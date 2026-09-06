@@ -35,11 +35,24 @@
   * INSERTING a new expression before a commented one is ACCEPTED. The guarded
     expression's identity did not change, so nothing moved. The previous round
     compared ordinals and refused this; that conservative narrowing is gone.
-  * A mission that deliberately REWRITES the guarded expression may opt in with
-    `:comment-follows-rewrite true` on the basis, which accepts an identity
-    change when side, depth-path and ordinal are unchanged. That opt-in
-    re-admits the ordinal rule for those comments -- under it a deliberate swap
-    IS accepted -- which is precisely why it is opt-in and never a fallback.
+  * A mission that deliberately REWRITES the guarded expression is REFUSED,
+    strictly and with no opt-in. There is no basis flag, no escape hatch and no
+    fallback: `:forms-comment-moved` says so and its `:next_call` names the one
+    runnable recovery, a reviewed native edit made by hand. An earlier round
+    shipped a `:comment-follows-rewrite` Boolean; it was removed because it
+    restored the reproduced false acceptance (under it a deliberate swap of two
+    body expressions passes), because the public mission request had no proven
+    route for setting it, and because a blanket Boolean is a new authority mode
+    rather than a recovery. An exact per-comment rewrite authorization can be
+    designed later; it is not this.
+
+  * Expression identity is EXACT SOURCE IDENTITY, compared as a rewrite-clj
+    NODE FINGERPRINT: node tags plus literal token and string bytes, with only
+    whitespace, newline and comma nodes discarded. Source strings are never
+    regex-collapsed. So a pure re-indentation of a multi-line guarded
+    expression is the SAME expression, while `\"a  b\"` and `\"a b\"` differ --
+    those spaces are inside a string literal, they are program text, and the
+    node keeps them byte for byte.
 
   No formatter runs here. cljfmt is not on this project's classpath (see
   deps.edn); `format-replacement` is the seam a caller would fill if it ever is,
@@ -127,32 +140,76 @@
       (refuse! :forms-replacement-not-one-form {:form-count (count forms)}))
     {:node tree :form (first forms) :comments (comment-nodes source)}))
 
-(defn- normalize-expr
-  "The attached expression's canonical source: its own bytes with SURROUNDING
-   whitespace trimmed. Interior bytes are deliberately untouched -- collapsing
-   whitespace inside the form would make `\"a  b\"` and `\"a b\"` compare equal,
-   which is a false acceptance of a different expression."
+(defn node-fingerprint
+  "EXACT SOURCE IDENTITY of a node, as a comparable value.
+
+   Not canonical source: nothing is normalised, rewritten or re-printed. The
+   fingerprint keeps every node TAG and every literal token/string node's bytes
+   VERBATIM, and discards exactly one thing -- `trivia`, the whitespace, newline
+   and comma nodes that carry no program text. Nothing else is collapsed, and a
+   source string is never touched by a regular expression.
+
+   Two consequences, and both are the contract:
+
+   * A pure RE-INDENTATION of a multi-line guarded expression is the same
+     expression. Only trivia nodes changed.
+   * `\"a  b\"` and `\"a b\"` are DIFFERENT expressions. Those spaces are inside
+     a string literal, so rewrite-clj lexed them into one string token and its
+     bytes are part of the fingerprint. A comparator that collapsed source text
+     would call them equal, which is a false acceptance of different program
+     text."
+  [n]
+  (let [t (node/tag n)]
+    (cond
+      (contains? trivia t) nil
+      (and (node/inner? n) (every? node/node? (node/children n)))
+      (into [t] (keep node-fingerprint (node/children n)))
+      :else [t (node/string n)])))
+
+(defn- expr-text
+  "The attached expression's source, surrounding whitespace trimmed. This is for
+   REPORTING only -- `:from`/`:to` in a refusal must be readable by the caller.
+   It is never the thing compared; `node-fingerprint` is."
   [n]
   (when n (.trim ^String (node/string n))))
 
 (defn- attachment-identities
   "Comments under `children`, each attached to the EXPRESSION it guards.
 
-   An attachment is `{:comment text :expr <canonical source of the attached
-   sexpr> :side :before|:after :depth-path <containing-sexpr path, WITHOUT the
-   final ordinal> :ordinal <index of the attached sexpr at that level>}`.
+   An attachment is `{:comment text :expr <readable source of the attached
+   sexpr> :expr-id <that sexpr's exact-source-identity fingerprint> :side
+   :before|:after :depth-path <containing-sexpr path, WITHOUT the final ordinal>
+   :ordinal <index of the attached sexpr at that level>}`.
+
+   `:expr-id` is what is COMPARED -- a `node-fingerprint`, so a re-indentation is
+   the same expression and a changed byte inside a string literal is not.
+   `:expr` is the same expression as readable text and exists so a refusal can
+   name it; it is never the comparison.
 
    One exception, and it is the owner contract rather than a weakening: at the
-   span's own top level (`depth-path []`) `:expr` is the sentinel `:owner-form`.
-   The expression there is the owner definition itself, which the mission
-   replaces by design; its identity is checked separately as
-   `:forms-owner-mismatch` (head, name-or-new-owner, docstring). Comparing its
-   bytes here would refuse every rename.
+   span's own top level (`depth-path []`) `:expr` and `:expr-id` are both the
+   sentinel `:owner-form`. The expression there is the owner definition itself,
+   which the mission replaces by design; comparing its bytes here would refuse
+   every rename, which is the one thing this route exists to do.
 
-   `:comment`, `:expr`, `:side` and `:depth-path` are the IDENTITY. `:ordinal`
-   is carried alongside it, never inside it: it is only the tie-break between
-   two attachments whose identity is already equal, and the sole thing the
-   opt-in `:comment-follows-rewrite` compares."
+   What the sentinel costs, stated plainly. The owner definition's identity is
+   guarded SEPARATELY, and only there: `mission-forms/compile-forms` requires
+   exactly ONE declared owner in the span (`definition` refuses
+   `:forms-invalid-definition` for a span carrying two definitions) and then
+   requires that owner's HEAD, its NAME (the original owner name, or the
+   planner's `:new-owner`) and its DOCSTRING to match, refusing
+   `:forms-owner-mismatch` otherwise. That is an OWNER-IDENTITY BOUNDARY: it
+   proves the replacement is still the same declared thing, with the same
+   contract text. It is NOT a proof that a top-level comment -- or the docstring
+   it echoes -- remains semantically TRUE after a behaviour change inside the
+   body. No machine here claims that; a leading `;; returns nil on miss` note
+   survives a body that starts throwing, and only a human review catches it.
+   `:side` still carries the rest of the meaning (a leading note turned trailing
+   still refuses).
+
+   `:comment`, `:expr-id`, `:side` and `:depth-path` are the IDENTITY. `:ordinal`
+   and `:expr` ride alongside, never inside it: `:ordinal` is only the tie-break
+   between two attachments whose identity is already equal."
   [children prefix]
   (let [sexprs (vec (remove #(contains? ignorable (node/tag %)) children))
         total (count sexprs)]
@@ -164,24 +221,13 @@
           (cond
             (= :comment t)
             (let [before? (< seen total)
-                  ord (if before? seen (max 0 (dec total)))]
+                  ord (if before? seen (max 0 (dec total)))
+                  top? (empty? prefix)
+                  target (get sexprs ord)]
               (recur (inc i) seen
                      (conj acc {:comment (comment-text k)
-                                ;; At the span's own top level (`depth-path []`)
-                                ;; the attached expression IS the owner
-                                ;; definition, which the mission replaces
-                                ;; wholesale -- comparing its text there would
-                                ;; refuse every rename, which is the one thing
-                                ;; this route exists to do. That expression's
-                                ;; identity is already guarded, by
-                                ;; `:forms-owner-mismatch` on head, name and
-                                ;; docstring, so here it is the sentinel
-                                ;; `:owner-form` and `:side` carries the rest of
-                                ;; the meaning (a leading note turned trailing
-                                ;; still refuses).
-                                :expr (if (seq prefix)
-                                        (normalize-expr (get sexprs ord))
-                                        :owner-form)
+                                :expr (if top? :owner-form (expr-text target))
+                                :expr-id (if top? :owner-form (some-> target node-fingerprint))
                                 :side (if before? :before :after)
                                 :depth-path prefix
                                 :ordinal ord})))
@@ -205,35 +251,48 @@
   [source]
   (attachment-identities (vec (node/children (parse-owner-source source))) []))
 
-(defn- identity-of [a] (dissoc a :ordinal))
+(defn- identity-of
+  "The comparable identity of an attachment: its text, the guarded expression's
+   EXACT SOURCE IDENTITY fingerprint, the side and the depth-path. `:ordinal` is
+   a tie-break, not identity; `:expr` is readable reporting text, not identity."
+  [a]
+  (dissoc a :ordinal :expr))
+
+(defn- report-of
+  "How an attachment is NAMED in a refusal: readable, and never the fingerprint."
+  [a]
+  (select-keys a [:expr :side :depth-path]))
 
 (defn comment-preservation
   "Compare the comments of an owner span against a replacement span by TEXT AND
    ATTACHED-EXPRESSION IDENTITY.
 
    A comment is preserved when the same text is attached to the same expression,
-   on the same side, at the same depth-path. Three consequences follow, and each
-   one is a deliberate contract:
+   on the same side, at the same depth-path. Expression sameness is EXACT SOURCE
+   IDENTITY (`node-fingerprint`): tags plus literal token/string bytes, only
+   whitespace/newline/comma nodes discarded, never a collapsed source string. So
+   a pure re-indentation preserves the comment, and a byte changed INSIDE a
+   string literal does not.
+
+   Four consequences follow, and each one is a deliberate contract:
 
    * Swapping two body expressions MOVES every comment attached to them, even
      though no ordinal changed. This is the case a path/ordinal comparison
      accepts falsely.
    * INSERTING a new expression before a commented one preserves the comment.
-     The identity did not change, so nothing is refused. The previous round's
-     ordinal rule refused this; that narrowing is gone.
+     The identity did not change, so nothing is refused.
+   * RE-INDENTING the guarded expression preserves the comment. Only trivia
+     nodes changed, and trivia is the one thing the fingerprint drops.
    * Two identical expressions carrying the same comment text are
      indistinguishable by identity, so they are matched in document order --
      a stable tie-break -- and swapping them is a no-op that is accepted.
 
-   When the mission legitimately REWRITES the guarded expression, its identity
-   changes and the comment is reported `:forms-comment-moved` with the `:from`
-   and `:to` expression texts, so the caller can re-emit the comment against the
-   rewritten expression. A caller that intends exactly that may pass
-   `:comment-follows-rewrite true`, which accepts an identity change when the
-   comment's side, depth-path and ordinal are unchanged. Be honest about what
-   that opt-in costs: it re-admits the ordinal rule for those comments, so under
-   it a deliberate swap of two body expressions is accepted. It is opt-in for
-   that reason.
+   When the mission REWRITES the guarded expression, its identity changes and
+   the comment is reported `:forms-comment-moved` with the `:from` and `:to`
+   expression texts. That refusal is STRICT and final: there is no opt-in, no
+   basis flag and no fallback that accepts it. The recovery is a reviewed native
+   edit made by hand -- a human decides whether the comment is still true of the
+   rewritten expression, which is exactly the judgement no flag can delegate.
 
    Order-preserving and multiset-like: each owner comment consumes at most one
    replacement comment. Identity matches are assigned first, across ALL owner
@@ -242,39 +301,30 @@
 
    Returns `{:preserved true}`, or `{:preserved false}` plus `:lost [...]` and/or
    `:moved [{:comment ... :from {:expr :side :depth-path} :to {...}}]`."
-  ([owner-source replacement-source] (comment-preservation owner-source replacement-source nil))
-  ([owner-source replacement-source {:keys [comment-follows-rewrite]}]
-   (let [owners (vec (comment-attachments owner-source))
-         repl (vec (comment-attachments replacement-source))
-         pick (fn [used pred] (first (keep-indexed (fn [i r] (when (and (not (used i)) (pred r)) i)) repl)))
-         sweep (fn [[used pending] pred-for]
-                 (reduce (fn [[u p] idx]
-                           (if-let [k (pick u (pred-for (nth owners idx)))]
-                             [(conj u k) p]
-                             [u (conj p idx)]))
-                         [used []] pending))
-         [used-1 pend-1] (sweep [#{} (vec (range (count owners)))]
-                                (fn [c] #(= (identity-of %) (identity-of c))))
-         [used-2 pend-2] (if comment-follows-rewrite
-                           (sweep [used-1 pend-1]
-                                  (fn [c] #(and (= (:comment %) (:comment c))
-                                                (= (:side %) (:side c))
-                                                (= (:depth-path %) (:depth-path c))
-                                                (= (:ordinal %) (:ordinal c)))))
-                           [used-1 pend-1])
-         [_ lost moved]
-         (reduce (fn [[u lost moved] idx]
-                   (let [c (nth owners idx)]
-                     (if-let [k (pick u #(= (:comment %) (:comment c)))]
-                       [(conj u k) lost
-                        (conj moved {:comment (:comment c)
-                                     :from (identity-of (dissoc c :comment))
-                                     :to (identity-of (dissoc (nth repl k) :comment))})]
-                       [u (conj lost (:comment c)) moved])))
-                 [used-2 [] []] pend-2)]
-     (cond-> {:preserved (and (empty? lost) (empty? moved))}
-       (seq lost) (assoc :lost lost)
-       (seq moved) (assoc :moved moved)))))
+  [owner-source replacement-source]
+  (let [owners (vec (comment-attachments owner-source))
+        repl (vec (comment-attachments replacement-source))
+        pick (fn [used pred] (first (keep-indexed (fn [i r] (when (and (not (used i)) (pred r)) i)) repl)))
+        [used-1 pend-1]
+        (reduce (fn [[u p] idx]
+                  (let [c (nth owners idx)]
+                    (if-let [k (pick u #(= (identity-of %) (identity-of c)))]
+                      [(conj u k) p]
+                      [u (conj p idx)])))
+                [#{} []] (range (count owners)))
+        [_ lost moved]
+        (reduce (fn [[u lost moved] idx]
+                  (let [c (nth owners idx)]
+                    (if-let [k (pick u #(= (:comment %) (:comment c)))]
+                      [(conj u k) lost
+                       (conj moved {:comment (:comment c)
+                                    :from (report-of c)
+                                    :to (report-of (nth repl k))})]
+                      [u (conj lost (:comment c)) moved])))
+                [used-1 [] []] pend-1)]
+    (cond-> {:preserved (and (empty? lost) (empty? moved))}
+      (seq lost) (assoc :lost lost)
+      (seq moved) (assoc :moved moved))))
 
 (defn align-replacement
   "The exact bytes to splice for one owner: the replacement's FORM, plus its

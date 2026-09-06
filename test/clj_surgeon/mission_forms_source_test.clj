@@ -122,12 +122,12 @@
     (is (= [{:comment ";; up" :expr :owner-form :side :before :depth-path [] :ordinal 0}
             {:comment ";; in" :expr "1" :side :before :depth-path [0] :ordinal 2}
             {:comment "; down" :expr :owner-form :side :after :depth-path [] :ordinal 0}]
-           (source/comment-attachments ";; up\n(def a ;; in\n 1)\n; down"))))
+           (mapv #(dissoc % :expr-id) (source/comment-attachments ";; up\n(def a ;; in\n 1)\n; down")))))
   (testing "the fixture owner span"
     (is (= [{:comment ";; leading note" :expr :owner-form :side :before :depth-path [] :ordinal 0}
             {:comment ";; inner reason" :expr "(get x :value)" :side :before
              :depth-path [0] :ordinal 3}]
-           (source/comment-attachments owner-span))))
+           (mapv #(dissoc % :expr-id) (source/comment-attachments owner-span)))))
   (testing "extra blank lines and a second comment do not move an attachment"
     (is (= [[:owner-form :before []] [:owner-form :before []] [:owner-form :before []]
             ["(get x :value)" :before [0]]]
@@ -360,16 +360,20 @@
     (testing "the two attachments have equal identity and differ only by ordinal"
       (is (= [{:comment "; guard" :expr "(risky)" :side :before :depth-path [0] :ordinal 3}
               {:comment "; guard" :expr "(risky)" :side :before :depth-path [0] :ordinal 4}]
-             (source/comment-attachments twins))))
+             (mapv #(dissoc % :expr-id) (source/comment-attachments twins)))))
     (is (= {:preserved true} (source/comment-preservation twins renamed)))
     (is (:ok r) (pr-str r))
     (is (= renamed (get-in r [:future-sources "src/a.clj"])))))
 
-(deftest a-rewritten-guarded-expression-refuses-without-the-opt-in
+(deftest a-rewritten-guarded-expression-refuses-and-names-the-native-edit
   ;; The honest hard case: the mission MEANS to change the expression the
   ;; comment guards. Its identity changed, so the comment no longer demonstrably
-  ;; guards what it used to. Refuse, name both expressions, and say in
-  ;; :next_call what the caller may do about it.
+  ;; guards what it used to. Refuse -- strictly, with no opt-in of any kind --
+  ;; name both expressions, and say in :next_call the one runnable recovery: a
+  ;; reviewed native edit made by hand. An earlier round offered a
+  ;; :comment-follows-rewrite Boolean here; it restored the reproduced false
+  ;; acceptance and had no proven route on the public request, so it is gone and
+  ;; nothing in the refusal text points a caller at a flag.
   (let [rewritten (str "(defn- finding-field\n"
                        "  []\n"
                        "  ; guards risky\n"
@@ -381,31 +385,135 @@
              :from {:expr "(risky)" :side :before :depth-path [0]}
              :to {:expr "(risky-v2)" :side :before :depth-path [0]}}]
            (:moved r)))
-    (is (re-find #":comment-follows-rewrite" (:next_call r)))
+    (testing "the refusal names a reviewed native edit, and no flag"
+      (is (re-find #"(?i)reviewed native edit" (:next_call r)))
+      (is (nil? (re-find #"comment-follows-rewrite" (:next_call r)))))
     (is (false? (:mutation-attempted r)))))
 
-(deftest a-rewritten-guarded-expression-is-accepted-when-the-caller-opts-in
+(deftest a-rewritten-guarded-expression-has-no-flag-that-accepts-it
+  ;; The removed escape hatch, pinned as absent rather than trusted to stay gone.
+  ;; `comment-preservation` takes exactly two arguments; there is no options map
+  ;; to smuggle an opt-in through, and no basis key that changes the verdict.
   (let [rewritten (str "(defn- finding-field\n"
                        "  []\n"
                        "  ; guards risky\n"
                        "  (risky-v2)\n"
-                       "  (safe))")
-        b (assoc (span-basis guard-span) :comment-follows-rewrite true)
-        r (forms/compile-forms b [(replacement rewritten)])]
-    (is (:ok r) (pr-str r))
-    (is (= rewritten (get-in r [:future-sources "src/a.clj"])))
-    (testing "the opt-in is an ordinal rule, and says so: a swap passes under it"
-      (is (= {:preserved true}
-             (source/comment-preservation
-               guard-span
-               "(defn- finding-field\n  []\n  ; guards risky\n  (safe)\n  (risky))"
-               {:comment-follows-rewrite true}))))
-    (testing "and it is opt-in only -- the same swap still refuses by default"
+                       "  (safe))")]
+    (testing "no arity accepts options"
+      (is (= #{2} (->> (:arglists (meta #'source/comment-preservation))
+                       (map count) set))))
+    (testing "a basis flag of that name changes nothing"
+      (let [r (forms/compile-forms (assoc (span-basis guard-span) :comment-follows-rewrite true)
+                                   [(replacement rewritten)])]
+        (is (= :forms-comment-moved (:error-type r)))
+        (is (false? (:mutation-attempted r)))))
+    (testing "and a swap is refused, which is what the opt-in used to accept"
       (is (false? (:preserved (source/comment-preservation
                                 guard-span
                                 (str "(defn- finding-field\n  []\n  ; guards risky\n"
-                                     "  (safe)\n  (risky))")))))))
-  (testing "the opt-in does not resurrect a LOST comment"
-    (is (= {:preserved false :lost ["; guards risky"]}
-           (source/comment-preservation guard-span "(defn- finding-field [] (risky) (safe))"
-                                        {:comment-follows-rewrite true})))))
+                                     "  (safe)\n  (risky))"))))))))
+
+;; EXACT SOURCE IDENTITY, not canonical source (Astra, ruling on 3df71faa):
+;; "a rewrite-clj node fingerprint that discards only whitespace/newline/comma
+;; nodes while retaining node tags and literal token/string bytes; never
+;; regex-collapse source strings."
+
+(def multi-line-guard-span
+  (str "(defn- field\n"
+       "  [x]\n"
+       "  ; guards the lookup\n"
+       "  (get-in x\n"
+       "          [:a :b]\n"
+       "          :missing))"))
+
+(deftest re-indenting-the-guarded-expression-is-the-same-expression
+  (let [reindented (str "(defn- finding-field\n"
+                        "  [x]\n"
+                        "  ; guards the lookup\n"
+                        "  (get-in\n"
+                        "    x\n"
+                        "    [:a :b] :missing))")
+        r (forms/compile-forms (span-basis multi-line-guard-span) [(replacement reindented)])]
+    (testing "the two expressions differ byte for byte"
+      (is (not= (:expr (first (source/comment-attachments multi-line-guard-span)))
+                (:expr (first (source/comment-attachments reindented))))))
+    (testing "but only whitespace and newline nodes differ, so identity is equal"
+      (is (= (:expr-id (first (source/comment-attachments multi-line-guard-span)))
+             (:expr-id (first (source/comment-attachments reindented))))))
+    (is (= {:preserved true} (source/comment-preservation multi-line-guard-span reindented)))
+    (is (:ok r) (pr-str r))
+    (is (= reindented (get-in r [:future-sources "src/a.clj"])))))
+
+(deftest spaces-inside-a-string-literal-are-program-text-and-stay-distinct
+  ;; The exact case a regex-collapsing comparator gets wrong: those two spaces
+  ;; are INSIDE a string token, so they are program text, not indentation.
+  ;; rewrite-clj lexed them into one token whose bytes are the fingerprint.
+  (let [span (str "(defn- field\n"
+                  "  []\n"
+                  "  ; guards the greeting\n"
+                  "  (println \"a  b\")\n"
+                  "  (safe))")
+        collapsed (str "(defn- finding-field\n"
+                       "  []\n"
+                       "  ; guards the greeting\n"
+                       "  (println \"a b\")\n"
+                       "  (safe))")
+        r (forms/compile-forms (span-basis span) [(replacement collapsed)])]
+    (testing "the fingerprints differ -- the string bytes are kept verbatim"
+      (is (not= (:expr-id (first (source/comment-attachments span)))
+                (:expr-id (first (source/comment-attachments collapsed))))))
+    (testing "so this is an identity change and refuses"
+      (is (= :forms-comment-moved (:error-type r)))
+      (is (= [{:comment "; guards the greeting"
+               :from {:expr "(println \"a  b\")" :side :before :depth-path [0]}
+               :to {:expr "(println \"a b\")" :side :before :depth-path [0]}}]
+             (:moved r)))
+      (is (false? (:mutation-attempted r))))))
+
+;; The :owner-form sentinel is an OWNER-IDENTITY BOUNDARY. It is sound only
+;; while exactly ONE declared owner sits in the span and that owner's head, name
+;; (or :new-owner) and docstring are guarded. Both halves are witnessed here.
+;; It is NOT a proof that a top-level comment stays semantically true after a
+;; behaviour change; nothing in this namespace claims that.
+
+(deftest the-owner-form-sentinel-holds-for-exactly-one-declared-owner
+  (testing "a span declaring TWO owners is refused before any comment rule runs"
+    (let [two-owner-span (str ";; leading note\n"
+                              "(defn- field [x] (get x :value))\n"
+                              "(defn- other [x] (get x :other))")
+          r (forms/compile-forms (span-basis two-owner-span)
+                                 [(replacement "(defn- finding-field [x] (get x :value))")])]
+      (is (false? (:ok r)))
+      (is (= :forms-invalid-definition (:error-type r)))
+      (is (false? (:mutation-attempted r)))))
+  (testing "a REPLACEMENT declaring two owners is refused the same way"
+    (let [r (forms/compile-forms (span-basis guard-span)
+                                 [(replacement (str "(defn- finding-field [] (risky) (safe))\n"
+                                                    "(defn- extra [] nil)"))])]
+      (is (false? (:ok r)))
+      (is (= :forms-invalid-definition (:error-type r)))))
+  (testing "with exactly one owner, the sentinel's guard is head/name/docstring"
+    (let [documented (str ";; leading note\n"
+                          "(defn- field\n"
+                          "  \"Reads the value.\"\n"
+                          "  [x]\n"
+                          "  (get x :value))")]
+      (is (= [:owner-form]
+             (mapv :expr-id (source/comment-attachments documented))))
+      (testing "a changed docstring under the same sentinel is :forms-owner-mismatch"
+        (let [r (forms/compile-forms (span-basis documented)
+                                     [(replacement (str ";; leading note\n"
+                                                        "(defn- finding-field\n"
+                                                        "  \"Reads something else.\"\n"
+                                                        "  [x]\n"
+                                                        "  (get x :value))"))])]
+          (is (= :forms-owner-mismatch (:error-type r)))
+          (is (false? (:mutation-attempted r)))))
+      (testing "a changed HEAD under the same sentinel is :forms-owner-mismatch"
+        (let [r (forms/compile-forms (span-basis documented)
+                                     [(replacement (str ";; leading note\n"
+                                                        "(defn finding-field\n"
+                                                        "  \"Reads the value.\"\n"
+                                                        "  [x]\n"
+                                                        "  (get x :value))"))])]
+          (is (= :forms-owner-mismatch (:error-type r))))))))

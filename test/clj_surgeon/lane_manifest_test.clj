@@ -416,7 +416,7 @@
     clj-surgeon.mission-candidate-test 5 ; Frozen span lowering boundaries.
     clj-surgeon.mission-plain-forms-test 8 ; Bounded raw definition decoding and actual escaping failure.
     clj-surgeon.mission-forms-test 5 ; Owner identity and protected syntax, plus the comment-lost refusal that replaced the blanket comment ban.
-    clj-surgeon.mission-forms-source-test 20 ; Comment-preserving source lowering: owner comments survive a replacement, a dropped one refuses :forms-comment-lost instead of deleting silently, and #_/^meta/#= stay protected. 12 -> 15 when positional carry was removed and preservation began comparing structural ATTACHMENT as well as text: +1 attachment-path unit, +1 comment-moved refusal, +1 lint-directive-moved refusal, -1 deleted :carry-comments witness, and the carried-source witness became a faithful-re-emission one. 15 -> 20 when Astra's direct probe showed the structural PATH accepted a swap of two body expressions falsely (same path is not same expression) and preservation moved to the attached EXPRESSION'S identity: +1 swapped-expression refusal, +1 insertion-before acceptance (the ordinal rule's narrowing removed), +1 identical-expressions tie-break, +1 rewritten-guard refusal, +1 rewritten-guard acceptance under the opt-in :comment-follows-rewrite.
+    clj-surgeon.mission-forms-source-test 23 ; Comment-preserving source lowering: owner comments survive a replacement, a dropped one refuses :forms-comment-lost instead of deleting silently, and #_/^meta/#= stay protected. 12 -> 15 when positional carry was removed and preservation began comparing structural ATTACHMENT as well as text: +1 attachment-path unit, +1 comment-moved refusal, +1 lint-directive-moved refusal, -1 deleted :carry-comments witness, and the carried-source witness became a faithful-re-emission one. 15 -> 20 when Astra's direct probe showed the structural PATH accepted a swap of two body expressions falsely (same path is not same expression) and preservation moved to the attached EXPRESSION'S identity: +1 swapped-expression refusal, +1 insertion-before acceptance (the ordinal rule's narrowing removed), +1 identical-expressions tie-break, +1 rewritten-guard refusal, +1 rewritten-guard acceptance under the opt-in :comment-follows-rewrite. 20 -> 23 on Astra's 03:35Z ruling: -1 opt-in acceptance witness (:comment-follows-rewrite removed entirely -- it restored the reproduced false acceptance and had no proven route on the public request), +1 witness pinning that flag as absent (comment-preservation has only a 2-arity; a basis key of that name changes no verdict), +1 re-indentation of a multi-line guarded expression accepted and +1 "a  b" vs "a b" inside a string literal refused (the comparator is now EXACT SOURCE IDENTITY -- a rewrite-clj node fingerprint discarding only whitespace/newline/comma nodes, never a collapsed source string), +1 :owner-form sentinel boundary witness (a span declaring two owners is refused; with exactly one, head and docstring are guarded by :forms-owner-mismatch).
     clj-surgeon.mission-typist-executor-test 7 ; Real proof/commit/undo and independent witness.
     clj-surgeon.battery-ledger-test        12 ; TEST-ISO-009a/b's witness (round three)
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
@@ -497,11 +497,21 @@
       ;; guarded EXPRESSION'S identity: a swapped-expression refusal, an
       ;; insertion-before acceptance, an identical-expressions tie-break, and a
       ;; rewritten-guard refusal plus its :comment-follows-rewrite acceptance.
-      (is (= 327 adopted) (str "adopted tests: " adopted)))
+      ;; 327 -> 330 on Astra's 03:35Z ruling: the :comment-follows-rewrite
+      ;; opt-in was REMOVED (-1 acceptance witness, +1 witness pinning the flag
+      ;; as absent -- no options arity, a basis key of that name changes
+      ;; nothing), the comparator became exact source identity as a rewrite-clj
+      ;; node fingerprint (+1 re-indentation accepted, +1 string-interior spaces
+      ;; stay distinct), and the :owner-form sentinel gained its boundary
+      ;; witness (+1: two declared owners in one span refused, head/docstring
+      ;; guarded for the one).
+      (is (= 330 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; 1240 -> 1243 with the same three attachment witnesses, then
-      ;; 1243 -> 1248 with the five expression-identity witnesses.
-      (is (= 1248 total) (str "manifest declares " total " tests"))
+      ;; 1243 -> 1248 with the five expression-identity witnesses, then
+      ;; 1248 -> 1251 with the strict-identity round (opt-in removed, node
+      ;; fingerprint, owner-sentinel boundary).
+      (is (= 1251 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

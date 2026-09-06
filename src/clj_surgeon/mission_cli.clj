@@ -121,9 +121,10 @@
                                           (or (:next_call plan)
                                               (str "Re-emit the form with its comments verbatim and against "
                                                    "the same expressions they guard. If this mission "
-                                                   "intends to rewrite a guarded expression, re-emit the "
-                                                   "comment on the rewritten expression or set "
-                                                   ":comment-follows-rewrite true on the basis."))
+                                                   "intends to rewrite a guarded expression, owner_forms "
+                                                   "cannot accept it and has no flag that will: make a "
+                                                   "reviewed native edit by hand instead, changing the "
+                                                   "comment and the expression it guards together."))
 
                                           :else
                                           (or (:decision plan)

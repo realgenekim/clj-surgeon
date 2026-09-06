@@ -68,55 +68,57 @@
    re-printed reader value -- so a comment the model DID emit is spliced
    verbatim. Preservation is judged on TEXT AND THE ATTACHED EXPRESSION'S
    IDENTITY: a comment must come back with the same text against the same
-   expression, on the same side, at the same depth-path. Its ordinal is NOT the
-   test -- swapping two body expressions leaves every ordinal intact and every
-   guard wrong. Dropped is `:forms-comment-lost`; re-attached to a different
-   expression is `:forms-comment-moved`, carrying the `:from` and `:to`
-   expression texts. Inserting a new expression before a commented one changes
-   no identity and is accepted.
+   expression, on the same side, at the same depth-path. That expression's
+   sameness is EXACT SOURCE IDENTITY -- a rewrite-clj node fingerprint, so a
+   re-indentation is the same expression and a byte changed inside a string
+   literal is not. Its ordinal is NOT the test -- swapping two body expressions
+   leaves every ordinal intact and every guard wrong. Dropped is
+   `:forms-comment-lost`; re-attached to a different expression is
+   `:forms-comment-moved`, carrying the `:from` and `:to` expression texts.
+   Inserting a new expression before a commented one changes no identity and is
+   accepted.
 
    Nothing is ever placed by position on the model's behalf -- a machine
    guessing where a `;; clj-kondo/ignore` or a `;; why` note belongs corrupts
-   its meaning more quietly than dropping it would. `opts` may carry
-   `:comment-follows-rewrite true`, the caller's explicit statement that this
-   mission rewrites the guarded expression and the comment should follow the new
-   one at the same position; it accepts an identity change only when side,
-   depth-path and ordinal are unchanged, and it re-admits the ordinal rule for
-   those comments, so a swap is accepted under it. It is opt-in for that reason
-   and is never entered as a fallback."
-  ([owner-span replacement-span original replacement]
-   (reconcile-comments owner-span replacement-span original replacement nil))
-  ([owner-span _replacement-span original replacement opts]
-   (let [text (source/align-replacement (source/owner-comment-positions owner-span)
-                                        (:span-source replacement)
-                                        (:source replacement))]
-     (if (and (empty? (:comments original)) (empty? (source/comment-nodes text)))
-       text
-       ;; Preservation is checked against the bytes that will ACTUALLY be spliced,
-       ;; never against the raw candidate text. That is what makes duplication and
-       ;; loss both impossible rather than merely unlikely.
-       (let [{:keys [preserved lost moved]} (source/comment-preservation owner-span text opts)]
-         (cond
-           preserved text
+   its meaning more quietly than dropping it would. And there is NO opt-in that
+   accepts a moved comment: when a mission means to rewrite the expression a
+   comment guards, the only recovery is a reviewed native edit -- a person opens
+   the file, decides whether the comment is still true of the rewritten
+   expression, and edits both by hand. A Boolean cannot make that judgement, so
+   this route does not offer one."
+  [owner-span _replacement-span original replacement]
+  (let [text (source/align-replacement (source/owner-comment-positions owner-span)
+                                       (:span-source replacement)
+                                       (:source replacement))]
+    (if (and (empty? (:comments original)) (empty? (source/comment-nodes text)))
+      text
+      ;; Preservation is checked against the bytes that will ACTUALLY be spliced,
+      ;; never against the raw candidate text. That is what makes duplication and
+      ;; loss both impossible rather than merely unlikely.
+      (let [{:keys [preserved lost moved]} (source/comment-preservation owner-span text)]
+        (cond
+          preserved text
 
-           (seq moved)
-           (throw (ex-info "Owner comment re-attached to a different expression"
-                           (cond-> {:error-type :forms-comment-moved :moved moved
-                                    :next_call (str "Re-emit the form with each comment against the "
-                                                    "same expression it guards; :from and :to give the "
-                                                    "expression each comment was and is attached to. "
-                                                    "If this mission intends to rewrite the guarded "
-                                                    "expression, re-emit the comment on the rewritten "
-                                                    "expression, or set :comment-follows-rewrite true "
-                                                    "on the basis to accept an identity change at the "
-                                                    "same position.")}
-                             (seq lost) (assoc :lost lost))))
+          (seq moved)
+          (throw (ex-info "Owner comment re-attached to a different expression"
+                          (cond-> {:error-type :forms-comment-moved :moved moved
+                                   :next_call (str "Re-emit the form with each comment against the "
+                                                   "same expression it guards; :from and :to give the "
+                                                   "expression each comment was and is attached to. "
+                                                   "If this mission intends to rewrite the guarded "
+                                                   "expression, owner_forms cannot accept it and has "
+                                                   "no flag that will: make a REVIEWED NATIVE EDIT "
+                                                   "instead -- open the file by hand, decide whether "
+                                                   "the comment is still true of the rewritten "
+                                                   "expression, and change the comment and the "
+                                                   "expression together in that edit.")}
+                            (seq lost) (assoc :lost lost))))
 
-           :else
-           (throw (ex-info "Owner comments dropped by replacement"
-                           {:error-type :forms-comment-lost :lost lost
-                            :next_call (str "Re-emit the form with its comments verbatim and "
-                                            "against the same expressions.")}))))))))
+          :else
+          (throw (ex-info "Owner comments dropped by replacement"
+                          {:error-type :forms-comment-lost :lost lost
+                           :next_call (str "Re-emit the form with its comments verbatim and "
+                                           "against the same expressions.")})))))))
 
 (defn compile-forms
   "Replace only frozen owners. New names are planner-owned :new-owner values.
@@ -151,8 +153,7 @@
                                      (= (:docstring original) (:docstring replacement)))
                         (throw (ex-info "Definition identity mismatch" {:error-type :forms-owner-mismatch})))
                       {:file file :before before
-                       :after (reconcile-comments before (:form r) original replacement
-                                                 (select-keys basis [:comment-follows-rewrite]))})))
+                       :after (reconcile-comments before (:form r) original replacement)})))
                 replacements)]
           (candidate/compile-candidate basis changes)))
       (catch StackOverflowError _ (refusal :candidate-parser-depth))
