@@ -28,7 +28,7 @@
 
      the TRIPWIRE `make battery-fresh` refuses when the newest entry is older
                   than 26 h, when it failed, or when the commit it names is
-                  not an ancestor of HEAD or is more than 30 commits behind
+                  not an ancestor of HEAD or is more than 30 counted commits behind
                   it. 26 h rather than 24 gives a nightly a two-hour margin
                   before it starts crying wolf; 30 commits bounds `the battery
                   passed, on a tree nobody would recognise`.
@@ -115,7 +115,7 @@
   "The tripwire's verdict over `entries`, as data.
 
    `now-ms`             the instant to measure age from
-   `commits-behind-fn`  sha -> how many commits HEAD is ahead of it, or nil
+   `commits-behind-fn`  sha -> a distance audit map (or legacy integer), or nil
                         when the sha is not an ancestor of HEAD at all
 
    Returns {:ok true :entry e :age-hours h} or {:ok false :reason kw
@@ -146,45 +146,50 @@
             started-ms (try (.toEpochMilli (java.time.Instant/parse started))
                             (catch Exception _ nil))
             age (when started-ms (- now-ms started-ms))
-            behind (commits-behind-fn sha)]
-        (cond
-          (nil? started-ms)
-          {:ok false :reason :unreadable-timestamp
-           :message (format "newest receipt names sha %s but its :started %s is not an instant"
-                            sha (pr-str started))
-           :remedy remedy}
+            distance (commits-behind-fn sha)
+            audit (if (map? distance) distance
+                    {:commits-behind distance :raw-commits-behind distance
+                     :ignored-archive-commits 0})
+            behind (:commits-behind audit)]
+        (merge audit
+          (cond
+            (nil? started-ms)
+            {:ok false :reason :unreadable-timestamp
+             :message (format "newest receipt names sha %s but its :started %s is not an instant"
+                              sha (pr-str started))
+             :remedy remedy}
 
-          (not= :pass (verdict-kw verdict))
-          {:ok false :reason :last-run-failed
-           :message (format (str "the newest battery receipt FAILED: sha %s, started %s, "
-                                 "wall %ss, verdict %s. A failing gate is not a fresh gate.")
-                            sha started wall_s (pr-str verdict))
-           :remedy remedy}
+            (not= :pass (verdict-kw verdict))
+            {:ok false :reason :last-run-failed
+             :message (format (str "the newest battery receipt FAILED: sha %s, started %s, "
+                                   "wall %ss, verdict %s. A failing gate is not a fresh gate.")
+                              sha started wall_s (pr-str verdict))
+             :remedy remedy}
 
-          (> age max-age-ms)
-          {:ok false :reason :stale
-           :message (format (str "the newest battery receipt is %.1f h old (sha %s, started %s); "
-                                 "the tripwire refuses past %.0f h")
-                            (ms->hours age) sha started (ms->hours max-age-ms))
-           :remedy remedy}
+            (> age max-age-ms)
+            {:ok false :reason :stale
+             :message (format (str "the newest battery receipt is %.1f h old (sha %s, started %s); "
+                                   "the tripwire refuses past %.0f h")
+                              (ms->hours age) sha started (ms->hours max-age-ms))
+             :remedy remedy}
 
-          (nil? behind)
-          {:ok false :reason :not-an-ancestor
-           :message (format (str "the newest battery receipt names sha %s, which is NOT an "
-                                 "ancestor of HEAD -- it passed on a tree this one does not "
-                                 "descend from, so it says nothing about the code here")
-                            sha)
-           :remedy remedy}
+            (nil? behind)
+            {:ok false :reason :not-an-ancestor
+             :message (format (str "the newest battery receipt names sha %s, which is NOT an "
+                                   "ancestor of HEAD -- it passed on a tree this one does not "
+                                   "descend from, so it says nothing about the code here")
+                              sha)
+             :remedy remedy}
 
-          (> behind max-commits-behind)
-          {:ok false :reason :too-far-behind
-           :message (format (str "the newest battery receipt names sha %s, %d commits behind "
-                                 "HEAD; the tripwire refuses past %d")
-                            sha behind max-commits-behind)
-           :remedy remedy}
+            (> behind max-commits-behind)
+            {:ok false :reason :too-far-behind
+             :message (format (str "the newest battery receipt names sha %s, %d commits behind "
+                                   "HEAD; the tripwire refuses past %d")
+                              sha behind max-commits-behind)
+             :remedy remedy}
 
-          :else
-          {:ok true :entry newest :age-hours (ms->hours age) :commits-behind behind})))))
+            :else
+            {:ok true :entry newest :age-hours (ms->hours age) :commits-behind behind}))))))
 
 ;; --------------------------------------------------------------------------
 ;; the CLI (bb) -- the ONLY place that shells out
@@ -196,16 +201,55 @@
               (redirectErrorStream true)
               start)
         out (slurp (.getInputStream p))]
-    {:exit (.waitFor p) :out (str/trim out)}))
+    {:exit (.waitFor p) :out out}))
+
+(def archival-paths
+  "Closed output-journal set, audited in TEST-ISO-009b. Never a docs glob."
+  #{"docs/observations/2026-09-03-captains-log-anvil-seat.md"
+    "docs/observations/2026-09-05-captains-log-astra-four-hour-comparison.md"
+    "docs/observations/2026-09-06-live-astra-typist-commentary.md"})
+
+;; @spec TEST-ISO-009b -- malformed or non-content changes cannot exempt a commit.
+(defn archive-only-diff?
+  "Strict NUL-delimited --raw -z --no-renames diff; false on missing evidence."
+  [raw]
+  (let [parts (str/split (or raw "") #"\u0000" -1)
+        records (butlast parts)]
+    (boolean
+      (and (= "" (last parts)) (seq records) (even? (count records))
+           (every? (fn [[header path]]
+                     (and (re-matches #":100644 100644 [0-9a-f]{40} [0-9a-f]{40} M" header)
+                          (contains? archival-paths path)))
+                   (partition 2 records))))))
+
+(defn- archive-only-commit? [line]
+  (let [[commit & parents] (str/split line #" ")]
+    (and (seq parents)
+         (every? (fn [parent]
+                   (let [{:keys [exit out]}
+                         (sh "git" "diff" "--raw" "-z" "--no-abbrev" "--no-renames"
+                             "--no-ext-diff" "--no-textconv" "--ignore-submodules=none"
+                             parent commit "--")]
+                     (and (zero? exit) (archive-only-diff? out))))
+                 parents))))
 
 (defn- commits-behind-head
-  "How many commits HEAD is ahead of `sha`, or nil when `sha` is not an
-   ancestor of HEAD (which includes a sha this clone has never seen)."
+  "All-DAG distance, excluding only proven archival content commits.
+   Histories over 1000 commits conservatively use raw distance."
   [sha]
   (when (and sha (re-matches #"[0-9a-f]{7,40}" (str sha)))
     (when (zero? (:exit (sh "git" "merge-base" "--is-ancestor" (str sha) "HEAD")))
-      (let [{:keys [exit out]} (sh "git" "rev-list" "--count" (str sha "..HEAD"))]
-        (when (zero? exit) (parse-long out))))))
+      (let [range (str sha "..HEAD")
+            {count-exit :exit count-out :out} (sh "git" "rev-list" "--count" range)
+            raw (when (zero? count-exit) (parse-long (str/trim count-out)))]
+        (when raw
+          (let [{:keys [exit out]} (when (<= raw 1000)
+                                    (sh "git" "rev-list" "--parents" range))
+                lines (when (and (= 0 exit) (not (str/blank? out))) (str/split-lines out))
+                ignored (if (and (<= raw 1000) (= raw (count lines)))
+                          (count (filter archive-only-commit? lines)) 0)]
+            {:commits-behind (- raw ignored) :raw-commits-behind raw
+             :ignored-archive-commits ignored}))))))
 
 (defn -main
   [& args]
@@ -217,7 +261,7 @@
                    :started (get opts "--started")
                    :wall_s (parse-long (str (get opts "--wall-s" "0")))
                    :verdict (keyword (str (get opts "--verdict" "unknown")))
-                   :host (get opts "--host" (:out (sh "hostname")))}]
+                   :host (get opts "--host" (str/trim (:out (sh "hostname"))))}]
         (append-entry! ledger-path entry)
         (println "battery-ledger: appended" (entry-line entry)))
 
@@ -225,6 +269,10 @@
       (let [entries (parse-ledger (when (.exists (io/file ledger-path))
                                     (slurp ledger-path)))
             r (freshness entries (System/currentTimeMillis) commits-behind-head)]
+        (when (some? (:raw-commits-behind r))
+          (println "battery-fresh: distance"
+                   (pr-str (select-keys r [:commits-behind :raw-commits-behind
+                                          :ignored-archive-commits]))))
         (if (:ok r)
           (do (println (format (str "battery-fresh: OK -- newest receipt sha %s, started %s, "
                                     "wall %ss, %.1f h old, %d commit(s) behind HEAD")
