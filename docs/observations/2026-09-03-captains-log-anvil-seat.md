@@ -3285,3 +3285,5 @@ My objections to the opening six: verification is not established as the dominan
 ## 22:57Z — usage watch: tools "admit_clojure_patch": 9 "apply_clojure_changes": 73 "inspect_clojure": 19  (collector figures verbatim; collector window: "since": "2026-09-06T04:44:02Z" → "until": "2026-09-06T22:51:48.492055Z"; === start 22:51Z load 3.78 ; === rc 0 end 22:57Z)
 
 ## 23:13Z — hot battery PASS on merge 35ad3b3f; receipt 3c2e023c pushed; LANDING via ~/bin/land now (Astra GO ten-3c). Receipts branch merges trunk after this lands.
+
+## 23:18Z — LANDED (ancestry-verified): hot verification fix 10f5131d + receipt 3c2e023c → MCP/main 0ddf8ec5 at 23:17Z, gates green. inb-adcc9e closed by this landing. Two of three fixes landed; receipts branch merging trunk now (pin recomputed as trunk 1381 + own +12).
