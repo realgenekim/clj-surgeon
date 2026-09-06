@@ -1,0 +1,14 @@
+2026-09-06T16:47:03Z cohort-I start load=1.75 pid=1097176
+{"freeze_check": {"files": 14, "manifest": "/var/tmp/forge/cell-prep/runner-b/freeze-b.json"}}
+{"mode": "preregistered", "schedule": ["N1", "I1", "I2", "N2", "N3", "I3", "I4", "N4"], "cohort": "/var/tmp/forge/cell-prep/runner-b/cohort-I", "timing_window": "/var/tmp/forge/quiet-window.md", "proof_b_entry": "/var/tmp/forge/cell-prep/out/fanout-B/proof-b/run.py", "block_to_first_dispatch_s": null}
+{"arm": "N1", "actor_exit": 0, "actor_wall_s": 103.23858454497531, "wall_s": 103.24559140624478, "total_with_proof_s": 107.94931131834164, "correct": true, "load1_at_start": 1.75, "apparatus_fault": null}
+{"arm": "I1", "actor_exit": 0, "actor_wall_s": 69.21642109612003, "wall_s": 69.2205028696917, "total_with_proof_s": 73.7717924839817, "correct": true, "load1_at_start": 2.6171875, "apparatus_fault": null}
+{"arm": "I2", "actor_exit": 0, "actor_wall_s": 48.16939280228689, "wall_s": 48.17332878615707, "total_with_proof_s": 52.873336158227175, "correct": true, "load1_at_start": 2.013671875, "apparatus_fault": null}
+{"arm": "N2", "actor_exit": 0, "actor_wall_s": 90.0082838209346, "wall_s": 90.0119145968929, "total_with_proof_s": 94.51352211507037, "correct": true, "load1_at_start": 1.5068359375, "apparatus_fault": null}
+{"arm": "N3", "actor_exit": 0, "actor_wall_s": 107.23883646912873, "wall_s": 107.2428245311603, "total_with_proof_s": 111.84317910624668, "correct": false, "load1_at_start": 3.1572265625, "apparatus_fault": null}
+{"arm": "I3", "actor_exit": 0, "actor_wall_s": 49.770704589318484, "wall_s": 49.7747078249231, "total_with_proof_s": 54.17414515791461, "correct": true, "load1_at_start": 1.94775390625, "apparatus_fault": null}
+{"arm": "I4", "actor_exit": 0, "actor_wall_s": 56.98510757414624, "wall_s": 56.989032302983105, "total_with_proof_s": 61.390691419132054, "correct": true, "load1_at_start": 2.02099609375, "apparatus_fault": null}
+{"arm": "N4", "actor_exit": 0, "actor_wall_s": 66.210201817099, "wall_s": 66.21388938836753, "total_with_proof_s": 70.71301119728014, "correct": true, "load1_at_start": 1.69091796875, "apparatus_fault": null}
+{"summary": "/var/tmp/forge/cell-prep/runner-b/cohort-I/summary.json", "arms": 8, "correct": 7}
+2026-09-06T16:57:30Z cohort-I rc=0
+2026-09-06T16:57:30Z window released
