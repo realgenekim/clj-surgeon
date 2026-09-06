@@ -2877,3 +2877,5 @@ Astra's nREPL riff, in substance: a warm runtime is the right instrument, but po
 ## 09:45Z — Runner apparatus for fan-out B verified by this seat: witness 31/31; freeze 14 files (detector source + fixtures pinned, typed drift refusal); corrected registration receipt from the retained rollout — attempted 1 / refused 1 / succeeded 0 (registration + attempted call proven; successful structural read not proven); original failure receipt retained unmutated.
 
 ## 09:46Z — Sol fence r1 on freshness 846c8631 (gate-authority brief): LAND YES, no release-authority counterexample. Landing 455a8dd9 (docs-only over it) launched 09:46Z under a fable window.
+
+## 09:49Z — usage watch: tools "apply_clojure_changes": 2 "inspect_clojure": 8  (collector figures verbatim; collector window: "since": "2026-09-06T04:44:02Z" → "until": "2026-09-06T09:48:32.609496Z"; === start 09:48Z load 3.31 ; === rc 0 end 09:49Z)
