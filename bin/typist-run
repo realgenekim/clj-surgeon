@@ -829,6 +829,13 @@ def edn(v, indent=0):
     if isinstance(v, str):
         return edn_str(v)
     if isinstance(v, float):
+        # Timings are written at millisecond resolution. COSTS ARE NOT TIMINGS:
+        # a sub-cent USD figure rounded to 3 places becomes 0.001 or 0.000 —
+        # a fabricated number in a receipt whose whole point is the real one.
+        # Anything smaller than 0.01 keeps its digits.
+        if v != 0.0 and abs(v) < 0.01:
+            t = ("%.10f" % v).rstrip("0")
+            return t + "0" if t.endswith(".") else t
         return "%.3f" % v
     return str(v)
 
@@ -1730,6 +1737,9 @@ PROVIDERS = {
         # more to the point, an unpinned request is not the request this
         # experiment preregistered.
         "upstream_order": ["Cerebras", "Groq"],
+        # OpenRouter's usage accounting: the response then carries
+        # `usage.cost` in USD, the PROVIDER's own number for this call.
+        "usage_include": True,
         "headers": {
             "User-Agent": GROQ_UA,
             # OpenRouter's attribution headers; they identify the caller, not a secret.
@@ -1743,6 +1753,61 @@ PROVIDERS = {
         "reasoning_effort": "low",
     },
 }
+
+# --------------------------------------------------------------------------
+# PRICES — USD per 1,000,000 tokens.  DATED 2026-09-06.  SOURCED, not remembered.
+#
+#   groq                  read 2026-09-06 from https://console.groq.com/docs/models,
+#                         the model card keyed "openai/gpt-oss-120b-price":
+#                         "$0.15 input" / "$0.60 output".
+#   openrouter:<upstream> read 2026-09-06 from
+#                         https://openrouter.ai/api/v1/models/openai/gpt-oss-120b/endpoints
+#                         (public, no key), each endpoint's pricing.prompt /
+#                         pricing.completion, which are USD PER TOKEN — multiplied
+#                         by 1e6 here.  Cerebras: 0.00000035 / 0.00000075.
+#   spark                 codex exec on the ChatGPT subscription: no metered cost.
+#
+# REASONING TOKENS ARE BILLED AS COMPLETION TOKENS on both providers, and both
+# already INCLUDE them in `usage.completion_tokens` — so reasoning is never
+# added again here.  A table rate is an ESTIMATE; when the provider reports its
+# own USD (OpenRouter `usage.cost`), that number wins and :cost_source says so.
+PRICES_DATE = "2026-09-06"
+PRICES = {
+    "groq":                    {"in": 0.15,  "out": 0.60},
+    "openrouter:Cerebras":     {"in": 0.35,  "out": 0.75},
+    "openrouter:Groq":         {"in": 0.15,  "out": 0.60},
+    "openrouter:DigitalOcean": {"in": 0.055, "out": 0.385},
+    "openrouter:DeepInfra":    {"in": 0.037, "out": 0.17},
+    "openrouter:CoreWeave":    {"in": 0.03,  "out": 0.17},
+    "openrouter:SiliconFlow":  {"in": 0.05,  "out": 0.45},
+    "spark":                   {"in": 0.0,   "out": 0.0},
+}
+
+
+def price_key(provider, upstream):
+    """The PRICES key for a call. OpenRouter is priced by the UPSTREAM it routed
+    to; an unreported upstream has no rate and must stay unknown, never zero."""
+    if provider == "openrouter":
+        return ("openrouter:%s" % upstream) if upstream else None
+    return provider
+
+
+def cost_for(provider, upstream, prompt_tokens, completion_tokens,
+             provider_cost=None):
+    """(cost_usd, cost_source). None when the tokens or the rate are missing —
+    an unpriceable call is UNKNOWN, never $0. `provider_cost` is the provider's
+    own reported USD and always wins."""
+    if provider_cost is not None:
+        return (round(float(provider_cost), 8), "provider")
+    if provider == "spark":
+        return (0.0, "unmetered:subscription")
+    key = price_key(provider, upstream)
+    rate = PRICES.get(key) if key else None
+    if rate is None or prompt_tokens is None or completion_tokens is None:
+        return (None, None)
+    usd = (prompt_tokens * rate["in"] + completion_tokens * rate["out"]) / 1e6
+    return (round(usd, 8), "table:%s:%s" % (PRICES_DATE, key))
+
 
 # The provider-side usage-limit refusal. It is a TYPED REFUSAL, exactly like
 # Groq's finish_reason=length: nothing is applied, nothing is gated, and it is
@@ -1818,6 +1883,8 @@ def call_openai_chat(cfg, prompt, k, temperature, tag):
         order = cfg.get("upstream_order")
         if order:
             payload["provider"] = {"order": list(order), "allow_fallbacks": False}
+        if cfg.get("usage_include"):
+            payload["usage"] = {"include": True}
         body = json.dumps(payload).encode()
         headers = {"Content-Type": "application/json"}
         headers.update(cfg["headers"])
@@ -1830,7 +1897,7 @@ def call_openai_chat(cfg, prompt, k, temperature, tag):
             return {"cand": cand, "source": model, "text": None,
                     "response_s": time.time() - T0,
                     "call_wall_s": time.time() - t_call,
-                    "tokens": None,
+                    "tokens": None, "provider_cost_usd": None,
                     "error_class": klass, "http_status": status,
                     "error": generic_error(cfg["key_label"], klass, status)}
         call_wall = time.time() - t_call
@@ -1868,6 +1935,10 @@ def call_openai_chat(cfg, prompt, k, temperature, tag):
                 "queue_time": u.get("queue_time"),
                 # which upstream OpenRouter actually routed to (Cerebras/Groq/...).
                 "upstream": upstream,
+                # the PROVIDER's own USD for this call, when it reports one
+                # (OpenRouter `usage.cost`, enabled by usage.include). None on
+                # Groq, which reports no cost field.
+                "provider_cost_usd": u.get("cost"),
                 "error_class": None, "http_status": None,
                 "error": None}
     with cf.ThreadPoolExecutor(max_workers=max(1, k)) as ex:
@@ -1941,9 +2012,15 @@ def arm_f(prompt, k, temperature=0.7, provider="groq", tag="f", run_dir=None):
             % (provider, ", ".join(sorted(PROVIDERS))), 7)
     cfg = PROVIDERS[provider]
     if cfg["kind"] == "codex-exec":
-        return call_codex_exec(cfg["model"], prompt, k, tag,
-                               cfg["reasoning_effort"], run_dir or RUN_DIR)
-    return call_openai_chat(cfg, prompt, k, temperature, tag)
+        cands = call_codex_exec(cfg["model"], prompt, k, tag,
+                                cfg["reasoning_effort"], run_dir or RUN_DIR)
+    else:
+        cands = call_openai_chat(cfg, prompt, k, temperature, tag)
+    # the provider NAME travels with the candidate: pricing is a property of
+    # who was called, and a receipt read later has no other way to know.
+    for c in cands:
+        c["provider"] = provider
+    return cands
 
 
 # --------------------------------------------------------------------------
@@ -1959,6 +2036,13 @@ REFUSAL_DETAIL = {
     "no-key": "no API key on this box; nothing was called",
     "key-mode": "the key file is not mode 600; nothing was called",
 }
+
+
+def run_cost(records):
+    """Sum of the priceable candidates. None when NOTHING could be priced —
+    a run whose cost is unknown must not report $0."""
+    xs = [r["cost_usd"] for r in records if r.get("cost_usd") is not None]
+    return round(sum(xs), 8) if xs else None
 
 
 def judge_candidates(cands, manifest, cmds, run_dir, t_ref=None):
@@ -2009,11 +2093,17 @@ def judge_candidates(cands, manifest, cmds, run_dir, t_ref=None):
                "refusal_evidence": scrub(c.get("refusal_evidence")),
                "completion_time_s": c.get("completion_time_s"),
                "queue_time_s": c.get("queue_time"),
+               "provider": c.get("provider"),
                # typed, never the exception's text
                "error_class": c.get("error_class"),
                "http_status": c.get("http_status"),
                "error": scrub(c.get("error"))}
         rec.update(ev)
+        cost, cost_src = cost_for(c.get("provider"), c.get("upstream"),
+                                  c.get("prompt_tokens"), c.get("tokens"),
+                                  c.get("provider_cost_usd"))
+        rec["cost_usd"] = cost
+        rec["cost_source"] = cost_src
         rec["verified"] = verified
         rec["verified_wall_s"] = round(time.time() - t_ref, 3) if verified else None
         rec["semantic_mismatch"] = bool(ev.get("gate_ok") and not ev.get("accept_ok"))
@@ -2070,6 +2160,7 @@ def bench(prompt, providers, rounds, temperature, manifest, cmds):
                     "verified": False, "verified_wall_s": None,
                     "call_wall_s": None, "response_wall_s": None,
                     "tokens": None, "completion_time_s": None, "upstream": None,
+                    "cost_usd": None, "cost_source": None,
                     "apply_ok": None, "gate_ok": None, "accept_ok": None})
                 continue
             run_dir = os.path.join(FX, "bench-%d-%s-r%d" % (int(T0), p, r_i))
@@ -2148,6 +2239,9 @@ def bench(prompt, providers, rounds, temperature, manifest, cmds):
                       "gate_commands": cmds, "rounds": rounds, "k": 1,
                       "interleaved": True,
                       "rows": rows,
+                      "prices_date": PRICES_DATE,
+                      "run_cost_usd": run_cost([r for p in providers
+                                                for r in per[p]]),
                       "candidates": [r for p in providers for r in per[p]]}) + "\n")
     print("\nbench table written to %s" % out)
     return 0
@@ -2345,6 +2439,214 @@ def arm_nw(session_id, run_dir):
         "error": None if refusal else err}]
 
 
+# --------------------------------------------------------------------------
+# --cost-report — walk the fx trees and price everything that was spent.
+#
+# It reads receipt.edn, bench-*.edn and candidate-*.edn. It does NOT re-read a
+# candidate's tokens from anywhere else, and it never guesses a missing number:
+# a candidate with no usage fields is counted in `no-usage`, which is UNKNOWN,
+# not zero. Older receipts predate the :provider field; those are attributed
+# from the candidate's :upstream, then its :cand prefix, then — for a bare
+# `openai/gpt-oss-120b` source with neither — groq, which was the default
+# provider before the field existed. That fallback is printed as a caveat.
+COST_REPORT_DEFAULT_FX = ["/var/tmp/forge/typist-fx",
+                          "/var/tmp/forge/typist-real-fx"]
+
+_NUM = re.compile(r"^-?\d+(?:\.\d+)?$")
+
+
+def edn_scalar(tok):
+    if tok == "nil":
+        return None
+    if tok in ("true", "false"):
+        return tok == "true"
+    if _NUM.match(tok):
+        return float(tok) if "." in tok else int(tok)
+    return tok
+
+
+def edn_read(text):
+    """A SMALL reader for the EDN this script itself writes: maps, vectors,
+    strings, keywords, numbers, nil/true/false. Not a general EDN reader — it
+    is deliberately narrow so a surprising file fails loudly."""
+    i = [0]
+    n = len(text)
+
+    def ws():
+        while i[0] < n and (text[i[0]].isspace() or text[i[0]] == ","):
+            i[0] += 1
+
+    def read():
+        ws()
+        if i[0] >= n:
+            raise ValueError("eof")
+        ch = text[i[0]]
+        if ch == "{":
+            i[0] += 1
+            d = {}
+            while True:
+                ws()
+                if text[i[0]] == "}":
+                    i[0] += 1
+                    return d
+                k = read()
+                v = read()
+                d[k] = v
+        if ch == "[":
+            i[0] += 1
+            out = []
+            while True:
+                ws()
+                if text[i[0]] == "]":
+                    i[0] += 1
+                    return out
+                out.append(read())
+        if ch == '"':
+            i[0] += 1
+            buf = []
+            while text[i[0]] != '"':
+                if text[i[0]] == "\\":
+                    i[0] += 1
+                    c = text[i[0]]
+                    buf.append({"n": "\n", "t": "\t", "r": "\r"}.get(c, c))
+                else:
+                    buf.append(text[i[0]])
+                i[0] += 1
+            i[0] += 1
+            return "".join(buf)
+        if ch == ":":
+            i[0] += 1
+            st = i[0]
+            while i[0] < n and (text[i[0]].isalnum() or text[i[0]] in "-_?!*+./"):
+                i[0] += 1
+            return text[st:i[0]]
+        st = i[0]
+        while i[0] < n and not text[i[0]].isspace() and text[i[0]] not in "{}[],":
+            i[0] += 1
+        return edn_scalar(text[st:i[0]])
+    return read()
+
+
+def attribute(top, c):
+    """The PRICES key for one candidate record read back off disk."""
+    src = str(c.get("source") or "")
+    up = c.get("upstream")
+    cand = str(c.get("cand") or "")
+    prov = top.get("provider")
+    if "codex exec" in src:
+        return "spark"
+    if up:
+        return "openrouter:%s" % up
+    if cand.startswith("openrouter"):
+        return "openrouter:unreported"
+    if cand.startswith("groq"):
+        return "groq"
+    if cand.startswith("spark"):
+        return "spark"
+    if prov:
+        return "openrouter:unreported" if prov == "openrouter" else prov
+    if src == GROQ_MODEL:
+        return "groq"          # pre-:provider receipts; groq was the default
+    return "no-model-call"     # fake / replay arms
+
+
+def cost_report(fx_dirs):
+    want = ("receipt.edn",)
+    agg = {}
+    files = 0
+    unreadable = []
+    for root in fx_dirs:
+        for dirpath, _dirs, names in os.walk(root):
+            for nm in sorted(names):
+                if not nm.endswith(".edn"):
+                    continue
+                if not (nm in want or nm.startswith("bench-")
+                        or nm.startswith("candidate-")):
+                    continue
+                path = os.path.join(dirpath, nm)
+                try:
+                    with open(path) as fh:
+                        top = edn_read(fh.read())
+                except Exception as e:                          # noqa: BLE001
+                    unreadable.append((path, type(e).__name__))
+                    continue
+                if not isinstance(top, dict):
+                    continue
+                files += 1
+                for c in (top.get("candidates") or []):
+                    if not isinstance(c, dict):
+                        continue
+                    k = attribute(top, c)
+                    a = agg.setdefault(k, {"calls": 0, "prompt": 0,
+                                           "completion": 0, "reasoning": 0,
+                                           "no_usage": 0, "provider_usd": 0.0,
+                                           "provider_priced": 0})
+                    pt, ct = c.get("prompt_tokens"), c.get("tokens")
+                    a["calls"] += 1
+                    a["prompt"] += pt or 0
+                    a["completion"] += ct or 0
+                    a["reasoning"] += c.get("reasoning_tokens") or 0
+                    if pt is None and ct is None:
+                        a["no_usage"] += 1
+                    if c.get("cost_source") == "provider" and c.get("cost_usd") is not None:
+                        a["provider_usd"] += float(c["cost_usd"])
+                        a["provider_priced"] += 1
+    hdr = ("provider/upstream", "calls", "prompt", "completion", "reasoning",
+           "no-usage", "est USD")
+    print("\nCOST REPORT   prices dated %s   fx: %s"
+          % (PRICES_DATE, ", ".join(fx_dirs)))
+    print("%-26s %6s %10s %11s %10s %9s %12s" % hdr)
+    total = 0.0
+    unpriced = 0
+    rows = []
+    for k, a in sorted(agg.items(), key=lambda kv: -kv[1]["calls"]):
+        rate = PRICES.get(k)
+        if a["provider_priced"] == a["calls"] - a["no_usage"] and a["provider_priced"]:
+            usd = a["provider_usd"]          # every priceable call self-reported
+            src = "provider"
+        elif rate is not None:
+            usd = (a["prompt"] * rate["in"] + a["completion"] * rate["out"]) / 1e6
+            src = "table:%s" % PRICES_DATE
+        else:
+            usd, src = None, "no rate"
+        if usd is None:
+            unpriced += a["calls"]
+        else:
+            total += usd
+        rows.append((k, a, usd, src))
+        print("%-26s %6d %10d %11d %10d %9d %12s"
+              % (k, a["calls"], a["prompt"], a["completion"], a["reasoning"],
+                 a["no_usage"], ("$%.4f" % usd) if usd is not None else "unknown"))
+    print("%-26s %6d %10s %11s %10s %9d %12s"
+          % ("TOTAL", sum(a["calls"] for a in agg.values()), "", "", "",
+             sum(a["no_usage"] for a in agg.values()), "$%.4f" % total))
+    print("reasoning tokens are INCLUDED in the completion column "
+          "(both providers bill them as output).")
+    if unpriced:
+        print("%d call(s) have no rate and are UNKNOWN, not zero." % unpriced)
+    if unreadable:
+        print("%d file(s) unreadable: %s" % (len(unreadable), unreadable[:3]))
+    out = os.path.join(fx_dirs[0], "cost-report-%d.edn" % int(T0))
+    with open(out, "w") as fh:
+        fh.write(edn({"cost_report": True,
+                      "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                      "prices_date": PRICES_DATE,
+                      "prices": PRICES,
+                      "fx_dirs": fx_dirs,
+                      "files_read": files,
+                      "rows": [{"key": k, "calls": a["calls"],
+                                "prompt_tokens": a["prompt"],
+                                "completion_tokens": a["completion"],
+                                "reasoning_tokens": a["reasoning"],
+                                "no_usage_calls": a["no_usage"],
+                                "cost_usd": usd, "cost_source": src}
+                               for (k, a, usd, src) in rows],
+                      "total_usd": round(total, 6),
+                      "unpriced_calls": unpriced}) + "\n")
+    print("cost report written to %s" % out)
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(prog="typist-run", add_help=True)
     ap.add_argument("--arm", choices=["N", "NW", "F", "fake"])
@@ -2397,12 +2699,18 @@ def main():
                     help="the mission whose fixture, gate profile, authorized file "
                          "and acceptance witness judge the candidates. Default: "
                          "derived from the dossier basename.")
+    ap.add_argument("--cost-report", action="store_true",
+                    help="walk the fx trees, price every recorded call, exit")
+    ap.add_argument("--fx", action="append", default=None, metavar="DIR",
+                    help="--cost-report only: an fx tree to walk (repeatable)")
     ap.add_argument("--fixture", default=None, metavar="PREIMAGE_DIR",
                     help="override the mission's preimage directory; its manifest "
                          "is written beside it as <dir>.manifest.edn")
     a = ap.parse_args()
+    if a.cost_report:
+        sys.exit(cost_report(a.fx or list(COST_REPORT_DEFAULT_FX)))
     if not a.arm and not a.replay and not a.bench:
-        ap.error("one of --arm, --replay or --bench is required")
+        ap.error("one of --arm, --replay, --bench or --cost-report is required")
 
     global KEYS_DIR
     if a.keys_dir is not None:
@@ -2561,6 +2869,8 @@ def main():
                       else "process-start-to-independent-acceptance"),
             "acceptance": MISSIONS[MISSION]["accept_desc"],
             "candidates": records,
+            "run_cost_usd": run_cost(records),
+            "prices_date": PRICES_DATE,
             "first_verified_s": first,
             "semantic_mismatch": mismatch,
             "refusals": refusals,
@@ -2572,12 +2882,14 @@ def main():
         tok_s = ("tokens=%d" % sum(tok)) if tok else "tokens=unknown"
         rt = [r["reasoning_tokens"] for r in records if r.get("reasoning_tokens") is not None]
         rt_s = ("reasoning_tokens=%d" % sum(rt)) if rt else "reasoning_tokens=unknown"
+        rc = run_cost(records)
+        cost_s = ("cost=$%.6f" % rc) if rc is not None else "cost=unknown"
         print("arm=%s mission=%s edit_form=%s run=%s first_verified_s=%s candidates=%d apply_ok=%d "
-              "gate_ok=%d accept_ok=%d semantic_mismatch=%d refusals=%d %s %s%s"
+              "gate_ok=%d accept_ok=%d semantic_mismatch=%d refusals=%d %s %s %s%s"
               % (a.arm, MISSION, EDIT_FORM, run_id,
                  ("%.2f" % first) if first is not None else "none",
                  len(records), apply_ok, gate_ok, accept_ok, mismatch, refusals,
-                 tok_s, rt_s,
+                 tok_s, rt_s, cost_s,
                  ("" if a.arm != "NW" else
                   " warm_kind=fork warm_session=%s call_wall_s=%s edit_channel=%s"
                   % (warm["session"], fmt(records[0].get("call_wall_s")),

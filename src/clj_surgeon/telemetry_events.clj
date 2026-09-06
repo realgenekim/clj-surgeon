@@ -95,8 +95,11 @@
    is a scalar the reader needs and nothing else: no key, no path, no source.
    `wall_ms` is rounded to a long; a nil stays nil rather than becoming 0,
    because \"not measured\" and \"instant\" are different facts."
-  [{:keys [ts seat pid kind tool ok error_type wall_ms mission_id dropped]}]
-  (let [[error truncated?] (truncate error_type)]
+  [{:keys [ts seat pid kind tool ok error_type wall_ms mission_id dropped
+           prompt_tokens completion_tokens reasoning_tokens cost_usd
+           provider upstream]}]
+  (let [[error truncated?] (truncate error_type)
+        tok (fn [v] (when (number? v) (long v)))]
     (cond-> {:ts ts
              :seat seat
              :pid pid
@@ -105,7 +108,21 @@
              :ok (boolean ok)
              :error_type error
              :wall_ms (when (number? wall_ms) (long (Math/round (double wall_ms))))
-             :mission_id mission_id}
+             :mission_id mission_id
+             ;; COST FIELDS -- optional, and ALWAYS PRESENT AS KEYS so a reader
+             ;; never has to distinguish "absent" from "the writer forgot".
+             ;; null is the honest value for a caller that has no such number:
+             ;; the MCP tools have none, the typist runner and the ledger do.
+             ;; A token count that is not a number stays nil rather than
+             ;; becoming 0 -- "not reported" and "zero tokens" are different
+             ;; facts, the same rule `wall_ms` already follows.
+             :prompt_tokens (tok prompt_tokens)
+             :completion_tokens (tok completion_tokens)
+             :reasoning_tokens (tok reasoning_tokens)
+             :cost_usd (when (number? cost_usd) (double cost_usd))
+             ;; free text, bounded like every other free-text field
+             :provider (first (truncate provider))
+             :upstream (first (truncate upstream))}
       truncated? (assoc :error_type_truncated true)
       (pos? (or dropped 0)) (assoc :telemetry_dropped dropped))))
 
@@ -120,7 +137,8 @@
       rendered
       (str (json/generate-string
              (assoc line :error_type nil :tool (first (truncate (:tool line)))
-                    :mission_id nil :over_limit true))
+                    :mission_id nil :provider nil :upstream nil
+                    :over_limit true))
            "\n"))))
 
 (defn- open-options
@@ -155,7 +173,10 @@
    on the next line that lands, then resets -- so the drop is reported exactly
    once and by the process that suffered it.
 
-   `event` keys: :kind :tool :ok :error_type :wall_ms :mission_id."
+   `event` keys: :kind :tool :ok :error_type :wall_ms :mission_id, plus the
+   optional cost fields :prompt_tokens :completion_tokens :reasoning_tokens
+   :cost_usd :provider :upstream, which pass straight through and are null
+   for any caller that does not have them."
   ([event] (record! (default-events-file) event))
   ([file event]
    (let [carried @dropped

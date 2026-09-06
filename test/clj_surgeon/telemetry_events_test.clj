@@ -156,3 +156,34 @@
 (deftest the-default-path-is-the-home-dotdir
   (is (str/ends-with? (events/default-events-file) "/.clj-surgeon/events.jsonl")
       "the ledger is a HOME dotdir, not one of the launcher-chosen state roots"))
+
+(def cost-fields
+  "The optional cost fields. A caller that has them passes them through; a
+   caller that does not gets nulls -- never a zero, which would read as a free
+   call in a ledger whose whole purpose is telling Gene what he is paying."
+  [:prompt_tokens :completion_tokens :reasoning_tokens :cost_usd
+   :provider :upstream])
+
+(deftest cost-fields-round-trip-and-are-null-when-the-caller-has-none
+  (let [file (io/file (temp-dir "events-cost-") "events.jsonl")]
+    (events/record! file {:kind "typist-call" :tool "arm-F" :ok true
+                          :wall_ms 1234 :mission_id "onesite"
+                          :prompt_tokens 806 :completion_tokens 318
+                          :reasoning_tokens 256 :cost_usd 5.21E-4
+                          :provider "openrouter" :upstream "Cerebras"})
+    (events/record! file {:kind "mcp-call" :tool "inspect_clojure" :ok true})
+    (let [[priced unpriced] (map #(json/parse-string % true) (lines file))]
+      (is (= 806 (:prompt_tokens priced)))
+      (is (= 318 (:completion_tokens priced)))
+      (is (= 256 (:reasoning_tokens priced)))
+      (is (= 5.21E-4 (:cost_usd priced))
+          "the USD survives serialization at its real magnitude, not rounded to a cent")
+      (is (= "openrouter" (:provider priced)))
+      (is (= "Cerebras" (:upstream priced)))
+      (doseq [f cost-fields]
+        (is (contains? unpriced f)
+            (str f " is PRESENT on a line whose caller has no such number")))
+      (is (every? nil? (map unpriced cost-fields))
+          "an MCP tool call has no tokens and no cost: null, never zero")
+      (doseq [f required-fields]
+        (is (contains? priced f) (str f " still present on a priced line"))))))
