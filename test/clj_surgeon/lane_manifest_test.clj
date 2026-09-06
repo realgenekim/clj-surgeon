@@ -376,10 +376,10 @@
 
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
-    (is (= 46 (count (lm/namespaces-for :fast))))
+    (is (= 47 (count (lm/namespaces-for :fast))))
     (is (= 5 (count (lm/namespaces-for :integration))))
-    (is (= 22 (count (lm/namespaces-for :battery))))
-    (is (= 73 (count lm/manifest))
+    (is (= 23 (count (lm/namespaces-for :battery))))
+    (is (= 75 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -410,8 +410,10 @@
     clj-surgeon.mission-events-test 7 ; Public completion events and isolated logging failure.
     clj-surgeon.mission-phase-events-test 7 ; Actual phase receipts, identity and isolated logging failure.
     clj-surgeon.mission-provider-fallback-events-test 8 ; Actual dispatched fallback, thread context and isolated logging.
-    clj-surgeon.mission-display-test 7 ; Bounded saved receipt, executable examples and missing workspace.
+    clj-surgeon.mission-display-test 9 ; Add historical nested refusal and incompatible-example witnesses.
     clj-surgeon.mission-fallback-test 5 ; Explicit report, actual event write and unchanged proof.
+    clj-surgeon.mission-usage-test 7 ; Observed legacy/attempt usage and unknowns.
+    clj-surgeon.mission-usage-executor-test 2 ; Saved success/refusal usage snapshots.
     clj-surgeon.mission-run-test 8 ; One-process saved plan, refusal and CLI boundaries.
     clj-surgeon.mission-test 27 ; Adopt existing ledger orphan plus owner-forms routing and recovery witnesses.
     clj-surgeon.mission-typist-test 6 ; Pure routing/dossier and frozen generation policy boundaries.
@@ -488,10 +490,10 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      ;; Add seven phase-event and two fallback witnesses: 921 original + 343 adopted = 1264; includes mission display and fallback report witnesses.
-      (is (= 343 adopted) (str "adopted tests: " adopted)))
+      ;; Add seven phase-event and two fallback witnesses: 921 original + 354 adopted = 1275; includes observed usage and historical presentation.
+      (is (= 354 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1264 total) (str "manifest declares " total " tests"))
+      (is (= 1275 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
