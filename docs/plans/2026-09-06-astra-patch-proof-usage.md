@@ -1,6 +1,6 @@
 # Astra: make the existing patch gate usable with supplied proof
 
-Status: jointly reviewed and exercised on one real-source scratch fixture; the existing API and verification law are unchanged. Tool-description guidance is implemented on the branch; live catalog exposure and portable example packaging remain unfinished.
+Status: jointly reviewed and exercised on one real-source scratch fixture; the existing API and verification law are unchanged. Tool-description guidance is implemented on the branch; live catalog exposure and a portable executable runner remain unfinished. A [profile integration guide and explicit template](../focused-test-profile.md) now document the demonstrated ABI; they do not turn the restricted adapter into a generic runner.
 Evidence: [fresh-caller pilot](../observations/2026-09-06-astra-recovery-pilot-result.md).
 
 ## Problem and observed behavior

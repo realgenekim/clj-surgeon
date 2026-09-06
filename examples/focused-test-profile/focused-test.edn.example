@@ -1,0 +1,7 @@
+;; TEMPLATE ONLY. Supply an existing, reviewed snapshot-aware executable and
+;; real source-to-suite mapping. This command is not included in this package.
+;; Relative executable path resolves from the live project root.
+{:command ["./scripts/project-focused-tests"
+           "{snapshot}" "{report}" "{namespaces}"]
+ :timeout-ms 70000
+ :namespaces {"src/your_project/example.clj" ["your-project.example-test"]}}
