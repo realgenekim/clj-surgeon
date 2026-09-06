@@ -199,3 +199,7 @@ The sole paid attempt verified on the original three-owner Maven task: generatio
 ### Astra 12:00Z checkpoint, recorded 2026-09-06T11:42:12.863714+00:00
 
 [Full Gene report](2026-09-06-astra-checkpoint-1200z.md) records the prepared wins, the new assigned-route loss, the independently verified single Spark candidate, the known witness defect and next small fresh-caller pilot. Meter observed11:37: 50% weekly remaining, reset September12 15:48:08UTC; no token-budget estimate. Next scheduled checkpoint15:00, extended end16:20.
+
+### Astra fresh-caller usability result, 2026-09-06T12:31:10.559486+00:00
+
+Both new callers verified (N67.262s, D87.680s), but ordinary-batch adoption failed: D authored a native patch, tried admit_clojure_patch(commit,verify=none), got the correct verification-incomplete refusal, then applied the same patch natively. Zero tool-committed sites. Both reused and ran supplied proofs, then parent repeated them. Preparation/review/overlapping wait was38.2minutes, separately visible. [Full result, fairness limits and accounting](2026-09-06-astra-recovery-pilot-result.md). Collector/docs landed b912f714 after the recorded freshness refusal and fresh battery; no policy waiver.
