@@ -124,6 +124,19 @@
       (is (seq routing/required-sections))
       (doseq [section routing/required-sections]
         (is (str/includes? plate section) section))))
+  (testing "the plate routes only witnessed contracts and says when a route retires"
+    (let [plate (slurp "resources/clj-surgeon-agent-routing.md")]
+      (is (str/includes? plate "**Strictly better, or native.**"))
+      (is (str/includes? plate "**Kill switch.**"))
+      (testing "one complete valid call is present for every routed class"
+        (is (str/includes? plate "\"expect\": {\"requests\": 3, \"files\": 2}"))
+        (is (str/includes? plate "\"within\": {\"form\": \"handle-event\"}"))
+        (is (str/includes? plate "\"op\": \"alias_migration\"")))
+      (testing "the receipt scope separates byte-level proof from caller proof"
+        (is (str/includes? plate "written bytes read back and verified"))
+        (is (str/includes? plate "structural candidates")))
+      (testing "extraction and whole-feature work stay native"
+        (is (str/includes? plate "extraction stays NATIVE")))))
   (testing "the plate names the doctrine commit it derives from"
     (is (re-find #"Derived from doctrine commit [0-9a-f]{8}"
                  (slurp "resources/clj-surgeon-agent-routing.md"))))

@@ -28,7 +28,12 @@
    "3. ONE `apply_clojure_changes` call, edits"
    "4. Clear argument error: repair once from the refusal. Route unavailable,"
    "**Evidence and boundary.** Cohort I measured the INFORMED BATCHED EDIT route"
-   "*Derived from doctrine commit 7a682b9e on clj-surgeon MCP/main, whose receipts"])
+   "*Derived from doctrine commit 7a682b9e on clj-surgeon MCP/main, whose receipts"
+   ;; The strictly-better rule and its kill switch. A plate that routes a class
+   ;; without stating WHEN the route is withdrawn is an unbounded default, so the
+   ;; rule line and the retirement line are pinned together.
+   "**Strictly better, or native.** Route automatically only when the task matches a witnessed contract and the complete receipt path is available; otherwise use native. On one clear refusal repair once, then native fallback with a receipt. Meter complete verified wall, first-attempt success, fallback and unknown telemetry; retire a route when evidence no longer clears its native control."
+   "**Kill switch.** Stop routing a class and re-run a preregistered native pair when"])
 
 (defn missing-sections
   "Required plate sections absent from `source`, in declaration order."
