@@ -936,7 +936,30 @@
                  :decision "provide evidence"}
         p (cli/plan-dossier "owner_forms" refusal typist-request)]
     (is (= :blocked (:state p)))
-    (is (= "typist-not-admitted" (get-in p [:decision :error_type])))))
+    (is (= "typist-not-admitted" (get-in p [:decision :error_type]))))
+  ;; Field witness: commit-candidate! contains comments; the old projection
+  ;; dropped its hyphenated refusal code and supplied a helper example.
+  (let [request (assoc typist-request :owners [{:file "executor.clj" :owner "commit-candidate!"}])
+        refusal {:ok false :committed false :error-type :forms-protected-syntax
+                 :mutation-attempted false}
+        p (cli/plan-dossier "owner_forms" refusal request)
+        saved (atom nil)]
+    (is (= "forms-protected-syntax" (get-in p [:decision :error_type])))
+    (is (re-find #"(?i)comments" (get-in p [:decision :because] "")))
+    (is (re-find #"smaller supported owner|native edit" (get-in p [:decision :decision] "")))
+    (is (= "owner_forms" (get-in p [:decision :example :verb])))
+    (is (= (:owners request) (get-in p [:decision :example :request :owners])))
+    (is (true? (get-in p [:decision :example :requires-decision])))
+    (with-redefs-fn
+      {#'cli/verbs {"owner_forms" {:plan (fn [& _] refusal)}}
+       #'cli/state-dir-for (fn [& _] "/ledger")
+       #'cli/admitted-profiles (fn [& _] {"gate" {:commands [["bb" "test"]]}})
+       #'mission/next-id (fn [_] "m1")
+       #'cli/save! (fn [_ m] (reset! saved m))}
+      #(do
+         (cli/propose! {:verb "owner_forms" :request request})
+         (is (= :blocked (:state @saved)))
+         (is (= (:decision p) (:decision @saved)))))))
 
 (deftest helper-projection-stays-identical
   (is (= (mission/dossier typist-planned typist-request)

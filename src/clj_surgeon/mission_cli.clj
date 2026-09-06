@@ -74,13 +74,32 @@
 (defn plan-dossier
   "Project the selected verb without inventing helper-extraction counts."
   [verb plan request]
-  (if (and (= verb "owner_forms") (:ok plan))
-    {:dossier {:planned true
-               :owners (:owners request)
-               :typist (select-keys (:typist plan) [:dossier :route])
-               :sources_read (count (:sources plan))}
-     :decision nil
-     :state :ready}
+  (if (= verb "owner_forms")
+    (if (:ok plan)
+      {:dossier {:planned true
+                 :owners (:owners request)
+                 :typist (select-keys (:typist plan) [:dossier :route])
+                 :sources_read (count (:sources plan))}
+       :decision nil
+       :state :ready}
+      (let [code (or (:error_type plan) (:error-type plan) "typist-plan-refused")
+            code (if (keyword? code) (name code) (str code))
+            protected? (= code "forms-protected-syntax")
+            normalized (assoc plan
+                              :error_type code
+                              :error (if protected?
+                                       "The selected owner contains comments or other protected syntax that owner_forms cannot safely replace. No mutation was attempted."
+                                       (or (:error plan) (str "owner_forms refused this plan: " code ".")))
+                              :decision (if protected?
+                                          "Choose a smaller supported owner while preserving the protected syntax, or use a native edit. Do not retry the identical request."
+                                          (or (:decision plan)
+                                              "Inspect the refusal evidence and choose a supported owner scope or a native edit before trying again.")))]
+        (assoc-in (mission/dossier normalized request) [:decision :example]
+                  {:verb "owner_forms"
+                   :request (select-keys request [:workspace_root :owners :proof-files :intent
+                                                  :typist :verification :acceptance_profile])
+                   :requires-decision true
+                   :note "Request shape only; resolve the refusal before submitting."})))
     (mission/dossier plan request)))
 
 (defn parse-flags
@@ -192,7 +211,9 @@
           ;; would have been accepted, and the size of any file it names.
           decision (when decision
                      (-> decision
-                         (assoc :example example-request)
+                         (assoc :example (if (= verb "owner_forms")
+                                           (:example decision)
+                                           example-request))
                          (update :evidence merge
                                  (let [occ (occupant-sizes (:evidence decision)
                                                            (:workspace_root request))]
