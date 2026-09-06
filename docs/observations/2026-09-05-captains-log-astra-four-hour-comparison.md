@@ -191,3 +191,7 @@ Sparkunpaidpreflight: actual reference kernel+proofs pass2/5and4/24, outerreceip
 ### Astra class contract clarification, 2026-09-06T11:23:03.190063+00:00
 
 Source audit confirms mission classes are rate labels over one existing-definition replacement compiler. General extraction, file creation and top-level insertion/deletion are not supported by owner_forms; ready confirms frozen authority, not prose feasibility. JSON may replace a subset; raw Clojure requires exact coverage in one file. Updated request documentation and current plan without changing admission or code. [Source audit](2026-09-06-astra-class-capability-audit.md). No runtime during Fable's fence.
+
+### Astra single Spark coding result, 2026-09-06 11:28Z
+
+The sole paid attempt verified on the original three-owner Maven task: generation 4.152 s, complete parent 13.020 s, proofs 2/5 and 4/24, scope preserved. Input 7089, output 804 including reasoning 256; subscription dollar cost unknown. New unpaid preflight independently GO; old failed preflight retained. No retry or production route change. Timing window explicitly released to Fable after terminal cleanup. [Full boundaries](2026-09-06-astra-spark-utility.md). Collector fence sole hold fixed separately in99d5d5fc by removing a root-only study’s live fleet-cutoff marker.
