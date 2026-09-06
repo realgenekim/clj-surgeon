@@ -74,3 +74,64 @@ The finding that was NOT predicted: Spark is the most RELIABLE single candidate 
 | fanout, k=5 | 1.95 s (6/6) | 5.54 s (6/6) | not run | not run | — |
 
 Gene's question answered: fastest typist by wall = gpt-oss-120b on Cerebras, pinned through OpenRouter; then Groq; Spark last, by an order of magnitude, because of the per-call process. Most reliable single candidate = Spark.
+
+## Offline contract (from fix round 5, 03:4xZ) — chokepoint, not sandbox
+
+**`TYPIST_OFFLINE=1` is a CHOKEPOINT, NOT A SANDBOX.** Receipts written under
+it carry `:offline_contract "chokepoint-not-sandbox"`, and the same words are
+in `bin/typist-run`'s module docstring, its header comment, `--print-key-paths`
+output, and the `bin/typist-run-test` banner.
+
+What it does:
+
+- It refuses **the runner's OWN** spawn and connect paths at one chokepoint —
+  every `os.system`/`os.popen`/`os.exec*`/`os.spawn*`/`os.posix_spawn*`,
+  `subprocess.run|call|check_call|check_output|Popen`, `urlopen`,
+  `http.client.HTTP(S)Connection` and `socket.create_connection` this process
+  reaches, plus a `codex`/`claude` word scanned inside any shell string.
+  Typed refusal, exit 6, before the call.
+
+What it does **not** do:
+
+- It does not confine children, and it is not a sandbox. Sol fence r4
+  demonstrated the escapes and they are real: `bash -c /abs/path/codex`, a
+  `PATH` reset, `env -i`, a re-exec from a spawned `python3`, a socket opened
+  by a child. **Python monkeypatching plus a mutable `PATH` cannot make that
+  impossible.** Only an OS-enforced process/network boundary or a strictly
+  confined broker can.
+
+**No such boundary is available on this box to this user.** Measured
+2026-09-06 on Anvil as `forge`:
+
+```text
+$ unshare -rn true
+unshare: write failed /proc/self/uid_map: Operation not permitted
+$ command -v bwrap firejail
+(no output; exit 1)
+```
+
+There is no `sudo` on this seat either. So the guarantee was made **witnessed**
+rather than **enforced**, in two parts, both asserted at the end of
+`bin/typist-run-test`:
+
+1. **No real key is reachable.** Every runner subprocess the suite starts goes
+   through one helper that always passes `--keys-dir` pointing at a fenced
+   dummy-key directory under `/var/tmp/forge` (syntactically valid values, not
+   real keys); the suite never reads `~/secrets`. The proof is the new
+   `--print-key-paths` dry run, which prints resolved key **paths only** and
+   never opens the files: both provider paths must resolve under the fence and
+   none may touch `/home/forge/secrets`.
+2. **Nothing was spent.** The `~/.codex/sessions` **path set** is compared
+   before and after (a set, not a newest-mtime: a rewritten file is not a new
+   session and a deleted one is not the absence of a new one), plus an egress
+   canary — `~/.clj-surgeon/events.jsonl` must not have grown, and no `.edn`
+   under the suite's own fx tree may carry `:cost_source "provider"` or a real
+   `:upstream`.
+
+Stated the way the banner states it: *a general-purpose child could still
+spawn or connect; what this suite proves is that it did not (session set
+unchanged) and could not have spent (no real key reachable).*
+
+**The landing gates run the suite under this same contract** — the same
+`bin/typist-run-test`, the same `--keys-dir` fence, the same two witnesses. A
+gate that ran under a different, stronger claim would be asserting a boundary
