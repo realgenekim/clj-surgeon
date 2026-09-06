@@ -119,3 +119,4 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - QUEUED docs-only: astra 61f62705 (alias-replication report + captain + tech tree) — 19:42Z
 - LANDED: fable/strictly-better-skill 5d0b31f7 (+receipt 2c68e673) → MCP/main 30d7920c at 20:37Z; tag stable/2026-09-06-strict — 20:39Z
 - QUEUED docs-only: astra e3a3cd64 (brainstorm hand-drive report + scripts + raw clocks + captain) — 21:08Z
+- QUEUED docs-only: astra dc33eba2 (trace report + raw trace) and 43b99afb (keeper) — 21:35Z
