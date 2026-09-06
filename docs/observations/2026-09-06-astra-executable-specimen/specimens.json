@@ -1,0 +1,5 @@
+[
+  {"kind":"inspect","request":"/var/tmp/forge/fable-strict-fx/examples/1-read-request.json","receipt":"/var/tmp/forge/fable-strict-fx/examples/1-read-result.json"},
+  {"kind":"fanout","request":"/var/tmp/forge/fable-strict-fx/examples/2-fanout-request.json","receipt":"/var/tmp/forge/fable-strict-fx/examples/2-fanout-result.json"},
+  {"kind":"alias","request":"/var/tmp/forge/fable-strict-fx/examples/3-alias-request.json","receipt":"/var/tmp/forge/fable-strict-fx/examples/3-alias-result.json"}
+]

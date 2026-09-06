@@ -1,0 +1,151 @@
+{
+  "summary": {
+    "date": "2026-09-06T21:04:39.618Z",
+    "scope": "Archived data, fresh-process component clocks; shared box; no agent task speed claim",
+    "positive_runs": 10,
+    "negative_runs": 8,
+    "byte_identical_examples": 3,
+    "median_ms": {
+      "native": 28.500112,
+      "bb": 14.764783000000023
+    }
+  },
+  "positive": [
+    {
+      "repetition": 1,
+      "arm": "native",
+      "wall_ms": 30.326931000000002,
+      "status": 0,
+      "stderr": ""
+    },
+    {
+      "repetition": 1,
+      "arm": "bb",
+      "wall_ms": 15.382250000000006,
+      "status": 0,
+      "stderr": ""
+    },
+    {
+      "repetition": 2,
+      "arm": "bb",
+      "wall_ms": 12.878394,
+      "status": 0,
+      "stderr": ""
+    },
+    {
+      "repetition": 2,
+      "arm": "native",
+      "wall_ms": 28.500112,
+      "status": 0,
+      "stderr": ""
+    },
+    {
+      "repetition": 3,
+      "arm": "native",
+      "wall_ms": 26.004719999999992,
+      "status": 0,
+      "stderr": ""
+    },
+    {
+      "repetition": 3,
+      "arm": "bb",
+      "wall_ms": 14.828067000000004,
+      "status": 0,
+      "stderr": ""
+    },
+    {
+      "repetition": 4,
+      "arm": "bb",
+      "wall_ms": 13.245365000000021,
+      "status": 0,
+      "stderr": ""
+    },
+    {
+      "repetition": 4,
+      "arm": "native",
+      "wall_ms": 27.354444,
+      "status": 0,
+      "stderr": ""
+    },
+    {
+      "repetition": 5,
+      "arm": "native",
+      "wall_ms": 29.699460999999985,
+      "status": 0,
+      "stderr": ""
+    },
+    {
+      "repetition": 5,
+      "arm": "bb",
+      "wall_ms": 14.764783000000023,
+      "status": 0,
+      "stderr": ""
+    }
+  ],
+  "negative": [
+    {
+      "case": "request-drift",
+      "arm": "native",
+      "wall_ms": 26.68938700000001,
+      "status": 2,
+      "stdout": "",
+      "stderr": "REFUSED request-receipt-mismatch\n"
+    },
+    {
+      "case": "request-drift",
+      "arm": "bb",
+      "wall_ms": 15.165102999999988,
+      "status": 2,
+      "stdout": "",
+      "stderr": "REFUSED request-receipt-mismatch\n"
+    },
+    {
+      "case": "two-files-expect-three",
+      "arm": "native",
+      "wall_ms": 26.795034000000044,
+      "status": 2,
+      "stdout": "",
+      "stderr": "REFUSED request-cardinality-mismatch\n"
+    },
+    {
+      "case": "two-files-expect-three",
+      "arm": "bb",
+      "wall_ms": 15.86336,
+      "status": 2,
+      "stdout": "",
+      "stderr": "REFUSED request-cardinality-mismatch\n"
+    },
+    {
+      "case": "failed-receipt",
+      "arm": "native",
+      "wall_ms": 29.99517400000002,
+      "status": 2,
+      "stdout": "",
+      "stderr": "REFUSED receipt-not-success\n"
+    },
+    {
+      "case": "failed-receipt",
+      "arm": "bb",
+      "wall_ms": 15.119325000000003,
+      "status": 2,
+      "stdout": "",
+      "stderr": "REFUSED receipt-not-success\n"
+    },
+    {
+      "case": "receipt-count",
+      "arm": "native",
+      "wall_ms": 25.679001000000028,
+      "status": 2,
+      "stdout": "",
+      "stderr": "REFUSED receipt-cardinality-mismatch\n"
+    },
+    {
+      "case": "receipt-count",
+      "arm": "bb",
+      "wall_ms": 14.73299499999996,
+      "status": 2,
+      "stdout": "",
+      "stderr": "REFUSED receipt-cardinality-mismatch\n"
+    }
+  ]
+}
