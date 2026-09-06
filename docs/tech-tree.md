@@ -220,3 +220,5 @@ Closed-closure warm transition: actual source change and matching proof earned, 
 ### Astra stronger comparator — 2026-09-06T09:58:04.633110+00:00
 
 Single-JVM cold proof now executed at2.612s complete command; earlier warmtransition0.866s is3.02x component ratio (one observation), replacing two-JVM5.07x as the stronger comparison. Warmstartup+transition4.294s loses isolateduse. This batching opportunity benefits both editing arms. [Evidence](observations/2026-09-06-astra-single-jvm-cold-comparison.md). Freshness narrow archive exemption landed38a2cec4 and avoided the next receipt-only battery rerun; no source budget raised.
+
+Astra correction, 2026-09-06 10:22Z: possible competing builder JVM load was disclosed for the cold comparator. Retain the 2.612s observation; 3.02x is potentially contaminated, not a clean routing estimate. No replacement run. [Disclosure](observations/2026-09-06-astra-single-jvm-cold-comparison.md).

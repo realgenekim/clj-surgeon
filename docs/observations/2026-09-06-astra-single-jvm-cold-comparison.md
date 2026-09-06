@@ -5,7 +5,8 @@ Recorded 2026-09-06T09:58:04.633110+00:00
 The same candidate gate and witness passed in one fresh JVM. Complete external
 command wall was **2.611796 seconds**, versus the earlier warm source transition's
 **0.865773 seconds**. This is a **3.02× component ratio in one unreplicated
-observation**, with small differences in external watchdog overhead. The former
+observation**, with small differences in external watchdog overhead and
+possible competing JVM load during the cold run. The former
 5.07× ratio remains specific to the weaker two-JVM cold path.
 
 | Boundary | Observed wall |
@@ -45,3 +46,16 @@ explicit timing handoff, and independent review performed no timing rerun.
 
 Evidence: `/var/tmp/forge/astra-cold-batch-v2-fx/parent-attempt/status.json`,
 `run-01/result.json`, `run-01/stdout`, and `independent-outcome.md`.
+
+## Astra timing disclosure — 10:22Z
+
+Fable reported at 09:54Z in `/var/tmp/forge/fable-to-astra.md` that a
+builder began proof JVMs at 09:52Z after Fable released the preceding window.
+Those runs may have overlapped this comparator during 09:52–09:53Z despite
+root obtaining an explicit handoff and declaring its own window. Exact
+process overlap and its effect on latency have not been established. The
+retained 2.612-second observation and successful proof remain valid records;
+**3.02× is not an uncontaminated speedup estimate**. Do not infer the absence
+of contention from a plausible duration or subtract an invented penalty.
+No replacement timing run has been performed. A clean replicated comparison
+would be needed before using this ratio for a routing decision.
