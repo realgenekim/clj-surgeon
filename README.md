@@ -2273,3 +2273,7 @@ that id. Missing admission facts do not become a provider call.
 
 The one-process entrance removes one cold JVM start; it does not remove proof
 or establish a measured speedup. Runtime, provider and proof costs still count.
+
+`clj-surgeon :op :ls :file src/app.clj` accepts warning-only clj-kondo analysis;
+it does not suppress those warnings or change your source. Analyzer errors,
+unavailable authority and missing or malformed analysis still refuse.

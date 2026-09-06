@@ -201,3 +201,13 @@ No cohort result is upgraded by these functional gates.
 - Astra 04:40Z: Git publication safety ratchets (189e0086, e50c4403): force visibility of staged submodules despite Git config; durable publication intent and conservative undo refusal on uncertain outcomes. Combined root gate 101/827 green; independent re-review pending. Deterministic Surgeon literal-edit dogfood receipt retained at /var/tmp/forge/astra-git-submodule-fx/receipt.edn, not a speed comparison. This is proof-cost evidence, not a newly won latency square.
 
 - Astra 05:30Z: raw-v2 completed real-derived five-owner rename loop, independent outcome audit GO: paired N4/4median25.193s,T4/4median7.655s=3.2909x; sixcontrolSD1.7856, gap clears2SD. Fourteen final sources byte-identical,28/28 independent scratch gate/witness replays pass. Prepared task only; excludes orientation and intent/proof preparation, no free-choice adoption or general/Astra superiority. Earlier JSON reliability loss retained. Report: docs/observations/2026-09-06-astra-raw-cohort-v2-result.md. Actual keeper6022ad35 separately demonstrates productive use in7.08s, with malformed candidate refused.
+
+### Astra 2026-09-06: warning-only outline analysis
+
+Observed caller friction: :ls refused mission_cli.clj because clj-kondo emitted
+one redundant-let warning with otherwise complete Var analysis. Explicit
+`--fail-level error` restores this existing read; real errors, unadmitted or
+unfinished processes, nonzero exits and missing/malformed analysis still refuse.
+This is a reliability repair, not a new square or speed claim. Receipt and
+remaining installed-version distinction:
+[warning analysis repair](observations/2026-09-06-forward-reference-warning-astra.md).

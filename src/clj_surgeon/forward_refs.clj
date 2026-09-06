@@ -5,8 +5,22 @@
    [clj-surgeon.mcp-process :as process-env]
    [clojure.string :as str]))
 
+(defn validated-analysis [data]
+  (let [analysis (:analysis data)
+        error-count (get-in data [:summary :error])]
+    (when-not (and (map? data) (map? analysis)
+                   (every? #(and (vector? %) (every? map? %))
+                           [(:var-definitions analysis) (:var-usages analysis)]))
+      (throw (ex-info "Forward-reference analyzer returned incomplete analysis"
+                      {:error-type :forward-reference-analysis-invalid})))
+    (when (or (and (number? error-count) (pos? error-count))
+              (some #(= "error" (:level %)) (:findings data)))
+      (throw (ex-info "Forward-reference analyzer reported errors"
+                      {:error-type :forward-reference-analysis-failed})))
+    data))
+
 (defn- run-kondo [file]
-  (let [command ["clj-kondo" "--lint" file
+  (let [command ["clj-kondo" "--lint" file "--fail-level" "error"
                  "--config"
                  "{:output {:format :json} :analysis {:var-definitions true :var-usages true}}"]
         result (try
@@ -25,17 +39,18 @@
       (throw (ex-info "Forward-reference analyzer authority is unverified"
                       {:error-type :analyzer-authority-unverified
                        :admission (:admission result)})))
-    (when-not (and (:finished? result) (zero? (:exit result)))
+    (when-not (and (:finished? result) (= 0 (:exit result)))
       (throw (ex-info "Forward-reference analysis failed"
                       {:error-type :forward-reference-analysis-failed
                        :exit (:exit result)
                        :diagnostic (str/trim (or (:err result) ""))})))
-    (try
-      (json/parse-string (:out result) true)
-      (catch Exception error
-        (throw (ex-info "Forward-reference analyzer returned invalid JSON"
-                        {:error-type :forward-reference-analysis-invalid}
-                        error))))))
+    (validated-analysis
+      (try
+        (json/parse-string (:out result) true)
+        (catch Exception error
+          (throw (ex-info "Forward-reference analyzer returned invalid JSON"
+                          {:error-type :forward-reference-analysis-invalid}
+                          error)))))))
 
 (defn detect-forward-refs
   "Returns forward references: vars used before they're defined in the same namespace."

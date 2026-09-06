@@ -266,3 +266,48 @@
                  (set (map :name destructuring-keywords)))))
         (finally
           (fs/delete-tree root))))))
+
+(defn forward-outcome [result]
+  (with-redefs [process-env/run-bounded! (fn [_] result)]
+    (try {:value (forward-refs/detect-forward-refs "fixture.clj" 'fixture)}
+         (catch clojure.lang.ExceptionInfo e (select-keys (ex-data e) [:error-type]))
+         (catch Exception e {:unexpected (.getName (class e))}))))
+
+(deftest forward-analysis-refuses-invalid-process-and-payload-authority
+  (let [valid "{\"analysis\":{\"var-definitions\":[],\"var-usages\":[]}}"
+        base {:admission {:status :admitted} :finished? true :exit 0 :out valid :err ""}]
+    (is (= {:value []} (forward-outcome base)))
+    (doseq [result [(assoc base :finished? false) (assoc base :exit 2)
+                    (assoc base :exit 3) (assoc base :exit 127) (dissoc base :exit)]]
+      (is (= {:error-type :forward-reference-analysis-failed} (forward-outcome result))))
+    (is (= {:error-type :analyzer-authority-unverified}
+           (forward-outcome (assoc base :admission {:status :refused}))))
+    (doseq [out ["not json" "null" "{}" "{\"analysis\":{}}"
+                 "{\"analysis\":{\"var-definitions\":null,\"var-usages\":[]}}"
+                 "{\"analysis\":{\"var-definitions\":[],\"var-usages\":{}}}"
+                 "{\"analysis\":{\"var-definitions\":[3],\"var-usages\":[]}}"]]
+      (is (= {:error-type :forward-reference-analysis-invalid}
+             (forward-outcome (assoc base :out out)))))
+    (doseq [field [",\"summary\":{\"error\":1}" ",\"findings\":[{\"level\":\"error\"}]"]]
+      (is (= {:error-type :forward-reference-analysis-failed}
+             (forward-outcome (assoc base :out (str (subs valid 0 (dec (count valid))) field "}"))))))))
+
+(deftest forward-analysis-requests-error-threshold-without-accepting-nonzero
+  (let [seen (atom nil)]
+    (with-redefs [process-env/run-bounded!
+                  (fn [opts] (reset! seen opts)
+                    {:admission {:status :admitted} :finished? true :exit 0
+                     :out "{\"analysis\":{\"var-definitions\":[],\"var-usages\":[]}}"})]
+      (is (= [] (forward-refs/detect-forward-refs "fixture.clj" 'fixture))))
+    (is (some #{["--fail-level" "error"]} (partition 2 1 (:command @seen))))))
+
+(deftest real-warning-only-forward-analysis-remains-readable
+  ;; Minimized from mission_cli.clj's redundant nested let, the actual :ls refusal.
+  (let [root (fs/create-temp-dir {:prefix "forward-warning-"})
+        file (fs/path root "warning.clj")
+        source "(ns warning)\n(defn f [x] (let [a x] (let [b a] b)))\n"]
+    (try
+      (spit (str file) source)
+      (is (= [] (forward-refs/detect-forward-refs (str file) 'warning)))
+      (is (= source (slurp (str file))))
+      (finally (fs/delete-tree root)))))
