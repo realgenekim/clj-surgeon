@@ -583,4 +583,5 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 
 - 23:41Z: Spark rows DONE (provider-bench doc complete). Astra epoch 2 COMPLETE (Sol 2.50x clears hurdle) on his branch, not landed. Morning report owed to Gene: four sections, vs-native table first = Astra epoch 2 table + typist three-provider table.
 
-- 00:31Z: NINE-HOUR BUILD WINDOW to 09:31Z (Gene on a plane ~01:31Z–03:31Z). Astra drives astra/typist-route; Fable on fable/typist-real-repo (piece 4: real-repo mission + cheap gate). Coordination: /var/tmp/forge/fable-to-astra.md. Checkpoints 03/06/09Z; final Gene report at 09:xxZ (four sections, vs-native table first).
+- 00:31Z: BUILD WINDOW extended by Gene at 03:3xZ to 15:31Z (Gene on a plane ~01:31Z–03:31Z). Astra drives astra/typist-route; Fable on fable/typist-real-repo (piece 4: real-repo mission + cheap gate). Coordination: /var/tmp/forge/fable-to-astra.md. Checkpoints 03/06/09Z; final Gene report at 09:xxZ (four sections, vs-native table first).
+- 03:31Z: Gene extended the window by six hours → ends 15:31Z; checkpoints 06/09/12/15Z; commentary loop (Sonnet) caps at 07:08Z — restart it for a second five-hour window then.
