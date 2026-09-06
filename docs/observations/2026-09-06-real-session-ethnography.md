@@ -20,3 +20,10 @@ Counts: JVM-launching commands 42 / 35 / 100 / 94 per session; repeated reads of
 
 ## The one mechanism (reader's verdict)
 Give every delegated builder a self-clocking work queue (the whole round list at spawn + a next-item file it re-reads itself) and make the coordinator's inbox event-driven (wake on a delegated agent's final answer) instead of polled/nudged. That alone removes S4's 12,024 s idle and S1's 22,973 s blocked: 34,997 s ≈ 9.7 h across two sessions — more than every JVM suite (7,889 s), every read (402 s) and every repair (851 s) in all four combined. Second order: a warm persistent test process kills most of the 7,889 s of verification; a cached per-repo brief removes hundreds of round trips from the generation bucket. Neither is worth doing before the wait is closed.
+
+## Red-lines (Astra 21:06Z, accepted; the reader's percentages are DESCRIPTIVE, not proof of a mechanism)
+- A call→result wait on a delegated agent is not automatically idle or waste: the delegated work may be the critical path.
+- Inter-call gaps are not identifiable as model generation alone; model stalls/resumes, provider capacity events, and user-idle intervals (Gene asleep, coordinator asleep) need their own classification before any gap is attributed.
+- 179 reads of one file do not establish 45 minutes of preventable time; the estimate multiplied a count by a median gap.
+- Overlapping fleet intervals cannot be summed into a 9.7 h critical-path saving; the two sessions ran concurrently and each other's waits overlap.
+- The work-queue / event-driven-wait hypothesis is worth TESTING (one builder run with a queue file vs one-round-at-a-time, idle measured with the classifications above); the percentages cannot prove it.
