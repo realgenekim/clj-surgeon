@@ -71,14 +71,34 @@
   "The box-wide ledger path, `~/.clj-surgeon/events.jsonl` -- a dotdir in
    $HOME beside ~/.codex and ~/.claude, deliberately NOT under ~/.local/state,
    which is where the per-launcher directories the collector kept missing
-   live. `CLJ_SURGEON_EVENTS_FILE` overrides it. Reads the `user.home`
-   PROPERTY, not $HOME, so an isolated test JVM stays isolated."
+   live. Reads the `user.home` PROPERTY, not $HOME, so an isolated test JVM
+   stays isolated.
+
+   PURE, AND ENV-FREE ON PURPOSE (Sol fence r4, 2026-09-06). This fn used to
+   consult `CLJ_SURGEON_EVENTS_FILE` itself, which made the assertion \"the
+   default path is the home dotdir\" false for every process that had the
+   isolation variable exported -- `~/bin/suite-run` exports it, so the test
+   that pins the default was red exactly in the harness the landing gates run
+   under. A DEFAULT and an OVERRIDE are two facts; one fn cannot state both.
+   `default-events-file` is the default; `events-file` is what a writer
+   resolves."
   []
-  (let [override (System/getenv events-file-env)]
+  (str (io/file (System/getProperty "user.home") ".clj-surgeon" "events.jsonl")))
+
+(defn events-file-override
+  "The raw `CLJ_SURGEON_EVENTS_FILE` value, or nil. Its own fn so a test can
+   witness the override branch without mutating the JVM's environment."
+  []
+  (System/getenv events-file-env))
+
+(defn events-file
+  "The path THIS process appends to: the `CLJ_SURGEON_EVENTS_FILE` override
+   when set and non-blank, else `default-events-file`."
+  []
+  (let [override (events-file-override)]
     (if (and override (not (str/blank? override)))
       override
-      (str (io/file (System/getProperty "user.home")
-                    ".clj-surgeon" "events.jsonl")))))
+      (default-events-file))))
 
 (defn current-pid [] (.pid (ProcessHandle/current)))
 
@@ -438,7 +458,7 @@
    optional cost fields :prompt_tokens :completion_tokens :reasoning_tokens
    :cost_usd :provider :upstream, which pass straight through and are null
    for any caller that does not have them."
-  ([event] (record! (default-events-file) event))
+  ([event] (record! (events-file) event))
   ([file event]
    (let [carried @dropped
          line (line-map (assoc event
