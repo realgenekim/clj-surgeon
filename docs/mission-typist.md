@@ -93,3 +93,23 @@ It exercises persisted planning, owned-form formatting, real-1's actual gate and
 independent acceptance, commit and exact undo. It makes no provider call and
 prints no speed claim. Timing comparisons must separately charge orientation,
 JVM startup, candidate generation, formatting, proof, commit and receipt writing.
+
+## Read the saved result without parsing receipt files
+
+```sh
+bin/mission show M-1 --workspace /absolute/project
+bin/mission show M-1 --workspace /absolute/project --full
+```
+
+The default is a readable EDN projection capped at 4096 UTF-8 bytes: actual
+saved state and receipt, the planned route, and candidate refusals including
+lost-content diagnostics. `:authority :saved-mission` means this reads recorded
+proof; it does not rerun verification. Truncation and omitted candidate counts
+are explicit. `:details` supplies the full command; `--full` retains the previous
+complete ledger view, which can contain frozen source and large proof details.
+
+A readable failed mission exits zero because the read succeeded. Missing or
+corrupt mission rows exit nonzero with an executable `:example` containing both
+argv and safely quoted shell command. Mission write refusals also supply an
+inspection/help example, never a blind replay of a failed mutation. These
+examples concern the mission entrance, not every Surgeon core operation.

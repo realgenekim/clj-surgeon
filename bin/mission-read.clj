@@ -11,6 +11,7 @@
 ;; Writes are NOT here. open/plan/apply/resume/undo reach a planner and a
 ;; guarded transaction kernel and stay on the JVM.
 (require '[clj-surgeon.mission :as mission]
+         '[clj-surgeon.mission-display :as display]
          '[clojure.pprint :as pp]
          '[clojure.string :as str])
 
@@ -38,13 +39,16 @@
   (case verb
     ("help" nil) (print (mission/help-text (first args)))
 
-    "show" (let [m (mission/read-mission @state-dir (first args))]
-             (pp/pprint (if (mission/refused? m)
-                          m
-                          (assoc (mission/show-view @missions (first args))
-                                 :config_sources
-                                 (mission/config-sources (:workspace flags)
-                                                         (:config flags))))))
+    "show" (let [m (mission/read-mission @state-dir (first args))
+                 result (display/show-result
+                          (if (mission/refused? m)
+                            m
+                            (assoc (mission/show-view @missions (first args))
+                                   :config_sources
+                                   (mission/config-sources (:workspace flags) (:config flags))))
+                          (assoc flags :id (first args)))]
+             (pp/pprint result)
+             (when (false? (:ok result)) (System/exit 1)))
 
     "list" (pp/pprint {:ok true :operation "mission"
                        :ledger (mission/missions-dir @state-dir)

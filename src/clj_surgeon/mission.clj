@@ -844,7 +844,7 @@
 (def verb-help
   {"open"   "open --spec-file <file|-> [--workspace R] [--state-home H]\n    One bounded intent -> a mission id and its dossier. Writes no bytes."
    "plan"   "plan  [--spec-file <file|->] | plan <id> [--spec-file <file|->]\n    With no id: open-and-plan (same as `open`).\n    With an id: RE-plan that mission against the tree as it now is.\n    With an id AND --spec-file on a :blocked/:failed mission: open a NEW\n    mission carrying the repaired intent, linked :supersedes to the old one."
-   "show"   "show <id> --workspace R\n    The mission, its dependency DAG, its supersession chain, and the\n    config files this ledger read (:config_sources)."
+   "show"   "show <id> --workspace R [--full]\n    Bounded saved state, receipt, route and candidate refusals (no proof rerun).\n    --full prints the previous complete ledger view, including frozen source.\n    Readable failed missions exit 0; missing/corrupt missions exit 1 with a runnable recovery example."
    "run"    "run --spec-file <file|-> [--state-home H]\n    owner_forms only: save a frozen plan and immediately apply it in one JVM.\n    WRITES source after proof. For review before write, use propose then apply.\n    No existing id. A blocked plan is saved; exits nonzero with its decision."
    "apply"  "apply <id> --workspace R\n    Run the guarded transaction and its proof. The mission carries its own\n    verification authority; no spec is re-supplied. Exits non-zero on a\n    refusal OR a failed receipt."
    "resume" "resume <id> --workspace R\n    Move it from wherever it is: :ready -> apply, :verified -> undo."

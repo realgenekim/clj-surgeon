@@ -27,6 +27,7 @@
    [clj-surgeon.mcp-helper-extraction :as helper]
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.mission :as mission]
+   [clj-surgeon.mission-display :as display]
    [clj-surgeon.mission-events :as mission-events]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -337,10 +338,11 @@
   (let [state-dir (state-dir-for workspace state-home)
         m (mission/read-mission state-dir id)]
     (if (mission/refused? m)
-      m
-      (assoc (mission/show-view (mission/read-all state-dir) id)
-             :config_sources (mission/config-sources (or workspace (:root m))
-                                                     (:config opts))))))
+      (display/show-result m opts)
+      (display/show-result
+        (assoc (mission/show-view (mission/read-all state-dir) id)
+          :config_sources (mission/config-sources (or workspace (:root m))
+                                                  (:config opts))) opts))))
 
 (defn link!
   "Add one `:depends-on` or `:supersedes` edge, or refuse a cycle.
@@ -586,7 +588,7 @@
                      :spec spec
                      :receipt-dir (:receipt-dir flags)
                      :id (second positional)}
-                    (select-keys flags [:depends-on :supersedes])
+                    (select-keys flags [:depends-on :supersedes :full])
                     (select-keys spec [:verb :question :request :profiles]))]
     (cond
       ;; explicit help is a SUCCESS, and it is the only path that prints usage
@@ -618,7 +620,7 @@
                      "link" (link! opts)
                      ("ready" "blocked") (ready opts)
                      "list" (list-missions opts))]
-        (when (map? result) (pp/pprint result))
+        (when (map? result) (pp/pprint (if (= "show" verb) result (display/with-recovery result opts))))
         (System/exit (cond (false? (:ok result)) 1
-                           (failed-receipt? result) 1
+                           (and (not= "show" verb) (failed-receipt? result)) 1
                            :else 0))))))

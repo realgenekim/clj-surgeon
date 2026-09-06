@@ -148,3 +148,19 @@ name its source representation; it is not raw-format reliability evidence.
 ## Candidate refusal survival (Astra, paper cuts round)
 
 Every rejected compilation retains its typed diagnostic in the candidate receipt. The public response projects only error-type, error, condition, lost, moved and next_call, capped at 4096 printed characters per candidate. If oversized, it returns the type and explicit truncation plus a path to the complete diagnostic artifact; it never presents a truncated next call as runnable. Full compilation refusal data is retained locally in the mission artifact directory. Successful compilations do not copy staged source into receipts. Proof failures retain their existing independent gate/witness receipt. Witnesses: faithful lost-comment diagnostic survives all-candidates-rejected without write; oversized diagnostic points to complete artifact; valid later candidate retains earlier refusal. Transport failures remain typed separately; no raw provider message is promoted into these fields.
+
+## Paper cut: readable mission receipt and supported recovery
+
+`mission show ID` projects the saved ledger row into bounded EDN (at most 4096
+UTF-8 bytes as pretty-printed), retaining actual state, receipt success/failure,
+route and bounded candidate refusals including lost content and next_call.
+It never implies that reading the receipt reran proof. Omitted candidate counts
+and truncation are explicit; `show ID --full` preserves the previous full view.
+Both BB and JVM entrances use one projection. Missing/corrupt show is nonzero;
+a successful read of a failed mission is still a successful read.
+
+Mission CLI refusals receive executable examples for supported inspection or
+help recovery, with real workspace/state-home arguments and safe shell quoting.
+A stale/failed mutation is never blindly replayed by an example. This concerns
+the mission CLI only; the reported Surgeon core receipt-out/source-string errors
+remain outside this change. No `mission commit` capability belongs to this cut.

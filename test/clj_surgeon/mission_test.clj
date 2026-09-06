@@ -749,7 +749,7 @@
                   "PROPOSE WRITES NO BYTES to the workspace")))
 
           (testing "SHOW — the same object, read back off disk"
-            (let [shown (cli/show (assoc base :id "M-1"))]
+            (let [shown (cli/show (assoc base :id "M-1" :full true))]
               (is (= :ready (:state shown)))
               (is (= request (:intent shown))
                   "the intent is stored verbatim, so the dossier can be recomputed")
@@ -792,11 +792,11 @@
                   (is (false? (:mutation_attempted refused)))
                   (is (= pre (tree-on-disk root (keys pre)))
                       "no byte of the workspace moved")
-                  (is (= :ready (:state (cli/show (assoc base :id "M-2"))))
+                  (is (= :ready (:state (cli/show (assoc base :id "M-2" :full true))))
                       "and M-2 did not leave :ready")))))
 
           (testing "@stale-resume — a tree that MOVED refuses before any write"
-            (let [snap (:snapshot (cli/show (assoc base :id "M-1")))
+            (let [snap (:snapshot (cli/show (assoc base :id "M-1" :full true)))
                   ;; a real planned owner, taken from the mission's own
                   ;; snapshot rather than guessed from the fixture's layout
                   victim (io/file (first (sort (keys (:by-file snap)))))
@@ -808,7 +808,7 @@
                 (is (= [(str victim)] (:changed_files refused))
                     "and it NAMES the file that moved")
                 (is (false? (:mutation_attempted refused)))
-                (is (= :ready (:state (cli/show (assoc base :id "M-1"))))
+                (is (= :ready (:state (cli/show (assoc base :id "M-1" :full true))))
                     "the mission did not leave :ready: nothing was staged"))
               (spit victim original)
               (is (= pre (tree-on-disk root (keys pre)))
@@ -818,9 +818,9 @@
             (let [out (:out (clojure.java.shell/sh
                               "bb" "--classpath" "src" "bin/mission-read.clj"
                               "show" "M-1" "--workspace" (str root)
-                              "--state-home" (str state-home)
+                              "--state-home" (str state-home) "--full"
                               :dir "."))]
-              (is (= (cli/show (assoc base :id "M-1")) (edn/read-string out))
+              (is (= (cli/show (assoc base :id "M-1" :full true)) (edn/read-string out))
                   "one object, two entrances")))
 
           (testing "APPLY — the guarded transaction runs and the receipt lands
@@ -854,7 +854,7 @@
                     M-1 has since rewritten. Nothing was written to M-2 to make
                     that true; it is two stamps the ledger already had."
             (let [{:keys [ready waiting]} (cli/ready base)
-                  shown (cli/show (assoc base :id "M-2"))]
+                  shown (cli/show (assoc base :id "M-2" :full true))]
               (is (= [] (mapv :id ready))
                   "M-2 is NOT offered as ready, and M-1 has already run")
               (is (= [{:id "M-2" :state "proposed" :waiting_on ["M-1"]
@@ -891,7 +891,7 @@
                 (is (string? (:decision replanned))
                     "and it carries the ONE decision the planner is waiting on")
                 (is (false? (:mutation_attempted replanned)))
-                (is (= :ready (:state (cli/show (assoc base :id "M-2"))))
+                (is (= :ready (:state (cli/show (assoc base :id "M-2" :full true))))
                     "a refused re-plan leaves the mission exactly as it was"))))
 
           (testing "RESUME — one verb moves it from wherever it is; on a
