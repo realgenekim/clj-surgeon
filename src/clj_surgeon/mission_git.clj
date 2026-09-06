@@ -124,7 +124,7 @@
     (when-not (and (oid? head) (branch? branch)) (fail! :git-unsupported-head))
     {:workspace-root root :head head :branch branch
      :tree (str/trim (run ["write-tree"] nil))
-     :staged-paths (vec (remove empty? (str/split (run ["diff" "--cached" "--no-ext-diff" "--name-only" "-z" "--"] nil) #"\u0000")))
+     :staged-paths (vec (remove empty? (str/split (run ["diff" "--cached" "--no-ext-diff" "--ignore-submodules=none" "--name-only" "-z" "--"] nil) #"\u0000")))
      :files (into {} (for [path (keys (:files p))]
                        (let [tree-entry (run ["--literal-pathspecs" "ls-tree" "-z" head "--" path] nil)
                              index-entry (run ["--literal-pathspecs" "ls-files" "--stage" "-z" "--" path] nil)

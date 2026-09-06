@@ -124,3 +124,14 @@ identity preflight test now explicitly scrubs identity in its child so its
 precondition remains true in fleet seats. Formatter/lint pass. No actual user
 commit, provider, shared service or shared telemetry writes occurred. This fixes
 identity only; publication/undo consistency is tracked separately by its owner.
+
+## Astra: staged submodule scope correction (2026-09-06)
+
+An independently executed Opus probe showed that both diff.ignoreSubmodules=all
+and a working-tree .gitmodules ignore=all setting can hide a staged gitlink from
+the default cached diff while write-tree retains it. Scope discovery must request
+--ignore-submodules=none explicitly. A staged gitlink outside the declared owner
+set refuses :git-staged-scope; HEAD, index tree and source remain unchanged.
+Two real repository witnesses retain both settings as provenance. This repairs
+the observed omission; it does not claim that a full recursive tree comparison
+or every possible Git configuration interaction has been proved.
