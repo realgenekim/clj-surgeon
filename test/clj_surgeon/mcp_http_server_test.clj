@@ -836,3 +836,80 @@
         (http-server/stop-http-server! running)
         (delete-tree! workspace)
         (delete-tree! server-project)))))
+
+;; --- Unconfigured verification profiles (MCP-OP-VERIFY-013) -----------------
+
+(def ^:private verify-sample-source
+  "(ns sample.core)\n\n(defn helper [] :old)\n")
+
+(defn- verify-workspace!
+  []
+  (let [workspace (temp-dir)
+        source-file (io/file workspace "src/sample/core.clj")]
+    (.mkdirs (.getParentFile source-file))
+    (spit source-file verify-sample-source)
+    [workspace source-file]))
+
+(def ^:private verify-change
+  {"id" "swap"
+   "files" ["src/sample/core.clj"]
+   "forms" ["helper"]
+   "find" ":old"
+   "replace" ":new"
+   "expect" {"matches" 1}})
+
+(deftest built-in-profiles-offer-lint-only-and-never-fast-or-full
+  ;; @spec MCP-OP-VERIFY-013
+  (let [selection (http-server/resolve-verification-profiles nil {})]
+    (is (= :built-in (:source selection)))
+    (is (= #{"lint"} (set (keys (:profiles selection)))))
+    (is (not (contains? (:profiles selection) "fast")))
+    (is (not (contains? (:profiles selection) "full")))))
+
+(deftest unconfigured-workspace-refuses-verify-before-any-write
+  ;; @spec MCP-OP-VERIFY-013
+  (let [[workspace source-file] (verify-workspace!)
+        selection (http-server/resolve-verification-profiles nil {})
+        result (tool/execute-request!
+                 {:project-root (.getPath workspace)
+                  :receipt-dir (.getPath (io/file workspace "receipts"))
+                  :verification-profiles (:profiles selection)
+                  :verification-profile-source (:source selection)}
+                 {"changes" [verify-change]
+                  "verify" "fast"})]
+    (try
+      (is (false? (:ok result)) (pr-str result))
+      (is (= "verification-profiles-unconfigured" (:error_type result)))
+      (is (str/includes? (str (:remedy result)) ":verification-profiles"))
+      (is (str/includes? (str (:remedy result)) ".clj-surgeon.edn"))
+      (is (= "verify" (:field result)))
+      (is (= "fast" (:actual result)))
+      (is (= ["lint"] (:accepted result)))
+      (is (:source_unchanged result))
+      (is (not (:rolled_back result)))
+      (is (nil? (:verification result))
+          "no built-in check may run as verification")
+      (is (= verify-sample-source (slurp source-file)))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest configured-workspace-still-verifies-as-before
+  ;; @spec MCP-OP-VERIFY-013
+  (let [[workspace source-file] (verify-workspace!)
+        selection (http-server/resolve-verification-profiles
+                    nil {:verification-profiles {"fast" ["/bin/true"]}})
+        result (tool/execute-request!
+                 {:project-root (.getPath workspace)
+                  :receipt-dir (.getPath (io/file workspace "receipts"))
+                  :verification-profiles (:profiles selection)
+                  :verification-profile-source (:source selection)}
+                 {"changes" [verify-change]
+                  "verify" "fast"})]
+    (try
+      (is (= :project (:source selection)))
+      (is (:ok result) (pr-str result))
+      (is (= "fast" (get-in result [:verification :profile])))
+      (is (true? (get-in result [:verification :ok])))
+      (is (str/includes? (slurp source-file) ":new"))
+      (finally
+        (delete-tree! workspace)))))

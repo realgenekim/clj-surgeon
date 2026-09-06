@@ -2270,3 +2270,138 @@
         (is (not (contains? result :expect_matched))))
       (finally
         (delete-tree! workspace)))))
+
+;; --- Verification receipt truth (MCP-OP-VERIFY-011/012) ---------------------
+
+(def ^:private verified-apply-result
+  {:ok true
+   :operation "apply_clojure_changes"
+   :edits 3
+   :files 2
+   :elapsed_ms 2500.44
+   :verification_complete true
+   :verification
+   {:ok true
+    :profile "fast"
+    :profile-source :project
+    :checks [{:ok true
+              :command "/usr/bin/python3"
+              :exit 0
+              :elapsed_ms 2205.19
+              :output (str "\nTesting maven.tweets-test\n\n"
+                           "Ran 58 tests containing 190 assertions.\n"
+                           "0 failures, 0 errors.\n")}]}})
+
+(def ^:private unverified-apply-result
+  (dissoc verified-apply-result :verification))
+
+(def ^:private failed-check-output
+  (str "\nTesting maven.pool-relaxed-test\n\n"
+       "Testing maven.tweets-import-test\n\n"
+       "FAIL in (->iso-handles-all-observed-formats) (tweets_import_test.clj:9)\n"
+       "the three real source formats (validated on live rows)\n"
+       "ISO instant\n"
+       "expected: (= \"1999-01-01T00:00:00Z\" (twi/->iso \"2026-03-07T17:07:00Z\"))\n"
+       "  actual: (not (= \"1999-01-01T00:00:00Z\" \"2026-03-07T17:07:00Z\"))\n\n"
+       "Ran 58 tests containing 190 assertions.\n"
+       "1 failures, 0 errors.\n"))
+
+(def ^:private verification-failure-result
+  {:ok false
+   :operation "apply_clojure_changes"
+   :reason "verification-failed"
+   :error_type "verification-failed"
+   :elapsed_ms 2320.28
+   :source_unchanged true
+   :rolled_back true
+   :remedy "Fix the failed fast verification check."
+   :verification
+   {:ok false
+    :profile "fast"
+    :checks [{:ok false
+              :command "/usr/bin/python3"
+              :exit 1
+              :elapsed_ms 2002.45
+              :output failed-check-output}]}})
+
+(deftest success-text-states-the-verification-actually-performed
+  ;; @spec MCP-OP-VERIFY-011
+  (let [verified (mcp-tool/concise-summary verified-apply-result)
+        unverified (mcp-tool/concise-summary unverified-apply-result)]
+    (testing "a verified call names its profile, its coverage, and its tally"
+      (is (str/includes? verified "verification: fast"))
+      (is (str/includes? verified "project"))
+      (is (str/includes? verified "1 of 1 check"))
+      (is (str/includes? verified "/usr/bin/python3"))
+      (is (str/includes? verified "exit 0"))
+      (is (str/includes? verified
+                         "Ran 58 tests containing 190 assertions.")))
+    (testing "an unverified call says so instead of claiming verification"
+      (is (str/includes? unverified "verification: none requested"))
+      (is (not (str/includes? unverified "verification: fast"))))
+    (testing "the two texts differ"
+      (is (not= verified unverified)))
+    (testing "bytes read back is never spelled as a test result"
+      (is (not (str/includes? unverified
+                              "written bytes read back and verified"))))
+    (testing "the line stays inside its stated bound"
+      (is (every? #(<= (count %) 600) (str/split-lines verified))))))
+
+(deftest failure-text-carries-the-structured-verification-verbatim
+  ;; @spec MCP-OP-VERIFY-012
+  (let [text (mcp-tool/concise-summary verification-failure-result)
+        check (first (get-in verification-failure-result
+                             [:verification :checks]))]
+    (testing "text is a superset of the structured failure evidence"
+      (is (str/includes? text (:command check)))
+      (is (str/includes? text "exit 1"))
+      (doseq [line (remove str/blank? (str/split-lines (:output check)))]
+        (is (str/includes? text line)
+            (str "missing verbatim output line: " line))))
+    (testing "the expected/actual pair and the tally survive whole"
+      (is (str/includes?
+            text
+            "expected: (= \"1999-01-01T00:00:00Z\" (twi/->iso \"2026-03-07T17:07:00Z\"))"))
+      (is (str/includes? text "Ran 58 tests containing 190 assertions.")))
+    (testing "nothing is cut mid-line"
+      (is (not (str/includes? text "expected: (= \"1999-01-01T00:00:00Z\".")))
+      (is (not (re-find #"\.\.\.$" text))))))
+
+(deftest failure-text-bounds-oversized-output-at-a-line-boundary
+  ;; @spec MCP-OP-VERIFY-012
+  (let [long-output (str/join "\n" (repeat 400 "a failing assertion line"))
+        result (assoc-in verification-failure-result
+                         [:verification :checks 0 :output] long-output)
+        text (mcp-tool/concise-summary result)]
+    (is (str/includes? text "2000"))
+    (is (str/includes? text "truncated"))
+    (testing "every rendered output line is a whole line"
+      (is (every? #(or (str/blank? %)
+                       (not (str/includes? % "a failing assertion lin\n")))
+                  (str/split-lines text))))
+    (testing "a single line longer than the bound is shortened, never dropped"
+      (let [one-line (assoc-in verification-failure-result
+                               [:verification :checks 0 :output]
+                               (apply str (repeat 5000 "x")))
+            one-text (mcp-tool/concise-summary one-line)]
+        (is (str/includes? one-text "xxxx"))
+        (is (str/includes? one-text "truncated"))))))
+
+(deftest alias-migration-success-text-states-its-verification
+  ;; @spec MCP-OP-VERIFY-011
+  (let [base {:ok true
+              :committed true
+              :operation "alias_migration"
+              :files 9 :sites 21
+              :alias_histogram {"m" 9}
+              :collisions_resolved 0
+              :elapsed_ms 1200.0
+              :details_path "/tmp/details.edn"}
+        verified (mcp-tool/alias-migration-summary
+                   (assoc base :verification
+                          (:verification verified-apply-result)))
+        unverified (mcp-tool/alias-migration-summary base)]
+    (is (str/includes? verified "verification: fast"))
+    (is (str/includes? verified "Ran 58 tests containing 190 assertions."))
+    (is (str/includes? unverified "verification: none requested"))
+    (is (not= verified unverified))))
