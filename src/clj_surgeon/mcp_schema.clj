@@ -1071,7 +1071,7 @@
                "verification"]}
 
    {:title "refusal"
-    :description "A typed refusal. No terminal state was reached, so there is no status: the receipt carries the error_type, the cause, the one unresolved decision, and next_call — null in v1, always, because no refusal has a mechanically composable continuation."
+    :description "A typed refusal. No terminal state was reached, so there is no status: the receipt carries the error_type, the cause, the one unresolved decision, and next_call — null in v1, always, because no refusal has a mechanically composable continuation. A REQUEST-SHAPE refusal may additionally carry `field` (the offending field path) and `example` (one complete, minimal, copy-paste-runnable request in the closed shape). Both are ALLOWED and neither is REQUIRED: a refusal about the tree has no offending field, and requiring an example would make every non-shape refusal invent one. They are typed in the outer properties map, so a refusal that carries them is still checked."
     :constants {"operation" "helper_extraction"
                 "ok" false
                 "committed" false
@@ -1243,6 +1243,12 @@
                              :description "Always null in v1: no refusal has a mechanically composable continuation."}
                 "limitation" {:type "string"
                               :description "Present when the refusal names a kernel limitation rather than a caller decision."}
+                "decision" {:type "string"
+                            :description "The one unresolved decision the refusal hands back to the caller, in one sentence."}
+                "field" {:type "string"
+                         :description "REQUEST-SHAPE refusals only: the offending field path, dotted (\"to\", \"scope.paths\"). Optional -- a refusal about the tree rather than the request carries none."}
+                "example" {:type "object"
+                           :description "REQUEST-SHAPE refusals only: one complete, minimal, copy-paste-runnable request in the closed shape. Optional, and NEVER a continuation -- next_call stays null, because an example is edited and resent by the caller rather than mechanically replayed by a client."}
                 "remedy" {:type "string"}
                 "elapsed_ms" {:type "number" :minimum 0}
                 "helpers" {:type "integer" :minimum 0}

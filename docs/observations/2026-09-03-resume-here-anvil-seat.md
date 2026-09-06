@@ -570,3 +570,19 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 - 15:35Z: MCP/main = 01f66435 (Astra telemetry landed as 2b5b3d97). Servers 7906 PID 539986 / 8171 PID 539988 on it. land refuses ancestor tips/empty merges now. Astra idle after his block (telemetry + prereg delivered; no accepted comparison). Next per his handoff: oracle revision, then a fresh preregistered epoch with six accepted controls.
 
 - 16:26Z: MCP/main = 32910d14 (Astra production-readiness landed as 32910d14). Servers 7906 PID 1565316 / 8171 PID 1565318 on it; CLI/skills installed. The pane agent keeps using the shared seat checkout on its own branches — read its branch there before assuming trunk.
+
+- 21:23Z: Spark (gpt-5.3-codex-spark) still limited; Codex says "try again at 11:37 PM" (box time UTC). Next action after that: the three-way test (native apply_patch / Spark emits mission request / Spark emits native patch), effort low, dossier prompt, 5-min cap, gate outside; design in docs/observations/2026-09-05-ideal-tool-riff-fable.md §8.
+
+## 2026-09-05 23:0xZ — state after the fast-typist program (read this before anything else)
+- Trunk MCP/main head includes 13c12401 (request-shape :example refusals) and all tonight's records; local install (CLI, skills, 7906/8171 servers) is at 13c12401.
+- Typist prototype lives on bridge/mission-ledger (runner bin/typist-run, tip f2efc87c): missions scope-roots / onesite / fanout; providers groq / openrouter (pin via TYPIST_OPENROUTER_ORDER=Cerebras, no fallback) / spark; --bench mode. Keys: ~/secrets/groq.edn {:key …}, ~/secrets/openrouter.edn {:openrouter-api-key …} — never echo, never env.
+- Results docs on MCP/main: 2026-09-05-fast-typist-cohort-1.md (four cohorts + standing summary), 2026-09-05-fast-typist-provider-bench.md (Groq / OpenRouter / Cerebras rows; Cerebras k=5 fan-out 6/6 at 1.95 s vs cold Sol 26.66 s). NOT KEEP for search on easy dossiers; search real on fan-out; all cold-vs-cold on a five-file fixture.
+- PENDING: Spark provider row after its usage-limit reset (23:37Z): `cd /home/forge/src/clj-surgeon-mission && bin/typist-run --bench --providers spark,groq --dossier bin/typist-dossier-onesite.md --rounds 6` then the same on fanout; prediction on record: Spark 5–10 s (process start), falsifier <3 s median on onesite. Then add the rows to the provider-bench doc.
+- Astra runs epoch 2 of his fair comparison (attested receipts in /var/tmp/forge/fable-to-astra.md under "ASTRA EXPERIMENT"); friction item inb-a9b30e (helper_extraction preflight refusal x2).
+- Owed to Gene: a morning report in the four-section format (vs-native table first) covering the aperture window, the typist program, and Astra's epoch 2 when it lands.
+
+- 23:41Z: Spark rows DONE (provider-bench doc complete). Astra epoch 2 COMPLETE (Sol 2.50x clears hurdle) on his branch, not landed. Morning report owed to Gene: four sections, vs-native table first = Astra epoch 2 table + typist three-provider table.
+
+- 00:31Z: BUILD WINDOW extended by Gene at 03:3xZ to 15:31Z (Gene on a plane ~01:31Z–03:31Z). Astra drives astra/typist-route; Fable on fable/typist-real-repo (piece 4: real-repo mission + cheap gate). Coordination: /var/tmp/forge/fable-to-astra.md. Checkpoints 03/06/09Z; final Gene report at 09:xxZ (four sections, vs-native table first).
+- 03:31Z: Gene extended the window by six hours → ends 15:31Z; checkpoints 06/09/12/15Z; commentary loop (Sonnet) caps at 07:08Z — restart it for a second five-hour window then.
+- 03:33Z: CADENCE (Gene): round → ethnography (~/bin/ethno, recon only) → paper-cut spike → resume; ethnography at 06/09/12/15Z or round close.

@@ -93,3 +93,5 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - **15:35Z LANDED 2b5b3d97** — Astra's telemetry emission for helper_extraction + wire witness + comparison prereg (Gene: "merge it in"). MAYOR: trunk head is now 01f66435 — pull and install this one (supersedes the 3ffc6fae note).
 
 - **16:26Z LANDED 32910d14** — astra/production-readiness (CLI production entrance + safety guard + skills/docs; analyzer opt-in). MAYOR: trunk head is now 32910d14 — pull and install this one (supersedes earlier notes).
+- **20:21Z LANDED 13c12401** — bridge/helper-refusal-example (request-shape refusals carry :field, :decision, runnable :example; battery receipt). MAYOR: trunk head is now 13c12401 — pull and install this one (supersedes 32910d14).
+- **23:41Z ASTRA EPOCH 2 RESULT on astra/fair-profile-epoch2** (not landed): Sol tool 45.44 s vs Sol native 105.61 s, paired 2.50x, clears the preregistered two-SD hurdle; Astra 1.30x does not clear. MAYOR: review candidate for the morning — needs Sol fence review + land gates; it carries bench/ code, not docs only.

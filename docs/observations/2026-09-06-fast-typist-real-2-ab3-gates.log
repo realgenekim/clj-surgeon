@@ -1,0 +1,64 @@
+## ab-3 gate-dominated (real-2 / real-2j) — started Sun Sep  6 01:07:09 AM UTC 2026
+### gate real-2 measure 1 load1=2.77
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Ran 2 tests containing 20 assertions.
+0 failures, 0 errors.
+exit=0
+### gate real-2j measure 1 load1=2.77
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.mcp-change-buffer-test
+
+Testing clj-surgeon.mcp-compact-location-test
+
+Testing clj-surgeon.ns-isolation-test
+
+Ran 65 tests containing 518 assertions.
+0 failures, 0 errors.
+exit=0
+### gate real-2 measure 2 load1=2.71
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Ran 2 tests containing 20 assertions.
+0 failures, 0 errors.
+exit=0
+### gate real-2j measure 2 load1=2.71
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.mcp-change-buffer-test
+
+Testing clj-surgeon.mcp-compact-location-test
+
+Testing clj-surgeon.ns-isolation-test
+
+Ran 65 tests containing 518 assertions.
+0 failures, 0 errors.
+exit=0
+GATE real-2 run=1 wall=.734320130 s exit=0 load1=2.68
+GATE real-2j run=1 wall=7.169886919 s exit=0 load1=3.10
+GATE real-2 run=2 wall=.768360769 s exit=0 load1=3.26
+GATE real-2j run=2 wall=7.079972933 s exit=0 load1=3.32
+### arm=F mission=real-2 round 1 load1=2.89 01:08:07Z
+arm=F mission=real-2 edit_form=whole-file run=F-real-2-wf-1788656887-3394795-0 first_verified_s=3.24 candidates=5 apply_ok=5 gate_ok=4 accept_ok=4 semantic_mismatch=0 refusals=0 tokens=11605 reasoning_tokens=7795
+### arm=F mission=real-2j round 1 load1=3.14 01:08:14Z
+arm=F mission=real-2j edit_form=whole-file run=F-real-2j-wf-1788656894-3398045-0 first_verified_s=8.51 candidates=5 apply_ok=5 gate_ok=4 accept_ok=4 semantic_mismatch=0 refusals=0 tokens=11993 reasoning_tokens=8183
+### arm=N mission=real-2j round 1 load1=4.10 01:08:44Z
+arm=N mission=real-2j edit_form=whole-file run=N-real-2j-wf-1788656924-3407851-0 first_verified_s=24.58 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+### arm=F mission=real-2 round 2 load1=4.25 01:09:09Z
+arm=F mission=real-2 edit_form=whole-file run=F-real-2-wf-1788656949-3415635-0 first_verified_s=2.34 candidates=5 apply_ok=5 gate_ok=4 accept_ok=4 semantic_mismatch=0 refusals=0 tokens=12750 reasoning_tokens=8940
+### arm=F mission=real-2j round 2 load1=4.71 01:09:14Z
+arm=F mission=real-2j edit_form=whole-file run=F-real-2j-wf-1788656954-3418497-0 first_verified_s=8.55 candidates=5 apply_ok=5 gate_ok=3 accept_ok=3 semantic_mismatch=0 refusals=0 tokens=11095 reasoning_tokens=7285
+### arm=N mission=real-2j round 2 load1=5.13 01:09:39Z
+arm=N mission=real-2j edit_form=whole-file run=N-real-2j-wf-1788656979-3425848-0 first_verified_s=24.90 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+### arm=F mission=real-2 round 3 load1=5.20 01:10:04Z
+arm=F mission=real-2 edit_form=whole-file run=F-real-2-wf-1788657004-3434197-0 first_verified_s=2.15 candidates=5 apply_ok=5 gate_ok=5 accept_ok=5 semantic_mismatch=0 refusals=0 tokens=10013 reasoning_tokens=6203
+### arm=F mission=real-2j round 3 load1=5.19 01:10:09Z
+arm=F mission=real-2j edit_form=whole-file run=F-real-2j-wf-1788657009-3436837-0 first_verified_s=10.46 candidates=5 apply_ok=5 gate_ok=3 accept_ok=3 semantic_mismatch=0 refusals=0 tokens=11054 reasoning_tokens=7244
+### arm=N mission=real-2j round 3 load1=4.96 01:10:34Z
+arm=N mission=real-2j edit_form=whole-file run=N-real-2j-wf-1788657034-3444416-0 first_verified_s=24.80 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+## ab-3 done Sun Sep  6 01:10:59 AM UTC 2026

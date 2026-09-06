@@ -1,0 +1,25 @@
+=== round 1 N 21:59:31Z
+arm=N run=N-1788645571-0 first_verified_s=9.54 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+=== round 1 F 21:59:40Z
+arm=F run=F-1788645580-0 first_verified_s=1.89 candidates=5 apply_ok=4 gate_ok=4 accept_ok=4 semantic_mismatch=0 refusals=0 tokens=3684 reasoning_tokens=2796
+=== round 2 N 21:59:42Z
+arm=N run=N-1788645582-0 first_verified_s=17.17 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+=== round 2 F 22:00:00Z
+arm=F run=F-1788645600-0 first_verified_s=2.38 candidates=5 apply_ok=5 gate_ok=5 accept_ok=5 semantic_mismatch=0 refusals=0 tokens=3531 reasoning_tokens=2804
+=== round 3 N 22:00:02Z
+arm=N run=N-1788645602-0 first_verified_s=8.55 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+=== round 3 F 22:00:11Z
+arm=F run=F-1788645611-0 first_verified_s=2.36 candidates=5 apply_ok=5 gate_ok=5 accept_ok=5 semantic_mismatch=0 refusals=0 tokens=3945 reasoning_tokens=3177
+=== round 4 N 22:00:14Z
+arm=N run=N-1788645614-0 first_verified_s=15.19 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+=== round 4 F 22:00:29Z
+arm=F run=F-1788645629-0 first_verified_s=2.49 candidates=5 apply_ok=5 gate_ok=2 accept_ok=2 semantic_mismatch=0 refusals=0 tokens=3248 reasoning_tokens=2466
+=== round 5 N 22:00:32Z
+arm=N run=N-1788645632-0 first_verified_s=24.74 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+=== round 5 F 22:00:56Z
+arm=F run=F-1788645656-0 first_verified_s=2.29 candidates=5 apply_ok=5 gate_ok=4 accept_ok=4 semantic_mismatch=0 refusals=0 tokens=3426 reasoning_tokens=2720
+=== round 6 N 22:00:59Z
+arm=N run=N-1788645659-0 first_verified_s=9.63 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+=== round 6 F 22:01:09Z
+arm=F run=F-1788645669-0 first_verified_s=2.54 candidates=5 apply_ok=5 gate_ok=5 accept_ok=5 semantic_mismatch=0 refusals=0 tokens=3463 reasoning_tokens=2661
+=== COHORT DONE 22:01:11Z
