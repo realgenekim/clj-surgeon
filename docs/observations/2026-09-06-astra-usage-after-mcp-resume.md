@@ -1,7 +1,5 @@
 # Astra: usage after the MCP resume
 
-<!-- agent-usage-window-end: 2026-09-06T08:45:00Z -->
-
 Recorded 2026-09-06T10:07:15.502127+00:00. Window: September 6,
 2026, **07:52–08:45 UTC / 00:52–01:45 PDT**. This is one Astra session,
 not a fleet comparison or an adoption experiment.
