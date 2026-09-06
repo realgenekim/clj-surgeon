@@ -244,11 +244,16 @@
           candidates (:candidates response)]
       (when-not (and (vector? candidates) (= 1 (count candidates)))
         (reject! :typist-transport-invalid-response))
+      (mission-events/record-provider-fallback! (first candidates))
       (assoc (first candidates) :transport-wall-ms (:elapsed_ms result)))))
 
 (defn request-candidates! [authority]
   (let [processes (atom {})
-        handle (race/start! (get-in authority [:route :k]) #(request-one! authority % processes))]
+        context mission-events/*context*
+        handle (race/start! (get-in authority [:route :k])
+                 (fn [index]
+                   (binding [mission-events/*context* context]
+                     (request-one! authority index processes))))]
     (assoc handle :transport-processes processes)))
 
 (defn candidate-sequence [handle]

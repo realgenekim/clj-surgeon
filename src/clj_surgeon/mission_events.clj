@@ -115,3 +115,56 @@
       (catch Throwable failure
         (emit! phase prior nil started true)
         (throw failure)))))
+
+(def provider-error-types
+  #{"provider-rate-limited" "provider-unavailable" "http-error" "timeout"
+    "provider-error" "provider-refusal" "model-mismatch" "upstream-mismatch"
+    "invalid-response" "invalid-choices" "invalid-message" "output-length"
+    "nonterminal-output" "empty-content" "response-too-large" "secret-in-response"
+    "redirect-refused" "transport-refused" "transport-or-response-error"})
+
+(defn finite-nonnegative [value]
+  (when (and (number? value) (Double/isFinite (double value)) (<= 0 value))
+    (double value)))
+
+(defn provider-fallback-event
+  "Project only a returned, actually dispatched provider fallback receipt.
+   This is not native-tool fallback, planned routing, or a mission state change."
+  [prior candidate]
+  (let [attempts (:attempts candidate)]
+    (when (and (vector? attempts) (= 2 (count attempts)))
+      (let [[primary fallback] attempts
+            eligible {429 "provider-rate-limited" 503 "provider-unavailable"}]
+        (when (and (= "openrouter-cerebras" (:route primary))
+                   (true? (:request_started primary))
+                   (contains? eligible (:http_status primary))
+                   (= (get eligible (:http_status primary)) (:error_type primary))
+                   (= "groq" (:route fallback)) (true? (:request_started fallback)))
+          (let [attested? (and (= "openai/gpt-oss-120b" (:model fallback))
+                               (= "Groq" (:upstream fallback)))
+                ok? (and attested? (true? (:usable fallback)))
+                seconds (finite-nonnegative (:request_wall_s fallback))
+                millis (when seconds (* 1000.0 seconds))
+                cost (when (= "provider-reported" (:cost_source fallback))
+                       (finite-nonnegative (:cost_usd fallback)))
+                token (fn [v] (when (and (integer? v) (<= 0 v Long/MAX_VALUE)) (long v)))]
+            (merge (dissoc (events/mission-fields prior) :mission_state :provider :model
+                     :upstream :cost_source)
+                   {:kind "mission-provider-fallback" :tool "mission" :provider "groq"
+                    :ok ok?
+                    :error_type (when-not ok?
+                                  (cond (provider-error-types (:error_type fallback)) (:error_type fallback)
+                                        (true? (:usable fallback)) "provider-identity-unverified"
+                                        :else "provider-fallback-refused"))
+                    :wall_ms (when (and millis (Double/isFinite millis) (<= millis Long/MAX_VALUE)) millis)
+                    :prompt_tokens (token (:prompt_tokens fallback))
+                    :completion_tokens (token (:completion_tokens fallback))
+                    :reasoning_tokens (token (:reasoning_tokens fallback))
+                    :cost_usd cost :cost_source (when cost "provider-reported")}
+                   (when attested? {:model "openai/gpt-oss-120b" :upstream "Groq"}))))))))
+
+(defn record-provider-fallback! [candidate]
+  (try
+    (when-let [event (provider-fallback-event (when *context* @*context*) candidate)]
+      (events/record! event))
+    (catch Throwable _ nil)))

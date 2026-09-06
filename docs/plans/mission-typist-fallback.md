@@ -92,3 +92,43 @@ and absent fallback), followed by GREEN. Final JVM admission + executor suites:
 `/var/tmp/forge/typist-fallback-integration/`. No live provider or timed experiment.
 Lane enrollment remains parent-owned: admission namespace now 6 deftests; executor
 namespace now 8. Full repository landing gates and independent review remain owed.
+
+## Receipt-derived provider-fallback events
+
+Emit `mission-provider-fallback`, explicitly distinct from a native-tool fallback,
+only after an actual two-attempt receipt: OpenRouter/Cerebras request started and
+returned typed HTTP429/503; the second Groq request actually started. Planned
+fallback, key-load failure before dispatch, deadline-skipped fallback and absent
+or malformed records do not prove a fallback call and emit no such event.
+Native-tool fallback telemetry remains a separate pending requirement.
+
+One event is emitted per completed fallback receipt at request-one!, including
+losing race children that finish before cancellation. Capture only the mission
+context binding across worker threads; never infer an id for direct calls. Do
+not propagate a mission state into a provider event. If a child never returns a
+receipt, this surface has no evidence and cannot claim a completed fallback.
+
+Wall and usage come from the second attempt, not an observer stopwatch or the
+planned route. Unknown measurements remain nil. Actual model/upstream are added
+only when the receipt's model and upstream match the pins; the provider route is
+known from the dispatched Groq endpoint. Drop source, prompts, raw provider errors,
+paths and arbitrary fields. Logging must not change result or exception behavior.
+Pure projection, actual-request mock wiring, context threading and logger failure
+need tests. No live provider call is authorized by this telemetry change.
+
+This event is a provider sub-event, not another top-level mission invocation.
+Verification: the existing request-one! seam first failed three event assertions
+with an unchanged successful transport result. Final combined observer/phase/
+executor gate: 30 tests / 201 assertions PASS. Eight new battery tests cover
+actual receipt routing, observed facts, exclusions, failed/unknown data, privacy,
+logging failure, three worker contexts, and direct calls without invented ids.
+A real temporary ledger write is checked and deleted in finally. Parent owns
+lane enrollment: add mission-provider-fallback-events-test8 to :battery.
+
+The first combined run lacked an explicit events path; any fixture events it
+appended to shared telemetry are test contamination, never paid-provider usage.
+It is retained as green-unisolated.txt. The final run explicitly set inherited
+CLJ_SURGEON_EVENTS_FILE=/var/tmp/forge/provider-fallback-events/test-events.jsonl
+and produced 12 isolated fixture phase events. Receipts are under
+/var/tmp/forge/provider-fallback-events/. No live provider calls, timing claims,
+production ledger backfill, or native-tool-fallback implementation occurred.
