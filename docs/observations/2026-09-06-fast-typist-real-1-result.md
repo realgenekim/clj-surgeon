@@ -70,3 +70,18 @@ Ratio warm: **12.4x** (cold was 15.7x). Warming the context bought Sol ~21% of w
 Predictions vs observed: NW median 6–12 s → 23.37 s (missed HIGH: I priced Sol's turn without its self-check); F ~1.9 s → 1.88 (hit); warm ratio 3–6x → 12.4x (missed; the typist's lead survives warmth); falsifier (NW < 3 s) did not fire. F's two losses are the known ns-name drift, caught by the gate.
 
 Standing after A/B 1–4 on one real file: the typist's advantage is set by the gate (16x → 8x → 3x as the gate goes 0.06 → 0.75 → 7.1 s) and only mildly by Sol's warmth (16x → 12x). What remains on Sol's side is the model turn itself, most of it the model verifying its own work — which is precisely the work the ledger's gate does for the typist in 50 ms.
+
+## A/B 5 (01:38–01:41Z) — what a resident JVM gate buys (Gene: "tests running in watch mode, obviating JVM startup time")
+
+Replay-only (no model calls): the retained A/B 3 candidates re-judged through a runner-OWNED resident nREPL JVM (liveness probe with a 2 s deadline before every candidate, classpath sha256 pinned at start and compared per candidate, every clj-surgeon.* namespace unmapped and reloaded from the candidate's bytes per judge, typed refusals "resident: classpath hash mismatch" / "resident: not alive" with cold fallback recorded in the receipt) versus the cold JVM, interleaved, quiet window, load 2.6–4.7. Model walls are the retained ones.
+
+| mission | gate | cold median gate wall | resident median gate wall | cold first-verified | resident first-verified | vs cold Sol |
+|---|---|---|---|---|---|---|
+| real-2 | JVM focused test ns | 0.726 s | **0.130 s** | 2.37 s | **1.77 s** | 7.8x → **10.4x** (Sol ≈18.4 s) |
+| real-2j | JVM four namespaces | 6.925 s | **2.811 s** steady (first candidate 5.7–5.9 s: JIT + first tree load) | 8.59 s | 7.33 s | 2.89x → 3.38x (Sol 24.80 s) |
+
+Verdict differences between modes: ZERO, candidate by candidate. Isolation proved (known-bad judged first, then known-good, same JVM: good passes; it required unmapping namespaces before reload). Both typed refusals demonstrated live mid-run with verdicts unchanged after fallback. Resident startup 1.4–1.8 s, recorded, never charged; liveness check 45 ms per candidate.
+
+The honest catch: inside a single run the resident pays its own warm-up on the first candidate, and first-verified is usually won by candidate 0, so the four-namespace gain is mostly eaten. A resident that OUTLIVES the run — the watch-mode ideal — replaces that first 5.8 s with 2.8 s: projected real-2j first-verified ≈ 4.4 s → ≈ 5.7x vs Sol (a projection, labelled as such). What the four-namespace resident cannot escape is the 2.8 s full-tree reload per candidate, needed so no previous candidate's Vars stay rooted in dependents; a narrower reload scope (touched namespaces + dependents via tools.namespace) is the next lever and is exactly Gene's kaocha-watcher caution turned into design.
+
+Prediction from the ladder note (0.75 s → ~50 ms): observed 0.13 s; direction right, floor higher than guessed (nREPL round trip + reload of one namespace).
