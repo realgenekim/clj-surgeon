@@ -212,3 +212,7 @@ No cohort result is upgraded by these functional gates.
 Receipt and bounds: [Astra Maven comparison](observations/2026-09-06-astra-maven-native-comparison.md). Earlier positive and negative cohorts retain their own scopes.
 
 - Astra 2026-09-06T08:26:57.350919+00:00: inducedprimary429→realGroq fallback transport VERIFIED once,84prompt/175completion/159reasoningsubset, unknowncost. Not a realoutage or missionfailover benchmark. Node testboundary leak fix fullgate/independentreviewGO; receipt mock leak focusedRED/GREEN, combinedgatepending. These remove observed papercuts, not new latency squares.
+
+### Astra evidence update — 2026-09-06T09:30:10.545202+00:00
+
+Closed-closure warm transition: actual source change and matching proof earned, one866ms observation versus existing two-cold-JVM4386ms. Startup+transition+teardown4761ms; one-shot win and100ms target unearned. Next useful comparator is batched cold proof, then repeated real transitions; receipt poison-state paper cut precedes product use. Spark: actual single availability/accounting boundary passed, production tool-free adapter still unsupported. See [Astra report](observations/2026-09-06-astra-warm-transition-and-spark.md).
