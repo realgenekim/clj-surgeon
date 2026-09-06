@@ -2972,7 +2972,15 @@
   [_exchange params callback]
   (mcp-operation/invoke!
     ;; @spec MCP-OP-ADMIT-133
-    {:execute #(checked-refusal-kind!
+     ;; @spec MCP-OP-EDIT-037
+     ;; @spec MCP-OP-EDIT-038
+     ;; Canonicalized HERE, at this verb's receipt construction exit --
+     ;; the last point inside the verb where the receipt is built -- so the
+     ;; shared finalizer receives an already-canonical map and changes only
+     ;; `elapsed_ms` (MCP-OP-RESULT-003). Sol fence r7 (2026-09-06) proved
+     ;; the previous placement inside `finalize-result` broke that.
+    {:execute
+     (comp mcp-operation/canonicalize-receipt-text #(checked-refusal-kind!
                  (try
                  (if-let [config @runtime-config]
                    (execute-request! config params)
@@ -3005,7 +3013,7 @@
                  ;; @spec MCP-OP-ADMIT-129
                  ;; @spec MCP-OP-ADMIT-146
                  (catch Throwable error
-                   (bound-receipt (edge-throwable-refusal error)))))
+                   (bound-receipt (edge-throwable-refusal error))))))
      :summarize summary
      :callback callback}))
 

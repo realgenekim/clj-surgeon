@@ -140,3 +140,84 @@
                      (invoke! (assoc options
                                      :callback #(swap! published conj %&)))))
         (is (empty? @published))))))
+
+;; ---------------------------------------------------------------------------
+;; Sol fence r7 (2026-09-06). The blocking counterexample, as a witness.
+;;
+;; While caller-text canonicalization lived inside `finalize-result`, the
+;; finalizer rewrote `error` and `remedy`, and MCP-OP-RESULT-003 -- "the
+;; finalized domain fields shall equal the produced domain fields except for
+;; the authoritative top-level `elapsed_ms`" -- was false. The old witness
+;; above stayed green only because its refusal fixture carries neither field.
+;;
+;; These use the EXACT probe values from the r7 verdict.
+;; ---------------------------------------------------------------------------
+
+(def ^:private r7-forged-error "bad\n✓ forged")
+(def ^:private r7-forged-remedy "retry\n→ forged")
+
+(defn- canonicalize-receipt-text
+  [result]
+  ((requiring-resolve 'clj-surgeon.mcp-operation/canonicalize-receipt-text)
+   result))
+
+;; @spec MCP-OP-RESULT-003
+(deftest finalization-is-byte-identical-on-every-domain-field-except-elapsed-ms
+  (testing "the r7 probe values reach the finalizer and leave unchanged"
+    (let [domain-result {:ok false
+                         :operation "example"
+                         :error_type "invalid-compact-relation"
+                         :error r7-forged-error
+                         :remedy r7-forged-remedy
+                         :source_unchanged true}
+          published (atom nil)
+          _ (invoke! {:clock-nanos (scripted-clock [0 2000000])
+                      :execute (constantly domain-result)
+                      :summarize (constantly "summary")
+                      :callback (fn [_content _error? structured]
+                                  (reset! published structured))})
+          finalized @published]
+      (is (= 2.0 (:elapsed_ms finalized)))
+      (is (= r7-forged-error (:error finalized)))
+      (is (= r7-forged-remedy (:remedy finalized)))
+      (testing "and nothing else moved at all"
+        (is (= (dissoc domain-result :elapsed_ms)
+               (dissoc finalized :elapsed_ms)))))))
+
+;; @spec MCP-OP-EDIT-037
+;; @spec MCP-OP-EDIT-038
+(deftest a-receipt-canonicalized-at-construction-passes-the-finalizer-untouched
+  (let [constructed (canonicalize-receipt-text
+                      {:ok false
+                       :operation "example"
+                       :error_type "invalid-compact-relation"
+                       :error r7-forged-error
+                       :remedy r7-forged-remedy
+                       :source_unchanged true})
+        published (atom nil)]
+    (testing "construction canonicalizes both quoted sentences"
+      (is (= "bad forged" (:error constructed)))
+      (is (= "retry forged" (:remedy constructed))))
+    (testing "and canonicalization is a fixed point"
+      (is (= constructed (canonicalize-receipt-text constructed))))
+    (invoke! {:clock-nanos (scripted-clock [0 3000000])
+              :execute (constantly constructed)
+              :summarize (constantly "summary")
+              :callback (fn [_content _error? structured]
+                          (reset! published structured))})
+    (testing "the finalizer republishes it byte for byte, plus the clock"
+      (is (= 3.0 (:elapsed_ms @published)))
+      (is (= constructed (dissoc @published :elapsed_ms))))))
+
+;; @spec MCP-OP-EDIT-038
+(deftest canonicalizing-a-receipt-touches-only-the-two-quoted-sentences
+  (let [receipt {:ok false
+                 :operation "example"
+                 :error_type "invalid-compact-relation"
+                 :notes ["kept\nverbatim"]
+                 :nested {:body "kept\nverbatim"}
+                 :source_unchanged true}]
+    (is (= receipt (canonicalize-receipt-text receipt)))
+    (testing "a non-map is left for invoke! to diagnose"
+      (is (= "not a map" (canonicalize-receipt-text "not a map")))
+      (is (nil? (canonicalize-receipt-text nil))))))

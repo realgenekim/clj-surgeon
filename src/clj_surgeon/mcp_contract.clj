@@ -1255,6 +1255,12 @@
 
                           (integer? (nth path 4 nil))
                           (assoc :row_index (nth path 4)))))))
+      ;; @spec MCP-OP-EDIT-037
+      (contains? result :expected-shape-example)
+      (assoc :expected_shape_example (:expected-shape-example result))
+      (contains? result :expected-shape-example-schematic)
+      (assoc :expected_shape_example_schematic
+             (boolean (:expected-shape-example-schematic result)))
       (contains? result :change-ids)
       (assoc :change_ids (mapv #(if (keyword? %) (name %) (str %))
                                (:change-ids result)))

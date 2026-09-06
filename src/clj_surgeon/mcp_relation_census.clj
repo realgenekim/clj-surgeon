@@ -1435,12 +1435,20 @@
     ;; uninitialised-server refusal — which is raised here, before
     ;; `execute-request!*` is ever called — is not the next shape outside the
     ;; bound.
-    {:execute #(entrance-bounded
+     ;; @spec MCP-OP-EDIT-037
+     ;; @spec MCP-OP-EDIT-038
+     ;; Canonicalized HERE, at this verb's receipt construction exit --
+     ;; the last point inside the verb where the receipt is built -- so the
+     ;; shared finalizer receives an already-canonical map and changes only
+     ;; `elapsed_ms` (MCP-OP-RESULT-003). Sol fence r7 (2026-09-06) proved
+     ;; the previous placement inside `finalize-result` broke that.
+    {:execute
+     (comp mcp-operation/canonicalize-receipt-text #(entrance-bounded
                   (if-let [config @runtime-config]
                     (execute-request!* config params)
                     (refusal :server-not-initialized
                              "relation_census server is not initialized"
-                             (:next-call (continuation {})))))
+                             (:next-call (continuation {}))))))
      :summarize summary
      :callback callback}))
 

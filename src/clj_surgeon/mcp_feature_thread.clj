@@ -3196,7 +3196,23 @@
    (let [missing (->> (leaf-paths result [])
                       (remove (fn [[p _]] (contains? vouched p)))
                       (remove (fn [[_ v]] (str/includes? haystack (str v))))
-                      (map (fn [[p v]] (str (str/join "." p) "=" (pr-str v))))
+                      ;; @spec MCP-OP-EDIT-038
+                      ;; On a REFUSAL these leaves are frequently the caller's
+                      ;; own rejected values — Sol fence r5 (2026-09-06) found a
+                      ;; hostile `unknown_fields` leaf carrying the receipt's
+                      ;; own glyphs onto this line — so they are canonicalized.
+                      ;; On SUCCESS the leaves are source bodies and anchor
+                      ;; context that must stay byte-verbatim; collapsing their
+                      ;; whitespace would break the very superset promise this
+                      ;; function exists to keep.
+                      (map (fn [[p v]]
+                             (let [rendered (str (str/join "." p) "="
+                                                 (pr-str v))]
+                               (if (:ok result)
+                                 rendered
+                                 (or (mcp-operation/sanitize-caller-text
+                                       rendered)
+                                     "")))))
                       distinct)]
      (if (seq missing)
        (str text "\n structured-only · " (str/join " · " missing))
@@ -4120,8 +4136,14 @@
   [result]
   (if (:ok result)
     (render-receipt result)
-    (let [without-clock (str "feature_thread refused · " (:error_type result)
+    (let [safe #(or (mcp-operation/sanitize-caller-text
+                      (when (some? %) (str %)))
+                    "")
+          without-clock (str "feature_thread refused · "
+                             (safe (:error_type result))
+                             ;; @spec MCP-OP-EDIT-037 · already canonical
                              "\n→ " (:error result)
+                             ;; @spec MCP-OP-EDIT-037 · canonical at construction
                              (when-let [remedy (:remedy result)]
                                (str "\nremedy · " remedy))
                              ;; @spec MCP-OP-THREAD-026
@@ -4271,7 +4293,15 @@
   "clojure-mcp callback handler retained as a Var for hot reload."
   [_exchange params callback]
   (mcp-operation/invoke!
-    {:execute #(try
+     ;; @spec MCP-OP-EDIT-037
+     ;; @spec MCP-OP-EDIT-038
+     ;; Canonicalized HERE, at this verb's receipt construction exit --
+     ;; the last point inside the verb where the receipt is built -- so the
+     ;; shared finalizer receives an already-canonical map and changes only
+     ;; `elapsed_ms` (MCP-OP-RESULT-003). Sol fence r7 (2026-09-06) proved
+     ;; the previous placement inside `finalize-result` broke that.
+    {:execute
+     (comp mcp-operation/canonicalize-receipt-text #(try
                  (execute-request @runtime-config params)
                  (catch Exception error
                    (refuse "feature-thread-failure"
@@ -4280,7 +4310,7 @@
                  (catch Throwable error
                    (refuse "feature-thread-error"
                            (or (.getMessage error) (.getName (class error)))
-                           {:remedy "Report this receipt; no source was read past the failure."})))
+                           {:remedy "Report this receipt; no source was read past the failure."}))))
      :summarize summary
      ;; @spec MCP-OP-THREAD-046
      ;; The text is rendered from the FULL result, which is why `summarize`

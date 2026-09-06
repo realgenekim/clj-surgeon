@@ -393,18 +393,38 @@
          " · " (:match-count result) " guarded edit(s) · "
          (mcp-operation/format-elapsed-ms (:elapsed_ms result)) "\n\n"
          (:diff result))
-    (str "transform_clojure refused · " (name (:error-type result))
+    ;; @spec MCP-OP-EDIT-037
+    ;; @spec MCP-OP-EDIT-038
+    ;; Two defects the r5 catalog witness found here, both reachable from the
+    ;; public entrance: `(name (:error-type result))` threw NullPointerException
+    ;; for every refusal that publishes the snake-case `:error_type` (the
+    ;; workspace router's do), and the error sentence was written at column zero
+    ;; where a caller value could add its own receipt lines.
+    (str "transform_clojure refused · "
+         (let [reason (or (:error-type result) (:error_type result)
+                          "unknown-error")]
+           (if (keyword? reason) (name reason) (str reason)))
          " · " (mcp-operation/format-elapsed-ms (:elapsed_ms result))
-         "\n" (:error result) "\nsource unchanged")))
+         (when-let [sentence (not-empty (str (:error result)))]
+           (str "\n  " sentence))
+         "\nsource unchanged")))
 
 (defn handle-transform-clojure
   "clojure-mcp callback handler retained as a Var for hot reload."
   [_exchange params callback]
   (mcp-operation/invoke!
-    {:execute #(if-let [config @runtime-config]
+     ;; @spec MCP-OP-EDIT-037
+     ;; @spec MCP-OP-EDIT-038
+     ;; Canonicalized HERE, at this verb's receipt construction exit --
+     ;; the last point inside the verb where the receipt is built -- so the
+     ;; shared finalizer receives an already-canonical map and changes only
+     ;; `elapsed_ms` (MCP-OP-RESULT-003). Sol fence r7 (2026-09-06) proved
+     ;; the previous placement inside `finalize-result` broke that.
+    {:execute
+     (comp mcp-operation/canonicalize-receipt-text #(if-let [config @runtime-config]
                  (execute-request! config params)
                  (refusal :server-not-initialized
-                          "transform_clojure server is not initialized"))
+                          "transform_clojure server is not initialized")))
      :summarize summary
      :callback callback}))
 
