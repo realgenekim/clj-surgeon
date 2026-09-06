@@ -612,3 +612,11 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 ## 14:55Z — STATE: real admission use through the existing gate with a supplied profile — task 1 refused once (gate bookkeeping paths) then committed (2.14 s); task 2 (timing-points extraction) committed on the FIRST call (2.07 s); aggregate calls 2/3, first-call-complete tasks 1/2. Astra's description-guidance commit e1270478 in its normal gate; refusal-text branch parked (inb-2da8ea); servers held on 181c365c at his request; docs-only tips 9aa2fbf9 queued for a later batch. Final report drafted (docs/observations/2026-09-06-gene-report-1620z-night.md); at 16:20Z: finalize it, stop the commentary loop (pid 85201), post the report in chat.
 
 ## 16:18Z — WINDOW CLOSED (16:20Z). Final report: docs/observations/2026-09-06-gene-report-1620z-night.md. Next window first acts: agree the live-catalog check and rebuild 7906/8171 on trunk; pick up inb-2da8ea (one item) in a tool-perfect block.
+
+
+## STATE at 19:41Z 2026-09-06 (wind-down of the exploration window)
+- Trunk MCP/main carries 7f920915 (inspect owner_counts) and 38e40a94 (fan-out route plate); tag stable/2026-09-06 = 38e40a94. Block installed on THIS box (hash ffc885d9); tripwire ~/bin/check-prompt-plate.sh re-pointed to the records worktree + MCP/main and green. Servers 7906/8171 on e8076379.
+- Wins: fan-out informed route 1.75x; Astra's alias migration 1.38x. Losses: whole-task ×2, served discovery, extract-to-namespace. All in docs/observations/2026-09-06-* with receipts; report: 2026-09-06-gene-report-1950z-crank.md.
+- Instruments: ~/bin/block-ledger, ~/bin/cadence-watch (cron */5), ~/bin/usage-watch (window-guarded), ~/bin/land (verdict line), runner-b --cell/--parallel/--first-pair-gate/--dry-run receipt gate/--shared-box.
+- Open items: inb-b60d6e (public ceiling), inb-e02822 (compact counts P2), inb-a36079 (hash policy), inb-2da8ea (refusal text parked), inb-b3b6d1 (extraction friction), inb-e21b3d (inspect match friction). Docs-only branches queued: 9aa2fbf9, f25d4a32, 96d49433.
+- Next action: wind down; the next evidence is a naturally occurring fleet task through the installed plate, metered by usage-watch.
