@@ -29,6 +29,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -352,6 +353,39 @@ def test_offline_guard(m):
         ok, detail = e.code == 6, "exit=%s" % e.code
     check("offline refuses a network open (exit 6)", ok, detail)
 
+    # SOL FENCE R3, finding 3: the three routes that walked past the r2 guard.
+    # Each of them hands the command line to a SHELL, so argv[0] is `sh` or
+    # `bash` and a guard that only looks at argv[0] sees nothing. Two stops
+    # close them: the shell STRING is scanned in-process, and a PATH shim
+    # makes `codex`/`claude` unstartable even for a shell string this process
+    # never sees the inside of.
+    try:
+        m.os.system("codex exec -m gpt-5.6-sol")
+        ok, detail = False, "no refusal"
+    except SystemExit as e:
+        ok, detail = e.code == 6, "exit=%s" % e.code
+    check("offline refuses os.system('codex ...') (exit 6)", ok, detail)
+    try:
+        m.subprocess.run("codex exec -m gpt-5.6-sol", shell=True)
+        ok, detail = False, "no refusal"
+    except SystemExit as e:
+        ok, detail = e.code == 6, "exit=%s" % e.code
+    check("offline refuses a shell string (shell=True) (exit 6)", ok, detail)
+    r = m.subprocess.run(["bash", "-c", "codex exec -m gpt-5.6-sol"],
+                         capture_output=True, text=True)
+    check("a bash -c trampoline hits the PATH shim (exit 6)",
+          r.returncode == 6 and "offline: spawn of codex refused" in r.stderr,
+          "exit=%s %r" % (r.returncode, r.stderr.strip()))
+    check("the offline PATH shim is installed under /var/tmp/forge",
+          bool(m.OFFLINE_SHIM_DIR)
+          and m.OFFLINE_SHIM_DIR.startswith(FENCE + os.sep)
+          and os.access(os.path.join(m.OFFLINE_SHIM_DIR, "claude"), os.X_OK),
+          str(m.OFFLINE_SHIM_DIR))
+    r = m.subprocess.run(["echo", "ordinary"], capture_output=True, text=True)
+    check("offline still RUNS an ordinary tool (echo)",
+          r.returncode == 0 and r.stdout.strip() == "ordinary",
+          "exit=%s %r" % (r.returncode, r.stdout.strip()))
+
 
 # --------------------------------------------------------------------------
 # (e) cost accounting -- an aggregate never outranks its members
@@ -437,8 +471,31 @@ def test_cost(m):
                                     TYPIST_FX=fx2),
                            capture_output=True, text=True, timeout=180)
         row = [ln for ln in r.stdout.splitlines() if ln.startswith("groq")]
+        # SOL FENCE R3, finding 5. The r2 test asserted the provider's figure
+        # on the DISPLAY only, and the display was already truncating it to
+        # $0.1235; the RECEIPT -- the artifact anyone would later read as the
+        # authority -- went through the generic EDN float branch and became
+        # 0.123. A cost is not a timing: the receipt must round-trip the
+        # provider's own digits exactly, and the table must not print fewer.
         check("--cost-report: a mixed group keeps the provider's figure",
-              bool(row) and "$0.1235" in row[0], (row or [""])[0].strip())
+              bool(row) and "$0.12345678" in row[0], (row or [""])[0].strip())
+        check("--cost-report: the table prints at least 6 decimals",
+              bool(row) and re.search(r"\$\d+\.\d{6,}", row[0]),
+              (row or [""])[0].strip())
+        written = [f for f in os.listdir(fx2) if f.startswith("cost-report-")]
+        body = open(os.path.join(fx2, written[0])).read() if written else ""
+        check("--cost-report: the RECEIPT round-trips 0.12345678 exactly",
+              ":cost_usd 0.12345678" in body,
+              "; ".join(ln.strip() for ln in body.splitlines()
+                        if "cost_usd" in ln))
+        check("--cost-report: :total_usd is the provider figure, unrounded",
+              ":total_usd 0.12345678" in body,
+              "; ".join(ln.strip() for ln in body.splitlines()
+                        if "total_usd" in ln))
+        check("--cost-report: no truncated 0.123 in the receipt",
+              ":cost_usd 0.123 " not in body and ":total_usd 0.123 " not in body
+              and ":cost_usd 0.123\n" not in body
+              and ":total_usd 0.123\n" not in body)
         check("--cost-report: the unpriced member is still counted UNKNOWN",
               "1 call(s) have no rate and are UNKNOWN, not zero." in r.stdout)
     finally:
