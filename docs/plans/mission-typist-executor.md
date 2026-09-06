@@ -243,3 +243,13 @@ candidate diff; generation/proof/write happen in apply. Dedicated propose and
 undo help link that user contract and disclose source-versus-ledger writes,
 publication refusals and read-only Git inspection. This is documentation/help
 repair, not a fresh blind adoption result, new capability or performance claim.
+
+### Compact proposal presentation
+
+A real count-name proposal printed 60,118 bytes of repeated saved authority.
+The CLI-only default for an id-bearing `propose` will return the existing bounded
+`mission-show` view of that saved mission, with its state, effective next action
+and workspace/state-home-bound full-details command. `propose --full` retains
+the previous complete result. Internal propose!, run!, saved bytes and exit
+classification stay unchanged. This is an authority display, not candidate-diff
+approval or proof. Refusals without a saved id keep their existing response.

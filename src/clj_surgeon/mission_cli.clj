@@ -693,7 +693,13 @@
                      "link" (link! opts)
                      ("ready" "blocked") (ready opts)
                      "list" (list-missions opts))]
-        (when (map? result) (pp/pprint (if (= "show" verb) result (display/with-recovery result opts))))
+        (when (map? result)
+          (pp/pprint
+            (cond
+              (= "show" verb) result
+              (and (= "propose" verb) (:id result) (not (:full opts)))
+              (show (assoc opts :id (:id result) :workspace (:root result)))
+              :else (display/with-recovery result opts))))
         (System/exit (cond (false? (:ok result)) 1
                            (and (not= "show" verb) (failed-receipt? result)) 1
                            :else 0))))))

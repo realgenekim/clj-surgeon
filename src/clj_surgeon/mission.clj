@@ -843,7 +843,7 @@
 
 (def verb-help
   {"open"   "open --spec-file <file|-> [--workspace R] [--state-home H]\n    One bounded intent -> a mission id and its dossier. Saves ledger bytes; writes no source bytes."
-   "propose" "propose --spec-file <file|-> [--state-home H]\n    Save frozen intent/source/proof authority and a mission id; no provider call or source write.\n    This is an authority preview, not a generated candidate diff.\n    Apply generates candidates, proves them, and may write source; there is no intervening candidate-diff approval command."
+   "propose" "propose --spec-file <file|-> [--state-home H] [--full]\n    Save frozen intent/source/proof authority and a mission id; no provider call or source write.\n    This is an authority preview, not a generated candidate diff.\n    Apply generates candidates, proves them, and may write source; there is no intervening candidate-diff approval command."
    "plan"   "plan  [--spec-file <file|->] | plan <id> [--spec-file <file|->]\n    With no id: open-and-plan (same as `open`).\n    With an id: RE-plan that mission against the tree as it now is.\n    With an id AND --spec-file on a :blocked/:failed mission: open a NEW\n    mission carrying the repaired intent, linked :supersedes to the old one."
    "show"   "show <id> --workspace R [--full]\n    Bounded saved state, receipt, route and candidate refusals (no proof rerun).\n    --full prints the previous complete ledger view, including frozen source.\n    Readable failed missions exit 0; missing/corrupt missions exit 1 with a runnable recovery example."
    "run"    "run --spec-file <file|-> [--state-home H]\n    owner_forms only: save a frozen plan and immediately apply it in one JVM.\n    WRITES source after proof. For authority review before write, use propose then apply.\n    No existing id. A blocked plan is saved; exits nonzero with its decision."
@@ -870,7 +870,7 @@
   (cond
     (= "propose" verb)
     (str "bin/mission — propose.\n\n" (get verb-help "propose")
-         "\n\nComplete user contract: docs/mission-typist.md (Complete request contract).\n"
+         "\n\nDefault stdout is the bounded saved mission-show view, including the full-details command.\n--full prints the complete proposal result; saved authority is retained in either mode.\nComplete user contract: docs/mission-typist.md (Complete request contract).\n"
          "Template: docs/examples/owner-forms-template.edn; unknown facts must come from retained evidence.\n"
          "  bin/mission propose --spec-file - < owner-forms.edn\n"
          "Use the returned id: bin/mission show M-ID --workspace /absolute/project\n")

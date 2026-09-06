@@ -162,3 +162,66 @@
           (is (string? (:id receipt)))
           (is (= before (slurp source)))
           (is (not (str/includes? (:err result) "Exception"))))))))
+
+(deftest public-propose-is-bounded-and-full-preserves-saved-authority
+  (with-fixture
+    (fn [root]
+      (let [file "src/clj_surgeon/diagnostic_delta.clj"
+            source (io/file root file)
+            _ (io/make-parents source)
+            _ (io/copy (io/file file) source)
+            before (slurp source)
+            state-home (str (io/file root "state"))
+            spec (io/file root "request.edn")
+            request {:workspace_root (str root)
+                     :intent "In representative-difference rename count-left to remaining-right-count; preserve behavior."
+                     :owners [{:file file :owner "representative-difference"}]
+                     :proof-files []
+                     :verification {:profile "gate"} :acceptance_profile "witness"
+                     :typist {:mission-class :rename
+                              :source-policy {file {:generated? false :reader-conditionals? false :format-sensitive? false}}
+                              :budget {:max-files 1 :max-changed-chars 1200}
+                              :provider {:id :openrouter :model "openai/gpt-oss-120b" :upstream "Cerebras"}
+                              :rate {:mission-class :rename :provider :openrouter :model "openai/gpt-oss-120b" :upstream "Cerebras"
+                                     :verified 3 :attempted 4 :evidence "SYNTHETIC-display-only-no-execution"}
+                              :candidate-format :clojure-forms}}
+            ;; Synthetic facts exercise display only. Propose cannot call transport
+            ;; or run proof; neither these argv nor their timing claim is live evidence.
+            profiles {"gate" {:commands [["never-execute-display-gate"]] :measured-ms 1 :evidence "synthetic-gate"}
+                      "witness" {:commands [["never-execute-display-witness"]] :measured-ms 1 :evidence "synthetic-witness"}}]
+        (spit spec (pr-str {:verb "owner_forms" :request request :profiles profiles}))
+        (let [args ["bin/mission" "propose" "--spec-file" (str spec) "--state-home" state-home]
+              compact (apply shell/sh args)
+              result (edn/read-string (:out compact))
+              full (apply shell/sh (conj args "--full"))
+              full-result (edn/read-string (:out full))
+              saved (mission/read-mission (mission/workspace-state-dir (str root) state-home) (:id full-result))]
+          (is (= 0 (:exit compact)))
+          (is (= "mission-show" (:operation result)))
+          (is (= :ready (:state result)))
+          (is (= 3 (get-in result [:route :k])))
+          (is (<= (alength (.getBytes (:out compact) "UTF-8")) 4096))
+          (is (some #{state-home} (get-in result [:details :argv])))
+          (is (some #{"--full"} (get-in result [:details :argv])))
+          (is (not (contains? result :dossier)))
+          (is (= 0 (:exit full)))
+          (is (= saved full-result))
+          (is (> (count (:out full)) 4096))
+          (is (= before (slurp source)))
+          (println "proposal-display-bytes"
+                   {:compact (alength (.getBytes (:out compact) "UTF-8"))
+                    :full (alength (.getBytes (:out full) "UTF-8"))}))))))
+
+(deftest public-propose-unsaved-refusal-preserves-response-and-exit
+  (with-fixture
+    (fn [root]
+      (let [spec (io/file root "unknown.edn")
+            _ (spit spec (pr-str {:verb "not-a-mission" :request {:workspace_root (str root)}}))
+            args ["bin/mission" "propose" "--spec-file" (str spec) "--state-home" (str (io/file root "state"))]
+            compact (apply shell/sh args)
+            full (apply shell/sh (conj args "--full"))
+            result (edn/read-string (:out compact))]
+        (is (= 1 (:exit compact) (:exit full)))
+        (is (= result (edn/read-string (:out full))))
+        (is (= "mission-unknown-verb" (:error_type result)))
+        (is (nil? (:id result)))))))

@@ -15,7 +15,13 @@ saves and immediately applies the plan in one JVM. This is an explicit write
 command, restricted to `owner_forms` and no existing mission id. Use `propose`
 then `apply` when an intervening authority review matters. Proposal is an
 **authority preview**, not a generated candidate diff: it freezes intent, owners,
-source and proof authority and saves the mission. It calls no provider. Candidate
+source and proof authority and saves the mission. It calls no provider.
+
+Successful CLI proposals print the bounded saved `mission-show` view, with the
+mission id, state, next action and a workspace/state-home-bound `show --full`
+command. `propose --full` preserves the complete proposal stdout; both modes
+retain complete authority in the ledger. This output choice does not change
+`run` or internal planning results. Candidate
 generation happens during apply, followed by proof and the guarded live write;
 there is currently no public candidate-diff approval pause between them. A blocked run retains its
 mission id and returns `:error_type "mission-not-ready"` with the decision,
