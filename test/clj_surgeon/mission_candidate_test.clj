@@ -1,4 +1,5 @@
 (ns clj-surgeon.mission-candidate-test
+  {:lane :fast}
   (:require
    [clj-surgeon.mission-candidate :as candidate]
    [clojure.test :refer [deftest is testing]]))

@@ -59,7 +59,8 @@
               (map? sources) (<= (count sources) 64)
               (every? #(and (string? %) (<= (count %) 262144)) (vals sources))
               (<= (reduce + (map count (vals sources))) 4194304)
-              (every? #(owner-valid? sources %) owners)))
+              (every? #(owner-valid? sources %) owners)
+              (<= (reduce + (map #(- (:end %) (:start %)) owners)) 131072)))
     [:complete-dossier "Complete discovery and supply valid named source spans."]
     (not (every? #(source-admitted? source-policy (:file %)) owners))
     [:source-policy "Establish plain, non-generated, formatting-safe source authority."]

@@ -11,6 +11,7 @@
               prove: one bounded intent in, an id and a dossier out, an apply
               that publishes a terminal receipt into the mission file, and an
               undo that puts every byte back."
+  {:lane :battery}
   (:require
    [clj-surgeon.helper-extraction-fixture :as fixture]
    [clj-surgeon.mcp-workspace :as workspace]

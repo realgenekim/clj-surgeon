@@ -1,4 +1,5 @@
 (ns clj-surgeon.mission-forms-test
+  {:lane :fast}
   (:require
    [clj-surgeon.mission-forms :as forms]
    [clojure.test :refer [deftest is testing]]))

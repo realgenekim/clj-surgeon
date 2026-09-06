@@ -1,4 +1,5 @@
 (ns clj-surgeon.mission-typist-test
+  {:lane :fast}
   (:require
    [clj-surgeon.mission-typist :as typist]
    [clojure.string :as str]

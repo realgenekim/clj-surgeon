@@ -51,7 +51,8 @@
    or integration lane MUST NOT touch the network: those lanes run N-wide
    from N clones, and a lane whose wall depends on a remote host is not a
    merge gate."
-  (:require [clojure.string :as str]))
+  (:require
+   [clojure.string :as str]))
 
 (def lanes
   "Declaration order is execution order across lanes."
@@ -91,9 +92,11 @@
 (def manifest
   "test namespace -> lane. THE authority. Adding a JVM test namespace without
    adding it here fails `clj-surgeon.lane-manifest-test` by name."
-  {
-
-   ;; ---- :fast (40) ----
+  {;; ---- :fast (43) ----
+   'clj-surgeon.mission-typist-test                    :fast
+   'clj-surgeon.mission-candidate-race-test :fast
+   'clj-surgeon.mission-candidate-test                 :fast
+   'clj-surgeon.mission-forms-test                     :fast
    'clj-surgeon.battery-ledger-test                     :fast
    'clj-surgeon.census-pool-test                        :fast
    'clj-surgeon.fast-lane-isolation-test                :fast
@@ -142,7 +145,9 @@
    'clj-surgeon.mcp-http-server-test                    :integration
    'clj-surgeon.mcp-tool-test                           :integration
 
-   ;; ---- :battery (14) ----
+   ;; ---- :battery (16) ----
+   'clj-surgeon.mission-test                           :battery
+   'clj-surgeon.mission-typist-executor-test            :battery
    'clj-surgeon.admit-patch-test                        :battery
    'clj-surgeon.core-discovery-test                     :battery
    'clj-surgeon.mcp-alias-migration-test                :battery
@@ -156,8 +161,7 @@
    'clj-surgeon.mcp-relation-census-test                :battery
    'clj-surgeon.reader-eval-fence-test                  :battery
    'clj-surgeon.repository-hygiene-test                 :battery
-   'clj-surgeon.txn-journal-test                        :battery
-   })
+   'clj-surgeon.txn-journal-test                        :battery})
 
 (def excluded
   "Test namespaces that are on disk and in NO JVM lane, each with the reason
@@ -192,8 +196,7 @@
    "own Make target -- `make worktree-lifecycle-test` (Makefile:824)"
 
    'clj-surgeon.worktree-lifecycle-recovery-test
-   "own Make target -- `make worktree-lifecycle-recovery-test` (Makefile:834)"
-})
+   "own Make target -- `make worktree-lifecycle-recovery-test` (Makefile:834)"})
 
 (defn cadence-of-lane
   "The declared cadence for `lane`, or nil when the lane declares none."
