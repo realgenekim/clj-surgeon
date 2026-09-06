@@ -187,11 +187,62 @@
     :prompt_tokens :completion_tokens :reasoning_tokens :cost_usd
     :provider :upstream})
 
+(def reserved-field-names
+  "Every JSON name the writer itself can emit. An extra whose normalized name
+   lands on one of these is REJECTED, never merged.
+
+   Sol fence r2 proved why the old \"merge extras UNDER the named fields\"
+   comment was not the property it claimed: `merge` de-duplicates by KEY, and
+   the string key \"ok\" is a different key from the keyword `:ok` while both
+   serialize to the same JSON name. The line carried BOTH, cheshire wrote
+   both, and every JSON parser in the world keeps the LAST one -- so the
+   caller's `\"ok\": \"<redacted>\"` shadowed the writer's `\"ok\": true`. A
+   collision is therefore settled on the JSON NAME, before the merge, not on
+   the Clojure key after it."
+  (into #{"error_type_truncated" "telemetry_dropped" "over_limit"
+          "dropped_fields"}
+        (map name known-keys)))
+
+(def extra-name-shape
+  "The ONLY shape an extra field name may take: lowercase ASCII, digits and
+   underscores, 1-64 characters, starting with a letter. An allowlist, for the
+   same reason `mission-id-shape` is one -- a name is written to the ledger
+   VERBATIM and is never redacted on the way out, so any name that could carry
+   a payload is a smuggling channel with the scrubber pointed the other way."
+  #"[a-z][a-z0-9_]{0,63}")
+
+(defn normalize-extra-name
+  "The JSON name an extra key is allowed to take, or nil if it may take none.
+
+   Keyword, symbol or string -> its name, lowercased, hyphens folded to
+   underscores. nil for: a key of any other type; a normalized name that
+   misses `extra-name-shape` (too long, uppercase-only alphabet exhausted,
+   punctuation, empty); a normalized name that collides with a field the
+   writer emits; and a name that is key-shaped either before or after
+   normalization -- `gsk_FIELDNAMECANARY` is a live credential spelled as a
+   field name, and Sol found it verbatim in the file."
+  [k]
+  (let [raw (cond (keyword? k) (name k)
+                  (symbol? k) (name k)
+                  (string? k) k
+                  :else nil)]
+    (when (some? raw)
+      (let [normalized (-> raw str/lower-case (str/replace "-" "_"))]
+        (when (and (re-matches extra-name-shape normalized)
+                   (not (contains? reserved-field-names normalized))
+                   (= raw (scrub raw))
+                   (= normalized (scrub normalized)))
+          normalized)))))
+
 (defn extra-fields
-  "THE PASS-THROUGH RULE. Any key an event carries beyond `known-keys` is kept
-   IF AND ONLY IF its value is a SCALAR -- a string, a number, or a boolean --
-   and it is kept scrubbed and byte-bounded like every other field. Anything
-   else (a map, a vector, a set, a seq, a function, an exception) is DROPPED.
+  "THE PASS-THROUGH RULE, as {:fields <name->value> :dropped-fields <n>}.
+
+   Any key an event carries beyond `known-keys` is kept IF AND ONLY IF its
+   NAME survives `normalize-extra-name` and its VALUE is a SCALAR -- a string,
+   a number, or a boolean -- and it is kept scrubbed and byte-bounded like
+   every other field. Everything else is DROPPED and COUNTED, and the count
+   lands on the line as `dropped_fields`: a refusal nobody can see is
+   indistinguishable from silent data loss.
 
    Open on purpose (Astra, 2026-09-06): the mission boundary emits
    `mission_state`, `mission_verb`, `executor`, `candidate_count`, `provider`,
@@ -199,22 +250,35 @@
    before a caller may count a new dimension is a ledger that stops being
    written to. So the writer does not hold a list of allowed NAMES.
 
-   It holds a rule about SHAPES, which is the part that carries the safety.
-   A scalar is a value someone chose to report; a collection is a structure
-   someone forgot to summarize, and the two ledger defects this file exists to
-   answer -- a smuggled key and a 5185-byte line -- are both what happens when
-   an unbounded caller value is copied verbatim. Dropping a map is therefore
-   not a limitation, it is the refusal: summarize it caller-side into a scalar
-   the reader can count by, and it lands."
+   It holds a rule about SHAPES -- one for the value, and, since Sol fence r2,
+   one for the name as well. A scalar is a value someone chose to report; a
+   collection is a structure someone forgot to summarize, and the two ledger
+   defects this file exists to answer -- a smuggled key and a 5185-byte line
+   -- are both what happens when an unbounded caller value is copied verbatim.
+   The name rule closes the same hole one level up: an unbounded caller NAME
+   is copied verbatim too, and it is copied WITHOUT the scrubber, because
+   nothing downstream scrubs a JSON key.
+
+   Two distinct keys that normalize to one name (`:some-extra` and
+   `\"some_extra\"`) are a collision as surely as one with a named field: the
+   FIRST claim wins and the rest are dropped and counted, so the line is never
+   a coin flip on map ordering."
   [event]
-  (reduce-kv (fn [m k v]
+  (let [result
+        (reduce-kv
+         (fn [acc k v]
+           (if (contains? known-keys k)
+             acc
+             (let [nm (normalize-extra-name k)]
                (cond
-                 (known-keys k) m
-                 (string? v) (assoc m k (first (truncate v)))
-                 (or (number? v) (boolean? v)) (assoc m k v)
-                 :else m))
-             {}
-             (into {} event)))
+                 (nil? nm) (update acc :dropped-fields inc)
+                 (contains? (:fields acc) nm) (update acc :dropped-fields inc)
+                 (string? v) (assoc-in acc [:fields nm] (first (truncate v)))
+                 (or (number? v) (boolean? v)) (assoc-in acc [:fields nm] v)
+                 :else (update acc :dropped-fields inc)))))
+         {:fields {} :dropped-fields 0}
+         (into {} event))]
+    result))
 
 (defn line-map
   "Build one ledger line. PURE -- no clock, no I/O, no filesystem. Every field
@@ -223,16 +287,20 @@
    because \"not measured\" and \"instant\" are different facts.
 
    Extra scalar fields a caller names pass through untouched except for the
-   scrubber and the byte bound -- see `extra-fields`. They are merged UNDER
-   the named fields, so no extra can shadow `ok`, `ts`, or `mission_id`."
+   scrubber and the byte bound -- see `extra-fields`. No extra can shadow
+   `ok`, `ts`, or `mission_id`, and that is now enforced on the JSON NAME
+   before the merge rather than hoped for from key ordering after it: an
+   extra whose normalized name collides with a field this function emits is
+   dropped and counted in `dropped_fields`."
   [{:keys [ts seat pid kind tool ok error_type wall_ms mission_id dropped
            prompt_tokens completion_tokens reasoning_tokens cost_usd
            provider upstream]
     :as event}]
   (let [[error truncated?] (truncate error_type)
         tok (fn [v] (when (number? v) (long v)))
-        bounded (fn [v] (first (truncate v)))]
-    (cond-> (merge (extra-fields event)
+        bounded (fn [v] (first (truncate v)))
+        {extras :fields dropped-fields :dropped-fields} (extra-fields event)]
+    (cond-> (merge extras
                    {:ts ts
              ;; EVERY string field goes through scrub+byte-truncate, including
              ;; the ones that come from the environment. $SURGEON_SEAT is
@@ -264,7 +332,11 @@
              :provider (first (truncate provider))
              :upstream (first (truncate upstream))})
       truncated? (assoc :error_type_truncated true)
-      (pos? (or dropped 0)) (assoc :telemetry_dropped dropped))))
+      (pos? (or dropped 0)) (assoc :telemetry_dropped dropped)
+      ;; A REFUSAL NOBODY CAN SEE IS SILENT DATA LOSS. Every extra the name or
+      ;; shape rule rejected is counted here, so a caller whose dimension
+      ;; never lands finds out from the ledger instead of from its absence.
+      (pos? (long dropped-fields)) (assoc :dropped_fields dropped-fields))))
 
 (def free-text-drop-order
   "The order free-text fields are surrendered in when a line will not fit.

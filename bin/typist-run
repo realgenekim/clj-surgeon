@@ -77,6 +77,70 @@ import urllib.request
 
 T0 = time.time()
 
+# --------------------------------------------------------------------------
+# HARD OFFLINE MODE (Astra, 2026-09-06). `bin/typist-run-test` calls itself an
+# OFFLINE self-test, and it was one only by accident of geography: its NW
+# "refused before any codex call" check pointed at the WORKTREE, and the write
+# fence admits the worktree. On a checkout that lives inside /var/tmp/forge
+# the fence therefore correctly ADMITTED the workspace, the refusal never
+# fired, and the "offline" test made a real codex warm-up call -- 12.2 s and a
+# created session. A test whose offline-ness is a property of where the repo
+# happens to sit is not offline; it is lucky.
+#
+# So offline-ness becomes a state the program ENFORCES rather than a property
+# the caller hopes for. TYPIST_OFFLINE is read ONCE, here, at import: this is
+# a TEST SEAM, never a key or a policy dial -- it can only ever REFUSE more.
+#
+# The guard is installed at the CHOKEPOINT, not at each call site. There are
+# four `codex exec` spawn sites and a `urlopen`, and a guard that must be
+# remembered at each of them is a guard that is missing from the fifth.
+OFFLINE = os.environ.get("TYPIST_OFFLINE") == "1"
+
+OFFLINE_BLOCKED_EXES = ("codex", "claude")
+
+
+def offline_refuse(what):
+    """The typed offline refusal. Exit 6 -- its own class, distinct from the
+    write fence's 4, so a test can tell "the fence stopped it" from "offline
+    stopped it" without reading prose."""
+    die("typist-run: refusing — offline: %s refused (TYPIST_OFFLINE=1)" % what, 6)
+
+
+def guard_spawn(cmd):
+    """Refuse a model-executor spawn BEFORE it happens."""
+    if not OFFLINE:
+        return
+    exe = cmd[0] if isinstance(cmd, (list, tuple)) and cmd else cmd
+    if os.path.basename(str(exe)) in OFFLINE_BLOCKED_EXES:
+        offline_refuse("spawn of %s" % os.path.basename(str(exe)))
+
+
+_real_subprocess_run = subprocess.run
+_real_subprocess_popen = subprocess.Popen
+_real_urlopen = urllib.request.urlopen
+
+
+def _guarded_run(cmd, *args, **kwargs):
+    guard_spawn(cmd)
+    return _real_subprocess_run(cmd, *args, **kwargs)
+
+
+class _GuardedPopen(_real_subprocess_popen):
+    def __init__(self, cmd, *args, **kwargs):
+        guard_spawn(cmd)
+        super().__init__(cmd, *args, **kwargs)
+
+
+def _guarded_urlopen(req, *args, **kwargs):
+    if OFFLINE:
+        offline_refuse("network open")
+    return _real_urlopen(req, *args, **kwargs)
+
+
+subprocess.run = _guarded_run
+subprocess.Popen = _GuardedPopen
+urllib.request.urlopen = _guarded_urlopen
+
 FX = os.environ.get("TYPIST_FX", "/var/tmp/forge/typist-fx")
 HERE = os.path.dirname(os.path.abspath(__file__))
 # ---- the secrets fence -------------------------------------------------
@@ -817,6 +881,33 @@ def fenced_path(p, purpose):
 SECRET_RE = re.compile(r"gsk_[A-Za-z0-9_-]+"
                        r"|sk-or-[A-Za-z0-9_-]+"
                        r"|Bearer\s+[A-Za-z0-9_.\-]+")
+
+
+def refuse_nw_outside_scratch(ws_path):
+    """ARM NW REFUSES WITHOUT A FENCED WORKSPACE. NW hands codex
+    --dangerously-bypass-approvals-and-sandbox, which codex documents as
+    "execute commands without sandboxing ... Intended solely for running in
+    environments that are externally sandboxed", and Sol demonstrated an
+    executed child writing OUTSIDE the warm workspace. We do not have an
+    external kernel sandbox on this seat, so the honest position is not to
+    claim containment we lack: the workspace must be under /var/tmp/forge --
+    the seat's scratch fence, the same one ~/bin/sol-yolo uses -- and NW
+    refuses outright when it is not. The worktree is deliberately NOT accepted
+    here even though the general write fence allows it: a non-cooperative
+    child inside the source tree is a different blast radius from one inside
+    scratch.
+
+    PURE apart from the realpath reads: it creates nothing, so it is safe to
+    call as the first act of main()."""
+    ws_real = os.path.realpath(ws_path)
+    scratch = os.path.realpath(TEST_KEYS_FENCE)
+    if not (ws_real == scratch or ws_real.startswith(scratch + os.sep)):
+        die("typist-run: refusing — NW: sandbox unavailable — workspace "
+            "not under the fence (%s resolves to %s, not under %s). Arm NW "
+            "runs codex with --dangerously-bypass-approvals-and-sandbox; "
+            "its ONLY containment is this directory, so a workspace "
+            "outside it is an unsandboxed child with no fence at all."
+            % (ws_path, ws_real, scratch), 4)
 
 
 def scrub(s):
@@ -2616,6 +2707,29 @@ def attribute(top, c):
     return "no-model-call"     # fake / replay arms
 
 
+def candidate_cost(key, cand):
+    """(usd, source) for ONE candidate, or (None, None) when it cannot be
+    priced. NEVER a zero standing in for a missing number.
+
+    A candidate that already carries `cost_usd` keeps it verbatim -- that is
+    the provider's own authoritative figure when `cost_source` says
+    `provider`, and re-deriving it from a table would be the report
+    overruling the vendor. Only a candidate with NO recorded cost and a
+    COMPLETE usage pair is priced from the dated table; a missing usage field
+    yields unknown, because zero tokens and unreported tokens are different
+    facts."""
+    cu = cand.get("cost_usd")
+    if cu is not None:
+        return float(cu), (cand.get("cost_source") or "receipt")
+    pt, ct = cand.get("prompt_tokens"), cand.get("tokens")
+    if pt is None or ct is None:
+        return None, None
+    rate = PRICES.get(key)
+    if rate is None:
+        return None, None
+    return (pt * rate["in"] + ct * rate["out"]) / 1e6, "table:%s" % PRICES_DATE
+
+
 def cost_report(fx_dirs):
     want = ("receipt.edn",)
     agg = {}
@@ -2645,18 +2759,22 @@ def cost_report(fx_dirs):
                     k = attribute(top, c)
                     a = agg.setdefault(k, {"calls": 0, "prompt": 0,
                                            "completion": 0, "reasoning": 0,
-                                           "no_usage": 0, "provider_usd": 0.0,
-                                           "provider_priced": 0})
+                                           "no_usage": 0, "usd": 0.0,
+                                           "priced": 0, "sources": set()})
                     pt, ct = c.get("prompt_tokens"), c.get("tokens")
                     a["calls"] += 1
+                    # `or 0` ONLY in the display columns, and never in the
+                    # arithmetic that prices anything -- see `candidate_cost`.
                     a["prompt"] += pt or 0
                     a["completion"] += ct or 0
                     a["reasoning"] += c.get("reasoning_tokens") or 0
                     if pt is None and ct is None:
                         a["no_usage"] += 1
-                    if c.get("cost_source") == "provider" and c.get("cost_usd") is not None:
-                        a["provider_usd"] += float(c["cost_usd"])
-                        a["provider_priced"] += 1
+                    usd, src = candidate_cost(k, c)
+                    if usd is not None:
+                        a["usd"] += usd
+                        a["priced"] += 1
+                        a["sources"].add(src)
     hdr = ("provider/upstream", "calls", "prompt", "completion", "reasoning",
            "no-usage", "est USD")
     print("\nCOST REPORT   prices dated %s   fx: %s"
@@ -2666,26 +2784,28 @@ def cost_report(fx_dirs):
     unpriced = 0
     rows = []
     for k, a in sorted(agg.items(), key=lambda kv: -kv[1]["calls"]):
-        rate = PRICES.get(k)
-        if a["provider_priced"] == a["calls"] - a["no_usage"] and a["provider_priced"]:
-            usd = a["provider_usd"]          # every priceable call self-reported
-            src = "provider"
-        elif rate is not None:
-            usd = (a["prompt"] * rate["in"] + a["completion"] * rate["out"]) / 1e6
-            src = "table:%s" % PRICES_DATE
-        else:
-            usd, src = None, "no rate"
-        if usd is None:
-            unpriced += a["calls"]
-        else:
+        # THE AGGREGATE IS A SUM OF CANDIDATES, NOT A RE-PRICING OF THE GROUP.
+        # Sol fence r2: the old row priced the group's SUMMED tokens, so one
+        # Groq call with no usage at all summed to zero tokens, hit the table
+        # rate, and printed `$0.0000` for a call nobody can price -- and a
+        # mixed group threw away the provider's own authoritative figure to
+        # re-derive the whole row from the table. Both are the same mistake:
+        # an aggregate that outranks its members. A row is now exactly the sum
+        # of the members that HAVE a cost, and it is `unknown` when none does.
+        usd = a["usd"] if a["priced"] else None
+        src = "+".join(sorted(a["sources"])) if a["sources"] else "no rate"
+        unpriced += a["calls"] - a["priced"]
+        if usd is not None:
             total += usd
         rows.append((k, a, usd, src))
         print("%-26s %6d %10d %11d %10d %9d %12s"
               % (k, a["calls"], a["prompt"], a["completion"], a["reasoning"],
                  a["no_usage"], ("$%.4f" % usd) if usd is not None else "unknown"))
+    any_priced = any(a["priced"] for a in agg.values())
     print("%-26s %6d %10s %11s %10s %9d %12s"
           % ("TOTAL", sum(a["calls"] for a in agg.values()), "", "", "",
-             sum(a["no_usage"] for a in agg.values()), "$%.4f" % total))
+             sum(a["no_usage"] for a in agg.values()),
+             ("$%.4f" % total) if any_priced else "unknown"))
     print("reasoning tokens are INCLUDED in the completion column "
           "(both providers bill them as output).")
     if unpriced:
@@ -2707,7 +2827,7 @@ def cost_report(fx_dirs):
                                 "no_usage_calls": a["no_usage"],
                                 "cost_usd": usd, "cost_source": src}
                                for (k, a, usd, src) in rows],
-                      "total_usd": round(total, 6),
+                      "total_usd": round(total, 6) if any_priced else None,
                       "unpriced_calls": unpriced}) + "\n")
     print("cost report written to %s" % out)
     return 0
@@ -2782,6 +2902,23 @@ def main():
     global FX
     FX = fenced_path(FX, "TYPIST_FX artifact root")
 
+    # ARM NW REFUSES BEFORE ANYTHING IS WRITTEN. Sol fence r2 traced the
+    # syscalls: `materialize_fixture` ran first, so an NW invocation with an
+    # out-of-fence workspace created the artifact root, the fixture preimage,
+    # five source files and a manifest, and only THEN refused. The refusal was
+    # correct and it was late, which is the same defect as no refusal for
+    # every byte written before it. So the NW check is the FIRST thing main()
+    # does after resolving the artifact root -- before mission selection,
+    # fixture materialization, gate resolution, resident startup, or any other
+    # filesystem mutation. The mission name is computed purely here (argparse
+    # restricts --mission to MISSIONS, and `mission_for_dossier` is a basename
+    # lookup), because the workspace path is FX/warm-ws-<mission> and the FX
+    # component is the only part a caller can steer.
+    if a.arm == "NW":
+        nw_mission = a.mission or (mission_for_dossier(a.dossier)
+                                   if a.dossier else "scope-roots")
+        refuse_nw_outside_scratch(os.path.join(FX, "warm-ws-%s" % nw_mission))
+
     if a.cost_report:
         sys.exit(cost_report(a.fx or list(COST_REPORT_DEFAULT_FX)))
     if not a.arm and not a.replay and not a.bench:
@@ -2853,27 +2990,12 @@ def main():
 
     warm = None
     if a.arm == "NW":
-        # ARM NW REFUSES WITHOUT A FENCED WORKSPACE. NW hands codex
-        # --dangerously-bypass-approvals-and-sandbox, which codex documents as
-        # "execute commands without sandboxing ... Intended solely for running
-        # in environments that are externally sandboxed", and Sol demonstrated
-        # an executed child writing OUTSIDE the warm workspace. We do not have
-        # an external kernel sandbox on this seat, so the honest position is
-        # not to claim containment we lack: the workspace must be under
-        # /var/tmp/forge -- the seat's scratch fence, the same one
-        # ~/bin/sol-yolo uses -- and NW refuses outright when it is not. The
-        # worktree is deliberately NOT accepted here even though the general
-        # write fence allows it: a non-cooperative child inside the source
-        # tree is a different blast radius from one inside scratch.
-        ws_real, _ok = under_fence(warm_workspace_path())
-        scratch = os.path.realpath(TEST_KEYS_FENCE)
-        if not (ws_real == scratch or ws_real.startswith(scratch + os.sep)):
-            die("typist-run: refusing — NW: sandbox unavailable — workspace "
-                "not under the fence (%s resolves to %s, not under %s). Arm NW "
-                "runs codex with --dangerously-bypass-approvals-and-sandbox; "
-                "its ONLY containment is this directory, so a workspace "
-                "outside it is an unsandboxed child with no fence at all."
-                % (warm_workspace_path(), ws_real, scratch), 4)
+        # Re-asserted here, AFTER select_mission has bound MISSION, so the
+        # path checked is the exact one `create_warm_session` will use. The
+        # decisive check already ran at the top of main(); this one cannot
+        # fire, and it stays because a fence that is only checked once is a
+        # fence that a later refactor moves the mutation in front of.
+        refuse_nw_outside_scratch(warm_workspace_path())
         if EDIT_FORM != "diff":
             die("typist-run: refusing — arm NW reads the model's OWN in-place "
                 "edit back as a git diff; --edit-form whole-file is not its "
