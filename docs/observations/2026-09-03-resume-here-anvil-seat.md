@@ -620,3 +620,7 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 - Instruments: ~/bin/block-ledger, ~/bin/cadence-watch (cron */5), ~/bin/usage-watch (window-guarded), ~/bin/land (verdict line), runner-b --cell/--parallel/--first-pair-gate/--dry-run receipt gate/--shared-box.
 - Open items: inb-b60d6e (public ceiling), inb-e02822 (compact counts P2), inb-a36079 (hash policy), inb-2da8ea (refusal text parked), inb-b3b6d1 (extraction friction), inb-e21b3d (inspect match friction). Docs-only branches queued: 9aa2fbf9, f25d4a32, 96d49433.
 - Next action: wind down; the next evidence is a naturally occurring fleet task through the installed plate, metered by usage-watch.
+
+## STATE at 20:39Z 2026-09-06 — strictly-better landed
+- MCP/main 30d7920c = tag stable/2026-09-06-strict: agent skill + plate steer a clean agent to Surgeon only for fan-out and alias migration; native by rule elsewhere. Installed on this box (block 043e607a, skill receipts). Tripwire pulls MCP/main into the records worktree before checking. Skiff install: docs/observations/2026-09-06-skiff-install-stable.md.
+- All runtime stopped; no open ledger rows; servers 7906/8171 on e8076379 (rebuild to 30d7920c is only needed for server-side changes — the strict landing is text + checker, no server change).
