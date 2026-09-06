@@ -2495,3 +2495,81 @@ landed (his branch; gates + review owed; mayor queue note added).
 ## 02:30Z — fix round 2 on fable/typist-real-repo → ; fast lane 458 tests / 4385 assertions / 0 failures / no temp leak; mission-test was never red — the manifest witness correctly reported it unenrolled (now :battery); ledger hardened per r1; runner write fence; Sol fence r2 launched (sections 1/3/4 + the cost commit).
 
 ## 02:33Z — Astra DOGFOOD LEDGER 02:30Z (his table): six edits — five native-ineligible by design (new candidate-format planning, raw decoder ns/tests, executor dispatch, lane registration, cohort docs), one attempted executor-first (mission boundary event hooks) → refusal→native on forms-protected-syntax. Reading: eligible surface is narrow tonight and the comment gap blocked 2/2 eligible attempts on his own code; comment preservation via rewrite-clj source text is the largest eligibility gain; ordering his.
+
+## 02:36Z — Gene: "Write this to captains log" — the storyboards: what fast-typist usage looks like from inside, on a timeline, and what fan-out means here
+
+What usage looks like from inside: one command per mission. Astra names the owners, the intended forms, and the proof profile; the executor compiles that into a dossier, asks the fast model for replacement forms, prints them through the kernel formatter so whitespace is never the model's job, runs the gate and the independent witness, and commits or refuses. The receipt says which happened, at what wall, for how many tokens and cents, and undo is exact. When it refuses, it refuses before touching the tree, with a typed reason, and the native path stays open. His pattern all night has been to accept the refusal rather than route around it, which is the behaviour the tool is designed to reward.
+
+Panel 1 — the mission, as Astra writes it
+```
+ ┌──────────────────────────────────────────────┐
+ │ mission M-1                                  │
+ │  owners : diagnostic-delta/finding-identity  │
+ │           diagnostic-delta/field  (+10 sites)│
+ │  intent : rename → finding-fingerprint,      │
+ │           finding-field                      │
+ │  traps  : keep `identity` let-binding,       │
+ │           keep docstring sentence            │
+ │  proof  : bb focused test  + witness         │
+ └──────────────────────────────────────────────┘
+        one command:  mission run M-1
+```
+Panel 2 — inside the executor
+```
+ plan ──► dossier ──► fast model ──► kernel ──► gate ──► commit
+  │         │            │            │          │         │
+  │  frozen spans,   returns the    prints the  bb test   atomic
+  │  intended change REPLACEMENT   forms; model 19 ms +   write,
+  │  as one prompt   FORMS only    never owns   witness   receipt,
+  │                  (no diff)     whitespace   15 ms     exact undo
+  └─ refuses HERE, typed, if the tree moved or the
+     owner has syntax the printer cannot carry (comments)
+```
+Panel 3 — the receipt
+```
+ {:mission M-1  :verified true
+  :provider Cerebras/gpt-oss-120b  :k 1
+  :tokens {:prompt 1530 :completion 3171 :reasoning 2324}
+  :cost_usd 0.0020
+  :walls {:api 1.66 :executor 2.85 :cli-total 15.06}
+  :gate "bb 19 ms"  :witness "14.7 ms"
+  :outside-owner-bytes identical
+  :undo exact}
+```
+Panel 4 — the refusal, same night
+```
+  mission M-1 (telemetry repair, 3 owners)
+     ▼
+  plan:  owner commit-candidate! contains ;; comments
+     ▼
+  REFUSED :forms-protected-syntax   ← before any call, before any write;
+  tree untouched, native path open
+     ▼
+  Astra edits natively, logs "coverage loss, not a win"
+```
+Timeline of one bounded edit on the real file, cold vs tool
+```
+ seconds  0    5    10   15   20   25   30
+          ├────┼────┼────┼────┼────┼────┤
+ cold Sol ████████████████████████████░░   29.7 s  (3 of 4 correct)
+ warm Sol ░░░████████████████████░░░░░░░   21.4 s  (6 of 6)  ← ~15 s is Sol re-checking its own work
+ executor ███████░                          7.4 s  (3 of 4)  ← 2.3 s inside; the rest is cold CLI start
+ typist×5 ██                                1.9 s  (4 of 4)  ← whole-file, gate 0.06 s, bench harness
+```
+Fan-out, in this context
+```
+ one dossier
+     ├──► candidate 1 ──┐
+     ├──► candidate 2 ──┤   all in parallel, ~1.5 s each
+     ├──► candidate 3 ──┼──► gate judges each ──► first pass wins
+     ├──► candidate 4 ──┤
+     └──► candidate 5 ──┘
+ easy edit:  1 of 1 passes → fan-out buys nothing (12/12 at k=1)
+ hard edit:  k=1 passed 2 of 6 rounds; k=5 passed 6 of 6
+             cost: +0.8 s wall, 6x tokens (~half a cent)
+```
+Fan-out is not five people typing; it is five guesses and one judge. It pays exactly when a single guess is unreliable and the judge is cheap.
+
+How we use fast typers: the strong model decides and describes; the fast model only types the described change; whitespace is taken away from it by the form printer or by whole-file replacement (at 1,600 tok/s it cannot hold indentation to the byte and does not need to); k comes from the mission class's measured single-candidate rate (one for renames and known sites, five for multi-file fan-outs); the gate is the whole product — a millisecond gate makes the typist a search engine, a seven-second gate makes it a modest helper.
+
+Where it wins vs native (tonight): bounded edit + cheap gate 10–16x cold or warm; bounded edit + 7 s JVM gate ≈3x; whole task incl. discovery 1.3–2.5x (all from the tool, none from the typist); unified diff on real Clojure loses outright (0/20); owner with comments → refused, native by default until the printer carries comments. The pattern: the typist never makes the decision and never runs the check; it types, fast and often wrong, into a machine that only keeps what passes.
