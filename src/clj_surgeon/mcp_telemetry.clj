@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-telemetry
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.telemetry-events :as events]
    [clojure.java.io :as io]
    [clojure.string :as str])
   (:import
@@ -87,9 +88,44 @@
          :file (.getCanonicalPath file)
          :lock (Object.)}))))
 
+(defn- mission-id
+  "The mission id the caller named, if any. Reads BOTH spellings and both key
+   types so a later ledger phase does not have to touch this function."
+  [data]
+  (let [request (or (:request data) {})]
+    (some #(get request %)
+          [:mission_id "mission_id" :mission-id "mission-id"])))
+
+(defn- ledger!
+  "@spec TELEMETRY-EVENTS-001 -- the box-wide JSONL side effect of a public
+   MCP call.
+
+   DELIBERATELY OUTSIDE the `:off` / nil-state guard below. The per-server
+   directory emission is a property of how a launcher configured THAT server;
+   the ledger is a property of the fleet, and a call made by a server someone
+   started with telemetry off is exactly the call that went missing on
+   2026-09-05. One append here covers every public tool, because
+   `record-call!`, `record-helper-call!`, `record-inspect-call!`, and the
+   admit tool all funnel through `emit!`. (The admit tool's injected
+   `(:emit! state)` test hook bypasses this by design -- it is a fixture
+   collector, not a running server.)
+
+   Never throws: `events/record!` swallows and counts."
+  [event data]
+  (when (= :tool.call event)
+    (let [outcome (or (:outcome data) {})]
+      (events/record!
+        {:kind "mcp-call"
+         :tool (:tool data)
+         :ok (boolean (:ok outcome))
+         :error_type (some-> (or (:error_type outcome) (:error-type outcome)) str)
+         :wall_ms (:total_ms (:timings_ms data))
+         :mission_id (mission-id data)}))))
+
 (defn emit!
   "Append one structured event. Never writes to stdout."
   [state event data]
+  (ledger! event data)
   (when (and state (not= :off (:mode state)))
     (let [record (cond->
                    (merge
