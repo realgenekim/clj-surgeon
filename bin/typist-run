@@ -155,11 +155,22 @@ T0 = time.time()
 #       `codex exec ...` inside it is refused with the same exit 6.
 #   (b) THE PATH SHIM -- under TYPIST_OFFLINE the runner prepends a temp dir
 #       holding executable `codex` and `claude` scripts that print the typed
-#       refusal and exit 6. A shell string that this process never sees the
+#       refusal and exit 6, so a shell string this process never sees the
 #       inside of (`bash -c 'codex ...'`, an alias, a Makefile, a child of a
-#       child) still cannot start the real binary, because PATH no longer
-#       leads to it. (a) fails loud in-process; (b) catches everything (a)
-#       structurally cannot see.
+#       child) that resolves the NAME `codex` gets the refusal instead of the
+#       real binary.
+#
+#       SOL FENCE R4 DEMONSTRATED ITS BYPASSES, and they are written here
+#       rather than left as an impression: the shim is a NAME redirect on one
+#       inherited variable, not a boundary. A child that invokes the ABSOLUTE
+#       path, that rewrites or resets PATH, that runs under `env -i`, or that
+#       re-execs through anything restoring the original environment reaches
+#       the real binary. (a) fails loud in-process and (b) covers name lookups
+#       (a) structurally cannot see -- NEITHER catches everything, and the
+#       pair is not confinement. That is why the contract is named
+#       chokepoint-not-sandbox and why the suite proves a WITNESSED guarantee
+#       (no real key reachable; no session created; ledger did not grow)
+#       instead of an impossibility claim.
 #
 # THE CHOKEPOINT TABLE (wrapped at import when OFFLINE):
 #   os.system, os.popen
@@ -2210,6 +2221,18 @@ def cost_for(provider, upstream, prompt_tokens, completion_tokens,
 USAGE_LIMIT_RE = re.compile(r"hit your usage limit", re.I)
 
 
+def registry_key_path(provider):
+    """The provider's FIXED registry key path, as a STRING. Pure: it ignores
+    KEYS_DIR, resolves nothing, stats nothing and opens nothing.
+
+    Sol fence r5 (b): the witness that "without --keys-dir the path is still
+    the fixed registry path" used to be a SUBPROCESS that resolved and printed
+    the real path -- so the suite that proves no real key is reachable was
+    itself reaching for one. A claim about a path is a claim about a string;
+    prove it as a string."""
+    return PROVIDERS[provider].get("key_file")
+
+
 def key_file_for(cfg):
     """The provider's key file. FIXED by the registry; only --keys-dir (already
     fenced to /var/tmp/forge) may redirect it, and only for the offline tests."""
@@ -2232,8 +2255,23 @@ def preflight_key_file(cfg):
 
 def provider_key(cfg):
     """Read the API key AT THE POINT OF THE REQUEST. Never echoed, logged, or
-    written to a receipt, and never held outside its caller's request scope."""
+    written to a receipt, and never held outside its caller's request scope.
+
+    OFFLINE FORBIDS A REAL KEY PATH (Sol fence r5, finding (b)). strace proved
+    the offline suite opened /home/forge/secrets/openrouter.edn four times and
+    groq.edn once: an in-process probe monkeypatched urlopen but left KEYS_DIR
+    unset, so request construction reached here and opened the real key before
+    the fake transport ever ran. Belt and braces: under TYPIST_OFFLINE the only
+    key path this function will open is one under the test fence. Anything else
+    is a TYPED REFUSAL (exit 6, the offline exit), never a silent read."""
     path = key_file_for(cfg)
+    if OFFLINE:
+        fence = os.path.realpath(TEST_KEYS_FENCE)
+        real = os.path.realpath(path)
+        if real != fence and not real.startswith(fence + os.sep):
+            die("typist-run: refusing — TYPIST_OFFLINE=1 and the resolved key "
+                "path is not under %s: %s (offline mode forbids opening a real "
+                "key; pass --keys-dir)" % (fence, real), 6)
     with open(path) as fh:
         m = re.search(r':(?:openrouter-api-)?key\s+"([^"]+)"', fh.read())
     if not m:
@@ -2627,6 +2665,14 @@ def bench(prompt, providers, rounds, temperature, manifest, cmds):
     out = os.path.join(FX, "bench-%d.edn" % int(T0))
     with open(out, "w") as fh:
         fh.write(edn({"bench": True,
+                      # THE OFFLINE CONTRACT TRAVELS WITH EVERY RECEIPT (Sol
+                      # fence r5, finding (a)): an offline, preflight-blocked
+                      # bench wrote a receipt carrying neither field, so a
+                      # later reader of that one file had no way to know the
+                      # run was offline -- or that "offline" here is a
+                      # chokepoint and not confinement.
+                      "offline": OFFLINE,
+                      "offline_contract": (OFFLINE_CONTRACT if OFFLINE else None),
                       "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                       "mission": MISSION, "dossier": DOSSIER,
                       "dossier_sha256": sha256_bytes(prompt.encode()),

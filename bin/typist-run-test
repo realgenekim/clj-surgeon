@@ -163,11 +163,38 @@ def check(name, ok, detail=""):
 
 
 def load_runner():
+    """Load the runner in-process WITH ITS KEY PATHS ALREADY REDIRECTED.
+
+    THE SUITE-LEVEL KEY FIXTURE (Sol fence r5, finding (b)). strace proved
+    this suite opened /home/forge/secrets/openrouter.edn four times and
+    groq.edn once: the in-process routing probe monkeypatches urlopen only, so
+    request construction still ran `provider_key`, and `KEYS_DIR` -- the one
+    thing that redirects it -- is set only by the --keys-dir FLAG, which an
+    in-process call never passes. A guarantee that each probe must remember to
+    set is a guarantee missing from the next probe, so it is set ONCE, here,
+    for every in-process user of the module, and asserted immediately."""
     loader = importlib.machinery.SourceFileLoader("typist_run", RUNNER)
     spec = importlib.util.spec_from_loader("typist_run", loader)
     m = importlib.util.module_from_spec(spec)
     loader.exec_module(m)
+    pin_keys_dir(m)
     return m
+
+
+def pin_keys_dir(m):
+    """Point the loaded module's key lookup at the dummy fence, and prove it."""
+    d = keys_dir()
+    m.KEYS_DIR = d
+    resolved = [m.key_file_for(m.PROVIDERS[p]) for p in sorted(m.PROVIDERS)
+                if m.PROVIDERS[p].get("key_file")]
+    check("in-process key lookup is pinned to the dummy fence",
+          bool(resolved) and all(
+              r == d or r.startswith(d + os.sep) for r in resolved),
+          repr(resolved))
+    check("NO in-process key path touches /home/forge/secrets",
+          not any(r.startswith("/home/forge/secrets") for r in resolved),
+          repr(resolved))
+    return d
 
 
 def keys_dir():
@@ -312,7 +339,9 @@ def test_keys(m):
     missing = dict(m.PROVIDERS["groq"], key_file="/home/forge/secrets/nope.edn")
     check("preflight refuses a missing key file",
           m.preflight_key_file(missing)[0] == "no-key")
-    m.KEYS_DIR = None
+    # NEVER left unset: an unset KEYS_DIR is exactly the state in which the
+    # next in-process probe opens the real key (Sol fence r5).
+    pin_keys_dir(m)
 
 
 def test_keys_dir_fence():
@@ -570,7 +599,7 @@ def test_cost(m):
 # (f) NO REAL KEY IS REACHABLE -- the half of the guarantee the contract can
 #     actually keep, witnessed through the runner's own path resolution.
 
-def test_no_real_key_reachable():
+def test_no_real_key_reachable(m):
     """SOL FENCE R4. The offline contract cannot confine a child, so it cannot
     promise that nothing spawns. What it CAN promise -- and what this witnesses
     -- is that nothing reachable from this suite can spend: every runner
@@ -598,12 +627,80 @@ def test_no_real_key_reachable():
           "gsk_" not in r.stdout and "sk-or-" not in r.stdout)
     # and the default, WITHOUT the seam, still is the fixed registry path --
     # so the witness above is a redirection, not an accident of a broken lookup.
-    plain = subprocess.run([sys.executable, RUNNER, "--print-key-paths"],
-                           env=dict(os.environ, TYPIST_OFFLINE="1"),
-                           capture_output=True, text=True, timeout=120)
+    #
+    # PROVED AS A STRING, NOT AS A RESOLUTION (Sol fence r5, finding (b)). This
+    # used to be a subprocess run WITHOUT --keys-dir, which resolved and printed
+    # the real path: the witness for "no real key is reachable" was itself the
+    # last reacher. `registry_key_path` is pure -- it ignores KEYS_DIR and
+    # opens, stats and resolves nothing -- so the claim is checked without any
+    # syscall naming /home/forge/secrets.
     check("without --keys-dir the groq path is still the fixed registry path",
-          "/home/forge/secrets/groq.edn" in plain.stdout,
-          (plain.stdout.strip().splitlines() or [""])[-1])
+          m.registry_key_path("groq") == "/home/forge/secrets/groq.edn",
+          repr(m.registry_key_path("groq")))
+    check("the registry path witness resolves and opens nothing",
+          m.registry_key_path("openrouter")
+          == m.PROVIDERS["openrouter"]["key_file"] and m.KEYS_DIR == d,
+          "KEYS_DIR=%s" % m.KEYS_DIR)
+
+
+# --------------------------------------------------------------------------
+# (g) THE SYSCALL WITNESS -- what the process ACTUALLY opened
+#
+# Every check above is a claim this file makes about its own behaviour, and
+# Sol fence r5 showed exactly how such a claim fails: the suite passed all of
+# them while strace recorded five opens of /home/forge/secrets. So the last
+# witness is not a claim at all -- it is a full inner pass of this suite under
+# `strace -f -e trace=openat`, asserting that no openat anywhere in the process
+# TREE names /home/forge/secrets. An intent check reads source; this reads a
+# record of what executed.
+
+INNER = os.environ.get("TYPIST_TEST_INNER") == "1"
+
+
+def tracer_pid():
+    """The PID tracing this process, 0 if none. strace cannot attach to a
+    process another tracer already holds, so a nested run would produce an
+    empty log and a non-zero exit -- a FAILURE that means "already proven",
+    which is the worst kind of red."""
+    try:
+        for ln in open("/proc/self/status"):
+            if ln.startswith("TracerPid:"):
+                return int(ln.split()[1])
+    except OSError:
+        pass
+    return 0
+
+
+def test_strace_no_secret_open():
+    """Run one complete inner pass under strace; assert zero secret opens."""
+    tp = tracer_pid()
+    if tp:
+        check("no openat under strace names /home/forge/secrets",
+              True, "n/a: this pass is ALREADY traced (TracerPid=%d) -- the "
+                    "outer tracer's log is the witness" % tp)
+        return
+    if not shutil.which("strace"):
+        check("no openat under strace names /home/forge/secrets",
+              True, "n/a: strace absent -- SKIPPED LOUDLY, this run proves nothing")
+        return
+    log = os.path.join(SUITE_FX, "strace-openat.log")
+    r = subprocess.run(
+        ["strace", "-f", "-e", "trace=openat", "-o", log,
+         sys.executable, os.path.abspath(__file__)],
+        env=dict(os.environ, TYPIST_OFFLINE="1", TYPIST_TEST_INNER="1"),
+        capture_output=True, text=True, timeout=600)
+    try:
+        body = open(log, errors="replace").read()
+    except OSError as e:
+        body = ""
+        check("strace log was written", False, repr(e))
+    hits = [ln for ln in body.splitlines() if "/home/forge/secrets" in ln]
+    check("the inner suite pass under strace is green",
+          r.returncode == 0,
+          "exit=%s %r" % (r.returncode, (r.stdout.strip().splitlines() or [""])[-1]))
+    check("no openat under strace names /home/forge/secrets",
+          bool(body) and not hits,
+          "openat lines=%d hits=%s" % (len(body.splitlines()), hits[:2]))
 
 
 def main():
@@ -632,7 +729,11 @@ def main():
     print("== write fence ==");     test_write_fence()
     print("== offline guard ==");   test_offline_guard(m)
     print("== cost accounting =="); test_cost(m)
-    print("== no real key reachable =="); test_no_real_key_reachable()
+    print("== no real key reachable =="); test_no_real_key_reachable(m)
+    if INNER:
+        print("== syscall witness ==  (inner pass: strace witness not re-run)")
+    else:
+        print("== syscall witness =="); test_strace_no_secret_open()
 
     # ---- THE NO-SPEND WITNESS (Sol fence r4). Two independent facts, both
     # bound to stores this file never writes.
