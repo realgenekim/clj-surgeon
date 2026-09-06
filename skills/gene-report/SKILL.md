@@ -21,6 +21,11 @@ One markdown page at `docs/observations/<YYYY-MM-DD>-gene-peek-report.md` in the
 order of `docs/gene-peek-report.md` (the template; read it first, every time):
 
 1. Headline, one sentence, biggest true number first; then *Events to the contrary:* none/these.
+1a. Block ledger (Gene, 2026-09-06: "I love this report. Can it [be the] block report"): one
+    paragraph per block of the session in clock order, UTC with Pacific in brackets, each
+    labelled tool-perfect / frontier / mixed and carrying: what was tried, what came of it,
+    and the receipt. End with the honest shape: how many blocks of each kind and where the
+    drift was. The versus-NATIVE WALL tables (§2, §3) follow it; native wall is the meter.
 2. Wins vs native — table: task · native · tool · ratio (returns, wall) · correctness · n · receipt.
 3. Losses vs native — same table. Never omit this section; an empty losses table is a claim.
 4. Exactly what the win is — mechanism in one sentence, boundary in one sentence.
