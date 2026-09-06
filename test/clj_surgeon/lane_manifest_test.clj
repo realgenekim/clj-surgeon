@@ -376,10 +376,10 @@
 
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
-    (is (= 46 (count (lm/namespaces-for :fast))))
+    (is (= 47 (count (lm/namespaces-for :fast))))
     (is (= 5 (count (lm/namespaces-for :integration))))
     (is (= 18 (count (lm/namespaces-for :battery))))
-    (is (= 69 (count lm/manifest))
+    (is (= 70 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -389,7 +389,9 @@
              "spawns a child, moved out of a :fast namespace into :battery; "
              "and the trunk's mcp-feature-thread-test, adopted at this merge "
              "with its own `sed` cross-check split into "
-             "mcp-feature-thread-sed-test (:battery) for the same reason"))))
+             "mcp-feature-thread-sed-test (:battery) for the same reason; "
+             "and mission-forms-source-test, the comment-preserving source "
+             "lowering that replaced the blanket comment refusal"))))
 
 (defn- deftest-count
   "How many `deftest` forms a namespace's source file declares. A SOURCE
@@ -413,7 +415,8 @@
     clj-surgeon.mission-typist-test 5 ; Pure routing/dossier boundaries.
     clj-surgeon.mission-candidate-test 5 ; Frozen span lowering boundaries.
     clj-surgeon.mission-plain-forms-test 8 ; Bounded raw definition decoding and actual escaping failure.
-    clj-surgeon.mission-forms-test 4 ; Owner identity and protected syntax.
+    clj-surgeon.mission-forms-test 5 ; Owner identity and protected syntax, plus the comment-lost refusal that replaced the blanket comment ban.
+    clj-surgeon.mission-forms-source-test 12 ; Comment-preserving source lowering: owner comments survive a replacement, a dropped one refuses :forms-comment-lost instead of deleting silently, :carry-comments moves only leading/trailing, and #_/^meta/#= stay protected.
     clj-surgeon.mission-typist-executor-test 7 ; Real proof/commit/undo and independent witness.
     clj-surgeon.battery-ledger-test        12 ; TEST-ISO-009a/b's witness (round three)
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
@@ -484,10 +487,11 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      ;; Fable events adds nine; the one-shot mission entrance adds eight tests.
-      (is (= 306 adopted) (str "adopted tests: " adopted)))
+      ;; Fable events adds nine; the one-shot mission entrance adds eight tests;
+      ;; mission-forms-source-test adds eleven for comment preservation.
+      (is (= 319 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1227 total) (str "manifest declares " total " tests"))
+      (is (= 1240 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

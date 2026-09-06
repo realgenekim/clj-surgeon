@@ -35,8 +35,23 @@
         (is (false? (:ok r)))
         (is (false? (:mutation-attempted r)))))))
 
+(defn- owner-basis [s]
+  (assoc basis :sources {"src/a.clj" s}
+         :owners [{:file "src/a.clj" :owner "field" :new-owner "finding-field"
+                   :start 0 :end (count s)}]))
+
+(deftest comments-refuse-as-lost-not-as-protected-syntax
+  ;; A comment is no longer traded away as protected syntax. mission-forms-source
+  ;; carries it through as source text; a replacement that DROPS one is refused
+  ;; loudly here instead of deleting it silently. See
+  ;; clj-surgeon.mission-forms-source-test for the preservation and carry paths.
+  (let [r (forms/compile-forms (owner-basis "(defn- field [] ; keep me\n 1)") [replacement])]
+    (is (= :forms-comment-lost (:error-type r)))
+    (is (= ["; keep me"] (:lost r)))
+    (is (false? (:mutation-attempted r)))))
+
 (deftest protected-owner-syntax-refuses
-  (doseq [s ["(defn- field [] ; keep me\n 1)" "(defn- ^:private field [] 1)" "(defn- field [] #_discard 1)"]]
+  (doseq [s ["(defn- ^:private field [] 1)" "(defn- field [] #_discard 1)"]]
     (let [b (assoc basis :sources {"src/a.clj" s}
                    :owners [{:file "src/a.clj" :owner "field" :new-owner "finding-field"
                              :start 0 :end (count s)}])]

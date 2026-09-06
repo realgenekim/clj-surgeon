@@ -87,13 +87,34 @@
       (let [code (or (:error_type plan) (:error-type plan) "typist-plan-refused")
             code (if (keyword? code) (name code) (str code))
             protected? (= code "forms-protected-syntax")
+            comment-lost? (= code "forms-comment-lost")
+            lost (or (:lost plan) [])
             normalized (assoc plan
                               :error_type code
-                              :error (if protected?
-                                       "The selected owner contains comments or other protected syntax that owner_forms cannot safely replace. No mutation was attempted."
+                              :error (cond
+                                       protected?
+                                       (str "The selected owner contains protected syntax -- metadata, a reader "
+                                            "macro, or a discarded form -- that owner_forms cannot safely "
+                                            "replace. Comments themselves are supported. No mutation was attempted.")
+
+                                       comment-lost?
+                                       (str "The replacement dropped " (count lost)
+                                            " comment(s) the owner carried: " (pr-str lost)
+                                            ". Nothing was written; the comments are intact on disk.")
+
+                                       :else
                                        (or (:error plan) (str "owner_forms refused this plan: " code ".")))
-                              :decision (if protected?
+                              :decision (cond
+                                          protected?
                                           "Choose a smaller supported owner while preserving the protected syntax, or use a native edit. Do not retry the identical request."
+
+                                          comment-lost?
+                                          (or (:next_call plan)
+                                              (str "Re-emit the form with its comments verbatim, or set "
+                                                   ":carry-comments true to carry leading and trailing "
+                                                   "comments by position."))
+
+                                          :else
                                           (or (:decision plan)
                                               "Inspect the refusal evidence and choose a supported owner scope or a native edit before trying again.")))]
         (assoc-in (mission/dossier normalized request) [:decision :example]

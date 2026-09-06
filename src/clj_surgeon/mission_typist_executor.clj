@@ -161,12 +161,15 @@
 (defn compile-formatted!
   "Validate before invoking a formatter; then validate its owned-fragment output."
   [authority replacements]
-  (let [initial (forms/compile-forms (:basis authority) replacements)]
+  ;; :carry-comments is route policy, not model output: the candidate can never
+  ;; grant itself permission to have a dropped comment repositioned for it.
+  (let [opts {:carry-comments (true? (get-in authority [:route :carry-comments]))}
+        initial (forms/compile-forms (:basis authority) replacements opts)]
     (if-not (:ok initial)
       initial
       (let [formatted (format-replacements! (:root authority) replacements)]
         (if (:ok formatted)
-          (let [compiled (forms/compile-forms (:basis authority) (:replacements formatted))]
+          (let [compiled (forms/compile-forms (:basis authority) (:replacements formatted) opts)]
             (if (:ok compiled)
               (assoc compiled :form-count (count replacements) :format (:format formatted))
               compiled))

@@ -66,13 +66,22 @@
 (deftest existing-protection-is-not-bypassed
   (doseq [raw ["(defn finding-field [x] (get x :value))"
                "(defn- finding-field \"invented doc\" [x] (get x :value))"
-               "(defn- ^:private finding-field [x] (get x :value))"
-               "(defn- finding-field [x] ; comment\n (get x :value))"]]
+               "(defn- ^:private finding-field [x] (get x :value))"]]
     (is (false? (:ok (plain/compile-response basis raw)))))
+  ;; A comment inside a form is no longer refused: it lives in the owner's span
+  ;; and is carried through as source text. Dropping one the owner had is still
+  ;; refused -- now by name, :forms-comment-lost, with the lost text.
   (let [protected "(defn- field [x] ; preserve me\n (get x :value))"
         b (-> basis (assoc-in [:sources "src/a.clj"] protected)
               (assoc-in [:owners 0 :start] 0) (assoc-in [:owners 0 :end] (count protected)))]
-    (is (= :forms-protected-syntax (:error-type (plain/compile-response b replacement))))))
+    (is (= :forms-comment-lost (:error-type (plain/compile-response b replacement))))
+    (is (= ["; preserve me"]
+           (:lost (plain/compile-response b replacement))))
+    (is (:ok (plain/compile-response b "(defn- finding-field [x] ; preserve me\n (get x :value))")))
+    ;; A top-level comment belongs to no owner span, so accepting it would drop
+    ;; it silently. That is still protected syntax.
+    (is (= :forms-protected-syntax
+           (:error-type (plain/compile-response b (str ";; stray\n" replacement)))))))
 
 (deftest preparse-bounds-and-malformed-input
   (doseq [[raw code] [[(apply str (repeat 262145 "x")) :candidate-parser-budget]
