@@ -98,3 +98,5 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - **04:22Z LANDED 3dda2a61** — fable/typist-real-repo (events ledger ~/.clj-surgeon/events.jsonl with closed field policy; real missions real-1/2/2j; whole-file edit form; resident nREPL gate; warm-native arm; provider fence; cost accounting; honest offline contract; mission ledger prototype). MAYOR: trunk head is now 3dda2a61 — pull and install this one (supersedes 13c12401).
 
 - 07:21Z LANDED: astra/typist-route (final tip 9e83d4b9 + battery receipt cd1eb5cc) → MCP/main 39a4e858. Sol delta fence LAND YES; every gate green on the merged tree (mcp-test 662/8011, run_all 862/7352, battery 691/13289, oracle, hygiene, audit). Trunk head 39a4e858.
+
+- 08:21Z QUEUED (not yet fenced): astra/typist-route 4c36f135+dcf92327 — Maven comparison report + receipt-test repair (mission_test only). Land after a Sol fence in the next tool-perfect slot.
