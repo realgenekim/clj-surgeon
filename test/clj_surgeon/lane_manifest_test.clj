@@ -378,8 +378,8 @@
   (testing "counts are pinned so a silent re-partition is loud"
     (is (= 45 (count (lm/namespaces-for :fast))))
     (is (= 5 (count (lm/namespaces-for :integration))))
-    (is (= 17 (count (lm/namespaces-for :battery))))
-    (is (= 67 (count lm/manifest))
+    (is (= 18 (count (lm/namespaces-for :battery))))
+    (is (= 68 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -407,6 +407,7 @@
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
   '{clj-surgeon.mission-candidate-race-test 5 ; Completion-order delivery, bounded cancellation and retained results.
+    clj-surgeon.mission-events-test 7 ; Public completion events and isolated logging failure.
     clj-surgeon.mission-run-test 8 ; One-process saved plan, refusal and CLI boundaries.
     clj-surgeon.mission-test 27 ; Adopt existing ledger orphan plus owner-forms routing and recovery witnesses.
     clj-surgeon.mission-typist-test 5 ; Pure routing/dossier boundaries.
@@ -483,9 +484,9 @@
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
       ;; Fable events adds nine; the one-shot mission entrance adds eight tests.
-      (is (= 290 adopted) (str "adopted tests: " adopted)))
+      (is (= 297 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1211 total) (str "manifest declares " total " tests"))
+      (is (= 1218 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
