@@ -36,3 +36,19 @@ no installation or shared root was changed. Artifacts are under
 still-old installation, ls-branch-after.edn, red.log, green.log). No timing or
 speedup claim. Three tests added to the existing analyzer contract namespace;
 no registry changes. Independent executed review is required before integration.
+
+## Owning gate budget correction
+
+The first full owning make analyzer-contract-test failed 9 tests/45 assertions
+with one failure: the new standalone real-warning witness consumed a sixth
+launch beyond the fixed five-launch analyzer mission. The failed receipt is
+retained at analyzer-contract-gate.log. That standalone witness is superseded
+by adding the warning-bearing valid form to the existing real forward-reference
+fixture. The same launch now checks the exact forward-reference answer, zero
+errors, the retained redundant-let warning and unchanged source. Production
+launch limits, expiry, admission and scope are unchanged. Two pure/mock tests
+remain new; the final namespace delta is +2 tests, not the initial +3.
+
+The combined fixture's actual pre-fix command exits2 with zero errors/one warning;
+the error-threshold command exits0 with the same warning. Raw receipts are
+combined-pre-fix.json and combined-fixed.json in the artifact directory.

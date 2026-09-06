@@ -2,6 +2,7 @@
   ;; @spec MCP-OP-ANALYZER-008
   (:require
    [babashka.fs :as fs]
+   [cheshire.core :as json]
    [clj-surgeon.binding-rename :as binding-rename]
    [clj-surgeon.fix-declares-test :as fix-fixtures]
    [clj-surgeon.forward-refs :as forward-refs]
@@ -228,16 +229,30 @@
 (deftest forward-reference-analysis-retains-the-provider-schema
   (with-analyzer-contract-authority
     (let [root (fs/create-temp-dir {:prefix "clj-surgeon-forward-contract-"})
-          source (fs/path root "src/my/app.clj")]
+          source (fs/path root "src/my/app.clj")
+          ;; Same real analyzer launch proves forward refs and the mission_cli
+          ;; redundant-let warning regression; do not expand its five-launch budget.
+          before (str fix-fixtures/simple-forward-ref
+                      "\n(defn warning-only [x] (let [a x] (let [b a] b)))\n")]
       (try
         (fs/create-dirs (fs/parent source))
-        (spit (str source) fix-fixtures/simple-forward-ref)
-        (let [actual (forward-refs/detect-forward-refs (str source) 'my.app)]
+        (spit (str source) before)
+        (let [run process-env/run-bounded!
+              observed (atom nil)
+              actual (with-redefs [process-env/run-bounded!
+                                   (fn [opts] (let [result (run opts)]
+                                                (reset! observed result)
+                                                result))]
+                       (forward-refs/detect-forward-refs (str source) 'my.app))
+              data (json/parse-string (:out @observed) true)]
+          (is (zero? (get-in data [:summary :error])))
+          (is (some #(and (= "redundant-let" (:type %)) (= "warning" (:level %))) (:findings data)))
           (is (= [{:name 'helper
                    :used-at 6
                    :defined-at 8
                    :gap 2}]
-                 actual)))
+                 actual))
+          (is (= before (slurp (str source)))))
         (finally
           (fs/delete-tree root))))))
 
@@ -300,14 +315,3 @@
                      :out "{\"analysis\":{\"var-definitions\":[],\"var-usages\":[]}}"})]
       (is (= [] (forward-refs/detect-forward-refs "fixture.clj" 'fixture))))
     (is (some #{["--fail-level" "error"]} (partition 2 1 (:command @seen))))))
-
-(deftest real-warning-only-forward-analysis-remains-readable
-  ;; Minimized from mission_cli.clj's redundant nested let, the actual :ls refusal.
-  (let [root (fs/create-temp-dir {:prefix "forward-warning-"})
-        file (fs/path root "warning.clj")
-        source "(ns warning)\n(defn f [x] (let [a x] (let [b a] b)))\n"]
-    (try
-      (spit (str file) source)
-      (is (= [] (forward-refs/detect-forward-refs (str file) 'warning)))
-      (is (= source (slurp (str file))))
-      (finally (fs/delete-tree root)))))
