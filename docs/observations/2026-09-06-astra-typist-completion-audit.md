@@ -42,3 +42,9 @@ merge-queue GO or permission to publish.
 ### Astra update 04:40Z
 
 Trunk merge f92f04be green (93/1438). Additional actual Opus review HOLD discovered staged-submodule scope bypass: repaired 189e0086 with two faithful red-to-green regressions. Publication/undo safety integrated e50c4403, seven battery tests enrolled. Combined root gate 101 tests / 827 assertions passes. Current inventory 1344 tests, 86 namespaces (49 fast / 5 integration / 32 battery). Independent combined-fix re-review and whole-branch r2 fence remain required before live publication or landing. Raw cohort apparatus remains HOLD on the four independent review findings; no new provider calls.
+
+### Astra 04:56Z — executed GO, battery leak retained
+
+Independent Opus re-review at ebbf4389 GO: identity, both hidden-gitlink vectors, publication/undo and metadata uncertainty closed; nine namespaces34/263 green. Normal Git config identity remains supported; our live publication must explicitly provide seat env. No automatic publication-clear from mere current-tree inequality. Independent raw apparatus corrections562887db GO offline15tests; not launch evidence.
+
+Full battery at ebbf4389:682tests13209assertions, zero failures/errors/skips/isolation violations, but overallFAIL because node-compile-cache leaked under the suite temp root. Failed766s receipt retained in battery-ledger; cause investigation in flight. Do not claim battery green.
