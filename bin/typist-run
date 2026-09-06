@@ -479,6 +479,96 @@ REAL1_ACCEPT = r"""(require 'clj-surgeon.diagnostic-delta)
   (println "ACCEPT-OK"))"""
 
 
+# ---- missions 5 & 6: real-2 / real-2j (the GATE-DOMINATED variants) -------
+#
+# real-1 measured the fast typist against a gate that costs 0.06 s (babashka,
+# one focused namespace). That flatters the typist: whatever the model saves is
+# nearly the whole wall. real-2 and real-2j change ONE thing — the proof
+# profile — and nothing else: same preimage bytes, same change, same traps,
+# same independent acceptance witness, same authorized file.
+#
+#   real-2   the SAME focused namespace, run on the JVM (~0.75 s cold).
+#   real-2j  a broader honest set that still exercises the change: three real
+#            test namespaces from this repository, two of which load
+#            clj-surgeon.diagnostic-delta transitively through
+#            clj-surgeon.mcp-change-buffer and clj-surgeon.mcp-admit-tool.
+#            (~18 s cold.) clj-surgeon.analyzer-contract-test was measured and
+#            REJECTED from the set: it asserts on clojure.test's global report
+#            counters and fails when run after another namespace — an
+#            order-dependent test is not an honest gate.
+#
+# The JVM classpath is resolved ONCE from this repository's
+# :clj-surgeon/mcp-test alias and baked into the profile, because a candidate
+# workspace is a standalone two-file project that cannot resolve deps itself.
+# The candidate's own `src` and `test` come FIRST, so the candidate's file is
+# what loads; the repository entries are only there so the JVM has clojure and,
+# for real-2j, the additional test namespaces.
+
+REAL2_CP_CACHE = {}
+
+
+def real2_classpath(jars_only):
+    """`clojure -Spath -A:clj-surgeon/mcp-test` from the real repository, with
+    relative entries made absolute and the candidate's own src/test in front.
+    jars_only drops the repository's source/test roots: real-2's gate must see
+    ONLY the candidate's two files."""
+    key = bool(jars_only)
+    if key in REAL2_CP_CACHE:
+        return REAL2_CP_CACHE[key]
+    r = subprocess.run(["clojure", "-Spath", "-A:clj-surgeon/mcp-test"],
+                       cwd=REAL1_REPO, capture_output=True, text=True, timeout=300)
+    if r.returncode != 0:
+        die("typist-run: refusing — cannot resolve the JVM classpath for the "
+            "real-2 gate: %s" % (r.stderr or "").strip(), 5)
+    entries = []
+    for e in r.stdout.strip().split(os.pathsep):
+        if not e:
+            continue
+        p = e if os.path.isabs(e) else os.path.join(REAL1_REPO, e)
+        if jars_only and not p.endswith(".jar"):
+            continue
+        entries.append(p)
+    if not entries:
+        die("typist-run: refusing — the resolved JVM classpath is empty", 5)
+    cp = os.pathsep.join(["src", "test"] + entries)
+    REAL2_CP_CACHE[key] = cp
+    return cp
+
+
+REAL2_NSS = ["clj-surgeon.diagnostic-delta-test"]
+REAL2J_NSS = ["clj-surgeon.diagnostic-delta-test",
+              "clj-surgeon.mcp-change-buffer-test",
+              "clj-surgeon.mcp-compact-location-test",
+              "clj-surgeon.ns-isolation-test"]
+
+
+def real2_gate_argv(nss, jars_only):
+    quoted = " ".join("'" + n for n in nss)
+    expr = ("(require 'clojure.test %s)"
+            " (let [r (apply clojure.test/run-tests '(%s))]"
+            " (System/exit (if (and (zero? (:fail r)) (zero? (:error r))) 0 1)))"
+            % (quoted, " ".join(nss)))
+    return ["java", "-cp", real2_classpath(jars_only), "clojure.main", "-e", expr]
+
+
+def real2_edn(profile, nss, jars_only):
+    argv = real2_gate_argv(nss, jars_only)
+    return ('{:verification-profiles\n'
+            ' {%s\n'
+            '  {:commands [[%s]]}}}\n'
+            % (edn_str(profile), "\n               ".join(edn_str(a) for a in argv)))
+
+
+def real2_seed_factory(profile, nss, jars_only):
+    """The real-1 preimage with ONE file different: `.clj-surgeon.edn`, whose
+    single verification profile is the JVM gate instead of the bb gate."""
+    def seed():
+        s = real1_seed()
+        s[".clj-surgeon.edn"] = real2_edn(profile, nss, jars_only)
+        return s
+    return seed
+
+
 MISSIONS = {
     "scope-roots": {
         "dossier": os.path.join(HERE, "typist-dossier.md"),
@@ -518,6 +608,32 @@ MISSIONS = {
         "preimage": "/var/tmp/forge/typist-real-fx/preimage",
         "seed": real1_seed,
         "profile": "typist-real-1",
+        "mutable": [REAL1_SRC],
+        "accept_expr": REAL1_ACCEPT,
+        "accept_desc": ("independent behavioural witness (clj-surgeon.diagnostic-delta "
+                        "only, never the gate's test ns) + both do-not-change spans "
+                        "checked in the source text + preimage byte identity"),
+    },
+    "real-2": {
+        "dossier": os.path.join(HERE, "typist-dossier-real-2.md"),
+        "dossier_wholefile": os.path.join(HERE, "typist-dossier-real-2-wholefile.md"),
+        "budget_ref": os.path.join(HERE, "fixtures", "typist-real-1-good.diff"),
+        "preimage": "/var/tmp/forge/typist-real-fx/preimage-real-2",
+        "seed": real2_seed_factory("typist-real-2", REAL2_NSS, True),
+        "profile": "typist-real-2",
+        "mutable": [REAL1_SRC],
+        "accept_expr": REAL1_ACCEPT,
+        "accept_desc": ("independent behavioural witness (clj-surgeon.diagnostic-delta "
+                        "only, never the gate's test ns) + both do-not-change spans "
+                        "checked in the source text + preimage byte identity"),
+    },
+    "real-2j": {
+        "dossier": os.path.join(HERE, "typist-dossier-real-2j.md"),
+        "dossier_wholefile": os.path.join(HERE, "typist-dossier-real-2j-wholefile.md"),
+        "budget_ref": os.path.join(HERE, "fixtures", "typist-real-1-good.diff"),
+        "preimage": "/var/tmp/forge/typist-real-fx/preimage-real-2j",
+        "seed": real2_seed_factory("typist-real-2j", REAL2J_NSS, False),
+        "profile": "typist-real-2j",
         "mutable": [REAL1_SRC],
         "accept_expr": REAL1_ACCEPT,
         "accept_desc": ("independent behavioural witness (clj-surgeon.diagnostic-delta "
@@ -577,11 +693,19 @@ def select_mission(name, dossier=None, fixture=None, edit_form="diff"):
 def mission_for_dossier(path):
     """The mission whose dossier basename this is. Refuses an unpaired dossier."""
     base = os.path.basename(os.path.abspath(path))
+    hits = []
     for name, m in MISSIONS.items():
         known = [m["dossier"]] + ([m["dossier_wholefile"]]
                                   if m.get("dossier_wholefile") else [])
         if base in [os.path.basename(d) for d in known]:
-            return name
+            hits.append(name)
+    if len(hits) > 1:
+        die("typist-run: refusing — dossier %s is registered under %d missions "
+            "(%s); pass --mission explicitly. Judging a candidate against the "
+            "wrong mission's gate is a silent wrong answer."
+            % (path, len(hits), ", ".join(sorted(hits))), 7)
+    if hits:
+        return hits[0]
     die("typist-run: refusing — dossier %s is not paired with a mission. "
         "Pass --mission explicitly, or register it in MISSIONS." % path, 7)
 
@@ -1022,6 +1146,9 @@ def run_acceptance(workdir, manifest, timeout=300):
 
 
 def evaluate(cand_dir, diff_text, manifest, cmds):
+    # Per-candidate judging cost, recorded so a gate-dominated mission can be
+    # decomposed into model wall vs judging wall without re-running anything.
+    t_judge0 = time.time()
     rec = {"edit_form": EDIT_FORM}
     if diff_text is None:
         rec["apply_ok"] = False
@@ -1030,6 +1157,7 @@ def evaluate(cand_dir, diff_text, manifest, cmds):
         rec["applier"] = None
         rec["gate_ok"] = False
         rec["accept_ok"] = False
+        rec["judge_wall_s"] = round(time.time() - t_judge0, 3)
         return rec
     if EDIT_FORM == "whole-file":
         ok, detail, applier, extra = apply_wholefile(cand_dir, diff_text)
@@ -1037,20 +1165,27 @@ def evaluate(cand_dir, diff_text, manifest, cmds):
     else:
         ok, detail, applier = apply_diff(cand_dir, diff_text)
     rec["apply_ok"], rec["apply_detail"], rec["applier"] = ok, detail, applier
+    rec["apply_wall_s"] = round(time.time() - t_judge0, 3)
     if not ok:
         rec["gate_ok"] = False
         rec["accept_ok"] = False
+        rec["judge_wall_s"] = round(time.time() - t_judge0, 3)
         return rec
+    t_gate0 = time.time()
     try:
         g_ok, g_detail = run_gate(cand_dir, cmds)
     except subprocess.TimeoutExpired:
         g_ok, g_detail = False, "gate timed out"
     rec["gate_ok"], rec["gate_detail"] = g_ok, g_detail
+    rec["gate_wall_s"] = round(time.time() - t_gate0, 3)
+    t_acc0 = time.time()
     try:
         a_ok, a_detail = run_acceptance(cand_dir, manifest)
     except subprocess.TimeoutExpired:
         a_ok, a_detail = False, "acceptance timed out"
     rec["accept_ok"], rec["accept_detail"] = a_ok, a_detail
+    rec["accept_wall_s"] = round(time.time() - t_acc0, 3)
+    rec["judge_wall_s"] = round(time.time() - t_judge0, 3)
     return rec
 
 
@@ -1368,8 +1503,13 @@ def judge_candidates(cands, manifest, cmds, run_dir, t_ref=None):
                   "refusal_detail": REFUSAL_DETAIL.get(
                       refusal, "provider refused: %s" % refusal)}
         else:
+            t_copy0 = time.time()
             cand_dir = fresh_copy(os.path.join(run_dir, c["cand"]))
+            copy_s = round(time.time() - t_copy0, 3)
             ev = evaluate(cand_dir, c.get("text"), manifest, cmds)
+            ev["copy_wall_s"] = copy_s
+            if ev.get("judge_wall_s") is not None:
+                ev["judge_wall_s"] = round(ev["judge_wall_s"] + copy_s, 3)
         verified = bool(ev.get("apply_ok") and ev.get("gate_ok") and ev.get("accept_ok"))
         rec = {"cand": c["cand"], "source": c["source"],
                "dir": cand_dir,
