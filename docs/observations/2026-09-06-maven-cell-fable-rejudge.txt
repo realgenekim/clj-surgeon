@@ -26,3 +26,21 @@ N1 unchanged: 10 / 17 changed: ['src/maven/recording_query.clj'] missing: ['run.
 N2 unchanged: 10 / 17 changed: ['src/maven/recording_query.clj'] missing: ['run.py', 'native.py', 'outcome.py', 'dossier.txt', 'spec-template.edn', 'preregistration.md']
 T1 unchanged: 10 / 17 changed: ['src/maven/recording_query.clj'] missing: ['run.py', 'native.py', 'outcome.py', 'dossier.txt', 'spec-template.edn', 'preregistration.md']
 T2 unchanged: 10 / 17 changed: ['src/maven/recording_query.clj'] missing: ['run.py', 'native.py', 'outcome.py', 'dossier.txt', 'spec-template.edn', 'preregistration.md']
+
+## Astra native epoch (A1,T3,T4,A2) — fable replay 08:04Z
+A1 gate rc=0 last=ng maven.recording-query-test  Ran 2 tests containing 5 assertions. 0 failures, 0 errors. 
+A1 candidate rc=0 last= Ran 4 tests containing 24 assertions. 0 failures, 0 errors. 
+A1 src vs N1: 0 differing
+T3 gate rc=0 last=ng maven.recording-query-test  Ran 2 tests containing 5 assertions. 0 failures, 0 errors. 
+T3 candidate rc=0 last= Ran 4 tests containing 24 assertions. 0 failures, 0 errors. 
+T3 src vs N1: 0 differing
+T4 gate rc=0 last=ng maven.recording-query-test  Ran 2 tests containing 5 assertions. 0 failures, 0 errors. 
+T4 candidate rc=0 last= Ran 4 tests containing 24 assertions. 0 failures, 0 errors. 
+T4 src vs N1: 0 differing
+A2 gate rc=0 last=ng maven.recording-query-test  Ran 2 tests containing 5 assertions. 0 failures, 0 errors. 
+A2 candidate rc=0 last= Ran 4 tests containing 24 assertions. 0 failures, 0 errors. 
+A2 src vs N1: 0 differing
+A1 unchanged: 10 / 17 changed: ['src/maven/recording_query.clj'] missing-external: 6
+T3 unchanged: 10 / 17 changed: ['src/maven/recording_query.clj'] missing-external: 6
+T4 unchanged: 10 / 17 changed: ['src/maven/recording_query.clj'] missing-external: 6
+A2 unchanged: 10 / 17 changed: ['src/maven/recording_query.clj'] missing-external: 6
