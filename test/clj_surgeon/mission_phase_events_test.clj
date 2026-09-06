@@ -41,25 +41,27 @@
       (is (= :success (observe-phase "verify" (fn [] :success)))))))
 
 (defn exercise [compiled proof commit stale-at-commit?]
-  (let [seen (atom []) calls (atom []) unchanged (atom 0)
+  (let [artifact-parent (str (java.nio.file.Files/createTempDirectory "phase-artifacts-" (make-array java.nio.file.attribute.FileAttribute 0)))
+        seen (atom []) calls (atom []) unchanged (atom 0)
         original-commit executor/commit-candidate!]
-    (binding [observer/*context* (atom prior)]
-      (with-redefs [events/record! #(swap! seen conj %)
-                    executor/unchanged? (fn [_] (or (not stale-at-commit?) (= 1 (swap! unchanged inc))))
-                    executor/make-artifacts! (fn [_] "/fixture-artifacts")
-                    file-ops/atomic-write! (fn [& _])
-                    executor/request-candidates! (fn [_] :fake-handle)
-                    executor/candidate-sequence (fn [_] [{:index 0 :usable true :content "invalid"}])
-                    executor/close-candidates! (fn [& _] {:terminated? true})
-                    executor/compile-candidate! (fn [& _] (swap! calls conj :compile) compiled)
-                    executor/verify-candidate! (fn [& _] (swap! calls conj :verify) proof)
-                    executor/commit-candidate! (fn [& args]
-                                                 (swap! calls conj :commit)
-                                                 (if stale-at-commit?
-                                                   (apply original-commit args)
-                                                   commit))]
-        (let [result (executor/execute! nil {:plan {:typist {:route {:executor :typist}}}})]
-          {:result result :events @seen :calls @calls})))))
+    (try
+      (binding [observer/*context* (atom prior)]
+        (with-redefs [events/record! #(swap! seen conj %)
+                      executor/unchanged? (fn [_] (or (not stale-at-commit?) (= 1 (swap! unchanged inc))))
+                      file-ops/atomic-write! (fn [& _])
+                      executor/request-candidates! (fn [_] :fake-handle)
+                      executor/candidate-sequence (fn [_] [{:index 0 :usable true :content "invalid"}])
+                      executor/close-candidates! (fn [& _] {:terminated? true})
+                      executor/compile-candidate! (fn [& _] (swap! calls conj :compile) compiled)
+                      executor/verify-candidate! (fn [& _] (swap! calls conj :verify) proof)
+                      executor/commit-candidate! (fn [& args]
+                                                   (swap! calls conj :commit)
+                                                   (if stale-at-commit?
+                                                     (apply original-commit args)
+                                                     commit))]
+          (let [result (executor/execute! nil {:plan {:typist {:route {:executor :typist}}} :receipt-dir artifact-parent})]
+            {:result result :events @seen :calls @calls})))
+      (finally (executor/delete-tree! artifact-parent)))))
 
 (deftest parse-refusal-does-not-invent-proof-or-commit
   (let [{:keys [events calls result]} (exercise {:ok false :error-type :forms-unparseable}

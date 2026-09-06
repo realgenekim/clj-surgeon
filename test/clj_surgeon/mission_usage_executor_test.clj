@@ -8,31 +8,33 @@
 
 (deftest closed-usage-survives-success-rejection-and-post-close-commit-error
   (doseq [mode [:success :rejection :commit-error]]
-    (let [order (atom [])
+    (let [artifact-parent (str (java.nio.file.Files/createTempDirectory "usage-artifacts-" (make-array java.nio.file.attribute.FileAttribute 0)))
+          order (atom [])
           candidate {:index 0 :request_started true :prompt_tokens 2 :completion_tokens 3
                      :reasoning_tokens 1 :cost_usd 0 :cost_source "provider-reported"}]
-      (with-redefs [executor/unchanged? (constantly true)
-                    executor/make-artifacts! (constantly "/var/tmp/forge/unused-mock-artifacts")
-                    file-ops/atomic-write! (fn [& _] nil)
-                    events/observe-phase! (fn [_ f] (f))
-                    executor/request-candidates! (constantly [candidate])
-                    executor/compile-candidate! (fn [& _] {:ok (not= mode :rejection)})
-                    executor/verify-candidate! (fn [& _] {:ok true})
-                    executor/close-candidates! (fn [& _] (swap! order conj :close)
-                                                 {:terminated? true :completed [candidate] :cancelled []})
-                    executor/commit-candidate! (fn [& _]
-                                                 (swap! order conj :commit)
-                                                 (if (= mode :commit-error)
-                                                   (throw (ex-info "private error" {:error-type :test-commit-refusal}))
-                                                   {:ok true :committed true}))]
-        (let [result (executor/execute! {} {:plan {:typist {:route {}}}})]
-          (is (= 3 (get-in result [:usage :completion-tokens :known-total])))
-          (is (= 0M (get-in result [:usage :cost-usd :known-total])))
-          (is (= :complete (get-in result [:usage :status])))
-          (is (= (if (= mode :rejection) [:close] [:close :commit]) @order))
-          (when (= mode :commit-error)
-            (is (= :test-commit-refusal (:error-type result)))
-            (is (not (.contains (pr-str result) "private error")))))))))
+      (try
+        (with-redefs [executor/unchanged? (constantly true)
+                      file-ops/atomic-write! (fn [& _] nil)
+                      events/observe-phase! (fn [_ f] (f))
+                      executor/request-candidates! (constantly [candidate])
+                      executor/compile-candidate! (fn [& _] {:ok (not= mode :rejection)})
+                      executor/verify-candidate! (fn [& _] {:ok true})
+                      executor/close-candidates! (fn [& _] (swap! order conj :close)
+                                                   {:terminated? true :completed [candidate] :cancelled []})
+                      executor/commit-candidate! (fn [& _]
+                                                   (swap! order conj :commit)
+                                                   (if (= mode :commit-error)
+                                                     (throw (ex-info "private error" {:error-type :test-commit-refusal}))
+                                                     {:ok true :committed true}))]
+          (let [result (executor/execute! {} {:plan {:typist {:route {}}} :receipt-dir artifact-parent})]
+            (is (= 3 (get-in result [:usage :completion-tokens :known-total])))
+            (is (= 0M (get-in result [:usage :cost-usd :known-total])))
+            (is (= :complete (get-in result [:usage :status])))
+            (is (= (if (= mode :rejection) [:close] [:close :commit]) @order))
+            (when (= mode :commit-error)
+              (is (= :test-commit-refusal (:error-type result)))
+              (is (not (.contains (pr-str result) "private error"))))))
+        (finally (executor/delete-tree! artifact-parent))))))
 
 (deftest pre-transport-refusal-does-not-invent-zero-cost
   (let [result (executor/execute! {} {:plan {}})]
