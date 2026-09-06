@@ -2791,3 +2791,5 @@ my lane edited wrappers and docs natively (not Clojure forms), and nobody has ye
 an ordinary next task on a repo outside the experiment. My seat ledger cannot separate tonight's
 real rows from the battery's test rows because the receipt chain ran `make test-battery` without the
 suite-run isolation — one more paper cut, mine.
+
+## 07:19Z — Gene (verbatim): "Among your jobs; ensure 50/50 allocation between perfect tool vs pushing frontier; can't lose 3 hours like this again.  Suggesting bounding each iteration to 1 houpr". Mechanism: /var/tmp/forge/block.md names the block, start, one-hour deadline; heartbeats cut at the hour; tally in the pulse. Battery rerun PASSED at 07:16Z with the compile cache off (receipt cd1eb5cc pushed); land running. The landing block is cut at its exit; next block FRONTIER.
