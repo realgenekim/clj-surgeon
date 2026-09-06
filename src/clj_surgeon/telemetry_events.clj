@@ -90,22 +90,47 @@
     [(subs (str value) 0 free-text-limit) true]
     :else [(str value) false]))
 
+(def mission-enums
+  {:mission_state #{"proposed" "ready" "blocked" "applied" "verified" "failed" "undone"}
+   :mission_verb #{"owner_forms" "helper_extraction"}
+   :executor #{"native" "typist"}
+   :provider #{"openrouter" "groq" "spark"}
+   :model #{"openai/gpt-oss-120b" "gpt-5.3-codex-spark"}
+   :upstream #{"Cerebras" "Groq" "OpenAI"}
+   :refused_rung #{"mechanical-class" "complete-dossier" "source-policy"
+                   "cheap-gate" "independent-acceptance" "guarded-commit"
+                   "bounded-scope" "pinned-provider" "verified-rate"}})
+
+(defn mission-fields
+  "Only fixed mission enums and bounded candidate counts enter shared JSONL."
+  [event]
+  (cond-> (reduce-kv (fn [out key admitted]
+                       (let [value (get event key)]
+                         (cond-> out (contains? admitted value) (assoc key value))))
+            {} mission-enums)
+    (and (integer? (:candidate_count event)) (<= 1 (:candidate_count event) 5))
+    (assoc :candidate_count (:candidate_count event))
+    (and (string? (:mission_id event))
+         (re-matches #"M-[0-9]{1,12}" (:mission_id event)))
+    (assoc :mission_id (:mission_id event))))
+
 (defn line-map
   "Build one ledger line. PURE -- no clock, no I/O, no filesystem. Every field
    is a scalar the reader needs and nothing else: no key, no path, no source.
    `wall_ms` is rounded to a long; a nil stays nil rather than becoming 0,
    because \"not measured\" and \"instant\" are different facts."
-  [{:keys [ts seat pid kind tool ok error_type wall_ms mission_id dropped]}]
+  [{:keys [ts seat pid kind tool ok error_type wall_ms mission_id dropped] :as event}]
   (let [[error truncated?] (truncate error_type)]
-    (cond-> {:ts ts
-             :seat seat
-             :pid pid
-             :kind kind
-             :tool tool
-             :ok (boolean ok)
-             :error_type error
-             :wall_ms (when (number? wall_ms) (long (Math/round (double wall_ms))))
-             :mission_id mission_id}
+    (cond-> (merge {:ts ts
+                    :seat seat
+                    :pid pid
+                    :kind kind
+                    :tool tool
+                    :ok (boolean ok)
+                    :error_type error
+                    :wall_ms (when (number? wall_ms) (long (Math/round (double wall_ms))))
+                    :mission_id mission_id}
+              (mission-fields event))
       truncated? (assoc :error_type_truncated true)
       (pos? (or dropped 0)) (assoc :telemetry_dropped dropped))))
 
@@ -150,12 +175,13 @@
     (catch Throwable _ false)))
 
 (defn record!
-  "Append one ledger line for a completed public MCP call. Never throws, never
+  "Append one ledger line for a completed public tool or mission boundary. Never throws, never
    fails the call. A failed append increments `dropped`; the count rides out
    on the next line that lands, then resets -- so the drop is reported exactly
    once and by the process that suffered it.
 
-   `event` keys: :kind :tool :ok :error_type :wall_ms :mission_id."
+   `event` keys: :kind :tool :ok :error_type :wall_ms :mission_id plus the
+   optional fixed enums/count accepted by mission-fields."
   ([event] (record! (default-events-file) event))
   ([file event]
    (let [carried @dropped
