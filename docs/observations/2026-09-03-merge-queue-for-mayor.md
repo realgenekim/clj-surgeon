@@ -114,3 +114,5 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - 15:33Z LANDED: astra/typist-route e1270478 (+ battery receipt 3ecd0cfc) → MCP/main 10f03973 — admit_clojure_patch tool-description guidance (description-only, one owner, via Surgeon CLI; Sol fence r1 LAND YES; all gates green). Trunk head 10f03973. Sixth landing of the window.
 
 - QUEUED docs-only: astra f25d4a32 (first whole-task pair LOSS + profile guide; no source; land in the next docs batch with 9aa2fbf9) — 17:44Z
+
+- LANDED: fable/match-owner-counts d6c0d035 (+receipt 1472105d) → MCP/main 7f920915 at 19:01Z (inspect owner_counts + source-omission; fence r2 HOLD on a pre-existing defect, landed per Gene) — 19:03Z
