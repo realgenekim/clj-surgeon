@@ -1070,20 +1070,6 @@
         (str summary "\n\n" prepared-request/coaching-text)
         summary))))
 
-(def ^:private output-budget-refusal-types
-  "Every typed refusal that already says a public output budget refused."
-  #{:decision-output-budget-exceeded
-    :structural-buffer-output-budget-exceeded
-    "decision-output-budget-exceeded"
-    "structural-buffer-output-budget-exceeded"
-    "inspect-output-limit"})
-
-(defn- output-budget-refusal?
-  [result]
-  (and (not (:ok result))
-       (boolean (some output-budget-refusal-types
-                      [(:error-type result) (:error_type result)]))))
-
 ;; @spec MCP-OP-FIELD-009
 (defn- result-budget-refusal
   "The bounded typed refusal for a result over the public-result ceiling.
@@ -1158,7 +1144,66 @@
           (mcp-result-byte-count (inspect-summary normalized) normalized)]
       (if (<= required-bytes max-public-result-bytes)
         raw-result
-        (result-budget-refusal raw-result required-bytes)))))
+        ;; The candidate travels with the refusal under a PRIVATE key so the
+        ;; publication guard can report the bytes this result would have
+        ;; measured AS PUBLISHED, not the pre-finalization figure counted here.
+        ;; `final-public-result-guard` removes the key; it is never published.
+        (assoc (result-budget-refusal raw-result required-bytes)
+               ::budget-candidate raw-result)))))
+
+;; @spec MCP-OP-FIELD-009
+(def ^:private evidence-truncated-marker
+  "... evidence truncated on a line boundary to fit the public-result ceiling")
+
+(defn- public-result-bytes
+  [result]
+  (mcp-result-byte-count (inspect-summary result) result))
+
+(defn- with-bounded-error
+  [result kept-lines]
+  (assoc result
+         :error (str/join "\n" (conj (vec kept-lines) evidence-truncated-marker))
+         :evidence_truncated true))
+
+;; @spec MCP-OP-FIELD-009
+(defn- bound-to-ceiling
+  "Return a replacement refusal PROVEN to fit the public-result ceiling.
+
+  The replacement is measured exactly as publication will render it -- the same
+  summarizer `invoke!` re-runs on it -- so its size is established here, before
+  it is returned, and not hoped for. Oversized evidence is cut on line
+  boundaries with a marker inside the budget; if even the evidence-free refusal
+  cannot fit, this throws rather than emitting an oversized envelope."
+  [replacement]
+  (if (<= (public-result-bytes replacement) max-public-result-bytes)
+    replacement
+    (let [lines (str/split-lines (str (:error replacement)))
+          ;; Largest line prefix that fits, by bisection on measured bytes.
+          kept (loop [low 0 high (count lines) best nil]
+                 (if (> low high)
+                   best
+                   (let [mid (quot (+ low high) 2)
+                         candidate (with-bounded-error replacement
+                                                       (take mid lines))]
+                     (if (<= (public-result-bytes candidate)
+                             max-public-result-bytes)
+                       (recur (inc mid) high candidate)
+                       (recur low (dec mid) best)))))
+          minimal (-> replacement
+                      (assoc :error
+                             (str "The complete result exceeds the public MCP "
+                                  "output budget")
+                             :evidence_truncated true)
+                      (dissoc :remedy))]
+      (cond
+        kept kept
+        (<= (public-result-bytes minimal) max-public-result-bytes) minimal
+        :else
+        (throw
+          (ex-info "No bounded public MCP result fits the public-result ceiling"
+                   {:error-type :public-result-ceiling-unsatisfiable
+                    :public-result-bytes (public-result-bytes minimal)
+                    :limit max-public-result-bytes}))))))
 
 ;; @spec MCP-OP-FIELD-009
 (defn final-public-result-guard
@@ -1171,17 +1216,37 @@
   publish the candidate, or a bounded typed refusal to publish instead --
   never a truncated, elided, or partial result."
   [result summary]
-  (let [published-bytes (mcp-result-byte-count summary result)]
-    (when (and (> published-bytes max-public-result-bytes)
-               ;; A result that is ALREADY one of the typed output-budget
-               ;; refusals keeps its own type and its own mode-specific
-               ;; evidence: prepare-change, basis-view, plan-extraction and
-               ;; continuation semantics are unchanged by this guard, and
-               ;; replacing a bounded refusal with another refusal would only
-               ;; lose which budget refused.
-               (not (output-budget-refusal? result)))
-      (cond-> (result-budget-refusal result published-bytes)
-        (:elapsed_ms result) (assoc :elapsed_ms (:elapsed_ms result))))))
+  (let [candidate (::budget-candidate result)]
+    (cond
+      ;; The early gate already refused this one. Report the bytes the refused
+      ;; candidate would have measured AS PUBLISHED -- same finalized
+      ;; `elapsed_ms` this refusal carries -- and drop the private key.
+      candidate
+      (let [as-published (assoc candidate :elapsed_ms (:elapsed_ms result))
+            published-bytes (mcp-result-byte-count
+                              (inspect-summary as-published) as-published)]
+        (bound-to-ceiling
+          (-> result
+              (dissoc ::budget-candidate)
+              (assoc :required {:public_result_bytes published-bytes}))))
+
+      (> (mcp-result-byte-count summary result) max-public-result-bytes)
+      (let [published-bytes (mcp-result-byte-count summary result)]
+        (bound-to-ceiling
+          (cond-> (result-budget-refusal result published-bytes)
+            ;; An oversized refusal keeps the name of what actually refused
+            ;; and as much of its own evidence as fits; only its SIZE is
+            ;; corrected, and the correction is visible.
+            (not (:ok result))
+            (assoc :original_error_type
+                   (or (:error_type result)
+                       (some-> (:error-type result) name))
+                   :error (or (:error result)
+                              (str "The complete result exceeds the public "
+                                   "MCP output budget")))
+            (:elapsed_ms result) (assoc :elapsed_ms (:elapsed_ms result)))))
+
+      :else nil)))
 
 ;; @spec MCP-OP-TIME-004
 ;; @spec MCP-OP-ASYNC-001

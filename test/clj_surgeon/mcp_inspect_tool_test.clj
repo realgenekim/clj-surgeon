@@ -631,15 +631,22 @@
 (deftest selector-continuation-obeys-the-complete-public-envelope-budget
   ;; @spec MCP-OP-READ-CONT-002
   (let [project (temp-dir)
-        _source (write-source! project "src/demo.clj"
-                               "(ns demo)\n(def alpha 1)\n(def beta 2)\n")
+        ;; The ceiling is lowered to 4,096 rather than to 1: the guard at the
+        ;; publication point holds for EVERY response, including this typed
+        ;; refusal, so the ceiling under test has to be one its own refusal can
+        ;; fit inside. `beta` is padded so the successful result is far over it.
+        _source (write-source!
+                  project "src/demo.clj"
+                  (str "(ns demo)\n(def alpha 1)\n(def beta\n  ["
+                       (str/join " " (range 900))
+                       "])\n"))
         calls (atom [])
         budget-var (ns-resolve 'clj-surgeon.mcp-inspect-tool
                                'max-public-result-bytes)]
     (try
       (inspect-tool/init! {:project-root (.getPath project)})
       (with-redefs-fn
-        {budget-var 1}
+        {budget-var 4096}
         #(inspect-tool/handle-inspect
            nil
            {"requests" [{"id" "before" "operation" "forms"
@@ -986,7 +993,9 @@
                            :line 2 :character 7
                            :name "target"}
               :references []}))})
-      (with-redefs [inspect-tool/max-public-result-bytes 128]
+      ;; 1,024 rather than 128: the publication guard holds for this refusal
+      ;; too, so the ceiling under test must be one the refusal fits inside.
+      (with-redefs [inspect-tool/max-public-result-bytes 1024]
         (inspect-tool/handle-inspect
           nil
           {"mode" "prepare-change"
@@ -1615,12 +1624,19 @@
 ;; controlled clock, so the byte counts are exact rather than a band.
 ;; ---------------------------------------------------------------------------
 
+(declare publish-through-invoke*)
+
 (defn- publish-through-invoke
   "The publication step itself: the real summarizer, the real guard, a fixed
    clock. Returns the exact envelope the callback received."
-  [result]
+  ([result] (publish-through-invoke result 1000000))
+  ([result finish-ns]
+   (publish-through-invoke* result finish-ns)))
+
+(defn- publish-through-invoke*
+  [result finish-ns]
   (let [calls (atom [])
-        ticks (atom [0 1000000])]
+        ticks (atom [0 finish-ns])]
     (mcp-operation/invoke!
       {:clock-nanos (fn [] (let [[t & more] @ticks]
                              (reset! ticks (or (seq more) [t]))
@@ -1791,19 +1807,49 @@
     (try
       (write-source! project "src/many.clj" (repeated-literal-source 200))
       (let [{:keys [structured]} (published project (match-params))
-            as-published (assoc (inspect-tool/execute-inspect!
-                                  {:project-root (.getPath project)}
-                                  (match-params))
-                                :elapsed_ms (:elapsed_ms structured))
-            finalized-bytes (inspect-tool/mcp-result-byte-count
-                              (#'inspect-tool/inspect-summary as-published)
-                              as-published)]
-        (is (false? (:ok structured)))
-        (is (= finalized-bytes
-               (get-in structured [:required :public_result_bytes])))
+            ;; The same refusal shape the early gate produces, driven through
+            ;; the publication step under the fixed clock so the finalized
+            ;; measurement is computable here rather than raced.
+            candidate (inspect-tool/execute-inspect!
+                        {:project-root (.getPath project)}
+                        (match-params))
+            controlled (publish-through-invoke
+                         {:ok false
+                          :operation "inspect_clojure"
+                          :error_type "structural-buffer-output-budget-exceeded"
+                          :read_complete false
+                          :source_unchanged true
+                          :next_action "narrow_request"
+                          :required {:public_result_bytes 1}
+                          :clj-surgeon.mcp-inspect-tool/budget-candidate
+                          (dissoc candidate :elapsed_ms)}
+                         1234567)
+            as-published (assoc (dissoc candidate :elapsed_ms)
+                                :elapsed_ms
+                                (:elapsed_ms (:structured controlled)))]
+        (testing "the production path refuses and reports an over-ceiling size"
+          (is (false? (:ok structured)))
+          (is (> (get-in structured [:required :public_result_bytes])
+                 inspect-tool/max-public-result-bytes)))
+        (testing "and the reported size is the FINALIZED candidate's, exactly"
+          (is (= (inspect-tool/mcp-result-byte-count
+                   (#'inspect-tool/inspect-summary as-published) as-published)
+                 (get-in (:structured controlled)
+                         [:required :public_result_bytes])))
+          ;; and NOT the pre-finalization count the early gate took: the fixed
+          ;; clock here finalizes to 1.234567 ms, whose digits cost more bytes
+          ;; than the normalized 0.0 the early gate measured with
+          (is (not= (inspect-tool/mcp-result-byte-count
+                      (#'inspect-tool/inspect-summary
+                        (assoc candidate :elapsed_ms 0.0))
+                      (assoc candidate :elapsed_ms 0.0))
+                    (get-in (:structured controlled)
+                            [:required :public_result_bytes]))))
         (testing "and the private carrier never reaches the caller"
           (is (not-any? #(= "clj-surgeon.mcp-inspect-tool" (namespace %))
-                        (keys structured)))))
+                        (keys structured)))
+          (is (not-any? #(= "clj-surgeon.mcp-inspect-tool" (namespace %))
+                        (keys (:structured controlled))))))
       (finally (delete-tree! project)))))
 
 (deftest publication-throws-rather-than-emitting-an-oversized-envelope
