@@ -30,8 +30,9 @@
 
 (defn- report!
   [role args]
-  (println (format "PROBE role=%s max-mb=%d tmpdir=%s args=%s"
+  (println (format "PROBE role=%s max-mb=%d tmpdir=%s node-cache=%s args=%s"
                    role (max-mb) (System/getProperty "java.io.tmpdir")
+                   (or (System/getenv "NODE_DISABLE_COMPILE_CACHE") "<unset>")
                    (pr-str (vec args)))))
 
 (defn -main
@@ -46,6 +47,12 @@
         argset (set args)]
     (report! "child" args)
     (println (format "PROBE root=%s" root))
+    ;; @spec MCP-OP-TMPHYG-005 -- reuse the existing JVM/BB argv probes.
+    (when (contains? argset "--node-cache-env")
+      (let [{:keys [exit out]} (shell/sh "sh" "-c" "printf %s \"$NODE_DISABLE_COMPILE_CACHE\"")]
+        (when-not (zero? exit)
+          (throw (ex-info "Node-cache environment descendant probe failed" {:exit exit})))
+        (println (str "PROBE descendant-node-cache=" out))))
     (when (contains? argset "--leak-subprocess")
       ;; A descendant that picks its OWN temp location: the only thing that
       ;; keeps it inside the isolated root is TMPDIR in the child's env.

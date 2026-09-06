@@ -47,7 +47,11 @@ required), `[x]` implemented (implementation and test witnesses required),
   root — via `TMPDIR`/`TMP`/`TEMP`, since `-Djava.io.tmpdir` is a
   JVM-internal property no child process inherits — so a subprocess that
   picks its own temp location cannot write outside the root the leak witness
-  watches.
+  watches. The test re-exec child shall also receive the fixed string
+  `NODE_DISABLE_COMPILE_CACHE=1`, overriding an unset/0 parent setting; a
+  re-exec child lacking that exact value shall refuse before running tests.
+  Normal descendants inherit this test-only policy. Production formatter
+  invocations outside this test boundary keep their existing cache behavior.
 
 - [x] **MCP-OP-TMPHYG-007**: When a test-runner process is terminated in a
   way the VM can observe — an external `timeout`'s SIGTERM, a Ctrl-C — before

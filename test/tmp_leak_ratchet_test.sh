@@ -194,7 +194,7 @@ run_probe_flags sentinel-mismatch "-Djava.io.tmpdir=$DECOY" "" \
 # one rebuilt the child as a bare `java -cp ... clojure.main` and the suite
 # silently ran at the box default (7.8 GB) while the heap-config gate — which
 # only reads `make -n` TEXT — stayed green.
-run_probe_flags heap-args "-Xmx317m" "alpha beta" TMPDIR="$FX/realdisk"
+run_probe_flags heap-args "-Xmx317m" "alpha beta --node-cache-env" TMPDIR="$FX/realdisk" NODE_DISABLE_COMPILE_CACHE=0
 [ "$PROBE_EXIT" -eq 0 ] || fail "6: probe exit $PROBE_EXIT"
 parent_mb=$(probe_field heap-args parent max-mb)
 child_mb=$(probe_field heap-args child max-mb)
@@ -209,20 +209,50 @@ child_mb=${child_mb%% *}
 # arg sink: the day a runner takes a test selector it vanishes with no error.
 parent_args=$(probe_field heap-args parent args)
 child_args=$(probe_field heap-args child args)
-[ "$parent_args" = '["alpha" "beta"]' ] || fail "6: parent argv not seen: $parent_args"
+[ "$parent_args" = '["alpha" "beta" "--node-cache-env"]' ] || fail "6: parent argv not seen: $parent_args"
 [ "$child_args" = "$parent_args" ] \
   || fail "6b: the re-exec dropped the test-selection args: parent=$parent_args child=$child_args"
 
 # The bb lane re-execs by script path and appends args after the script.
 set +e
-env TMPDIR="$FX/realdisk" bb test/tmp_leak_probe.clj alpha beta >"$FX/bb-args.out" 2>&1
+env -u NODE_DISABLE_COMPILE_CACHE TMPDIR="$FX/realdisk" bb test/tmp_leak_probe.clj alpha beta --node-cache-env >"$FX/bb-args.out" 2>&1
 BB_EXIT=$?
 set -e
 echo "--- bb-args (exit=$BB_EXIT) ---"
 cat "$FX/bb-args.out"
 [ "$BB_EXIT" -eq 0 ] || fail "6c: the bb lane exited $BB_EXIT"
-[ "$(probe_field bb-args child args)" = '["alpha" "beta"]' ] \
+[ "$(probe_field bb-args child args)" = '["alpha" "beta" "--node-cache-env"]' ] \
   || fail "6c: the bb re-exec dropped its args"
+
+# @spec MCP-OP-TMPHYG-005 -- no added JVM launches: extend the existing argv arms.
+grep -q '^PROBE role=parent .* node-cache=0 args=' "$FX/heap-args.out" \
+  || fail "node cache: JVM parent did not exercise the explicit 0 control"
+grep -q '^PROBE role=parent .* node-cache=<unset> args=' "$FX/bb-args.out" \
+  || fail "node cache: BB parent did not exercise the unset control"
+for arm in heap-args bb-args; do
+  grep -q '^PROBE role=child .* node-cache=1 args=' "$FX/$arm.out" \
+    || fail "node cache: $arm child did not force the test-only setting"
+  grep -qx 'PROBE descendant-node-cache=1' "$FX/$arm.out" \
+    || fail "node cache: $arm descendant did not inherit the setting"
+done
+
+# A structurally valid re-exec root with a stripped flag must not run tests.
+NODE_ROOT="$FX/realdisk/clj-surgeon-suite-$$-node-cache"
+mkdir -p "$NODE_ROOT"
+printf '%s\n' precious > "$NODE_ROOT/precious"
+set +e
+env NODE_DISABLE_COMPILE_CACHE=0 CLJ_SURGEON_TMPDIR_REEXEC="$NODE_ROOT" TMPDIR="$NODE_ROOT" \
+  bb "-Djava.io.tmpdir=$NODE_ROOT" test/tmp_leak_probe.clj > "$FX/node-cache-refusal.out" 2>&1
+NODE_EXIT=$?
+set -e
+[ "$NODE_EXIT" -eq 97 ] || fail "node cache: stripped child flag must refuse, got $NODE_EXIT"
+grep -q 'WITHOUT NODE_DISABLE_COMPILE_CACHE=1' "$FX/node-cache-refusal.out" \
+  || fail "node cache: refusal did not explain its required test setting"
+if grep -q '^PROBE role=child ' "$FX/node-cache-refusal.out"; then
+  fail "node cache: stripped child ran tests"
+fi
+[ -f "$NODE_ROOT/precious" ] || fail "node cache: refused child swept unregistered contents"
+rm -rf "$NODE_ROOT"
 
 # ============================================================
 # MCP-OP-TMPHYG-005: descendant processes inherit the isolated root
