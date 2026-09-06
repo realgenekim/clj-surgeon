@@ -7,7 +7,7 @@
 
 (def mechanical-classes #{:rename :thread-parameter :move-helpers :fanout :witness})
 
-(defn nonblank? [s] (and (string? s) (not (str/blank? s))))
+(defn nonblank? [s] (and (string? s) (<= (count s) 16384) (not (str/blank? s))))
 
 (defn relative-source? [s]
   (and (nonblank? s)
@@ -16,9 +16,10 @@
        (not-any? #{"" "." ".."} (str/split s #"/"))
        (str/ends-with? s ".clj")))
 
-(defn owner-valid? [sources {:keys [file owner start end]}]
+(defn owner-valid? [sources {:keys [file owner new-owner start end]}]
   (let [source (get sources file)]
-    (and (relative-source? file) (nonblank? owner) (string? source)
+    (and (relative-source? file) (nonblank? owner)
+         (or (nil? new-owner) (nonblank? new-owner)) (string? source)
          (integer? start) (integer? end) (<= 0 start) (< start end)
          (<= end (count source)))))
 
@@ -54,7 +55,10 @@
     (not (contains? mechanical-classes mission-class))
     [:mechanical-class "Choose a supported mechanical mission class."]
     (not (and (true? discovery-complete?) (nonblank? intent)
-              (vector? owners) (seq owners) (map? sources)
+              (vector? owners) (seq owners) (<= (count owners) 256)
+              (map? sources) (<= (count sources) 64)
+              (every? #(and (string? %) (<= (count %) 262144)) (vals sources))
+              (<= (reduce + (map count (vals sources))) 4194304)
               (every? #(owner-valid? sources %) owners)))
     [:complete-dossier "Complete discovery and supply valid named source spans."]
     (not (every? #(source-admitted? source-policy (:file %)) owners))
@@ -86,9 +90,13 @@
       {:ok false :executor :typist :error-type :typist-route-refused
        :condition condition :decision decision :mutation-attempted false}
       {:ok true :executor :typist :k (candidate-count (:rate facts))
-       :provider (:provider facts) :mission-class (:mission-class facts)
-       :rate (:rate facts) :gate (:gate facts) :acceptance (:acceptance facts)
-       :budget (:budget facts)})))
+       :provider (select-keys (:provider facts) [:id :model :upstream])
+       :mission-class (:mission-class facts)
+       :rate (select-keys (:rate facts) [:verified :attempted :mission-class :provider
+                                         :model :upstream :evidence])
+       :gate (select-keys (:gate facts) [:id :measured-ms :evidence])
+       :acceptance (select-keys (:acceptance facts) [:id :evidence])
+       :budget (select-keys (:budget facts) [:max-files :max-changed-chars])})))
 
 (defn canonical-data [x]
   (cond (map? x) (into (sorted-map) (map (fn [[k v]] [k (canonical-data v)])) x)
@@ -101,13 +109,17 @@
       decision
       (let [owners (mapv (fn [{:keys [file start end] :as owner}]
                            (let [source (get-in facts [:sources file])]
-                             (assoc owner :source (subs source start end)
+                             (assoc (select-keys owner [:file :owner :new-owner :start :end])
+                                    :source (subs source start end)
                                     :file-sha256 (mission/sha256 source))))
                          (:owners facts))
-            frozen (canonical-data {:schema 1 :intent (:intent facts)
+            frozen (canonical-data {:schema 2 :candidate-format :owner-forms :intent (:intent facts)
                                     :owners owners :route decision})
             serialized (pr-str frozen)]
         {:ok true :dossier frozen :dossier-hash (mission/sha256 serialized)
          :prompt (str "Complete only the mechanical change described by this frozen dossier.\n"
-                      "Return candidate edits; you have no discovery, shell, or write authority.\n"
+                      "Return only a JSON array of objects with exactly file, owner, form string fields.\n"
+                      "owner is the ORIGINAL frozen owner name; form is one complete replacement definition.\n"
+                      "Use new-owner when declared as the definition name; otherwise keep the name.\n"
+                      "Do not emit old context, offsets, markdown, or prose. No discovery, shell, or write authority.\n"
                       serialized)}))))

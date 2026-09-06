@@ -1,6 +1,7 @@
 (ns clj-surgeon.mission-typist-test
   (:require
    [clj-surgeon.mission-typist :as typist]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
 
 (def eligible
@@ -76,3 +77,20 @@
     (is (= (:dossier-hash d) (:dossier-hash (typist/dossier eligible))))
     (is (not= (:dossier-hash d)
               (:dossier-hash (typist/dossier (assoc eligible :intent "Different intent")))))))
+
+(deftest dossier-never-forwards-unapproved-metadata
+  (doseq [path [[:owners 0 :secret] [:owners 0 "secret"] [:provider :key]
+                [:rate :key] [:gate :key] [:acceptance :key] [:budget :key]]]
+    (let [result (typist/dossier (assoc-in eligible path "SENTINEL-SECRET"))]
+      (is (:ok result))
+      (is (not (str/includes? (:prompt result) "SENTINEL-SECRET"))))))
+
+(deftest dossier-bounds-before-projection
+  (doseq [facts [(assoc eligible :intent (apply str (repeat 16385 "x")))
+                 (assoc eligible :owners (vec (repeat 257 (first (:owners eligible)))))
+                 (assoc-in eligible [:sources "src/a.clj"] (apply str (repeat 262145 "x")))
+                 (assoc-in eligible [:owners 0 :new-owner] {:bad :authority})]]
+    (is (false? (:ok (typist/dossier facts)))))
+  (let [r (typist/dossier (assoc-in eligible [:owners 0 :new-owner] "renamed"))]
+    (is (= :owner-forms (get-in r [:dossier :candidate-format])))
+    (is (= "renamed" (get-in r [:dossier :owners 0 :new-owner])))))

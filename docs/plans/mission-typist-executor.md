@@ -33,8 +33,10 @@ typed redacted diagnostics. No automatic unpinned provider selection.
    tests for every refusal and rate boundary. Receipt names the failed condition.
 2. Flagged executor inside mission apply; route/k/provider/proof carried from plan.
    First fake-candidate end-to-end fixture goes through this path before paid calls.
-3. Pure context-anchored candidate compilation, then existing guarded transaction
-   machinery. Model output edits scratch candidates only; live source is written
+3. Pure owner-keyed replacement forms, then existing guarded transaction
+   machinery. Frozen planner spans supply the preimage; the model never emits old
+   whitespace. Format only owned replacements, preserving all other bytes.
+   Model output edits scratch candidates only; live source is written
    only after independent proof and stale-source recheck. Reject duplicate blocks,
    ambiguous anchors, escapes, overlap, budget breach and unauthorized changes.
 4. Fable's real-repository gate, including measured cost and command authority.
@@ -82,3 +84,15 @@ provider, candidate proof and commit are all charged. A real JVM proof above the
 route's budget refuses admission rather than becoming a hidden slow exception.
 If the executor cannot beat native, keep reusable dossier/proof primitives and
 report the lost route. Do not scale candidate count to conceal a bad experiment.
+
+## Real-1 finding: representation revision
+
+Fable 4b277bfc reports a preregistered real-repository loss: Cerebras 0/20
+candidates applied, versus cold Sol 3/4 at median 29.68 s. These are Fable
+measurements, not a new Astra run. Model-emitted old context failed whitespace
+matching. The model interface is now `{:file :owner :form}`; `:new-owner` is
+planner-owned rename authority. Whole-form syntax must parse without evaluation;
+comments, metadata and reader-discard syntax refuse until preservation is proven.
+Literal anchors remain a private lowering seam, never a demand made of the model.
+Astra owns forms; Fable owns the whole-file comparator. Neither has established
+a gain. Formatting, independent proof and guarded commit are still charged.

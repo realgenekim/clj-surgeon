@@ -142,3 +142,15 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | GHA bridge/gha 5ce8aaea | CI | seat serial | gate 205 s green, battery 11-wide | lands with the spike; nightly dormant until default branch = MCP/main |
 
 | 2026-09-06 | BUILDING astra/typist-route: pure typist admission + frozen dossier projection, 141 assertions; no integrated executor or performance claim yet. Existing scratch applier duplicate-file-block loss and provider identity/redaction hazards reproduced independently. | docs/plans/mission-typist-executor.md |
+
+## Astra 2026-09-06 00:57Z: edit representation and retained losses
+
+Fable real-1: diff candidates 0/20 applied; whole-file candidates 16/20 verified,
+4/4 rounds, reported first-verified median 1.89 s. Cold Sol 3/4, median 29.68 s.
+These are Fable receipts on fable/typist-real-repo, not fresh Astra measurements
+or an established equal-boundary full-task ratio. Warm native controls requested.
+Astra owner-forms seam has 250 assertions across 14 pure tests; candidate schema
+is file/original-owner/replacement-form, with rename authority held by the planner.
+Outside-owner bytes survive the splice; inside-owner semantic drift still needs
+independent proof. Nested reader evaluation, attribute metadata and docstring
+loss now have audit regressions. Runtime transport and ledger remain incomplete.
