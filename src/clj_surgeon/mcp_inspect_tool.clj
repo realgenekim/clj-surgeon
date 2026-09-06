@@ -51,6 +51,10 @@
     "reconstruct aggregate expect or reread completed siblings. Every guarded file is verified before evaluation; "
     "a changed guard refuses without source or write authority. Hypotheses are "
     "never selection authority, and continuation is never write authority. "
+    "Every match result carries its file and an owner_counts vector of "
+    "{inside, matches} in first-occurrence order summing to match_count; copy "
+    "those straight into apply_clojure_changes edits as file, within.form, and "
+    "matches instead of re-tallying the per-site vector. "
     "read_complete=true is "
     "terminal. Never writes."))
 

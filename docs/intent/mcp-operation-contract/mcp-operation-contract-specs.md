@@ -164,6 +164,7 @@ These requirements define the project-owned exact-verifier fusion contract.
 - [x] **MCP-OP-FIELD-003**: When a `match` request whose pattern uses `_` as a standalone wildcard returns zero matches, or fewer than its declared expectation, the result shall carry the note that each `_` matches exactly one subtree and that a longer form needs a longer pattern. A pattern without a standalone `_` shall carry no such note.
 - [x] **MCP-OP-FIELD-005**: clj-surgeon shall decide whether a `match` pattern uses a standalone `_` wildcard from the parsed pattern, not from its bytes. An `_` inside a string literal or inside one symbol shall not count as a wildcard, and a wildcard whose only neighbour is a comma shall.
 - [x] **MCP-OP-FIELD-006**: Every minimal request shape clj-surgeon publishes shall be one the live validators accept at that path. Where no registered example covers a path's complete required set, the refusal shall omit `minimal_request` rather than show a shape clj-surgeon cannot stand behind.
+- [x] **MCP-OP-FIELD-007**: Every `inspect_clojure` `match` result shall carry its `file` and an `owner_counts` vector of `{inside, matches}` objects, one per distinct enclosing owner in first-occurrence order, whose `matches` sum equals that request's `match_count`; a match with no enclosing defining form shall carry `inside` null. The visible match line shall show that request's file path and its `owner_counts` instead of the per-site `inside`/`source` echo, and shall stay inside its published character bound. The structured per-site `matches` vector, including each site's `source`, shall be unchanged, and `expect` semantics shall be unchanged.
 
 # #Matched-But-Unaddressed Reporting
 
@@ -288,6 +289,7 @@ These requirements define the project-owned exact-verifier fusion contract.
 | `MCP-OP-FIELD-003` | Every miss deserves the wildcard note, or `_` inside a symbol counts as a wildcard. | Zero matches with a standalone `_` ; fewer than expected with `_` ; zero matches with no `_` ; a pattern containing `foo_bar` only. |
 | `MCP-OP-FIELD-005` | Whitespace around `_` in the pattern text is a reliable test. | `(f "a _ b")` ; `[a,_]` ; `foo_bar` ; `(f _)` ; a pattern that does not parse. |
 | `MCP-OP-FIELD-006` | A published example shape stays valid on its own, and every registered path's example covers that path's required set. | Each registered example embedded in a complete request ; a `forms` request omitting `forms` and `expect` ; a path the table does not register ; a new example added without a validator carrier. |
+| `MCP-OP-FIELD-007` | A per-site vector is enough because the caller can re-tally it, or the result id identifies the file. | Two owners with two and one match in one file ; the same owner name in two files ; a top-level match with no enclosing owner ; a request whose text line must stay under its bound. |
 
 # #Deferred Surface
 
