@@ -417,3 +417,20 @@ a win.
 - [One compiler, two entrances](../../plans/one-compiler-two-entrances.md)
 - [MCP operation contract](../mcp-operation-contract/mcp-operation-contract-design.md)
 - [CLI/MCP causal transport parity receipt](../../observations/2026-08-27-cli-mcp-causal-transport-parity-receipt.md)
+
+## Single-form cardinality diagnostics
+
+The compiler's existing single-form law remains unchanged. A successfully
+parsed source with no detached comment nodes and a syntax-unit count other
+than one is refused as invalid-intent-form with expected=1 and actual=N.
+The existing form-count evidence remains. The kernel message names the field
+and those counts so every existing projection can explain the refusal.
+
+A syntax unit is a non-whitespace top-level rewrite-clj node, including a reader
+discard; it is not an evaluated value. Detached comments keep their existing
+explanation, and malformed input has no asserted numeric cardinality. This
+changes diagnostic evidence, not accepted syntax, source ownership or effects.
+The motivating real report is inb-e68905: a two-form replacement should reveal
+why it cannot replace a single-form site. Sequence-site lowering is outside
+this change. The governing public-boundary intent is the high-level design's
+consistent terminal evidence; OP-ALG-FORM-COUNT-001 is its compiler witness.

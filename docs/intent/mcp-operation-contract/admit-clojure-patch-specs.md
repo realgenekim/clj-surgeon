@@ -44,15 +44,17 @@ where they are.
 |---|---|---|---|
 | `workspace_root` | no | configured root | Canonical absolute workspace, resolved by the shared router |
 | `patch` | yes | — | The exact payload the caller would give `apply_patch`, in either the V4A or the unified-diff grammar |
-| `mode` | no | `preview` | `preview` never writes; `commit` writes when no refusal-class hazard exists |
-| `verify` | no | `focused` | `focused` runs the lint delta and the mapped focused tests; `none` runs neither |
+| `mode` | no | `preview` | `preview` never writes; `commit` requires no blocking hazard and complete verification, except the explicit narrow ADMIT-126 waiver |
+| `verify` | no | `focused` | `focused` runs the lint delta and the mapped focused tests; `none` runs neither and cannot authorize commit |
+| `allow_partial` | no | `false` | Narrow ADMIT-126 exception only: explicit waiver, `verify=focused`, partial status, observed absent focused-test profile, and a clean analyzer reading; never waives `verify=none` or a broken configured runner |
 | `expect_pre_sha256` | no | — | Per-file pre-image digests, copied from a preview's `next_call`; binds this commit to the bytes that preview inspected |
 
-There is nothing else. No owners, no selectors, no counts, no expectations.
-Every fact the gate needs beyond the patch it reads from the workspace itself;
-the one optional field it accepts, `expect_pre_sha256`, is a value the gate
-itself produced in the previous call. That is the whole adoption argument, and it is deliberately the whole
-request schema.
+No owner selectors or caller-supplied verification command are required. The
+gate reads the patch targets from the workspace and resolves its trusted
+focused-test configuration. `expect_pre_sha256` can bind a commit to a prior
+preview; omitting it permits a one-shot commit, explicitly reported as
+unbound. A preview is not a mandatory additional round-trip. `allow_partial`
+is the restricted exception above, not a substitute for supplying proof.
 
 ## #Receipt
 
@@ -462,18 +464,25 @@ location-independent by design, so an unrelated edit that merely moves an
 existing finding does not read as a regression. Introduced findings at
 `:warning` or `:error` are blocking.
 
-**Focused tests.** The touched source namespaces are mapped to `<ns>-test`.
-The mapped namespace is run only when its file exists. The command is
-repository-owned: the workspace configuration supplies a bounded
-`:focused-test` profile whose `{namespaces}` and `{snapshot}` placeholders are
-expanded with the derived namespaces and with a temporary directory holding
-the post images. A profile whose command does not name `{snapshot}` would test
-the bytes on disk — in preview the unpatched ones, after a commit no longer a
-proof of anything the gate decided — so such a command is reported as **not
-run** rather than credited. When no profile is configured, the gate publishes
-the derived namespaces with `ran: false` and a stated reason. Guessing a test
-runner would be the exact "generic verify=fast is not equivalent verification"
-mistake this repository already stopped once.
+**Focused tests.** Coverage resolves per touched file from the profile's
+`:namespaces` mapping (source path or source namespace), then from a touched
+suite itself, then from the `<ns>-test` convention. Asserted suites must resolve
+to files; a missing asserted suite is `focused-namespace-missing`, while absent
+conventional coverage is `no-mapped-test-namespace` (ADMIT-109/111/112).
+
+The nonempty command argv must contain literal `{snapshot}` and `{report}`
+arguments. `{namespaces}` expands into individual suite names. The process
+starts in the live project root. `{snapshot}` holds only changed, nondeleted
+post-images, not a checkout: the trusted runner must load those candidate files
+before unchanged dependencies, suites and resources, and handle deletions if
+its admitted task permits them. A live-tree-only test does not establish
+candidate correctness. Merely passing the snapshot path cannot prove that the
+runner used it; validate the integration using snapshot-only changes and an
+actual failing candidate before relying on it.
+
+The runner writes attributable results to `{report}`. A passing external
+command is not automatically compatible with this ABI. No configured profile
+or missing coverage yields an explicit reason, never invented test evidence.
 
 ### #Verification runs before the write, not after it
 
@@ -489,11 +498,13 @@ Two outcomes are distinguished, and the distinction carries the whole design:
   a non-zero failure count — is a refusal. Nothing is written, the receipt is
   `ok: false` with `error-type: verification-failed`, and `next_call` names
   which check blocked it.
-- A check that **could not run** — no analyzer on the box, no declared test
-  profile, no namespace to attribute a result to — does not block the commit,
-  because a repository that has not declared a focused-test command would
-  otherwise be unable to commit at all. It does keep `verification_complete`
-  false, with the reason on the receipt.
+- A check that **could not run**, or produced incomplete/untrustworthy evidence,
+  prevents commit with `verification-incomplete` and no mutation (ADMIT-120).
+  The sole ADMIT-126 exception requires explicit `allow_partial`, focused
+  verification, partial status, an observed absent profile and a clean analyzer
+  reading. An unavailable analyzer, broken configured runner, or `verify=none`
+  cannot use that exception. Preview can report incomplete verification without
+  writing; it does not grant commit authority.
 
 ### #What counts as a test result
 
@@ -501,14 +512,17 @@ Two outcomes are distinguished, and the distinction carries the whole design:
 focused runner produced evidence that can be attributed to the namespaces the
 gate asked about. A process that exits zero has proved that a process exited
 zero; counting that as a test run is precisely how a gate comes to report a
-verification it never performed. Evidence is therefore one of:
+verification it never performed.
 
 The evidence is a **report file the runner wrote**. The gate expands a
 `{report}` placeholder to a path inside the snapshot directory it just
 created, so the file cannot pre-exist and its presence proves this command
 produced it. The report is read as EDN, JSON, or JUnit XML — whatever the
 repository's own runner already emits — and must name every mapped namespace
-with a positive test count and no failures or errors.
+with a positive test count and no failures or errors; the set of report
+namespaces must equal the requested set, and the runner must finish with exit
+zero. EDN/JSON reports map namespace names to `tests`, `failures` and `errors`;
+JUnit reports use those attributes on named `testsuite` elements.
 
 Nothing the command *prints* is evidence. A stdout summary is text the command
 chose to emit: `printf 'Ran 7 tests containing 21 assertions.\n0 failures'`
@@ -533,12 +547,14 @@ A non-zero exit is decisive on its own. A command that writes a spotless
 report and then exits three did not finish the way it meant to, and its report
 describes whatever happened before it gave up rather than a clean suite; the
 gate publishes `:runner-exit-nonzero` with the code and caps the status at
-`:partial`. It still does not block the commit, because an unfinished check is
-an unproven one rather than a failed one — a report that actually *names*
-failures is what blocks.
+`:partial` when the other evidence supports that status. This blocks commit:
+a configured runner that failed cannot satisfy the absent-profile waiver.
+The earlier commit-on-partial behavior is superseded by ADMIT-105/120/126.
 
 Anything else publishes `verification_complete: false` with a stated reason:
-`:no-test-evidence` when no report was written, `:unreadable-test-report` when
+`report-file-absent` when a finished zero-exit runner wrote no report,
+`verification-runner-failed` when a failed/unfinished runner wrote none,
+`:no-test-evidence` when reported counts establish no tests, `:unreadable-test-report` when
 one was written but could not be parsed, `:report-namespaces-do-not-match` when
 it covers different namespaces, `:test-command-not-report-bound` or
 `:test-command-not-snapshot-bound` when the declared command cannot produce
@@ -548,15 +564,13 @@ an unavailable check into a pass.
 
 ### #Where the focused-test profile comes from
 
-Precedence is explicit, because the two sources answer different questions.
-The server's start configuration — the `-X` args map, key `:focused-test` with
-`{:command [...] :timeout-ms n}` — is what *this server* was launched to do.
-Failing that, `.clj-surgeon/focused-test.edn` at the workspace root, in the
-same shape, is what *this tree* says about itself and travels with it. The
-receipt names which source supplied the profile. Without a loader on either
-path the gate could only ever report `verification_complete: false`, which is
-how the first implementation shipped a verification story that no real commit
-could reach.
+ADMIT-110 supersedes the original whole-map/server-first rule. Resolve
+`:command`, `:timeout-ms` and `:namespaces` independently: repository
+`.clj-surgeon/focused-test.edn` first, server `:focused-test` start configuration
+second. A repository declaring only coverage can use the server's command.
+The receipt identifies command provenance as `profile_source` and mapping
+provenance as `profile_source_namespaces` (or `path-convention`). The loader
+contract remains ADMIT-081; its original precedence is historical, not current.
 
 ### #What the receipt says about verification as a whole
 
@@ -569,13 +583,13 @@ so every receipt also carries `verification_status`:
 |---|---|
 | `:complete` | every requested check ran and passed |
 | `:partial` | at least one requested check produced a usable result, at least one did not |
-| `:unverified` | no requested check produced a usable result |
+| `:unverified` | verification was declined, neither check produced usable evidence, or a detector could not run under ADMIT-107/124/127; another detector may nevertheless have a reading |
 
-with `verification_reasons` naming each shortfall. And when verification was
-requested in commit mode and the status is `:unverified`, the receipt reports
-`ok: false` while still reporting `committed: true`. The caller asked for
-verification and did not get any; the bytes landed, and `ok` tells the truth
-about the proof rather than about the write.
+with `verification_reasons` naming each shortfall. Status does not grant write
+authority: a commit with incomplete verification refuses before writing, unless
+all ADMIT-126 conditions hold. `verify=none` is never waivable. Historical
+receipts showing `ok: false, committed: true` for unverified writes below record
+the earlier defect; they do not describe the current commit path.
 
 ## #Commit
 
@@ -654,26 +668,34 @@ receipt now states which it was: `pre_image_binding` is `"bound"` or
 
 # #Behaviour Matrix
 
+Current verification/write outcomes follow ADMIT-110/120/126. Successful
+structural rows assume the verification gate and all transaction guards pass.
+Preview never writes; commit writes only after that gate. These are contract
+rows, not newly executed results. `per check` means true only when focused
+verification completes; false when verification is declined or incomplete.
+Successful preview rows assume no blocking findings; preview itself does not
+force `verification_complete` to false.
+
 | Case | mode | Refusal hazard | Result | Bytes written | `verification_complete` | `next_call` |
 |---|---|---|---|---|---|---|
-| Clean single-file patch | preview | no | ok, zeros | none | false | same call, `commit` |
-| Clean multi-file patch | preview | no | ok, zeros | none | false | same call, `commit` |
-| Clean patch | commit | no | ok, committed | all changed files, atomically | true when checks ran and passed | none |
-| Comment reformat outside the edit | preview | no | ok, protected drift and byte drift positive | none | false | same call, `commit` |
-| Whitespace-only reprint of an untouched form | preview | no | ok, byte drift positive, protected drift empty | none | false | same call, `commit` |
-| Long code-shaped string edited without its delimiter | preview | no | ok, informational hazard | none | false | same call, `commit` |
+| Clean single-file patch | preview | no | ok, zeros | none | per check | same call, `commit` |
+| Clean multi-file patch | preview | no | ok, zeros | none | per check | same call, `commit` |
+| Clean patch, complete verification | commit | no | ok, committed | all changed files, atomically | true | none |
+| Comment reformat outside the edit | preview | no | ok, protected drift and byte drift positive | none | per check | same call, `commit` |
+| Whitespace-only reprint of an untouched form | preview | no | ok, byte drift positive, protected drift empty | none | per check | same call, `commit` |
+| Long code-shaped string edited without its delimiter | preview | no | ok, informational hazard | none | per check | same call, `commit` |
 | Duplicate top-level definition | preview | yes | ok false, hazard listed | none | false | same call, `preview`, `blocked_by` |
 | Duplicate top-level definition | commit | yes | ok false, hazard listed, committed false | none | false | same call, `preview`, `blocked_by` |
 | Post image does not read | either | yes | ok false, hazard listed | none | false | same call, `preview`, `blocked_by` |
 | `ns` loses a require | either | yes | ok false, hazard listed | none | false | same call, `preview`, `blocked_by` |
 | Hunk context does not match | either | n/a | typed refusal `:patch-does-not-apply` | none | false | same call, `preview` |
 | Malformed or blank patch | either | n/a | typed refusal `:invalid-patch` | none | false | same call, `preview` |
-| Add File, or `--- /dev/null` | either | no | ok, owners all added, `pre_image_binding: "created"` | the new file | per check | same call, `commit` |
+| Add File, or `--- /dev/null` | either | no | ok, owners all added, `pre_image_binding: "created"` | none in preview; new file on admitted commit | per check | commit after preview; none after commit |
 | Add File whose target exists | commit | n/a | typed refusal `:target-already-exists` | none | false | same call, `preview` |
 | Created file with a duplicate definition or an image that does not read | either | yes | typed refusal, nothing created | none | false | same call, `preview` |
-| Delete File, or `+++ /dev/null` | either | no | ok, owners all removed | the file is removed | per check | same call, `commit` |
+| Delete File, or `+++ /dev/null` | either | no | ok, owners all removed | none in preview; removed on admitted commit | per check | commit after preview; none after commit |
 | Delete File whose namespace is still required | either | yes | typed refusal `:namespace-form-removed` naming the dependents | none | false | same call, `preview` |
-| Move to | either | no | ok, destination created with the edits, source deleted, one transaction | both | per check | same call, `commit` |
+| Move to | either | no | ok, destination created with the edits, source deleted, one transaction | none in preview; both on admitted commit | per check | commit after preview; none after commit |
 | Payload in neither grammar | either | n/a | typed refusal `:invalid-patch` naming both grammars and quoting the first line | none | false | same call, `preview`, with `expected_headers` |
 | Unified hunk body overruns its header | either | n/a | typed refusal `:hunk-body-overruns-header` | none | false | same call, `preview` |
 | V4A hunk whose `@@` anchor does not match | either | n/a | applies, if the block itself is found | as usual | as usual | as usual |
@@ -684,25 +706,27 @@ receipt now states which it was: `pre_image_binding` is `"bound"` or
 | Source moved since the preview, digests supplied | commit | no | typed refusal `:source-hash-mismatch` | none | false | same call, `preview` |
 | Blocking analyzer findings | commit | no | typed refusal `:verification-failed` | none | false | same call, `preview` |
 | Focused tests failed | commit | no | typed refusal `:verification-failed` | none | false | same call, `preview` |
-| `verify: "none"` | commit | no | ok, committed | all changed files | false | none |
-| Analyzer unavailable | commit | no | ok, committed, lint status unverified | all changed files | false | none |
-| Focused runner not snapshot- or report-bound | commit | no | ok, committed, tests reported not run, status `:partial` | all changed files | false | none |
-| Runner printed a summary and wrote no report | commit | no | ok, committed, `:no-test-evidence`, status `:partial` | all changed files | false | none |
-| Report names other namespaces | commit | no | ok, committed, `:report-namespaces-do-not-match` | all changed files | false | none |
+| `verify: "none"` | commit | no | typed refusal `:verification-incomplete`, committed false; unverified; focused verification required | none | false | typed remediation with `verify=focused` |
+| Analyzer unavailable | commit | no | typed refusal `:verification-incomplete`, committed false; unverified; analyzer unavailable | none | false | typed remediation with `verify=focused` |
+| Focused runner not snapshot- or report-bound | commit | no | typed refusal `:verification-incomplete`, committed false; runner ABI incomplete | none | false | typed remediation with `verify=focused` |
+| Runner printed a summary and wrote no report | commit | no | typed refusal `:verification-incomplete`, committed false; report-file-absent or verification-runner-failed; unverified | none | false | typed remediation with `verify=focused` |
+| Report names other namespaces | commit | no | typed refusal `:verification-incomplete`, committed false; report-namespaces-do-not-match | none | false | typed remediation with `verify=focused` |
 | Report shows failures | commit | yes | typed refusal `:verification-failed` | none | false | same call, `preview` |
-| Clean report, runner exited non-zero | commit | no | ok, committed, status `:partial`, `:runner-exit-nonzero` with the code | all changed files | false | none |
+| Clean report, runner exited non-zero | commit | no | typed refusal `:verification-incomplete`, committed false; runner-exit-nonzero; at best partial | none | false | typed remediation with `verify=focused` |
 | Workspace lock cannot be taken | commit | n/a | typed refusal `:workspace-lock-unavailable` | none | false | same call, `preview` |
-| No requested check produced a result | commit | no | **`ok: false`**, `committed: true`, `:verification-unverified` | all changed files | false | same call, `preview` |
+| No requested check produced a result | commit | no | typed refusal `:verification-incomplete`, committed false; unverified | none | false | typed remediation with `verify=focused` |
+| Explicit ADMIT-126 waiver, focused/partial, clean analyzer, observed absent profile | commit | no | ok, committed if remaining guards pass | all changed files | false | none |
 | Two commits race on one file | commit | no | serialised; each commits or refuses | all changed files of the winner | per check | none |
 | Patch over the byte limit | either | n/a | typed refusal `:patch-too-large` | none | false | split the patch |
 
-Three rows carry the load. A refusal in commit mode writes nothing and still
-returns the complete receipt; a caller never has to choose between knowing what
-happened and knowing that nothing happened. A check that *failed* refuses
-before the write, so no receipt can read `ok: true, committed: true` beside a
-failing test. And a check that *could not run* is still an honest `ok` with
-`verification_complete: false` — the write succeeded, the proof did not, and
-the receipt says which and why.
+A failed check refuses before the write. A check that could not run or did
+not establish complete verification also prevents mutation in commit mode,
+except under the exact ADMIT-126 waiver: explicit `allow_partial`, focused
+verification, partial status, an observed absent profile, and a clean analyzer
+reading, with all other guards satisfied. Only that exception can commit with
+`verification_complete: false`; it never waives a failing test, unavailable
+analyzer, broken configured runner, or `verify=none`. Preview remains read-only
+and reports the verification it actually obtained, whether complete or not.
 
 # #Out of Scope
 
@@ -812,8 +836,8 @@ Adversarial review, round two. Confinement, atomicity, the preview binding,
 the admission cap and the linear line index held. Five classes did not.
 
 - [x] **MCP-OP-ADMIT-080**: When focused verification runs, clj-surgeon shall accept as test evidence only a machine-readable report the runner wrote to a gate-named path inside the snapshot directory, naming every mapped namespace with a positive test count and no failures; text the command printed shall never be evidence. *(r1)*
-- [x] **MCP-OP-ADMIT-081**: When clj-surgeon resolves the focused-test profile, it shall take it from the server start configuration, and failing that from `.clj-surgeon/focused-test.edn` at the workspace root, reporting which source supplied it. *(r6)*
-- [x] **MCP-OP-ADMIT-082**: When an admit request terminates, clj-surgeon shall publish a verification status of complete, partial, or unverified together with the reasons; and if verification was requested in commit mode and the status is unverified, then the receipt shall report `ok` false while still reporting the commit that happened. *(r1e)*
+- [x] **MCP-OP-ADMIT-081**: When clj-surgeon resolves the focused-test profile, it shall take it from the server start configuration, and failing that from `.clj-surgeon/focused-test.edn` at the workspace root, reporting which source supplied it. *(r6)* **Current interpretation:** Precedence clause superseded by MCP-OP-ADMIT-110; retain loader/provenance requirement.
+- [x] **MCP-OP-ADMIT-082**: When an admit request terminates, clj-surgeon shall publish a verification status of complete, partial, or unverified together with the reasons; and if verification was requested in commit mode and the status is unverified, then the receipt shall report `ok` false while still reporting the commit that happened. *(r1e)* **Current interpretation:** Commit-after-unverified clause superseded by MCP-OP-ADMIT-105/120/126; status reporting remains active.
 - [x] **MCP-OP-ADMIT-083**: When a definition is introduced under any wrapper that still evaluates, at any depth, clj-surgeon shall count it and record the wrapper path; two definitions inside one reader-conditional branch shall count twice while one definition per branch counts once; a libspec inside a reader conditional shall count as required; a dropped `:refer` symbol shall be a removed require naming that symbol; and deleting the `ns` form shall be a refusal-class hazard. *(r3)*
 - [x] **MCP-OP-ADMIT-084**: When clj-surgeon commits, it shall hold exclusive write authority over the canonical workspace root from the snapshot through the write, serialising threads within a server and, where the workspace carries a `.clj-surgeon` directory, server processes on the same tree; no request shall report a commit whose bytes are absent from the file. *(r5)*
 - [x] **MCP-OP-ADMIT-085**: When a published payload is trimmed to fit the shared budget, clj-surgeon shall report the cumulative rows and bytes omitted across every trimming step. *(r7 follow-up)*
@@ -862,7 +886,7 @@ real `git diff` payloads could not be read past their second file section.
 - [x] **MCP-OP-ADMIT-103**: When a unified payload carries git's extended file headers — `index`, `old mode`, `new mode`, `deleted file mode`, `new file mode`, `similarity index`, `dissimilarity index`, `rename from`, `rename to`, `copy from`, `copy to` — between a `diff --git` line and that section's `---`/`+++` pair or first hunk, clj-surgeon shall accept and ignore them; outside that region an unclassifiable line shall still be refused as before. *(z5)*
 - [x] **MCP-OP-ADMIT-104**: If a file section declares binary content (`Binary files … differ`, or `GIT binary patch`), then clj-surgeon shall publish a typed `binary-patch-unsupported` refusal naming the file, rather than skipping the section and reporting success for the rest of the patch. *(z5)*
 - [x] **MCP-OP-ADMIT-105**: If mode is commit and verification was requested and `verification_status` is anything other than complete, then clj-surgeon shall refuse with a typed `verification-incomplete` error, write nothing, publish `committed false`, `mutation_attempted false` and `source-unchanged true`, and name preview and the blocking reason in `next_call`; every receipt shall carry `mutation_attempted`. *(z4, z5)* A runner that wrote a report and then exited non-zero (`runner-exit-nonzero`) remains `partial` rather than unverified — a report exists, it is merely untrustworthy — and is refused under this requirement all the same, because `partial` is no longer permission to write.
-- [x] **MCP-OP-ADMIT-106**: When the caller passes `allow_partial true` and the workspace declares no focused-test profile at all, clj-surgeon shall permit the commit that MCP-OP-ADMIT-105 would otherwise refuse; when a profile exists and did not deliver evidence, `allow_partial` shall not waive the refusal. *(z4, z5)*
+- [x] **MCP-OP-ADMIT-106**: When the caller passes `allow_partial true` and the workspace declares no focused-test profile at all, clj-surgeon shall permit the commit that MCP-OP-ADMIT-105 would otherwise refuse; when a profile exists and did not deliver evidence, `allow_partial` shall not waive the refusal. *(z4, z5)* **Current interpretation:** Waiver conditions narrowed by MCP-OP-ADMIT-119/126; absence alone is insufficient.
 - [x] **MCP-OP-ADMIT-107**: When the focused runner was invoked and no report file appeared, clj-surgeon shall publish a typed reason distinguishing a non-zero or unfinished run (`verification-runner-failed`) from a clean run that produced nothing (`report-file-absent`), carry the runner's exit code, the resolved report path, the expanded command argv, its working directory, and the last 40 lines of the runner's merged output, and shall report `verification_status` as unverified rather than partial in both cases. *(z4, z5)*
 - [x] **MCP-OP-ADMIT-109**: When the workspace ships `.clj-surgeon/focused-test.edn` carrying a `:namespaces` mapping, clj-surgeon shall select each touched file's focused test namespaces from that mapping — keyed by the source path or by the source namespace, valued as one namespace or a collection of them — and shall fall back to the `<ns>-test` path convention only for files the mapping does not cover. *(z4)*
 - [x] **MCP-OP-ADMIT-110**: clj-surgeon shall resolve the focused-test profile from the repository file first and the server start configuration second, merged one key at a time so a tree that declares only `:namespaces` still runs the server's `:command`; and the receipt shall name which source supplied the command (`profile_source`) and which supplied the coverage mapping (`profile_source_namespaces`, or `path-convention` when neither did). *(z4)*
@@ -875,7 +899,7 @@ real `git diff` payloads could not be read past their second file section.
 - [x] **MCP-OP-ADMIT-117**: When a patch drops a symbol from a `:refer` vector while the library stays required, clj-surgeon shall apply the same structural evidence test: the hazard is class `note` when the patched image uses that symbol nowhere unqualified, and stays class `refusal` naming every remaining bare use with its file and line when it does. A use that survives only as a qualified call is not evidence, because the library is still required and the qualified call still resolves. *(sewing, hand-driven)*
 - [x] **MCP-OP-ADMIT-118**: clj-surgeon shall distinguish a workspace that declares no focused-test profile (`no-focused-test-profile`) from one that declares a profile naming no runnable command (`focused-test-profile-has-no-command`); the second shall read as unverified, and shall never inherit a waiver written for the first. *(z8)*
 - [x] **MCP-OP-ADMIT-119**: The `allow_partial` waiver shall be decided on the directly observed absence of a focused-test profile, published on the receipt as `profile_absent`, and never on a runner reason that happens to name that state. *(z8)*
-- [x] **MCP-OP-ADMIT-120**: A commit shall require `verification_status` complete regardless of the `verify` argument; `verify: "none"` shall refuse a commit rather than waive one, and the refusal's `next_call` shall propose `verify: "focused"` as the call that could lift it. Verification may still be declined in `preview`, which is where an unverified answer belongs. *(z8)*
+- [x] **MCP-OP-ADMIT-120**: A commit shall require `verification_status` complete regardless of the `verify` argument; `verify: "none"` shall refuse a commit rather than waive one, and the refusal's `next_call` shall propose `verify: "focused"` as the call that could lift it. Verification may still be declined in `preview`, which is where an unverified answer belongs. *(z8)* **Current interpretation:** Read together with the explicit narrow MCP-OP-ADMIT-126 exception; verify none remains unwaivable.
 - [x] **MCP-OP-ADMIT-108**: If `expect_pre_sha256` does not name exactly the files the patch touches, then clj-surgeon's refusal shall list the files the patch touches, the files that were named, and the difference in both directions, so the caller can repair the call without a second preview. *(z4)*
 
 Field replay E-GATE-R, 2026-09-04. Fourteen real 21-file patches from the
@@ -1004,6 +1028,12 @@ failure: the tests were written against the contract in this document, not
 against code that already worked.
 
 # #Recorded Evidence
+
+**Historical evidence, preserved verbatim.** The receipts and field tables
+below describe their recorded implementation epochs, not a current execution
+claim. In particular ADMIT-110 supersedes server-first precedence and
+ADMIT-105/120/126 supersede unverified/partial commits without the current
+waiver. No historical payload or measured result is rewritten here.
 
 The gate was exercised end to end through a live dev MCP server on port 7897
 (`make mcp-dev-start MCP_DEV_PORT=7897`), driven over the streamable-HTTP MCP
@@ -1665,7 +1695,8 @@ from the artifacts at all. MCP-OP-ADMIT-107 is written so this class of question
 is answered in the payload: the resolved report path, the expanded argv, the
 working directory, and the last forty lines the runner printed.
 
-One adjacent observation, recorded and not acted on: `resolve-focused-test`
+One adjacent observation at that historical epoch (subsequently addressed
+by ADMIT-110): `resolve-focused-test`
 gives the server's start configuration precedence over the workspace's
 `.clj-surgeon/focused-test.edn`, so the `:namespaces` mapping those worktrees
 shipped — the repository's own statement of which suite covers which source —

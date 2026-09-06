@@ -63,3 +63,14 @@ prefix: OP-ALG
 - [D] **OP-ALG-EXPAND-001**: Where another public operation earns migration, the system shall add a separately reviewed catalog entry and parity matrix before routing that operation through the algebra.
 - [D] **OP-ALG-CLI-002**: Where a versioned CLI canonical-output mode is approved, the CLI shall expose canonical terminal fields without changing legacy output mode.
 - [D] **OP-ALG-VERIFY-004**: Where shared verifier policy is approved after a compatibility study, the system shall represent it as an entrance-neutral capability without changing existing CLI defaults.
+
+## Single-form refusal evidence
+
+- [x] **OP-ALG-FORM-COUNT-001**: When a single-form source parses successfully without detached comment nodes but contains a number N of complete top-level syntax units other than one, the transaction compiler shall report expected=1 and actual=N in its existing typed invalid-intent-form refusal.
+
+Misreadings to exclude: counting evaluated reader values instead of lossless
+syntax units; treating detached comments as extra semantic forms; guessing a
+count from malformed source; accepting multiple forms to avoid the refusal;
+or proving the diagnostic only with a handwritten normalized error map.
+The accepted/rejected source set and the absence of future sources on refusal
+remain governed by the existing transaction contract.
