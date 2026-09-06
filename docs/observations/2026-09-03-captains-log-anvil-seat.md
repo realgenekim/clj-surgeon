@@ -2653,3 +2653,5 @@ The proposal is docs/observations/2026-09-06-sublime-tool-for-astra.md; the riff
 ## 04:17Z — battery on the merged typist tree d326f3d2: 583 tests / 12479 assertions / 0 failures / 699 s; receipt committed (0a9f17df); third landing attempt running.
 
 ## 04:22Z — LANDED 3dda2a61 on MCP/main (fable/typist-real-repo tip 0a9f17df; six Sol fence rounds, each a real defect; trunk merged; battery receipt). Trunk now carries the events ledger writer, the typist runner and missions, the resident gate, the provider fence, cost accounting, the offline contract, and the mission ledger prototype (from bridge/mission-ledger). Local install refresh next; Astra to merge trunk.
+
+## 04:23Z — local install refreshed to 3dda2a61 (CLI + both skills from 0970f4e5 = 3dda2a61 + records; servers 7906/8171 restarted from their worktrees at 3dda2a61; both listening). Note: trunk carries a docs-only merge commit da54ce9d created by the commentary loop's git pull when its push raced the landing (2 lines of captain's log; src untouched); loop prompt now rebases instead of merging on a non-ff pull.
