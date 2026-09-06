@@ -1793,6 +1793,10 @@
              (:original_error_type structured)))
       (is (true? (:evidence_truncated structured)))
       (is (str/includes? (:error structured) "truncated on a line boundary"))
+      ;; the cut keeps a PREFIX of the original evidence, whole lines only
+      (is (str/starts-with? (:error structured) (apply str (repeat 79 \x))))
+      (is (pos? (count (str/split-lines (:error structured)))))
+      (is (< (count (:error structured)) (count (:error candidate))))
       (is (false? (:read_complete structured)))
       (is (true? (:source_unchanged structured)))
       (is (not= "none" (:next_action structured))))))
