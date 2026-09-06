@@ -100,3 +100,4 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - 07:21Z LANDED: astra/typist-route (final tip 9e83d4b9 + battery receipt cd1eb5cc) → MCP/main 39a4e858. Sol delta fence LAND YES; every gate green on the merged tree (mcp-test 662/8011, run_all 862/7352, battery 691/13289, oracle, hygiene, audit). Trunk head 39a4e858.
 
 - 08:21Z QUEUED (not yet fenced): astra/typist-route 4c36f135+dcf92327 — Maven comparison report + receipt-test repair (mission_test only). Land after a Sol fence in the next tool-perfect slot.
+- 08:54Z FENCED: astra/typist-route 7e7da788 (leak fixes + Maven report + Groq note) — Sol r1 HOLD on scope only, scope expanded, remaining delta LAND YES; ~/bin/land running (verdict docs/observations/2026-09-06-sol-fence-astra-leak-tip-r1.md).
