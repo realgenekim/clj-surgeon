@@ -2637,3 +2637,5 @@ The proposal is docs/observations/2026-09-06-sublime-tool-for-astra.md; the riff
 ## 03:47Z — fix round 6 → c371e84c7fe0635c5b239211d0a78120a64e07af (no real key reachable by the suite, proven by strace 0/2068 and a sabotage check); fence r6 launched.
 
 ## 03:53Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "helper_extraction": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 03:48Z load 4.37 ; === rc 0 end 03:53Z)
+
+## 03:54Z — comment lowering per Astra's ruling → f04298ccbbcd3f077cded43672b0471d235990a5 (node fingerprint; opt-in removed; sentinel guard); handed to Astra. Usage watch 03:53Z unchanged (seat servers idle; ledger 61 lines).
