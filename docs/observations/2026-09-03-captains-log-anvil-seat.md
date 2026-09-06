@@ -2893,3 +2893,5 @@ Astra's nREPL riff, in substance: a warm runtime is the right instrument, but po
 ## 10:01Z — Closed with receipts on trunk: inb-3c57fd (NODE_DISABLE_COMPILE_CACHE pinned in tmp_leak_support/probe/ratchet) and inb-8e0a87 (mission_test no longer redefines io/file globally; receipt goes to a scratch ledger) — both landed via 181c365c.
 
 ## 10:04Z — Astra's final DN contract check (before ADMIT): (1) outcome audit must accept the optional declare that witness/prereg permit (positive variant through both audits); (2) forwarder metadata restricted to inert fields with behavioural-metadata negatives (^:inline etc.). Both dispatched; after final pins he admits controls without another review cycle. His collector fix b60b9103 gets one short slot before the cohort.
+
+## 10:09Z — Fan-out B FINAL ADMISSION PROOF (this seat, log docs/observations/2026-09-06-fanout-B-final-admission-fable.log): baseline 473/73 RED; reference 496/0 GREEN; reference-declare 497/0 GREEN; 13/13 negatives incl. behavioural-metadata; runner witness 37/37; freeze 14 files sha256 02c77d53807e30552abda8175ea912f84bcb7744ff2cd5ca729414b314fd65c2. Aggregate posted to Astra for ADMIT.
