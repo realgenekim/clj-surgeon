@@ -3023,3 +3023,11 @@ Astra's nREPL riff, in substance: a warm runtime is the right instrument, but po
 ## 15:33Z — LANDED: Astra's description-guidance tip e1270478 (+ receipt 3ecd0cfc) → MCP/main 10f03973 at 15:33:08Z; battery PASS 15:28Z; all gates green. Sixth and last landing of the window. Window released. Servers held on 181c365c pending the agreed catalog check.
 
 ## 15:53Z — usage watch: tools "admit_clojure_patch": 4 "apply_clojure_changes": 31 "inspect_clojure": 8  (collector figures verbatim; collector window: "since": "2026-09-06T04:44:02Z" → "until": "2026-09-06T15:48:44.144857Z"; === start 15:48Z load 1.32 ; === rc 0 end 15:53Z)
+
+## 16:38Z — Gene, morning after (verbatim), and the seat's answer
+
+Gene: "I love this report. Can it block report." → block ledger is now §1a of the gene-report skill (7c34ebb6).
+Gene: "Okay let's do that next. Go on having Astra start." → Astra owns the nREPL probe-then-proof hand-drive (posted 16:33Z; no ack yet).
+Gene: "I'm disappointed we have not made a dent in it. What are we doing wrong" / "Native wall that is".
+
+Answer given (committed): (1) we measure where native is already good; (2) the fan-out cohort tested the assigned deterministic route (2.8x loss) while the batched route did 59 edits/20 files in 2.4 s vs native 85 s and was never run as a preregistered A/B; (3) ~40% of the night hardened a gate nobody uses; (4) fix-round t is 20–40 min through fences — N was ~8 decisions in 9 h; (5) free-choice adoption is dead and we wrote another description; (6) no whole task end to end, ever. Proposed: preregistered informed-batched-route fan-out A/B (same seed/witness/runner) now; one whole maven task both arms with repair charged; freeze gate hardening; route without asking; nREPL stays with Astra as item four. Waiting on Gene's go and a named maven feature.
