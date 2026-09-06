@@ -46,7 +46,7 @@ count or skip the already specified functional comparison. Do not use only
 successful controls to calculate the admission floor.
 
 Stop dispatch for identity/fixture/quiet-ownership faults, missing or malformed
-terminal evidence, provider transport refusal requiring review, or an external
+terminal evidence, typed provider transport/service failure requiring review, or an external
 watchdog with no completed receipt. Retain the fault row and every prior row.
 A nonzero command exit with an intact, correctly bound terminal outcome is not
 by itself a reason to discard a real model failure. In particular, the retained
@@ -88,9 +88,15 @@ live processes and allocate the quiet window. The old runner's hardcoded dead PI
 runner checks owned quiet marker, clean tracked tree/HEAD and frozen hashes, but
 these checks do not replace the parent's full allocation/identity review. Its
 watchdog retains the inherited own-process-group cleanup; detached-child cleanup
-and proof-infrastructure terminal classification need parent review before launch.
-It does not claim independent resolved-model attestation beyond the inherited
-native receipt's declared model and saved session.
+needs parent review before launch.
+Native identity is now checked against the actual opening CLI stderr header,
+not solely the inherited receipt's declared model. The frozen expected fields
+are Codex 0.153.3, Sol, medium effort, OpenAI provider, approved sandbox settings,
+and the fixed warm workspace. The fork UUID must differ from the orientation UUID
+and must not repeat in this cohort. Save the resolved header values, fork UUID,
+header hash and whole-capture hash. Parsing requires one exact stderr delimiter
+and the opening header; later model text cannot repair a mismatched header.
+This is CLI-reported identity, not cryptographic proof of a remote backend.
 
 The final parent-held `--frozen-sha` binds the materialized manifest. Preparation
 and run entry points are deliberately separate. No fixture was prepared, no model
@@ -98,14 +104,50 @@ or provider called, and no timing window allocated for this apparatus repair.
 
 ## Offline witnesses
 
-Six tests in [test_run.py](../../bench/raw-cohort-v2/test_run.py) pass: the old
+Eleven tests in [test_run.py](../../bench/raw-cohort-v2/test_run.py) pass: the old
 sixth-control failure shape remains incorrect rather than a capture fault; six
 fixed attempts retain failures; identity faults save then stop; floor persistence
 happens before any paired dispatch; failure to save it prevents the first pair;
 and a fake native entry receives the new phase prompt and unchanged native args.
-These are deterministic orchestration tests, not synthetic performance evidence.
+New prelaunch witnesses parse the actual old C6 capture and EDN receipt: its
+opening header is valid and its edit remains incorrect. The actual retained raw
+handdrive's completed transport and proof receipt passes the evidence validator.
+Negative witnesses cover wrong version/model/effort/workspace, duplicate fields,
+missing/ambiguous header delimiter, later quotation, file bytes/modes/additions
+and symlinks, and the fault-policy distinctions below. Small throwaway test
+fixtures under /var/tmp/forge are removed; no cohort fixture is materialized.
+These tests make bounded BB EDN-parser subprocess calls over retained artifacts,
+not proof executions. They are not synthetic performance evidence.
 
 ```sh
 CLJ_SURGEON_EVENTS_FILE=/var/tmp/forge/raw-cohort-v2-prep/events.jsonl \
 PYTHONDONTWRITEBYTECODE=1 nice -n 10 python3 bench/raw-cohort-v2/test_run.py
 ```
+
+
+## Frozen fixture and terminal-evidence policy
+
+Before each T command starts, inventory the actual workspace and match the frozen
+seed exactly: file set, SHA256 and POSIX mode of every regular file, directory set
+and modes. No symlinks or special files are admitted. Prepared files use0644 and
+directories0755, recorded in the manifest. A changed preimage stops before dispatch.
+Post-command protected-byte checks remain part of correctness; a generic failed
+gate does not prove the apparatus is broken.
+
+| Observed evidence | Prospective classification |
+|---|---|
+| Native correctly bound receipt, no transport error, no diff/wrong edit/failed acceptance | Incorrect attempt; retain and continue fixed sequence |
+| Tool owner/compiler refusal with valid completed transport | Incorrect candidate/attempt; no replacement |
+| Attested model content refusal, length limit, empty content or nonterminal model output | Incorrect candidate/attempt; no provider infrastructure claim |
+| Completed proof command nonzero, or bounded candidate proof timeout with terminal result fields | Candidate proof failure; do not infer broken infrastructure |
+| Typed API/service/network/key/response error, identity mismatch, unrecognized transport error | Fault requiring review; retain row then pause, without guessing root cause |
+| Accepted cancelled loser also present in completed | Retain cancellation/unknown usage; not a successful or free request |
+| Missing/malformed candidate or proof results, unconfirmed transport cleanup | Apparatus/evidence fault; retain then pause |
+
+The tool validator reads the actual owned `transport-close.edn`, confirms bounded
+candidate indices and provider identity, and checks terminal proof record shapes.
+It does not infer infrastructure failure from `:ok false`, a nonzero proof exit,
+or `:finished? false` alone. Compiled candidates require their gate results, and
+acceptance results when the gate passed. A compiled=false candidate does not
+require a proof that was never run. Evidence-path confinement and read-size
+bounds apply before parsing. All raw receipts and capture paths are retained.
