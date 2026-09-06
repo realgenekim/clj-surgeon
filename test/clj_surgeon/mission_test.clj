@@ -999,3 +999,52 @@
                clj-surgeon.mission-typist-executor/undo!]
              (mapv first @calls)))
       (is (= '("receipt.edn") (second (last @calls)))))))
+
+(deftest owner-forms-publishes-recovery-before-a-crashed-write
+  (let [saved (atom {:id "m1" :verb "owner_forms" :state :ready :root "/fixture"
+                     :intent typist-request :plan typist-planned})
+        recovery {:receipt "/receipts/inverse.edn" :receipt_hash "hash"
+                  :artifacts "/receipts"}
+        published (atom nil)]
+    (with-redefs-fn
+      {#'cli/verbs {"owner_forms"
+                    {:execute! (fn [_ config]
+                                 ((:persist-recovery! config) recovery)
+                                 (reset! published @saved)
+                                 (throw (ex-info "simulated crash before write" {})))}}
+       #'cli/state-dir-for (fn [& _] "/ledger")
+       #'cli/admitted-profiles (fn [& _] {})
+       #'cli/stale? (fn [_] nil)
+       #'mission/read-mission (fn [& _] @saved)
+       #'mission/read-all (fn [_] [])
+       #'cli/save! (fn [_ m] (reset! saved m))}
+      #(do
+         (is (thrown? clojure.lang.ExceptionInfo
+                      (cli/apply! {:id "m1" :workspace "/fixture"})))
+         (is (= :applied (:state @saved)))
+         (is (= @published @saved))
+         (is (= (select-keys recovery [:receipt :receipt_hash]) (:undo @saved)))
+         (is (= recovery (get-in @saved [:proof :typist-recovery])))
+         (is (= typist-planned (:plan @saved)))))))
+
+(deftest owner-forms-recovery-save-failure-prevents-executor-continuation
+  (let [mission {:id "m1" :verb "owner_forms" :state :ready :root "/fixture"
+                 :intent typist-request :plan typist-planned}
+        saves (atom 0) continued (atom false)]
+    (with-redefs-fn
+      {#'cli/verbs {"owner_forms"
+                    {:execute! (fn [_ config]
+                                 ((:persist-recovery! config) {:receipt "inverse" :receipt_hash "hash"})
+                                 (reset! continued true))}}
+       #'cli/state-dir-for (fn [& _] "/ledger")
+       #'cli/admitted-profiles (fn [& _] {})
+       #'cli/stale? (fn [_] nil)
+       #'mission/read-mission (fn [& _] mission)
+       #'mission/read-all (fn [_] [])
+       #'cli/save! (fn [_ m] (if (= 1 (swap! saves inc)) m
+                               (throw (ex-info "recovery persistence failed" {}))))}
+      #(do
+         (is (thrown? clojure.lang.ExceptionInfo
+                      (cli/apply! {:id "m1" :workspace "/fixture"})))
+         (is (= 2 @saves))
+         (is (false? @continued))))))

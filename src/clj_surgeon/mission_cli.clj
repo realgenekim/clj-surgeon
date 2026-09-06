@@ -411,7 +411,14 @@
                                (mission/verification-profiles m)
                                (not-empty (admitted-profiles (:root m) opts)))
                   config (cond-> {:verification-profiles profiles}
-                           (= "owner_forms" (:verb m)) (assoc :plan (:plan m))
+                           (= "owner_forms" (:verb m))
+                           (assoc :plan (:plan m)
+                                  :persist-recovery!
+                                  (fn [recovery]
+                                    (save! state-dir
+                                           (assoc staged
+                                                  :undo (select-keys recovery [:receipt :receipt_hash])
+                                                  :proof {:typist-recovery recovery}))))
                            receipt-dir (assoc :receipt-dir receipt-dir))
                   receipt ((get-in verbs [(:verb m) :execute!]) (:intent m) config)
                   committed? (true? (:committed receipt))
