@@ -588,3 +588,5 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 - 03:33Z: CADENCE (Gene): round → ethnography (~/bin/ethno, recon only) → paper-cut spike → resume; ethnography at 06/09/12/15Z or round close.
 
 - 04:22Z: LANDED 3dda2a61 (typist branch). Astra merges trunk next → his fence r2 → his landing. Routing r3 (b2824ee1) awaits his install-hold release; comment lowering f04298cc awaits his merge.
+
+## 07:16Z — WINDOW EXTENDED: Gene asleep, 9 h → 16:20Z. Cadence: land Astra (receipt chain 2 on 8fd9a2e8) → FRONTIER push on a held-out repo (Astra drives) → ethnography → paper-cut spike → frontier. Checkpoints 09/12/15Z, final report 16:20Z. Open items: inb-3c57fd, inb-8e0a87, inb-4c3d0e; routing fence r5 on b409e467 after the landing.
