@@ -583,6 +583,23 @@
       (boolean (some #(= '_ %) (tree-seq coll? seq form))))
     (catch Exception _ false)))
 
+(defn- owner-counts
+  "Per-owner match tallies for one match request, in first-occurrence order.
+
+   @spec MCP-OP-FIELD-007
+
+   The caller's next call is an `apply_clojure_changes` `edits` list shaped
+   [{file, within{form}, from, to, matches}], so the tally it needs is per
+   (file, owner) -- not per site. Every fact is already in `matches`; re-deriving
+   it by hand is ~10 s of model output per batch and one more place to be wrong.
+   A match with no enclosing defining form carries `inside` nil, which is what
+   `within` omits for a top-level edit."
+  [matches]
+  (let [owners (mapv :inside matches)
+        tally (frequencies owners)]
+    (mapv (fn [owner] (array-map :inside owner :matches (get tally owner)))
+          (distinct owners))))
+
 (defn- match-result
   [request snapshot]
   (let [found (structural-lens/find-subforms
@@ -605,11 +622,20 @@
         (assoc :note wildcard-note))
 
       :else
-      (let [matches (mapv (fn [match]
-                            (assoc (json-data match)
-                                   :hash (structural-lens/source-hash
-                                           (:source match))
-                                   :file_hash (:hash snapshot)))
+      ;; @spec MCP-OP-FIELD-008
+      ;; A site whose `source` is byte-for-byte the request's own `match` string
+      ;; is echoing the request back. For a literal pattern that is EVERY site,
+      ;; a constant repeated once per match. Omit it there and keep it wherever
+      ;; the spelling differs -- any `_` wildcard, any non-identical whitespace
+      ;; -- because that is the only case where the caller cannot reconstruct
+      ;; the byte from the request it just sent.
+      (let [pattern (:match request)
+            matches (mapv (fn [match]
+                            (cond-> (assoc (json-data match)
+                                           :hash (structural-lens/source-hash
+                                                   (:source match))
+                                           :file_hash (:hash snapshot))
+                              (= pattern (:source match)) (dissoc :source)))
                           (:matches found))]
         (cond->
           {:id (:id request)
@@ -621,6 +647,12 @@
            :match_count (:match-count found)
            :source_character_count (reduce + 0 (map #(count (:source %))
                                                     (:matches found)))
+           ;; @spec MCP-OP-FIELD-007
+           :owner_counts (owner-counts matches)
+           ;; @spec MCP-OP-FIELD-008 -- state the rule on the receipt, so a
+           ;; reader who finds a site without `source` knows it was derivable
+           ;; from the request and not lost.
+           :source_omitted_when_equal_to_match true
            :matches matches}
           ;; @spec MCP-OP-FIELD-003
           (and (zero? (:match-count found))
@@ -857,12 +889,17 @@
 
     "match"
     (when (:id result)
-      (let [matches (:matches result)
-            compact (compact-json
-                      (mapv #(select-keys % [:inside :source]) matches) 1024)]
+      ;; @spec MCP-OP-FIELD-007
+      ;; The file and the per-owner tallies, not the per-site source echo. The
+      ;; echo was ~65% of a 24.5 KB batch payload and said nothing the caller's
+      ;; next call needs; the file was reachable only by counting the caller's
+      ;; own request ordering back from the result id.
+      (let [compact (compact-json (or (:owner_counts result) []) 1024)]
         (when compact
-          (str "  " (:id result) ": "
-               (plural (:match_count result) "match") " · " compact
+          (str "  " (:id result)
+               (when-let [file (:file result)] (str " " file))
+               ": "
+               (plural (:match_count result) "match") " · owners " compact
                ;; @spec MCP-OP-FIELD-003
                (when (:note result)
                  (str "\n    note: " (:note result)))))))

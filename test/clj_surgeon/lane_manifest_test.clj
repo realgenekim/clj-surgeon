@@ -505,14 +505,17 @@
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
       ;; One outline corpus test MOVED from its original namespace to adopted integration.
-      ;; 921 original + 435 adopted = 1356: add the real two-require cardinality
+      ;; 928 original + 435 adopted = 1363: add 7 inspect owner_counts/source-omission
+      ;; witnesses (5 in mcp-inspect-contract-test, 2 in mcp-inspect-tool-test), both
+      ;; round-one namespaces, so the growth lands in the original half and adopted holds;
+      ;; add the real two-require cardinality
       ;; regression in mcp-contract-test; retain Astra identity/receipt witnesses and trunk
       ;; helper request-shape refusals (48 -> 51), plus two battery archival-distance witnesses;
       ;; closed telemetry remains 17, not trunk
       ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
       (is (= 435 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1356 total) (str "manifest declares " total " tests"))
+      (is (= 1363 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
