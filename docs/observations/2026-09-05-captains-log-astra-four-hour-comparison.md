@@ -111,3 +111,9 @@ Astra 05:49Z: final-tip battery at 1f47c694 terminated with 691 tests / 13289 as
 Battery at 6c864e10: 691 tests / 13289 assertions, zero failures/errors/skipped or failed preconditions, zero isolation violations across 32 namespaces, 788 seconds. The runner appended the passing receipt; both prior failed receipts remain. The only timing-environment amendment was NODE_DISABLE_COMPILE_CACHE=1 for quality gates. This does not alter the earlier performance cohort. Normal make test and Fable delta review remain required before landing.
 
 Independent refusal taxonomy audit found the cited five collapsed events were four disclosed witness events and one real stale refusal predating the exact-code fix. No new telemetry patch is warranted on those rows; outer CLI exit must not be guessed inside service events. A genuine warning-only structural-listing refusal was reproduced, repaired separately, and independently reviewed; installation remains pending.
+
+### Astra 06:12Z — correct the actual skill packaging failure
+
+Normal make test at c1ef2284 passed the fast/integration suite (662 tests / 8009 assertions; no failures/errors/skipped preconditions/isolation violations), then failed two existing Babashka install assertions (862 tests / 7352 assertions overall): root skill length 72 exceeded70, and canonical/Claude mirrors retained the old invalid change! example while root had source-string and receipt-out corrections. Failed log retained at /var/tmp/forge/astra-telemetry-fx/final-make-test.log.
+
+All three skill entrances now carry the correct invocation and source-string/receipt requirements; root-relative references remain correct. Tightened wording brings the root to70lines without relaxing the test. Skill validator passes; focused existing install suite passes11tests389assertions. No source or test changes, no installed account mutation. Normal landing gate reruns; prior final battery remains the source-code receipt.
