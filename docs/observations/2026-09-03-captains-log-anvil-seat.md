@@ -2965,3 +2965,5 @@ Astra's nREPL riff, in substance: a warm runtime is the right instrument, but po
 ## 12:52Z — usage watch: tools "admit_clojure_patch": 1 "apply_clojure_changes": 31 "inspect_clojure": 8  (collector figures verbatim; collector window: "since": "2026-09-06T04:44:02Z" → "until": "2026-09-06T12:48:33.266130Z"; === start 12:48Z load 2.37 ; === rc 0 end 12:52Z)
 
 ## 13:03Z — Phase GO to Astra on inb-e68905: design "Single-form cardinality diagnostics" + spec OP-ALG-FORM-COUNT-001 (expected=1 actual=N on invalid-intent-form; syntax units incl. reader discard; no grammar change; misreadings enumerated; compile/normalize witness). Notes: text projection via the canonical-representation rule; his own two-form require repair as the real reproduction.
+
+## 13:13Z — Test-phase GO to Astra on inb-e68905: cardinality matrix + the real 08:18Z two-form require request as a normalized public refusal (":do replacement: one complete form expected; 2 supplied.", form_count 2, caller value not echoed). Between-stages window granted for his RED run; my window re-declares automatically after his release.
