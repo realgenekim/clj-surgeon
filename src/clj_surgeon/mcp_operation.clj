@@ -51,15 +51,26 @@
 
   The request clock surrounds domain execution only. Summary rendering and
   serialization both complete before callback publication, so failures cannot
-  expose a partial public result."
-  [{:keys [clock-nanos execute summarize serialize callback]
+  expose a partial public result.
+
+  The optional `guard` runs at the FINALIZATION POINT, on the exact result and
+  summary publication would hand to the callback -- timing fields already
+  finalized, summary already rendered. It returns nil to publish that
+  candidate, or a replacement result to publish instead; the replacement is
+  re-summarized and nothing after the guard can grow the envelope. A guard
+  that will not accept its own replacement is a defect in the guard, so the
+  replacement is published once and not re-guarded."
+  [{:keys [clock-nanos execute summarize serialize callback guard]
     :or {clock-nanos #(System/nanoTime)
          serialize json/generate-string}}]
   (let [started-ns (clock-nanos)
         domain-result (execute)
         finished-ns (clock-nanos)
-        result (finalize-result domain-result started-ns finished-ns)
-        summary (summarize result)
+        finalized (finalize-result domain-result started-ns finished-ns)
+        finalized-summary (summarize finalized)
+        replacement (when guard (guard finalized finalized-summary))
+        result (or replacement finalized)
+        summary (if replacement (summarize result) finalized-summary)
         body (serialize result)]
     (callback [summary] (not (:ok result)) result)
     body))

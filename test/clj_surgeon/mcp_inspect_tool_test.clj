@@ -1729,7 +1729,7 @@
   ;; not fall through to the ordinary branch. That fallback publication is
   ;; still a publication, so the finalization guard covers it.
   (let [project (temp-dir)
-        body (str/join (repeat 1200 "  (send! :ping)\n"))]
+        body (str/join (repeat 2600 "  (send! :ping)\n"))]
     (try
       (write-source! project "src/big.clj"
                      (str "(ns big)\n(defn wide []\n" body "  nil)\n"))

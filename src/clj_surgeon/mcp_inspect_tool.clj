@@ -1070,6 +1070,20 @@
         (str summary "\n\n" prepared-request/coaching-text)
         summary))))
 
+(def ^:private output-budget-refusal-types
+  "Every typed refusal that already says a public output budget refused."
+  #{:decision-output-budget-exceeded
+    :structural-buffer-output-budget-exceeded
+    "decision-output-budget-exceeded"
+    "structural-buffer-output-budget-exceeded"
+    "inspect-output-limit"})
+
+(defn- output-budget-refusal?
+  [result]
+  (and (not (:ok result))
+       (boolean (some output-budget-refusal-types
+                      [(:error-type result) (:error_type result)]))))
+
 ;; @spec MCP-OP-FIELD-009
 (defn- result-budget-refusal
   "The bounded typed refusal for a result over the public-result ceiling.
@@ -1158,7 +1172,14 @@
   never a truncated, elided, or partial result."
   [result summary]
   (let [published-bytes (mcp-result-byte-count summary result)]
-    (when (> published-bytes max-public-result-bytes)
+    (when (and (> published-bytes max-public-result-bytes)
+               ;; A result that is ALREADY one of the typed output-budget
+               ;; refusals keeps its own type and its own mode-specific
+               ;; evidence: prepare-change, basis-view, plan-extraction and
+               ;; continuation semantics are unchanged by this guard, and
+               ;; replacing a bounded refusal with another refusal would only
+               ;; lose which budget refused.
+               (not (output-budget-refusal? result)))
       (cond-> (result-budget-refusal result published-bytes)
         (:elapsed_ms result) (assoc :elapsed_ms (:elapsed_ms result))))))
 
@@ -1201,6 +1222,8 @@
           exchange ordinary-result
           (prepared-request/project-result ordinary-result)))
      :summarize inspect-summary
+     ;; @spec MCP-OP-FIELD-009
+     :guard final-public-result-guard
      :callback callback}))
 
 (def inspect-tool
