@@ -54,3 +54,19 @@ Decomposition of one real-2j round, per candidate: model 1.0–1.5 s; copy 14 ms
 Predictions vs observed: absolute F medians missed LOW (I priced the winner as if it sat late in the queue; it usually sits first — the serial penalty is charged on failures ahead of the winner, not on k); the ratios hit at both ends (5–15x at 0.75 s → 7.9x; 1.5–3x at heavy → 2.90x); monotone collapse hit; rate unchanged hit (87% / 67% per candidate).
 
 Reading for Gene's question ("neighborhood multiplier vs native"): on a real file with real gates, the fast typist's multiplier over a cold careful author is ~16x at a 0.06 s gate, ~8x at 0.75 s, ~3x at 7 s. The gate, not the model, sets the number. Cheap, narrow, honest proof profiles are therefore the highest-leverage piece of the machinery — which is what the mission ledger's per-mission profile is for.
+
+## A/B 4 (01:17–01:24Z) — the warm native comparator (Astra's protocol)
+
+Arm NW = context-warm / process-cold Sol: one frozen orientation session (dossier + source loaded, READY, nothing solved; warm-up 10.96 s recorded, not charged), then per trial a fresh preimage in place and `codex exec fork <id>` with the trial prompt, so every trial starts from an identical orientation transcript and nothing is learned across trials. Native free to script or batch. Clock = fork spawn to independent acceptance. Four variance controls then four interleaved NW/F rounds (the preregistered six controls became four: two codex calls were spent discovering that fork's read-only sandbox was broken on this box — bwrap loopback failure — so the first orientation had loaded nothing; that session and its trial are VOID and recorded; the rerun uses the seat's fenced sandbox bypass, stated in every receipt as :sandbox "bypass"; cold Sol in A/B 1 ran read-only and emitted a diff, so this is a real difference, not pure warmth). Raw log 2026-09-06-fast-typist-real-1-ab4-warm.log; quiet window; load 1.1–3.1.
+
+| arm | n | verified | first-verified wall, sorted (s) | median | max |
+|---|---|---|---|---|---|
+| NW — context-warm / process-cold Sol | 8 | **8/8** | 19.72 19.77 22.04 23.37 23.37 24.27 24.89 25.27 | **23.37** | 25.27 |
+| F — Cerebras whole-file k=5 | 4 | 4/4 (18/20) | 1.14 1.72 2.04 3.26 | **1.88** | 3.26 |
+| N — cold Sol (A/B 1) | 4 | 3/4 | 17.43 29.68 52.02 | 29.68 | 52.02 |
+
+Ratio warm: **12.4x** (cold was 15.7x). Warming the context bought Sol ~21% of wall and, more importantly, reliability: 3/4 → 8/8, and all eight retained diffs are byte-identical (one batched apply_patch block each; zero answer variance). Decomposition: fork process overhead ≈ 0.95 s (well under the 3.5 s cold floor); judging 0.05 s; the rest is the model turn, 18.7–24.2 s — and 7 of 8 trials spent a self-verification turn of Sol's own choosing (git diff, rg for the trap spellings, running the bb test) inside the charged wall.
+
+Predictions vs observed: NW median 6–12 s → 23.37 s (missed HIGH: I priced Sol's turn without its self-check); F ~1.9 s → 1.88 (hit); warm ratio 3–6x → 12.4x (missed; the typist's lead survives warmth); falsifier (NW < 3 s) did not fire. F's two losses are the known ns-name drift, caught by the gate.
+
+Standing after A/B 1–4 on one real file: the typist's advantage is set by the gate (16x → 8x → 3x as the gate goes 0.06 → 0.75 → 7.1 s) and only mildly by Sol's warmth (16x → 12x). What remains on Sol's side is the model turn itself, most of it the model verifying its own work — which is precisely the work the ledger's gate does for the typist in 50 ms.

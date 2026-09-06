@@ -1,0 +1,59 @@
+=== ab-4: warm native comparator (arm NW, context-warm/process-cold, fork protocol) ===
+start 2026-09-06T01:17:50Z load1=1.10
+--- WARM-UP (recorded, NOT charged to any trial) ---
+warm_session=01a0744b-0d32-7701-9135-541494d69292 warmup_wall_s=11.80 workspace=/var/tmp/forge/typist-real-fx/warm-ws-real-1 rollout=/home/forge/.codex/sessions/2026/09/06/rollout-2026-09-06T01-17-50-01a0744b-0d32-7701-9135-541494d69292.jsonl orientation_edited=False
+arm=NW mission=real-1 edit_form=diff run=NW-real-1-1788657470-3592097-0 first_verified_s=none candidates=1 apply_ok=0 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown warm_kind=fork warm_session=01a0744b-0d32-7701-9135-541494d69292 call_wall_s=43.28 edit_channel=None
+load1_after=1.13
+
+--- VOID: warm session 01a0744b-0d32-7701-9135-541494d69292 and trial NW-real-1-1788657470-3592097-0
+    reason: codex exec fork runs sandbox=read-only and this box's bundled bubblewrap fails
+    (bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted). The orientation could not
+    READ the source (2 failed exec calls, replied READY anyway) -> frozen definition of WARM
+    ('loaded source') unmet. 2 codex calls spent; 10 remain of the cap of 12.
+--- WARM-UP 2 (sandbox bypass; fence = the warm workspace) ---
+at 2026-09-06T01:19:58Z load1=1.31
+warm_session=01a0744d-01d2-7863-9001-72b9f144fbe0 warmup_wall_s=10.96 workspace=/var/tmp/forge/typist-real-fx/warm-ws-real-1 rollout=/home/forge/.codex/sessions/2026/09/06/rollout-2026-09-06T01-19-58-01a0744d-01d2-7863-9001-72b9f144fbe0.jsonl orientation_edited=False
+arm=NW mission=real-1 edit_form=diff run=NW-real-1-1788657598-3635543-0 first_verified_s=24.27 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown warm_kind=fork warm_session=01a0744d-01d2-7863-9001-72b9f144fbe0 call_wall_s=24.22 edit_channel=in-place
+load1_after=1.18
+
+--- VARIANCE CONTROLS 2-4 (fork of 01a0744d-01d2-7863-9001-72b9f144fbe0; control 1 above) ---
+control2 at 01:20:50Z load1=1.18
+arm=NW mission=real-1 edit_form=diff run=NW-real-1-1788657650-3652855-0 first_verified_s=19.72 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown warm_kind=fork warm_session=01a0744d-01d2-7863-9001-72b9f144fbe0 call_wall_s=19.67 edit_channel=in-place
+control3 at 01:21:10Z load1=1.19
+arm=NW mission=real-1 edit_form=diff run=NW-real-1-1788657670-3661794-0 first_verified_s=23.36 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown warm_kind=fork warm_session=01a0744d-01d2-7863-9001-72b9f144fbe0 call_wall_s=23.31 edit_channel=in-place
+control4 at 01:21:33Z load1=2.09
+arm=NW mission=real-1 edit_form=diff run=NW-real-1-1788657694-3670126-0 first_verified_s=22.04 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown warm_kind=fork warm_session=01a0744d-01d2-7863-9001-72b9f144fbe0 call_wall_s=21.99 edit_channel=in-place
+
+--- INTERLEAVED ROUNDS (NW then F, x4) ---
+round1 NW at 01:22:03Z load1=1.79
+arm=NW mission=real-1 edit_form=diff run=NW-real-1-1788657724-3680575-0 first_verified_s=19.77 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown warm_kind=fork warm_session=01a0744d-01d2-7863-9001-72b9f144fbe0 call_wall_s=19.72 edit_channel=in-place
+round1 F  at 01:22:23Z load1=1.49
+arm=F mission=real-1 edit_form=whole-file run=F-real-1-wf-1788657743-3686257-0 first_verified_s=2.04 candidates=5 apply_ok=5 gate_ok=4 accept_ok=4 semantic_mismatch=0 refusals=0 tokens=12127 reasoning_tokens=8317
+round2 NW at 01:22:26Z load1=3.05
+arm=NW mission=real-1 edit_form=diff run=NW-real-1-1788657746-3687390-0 first_verified_s=25.27 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown warm_kind=fork warm_session=01a0744d-01d2-7863-9001-72b9f144fbe0 call_wall_s=25.21 edit_channel=in-place
+round2 F  at 01:22:51Z load1=2.39
+arm=F mission=real-1 edit_form=whole-file run=F-real-1-wf-1788657771-3695485-0 first_verified_s=1.14 candidates=5 apply_ok=5 gate_ok=5 accept_ok=5 semantic_mismatch=0 refusals=0 tokens=9562 reasoning_tokens=5752
+round3 NW at 01:22:52Z load1=2.39
+arm=NW mission=real-1 edit_form=diff run=NW-real-1-1788657773-3696233-0 first_verified_s=23.37 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown warm_kind=fork warm_session=01a0744d-01d2-7863-9001-72b9f144fbe0 call_wall_s=23.32 edit_channel=in-place
+round3 F  at 01:23:16Z load1=1.82
+arm=F mission=real-1 edit_form=whole-file run=F-real-1-wf-1788657796-3704760-0 first_verified_s=3.26 candidates=5 apply_ok=5 gate_ok=4 accept_ok=4 semantic_mismatch=0 refusals=0 tokens=11983 reasoning_tokens=8173
+round4 NW at 01:23:20Z load1=1.75
+arm=NW mission=real-1 edit_form=diff run=NW-real-1-1788657800-3705525-0 first_verified_s=24.89 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown warm_kind=fork warm_session=01a0744d-01d2-7863-9001-72b9f144fbe0 call_wall_s=24.84 edit_channel=in-place
+round4 F  at 01:23:45Z load1=1.54
+arm=F mission=real-1 edit_form=whole-file run=F-real-1-wf-1788657825-3715338-0 first_verified_s=1.72 candidates=5 apply_ok=5 gate_ok=5 accept_ok=5 semantic_mismatch=0 refusals=0 tokens=10815 reasoning_tokens=7005
+done 01:23:47Z load1=1.54
+
+=== SUMMARY (no tuning after results) ===
+warm session (frozen orientation, fork protocol): 01a0744d-01d2-7863-9001-72b9f144fbe0
+warmup_wall_s=10.96 (recorded, NOT charged to any trial); orientation read 3587 chars of source, replied READY, edited nothing
+NW (context-warm / process-cold, sandbox bypass) n=8 verified 8/8
+  sorted walls: 19.72 19.77 22.04 23.37 23.37 24.27 24.89 25.27  median=23.37 max=25.27 mean=22.84 sd=2.16
+  judging cost per trial: copy 0.014 + apply 0.004 + gate 0.017 + accept 0.013 = 0.05 s (0.2% of the wall)
+  fork process overhead ~0.95 s; model turn ~18.7-24.2 s
+  all 8 candidate.diff files BYTE-IDENTICAL (md5 2054872f578240fb4f937892c6157424)
+F (Cerebras gpt-oss-120b, whole-file, k=5) n=4 rounds verified 4/4, 18/20 candidates
+  sorted first-verified: 1.14 1.72 2.04 3.26  median=1.88 max=3.26
+RATIO NW/F on median = 12.4x  (cold Sol in A/B 1 was 29.68 s -> 15.7x)
+PREDICTION 6-12 s for NW: MISSED HIGH (23.37). F ~1.9 s: HIT (1.88). Ratio 3-6x: MISSED (12.4x).
+FALSIFIER (NW median < 3 s): did NOT fire.
+calls: codex 11 of cap 12 (2 void + 1 warm-up + 8 trials); OpenRouter 20 of cap 20.
