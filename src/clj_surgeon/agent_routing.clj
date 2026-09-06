@@ -51,7 +51,14 @@
    a managed marker was invisible to the check, so the installer appended a
    second block beside a region it could not bound. A prefix hit whose version
    is not a well-formed positive integer is returned as `:malformed`, and every
-   caller refuses on it."
+   caller refuses on it.
+
+   A marker must also OWN ITS LINE: the prefix has to begin at column 0
+   (`idx` = `line-start`). `.indexOf` finds the prefix anywhere on a line and
+   the matcher region began at that hit, so a leading space, a tab, a `>`
+   quote prefix, arbitrary leading text, or a BOM before the first marker line
+   all matched as well formed -- and the installer then rewrote a region it had
+   no business bounding (Sol fence r3). Leading bytes are MALFORMED."
   [^java.util.regex.Pattern pattern ^String prefix ^String source]
   (loop [from 0
          found []]
@@ -59,13 +66,14 @@
       (if (neg? idx)
         found
         (let [[line-start line-end] (line-bounds source idx)
+              at-line-start? (= idx line-start)
               matcher (doto (re-matcher pattern source)
                         (.region idx line-end))
               ;; `.matches`, not `.lookingAt`: the marker must consume the
               ;; WHOLE rest of the line. `.lookingAt` accepted trailing bytes
               ;; after `-->`, so a line that is not the managed marker still
               ;; bounded a managed region (Sol fence r2, gap 2).
-              version (when (.matches matcher)
+              version (when (and at-line-start? (.matches matcher))
                         (parse-long (.group matcher 1)))
               hit (if version
                     {:start idx
@@ -73,15 +81,18 @@
                      :version version}
                     {:start idx
                      :malformed true
-                     :line (str/trim (subs source line-start line-end))})]
+                     :reason (if at-line-start?
+                               :unversioned-marker
+                               :marker-not-at-line-start)
+                     :line (subs source line-start line-end)})]
           (recur (long (inc idx)) (conj found hit)))))))
 
 (defn- marker-state
   "Exactly ONE well-formed BEGIN/END pair, at ONE version, across ALL versions.
    Anything else is refused with a diagnosis and the file is left alone: a
-   malformed version, a second block, a crossed pair, or a version-mismatched
-   pair means a human edited a managed region and the installer cannot know
-   which rule governs."
+   malformed version, a marker that does not start its own line, a second
+   block, a crossed pair, or a version-mismatched pair means a human edited a
+   managed region and the installer cannot know which rule governs."
   [source]
   (let [begins (marker-scan well-formed-begin begin-prefix source)
         ends (marker-scan well-formed-end end-prefix source)
@@ -98,11 +109,17 @@
                    (assoc :malformed-markers (mapv :line malformed))))]
     (cond
       (seq malformed)
-      (refuse (str "a CLJ-SURGEON ROUTING marker declares a version that is not a "
-                   "positive integer: " (pr-str (mapv :line malformed))
-                   ". A marker line the installer cannot version cannot be trusted "
-                   "to bound a managed region, so the file is left untouched. Fix "
-                   "the version by hand (or delete the block), then re-run the "
+      (refuse (str "a CLJ-SURGEON ROUTING marker line is not well formed: "
+                   (pr-str (mapv :line malformed))
+                   ". A marker must begin at column 0 of its own line and declare "
+                   "a positive integer version, exactly "
+                   "`<!-- BEGIN CLJ-SURGEON ROUTING v:N -->`"
+                   (when (some #(= :marker-not-at-line-start (:reason %)) malformed)
+                     (str " -- leading text or whitespace (a space, a tab, a `>` "
+                          "quote prefix, a byte-order mark) makes it malformed"))
+                   ". A marker line the installer cannot trust cannot bound a "
+                   "managed region, so the file is left untouched. Fix "
+                   "the marker by hand (or delete the block), then re-run the "
                    "installer."))
 
       (and (empty? begins) (empty? ends))

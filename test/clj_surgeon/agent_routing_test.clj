@@ -537,3 +537,90 @@
         (testing "the target is byte-identical"
           (is (= original (slurp target)))))
       (finally (fs/delete-tree dir)))))
+
+;; ---------------------------------------------------------------------------
+;; Sol fence r3: the existing witnesses cover TRAILING bytes but not LEADING
+;; ones. `.indexOf` finds the prefix anywhere on a line, and the matcher's
+;; region began at that hit -- so `  <!-- BEGIN CLJ-SURGEON ROUTING v:2 -->`,
+;; `> <!-- BEGIN ... -->` in a quoted block, or a BOM before the first marker
+;; line all matched as WELL FORMED and bounded a managed region the installer
+;; then rewrote. A marker is well formed only if it begins at COLUMN 0 of its
+;; own line: idx == line-start. Any leading text or whitespace is MALFORMED --
+;; a refusal, never `:absent` and never a stale rewrite.
+
+(deftest leading-bytes-before-the-marker-refuse
+  (doseq [[label source]
+          [["a leading space before BEGIN"
+            (str "head\n " routing/managed-begin "\nBODY\n"
+                 routing/managed-end "\ntail\n")]
+           ["a leading tab before BEGIN"
+            (str "head\n\t" routing/managed-begin "\nBODY\n"
+                 routing/managed-end "\ntail\n")]
+           ["leading text on the marker line"
+            (str "head\nx" routing/managed-begin "\nBODY\n"
+                 routing/managed-end "\ntail\n")]
+           ["a markdown quote prefix"
+            (str "head\n> " routing/managed-begin "\n> BODY\n> "
+                 routing/managed-end "\ntail\n")]
+           ["a BOM before the first marker line"
+            (str "﻿" routing/managed-begin "\nBODY\n"
+                 routing/managed-end "\n")]
+           ["a leading space on the END marker only"
+            (str "head\n" routing/managed-begin "\nBODY\n "
+                 routing/managed-end "\ntail\n")]
+           ["a leading space on a STALE pair is a refusal, not a rewrite"
+            (str "head\n <!-- BEGIN CLJ-SURGEON ROUTING v:1 -->\nOLD-BYTES\n "
+                 "<!-- END CLJ-SURGEON ROUTING v:1 -->\ntail\n")]]]
+    (testing label
+      (let [result (routing/upsert-routing-block source canonical-block)]
+        (is (malformed-refusal? result)
+            (str label " -- expected :invalid-managed-routing, got "
+                 (pr-str (dissoc result :source))))
+        (testing "the file's bytes are untouched"
+          (is (= source (:source result))))
+        (testing "it is never absent, current, replaced or stale"
+          (is (nil? (:previous-state result)))
+          (is (nil? (:stale-version result))))))))
+
+(deftest a-marker-at-column-zero-is-still-well-formed
+  ;; The fail-closed rule must not swallow the two states it exists to protect.
+  (testing "the current pair still reads current and rewrites nothing"
+    (let [source (str "before\n" canonical-block "after\n")
+          result (routing/upsert-routing-block source canonical-block)]
+      (is (:ok result))
+      (is (= :current (:previous-state result)))
+      (is (false? (:changed result)))
+      (is (= source (:source result)))))
+  (testing "a lone valid stale pair still reads stale and is replaced in place"
+    (let [source (str "head\n<!-- BEGIN CLJ-SURGEON ROUTING v:1 -->\nOLD-BYTES\n"
+                      "<!-- END CLJ-SURGEON ROUTING v:1 -->\ntail\n")
+          result (routing/upsert-routing-block source canonical-block)]
+      (is (:ok result))
+      (is (= :stale (:previous-state result)))
+      (is (= 1 (:stale-version result)))
+      (is (not (str/includes? (:source result) "OLD-BYTES")))))
+  (testing "a marker at the very first byte of the file is well formed"
+    (is (= :current (:previous-state
+                     (routing/upsert-routing-block canonical-block
+                                                   canonical-block))))))
+
+(deftest install-refuses-a-leading-space-marker-and-writes-nothing
+  (let [dir (fs/create-temp-dir {:prefix "clj-surgeon-routing-leading"})
+        block-file (str (fs/path dir "block.md"))
+        target (str (fs/path dir "target.md"))
+        original (str "keep me\n " routing/managed-begin "\n"
+                      "OLD-BODY\n " routing/managed-end "\n")]
+    (try
+      (spit block-file canonical-block)
+      (spit target original)
+      (let [result (routing/install-routing! block-file [target])
+            after (slurp target)]
+        (is (false? (:ok result)))
+        (is (= :invalid-managed-routing (:error-type result)))
+        (is (= :install-agent-routing (:operation result)))
+        (is (= target (:target result)))
+        (testing "not one byte was written"
+          (is (= original after))
+          (is (= 1 (count (re-seq #"BEGIN CLJ-SURGEON ROUTING" after))))
+          (is (str/includes? after "OLD-BODY"))))
+      (finally (fs/delete-tree dir)))))
