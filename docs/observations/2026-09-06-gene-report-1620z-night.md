@@ -17,7 +17,7 @@ No general problem-to-published-change win is established. The prepared typist w
 
 ## 2. Wins and losses
 **Wins**
-- Five landings on trunk, every gate green, nothing forced: typist branch (39a4e858), leak fixes (181c365c), content-bound battery freshness (38a2cec4), collector fix + corrected usage study (b912f714), Astra's single-form cardinality diagnostic (ee911577).
+- Six landings on trunk, every gate green, nothing forced: typist branch (39a4e858), leak fixes (181c365c), content-bound battery freshness (38a2cec4), collector fix + corrected usage study (b912f714), Astra's single-form cardinality diagnostic (ee911577), his admit-tool description guidance (10f03973).
 - The partner seat dogfooded Surgeon on Surgeon end to end: inb-e68905 filed → designed (OP-ALG-FORM-COUNT-001) → tested RED (21 failures) → fixed through the CLI `:change!` with a guarded receipt → normal gate → Sol fence LAND YES → landed.
 - P0 closed: the Surgeon MCP surface was never callable from the Codex seats; argv registration under the ignore flags fixed it; the detector now counts the right event type.
 - Preparation cost: 17 min of hand work → 0.02 s mechanical + one $0.002 model draft under review gates (first draft rightly rejected).
