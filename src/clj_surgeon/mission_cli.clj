@@ -88,7 +88,9 @@
             code (if (keyword? code) (name code) (str code))
             protected? (= code "forms-protected-syntax")
             comment-lost? (= code "forms-comment-lost")
+            comment-moved? (= code "forms-comment-moved")
             lost (or (:lost plan) [])
+            moved (or (:moved plan) [])
             normalized (assoc plan
                               :error_type code
                               :error (cond
@@ -102,17 +104,21 @@
                                             " comment(s) the owner carried: " (pr-str lost)
                                             ". Nothing was written; the comments are intact on disk.")
 
+                                       comment-moved?
+                                       (str "The replacement re-attached " (count moved)
+                                            " comment(s) to a different expression: " (pr-str moved)
+                                            ". Nothing was written; the comments are intact on disk.")
+
                                        :else
                                        (or (:error plan) (str "owner_forms refused this plan: " code ".")))
                               :decision (cond
                                           protected?
                                           "Choose a smaller supported owner while preserving the protected syntax, or use a native edit. Do not retry the identical request."
 
-                                          comment-lost?
+                                          (or comment-lost? comment-moved?)
                                           (or (:next_call plan)
-                                              (str "Re-emit the form with its comments verbatim, or set "
-                                                   ":carry-comments true to carry leading and trailing "
-                                                   "comments by position."))
+                                              (str "Re-emit the form with its comments verbatim and against "
+                                                   "the same expressions they guard."))
 
                                           :else
                                           (or (:decision plan)

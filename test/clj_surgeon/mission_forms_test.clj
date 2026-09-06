@@ -44,7 +44,8 @@
   ;; A comment is no longer traded away as protected syntax. mission-forms-source
   ;; carries it through as source text; a replacement that DROPS one is refused
   ;; loudly here instead of deleting it silently. See
-  ;; clj-surgeon.mission-forms-source-test for the preservation and carry paths.
+  ;; clj-surgeon.mission-forms-source-test for the text-and-attachment
+  ;; preservation rule and the :forms-comment-moved refusal.
   (let [r (forms/compile-forms (owner-basis "(defn- field [] ; keep me\n 1)") [replacement])]
     (is (= :forms-comment-lost (:error-type r)))
     (is (= ["; keep me"] (:lost r)))

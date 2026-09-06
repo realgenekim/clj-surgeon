@@ -14,8 +14,11 @@
 
 ;; Comments are no longer protected syntax. They were protected because a model
 ;; asked to re-emit a definition drops them and the splice would delete them
-;; SILENTLY; `compile-forms` now makes that loss loud (`:forms-comment-lost`)
-;; instead of trading the whole class away. `^meta`, `#_` and `#=` are untouched.
+;; SILENTLY; `compile-forms` now makes that loss loud (`:forms-comment-lost`,
+;; and `:forms-comment-moved` when the text survives against a different
+;; expression) instead of trading the whole class away. `^meta`, `#_` and `#=`
+;; are untouched -- `#_{:clj-kondo/ignore [...]}` is an :uneval node and stays
+;; protected syntax; a `;; clj-kondo` directive COMMENT follows the attachment rule.
 (def protected #{:meta :uneval :reader-macro :eval})
 
 (defn definition [source]
@@ -62,11 +65,13 @@
 
    The replacement is kept as SOURCE TEXT throughout -- `:span-source`, not a
    re-printed reader value -- so a comment the model DID emit is spliced
-   verbatim. A comment the owner carried and the replacement dropped is a typed
-   refusal, never a silent delete. With `:carry-comments`, a lost LEADING or
-   TRAILING comment is carried by position; a lost INTERIOR one is still refused,
-   because its position carries meaning a machine cannot guess."
-  [owner-span _replacement-span original replacement carry?]
+   verbatim. Preservation is judged on TEXT AND ATTACHMENT: a comment must come
+   back with the same text against the same expression. Dropped is
+   `:forms-comment-lost`; re-attached to a different expression is
+   `:forms-comment-moved`. Nothing is ever placed by position on the model's
+   behalf -- a machine guessing where a `;; clj-kondo/ignore` or a `;; why` note
+   belongs corrupts its meaning more quietly than dropping it would."
+  [owner-span _replacement-span original replacement]
   (let [text (source/align-replacement (source/owner-comment-positions owner-span)
                                        (:span-source replacement)
                                        (:source replacement))]
@@ -75,66 +80,61 @@
       ;; Preservation is checked against the bytes that will ACTUALLY be spliced,
       ;; never against the raw candidate text. That is what makes duplication and
       ;; loss both impossible rather than merely unlikely.
-      (let [{:keys [preserved lost]} (source/comment-preservation owner-span text)]
+      (let [{:keys [preserved lost moved]} (source/comment-preservation owner-span text)]
         (cond
           preserved text
 
-          (not carry?)
-          (throw (ex-info "Owner comments dropped by replacement"
-                          {:error-type :forms-comment-lost :lost lost
-                           :next_call (str "Re-emit the form with its comments verbatim, "
-                                           "or set :carry-comments true to carry leading and "
-                                           "trailing comments by position.")}))
+          (seq moved)
+          (throw (ex-info "Owner comment re-attached to a different expression"
+                          (cond-> {:error-type :forms-comment-moved :moved moved
+                                   :next_call (str "Re-emit the form with each comment against the "
+                                                   "same expression it guards; :from and :to give the "
+                                                   "attachment paths that differ.")}
+                            (seq lost) (assoc :lost lost))))
 
           :else
-          (let [carried (source/carry-comments owner-span text)]
-            (if (:ok carried)
-              (:source carried)
-              (throw (ex-info "Interior owner comments cannot be carried by position"
-                              {:error-type :forms-comment-lost :lost (:interior carried)
-                               :next_call (str "Re-emit the form with these interior comments "
-                                               "verbatim; carry only positions leading and "
-                                               "trailing comments.")})))))))))
+          (throw (ex-info "Owner comments dropped by replacement"
+                          {:error-type :forms-comment-lost :lost lost
+                           :next_call (str "Re-emit the form with its comments verbatim and "
+                                           "against the same expressions.")})))))))
 
 (defn compile-forms
   "Replace only frozen owners. New names are planner-owned :new-owner values.
    Returns staged source; formatting and independent acceptance remain mandatory
    before commit. Model output contains no old-context text or source offsets."
-  ([basis replacements] (compile-forms basis replacements {}))
-  ([basis replacements {:keys [carry-comments]}]
-   (cond
-     (not (candidate/valid-basis? basis)) (refusal :candidate-invalid-basis)
-     (not (and (vector? replacements) (seq replacements)
-               (<= (count replacements) (:changes candidate/limits))
-               (every? valid-replacement? replacements))) (refusal :forms-invalid-replacements)
-     :else
-     (try
-       (let [owner-key (juxt :file :owner)
-             groups (group-by owner-key (:owners basis))
-             keys (mapv owner-key replacements)]
-         (when-not (= (count keys) (count (set keys)))
-           (throw (ex-info "Duplicate replacement" {:error-type :forms-duplicate-owner})))
-         (let [changes
-               (mapv
-                 (fn [r]
-                   (let [owners (get groups (owner-key r))]
-                     (when-not (= 1 (count owners))
-                       (throw (ex-info "Unknown or ambiguous owner" {:error-type :forms-unknown-owner})))
-                     (let [{:keys [file owner new-owner start end]} (first owners)
-                           before (subs (get-in basis [:sources file]) start end)
-                           original (definition before)
-                           replacement (definition (:form r))]
-                       (when-not (and (= owner (:name original))
-                                      (= (or new-owner owner) (:name replacement))
-                                      (= (:head original) (:head replacement))
-                                      (= (:docstring original) (:docstring replacement)))
-                         (throw (ex-info "Definition identity mismatch" {:error-type :forms-owner-mismatch})))
-                       {:file file :before before
-                        :after (reconcile-comments before (:form r) original replacement
-                                                   carry-comments)})))
-                 replacements)]
-           (candidate/compile-candidate basis changes)))
-        (catch StackOverflowError _ (refusal :candidate-parser-depth))
-        (catch Exception e
-          (refusal (or (:error-type (ex-data e)) :candidate-unparseable)
-                   (dissoc (ex-data e) :error-type)))))))
+  [basis replacements]
+  (cond
+    (not (candidate/valid-basis? basis)) (refusal :candidate-invalid-basis)
+    (not (and (vector? replacements) (seq replacements)
+              (<= (count replacements) (:changes candidate/limits))
+              (every? valid-replacement? replacements))) (refusal :forms-invalid-replacements)
+    :else
+    (try
+      (let [owner-key (juxt :file :owner)
+            groups (group-by owner-key (:owners basis))
+            keys (mapv owner-key replacements)]
+        (when-not (= (count keys) (count (set keys)))
+          (throw (ex-info "Duplicate replacement" {:error-type :forms-duplicate-owner})))
+        (let [changes
+              (mapv
+                (fn [r]
+                  (let [owners (get groups (owner-key r))]
+                    (when-not (= 1 (count owners))
+                      (throw (ex-info "Unknown or ambiguous owner" {:error-type :forms-unknown-owner})))
+                    (let [{:keys [file owner new-owner start end]} (first owners)
+                          before (subs (get-in basis [:sources file]) start end)
+                          original (definition before)
+                          replacement (definition (:form r))]
+                      (when-not (and (= owner (:name original))
+                                     (= (or new-owner owner) (:name replacement))
+                                     (= (:head original) (:head replacement))
+                                     (= (:docstring original) (:docstring replacement)))
+                        (throw (ex-info "Definition identity mismatch" {:error-type :forms-owner-mismatch})))
+                      {:file file :before before
+                       :after (reconcile-comments before (:form r) original replacement)})))
+                replacements)]
+          (candidate/compile-candidate basis changes)))
+      (catch StackOverflowError _ (refusal :candidate-parser-depth))
+      (catch Exception e
+        (refusal (or (:error-type (ex-data e)) :candidate-unparseable)
+                 (dissoc (ex-data e) :error-type))))))

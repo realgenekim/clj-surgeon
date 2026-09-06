@@ -161,15 +161,15 @@
 (defn compile-formatted!
   "Validate before invoking a formatter; then validate its owned-fragment output."
   [authority replacements]
-  ;; :carry-comments is route policy, not model output: the candidate can never
-  ;; grant itself permission to have a dropped comment repositioned for it.
-  (let [opts {:carry-comments (true? (get-in authority [:route :carry-comments]))}
-        initial (forms/compile-forms (:basis authority) replacements opts)]
+  ;; There is no route option that repositions a comment. A comment that comes
+  ;; back missing or against a different expression is a typed refusal
+  ;; (:forms-comment-lost / :forms-comment-moved), never a machine's guess.
+  (let [initial (forms/compile-forms (:basis authority) replacements)]
     (if-not (:ok initial)
       initial
       (let [formatted (format-replacements! (:root authority) replacements)]
         (if (:ok formatted)
-          (let [compiled (forms/compile-forms (:basis authority) (:replacements formatted) opts)]
+          (let [compiled (forms/compile-forms (:basis authority) (:replacements formatted))]
             (if (:ok compiled)
               (assoc compiled :form-count (count replacements) :format (:format formatted))
               compiled))

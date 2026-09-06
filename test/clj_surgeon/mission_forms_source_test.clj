@@ -104,48 +104,114 @@
     (is (string? (:next_call r)))
     (is (false? (:mutation-attempted r)))))
 
-(deftest carry-comments-moves-only-what-has-one-legal-position
-  (testing "a lost leading comment is carried above the form"
-    (let [span ";; leading note\n(defn- field [x] (get x :value))"
-          b (assoc basis :sources {"src/a.clj" span}
-                   :owners [{:file "src/a.clj" :owner "field" :new-owner "finding-field"
-                             :start 0 :end (count span)}])
-          r (forms/compile-forms b [(replacement bare)] {:carry-comments true})]
-      (is (:ok r))
-      (is (= (str ";; leading note\n" bare) (get-in r [:future-sources "src/a.clj"])))))
-  (testing "a lost trailing comment is carried below the form"
-    (let [span "(defn- field [x] (get x :value))\n; tail note"
-          b (assoc basis :sources {"src/a.clj" span}
-                   :owners [{:file "src/a.clj" :owner "field" :new-owner "finding-field"
-                             :start 0 :end (count span)}])
-          r (forms/compile-forms b [(replacement bare)] {:carry-comments true})]
-      (is (:ok r))
-      (is (= (str bare "\n; tail note") (get-in r [:future-sources "src/a.clj"])))))
-  (testing "an interior comment is refused even under carry: its position is meaning"
-    (let [r (forms/compile-forms basis [(replacement bare)] {:carry-comments true})]
-      (is (false? (:ok r)))
-      (is (= :forms-comment-lost (:error-type r)))
-      (is (= [";; inner reason"] (:lost r)))))
-  (testing "carry is off by default"
-    (is (= :forms-comment-lost (:error-type (forms/compile-forms basis [(replacement bare)]))))))
+(deftest attachment-is-a-structural-path-not-a-position
+  ;; A comment's path names the expression it guards: `[:before n]` for the n-th
+  ;; sexpr at that level, `[:after n]` when it trails the last one. Whitespace and
+  ;; neighbouring comments do not shift it, which is what makes it comparable
+  ;; between the owner span and a re-emitted replacement.
+  (testing "leading, interior and trailing paths"
+    (is (= [{:text ";; up" :path [[:before 0]]}
+            {:text ";; in" :path [0 [:before 2]]}
+            {:text "; down" :path [[:after 0]]}]
+           (source/comment-attachments ";; up\n(def a ;; in\n 1)\n; down"))))
+  (testing "the fixture owner span"
+    (is (= [{:text ";; leading note" :path [[:before 0]]}
+            {:text ";; inner reason" :path [0 [:before 3]]}]
+           (source/comment-attachments owner-span))))
+  (testing "extra blank lines and a second comment do not move a path"
+    (is (= [[[:before 0]] [[:before 0]] [[:before 0]] [0 [:before 3]]]
+           (mapv :path (source/comment-attachments
+                         (str ";; one\n;; two\n\n" owner-span)))))))
 
-(deftest carried-source-still-reads-as-clojure
+;; RED first, and the reason this round exists (Astra, review of dce1d9ed):
+;; "comment text AND structural attachment paths, no guessed positional
+;; carryover." Text-only preservation lets a model move a comment -- most
+;; dangerously a lint directive -- onto a different expression and pass.
+(def two-body-span
+  (str "(defn- field\n"
+       "  [x]\n"
+       "  (touch x)\n"
+       "  ;; note: guards the get, not the touch\n"
+       "  (get x :value))"))
+
+(defn- span-basis [span]
+  (assoc basis :sources {"src/a.clj" span}
+         :owners [{:file "src/a.clj" :owner "field" :new-owner "finding-field"
+                   :start 0 :end (count span)}]))
+
+(deftest a-comment-moved-to-another-expression-refuses
+  (let [moved-form (str "(defn- finding-field\n"
+                        "  [x]\n"
+                        "  ;; note: guards the get, not the touch\n"
+                        "  (touch x)\n"
+                        "  (get x :value))")
+        r (forms/compile-forms (span-basis two-body-span) [(replacement moved-form)])]
+    (testing "the text is all present, so text-only comparison would pass"
+      (is (= (source/comment-nodes two-body-span) (source/comment-nodes moved-form))))
+    (testing "attachment comparison refuses, with the from/to paths"
+      (is (false? (:ok r)))
+      (is (= :forms-comment-moved (:error-type r)))
+      (is (= [{:comment ";; note: guards the get, not the touch"
+               :from [0 [:before 4]]
+               :to [0 [:before 3]]}]
+             (:moved r)))
+      (is (string? (:next_call r)))
+      (is (false? (:mutation-attempted r))))))
+
+(deftest the-same-text-at-the-same-path-is-accepted
+  (let [kept (str "(defn- finding-field\n"
+                  "  [x]\n"
+                  "  (touch x)\n"
+                  "  ;; note: guards the get, not the touch\n"
+                  "  (get x :value2))")
+        r (forms/compile-forms (span-basis two-body-span) [(replacement kept)])]
+    (is (:ok r) (pr-str r))
+    (is (= kept (get-in r [:future-sources "src/a.clj"])))))
+
+(deftest a-lint-directive-comment-may-not-change-expressions
+  ;; `#_{:clj-kondo/ignore [...]}` is an :uneval node and stays protected syntax
+  ;; (see protected-syntax-scope-is-unchanged). The `;;` directive form is a
+  ;; COMMENT, so it rides the attachment rule -- and it is the case where moving
+  ;; the line silently re-points a suppression at innocent code.
+  (let [span (str "(defn- field\n"
+                  "  [x]\n"
+                  "  (touch x)\n"
+                  "  ;; clj-kondo/ignore\n"
+                  "  (get x :value))")
+        moved (str "(defn- finding-field\n"
+                   "  [x]\n"
+                   "  ;; clj-kondo/ignore\n"
+                   "  (touch x)\n"
+                   "  (get x :value))")
+        r (forms/compile-forms (span-basis span) [(replacement moved)])]
+    (is (= :forms-comment-moved (:error-type r)))
+    (is (= [{:comment ";; clj-kondo/ignore" :from [0 [:before 4]] :to [0 [:before 3]]}]
+           (:moved r)))
+    (is (false? (:mutation-attempted r)))))
+
+(deftest staged-source-still-reads-as-clojure
   (let [span ";; leading note\n(defn- field [x] (get x :value))\n; tail note"
-        b (assoc basis :sources {"src/a.clj" span}
-                 :owners [{:file "src/a.clj" :owner "field" :new-owner "finding-field"
-                           :start 0 :end (count span)}])
-        staged (get-in (forms/compile-forms b [(replacement bare)] {:carry-comments true})
+        faithful-span ";; leading note\n(defn- finding-field [x] (get x :value2))\n; tail note"
+        staged (get-in (forms/compile-forms (span-basis span) [(replacement faithful-span)])
                        [:future-sources "src/a.clj"])]
+    (is (= faithful-span staged))
     (is (= [";; leading note" "; tail note"] (source/comment-nodes staged)))
     (testing "the staged bytes load: the one form reads back as the renamed defn-"
       (is (= '(defn- finding-field [x] (get x :value2))
-             (read-string staged))))))
+             (read-string staged)))))
+  (testing "dropping either edge comment refuses; nothing is carried back in"
+    (let [span ";; leading note\n(defn- field [x] (get x :value))\n; tail note"
+          r (forms/compile-forms (span-basis span) [(replacement bare)])]
+      (is (= :forms-comment-lost (:error-type r)))
+      (is (= [";; leading note" "; tail note"] (:lost r))))))
 
 (deftest protected-syntax-scope-is-unchanged
   (doseq [[label span] [["discard" "(defn- field [] #_discard 1)"]
                         ["metadata" "(defn- ^:private field [] 1)"]
                         ["reader eval" "(defn- field [] #=(+ 1 2))"]
-                        ["attribute map" "(defn- field {:private true} [] 1)"]]]
+                        ["attribute map" "(defn- field {:private true} [] 1)"]
+                        ["clj-kondo ignore directive (an :uneval node)"
+                         "(defn- field [] #_{:clj-kondo/ignore [:unused-value]} 1)"]]]
     (testing label
       (let [b (assoc basis :sources {"src/a.clj" span}
                      :owners [{:file "src/a.clj" :owner "field" :new-owner "finding-field"

@@ -416,7 +416,7 @@
     clj-surgeon.mission-candidate-test 5 ; Frozen span lowering boundaries.
     clj-surgeon.mission-plain-forms-test 8 ; Bounded raw definition decoding and actual escaping failure.
     clj-surgeon.mission-forms-test 5 ; Owner identity and protected syntax, plus the comment-lost refusal that replaced the blanket comment ban.
-    clj-surgeon.mission-forms-source-test 12 ; Comment-preserving source lowering: owner comments survive a replacement, a dropped one refuses :forms-comment-lost instead of deleting silently, :carry-comments moves only leading/trailing, and #_/^meta/#= stay protected.
+    clj-surgeon.mission-forms-source-test 15 ; Comment-preserving source lowering: owner comments survive a replacement, a dropped one refuses :forms-comment-lost instead of deleting silently, and #_/^meta/#= stay protected. 12 -> 15 when positional carry was removed and preservation began comparing structural ATTACHMENT as well as text: +1 attachment-path unit, +1 comment-moved refusal, +1 lint-directive-moved refusal, -1 deleted :carry-comments witness, and the carried-source witness became a faithful-re-emission one.
     clj-surgeon.mission-typist-executor-test 7 ; Real proof/commit/undo and independent witness.
     clj-surgeon.battery-ledger-test        12 ; TEST-ISO-009a/b's witness (round three)
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
@@ -488,10 +488,15 @@
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
       ;; Fable events adds nine; the one-shot mission entrance adds eight tests;
-      ;; mission-forms-source-test adds eleven for comment preservation.
-      (is (= 319 adopted) (str "adopted tests: " adopted)))
+      ;; mission-forms-source-test adds eleven for comment preservation, then
+      ;; three more (319 -> 322) when positional carry was removed and comment
+      ;; preservation began comparing structural ATTACHMENT as well as text:
+      ;; an attachment-path unit, a :forms-comment-moved refusal, and a moved
+      ;; lint-directive refusal, less the deleted :carry-comments witness.
+      (is (= 322 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1240 total) (str "manifest declares " total " tests"))
+      ;; 1240 -> 1243 with the same three attachment witnesses.
+      (is (= 1243 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

@@ -21,11 +21,11 @@
   * `#_`, `#=`, and `^meta` remain protected syntax in `mission-forms`. This
     namespace deliberately does not widen that scope; only `:comment` was
     released.
-  * An INTERIOR comment (one between children of the owner form) is never
-    carried automatically, even under `:carry-comments`. Its position carries
-    meaning, and a machine placing it by guess corrupts that meaning more quietly
-    than dropping it. Leading and trailing comments have exactly one legal
-    position, so those are the only ones carry moves.
+  * NOTHING is carried by position. A comment's position is part of its meaning,
+    so preservation compares ATTACHMENT as well as text: the same comment text
+    must appear at the same structural path in the replacement. A comment whose
+    text survives at a different path is `:forms-comment-moved`; one whose text
+    is gone is `:forms-comment-lost`. Both are typed refusals, never a guess.
 
   No formatter runs here. cljfmt is not on this project's classpath (see
   deps.edn); `format-replacement` is the seam a caller would fill if it ever is,
@@ -113,43 +113,74 @@
       (refuse! :forms-replacement-not-one-form {:form-count (count forms)}))
     {:node tree :form (first forms) :comments (comment-nodes source)}))
 
+(defn- attachment-paths
+  "Comments under `children`, each `{:text ... :path ...}`.
+
+   A path is the structural route to the expression the comment is ATTACHED to,
+   never a byte offset and never a raw child index (whitespace and other comments
+   would make that unstable). Each element is the ordinal of a containing sexpr,
+   and the last element says which sexpr at that level the comment sits against:
+   `[:before n]` for the n-th sexpr that follows it, `[:after n]` when nothing
+   follows and it trails the n-th. So a comment before the second body expression
+   of a top-level `defn` is `[0 [:before 4]]` -- inside top-level form 0, before
+   sexpr 4 (`defn-`, name, args, first body, second body)."
+  [children prefix]
+  (let [total (count (remove #(contains? ignorable (node/tag %)) children))]
+    (loop [i 0 seen 0 acc []]
+      (if (>= i (count children))
+        acc
+        (let [k (nth children i)
+              t (node/tag k)]
+          (cond
+            (= :comment t)
+            (recur (inc i) seen
+                   (conj acc {:text (comment-text k)
+                              :path (conj prefix (cond (< seen total) [:before seen]
+                                                       (zero? total) [:before 0]
+                                                       :else [:after (dec total)]))}))
+
+            (contains? trivia t) (recur (inc i) seen acc)
+
+            :else
+            (recur (inc i) (inc seen)
+                   (into acc (when (node/inner? k)
+                               (attachment-paths (vec (node/children k)) (conj prefix seen)))))))))))
+
+(defn comment-attachments
+  "Ordered comments in a span with their structural attachment paths.
+
+   This is the unit of preservation. Comparing text alone would let a model move
+   a `;; clj-kondo/ignore` line -- or any comment whose whole value is WHICH
+   expression it sits against -- onto a different expression and still pass."
+  [source]
+  (attachment-paths (vec (node/children (parse-owner-source source))) []))
+
 (defn comment-preservation
-  "Compare the comments of an owner span against a replacement span.
+  "Compare the comments of an owner span against a replacement span, by TEXT AND
+   ATTACHMENT.
 
-   Multiset difference, order preserved: a comment the owner carried twice and
-   the replacement carries once is lost once. Returns `{:preserved true}` or
-   `{:preserved false :lost [...]}` with the lost strings verbatim."
+   Order-preserving, multiset-like: each owner comment consumes at most one
+   replacement comment. An exact `[text path]` match is preserved. Text that
+   survives at a DIFFERENT path is moved -- reported with its `:from` and `:to`
+   paths, because a directive or a `;; why` note attached to the wrong expression
+   is a silent semantic edit. Text that does not survive at all is lost.
+
+   Returns `{:preserved true}`, or `{:preserved false}` plus `:lost [...]` and/or
+   `:moved [{:comment ... :from ... :to ...}]`."
   [owner-source replacement-source]
-  (let [{:keys [lost]}
-        (reduce (fn [{:keys [have lost]} c]
-                  (if (pos? (get have c 0))
-                    {:have (update have c dec) :lost lost}
-                    {:have have :lost (conj lost c)}))
-                {:have (frequencies (comment-nodes replacement-source)) :lost []}
-                (comment-nodes owner-source))]
-    (if (seq lost) {:preserved false :lost lost} {:preserved true})))
-
-(defn carry-comments
-  "Carry the owner's lost comments onto the replacement text BY POSITION.
-
-   Leading comments go above the replacement, trailing comments below, each on
-   its own line and in the owner's order. An interior lost comment is refused
-   rather than guessed: returns `{:ok false :interior [...]}`, and the caller
-   must turn that into `:forms-comment-lost`."
-  [owner-source replacement-source]
-  (let [lost (set (:lost (comment-preservation owner-source replacement-source)))
-        wanted (filter #(contains? lost (:text %)) (classified-comments owner-source))
-        interior (mapv :text (filter #(= :interior (:position %)) wanted))]
-    (if (seq interior)
-      {:ok false :interior interior}
-      (let [pick (fn [p] (mapv :text (filter #(= p (:position %)) wanted)))
-            above (pick :leading)
-            below (pick :trailing)]
-        {:ok true
-         :source (str (apply str (map #(str % "\n") above))
-                      replacement-source
-                      (apply str (map #(str "\n" %) below)))
-         :carried (into above below)}))))
+  (let [repl (vec (comment-attachments replacement-source))
+        pick (fn [used pred] (first (keep-indexed (fn [i r] (when (and (not (used i)) (pred r)) i)) repl)))]
+    (loop [[c & more] (comment-attachments owner-source) used #{} lost [] moved []]
+      (if (nil? c)
+        (cond-> {:preserved (and (empty? lost) (empty? moved))}
+          (seq lost) (assoc :lost lost)
+          (seq moved) (assoc :moved moved))
+        (if-let [exact (pick used #(and (= (:text %) (:text c)) (= (:path %) (:path c))))]
+          (recur more (conj used exact) lost moved)
+          (if-let [elsewhere (pick used #(= (:text %) (:text c)))]
+            (recur more (conj used elsewhere) lost
+                   (conj moved {:comment (:text c) :from (:path c) :to (:path (nth repl elsewhere))}))
+            (recur more used (conj lost (:text c)) moved)))))))
 
 (defn align-replacement
   "The exact bytes to splice for one owner: the replacement's FORM, plus its
