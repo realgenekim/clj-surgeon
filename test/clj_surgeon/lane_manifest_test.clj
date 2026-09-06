@@ -515,7 +515,15 @@
       ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
       (is (= 435 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1363 total) (str "manifest declares " total " tests"))
+      ;; 1363 -> 1370: seven MCP-OP-VERIFY-011/012/013 witnesses -- four in
+      ;; mcp-tool-test (success text states the verification actually
+      ;; performed, failure text carries the check's own bytes, its bound cuts
+      ;; at a line boundary, alias receipts do the same) and three in
+      ;; mcp-http-server-test (built-in profiles are lint-only, an
+      ;; unconfigured workspace refuses `verify` before any write, a
+      ;; configured one is unchanged). Both are round-one namespaces, so the
+      ;; growth lands in the original half and `adopted` holds at 435.
+      (is (= 1370 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

@@ -88,9 +88,13 @@
                       profiles {:verification-profiles {"other" ["false"]}}))))
     (let [built-in (http-server/resolve-verification-profiles nil {})]
       (is (= :built-in (:source built-in)))
-      (is (= 1200000
-             (get-in built-in [:profiles "full" :cold :timeout-ms]))
-          "the built-in full gate must exceed this repository's measured ten-minute suite"))
+      ;; @spec MCP-OP-VERIFY-013 replaces the retired assertion that a built-in
+      ;; "full" profile ran `make test` with a 20-minute timeout. clj-surgeon
+      ;; owns no built-in name meaning "this repository's tests": a lint and
+      ;; format gate is not a test profile, and presenting one as `fast` rolled
+      ;; back a correct edit on pre-existing lint debt (inb-186182).
+      (is (= #{"lint"} (set (keys (:profiles built-in))))
+          "the only built-in profile is the explicitly named lint gate"))
     (doseq [invalid [{:verification-profiles {}}
                      {:verification-profiles {:fast ["make" "test"]}}
                      {:verification-profiles {"fast" "make test"}}
@@ -898,15 +902,24 @@
   (let [[workspace source-file] (verify-workspace!)
         selection (http-server/resolve-verification-profiles
                     nil {:verification-profiles {"fast" ["/bin/true"]}})
+        seen (atom nil)
         result (tool/execute-request!
                  {:project-root (.getPath workspace)
                   :receipt-dir (.getPath (io/file workspace "receipts"))
                   :verification-profiles (:profiles selection)
-                  :verification-profile-source (:source selection)}
+                  :verification-profile-source (:source selection)
+                  ;; a stub, not /bin/true: this namespace's lane spawns no
+                  ;; child process (TEST-ISO-002). What is under test here is
+                  ;; that a CONFIGURED workspace still reaches verification
+                  ;; with its own profile name, unchanged by VERIFY-013.
+                  :verify! (fn [_ profile _ _]
+                             (reset! seen profile)
+                             {:ok true :profile profile :checks []})}
                  {"changes" [verify-change]
                   "verify" "fast"})]
     (try
       (is (= :project (:source selection)))
+      (is (= "fast" @seen) "the configured profile name reached the verifier")
       (is (:ok result) (pr-str result))
       (is (= "fast" (get-in result [:verification :profile])))
       (is (true? (get-in result [:verification :ok])))

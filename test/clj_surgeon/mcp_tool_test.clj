@@ -1890,7 +1890,11 @@
           (is (= (str "apply_clojure_changes\n"
                       (format "  6 edits · 2 files · %.2f ms\n\n" elapsed)
                       "✓ atomic commit complete\n"
-                      "✓ written bytes read back and verified\n"
+                      ;; @spec MCP-OP-VERIFY-011 re-blessed: the success text
+                      ;; now states the verification this call performed, and
+                      ;; this request asked for none
+                      "✓ written bytes read back\n"
+                      "✓ verification: none requested — bytes read back only\n"
                       "✓ terminal evidence · verification_complete=true · next action none")
                  (get-in @calls [0 :content])))))
       (mcp-tool/handle-clj-change nil
