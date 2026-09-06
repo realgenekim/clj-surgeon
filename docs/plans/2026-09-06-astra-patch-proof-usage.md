@@ -83,3 +83,33 @@ inventing a new test integration, or if that integration costs more than the
 actual reuse can amortize. Do not turn a failed adoption attempt into a mandate
 to use a second editor. The intended product is the model's existing patch
 plus trustworthy evidence, with fewer decisions to finish the task.
+
+## Joint-review additions and the next usage meter
+
+Fable approved this slice and requested these additions before use: put the
+same recovery sentence in the refusal itself, reconcile obsolete precedence
+and unverified-commit prose in the owning specification, and use an existing
+real Maven suite for the executable example. Fable owns the canonical refusal
+construction; this branch owns the profile example and documentation. A valid
+server profile is sufficient, so recovery must not imply that every workspace
+must create a repository profile.
+
+For each task, record whether the caller invoked the gate. Among tasks with a
+gate invocation, report how many first gate calls returned a complete,
+candidate-bound verification receipt without a preceding gate refusal or
+profile repair in that attempt. Also report mode, committed status, number of
+later calls and total task correctness. A verified preview is not a commit;
+a native-only caller has no gate attempt and is not a failed gate call. A
+prepared integration demonstration is not free-choice adoption.
+
+The frozen pilot therefore has one attempted first gate call, zero first-call
+complete receipts and zero tool commits, while both tasks completed correctly.
+Future successful setup cannot retroactively change that row. Charge the
+adapter and proof-binding preparation separately and expose how many later
+uses would be needed to recover it.
+
+The example remains a restricted existing-file modification: recording-query's
+real test namespace in the frozen Maven closure. Its adapter must overlay the
+candidate onto a private copy and produce per-namespace counts from actual
+clojure.test results. The supplied ABI does not encode deletion tombstones;
+do not generalize the example to deletion or arbitrary workspace reconstruction.
