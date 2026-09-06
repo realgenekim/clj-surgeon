@@ -356,12 +356,10 @@
                    opts (into-array java.nio.file.LinkOption [])]
                (when (Files/isDirectory path opts)
                  (let [current (Files/getPosixFilePermissions path opts)
-                       owner-only (java.util.EnumSet/copyOf ^java.util.Collection current)]
-                   (.retainAll owner-only
-                               (java.util.EnumSet/of
-                                 java.nio.file.attribute.PosixFilePermission/OWNER_READ
-                                 java.nio.file.attribute.PosixFilePermission/OWNER_WRITE
-                                 java.nio.file.attribute.PosixFilePermission/OWNER_EXECUTE))
+                       owner-only (set (filter #{java.nio.file.attribute.PosixFilePermission/OWNER_READ
+                                                 java.nio.file.attribute.PosixFilePermission/OWNER_WRITE
+                                                 java.nio.file.attribute.PosixFilePermission/OWNER_EXECUTE}
+                                         current))]
                    (when (not= current owner-only)
                      (Files/setPosixFilePermissions path owner-only)))))
              (catch Exception _ nil)))

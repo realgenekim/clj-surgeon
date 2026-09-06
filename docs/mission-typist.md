@@ -141,3 +141,29 @@ has no direct error code, its nested evidence code is displayed with
 mission verb is omitted and labeled `:incompatible-mission-verb`; runnable help
 replaces it. The original row remains available through `--full`, and neither
 reading mode rewrites the ledger.
+
+Publish an already verified `owner_forms` mission as a Git commit:
+
+```sh
+git -C /absolute/workspace add -- src/the/verified_file.clj
+bin/mission commit M-1 --workspace /absolute/workspace
+```
+
+Stage **exactly** the mission's verified changed files yourself. This command
+stages nothing. It reads the saved mission, inverse receipt, and independent
+proof; no spec, proof, profile, or receipt overrides are accepted. The staged
+and live files must match the verified result, and HEAD must match its preimage.
+The first version supports only regular-file modifications on a nonfrozen local
+branch; `main` and `MCP/main` refuse.
+
+This is Git ref publication, separate from the source kernel's commit event.
+It uses `commit-tree` and deliberately **skips Git hooks and signing**. It does
+not change source or push. Configure your repository's Git identity beforehand.
+The generated commit body contains bounded mission/proof provenance. A receipt
+with `:git-ref-updated :unknown` requires inspecting the branch and
+`:possible-commit` before retrying; it is not evidence that the ref stayed put.
+
+The event-only `fallback` entrance runs under Babashka, using the same handler
+and JSONL schema as the JVM API. It loads no source planner or executor. Failed
+appends still return `:recorded false` and exit 1; moving the runtime does not
+turn user reports into evidence of performed or verified edits.

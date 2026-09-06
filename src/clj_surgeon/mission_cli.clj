@@ -29,7 +29,8 @@
    [clj-surgeon.mission :as mission]
    [clj-surgeon.mission-display :as display]
    [clj-surgeon.mission-events :as mission-events]
-   [clj-surgeon.telemetry-events :as telemetry-events]
+   [clj-surgeon.mission-fallback :as mission-fallback]
+   [clj-surgeon.mission-git-ledger :as mission-git-ledger]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.pprint :as pp]
@@ -348,35 +349,9 @@
                                                     (:config opts))) opts)))))
 
 (defn fallback!
-  "Record an explicit caller report, never a native edit or proof of adoption."
-  [{:keys [workspace state-home id reason]}]
-  (let [started (System/nanoTime)]
-    (cond
-      (not (and (string? workspace) (seq workspace))) display/workspace-required
-      (not (contains? #{"refusal" "unsupported" "slower-than-native" "user-choice"} reason))
-      {:ok false :recorded false :error-type :mission-fallback-reason
-       :error "Use --reason refusal|unsupported|slower-than-native|user-choice."}
-      (not (and (string? id) (re-matches #"M-[0-9]{1,12}" id)))
-      {:ok false :recorded false :error-type :mission-fallback-id
-       :error "Supply the saved mission id, for example M-1."}
-      :else
-      (let [m (mission/read-mission (state-dir-for workspace state-home) id)]
-        (if (mission/refused? m)
-          (assoc m :recorded false)
-          (let [event {:kind "mission-fallback" :tool "mission" :ok true
-                       :mission_id id :mission_state (when (or (keyword? (:state m)) (string? (:state m)))
-                                                       (name (:state m)))
-                       :mission_verb "fallback" :fallback_kind "native-tool"
-                       :report_basis "user-reported" :fallback_reason reason
-                       :wall_ms (/ (- (System/nanoTime) started) 1000000.0)}
-                recorded (try (telemetry-events/record! event) (catch Throwable _ nil))]
-            (if (map? recorded)
-              {:ok true :recorded true :id id :event recorded
-               :native_edit_verified false
-               :message "User-reported native-tool fallback only; no edit performed or verified. Saved mission state and proof unchanged."}
-              {:ok false :recorded false :id id :native_edit_verified false
-               :error-type :mission-fallback-record-failed
-               :error "Fallback report was not recorded. Saved mission state and proof unchanged."})))))))
+  "Shared event-only handler; public launcher uses the same function under BB."
+  [opts]
+  (mission-fallback/report! opts))
 
 (defn link!
   "Add one `:depends-on` or `:supersedes` edge, or refuse a cycle.
@@ -611,10 +586,35 @@
                 (or (= :failed (:state result))
                     (false? (get-in result [:receipt :committed]))))))
 
+(defn commit-options
+  "Pure closed CLI request: proof authority can only come from the saved mission."
+  [{:keys [positional workspace state-home] :as flags}]
+  (if (and (every? #{:positional :workspace :state-home} (keys flags))
+           (= 2 (count positional)) (= "commit" (first positional))
+           (string? (second positional)) (re-matches #"M-[0-9]{1,12}" (second positional))
+           (string? workspace) (not (str/blank? workspace))
+           (or (not (contains? flags :state-home))
+               (and (string? state-home) (not (str/blank? state-home)))))
+    {:ok true :options (cond-> {:id (second positional) :workspace workspace}
+                         (contains? flags :state-home) (assoc :state-home state-home))}
+    {:ok false :error-type :mission-commit-options
+     :error "Use commit M-ID --workspace R [--state-home H]; no spec, proof or config overrides."
+     :git-ref-updated false :source-mutation-attempted false :index-staging false}))
+
+(defn commit!
+  "CLI boundary for Git ref publication, distinct from the source kernel commit."
+  [flags]
+  (let [request (commit-options flags)
+        result (if (:ok request) (mission-git-ledger/commit! (:options request)) request)]
+    (cond-> (assoc result :operation "mission-git-commit" :push-requested false
+              :contract "Git ref publication from saved verified proof; stages nothing, changes no source, skips Git hooks and signing, never pushes.")
+      (= :unknown (:git-ref-updated result))
+      (assoc :next-action "Inspect the Git branch and possible-commit before retrying; ref update outcome is unknown."))))
+
 (defn -main [& args]
   (let [{:keys [positional] :as flags} (parse-flags args)
         verb (first positional)
-        spec (read-spec (:spec-file flags))
+        spec (when-not (= "commit" verb) (read-spec (:spec-file flags)))
         opts (merge {:workspace (:workspace flags)
                      :state-home (:state-home flags)
                      :config (:config flags)
@@ -630,7 +630,7 @@
       (do (println (help-text (second positional))) (System/exit 0))
 
       (not (contains? #{"open" "plan" "propose" "run" "show" "apply" "resume" "undo"
-                        "link" "ready" "blocked" "list" "fallback"} verb))
+                        "link" "ready" "blocked" "list" "fallback" "commit"} verb))
       (do (binding [*out* *err*]
             (println (str "bin/mission: no verb named " (pr-str verb) ".\n")))
           (println (help-text nil))
@@ -651,6 +651,7 @@
                      "run" (run! opts)
                      "resume" (resume opts)
                      "undo" (undo! opts)
+                     "commit" (commit! flags)
                      "fallback" (fallback! opts)
                      "link" (link! opts)
                      ("ready" "blocked") (ready opts)

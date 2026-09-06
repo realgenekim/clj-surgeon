@@ -195,3 +195,25 @@ example whose declared verb conflicts with the mission verb. An explicit
 omission reason and runnable verb-appropriate help replace that example.
 This is presentation only: saved bytes and --full remain unchanged. Witnesses
 use the actual historical forms-protected-syntax row and the BB CLI reader.
+
+### Event-only fallback runtime
+
+`mission fallback` appends a user report and needs no source executor or JVM
+planner. A small shared handler keeps BB and JVM validation, JSONL schema,
+append-success truth, response text and unchanged-state semantics identical.
+The public launcher routes this verb to BB. Shared telemetry must load under BB;
+POSIX permission tightening retains only existing owner bits, without granting
+new ones. Verification compares BB/JVM receipts excluding process/time fields,
+blocks any Clojure executable in the real CLI witness, and checks BB privacy and
+append failures. Any single observed command wall is an unreplicated snapshot,
+not a speedup claim. Source and saved mission bytes remain unchanged.
+
+BB fallback verification: combined fallback, shared telemetry and display gate
+passes 33 tests / 268 assertions. Three new fallback witnesses cover runtime
+parity, a poisoned Clojure executable proving public launch uses BB, and POSIX
+owner-write preservation on a read-only parent. Existing append-failure and
+unchanged mission/source tests now exercise the BB launcher. The schema is
+unchanged; the only shared writer change replaces unsupported EnumSet calls
+with filtering existing permission bits. An actual isolated command receipt
+and single unreplicated wall snapshot are retained at
+`/var/tmp/forge/mission-fallback-bb-dogfood-fx`; no comparative claim follows.
