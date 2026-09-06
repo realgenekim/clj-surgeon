@@ -39,7 +39,7 @@ No general problem-to-published-change win is established. The prepared typist w
 - Waiters bind to the long-lived PID, never to a pattern or a transient child; kill by pid file.
 
 ## 4. What is next
-- Astra's description-guidance tip e1270478 (one tool-description owner, made through Surgeon's own CLI; normal gate green) lands on a fence GO (chain armed at 15:0xZ) — the last landing of the window.
+- LANDED 15:33Z: Astra's description-guidance tip e1270478 → MCP/main 10f03973 (fence LAND YES; battery receipt after a freshness refusal) — the sixth and last landing of the window.
 - Servers 7906/8171 stay on 181c365c until both seats agree the live-catalog check; then rebuild on trunk.
 - Astra: the admission retry with the fixed adapter (recognise the two gate bookkeeping paths), then the patch-and-proof slice: guidance in the refusal text, one executable profile example from the real suite, adoption measured as first-attempt gate successes.
 - Refusal-text branch: pick up inb-2da8ea (one item) in a tool-perfect block, fence once, land.
