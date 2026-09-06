@@ -515,7 +515,15 @@
       ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
       (is (= 435 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1363 total) (str "manifest declares " total " tests"))
+      ;; +9 at the hot-verification merge (2026-09-06, inb-adcc9e): nine
+      ;; witnesses added to clj-surgeon.mcp-hot-verify-test, a ROUND-ONE
+      ;; namespace, so the growth lands in r1 and adopted holds at 435. They
+      ;; pin that a hot verification ends at a terminal status instead of
+      ;; blocking to its :timeout-ms ceiling, that `interrupted` is a failure
+      ;; and not a pass, that the ceiling is one deadline no response resets,
+      ;; that a connect failure and a mid-read closure stay distinct typed
+      ;; refusals, and that both keep their bounded output. 1363 -> 1372.
+      (is (= 1372 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
@@ -659,7 +667,9 @@
    "test/clj_surgeon/scope_stream_test.clj"
    {105 "bounded poll -- System/gc then re-check reachability, succeeds immediately, fails at gc-deadline-ms (round three's fix for the two fixed `Thread/sleep 100` assertions)"}
    "test/clj_surgeon/mcp_tool_test.clj"
-   {1380 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count"}})
+   {1380 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count"}
+   "test/clj_surgeon/mcp_hot_verify_test.clj"
+   {244 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
 
 (deftest every-sleep-on-the-merge-gate-is-declared-with-its-reason
   (let [sources (fn [lane]

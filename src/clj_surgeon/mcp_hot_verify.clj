@@ -87,7 +87,11 @@
    only diagnostic a caller gets for a read that never terminated."
   [connection id timeout-ms]
   (let [deadline (+ (System/nanoTime) (* 1000000 (long timeout-ms)))
-        remaining #(quot (- deadline (System/nanoTime)) 1000000)
+        ;; rounded UP: truncating the remaining nanos to whole milliseconds
+        ;; lets the last blocking read expire just BEFORE the deadline, and a
+        ;; ceiling that can be undershot is not a ceiling. Measured: a 300 ms
+        ;; profile returned at 299.67 ms.
+        remaining #(long (Math/ceil (/ (- deadline (System/nanoTime)) 1000000.0)))
         collected (volatile! [])]
     (try
       (loop []
@@ -134,17 +138,23 @@
                                                     :id id
                                                     :code (eval-code profile)})
                       {:keys [responses outcome] :as read-result}
-                      (read-until-terminal connection id timeout)]
+                      (read-until-terminal connection id timeout)
+                      ;; hoisted rather than spelled inside the `:error-type`
+                      ;; value: the entrance's refusal enumeration READS that
+                      ;; value structurally, and a comparison operand sitting
+                      ;; inside it is minted as a refusal kind that does not
+                      ;; exist (the alias-migration enumeration read `closed`).
+                      closed? (= :closed outcome)]
                   (if (not= :terminal outcome)
                     {:ok false
                      :status :failed
                      :jvm "application"
                      :reload-count (count (:reload profile))
                      :law-count (count (:tests profile))
-                     :error-type (if (= :closed outcome)
+                     :error-type (if closed?
                                    :hot-verification-transport-closed
                                    :hot-verification-timeout)
-                     :error (if (= :closed outcome)
+                     :error (if closed?
                               (str "Application nREPL transport closed before "
                                    "any terminal status: " (:error read-result))
                               (str "Application nREPL sent no terminal status "
