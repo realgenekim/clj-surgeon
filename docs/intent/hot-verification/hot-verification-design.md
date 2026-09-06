@@ -30,3 +30,21 @@ The profile shape, the validator, and every reported field (`summary`, `pid`,
 `cwd`, `reload-count`, `law-count`, `output`, `elapsed_ms`) are unchanged.
 
 Requirements: `hot-verification-specs.md`.
+
+## The internal outcome tag is not a refusal kind
+
+The read reports its outcome to its own caller as `:terminal`, `:timeout` or
+`:closed`. Only the two `hot-verification-*` kinds cross the entrance. On
+2026-09-06 `:closed` reached the alias-migration entrance's refusal enumeration
+as a 148th kind, because it sat as a comparison operand inside the `:error-type`
+value -- `(if (= :closed outcome) ...)` -- and that enumeration reads the value
+with the reader rather than a regex, precisely so a kind minted inside a
+non-literal value cannot hide. The operand is hoisted to a `closed?` binding.
+
+The witness in `mcp_alias_migration_test` asserts that `closed` specifically is
+absent from the enumeration. It is a pin on THIS leaked tag, not a general
+guard: it cannot see a different internal tag spelled into an `:error-type`
+value tomorrow. The general control remains the enumeration's own count-and-
+membership pin, which fails on any unfrozen kind whatever its name; the named
+assertion exists so that a regression of this exact leak reports its own cause
+rather than an arithmetic mismatch.

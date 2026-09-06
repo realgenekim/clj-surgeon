@@ -505,9 +505,13 @@
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
       ;; One outline corpus test MOVED from its original namespace to adopted integration.
-      ;; 928 original + 435 adopted = 1363: add 7 inspect owner_counts/source-omission
+      ;; 931 original + 435 adopted = 1366: add 7 inspect owner_counts/source-omission
       ;; witnesses (5 in mcp-inspect-contract-test, 2 in mcp-inspect-tool-test), both
       ;; round-one namespaces, so the growth lands in the original half and adopted holds;
+      ;; then add 9 public-handler result-ceiling witnesses in mcp-inspect-tool-test
+      ;; (MCP-OP-FIELD-009, inb-b60d6e: the ordinary read path now measures and refuses)
+      ;; and 3 more for the publication-point guard at the exact byte boundary,
+      ;; also a round-one namespace, so 1363 -> 1372 lands in the original half too;
       ;; add the real two-require cardinality
       ;; regression in mcp-contract-test; retain Astra identity/receipt witnesses and trunk
       ;; helper request-shape refusals (48 -> 51), plus two battery archival-distance witnesses;
@@ -515,15 +519,27 @@
       ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
       (is (= 435 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      ;; +9 at the hot-verification merge (2026-09-06, inb-adcc9e): nine
-      ;; witnesses added to clj-surgeon.mcp-hot-verify-test, a ROUND-ONE
-      ;; namespace, so the growth lands in r1 and adopted holds at 435. They
-      ;; pin that a hot verification ends at a terminal status instead of
-      ;; blocking to its :timeout-ms ceiling, that `interrupted` is a failure
-      ;; and not a pass, that the ceiling is one deadline no response resets,
-      ;; that a connect failure and a mid-read closure stay distinct typed
-      ;; refusals, and that both keep their bounded output. 1363 -> 1372.
-      (is (= 1372 total) (str "manifest declares " total " tests"))
+      ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
+      ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
+      ;; witnesses, so the number agreed textually and git auto-merged it while
+      ;; the corpus had grown TWICE. The pin is the SUM of both deltas, 1381,
+      ;; and this line records both -- a pin whose two sides collide on the same
+      ;; value is the one case where agreement is not evidence:
+      ;;
+      ;;   +9 on trunk: the public-handler result-ceiling witnesses in
+      ;;      mcp-inspect-tool-test (MCP-OP-FIELD-009, inb-b60d6e), narrated in
+      ;;      the block above, 1363 -> 1372.
+      ;;   +9 here: the hot-verification witnesses in
+      ;;      clj-surgeon.mcp-hot-verify-test (inb-adcc9e) -- that a hot
+      ;;      verification ends at a terminal status instead of blocking to its
+      ;;      :timeout-ms ceiling, that `interrupted` is a failure and not a
+      ;;      pass, that the ceiling is one deadline no response resets, that a
+      ;;      connect failure and a mid-read closure stay distinct typed
+      ;;      refusals, and that both keep their bounded output. 1372 -> 1381.
+      ;;
+      ;; Both namespaces are ROUND-ONE, so all 18 land in r1 and adopted holds
+      ;; at 435.
+      (is (= 1381 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

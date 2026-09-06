@@ -32,7 +32,13 @@ required), `[x]` implemented (implementation and test witnesses required),
   `hot-verification-timeout` failure naming the ceiling. When the transport
   closes before any terminal status arrives, it shall return a typed
   `hot-verification-transport-closed` failure rather than blocking until the
-  ceiling. Failing to CONNECT to the application nREPL is a distinct typed
+  ceiling. The ceiling bounds the READ, and is not a hard wall-time bound on
+  `verify!`: the time remaining is rounded UP to whole milliseconds so a read
+  can never expire before the deadline, which permits a sub-millisecond
+  rounding overshoot, and the thread must still be scheduled to observe the
+  expiry. A caller may rely on "not appreciably longer than the ceiling", never
+  on "no longer than the ceiling by any margin". Failing to CONNECT to the
+  application nREPL is a distinct typed
   `hot-verification-connection-failed`, never reported as a closure during an
   established read. Neither refusal shall claim a verification result, and each
   shall carry the bounded output read before it so a caller has a diagnostic.
