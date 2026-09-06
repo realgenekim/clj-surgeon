@@ -523,7 +523,11 @@
       ;; unconfigured workspace refuses `verify` before any write, a
       ;; configured one is unchanged). Both are round-one namespaces, so the
       ;; growth lands in the original half and `adopted` holds at 435.
-      (is (= 1370 total) (str "manifest declares " total " tests"))
+      ;; +3 round two (peer-review HOLD, executed bb probes): percent-bearing
+      ;; verification strings must not throw out of the receipt renderer; the
+      ;; real profile shape carries hot and cold verdicts beside :checks; the
+      ;; 2000-character failure budget is one TOTAL, not one per check.
+      (is (= 1373 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

@@ -2378,7 +2378,7 @@
                          [:verification :checks 0 :output] long-output)
         text (mcp-tool/concise-summary result)]
     (is (str/includes? text "2000"))
-    (is (str/includes? text "truncated"))
+    (is (str/includes? text "bounded excerpt"))
     (testing "every rendered output line is a whole line"
       (is (every? #(or (str/blank? %)
                        (not (str/includes? % "a failing assertion lin\n")))
@@ -2409,3 +2409,163 @@
     (is (str/includes? verified "Ran 58 tests containing 190 assertions."))
     (is (str/includes? unverified "verification: none requested"))
     (is (not= verified unverified))))
+
+;; --- Round two: renderer crash, real profile shape, one shared bound -------
+
+(deftest percent-bearing-verification-strings-never-destroy-the-receipt
+  ;; @spec MCP-OP-VERIFY-011
+  ;; A check command spelled `printf %s ok` or a profile named
+  ;; `coverage 100%` threw out of `format` when the line was spliced into the
+  ;; TEMPLATE: a mutation that had already committed lost its public receipt.
+  (let [receipt (fn [command profile]
+                  {:ok true
+                   :operation "apply_clojure_changes"
+                   :edits 1 :files 1 :elapsed_ms 10.0
+                   :verification_complete true
+                   :verification {:ok true :profile profile
+                                  :checks [{:ok true :command command
+                                            :exit 0}]}})]
+    (doseq [[command profile] [["true" "test"]
+                               ["printf %s ok" "test"]
+                               ["coverage 100%" "100% coverage"]
+                               ["%n%%%s" "%d"]]]
+      (let [text (mcp-tool/concise-summary (receipt command profile))]
+        (is (string? text) (str "render threw for " (pr-str [command profile])))
+        (is (str/includes? text command))
+        (is (str/includes? text profile))
+        (is (str/includes? text "✓ atomic commit complete")
+            "the committed state is still reported honestly")))
+    (testing "the cold-running branch and the refusal branch too"
+      (let [running (assoc (receipt "printf %s ok" "100%")
+                           :verification_complete false)
+            refused {:ok false
+                     :operation "apply_clojure_changes"
+                     :reason "verification-failed"
+                     :elapsed_ms 1.0
+                     :source_unchanged true
+                     :verification
+                     {:ok false :profile "100%"
+                      :checks [{:ok false :command "printf %s ok" :exit 1
+                                :output "expected: 100%\nactual: %s\n"}]}}]
+        (is (string? (mcp-tool/concise-summary running)))
+        (is (str/includes? (mcp-tool/concise-summary refused) "printf %s ok"))
+        (is (str/includes? (mcp-tool/concise-summary refused)
+                           "expected: 100%"))))
+    (testing "and the alias receipt"
+      (is (string?
+            (mcp-tool/alias-migration-summary
+              {:ok true :committed true :operation "alias_migration"
+               :files 1 :sites 1 :alias_histogram {"m" 1}
+               :collisions_resolved 0 :elapsed_ms 1.0
+               :details_path "/tmp/d.edn"
+               :verification {:ok true :profile "100%"
+                              :checks [{:ok true :command "printf %s ok"
+                                        :exit 0}]}}))))))
+
+(deftest receipts-render-the-real-hot-and-cold-verification-shape
+  ;; @spec MCP-OP-VERIFY-011
+  ;; @spec MCP-OP-VERIFY-012
+  ;; run-verification! returns :checks, :hot-verification AND
+  ;; :cold-verification (mcp_change_buffer.clj). A hot-only profile leaves
+  ;; :checks empty, so a renderer that reads only :checks reports nothing at
+  ;; all about the verdict it was handed.
+  (let [hot-pass {:ok true :status :complete :jvm "application"
+                  :summary {:test 3 :pass 11 :fail 0 :error 0}
+                  :elapsed_ms 40.0}
+        hot-fail {:ok false :status :failed :jvm "application"
+                  :summary {:test 3 :pass 10 :fail 1 :error 0}
+                  :error-type :hot-verification-failed
+                  :output (str "FAIL in (roundtrips) (core_test.clj:9)\n"
+                               "expected: (= 1 (f))\n"
+                               "  actual: (not (= 1 2))\n")}]
+    (testing "hot success is named, with its tally, not called detail-less"
+      (let [line (mcp-tool/verification-success-line
+                   {:ok true :profile "fast" :checks []
+                    :hot-verification hot-pass})]
+        (is (str/includes? line "hot: complete"))
+        (is (str/includes? line "3 tests · 11 passes"))
+        (is (not (str/includes? line "no per-check detail")))))
+    (testing "hot failure renders its status, tally and output"
+      (let [block (mcp-tool/verification-failure-block
+                    {:ok false :profile "fast" :checks []
+                     :hot-verification hot-fail})]
+        (is (some? block))
+        (is (str/includes? block "hot: failed"))
+        (is (str/includes? block "3 tests · 10 passes · 1 failures"))
+        (is (str/includes? block "expected: (= 1 (f))"))
+        (is (str/includes? block "  actual: (not (= 1 2))"))))
+    (testing "a passing command check is never shown as the failure"
+      (let [block (mcp-tool/verification-failure-block
+                    {:ok false :profile "fast"
+                     :checks [{:ok true :command "clj-kondo" :exit 0}]
+                     :hot-verification hot-fail})]
+        (is (not (str/includes? block "✗ `clj-kondo`"))
+            "a check that PASSED must never appear under a failure mark")
+        (is (str/includes? block "hot: failed"))))
+    (testing "a running cold job is never reported as a pass"
+      (let [line (mcp-tool/verification-success-line
+                   {:ok true :profile "full" :checks []
+                    :hot-verification hot-pass
+                    :cold-verification {:ok true :status :running
+                                        :verification_complete false
+                                        :verification_job "verify/abc"}})]
+        (is (str/includes? line "cold: RUNNING"))
+        (is (not (re-find #"cold: passed" line)))
+        (is (str/includes? line "inspect_clojure"))))
+    (testing "a completed cold job reports its own verdict"
+      (let [passed (mcp-tool/verification-success-line
+                     {:ok true :profile "full" :checks []
+                      :cold-verification {:ok true :passed true
+                                          :status :passed :exit 0}})
+            failed (mcp-tool/verification-failure-block
+                     {:ok false :profile "full" :checks []
+                      :cold-verification {:ok true :passed false
+                                          :status :failed :exit 1
+                                          :output "Ran 12 tests\n1 failures\n"}})]
+        (is (str/includes? passed "cold: passed · exit 0"))
+        (is (str/includes? failed "cold: failed · exit 1"))
+        (is (str/includes? failed "1 failures"))))))
+
+(deftest the-failure-detail-budget-is-one-total-not-one-per-check
+  ;; @spec MCP-OP-VERIFY-012
+  ;; Measured on the first round: one 5,000-character line emitted 2,142
+  ;; characters and three failed checks emitted 6,372 — the marker sat OUTSIDE
+  ;; the budget and every check minted a fresh one.
+  (let [bound mcp-tool/verification-failure-detail-characters
+        long-line (apply str (repeat 5000 \x))
+        check (fn [i] {:ok false :command (str "check-" i) :exit 1
+                       :output long-line})
+        many-lines (str/join "\n" (repeat 400 "a failing assertion line"))]
+    (doseq [n [1 3 8]]
+      (let [block (mcp-tool/verification-failure-block
+                    {:ok false :profile "fast"
+                     :checks (mapv check (range n))})]
+        (is (<= (count block) bound)
+            (str n " failed checks emitted " (count block)
+                 " characters against a stated bound of " bound))
+        (is (str/includes? block "bounded excerpt")
+            "an omission is stated, never silent")))
+    (testing "whole-line cutting survives the total bound"
+      (let [block (mcp-tool/verification-failure-block
+                    {:ok false :profile "fast"
+                     :checks [{:ok false :command "c" :exit 1
+                               :output many-lines}]})]
+        (is (<= (count block) bound))
+        (is (str/includes? block "bounded excerpt"))
+        (is (every? #(or (str/blank? %)
+                         (str/includes? % "a failing assertion line")
+                         (str/starts-with? % "verification:")
+                         (str/starts-with? % "  ✗")
+                         (str/starts-with? % "…"))
+                    (str/split-lines block))
+            "every rendered output line is a whole line")))
+    (testing "the whole refusal text still lands inside the outer ceiling"
+      (let [text (mcp-tool/concise-summary
+                   {:ok false :operation "apply_clojure_changes"
+                    :reason "verification-failed" :elapsed_ms 1.0
+                    :source_unchanged true
+                    :remedy "Fix it."
+                    :verification {:ok false :profile "fast"
+                                   :checks (mapv check (range 8))}})]
+        (is (<= (count text) (+ bound 600)))
+        (is (str/includes? text "Fix it."))))))
