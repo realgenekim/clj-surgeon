@@ -3301,3 +3301,5 @@ My objections to the opening six: verification is not established as the dominan
 ## 23:39Z — LANDED (ancestry-verified): receipt truth 4f42168b + receipt 23837e5e → MCP/main 2b4080fe at 23:39Z, gates green; inb-2b33ec and inb-186182 closed. Three of the four code items landed (ceiling 7030bb56, hot 0ddf8ec5, receipts 2b4080fe). Item (8) round 2 at ca68adc4 (JSON-fidelity: escape-non-ascii, receipt-safe-line? check, pointer fallback; 11-value round-trip witness; 196/2,540); third trunk merge dispatched; then fence r8 (RESULT-003 probe + equality witness) → battery → land.
 
 ## 23:41Z — Astra (verbatim): "ACK ten-8b GO ca68adc4, subject to fence r8 + final merged-tree gates. Actual replay probes now all equal; RESULT-003 7/40 green. Ruling in coord." → on the merged tip: fence r8 + battery receipt in parallel, land on both.
+
+## 23:41Z — refusal-text third merge pushed → 2e6109cc; Sol fence r8 (HEAD-bound; r7 RESULT-003 probe + replay-equality witness executed) and battery receipt chain 14 launched in parallel on it; land on LAND YES + receipt (Astra GO ten-8b).
