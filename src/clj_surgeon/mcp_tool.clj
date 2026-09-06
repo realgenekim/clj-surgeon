@@ -1289,33 +1289,86 @@
           change-index (or (:change-index result) (:change_index result))
           change-id (or (:change-id result) (:change_id result))
           field (:field result)
+          ;; @spec MCP-OP-EDIT-038
+          safe (fn [value]
+                 (when (some? value)
+                   (or (mcp-operation/encode-caller-text
+                         (if (string? value) value (pr-str value)))
+                       "")))
           change-line (when (or (some? change-index) change-id field)
                         (format "  change %s%s%s\n"
                                 (if (some? change-index) change-index "unknown")
-                                (if change-id (str " · " change-id) "")
-                                (if field (str " · field " field) "")))
+                                (if change-id (str " · " (safe change-id)) "")
+                                (if field (str " · field " (safe field)) "")))
           ;; @spec MCP-OP-FIELD-002
           named-field-line (when (and field (seq (:accepted result)))
                              (format "  field %s accepts: %s%s\n"
-                                     field
-                                     (str/join ", " (:accepted result))
+                                     (safe field)
+                                     (str/join ", " (map safe (:accepted result)))
                                      (if (contains? result :actual)
                                        (str " · received "
-                                            (pr-str (:actual result)))
+                                            (safe (:actual result)))
                                        "")))
           source-safe? (or (:source-unchanged result)
                            (:source_unchanged result)
-                           (:rolled-back result))]
+                           (:rolled-back result))
+          ;; @spec MCP-OP-EDIT-037
+          ;; The structured receipt carries a one-sentence `error` naming the
+          ;; shape that was refused; the model reads only this text block, so
+          ;; text must be a superset of structured. Generic: any refusal whose
+          ;; receipt has an error sentence renders it, not one error class.
+          ;; @spec MCP-OP-EDIT-037
+          ;; Both of these were canonicalized at receipt construction — the
+          ;; sentence by mcp-operation/canonicalize-receipt-text, called at
+          ;; each verb's own invoke! construction exit (it lived in
+          ;; mcp-operation/finalize-result until Sol fence r7, 2026-09-06,
+          ;; showed a finalizer that rewrites a domain field breaks
+          ;; MCP-OP-RESULT-003); the example in
+          ;; mcp-compact-relations — so they are rendered byte-identically and
+          ;; the text contains the structured values VERBATIM. Encoding again
+          ;; here is what Sol fence r5 (2026-09-06) refuted: two renderers
+          ;; agreeing is not one canonical string, and they disagreed.
+          error-sentence
+          (let [sentence (or (:error result) (:error-message result))]
+            (when (and (string? sentence)
+                       (not (str/blank? sentence))
+                       ;; the placeholder normalize-refusal fills when the
+                       ;; refusal carried no sentence of its own
+                       (not= sentence (str operation " refused")))
+              sentence))
+          error-line (when error-sentence (str "  " error-sentence "\n"))
+          expected-shape (or (:expected_shape_example result)
+                             (:expected-shape-example result))
+          expected-shape-schematic?
+          (boolean (or (:expected_shape_example_schematic result)
+                       (:expected-shape-example-schematic result)))
+          expected-shape-line
+          (when (and (string? expected-shape) (not (str/blank? expected-shape)))
+            (str (if expected-shape-schematic?
+                   "  expected (schematic): "
+                   "  expected: ")
+                 expected-shape
+                 "\n"))]
+      ;; MERGE, 2026-09-06 (receipts landing 2b4080fe): `operation` moved OUT
+      ;; of the format string -- an operation name carrying a percent sign is a
+      ;; caller-derived value and `format` would read it as a conversion. Kept
+      ;; with this branch's four slots: the EDIT-037 error sentence and
+      ;; expected-shape example render ahead of the change and field lines.
       (str operation "\n"
        (format (str "  refused · %s%s · %s\n"
-                   "%s%s\n"
+                   "%s%s%s%s\n"
                    "%s\n"
                    ;; @spec MCP-OP-VERIFY-012
                    "%s"
                    "→ %s")
-              reason
-              (if path (str " at " (pr-str path)) "")
+              (safe reason)
+              ;; @spec MCP-OP-EDIT-038
+              ;; pr-str keeps trunk's escaping of the caller's own value; the
+              ;; encoder then bounds it and strips receipt glyphs.
+              (if path (str " at " (safe (pr-str path))) "")
               (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+              (or error-line "")
+              (or expected-shape-line "")
               (or change-line "")
               (or named-field-line "")
               (if source-safe?
@@ -1497,7 +1550,15 @@
 (defn- handle-operation
   [operation exchange params callback]
   (mcp-operation/invoke!
+     ;; @spec MCP-OP-EDIT-037
+     ;; @spec MCP-OP-EDIT-038
+     ;; Canonicalized HERE, at this verb's receipt construction exit --
+     ;; the last point inside the verb where the receipt is built -- so the
+     ;; shared finalizer receives an already-canonical map and changes only
+     ;; `elapsed_ms` (MCP-OP-RESULT-003). Sol fence r7 (2026-09-06) proved
+     ;; the previous placement inside `finalize-result` broke that.
     {:execute
+     (comp mcp-operation/canonicalize-receipt-text
      (fn []
        (write-refusal/bound-public-refusal
          (with-exact-terminal-response
@@ -1554,7 +1615,7 @@
                       combinable/process-registry
                       (prepared-confirmation/exchange-session-key exchange)
                       params)))))
-         concise-summary))
+         concise-summary)))
      :summarize concise-summary
      :callback callback}))
 
@@ -2048,12 +2109,19 @@
         facts (->> renderable
                    (take max-refusal-facts)
                    (mapv (fn [[field value]]
-                           ;; bounded in WORK, not merely cut afterwards
-                           (str (name field) "="
-                                (bounded-pr-str
-                                  value max-refusal-fact-characters
-                                  (- deadline
-                                     (System/currentTimeMillis)))))))]
+                           ;; @spec MCP-OP-EDIT-038
+                           ;; bounded in WORK, not merely cut afterwards — and
+                           ;; canonicalized, because both halves of a fact can
+                           ;; be caller-derived. Sol fence r5 (2026-09-06) found
+                           ;; alias_migration and helper_extraction rendering a
+                           ;; hostile field NAME and value here raw.
+                           (or (mcp-operation/sanitize-caller-text
+                                 (str (name field) "="
+                                      (bounded-pr-str
+                                        value max-refusal-fact-characters
+                                        (- deadline
+                                           (System/currentTimeMillis)))))
+                               ""))))]
     (when (seq facts)
       (str "facts · " (str/join " · " facts)
            (when (pos? dropped)
@@ -2076,8 +2144,29 @@
   stops looking."
   [result]
   (if-let [call (:next_call result)]
-    (let [encoded (json/generate-string call)]
-      (if (<= (count encoded) max-rendered-next-call-characters)
+    ;; @spec MCP-OP-EDIT-038
+    ;; This line is EXECUTABLE, so it is ENCODED, never prose-canonicalized.
+    ;; Astra's replay review (2026-09-06, e67a6f13) found the whole serialized
+    ;; JSON running through `sanitize-caller-text`: `"a  b"` rendered as
+    ;; `"a b"`, `"src/a→b.clj"` as `"src/a b.clj"`, `"a✓b"` as
+    ;; `"a b"` -- each unequal to `structuredContent.next_call`, so a caller
+    ;; who copies the text sends a DIFFERENT request than the server composed.
+    ;; A receipt that misquotes its own remedy is worse than one with none.
+    ;;
+    ;; `:escape-non-ascii` gives EDIT-038 everything it asks for without
+    ;; destroying data: JSON already escapes every control character, and this
+    ;; escapes every non-ASCII one, so no receipt glyph, line or paragraph
+    ;; separator, zero-width mark or supplementary format character can appear
+    ;; as itself -- while spaces inside strings stay spaces and the line still
+    ;; parses back to the identical map.
+    ;;
+    ;; `receipt-safe-line?` is the check, not a repair: if a faithful encoding
+    ;; ever fails it, the POINTER at structuredContent is rendered instead of
+    ;; a lossy call. A caller can always send an unrendered call; it can never
+    ;; recover a corrupted one.
+    (let [encoded (json/generate-string call {:escape-non-ascii true})]
+      (if (and (<= (count encoded) max-rendered-next-call-characters)
+               (mcp-operation/receipt-safe-line? encoded))
         (str "next_call · " encoded)
         (str "next_call · " (count encoded)
              " characters, in structuredContent.next_call — send it verbatim")))
@@ -2145,11 +2234,17 @@
         [(format (str "alias_migration\n"
                       "  refused · %s · %s\n\n"
                       "%s")
-                 (or (:error_type result) (:reason result) "unknown-error")
+                 (or (mcp-operation/encode-caller-text
+                       (str (or (:error_type result) (:reason result)
+                                "unknown-error")))
+                     "unknown-error")
                  (mcp-operation/format-elapsed-ms (:elapsed_ms result))
                  (if (or (:source_unchanged result) (:source-unchanged result))
                    "\u2713 source unchanged"
                    "\u26a0 source state requires structured receipt review"))
+         ;; @spec MCP-OP-EDIT-037 · the error sentence and the remedy below
+         ;; are already canonical: each verb canonicalizes its receipt at
+         ;; construction, so nothing is re-encoded at render time.
          ;; @spec MCP-OP-VERIFY-012
          (verification-failure-block (:verification result))
          (str "\u2192 " (or (:error result)
@@ -2186,7 +2281,15 @@
   "Stable callback that plans, commits, and publishes one O(1) receipt."
   [_exchange params callback]
   (mcp-operation/invoke!
+     ;; @spec MCP-OP-EDIT-037
+     ;; @spec MCP-OP-EDIT-038
+     ;; Canonicalized HERE, at this verb's receipt construction exit --
+     ;; the last point inside the verb where the receipt is built -- so the
+     ;; shared finalizer receives an already-canonical map and changes only
+     ;; `elapsed_ms` (MCP-OP-RESULT-003). Sol fence r7 (2026-09-06) proved
+     ;; the previous placement inside `finalize-result` broke that.
     {:execute
+     (comp mcp-operation/canonicalize-receipt-text
      (fn []
        (let [normalized (json/parse-string (json/generate-string params) true)]
          (if-not @runtime-config
@@ -2211,7 +2314,7 @@
                  (assoc (alias-migration/execute!
                           (assoc routed-config :receipt-dir receipt-dir)
                           (:params routed))
-                        :workspace_root (:workspace-root routed))))))))
+                        :workspace_root (:workspace-root routed)))))))))
      :summarize alias-migration-summary
      :callback callback}))
 
@@ -2296,7 +2399,10 @@
         [(format (str "helper_extraction\n"
                       "  refused \u00b7 %s \u00b7 %s\n\n"
                       "%s")
-                 (or (:error_type result) (:status result) "unknown-error")
+                 (or (mcp-operation/encode-caller-text
+                       (str (or (:error_type result) (:status result)
+                                "unknown-error")))
+                     "unknown-error")
                  (mcp-operation/format-elapsed-ms (:elapsed_ms result))
                  (if (or (:source_unchanged result) (:source-unchanged result))
                    "\u2713 source unchanged"
@@ -2324,7 +2430,15 @@
   "Stable callback that plans, stages, proves, and publishes one O(1) receipt."
   [_exchange params callback]
   (mcp-operation/invoke!
+     ;; @spec MCP-OP-EDIT-037
+     ;; @spec MCP-OP-EDIT-038
+     ;; Canonicalized HERE, at this verb's receipt construction exit --
+     ;; the last point inside the verb where the receipt is built -- so the
+     ;; shared finalizer receives an already-canonical map and changes only
+     ;; `elapsed_ms` (MCP-OP-RESULT-003). Sol fence r7 (2026-09-06) proved
+     ;; the previous placement inside `finalize-result` broke that.
     {:execute
+     (comp mcp-operation/canonicalize-receipt-text
      (fn []
        (let [started (System/nanoTime)
              normalized (json/parse-string (json/generate-string params) true)
@@ -2379,7 +2493,7 @@
                                     (assoc routed-config :receipt-dir receipt-dir)
                                     (assoc (:params routed)
                                            :workspace_root (:workspace-root routed)))
-                                  :workspace_root (:workspace-root routed)))))))))
+                                  :workspace_root (:workspace-root routed))))))))))
      :summarize helper-extraction-summary
      :callback callback}))
 

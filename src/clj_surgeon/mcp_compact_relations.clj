@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-compact-relations
   "Pure lowering for the closed compact symbol_migration + require_change pair."
   (:require
+   [clj-surgeon.mcp-operation :as mcp-operation]
    [clojure.set :as set]
    [clojure.string :as str]
    [rewrite-clj.node :as n]
@@ -85,6 +86,156 @@
            :next-action "correct_request"
            :source-unchanged true}
     path (assoc :path path)))
+
+(def ^:private expected-shape-example-ceiling
+  "Hard character ceiling for the single filled example carried in a refusal."
+  200)
+
+(defn- migration-files-path?
+  "True for a refusal path that names a `symbol_migration.files` entry."
+  [path]
+  (and (vector? path)
+       (= "symbol_migration" (nth path 0 nil))
+       (= "files" (nth path 1 nil))))
+
+;; An example is a PROMISE about the accepted shape. Sol fence r2 (2026-09-06)
+;; found the first cut breaking that promise two ways: with
+;; `symbol_migration.files` nil or empty it invented `src/example.clj`,
+;; `owner-fn` and `old.ns/name` — none of which the caller had written — and it
+;; echoed three-element rows that were themselves invalid (blank owner, a
+;; non-symbol `from`, `matches` of 0) as the shape to copy. Both teach the
+;; caller something untrue. So: an example is built ONLY from caller values
+;; that would themselves pass admission, and when no such value exists the
+;; schematic form is used and LABELLED, so nothing invented can pass itself off
+;; as caller-derived.
+
+(defn- valid-example-file
+  "The caller's own file string, in its canonical safe spelling, only when it
+   would survive admission.
+
+  Non-blank is the whole test, because non-blank is the whole test admission
+  applies (`nonblank!`). A value carrying control or format characters is
+  CANONICALIZED here rather than skipped: canonicalization already makes it
+  safe, and skipping would fall back to the schematic example more often,
+  handing the caller less of their own request back.
+
+  The encoding happens HERE, when the example is built — not when it is
+  rendered. Sol fence r5 (2026-09-06) showed why: a caller path of
+  `src/arrow\u2192file.clj` was published raw in `expected_shape_example` and
+  encoded in the text block, so the two disagreed about the very value they
+  were both quoting. One canonical string, published and rendered."
+  [value]
+  (when (and (string? value) (not (str/blank? value)))
+    (mcp-operation/encode-caller-text value)))
+
+(defn- valid-example-row
+  "The caller's own [owner from matches] row, only when every cell is valid.
+
+  Deliberately the same predicates admission itself applies, so an example can
+  never show a row the very next call would refuse."
+  [row]
+  (when (and (vector? row) (= 3 (count row)))
+    (let [[owner from matches] row
+          from-parts (when (string? from) (str/split from #"/" -1))]
+      (when (and (valid-example-file owner)
+                 (#{1 2} (count from-parts))
+                 (every? simple-symbol-token? from-parts)
+                 (integer? matches)
+                 (pos? matches))
+        ;; `from` already passed the symbol-token predicates, so it carries no
+        ;; separator or glyph; `owner` is canonicalized like any caller string.
+        [(valid-example-file owner) from matches]))))
+
+(defn- first-valid-migration-row
+  "The caller's own first fully valid [owner from matches] row, if any."
+  [files]
+  (when (vector? files)
+    (some (fn [entry]
+            (when (and (vector? entry) (= 2 (count entry)))
+              (let [rows (second entry)]
+                (when (vector? rows)
+                  (some valid-example-row rows)))))
+          files)))
+
+(defn- offending-migration-file
+  "The valid file name the caller wrote at the refused entry, else any valid
+   file name it declared. Never a value the caller did not supply."
+  [files path]
+  (let [entry-of (fn [entry]
+                   (cond
+                     (string? entry) (valid-example-file entry)
+                     (vector? entry) (valid-example-file (first entry))))
+        index (nth path 2 nil)
+        entry (when (and (integer? index) (vector? files))
+                (nth files index nil))]
+    (or (entry-of entry)
+        (when (vector? files) (some entry-of files)))))
+
+(def ^:private elision-marker
+  "The visible mark that says one caller string was shortened, never truncated silently."
+  "…")
+
+(def ^:private schematic-shape-example
+  "The last-resort example, used only when nothing the caller supplied fits the
+   ceiling. Deliberately still readable EDN of the accepted shape."
+  (pr-str ["<file>" [["<owner>" "<old-ns>/<name>" 1]]]))
+
+(defn- elide-middle
+  "Shorten one caller string to `limit` characters, cutting from the middle and
+   marking the cut, so both ends of the caller's own value stay recognizable."
+  [value limit]
+  (if (<= (count value) limit)
+    value
+    (let [keep (max 0 (- limit (count elision-marker)))
+          head (quot keep 2)
+          tail (- keep head)]
+      (str (subs value 0 head)
+           elision-marker
+           (subs value (- (count value) tail))))))
+
+(defn- fitted-shape-example
+  "Render `[file [row]]` within the ceiling, shortening the caller's own path
+   from the middle when it does not fit. Returns nil only when even a minimal
+   path cannot bring the rendered example under the ceiling — which can happen
+   only when the caller's own row is itself oversized."
+  [file row]
+  (let [render (fn [candidate] (pr-str [candidate [row]]))
+        full (render file)]
+    (if (<= (count full) expected-shape-example-ceiling)
+      full
+      ;; Escaping means one dropped character need not remove one rendered
+      ;; character, so shrink by the observed overflow and re-measure.
+      (loop [limit (count file)
+             guard 0]
+        (let [candidate (render (elide-middle file limit))
+              overflow (- (count candidate) expected-shape-example-ceiling)]
+          (cond
+            (not (pos? overflow)) candidate
+            (or (<= limit (count elision-marker)) (< 64 guard)) nil
+            :else (recur (max (count elision-marker) (- limit (max 1 overflow)))
+                         (inc guard))))))))
+
+;; @spec MCP-OP-EDIT-037
+(defn- expected-shape-example
+  "One filled `symbol_migration.files` entry, derived from the caller's own request.
+
+  Returns `{:example s :schematic? bool}`, never nil for an applicable refusal —
+  a caller who cannot see the accepted shape retries the wrong shape, which is
+  the defect this exists for. Bounded and total: at most
+  `expected-shape-example-ceiling` characters, with an oversized caller path
+  shortened from the middle under a visible marker rather than dropped.
+  `:schematic? true` means nothing the caller supplied was usable and the fixed
+  placeholder form stands in; the renderer labels that case so an invented value
+  can never read as one the caller wrote."
+  [request path]
+  (when (migration-files-path? path)
+    (let [files (get-in request ["symbol_migration" "files"])
+          file (offending-migration-file files path)
+          row (first-valid-migration-row files)
+          derived (when (and file row) (fitted-shape-example file row))]
+      (if derived
+        {:example derived :schematic? false}
+        {:example schematic-shape-example :schematic? true}))))
 
 (defn- request-files [request]
   (let [literal (mapcat #(if-let [file (get % "file")]
@@ -321,11 +472,19 @@
           :deleted_owners (deletion-count ordinary-request)
           :declared_matches symbol-matches}})
       (catch clojure.lang.ExceptionInfo error
-        (let [data (ex-data error)]
-          (relation-refusal
-            (or (:relation-error-type data) :invalid-compact-relation)
-            (or (:failed-stage data) :relation-admission)
-            (.getMessage error) (:path data)))))))
+        (let [data (ex-data error)
+              error-type (or (:relation-error-type data)
+                             :invalid-compact-relation)
+              path (:path data)
+              example (when (= :invalid-compact-relation error-type)
+                        (expected-shape-example request path))]
+          (cond-> (relation-refusal
+                    error-type
+                    (or (:failed-stage data) :relation-admission)
+                    (.getMessage error) path)
+            example (assoc :expected-shape-example (:example example)
+                           :expected-shape-example-schematic
+                           (:schematic? example))))))))
 
 (defn validate-path-resolution
   "Prove that one existing resolver result gives each raw relation path one canonical identity."

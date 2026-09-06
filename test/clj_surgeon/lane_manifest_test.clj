@@ -539,39 +539,42 @@
       ;;
       ;; Both namespaces are ROUND-ONE, so all 18 land in r1 and adopted holds
       ;; at 435.
+      ;; MERGE RESOLUTION, 2026-09-06 (fable/refusal-text-shape x MCP/main
+      ;; 0ad609ff, the receipts landing 2b4080fe). THIRD time at the same
+      ;; trap, and it is now a pattern rather than an accident: BOTH sides
+      ;; arrive carrying a merge-resolution comment of their own, and the
+      ;; number each one states was true for the trunk it was computed
+      ;; against. Neither is adopted. The pin is trunk's CURRENT value plus
+      ;; THIS branch's own delta, RECOUNTED namespace by namespace against
+      ;; origin/MCP/main at merge time:
       ;;
-      ;; MERGE RESOLUTION, 2026-09-06 (fable/receipt-truth x MCP/main
-      ;; 387424cc). THE SAME TRAP, one merge later: this branch's own pin line
-      ;; also read 1375, which is neither side's answer. The pin is trunk's
-      ;; CURRENT value plus THIS branch's own delta, computed, never adopted
-      ;; from whichever side git happened to keep:
+      ;;   trunk 0ad609ff (receipt-truth's 1381 + 12 = 1393) ......... 1393
+      ;;   +15 mcp-compact-relations-test: MCP-OP-EDIT-037/038 -- the refusal
+      ;;       sentence in text, the D1 filled example, the ceiling boundary,
+      ;;       the oversized caller path, the leak and totality witnesses, the
+      ;;       forged-line/size/escaping witnesses, and the Unicode separator,
+      ;;       supplementary-format-mark and legitimate-supplementary triple.
+      ;;   +3  mcp-tool-test (56 -> 59, ON TOP of receipt-truth's four): the
+      ;;       EDIT-037 per-verb sweep
+      ;;       every-public-verb-shows-the-structured-error-sentence-it-publishes,
+      ;;       plus round two's two next_call REPLAY witnesses --
+      ;;       a-rendered-next-call-replays-to-the-structured-next-call-exactly
+      ;;       and an-oversized-next-call-renders-the-structured-pointer-not-a-
+      ;;       lossy-line (Astra's replay review of e67a6f13: the rendered
+      ;;       next_call was prose-sanitised, so the text and
+      ;;       structuredContent.next_call named DIFFERENT requests).
+      ;;   +1  mcp-inspect-tool-test: inspect-diagnostic-fields-cannot-forge-
+      ;;       receipt-lines (EDIT-038, Sol fence r5).
+      ;;   +3  mcp-operation-test: the RESULT-003 byte-identity witness Sol
+      ;;       fence r7 demanded, the construction-then-finalizer witness, and
+      ;;       the "canonicalization touches only the two quoted sentences"
+      ;;       witness (inb-2da8ea).
+      ;;                                                    ------
+      ;;   1393 + 22 ..................................... 1415
       ;;
-      ;;   trunk today ............................................... 1381
-      ;;   + this branch's delta, 1363 -> 1375 ......................... +12
-      ;;   ---------------------------------------------------------------
-      ;;   merged pin ................................................ 1393
-      ;;
-      ;; The +12, by round (MCP-OP-VERIFY-011/012/013, receipt truth):
-      ;;   +7 round one: four in mcp-tool-test (the success text states the
-      ;;      verification actually performed; the failure text carries the
-      ;;      check's own bytes; its bound cuts at a line boundary; alias
-      ;;      receipts do the same) and three in mcp-http-server-test (built-in
-      ;;      profiles are lint-only; an unconfigured workspace refuses
-      ;;      `verify` before any write; a configured one is unchanged).
-      ;;   +3 round two (peer-review HOLD, executed bb probes): percent-bearing
-      ;;      verification strings must not throw out of the receipt renderer;
-      ;;      the real profile shape carries hot and cold verdicts beside
-      ;;      :checks; the 2000-character failure budget is one TOTAL, not one
-      ;;      per check.
-      ;;   +1 round three: the unconfigured refusal may advertise only values
-      ;;      the verify enum accepts, on both write routes and in the schema.
-      ;;   +1 final tidy: the published descriptions must say that lint is the
-      ;;      only built-in, that it is a lint/format gate and NOT a test
-      ;;      profile, and that test profiles are named in .clj-surgeon.edn.
-      ;;
-      ;; All three namespaces are ROUND-ONE, so the 12 land in r1 and adopted
-      ;; holds at 435.
-      (is (= 1393 total) (str "manifest declares " total " tests"))
+      ;; All four namespaces are ROUND-ONE, so the whole +22 lands in r1 and
+      ;; `adopted` holds at 435.
+      (is (= 1415 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
@@ -715,7 +718,7 @@
    "test/clj_surgeon/scope_stream_test.clj"
    {105 "bounded poll -- System/gc then re-check reachability, succeeds immediately, fails at gc-deadline-ms (round three's fix for the two fixed `Thread/sleep 100` assertions)"}
    "test/clj_surgeon/mcp_tool_test.clj"
-   {1380 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count"}
+   {1381 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count (1380 -> 1381 on 2026-09-06: the `cheshire.core` require the next_call REPLAY witnesses need moved the whole namespace down one line -- the pin costing one number is the point)"}
    "test/clj_surgeon/mcp_hot_verify_test.clj"
    {244 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
 
