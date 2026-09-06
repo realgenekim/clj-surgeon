@@ -140,3 +140,5 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | alias_migration (landed) | N=21 fan-out, Sol and a second caller | native same harness | 5.7–7.2× fewer write chars, byte-identical; second caller 13/16/9 s vs 51/23/41 s | wall secondary by pre-registration |
 | suite spike 2ecce8c4 | clj-surgeon's own suite | round one 717 s | merge gate 150 s, fast 30 s, N=4 12/12 | r2 NO-GO: orphan formatter test; r3 building |
 | GHA bridge/gha 5ce8aaea | CI | seat serial | gate 205 s green, battery 11-wide | lands with the spike; nightly dormant until default branch = MCP/main |
+
+| 2026-09-06 | BUILDING astra/typist-route: pure typist admission + frozen dossier projection, 141 assertions; no integrated executor or performance claim yet. Existing scratch applier duplicate-file-block loss and provider identity/redaction hazards reproduced independently. | docs/plans/mission-typist-executor.md |
