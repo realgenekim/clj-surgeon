@@ -201,3 +201,12 @@ No cohort result is upgraded by these functional gates.
 - Astra 04:40Z: Git publication safety ratchets (189e0086, e50c4403): force visibility of staged submodules despite Git config; durable publication intent and conservative undo refusal on uncertain outcomes. Combined root gate 101/827 green; independent re-review pending. Deterministic Surgeon literal-edit dogfood receipt retained at /var/tmp/forge/astra-git-submodule-fx/receipt.edn, not a speed comparison. This is proof-cost evidence, not a newly won latency square.
 
 - Astra 05:30Z: raw-v2 completed real-derived five-owner rename loop, independent outcome audit GO: paired N4/4median25.193s,T4/4median7.655s=3.2909x; sixcontrolSD1.7856, gap clears2SD. Fourteen final sources byte-identical,28/28 independent scratch gate/witness replays pass. Prepared task only; excludes orientation and intent/proof preparation, no free-choice adoption or general/Astra superiority. Earlier JSON reliability loss retained. Report: docs/observations/2026-09-06-astra-raw-cohort-v2-result.md. Actual keeper6022ad35 separately demonstrates productive use in7.08s, with malformed candidate refused.
+
+### Astra 2026-09-06T08:15:56.611443+00:00: prepared real-repository typing win; preparation remains costly
+
+- Maven3owner/1file rename, actual app/JVM closure, independently replayed10outcomes: Sol paired medians29.713/15.038s=1.976x; actualAstra extension27.508/15.088s=1.823x. Separate exploratory n2pairs each, no pooling/free-choice/shipping claim.
+- Shared1035s task/proof preparation reduces Sol two-attempt comparison to1.028x when charged. Preparation removal/reuse is the larger frontier; cold JVM proofs cost about1.7s each.
+- Actual Astra batched native patch+bothproofs into one turn after orientation. Stronger models can improve the native route too. Deterministic exact-relation reference0.197s beforeproof motivates avoiding typists when existing operations already express the intent; no complete-task ratio claimed for that reference.
+- Warm proof prototype is under construction with generation/source/dependency/test binding. Immutable-byte reuse first; changed candidates restart. Not a measured warm/per-edit win.
+
+Receipt and bounds: [Astra Maven comparison](observations/2026-09-06-astra-maven-native-comparison.md). Earlier positive and negative cohorts retain their own scopes.
