@@ -368,6 +368,9 @@ def route_kinds(text: str, action: str) -> list[str]:
         kinds.add("native-patch")
     elif has_clojure_path and not ops:
         kinds.add("native-read")
+    # An exec can both read and patch; its outer "shell" label loses neither route.
+    if action == "shell" and "apply_patch" in nested_methods and has_clojure_path and not ops:
+        kinds.add("native-patch")
     if "clj-nrepl-eval" in text:
         kinds.add("live-probe")
     if re.search(
@@ -1667,6 +1670,36 @@ def self_test_registered_surgeon_alias() -> None:
         assert route_kinds('await tools.mcp__unrelated__alias_migration({});', "exec") == []
 
 
+def self_test_mixed_native_patch_route() -> None:
+    """Field regression: one shell+patch exec kept its counter but lost its patch route."""
+    mixed = ('const r = await tools.exec_command({cmd:"read src/sample.clj"}); '
+             'text(await tools.apply_patch(JSON.parse(r.output)));')
+    assert route_kinds(mixed, "shell") == ["native-read", "native-patch"]
+    for mention in ['const note = "tools.apply_patch(value)";',
+                    '// tools.apply_patch(load("patch"))',
+                    '/* tools.apply_patch(load("patch")) */']:
+        text = 'await tools.exec_command({cmd:"read src/sample.clj"}); ' + mention
+        assert route_kinds(text, "shell") == ["native-read"]
+    assert route_kinds('text(await tools.apply_patch(load("patch")));', "apply_patch") == []
+    assert route_kinds('await tools.exec_command({cmd:"read README.md"}); '
+                       'await tools.apply_patch(load("patch"));', "shell") == []
+    start = parse_time("2026-09-06T12:17:14Z")
+    with tempfile.TemporaryDirectory(prefix="study-agent-mixed-patch-") as tmp:
+        path = Path(tmp) / "rollout-mixed.jsonl"
+        write_fixture(path, [
+            {"timestamp": iso_time(start), "type": "event_msg", "payload": {"type": "task_started", "turn_id": "mixed"}},
+            {"timestamp": "2026-09-06T12:17:15Z", "type": "response_item", "payload": {"type": "custom_tool_call", "name": "exec", "call_id": "mixed-call", "input": mixed}},
+            {"timestamp": "2026-09-06T12:17:15.104Z", "type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "mixed-call", "output": "done"}},
+            {"timestamp": "2026-09-06T12:17:16Z", "type": "event_msg", "payload": {"type": "task_complete", "turn_id": "mixed", "duration_ms": 2000}},
+        ])
+        session = analyze_codex_file(path, start, parse_time("2026-09-06T12:17:17Z"))
+        assert session["route_phases"][0]["kinds"] == ["native-read", "native-patch"]
+        assert session["route_phases"][0]["actions"] == 1
+        assert session["route_phases"][0]["wall_ms"] == 104
+        assert session["task_turns"][0]["native_apply_patch_actions"] == 1
+        assert session["native_apply_patch_action_wall_samples_ms"] == [104]
+
+
 def self_test_edit_clojure_route() -> None:
     """2026-09-06 field: completed edits vanished from exec route phases."""
     assert route_kinds('await tools.mcp__clj_surgeon__edit_clojure({});', 'exec') == ['surgeon-apply']
@@ -1726,6 +1759,7 @@ def self_test_codex_typed_refusals() -> None:
 
 
 def self_test() -> int:
+    self_test_mixed_native_patch_route()
     self_test_edit_clojure_route()
     self_test_codex_typed_refusals()
     self_test_events_ledger()

@@ -203,3 +203,21 @@ The sole paid attempt verified on the original three-owner Maven task: generatio
 ### Astra fresh-caller usability result, 2026-09-06T12:31:10.559486+00:00
 
 Both new callers verified (N67.262s, D87.680s), but ordinary-batch adoption failed: D authored a native patch, tried admit_clojure_patch(commit,verify=none), got the correct verification-incomplete refusal, then applied the same patch natively. Zero tool-committed sites. Both reused and ran supplied proofs, then parent repeated them. Preparation/review/overlapping wait was38.2minutes, separately visible. [Full result, fairness limits and accounting](2026-09-06-astra-recovery-pilot-result.md). Collector/docs landed b912f714 after the recorded freshness refusal and fresh battery; no policy waiver.
+
+### Astra 12:47Z — preserve mixed native routes; make proof integration explicit
+
+The fresh two-caller pilot exposed a real collector omission: one exec that
+reads and applies a native patch kept its patch counter but lost its patch route.
+Fixed the route classification without changing outer-action counts or clocks.
+Paved self-test passes; identical-bounds recollection reports native-read5,
+native-patch1, skill-load1. D's opaque stored-patch action remains language-unknown
+to the collector. Exact source trace remains the authority for native completion.
+Service refusal event has no timing field: missing samples remain missing.
+
+Added development MCP guidance for commit/focused verification and existing
+profile configuration. Independent design review caught that candidate snapshots
+are partial and the runner starts at the live project root; candidate-first
+loading is now explicit. No production API/code change or new provider run.
+Details: docs/observations/2026-09-06-astra-recovery-pilot-result.md and
+ docs/plans/2026-09-06-astra-patch-proof-usage.md. These are usability corrections,
+not speedup claims. Fable retains the quiet window for the corrected fence.

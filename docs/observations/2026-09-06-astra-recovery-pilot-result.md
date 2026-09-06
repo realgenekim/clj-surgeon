@@ -47,3 +47,34 @@ The inherited aggregate parser mislabeled this refusal `invalid-mcp-request`; th
 Next: correct usage guidance around commit verification, and assess existing proof-profile reuse on a genuinely needed task. Keep the compact recovery proposal offline; this caller never reached that refusal. No new full cohort is justified solely by improved refusal wording.
 
 The collector/docs landing itself completed as b912f714 only after a fresh battery: the current commit-age rule counted observation documents, reaching44 against a30 ceiling even though Clojure source was unchanged. The successful remedy cost about14 minutes of battery plus about5 minutes of landing. This is documented process cost, not editing time; the rule was not weakened after the refusal.
+
+## Astra usage-study follow-up
+
+The bounded collector study covers exactly the two caller sessions from
+12:17:14Z through 12:19:50Z. Its initial route summary missed the native patch
+inside N1's combined read/patch action, although its separate patch counter
+already recorded that action. The collector now retains both route kinds in
+one outer action. The paved self-test passed, including a faithful mixed-action
+regression, quoted/commented method negatives and an opaque-argument negative.
+The existing classifier uses Clojure-path evidence across the whole action;
+a route label alone does not prove every patched file is Clojure. Labels may
+overlap on one action. The same bounds were collected once again; the corrected receipt supersedes the
+initial receipt as counting authority. No benchmark or provider was rerun.
+
+D1's later `apply_patch(load("patch"))` has no literal Clojure path in that
+action. Its language-specific omission remains a visibility limitation; raw
+bound actions still prove native completion. The collector does not infer
+stored variable contents. Both caller clocks and the pilot verdict are unchanged.
+
+The service scan finds one admission refusal with the correct typed error, but
+its event has no timing field, including in its outcome. Thus zero service timing
+samples means missing evidence, not zero runtime. The 577.461 ms figure above
+comes from the bound operation result, not that service event. Repairing the
+emitter is a separate scoped change; no inferred time was inserted into this
+study. This is a two-caller study, not a fleet census or new fleet cutoff.
+
+Corrected receipt: `/var/tmp/forge/astra-recovery-pilot-usage-fx/receipt-corrected.json`.
+Diagnosis: `/var/tmp/forge/astra-recovery-pilot-usage-fx/diagnosis.md`.
+The [patch-and-proof usage design](../plans/2026-09-06-astra-patch-proof-usage.md)
+records the next proposed slice and why the external proof cannot simply be
+substituted for an admission profile.

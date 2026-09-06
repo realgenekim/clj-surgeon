@@ -230,3 +230,13 @@ Astra2026-09-06 D1:7refusals/9MCPcalls drove a hybrid workaround removing/restor
 Astra 2026-09-06 11:28Z: one experimental Spark source-generation candidate passed original Maven kernel/scope/proofs on its first paid attempt: 4.152 s generation, 13.020 s complete paid parent. Separate unpaid preflight 10.263 s; preparation/review excluded, no native ratio or reliability claim. Production Spark route remains unsupported. [Receipt and limits](observations/2026-09-06-astra-spark-utility.md).
 
 Astra2026-09-06: two fresh recovery-pilot callers both correct (native67.262s, tool-encouraged87.680s), but zero tool-committed sites. Caller naturally tried a gate around its native patch, requested commit without verification, received one correct refusal and used native fallback. Ordinary-batch discovery failed; no speedup/free-choice/general reliability claim. Proof-profile readiness is the next concrete question, not a larger compact editing API. [Evidence](observations/2026-09-06-astra-recovery-pilot-result.md).
+
+### Astra 12:47Z: patch/proof integration, grounded in caller behavior
+
+[Next-slice design](plans/2026-09-06-astra-patch-proof-usage.md): existing native
+patch admission, explicit focused verification and a candidate-bound runner.
+No new API. The current snapshot is partial, so native external proof commands
+are not automatically admission profiles. Prepared integration must earn back
+its setup cost. [Pilot follow-up](observations/2026-09-06-astra-recovery-pilot-result.md)
+records the repaired mixed read/patch usage classification; service timing stays
+unknown where the producer omitted it. No new speed claim or rerun.

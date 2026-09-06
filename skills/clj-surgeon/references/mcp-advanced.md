@@ -3,6 +3,29 @@
 Read only the section required by the current task. Ordinary already-decided
 edits belong in compact `edit_clojure`, not here.
 
+## Gate an existing native patch (development MCP)
+
+When this gate is the chosen development route, pass the exact native patch to
+`admit_clojure_patch` with `mode=commit, verify=focused`. `verify=none` is for
+an unverified preview; a commit with it refuses before writing. Do not use
+`allow_partial` to work around missing proof. A separate preview is optional;
+when you use one, copy its `expect_pre_sha256` into the subsequent commit.
+
+Focused verification needs a real runner and coverage mapping. The repository
+may declare `.clj-surgeon/focused-test.edn`; `:command`, `:timeout-ms` and
+`:namespaces` override server configuration per key. Command argv must contain
+literal `{snapshot}` and `{report}` arguments; `{namespaces}` expands into suite
+names. The runner must test the candidate and write attributable results to that
+report. The snapshot contains changed files, not a complete checkout: resolve
+candidate files before unchanged dependencies and suites. The process starts
+in the live workspace, so testing the current directory alone is insufficient.
+
+An external passing command is not automatically an admission profile. If the
+receipt says verification is incomplete, use its typed reason to repair the
+actual profile or use native editing with the project's proof; do not claim the
+gate verified or committed the change. Count profile setup and refusals in the
+complete task time. There is no measured general speedup for this route.
+
 ## Semantic preparation
 
 When exact sites are unknown, use `inspect_clojure` with
