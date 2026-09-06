@@ -48,3 +48,9 @@ Trunk merge f92f04be green (93/1438). Additional actual Opus review HOLD discove
 Independent Opus re-review at ebbf4389 GO: identity, both hidden-gitlink vectors, publication/undo and metadata uncertainty closed; nine namespaces34/263 green. Normal Git config identity remains supported; our live publication must explicitly provide seat env. No automatic publication-clear from mere current-tree inequality. Independent raw apparatus corrections562887db GO offline15tests; not launch evidence.
 
 Full battery at ebbf4389:682tests13209assertions, zero failures/errors/skips/isolation violations, but overallFAIL because node-compile-cache leaked under the suite temp root. Failed766s receipt retained in battery-ledger; cause investigation in flight. Do not claim battery green.
+
+### Astra 05:35Z — real usage and narrow comparison earned
+
+Productive actualM1 keeper6022ad35:7.0799s apply, independent gate/witness pass, one malformed candidate rejected, explicit seat Git publication/metadata recorded; staleM2refusal leaves source unchanged. Raw-v2 frozenba683ee1: all6controls and4N/4Tverified; medians25.193/7.655=3.2909x prepared-task gain,2SDfloor cleared. Separate-author outcome audit independently rejudged all14outputs with28/28gate+witness passes, all sources byteidentical. Includes per-trial setup/proof, excludes prior orientation/intent/proof preparation; no adoption/general-model claim.
+
+Sol landing corrections integrated4c9cb5f1 (spawn isolation ledger),771e017d (display error exit),f2c0fac8 (explicit artifact destination/recoverable refusal and exact closed stale-error telemetry). Combined root142tests1069assertions green;1353declared tests86namespaces, no new namespace. Fresh fullbattery/cacheoff and make test still pending; no landing/production-complete claim. Routing install remains Fable-owned, not yet attested installed.

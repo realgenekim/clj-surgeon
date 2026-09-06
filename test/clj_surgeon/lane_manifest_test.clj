@@ -409,7 +409,7 @@
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
   '{clj-surgeon.mission-candidate-race-test 5 ; Completion-order delivery, bounded cancellation and retained results.
-    clj-surgeon.mission-events-test 7 ; Public completion events and isolated logging failure.
+    clj-surgeon.mission-events-test 8 ; Public completion events and isolated logging failure.
     clj-surgeon.mission-phase-events-test 7 ; Actual phase receipts, identity and isolated logging failure.
     clj-surgeon.mission-provider-fallback-events-test 8 ; Actual dispatched fallback, thread context and isolated logging.
     clj-surgeon.mission-display-test 14 ; Add historical nested refusal and incompatible-example witnesses.
@@ -426,14 +426,14 @@
     clj-surgeon.mission-usage-test 7 ; Observed legacy/attempt usage and unknowns.
     clj-surgeon.mission-typist-executor-admission-test 2 ; Unsupported adapter refused before readiness.
     clj-surgeon.mission-usage-executor-test 2 ; Saved success/refusal usage snapshots.
-    clj-surgeon.mission-run-test 10 ; One-process saved plan, refusal and CLI boundaries.
+    clj-surgeon.mission-run-test 11 ; One-process saved plan, refusal and CLI boundaries.
     clj-surgeon.mission-test 27 ; Adopt existing ledger orphan plus owner-forms routing and recovery witnesses.
     clj-surgeon.mission-typist-test 6 ; Pure routing/dossier and frozen generation policy boundaries.
     clj-surgeon.mission-candidate-test 5 ; Frozen span lowering boundaries.
     clj-surgeon.mission-plain-forms-test 8 ; Bounded raw definition decoding and actual escaping failure.
     clj-surgeon.mission-forms-test 5 ; Owner identity, protected syntax and lost-comment refusal.
     clj-surgeon.mission-forms-source-test 23 ; Strict comment text/attachment, whitespace identity and owner sentinel.
-    clj-surgeon.mission-typist-executor-test 9 ; Add candidate diagnostic survival to proof/commit/undo and saved fallback forwarding.
+    clj-surgeon.mission-typist-executor-test 11 ; Add candidate diagnostic survival to proof/commit/undo and saved fallback forwarding.
     clj-surgeon.battery-ledger-test        12 ; TEST-ISO-009a/b's witness (round three)
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
     clj-surgeon.lane-manifest-test         25 ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses
@@ -503,12 +503,12 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      ;; 921 original + 428 adopted = 1349: retain Astra identity/receipt witnesses and add trunk
+      ;; 921 original + 432 adopted = 1353: retain Astra identity/receipt witnesses and add trunk
       ;; helper request-shape refusals (48 -> 51); closed telemetry remains 17, not trunk
       ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
-      (is (= 428 adopted) (str "adopted tests: " adopted)))
+      (is (= 432 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1349 total) (str "manifest declares " total " tests"))
+      (is (= 1353 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
