@@ -29,13 +29,19 @@
 (def default-port 7888)
 (def default-endpoint "/mcp")
 
-(def default-verification-profiles
-  {"fast"
+;; @spec MCP-OP-VERIFY-013
+;; A lint-and-format gate is not a test profile. clj-surgeon owns no built-in
+;; name a caller would reach for meaning "run this repository's tests": the
+;; only built-in is the explicitly named "lint", and a call that asks for a
+;; profile this workspace does not configure is refused rather than silently
+;; given a lint run wearing the word "verified". "fast" and "full" were
+;; built-in names until 2026-09-06, and rolled back a CORRECT edit on
+;; pre-existing lint debt in untouched source (inb-186182).
+(def built-in-verification-profiles
+  {"lint"
    {:commands
     [["clj-kondo" "--lint" "{files}"]
-     ["npx" "@chrisoakman/standard-clojure-style" "check" "{files}"]]}
-   "full" {:cold {:command ["make" "test"]
-                  :timeout-ms 1200000}}})
+     ["npx" "@chrisoakman/standard-clojure-style" "check" "{files}"]]}})
 
 (def default-formatter mcp-formatter/default-command)
 
@@ -109,7 +115,7 @@
     explicit
     {:profiles (or (verification-profiles-from-config
                      {:verification-profiles explicit})
-                   default-verification-profiles)
+                   built-in-verification-profiles)
      :source :process}
 
     (:verification-profiles project-config)
@@ -117,7 +123,7 @@
      :source :project}
 
     :else
-    {:profiles default-verification-profiles
+    {:profiles built-in-verification-profiles
      :source :built-in}))
 
 (defn- read-project-config

@@ -540,22 +540,24 @@
       ;; Both namespaces are ROUND-ONE, so all 18 land in r1 and adopted holds
       ;; at 435.
       ;; MERGE RESOLUTION, 2026-09-06 (fable/refusal-text-shape x MCP/main
-      ;; 83bb5002): trunk's pin was 1381 and this branch's was 1355 -- the
-      ;; branch forked at d62192af, which trunk then LANDED, so the branch's
-      ;; own 1355 was the pre-trunk-delta number and the two sides did NOT
-      ;; agree textually. The resolved pin is trunk's current pin plus this
-      ;; branch's own delta, counted namespace by namespace against
-      ;; origin/MCP/main rather than trusted from either side:
+      ;; 0ad609ff, the receipts landing 2b4080fe). THIRD time at the same
+      ;; trap, and it is now a pattern rather than an accident: BOTH sides
+      ;; arrive carrying a merge-resolution comment of their own, and the
+      ;; number each one states was true for the trunk it was computed
+      ;; against. Neither is adopted. The pin is trunk's CURRENT value plus
+      ;; THIS branch's own delta, RECOUNTED namespace by namespace against
+      ;; origin/MCP/main at merge time:
       ;;
-      ;;   trunk 83bb5002 ................................ 1381
+      ;;   trunk 0ad609ff (receipt-truth's 1381 + 12 = 1393) ......... 1393
       ;;   +15 mcp-compact-relations-test: MCP-OP-EDIT-037/038 -- the refusal
       ;;       sentence in text, the D1 filled example, the ceiling boundary,
       ;;       the oversized caller path, the leak and totality witnesses, the
       ;;       forged-line/size/escaping witnesses, and the Unicode separator,
       ;;       supplementary-format-mark and legitimate-supplementary triple.
-      ;;   +3  mcp-tool-test: every-public-verb-shows-the-structured-error-
-      ;;       sentence-it-publishes (EDIT-037's per-verb sweep), plus round
-      ;;       two's two next_call REPLAY witnesses --
+      ;;   +3  mcp-tool-test (56 -> 59, ON TOP of receipt-truth's four): the
+      ;;       EDIT-037 per-verb sweep
+      ;;       every-public-verb-shows-the-structured-error-sentence-it-publishes,
+      ;;       plus round two's two next_call REPLAY witnesses --
       ;;       a-rendered-next-call-replays-to-the-structured-next-call-exactly
       ;;       and an-oversized-next-call-renders-the-structured-pointer-not-a-
       ;;       lossy-line (Astra's replay review of e67a6f13: the rendered
@@ -568,11 +570,11 @@
       ;;       the "canonicalization touches only the two quoted sentences"
       ;;       witness (inb-2da8ea).
       ;;                                                    ------
-      ;;   1381 + 22 ..................................... 1403
+      ;;   1393 + 22 ..................................... 1415
       ;;
       ;; All four namespaces are ROUND-ONE, so the whole +22 lands in r1 and
       ;; `adopted` holds at 435.
-      (is (= 1403 total) (str "manifest declares " total " tests"))
+      (is (= 1415 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

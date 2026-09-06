@@ -585,9 +585,11 @@
             (refuse! (:error-type validation)
                      (or (:path validation) ["extraction"])
                      (:error validation) validation))
-          (when (and verify (not (#{"fast" "full" "exact"} verify)))
+          ;; @spec MCP-OP-VERIFY-013
+          (when (and verify (not ((set mcp-schema/verification-profile-names)
+                                  verify)))
             (refuse! :invalid-enum ["verify"]
-                     "verify must be fast, full, or exact"))
+                     mcp-schema/verification-profile-sentence))
           {:ok true
            :params (cond-> {:extraction normalized}
                      verify (assoc :verify verify))}))
@@ -635,9 +637,11 @@
             (validate-expect-matched! (field params "expect_matched")))
           verify (when (present? params "verify")
                    (nonblank-string! (field params "verify") ["verify"]))]
-      (when (and verify (not (#{"fast" "full" "exact"} verify)))
+      ;; @spec MCP-OP-VERIFY-013
+      (when (and verify (not ((set mcp-schema/verification-profile-names)
+                              verify)))
         (refuse! :invalid-enum ["verify"]
-                 "verify must be fast, full, or exact"))
+                 mcp-schema/verification-profile-sentence))
       (loop [seen #{}
              index 0]
         (when (< index (count changes))

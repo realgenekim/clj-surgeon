@@ -85,7 +85,13 @@
     "address as unaddressed_matches [{line, hash}]. A file, hash, or count disagreement refuses "
     "expect-matched-stale before any write. "
     "Omit verify unless the user or repository explicitly requests a configured transaction profile. "
-    "When requested, verify is fast, full, or the project-owned exact profile. Staged formatting, "
+    ;; @spec MCP-OP-VERIFY-013
+    "A test profile is NAMED BY THE REPOSITORY in .clj-surgeon.edn under "
+    ":verification-profiles; a verify naming a profile this workspace does not "
+    "configure is refused before any write. lint is the only built-in profile "
+    "and runs a lint and format gate — it is NOT a test profile, and it fails "
+    "on pre-existing lint debt in source this transaction never touched. "
+    "When requested, verify is fast, full, lint, or the project-owned exact profile. Staged formatting, "
     "commands, and hot laws roll back on failure. A configured cold job returns "
     "verification_complete=false plus one inspect next_call; continue useful "
     "work and copy it once instead of replaying the edit. Success parses and "
@@ -341,6 +347,34 @@
                :caller-changes []
                :ignored-caller-files []}}
              :next-action "fill_caller_decisions_then_apply_once"))))
+
+(def ^:private verification-profiles-unconfigured-remedy
+  (str "This workspace configures no verification profiles. Add "
+       ":verification-profiles to .clj-surgeon.edn at the workspace root, "
+       "binding each profile name to this repository's OWN test command, "
+       "then retry with that name. clj-surgeon runs no built-in gate as "
+       "verification: a lint or format check is not a test profile, and "
+       "refusing a correct edit on pre-existing lint debt is not "
+       "verification."))
+
+;; @spec MCP-OP-VERIFY-013
+(defn- unconfigured-verification-refusal
+  "Refuse, before any write, a `verify` this workspace never configured.
+
+  Reached only when the profile map is the built-in one — a workspace with its
+  own `:verification-profiles` keeps every prior behaviour."
+  [config verify]
+  (when (and verify
+             (= :built-in (:verification-profile-source config))
+             (not (contains? (:verification-profiles config) verify)))
+    {:error (str "No verification profile named " (pr-str verify)
+                 " is configured for this workspace")
+     :error-type :verification-profiles-unconfigured
+     :field "verify"
+     :actual verify
+     :accepted (vec (sort (keys (:verification-profiles config))))
+     :source-unchanged true
+     :remedy verification-profiles-unconfigured-remedy}))
 
 (defn- execute-extraction!
   [config root request receipt verify]
@@ -876,17 +910,23 @@
                     receipt (str (io/file directory
                                           (str (UUID/randomUUID) ".edn")))
                     [result kernel-ms]
-                    (timed #(if extraction?
-                              (execute-extraction!
-                                config root (:extraction resolved) receipt
-                                (get-in validated [:params :verify]))
-                              (execute-explicit-change!
-                                config root resolved receipt
-                                (get-in validated [:params :verify])
-                                (:compact-location-normalization validated)
-                                (:compact-relation-plan validated)
-                                compact-effect-identity?
-                                public-operation)))
+                    ;; @spec MCP-OP-VERIFY-013
+                    ;; one gate for BOTH write routes, ahead of every write:
+                    ;; a `verify` this workspace never configured is refused,
+                    ;; never satisfied by a built-in lint run.
+                    (timed #(or (unconfigured-verification-refusal
+                                  config (get-in validated [:params :verify]))
+                                (if extraction?
+                                  (execute-extraction!
+                                    config root (:extraction resolved) receipt
+                                    (get-in validated [:params :verify]))
+                                  (execute-explicit-change!
+                                    config root resolved receipt
+                                    (get-in validated [:params :verify])
+                                    (:compact-location-normalization validated)
+                                    (:compact-relation-plan validated)
+                                    compact-effect-identity?
+                                    public-operation))))
                     classified (cond->
                                  (contract/classify-kernel-result
                                    (.toString root) result)
@@ -936,6 +976,223 @@
           (assoc (execute-request-in-context!
                    (:config routed) (:params routed) public-operation)
                  :workspace_root (:workspace-root routed)))))))
+
+(def verification-line-characters
+  "Stated bound on the visible verification line of a success receipt."
+  600)
+
+(def verification-failure-detail-characters
+  "Stated bound on the WHOLE verbatim failure detail a refusal text carries,
+  header and omission markers included — not a fresh budget per check."
+  2000)
+
+(defn- test-tally
+  "The `Ran N tests containing M assertions.` line a check's output carried."
+  [output]
+  (when (string? output)
+    (first (re-seq #"(?m)^Ran \d+ tests? containing \d+ assertions\.$" output))))
+
+(defn- hot-tally
+  "The hot verifier reports a summary map, never a clojure.test tally line."
+  [hot]
+  (when-let [summary (:summary hot)]
+    (str (or (:test summary) 0) " tests · " (or (:pass summary) 0) " passes"
+         " · " (or (:fail summary) 0) " failures"
+         " · " (or (:error summary) 0) " errors")))
+
+;; @spec MCP-OP-VERIFY-012
+(defn- whole-lines-within
+  "Whole lines of `text` inside `limit` characters, cut only at a line
+  boundary. A single line longer than the bound is SHORTENED and marked, never
+  dropped: a bound must degrade, never delete. Returns [text omitted-lines]."
+  [text limit]
+  (let [lines (str/split-lines (or text ""))
+        [kept _]
+        (reduce (fn [[kept used] line]
+                  (let [cost (inc (count line))]
+                    (if (<= (+ used cost) limit)
+                      [(conj kept line) (+ used cost)]
+                      (reduced [kept used]))))
+                [[] 0]
+                lines)
+        shortened? (empty? kept)
+        kept (if shortened?
+               [(str (subs (first lines) 0 (max 0 (min limit (count (first lines)))))
+                     " … [line truncated to " limit " characters]")]
+               kept)]
+    [(str/join "\n" kept)
+     (if shortened? 0 (- (count lines) (count kept)))
+     shortened?]))
+
+(defn- check-label
+  [check]
+  (str "`" (or (:command check) "check") "`"
+       (when (some? (:exit check)) (str " exit " (:exit check)))))
+
+;; @spec MCP-OP-VERIFY-011
+(defn- cold-state-phrase
+  "What a cold job's own status licenses the receipt to say. A running job has
+  proved nothing, and this line never lets it read as a pass."
+  [cold]
+  (case (:status cold)
+    :running (str "cold: RUNNING — not yet a pass; copy next_call to "
+                  "inspect_clojure for its verdict")
+    :passed (str "cold: passed"
+                 (when (some? (:exit cold)) (str " · exit " (:exit cold))))
+    (str "cold: " (name (or (:status cold) :unknown))
+         (when (some? (:exit cold)) (str " · exit " (:exit cold))))))
+
+;; @spec MCP-OP-VERIFY-011
+(defn verification-success-line
+  "State the verification this call actually performed, or that none ran.
+
+  `written bytes read back` is a claim about BYTES. It has never been a claim
+  about tests, and a receipt that renders the same text either way teaches an
+  actor to re-verify every call. The real profile result carries THREE places
+  a verdict can live — command `:checks`, `:hot-verification` and
+  `:cold-verification` — and every one of them that ran is named here."
+  [verification]
+  (let [line
+        (if-not (map? verification)
+          "✓ verification: none requested — bytes read back only"
+          (let [checks (vec (:checks verification))
+                hot (:hot-verification verification)
+                cold (:cold-verification verification)
+                passed (count (filter :ok checks))
+                tally (some #(test-tally (:output %)) checks)
+                segments
+                (remove
+                  nil?
+                  [(when (seq checks)
+                     (str passed " of " (count checks) " check"
+                          (if (= 1 (count checks)) "" "s") " passed · "
+                          (str/join " · " (map check-label checks))))
+                   (when tally tally)
+                   (when (map? hot)
+                     (str "hot: " (name (or (:status hot)
+                                            (if (:ok hot) :complete :failed)))
+                          (when-let [t (hot-tally hot)] (str " · " t))))
+                   (when (map? cold) (cold-state-phrase cold))
+                   (when (seq (:argv verification))
+                     (str "`" (str/join " " (:argv verification)) "`"
+                          (when (some? (:exit verification))
+                            (str " exit " (:exit verification)))))])]
+            (str "✓ verification: " (or (:profile verification) "unknown")
+                 (when-let [source (:profile-source verification)]
+                   (str " (" (name source) ")"))
+                 " · "
+                 (if (seq segments)
+                   (str/join " · " segments)
+                   "profile ran; it reported no per-check detail"))))]
+    (if (<= (count line) verification-line-characters)
+      line
+      (str (subs line 0 (- verification-line-characters 40))
+           " … [line truncated at " verification-line-characters "]"))))
+
+;; @spec MCP-OP-VERIFY-012
+(defn verification-failure-block
+  "The failing evidence's own bytes, verbatim, inside ONE stated budget.
+
+  Only what actually FAILED is rendered: a successful command check is never
+  shown under a `✗`, and a hot or cold failure is rendered even when every
+  command check passed. The whole block — header, per-entry lines and the
+  omission markers themselves — is held inside
+  `verification-failure-detail-characters`, so N failures share one budget
+  rather than minting a fresh one each."
+  [verification]
+  (when (map? verification)
+    (let [checks (vec (:checks verification))
+          hot (:hot-verification verification)
+          cold (:cold-verification verification)
+          failed-checks (vec (remove :ok checks))
+          hot-failed? (and (map? hot) (not (:ok hot)))
+          cold-failed? (and (map? cold)
+                            (not= :running (:status cold))
+                            (not (:passed cold))
+                            (not= :passed (:status cold)))
+          entries
+          (concat
+            (map (fn [check]
+                   [(str "  ✗ " (check-label check)
+                         (when-let [elapsed (:elapsed_ms check)]
+                           (str " · " (mcp-operation/format-elapsed-ms elapsed))))
+                    (:output check)])
+                 failed-checks)
+            (when hot-failed?
+              [[(str "  ✗ hot: "
+                     (name (or (:status hot) :failed))
+                     (when-let [t (hot-tally hot)] (str " · " t)))
+                (:output hot)]])
+            (when cold-failed?
+              [[(str "  ✗ " (cold-state-phrase cold)) (:output cold)]])
+            (when (and (:diagnostics verification)
+                       (not (seq failed-checks))
+                       (not hot-failed?)
+                       (not cold-failed?)
+                       (false? (:ok verification)))
+              [["  ✗ exact verifier" (:diagnostics verification)]]))]
+      (when (seq entries)
+        (let [;; @spec MCP-OP-VERIFY-012
+              ;; the HEADER is inside the budget too. A 2,200-character profile
+              ;; name published a 2,385-character block: a bound the header sat
+              ;; beside is not a bound.
+              header-limit (quot verification-failure-detail-characters 4)
+              raw-header (str "verification: "
+                              (or (:profile verification) "unknown")
+                              (when-let [source (:profile-source verification)]
+                                (str " (" (name source) ")"))
+                              " · failed")
+              header (if (<= (count raw-header) header-limit)
+                       raw-header
+                       (str (subs raw-header 0 header-limit)
+                            " … [header truncated to " header-limit
+                            " characters; the complete verification block is "
+                            "in structuredContent]"))
+              ;; room for the omission marker, whose own length depends on
+              ;; what it must report; measured longest form is ~200 chars
+              reserve 280
+              budget (- verification-failure-detail-characters
+                        (count header) reserve)
+              [rendered omitted-lines omitted-entries]
+              (reduce
+                (fn [[acc omitted-lines omitted-entries] [label output]]
+                  (let [remaining (- budget (count acc))]
+                    (if (< remaining (+ (count label) 2))
+                      [acc omitted-lines (inc omitted-entries)]
+                      (let [[body dropped shortened?]
+                            (if (string? output)
+                              (whole-lines-within
+                                output (- remaining (count label) 2))
+                              ["" 0 false])]
+                        [(str acc "\n" label
+                              (when (seq body) (str "\n" body)))
+                         (+ omitted-lines dropped (if shortened? 1 0))
+                         omitted-entries]))))
+                ["" 0 0]
+                entries)
+              marker (when (or (pos? omitted-lines) (pos? omitted-entries))
+                       (str "\n… [bounded excerpt: " omitted-lines
+                            " output line"
+                            (if (= 1 omitted-lines) "" "s") " and "
+                            omitted-entries " failed check"
+                            (if (= 1 omitted-entries) "" "s")
+                            " omitted to hold this block inside "
+                            verification-failure-detail-characters
+                            " characters; the complete verification block is "
+                            "in structuredContent]"))
+              assembled (str header rendered marker)]
+          ;; the bound is on the WHOLE block, marker included. If the reserve
+          ;; under-estimated the marker, cut the body again at a line boundary
+          ;; rather than publish one character over a stated number.
+          (if (<= (count assembled) verification-failure-detail-characters)
+            assembled
+            ;; last resort only, and it SHORTENS rather than drops: losing the
+            ;; failing line entirely would be a bound that deletes.
+            (let [room (max 0 (- verification-failure-detail-characters
+                                 (count header) (count (or marker ""))))]
+              (str header
+                   (subs rendered 0 (min room (count rendered)))
+                   marker))))))))
 
 (defn concise-summary
   "Render compact visible content; the full receipt remains structuredContent."
@@ -989,35 +1246,41 @@
                  (:terminal_response result)
                  "\n  If work remains, continue."))]
       (if (= "edit_clojure-preview" operation)
-        (format (str operation "\n"
-                     "  %s changed files · %s changed characters · %s\n\n"
-                     "✓ complete bounded diff compiled\n"
-                     "✓ source unchanged · no write authority\n"
-                     "✓ lifecycle preview · next action none")
-                (:changed_files result)
-                (:changed_characters result)
-                (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
-        (if (:verification_complete result)
-          (format (str operation "\n"
-                       "  %s edits · %s files · %s\n\n"
-                       "✓ atomic commit complete\n"
-                       "✓ written bytes read back and verified"
-                       caller-proof-line matched-line "\n"
-                       "✓ terminal evidence · verification_complete=true · next action none"
-                       terminal-response-line)
-                  (or (:edits result) (:match-count result) 0)
-                  (or (:files result) (:changed-file-count result) 0)
-                  (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
-          (format (str operation "\n"
-                       "  %s edits · %s files · %s\n\n"
-                       "✓ atomic commit complete\n"
-                       "✓ written bytes read back and hot proof complete"
-                       caller-proof-line matched-line "\n"
-                       "… cold verification running · edit remains committed\n"
-                       "→ copy next_call to inspect_clojure after doing other useful work")
-                  (or (:edits result) (:match-count result) 0)
-                  (or (:files result) (:changed-file-count result) 0)
-                  (mcp-operation/format-elapsed-ms (:elapsed_ms result))))))
+        (str operation "\n"
+             (format
+               (str "  %s changed files · %s changed characters · %s\n\n"
+                    "✓ complete bounded diff compiled\n"
+                    "✓ source unchanged · no write authority\n"
+                    "✓ lifecycle preview · next action none")
+               (:changed_files result)
+               (:changed_characters result)
+               (mcp-operation/format-elapsed-ms (:elapsed_ms result))))
+        ;; @spec MCP-OP-VERIFY-011
+        ;; Caller-derived text — a check command, a profile name, a
+        ;; terminal_response — is CONCATENATED after formatting, never spliced
+        ;; into the format TEMPLATE. A command spelled `printf %s ok` or a
+        ;; profile named `coverage 100%` threw from `format` and destroyed the
+        ;; public receipt of a mutation that had already committed.
+        (let [head (str operation "\n"
+                        (format
+                          (str "  %s edits · %s files · %s\n\n"
+                               "✓ atomic commit complete\n")
+                          (or (:edits result) (:match-count result) 0)
+                          (or (:files result) (:changed-file-count result) 0)
+                          (mcp-operation/format-elapsed-ms (:elapsed_ms result))))]
+          (if (:verification_complete result)
+            (str head
+                 "✓ written bytes read back\n"
+                 (verification-success-line (:verification result))
+                 caller-proof-line matched-line "\n"
+                 "✓ terminal evidence · verification_complete=true · next action none"
+                 terminal-response-line)
+            (str head
+                 "✓ written bytes read back and hot proof complete\n"
+                 (verification-success-line (:verification result))
+                 caller-proof-line matched-line "\n"
+                 "… cold verification running · edit remains committed\n"
+                 "→ copy next_call to inspect_clojure after doing other useful work")))))
     (let [operation (or (:operation result) "apply_clojure_changes")
           reason (or (:reason result) (:error-type result)
                      (:error_type result) "unknown-error")
@@ -1086,10 +1349,17 @@
                    "  expected: ")
                  expected-shape
                  "\n"))]
-      (format (str operation "\n"
-                   "  refused · %s%s · %s\n"
+      ;; MERGE, 2026-09-06 (receipts landing 2b4080fe): `operation` moved OUT
+      ;; of the format string -- an operation name carrying a percent sign is a
+      ;; caller-derived value and `format` would read it as a conversion. Kept
+      ;; with this branch's four slots: the EDIT-037 error sentence and
+      ;; expected-shape example render ahead of the change and field lines.
+      (str operation "\n"
+       (format (str "  refused · %s%s · %s\n"
                    "%s%s%s%s\n"
                    "%s\n"
+                   ;; @spec MCP-OP-VERIFY-012
+                   "%s"
                    "→ %s")
               (safe reason)
               ;; @spec MCP-OP-EDIT-038
@@ -1104,8 +1374,11 @@
               (if source-safe?
                 "✓ source unchanged"
                 "⚠ source state requires structured receipt review")
+              (if-let [block (verification-failure-block (:verification result))]
+                (str block "\n")
+                "")
               (or (:remedy result) (:next_action result)
-                  "Correct the request and retry once.")))))
+                  "Correct the request and retry once."))))))
 
 (defn- prepared-confirmation-request?
   [params]
@@ -1919,10 +2192,18 @@
   (let [ceiling alias-migration/max-refusal-text-characters]
     (if (<= (count text) ceiling)
       text
+      ;; @spec MCP-OP-VERIFY-012
+      ;; Cut at a line boundary when one lies within a short lookback of the
+      ;; ceiling, so a bounded verification excerpt does not lose its last line
+      ;; to a mid-line cut. A single line longer than the window still cuts
+      ;; hard: the ceiling is the ceiling.
       (let [marker (str "\n… [refusal text truncated at " ceiling
                         " characters; it rendered " (count text)
-                        " — every field is complete in structuredContent]")]
-        (str (subs text 0 (max 0 (- ceiling (count marker)))) marker)))))
+                        " — every field is complete in structuredContent]")
+            hard (max 0 (- ceiling (count marker)))
+            boundary (str/last-index-of text "\n" hard)
+            cut (if (and boundary (<= (- hard boundary) 200)) boundary hard)]
+        (str (subs text 0 cut) marker)))))
 
 (defn alias-migration-summary
   "Render one compact visible summary whose length is constant in N.
@@ -1934,12 +2215,15 @@
     (format (str "alias_migration\n"
                  "  %s files · %s sites · aliases %s · %s collisions resolved · %s\n\n"
                  "\u2713 atomic commit complete\n"
-                 "\u2713 written bytes read back and verified\n"
+                 ;; @spec MCP-OP-VERIFY-011
+                 "\u2713 written bytes read back\n"
+                 "%s\n"
                  "\u2713 terminal evidence · per-file detail at %s (%s retention)")
             (:files result) (:sites result)
             (pr-str (:alias_histogram result))
             (:collisions_resolved result)
             (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+            (verification-success-line (:verification result))
             (:details_path result)
             (or (:details_retention result) "best-effort"))
     (bounded-refusal-text
@@ -1958,8 +2242,11 @@
                  (if (or (:source_unchanged result) (:source-unchanged result))
                    "\u2713 source unchanged"
                    "\u26a0 source state requires structured receipt review"))
-         ;; @spec MCP-OP-EDIT-037 · the sentence is already canonical
-         ;; @spec MCP-OP-EDIT-037 · both are canonical at construction
+         ;; @spec MCP-OP-EDIT-037 · the error sentence and the remedy below
+         ;; are already canonical: each verb canonicalizes its receipt at
+         ;; construction, so nothing is re-encoded at render time.
+         ;; @spec MCP-OP-VERIFY-012
+         (verification-failure-block (:verification result))
          (str "\u2192 " (or (:error result)
                             (:remedy result)
                             "Correct the request and retry once."))
