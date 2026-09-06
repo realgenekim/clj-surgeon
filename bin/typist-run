@@ -1517,6 +1517,11 @@ def judge_candidates(cands, manifest, cmds, run_dir, t_ref=None):
                "call_wall_s": (round(c["call_wall_s"], 3)
                                if c.get("call_wall_s") is not None else None),
                "upstream": c.get("upstream"),
+               # arm NW: which channel the edit arrived on (the model's own
+               # in-place write, or a diff in its response body) and the
+               # orientation session it was forked from.
+               "edit_channel": c.get("edit_channel"),
+               "warm_session": c.get("warm_session"),
                "refusal": refusal,
                "finish_reason": c.get("finish_reason"),
                "tokens": c.get("tokens"),
@@ -1674,9 +1679,204 @@ def bench(prompt, providers, models, rounds, temperature, manifest, cmds):
 
 # --------------------------------------------------------------------------
 
+# --------------------------------------------------------------------------
+# arm NW — the CONTEXT-WARM / PROCESS-COLD comparator (Astra, 2026-09-06)
+#
+# Arm N pays a COLD `codex exec` per round: a new process, and a model turn
+# that must read the dossier and the source from scratch. Arm NW freezes that
+# reading cost into a WARM-UP that is recorded and NOT charged to any trial.
+#
+# WARM is defined, frozen, exactly this and nothing else:
+#   one `codex exec -m gpt-5.6-sol --skip-git-repo-check` in a scratch copy of
+#   the mission preimage, whose prompt is the frozen dossier plus "Read the
+#   file now and reply READY; do not edit yet". That session's transcript
+#   therefore holds the dossier AND the source it read. It solves nothing.
+#
+# Per trial the session is NOT resumed and evolved -- it is FORKED. A resumed
+# session would carry the previous trial's SOLUTION, and the fast typist is
+# stateless; reuse would compare a model that already knows the answer against
+# one that does not. `codex exec fork <id>` starts every trial from the same
+# frozen orientation transcript. The process is still cold (spawn charged);
+# only the CONTEXT is warm. Hence the label.
+#
+# The workspace path is fixed across trials so the loaded context stays valid:
+# per trial the preimage bytes are restored IN PLACE (everything but .git is
+# deleted and re-copied), and the model's own in-place edit is read back with
+# `git diff` against the preimage commit made at warm-up time.
+#
+# The clock per trial runs from the fork SPAWN to independent acceptance --
+# process start charged, warm-up not.
+
+# MEASURED 2026-09-06, and the reason this flag is here: `codex exec fork` runs
+# `sandbox: read-only` and this box has no working bubblewrap -- the bundled one
+# dies with "bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted". Under
+# that sandbox the model cannot even READ the source: the first orientation
+# session's two read attempts both failed and it replied READY having loaded
+# nothing, which VOIDS the frozen definition of WARM ("loaded source"). The seat's
+# established fence for an unsandboxed codex is the scratch directory itself
+# (~/bin/sol-yolo), and this arm's fence is the warm workspace under
+# /var/tmp/forge/typist-real-fx. Recorded in every receipt as :sandbox "bypass",
+# because it is a real difference from arm N (cold Sol, read-only, diff-in-response).
+WARM_SANDBOX = ["--dangerously-bypass-approvals-and-sandbox"]
+
+WARM_ORIENT_SUFFIX = "\n\nRead the file now and reply READY; do not edit yet.\n"
+
+WARM_TRIAL_PROMPT = (
+    "The workspace has been reset to the original file. Perform the change now "
+    "exactly as specified; emit your edit by editing the file in place (any "
+    "script or batched patch is allowed); reply DONE.")
+
+UUID_RE = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
+CODEX_SESSIONS = os.path.expanduser("~/.codex/sessions")
+
+
+def warm_workspace_path():
+    """One fixed path per mission. Fixed BECAUSE the orientation session read
+    the source at this path; a different path per trial would invalidate the
+    very context the arm is measuring."""
+    return os.path.join(FX, "warm-ws-%s" % MISSION)
+
+
+def newest_rollout():
+    """(mtime, path) of the newest codex rollout file, or (0.0, None)."""
+    best = (0.0, None)
+    for dirpath, _dirnames, filenames in os.walk(CODEX_SESSIONS):
+        for f in filenames:
+            if f.startswith("rollout-") and f.endswith(".jsonl"):
+                p = os.path.join(dirpath, f)
+                try:
+                    t = os.path.getmtime(p)
+                except OSError:
+                    continue
+                if t > best[0]:
+                    best = (t, p)
+    return best
+
+
+def reset_preimage_in_place(dest):
+    """Restore the preimage AT THE SAME PATH, keeping .git. Returns the
+    `git diff --stat` of the result, which MUST be empty: a non-empty value
+    means the reset did not reach the preimage and the trial is not comparable."""
+    for name in sorted(os.listdir(dest)):
+        if name == ".git":
+            continue
+        p = os.path.join(dest, name)
+        if os.path.isdir(p) and not os.path.islink(p):
+            shutil.rmtree(p)
+        else:
+            os.remove(p)
+    for rel in tree_files(PREIMAGE):
+        src = os.path.join(PREIMAGE, rel)
+        dst = os.path.join(dest, rel)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copy2(src, dst)
+    r = subprocess.run(["git", "diff", "--stat"], cwd=dest,
+                       capture_output=True, text=True)
+    return (r.stdout or "").strip()
+
+
+def create_warm_session(prompt):
+    """The warm-up call. Its wall is RECORDED and never charged to a trial."""
+    ws = fresh_copy(warm_workspace_path())
+    before_t, _before_p = newest_rollout()
+    cmd = ["codex", "exec", "-m", "gpt-5.6-sol",
+           "-c", 'model_reasoning_effort="medium"',
+           "--skip-git-repo-check"] + WARM_SANDBOX + [prompt + WARM_ORIENT_SUFFIX]
+    t0 = time.time()
+    try:
+        with open(os.devnull) as devnull:
+            r = subprocess.run(cmd, cwd=ws, stdin=devnull, capture_output=True,
+                               text=True, timeout=900)
+        out, err_s, rc = (r.stdout or ""), (r.stderr or ""), r.returncode
+    except Exception as e:                                       # noqa: BLE001
+        die("typist-run: warm-up failed: %s" % e, 8)
+    wall = time.time() - t0
+    blob = out + "\n" + err_s
+    if USAGE_LIMIT_RE.search(blob):
+        die("typist-run: refusing — warm-up hit the provider usage limit; "
+            "no session was created", 8)
+    sid = None
+    m = re.search(r"session[ _-]?id\D{0,4}(" + UUID_RE.pattern + ")", blob, re.I)
+    if m:
+        sid = m.group(1)
+    after_t, after_p = newest_rollout()
+    roll = after_p if after_t > before_t else None
+    if sid is None and roll:
+        m2 = UUID_RE.search(os.path.basename(roll))
+        sid = m2.group(0) if m2 else None
+    if sid is None:
+        die("typist-run: refusing — could not identify the warm session id "
+            "(rc=%s); no trial may run without it" % rc, 8)
+    g = subprocess.run(["git", "diff"], cwd=ws, capture_output=True, text=True)
+    return {"session": sid, "rollout": roll,
+            "warmup_wall_s": round(wall, 3),
+            "workspace": ws, "warmup_rc": rc,
+            "orientation_tail": out.strip()[-300:],
+            "orientation_edited": bool((g.stdout or "").strip())}
+
+
+def arm_nw(session_id, run_dir):
+    """One trial: reset in place, fork the frozen orientation, read the edit
+    back with `git diff`. Returns (spawn_clock, [candidate])."""
+    ws = warm_workspace_path()
+    if not os.path.isdir(os.path.join(ws, ".git")):
+        die("typist-run: refusing — no warm workspace at %s (create the warm "
+            "session first, or drop --warm-session)" % ws, 8)
+    dirty = reset_preimage_in_place(ws)
+    if dirty:
+        die("typist-run: refusing — warm workspace is not byte-identical to "
+            "the preimage after reset: %s" % dirty, 8)
+    cmd = ["codex", "exec", "fork", session_id, "-m", "gpt-5.6-sol",
+           "-c", 'model_reasoning_effort="medium"',
+           "--skip-git-repo-check"] + WARM_SANDBOX + [WARM_TRIAL_PROMPT]
+    t_spawn = time.time()
+    try:
+        with open(os.devnull) as devnull:
+            r = subprocess.run(cmd, cwd=ws, stdin=devnull, capture_output=True,
+                               text=True, timeout=900)
+        text, full_err = (r.stdout or ""), (r.stderr or "").strip()
+        err = full_err[-600:] if r.returncode else None
+    except Exception as e:                                       # noqa: BLE001
+        text, full_err, err = "", "", "codex exec fork failed: %s" % e
+    call_wall = time.time() - t_spawn
+    with open(os.path.join(run_dir, "nw-stdout.txt"), "w") as fh:
+        fh.write(text + "\n----- stderr -----\n" + full_err + "\n")
+    blob = text + "\n" + full_err
+    refusal = "usage-limit" if USAGE_LIMIT_RE.search(blob) else None
+    d, how = None, None
+    if not refusal:
+        g = subprocess.run(["git", "diff"], cwd=ws, capture_output=True, text=True)
+        if (g.stdout or "").strip():
+            d, how = g.stdout, "in-place"
+        else:
+            d = extract_candidate(text)
+            how = "response-body" if d else None
+    return t_spawn, [{
+        "cand": "nw0", "source": "codex exec fork gpt-5.6-sol (context-warm)",
+        "text": d,
+        "edit_channel": how,
+        "warm_session": session_id,
+        "refusal_evidence": blob.strip()[-400:] if refusal else None,
+        "raw_chars": len(text), "reasoning_chars": None,
+        "finish_reason": None, "refusal": refusal,
+        "response_s": time.time() - t_spawn,
+        "call_wall_s": call_wall,
+        "tokens": None, "reasoning_tokens": None, "prompt_tokens": None,
+        "completion_time_s": None, "queue_time": None, "upstream": None,
+        "error": None if refusal else err}]
+
+
 def main():
     ap = argparse.ArgumentParser(prog="typist-run", add_help=True)
-    ap.add_argument("--arm", choices=["N", "F", "fake"])
+    ap.add_argument("--arm", choices=["N", "NW", "F", "fake"])
+    ap.add_argument("--warm-session", default=None, metavar="SESSION_ID",
+                    help="--arm NW only: reuse an EXISTING frozen orientation "
+                         "session instead of creating one. Every trial FORKS "
+                         "this session, so no trial ever sees another trial's "
+                         "solution. Without it the runner creates the session "
+                         "and records its wall as :warmup_wall_s (never charged).")
     ap.add_argument("--replay", metavar="RUN_DIR",
                     help="re-run apply+gate+acceptance on the RETAINED "
                          "candidate.diff files of an earlier run. No network.")
@@ -1753,8 +1953,30 @@ def main():
         runs = 1
         k = 0
     else:
-        k = a.k if a.k is not None else (1 if a.arm == "N" else 5)
+        k = a.k if a.k is not None else (1 if a.arm in ("N", "NW") else 5)
         runs = a.runs
+
+    warm = None
+    if a.arm == "NW":
+        if EDIT_FORM != "diff":
+            die("typist-run: refusing — arm NW reads the model's OWN in-place "
+                "edit back as a git diff; --edit-form whole-file is not its "
+                "edit form", 8)
+        if k != 1:
+            die("typist-run: refusing — arm NW is one trial per fork (k=1); "
+                "k=%d was asked for" % k, 8)
+        if a.warm_session:
+            warm = {"session": a.warm_session, "rollout": None,
+                    "warmup_wall_s": None, "workspace": warm_workspace_path(),
+                    "warmup_rc": None, "orientation_tail": None,
+                    "orientation_edited": None, "created_here": False}
+        else:
+            warm = create_warm_session(prompt)
+            warm["created_here"] = True
+            print("warm_session=%s warmup_wall_s=%.2f workspace=%s rollout=%s "
+                  "orientation_edited=%s"
+                  % (warm["session"], warm["warmup_wall_s"], warm["workspace"],
+                     warm["rollout"], warm["orientation_edited"]))
 
     exit_code = 0
     for r_i in range(runs):
@@ -1774,11 +1996,16 @@ def main():
             cands = arm_fake(k, a.fake_good, a.fake_bad)
         elif a.arm == "N":
             cands = arm_n(prompt, k)
+        elif a.arm == "NW":
+            t_spawn, cands = arm_nw(warm["session"], RUN_DIR)
         else:
             cands = arm_f(prompt, k, a.temperature,
                           provider=a.provider, model=a.model, run_dir=RUN_DIR)
 
-        records = judge_candidates(cands, manifest, cmds, RUN_DIR)
+        # Arm NW's clock starts at the FORK SPAWN, not at process start: the
+        # warm-up is a recorded cost of the arm, never a cost of a trial.
+        records = judge_candidates(cands, manifest, cmds, RUN_DIR,
+                                   t_ref=(t_spawn if a.arm == "NW" else None))
 
         verified_walls = [r["verified_wall_s"] for r in records if r["verified"]]
         first = min(verified_walls) if verified_walls else None
@@ -1802,7 +2029,20 @@ def main():
             "mission": MISSION, "mutable_file": MUTABLE,
             "provider": (a.provider if a.arm == "F" else None),
             "model": ((a.model or PROVIDERS[a.provider]["model"])
-                      if a.arm == "F" else None),
+                      if a.arm == "F" else
+                      ("gpt-5.6-sol" if a.arm in ("N", "NW") else None)),
+            # Arm NW's frozen definition of WARM, carried in every receipt.
+            "warm_session": (warm["session"] if warm else None),
+            "warm_kind": ("fork" if warm else None),
+            "warm_workspace": (warm["workspace"] if warm else None),
+            "warm_rollout": (warm["rollout"] if warm else None),
+            "warm_session_created_here": (warm["created_here"] if warm else None),
+            "sandbox": ("bypass" if a.arm == "NW" else "codex default (read-only)"),
+            "warmup_wall_s": (warm["warmup_wall_s"] if warm else None),
+            "warmup_charged": (False if warm else None),
+            "warm_orientation_edited": (warm["orientation_edited"] if warm else None),
+            "clock": ("fork-spawn-to-independent-acceptance" if a.arm == "NW"
+                      else "process-start-to-independent-acceptance"),
             "acceptance": MISSIONS[MISSION]["accept_desc"],
             "candidates": records,
             "first_verified_s": first,
@@ -1817,11 +2057,15 @@ def main():
         rt = [r["reasoning_tokens"] for r in records if r.get("reasoning_tokens") is not None]
         rt_s = ("reasoning_tokens=%d" % sum(rt)) if rt else "reasoning_tokens=unknown"
         print("arm=%s mission=%s edit_form=%s run=%s first_verified_s=%s candidates=%d apply_ok=%d "
-              "gate_ok=%d accept_ok=%d semantic_mismatch=%d refusals=%d %s %s"
+              "gate_ok=%d accept_ok=%d semantic_mismatch=%d refusals=%d %s %s%s"
               % (a.arm, MISSION, EDIT_FORM, run_id,
                  ("%.2f" % first) if first is not None else "none",
                  len(records), apply_ok, gate_ok, accept_ok, mismatch, refusals,
-                 tok_s, rt_s))
+                 tok_s, rt_s,
+                 ("" if a.arm != "NW" else
+                  " warm_kind=fork warm_session=%s call_wall_s=%s edit_channel=%s"
+                  % (warm["session"], fmt(records[0].get("call_wall_s")),
+                     records[0].get("edit_channel")))))
         if mismatch:
             exit_code = 3
     sys.exit(exit_code)
