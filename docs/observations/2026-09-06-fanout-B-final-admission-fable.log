@@ -1,0 +1,13 @@
+2026-09-06T10:08:00Z start
+witness proof-b/baseline: Ran 19 tests containing 473 assertions 73 failures, 0 errors
+witness reference: Ran 19 tests containing 496 assertions 0 failures, 0 errors
+witness reference-declare: Ran 19 tests containing 497 assertions 0 failures, 0 errors
+self-test rc=0 {"cases": 13, "self_test_failures": 0}
+outcome audit reference: "ok": false
+outcome audit reference-declare: "ok": false
+{"freeze": "/var/tmp/forge/cell-prep/runner-b/freeze-b.json", "files": 14}
+freeze sha256: 02c77d53807e30552abda8175ea912f84bcb7744ff2cd5ca729414b314fd65c2
+runner witness rc=0 pass=37 fail=0
+2026-09-06T10:08:56Z done, window released
+outcome audit reference (native route): "ok": true "db_declare_present": false "db_added_forms": 1
+outcome audit reference-declare (native route): "ok": true "db_declare_present": true "db_added_forms": 2
