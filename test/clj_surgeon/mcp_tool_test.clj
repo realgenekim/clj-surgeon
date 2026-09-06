@@ -2590,3 +2590,22 @@
                                    :checks (mapv check (range 8))}})]
         (is (<= (count text) (+ bound 600)))
         (is (str/includes? text "Fix it."))))))
+
+(deftest the-published-descriptions-say-what-lint-is-and-is-not
+  ;; @spec MCP-OP-VERIFY-013
+  ;; A caller reads the tool description, not this repository's source. If the
+  ;; description does not say that `lint` is a lint and format gate rather than
+  ;; a test profile, the caller will send it expecting tests.
+  (doseq [[surface text] [["apply" mcp-tool/tool-description]
+                          ["verify field"
+                           (:description mcp-schema/verification-schema)]
+                          ["alias verify field"
+                           (get-in mcp-schema/alias-migration-schema
+                                   [:properties "verify" :description])]]]
+    (testing surface
+      (is (str/includes? text "lint")
+          "the only built-in profile is not named")
+      (is (str/includes? text ".clj-surgeon.edn")
+          "where a test profile is named is not stated")
+      (is (re-find #"(?i)not a test profile" text)
+          "the description does not say lint is NOT a test profile"))))

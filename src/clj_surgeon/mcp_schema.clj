@@ -18,7 +18,7 @@
 (def verification-schema
   {:type "string" :enum verification-profile-names
    :description
-   "Optional repository-owned verification profile named in .clj-surgeon.edn. lint is the only built-in and runs a lint and format gate, which is NOT a test profile; a name this workspace does not configure is refused before any write. exact runs one project-declared exact-exit argv against staged bytes. Formatter, commands, and hot laws roll back on failure. A configured cold job returns verification_complete=false plus one inspect next_call."})
+   "Optional verification profile. A TEST profile is named by the repository in .clj-surgeon.edn under :verification-profiles, and a name this workspace does not configure is refused before any write. lint is the only built-in profile and runs a lint and format gate: it is NOT a test profile, and it fails on pre-existing lint debt in source the transaction never touched. exact runs one project-declared exact-exit argv against staged bytes. Formatter, commands, and hot laws roll back on failure. A configured cold job returns verification_complete=false plus one inspect next_call."})
 
 (def basis-change-schema
   {:type "object"
@@ -644,7 +644,14 @@
      :additionalProperties false
      :properties {"files" {:type "integer" :minimum 0}}
      :required ["files"]}
-    "verify" {:type "string" :minLength 1}}
+    ;; @spec MCP-OP-VERIFY-013
+    "verify" {:type "string" :minLength 1
+              :description
+              (str "Optional verification profile named by the repository in "
+                   ".clj-surgeon.edn under :verification-profiles. A name this "
+                   "workspace does not configure is refused before any write. "
+                   "lint is the only built-in and runs a lint and format gate: "
+                   "it is NOT a test profile.")}}
    :required ["from" "to" "scope" "expect"]})
 
 (def alias-migration-output-schema

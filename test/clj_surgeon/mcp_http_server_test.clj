@@ -964,12 +964,16 @@
                                "caller_changes" []
                                "ignored_caller_files" []}
                               "verify" value})]
-            (is (not= :invalid-enum (:reason direct))
-                (str "the direct route rejects the advertised " (pr-str value)
-                     ": " (pr-str direct)))
-            (is (not= :invalid-enum (:reason extraction))
-                (str "the extraction route rejects the advertised "
-                     (pr-str value) ": " (pr-str extraction))))))
+            ;; :ok, not merely "not :invalid-enum" — the absence of one
+            ;; refusal reason is not admission.
+            (is (true? (:ok direct))
+                (str "the direct route did not ADMIT the advertised "
+                     (pr-str value) ": " (pr-str direct)))
+            (is (true? (:ok extraction))
+                (str "the extraction route did not ADMIT the advertised "
+                     (pr-str value) ": " (pr-str extraction)))
+            (is (= value (get-in direct [:params :verify])))
+            (is (= value (get-in extraction [:params :verify]))))))
       (testing "and the published schema advertises the same set"
         (doseq [value accepted]
           (is (contains? (set (:enum mcp-schema/verification-schema)) value)

@@ -529,7 +529,10 @@
       ;; 2000-character failure budget is one TOTAL, not one per check.
       ;; +1 round three: the unconfigured refusal may advertise only values
       ;; the verify enum accepts, on both write routes and in the schema.
-      (is (= 1374 total) (str "manifest declares " total " tests"))
+      ;; +1 final tidy: the PUBLISHED descriptions must say that lint is the
+      ;; only built-in, that it is a lint/format gate and not a test profile,
+      ;; and that test profiles are named in .clj-surgeon.edn.
+      (is (= 1375 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
