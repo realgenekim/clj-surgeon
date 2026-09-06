@@ -43,7 +43,16 @@ saved-ledger extraction, its reread/hash callback, CLI help and wiring. The seam
 is exposed by the experimental `bin/mission commit` command. Git `write-tree` may refresh internal
 index cache metadata; no staging or staged-content mutation occurs. Source blobs
 must be UTF-8 and at most 1 MiB; every subprocess has a 10-second wall limit and
-1 MiB output cap enforced while reading. Environment Git overrides are removed;
+1 MiB output cap enforced while reading. Environment Git overrides are removed,
+except the explicit seat identity variables `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`,
+`GIT_AUTHOR_DATE`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL`, and
+`GIT_COMMITTER_DATE`. Git resolves these before repository identity configuration;
+the same inherited values reach identity preflight and commit creation. No identity
+is supplied by model/request fields. Arbitrary config, workspace, index and other
+Git environment controls remain removed. With the six variables absent, ordinary
+explicit local configuration behavior remains; the tool cannot infer the intended
+human/agent author from a name. Fleet seats must continue exporting their own
+identity, as required by the Anvil resume/house rule. In either mode,
 fsmonitor, hooks and automatic signing are disabled for these subprocesses.
 
 An update-ref failure or timeout returns `:git-ref-updated :unknown` with a
@@ -95,3 +104,23 @@ with an explicit repository-local configuration next action, never guessed or
 silently installed identity. Full seam: 15 tests / 85 assertions. Test lanes:
 mission-git-test :fast (4); boundary :battery (4); fence :battery (5); process
 :battery (2). Source and staged-content preservation remain unchanged.
+
+Independent Opus identity finding (review of b3dbd9e4): stripping every Git
+environment variable silently replaced the exported seat identity with repository
+configuration. The faithful new witness reproduced that failure before the fix:
+the committed author/committer came from the conflicting repository, and all six
+explicit identity variables disappeared. After the exact allowlist repair, a real
+scratch commit records distinct seat author and committer names/emails plus the
+two requested Git timestamps. A separate child with identity variables omitted
+retains explicit local configuration behavior. Another witness confirms that
+GIT_CONFIG_*, GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_SSH_COMMAND and
+GIT_AUTHOR_IDENT do not survive; GIT_TERMINAL_PROMPT is forced to zero.
+
+Verification: new `mission-git-identity-test` is :battery, three tests / five
+assertions (two RED assertions before implementation). Combined identity,
+process, boundary and fence JVM suites pass 14 tests / 63 assertions, even with
+an explicit outer seat identity inherited by the suite itself. The old absent
+identity preflight test now explicitly scrubs identity in its child so its
+precondition remains true in fleet seats. Formatter/lint pass. No actual user
+commit, provider, shared service or shared telemetry writes occurred. This fixes
+identity only; publication/undo consistency is tracked separately by its owner.

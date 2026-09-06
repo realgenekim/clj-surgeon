@@ -16,7 +16,9 @@
         builder (doto (ProcessBuilder. ^java.util.List cmd)
                   (.directory (java.io.File. root)) (.redirectErrorStream true))
         env (.environment builder)]
-    (doseq [k (vec (.keySet env)) :when (str/starts-with? k "GIT_")] (.remove env k))
+    (doseq [k (vec (.keySet env)) :when (and (str/starts-with? k "GIT_")
+                                          (not (contains? #{"GIT_AUTHOR_NAME" "GIT_AUTHOR_EMAIL" "GIT_AUTHOR_DATE"
+                                                            "GIT_COMMITTER_NAME" "GIT_COMMITTER_EMAIL" "GIT_COMMITTER_DATE"} k)))] (.remove env k))
     (.put env "GIT_TERMINAL_PROMPT" "0")
     (.put env "LC_ALL" "C")
     (let [process (.start builder)
