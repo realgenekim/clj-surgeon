@@ -3017,3 +3017,5 @@ Astra's nREPL riff, in substance: a warm runtime is the right instrument, but po
 ## 15:00Z — 15:00Z: Astra's report appended verbatim to the checkpoint (7/10; codex meter 38% weekly remaining; two real edits through public admission; collector visibility gap filed as inb-b5356a). His description-guidance tip e1270478 (gate green 389 s) — Sol fence r1 launched (reviewer 3230851) under my window; land on GO. Rebuild held.
 
 ## 15:13Z — Sol fence r1 on Astra's description-guidance tip e1270478: LAND YES, no blocking findings, HEAD-bound throughout (e1270478 at every probe). Chain is landing it now.
+
+## 15:14Z — land e1270478: functional gates green; battery-fresh refused on commit distance (his branch's docs count). Receipt chain 5 running (battery on the merged tree → receipt → land).
