@@ -1,0 +1,20 @@
+C1 gate rc=0 wall=1.7s last= Testing maven.recording-query-test  Ran 2 tests containing 5 assertions. 0 failures, 0 errors. 
+C1 candidate rc=0 wall=1.7s last= Ran 4 tests containing 24 assertions. 0 failures, 0 errors. 
+C2 gate rc=0 wall=1.7s last= Testing maven.recording-query-test  Ran 2 tests containing 5 assertions. 0 failures, 0 errors. 
+C2 candidate rc=0 wall=1.8s last= Ran 4 tests containing 24 assertions. 0 failures, 0 errors. 
+N1 gate rc=0 wall=1.7s last= Testing maven.recording-query-test  Ran 2 tests containing 5 assertions. 0 failures, 0 errors. 
+N1 candidate rc=0 wall=1.7s last= Ran 4 tests containing 24 assertions. 0 failures, 0 errors. 
+N2 gate rc=0 wall=1.7s last= Testing maven.recording-query-test  Ran 2 tests containing 5 assertions. 0 failures, 0 errors. 
+N2 candidate rc=0 wall=1.8s last= Ran 4 tests containing 24 assertions. 0 failures, 0 errors. 
+T1 gate rc=0 wall=1.7s last= Testing maven.recording-query-test  Ran 2 tests containing 5 assertions. 0 failures, 0 errors. 
+T1 candidate rc=0 wall=1.7s last= Ran 4 tests containing 24 assertions. 0 failures, 0 errors. 
+T2 gate rc=0 wall=1.8s last= Testing maven.recording-query-test  Ran 2 tests containing 5 assertions. 0 failures, 0 errors. 
+T2 candidate rc=0 wall=1.7s last= Ran 4 tests containing 24 assertions. 0 failures, 0 errors. 
+frozen files: 17 engine: a720c0792641a27e01b84af6afaf2a6b5ab2c972 frozen_at: 2026-09-06T07:36:40.474621+00:00
+entry shape: seed/deps.edn b65421a2fb0cfdd9cf90053ef6b67d7aacd3540a740eae9c962504f817e6ed4b
+C1 unchanged: 0 / 17 changed: [] missing: ['seed/deps.edn', 'seed/proof/gate.clj', 'seed/proof/no-network.py']
+C2 unchanged: 0 / 17 changed: [] missing: ['seed/deps.edn', 'seed/proof/gate.clj', 'seed/proof/no-network.py']
+N1 unchanged: 0 / 17 changed: [] missing: ['seed/deps.edn', 'seed/proof/gate.clj', 'seed/proof/no-network.py']
+N2 unchanged: 0 / 17 changed: [] missing: ['seed/deps.edn', 'seed/proof/gate.clj', 'seed/proof/no-network.py']
+T1 unchanged: 0 / 17 changed: [] missing: ['seed/deps.edn', 'seed/proof/gate.clj', 'seed/proof/no-network.py']
+T2 unchanged: 0 / 17 changed: [] missing: ['seed/deps.edn', 'seed/proof/gate.clj', 'seed/proof/no-network.py']
