@@ -59,8 +59,9 @@ format is saved with the plan; apply-time request changes cannot switch it.
 Multi-file raw requests refuse. Anonymous functions, sets and regex literals are
 supported; character literals and other reader dispatch remain outside this first
 prototype. Missing, extra or duplicate owners and changed docstrings refuse.
-This representation has passed boundary tests but has not earned a live or
-comparative claim yet. Omission retains the existing JSON owner-form format.
+This representation has passed boundary tests and one live mission; all three
+retained candidates also passed non-writing proof replay. It has no comparative
+performance or calibrated reliability claim yet. Omission retains the existing JSON owner-form format.
 
 The executor runs the gate and independent witness before writing live source,
 checks proof inputs for byte/mode changes, rechecks the live frozen snapshot,

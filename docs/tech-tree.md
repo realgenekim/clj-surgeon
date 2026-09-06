@@ -173,3 +173,10 @@ real-1 keeper; it is not a speedup measurement. New fake-executor and public CLI
 witnesses cover saved authority, zero apply on blocked planning, one plan/apply,
 help, dispatch, EDN/nonzero refusal and unchanged source. See
 [the executor plan](plans/mission-typist-executor.md#optional-one-process-run-entrance).
+
+## Astra 2026-09-06 02:35Z — typist representation and complete CLI cost
+
+- JSON owner forms: fourpaired completecommand measurements, native4/4 median22.588s vs tool3/4 median7.405s.3.05x latency-only; reliability prediction FAILED. T4doubleescaping lost parsed docstrings, correctly refused beforewrite; all5names matched in exactJVM replay. See [retained result](observations/2026-09-06-astra-forms-cohort-result.md).
+- Raw Clojure one-file definitions: optional frozenformat, exact ownercoverage, existing guardedcompiler. One live k3missionverified and3/3retainedcandidateproofs passed; concurrentreview/lowpriority makes elapsednoncomparative. Char literals, comments/meta and multfile remain unsupported. See [captain log](observations/2026-09-06-astra-live-dogfood.md).
+- Single-process mission run removes one process boundary; replicated JSONcohort above charges remainingcoldstart. Lazy helperplanner loading is a specific next startuphypothesis, notmeasured yet.
+- Next: rawformatreplication after freshnativevariancefloor, faithful commentattachment preservation prototype, complete observerhooks and combinedfence. Strongernativecontrolremainsmandatory; do not trade3/4reliability for a braggingratio.

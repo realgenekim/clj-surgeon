@@ -82,3 +82,11 @@ The real-1 fresh fixture verified through `bin/mission run` in7.681950729s compl
 ## Astra 02:10Z — delegated event-hook dogfood
 
 The event-hook builder attempted the actual owner_forms planner on mission_cli/propose! before editing. It returned forms-protected-syntax with committed=false and mutation-attempted=false; zero provider calls. Receipt `/var/tmp/forge/mission-events-admission.log`. Native fallback preserves the protected comments. This is another observed coverage refusal, not an adoption or speed win.
+
+## Astra 02:35Z — raw Clojure hand-drive verified
+
+Engineb1559a95, one fresh real-1 mission, k3 from explicitly transferred JSON3/4 prior. All three provider responses completed; candidate2 was selected, passed gate+witness, and committed five owners. No live processes/cancelled work. A later non-writing replay proves all three retained candidates compile, format and pass the same gate+witness. This is one functional mission plus3retained-candidate proofs, not3independent missions or a calibrated reliability rate.
+
+Total provider-reported cost$0.0056541;4536prompt tokens,5422completion including3607reasoning. Raw receipts/prereg/replay are in `/var/tmp/forge/astra-raw-live-fx`. Forensic elapsed7.630s includes low-priority scheduling under concurrent fence848070; internal executor2.127s, owned formatter977.3ms. These are excluded from performance claims.
+
+The saved response-format dispatch regression failed before integration: the old executor accepted a JSON response despite a frozen raw request. It now refuses JSON in raw mode and honors saved format even if the apply request names another format; commit/undo restores exact source. Combined45tests349assertions passed, then the added one-file-only refusal assertion passed in5tests166assertions.
