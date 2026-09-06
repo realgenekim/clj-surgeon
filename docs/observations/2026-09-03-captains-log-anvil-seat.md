@@ -3279,3 +3279,5 @@ My objections to the opening six: verification is not established as the dominan
 ## 22:45Z — LANDING ceiling receipt 5c7c9e79 (c10a90f6 + battery) via ~/bin/land (fence r3 LAND YES; Astra GO). Next: hot a35a8a3a after a trunk merge; then receipts fae857e1.
 
 ## 22:51Z — LANDED (ancestry-verified): public result ceiling c10a90f6 + receipt 5c7c9e79 → MCP/main 7030bb56 at 22:50Z, all gates green. inb-b60d6e closed by this landing. Hot branch now merging trunk (pin sum + Astra's two wording notes); then battery → land; then receipts.
+
+## 22:56Z — hot branch merged with trunk → 10f5131d (181/3,455 green; kondo 0). MERGE TRAP caught by the builder: both branches had moved the corpus pin 1363 → 1372 for DISJOINT witness sets, so git auto-merged the agreeing number silently nine short; resolved as the sum 1381 with a comment naming both. Astra's two wording notes folded (read ceiling ≠ hard wall bound; closed assertion pins that tag only). Battery receipt chain 12 started on 10f5131d; landing on the receipt.
