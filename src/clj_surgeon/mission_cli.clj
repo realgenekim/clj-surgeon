@@ -22,10 +22,10 @@
   carries `:verb` and an opaque `:intent`, the dossier projection is the only
   verb-aware function, and it takes a plan map rather than a plan function."
   (:require
-   [clj-surgeon.mission :as mission]
    [clj-surgeon.mcp-extraction :as extraction]
    [clj-surgeon.mcp-helper-extraction :as helper]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.mission :as mission]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.pprint :as pp]
@@ -43,7 +43,17 @@
 ;; receipt; `:undo` inverts a committed one from its own receipt file.
 
 (def verbs
-  {"helper_extraction"
+  {"owner_forms"
+   {:plan (fn [request profiles]
+            ((requiring-resolve 'clj-surgeon.mission-typist-executor/plan)
+             request profiles))
+    :execute! (fn [request config]
+                ((requiring-resolve 'clj-surgeon.mission-typist-executor/execute!)
+                 request config))
+    :undo (fn [undo-receipt]
+            ((requiring-resolve 'clj-surgeon.mission-typist-executor/undo!)
+             undo-receipt))}
+   "helper_extraction"
    {:plan     (fn [request profiles] (helper/plan request profiles))
     :execute! (fn [request config] (helper/execute! config request))
     :undo     (fn [undo-receipt]
@@ -60,6 +70,18 @@
 (def example-config mission/example-config)
 (def verb-help mission/verb-help)
 (def help-text mission/help-text)
+
+(defn plan-dossier
+  "Project the selected verb without inventing helper-extraction counts."
+  [verb plan request]
+  (if (and (= verb "owner_forms") (:ok plan))
+    {:dossier {:planned true
+               :owners (:owners request)
+               :typist (select-keys (:typist plan) [:dossier :route])
+               :sources_read (count (:sources plan))}
+     :decision nil
+     :state :ready}
+    (mission/dossier plan request)))
 
 (defn parse-flags
   "@caller-probe. Global options are accepted BEFORE or AFTER the verb, and a
@@ -165,7 +187,7 @@
                   :decision (:decision proof-decision)
                   :admitted_profiles (get-in proof-decision [:evidence :admitted_profiles])}
                  ((get-in verbs [verb :plan]) request profiles))
-          {:keys [dossier decision state recommendation]} (mission/dossier plan request)
+          {:keys [dossier decision state recommendation]} (plan-dossier verb plan request)
           ;; @caller-probe: EVERY blocked mission carries the closed shape that
           ;; would have been accepted, and the size of any file it names.
           decision (when decision
@@ -190,6 +212,7 @@
         (let [classified (mission/advance created state "plan"
                                           (cond-> {:at (now) :updated_at (now)
                                                    :dossier dossier}
+                                            (= verb "owner_forms") (assoc :plan plan)
                                             recommendation (merge recommendation)
                                             ;; @stale-resume: the snapshot is
                                             ;; taken from the plan's OWN frozen
@@ -213,19 +236,24 @@
       m
       (let [request (:intent m)
             profiles (or profiles
-                         (mission/verification-profiles m)
+                         (when-not (= "owner_forms" (:verb m))
+                           (mission/verification-profiles m))
                          (not-empty (admitted-profiles (:root m) opts)))
             plan ((get-in verbs [(:verb m) :plan]) request profiles)
-            projection (assoc (mission/dossier plan request)
+            projection (assoc (plan-dossier (:verb m) plan request)
                               :snapshot (when (:ok plan)
                                           (mission/snapshot (:sources plan))))
-            replanned (mission/replan m projection (now))]
+            refreshed (mission/replan m projection (now))
+            replanned (if (and (= "owner_forms" (:verb m))
+                               (not (mission/refused? refreshed)))
+                        (assoc refreshed :plan plan)
+                        refreshed)]
         (if (mission/refused? replanned)
           replanned
           (do (save! state-dir replanned)
               (assoc (mission/show-view (mission/read-all state-dir) id)
-             :config_sources (mission/config-sources (or workspace (:root m))
-                                                     (:config opts)))))))))
+                :config_sources (mission/config-sources (or workspace (:root m))
+                                                        (:config opts)))))))))
 
 (defn repair!
   "@caller-probe. Answer a dead mission with a NARROWER one, and say so.
@@ -315,8 +343,8 @@
               linked
               (do (save! state-dir linked)
                   (assoc (mission/show-view (mission/read-all state-dir) id)
-             :config_sources (mission/config-sources (or workspace (:root m))
-                                                     (:config opts)))))))))))
+                    :config_sources (mission/config-sources (or workspace (:root m))
+                                                            (:config opts)))))))))))
 
 (defn list-missions
   [{:keys [workspace state-home]}]
@@ -364,40 +392,41 @@
     (if (mission/refused? m)
       m
       (or
-       ;; @migration-plan: an unverified dependency refuses FIRST — before the
-       ;; snapshot is even checked, because a stale-plan refusal would send the
-       ;; caller to re-plan against a tree its dependency has not touched yet.
-       (mission/dependency-refusal m (mission/by-id (mission/read-all state-dir)))
-       ;; @stale-resume: nothing is staged, nothing is written, and the refusal
-       ;; names the files that moved.
-       (stale? m)
-       (let [staged (mission/advance m :applied "apply" {:at (now) :updated_at (now)})]
-        (if (mission/refused? staged)
-          staged
-          (let [_ (save! state-dir staged)
-                ;; @carry-the-proof: the mission's OWN authority, so apply and
-                ;; resume need only an id and a workspace. An explicitly passed
-                ;; profiles map still wins, for a caller deliberately re-proving
-                ;; under a different profile.
-                profiles (or profiles
-                             (mission/verification-profiles m)
-                             (not-empty (admitted-profiles (:root m) opts)))
-                config (cond-> {:verification-profiles profiles}
-                         receipt-dir (assoc :receipt-dir receipt-dir))
-                receipt ((get-in verbs [(:verb m) :execute!]) (:intent m) config)
-                committed? (true? (:committed receipt))
-                terminal (mission/advance staged
-                                          (if committed? :verified :failed)
-                                          "apply"
-                                          (cond-> {:at (now) :updated_at (now)
-                                                   :receipt receipt}
-                                            committed?
-                                            (assoc :undo
-                                                   {:receipt (:undo_receipt receipt)
-                                                    :receipt_hash (:receipt_hash receipt)})))]
-            (if (mission/refused? terminal)
-              terminal
-              (save! state-dir terminal)))))))))
+        ;; @migration-plan: an unverified dependency refuses FIRST — before the
+        ;; snapshot is even checked, because a stale-plan refusal would send the
+        ;; caller to re-plan against a tree its dependency has not touched yet.
+        (mission/dependency-refusal m (mission/by-id (mission/read-all state-dir)))
+        ;; @stale-resume: nothing is staged, nothing is written, and the refusal
+        ;; names the files that moved.
+        (stale? m)
+        (let [staged (mission/advance m :applied "apply" {:at (now) :updated_at (now)})]
+          (if (mission/refused? staged)
+            staged
+            (let [_ (save! state-dir staged)
+                  ;; @carry-the-proof: the mission's OWN authority, so apply and
+                  ;; resume need only an id and a workspace. An explicitly passed
+                  ;; profiles map still wins, for a caller deliberately re-proving
+                  ;; under a different profile.
+                  profiles (or profiles
+                               (mission/verification-profiles m)
+                               (not-empty (admitted-profiles (:root m) opts)))
+                  config (cond-> {:verification-profiles profiles}
+                           (= "owner_forms" (:verb m)) (assoc :plan (:plan m))
+                           receipt-dir (assoc :receipt-dir receipt-dir))
+                  receipt ((get-in verbs [(:verb m) :execute!]) (:intent m) config)
+                  committed? (true? (:committed receipt))
+                  terminal (mission/advance staged
+                                            (if committed? :verified :failed)
+                                            "apply"
+                                            (cond-> {:at (now) :updated_at (now)
+                                                     :receipt receipt}
+                                              committed?
+                                              (assoc :undo
+                                                     {:receipt (:undo_receipt receipt)
+                                                      :receipt_hash (:receipt_hash receipt)})))]
+              (if (mission/refused? terminal)
+                terminal
+                (save! state-dir terminal)))))))))
 
 (defn undo!
   "Invert one verified mission through the receipt its own apply published."

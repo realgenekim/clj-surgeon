@@ -13,9 +13,9 @@
               undo that puts every byte back."
   (:require
    [clj-surgeon.helper-extraction-fixture :as fixture]
+   [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.mission :as mission]
    [clj-surgeon.mission-cli :as cli]
-   [clj-surgeon.mcp-workspace :as workspace]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.java.shell]
@@ -502,11 +502,11 @@
       (try
         (.mkdirs ws)
         (let [opened (cli/propose!
-                      {:verb "helper_extraction"
-                       :workspace (str ws) :state-home (str home)
-                       :profiles {"admitted" {:commands [["/bin/true"]]}}
-                       :request {:workspace_root (str ws)
-                                 :verification {:profile "not-admitted"}}})]
+                       {:verb "helper_extraction"
+                        :workspace (str ws) :state-home (str home)
+                        :profiles {"admitted" {:commands [["/bin/true"]]}}
+                        :request {:workspace_root (str ws)
+                                  :verification {:profile "not-admitted"}}})]
           (is (= :blocked (:state opened)))
           (is (= false (get-in opened [:verification :admitted?])))
           (is (str/includes? (get-in opened [:decision :decision]) "not-admitted"))
@@ -558,8 +558,8 @@
               touches no planner and no tree."
       (doseq [verb [nil "apply" "plan"]]
         (let [out (:out (clojure.java.shell/sh
-                         "bb" "--classpath" "src" "bin/mission-read.clj"
-                         "help" (or verb "") :dir "."))]
+                          "bb" "--classpath" "src" "bin/mission-read.clj"
+                          "help" (or verb "") :dir "."))]
           (is (= (mission/help-text verb) out)
               (str "bb and JVM help differ for " (pr-str verb)))))
       (is (= "help" (get mission/read-verbs "help"))
@@ -600,11 +600,11 @@
                 (is (= {:profile "mission-proof"
                         :commands [["/bin/true"]]
                         :hash (mission/sha256
-                               (pr-str ["mission-proof" [["/bin/true"]]]))
+                                (pr-str ["mission-proof" [["/bin/true"]]]))
                         :admitted? true}
                        (mission/resolve-verification
-                        {:verification {:profile "mission-proof"}}
-                        (cli/admitted-profiles (str ws) {}))))
+                         {:verification {:profile "mission-proof"}}
+                         (cli/admitted-profiles (str ws) {}))))
                 (finally (delete-tree! home)))))
           (finally (delete-tree! ws)))))
 
@@ -641,10 +641,10 @@
 
           (testing "repairing it opens a NEW mission that supersedes the old"
             (let [repaired (cli/repair!
-                            (assoc base :id "M-1" :verb "helper_extraction"
-                                   :profiles {"admitted" {:commands [["/bin/true"]]}}
-                                   :request {:workspace_root (str ws)
-                                             :verification {:profile "admitted"}}))]
+                             (assoc base :id "M-1" :verb "helper_extraction"
+                                    :profiles {"admitted" {:commands [["/bin/true"]]}}
+                                    :request {:workspace_root (str ws)
+                                              :verification {:profile "admitted"}}))]
               (is (= "M-2" (:id repaired)) "a new id, not an edited intent")
               (is (= "M-1" (:repaired repaired)))
               (is (= ["M-1"] (:supersedes repaired)))
@@ -815,10 +815,10 @@
 
           (testing "the bb READ path renders exactly what the JVM path does"
             (let [out (:out (clojure.java.shell/sh
-                             "bb" "--classpath" "src" "bin/mission-read.clj"
-                             "show" "M-1" "--workspace" (str root)
-                             "--state-home" (str state-home)
-                             :dir "."))]
+                              "bb" "--classpath" "src" "bin/mission-read.clj"
+                              "show" "M-1" "--workspace" (str root)
+                              "--state-home" (str state-home)
+                              :dir "."))]
               (is (= (cli/show (assoc base :id "M-1")) (edn/read-string out))
                   "one object, two entrances")))
 
@@ -919,3 +919,83 @@
           (delete-tree! root)
           (delete-tree! state-home)
           (delete-tree! receipt-dir))))))
+
+;; Optional owner_forms dispatch retains the exact planner snapshot.
+(def typist-request {:workspace_root "/fixture" :owners [{:file "a.clj" :owner "a"}]
+                     :intent "change a" :verification {:profile "gate"}
+                     :acceptance_profile "accept"})
+(def typist-planned {:ok true :sources {"/fixture/a.clj" "(def a 1)"}
+                     :typist {:dossier {:intent "frozen"} :route {:k 1} :basis "basis"}})
+
+(deftest verb-specific-dossier-and-blocked-evidence
+  (is (= :ready (:state (cli/plan-dossier "owner_forms" typist-planned typist-request))))
+  (is (= {:dossier {:intent "frozen"} :route {:k 1}}
+         (get-in (cli/plan-dossier "owner_forms" typist-planned typist-request) [:dossier :typist])))
+  (let [refusal {:ok false :error_type "typist-not-admitted" :error "missing proof"
+                 :decision "provide evidence"}
+        p (cli/plan-dossier "owner_forms" refusal typist-request)]
+    (is (= :blocked (:state p)))
+    (is (= "typist-not-admitted" (get-in p [:decision :error_type])))))
+
+(deftest helper-projection-stays-identical
+  (is (= (mission/dossier typist-planned typist-request)
+         (cli/plan-dossier "helper_extraction" typist-planned typist-request))))
+
+(deftest proposal-persists-frozen-plan-and-apply-does-not-replan
+  (let [saved (atom nil) calls (atom [])
+        profiles {"gate" {:commands [["bb" "test.clj"]]}}
+        route {:plan (fn [r p] (swap! calls conj [:plan r p]) typist-planned)
+               :execute! (fn [r c] (swap! calls conj [:execute r c])
+                           {:committed true :undo_receipt "undo.edn" :receipt_hash "h"})}]
+    (with-redefs-fn {#'cli/verbs {"owner_forms" route}
+                     #'cli/state-dir-for (fn [& _] "/ledger")
+                     #'cli/admitted-profiles (fn [& _] profiles)
+                     #'cli/stale? (fn [_] nil)
+                     #'mission/next-id (fn [_] "m1")
+                     #'mission/read-mission (fn [& _] @saved)
+                     #'mission/read-all (fn [_] [])
+                     #'cli/save! (fn [_ m] (reset! saved m))}
+      #(do
+         (cli/propose! {:verb "owner_forms" :request typist-request})
+         (is (= :ready (:state @saved)))
+         (is (= typist-planned (:plan @saved)))
+         (is (= typist-request (:intent @saved)))
+         (cli/apply! {:id "m1" :workspace "/fixture"})
+         (is (= [:plan :execute] (mapv first @calls)))
+         (is (= typist-planned (get-in @calls [1 2 :plan])))
+         (is (= :verified (:state @saved)))))))
+
+(deftest replan-replaces-plan-only-when-admitted
+  (let [saved (atom {:id "m1" :verb "owner_forms" :state :ready :root "/fixture"
+                     :intent typist-request :plan {:old true}
+                     :verification {:profile "gate" :commands [["bb" "gate"]]}})
+        next-plan (atom typist-planned)
+        profiles-seen (atom nil)]
+    (with-redefs-fn {#'cli/verbs {"owner_forms" {:plan (fn [_ profiles]
+                                                         (reset! profiles-seen profiles)
+                                                         @next-plan)}}
+                     #'cli/state-dir-for (fn [& _] "/ledger")
+                     #'cli/admitted-profiles (fn [& _] {"gate" {} "accept" {}})
+                     #'mission/read-mission (fn [& _] @saved)
+                     #'mission/read-all (fn [_] [@saved])
+                     #'cli/save! (fn [_ m] (reset! saved m))}
+      #(do
+         (cli/replan! {:id "m1" :workspace "/fixture"})
+         (is (contains? @profiles-seen "accept"))
+         (is (= typist-planned (:plan @saved)))
+         (reset! next-plan {:ok false :error_type "blocked"})
+         (is (mission/refused? (cli/replan! {:id "m1" :workspace "/fixture"})))
+         (is (= typist-planned (:plan @saved)))))))
+
+(deftest owner-forms-resolves-only-the-selected-executor-entry
+  (let [calls (atom [])]
+    (with-redefs [clojure.core/requiring-resolve
+                  (fn [sym] (fn [& args] (swap! calls conj [sym args]) :called))]
+      (is (= :called ((get-in cli/verbs ["owner_forms" :plan]) typist-request {})))
+      (is (= :called ((get-in cli/verbs ["owner_forms" :execute!]) typist-request {:plan typist-planned})))
+      (is (= :called ((get-in cli/verbs ["owner_forms" :undo]) "receipt.edn")))
+      (is (= '[clj-surgeon.mission-typist-executor/plan
+               clj-surgeon.mission-typist-executor/execute!
+               clj-surgeon.mission-typist-executor/undo!]
+             (mapv first @calls)))
+      (is (= '("receipt.edn") (second (last @calls)))))))
