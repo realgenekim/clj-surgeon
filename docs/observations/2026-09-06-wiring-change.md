@@ -22,3 +22,6 @@ Fable, with deterministic watchers measuring and Opus reading rollouts for ethno
 
 ## First evidence the wiring matters (this window)
 Cohort I (informed batched route vs native), first pair: N1 103.2 s correct, I1 69.2 s correct — the same task class that lost 2.8x eleven hours earlier when the route was wrong. The difference between the two cohorts is wiring (which route the caller is put on), not capability.
+
+## Rule 1 sharpened (Gene, 2026-09-06 17:3xZ: "We have how many cores? 8 or 16? I think parallel is fine; we're looking for 2-10x gains; I think we can afford some very small limited contention.")
+Sixteen cores. Actor arms are network-bound; the proof is one core for ~2 s; the measured noise floor is 34 s at 2SD; provider weather moves walls far more than local load, and parallel arms share it. So: N and T arms of a pair launch within the same second, alternating which goes first; cohorts run two pairs at a time; load is recorded at start and end of every row; the quiet window exists only for JVM batteries or a predicted combined load above eight. Tripwire: cadence-watch alarms on a window whose purpose is not a battery while load < 8.

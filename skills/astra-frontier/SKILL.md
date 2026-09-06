@@ -28,3 +28,5 @@ description: The frontier seat's operating contract for the Surgeon program (Gen
 - **Fences at publication or a changed safety boundary**, not every experimental patch. Reuse earned proof; no full gate after documentation-only bookkeeping. The two-minute red-team is a budget, never a substitute for an unexamined safety boundary. "Two failed APPROACHES, then reconsider the approach", not two retries as an invariant.
 - **Dogfood a demonstrated winning route; never mandate a second editing layer.** Record exact route and refusals; a native fallback completes the task but counts zero tool-committed sites. The 40–60 tick/tock share is REPORTED, not alarmed; the alarm is >20 minutes of apparatus without new evidence. Tokens-per-win is too noisy at two wins; alarm on repeated spend without a changed decision.
 - **The overseer's question before any apparatus block:** "which native wall will this beat, and when do we find out?"
+
+- **Parallel arms (Gene 17:3xZ, 16 cores):** N and T arms launch together, order alternated, load logged per row; the quiet window is for JVM batteries only.
