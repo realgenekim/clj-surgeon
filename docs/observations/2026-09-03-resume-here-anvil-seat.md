@@ -590,3 +590,5 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 - 04:22Z: LANDED 3dda2a61 (typist branch). Astra merges trunk next → his fence r2 → his landing. Routing r3 (b2824ee1) awaits his install-hold release; comment lowering f04298cc awaits his merge.
 
 ## 07:16Z — WINDOW EXTENDED: Gene asleep, 9 h → 16:20Z. Cadence: land Astra (receipt chain 2 on 8fd9a2e8) → FRONTIER push on a held-out repo (Astra drives) → ethnography → paper-cut spike → frontier. Checkpoints 09/12/15Z, final report 16:20Z. Open items: inb-3c57fd, inb-8e0a87, inb-4c3d0e; routing fence r5 on b409e467 after the landing.
+
+## 08:03Z — STATE: P0 closed (Astra resumed with the Surgeon MCP surface; first call 07:54:56Z). Cadence REV 2 ADOPTED by Gene: slice→use→ledger row, falsifier-bounded blocks; first slice = nREPL verify step (spec /var/tmp/forge/nrepl-verify-slice-spec.md, Astra's lane). Trunk 39a4e858 (Astra typist branch landed 07:21Z). Maven cell: 1.976x paired, 1.03x end-to-end, rejudged 12/12. Open: Astra's builder + riff; inb-3c57fd inb-8e0a87 inb-4c3d0e inb-8f108d; routing r5; server rebuild on trunk. Gene asleep; window to 16:20Z.
