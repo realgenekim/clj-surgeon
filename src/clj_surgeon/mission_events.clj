@@ -56,7 +56,11 @@
 (defn event
   "Pure result projection; the id binds this event to the saved receipt."
   [operation prior result wall-ms threw?]
-  (let [failed? (or threw? (false? (:ok result))
+  (let [phase? (contains? #{"verify" "commit"} operation)
+        failed? (or threw?
+                    (and (= "verify" operation) (not (true? (:ok result))))
+                    (and (= "commit" operation) (not (true? (:committed result))))
+                    (false? (:ok result))
                     (#{:blocked :failed} (:state result))
                     (false? (get-in result [:receipt :committed])))
         error (scalar-name (or (:error_type result) (:error-type result)
@@ -64,9 +68,10 @@
                                (get-in result [:receipt :error-type])
                                (get-in result [:receipt :error_type])))
         rung (or (:condition result) (get-in result [:decision :evidence :condition]))]
-    (merge prior (context result)
+    (merge prior (when-not phase? (context result))
            {:kind (get {"propose" "mission-plan" "apply" "mission-apply"
-                        "undo" "mission-undo"} operation "mission-boundary")
+                        "undo" "mission-undo" "verify" "mission-verify"
+                        "commit" "mission-commit"} operation "mission-boundary")
             :tool "mission"
             :ok (not failed?)
             :wall_ms wall-ms
@@ -93,3 +98,20 @@
         (catch Throwable failure
           (emit! operation @*context* nil started true)
           (throw failure))))))
+
+(defn observe-phase!
+  "Wrap actual verification or commit work, never a derived terminal state.
+   Inherit only safe id/route context; the outer boundary owns mission state.
+   A direct executor call has no mission id unless its caller bound one."
+  [phase f]
+  (let [started (System/nanoTime)
+        prior (try (dissoc (events/mission-fields (when *context* @*context*))
+                     :mission_state)
+                   (catch Throwable _ {}))]
+    (try
+      (let [result (f)]
+        (emit! phase prior result started false)
+        result)
+      (catch Throwable failure
+        (emit! phase prior nil started true)
+        (throw failure)))))

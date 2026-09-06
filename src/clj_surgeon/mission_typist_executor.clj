@@ -9,6 +9,7 @@
    [clj-surgeon.mcp-process :as process]
    [clj-surgeon.mission :as mission]
    [clj-surgeon.mission-candidate-race :as race]
+   [clj-surgeon.mission-events :as mission-events]
    [clj-surgeon.mission-forms :as forms]
    [clj-surgeon.mission-plain-forms :as plain-forms]
    [clj-surgeon.mission-typist :as typist]
@@ -360,7 +361,9 @@
                     _ (file-ops/atomic-write! (str (io/file artifacts (str "candidate-" index ".edn")))
                         (pr-str candidate))
                     compiled (compile-candidate! authority candidate)
-                    proof (when (:ok compiled) (verify-candidate! authority compiled))
+                    proof (when (:ok compiled)
+                            (mission-events/observe-phase! "verify"
+                              #(verify-candidate! authority compiled)))
                     receipt {:index index :compiled (:ok compiled) :proof proof
                              :error-type (:error-type compiled)}
                     receipts (conj receipts receipt)]
@@ -369,7 +372,8 @@
                   (let [closed (close-candidates! handle artifacts)]
                     (when-not (:terminated? closed) (reject! :typist-transport-cleanup-incomplete))
                     (reset! closed? true)
-                    (let [committed (commit-candidate! authority compiled artifacts config)]
+                    (let [committed (mission-events/observe-phase! "commit"
+                                      #(commit-candidate! authority compiled artifacts config))]
                       (assoc committed :executor :typist :route (:route authority) :candidates receipts
                              :artifacts artifacts :transport (dissoc closed :completed)
                              :verification-complete (true? (:committed committed))
