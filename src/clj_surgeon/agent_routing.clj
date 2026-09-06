@@ -20,60 +20,70 @@
 (def ^:private any-begin-pattern #"<!-- BEGIN CLJ-SURGEON ROUTING v:(\d+) -->")
 (def ^:private any-end-pattern #"<!-- END CLJ-SURGEON ROUTING v:(\d+) -->")
 
-(defn- stale-marker-state
-  "Locate a single routing block written at a version other than the current one.
-   A stale block is real drift: the seat is reading a superseded rule."
+(defn- marker-scan
+  "Every marker of EVERY version, with its span and its declared version.
+   Scanning only the current version's literal is what let a superseded block
+   survive next to a fresh one: the old bytes were invisible to the check."
+  [pattern source]
+  (let [matcher (re-matcher pattern source)]
+    (loop [found []]
+      (if (.find matcher)
+        (recur (conj found {:start (.start matcher)
+                            :end (.end matcher)
+                            :version (parse-long (.group matcher 1))}))
+        found))))
+
+(defn- marker-state
+  "Exactly ONE well-formed BEGIN/END pair, at ONE version, across ALL versions.
+   Anything else is refused with a diagnosis and the file is left alone: a
+   second block, a crossed pair, or a version-mismatched pair means a human
+   edited a managed region and the installer cannot know which rule governs."
   [source]
-  (let [begins (vec (re-seq any-begin-pattern source))
-        ends (vec (re-seq any-end-pattern source))]
-    (when (and (= 1 (count begins)) (= 1 (count ends)))
-      (let [begin-text (first (first begins))
-            end-text (first (first ends))
-            version (second (first begins))
-            begin (str/index-of source begin-text)
-            end (str/index-of source end-text)]
-        (when (and begin end (< begin end))
-          {:ok true
-           :state :stale
-           :stale-version (parse-long version)
-           :begin begin
-           :end (+ end (count end-text))})))))
-
-(defn- indexes-of [source needle]
-  (loop [from 0
-         indexes []]
-    (if-let [index (str/index-of source needle from)]
-      (recur (+ index (count needle)) (conj indexes index))
-      indexes)))
-
-(defn- marker-state [source]
-  (let [begins (indexes-of source managed-begin)
-        ends (indexes-of source managed-end)]
+  (let [begins (marker-scan any-begin-pattern source)
+        ends (marker-scan any-end-pattern source)
+        refuse (fn [diagnosis]
+                 {:ok false
+                  :error-type :invalid-managed-routing
+                  :diagnosis diagnosis
+                  :begin-count (count begins)
+                  :end-count (count ends)
+                  :begin-versions (mapv :version begins)
+                  :end-versions (mapv :version ends)})]
     (cond
       (and (empty? begins) (empty? ends))
       {:ok true :state :absent}
 
-      (and (= 1 (count begins))
-           (= 1 (count ends))
-           (< (first begins) (first ends)))
-      {:ok true
-       :state :present
-       :begin (first begins)
-       :end (+ (first ends) (count managed-end))}
+      (or (not= 1 (count begins)) (not= 1 (count ends)))
+      (refuse (str "expected exactly one CLJ-SURGEON ROUTING marker pair across all "
+                   "versions; found " (count begins) " BEGIN "
+                   (pr-str (mapv :version begins)) " and " (count ends) " END "
+                   (pr-str (mapv :version ends))
+                   ". Delete every routing block by hand until at most one "
+                   "remains, then re-run the installer."))
+
+      (>= (:start (first begins)) (:start (first ends)))
+      (refuse (str "the END marker (v:" (:version (first ends))
+                   ") appears before the BEGIN marker (v:"
+                   (:version (first begins)) "); the managed region is inverted."))
+
+      (not= (:version (first begins)) (:version (first ends)))
+      (refuse (str "BEGIN is v:" (:version (first begins)) " but END is v:"
+                   (:version (first ends))
+                   "; a routing block must open and close at the same version. "
+                   "Neither marker can be trusted to bound the managed region."))
 
       :else
-      {:ok false
-       :error-type :invalid-managed-routing
-       :begin-count (count begins)
-       :end-count (count ends)})))
+      (let [version (:version (first begins))
+            span {:begin (:start (first begins)) :end (:end (first ends))}]
+        (if (= managed-version version)
+          (merge {:ok true :state :present} span)
+          (merge {:ok true :state :stale :stale-version version} span))))))
 
 (defn- routing-state
-  "Current-version markers win. A lone older-version block is reported stale."
+  "One pair or nothing. A lone older-version pair is reported stale and is
+   replaced IN PLACE, so no bytes of the superseded rule survive."
   [source]
-  (let [state (marker-state source)]
-    (if (and (:ok state) (= :absent (:state state)))
-      (or (stale-marker-state source) state)
-      state)))
+  (marker-state source))
 
 (defn- valid-canonical-block? [block]
   (let [state (marker-state block)]

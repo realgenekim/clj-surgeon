@@ -151,7 +151,7 @@
     (is (str/starts-with? source routing/managed-begin))
     (is (str/ends-with? (str/trimr source) routing/managed-end))
     (is (not (str/includes? source "ROUTING v:1")))
-    (is (str/includes? source "the `clj-surgeon` skill, section \"Edit routing\""))
+    (is (str/includes? source "the `clj-surgeon` skill, section \"Edit routing (policy revision 1, 2026-09-06)\""))
     (is (str/includes? source "bin/mission"))
     (is (str/includes? source "PROTOTYPE"))
     (is (not (str/includes? source "Native `rg` plus a native patch is the default route")))
@@ -160,7 +160,7 @@
     (testing "the block names the document it was derived from"
       (is (str/includes?
             source
-            "docs/observations/2026-09-06-clojure-edit-routing-rule.md")))))
+            "docs/observations/2026-09-06-routing-prompt-surfaces.md")))))
 
 (deftest terminal-response-routing-is-conditional-on-complete-user-work
   ;; @spec MCP-OP-RELAY-004
@@ -172,3 +172,136 @@
     (is (re-find
           #"They never prove\s+that the complete user request is finished\."
           source))))
+
+;; ---------------------------------------------------------------------------
+;; Astra's three probes, 2026-09-06 03:33Z, verbatim as witnesses.
+;;
+;; Executed against c1d6028a they returned: (a) :current with :changed false,
+;; leaving a contradictory v:1 rule installed beside the v:2 one; (b) :absent,
+;; so a THIRD block was appended next to two v:1 blocks; (c) accepted as stale
+;; and replaced, trusting a BEGIN v:1 / END v:3 pair to bound the region.
+;; Marker state must require exactly one well-formed matching pair across ALL
+;; versions and refuse everything else without touching the file.
+
+(defn- v-block [version body]
+  (str "<!-- BEGIN CLJ-SURGEON ROUTING v:" version " -->\n"
+       body "\n"
+       "<!-- END CLJ-SURGEON ROUTING v:" version " -->\n"))
+
+(deftest astra-probe-a-current-block-beside-an-old-block-refuses
+  (let [source (str "seat header\n"
+                    (v-block 2 "the current rule")
+                    "\n"
+                    (v-block 1 "Native `rg` plus a native patch is the default route.")
+                    "tail\n")
+        result (routing/upsert-routing-block source canonical-block)]
+    (testing "not :current, not :changed false -- a typed refusal"
+      (is (false? (:ok result)))
+      (is (= :invalid-managed-routing (:error-type result)))
+      (is (nil? (:previous-state result)))
+      (is (not= :current (:previous-state result))))
+    (testing "the diagnosis names both versions it found"
+      (is (= [2 1] (:begin-versions result)))
+      (is (= [2 1] (:end-versions result)))
+      (is (str/includes? (:diagnosis result) "exactly one")))
+    (testing "the file is NOT modified"
+      (is (= source (:source result))))))
+
+(deftest astra-probe-b-two-old-blocks-are-not-absent
+  (let [source (str "seat header\n"
+                    (v-block 1 "first old rule")
+                    "\n"
+                    (v-block 1 "second old rule")
+                    "tail\n")
+        result (routing/upsert-routing-block source canonical-block)]
+    (testing "not :absent -- refused, so no third block is appended"
+      (is (false? (:ok result)))
+      (is (= :invalid-managed-routing (:error-type result)))
+      (is (= 2 (:begin-count result)))
+      (is (= 2 (:end-count result))))
+    (testing "the file is NOT modified"
+      (is (= source (:source result)))
+      (is (not (str/includes? (:source result) "ROUTING v:2"))))))
+
+(deftest astra-probe-c-mismatched-pair-versions-refuse
+  (let [source (str "seat header\n"
+                    "<!-- BEGIN CLJ-SURGEON ROUTING v:1 -->\n"
+                    "a rule bounded by markers that disagree\n"
+                    "<!-- END CLJ-SURGEON ROUTING v:3 -->\n"
+                    "tail\n")
+        result (routing/upsert-routing-block source canonical-block)]
+    (testing "not accepted as stale"
+      (is (false? (:ok result)))
+      (is (= :invalid-managed-routing (:error-type result)))
+      (is (not= :stale (:previous-state result)))
+      (is (nil? (:stale-version result))))
+    (testing "the diagnosis names both marker versions"
+      (is (= [1] (:begin-versions result)))
+      (is (= [3] (:end-versions result)))
+      (is (str/includes? (:diagnosis result) "BEGIN is v:1"))
+      (is (str/includes? (:diagnosis result) "END is v:3")))
+    (testing "the file is NOT modified"
+      (is (= source (:source result))))))
+
+(deftest a-lone-well-formed-pair-is-still-handled
+  (testing "a lone stale pair is replaced in place"
+    (let [source (str "head\n" (v-block 1 "old rule") "tail\n")
+          result (routing/upsert-routing-block source canonical-block)]
+      (is (:ok result))
+      (is (= :stale (:previous-state result)))
+      (is (= 1 (:stale-version result)))
+      (is (= (str "head\n" canonical-block "tail\n") (:source result)))))
+  (testing "a lone current pair is :current and byte-idempotent"
+    (let [source (str "head\n" canonical-block "tail\n")
+          result (routing/upsert-routing-block source canonical-block)]
+      (is (:ok result))
+      (is (= :current (:previous-state result)))
+      (is (false? (:changed result)))
+      (is (= source (:source result))))))
+
+(deftest no-old-version-bytes-survive-a-replacement
+  ;; A replacement that appended instead of replacing would keep the old rule
+  ;; readable in the same file. Assert on the BYTES, at every older version.
+  (doseq [old-version [1 3 11]]
+    (testing (str "v:" old-version " leaves nothing behind")
+      (let [marker-body (str "SUPERSEDED-RULE-" old-version)
+            source (str "head\n" (v-block old-version marker-body) "tail\n")
+            result (routing/upsert-routing-block source canonical-block)
+            updated (:source result)]
+        (is (:ok result))
+        (is (= :stale (:previous-state result)))
+        (is (= old-version (:stale-version result)))
+        (is (not (str/includes? updated marker-body)))
+        (is (not (str/includes? updated (str "ROUTING v:" old-version))))
+        (is (= 1 (count (re-seq #"BEGIN CLJ-SURGEON ROUTING" updated))))
+        (is (= 1 (count (re-seq #"END CLJ-SURGEON ROUTING" updated))))
+        (is (= (str "head\n" canonical-block "tail\n") updated))))))
+
+(deftest the-plate-pointer-and-its-citations-resolve
+  ;; A pointer that names a heading nobody wrote, or a document nobody
+  ;; committed, is worse than no pointer: the seat reads a compact rule and
+  ;; believes fuller text exists behind it. The plate cited
+  ;; docs/observations/2026-09-06-clojure-edit-routing-rule.md, which was never
+  ;; written. `bb bin/check-routing-parity.clj` is the same guard over all the
+  ;; hand-copied table renderings.
+  (let [plate (slurp "resources/clj-surgeon-agent-routing.md")
+        canonical (slurp "skills/clj-surgeon/SKILL.md")
+        heading "## Edit routing (policy revision 1, 2026-09-06)"]
+    (testing "the plate names the canonical heading and that heading exists"
+      (is (str/includes? plate "Edit routing (policy revision 1, 2026-09-06)"))
+      (is (str/includes? canonical heading)))
+    (testing "every document the plate cites exists on disk"
+      (let [cited (set (re-seq #"docs/observations/[A-Za-z0-9._-]+\.md" plate))]
+        (is (seq cited))
+        (doseq [doc cited]
+          (is (fs/exists? doc) (str "the plate cites a missing document: " doc)))))
+    (testing "the plate carries no executor-first rule for production"
+      (is (str/includes? plate "There is no executor-first rule in production"))
+      (is (str/includes? plate "EXPERIMENT ONLY")))
+    (testing "the plate names the real refusal shapes, not only mission-*"
+      (is (str/includes? plate ":forms-protected-syntax"))
+      (is (str/includes? plate "mission-workspace-required"))
+      (is (str/includes? plate "NESTED diagnostics")))
+    (testing "no unsourced 11x figure survives on any surface"
+      (is (not (str/includes? plate "11x")))
+      (is (not (str/includes? canonical "| Bench harness wall | 11x |"))))))

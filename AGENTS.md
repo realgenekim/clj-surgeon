@@ -6,15 +6,29 @@ Read and follow [CLAUDE.md](CLAUDE.md) before making changes. It is the
 canonical repository instruction file for all coding agents, regardless of
 vendor or runtime.
 
-Clojure edit routing is governed by ONE canonical text: the `clj-surgeon`
-skill, section "Edit routing (measured 2026-09-06, build >= 13c12401)". Read it
-before the first Clojure edit of a task. The installed CLI is the production
-entrance; persistent MCP is explicit development work, not an unconditional
-preference, and no MCP server is started for an ordinary edit. Native `rg` plus
-`apply_patch` stays a legitimate production default for a known small literal
-change; the `bin/mission` executor is tried first only when scope, proof
-profile, provider permission, and measured admission facts already fit. The
-table below is that section reproduced verbatim; change it there first.
+Clojure edit routing is governed by ONE canonical text:
+[skills/clj-surgeon/SKILL.md](skills/clj-surgeon/SKILL.md), section
+**"Edit routing (policy revision 1, 2026-09-06)"**. That working-tree file is
+the SOURCE; installed mirrors follow it through `make install-claude-skill` and
+`make install-codex-skill`, and every copy of the table below is checked by
+`bb bin/check-routing-parity.clj`. Change it there first.
+
+Reading the section is not a per-edit tax: the managed `CLJ-SURGEON ROUTING`
+block carries the routing summary, and a known literal change with sufficient
+context in hand pays no extra read boundary. Read the section when the route is
+not already decided, and load its references only for the advanced workflows
+they cover.
+
+The installed CLI is the production entrance; persistent MCP is explicit
+development work, not an unconditional preference, and no MCP server is started
+for an ordinary edit. Native `rg` plus `apply_patch` stays a legitimate
+production default for a known small literal change. For any other bounded
+mechanical edit, production chooses native or one of the earned deterministic
+Surgeon routes by complete verified task cost -- there is no executor-first
+rule in production; executor-first applies only inside the explicitly opted-in
+dogfood experiment. A typed refusal is read, retried only on new evidence or a
+concrete supported correction, and otherwise finished natively with its
+provenance recorded.
 
 | Situation | Route |
 |---|---|
@@ -22,10 +36,11 @@ table below is that section reproduced verbatim; change it there first.
 | Owner unknown in a large file | One outline or one search (`:op :ls`, or `rg`), then read the named form. |
 | Source already held in context | No reread. |
 | Known small literal change in one region | Native `rg` plus `apply_patch`. This stays a legitimate production default. |
-| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter, add a require across namespaces) **and** scope, proof profile, provider permission, and measured admission facts already fit | Try the `bin/mission` executor first. Do not invent a profile or a prior to force eligibility. |
+| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter) | Choose native or a deterministic Surgeon route by COMPLETE VERIFIED TASK COST. There is no executor-first rule in production. |
+| Extraction to a new namespace; namespace rename; a require added or changed across namespaces; a surgical edit inside one known form | The earned deterministic Surgeon routes: `:extract!`, `:rename-ns!`, `require_change`, `within` plus `from`/`to`. Kept from the 2026-09-02 ruling: no native equivalent, or measured zero churn. |
 | Complete reference discovery required | Surgeon semantic preparation. `rg` is not a closure proof. |
-| New code, new tests, prose, non-Clojure | Native. Ineligible for this executor on this build; not forbidden territory. |
-| Tonight's mandated dogfood experiment, eligible edit | Executor first, then one ledger line. |
+| New code, new tests, prose, non-Clojure | Native. Ineligible for the experimental executor on this build; not forbidden territory. |
+| Under the mandated dogfood EXPERIMENT only, explicitly opted into, an eligible bounded mechanical edit | Try the `bin/mission` executor FIRST, then write one ledger line. Executor-first is the experiment's rule; it does not govern production routing. |
 | Fan-out via per-form MCP writes; `apply_clojure_changes` with a namespace owner; forms-scoped `find`+`replace` for insertion | Do not use. Measured losers 2026-09-02, not re-measured since. |
 
 For non-trivial feature work, `CLAUDE.md` requires the design, planning,

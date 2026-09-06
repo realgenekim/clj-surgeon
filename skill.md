@@ -11,6 +11,33 @@ production entrance. Persistent MCP is a development-only, months-long
 experiment; use it only when explicitly testing that service. Do not load this
 skill for an ordinary bounded structural read or an already-decided compact
 edit.
+## Edit routing (policy revision 1, 2026-09-06)
+
+The canonical Clojure edit-routing table lives in
+[skills/clj-surgeon/SKILL.md](skills/clj-surgeon/SKILL.md), section
+**"Edit routing (policy revision 1, 2026-09-06)"**. That working-tree file is the
+SOURCE; installed skill mirrors follow it through `make install-claude-skill`
+and `make install-codex-skill`. The table below is that section's table
+reproduced verbatim; change it there first, then re-run
+`bb bin/check-routing-parity.clj`.
+
+| Situation | Route |
+|---|---|
+| Owner and line already known | Direct bounded read: `:op :cat :file F :form NAME`, or `sed -n 'A,Bp'` on the known range. No outline. |
+| Owner unknown in a large file | One outline or one search (`:op :ls`, or `rg`), then read the named form. |
+| Source already held in context | No reread. |
+| Known small literal change in one region | Native `rg` plus `apply_patch`. This stays a legitimate production default. |
+| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter) | Choose native or a deterministic Surgeon route by COMPLETE VERIFIED TASK COST. There is no executor-first rule in production. |
+| Extraction to a new namespace; namespace rename; a require added or changed across namespaces; a surgical edit inside one known form | The earned deterministic Surgeon routes: `:extract!`, `:rename-ns!`, `require_change`, `within` plus `from`/`to`. Kept from the 2026-09-02 ruling: no native equivalent, or measured zero churn. |
+| Complete reference discovery required | Surgeon semantic preparation. `rg` is not a closure proof. |
+| New code, new tests, prose, non-Clojure | Native. Ineligible for the experimental executor on this build; not forbidden territory. |
+| Under the mandated dogfood EXPERIMENT only, explicitly opted into, an eligible bounded mechanical edit | Try the `bin/mission` executor FIRST, then write one ledger line. Executor-first is the experiment's rule; it does not govern production routing. |
+| Fan-out via per-form MCP writes; `apply_clojure_changes` with a namespace owner; forms-scoped `find`+`replace` for insertion | Do not use. Measured losers 2026-09-02, not re-measured since. |
+
+This file is a legacy working-tree copy kept for readers who open it
+directly. It is NOT the installer source and it does not override the
+canonical section above.
+
 ## Choose the cheapest authority
 
 Use native `rg` and `apply_patch` for a known literal and one small region. Use

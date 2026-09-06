@@ -1,7 +1,7 @@
 ---
 name: clj-surgeon
 description: >-
-  Carries the canonical Clojure EDIT ROUTING table (measured 2026-09-06, build >= 13c12401) plus advanced clj-surgeon workflows: semantic preparation, computed preview, extraction or movement, CLI fallback, MCP recovery, and troubleshooting. Do not invoke for ordinary inspect_clojure or edit_clojure calls; always-loaded routing and tool schemas cover them.
+  Carries the canonical Clojure EDIT ROUTING table (policy revision 1, 2026-09-06) plus advanced clj-surgeon workflows: semantic preparation, computed preview, extraction or movement, CLI fallback, MCP recovery, and troubleshooting. Do not invoke for ordinary inspect_clojure or edit_clojure calls; always-loaded routing and tool schemas cover them.
 ---
 
 # Production clj-surgeon routes (advanced router)
@@ -10,12 +10,23 @@ Optimize complete verified task time. The installed Babashka CLI is the
 production entrance. Persistent MCP is a development-only, months-long
 experiment; use it only when explicitly testing that service.
 
-## Edit routing (measured 2026-09-06, build >= 13c12401)
+## Edit routing (policy revision 1, 2026-09-06)
 
-This section is the CANONICAL routing text. The `CLJ-SURGEON ROUTING v:2`
-managed block, `safe-refactor`, the repository `CLAUDE.md` and `AGENTS.md`, and
-`docs/observations/2026-09-06-routing-prompt-surfaces.md` render this same
-table. They do not paraphrase it. Change it here first.
+This section is the CANONICAL routing text and the SOURCE of every copy. The
+`CLJ-SURGEON ROUTING v:2` managed block points at it; `skills/safe-refactor`,
+the repository `CLAUDE.md` and `AGENTS.md`, and
+`docs/observations/2026-09-06-routing-prompt-surfaces.md` render its table
+verbatim. Change it HERE first, then re-render the copies and re-run the parity
+check (`bb bin/check-routing-parity.clj`). Installed skill mirrors follow from
+this working tree through `make install-claude-skill` and
+`make install-codex-skill`; the working tree is authoritative and the mirrors
+are stable copies of it.
+
+You do NOT have to load this skill before every edit. The managed block carries
+the routing summary; a known literal change with sufficient context already in
+hand pays no extra read boundary. Read this section when the route is not
+already decided, and load the references below only for the advanced workflows
+they cover.
 
 ### The table
 
@@ -25,10 +36,11 @@ table. They do not paraphrase it. Change it here first.
 | Owner unknown in a large file | One outline or one search (`:op :ls`, or `rg`), then read the named form. |
 | Source already held in context | No reread. |
 | Known small literal change in one region | Native `rg` plus `apply_patch`. This stays a legitimate production default. |
-| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter, add a require across namespaces) **and** scope, proof profile, provider permission, and measured admission facts already fit | Try the `bin/mission` executor first. Do not invent a profile or a prior to force eligibility. |
+| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter) | Choose native or a deterministic Surgeon route by COMPLETE VERIFIED TASK COST. There is no executor-first rule in production. |
+| Extraction to a new namespace; namespace rename; a require added or changed across namespaces; a surgical edit inside one known form | The earned deterministic Surgeon routes: `:extract!`, `:rename-ns!`, `require_change`, `within` plus `from`/`to`. Kept from the 2026-09-02 ruling: no native equivalent, or measured zero churn. |
 | Complete reference discovery required | Surgeon semantic preparation. `rg` is not a closure proof. |
-| New code, new tests, prose, non-Clojure | Native. Ineligible for this executor on this build; not forbidden territory. |
-| Tonight's mandated dogfood experiment, eligible edit | Executor first, then one ledger line. |
+| New code, new tests, prose, non-Clojure | Native. Ineligible for the experimental executor on this build; not forbidden territory. |
+| Under the mandated dogfood EXPERIMENT only, explicitly opted into, an eligible bounded mechanical edit | Try the `bin/mission` executor FIRST, then write one ledger line. Executor-first is the experiment's rule; it does not govern production routing. |
 | Fan-out via per-form MCP writes; `apply_clojure_changes` with a namespace owner; forms-scoped `find`+`replace` for insertion | Do not use. Measured losers 2026-09-02, not re-measured since. |
 
 ### Entrance commands, as they exist on this branch
@@ -37,17 +49,10 @@ table. They do not paraphrase it. Change it here first.
 `help`, `show`, `list`, `ready`, and `blocked` run on babashka. `propose`,
 `plan`, `apply`, `run`, `resume`, `undo`, and `link` start a JVM.
 
-One JVM, plan and write together, no review step:
+Run a saved, complete spec in one JVM (plan and write together, no review step):
 
 ```bash
-bin/mission run --spec-file - --state-home "$H" <<'EDN'
-{:verb "owner_forms"
- :question "why this write is being made"
- :request {:op "owner_forms"
-           :workspace_root "/abs/path"
-           :scope {:paths ["src/**/*.clj"]}
-           :verification {:profile "mission-proof"}}}
-EDN
+bin/mission run --workspace "$WS" --state-home "$H" --spec-file owner-forms.edn
 ```
 
 Review before write:
@@ -59,16 +64,50 @@ bin/mission apply   M-1 --workspace "$WS" --state-home "$H"
 bin/mission undo    M-1 --workspace "$WS" --state-home "$H"
 ```
 
-`open` is an alias of `propose`. `run` supports the `owner_forms` verb only.
-`apply` exits non-zero on a refusal or a failed receipt. The proof profile is
-read from `<workspace_root>/.clj-surgeon.edn`:
+`open` is an alias of `propose`. `run` supports the `owner_forms` verb only and
+refuses an existing mission id. `apply` exits non-zero on a refusal or a failed
+receipt. The spec schema — every required key, and why each one exists — is
+[docs/mission-typist.md](../../docs/mission-typist.md).
+
+The only spec shape shown here is one that has been PROVEN to plan, commit, and
+undo: the request built by `test/clj_surgeon/mission_typist_executor_test.clj`
+(`request`, line 32) out of `test/clj_surgeon/mission_typist_test.clj`
+(`eligible`, line 8), exercised by the `real-proof-commit-and-undo` test at line
+42. Written out, with the fixture's own profiles:
 
 ```edn
-{:verification-profiles {"mission-proof" {:commands [["/bin/true"]]}}}
+{:verb "owner_forms"
+ :profiles
+ {"gate"   {:id "gate"   :measured-ms 10 :evidence "receipt:gate"
+            :commands [["clojure" "-M" "-e" "(require 'fixture.core)"]]}
+  "accept" {:id "accept" :measured-ms 10 :evidence "receipt:witness-receipt"
+            :commands [["clojure" "-M" "-e" "(require 'fixture.core) (assert (nil? (ns-resolve 'fixture.core 'old-name))) (assert (= 1 ((ns-resolve 'fixture.core 'new-name))))"]]}}
+ :request
+ {:workspace_root "/absolute/workspace"
+  :intent "Rename old-name to new-name preserving behavior"
+  :owners [{:file "src/fixture/core.clj" :owner "old-name" :new-owner "new-name"}]
+  :proof-files []
+  :verification {:profile "gate"}
+  :acceptance_profile "accept"
+  :typist {:enabled? true
+           :mission-class :rename
+           :discovery-complete? true
+           :source-policy {"src/fixture/core.clj" {:generated? false
+                                                   :reader-conditionals? false
+                                                   :format-sensitive? false}}
+           :budget {:max-files 1 :max-changed-chars 1000}
+           :commit {:atomic? true :rollback? true}
+           :provider {:id :openrouter :model "openai/gpt-oss-120b" :upstream "Cerebras"}
+           :rate {:mission-class :rename :provider :openrouter :upstream "Cerebras"
+                  :model "openai/gpt-oss-120b" :verified 9 :attempted 10
+                  :evidence "cohort:rename"}}}}
 ```
 
-Supply a profile that actually proves the change. Do not point a profile at
-`/bin/true` to make a mission eligible.
+The gate and the acceptance profile must be independently authored and must run
+DIFFERENT commands with different retained evidence; the planner refuses
+identical proof commands (`:typist-identical-proof-commands`). Supply a profile
+that actually proves the change. Never point a profile at a command that cannot
+fail.
 
 The mission executor is a PROTOTYPE dated 2026-09-05. Its kernel source commit
 is not yet a git commit on any published branch. Say so when you cite it.
@@ -82,15 +121,32 @@ in a repository or profile that has opted in.
 
 ### A typed refusal
 
-A refusal is EDN in the repository receipt shape:
+Refusals do not all share one spelling. Read whichever of these the receipt
+carries, at whatever depth it carries it:
+
+- `:error_type` as a STRING beginning `mission-`, in a CLI dossier — e.g.
+  `"mission-not-ready"`, `"mission-workspace-required"`.
+- `:error-type` as a KEYWORD, from the kernel — e.g.
+  `:forms-protected-syntax` (the owner contains comments or other protected
+  syntax; no mutation was attempted), `:forms-comment-lost`,
+  `:forms-comment-moved`, `:forms-owner-mismatch`,
+  `:typist-all-candidates-rejected`, `:typist-stale-plan`,
+  `:typist-identical-proof-commands`, `:typist-invalid-undo-hash`.
+- NESTED diagnostics: a refusal may arrive inside `:candidates`, `:proof`, or
+  `:decision` rather than at the top level. `(:ok result)` false with no
+  top-level code is still a refusal — walk the map before retrying.
+
+A CLI dossier refusal has this shape:
 
 ```edn
-{:ok false :operation "mission" :error_type "mission-<suffix>" :error "one sentence" :next_call nil}
+{:ok false :operation "mission" :error_type "mission-<suffix>" :error "one sentence"
+ :decision "what to do instead" :next_call nil}
 ```
 
-1. Read `:error_type` and `:error`.
+1. Read the code and the `:error` and `:decision` sentences.
 2. Retry only when new evidence or a concrete supported correction lifts the
-   stated reason.
+   stated reason. Never retry an identical request after
+   `:forms-protected-syntax`.
 3. Otherwise finish the edit natively. That is a legitimate outcome, not a
    defeat, and it is recorded.
 4. Record the provenance as actual or user-reported. Do not widen scope to make
@@ -104,8 +160,8 @@ guarantees, its unknowns, and whether its evidence is test or live.
 
 ### The dogfood ledger line
 
-For the mandated experiment, record one line per Clojure edit in the session
-work log:
+For the mandated experiment ONLY, record one line per Clojure edit in the
+session work log:
 
 ```text
 dogfood | <edit class> | <route> | <refusal type or -> | <wall seconds>
@@ -113,16 +169,25 @@ dogfood | <edit class> | <route> | <refusal type or -> | <wall seconds>
 
 `route` is `executor`, `native-after-refusal`, or `native-ineligible`.
 
-### The numbers, with their qualifiers
+### The numbers, and exactly where each one comes from
 
-| Meter | Result | Qualifier |
-|---|---|---|
-| Executor adoption in the pilot | executor-first | MANDATED, not chosen. Not an adoption signal. |
-| Terminal latency, Astra caller, complete CLI | 3.05x | Came with a reliability LOSS: 3/4 versus 4/4. |
-| Bench harness wall | 11x | Single harness, not replicated. |
-| Unified-diff route acceptance | 0 of 20 | Why the executor spec shape is used at all. |
+Policy revision 1, dated 2026-09-06. No figure appears here without the
+artifact it was read from.
 
-The raw pilot is not a replicated speedup. Never render these bare.
+| Meter | Result | Where it comes from | Qualifier |
+|---|---|---|---|
+| Median complete command wall, four prepared-change pairs | 3.05x | Astra forms cohort: `/var/tmp/forge/astra-forms-cohort-fx/summary.json` (written 2026-09-06 02:19:03Z); write-up `docs/observations/2026-09-06-astra-forms-cohort-result.md`, measurement stamped 2026-09-06T02:20:24Z, cohort engine `0a49f012` | Tool 3/4 verified against native Sol 4/4 verified. Latency only, bought at LOWER reliability. It is NOT an Astra-caller-versus-Sol-caller comparison. n=4; the native SD widened to 2SD 15.585s. |
+| Codex `apply_patch` V4A payloads refused by a unified-diff-only gate | 69-75% of admit calls | `docs/observations/2026-09-02-resume-here-bridge-program.md`, UPDATE 15:41Z | Why a structured spec shape is used instead of a diff string. A different gate, not this executor. |
+| The 2026-09-02 native-default ruling | ~2x wall and ~2x actions for a tool-mandated agent, no quality meter clearing the noise floor | `docs/observations/2026-09-02-captains-log-bridge-wall-clock-ideal-program.md`; 81 arm-runs, verified servers, two blind judges | Measured on the Sol caller, on the build before `13c12401` ("merge: helper_extraction: request-shape refusals carry :field, :decision and a runnable :example"), and on the MCP per-form editing grammar. |
+| Executor-first in the pilot | not a measurement | this section's experiment row, and `docs/observations/2026-09-06-routing-prompt-surfaces.md` | MANDATED by the experiment, not chosen by any agent. Carries no adoption signal and no speedup claim. |
+
+No 11x bench figure is carried. It was a single unreplicated harness reading
+with no retained receipt naming its scope, and it has been removed.
+
+The EXPERIMENTAL ENGINE is named separately from production routing: the
+`bin/mission` `owner_forms` executor, PROTOTYPE dated 2026-09-05, cohort engine
+`0a49f012`. Production routing in the table above does not depend on it and does
+not change if it is withdrawn.
 
 ### Why this replaces the 2026-09-02 ruling
 
@@ -132,12 +197,16 @@ the MCP per-form editing grammar. Under those conditions the agent kept its
 native read and patch loop and layered the tool on top, paying about 2x wall
 and 2x actions with no quality meter clearing the noise floor.
 
+That ruling's EXCEPTIONS survive unchanged and keep their row in the table:
+`:extract!`, `:rename-ns!`, `require_change`, and `within` plus `from`/`to` were
+the measured winners then and are the measured winners now.
+
 The mission executor is a different mechanism: owners, intended forms, and a
 proof profile in; a verified commit with a receipt and an undo out, or a typed
 refusal before any write. A rule measured on the first mechanism does not
 govern the second. It also does not license the second beyond what has been
-measured, which is why the table keeps native as the production default for
-small literal changes.
+measured, which is why the table keeps production routing on complete verified
+task cost and confines executor-first to the opted-in experiment.
 
 ### Reassessment
 
@@ -174,17 +243,19 @@ For any nontrivial plan, put the structured request on stdin. This is the CLI
 equivalent of MCP's structured arguments and avoids nested shell quoting:
 
 ```bash
-clj-surgeon :op :change! :spec-file - <<'EDN'
+clj-surgeon :op :change! :receipt-out ./change-receipt.edn :spec-file - <<'EDN'
 {:changes [{:id :rename
             :in ["src/app.clj"]
             :forms [run]
-            :find :old
-            :do [:replace :new]
+            :find ":old"
+            :do [:replace ":new"]
             :expect {:matches 1 :each-form 1}}]
  :expect {:changes 1 :edits 1 :files 1}}
 EDN
 ```
 
+`:find` and the replacement are source strings, even for a keyword literal.
+`:change!` requires a writable `:receipt-out` path for its guarded undo receipt.
 Use `:spec-file PATH` for a saved request. Attach stdin in the same shell
 action; never invoke `:spec-file -` and wait for a later input stream.
 Never run `clj-surgeon up` casually. It is development-only, edits workspace
