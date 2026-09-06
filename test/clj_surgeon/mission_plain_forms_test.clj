@@ -94,3 +94,23 @@
                    (apply str (repeat 129 "(def a 1)"))]]
         (is (false? (:ok (plain/compile-response basis raw)))))
       (is (zero? @calls)))))
+
+(deftest inert-dispatch-framing-for-real1
+  ;; Real-1 diagnostic-delta uses #(contains? ...), so a blanket # refusal
+  ;; excluded the motivating task. Framing is inert; compiler/proof own semantics.
+  (doseq [[before after]
+          [["(defn diagnostic-delta [xs seen] (remove (fn [x] (contains? seen x)) xs))"
+            "(defn diagnostic-delta [xs seen] (remove #(contains? seen %) xs))"]
+           ["(def values nil)" "(def values #{:a :b})"]
+           ["(def pattern nil)" "(def pattern #\"[(){}]\\\\d+\")"]]]
+    (let [name (if (.startsWith before "(defn") "diagnostic-delta"
+                 (if (.startsWith before "(def values") "values" "pattern"))
+          b {:sources {"a.clj" before}
+             :owners [{:file "a.clj" :owner name :start 0 :end (count before)}]
+             :budget {:max-files 1 :max-changed-chars 1000}}
+          r (plain/compile-response b after)]
+      (is (:ok r))
+      (is (= after (get-in r [:future-sources "a.clj"])))))
+  (doseq [dispatch ["#=(identity 1)" "#_1 2" "#?(:clj 1)" "#inst \"2020\"" "#unknown 1"]]
+    (is (= :plain-unsupported-reader-syntax
+           (:error-type (plain/compile-response basis (str "(defn- finding-field [x] " dispatch ")")))))))

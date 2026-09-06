@@ -7,8 +7,9 @@
   mission-forms/compile-forms; proof and commit are still required downstream.
 
   This prototype permits plain def/defn/defn- lists, with arbitrary legitimate
-  string contents. Outside strings, dispatch macros and character literals are
-  conservatively unsupported; comments/metadata refuse as protected syntax.
+  string contents. Anonymous functions, sets and regex literals are framed without evaluation.
+  Other dispatch macros and character literals outside strings remain unsupported;
+  comments/metadata refuse as protected syntax.
   Nothing unescapes JSON, strips fences, or repairs a refused response.
   Fixed preparse limits: 262144 UTF8 bytes, 2048 opening delimiters, depth 64,
   and at most the existing compiler's 128 changes. These are admission limits,
@@ -47,7 +48,13 @@
           (or (Character/isWhitespace c) (= c \,))
           (recur (inc i) stack false false start opens spans)
 
-          (contains? #{\# \\} c) (refuse! :plain-unsupported-reader-syntax)
+          (= c \#)
+          (if (and (seq stack) (< (inc i) (count response))
+                   (contains? #{\( \{ \"} (.charAt ^String response (inc i))))
+            (recur (inc i) stack false false start opens spans)
+            (refuse! :plain-unsupported-reader-syntax))
+
+          (= c \\) (refuse! :plain-unsupported-reader-syntax)
           (contains? #{\; \^} c) (refuse! :forms-protected-syntax)
 
           opening?
