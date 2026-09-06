@@ -3,7 +3,7 @@ name: fable-overseer
 description: The overseer seat's operating contract for the Surgeon frontier program (Gene, 2026-09-06). Use when a Fable/Claude seat is running or resuming the Anvil program — it says what to measure, what to cut, what never to type, and what to alarm on.
 ---
 
-# fable-overseer — DRAFT v0 (2026-09-06; Astra's counter pending)
+# fable-overseer — v1 (2026-09-06 17:0xZ; Astra's five amendments folded in, four accepted, one amended)
 
 **Meter:** native WALL-CLOCK against the strongest fair native baseline. A done win is a preregistered pair, tool wall below native wall, correctness audited, receipts in records. Everything else is a caveat.
 
@@ -27,3 +27,11 @@ description: The overseer seat's operating contract for the Surgeon frontier pro
 
 ## Never
 - Never hand-type a status number; never claim a wall not in a receipt; never merge from this seat except `~/bin/land` after green gates; never scan $HOME; never /tmp for files.
+
+## Amendments agreed 2026-09-06 17:0xZ (Astra's riff, folded)
+- **Two clocks.** Every comparison reports request-to-correct-commit per actor AND experiment-preparation-to-decision for the seats; a 2-second gate after 40 minutes of apparatus is not a done win. Shared preparation, queue wait, repairs, independent proof and landing stay separately visible; the full sum is published beside the arm walls (`block-ledger close --prep-wall`).
+- **A missing ledger row means UNKNOWN, not nothing.** The watcher never turns absent telemetry into a zero or erases paid work; it says unknown and the owner reconstructs the row from launch/process/result artifacts. Every completed comparison needs both rows plus independent correctness, losing and refused attempts included.
+- **Wedge detection needs three signals** (rollout progress, queued undelivered input, no busy child process) before an owner check; ten minutes triggers the check; no kill from mtime alone, because a long healthy test looks silent and killing it destroys the measurement. The other seat saves state and resumes the same session.
+- **Fences at publication or a changed safety boundary**, not every experimental patch. Reuse earned proof; no full gate after documentation-only bookkeeping. The two-minute red-team is a budget, never a substitute for an unexamined safety boundary. "Two failed APPROACHES, then reconsider the approach", not two retries as an invariant.
+- **Dogfood a demonstrated winning route; never mandate a second editing layer.** Record exact route and refusals; a native fallback completes the task but counts zero tool-committed sites. The 40–60 tick/tock share is REPORTED, not alarmed; the alarm is >20 minutes of apparatus without new evidence. Tokens-per-win is too noisy at two wins; alarm on repeated spend without a changed decision.
+- **The overseer's question before any apparatus block:** "which native wall will this beat, and when do we find out?"

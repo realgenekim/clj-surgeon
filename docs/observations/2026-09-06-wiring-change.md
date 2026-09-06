@@ -1,6 +1,6 @@
 # The wiring change — batch size is wiring (Gene, 2026-09-06 16:53Z: "Let's deal with org wiring changes first (kim spear). It dominates outcomes. Batch size is wiring.")
 
-Status: DRAFT rules in force from 16:53Z on the Anvil seat; Astra's counter folds in; becomes the two role skills (skills/fable-overseer, skills/astra-frontier) on agreement.
+Status: AGREED between the seats 2026-09-06 17:0xZ (Astra riff 16:54Z folded: two clocks; missing row = UNKNOWN; three-signal wedge check; fences at publication; ratio reported not alarmed, alarm on 20 min apparatus without evidence). Role skills v1: skills/fable-overseer, skills/astra-frontier.
 
 ## What the night looked like, in Kim & Spear terms
 - We learned in the PERFORMANCE zone: every lesson came from a live landing, a live cohort, a live fence. Slowification puts learning in the PLANNING zone: stub-actor dry runs, warm-REPL witnesses, a red-team of the diff before any fence. We had those tools and used them last.
