@@ -622,11 +622,20 @@
         (assoc :note wildcard-note))
 
       :else
-      (let [matches (mapv (fn [match]
-                            (assoc (json-data match)
-                                   :hash (structural-lens/source-hash
-                                           (:source match))
-                                   :file_hash (:hash snapshot)))
+      ;; @spec MCP-OP-FIELD-008
+      ;; A site whose `source` is byte-for-byte the request's own `match` string
+      ;; is echoing the request back. For a literal pattern that is EVERY site,
+      ;; a constant repeated once per match. Omit it there and keep it wherever
+      ;; the spelling differs -- any `_` wildcard, any non-identical whitespace
+      ;; -- because that is the only case where the caller cannot reconstruct
+      ;; the byte from the request it just sent.
+      (let [pattern (:match request)
+            matches (mapv (fn [match]
+                            (cond-> (assoc (json-data match)
+                                           :hash (structural-lens/source-hash
+                                                   (:source match))
+                                           :file_hash (:hash snapshot))
+                              (= pattern (:source match)) (dissoc :source)))
                           (:matches found))]
         (cond->
           {:id (:id request)
@@ -640,6 +649,10 @@
                                                     (:matches found)))
            ;; @spec MCP-OP-FIELD-007
            :owner_counts (owner-counts matches)
+           ;; @spec MCP-OP-FIELD-008 -- state the rule on the receipt, so a
+           ;; reader who finds a site without `source` knows it was derivable
+           ;; from the request and not lost.
+           :source_omitted_when_equal_to_match true
            :matches matches}
           ;; @spec MCP-OP-FIELD-003
           (and (zero? (:match-count found))
