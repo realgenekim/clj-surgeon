@@ -1,6 +1,7 @@
 # Mission typist executor — flagged prototype
 
-Owner: Astra. Deadline: 2026-09-06 09:31Z; checkpoints 03:00Z, 06:00Z, 09:00Z.
+Owner: Astra. Extended deadline: 2026-09-06 15:31Z (Gene, recorded 03:33Z).
+Completed checkpoint 03:00Z; remaining checkpoints 06:00Z, 09:00Z, 12:00Z, 15:00Z.
 Base: bridge/mission-ledger f2efc87c. Gene authorized the seven-piece experiment;
 Fable owns the real-repository mission, narrow gate and independent witness.
 

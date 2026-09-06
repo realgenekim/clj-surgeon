@@ -147,11 +147,13 @@
    'clj-surgeon.mcp-http-server-test                    :integration
    'clj-surgeon.mcp-tool-test                           :integration
 
-   ;; ---- :battery (20) ----
+   ;; ---- :battery (22) ----
    'clj-surgeon.mission-run-test                       :battery
    'clj-surgeon.mission-events-test :battery
    'clj-surgeon.mission-phase-events-test :battery
    'clj-surgeon.mission-provider-fallback-events-test :battery
+   'clj-surgeon.mission-display-test :battery
+   'clj-surgeon.mission-fallback-test :battery
    'clj-surgeon.mission-test                           :battery
    'clj-surgeon.mission-typist-executor-test            :battery
    'clj-surgeon.admit-patch-test                        :battery
