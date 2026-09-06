@@ -1,0 +1,35 @@
+### round 1 arm=N load1=1.61 00:38:04Z
+arm=N mission=real-1 run=N-real-1-1788655084-0 first_verified_s=none candidates=1 apply_ok=0 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+### round 1 arm=F load1=1.57 00:38:21Z
+arm=F mission=real-1 run=F-real-1-1788655102-0 first_verified_s=none candidates=5 apply_ok=0 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=6365 reasoning_tokens=3695
+### round 2 arm=N load1=1.60 00:38:23Z
+arm=N mission=real-1 run=N-real-1-1788655103-0 first_verified_s=none candidates=1 apply_ok=0 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+### round 2 arm=F load1=1.54 00:38:41Z
+arm=F mission=real-1 run=F-real-1-1788655121-0 first_verified_s=none candidates=5 apply_ok=0 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=7079 reasoning_tokens=4231
+### round 3 arm=N load1=1.54 00:38:42Z
+arm=N mission=real-1 run=N-real-1-1788655122-0 first_verified_s=none candidates=1 apply_ok=0 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+### round 3 arm=F load1=1.39 00:39:01Z
+arm=F mission=real-1 run=F-real-1-1788655141-0 first_verified_s=none candidates=5 apply_ok=0 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=1 tokens=10928 reasoning_tokens=3177
+### round 4 arm=N load1=1.36 00:39:04Z
+arm=N mission=real-1 run=N-real-1-1788655144-0 first_verified_s=30.40 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+### round 4 arm=F load1=1.04 00:39:34Z
+arm=F mission=real-1 run=F-real-1-1788655175-0 first_verified_s=none candidates=5 apply_ok=0 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=7948 reasoning_tokens=5246
+
+
+######## A/B RERUN (post applier fix) Sun Sep  6 12:41:16 AM UTC 2026
+### round 1 arm=N load1=0.83 00:41:16Z
+arm=N mission=real-1 run=N-real-1-1788655276-0 first_verified_s=none candidates=1 apply_ok=0 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+### round 1 arm=F load1=1.21 00:41:34Z
+arm=F mission=real-1 run=F-real-1-1788655294-0 first_verified_s=none candidates=5 apply_ok=0 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=7660 reasoning_tokens=4952
+### round 2 arm=N load1=1.21 00:41:36Z
+arm=N mission=real-1 run=N-real-1-1788655296-0 first_verified_s=52.02 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+### round 2 arm=F load1=0.88 00:42:28Z
+arm=F mission=real-1 run=F-real-1-1788655348-0 first_verified_s=none candidates=5 apply_ok=0 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=6119 reasoning_tokens=3514
+### round 3 arm=N load1=0.97 00:42:29Z
+arm=N mission=real-1 run=N-real-1-1788655349-0 first_verified_s=29.68 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+### round 3 arm=F load1=0.92 00:42:59Z
+arm=F mission=real-1 run=F-real-1-1788655379-0 first_verified_s=none candidates=5 apply_ok=0 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=7460 reasoning_tokens=4778
+### round 4 arm=N load1=0.92 00:43:01Z
+arm=N mission=real-1 run=N-real-1-1788655381-0 first_verified_s=17.43 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+### round 4 arm=F load1=0.86 00:43:19Z
+arm=F mission=real-1 run=F-real-1-1788655399-0 first_verified_s=none candidates=5 apply_ok=0 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=6110 reasoning_tokens=3355

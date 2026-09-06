@@ -411,7 +411,7 @@
     clj-surgeon.mission-phase-events-test 7 ; Actual phase receipts, identity and isolated logging failure.
     clj-surgeon.mission-provider-fallback-events-test 8 ; Actual dispatched fallback, thread context and isolated logging.
     clj-surgeon.mission-run-test 8 ; One-process saved plan, refusal and CLI boundaries.
-    clj-surgeon.mission-test 27 ; Adopt existing ledger orphan plus owner-forms routing and recovery witnesses.
+    clj-surgeon.mission-test 27 ; Adopt existing ledger orphan plus owner-forms routing and recovery witnesses. Trunk adopted the same namespace 2026-09-06 with the real-repo typist merge and recorded the lane reason kept here: :battery, not :fast, for the same reason mcp-inspect-cold-job-test is -- its end-to-end half launches a shell child process and materializes a fixture tree under /var/tmp/forge, and the fast lane's rule is that spawning is unrepresentable there, not merely discouraged. It arrived with NO lane at all; the disk->manifest witness caught it.
     clj-surgeon.mission-typist-test 6 ; Pure routing/dossier and frozen generation policy boundaries.
     clj-surgeon.mission-candidate-test 5 ; Frozen span lowering boundaries.
     clj-surgeon.mission-plain-forms-test 8 ; Bounded raw definition decoding and actual escaping failure.
@@ -426,8 +426,8 @@
     clj-surgeon.mcp-inspect-cold-job-test  1  ; MOVED, not new (round five): the one inspect-tool test that drives /bin/sh, out of :fast into :battery
     clj-surgeon.ns-isolation-test          24  ; TEST-ISO-002/003/004/005/007/010's witnesses (round four) + round five's four spawn-ledger witnesses
     clj-surgeon.helper-extraction-test     34  ; MCP-OP-HELPER's pure planner witnesses, enrolled into :fast when the planner went green (it requires only the planner, the fixture and clojure.test, and spawns nothing)
-    clj-surgeon.telemetry-events-test       16  ; TELEMETRY-EVENTS-001's witnesses: the box-wide JSONL ledger the public MCP fns append to as a side effect (2026-09-06, the night the hourly watch reported four figures while a dozen calls landed in launcher-chosen roots it never read)
-    clj-surgeon.mcp-helper-extraction-test 48}) ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
+    clj-surgeon.telemetry-events-test      17  ; TELEMETRY-EVENTS-001's witnesses: the box-wide JSONL ledger the public MCP fns append to as a side effect (2026-09-06, the night the hourly watch reported four figures while a dozen calls landed in launcher-chosen roots it never read). MERGE NOTE (2026-09-06): the pin is 17 on the merged tree, not trunk's 18. Trunk's `an-extra-scalar-field-passes-through` pair was superseded on this branch by `admitted-mission-fields-survive-and-unknown-scalars-do-not`, a CLOSED allowlist -- strictly stricter, so the shadow/smuggle defect it pinned is unrepresentable rather than merely tested. Trunk's reason, kept: 16 -> 17 on Sol fence r2: `an-extra-field-name-can-neither-shadow-nor-smuggle` pins the two defects he found in the pass-through rule -- a string key "ok" beside the keyword :ok serialized to ONE JSON name and the caller's copy won, and an extra's NAME reached the file unscrubbed (`gsk_FIELDNAMECANARY`). Extra names are now normalized, shape-checked, collision-rejected and counted in `dropped_fields`. 17 -> 18 on Sol fence r4: `the-env-override-wins-for-the-writer` pins the split of `default-events-file` (PURE, the home dotdir) from `events-file` (the CLJ_SURGEON_EVENTS_FILE override, else the default). One fn stating both facts made `the-default-path-is-the-home-dotdir` red under `~/bin/suite-run`, which exports that variable -- the test that pins the default was failing in exactly the harness the landing gates run under.
+    clj-surgeon.mcp-helper-extraction-test 51}) ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions. 48 -> 51 on 2026-09-05 (trunk, merged here): the three request-shape-refusal witnesses (a runnable :example, the named :field, and the enriched refusal still validating against exactly the refusal face) added after a real caller needed seven refused plan calls to reverse-engineer the closed shape
 
 (deftest the-corpus-only-ever-grows-and-the-arithmetic-is-shown
   ;; ASTRA 2026-09-06: add 27 ledger + 14 pure typist + 6 executor + 5 race = 52 tests.
@@ -440,9 +440,9 @@
   ;; actually holds the line:
   ;;
   ;;   round one's 49 namespaces, today ........... 920 deftests  (>= 865)
-  ;;   adopted since round one .................... 230 deftests  (12+4+25+3+69+1+1+24+34+48+9)
+  ;;   adopted since round one .................... 335 deftests  (12+4+25+3+69+1+1+24+34+51+17 plus the eleven mission-* namespaces)
   ;;                                                --------------
-  ;;   total declared by the manifest ............. 1151 deftests
+  ;;   total declared by the manifest ............. 1256 deftests
   ;;
   ;; ROUND SIX ADOPTED THE HELPER-EXTRACTION PAIR, 68 deftests, on the day the
   ;; planner and the boundary both went green. They had been `excluded` with
@@ -486,10 +486,13 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      ;; Add seven phase-event and two fallback witnesses: 921 original + 331 adopted = 1252; includes actual provider-fallback witnesses.
-      (is (= 331 adopted) (str "adopted tests: " adopted)))
+      ;; Recomputed on the MCP/main merge (2026-09-06): this branch's phase-event
+      ;; and provider-fallback witnesses PLUS trunk's telemetry split (16 -> 17 here; trunk pinned 18)
+      ;; and its three request-shape-refusal witnesses (48 -> 51). Both reasons
+      ;; are kept at the pins above; the numbers are the merged tree's census.
+      (is (= 335 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1252 total) (str "manifest declares " total " tests"))
+      (is (= 1256 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

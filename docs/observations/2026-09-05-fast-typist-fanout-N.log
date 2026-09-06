@@ -1,0 +1,7 @@
+arm=N mission=fanout run=N-fanout-1788646610-0 first_verified_s=26.66 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+arm=N mission=fanout run=N-fanout-1788646636-0 first_verified_s=22.66 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+arm=N mission=fanout run=N-fanout-1788646659-0 first_verified_s=20.96 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+arm=N mission=fanout run=N-fanout-1788646680-0 first_verified_s=27.77 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+arm=N mission=fanout run=N-fanout-1788646708-0 first_verified_s=42.63 candidates=1 apply_ok=1 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+arm=N mission=fanout run=N-fanout-1788646751-0 first_verified_s=none candidates=1 apply_ok=1 gate_ok=0 accept_ok=0 semantic_mismatch=0 refusals=0 tokens=unknown reasoning_tokens=unknown
+=== N FANOUT DONE 22:19:52Z

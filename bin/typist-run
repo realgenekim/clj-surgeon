@@ -56,6 +56,35 @@ untouched file against the preimage manifest).
 Clock: t0 is process start (startup is charged). Wall to first verified candidate
 includes queue, transport, apply, gate and acceptance.
 
+THE OFFLINE CONTRACT (TYPIST_OFFLINE=1) -- CHOKEPOINT, NOT SANDBOX.
+Sol fence r4 is right and this is the corrected claim. TYPIST_OFFLINE
+
+  * REFUSES THE RUNNER'S OWN spawn and connect paths at the chokepoint: every
+    spawn and network entry point THIS process reaches through the standard
+    library is wrapped at import (the table below), and a `codex`/`claude`
+    shell word is refused as a string. Exit 6, typed, before the call.
+  * DOES NOT CONFINE CHILDREN. It is NOT a sandbox. A general-purpose child
+    (bash, python3) that this process is allowed to start can still spawn an
+    absolute path, reset PATH, `env -i`, re-exec, or open a socket. Python
+    monkeypatching plus a mutable PATH cannot make that impossible; only an
+    OS-enforced process/network boundary or a strictly confined broker can.
+  * IS UNAVAILABLE TO UPGRADE ON THIS BOX AS THIS USER: `unshare -rn` fails
+    (write to uid_map not permitted), there is no bwrap and no firejail, and
+    there is no sudo. So the guarantee the test suite actually offers is a
+    WITNESSED one, not a confinement one -- see bin/typist-run-test:
+      (a) NO REAL KEY IS REACHABLE -- the suite always runs the runner with
+          --keys-dir pointed at a dummy-key directory under /var/tmp/forge,
+          and proves it with `--print-key-paths` (paths only, never contents).
+      (b) NOTHING WAS SPENT -- the ~/.codex/sessions PATH SET is identical
+          before and after, and an egress canary shows no receipt written by
+          the suite carries :cost_source "provider" or a real :upstream.
+    A child COULD have spawned or connected; what is proven is that it DID
+    NOT, and that it COULD NOT have spent.
+
+Receipts written while TYPIST_OFFLINE=1 carry
+:offline_contract "chokepoint-not-sandbox" so a later reader is never invited
+to mistake this for confinement.
+
 No number is ever fabricated: a missing API usage field prints `tokens=unknown`.
 """
 
@@ -78,7 +107,24 @@ import urllib.request
 T0 = time.time()
 
 # --------------------------------------------------------------------------
-# HARD OFFLINE MODE (Astra, 2026-09-06). `bin/typist-run-test` calls itself an
+# THE OFFLINE CONTRACT -- CHOKEPOINT, NOT SANDBOX (Astra 2026-09-06; the name
+# and the claim corrected after Sol fence r4, 2026-09-06).
+#
+# WHAT THIS IS: a refusal of the RUNNER'S OWN spawn and connect paths, at one
+# chokepoint. WHAT THIS IS NOT: a sandbox. It does not confine children. Sol
+# r4 demonstrated the escapes and they are real and unfixable at this layer --
+# `bash -c /abs/path/codex`, a PATH reset, `env -i`, a re-exec from a spawned
+# python3, a socket opened by a child. Python monkeypatching plus a mutable
+# PATH is not a boundary; an OS-enforced process/network boundary or a
+# strictly confined broker is, and NEITHER IS AVAILABLE on this box to this
+# user (`unshare -rn` -> write to uid_map not permitted; no bwrap, no
+# firejail, no sudo). Do not read the refusals below as containment.
+#
+# The guarantee the SUITE offers instead is witnessed, not enforced: no real
+# key is reachable (--keys-dir dummies under /var/tmp/forge, proved with
+# --print-key-paths) and nothing was spent (~/.codex/sessions path set
+# unchanged; no provider-priced receipt written by the suite). See
+# bin/typist-run-test. `bin/typist-run-test` calls itself an
 # OFFLINE self-test, and it was one only by accident of geography: its NW
 # "refused before any codex call" check pointed at the WORKTREE, and the write
 # fence admits the worktree. On a checkout that lives inside /var/tmp/forge
@@ -94,9 +140,61 @@ T0 = time.time()
 # The guard is installed at the CHOKEPOINT, not at each call site. There are
 # four `codex exec` spawn sites and a `urlopen`, and a guard that must be
 # remembered at each of them is a guard that is missing from the fifth.
+#
+# SOL FENCE R3, finding 3: the r2 guard was a guard on TWO NAMES, not a
+# boundary. `subprocess.run(cmd, shell=True)`, a `bash -c` trampoline and
+# `os.system` all walked straight past it, because each of those hands the
+# command to a SHELL and the shell -- not this process -- does the exec. Two
+# independent stops now close that, and each is listed here rather than
+# remembered at a call site:
+#
+#   (a) THE CHOKEPOINT TABLE below -- every spawn and every network entry
+#       point in the standard library that this process can reach is wrapped
+#       at import, in one place. A shell STRING (os.system, os.popen, or any
+#       subprocess call with shell=True) is scanned as a string, so
+#       `codex exec ...` inside it is refused with the same exit 6.
+#   (b) THE PATH SHIM -- under TYPIST_OFFLINE the runner prepends a temp dir
+#       holding executable `codex` and `claude` scripts that print the typed
+#       refusal and exit 6, so a shell string this process never sees the
+#       inside of (`bash -c 'codex ...'`, an alias, a Makefile, a child of a
+#       child) that resolves the NAME `codex` gets the refusal instead of the
+#       real binary.
+#
+#       SOL FENCE R4 DEMONSTRATED ITS BYPASSES, and they are written here
+#       rather than left as an impression: the shim is a NAME redirect on one
+#       inherited variable, not a boundary. A child that invokes the ABSOLUTE
+#       path, that rewrites or resets PATH, that runs under `env -i`, or that
+#       re-execs through anything restoring the original environment reaches
+#       the real binary. (a) fails loud in-process and (b) covers name lookups
+#       (a) structurally cannot see -- NEITHER catches everything, and the
+#       pair is not confinement. That is why the contract is named
+#       chokepoint-not-sandbox and why the suite proves a WITNESSED guarantee
+#       (no real key reachable; no session created; ledger did not grow)
+#       instead of an impossibility claim.
+#
+# THE CHOKEPOINT TABLE (wrapped at import when OFFLINE):
+#   os.system, os.popen
+#   os.execl/execle/execlp/execv/execve/execvp/execvpe
+#   os.spawnl/spawnle/spawnlp/spawnv/spawnve/spawnvp/spawnvpe, os.posix_spawn
+#   subprocess.run, subprocess.call, subprocess.check_call,
+#   subprocess.check_output, subprocess.Popen
+#   urllib.request.urlopen, http.client.HTTPConnection/HTTPSConnection,
+#   socket.create_connection
 OFFLINE = os.environ.get("TYPIST_OFFLINE") == "1"
 
+# The NAME of what TYPIST_OFFLINE provides, carried into every receipt written
+# under it so no later reader mistakes a chokepoint for confinement.
+OFFLINE_CONTRACT = "chokepoint-not-sandbox"
+OFFLINE_CONTRACT_LINE = (
+    "TYPIST_OFFLINE=1: refuses the runner's OWN spawn and connect paths at the "
+    "chokepoint; it does NOT confine children; NOT a sandbox.")
+
 OFFLINE_BLOCKED_EXES = ("codex", "claude")
+# a blocked name as a WORD inside a shell string: `codex exec`, `/x/codex -m`,
+# `FOO=1 codex`, `bash -c "claude ..."` -- but never `codexish` or `my-codex`.
+OFFLINE_SHELL_RE = re.compile(
+    r"(?:(?<=^)|(?<=[\s;&|(`]))(?:[\w./-]*/)?(%s)(?=$|[\s;&|)])"
+    % "|".join(OFFLINE_BLOCKED_EXES))
 
 
 def offline_refuse(what):
@@ -106,40 +204,168 @@ def offline_refuse(what):
     die("typist-run: refusing — offline: %s refused (TYPIST_OFFLINE=1)" % what, 6)
 
 
-def guard_spawn(cmd):
+def _blocked_name(cmd, shell=False):
+    """The blocked executable this command would start, or None.
+
+    A LIST is judged by its argv[0] only -- `bash -c "codex ..."` is a bash
+    spawn and is allowed to proceed straight into the PATH shim, which is the
+    stop designed for it. A STRING is a shell command line, so every word in
+    it is a candidate exec and the whole line is scanned."""
+    if isinstance(cmd, (list, tuple)):
+        if shell:
+            return _blocked_name(" ".join(str(c) for c in cmd), shell=False)
+        if not cmd:
+            return None
+        base = os.path.basename(str(cmd[0]))
+        return base if base in OFFLINE_BLOCKED_EXES else None
+    m = OFFLINE_SHELL_RE.search(str(cmd))
+    return m.group(1) if m else None
+
+
+def guard_spawn(cmd, shell=False):
     """Refuse a model-executor spawn BEFORE it happens."""
     if not OFFLINE:
         return
-    exe = cmd[0] if isinstance(cmd, (list, tuple)) and cmd else cmd
-    if os.path.basename(str(exe)) in OFFLINE_BLOCKED_EXES:
-        offline_refuse("spawn of %s" % os.path.basename(str(exe)))
+    name = _blocked_name(cmd, shell=shell)
+    if name:
+        offline_refuse("spawn of %s" % name)
+
+
+def guard_network(what="network open"):
+    if OFFLINE:
+        offline_refuse(what)
+
+
+def _install_offline_path_shim():
+    """Prepend a PATH dir whose `codex` and `claude` print the typed refusal
+    and exit 6. This is the stop for every route the in-process wrappers
+    cannot see: a shell trampoline, an alias, a grandchild process."""
+    import tempfile
+    base = "/var/tmp/forge"
+    d = tempfile.mkdtemp(prefix="typist-offline-shim-",
+                         dir=base if os.path.isdir(base) else None)
+    for exe in OFFLINE_BLOCKED_EXES:
+        p = os.path.join(d, exe)
+        with open(p, "w") as fh:
+            fh.write("#!/bin/sh\n"
+                     "echo \"typist-run: refusing \u2014 offline: "
+                     "spawn of %s refused (TYPIST_OFFLINE=1)\" >&2\n"
+                     "exit 6\n" % exe)
+        os.chmod(p, 0o755)
+    os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
+    atexit.register(shutil.rmtree, d, True)
+    return d
 
 
 _real_subprocess_run = subprocess.run
+_real_subprocess_call = subprocess.call
+_real_subprocess_check_call = subprocess.check_call
+_real_subprocess_check_output = subprocess.check_output
 _real_subprocess_popen = subprocess.Popen
 _real_urlopen = urllib.request.urlopen
+_real_os_system = os.system
+_real_os_popen = os.popen
+_real_socket_create_connection = socket.create_connection
+
+_OS_EXEC_SPAWN = ("execl", "execle", "execlp", "execv", "execve", "execvp",
+                  "execvpe", "spawnl", "spawnle", "spawnlp", "spawnv",
+                  "spawnve", "spawnvp", "spawnvpe", "posix_spawn",
+                  "posix_spawnp")
 
 
 def _guarded_run(cmd, *args, **kwargs):
-    guard_spawn(cmd)
+    guard_spawn(cmd, shell=kwargs.get("shell", False))
     return _real_subprocess_run(cmd, *args, **kwargs)
+
+
+def _guarded_call(cmd, *args, **kwargs):
+    guard_spawn(cmd, shell=kwargs.get("shell", False))
+    return _real_subprocess_call(cmd, *args, **kwargs)
+
+
+def _guarded_check_call(cmd, *args, **kwargs):
+    guard_spawn(cmd, shell=kwargs.get("shell", False))
+    return _real_subprocess_check_call(cmd, *args, **kwargs)
+
+
+def _guarded_check_output(cmd, *args, **kwargs):
+    guard_spawn(cmd, shell=kwargs.get("shell", False))
+    return _real_subprocess_check_output(cmd, *args, **kwargs)
 
 
 class _GuardedPopen(_real_subprocess_popen):
     def __init__(self, cmd, *args, **kwargs):
-        guard_spawn(cmd)
+        guard_spawn(cmd, shell=kwargs.get("shell", False)
+                    or (len(args) >= 7 and args[6]))
         super().__init__(cmd, *args, **kwargs)
 
 
 def _guarded_urlopen(req, *args, **kwargs):
-    if OFFLINE:
-        offline_refuse("network open")
+    guard_network()
     return _real_urlopen(req, *args, **kwargs)
 
 
+def _guarded_os_system(cmd):
+    guard_spawn(cmd, shell=True)
+    return _real_os_system(cmd)
+
+
+def _guarded_os_popen(cmd, *args, **kwargs):
+    guard_spawn(cmd, shell=True)
+    return _real_os_popen(cmd, *args, **kwargs)
+
+
+def _guarded_create_connection(*args, **kwargs):
+    guard_network()
+    return _real_socket_create_connection(*args, **kwargs)
+
+
+def _guard_os_exec_family():
+    """os.exec*/os.spawn* take the program as their FIRST argument in every
+    spelling, so one wrapper shape covers the whole family."""
+    def wrap(name, fn):
+        def guarded(path, *args, **kwargs):
+            guard_spawn([path], shell=False)
+            return fn(path, *args, **kwargs)
+        guarded.__name__ = name
+        return guarded
+    for name in _OS_EXEC_SPAWN:
+        fn = getattr(os, name, None)
+        if fn is not None:
+            setattr(os, name, wrap(name, fn))
+
+
+def _guard_http_client():
+    import http.client
+
+    for cls_name in ("HTTPConnection", "HTTPSConnection"):
+        cls = getattr(http.client, cls_name, None)
+        if cls is None:
+            continue
+        real_init = cls.__init__
+
+        def guarded_init(self, *args, _real=real_init, **kwargs):
+            guard_network()
+            return _real(self, *args, **kwargs)
+
+        cls.__init__ = guarded_init
+
+
 subprocess.run = _guarded_run
+subprocess.call = _guarded_call
+subprocess.check_call = _guarded_check_call
+subprocess.check_output = _guarded_check_output
 subprocess.Popen = _GuardedPopen
 urllib.request.urlopen = _guarded_urlopen
+
+OFFLINE_SHIM_DIR = None
+if OFFLINE:
+    os.system = _guarded_os_system
+    os.popen = _guarded_os_popen
+    socket.create_connection = _guarded_create_connection
+    _guard_os_exec_family()
+    _guard_http_client()
+    OFFLINE_SHIM_DIR = _install_offline_path_shim()
 
 FX = os.environ.get("TYPIST_FX", "/var/tmp/forge/typist-fx")
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -956,11 +1182,43 @@ def edn_str(s):
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+# --------------------------------------------------------------------------
+# COST FIELDS ARE WRITTEN AT FULL PRECISION (Sol fence r3, finding 5).
+# The generic EDN float branch writes ordinary floats at "%.3f" because the
+# receipts are full of millisecond timings. A COST IS NOT A TIMING: the whole
+# point of :cost_usd is that it is the provider's OWN figure, and 0.12345678
+# written as 0.123 is a fabricated number in the one field that must not be.
+# The earlier fix only reached candidate receipts (values below 0.01); the
+# cost-report receipt writes rows whose cost is 0.12345678, which is NOT below
+# 0.01, so it went through "%.3f" unnoticed. So the rule is by FIELD, not by
+# magnitude: every key whose name is a cost/USD field is serialized repr-style,
+# digit for digit, wherever it appears in a receipt.
+COST_KEY_RE = re.compile(r"(^|_)(cost|usd)($|_)")
+
+
+class Exact(float):
+    """A float whose EDN spelling is repr(), i.e. the provider's own digits."""
+
+
+def exact_cost(v):
+    """Wrap a float so the EDN writer never rounds it. nil/int pass through."""
+    return Exact(v) if isinstance(v, float) and not isinstance(v, Exact) else v
+
+
+def usd_str(v):
+    """USD for a HUMAN table, at least 6 decimals and never fewer digits than
+    the provider gave us: 0.12345678 -> $0.12345678, 0.123 -> $0.123000."""
+    head, _, frac = ("%.8f" % v).rstrip("0").partition(".")
+    return "$" + head + "." + frac.ljust(6, "0")
+
+
 def edn(v, indent=0):
     pad = " " * indent
     if isinstance(v, dict):
         items = []
         for k, val in v.items():
+            if COST_KEY_RE.search(k):
+                val = exact_cost(val)
             items.append(pad + " :" + k + " " + edn(val, indent + 2 + len(k)))
         return "{" + "\n".join(items).lstrip() + "}"
     if isinstance(v, (list, tuple)):
@@ -972,6 +1230,8 @@ def edn(v, indent=0):
     if isinstance(v, str):
         return edn_str(v)
     if isinstance(v, float):
+        if isinstance(v, Exact):
+            return repr(float(v))
         # Timings are written at millisecond resolution. COSTS ARE NOT TIMINGS:
         # a sub-cent USD figure rounded to 3 places becomes 0.001 or 0.000 —
         # a fabricated number in a receipt whose whole point is the real one.
@@ -1961,6 +2221,18 @@ def cost_for(provider, upstream, prompt_tokens, completion_tokens,
 USAGE_LIMIT_RE = re.compile(r"hit your usage limit", re.I)
 
 
+def registry_key_path(provider):
+    """The provider's FIXED registry key path, as a STRING. Pure: it ignores
+    KEYS_DIR, resolves nothing, stats nothing and opens nothing.
+
+    Sol fence r5 (b): the witness that "without --keys-dir the path is still
+    the fixed registry path" used to be a SUBPROCESS that resolved and printed
+    the real path -- so the suite that proves no real key is reachable was
+    itself reaching for one. A claim about a path is a claim about a string;
+    prove it as a string."""
+    return PROVIDERS[provider].get("key_file")
+
+
 def key_file_for(cfg):
     """The provider's key file. FIXED by the registry; only --keys-dir (already
     fenced to /var/tmp/forge) may redirect it, and only for the offline tests."""
@@ -1983,8 +2255,23 @@ def preflight_key_file(cfg):
 
 def provider_key(cfg):
     """Read the API key AT THE POINT OF THE REQUEST. Never echoed, logged, or
-    written to a receipt, and never held outside its caller's request scope."""
+    written to a receipt, and never held outside its caller's request scope.
+
+    OFFLINE FORBIDS A REAL KEY PATH (Sol fence r5, finding (b)). strace proved
+    the offline suite opened /home/forge/secrets/openrouter.edn four times and
+    groq.edn once: an in-process probe monkeypatched urlopen but left KEYS_DIR
+    unset, so request construction reached here and opened the real key before
+    the fake transport ever ran. Belt and braces: under TYPIST_OFFLINE the only
+    key path this function will open is one under the test fence. Anything else
+    is a TYPED REFUSAL (exit 6, the offline exit), never a silent read."""
     path = key_file_for(cfg)
+    if OFFLINE:
+        fence = os.path.realpath(TEST_KEYS_FENCE)
+        real = os.path.realpath(path)
+        if real != fence and not real.startswith(fence + os.sep):
+            die("typist-run: refusing — TYPIST_OFFLINE=1 and the resolved key "
+                "path is not under %s: %s (offline mode forbids opening a real "
+                "key; pass --keys-dir)" % (fence, real), 6)
     with open(path) as fh:
         m = re.search(r':(?:openrouter-api-)?key\s+"([^"]+)"', fh.read())
     if not m:
@@ -2378,6 +2665,14 @@ def bench(prompt, providers, rounds, temperature, manifest, cmds):
     out = os.path.join(FX, "bench-%d.edn" % int(T0))
     with open(out, "w") as fh:
         fh.write(edn({"bench": True,
+                      # THE OFFLINE CONTRACT TRAVELS WITH EVERY RECEIPT (Sol
+                      # fence r5, finding (a)): an offline, preflight-blocked
+                      # bench wrote a receipt carrying neither field, so a
+                      # later reader of that one file had no way to know the
+                      # run was offline -- or that "offline" here is a
+                      # chokepoint and not confinement.
+                      "offline": OFFLINE,
+                      "offline_contract": (OFFLINE_CONTRACT if OFFLINE else None),
                       "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                       "mission": MISSION, "dossier": DOSSIER,
                       "dossier_sha256": sha256_bytes(prompt.encode()),
@@ -2800,12 +3095,12 @@ def cost_report(fx_dirs):
         rows.append((k, a, usd, src))
         print("%-26s %6d %10d %11d %10d %9d %12s"
               % (k, a["calls"], a["prompt"], a["completion"], a["reasoning"],
-                 a["no_usage"], ("$%.4f" % usd) if usd is not None else "unknown"))
+                 a["no_usage"], usd_str(usd) if usd is not None else "unknown"))
     any_priced = any(a["priced"] for a in agg.values())
     print("%-26s %6d %10s %11s %10s %9d %12s"
           % ("TOTAL", sum(a["calls"] for a in agg.values()), "", "", "",
              sum(a["no_usage"] for a in agg.values()),
-             ("$%.4f" % total) if any_priced else "unknown"))
+             usd_str(total) if any_priced else "unknown"))
     print("reasoning tokens are INCLUDED in the completion column "
           "(both providers bill them as output).")
     if unpriced:
@@ -2815,6 +3110,8 @@ def cost_report(fx_dirs):
     out = os.path.join(fx_dirs[0], "cost-report-%d.edn" % int(T0))
     with open(out, "w") as fh:
         fh.write(edn({"cost_report": True,
+                      "offline": OFFLINE,
+                      "offline_contract": (OFFLINE_CONTRACT if OFFLINE else None),
                       "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                       "prices_date": PRICES_DATE,
                       "prices": PRICES,
@@ -2827,7 +3124,10 @@ def cost_report(fx_dirs):
                                 "no_usage_calls": a["no_usage"],
                                 "cost_usd": usd, "cost_source": src}
                                for (k, a, usd, src) in rows],
-                      "total_usd": round(total, 6) if any_priced else None,
+                      # NOT rounded: the sum of one provider-reported cost
+                      # IS that provider's figure, and rounding it here made
+                      # the receipt disagree with the candidate it came from.
+                      "total_usd": total if any_priced else None,
                       "unpriced_calls": unpriced}) + "\n")
     print("cost report written to %s" % out)
     return 0
@@ -2853,6 +3153,12 @@ def main():
                          "unless DIR resolves under /var/tmp/forge/. There is "
                          "no environment variable and no --model: the key path, "
                          "the model and the upstream order are all fixed.")
+    ap.add_argument("--print-key-paths", action="store_true",
+                    help="DRY RUN: print the RESOLVED provider key path for "
+                         "every provider and exit 0. PATHS ONLY -- the files "
+                         "are never opened, so nothing can leak a key. This is "
+                         "how bin/typist-run-test proves that under its "
+                         "--keys-dir no path resolves into /home/forge/secrets.")
     ap.add_argument("--bench", action="store_true",
                     help="compare providers: `rounds` rounds of k=1 per provider, "
                          "interleaved round-robin, one table at the end")
@@ -2921,8 +3227,9 @@ def main():
 
     if a.cost_report:
         sys.exit(cost_report(a.fx or list(COST_REPORT_DEFAULT_FX)))
-    if not a.arm and not a.replay and not a.bench:
-        ap.error("one of --arm, --replay, --bench or --cost-report is required")
+    if not a.arm and not a.replay and not a.bench and not a.print_key_paths:
+        ap.error("one of --arm, --replay, --bench, --cost-report or "
+                 "--print-key-paths is required")
 
     global KEYS_DIR
     if a.keys_dir is not None:
@@ -2934,6 +3241,21 @@ def main():
         if not os.path.isdir(d):
             die("typist-run: refusing — keys-dir does not exist: %s" % d, 4)
         KEYS_DIR = d
+
+    # THE DRY RUN. After the --keys-dir fence, before anything is built,
+    # spawned or opened. It prints PATHS, never contents: a witness that asks
+    # for a key in order to prove the key is safe has defeated itself.
+    if a.print_key_paths:
+        print("offline=%s offline_contract=%s"
+              % (OFFLINE, OFFLINE_CONTRACT if OFFLINE else "n/a"))
+        print("keys_dir=%s" % (KEYS_DIR or "(none -- fixed registry paths)"))
+        for name in sorted(PROVIDERS):
+            cfg = PROVIDERS[name]
+            if not cfg.get("key_file"):
+                print("%-12s key_path=(none -- no provider key)" % name)
+                continue
+            print("%-12s key_path=%s" % (name, os.path.realpath(key_file_for(cfg))))
+        sys.exit(0)
 
     bench_providers = []
     if a.bench:
@@ -3080,6 +3402,10 @@ def main():
             "warm_rollout": (warm["rollout"] if warm else None),
             "warm_session_created_here": (warm["created_here"] if warm else None),
             "sandbox": ("bypass" if a.arm == "NW" else "codex default (read-only)"),
+            # Sol fence r4: name the contract in the artifact, so a reader of
+            # this receipt is never invited to read a chokepoint as a sandbox.
+            "offline": OFFLINE,
+            "offline_contract": (OFFLINE_CONTRACT if OFFLINE else None),
             "warmup_wall_s": (warm["warmup_wall_s"] if warm else None),
             "warmup_charged": (False if warm else None),
             "warm_orientation_edited": (warm["orientation_edited"] if warm else None),

@@ -1,0 +1,7 @@
+arm=F mission=fanout run=F-fanout-1788648649-0 first_verified_s=1.86 candidates=5 apply_ok=3 gate_ok=3 accept_ok=3 semantic_mismatch=0 refusals=0 tokens=13266 reasoning_tokens=8610
+arm=F mission=fanout run=F-fanout-1788648651-0 first_verified_s=1.88 candidates=5 apply_ok=5 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=12488 reasoning_tokens=8579
+arm=F mission=fanout run=F-fanout-1788648653-0 first_verified_s=1.86 candidates=5 apply_ok=4 gate_ok=1 accept_ok=1 semantic_mismatch=0 refusals=0 tokens=12596 reasoning_tokens=8663
+arm=F mission=fanout run=F-fanout-1788648655-0 first_verified_s=2.58 candidates=5 apply_ok=4 gate_ok=2 accept_ok=2 semantic_mismatch=0 refusals=0 tokens=15351 reasoning_tokens=9178
+arm=F mission=fanout run=F-fanout-1788648658-0 first_verified_s=2.81 candidates=5 apply_ok=5 gate_ok=2 accept_ok=2 semantic_mismatch=0 refusals=0 tokens=12311 reasoning_tokens=8132
+arm=F mission=fanout run=F-fanout-1788648661-0 first_verified_s=2.02 candidates=5 apply_ok=4 gate_ok=4 accept_ok=4 semantic_mismatch=0 refusals=0 tokens=13653 reasoning_tokens=9268
+=== CEREBRAS K5 DONE 22:51:03Z

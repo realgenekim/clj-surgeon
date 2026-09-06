@@ -1,0 +1,138 @@
+diff --git a/Makefile b/Makefile
+index 4f442e60..7d647dae 100644
+--- a/Makefile
++++ b/Makefile
+@@ -188,7 +188,7 @@ install-clj-kondo-admission:
+ check-routing-parity:
+ 	bb "$(CLJ_SURGEON_HOME)bin/check-routing-parity.clj"
+ 
+-install-agent-routing:
++install-agent-routing: check-routing-parity
+ 	bb --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.agent-routing install "$(AGENT_ROUTING_SOURCE)" "$(CODEX_GLOBAL_INSTRUCTIONS)" "$(CLAUDE_GLOBAL_INSTRUCTIONS)"
+ 
+ check-agent-routing: check-routing-parity
+diff --git a/bin/check-routing-parity.clj b/bin/check-routing-parity.clj
+index a1947c24..da214a52 100755
+--- a/bin/check-routing-parity.clj
++++ b/bin/check-routing-parity.clj
+@@ -4,9 +4,17 @@
+ ;; The decision table is COPIED BY HAND into every prompt surface. Nothing
+ ;; generates it, so nothing but this check stops one copy from drifting into a
+ ;; different rule than the seat next to it. It asserts:
+-;;   1. every rendering's table is BYTE-IDENTICAL to the canonical section's;
++;;   1. every rendering's table is BYTE-IDENTICAL to the canonical section's ---
++;;      the FIVE table copies listed in `renderings`, and nothing else;
+ ;;   2. the managed plate's pointer heading really exists in the canonical file;
+ ;;   3. every document the plate cites exists on disk.
++;;
++;; SCOPE LIMIT. The compact plate (`resources/clj-surgeon-agent-routing.md`) is a
++;; REVIEWED SUMMARY that points at the canonical section --- it is deliberately
++;; not a byte-parity rendering of the table, and no byte comparison is made
++;; against it. Only its pointer heading and its citations are checked here; that
++;; its prose still says what the canonical section says is established by review,
++;; not by this gate.
+ ;; Run: bb bin/check-routing-parity.clj   (exit 0 green, exit 2 on drift)
+ 
+ (require '[clojure.string :as str]
+diff --git a/docs/observations/2026-09-06-routing-prompt-surfaces.md b/docs/observations/2026-09-06-routing-prompt-surfaces.md
+index c121a375..6e63a77b 100644
+--- a/docs/observations/2026-09-06-routing-prompt-surfaces.md
++++ b/docs/observations/2026-09-06-routing-prompt-surfaces.md
+@@ -46,11 +46,19 @@ installed skill mirrors follow it through `make install-claude-skill` and
+ **The copies are made BY HAND. Nothing generates them.** No templating step, no include, no
+ substitution: each surface below holds its own literal bytes of the table, typed in by whoever
+ last edited it. The guard against drift is therefore a CHECK, not a generator ---
+-`bb bin/check-routing-parity.clj` asserts that every rendering's table is byte-identical to
+-the canonical section's, that the plate's pointer heading exists in the canonical file, and
+-that every document the plate cites exists on disk. It exits 2 and names the first differing
+-row. `make check-agent-routing` runs it before checking the managed blocks, so a drifted copy
+-fails the same gate that catches a stale plate.
++`bb bin/check-routing-parity.clj` asserts that each of the FIVE hand-copied table renderings
++(`skill.md`, `skills/safe-refactor/SKILL.md`, `CLAUDE.md`, `AGENTS.md`, and this document) is
++byte-identical to the canonical section's table, that the plate's pointer heading exists in
++the canonical file, and that every document the plate cites exists on disk. It exits 2 and
++names the first differing row. `make check-agent-routing` AND `make install-agent-routing`
++both run it before touching the managed blocks, so the actual write entrance cannot bypass
++the guard.
++
++**The plate is not one of those five.** `resources/clj-surgeon-agent-routing.md` is a REVIEWED
++SUMMARY that points at the canonical section — compact prose bullets, deliberately not a
++byte-parity rendering of the table. No byte comparison is made against it; the check reaches
++only its pointer heading and its citations. That its summary still means what the canonical
++section says is established by human review, and nothing on this branch gates it.
+ 
+ The table:
+ 
+@@ -175,11 +183,15 @@ Delegation-brief paragraph, for every builder prompt:
+ 
+ 1. **No installer for `skills/safe-refactor`.** `SKILL_SOURCE` is `skills/clj-surgeon`
+    alone. The safe-refactor text ships only to agents reading the working tree.
+-2. ~~No checker binds the skill text to the plate.~~ **CLOSED.**
++2. ~~No checker binds the skill text to the plate.~~ **PARTLY CLOSED.**
+    `bb bin/check-routing-parity.clj` fails if the canonical heading the plate names is
+-   missing, if any rendering's table differs by a byte, or if a document the plate cites does
+-   not exist. `make check-agent-routing` depends on it. It does NOT check rows 8-10 below, or
+-   the prose around each table --- only the table bytes, the pointer, and the citations.
++   missing, if any of the five hand-copied table renderings differs by a byte, or if a
++   document the plate cites does not exist. `make check-agent-routing` and
++   `make install-agent-routing` both depend on it, so the write entrance is gated too. It
++   does NOT check rows 8-10 below, or the prose around each table --- only the table bytes,
++   the pointer, and the citations. **The plate's own wording remains unchecked:** it is a
++   reviewed summary, not a byte-parity rendering, so no gate can tell whether its bullets
++   still agree with the canonical section. Only review does.
+ 3. **Rows 6-10 have no checker at all.** Repo `CLAUDE.md`/`AGENTS.md`, the seat header,
+    shared house rules, and delegation briefs are verified by reading, not by a gate.
+ 4. **The plate does not carry the doctrine commit it was derived from.** The generator is an
+diff --git a/skills/clj-surgeon/SKILL.md b/skills/clj-surgeon/SKILL.md
+index d99da290..574a38c5 100644
+--- a/skills/clj-surgeon/SKILL.md
++++ b/skills/clj-surgeon/SKILL.md
+@@ -69,39 +69,15 @@ refuses an existing mission id. `apply` exits non-zero on a refusal or a failed
+ receipt. The spec schema — every required key, and why each one exists — is
+ [docs/mission-typist.md](../../docs/mission-typist.md).
+ 
+-The only spec shape shown here is one that has been PROVEN to plan, commit, and
+-undo: the request built by `test/clj_surgeon/mission_typist_executor_test.clj`
+-(`request`, line 32) out of `test/clj_surgeon/mission_typist_test.clj`
+-(`eligible`, line 8), exercised by the `real-proof-commit-and-undo` test at line
+-42. Written out, with the fixture's own profiles:
+-
+-```edn
+-{:verb "owner_forms"
+- :profiles
+- {"gate"   {:id "gate"   :measured-ms 10 :evidence "receipt:gate"
+-            :commands [["clojure" "-M" "-e" "(require 'fixture.core)"]]}
+-  "accept" {:id "accept" :measured-ms 10 :evidence "receipt:witness-receipt"
+-            :commands [["clojure" "-M" "-e" "(require 'fixture.core) (assert (nil? (ns-resolve 'fixture.core 'old-name))) (assert (= 1 ((ns-resolve 'fixture.core 'new-name))))"]]}}
+- :request
+- {:workspace_root "/absolute/workspace"
+-  :intent "Rename old-name to new-name preserving behavior"
+-  :owners [{:file "src/fixture/core.clj" :owner "old-name" :new-owner "new-name"}]
+-  :proof-files []
+-  :verification {:profile "gate"}
+-  :acceptance_profile "accept"
+-  :typist {:enabled? true
+-           :mission-class :rename
+-           :discovery-complete? true
+-           :source-policy {"src/fixture/core.clj" {:generated? false
+-                                                   :reader-conditionals? false
+-                                                   :format-sensitive? false}}
+-           :budget {:max-files 1 :max-changed-chars 1000}
+-           :commit {:atomic? true :rollback? true}
+-           :provider {:id :openrouter :model "openai/gpt-oss-120b" :upstream "Cerebras"}
+-           :rate {:mission-class :rename :provider :openrouter :upstream "Cerebras"
+-                  :model "openai/gpt-oss-120b" :verified 9 :attempted 10
+-                  :evidence "cohort:rename"}}}}
+-```
++No spec is written out here. `docs/mission-typist.md` is the schema of record;
++build the spec from it against the real workspace, and never copy profile ids,
++timings, or evidence strings out of a fixture.
++
++`test/clj_surgeon/mission_typist_executor_test.clj` (`real-proof-commit-and-undo`)
++is a synthetic integration witness — it redefines `request-candidates!`, so it
++proves deterministic fixture plan, commit, and undo only; it is not measured
++admission data, and neither its profiles nor its rate numbers describe live
++provider behavior.
+ 
+ The gate and the acceptance profile must be independently authored and must run
+ DIFFERENT commands with different retained evidence; the planner refuses
