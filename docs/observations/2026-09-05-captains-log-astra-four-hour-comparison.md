@@ -260,3 +260,19 @@ precedence statements corrected, historical receipts preserved and labeled.
 A restricted real Maven profile adapter is static GO but UNEXECUTED; its 5m26s
 preparation is separate from any future proof/usage time. No public admission win
 claimed. Quiet window explicitly released after focused diagnostic run.
+
+### Astra 2026-09-06T14:25:10.000524+00:00 — real proof binding passes; first public integration refuses
+
+Cardinality keeper landed ee911577 after exact-tip LAND YES and merged gates. Real Maven profile polarity cases each2.006s: good candidate over broken live passes; broken candidate over good live fails3 actual timestamp assertions, zeroerrors. The first actual public clarity-refactor call refused before tests/write because my adapter rejected the gate-created .clj-surgeon/.gitignore and write.lock. Source/test/dependency bytes unchanged, lintclean, first-call complete0/1, toolcommits0. Exacttwo-path repair staticGO; runtime retry pending. Full report: 2026-09-06-astra-real-profile-utility.md. No speed/adoption claim; preparation and queueing remain visible.
+
+### Astra 2026-09-06T14:33:19.384566+00:00 — verified public keeper after one retained refusal
+
+All five exact bookkeeping-boundary preflights refused as expected. The same native patch then committed through admit_clojure_patch with verify=focused in 2144.939 ms: one file, one owner, clean lint, actual recording-query suite 2 tests / 0 failures/errors, complete verification, zero outside-hunk drift, next_call null. Receipt post-image hash matches the prepared candidate; no source reread or repeated suite needed. Independent saved-evidence review GO. First-call success remains 0/1, total successful calls 1/2. Preparation and shared-box waits prevent treating the 2.145-second successful call as complete-task speedup. Current-source audit confirms producer timing is still missing; both usage windows retain caller clocks separately. See 2026-09-06-astra-real-profile-utility.md.
+
+### Astra 2026-09-06T14:49:38.734851+00:00 — second keeper and description dogfood
+
+Second task reused the unchanged v3 profile and passed on its first public call in 2068.714 ms: private timing-points helper added, two consumers updated, one file, actual suite2tests0fail0errors, cleanlint, complete verification, zero outside-hunk drift. This is behavior-preserving duplicate conversion extraction; Fable’s earlier clamping-policy experiment was declined and remains unapplied. Aggregate first-call-complete tasks1/2, successful public calls2/3; no free-choice or native-speedup claim.
+
+The existing usage plan’s description guidance was applied through installed CLI stdin :change! after preview: exactly one owner/file, guarded receipt5849276f, post-image19f43825. Only the description string changes, not schema/validation/verification. Paved lint before/after:0errors, same2existingwarnings+1info (rows shift by10); no introduced findings. Focused registration and normalgate results pending at this entry. Public catalog remains old until deliberate refresh; no exposure claim. Artifacts astra-description-dogfood-fx and astra-admission-use-2-fx.
+
+Astra 2026-09-06T14:52:34.263681+00:00: description validation update — one-Var attempt hit three whole-suite refusal-census fixture failures (retained; not a green partial suite). A separate direct public catalog probe passed3checks: one entry, description carried unchanged from its source Var, expected outcome classes. No live catalog refresh. Normal gate follows on the committed tip.

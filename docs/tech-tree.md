@@ -240,3 +240,7 @@ are not automatically admission profiles. Prepared integration must earn back
 its setup cost. [Pilot follow-up](observations/2026-09-06-astra-recovery-pilot-result.md)
 records the repaired mixed read/patch usage classification; service timing stays
 unknown where the producer omitted it. No new speed claim or rerun.
+
+### Astra 2026-09-06T14:33:19.384566+00:00 — existing patch gate with a real supplied profile
+
+One real Maven clarity edit committed in a scratch workspace through the existing admission API after one retained profile-integration refusal. Candidate/live polarity checks passed; actual cold suite in the successful receipt: 2 tests, 0 failures/errors, clean lint. Success call 2.145 s, not a native ratio; profile preparation 326 s plus patch setup and repair/queue costs remain material. Restriction: one existing file in a frozen real closure, no generic runner/deletions/free-choice claim. [Evidence](observations/2026-09-06-astra-real-profile-utility.md).
