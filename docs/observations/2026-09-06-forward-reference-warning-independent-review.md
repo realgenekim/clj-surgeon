@@ -9,3 +9,9 @@ Nine independent fake process-result checks pass: valid empty analysis admitted;
 Actual branch-local `bb --classpath src -m clj-surgeon.core :op :ls :file src/clj_surgeon/mission_cli.clj` succeeds, retained actual-ls.edn/exit/stderr. This specifically resolves the observed warning-only refusal while retaining real failure boundaries. Installed launcher remains pinned to old bundle. Worktree remains clean.
 
 One remaining diagnostic limitation is unchanged: genuine analyzer errors with JSON findings and empty stderr have an empty human diagnostic. This is not a blocker for this narrow warning acceptance repair.
+
+## Combined witness review — 2026-09-06T06:24:39.811271+00:00
+
+Static review of cce44037: production forward_refs code is unchanged from the executed c01b838c GO. The existing forward-reference fixture now appends the redundant-let warning form and captures its one actual run-bounded! result. Assertions require an actual redundant-let warning, zero analyzer errors, the original exact helper forward-reference coordinates, and unchanged fixture bytes. This retains the field-failure witness without adding a sixth analyzer launch or changing the fixed five-launch authority. Named Surgeon read retained during review; test source hash 6ff91735e900c60ffd7a1812ae6a0c6dcab5f9193ac310a3f9266ed51f2073a2.
+
+Status: static combined-witness GO; execution of the full owning analyzer gate is PENDING quiet release. No review JVM was launched. mission_one_shot will execute the owning gate after release; independent review will inspect its retained result without duplicating that run. This addendum does not claim the revised combined witness or full owning gate has passed.
