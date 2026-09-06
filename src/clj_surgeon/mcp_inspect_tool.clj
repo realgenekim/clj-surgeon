@@ -1070,6 +1070,28 @@
         (str summary "\n\n" prepared-request/coaching-text)
         summary))))
 
+;; @spec MCP-OP-FIELD-009
+(defn- result-budget-refusal
+  "The bounded typed refusal for a result over the public-result ceiling.
+
+  It names the measured bytes of the candidate it refused and the ceiling it
+  measured against, publishes no results, and claims no completion."
+  [result required-bytes]
+  (cond-> {:ok false
+           :operation "inspect_clojure"
+           :error_type "structural-buffer-output-budget-exceeded"
+           :error (str "The complete result exceeds the public MCP "
+                       "output budget")
+           :failed_stage "output-budget"
+           :required {:public_result_bytes required-bytes}
+           :limits {:public_result_bytes max-public-result-bytes}
+           :read_complete false
+           :source_unchanged true
+           :remedy (str "split the request into bounded file groups; "
+                        "keep every site and count")
+           :next_action "narrow_request"}
+    (:mode result) (assoc :mode (:mode result))))
+
 ;; @spec MCP-OP-READ-CONT-002
 ;; @spec MCP-OP-PREP-REQ-001
 ;; @spec MCP-OP-PREP-REQ-006
@@ -1110,31 +1132,35 @@
          :next_action "narrow_request"}))
 
     ;; @spec MCP-OP-FIELD-009
-    ;; The ordinary read path -- match, forms, outline. Measured the same way
-    ;; the helper measures a prepare-change result: the UTF-8 byte length of
-    ;; the exact public envelope, with `elapsed_ms` normalized so the figure is
-    ;; deterministic. Over the ceiling the result is REFUSED whole; nothing is
-    ;; truncated, elided, or dropped to make it fit (inb-b60d6e).
+    ;; The ordinary read path -- match, forms, outline. This is the EARLY gate:
+    ;; it keeps an oversized ordinary result from reaching prepared-confirmation
+    ;; retention, measured on the normalized candidate. It is not the authority
+    ;; on publication: `final-public-result-guard` measures the exact finalized
+    ;; envelope at the publication point, after timing fields and the summary
+    ;; are final (inb-b60d6e).
     :else
     (let [normalized (assoc raw-result :elapsed_ms 0.0)
           required-bytes
           (mcp-result-byte-count (inspect-summary normalized) normalized)]
       (if (<= required-bytes max-public-result-bytes)
         raw-result
-        (cond-> {:ok false
-                 :operation "inspect_clojure"
-                 :error_type "structural-buffer-output-budget-exceeded"
-                 :error (str "The complete result exceeds the public MCP "
-                             "output budget")
-                 :failed_stage "output-budget"
-                 :required {:public_result_bytes required-bytes}
-                 :limits {:public_result_bytes max-public-result-bytes}
-                 :read_complete false
-                 :source_unchanged true
-                 :remedy (str "split the request into bounded file groups; "
-                              "keep every site and count")
-                 :next_action "narrow_request"}
-          (:mode raw-result) (assoc :mode (:mode raw-result)))))))
+        (result-budget-refusal raw-result required-bytes)))))
+
+;; @spec MCP-OP-FIELD-009
+(defn final-public-result-guard
+  "Enforce the public-result ceiling on the EXACT published envelope.
+
+  `mcp-operation/invoke!` calls this at its finalization point, with the
+  result and summary it is about to hand to the callback: timing fields are
+  already finalized and the summary is already rendered, so this byte count is
+  the one that ships. Nothing after it can grow the envelope. Returns nil to
+  publish the candidate, or a bounded typed refusal to publish instead --
+  never a truncated, elided, or partial result."
+  [result summary]
+  (let [published-bytes (mcp-result-byte-count summary result)]
+    (when (> published-bytes max-public-result-bytes)
+      (cond-> (result-budget-refusal result published-bytes)
+        (:elapsed_ms result) (assoc :elapsed_ms (:elapsed_ms result))))))
 
 ;; @spec MCP-OP-TIME-004
 ;; @spec MCP-OP-ASYNC-001

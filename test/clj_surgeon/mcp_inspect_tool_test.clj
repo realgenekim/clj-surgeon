@@ -4,6 +4,7 @@
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-inspect :as inspect]
+   [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-source-anchor :as source-anchor]
    [clj-surgeon.mcp-telemetry :as telemetry]
@@ -1518,15 +1519,11 @@
                  (:error_type structured)))
           (is (> (get-in structured [:required :public_result_bytes])
                  inspect-tool/max-public-result-bytes))
-          ;; The same request measured independently through `execute-inspect!`.
-          ;; Equality is to within the digits of the result's own timing fields
-          ;; (`inspection_elapsed_ms` is not fixed at measurement time), which
-          ;; is why this is an emission gate and not a final-wire byte cap.
-          (is (< (Math/abs
-                   (- measured
-                      (long (get-in structured
-                                    [:required :public_result_bytes]))))
-                 64))
+          ;; A far-from-boundary sanity check: the same request measured
+          ;; independently is also far over the ceiling. The EXACT figures are
+          ;; pinned at the boundary by
+          ;; `the-published-envelope-never-exceeds-the-ceiling` below.
+          (is (> measured inspect-tool/max-public-result-bytes))
           (is (= inspect-tool/max-public-result-bytes
                  (get-in structured [:limits :public_result_bytes])))
           (is (= (str "split the request into bounded file groups; "
@@ -1600,10 +1597,154 @@
           (is (false? (:ok structured)))
           (is (= "structural-buffer-output-budget-exceeded"
                  (:error_type structured)))
-          (is (< (Math/abs
-                   (- (:bytes whole)
-                      (long (get-in structured
-                                    [:required :public_result_bytes]))))
-                 64))
+          (is (> (get-in structured [:required :public_result_bytes])
+                 inspect-tool/max-public-result-bytes))
           (is (nil? (:results structured)))))
+      (finally (delete-tree! project)))))
+
+;; ---------------------------------------------------------------------------
+;; The publication-point guard, at the exact boundary.
+;;
+;; The early gate in `enforce-result-budget` measures a NORMALIZED candidate
+;; (`elapsed_ms` 0.0) and returns the unnormalized one; `mcp-operation/invoke!`
+;; then finalizes the timing fields and re-renders the summary before the
+;; callback, so a candidate admitted at exactly the ceiling could still publish
+;; over it. `final-public-result-guard` runs at that finalization point, on the
+;; result and summary publication is about to hand to the callback, so what it
+;; measures is what ships. These witnesses drive that publication step with a
+;; controlled clock, so the byte counts are exact rather than a band.
+;; ---------------------------------------------------------------------------
+
+(defn- publish-through-invoke
+  "The publication step itself: the real summarizer, the real guard, a fixed
+   clock. Returns the exact envelope the callback received."
+  [result]
+  (let [calls (atom [])
+        ticks (atom [0 1000000])]
+    (mcp-operation/invoke!
+      {:clock-nanos (fn [] (let [[t & more] @ticks]
+                             (reset! ticks (or (seq more) [t]))
+                             t))
+       :execute (fn [] result)
+       :summarize #'inspect-tool/inspect-summary
+       :guard inspect-tool/final-public-result-guard
+       :callback (fn [content error? structured]
+                   (swap! calls conj {:content content :error? error?
+                                      :structured structured}))})
+    (let [{:keys [content structured error?]} (first @calls)
+          envelope (json/generate-string
+                     {:content [{:type "text" :text (first content)}]
+                      :structuredContent structured
+                      :isError (boolean error?)})]
+      {:structured structured
+       :envelope-bytes (count (.getBytes envelope "UTF-8"))})))
+
+(defn- padded-result
+  [base pad-length]
+  (assoc base :pad (apply str (repeat pad-length \x))))
+
+(deftest the-published-envelope-never-exceeds-the-ceiling
+  ;; @spec MCP-OP-FIELD-009
+  ;; Below, exactly AT, and one byte above 32,768, measured on the actual
+  ;; callback envelope. `:pad` is ASCII, so one character of it is one byte of
+  ;; envelope: the arithmetic that finds the exact boundary is the assertion.
+  (let [project (temp-dir)]
+    (try
+      (write-source! project "src/many.clj" (repeated-literal-source 40))
+      (let [base (dissoc (inspect-tool/execute-inspect!
+                           {:project-root (.getPath project)}
+                           (match-params))
+                         :elapsed_ms)
+            ;; The baseline carries the pad KEY with an empty value, so one
+            ;; added pad character is exactly one added envelope byte.
+            empty-bytes (:envelope-bytes
+                          (publish-through-invoke (padded-result base 0)))
+            at (- inspect-tool/max-public-result-bytes empty-bytes)
+            under (publish-through-invoke (padded-result base (dec at)))
+            exact (publish-through-invoke (padded-result base at))
+            over (publish-through-invoke (padded-result base (inc at)))]
+        (testing "one byte under the ceiling publishes"
+          (is (pos? at))
+          (is (true? (:ok (:structured under))))
+          (is (= (dec inspect-tool/max-public-result-bytes)
+                 (:envelope-bytes under))))
+        (testing "exactly at the ceiling publishes, whole"
+          (is (true? (:ok (:structured exact))))
+          (is (= inspect-tool/max-public-result-bytes
+                 (:envelope-bytes exact)))
+          (is (= 40 (count (:matches (first (:results (:structured exact))))))))
+        (testing "one byte over the ceiling is refused, and the refusal fits"
+          (is (false? (:ok (:structured over))))
+          (is (= "structural-buffer-output-budget-exceeded"
+                 (:error_type (:structured over))))
+          (is (= (inc inspect-tool/max-public-result-bytes)
+                 (get-in (:structured over)
+                         [:required :public_result_bytes])))
+          (is (nil? (:results (:structured over))))
+          (is (false? (:read_complete (:structured over))))
+          (is (true? (:source_unchanged (:structured over))))
+          (is (not= "none" (:next_action (:structured over))))
+          (is (<= (:envelope-bytes over)
+                  inspect-tool/max-public-result-bytes))))
+      (finally (delete-tree! project)))))
+
+(deftest the-ceiling-counts-json-escaped-bytes-not-source-characters
+  ;; @spec MCP-OP-FIELD-009
+  ;; Every site keeps its source (the pattern is a wildcard, so no site is
+  ;; byte-equal to the match) and every source is full of characters JSON must
+  ;; escape: quotes, backslashes, tabs and newlines each cost two bytes on the
+  ;; wire and one in the file. The whole file is far under the ceiling in raw
+  ;; characters; the published envelope is over it.
+  (let [project (temp-dir)
+        payload "a\\\"b\\\\c\\td\\ne"
+        source (str "(ns escaped)\n"
+                    (str/join
+                      (map (fn [i]
+                             (format "(defn owner-%03d []\n  (send! \"%s%03d\"))\n"
+                                     i payload i))
+                           (range 120))))]
+    (try
+      (write-source! project "src/escaped.clj" source)
+      (let [{:keys [structured envelope-bytes]}
+            (published project
+                       {"requests" [{"id" "e00" "operation" "match"
+                                     "file" "src/escaped.clj"
+                                     "match" "(send! _)"}]
+                        "expect" {"requests" 1 "files" 1}})]
+        (is (< (count source) inspect-tool/max-public-result-bytes))
+        (is (false? (:ok structured)))
+        (is (= "structural-buffer-output-budget-exceeded"
+               (:error_type structured)))
+        (is (> (get-in structured [:required :public_result_bytes])
+               inspect-tool/max-public-result-bytes))
+        (is (nil? (:results structured)))
+        (is (<= envelope-bytes inspect-tool/max-public-result-bytes)))
+      (finally (delete-tree! project)))))
+
+(deftest the-prepared-request-fallback-to-an-ordinary-result-is-also-guarded
+  ;; @spec MCP-OP-FIELD-009
+  ;; @spec MCP-OP-PREP-REQ-001
+  ;; When a prepared-request candidate measures over the ceiling,
+  ;; `enforce-result-budget` returns the ORDINARY result unchanged -- it does
+  ;; not fall through to the ordinary branch. That fallback publication is
+  ;; still a publication, so the finalization guard covers it.
+  (let [project (temp-dir)
+        body (str/join (repeat 1200 "  (send! :ping)\n"))]
+    (try
+      (write-source! project "src/big.clj"
+                     (str "(ns big)\n(defn wide []\n" body "  nil)\n"))
+      (let [{:keys [structured envelope-bytes]}
+            (published project
+                       {"requests" [{"id" "f00" "operation" "forms"
+                                     "file" "src/big.clj"
+                                     "forms" ["wide"]
+                                     "expect" {"forms" 1}}]
+                        "expect" {"requests" 1 "files" 1}})]
+        (is (false? (:ok structured)))
+        (is (= "structural-buffer-output-budget-exceeded"
+               (:error_type structured)))
+        (is (nil? (:results structured)))
+        (is (nil? (:prepared_request structured)))
+        (is (false? (:read_complete structured)))
+        (is (<= envelope-bytes inspect-tool/max-public-result-bytes)))
       (finally (delete-tree! project)))))
