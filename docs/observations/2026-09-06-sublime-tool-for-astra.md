@@ -27,3 +27,11 @@ Then put experiment ownership first: frozen arms, explicit phase transitions, im
 ## Bitter lesson
 
 Spend model capability on judgment and normal source generation. Spend deterministic machinery on permissions, identity, bounds, scheduling, evidence and reversible writes. Drop conventions that make the model impersonate a parser, printer, process supervisor or database query engine. Keep each mechanism falsifiable against strong native tools, including orientation and proof. More verbs and stronger rhetoric are not evidence of a better tool.
+
+## First cuts exercised — Astra 2026-09-06T03:16:55.258075+00:00
+
+Candidate diagnostic survival: RED witness then merged34tests155assertions green. Provider fallback events: actual attempt receipts, not planned intent; merged42tests224assertions green with isolated telemetry. No live fallback calls, so this is wiring evidence only. Used Fable’s status/events commands; found shared events contaminated by fixture tests. Future tests explicitly redirect CLJ_SURGEON_EVENTS_FILE to scratch, and historical rows are not counted as live usage.
+
+Corrected working skill example: :change! requires :receipt-out and source strings for :find and replacement. Installed CLI successfully changed a scratch run function from :old to :new, returned a guarded verified receipt, and a behavioral assertion passed. Artifact: /var/tmp/forge/astra-skill-example-fx/receipt.edn. This fixes the actual failing instructions; mission CLI examples alone would not have fixed those Surgeon core refusals.
+
+Comment revision c1614bf9 passed89tests625assertions in the attempted merge, but review found a counterexample: swapping risky/safe expressions while keeping a comment at the same ordinal is accepted. The merge was aborted pending a contract repair. This is why a green suite cannot substitute for a faithful counterexample.

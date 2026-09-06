@@ -34,17 +34,19 @@ For any nontrivial plan, put the structured request on stdin. This is the CLI
 equivalent of MCP's structured arguments and avoids nested shell quoting:
 
 ```bash
-clj-surgeon :op :change! :spec-file - <<'EDN'
+clj-surgeon :op :change! :receipt-out ./change-receipt.edn :spec-file - <<'EDN'
 {:changes [{:id :rename
             :in ["src/app.clj"]
             :forms [run]
-            :find :old
-            :do [:replace :new]
+            :find ":old"
+            :do [:replace ":new"]
             :expect {:matches 1 :each-form 1}}]
  :expect {:changes 1 :edits 1 :files 1}}
 EDN
 ```
 
+`:find` and the replacement are source strings, even for a keyword literal.
+`:change!` requires a writable `:receipt-out` path for its guarded undo receipt.
 Use `:spec-file PATH` for a saved request. Attach stdin in the same shell
 action; never invoke `:spec-file -` and wait for a later input stream.
 Never run `clj-surgeon up` casually. It is development-only, edits workspace
