@@ -17,39 +17,79 @@
 (def managed-begin (str "<!-- BEGIN CLJ-SURGEON ROUTING v:" managed-version " -->"))
 (def managed-end (str "<!-- END CLJ-SURGEON ROUTING v:" managed-version " -->"))
 
-(def ^:private any-begin-pattern #"<!-- BEGIN CLJ-SURGEON ROUTING v:(\d+) -->")
-(def ^:private any-end-pattern #"<!-- END CLJ-SURGEON ROUTING v:(\d+) -->")
+(def ^:private begin-prefix "<!-- BEGIN CLJ-SURGEON ROUTING")
+(def ^:private end-prefix "<!-- END CLJ-SURGEON ROUTING")
+
+;; A marker is WELL FORMED only if the prefix is followed by exactly
+;; " v:<positive integer> -->". `v:x`, `v:`, `v:2a`, `v:0` and a missing `v:`
+;; are all malformed -- and malformed is a REFUSAL, never an absence.
+(def ^:private well-formed-begin #"<!-- BEGIN CLJ-SURGEON ROUTING v:([1-9]\d*) -->")
+(def ^:private well-formed-end #"<!-- END CLJ-SURGEON ROUTING v:([1-9]\d*) -->")
+
+(defn- line-bounds
+  "[start end) of the line containing `idx`."
+  [^String source idx]
+  (let [nl (.indexOf source "\n" (int idx))
+        end (if (neg? nl) (count source) nl)
+        prev (.lastIndexOf source "\n" (int idx))
+        start (if (neg? prev) 0 (inc prev))]
+    [start end]))
 
 (defn- marker-scan
-  "Every marker of EVERY version, with its span and its declared version.
-   Scanning only the current version's literal is what let a superseded block
-   survive next to a fresh one: the old bytes were invisible to the check."
-  [pattern source]
-  (let [matcher (re-matcher pattern source)]
-    (loop [found []]
-      (if (.find matcher)
-        (recur (conj found {:start (.start matcher)
-                            :end (.end matcher)
-                            :version (parse-long (.group matcher 1))}))
-        found))))
+  "Every marker of EVERY version, with its span and its declared version --
+   found by PREFIX, not by a well-formed pattern. Scanning only well-formed
+   markers is what let `v:x` read as `:absent`: a line a human clearly meant as
+   a managed marker was invisible to the check, so the installer appended a
+   second block beside a region it could not bound. A prefix hit whose version
+   is not a well-formed positive integer is returned as `:malformed`, and every
+   caller refuses on it."
+  [^java.util.regex.Pattern pattern ^String prefix ^String source]
+  (loop [from 0
+         found []]
+    (let [idx (.indexOf source prefix (int from))]
+      (if (neg? idx)
+        found
+        (let [[line-start line-end] (line-bounds source idx)
+              matcher (doto (re-matcher pattern source)
+                        (.region idx line-end))
+              hit (if (.lookingAt matcher)
+                    {:start idx
+                     :end (.end matcher)
+                     :version (parse-long (.group matcher 1))}
+                    {:start idx
+                     :malformed true
+                     :line (str/trim (subs source line-start line-end))})]
+          (recur (long (inc idx)) (conj found hit)))))))
 
 (defn- marker-state
   "Exactly ONE well-formed BEGIN/END pair, at ONE version, across ALL versions.
    Anything else is refused with a diagnosis and the file is left alone: a
-   second block, a crossed pair, or a version-mismatched pair means a human
-   edited a managed region and the installer cannot know which rule governs."
+   malformed version, a second block, a crossed pair, or a version-mismatched
+   pair means a human edited a managed region and the installer cannot know
+   which rule governs."
   [source]
-  (let [begins (marker-scan any-begin-pattern source)
-        ends (marker-scan any-end-pattern source)
+  (let [begins (marker-scan well-formed-begin begin-prefix source)
+        ends (marker-scan well-formed-end end-prefix source)
+        malformed (filterv :malformed (concat begins ends))
         refuse (fn [diagnosis]
-                 {:ok false
-                  :error-type :invalid-managed-routing
-                  :diagnosis diagnosis
-                  :begin-count (count begins)
-                  :end-count (count ends)
-                  :begin-versions (mapv :version begins)
-                  :end-versions (mapv :version ends)})]
+                 (cond-> {:ok false
+                          :error-type :invalid-managed-routing
+                          :diagnosis diagnosis
+                          :begin-count (count begins)
+                          :end-count (count ends)
+                          :begin-versions (mapv #(or (:version %) :malformed) begins)
+                          :end-versions (mapv #(or (:version %) :malformed) ends)}
+                   (seq malformed)
+                   (assoc :malformed-markers (mapv :line malformed))))]
     (cond
+      (seq malformed)
+      (refuse (str "a CLJ-SURGEON ROUTING marker declares a version that is not a "
+                   "positive integer: " (pr-str (mapv :line malformed))
+                   ". A marker line the installer cannot version cannot be trusted "
+                   "to bound a managed region, so the file is left untouched. Fix "
+                   "the version by hand (or delete the block), then re-run the "
+                   "installer."))
+
       (and (empty? begins) (empty? ends))
       {:ok true :state :absent}
 

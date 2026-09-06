@@ -305,3 +305,86 @@
     (testing "no unsourced 11x figure survives on any surface"
       (is (not (str/includes? plate "11x")))
       (is (not (str/includes? canonical "| Bench harness wall | 11x |"))))))
+
+;; ---------------------------------------------------------------------------
+;; Sol fence r4, finding 1: the marker contract must FAIL CLOSED on a version
+;; it cannot parse. Before this, `marker-scan` matched only `v:\d+`, so a line
+;; a human obviously meant as a managed marker -- `<!-- BEGIN CLJ-SURGEON
+;; ROUTING v:x -->` -- was invisible: the file read `:absent` and the installer
+;; APPENDED a second block beside a region it could not bound, preserving the
+;; malformed one. `:absent` is the one state a malformed marker may never
+;; produce.
+
+(defn- malformed-refusal?
+  [result]
+  (and (false? (:ok result))
+       (= :invalid-managed-routing (:error-type result))
+       (string? (:diagnosis result))
+       (seq (:malformed-markers result))))
+
+(deftest a-marker-whose-version-is-not-a-positive-integer-refuses
+  (doseq [[label source]
+          [["v:x on both markers"
+            (str "head\n<!-- BEGIN CLJ-SURGEON ROUTING v:x -->\nMALFORMED-BODY\n"
+                 "<!-- END CLJ-SURGEON ROUTING v:x -->\ntail\n")]
+           ["a BEGIN with no version at all"
+            "head\n<!-- BEGIN CLJ-SURGEON ROUTING -->\nMALFORMED-BODY\ntail\n"]
+           ["a well-formed BEGIN with a malformed END"
+            (str "head\n" routing/managed-begin "\nBODY\n"
+                 "<!-- END CLJ-SURGEON ROUTING v:2a -->\ntail\n")]
+           ["an empty version"
+            (str "head\n<!-- BEGIN CLJ-SURGEON ROUTING v: -->\nBODY\n"
+                 "<!-- END CLJ-SURGEON ROUTING v: -->\ntail\n")]
+           ["a zero version is not positive"
+            (str "head\n<!-- BEGIN CLJ-SURGEON ROUTING v:0 -->\nBODY\n"
+                 "<!-- END CLJ-SURGEON ROUTING v:0 -->\ntail\n")]]]
+    (testing label
+      (let [result (routing/upsert-routing-block source canonical-block)]
+        (is (malformed-refusal? result)
+            (str label " -- expected :invalid-managed-routing, got "
+                 (pr-str (dissoc result :source))))
+        (testing "the file's bytes are untouched"
+          (is (= source (:source result))))
+        (testing "it is never reported absent"
+          (is (not= :absent (:previous-state result))))))))
+
+(deftest install-refuses-a-malformed-marker-file-and-appends-nothing
+  ;; The end-to-end half: `install` is what actually wrote the second block in
+  ;; Sol's reproduction, so the witness drives install!, not just the pure fn.
+  (let [dir (fs/create-temp-dir {:prefix "clj-surgeon-routing-malformed"})
+        block-file (str (fs/path dir "block.md"))
+        target (str (fs/path dir "target.md"))
+        original (str "keep me\n<!-- BEGIN CLJ-SURGEON ROUTING v:x -->\n"
+                      "MALFORMED-BODY\n<!-- END CLJ-SURGEON ROUTING v:x -->\n")]
+    (try
+      (spit block-file canonical-block)
+      (spit target original)
+      (let [result (routing/install-routing! block-file [target])
+            after (slurp target)]
+        (is (false? (:ok result)))
+        (is (= :invalid-managed-routing (:error-type result)))
+        (is (= :install-agent-routing (:operation result)))
+        (is (= target (:target result)))
+        (testing "not one byte was appended"
+          (is (= original after))
+          (is (= 1 (count (re-seq #"BEGIN CLJ-SURGEON ROUTING" after))))
+          (is (not (str/includes? after (str "ROUTING v:" routing/managed-version))))
+          (is (str/includes? after "MALFORMED-BODY"))))
+      (finally (fs/delete-tree dir)))))
+
+(deftest a-well-formed-file-still-reads-present-stale-and-absent
+  ;; The fail-closed rule must not swallow the states it exists to protect.
+  (testing "absent stays absent when no marker prefix appears at all"
+    (is (= :absent (:previous-state (routing/upsert-routing-block "plain\n"
+                                                                 canonical-block)))))
+  (testing "the canonical block still reads present/current"
+    (is (= :current (:previous-state (routing/upsert-routing-block canonical-block
+                                                                  canonical-block)))))
+  (testing "a lone v:1 pair still reads stale and is replaced in place"
+    (let [source (str "head\n<!-- BEGIN CLJ-SURGEON ROUTING v:1 -->\nOLD-BYTES\n"
+                      "<!-- END CLJ-SURGEON ROUTING v:1 -->\ntail\n")
+          result (routing/upsert-routing-block source canonical-block)]
+      (is (:ok result))
+      (is (= :stale (:previous-state result)))
+      (is (= 1 (:stale-version result)))
+      (is (not (str/includes? (:source result) "OLD-BYTES"))))))
