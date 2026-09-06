@@ -249,3 +249,8 @@ One real Maven clarity edit committed in a scratch workspace through the existin
 ### Astra — 2026-09-06 whole Maven task, wall hypothesis failed
 
 A full feature in the128-file Maven repository, two fresh Astra/medium actors: native128.420s vs patch-admission-assisted133.027s through actor completion/cleanup;130.639/135.144s through independent acceptance. Both independentGO, real source/test/README commits, no protected drift. Tool committed after one actor-authored-test refusal; native also repaired its own test. No native source fallback in T1. Whole-task >=1.25x prediction FAILED; tool1.036x aslong, onepair without statistical inference. Shared preparation-to-decision22.72min is explicit. The largest generation gap remained in the model; this is not an integrated fast-typist whole-feature comparison. [Scope, costs and receipts](observations/2026-09-06-astra-whole-maven-task.md).
+
+
+### Astra — 2026-09-06 17:53Z: the fast text survived; whole-task wall lost
+
+Second fresh whole-Maven pair independently GO on both sides: native122.616s versus fast-typist/admission226.761s (tool1.849x as long); through independent acceptance125.040/228.981s. One real Cerebras OSS-120B response supplied retained source/test/README in2.075s,5,142tokens,$0.0026057. Review/integration, extra JSON decoding, actor-added test repair and diagnostic proof produced16outer actions versus7. Preparation-to-independentdecision18.44min; actor dollars unknown. Both whole-task approaches are parked after two losses; no third run. Full accounting, commits and frozen receipts: [whole-Maven experiment](observations/2026-09-06-astra-whole-maven-task.md).

@@ -292,3 +292,8 @@ Assessment: **7/10**. Useful bounded wins are real; cheap preparation, proof sel
 ### Astra 2026-09-06T17:16:25.142879+00:00 — whole-task native comparison, retained LOSS
 
 Gene ratified the16:50–18:50 wall-only block. Full Maven feature pair completed: native128.420s, tool133.027s request-through-actor/cleanup; independent-acceptance boundary130.639/135.144s. Both independentGO, source/tests/READMElocallycommitted, originalAPI/tests preserved. Tool made one genuine focused-test refusal then one actual verified source/test commit; both actors corrected errors in their own new test literals. No native source fallback in the tool arm. Prediction>=1.25x FAILED; tool1.036x aslong. Onepair, no statistical/general slowdown claim. Preparation-to-decision22.72min includes queue/actors/review; no hidden transformation of2s service calls into task wins. Fullscope/receipts: [whole Maven task](2026-09-06-astra-whole-maven-task.md).
+
+
+### Astra — 2026-09-06 17:53Z: the fast text survived; whole-task wall lost
+
+Second fresh whole-Maven pair independently GO on both sides: native122.616s versus fast-typist/admission226.761s (tool1.849x as long); through independent acceptance125.040/228.981s. One real Cerebras OSS-120B response supplied retained source/test/README in2.075s,5,142tokens,$0.0026057. Review/integration, extra JSON decoding, actor-added test repair and diagnostic proof produced16outer actions versus7. Preparation-to-independentdecision18.44min; actor dollars unknown. Both whole-task approaches are parked after two losses; no third run. Full accounting, commits and frozen receipts: [whole-Maven experiment](2026-09-06-astra-whole-maven-task.md).
