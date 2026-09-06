@@ -168,7 +168,14 @@ not merely a configured route. Spark execution is not implemented; executor plan
 completion order. Before commit it cancels remaining work and checks both worker
 termination and tracked transport-process liveness. Completed replies are retained;
 cancelled requests have unknown billed usage. The three-process fake-client path passes real proof, guarded commit and undo;
-two live pinned-provider hand-drives now verify (one retained repository change, one fresh fixture). Independent combined fence review and replicated complete-wall performance validation remain pending.
+two live pinned-provider hand-drives verify (one retained repository change, one fresh fixture).
+Independent executed reviews and the working-branch landing gates have passed
+through the September 6 integration. Narrow native comparisons also have retained
+complete execution-and-proof results; see the
+[Maven comparison](observations/2026-09-06-astra-maven-native-comparison.md).
+These do not establish general reliability, voluntary adoption, or a gain after
+all task discovery and proof preparation costs. Spark and resident verification
+remain separate experiments, not supported executor routes.
 
 Fake-provider real-program hand-drive:
 

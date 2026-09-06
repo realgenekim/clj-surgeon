@@ -216,3 +216,7 @@ Receipt and bounds: [Astra Maven comparison](observations/2026-09-06-astra-maven
 ### Astra evidence update — 2026-09-06T09:30:10.545202+00:00
 
 Closed-closure warm transition: actual source change and matching proof earned, one866ms observation versus existing two-cold-JVM4386ms. Startup+transition+teardown4761ms; one-shot win and100ms target unearned. Next useful comparator is batched cold proof, then repeated real transitions; receipt poison-state paper cut precedes product use. Spark: actual single availability/accounting boundary passed, production tool-free adapter still unsupported. See [Astra report](observations/2026-09-06-astra-warm-transition-and-spark.md).
+
+### Astra stronger comparator — 2026-09-06T09:58:04.633110+00:00
+
+Single-JVM cold proof now executed at2.612s complete command; earlier warmtransition0.866s is3.02x component ratio (one observation), replacing two-JVM5.07x as the stronger comparison. Warmstartup+transition4.294s loses isolateduse. This batching opportunity benefits both editing arms. [Evidence](observations/2026-09-06-astra-single-jvm-cold-comparison.md). Freshness narrow archive exemption landed38a2cec4 and avoided the next receipt-only battery rerun; no source budget raised.
