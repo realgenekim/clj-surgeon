@@ -1,4 +1,4 @@
-(ns clj-surgeon.mission-test
+(ns ^{:lane :battery} clj-surgeon.mission-test
   "Witnesses for the MISSION LEDGER prototype.
 
   Two halves, matching the object's own two halves:

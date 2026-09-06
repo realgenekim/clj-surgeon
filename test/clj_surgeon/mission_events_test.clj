@@ -40,7 +40,7 @@
                         :upstream ["SECRET" "unknown"]
                         :refused_rung ["SECRET" "unknown"]}]
     (doseq [value values]
-      (is (not (contains? (events/line-map {key value}) key)))))
+      (is (nil? (get (events/line-map {key value}) key)))))
   (is (empty? (observer/context {:id "SECRET" :verb "SECRET"
                                  :state "SECRET" :plan "SECRET"}))))
 
