@@ -38,6 +38,7 @@ No number is ever fabricated: a missing API usage field prints `tokens=unknown`.
 """
 
 import argparse
+import atexit
 import concurrent.futures as cf
 import difflib
 import hashlib
@@ -520,6 +521,7 @@ def real2_classpath(jars_only):
     if r.returncode != 0:
         die("typist-run: refusing — cannot resolve the JVM classpath for the "
             "real-2 gate: %s" % (r.stderr or "").strip(), 5)
+    REAL2_SPATH_RAW[key] = r.stdout.strip()
     entries = []
     for e in r.stdout.strip().split(os.pathsep):
         if not e:
@@ -621,6 +623,7 @@ MISSIONS = {
         "preimage": "/var/tmp/forge/typist-real-fx/preimage-real-2",
         "seed": real2_seed_factory("typist-real-2", REAL2_NSS, True),
         "profile": "typist-real-2",
+        "jvm_nss": REAL2_NSS, "jvm_jars_only": True,
         "mutable": [REAL1_SRC],
         "accept_expr": REAL1_ACCEPT,
         "accept_desc": ("independent behavioural witness (clj-surgeon.diagnostic-delta "
@@ -634,6 +637,7 @@ MISSIONS = {
         "preimage": "/var/tmp/forge/typist-real-fx/preimage-real-2j",
         "seed": real2_seed_factory("typist-real-2j", REAL2J_NSS, False),
         "profile": "typist-real-2j",
+        "jvm_nss": REAL2J_NSS, "jvm_jars_only": False,
         "mutable": [REAL1_SRC],
         "accept_expr": REAL1_ACCEPT,
         "accept_desc": ("independent behavioural witness (clj-surgeon.diagnostic-delta "
@@ -643,6 +647,10 @@ MISSIONS = {
 }
 
 # Bound at startup from the selected mission; every judging function reads them.
+GATE_MODE = "cold"
+RESIDENT = None
+REAL2_SPATH_RAW = {}
+COLD_CP_HASH = [None]
 MISSION = None
 DOSSIER = None
 PREIMAGE = None
@@ -1108,6 +1116,339 @@ def apply_diff(workdir, diff_text):
     return ok, "git refused (%s); %s" % (git_detail, detail), ("anchored" if ok else None)
 
 
+# --------------------------------------------------------------------------
+# RESIDENT JVM GATE (--gate-mode resident)
+#
+# Gene's ask: "in my ideal, we'd have accommodations where tests are running in
+# watch mode, obviating JVM startup time."  A resident gate is one nREPL JVM,
+# started ONCE by the runner with the SAME classpath string the cold gate uses,
+# whose working directory holds the `src` and `test` roots that classpath names
+# FIRST.  Per candidate the runner overwrites those two roots with the
+# candidate's bytes, unmaps every clj-surgeon namespace (and drops them from
+# *loaded-libs*), and re-requires the gate's test namespaces -- so the load
+# order is identical to cold: the candidate's file is the one that loads.
+#
+# The tool owns the resident.  Before every candidate it proves (a) LIVENESS --
+# a 2 s round trip -- and (b) that the classpath the server was started with is
+# still the classpath `clojure -Spath` resolves now, by sha256 of the -Spath
+# string, recorded in the server's own metadata file.  Either proof failing is
+# a TYPED refusal that falls back to the cold gate and says so in the receipt
+# (:gate_mode "cold-fallback"), because a resident that has drifted is a silent
+# wrong answer machine.
+
+def bencode(obj):
+    if isinstance(obj, bytes):
+        return str(len(obj)).encode() + b":" + obj
+    if isinstance(obj, str):
+        return bencode(obj.encode())
+    if isinstance(obj, int):
+        return b"i" + str(obj).encode() + b"e"
+    if isinstance(obj, (list, tuple)):
+        return b"l" + b"".join(bencode(x) for x in obj) + b"e"
+    if isinstance(obj, dict):
+        out = b"d"
+        for k in sorted(obj):
+            out += bencode(k) + bencode(obj[k])
+        return out + b"e"
+    raise TypeError("bencode: %r" % (obj,))
+
+
+class BDecoder(object):
+    """Incremental bencode reader over a socket file object."""
+
+    def __init__(self, fh):
+        self.fh = fh
+
+    def _byte(self):
+        b = self.fh.read(1)
+        if not b:
+            raise EOFError("nrepl: connection closed")
+        return b
+
+    def read(self):
+        return self._val(self._byte())
+
+    def _val(self, c):
+        if c == b"i":
+            num = b""
+            while True:
+                d = self._byte()
+                if d == b"e":
+                    return int(num)
+                num += d
+        if c == b"l":
+            out = []
+            while True:
+                n = self._byte()
+                if n == b"e":
+                    return out
+                out.append(self._val(n))
+            return out
+        if c == b"d":
+            out = {}
+            while True:
+                k = self._byte()
+                if k == b"e":
+                    return out
+                # RHS-first evaluation would read the VALUE before the KEY:
+                # bind the key on its own line or the stream desynchronizes.
+                key = self._val(k)
+                out[key] = self.read()
+            return out
+        num = c
+        while True:
+            d = self._byte()
+            if d == b":":
+                break
+            num += d
+        n = int(num)
+        buf = b""
+        while len(buf) < n:
+            chunk = self.fh.read(n - len(buf))
+            if not chunk:
+                raise EOFError("nrepl: short read")
+            buf += chunk
+        return buf.decode("utf-8", "replace")
+
+
+class Nrepl(object):
+    def __init__(self, port, host="127.0.0.1", timeout=10.0):
+        import socket
+        self.sock = socket.create_connection((host, port), timeout=timeout)
+        self.fh = self.sock.makefile("rb")
+        self.dec = BDecoder(self.fh)
+        self.counter = 0
+        self.session = None
+        r = self.request({"op": "clone"}, timeout=timeout)
+        self.session = r.get("new_session")
+        if not self.session:
+            raise RuntimeError("nrepl: clone returned no session")
+
+    def request(self, msg, timeout=300.0):
+        self.counter += 1
+        mid = "m%d" % self.counter
+        msg = dict(msg)
+        msg["id"] = mid
+        if self.session and "session" not in msg:
+            msg["session"] = self.session
+        self.sock.settimeout(timeout)
+        self.sock.sendall(bencode(msg))
+        vals, outs, errs, status, ex, newsess = [], [], [], [], None, None
+        while True:
+            m = self.dec.read()
+            if not isinstance(m, dict) or m.get("id") != mid:
+                continue
+            if "value" in m:
+                vals.append(m["value"])
+            if "out" in m:
+                outs.append(m["out"])
+            if "err" in m:
+                errs.append(m["err"])
+            if "ex" in m:
+                ex = m["ex"]
+            if "new-session" in m:
+                newsess = m["new-session"]
+            st = m.get("status") or []
+            if isinstance(st, str):
+                st = [st]
+            status.extend(st)
+            if "done" in status:
+                return {"value": vals, "out": "".join(outs), "err": "".join(errs),
+                        "ex": ex, "status": status, "new_session": newsess}
+
+    def close(self):
+        try:
+            self.sock.close()
+        except Exception:                                        # noqa: BLE001
+            pass
+
+
+# The per-candidate reload, evaluated in the resident.  It unmaps every
+# clj-surgeon namespace and drops them from *loaded-libs* so `require` really
+# reloads from the classpath -- whose FIRST two entries are the candidate's own
+# src and test roots, exactly as in the cold gate.
+RESIDENT_EVAL = """(do
+  (require (quote clojure.string) (quote clojure.test))
+  (try
+    (let [pfx "clj-surgeon."
+          stale (doall (filter #(clojure.string/starts-with? (str (ns-name %%)) pfx) (all-ns)))]
+      (doseq [n stale] (remove-ns (ns-name n)))
+      (dosync (commute @#'clojure.core/*loaded-libs*
+                       (fn [s] (into #{} (remove #(clojure.string/starts-with? (str %%) pfx) s)))))
+      (apply require (quote (%s)))
+      (let [r (apply clojure.test/run-tests (quote (%s)))]
+        (str "GATE " (:fail r) " " (:error r) " " (:test r) " " (:pass r)
+             " unmapped=" (count stale))))
+    (catch Throwable t
+      (str "GATE-ERR " (.getName (class t)) ": "
+           (clojure.string/replace (str (.getMessage t)) "\\n" " ")))))"""
+
+
+def free_port(lo=7960, hi=7969):
+    """A free port in the seat's reserved band, proven free with ss(1)."""
+    used = set()
+    r = subprocess.run(["ss", "-ltnH"], capture_output=True, text=True)
+    for line in (r.stdout or "").splitlines():
+        f = line.split()
+        if len(f) >= 4 and ":" in f[3]:
+            try:
+                used.add(int(f[3].rsplit(":", 1)[1]))
+            except ValueError:
+                pass
+    for p in range(lo, hi + 1):
+        if p not in used:
+            return p
+    die("typist-run: refusing -- no free port in %d-%d for the resident nREPL"
+        % (lo, hi), 5)
+
+
+class Resident(object):
+    """One nREPL JVM owned by the runner: liveness + classpath hash + reload."""
+
+    def __init__(self, mission, port=None):
+        m = MISSIONS[mission]
+        if "jvm_nss" not in m:
+            die("typist-run: refusing -- mission %s has no JVM gate; "
+                "--gate-mode resident is only defined for the JVM missions "
+                "(real-2, real-2j)" % mission, 7)
+        self.mission = mission
+        self.nss = m["jvm_nss"]
+        self.jars_only = m["jvm_jars_only"]
+        self.cp = real2_classpath(self.jars_only)
+        self.spath = REAL2_SPATH_RAW[bool(self.jars_only)]
+        self.cp_hash = sha256_bytes(self.spath.encode())
+        self.dir = os.path.join(FX, "resident-%s-%d" % (mission, os.getpid()))
+        self.port = port or free_port()
+        self.proc = None
+        self.client = None
+        self.startup_wall_s = None
+        self.meta = os.path.join(self.dir, "resident.json")
+
+    def start(self):
+        if os.path.isdir(self.dir):
+            shutil.rmtree(self.dir)
+        os.makedirs(os.path.join(self.dir, "src"))
+        os.makedirs(os.path.join(self.dir, "test"))
+        with open(self.meta, "w") as fh:
+            json.dump({"mission": self.mission, "port": self.port,
+                       "classpath_hash": self.cp_hash, "nss": self.nss}, fh)
+        t0 = time.time()
+        log = open(os.path.join(self.dir, "nrepl.log"), "wb")
+        self.proc = subprocess.Popen(
+            ["java", "-cp", self.cp, "clojure.main", "-m", "nrepl.cmdline",
+             "--port", str(self.port)],
+            cwd=self.dir, stdout=log, stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL)
+        deadline = time.time() + 180
+        last = None
+        while time.time() < deadline:
+            if self.proc.poll() is not None:
+                die("typist-run: refusing -- the resident nREPL server exited "
+                    "rc=%s; see %s" % (self.proc.returncode,
+                                       os.path.join(self.dir, "nrepl.log")), 5)
+            try:
+                self.client = Nrepl(self.port, timeout=5.0)
+                break
+            except Exception as e:                               # noqa: BLE001
+                last = e
+                time.sleep(0.2)
+        if self.client is None:
+            die("typist-run: refusing -- the resident nREPL server never "
+                "answered on port %d: %s" % (self.port, last), 5)
+        self.startup_wall_s = round(time.time() - t0, 3)
+        return self
+
+    def alive(self):
+        """(ok, seconds). A 2 s round trip is the liveness proof."""
+        t0 = time.time()
+        try:
+            r = self.client.request({"op": "eval", "code": "(+ 1 1)"}, timeout=2.0)
+            ok = bool(r["value"]) and r["value"][-1] == "2"
+        except Exception:                                        # noqa: BLE001
+            ok = False
+        return bool(ok), round(time.time() - t0, 3)
+
+    def hash_ok(self):
+        try:
+            with open(self.meta) as fh:
+                return json.load(fh).get("classpath_hash") == self.cp_hash
+        except Exception:                                        # noqa: BLE001
+            return False
+
+    def stage(self, cand_dir):
+        for root in ("src", "test"):
+            dst = os.path.join(self.dir, root)
+            if os.path.isdir(dst):
+                shutil.rmtree(dst)
+            src = os.path.join(cand_dir, root)
+            if os.path.isdir(src):
+                shutil.copytree(src, dst)
+            else:
+                os.makedirs(dst)
+
+    def gate(self, cand_dir, timeout=300):
+        self.stage(cand_dir)
+        quoted = " ".join(self.nss)
+        code = RESIDENT_EVAL % (quoted, quoted)
+        r = self.client.request({"op": "eval", "code": code}, timeout=timeout)
+        if r.get("ex"):
+            return False, ("resident eval threw: %s | %s"
+                           % (r["ex"], r["err"][-200:]))[:400]
+        raw = r["value"][-1] if r["value"] else ""
+        val = raw.strip()
+        if val.startswith('"') and val.endswith('"'):
+            val = val[1:-1]
+        if val.startswith("GATE-ERR"):
+            return False, val[:400]
+        parts = val.split()
+        if len(parts) < 3 or parts[0] != "GATE":
+            return False, ("resident gate returned no verdict: %r | out=%s"
+                           % (raw[:200], r["out"][-200:]))[:400]
+        fail, err = int(parts[1]), int(parts[2])
+        if fail or err:
+            tail = r["out"].strip().splitlines()[-4:]
+            return False, ("%s | %s" % (val, " | ".join(tail)))[:400]
+        return True, "0 failures, 0 errors (%s)" % val
+
+    def stop(self):
+        if self.client:
+            self.client.close()
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=10)
+            except Exception:                                    # noqa: BLE001
+                self.proc.kill()
+
+
+def run_gate_dispatch(cand_dir, cmds, rec):
+    """The gate, in whichever mode was asked for. Records the mode ACTUALLY
+    used, the liveness proof, and the classpath hash on the candidate."""
+    if GATE_MODE != "resident" or RESIDENT is None:
+        rec["gate_mode"] = "cold"
+        rec["resident_liveness_check_s"] = None
+        rec["classpath_hash"] = COLD_CP_HASH[0]
+        return run_gate(cand_dir, cmds)
+    rec["classpath_hash"] = RESIDENT.cp_hash
+    alive, live_s = RESIDENT.alive()
+    rec["resident_liveness_check_s"] = live_s
+    if not RESIDENT.hash_ok():
+        rec["gate_mode"] = "cold-fallback"
+        rec["gate_fallback_reason"] = "resident: classpath hash mismatch"
+        return run_gate(cand_dir, cmds)
+    if not alive:
+        rec["gate_mode"] = "cold-fallback"
+        rec["gate_fallback_reason"] = "resident: not alive"
+        return run_gate(cand_dir, cmds)
+    rec["gate_mode"] = "resident"
+    try:
+        return RESIDENT.gate(cand_dir)
+    except Exception as e:                                       # noqa: BLE001
+        rec["gate_mode"] = "cold-fallback"
+        rec["gate_fallback_reason"] = "resident: not alive (%s)" % e
+        return run_gate(cand_dir, cmds)
+
+
 def run_gate(workdir, cmds, timeout=300):
     for cmd in cmds:
         r = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True,
@@ -1173,9 +1514,10 @@ def evaluate(cand_dir, diff_text, manifest, cmds):
         return rec
     t_gate0 = time.time()
     try:
-        g_ok, g_detail = run_gate(cand_dir, cmds)
+        g_ok, g_detail = run_gate_dispatch(cand_dir, cmds, rec)
     except subprocess.TimeoutExpired:
         g_ok, g_detail = False, "gate timed out"
+        rec.setdefault("gate_mode", GATE_MODE)
     rec["gate_ok"], rec["gate_detail"] = g_ok, g_detail
     rec["gate_wall_s"] = round(time.time() - t_gate0, 3)
     t_acc0 = time.time()
@@ -1903,6 +2245,12 @@ def main():
                          "of every authorized file inside one fenced block each, "
                          "judged under a changed-region budget. Same dossier "
                          "context, same gate, same acceptance witness.")
+    ap.add_argument("--gate-mode", default="cold", choices=["cold", "resident"],
+                    help="cold (default): one JVM per candidate, exactly as the "
+                         "mission profile says. resident: ONE nREPL JVM owned by "
+                         "the runner, same classpath, per-candidate namespace "
+                         "reload; refuses (typed) and falls back to cold on a "
+                         "liveness or classpath-hash failure. JVM missions only.")
     ap.add_argument("--dossier", default=None,
                     help="the frozen dossier to hand every arm "
                          "(default: bin/typist-dossier.md, the scope-roots mission)")
@@ -1942,6 +2290,21 @@ def main():
 
     manifest = materialize_fixture(force=a.rebuild_fixture)
     cmds = resolve_gate_commands()
+
+    global GATE_MODE, RESIDENT
+    GATE_MODE = a.gate_mode
+    if "jvm_jars_only" in MISSIONS[mission]:
+        # the cold gate's classpath identity, recorded on every candidate so a
+        # cold and a resident receipt can be compared without trusting a label
+        real2_classpath(MISSIONS[mission]["jvm_jars_only"])
+        COLD_CP_HASH[0] = sha256_bytes(
+            REAL2_SPATH_RAW[bool(MISSIONS[mission]["jvm_jars_only"])].encode())
+    if GATE_MODE == "resident":
+        RESIDENT = Resident(mission).start()
+        atexit.register(RESIDENT.stop)
+        print("resident: port=%d startup_wall_s=%.2f classpath_sha256=%s cwd=%s"
+              % (RESIDENT.port, RESIDENT.startup_wall_s,
+                 RESIDENT.cp_hash[:16], RESIDENT.dir))
 
     if a.bench:
         models = {p: a.model for p in bench_providers} if a.model else {}
@@ -2022,6 +2385,10 @@ def main():
             "dossier": DOSSIER, "dossier_sha256": dossier_sha,
             "preimage": PREIMAGE, "manifest": MANIFEST,
             "gate_profile": PROFILE, "gate_commands": cmds,
+            "gate_mode": GATE_MODE,
+            "resident_port": (RESIDENT.port if RESIDENT else None),
+            "resident_startup_wall_s": (RESIDENT.startup_wall_s if RESIDENT else None),
+            "classpath_sha256": (RESIDENT.cp_hash if RESIDENT else COLD_CP_HASH[0]),
             "edit_form": EDIT_FORM,
             "budget_reference_diff": BUDGET_REF,
             "changed_line_budget": (3 * reference_changed_lines(BUDGET_REF)
