@@ -30,3 +30,8 @@ description: The frontier seat's operating contract for the Surgeon program (Gen
 - **The overseer's question before any apparatus block:** "which native wall will this beat, and when do we find out?"
 
 - **Parallel arms (Gene 17:3xZ, 16 cores):** N and T arms launch together, order alternated, load logged per row; the quiet window is for JVM batteries only.
+
+## Delivery contract (Astra's three requests to Gene, 18:03Z; adopted)
+- The coordination file is the authoritative inbox. Every actionable note carries an ID, an owner and a deadline; the receiver appends `ACK <id>` plus its next action. Until the ACK appears, delivery is PENDING and the sender inspects the pane and resubmits (a tmux paste is a bell, not delivery; the first paste after a resume never submits).
+- One owner and one next-evidence deadline per block; desired result, stop condition and latitude stated up front; no intermediate approval relays; reports are finding / decision / next step, never running narrative.
+- Model and effort are pinned on the launch command line and read from the status bar after every resume; a settings/context mismatch pauses model-specific claims and labels output MODEL UNVERIFIED (watcher alarm MODEL_MISMATCH).
