@@ -508,10 +508,10 @@
       ;; 931 original + 435 adopted = 1366: add 7 inspect owner_counts/source-omission
       ;; witnesses (5 in mcp-inspect-contract-test, 2 in mcp-inspect-tool-test), both
       ;; round-one namespaces, so the growth lands in the original half and adopted holds;
-      ;; then add 6 public-handler result-ceiling witnesses in mcp-inspect-tool-test
+      ;; then add 9 public-handler result-ceiling witnesses in mcp-inspect-tool-test
       ;; (MCP-OP-FIELD-009, inb-b60d6e: the ordinary read path now measures and refuses)
       ;; and 3 more for the publication-point guard at the exact byte boundary,
-      ;; also a round-one namespace, so 1363 -> 1369 lands in the original half too;
+      ;; also a round-one namespace, so 1363 -> 1372 lands in the original half too;
       ;; add the real two-require cardinality
       ;; regression in mcp-contract-test; retain Astra identity/receipt witnesses and trunk
       ;; helper request-shape refusals (48 -> 51), plus two battery archival-distance witnesses;
@@ -519,7 +519,7 @@
       ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
       (is (= 435 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1369 total) (str "manifest declares " total " tests"))
+      (is (= 1372 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

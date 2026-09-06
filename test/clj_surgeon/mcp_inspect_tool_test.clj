@@ -1748,3 +1748,77 @@
         (is (false? (:read_complete structured)))
         (is (<= envelope-bytes inspect-tool/max-public-result-bytes)))
       (finally (delete-tree! project)))))
+
+;; ---------------------------------------------------------------------------
+;; Round 3. The ceiling is universal: no response is exempt because of what its
+;; error is CALLED. Seeded by the reviewer's executed probe
+;; (/var/tmp/forge/astra-ten5b-probe.clj), which pushed a 40,254-byte response
+;; already typed `structural-buffer-output-budget-exceeded` through the guard
+;; and published it whole.
+;; ---------------------------------------------------------------------------
+
+(deftest an-oversized-budget-refusal-is-bounded-not-exempted
+  ;; @spec MCP-OP-FIELD-009
+  (let [candidate {:ok false
+                   :operation "inspect_clojure"
+                   :error_type "structural-buffer-output-budget-exceeded"
+                   :read_complete false
+                   :source_unchanged true
+                   :next_action "narrow_request"
+                   :error (str/join "\n" (repeat 500 (apply str (repeat 79 \x))))}
+        {:keys [structured envelope-bytes]} (publish-through-invoke candidate)]
+    (testing "the oversized candidate is not published"
+      (is (> (count (:error candidate))
+             inspect-tool/max-public-result-bytes))
+      (is (<= envelope-bytes inspect-tool/max-public-result-bytes)))
+    (testing "and the bounded replacement still names what actually refused"
+      (is (false? (:ok structured)))
+      (is (= "structural-buffer-output-budget-exceeded"
+             (:original_error_type structured)))
+      (is (true? (:evidence_truncated structured)))
+      (is (str/includes? (:error structured) "truncated on a line boundary"))
+      (is (false? (:read_complete structured)))
+      (is (true? (:source_unchanged structured)))
+      (is (not= "none" (:next_action structured))))))
+
+(deftest the-early-gate-reports-the-bytes-it-would-have-published
+  ;; @spec MCP-OP-FIELD-009
+  ;; The early gate measures a normalized candidate (`elapsed_ms` 0.0) and its
+  ;; small refusal then passes the final guard untouched, so the reported
+  ;; figure described a candidate that was never the published one. The guard
+  ;; now re-measures the refused candidate with the finalized clock.
+  (let [project (temp-dir)]
+    (try
+      (write-source! project "src/many.clj" (repeated-literal-source 200))
+      (let [{:keys [structured]} (published project (match-params))
+            as-published (assoc (inspect-tool/execute-inspect!
+                                  {:project-root (.getPath project)}
+                                  (match-params))
+                                :elapsed_ms (:elapsed_ms structured))
+            finalized-bytes (inspect-tool/mcp-result-byte-count
+                              (#'inspect-tool/inspect-summary as-published)
+                              as-published)]
+        (is (false? (:ok structured)))
+        (is (= finalized-bytes
+               (get-in structured [:required :public_result_bytes])))
+        (testing "and the private carrier never reaches the caller"
+          (is (not-any? #(= "clj-surgeon.mcp-inspect-tool" (namespace %))
+                        (keys structured)))))
+      (finally (delete-tree! project)))))
+
+(deftest publication-throws-rather-than-emitting-an-oversized-envelope
+  ;; @spec MCP-OP-FIELD-009
+  ;; When the ceiling is small enough that even the evidence-free refusal
+  ;; cannot fit, the guard refuses to return anything -- it never emits an
+  ;; envelope over the ceiling.
+  (with-redefs [inspect-tool/max-public-result-bytes 32]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"No bounded public MCP result fits"
+          (publish-through-invoke
+            {:ok false
+             :operation "inspect_clojure"
+             :error_type "structural-buffer-output-budget-exceeded"
+             :read_complete false
+             :source_unchanged true
+             :error (apply str (repeat 40000 \x))})))))
