@@ -136,6 +136,7 @@
    'clj-surgeon.mcp-workspace-test                      :fast
    'clj-surgeon.mcp-write-refusal-test                  :fast
    'clj-surgeon.ns-isolation-test                       :fast
+   'clj-surgeon.outline-corpus-integration-test          :integration
    'clj-surgeon.outline-differential-test               :fast
    'clj-surgeon.outline-memory-test                     :fast
    'clj-surgeon.quoted-var-refs-test                    :fast

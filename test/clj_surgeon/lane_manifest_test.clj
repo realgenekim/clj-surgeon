@@ -377,9 +377,9 @@
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
     (is (= 49 (count (lm/namespaces-for :fast))))
-    (is (= 5 (count (lm/namespaces-for :integration))))
+    (is (= 6 (count (lm/namespaces-for :integration))))
     (is (= 32 (count (lm/namespaces-for :battery))))
-    (is (= 86 (count lm/manifest))
+    (is (= 87 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -408,7 +408,8 @@
   "Namespaces in a lane today that round one did NOT measure, each with the
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
-  '{clj-surgeon.mission-candidate-race-test 5 ; Completion-order delivery, bounded cancellation and retained results.
+  '{clj-surgeon.outline-corpus-integration-test 1 ; MOVED: full repository differential out of the bounded fast namespace.
+    clj-surgeon.mission-candidate-race-test 5 ; Completion-order delivery, bounded cancellation and retained results.
     clj-surgeon.mission-events-test 8 ; Public completion events and isolated logging failure.
     clj-surgeon.mission-phase-events-test 7 ; Actual phase receipts, identity and isolated logging failure.
     clj-surgeon.mission-provider-fallback-events-test 8 ; Actual dispatched fallback, thread context and isolated logging.
@@ -503,10 +504,11 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      ;; 921 original + 432 adopted = 1353: retain Astra identity/receipt witnesses and add trunk
+      ;; One outline corpus test MOVED from its original namespace to adopted integration.
+      ;; 920 original + 433 adopted = 1353: retain Astra identity/receipt witnesses and add trunk
       ;; helper request-shape refusals (48 -> 51); closed telemetry remains 17, not trunk
       ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
-      (is (= 432 adopted) (str "adopted tests: " adopted)))
+      (is (= 433 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       (is (= 1353 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
