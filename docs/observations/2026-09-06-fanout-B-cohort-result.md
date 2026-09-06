@@ -32,3 +32,9 @@ Preregistered expectations (before any run): Fable N 60–180 s / D < 60 s; Astr
 - D1's witness failure is under Astra's independent source review (paren-moved require insertion vs the line-subsequence delta; inb-7c05bc); D2/D3 failures not yet classified. No relabeling; all outcomes retained.
 - What this narrows: the deterministic verbs did not replace discovery/verification decisions for a fresh caller; the refusal contract, not the operation, was the wall. The prepared-typist results (1.98x/1.82x on the 3-owner task) are a different class and stand. Fix in flight on fable/refusal-text-shape (text ⊇ structured error + a filled example); a re-run is a NEW preregistered cell, not a retry of this one.
 - Costs charged: preparation 0.10 s mechanical + apparatus build (two builders, ~3 h of review rounds), review/correction wall in the log; proof per arm ~2.3 s.
+
+## Corrections (Astra, 10:48Z, accepted)
+- Dispersion: the controls' SAMPLE SD is 17.0683 s (2SD 34.1366 s); the 15.6 / 31.2 s above are population SD. Full-boundary sample SD 17.0252 s.
+- Complete medians from the frozen summary.json: N 84.6824 s, D 237.5750 s, N/D 0.3564 (D 2.8055x slower). Frozen pre-proof medians remain separate.
+- Root-cause reading softened: Astra's D1 trace shows the structured error sentence WAS visible to the actor and actively used; the remaining failures were the add-only existing-target contract, a wrong alias route, and a native workaround — a route mismatch, not only missing text. Therefore B2 (refusal-text-only re-run) is NOT ratified and stays unrun; the text improvement proceeds through review on its own merits. Next step per Astra: execute the existing ordinary batched route once on a fresh fixture with the original proof (prepared offline on root), then a bounded fresh-caller recovery pilot if justified.
+- D1–D3 remain frozen failures with the layout-mismatch disclosure; no post-hoc quality promotion.
