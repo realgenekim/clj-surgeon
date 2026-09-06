@@ -1,4 +1,4 @@
-(ns ^{:lane :battery} clj-surgeon.mission-test
+(ns clj-surgeon.mission-test
   "Witnesses for the MISSION LEDGER prototype.
 
   Two halves, matching the object's own two halves:
@@ -13,11 +13,13 @@
               undo that puts every byte back."
   {:lane :battery}
   (:require
+   [cheshire.core :as json]
    [clj-surgeon.helper-extraction-fixture :as fixture]
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.mission :as mission]
    [clj-surgeon.mission-cli :as cli]
    [clj-surgeon.mission-git-ledger :as publication]
+   [clj-surgeon.telemetry-events :as events]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.java.shell]
@@ -1024,23 +1026,56 @@
                clj-surgeon.mission-typist-executor/undo!]
              (mapv first @calls)))
       (is (= '("receipt.edn" "expected-hash") (second (last @calls))))))
-  (let [calls (atom [])
-        stored {:id "m1" :verb "owner_forms" :state :verified
-                :undo {:receipt "receipt.edn" :receipt_hash "wrong-stored-hash"}}]
-    (with-redefs-fn
-      {#'cli/verbs {"owner_forms"
-                    {:undo (fn [path expected]
-                             (swap! calls conj [path expected])
-                             {:ok false :error-type :typist-invalid-undo-hash})}}
-       #'publication/with-publication-lock (fn [_ f] (f))
-       #'publication/undo-publication-refusal (constantly nil)
-       #'cli/state-dir-for (fn [& _] "/ledger")
-       #'mission/read-mission (fn [& _] stored)
-       #'io/file (fn [& _] (proxy [java.io.File] ["receipt.edn"] (isFile [] true)))
-       #'cli/save! (fn [& _] (throw (ex-info "must not save a refused undo" {})))}
-      #(do
-         (is (mission/refused? (cli/undo! {:id "m1" :workspace "/fixture"})))
-         (is (= [["receipt.edn" "wrong-stored-hash"]] @calls))))))
+  (let [dir (.toFile (java.nio.file.Files/createTempDirectory
+                       "mission-undo-destination-"
+                       (make-array java.nio.file.attribute.FileAttribute 0)))
+        receipt (io/file dir "inverse.edn")
+        event-file (io/file dir "events.jsonl")
+        root (.getCanonicalFile (io/file "."))
+        entries (fn [] (set (map (fn [file] (.getName ^java.io.File file)) (.listFiles root))))
+        root-before (entries)
+        posix? (.supportsFileAttributeView
+                 (java.nio.file.Files/getFileStore (.toPath root)) "posix")
+        root-modes (when posix?
+                     (java.nio.file.Files/getPosixFilePermissions
+                       (.toPath root) (make-array java.nio.file.LinkOption 0)))
+        calls (atom [])
+        stored {:id "M-1" :verb "owner_forms" :state :verified
+                :undo {:receipt (.getAbsolutePath receipt)
+                       :receipt_hash "wrong-stored-hash"}}]
+    (try
+      (spit receipt "retained inverse sentinel")
+      (with-redefs-fn
+        {#'cli/verbs {"owner_forms"
+                      {:undo (fn [path expected]
+                               (swap! calls conj [path expected])
+                               {:ok false :error-type :typist-invalid-undo-hash})}}
+         #'publication/with-publication-lock (fn [_ f] (f))
+         #'publication/undo-publication-refusal (constantly nil)
+         #'cli/state-dir-for (fn [& _] (.getAbsolutePath dir))
+         #'mission/read-mission (fn [& _] stored)
+         #'events/events-file (fn [] (.getAbsolutePath event-file))
+         #'cli/save! (fn [& _] (throw (ex-info "must not save a refused undo" {})))}
+        #(let [result (cli/undo! {:id "M-1" :workspace (.getAbsolutePath dir)})]
+           (is (mission/refused? result))
+           (is (= "mission-undo-failed" (:error_type result)))
+           (is (= [[(.getAbsolutePath receipt) "wrong-stored-hash"]] @calls))))
+      (is (= "retained inverse sentinel" (slurp receipt)))
+      (is (.isFile event-file) "real telemetry reached the selected scratch destination")
+      (when (.isFile event-file)
+        (let [rows (map #(json/parse-string % true)
+                        (str/split-lines (slurp event-file)))]
+          (is (= 1 (count rows)))
+          (is (= ["mission-undo" "mission-undo-failed"]
+                 ((juxt :kind :error_type) (first rows))))))
+      (is (= root-before (entries)) "the fixture creates no repository-root artifact")
+      (is (= root-modes (when posix?
+                          (java.nio.file.Files/getPosixFilePermissions
+                            (.toPath root) (make-array java.nio.file.LinkOption 0))))
+          "telemetry does not tighten repository-root permissions")
+      (finally
+        (doseq [file (reverse (file-seq dir))]
+          (io/delete-file file true))))))
 
 (deftest owner-forms-publishes-recovery-before-a-crashed-write
   (let [saved (atom {:id "m1" :verb "owner_forms" :state :ready :root "/fixture"

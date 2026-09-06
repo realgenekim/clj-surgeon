@@ -210,3 +210,5 @@ No cohort result is upgraded by these functional gates.
 - Warm proof prototype is under construction with generation/source/dependency/test binding. Immutable-byte reuse first; changed candidates restart. Not a measured warm/per-edit win.
 
 Receipt and bounds: [Astra Maven comparison](observations/2026-09-06-astra-maven-native-comparison.md). Earlier positive and negative cohorts retain their own scopes.
+
+- Astra 2026-09-06T08:26:57.350919+00:00: inducedprimary429→realGroq fallback transport VERIFIED once,84prompt/175completion/159reasoningsubset, unknowncost. Not a realoutage or missionfailover benchmark. Node testboundary leak fix fullgate/independentreviewGO; receipt mock leak focusedRED/GREEN, combinedgatepending. These remove observed papercuts, not new latency squares.
