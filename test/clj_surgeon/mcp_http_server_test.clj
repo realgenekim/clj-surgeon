@@ -2,8 +2,10 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.alias-migration-fixture :as fixture]
+   [clj-surgeon.mcp-contract :as contract]
    [clj-surgeon.mcp-http-server :as http-server]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
+   [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-tool :as tool]
    [clj-surgeon.mcp-workspace :as workspace]
@@ -88,9 +90,13 @@
                       profiles {:verification-profiles {"other" ["false"]}}))))
     (let [built-in (http-server/resolve-verification-profiles nil {})]
       (is (= :built-in (:source built-in)))
-      (is (= 1200000
-             (get-in built-in [:profiles "full" :cold :timeout-ms]))
-          "the built-in full gate must exceed this repository's measured ten-minute suite"))
+      ;; @spec MCP-OP-VERIFY-013 replaces the retired assertion that a built-in
+      ;; "full" profile ran `make test` with a 20-minute timeout. clj-surgeon
+      ;; owns no built-in name meaning "this repository's tests": a lint and
+      ;; format gate is not a test profile, and presenting one as `fast` rolled
+      ;; back a correct edit on pre-existing lint debt (inb-186182).
+      (is (= #{"lint"} (set (keys (:profiles built-in))))
+          "the only built-in profile is the explicitly named lint gate"))
     (doseq [invalid [{:verification-profiles {}}
                      {:verification-profiles {:fast ["make" "test"]}}
                      {:verification-profiles {"fast" "make test"}}
@@ -836,3 +842,146 @@
         (http-server/stop-http-server! running)
         (delete-tree! workspace)
         (delete-tree! server-project)))))
+
+;; --- Unconfigured verification profiles (MCP-OP-VERIFY-013) -----------------
+
+(def ^:private verify-sample-source
+  "(ns sample.core)\n\n(defn helper [] :old)\n")
+
+(defn- verify-workspace!
+  []
+  (let [workspace (temp-dir)
+        source-file (io/file workspace "src/sample/core.clj")]
+    (.mkdirs (.getParentFile source-file))
+    (spit source-file verify-sample-source)
+    [workspace source-file]))
+
+(def ^:private verify-change
+  {"id" "swap"
+   "files" ["src/sample/core.clj"]
+   "forms" ["helper"]
+   "find" ":old"
+   "replace" ":new"
+   "expect" {"matches" 1}})
+
+(deftest built-in-profiles-offer-lint-only-and-never-fast-or-full
+  ;; @spec MCP-OP-VERIFY-013
+  (let [selection (http-server/resolve-verification-profiles nil {})]
+    (is (= :built-in (:source selection)))
+    (is (= #{"lint"} (set (keys (:profiles selection)))))
+    (is (not (contains? (:profiles selection) "fast")))
+    (is (not (contains? (:profiles selection) "full")))))
+
+(deftest unconfigured-workspace-refuses-verify-before-any-write
+  ;; @spec MCP-OP-VERIFY-013
+  (let [[workspace source-file] (verify-workspace!)
+        selection (http-server/resolve-verification-profiles nil {})
+        result (tool/execute-request!
+                 {:project-root (.getPath workspace)
+                  :receipt-dir (.getPath (io/file workspace "receipts"))
+                  :verification-profiles (:profiles selection)
+                  :verification-profile-source (:source selection)}
+                 {"changes" [verify-change]
+                  "verify" "fast"})]
+    (try
+      (is (false? (:ok result)) (pr-str result))
+      (is (= "verification-profiles-unconfigured" (:error_type result)))
+      (is (str/includes? (str (:remedy result)) ":verification-profiles"))
+      (is (str/includes? (str (:remedy result)) ".clj-surgeon.edn"))
+      (is (= "verify" (:field result)))
+      (is (= "fast" (:actual result)))
+      (is (= ["lint"] (:accepted result)))
+      (is (:source_unchanged result))
+      (is (not (:rolled_back result)))
+      (is (nil? (:verification result))
+          "no built-in check may run as verification")
+      (is (= verify-sample-source (slurp source-file)))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest configured-workspace-still-verifies-as-before
+  ;; @spec MCP-OP-VERIFY-013
+  (let [[workspace source-file] (verify-workspace!)
+        selection (http-server/resolve-verification-profiles
+                    nil {:verification-profiles {"fast" ["/bin/true"]}})
+        seen (atom nil)
+        result (tool/execute-request!
+                 {:project-root (.getPath workspace)
+                  :receipt-dir (.getPath (io/file workspace "receipts"))
+                  :verification-profiles (:profiles selection)
+                  :verification-profile-source (:source selection)
+                  ;; a stub, not /bin/true: this namespace's lane spawns no
+                  ;; child process (TEST-ISO-002). What is under test here is
+                  ;; that a CONFIGURED workspace still reaches verification
+                  ;; with its own profile name, unchanged by VERIFY-013.
+                  :verify! (fn [_ profile _ _]
+                             (reset! seen profile)
+                             {:ok true :profile profile :checks []})}
+                 {"changes" [verify-change]
+                  "verify" "fast"})]
+    (try
+      (is (= :project (:source selection)))
+      (is (= "fast" @seen) "the configured profile name reached the verifier")
+      (is (:ok result) (pr-str result))
+      (is (= "fast" (get-in result [:verification :profile])))
+      (is (true? (get-in result [:verification :ok])))
+      (is (str/includes? (slurp source-file) ":new"))
+      (finally
+        (delete-tree! workspace)))))
+
+;; --- Round three: the advertised retry must be a legal one ------------------
+
+(deftest the-refusal-advertises-only-values-the-verify-enum-accepts
+  ;; @spec MCP-OP-VERIFY-013
+  ;; The refusal told the caller to retry with `lint`, and the verify enum
+  ;; rejected `lint` on both write routes: an advertised remedy nothing would
+  ;; accept. A refusal that names an impossible retry is worse than one that
+  ;; names none.
+  (let [[workspace source-file] (verify-workspace!)
+        selection (http-server/resolve-verification-profiles nil {})
+        refusal (tool/execute-request!
+                  {:project-root (.getPath workspace)
+                   :receipt-dir (.getPath (io/file workspace "receipts"))
+                   :verification-profiles (:profiles selection)
+                   :verification-profile-source (:source selection)}
+                  {"changes" [verify-change]
+                   "verify" "fast"})
+        accepted (:accepted refusal)]
+    (try
+      (is (= "verification-profiles-unconfigured" (:error_type refusal)))
+      (is (seq accepted) "a refusal that names no retry teaches nothing")
+      (is (= verify-sample-source (slurp source-file)))
+      (testing "every advertised value is admitted by the enum on BOTH routes"
+        (doseq [value accepted]
+          (let [direct (contract/validate-tool-params
+                         {"changes" [verify-change] "verify" value})
+                extraction (contract/validate-extraction-tool-params
+                             {"extraction"
+                              {"file" "src/sample/core.clj"
+                               "to" "src/sample/moved.clj"
+                               "forms" ["helper"]
+                               "require_policy" "copy-all"
+                               "caller_changes" []
+                               "ignored_caller_files" []}
+                              "verify" value})]
+            ;; :ok, not merely "not :invalid-enum" — the absence of one
+            ;; refusal reason is not admission.
+            (is (true? (:ok direct))
+                (str "the direct route did not ADMIT the advertised "
+                     (pr-str value) ": " (pr-str direct)))
+            (is (true? (:ok extraction))
+                (str "the extraction route did not ADMIT the advertised "
+                     (pr-str value) ": " (pr-str extraction)))
+            (is (= value (get-in direct [:params :verify])))
+            (is (= value (get-in extraction [:params :verify]))))))
+      (testing "and the published schema advertises the same set"
+        (doseq [value accepted]
+          (is (contains? (set (:enum mcp-schema/verification-schema)) value)
+              (str "the published schema omits " (pr-str value)))))
+      (testing "an actually-unknown profile is still refused by the enum"
+        (is (= :invalid-enum
+               (:reason (contract/validate-tool-params
+                          {"changes" [verify-change]
+                           "verify" "no-such-profile"})))))
+      (finally
+        (delete-tree! workspace)))))

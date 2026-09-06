@@ -419,7 +419,7 @@
   second source of truth for what this server can run."
   []
   (try
-    (some-> (requiring-resolve 'clj-surgeon.mcp-http-server/default-verification-profiles)
+    (some-> (requiring-resolve 'clj-surgeon.mcp-http-server/built-in-verification-profiles)
             deref)
     (catch Exception _ nil)))
 

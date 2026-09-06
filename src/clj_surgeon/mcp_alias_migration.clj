@@ -154,7 +154,10 @@
 
       (not (or (nil? (:verify params)) (nonblank-string? (:verify params))))
       (invalid-request
-        "verify names one configured transaction profile, or is omitted"
+        (str "verify names one profile this repository configures in "
+             ".clj-surgeon.edn under :verification-profiles, or is omitted. "
+             "lint is the only built-in and is a lint and format gate, "
+             "not a test profile")
         ["verify"])
 
       :else
