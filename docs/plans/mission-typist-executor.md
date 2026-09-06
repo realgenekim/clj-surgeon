@@ -164,3 +164,9 @@ help recovery, with real workspace/state-home arguments and safe shell quoting.
 A stale/failed mutation is never blindly replayed by an example. This concerns
 the mission CLI only; the reported Surgeon core receipt-out/source-string errors
 remain outside this change. No `mission commit` capability belongs to this cut.
+
+Missing-workspace field regression: `show M-1 --state-home H` must return
+`:mission-workspace-required`, exit 1, and executable help rather than a nil
+workspace stacktrace. Shared BB/JVM show projection owns the same refusal;
+read-only BB list/ready/blocked use this guard too. Storage home never implies
+a workspace. Preserve the exact field invocation as a subprocess witness.

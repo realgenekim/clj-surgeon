@@ -107,3 +107,8 @@
                  :receipt (assoc (select-keys receipt [:committed :verification-complete :error-type :error_type])
                                  :candidate-count total :candidates-omitted total)}
                 4 12 96))))))))
+
+(def workspace-required
+  {:ok false :error-type :mission-workspace-required
+   :error "Supply --workspace with the workspace root; --state-home only selects ledger storage."
+   :example (command ["bin/mission" "help" "show"])})

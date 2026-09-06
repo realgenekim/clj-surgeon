@@ -124,3 +124,14 @@
           (is (= "list" (second argv)))
           (when (seq argv)
             (is (= 0 (:exit (apply shell/sh argv))))))))))
+
+(deftest missing-workspace-refuses-without-a-stacktrace
+  ;; Field report: show M-1 --state-home ... dereferenced nil workspace.
+  (let [r (shell/sh "bin/mission" "show" "M-1" "--state-home" "/var/tmp/forge/astra-live-real1-fx/state")]
+    (is (= 1 (:exit r)))
+    (is (not (.contains (:err r) "NullPointerException")))
+    (when (seq (:out r))
+      (let [value (edn/read-string (:out r))]
+        (is (= :mission-workspace-required (:error-type value)))
+        (is (= value ((requiring-resolve 'clj-surgeon.mission-cli/show) {:id "M-1" :state-home "/var/tmp/forge/astra-live-real1-fx/state"})))
+        (is (= 0 (:exit (apply shell/sh (get-in value [:example :argv])))))))))

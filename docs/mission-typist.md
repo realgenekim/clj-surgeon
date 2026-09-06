@@ -113,3 +113,8 @@ corrupt mission rows exit nonzero with an executable `:example` containing both
 argv and safely quoted shell command. Mission write refusals also supply an
 inspection/help example, never a blind replay of a failed mutation. These
 examples concern the mission entrance, not every Surgeon core operation.
+
+`--workspace R` is required for ledger reads: `--state-home H` selects storage,
+not the workspace identity. Omitting the workspace returns
+`:mission-workspace-required` with `bin/mission help show` as an executable
+recovery example; it does not guess a workspace from the launcher's directory.

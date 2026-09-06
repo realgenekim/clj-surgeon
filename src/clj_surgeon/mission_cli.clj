@@ -335,14 +335,16 @@
    caller learns that M-2 is held by M-1, so the DAG is rendered here rather
    than behind a second verb nobody would call."
   [{:keys [id workspace state-home] :as opts}]
-  (let [state-dir (state-dir-for workspace state-home)
-        m (mission/read-mission state-dir id)]
-    (if (mission/refused? m)
-      (display/show-result m opts)
-      (display/show-result
-        (assoc (mission/show-view (mission/read-all state-dir) id)
-          :config_sources (mission/config-sources (or workspace (:root m))
-                                                  (:config opts))) opts))))
+  (if-not (and (string? workspace) (seq workspace))
+    display/workspace-required
+    (let [state-dir (state-dir-for workspace state-home)
+          m (mission/read-mission state-dir id)]
+      (if (mission/refused? m)
+        (display/show-result m opts)
+        (display/show-result
+          (assoc (mission/show-view (mission/read-all state-dir) id)
+            :config_sources (mission/config-sources (or workspace (:root m))
+                                                    (:config opts))) opts)))))
 
 (defn link!
   "Add one `:depends-on` or `:supersedes` edge, or refuse a cycle.

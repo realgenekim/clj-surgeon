@@ -36,6 +36,10 @@
       state-dir (delay (mission/workspace-state-dir (:workspace flags)
                                                     (:state-home flags)))
       missions (delay (mission/read-all @state-dir))]
+  (when (and (contains? #{"show" "list" "ready" "blocked"} verb)
+             (not (and (string? (:workspace flags)) (seq (:workspace flags)))))
+    (pp/pprint display/workspace-required)
+    (System/exit 1))
   (case verb
     ("help" nil) (print (mission/help-text (first args)))
 
