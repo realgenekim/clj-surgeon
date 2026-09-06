@@ -393,9 +393,21 @@
          " · " (:match-count result) " guarded edit(s) · "
          (mcp-operation/format-elapsed-ms (:elapsed_ms result)) "\n\n"
          (:diff result))
-    (str "transform_clojure refused · " (name (:error-type result))
+    ;; @spec MCP-OP-EDIT-037
+    ;; @spec MCP-OP-EDIT-038
+    ;; Two defects the r5 catalog witness found here, both reachable from the
+    ;; public entrance: `(name (:error-type result))` threw NullPointerException
+    ;; for every refusal that publishes the snake-case `:error_type` (the
+    ;; workspace router's do), and the error sentence was written at column zero
+    ;; where a caller value could add its own receipt lines.
+    (str "transform_clojure refused · "
+         (let [reason (or (:error-type result) (:error_type result)
+                          "unknown-error")]
+           (if (keyword? reason) (name reason) (str reason)))
          " · " (mcp-operation/format-elapsed-ms (:elapsed_ms result))
-         "\n" (:error result) "\nsource unchanged")))
+         (when-let [sentence (not-empty (str (:error result)))]
+           (str "\n  " sentence))
+         "\nsource unchanged")))
 
 (defn handle-transform-clojure
   "clojure-mcp callback handler retained as a Var for hot reload."

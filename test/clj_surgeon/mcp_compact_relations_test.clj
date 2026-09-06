@@ -1102,6 +1102,21 @@
     {:structured normalized
      :text (mcp-tool/concise-summary normalized)}))
 
+(defn- public-refusal
+  "One refusal through the real public entrance, both faces as delivered."
+  [params]
+  (let [workspace (temp-dir)]
+    (try
+      (let [{:keys [content structured]}
+            (invoke-public-tool! mcp-tool/clj-change-tool
+                                 {:project-root (.getPath workspace)}
+                                 params)]
+        {:structured structured
+         :text (if (string? content) content (str/join "\n" content))})
+      (finally
+        (mcp-tool/init! nil)
+        (delete-tree! workspace)))))
+
 (def ^:private d1-bare-file-request
   "The exact D1 shape: a `files` entry that is a bare path string, not [file rows]."
   (assoc-in relation-request ["symbol_migration" "files" 0]
@@ -1333,7 +1348,7 @@
 
 (deftest caller-text-cannot-forge-a-receipt-line
   ;; @spec MCP-OP-EDIT-038
-  (let [{:keys [structured text]} (refusal-text
+  (let [{:keys [structured text]} (public-refusal
                                     (assoc relation-request rogue-field-name 1))
         body (str/join "\n" (rest (str/split-lines text)))]
     (testing "the structured sentence still carries the caller's value"
@@ -1355,7 +1370,7 @@
 
 (deftest caller-text-cannot-set-the-size-of-the-receipt
   ;; @spec MCP-OP-EDIT-038
-  (let [{:keys [text]} (refusal-text
+  (let [{:keys [text]} (public-refusal
                          (assoc relation-request (apply str (repeat 40000 \q)) 1))]
     (testing "a 40,000-character field cannot produce an 80,000-character receipt"
       (is (< (count text) 2000)
@@ -1367,10 +1382,10 @@
   ;; @spec MCP-OP-EDIT-038
   ;; Trunk escaped the caller's value inside the rendered path. Encoding bounds
   ;; and de-glyphs that value; it must not stop escaping it.
-  (let [{:keys [text]} (refusal-text (assoc relation-request "a\"b\\c" 1))]
+  (let [{:keys [text]} (public-refusal (assoc relation-request "a\"b\\c" 1))]
     (is (str/includes? text "\\\"") "pr-str quote escaping survives encoding")
     (is (str/includes? text "\\\\") "pr-str backslash escaping survives encoding"))
-  (let [{:keys [text]} (refusal-text (assoc relation-request "line\nbreak" 1))]
+  (let [{:keys [text]} (public-refusal (assoc relation-request "line\nbreak" 1))]
     (is (str/includes? text "\\n")
         "a newline inside the path stays the two-character escape trunk showed")))
 
@@ -1443,3 +1458,81 @@
       (is (str/includes? example "…"))
       (is (= example (pr-str (edn/read-string example))))
       (is (str/includes? text (str "expected: " example))))))
+
+;; ---------------------------------------------------------------------------
+;; ONE canonical safe representation.
+;;
+;; Sol fence r5 (2026-09-06) refuted the previous design, which encoded at
+;; RENDER time only. structuredContent kept the raw caller value, the text
+;; carried the encoded one, and `str/includes? text structured-error` was FALSE
+;; for exactly the hostile input the encoding existed to defeat — while
+;; `expected_shape_example` and its rendered line disagreed about the very
+;; string they were both quoting (`src/arrow\u2192file.clj`). Two renderers
+;; agreeing is not one canonical string. The encoding now happens once, at
+;; receipt construction, and both faces render it byte-identically.
+
+(deftest text-contains-the-structured-error-sentence-verbatim
+  ;; @spec MCP-OP-EDIT-037
+  (testing "the exact rogue field from the r5 verdict"
+    (let [{:keys [structured text]}
+          (public-refusal (assoc relation-request rogue-field-name 1))
+          sentence (:error structured)]
+      (is (string? sentence))
+      (is (str/includes? text sentence)
+          (str "text is not a superset of structured.\n  structured: "
+               (pr-str sentence) "\n  text: " (pr-str text)))
+      (testing "and the canonical sentence is itself safe"
+        (is (not (str/includes? sentence "\u2713")))
+        (is (not (str/includes? sentence "\u2192")))
+        (is (= 1 (count (str/split-lines sentence)))))
+      (testing "no receipt line was forged"
+        (is (= 1 (count (re-seq #"\u2713 source unchanged" text))))
+        (is (not (str/includes? text "\u2192 attacker supplied")))))))
+
+(deftest text-contains-the-structured-example-verbatim
+  ;; @spec MCP-OP-EDIT-037
+  (testing "the r5 arrow path: one canonical example in both faces"
+    (let [{:keys [structured text]}
+          (public-refusal
+            (assoc-in relation-request ["symbol_migration" "files"]
+                      [["src/keep.clj" [["own" "old/name" 3]]]
+                       (str "src/arrow\u2192file.clj")]))
+          example (:expected_shape_example structured)]
+      (is (string? example))
+      (is (false? (:expected_shape_example_schematic structured)))
+      (is (str/includes? text example)
+          (str "structured example absent from text.\n  structured: "
+               (pr-str example) "\n  text: " (pr-str text)))
+      (is (str/includes? text (str "expected: " example)))
+      (testing "the canonical example carries no receipt glyph"
+        (is (not (str/includes? example "\u2192")))
+        (is (= example (pr-str (edn/read-string example))))))))
+
+(deftest unicode-separators-cannot-break-a-receipt-line
+  ;; @spec MCP-OP-EDIT-038
+  ;; U+2028 survived both Character/isISOControl and Java's default \\s class
+  ;; at r5, so it still reached the rendered path and error.
+  (doseq [[label code-point]
+          [[:line-separator 0x2028]
+           [:paragraph-separator 0x2029]
+           [:next-line 0x0085]
+           [:zero-width-space 0x200B]
+           [:zero-width-joiner 0x200D]
+           [:byte-order-mark 0xFEFF]
+           [:no-break-space 0x00A0]]]
+    (testing (name label)
+      (let [separator (str (char code-point))
+            field (str "a" separator "\u2713 forged" separator "b")
+            {:keys [structured text]}
+            (public-refusal (assoc relation-request field 1))
+            sentence (:error structured)]
+        (is (not (str/includes? sentence separator))
+            (str "the canonical sentence still carries " (name label)))
+        (is (not (str/includes? text separator))
+            (str "the text block still carries " (name label)))
+        (is (str/includes? text sentence))
+        (is (= 1 (count (re-seq #"\u2713 source unchanged" text))))
+        (testing "and no caller line was added"
+          (doseq [line (str/split-lines text)
+                  :when (str/includes? line "forged")]
+            (is (not (str/includes? line "\u2713")) line)))))))

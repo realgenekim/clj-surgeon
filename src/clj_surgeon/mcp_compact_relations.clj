@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-compact-relations
   "Pure lowering for the closed compact symbol_migration + require_change pair."
   (:require
+   [clj-surgeon.mcp-operation :as mcp-operation]
    [clojure.set :as set]
    [clojure.string :as str]
    [rewrite-clj.node :as n]
@@ -109,12 +110,17 @@
 ;; as caller-derived.
 
 (defn- valid-example-file
-  "The caller's own file string, only when it would survive admission."
+  "The caller's own file string, in its canonical safe spelling, only when it
+   would survive admission.
+
+  The encoding happens HERE, when the example is built — not when it is
+  rendered. Sol fence r5 (2026-09-06) showed why: a caller path of
+  `src/arrow\u2192file.clj` was published raw in `expected_shape_example` and
+  encoded in the text block, so the two disagreed about the very value they
+  were both quoting. One canonical string, published and rendered."
   [value]
-  (when (and (string? value)
-             (not (str/blank? value))
-             (not-any? #(Character/isISOControl ^char %) value))
-    value))
+  (when (and (string? value) (not (str/blank? value)))
+    (mcp-operation/encode-caller-text value)))
 
 (defn- valid-example-row
   "The caller's own [owner from matches] row, only when every cell is valid.
@@ -130,7 +136,9 @@
                  (every? simple-symbol-token? from-parts)
                  (integer? matches)
                  (pos? matches))
-        [owner from matches]))))
+        ;; `from` already passed the symbol-token predicates, so it carries no
+        ;; separator or glyph; `owner` is canonicalized like any caller string.
+        [(valid-example-file owner) from matches]))))
 
 (defn- first-valid-migration-row
   "The caller's own first fully valid [owner from matches] row, if any."

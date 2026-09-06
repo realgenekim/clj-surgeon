@@ -897,6 +897,26 @@
             (:workspace-root routed)))))))
 
 ;; @spec MCP-OP-FIELD-001
+;; @spec MCP-OP-EDIT-038
+(defn- safe
+  "One caller-derived value in its canonical safe receipt spelling.
+
+  Sol fence r5 (2026-09-06): a reachable missing-form refusal carrying a
+  hostile request id and form emitted two forged `\u2713 source unchanged`
+  lines and three `\u2192` arrows, because these diagnostic values were
+  interpolated raw. Every caller-derived value on a receipt line goes through
+  here."
+  [value]
+  (when (some? value)
+    (or (mcp-operation/encode-caller-text
+          (if (string? value) value (pr-str value)))
+        "")))
+
+(defn- safe-join
+  "Canonicalize each caller-derived element, then join them."
+  [separator values]
+  (str/join separator (map safe values)))
+
 (defn- missing-field-lines
   "Name the omitted fields, their path, and the minimal valid object there."
   [result]
@@ -907,15 +927,15 @@
         (format "  missing required field%s at %s: %s\n"
                 (if (= 1 (count (:missing result))) "" "s")
                 (if (seq path)
-                  (str/join "." (map str path))
+                  (safe-join "." path)
                   "the request root")
-                (str/join ", " (:missing result)))
+                (safe-join ", " (:missing result)))
         (when (seq (:required result))
           (format "  required there: %s\n"
-                  (str/join ", " (:required result))))
+                  (safe-join ", " (:required result))))
         (when (:minimal_request result)
           (format "  minimal valid shape: %s\n"
-                  (json/generate-string (:minimal_request result))))))))
+                  (safe (json/generate-string (:minimal_request result)))))))))
 
 ;; @spec MCP-OP-FIELD-002
 (defn- named-field-lines
@@ -923,10 +943,10 @@
   [result]
   (when (and (:field result) (seq (:accepted result)))
     (format "  field %s accepts: %s%s\n"
-            (:field result)
-            (str/join ", " (:accepted result))
+            (safe (:field result))
+            (safe-join ", " (:accepted result))
             (if (contains? result :actual)
-              (str " · received " (pr-str (:actual result)))
+              (str " · received " (safe (:actual result)))
               ""))))
 
 ;; @spec MCP-OP-DISPATCH-003
@@ -941,13 +961,13 @@
                 (if (= 1 (:arm_count owner))
                   "1 defmethod arm shares"
                   (str (:arm_count owner) " defmethod arms share"))
-                (:name owner))
+                (safe (:name owner)))
         (format "  send this exact owner form to %s: {kind: %s, name: %s%s}\n"
-                (:accepted_by owner)
-                (pr-str kind)
-                (pr-str name)
+                (safe (:accepted_by owner))
+                (safe (pr-str kind))
+                (safe (pr-str name))
                 (if dispatch
-                  (str ", dispatch: " (pr-str dispatch))
+                  (str ", dispatch: " (safe (pr-str dispatch)))
                   ""))
         (when (seq vocabulary)
           (format "  dispatch values (%d/%d%s): %s\n"
@@ -1000,17 +1020,21 @@
         ;; `error "inspect_clojure server is not initialized"` and showed the
         ;; caller only the error type. Text must be a superset of structured
         ;; here for the same reason it must be everywhere else.
-        (when-let [sentence (mcp-operation/encode-caller-text (:error result))]
+        ;; @spec MCP-OP-EDIT-037
+        ;; The sentence was canonicalized at receipt construction
+        ;; (mcp-operation/finalize-result), so it is rendered byte-identically
+        ;; here: text contains the structured value VERBATIM, by construction.
+        (when-let [sentence (not-empty (str (:error result)))]
           (format "  %s\n" sentence))
         (when diagnostic?
           (str
             (format "  request %s · %s\n"
-                    (:id failed-request) (:file failed-request))
+                    (safe (:id failed-request)) (safe (:file failed-request)))
             (when failure
-              (format "  %s %s\n" failure-label (:form failure)))
+              (format "  %s %s\n" failure-label (safe (:form failure))))
             (when candidate
               (format "  I think you may have meant %s? (hypothesis only)\n"
-                      candidate))
+                      (safe candidate)))
             (when hypotheses-truncated
               (format "  hypotheses truncated · showing %d of %d owners\n"
                       (:hypotheses_returned selection-failure)
@@ -1022,13 +1046,13 @@
                       (if (:available_owners_truncated result)
                         "; truncated"
                         "")
-                      (str/join ", " available-owners)))
+                      (safe-join ", " available-owners)))
             (defmethod-owner-lines defmethod-owner)))
         (missing-field-lines result)
         (named-field-lines result)
         ;; @spec MCP-OP-FIELD-003
         (when (:note result)
-          (format "  note: %s\n" (:note result)))
+          (format "  note: %s\n" (safe (:note result))))
         (str (when (seq available-owners)
                (str "\n  All listed owners are real snapshot evidence; "
                     "ranking is non-authoritative. Semantic selection "
@@ -1039,7 +1063,7 @@
                             "  retry only %s; do not reread before the guarded retry\n")
                        completed-count
                        (if (= 1 completed-count) "" "s")
-                       (str/join ", " pending-ids)))
+                       (safe-join ", " pending-ids)))
              (cond
                continuation "\n→ copy continuation.retry_template.arguments, fill only its null selector holes, and submit it"
                (and diagnostic? defmethod-owner)
@@ -1049,9 +1073,9 @@
                (= "missing-fields" (some-> (:reason result) name))
                "\n→ add the named field(s) in the minimal valid shape above and call inspect_clojure once"
                :else (format "\n→ %s"
-                             (or (:remedy result)
-                                 (:next_action result)
-                                 "correct_request"))))))
+                             (safe (or (:remedy result)
+                                       (:next_action result)
+                                       "correct_request")))))))
 
     (= "prepare-change" (:mode result))
     (prepare-change-summary result)

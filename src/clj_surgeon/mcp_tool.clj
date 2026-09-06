@@ -1026,19 +1026,25 @@
           change-index (or (:change-index result) (:change_index result))
           change-id (or (:change-id result) (:change_id result))
           field (:field result)
+          ;; @spec MCP-OP-EDIT-038
+          safe (fn [value]
+                 (when (some? value)
+                   (or (mcp-operation/encode-caller-text
+                         (if (string? value) value (pr-str value)))
+                       "")))
           change-line (when (or (some? change-index) change-id field)
                         (format "  change %s%s%s\n"
                                 (if (some? change-index) change-index "unknown")
-                                (if change-id (str " · " change-id) "")
-                                (if field (str " · field " field) "")))
+                                (if change-id (str " · " (safe change-id)) "")
+                                (if field (str " · field " (safe field)) "")))
           ;; @spec MCP-OP-FIELD-002
           named-field-line (when (and field (seq (:accepted result)))
                              (format "  field %s accepts: %s%s\n"
-                                     field
-                                     (str/join ", " (:accepted result))
+                                     (safe field)
+                                     (str/join ", " (map safe (:accepted result)))
                                      (if (contains? result :actual)
                                        (str " · received "
-                                            (pr-str (:actual result)))
+                                            (safe (:actual result)))
                                        "")))
           source-safe? (or (:source-unchanged result)
                            (:source_unchanged result)
@@ -1048,15 +1054,21 @@
           ;; shape that was refused; the model reads only this text block, so
           ;; text must be a superset of structured. Generic: any refusal whose
           ;; receipt has an error sentence renders it, not one error class.
-          ;; @spec MCP-OP-EDIT-038
-          ;; The sentence is caller-influenced, so it is encoded to one bounded
-          ;; line before it enters the receipt; see mcp-operation.
+          ;; @spec MCP-OP-EDIT-037
+          ;; Both of these were canonicalized at receipt construction — the
+          ;; sentence in mcp-operation/finalize-result, the example in
+          ;; mcp-compact-relations — so they are rendered byte-identically and
+          ;; the text contains the structured values VERBATIM. Encoding again
+          ;; here is what Sol fence r5 (2026-09-06) refuted: two renderers
+          ;; agreeing is not one canonical string, and they disagreed.
           error-sentence
           (let [sentence (or (:error result) (:error-message result))]
-            (when-not (= sentence (str operation " refused"))
-              ;; the placeholder normalize-refusal fills when the refusal
-              ;; carried no sentence of its own
-              (mcp-operation/encode-caller-text sentence)))
+            (when (and (string? sentence)
+                       (not (str/blank? sentence))
+                       ;; the placeholder normalize-refusal fills when the
+                       ;; refusal carried no sentence of its own
+                       (not= sentence (str operation " refused")))
+              sentence))
           error-line (when error-sentence (str "  " error-sentence "\n"))
           expected-shape (or (:expected_shape_example result)
                              (:expected-shape-example result))
@@ -1064,25 +1076,22 @@
           (boolean (or (:expected_shape_example_schematic result)
                        (:expected-shape-example-schematic result)))
           expected-shape-line
-          (when-let [encoded (mcp-operation/encode-caller-text expected-shape)]
+          (when (and (string? expected-shape) (not (str/blank? expected-shape)))
             (str (if expected-shape-schematic?
                    "  expected (schematic): "
                    "  expected: ")
-                 encoded
+                 expected-shape
                  "\n"))]
       (format (str operation "\n"
                    "  refused · %s%s · %s\n"
                    "%s%s%s%s\n"
                    "%s\n"
                    "→ %s")
-              reason
+              (safe reason)
               ;; @spec MCP-OP-EDIT-038
               ;; pr-str keeps trunk's escaping of the caller's own value; the
               ;; encoder then bounds it and strips receipt glyphs.
-              (if path
-                (str " at "
-                     (or (mcp-operation/encode-caller-text (pr-str path)) ""))
-                "")
+              (if path (str " at " (safe (pr-str path))) "")
               (mcp-operation/format-elapsed-ms (:elapsed_ms result))
               (or error-line "")
               (or expected-shape-line "")
@@ -1815,12 +1824,19 @@
         facts (->> renderable
                    (take max-refusal-facts)
                    (mapv (fn [[field value]]
-                           ;; bounded in WORK, not merely cut afterwards
-                           (str (name field) "="
-                                (bounded-pr-str
-                                  value max-refusal-fact-characters
-                                  (- deadline
-                                     (System/currentTimeMillis)))))))]
+                           ;; @spec MCP-OP-EDIT-038
+                           ;; bounded in WORK, not merely cut afterwards — and
+                           ;; canonicalized, because both halves of a fact can
+                           ;; be caller-derived. Sol fence r5 (2026-09-06) found
+                           ;; alias_migration and helper_extraction rendering a
+                           ;; hostile field NAME and value here raw.
+                           (or (mcp-operation/sanitize-caller-text
+                                 (str (name field) "="
+                                      (bounded-pr-str
+                                        value max-refusal-fact-characters
+                                        (- deadline
+                                           (System/currentTimeMillis)))))
+                               ""))))]
     (when (seq facts)
       (str "facts · " (str/join " · " facts)
            (when (pos? dropped)
@@ -1843,7 +1859,10 @@
   stops looking."
   [result]
   (if-let [call (:next_call result)]
-    (let [encoded (json/generate-string call)]
+    (let [;; @spec MCP-OP-EDIT-038
+          encoded (or (mcp-operation/sanitize-caller-text
+                        (json/generate-string call))
+                      "")]
       (if (<= (count encoded) max-rendered-next-call-characters)
         (str "next_call · " encoded)
         (str "next_call · " (count encoded)
@@ -1901,11 +1920,16 @@
         [(format (str "alias_migration\n"
                       "  refused · %s · %s\n\n"
                       "%s")
-                 (or (:error_type result) (:reason result) "unknown-error")
+                 (or (mcp-operation/encode-caller-text
+                       (str (or (:error_type result) (:reason result)
+                                "unknown-error")))
+                     "unknown-error")
                  (mcp-operation/format-elapsed-ms (:elapsed_ms result))
                  (if (or (:source_unchanged result) (:source-unchanged result))
                    "\u2713 source unchanged"
                    "\u26a0 source state requires structured receipt review"))
+         ;; @spec MCP-OP-EDIT-037 · the sentence is already canonical
+         ;; @spec MCP-OP-EDIT-037 · both are canonical at construction
          (str "\u2192 " (or (:error result)
                             (:remedy result)
                             "Correct the request and retry once."))
@@ -2050,7 +2074,10 @@
         [(format (str "helper_extraction\n"
                       "  refused \u00b7 %s \u00b7 %s\n\n"
                       "%s")
-                 (or (:error_type result) (:status result) "unknown-error")
+                 (or (mcp-operation/encode-caller-text
+                       (str (or (:error_type result) (:status result)
+                                "unknown-error")))
+                     "unknown-error")
                  (mcp-operation/format-elapsed-ms (:elapsed_ms result))
                  (if (or (:source_unchanged result) (:source-unchanged result))
                    "\u2713 source unchanged"

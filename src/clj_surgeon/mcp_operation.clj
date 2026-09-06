@@ -52,36 +52,80 @@
    U+2713 proved, U+26A0 warning, U+2192 remedy, U+00B7 field separator."
   #{\u2713 \u26A0 \u2192 \u00B7})
 
-;; @spec MCP-OP-EDIT-038
-(defn encode-caller-text
-  "Render one caller-controlled string as a single bounded receipt line.
+(def ^:private extra-collapsible-code-points
+  "Separators Java's own predicates miss. Sol fence r5 (2026-09-06) proved the
+   gap with U+2028 LINE SEPARATOR, which survived both `Character/isISOControl`
+   and the default `\\s` class and so could still break a receipt line. The
+   zero-width marks and BOM are here for the same reason a newline is: a caller
+   value that renders as nothing can still hide the seam between what the
+   server wrote and what the caller did."
+  #{\u0085     ; NEL, next line
+    \u2028     ; LINE SEPARATOR (category Zl)
+    \u2029     ; PARAGRAPH SEPARATOR (category Zp)
+    \u200B     ; ZERO WIDTH SPACE
+    \u200C     ; ZERO WIDTH NON-JOINER
+    \u200D     ; ZERO WIDTH JOINER
+    \uFEFF})   ; ZERO WIDTH NO-BREAK SPACE / BOM
 
-  Control characters (newlines included) and receipt glyphs become spaces,
-  runs of whitespace collapse to one, and the result is trimmed — so no
-  caller-derived value can begin a line, mimic the receipt's indentation, or
-  spell one of its glyphs. Anything past `caller-text-ceiling` is cut with a
-  visible marker. Returns nil for a non-string or an input that encodes to
-  nothing, so callers can omit the line rather than print an empty one."
+(defn- collapsible-character?
+  "True for anything that can move a receipt to a new line, indent it, or
+   disappear between two visible runs."
+  [character]
+  (let [code-point (int character)]
+    (or (Character/isISOControl code-point)
+        (Character/isWhitespace code-point)
+        (Character/isSpaceChar code-point)
+        (contains? extra-collapsible-code-points character)
+        (contains? #{(long Character/LINE_SEPARATOR)
+                     (long Character/PARAGRAPH_SEPARATOR)
+                     (long Character/FORMAT)
+                     (long Character/CONTROL)}
+                   (long (Character/getType code-point))))))
+
+;; @spec MCP-OP-EDIT-038
+(defn sanitize-caller-text
+  "One caller-controlled string reduced to a single safe receipt line.
+
+  Every character that could move the text to a new line, indent it, vanish
+  between two visible runs, or spell one of the receipt's own outcome glyphs
+  becomes a space; runs of spaces collapse; the result is trimmed. Length is
+  NOT bounded here — a value whose renderer already carries its own, larger
+  ceiling (a bounded fact, a rendered next_call, a whole refusal block) must
+  not be silently shortened to this one. Returns nil for a non-string or an
+  input that reduces to nothing, so callers can omit a line rather than print
+  an empty one."
   [value]
   (when (string? value)
     (let [sanitized (->> value
-                         (map (fn [^Character character]
-                                (if (or (Character/isISOControl ^char character)
+                         (map (fn [character]
+                                (if (or (collapsible-character? character)
                                         (contains? receipt-glyphs character))
                                   \space
                                   character)))
                          (apply str))
           collapsed (-> sanitized
-                        (str/replace #"\s+" " ")
+                        (str/replace #" +" " ")
                         str/trim)]
       (when-not (str/blank? collapsed)
-        (if (<= (count collapsed) caller-text-ceiling)
-          collapsed
-          (str (subs collapsed
-                     0
-                     (- caller-text-ceiling
-                        (count caller-text-truncation-marker)))
-               caller-text-truncation-marker))))))
+        collapsed))))
+
+;; @spec MCP-OP-EDIT-038
+(defn encode-caller-text
+  "`sanitize-caller-text`, then bounded, with a visible truncation marker.
+
+  This is the canonical safe representation for a value that has no other
+  ceiling of its own — an error sentence, a request id, a rendered path. It is
+  IDEMPOTENT: encoding an already-encoded string returns that same string, so
+  the canonical form is a fixed point and no second spelling can appear."
+  ([value] (encode-caller-text value caller-text-ceiling))
+  ([value ceiling]
+   (when-let [collapsed (sanitize-caller-text value)]
+     (if (<= (count collapsed) ceiling)
+       collapsed
+       (str (subs collapsed
+                  0
+                  (max 0 (- ceiling (count caller-text-truncation-marker))))
+            caller-text-truncation-marker)))))
 
 (defn- finalize-result
   [domain-result started-ns finished-ns]
@@ -97,7 +141,25 @@
                        :started-ns started-ns
                        :finished-ns finished-ns
                        :elapsed-ms elapsed-ms})))
-    (assoc domain-result :elapsed_ms elapsed-ms)))
+    ;; @spec MCP-OP-EDIT-037
+    ;; @spec MCP-OP-EDIT-038
+    ;; ONE canonical safe representation, computed here — at receipt
+    ;; construction, before either the summary or the serialized body is
+    ;; built — so the structured `error` and the sentence a caller reads are
+    ;; the same string by construction rather than by two renderers agreeing.
+    ;; Sol fence r5 (2026-09-06) killed the previous design, which encoded at
+    ;; render time only: structured carried the raw caller value, text carried
+    ;; the encoded one, and `text ⊇ structured` was false for exactly the
+    ;; hostile input the encoding existed to defeat.
+    (cond-> (assoc domain-result :elapsed_ms elapsed-ms)
+      (string? (:error domain-result))
+      (assoc :error (or (encode-caller-text (:error domain-result)) ""))
+      ;; The remedy is the other sentence both faces quote. It is canonicalized
+      ;; the same way and for the same reason, but NOT length-capped: a remedy
+      ;; is the instruction that unblocks the caller, and the renderers that
+      ;; carry it already hold their own, larger ceilings.
+      (string? (:remedy domain-result))
+      (assoc :remedy (or (sanitize-caller-text (:remedy domain-result)) "")))))
 
 ;; @spec MCP-OP-RESULT-001
 ;; @spec MCP-OP-RESULT-002
