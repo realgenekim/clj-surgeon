@@ -1,0 +1,280 @@
+{
+  "task": "portable-specimen-keeper",
+  "clock": "e537d1a1d0bbd8e519292e156dba33a574cf0583dd3cce9626b92b4a717bc1a1",
+  "event_count": 68,
+  "wall_ms": 237209.895771,
+  "span_sum_ms": 59988.071965,
+  "span_union_ms": 59988.071965,
+  "unattributed_ms": 177221.823806,
+  "uncovered_intervals": [
+    {
+      "from_ms": 0,
+      "to_ms": 81.07124,
+      "label": "unattributed"
+    },
+    {
+      "from_ms": 109.921604,
+      "to_ms": 59283.439569,
+      "label": "unattributed"
+    },
+    {
+      "from_ms": 59706.896186,
+      "to_ms": 79818.31816,
+      "label": "unattributed"
+    },
+    {
+      "from_ms": 80281.742056,
+      "to_ms": 125294.68061,
+      "label": "unattributed"
+    },
+    {
+      "from_ms": 125381.25227,
+      "to_ms": 125457.638523,
+      "label": "unattributed"
+    },
+    {
+      "from_ms": 125987.204435,
+      "to_ms": 126041.589799,
+      "label": "unattributed"
+    },
+    {
+      "from_ms": 126079.625239,
+      "to_ms": 159211.032855,
+      "label": "unattributed"
+    },
+    {
+      "from_ms": 159215.90316,
+      "to_ms": 159293.184936,
+      "label": "unattributed"
+    },
+    {
+      "from_ms": 159321.864242,
+      "to_ms": 159400.090966,
+      "label": "unattributed"
+    },
+    {
+      "from_ms": 159881.849712,
+      "to_ms": 159931.781034,
+      "label": "unattributed"
+    },
+    {
+      "from_ms": 159941.985419,
+      "to_ms": 178949.713978,
+      "label": "unattributed"
+    },
+    {
+      "from_ms": 236786.607795,
+      "to_ms": 236858.304274,
+      "label": "unattributed"
+    },
+    {
+      "from_ms": 236870.316701,
+      "to_ms": 236941.819228,
+      "label": "unattributed"
+    },
+    {
+      "from_ms": 236949.544035,
+      "to_ms": 237022.97795,
+      "label": "unattributed"
+    },
+    {
+      "from_ms": 237040.229956,
+      "to_ms": 237115.1839,
+      "label": "unattributed"
+    },
+    {
+      "from_ms": 237133.956177,
+      "to_ms": 237209.895771,
+      "label": "unattributed"
+    }
+  ],
+  "declared_dependency_path": {
+    "label": "DECLARED DAG longest duration path; not causal savings",
+    "duration_ms": 58908.510497,
+    "spans": [
+      "inspect",
+      "portable-edit",
+      "fixture-integrity",
+      "preserve-artifact-bytes",
+      "fixture-integrity-fixed",
+      "relocated-proof-final",
+      "diff-check",
+      "independent-review",
+      "stage",
+      "staged-check",
+      "commit",
+      "clean"
+    ]
+  },
+  "spans": [
+    {
+      "id": "inspect",
+      "kind": "process",
+      "label": "process spawn-through-close/cleanup bracket",
+      "deps": [],
+      "duration_ms": 28.850364,
+      "observed_spawn_to_close_ms": 25.562721,
+      "code": 0
+    },
+    {
+      "id": "portable-edit",
+      "kind": "external",
+      "label": "EXTERNAL BRACKET (includes inter-call/model gaps)",
+      "deps": [
+        "inspect"
+      ],
+      "duration_ms": 423.456617,
+      "observed_spawn_to_close_ms": null,
+      "code": 0
+    },
+    {
+      "id": "first-proof",
+      "kind": "process",
+      "label": "process spawn-through-close/cleanup bracket",
+      "deps": [
+        "portable-edit"
+      ],
+      "duration_ms": 463.423896,
+      "observed_spawn_to_close_ms": 460.058677,
+      "code": 0
+    },
+    {
+      "id": "portable-proof-doc",
+      "kind": "external",
+      "label": "EXTERNAL BRACKET (includes inter-call/model gaps)",
+      "deps": [
+        "first-proof"
+      ],
+      "duration_ms": 86.57166,
+      "observed_spawn_to_close_ms": null,
+      "code": 0
+    },
+    {
+      "id": "relocated-proof",
+      "kind": "process",
+      "label": "process spawn-through-close/cleanup bracket",
+      "deps": [
+        "portable-proof-doc"
+      ],
+      "duration_ms": 529.565912,
+      "observed_spawn_to_close_ms": 525.846464,
+      "code": 0
+    },
+    {
+      "id": "fixture-integrity",
+      "kind": "process",
+      "label": "process spawn-through-close/cleanup bracket",
+      "deps": [
+        "portable-edit"
+      ],
+      "duration_ms": 38.03544,
+      "observed_spawn_to_close_ms": 35.058674,
+      "code": 1
+    },
+    {
+      "id": "preserve-artifact-bytes",
+      "kind": "process",
+      "label": "process spawn-through-close/cleanup bracket",
+      "deps": [
+        "fixture-integrity"
+      ],
+      "duration_ms": 4.870305,
+      "observed_spawn_to_close_ms": 1.80732,
+      "code": 0
+    },
+    {
+      "id": "fixture-integrity-fixed",
+      "kind": "process",
+      "label": "process spawn-through-close/cleanup bracket",
+      "deps": [
+        "preserve-artifact-bytes"
+      ],
+      "duration_ms": 28.679306,
+      "observed_spawn_to_close_ms": 25.600679,
+      "code": 0
+    },
+    {
+      "id": "relocated-proof-final",
+      "kind": "process",
+      "label": "process spawn-through-close/cleanup bracket",
+      "deps": [
+        "fixture-integrity-fixed"
+      ],
+      "duration_ms": 481.758746,
+      "observed_spawn_to_close_ms": 477.712246,
+      "code": 0
+    },
+    {
+      "id": "diff-check",
+      "kind": "process",
+      "label": "process spawn-through-close/cleanup bracket",
+      "deps": [
+        "relocated-proof-final"
+      ],
+      "duration_ms": 10.204385,
+      "observed_spawn_to_close_ms": 6.572959,
+      "code": 0
+    },
+    {
+      "id": "independent-review",
+      "kind": "external",
+      "label": "EXTERNAL BRACKET (includes inter-call/model gaps)",
+      "deps": [
+        "diff-check"
+      ],
+      "duration_ms": 57836.893817,
+      "observed_spawn_to_close_ms": null,
+      "code": 0
+    },
+    {
+      "id": "stage",
+      "kind": "process",
+      "label": "process spawn-through-close/cleanup bracket",
+      "deps": [
+        "independent-review"
+      ],
+      "duration_ms": 12.012427,
+      "observed_spawn_to_close_ms": 8.010975,
+      "code": 0
+    },
+    {
+      "id": "staged-check",
+      "kind": "process",
+      "label": "process spawn-through-close/cleanup bracket",
+      "deps": [
+        "stage"
+      ],
+      "duration_ms": 7.724807,
+      "observed_spawn_to_close_ms": 4.183454,
+      "code": 0
+    },
+    {
+      "id": "commit",
+      "kind": "process",
+      "label": "process spawn-through-close/cleanup bracket",
+      "deps": [
+        "staged-check"
+      ],
+      "duration_ms": 17.252006,
+      "observed_spawn_to_close_ms": 13.903845,
+      "code": 0
+    },
+    {
+      "id": "clean",
+      "kind": "process",
+      "label": "process spawn-through-close/cleanup bracket",
+      "deps": [
+        "commit"
+      ],
+      "duration_ms": 18.772277,
+      "observed_spawn_to_close_ms": 14.99382,
+      "code": 0
+    }
+  ],
+  "provider_first_token": "UNKNOWN",
+  "provider_last_token": "UNKNOWN",
+  "jvm_ready": "UNKNOWN",
+  "service_presence": "UNKNOWN",
+  "fork_exec_separation": "UNKNOWN",
+  "descendant_runtime_ready": "UNKNOWN"
+}

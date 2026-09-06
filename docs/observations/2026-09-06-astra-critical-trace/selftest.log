@@ -1,0 +1,20 @@
+PASS overlap union distinct from summed spans and full task gaps
+PASS declared sequential path omits wait gap without calling it savings
+PASS refuses unknown dependency
+PASS refuses dependency still open
+PASS refuses cycle forward edge
+PASS refuses self dependency
+PASS refuses duplicate closed span
+PASS refuses open span at end
+PASS refuses clock mismatch
+PASS refuses task mismatch
+PASS refuses event after end
+PASS refuses reversed timestamp
+PASS refuses process bypasses close
+PASS real command failure recorded terminal and exit propagated
+PASS nonexistent command terminal spawn error no raw argv receipt
+PASS concurrent invocations produce valid complete append events
+PASS duplicate mark and premature task end refuse without corrupting ledger
+PASS public report retains failures and brackets plus process timing
+PASS begin cannot overwrite existing receipt
+{"checks":19,"failures":0,"scope":"synthetic + local Node processes only; no timeout60s execution or escaped-descendant confinement test"}

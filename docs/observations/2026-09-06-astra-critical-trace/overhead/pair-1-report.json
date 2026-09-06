@@ -1,0 +1,45 @@
+{
+  "task": "verification-1",
+  "clock": "e537d1a1d0bbd8e519292e156dba33a574cf0583dd3cce9626b92b4a717bc1a1",
+  "event_count": 7,
+  "wall_ms": 564.372029,
+  "span_sum_ms": 506.188429,
+  "span_union_ms": 506.188429,
+  "unattributed_ms": 58.1836,
+  "uncovered_intervals": [
+    {
+      "from_ms": 0,
+      "to_ms": 28.256773,
+      "label": "unattributed"
+    },
+    {
+      "from_ms": 534.445202,
+      "to_ms": 564.372029,
+      "label": "unattributed"
+    }
+  ],
+  "declared_dependency_path": {
+    "label": "DECLARED DAG longest duration path; not causal savings",
+    "duration_ms": 506.188429,
+    "spans": [
+      "verify"
+    ]
+  },
+  "spans": [
+    {
+      "id": "verify",
+      "kind": "process",
+      "label": "process spawn-through-close/cleanup bracket",
+      "deps": [],
+      "duration_ms": 506.188429,
+      "observed_spawn_to_close_ms": 502.944413,
+      "code": 0
+    }
+  ],
+  "provider_first_token": "UNKNOWN",
+  "provider_last_token": "UNKNOWN",
+  "jvm_ready": "UNKNOWN",
+  "service_presence": "UNKNOWN",
+  "fork_exec_separation": "UNKNOWN",
+  "descendant_runtime_ready": "UNKNOWN"
+}

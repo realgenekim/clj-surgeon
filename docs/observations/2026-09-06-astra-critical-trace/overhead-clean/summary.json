@@ -1,0 +1,10 @@
+{
+  "utc": "2026-09-06T21:32:50.633Z",
+  "pairs": 5,
+  "direct_median_ms": 478.62796000000003,
+  "traced_run_median_ms": 511.80881899999986,
+  "overhead_ms": 33.18085899999983,
+  "ratio_traced_over_direct": 1.0693249491734662,
+  "traced_whole_lifecycle_median_ms": 601.237032,
+  "scope": "Shared-box fresh processes, same frozen verification argv. Setup/end/report costs separate. Not a whole-task speed comparison."
+}

@@ -1,0 +1,142 @@
+[
+  {
+    "pair": 1,
+    "arm": "direct",
+    "wall_ms": 533.711552,
+    "load1": 0.97,
+    "status": 0,
+    "signal": null,
+    "stdout": "PASS: relocated example, unrelated cwd, 10 successful renders, 8 refusals, 3 exact examples; historical receipt untouched\n",
+    "stderr": ""
+  },
+  {
+    "pair": 1,
+    "arm": "traced",
+    "wall_ms": 535.7796519999999,
+    "load1": 0.97,
+    "status": 0,
+    "signal": null,
+    "stdout": "PASS: relocated example, unrelated cwd, 10 successful renders, 8 refusals, 3 exact examples; historical receipt untouched\n",
+    "stderr": "",
+    "setup_ms": 29.265184999999974,
+    "finish_ms": 30.24466399999983,
+    "report_ms": 33.22581600000012,
+    "lifecycle_statuses": [
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "pair": 2,
+    "arm": "traced",
+    "wall_ms": 528.7578600000002,
+    "load1": 0.97,
+    "status": 0,
+    "signal": null,
+    "stdout": "PASS: relocated example, unrelated cwd, 10 successful renders, 8 refusals, 3 exact examples; historical receipt untouched\n",
+    "stderr": "",
+    "setup_ms": 30.04441399999996,
+    "finish_ms": 30.158856000000014,
+    "report_ms": 31.462982999999895,
+    "lifecycle_statuses": [
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "pair": 2,
+    "arm": "direct",
+    "wall_ms": 507.94562499999984,
+    "load1": 0.97,
+    "status": 0,
+    "signal": null,
+    "stdout": "PASS: relocated example, unrelated cwd, 10 successful renders, 8 refusals, 3 exact examples; historical receipt untouched\n",
+    "stderr": ""
+  },
+  {
+    "pair": 3,
+    "arm": "direct",
+    "wall_ms": 510.75818200000003,
+    "load1": 0.97,
+    "status": 0,
+    "signal": null,
+    "stdout": "PASS: relocated example, unrelated cwd, 10 successful renders, 8 refusals, 3 exact examples; historical receipt untouched\n",
+    "stderr": ""
+  },
+  {
+    "pair": 3,
+    "arm": "traced",
+    "wall_ms": 523.330962,
+    "load1": 0.97,
+    "status": 0,
+    "signal": null,
+    "stdout": "PASS: relocated example, unrelated cwd, 10 successful renders, 8 refusals, 3 exact examples; historical receipt untouched\n",
+    "stderr": "",
+    "setup_ms": 29.54443399999991,
+    "finish_ms": 31.317231999999876,
+    "report_ms": 28.843563999999787,
+    "lifecycle_statuses": [
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "pair": 4,
+    "arm": "traced",
+    "wall_ms": 556.4533809999998,
+    "load1": 1.05,
+    "status": 0,
+    "signal": null,
+    "stdout": "PASS: relocated example, unrelated cwd, 10 successful renders, 8 refusals, 3 exact examples; historical receipt untouched\n",
+    "stderr": "",
+    "setup_ms": 30.495520999999826,
+    "finish_ms": 30.8395859999996,
+    "report_ms": 34.74209999999994,
+    "lifecycle_statuses": [
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "pair": 4,
+    "arm": "direct",
+    "wall_ms": 488.4318849999995,
+    "load1": 1.05,
+    "status": 0,
+    "signal": null,
+    "stdout": "PASS: relocated example, unrelated cwd, 10 successful renders, 8 refusals, 3 exact examples; historical receipt untouched\n",
+    "stderr": ""
+  },
+  {
+    "pair": 5,
+    "arm": "direct",
+    "wall_ms": 514.5758290000003,
+    "load1": 1.05,
+    "status": 0,
+    "signal": null,
+    "stdout": "PASS: relocated example, unrelated cwd, 10 successful renders, 8 refusals, 3 exact examples; historical receipt untouched\n",
+    "stderr": ""
+  },
+  {
+    "pair": 5,
+    "arm": "traced",
+    "wall_ms": 532.7670340000004,
+    "load1": 1.05,
+    "status": 0,
+    "signal": null,
+    "stdout": "PASS: relocated example, unrelated cwd, 10 successful renders, 8 refusals, 3 exact examples; historical receipt untouched\n",
+    "stderr": "",
+    "setup_ms": 31.980579000000034,
+    "finish_ms": 30.05950600000051,
+    "report_ms": 33.183210999999574,
+    "lifecycle_statuses": [
+      0,
+      0,
+      0
+    ]
+  }
+]
