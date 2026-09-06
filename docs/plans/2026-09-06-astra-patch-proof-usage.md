@@ -1,6 +1,6 @@
 # Astra: make the existing patch gate usable with supplied proof
 
-Status: design for joint review; no API or verification change implemented.
+Status: jointly reviewed and exercised on one real-source scratch fixture; the existing API and verification law are unchanged. Tool-description guidance and portable example packaging remain unfinished.
 Evidence: [fresh-caller pilot](../observations/2026-09-06-astra-recovery-pilot-result.md).
 
 ## Problem and observed behavior
@@ -113,3 +113,9 @@ real test namespace in the frozen Maven closure. Its adapter must overlay the
 candidate onto a private copy and produce per-namespace counts from actual
 clojure.test results. The supplied ABI does not encode deletion tombstones;
 do not generalize the example to deletion or arbitrary workspace reconstruction.
+
+## Actual integration outcome
+
+The originally suggested diagnostic task was completed earlier through the installed guarded CLI and landed. The subsequent proof-profile use named a shared text-length bound in real Maven transcript code. Candidate/live polarity checks demonstrated the runner loaded the candidate; the first public commit still refused because the adapter rejected two gate-created control files. The exact two-path repair preserved source/test/dependency checks, and the same patch then received a complete verified commit in 2.145 seconds. First-call complete receipts remain 0/1, total successful public calls 1/2. [Full evidence](../observations/2026-09-06-astra-real-profile-utility.md).
+
+The restricted adapter and reports are retained experiment artifacts, not a portable profile for arbitrary repositories. No new ABI or weaker commit policy was needed. Preparation amortization and first-call usability remain open; do not count the mechanism demonstration as shipped adoption. The additional recovery sentence owned by the refusal-text branch remains parked with that branch, and the tool description still needs the explicit focused-profile guidance already in the skill reference.

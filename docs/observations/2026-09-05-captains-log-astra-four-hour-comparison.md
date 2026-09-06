@@ -260,3 +260,11 @@ precedence statements corrected, historical receipts preserved and labeled.
 A restricted real Maven profile adapter is static GO but UNEXECUTED; its 5m26s
 preparation is separate from any future proof/usage time. No public admission win
 claimed. Quiet window explicitly released after focused diagnostic run.
+
+### Astra 2026-09-06T14:25:10.000524+00:00 — real proof binding passes; first public integration refuses
+
+Cardinality keeper landed ee911577 after exact-tip LAND YES and merged gates. Real Maven profile polarity cases each2.006s: good candidate over broken live passes; broken candidate over good live fails3 actual timestamp assertions, zeroerrors. The first actual public clarity-refactor call refused before tests/write because my adapter rejected the gate-created .clj-surgeon/.gitignore and write.lock. Source/test/dependency bytes unchanged, lintclean, first-call complete0/1, toolcommits0. Exacttwo-path repair staticGO; runtime retry pending. Full report: 2026-09-06-astra-real-profile-utility.md. No speed/adoption claim; preparation and queueing remain visible.
+
+### Astra 2026-09-06T14:33:19.384566+00:00 — verified public keeper after one retained refusal
+
+All five exact bookkeeping-boundary preflights refused as expected. The same native patch then committed through admit_clojure_patch with verify=focused in 2144.939 ms: one file, one owner, clean lint, actual recording-query suite 2 tests / 0 failures/errors, complete verification, zero outside-hunk drift, next_call null. Receipt post-image hash matches the prepared candidate; no source reread or repeated suite needed. Independent saved-evidence review GO. First-call success remains 0/1, total successful calls 1/2. Preparation and shared-box waits prevent treating the 2.145-second successful call as complete-task speedup. Current-source audit confirms producer timing is still missing; both usage windows retain caller clocks separately. See 2026-09-06-astra-real-profile-utility.md.
