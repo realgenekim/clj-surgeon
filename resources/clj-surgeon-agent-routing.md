@@ -1,32 +1,17 @@
-<!-- BEGIN CLJ-SURGEON ROUTING v:1 -->
-## Clojure editing
+<!-- BEGIN CLJ-SURGEON ROUTING v:2 -->
+## Clojure edit routing (measured 2026-09-06, build >= 13c12401)
 
-**Native `rg` plus a native patch is the default route for reading and editing
-Clojure.** Do not reach for clj-surgeon for ordinary edits. Measured 2026-09-02
-(81 arm-runs, verified servers, two blind judges; receipts in clj-surgeon
-`docs/observations/2026-09-02-captains-log-bridge-wall-clock-ideal-program.md`):
-an agent told Surgeon is expected pays about 2x wall and 2x actions with no
-quality meter clearing the noise floor, because it keeps its native read/patch
-loop and layers the tool on top. Given a free choice, agents decline it, and
-decline it correctly.
+Canonical text: the `clj-surgeon` skill, section "Edit routing". This block is a pointer; read that section before the first Clojure edit of a task. It holds the full decision table, the entrance commands, the refusal handling, and the numbers with their qualifiers.
 
-**Call Surgeon only for these, and only when one applies** — each has no native
-equivalent or measured as a win:
-
-- `:extract!` — move forms to a new namespace.
-- `:rename-ns!` — structural namespace rename.
-- `:fix-declares!` — eliminate removable `declare`s.
-- MCP `require_change` — add or change a require across many namespaces
-  (measured: nine namespaces, zero churn).
-- MCP `within` + `from`/`to` — a surgical edit inside one known form
-  (measured: zero churn).
-- `:ls-deps` / `:topo` — dependency structure before a large refactor.
-
-**Do not use (measured losers):** per-form writes for a fan-out change (one
-native patch does 21 owners in one cell); `apply_clojure_changes` with
-`owner {:kind "namespace"}` or forms-scoped `find`+`replace` for insertion (it
-re-prints the whole owner — hundreds of untouched lines); the CLI wrapper as a
-substitute for MCP (a second layer, refuses 2.2x).
+- Reads: owner and line known — direct bounded read, no outline. Owner unknown in a large file — one outline or one search, then the form. Source already held — no reread.
+- Known small literal change in one region: native `rg` plus `apply_patch` remains a legitimate production default.
+- Bounded mechanical edit (rename across call sites, move helpers, thread a parameter, add a require across namespaces) AND scope, proof profile, provider permission and measured admission facts already fit: try the `bin/mission` executor first (`bin/mission run --spec-file -`, or `propose` then `apply`). Do not invent a profile or a prior to force eligibility. The executor is a 2026-09-05 PROTOTYPE; its kernel source commit is not yet a git commit.
+- Typed refusal (`:error_type` starting `mission-`): read the reason; retry only when new evidence or a concrete supported correction lifts it; otherwise finish natively and record the provenance. Finishing natively is legitimate.
+- New code, new tests, prose, non-Clojure: native — ineligible for this executor on this build, not forbidden. Where complete reference discovery is required, keep Surgeon semantic preparation; `rg` is not a closure proof.
+- Never: per-form MCP writes for fan-out, `apply_clojure_changes` with a namespace owner, forms-scoped `find`+`replace` for insertion. Measured losers 2026-09-02.
+- The installed CLI is the production entrance. Do not start an MCP server for an ordinary edit; persistent MCP is explicit development work; provider calls only in opted-in repositories or profiles.
+- Tie-break is complete verified task cost — orientation, refusals, proof — not the existence of a receipt. Reassess at each Gene report; nothing expires silently.
+- Lint through `~/bin/clj-kondo`. Do not discover, register, start, or call cclsp or clojure-lsp.
 
 **Every Surgeon MCP operation relays the same terminal-response contract.**
 If `terminal_response` is present and this mutation completes all remaining
@@ -36,14 +21,5 @@ terminal evidence for this operation and continue. `next_action=none` and
 `terminal_response` describe only the completed mutation. They never prove
 that the complete user request is finished.
 
-**Lint through `~/bin/clj-kondo`**, always. This paved entrance serializes
-analyzers across agents, repositories, and JVMs; an absolute Homebrew path
-bypasses that serialization and is the cause of contention failures.
-
-**Direct cclsp and clojure-lsp MCP clients are retired.** Do not discover,
-register, start, or call them from an agent session.
-
-*Reversible: re-open the default route when clj-surgeon-q5z (batch intent across
-N owners) and clj-surgeon-az8 (unrecoverable refusal classes) land and the acid
-apparatus shows rung-L non-test actions at or below native's.*
-<!-- END CLJ-SURGEON ROUTING v:1 -->
+Derived from `docs/observations/2026-09-06-clojure-edit-routing-rule.md`; surfaces and install procedure in `docs/observations/2026-09-06-routing-prompt-surfaces.md`.
+<!-- END CLJ-SURGEON ROUTING v:2 -->

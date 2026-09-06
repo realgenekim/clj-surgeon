@@ -6,14 +6,27 @@ Read and follow [CLAUDE.md](CLAUDE.md) before making changes. It is the
 canonical repository instruction file for all coding agents, regardless of
 vendor or runtime.
 
-Its Clojure routing and Surgeon-owned semantic escalation rules apply before native
-Read, Edit, grep, sed, or cat touches existing source. Load the working-tree
-skill before acting.
+Clojure edit routing is governed by ONE canonical text: the `clj-surgeon`
+skill, section "Edit routing (measured 2026-09-06, build >= 13c12401)". Read it
+before the first Clojure edit of a task. The installed CLI is the production
+entrance; persistent MCP is explicit development work, not an unconditional
+preference, and no MCP server is started for an ordinary edit. Native `rg` plus
+`apply_patch` stays a legitimate production default for a known small literal
+change; the `bin/mission` executor is tried first only when scope, proof
+profile, provider permission, and measured admission facts already fit. The
+table below is that section reproduced verbatim; change it there first.
 
-Use the hottest capable entrance: prefer the persistent `inspect_clojure` and
-`apply_clojure_changes` MCP tools. Use `~/bin/clj-surgeon` only when MCP is
-unavailable, the operation is not exposed there, or the CLI itself is under
-test.
+| Situation | Route |
+|---|---|
+| Owner and line already known | Direct bounded read: `:op :cat :file F :form NAME`, or `sed -n 'A,Bp'` on the known range. No outline. |
+| Owner unknown in a large file | One outline or one search (`:op :ls`, or `rg`), then read the named form. |
+| Source already held in context | No reread. |
+| Known small literal change in one region | Native `rg` plus `apply_patch`. This stays a legitimate production default. |
+| Bounded mechanical edit (rename across call sites, move helpers, thread a parameter, add a require across namespaces) **and** scope, proof profile, provider permission, and measured admission facts already fit | Try the `bin/mission` executor first. Do not invent a profile or a prior to force eligibility. |
+| Complete reference discovery required | Surgeon semantic preparation. `rg` is not a closure proof. |
+| New code, new tests, prose, non-Clojure | Native. Ineligible for this executor on this build; not forbidden territory. |
+| Tonight's mandated dogfood experiment, eligible edit | Executor first, then one ledger line. |
+| Fan-out via per-form MCP writes; `apply_clojure_changes` with a namespace owner; forms-scoped `find`+`replace` for insertion | Do not use. Measured losers 2026-09-02, not re-measured since. |
 
 For non-trivial feature work, `CLAUDE.md` requires the design, planning,
 testing, documentation, and verification standards that must be satisfied

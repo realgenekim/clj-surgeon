@@ -35,6 +35,47 @@
       (is (false? (:changed result)))
       (is (= source (:source result))))))
 
+(deftest stale-version-block-is-refused-as-stale-and-replaced
+  ;; The installed v:1 block is a superseded RULE, not merely different bytes.
+  ;; It must be located, reported by version, and replaced in place -- never
+  ;; left behind while a second block is appended.
+  (let [v1-block (str "<!-- BEGIN CLJ-SURGEON ROUTING v:1 -->\n"
+                      "Native `rg` plus a native patch is the default route.\n"
+                      "<!-- END CLJ-SURGEON ROUTING v:1 -->\n")
+        source (str "before\n" v1-block "after\n")
+        result (routing/upsert-routing-block source canonical-block)]
+    (testing "the current intent version is 2"
+      (is (= 2 routing/managed-version))
+      (is (str/includes? routing/managed-begin "v:2")))
+    (testing "a v:1 block is stale, not absent"
+      (is (:ok result))
+      (is (= :stale (:previous-state result)))
+      (is (= 1 (:stale-version result)))
+      (is (:changed result)))
+    (testing "the stale block is replaced in place, leaving no v:1 bytes"
+      (is (= (str "before\n" canonical-block "after\n") (:source result)))
+      (is (not (str/includes? (:source result) "ROUTING v:1"))))))
+
+(deftest check-fails-on-an-installed-stale-version
+  (let [tmp (str (fs/create-temp-dir {:prefix "agent-routing-test"}))
+        block-file (str (fs/path tmp "routing.md"))
+        target (str (fs/path tmp "CLAUDE.md"))]
+    (try
+      (spit block-file canonical-block)
+      (spit target (str "seat header\n"
+                        "<!-- BEGIN CLJ-SURGEON ROUTING v:1 -->\n"
+                        "old rule\n"
+                        "<!-- END CLJ-SURGEON ROUTING v:1 -->\n"))
+      (let [result (routing/check-routing! block-file [target])]
+        (is (false? (:ok result)))
+        (is (= :agent-routing-stale-version (:error-type result)))
+        (is (= 2 (:expected-version result)))
+        (is (= [{:path target :previous-state :stale :changed true
+                 :stale-version 1}]
+               (:targets result))))
+      (finally
+        (fs/delete-tree tmp)))))
+
 (deftest malformed-managed-markers-refuse
   (doseq [[label source]
           [["begin only" (str "x\n" routing/managed-begin "\n")]
@@ -102,6 +143,24 @@
                                          [codex-file claude-file]))))
       (finally
         (fs/delete-tree tmp)))))
+
+(deftest installed-plate-is-the-current-version-and-points-at-the-skill
+  ;; The plate is a POINTER now. If it stops naming the skill, seats read a
+  ;; compact rule with no canonical text behind it.
+  (let [source (slurp "resources/clj-surgeon-agent-routing.md")]
+    (is (str/starts-with? source routing/managed-begin))
+    (is (str/ends-with? (str/trimr source) routing/managed-end))
+    (is (not (str/includes? source "ROUTING v:1")))
+    (is (str/includes? source "the `clj-surgeon` skill, section \"Edit routing\""))
+    (is (str/includes? source "bin/mission"))
+    (is (str/includes? source "PROTOTYPE"))
+    (is (not (str/includes? source "Native `rg` plus a native patch is the default route")))
+    (testing "the block stays compact enough to sit in every seat header"
+      (is (<= (count (str/split-lines source)) 25)))
+    (testing "the block names the document it was derived from"
+      (is (str/includes?
+            source
+            "docs/observations/2026-09-06-clojure-edit-routing-rule.md")))))
 
 (deftest terminal-response-routing-is-conditional-on-complete-user-work
   ;; @spec MCP-OP-RELAY-004
