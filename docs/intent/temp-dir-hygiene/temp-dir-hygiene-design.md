@@ -194,3 +194,30 @@ Every other `createTemp*` site in `src/` deletes in a `finally`.
   observe (a graceful `SIGTERM`, an ordinary `System/exit`); nothing can run
   after `SIGKILL`. The `finally`-based cleanups inside individual tests carry
   the same limit.
+
+
+## Node compile-cache test invariant
+
+Node/npm can create an implicit compile cache beneath TMPDIR. Test subprocesses
+must suppress that cache through NODE_DISABLE_COMPILE_CACHE=1 so ordinary
+formatter execution does not leave a cache directory in the watched test root.
+This extends MCP-OP-TMPHYG-005's descendant execution environment without
+exempting any entry from the leak witness.
+
+The shared test child-environment supplies the fixed value, and the authenticated
+child refuses if it was stripped. BB, JVM lane, analyzer and memory runners all
+use this boundary; no seat wrapper or Makefile setting is authority for it.
+The existing JVM heap/argv and BB argv arms also witness 0/unset parents becoming
+1 in both child and shell descendant. A single additional cheap BB invocation
+witnesses refusal of a stripped authenticated child; no added JVM launch.
+
+No direct npx/standard-clojure-style or formatter API invocation was found in
+recursive test/bench shell gates. The format-extraction configuration self-test
+exits before benchmark execution. Arbitrary benchmark agent commands are not
+covered by this test-runner invariant. Tests that deliberately replace a whole
+subprocess environment must state that exception; production formatter behavior
+and all temporary-root/sweep protections remain unchanged.
+
+The runner witnesses exercise inheritance and stripped-environment refusal.
+They require no package installation or formatter package availability; direct
+formatter reproduction belongs to separately retained validation evidence.
