@@ -34,9 +34,8 @@ never reapplied blindly.
 
 ## Receipts test values, not field names
 
-Optimize complete verified task time — orientation, refusals, retries, emission and
-proof; server runtime was about 2% of every measured wall, and tool runtime is never
-subtracted. Proof is `verification_complete=true` TOGETHER WITH the named successful
+Optimize complete verified task time: count the complete verified task wall,
+including all discovery and repair costs. Tool runtime is never subtracted. Proof is `verification_complete=true` TOGETHER WITH the named successful
 checks over the current snapshot; a false or pending field is not evidence. An atomic
 commit with bytes read back proves the WRITE, not task semantics: do not re-verify a
 proven write, and do not treat it as behavioural proof. Run the outstanding required

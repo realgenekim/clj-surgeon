@@ -69,11 +69,14 @@ receipt that disclaims semantics buys no verification credit.
 
 ## Executed example receipts (2026-09-06 ~20:03Z)
 
-Each plate example was executed in its published shape against the running MCP
-service at `http://127.0.0.1:8171/mcp`, on a fresh scratch copy of the `fanout-B`
-seed (33 Clojure files) with `workspace_root` pointed at that copy and only the lib,
-Var, file, form and count values adapted to the fixture. Request and response JSON
-retained at `/var/tmp/forge/fable-strict-fx/examples/`.
+Each plate example is a schema example INSTANTIATED against a fixture and executed
+there, and the plate publishes it byte-identical to the request that ran (verified
+with `diff -q` against the retained files). The service was
+`http://127.0.0.1:8171/mcp`; the fixture was a fresh scratch copy of the `fanout-B`
+seed (33 Clojure files) with `workspace_root` pointed at that copy. A router
+substitutes the task inputs — `workspace_root`, lib, Var, file, form, path and every
+count. Request and response JSON retained at
+`/var/tmp/forge/fable-strict-fx/examples/`.
 
 | example | result | figures |
 |---|---|---|

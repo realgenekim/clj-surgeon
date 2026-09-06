@@ -16,9 +16,9 @@ decline it correctly.
 
 TWO classes are routed automatically, both mutations. Outside them native is the
 PERFORMANCE default; an explicit user request or a separately approved experiment
-may still use any other capability. Every lib, Var, file, form, path and count below
-is a TASK INPUT, not a constant to copy. Include `workspace_root` whenever the
-target is not the server's default project. Ratios, fixtures, caveats and how the
+may still use any other capability. Each example below is a SCHEMA EXAMPLE INSTANTIATED against a fixture repository
+and executed there, published byte-identical to the request that ran. Substitute the
+task inputs: `workspace_root`, lib, Var, file, form, path and every count. Ratios, fixtures, caveats and how the
 meter is operated live in
 `docs/observations/2026-09-06-strictly-better-evidence.md`.
 
@@ -28,17 +28,17 @@ Trigger: one known old/new form, a complete bounded set of NAMED owners already 
 hand, and a valid proof profile.
 
 ```json
-{"workspace_root": "/absolute/repository",
- "edits": [{"file": "src/app/core.clj", "within": {"form": "handle-event"},
-            "from": "(store/find-event id)", "to": "(store2/fetch-event id)",
-            "matches": 1},
-           {"file": "src/app/db.clj", "within": {"form": "load-row"},
-            "from": "(store/find-event id)", "to": "(store2/fetch-event id)",
-            "matches": 2}]}
+{"workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+ "edits": [{"file": "src/maven/inbox.clj", "within": {"form": "add"},
+            "from": "(mdb/get-ds)", "to": "(mdb/get-ds2)", "matches": 1},
+           {"file": "src/maven/inbox.clj", "within": {"form": "snooze"},
+            "from": "(mdb/get-ds)", "to": "(mdb/get-ds2)", "matches": 1},
+           {"file": "src/maven/tweets.clj", "within": {"form": "search"},
+            "from": "(mdb/get-ds)", "to": "(mdb/get-ds2)", "matches": 1}]}
 ```
 
-<!-- executed 2026-09-06 20:03Z, this exact shape, against a scratch fixture:
-     ok, atomic commit, 3 edits / 2 files, 293.94 ms. -->
+<!-- executed 2026-09-06 20:03Z, this exact request, against a scratch copy of the
+     fanout-B seed: ok, atomic commit, 3 edits / 2 files, 293.94 ms. -->
 
 ### Alias migration -- one whole-repository call
 
@@ -48,15 +48,15 @@ pre-enumerated match set: the measured run used neither. Afterwards run the
 repository's own required load and tests unless the receipt explicitly proves them.
 
 ```json
-{"op":"alias_migration","workspace_root":"/absolute/repository",
- "from":{"lib":"acid.fanout.store","var":"find-event"},
- "to":{"lib":"acid.fanout.store2","var":"fetch-event",
-       "alias_policy":["store2","st2","es","store-2"]},
- "scope":{"paths":["src"]},"expect":{"files":21}}
+{"op": "alias_migration", "workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+ "from": {"lib": "maven.db", "var": "get-ds2"},
+ "to": {"lib": "maven.relaxed-search", "var": "tokenize",
+        "alias_policy": ["rsearch", "rs", "relaxed", "r-search"]},
+ "scope": {"paths": ["src"]}, "expect": {"files": 2}}
 ```
 
-<!-- executed 2026-09-06 20:03Z, this exact shape, against a scratch fixture:
-     ok, atomic commit, 2 files / 3 sites, 628.12 ms. -->
+<!-- executed 2026-09-06 20:03Z, this exact request, against a scratch copy of the
+     fanout-B seed: ok, atomic commit, 2 files / 3 sites, 628.12 ms. -->
 
 ### Optional supporting read
 
@@ -67,17 +67,18 @@ root-level `expect` is required. A wildcard `_` matches ONE subtree, so it does 
 enumerate calls of arbitrary arity -- write the exact arity you mean.
 
 ```json
-{"workspace_root": "/absolute/repository",
- "requests": [{"id": "r1", "operation": "outline", "file": "src/app/core.clj"},
-              {"id": "r2", "operation": "match", "file": "src/app/core.clj",
-               "match": "(store/find-event id)"},
-              {"id": "r3", "operation": "match", "file": "src/app/db.clj",
-               "match": "(store/find-event id)"}],
+{"workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+ "requests": [{"id": "r1", "operation": "outline", "file": "src/maven/db.clj"},
+              {"id": "r2", "operation": "match", "file": "src/maven/inbox.clj",
+               "match": "(mdb/get-ds)"},
+              {"id": "r3", "operation": "match", "file": "src/maven/tweets.clj",
+               "match": "(mdb/get-ds)"}],
  "expect": {"requests": 3, "files": 3}}
 ```
 
-<!-- executed 2026-09-06 20:03Z, this exact shape, against a scratch fixture:
-     ok, read_complete=true, 3 requests / 3 files / 12 matches, 74.6 ms. -->
+<!-- executed 2026-09-06 20:03Z, this exact request, against a scratch copy of the
+     fanout-B seed: ok, read_complete=true, 3 requests / 3 files / 12 matches,
+     74.6 ms. Note the topology: three DISTINCT files, so expect.files is 3. -->
 
 ### Receipts: test values, not field names
 
@@ -104,9 +105,9 @@ a recorded loss. Required per routed class: first-attempt success, refusal rate,
 fallback rate, and complete request-to-verified wall; collector coverage of those is
 itself unproven, so unknowns are retained as unknown.
 
-**Other capabilities** — not automatically routed. Use them on an explicit
-request, for a separately approved experiment, or when one of these applies;
-each has no native equivalent or measured as a win:
+**Other capabilities** — not automatically routed. The only exceptions to the
+performance default are an explicit user request and a separately approved
+experiment:
 
 - `:extract!` — move forms to a new namespace.
 - `:rename-ns!` — structural namespace rename.

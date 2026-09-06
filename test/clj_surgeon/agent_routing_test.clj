@@ -129,8 +129,8 @@
       (is (str/includes? plate "**Strictly better, or native.**"))
       (is (str/includes? plate "**Kill switch.**"))
       (testing "one complete valid call is present for each automatic class"
-        (is (str/includes? plate "\"within\": {\"form\": \"handle-event\"}"))
-        (is (str/includes? plate "\"op\":\"alias_migration\""))
+        (is (str/includes? plate "\"within\": {\"form\": \"add\"}"))
+        (is (str/includes? plate "\"op\": \"alias_migration\", \"workspace_root\""))
         (testing "and for the optional supporting read, with expect at the ROOT"
           (is (str/includes? plate "\"expect\": {\"requests\": 3, \"files\": 3}"))))
       (testing "every published example carries workspace_root"
