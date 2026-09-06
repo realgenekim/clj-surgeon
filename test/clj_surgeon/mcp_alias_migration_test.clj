@@ -5917,7 +5917,20 @@
     ;; (`:census-worker-failure` at the pool boundary, `:unparseable-file` at
     ;; the per-file read), so the derivation reads them; they are pinned here
     ;; on purpose, one line of diff with a reason.
-    "census-worker-failure" "unparseable-file"})
+    "census-worker-failure" "unparseable-file"
+
+    ;; re-pinned at the hot-verification merge (2026-09-06, inb-adcc9e): the
+    ;; two typed failures `mcp_hot_verify.clj` gained when its response read
+    ;; stopped blocking to its `:timeout-ms` ceiling — 145 → 147. Both are
+    ;; keyword literals in the `:error-type` value of the non-terminal-outcome
+    ;; result, so the structural derivation reads them; they are pinned here on
+    ;; purpose, one line of diff with a reason. A third kind the derivation read
+    ;; on the first pass, `closed`, was SPURIOUS: the internal outcome tag
+    ;; `:closed` sat as a comparison operand inside that same `:error-type`
+    ;; value and was minted as a kind. It is hoisted to a `closed?` binding in
+    ;; the source rather than pinned here — a tag that never reaches a caller
+    ;; is not a refusal kind.
+    "hot-verification-timeout" "hot-verification-transport-closed"})
 
 ;; @spec MCP-OP-ALIAS-059
 (deftest the-refusal-enumeration-is-pinned-in-count-and-in-membership
@@ -5926,7 +5939,7 @@
   ;; could see. Both directions are asserted — a kind that appears and a kind
   ;; that vanishes are each a change to what a text-reading client is promised.
   (let [kinds (set (refusal-kinds-in-source))]
-    (is (= 145 (count kinds))
+    (is (= 147 (count kinds))
         (str "the entrance's refusal enumeration changed size: "
              (count kinds) " kinds"))
     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))
@@ -5935,7 +5948,23 @@
              (pr-str (sort (clojure.set/difference kinds frozen-refusal-kinds)))))
     (is (empty? (clojure.set/difference frozen-refusal-kinds kinds))
         (str "a pinned kind vanished from the enumeration: "
-             (pr-str (sort (clojure.set/difference frozen-refusal-kinds kinds)))))))
+             (pr-str (sort (clojure.set/difference frozen-refusal-kinds kinds)))))
+    ;; @spec MCP-OP-HOTVER-002
+    ;; An INTERNAL state tag is not a public refusal kind. `mcp_hot_verify`'s
+    ;; read reports its outcome to its own caller as :terminal, :timeout or
+    ;; :closed; only the two hot-verification-* kinds cross the entrance. The
+    ;; tag leaked once, on 2026-09-06: `:closed` sat as a comparison operand
+    ;; inside the `:error-type` value -- `(if (= :closed outcome) …)` -- and
+    ;; `structural-error-type-kinds`, which reads that value with the reader
+    ;; rather than a regex, minted it as a 148th kind. It is hoisted to a
+    ;; `closed?` binding at the source. This asserts the CLASS, not that one
+    ;; repair: a state name reaching the enumeration is a kind promised to a
+    ;; text-reading client that no refusal can ever produce.
+    (is (not (contains? kinds "closed"))
+        (str "the internal read-state tag `closed` reached the entrance's "
+             "refusal enumeration; the public hot-verification kinds are "
+             "hot-verification-timeout and hot-verification-transport-closed "
+             "only, and a state tag is not a refusal kind"))))
 
 ;; ---------------------------------------------------------------------------
 ;; every invisible or malformed code point in a scope entry is typed

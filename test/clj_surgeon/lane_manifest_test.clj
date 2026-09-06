@@ -505,9 +505,13 @@
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
       ;; One outline corpus test MOVED from its original namespace to adopted integration.
-      ;; 928 original + 435 adopted = 1363: add 7 inspect owner_counts/source-omission
+      ;; 931 original + 435 adopted = 1366: add 7 inspect owner_counts/source-omission
       ;; witnesses (5 in mcp-inspect-contract-test, 2 in mcp-inspect-tool-test), both
       ;; round-one namespaces, so the growth lands in the original half and adopted holds;
+      ;; then add 9 public-handler result-ceiling witnesses in mcp-inspect-tool-test
+      ;; (MCP-OP-FIELD-009, inb-b60d6e: the ordinary read path now measures and refuses)
+      ;; and 3 more for the publication-point guard at the exact byte boundary,
+      ;; also a round-one namespace, so 1363 -> 1372 lands in the original half too;
       ;; add the real two-require cardinality
       ;; regression in mcp-contract-test; retain Astra identity/receipt witnesses and trunk
       ;; helper request-shape refusals (48 -> 51), plus two battery archival-distance witnesses;
@@ -515,24 +519,59 @@
       ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
       (is (= 435 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      ;; 1363 -> 1370: seven MCP-OP-VERIFY-011/012/013 witnesses -- four in
-      ;; mcp-tool-test (success text states the verification actually
-      ;; performed, failure text carries the check's own bytes, its bound cuts
-      ;; at a line boundary, alias receipts do the same) and three in
-      ;; mcp-http-server-test (built-in profiles are lint-only, an
-      ;; unconfigured workspace refuses `verify` before any write, a
-      ;; configured one is unchanged). Both are round-one namespaces, so the
-      ;; growth lands in the original half and `adopted` holds at 435.
-      ;; +3 round two (peer-review HOLD, executed bb probes): percent-bearing
-      ;; verification strings must not throw out of the receipt renderer; the
-      ;; real profile shape carries hot and cold verdicts beside :checks; the
-      ;; 2000-character failure budget is one TOTAL, not one per check.
-      ;; +1 round three: the unconfigured refusal may advertise only values
-      ;; the verify enum accepts, on both write routes and in the schema.
-      ;; +1 final tidy: the PUBLISHED descriptions must say that lint is the
-      ;; only built-in, that it is a lint/format gate and not a test profile,
-      ;; and that test profiles are named in .clj-surgeon.edn.
-      (is (= 1375 total) (str "manifest declares " total " tests"))
+      ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
+      ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
+      ;; witnesses, so the number agreed textually and git auto-merged it while
+      ;; the corpus had grown TWICE. The pin is the SUM of both deltas, 1381,
+      ;; and this line records both -- a pin whose two sides collide on the same
+      ;; value is the one case where agreement is not evidence:
+      ;;
+      ;;   +9 on trunk: the public-handler result-ceiling witnesses in
+      ;;      mcp-inspect-tool-test (MCP-OP-FIELD-009, inb-b60d6e), narrated in
+      ;;      the block above, 1363 -> 1372.
+      ;;   +9 here: the hot-verification witnesses in
+      ;;      clj-surgeon.mcp-hot-verify-test (inb-adcc9e) -- that a hot
+      ;;      verification ends at a terminal status instead of blocking to its
+      ;;      :timeout-ms ceiling, that `interrupted` is a failure and not a
+      ;;      pass, that the ceiling is one deadline no response resets, that a
+      ;;      connect failure and a mid-read closure stay distinct typed
+      ;;      refusals, and that both keep their bounded output. 1372 -> 1381.
+      ;;
+      ;; Both namespaces are ROUND-ONE, so all 18 land in r1 and adopted holds
+      ;; at 435.
+      ;;
+      ;; MERGE RESOLUTION, 2026-09-06 (fable/receipt-truth x MCP/main
+      ;; 387424cc). THE SAME TRAP, one merge later: this branch's own pin line
+      ;; also read 1375, which is neither side's answer. The pin is trunk's
+      ;; CURRENT value plus THIS branch's own delta, computed, never adopted
+      ;; from whichever side git happened to keep:
+      ;;
+      ;;   trunk today ............................................... 1381
+      ;;   + this branch's delta, 1363 -> 1375 ......................... +12
+      ;;   ---------------------------------------------------------------
+      ;;   merged pin ................................................ 1393
+      ;;
+      ;; The +12, by round (MCP-OP-VERIFY-011/012/013, receipt truth):
+      ;;   +7 round one: four in mcp-tool-test (the success text states the
+      ;;      verification actually performed; the failure text carries the
+      ;;      check's own bytes; its bound cuts at a line boundary; alias
+      ;;      receipts do the same) and three in mcp-http-server-test (built-in
+      ;;      profiles are lint-only; an unconfigured workspace refuses
+      ;;      `verify` before any write; a configured one is unchanged).
+      ;;   +3 round two (peer-review HOLD, executed bb probes): percent-bearing
+      ;;      verification strings must not throw out of the receipt renderer;
+      ;;      the real profile shape carries hot and cold verdicts beside
+      ;;      :checks; the 2000-character failure budget is one TOTAL, not one
+      ;;      per check.
+      ;;   +1 round three: the unconfigured refusal may advertise only values
+      ;;      the verify enum accepts, on both write routes and in the schema.
+      ;;   +1 final tidy: the published descriptions must say that lint is the
+      ;;      only built-in, that it is a lint/format gate and NOT a test
+      ;;      profile, and that test profiles are named in .clj-surgeon.edn.
+      ;;
+      ;; All three namespaces are ROUND-ONE, so the 12 land in r1 and adopted
+      ;; holds at 435.
+      (is (= 1393 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
@@ -676,7 +715,9 @@
    "test/clj_surgeon/scope_stream_test.clj"
    {105 "bounded poll -- System/gc then re-check reachability, succeeds immediately, fails at gc-deadline-ms (round three's fix for the two fixed `Thread/sleep 100` assertions)"}
    "test/clj_surgeon/mcp_tool_test.clj"
-   {1380 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count"}})
+   {1380 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count"}
+   "test/clj_surgeon/mcp_hot_verify_test.clj"
+   {244 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
 
 (deftest every-sleep-on-the-merge-gate-is-declared-with-its-reason
   (let [sources (fn [lane]
