@@ -92,7 +92,7 @@
 (def manifest
   "test namespace -> lane. THE authority. Adding a JVM test namespace without
    adding it here fails `clj-surgeon.lane-manifest-test` by name."
-  {;; ---- :fast (43) ----
+  {;; ---- :fast (45) ----
    'clj-surgeon.mission-typist-test                    :fast
    'clj-surgeon.mission-candidate-race-test :fast
    'clj-surgeon.mission-candidate-test                 :fast
@@ -136,6 +136,7 @@
    'clj-surgeon.outline-memory-test                     :fast
    'clj-surgeon.quoted-var-refs-test                    :fast
    'clj-surgeon.scope-stream-test                       :fast
+   'clj-surgeon.telemetry-events-test                   :fast
    'clj-surgeon.workspace-onboarding-test               :fast
 
    ;; ---- :integration (5) ----

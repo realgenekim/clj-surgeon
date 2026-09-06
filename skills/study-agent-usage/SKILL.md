@@ -112,6 +112,33 @@ single explicit root when given. `services.clj_surgeon_mcp.status` is typed:
 events were found. Both states list `roots_checked`, and the latter two also
 list `roots_present`.
 
+**PREFER THE LEDGER OVER THE ROOT SCAN FOR "how much did the fleet call".**
+The directory scan above answers only *what did the roots I was told about
+contain*, and a server started with its own `:telemetry-dir` — every
+fixture-scoped server under `/var/tmp/forge/<lane>-fx`, for instance — is
+invisible to it. On the night of 2026-09-05 the hourly watch reported the same
+four figures while the union of 43 live roots held **421 calls against the
+default scan's 315**: a quarter of the fleet's public calls were unseen, and
+unseen was indistinguishable from calm.
+
+`~/.clj-surgeon/events.jsonl` (env `CLJ_SURGEON_EVENTS_FILE`) closes that. It
+is a box-wide JSONL ledger the public MCP functions APPEND TO AS A SIDE EFFECT
+of doing the work — one line per call, one atomic `O_APPEND` write per line, at
+one path that does not depend on how any server was launched, written even when
+that server's own telemetry mode is `off`. Count it with:
+
+```
+make study-agent-events
+python3 skills/study-agent-usage/scripts/collect_agent_usage.py --events [FILE]
+```
+
+The first line is count-first: `events: N (seats: …, pids: …, dropped: D)`.
+**`dropped` is an alarm, not a footnote** — it is the number of appends a
+process failed to write and reported on its next successful line, so the ledger
+tells you how much of itself is missing. A failed append never fails the tool
+call. Malformed lines are counted (`UNPARSABLE LINES`) and skipped: a corrupt
+tail must not blind the reader it exists to serve.
+
 Read `route_phases` as the agent's keystroke sequence. Each phase contains only
 behavioral kinds, action and Surgeon-call counts, input/output sizes, and wall:
 
