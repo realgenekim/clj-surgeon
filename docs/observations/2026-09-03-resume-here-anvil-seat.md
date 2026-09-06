@@ -582,3 +582,5 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 - Owed to Gene: a morning report in the four-section format (vs-native table first) covering the aperture window, the typist program, and Astra's epoch 2 when it lands.
 
 - 23:41Z: Spark rows DONE (provider-bench doc complete). Astra epoch 2 COMPLETE (Sol 2.50x clears hurdle) on his branch, not landed. Morning report owed to Gene: four sections, vs-native table first = Astra epoch 2 table + typist three-provider table.
+
+- 00:31Z: NINE-HOUR BUILD WINDOW to 09:31Z (Gene on a plane ~01:31Z–03:31Z). Astra drives astra/typist-route; Fable on fable/typist-real-repo (piece 4: real-repo mission + cheap gate). Coordination: /var/tmp/forge/fable-to-astra.md. Checkpoints 03/06/09Z; final Gene report at 09:xxZ (four sections, vs-native table first).
