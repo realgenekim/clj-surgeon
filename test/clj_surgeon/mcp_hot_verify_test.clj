@@ -180,6 +180,113 @@
             (str "a closed transport must not hang to the ceiling; took "
                  elapsed "ms"))
         (is (false? (:ok result)))
-        (is (contains? #{:hot-verification-transport-closed
-                         :hot-verification-connection-failed}
-                       (:error-type result)))))))
+        (is (= :hot-verification-transport-closed (:error-type result)))))))
+
+;; @spec MCP-OP-HOTVER-002
+(deftest hot-verification-preserves-output-when-the-transport-closes-mid-read
+  (with-stub-nrepl
+    (fn [{:keys [transport id]}]
+      (transport/send transport {:id id :out "partial output before the close"})
+      (.close ^java.io.Closeable transport))
+    (fn [project-root port-file]
+      (let [result (hot-verify/verify! project-root
+                                       (stub-profile port-file 60000))]
+        (is (false? (:ok result)))
+        (is (= :hot-verification-transport-closed (:error-type result))
+            "a closure DURING an established read is not a connect failure")
+        (is (str/includes? (str (:output result)) "partial output before")
+            "the responses read before the closure are diagnostic, not discarded")))))
+
+;; @spec MCP-OP-HOTVER-002
+(deftest hot-verification-names-a-connect-failure-as-a-connect-failure
+  (let [dead-port (with-open [socket (java.net.ServerSocket. 0)]
+                    (.getLocalPort socket))
+        project-root (System/getProperty "user.dir")
+        port-file (str ".hot-verify-test-" (random-uuid) ".port")
+        file (io/file project-root port-file)]
+    (try
+      (spit file dead-port)
+      (let [result (hot-verify/verify! project-root
+                                       (stub-profile port-file 60000))]
+        (is (false? (:ok result)))
+        (is (= :hot-verification-connection-failed (:error-type result))
+            "failing to CONNECT is a different typed failure from a closure mid-read"))
+      (finally
+        (io/delete-file file true)))))
+
+;; @spec MCP-OP-HOTVER-001
+(deftest hot-verification-does-not-terminate-on-another-messages-done
+  (with-stub-nrepl
+    (fn [{:keys [transport id]}]
+      (transport/send transport {:id "a-different-message" :status ["done"]})
+      (transport/send
+        transport
+        {:id id
+         :status ["done"]
+         :value (pr-str {:cwd (System/getProperty "user.dir")
+                         :pid 91
+                         :summary {:test 1 :pass 1 :fail 0 :error 0}})}))
+    (fn [project-root port-file]
+      (let [result (hot-verify/verify! project-root
+                                       (stub-profile port-file 60000))]
+        (is (:ok result) "a foreign id's done must not end this message's read")
+        (is (= 91 (:pid result)))))))
+
+;; @spec MCP-OP-HOTVER-002
+(deftest hot-verification-deadline-is-not-reset-by-non-terminal-responses
+  (let [pump (atom nil)]
+    (with-stub-nrepl
+      (fn [{:keys [transport id]}]
+        (reset! pump
+                (future
+                  (try
+                    (dotimes [n 200]
+                      (Thread/sleep 50)
+                      (transport/send transport {:id id :out (str "tick " n)}))
+                    (catch Exception _ nil)))))
+      (fn [project-root port-file]
+        (let [started (System/nanoTime)
+              result (hot-verify/verify! project-root
+                                         (stub-profile port-file 500))
+              elapsed (/ (double (- (System/nanoTime) started)) 1000000.0)]
+          (future-cancel @pump)
+          (is (>= elapsed 500.0))
+          (is (< elapsed 3000.0)
+              (str "responses arriving every 50 ms must not reset the 500 ms "
+                   "deadline; took " elapsed "ms"))
+          (is (= :hot-verification-timeout (:error-type result)))
+          (is (str/includes? (str (:output result)) "tick")
+              "the non-terminal output read before the ceiling is diagnostic"))))))
+
+;; @spec MCP-OP-HOTVER-001
+(deftest hot-verification-treats-interrupted-as-a-failure-never-a-pass
+  (let [good-value (pr-str {:cwd (System/getProperty "user.dir")
+                            :pid 77
+                            :summary {:test 1 :pass 1 :fail 0 :error 0}})]
+    (doseq [[label send-responses]
+            [["interrupted alone"
+              (fn [transport id]
+                (transport/send transport {:id id :status ["interrupted"]}))]
+             ["a good value, then interrupted"
+              (fn [transport id]
+                (transport/send transport {:id id :value good-value})
+                (transport/send transport {:id id :status ["interrupted"]}))]
+             ["a good value and interrupted in one response"
+              (fn [transport id]
+                (transport/send transport {:id id
+                                           :value good-value
+                                           :status ["interrupted"]}))]]]
+      (testing label
+        (with-stub-nrepl
+          (fn [{:keys [transport id]}] (send-responses transport id))
+          (fn [project-root port-file]
+            (let [started (System/nanoTime)
+                  result (hot-verify/verify! project-root
+                                             (stub-profile port-file 60000))
+                  elapsed (/ (double (- (System/nanoTime) started)) 1000000.0)]
+              (is (< elapsed 2000.0)
+                  (str "interrupted is terminal; took " elapsed "ms"))
+              (is (false? (:ok result))
+                  "an interrupted evaluation never verified anything")
+              (is (= :failed (:status result)))
+              (is (= :hot-verification-failed (:error-type result))))))))))
