@@ -1,7 +1,7 @@
 # Mission typist executor — flagged prototype
 
-Owner: Astra. Extended deadline: 2026-09-06 15:31Z (Gene, recorded 03:33Z).
-Completed checkpoint 03:00Z; remaining checkpoints 06:00Z, 09:00Z, 12:00Z, 15:00Z.
+Owner: Astra. Extended deadline: 2026-09-06 16:20Z (Gene, recorded 07:17Z).
+Completed checkpoints: 03:00Z, 06:00Z and 09:00Z. Remaining: 12:00Z and 15:00Z.
 Base: bridge/mission-ledger f2efc87c. Gene authorized the seven-piece experiment;
 Fable owns the real-repository mission, narrow gate and independent witness.
 
@@ -273,3 +273,15 @@ calls. Explicit destinations keep their existing semantics; helper_extraction
 is unchanged. Refusal does not create a suggested directory. The closed event
 normalizer admits only the new typist-receipt-dir-required code and the separately
 observed mission-snapshot-stale spelling; no arbitrary-code passthrough.
+
+## Current representation limits — Astra, 2026-09-06
+
+The five mission classes label rate evidence; they do not select five different
+compilers. Every class uses replacement of existing named definition slots.
+General extraction, new files and top-level insertion/deletion are outside this
+executor. JSON replacements may cover a subset of the selected owners; raw
+Clojure requires exact coverage in one file. Independent acceptance remains
+responsible for detecting incomplete work. A ready plan confirms frozen
+authority, not feasibility of arbitrary prose. See the current
+[request contract](../mission-typist.md) for caller-facing limits. This clarifies
+existing behavior and does not extend or relax admission.

@@ -24,7 +24,9 @@ saves and immediately applies the plan in one JVM. This is an explicit write
 command, restricted to `owner_forms` and no existing mission id. Use `propose`
 then `apply` when an intervening authority review matters. Proposal is an
 **authority preview**, not a generated candidate diff: it freezes intent, owners,
-source and proof authority and saves the mission. It calls no provider.
+source and proof authority and saves the mission. It calls no provider. A saved
+`:ready` state does not prove that the prose intent is realizable within those
+owners or that a candidate will pass acceptance.
 
 Successful CLI proposals print the bounded saved `mission-show` view, with the
 mission id, state, next action and a workspace/state-home-bound `show --full`
@@ -80,7 +82,7 @@ The user-supplied `:typist` map is:
 
 | Field | Contract and evidence to supply |
 |---|---|
-| `:mission-class` | One of `:rename`, `:thread-parameter`, `:move-helpers`, `:fanout`, `:witness`. Discovery and the exact intended transformation are already decided. |
+| `:mission-class` | One of `:rename`, `:thread-parameter`, `:move-helpers`, `:fanout`, `:witness`. These are workload labels for matching rate evidence, not separate transformation implementations. Discovery and the intended change are already decided; the replacement limits below apply to every class. |
 | `:source-policy` | Map keyed by every target's relative file. Each value explicitly has `:generated? false`, `:reader-conditionals? false`, `:format-sensitive? false`, based on inspection. Nil/missing/true refuses; do not guess. |
 | `:budget` | `{:max-files N :max-changed-chars N}` with positive integer limits you authorize. File limit must cover all target files. The character limit is a change budget, not a performance measurement. |
 | `:provider` | Exactly the supported identity triple: `{:id :openrouter :model "openai/gpt-oss-120b" :upstream "Cerebras"}` or `{:id :groq :model "openai/gpt-oss-120b" :upstream "Groq"}`. Spark execution refuses. Credentials belong to the configured transport, never this request. |
@@ -88,6 +90,22 @@ The user-supplied `:typist` map is:
 | `:candidate-format` | Optional `:owner-forms` (default JSON owner/form objects) or `:clojure-forms` (plain complete definitions, exactly one target file). |
 | `:max-tokens` | Optional positive integer 1..8192, default 8192, per candidate. Reasoning and answer consume the allocation. |
 | `:fallback` | Optional, only with OpenRouter primary: exactly `{:provider :groq :max-tokens N}`. Primary plus fallback allocations must total <=8192 per candidate. Only the documented typed primary responses trigger this provider fallback; it is separate from `mission fallback`. |
+
+All classes currently replace existing named `def`, `defn`, or `defn-` slots
+in existing files. The resulting name must be the original name or the planned
+`:new-owner`; the definition head, visibility and docstring remain protected.
+This entrance cannot create files, add or delete top-level definitions, or move
+a definition to another namespace. In particular, `:move-helpers` does not enable
+general extraction, `:fanout` cannot insert a new forwarding helper, and
+`:witness` cannot select a `deftest` form or create a test file. Use the appropriate
+[structural route](../skill.md) or a separately authorized edit for work outside
+these slots; do not relabel the workload to bypass a limitation.
+
+JSON `:owner-forms` may replace a subset of the selected owners; omitted owners
+remain unchanged. The independent acceptance witness must detect incomplete
+requested work. Plain `:clojure-forms` requires every selected owner exactly once
+and supports only one target file. Neither format makes planning a proof of the
+natural-language intent.
 
 Each of the two proof profiles contains `{:commands [["executable" "arg" ...]]
 :measured-ms N :evidence "retained-proof-receipt-id"}`. Supply nonempty argv
@@ -168,7 +186,14 @@ not merely a configured route. Spark execution is not implemented; executor plan
 completion order. Before commit it cancels remaining work and checks both worker
 termination and tracked transport-process liveness. Completed replies are retained;
 cancelled requests have unknown billed usage. The three-process fake-client path passes real proof, guarded commit and undo;
-two live pinned-provider hand-drives now verify (one retained repository change, one fresh fixture). Independent combined fence review and replicated complete-wall performance validation remain pending.
+two live pinned-provider hand-drives verify (one retained repository change, one fresh fixture).
+Independent executed reviews and the working-branch landing gates have passed
+through the September 6 integration. Narrow native comparisons also have retained
+complete execution-and-proof results; see the
+[Maven comparison](observations/2026-09-06-astra-maven-native-comparison.md).
+These do not establish general reliability, voluntary adoption, or a gain after
+all task discovery and proof preparation costs. Spark and resident verification
+remain separate experiments, not supported executor routes.
 
 Fake-provider real-program hand-drive:
 

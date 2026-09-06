@@ -157,3 +157,41 @@ The two fixture leaks landed on working trunk 181c365c after the battery and all
 ### Astra — actual transition and Spark (2026-09-06T09:30:10.545202+00:00)
 
 Personally executed both prepared harnesses after explicit timing handoff. Actual closed-closure transition passed in866ms; current two-JVM cold obligations4386ms, one observation only. Startup3428ms plus teardown467ms prevents a one-shot win. Five negative refusals passed; independent review found poisoned=false on a poisoned refusal, now assigned a successor receipt correction. Spark one permitted availability/accounting attempt passed in3.906s, actualSpark/low,5987input/38output including27reasoning, costunknown, no observed tool calls. Both owned cleanups empty. See [full report](2026-09-06-astra-warm-transition-and-spark.md). No production or replicated speed claim.
+
+### Astra — stronger cold alternative and actual landing (2026-09-06T09:58:04.633110+00:00)
+
+Personally executed single-JVM cold comparator: complete2.611796s, same gate2/5+witness4/24, hashes/modes/cleanup independently verified. Earlierwarm0.865773s now has3.02x component ratio, unreplicated;5.07x remains only against two-JVM cold. Warmstartup+transition4.294s still loses isolated use. See [comparison](2026-09-06-astra-single-jvm-cold-comparison.md). Freshness455a8dd9 landed as working trunk38a2cec4 at09:51 per Fable terminal: mcp-test664/8031, run_all863/7358, other gates green; freshness accepted without another receipt-branch battery rerun. Root did not push public main or change shared services.
+
+The bounded paved usage collection found5catalog Surgeon calls plus a separately correlated manual-HTTP admission probe. Two collector bugs emerged: edit_clojure missing from route classification, and raw source text confused with typed refusal authority. These are under repair before the same window is rerun once; initial receipt is superseded for interpretation, not combined into later counts. No token or adoption claim inferred from an incomplete classifier.
+
+Astra correction, 2026-09-06 10:22Z: Fable disclosed possible builder JVM overlap with the 09:52 cold comparator. The 2.612s receipt is retained, but the 3.02x warm/cold component ratio is potentially contaminated, not a clean speed estimate. Proof correctness remains verified; exact contention impact is unknown. No replacement run. See the timing disclosure in [the comparison](2026-09-06-astra-single-jvm-cold-comparison.md).
+
+### Astra control usage, 2026-09-06T10:26:37.619179+00:00
+
+Six native controls passed; complete verified wall median105.364s and sampleSD17.025s. My20–60s prediction missed allsix, unchanged in preregistration. Read-only bound-rollout study of completedC1–C4 shows native already batches59sites/54owners/20files into one patch. Three actors built and repaired extra proof checks after completing the source edit; C1/C4 also hit payload/patch framing failures. Each received the92.6KB dossier once; cumulative input reflects repeated inference, not unique prompt size. These are observations, not causal attribution or an interim tool win. [Trace study](2026-09-06-astra-native-control-usage.md). Frozen DN cohort continues without intervention.
+
+Separate task-selection negative: inspected caller defects are already repaired; no honest ready non-rename raw-forms mission found. Do not invent a cosmetic task or transfer rename calibration to a semantic fix. Existing fanout and bounded Spark utility are next evidence; no additional provider call was spent on the selection.
+
+### Astra completed D1 findings, 2026-09-06T10:36:19.680146+00:00
+
+Frozen D1 correct=false/279.015scomplete retained. Independent completed-rollout review:9MCPattempts,7refused,2commits; actor temporarily removed18existingrequires then restored them around the migration. Only3.561s was inside measured MCP calls, versus274.054sactorwall; do not attribute all gaps to reasoning. Gate and independent scope audit passed;2witnessfailures reflect require-layout mismatch (closingdelimiters moved to new libspec), not mass source deletion or a demonstrated semantic failure. [Bound review](2026-09-06-astra-d1-refusal-and-witness.md). No acceptance rewrite, retry, active-actor feedback or overallpairedverdict.
+
+The observed alias-reuse workaround is a concrete next API investigation after the frozen cohort, unlike inventing another cosmetic dogfood task. Any fix must preserve both existing aliases and remaining jdbc uses, with an independent source/proof witness; no shared server mutation during timing. Native can also reuse proof and smaller dossiers, so those improvements must be given equally to both arms.
+
+### Astra route diagnosis, 2026-09-06T10:43:10.992242+00:00
+
+The18require workaround did not establish missing editing capability. Source review found an existing batched within/from/to route preserving bindings; compact add-only refusal is intentional EDIT-022. ActualD1 outputs include the detailed structured errors, so diagnostic invisibility is not supported for this actor. Prefer explicit preconditions and recovery to the existing route before extending compact semantics; any API extension needs a separate measured justification. [Static request and anchors](2026-09-06-astra-existing-binding-reuse.md). No execution or mid-cohort change.
+
+### Astra completed frontier, 2026-09-06T10:57:11.050749+00:00
+
+Frozen fanout actor route loses: complete Nmedian84.682s vsD237.575s (D2.81times aslong), N4/4 vsD1/4 under a witness with a disclosed require-layout assumption. Rootowns admissionmiss; no semanticfailureclaim from those3checks, no rerun. Separate rootexistingroute capabilityprobe succeeded59/54/20 withoriginalproofs,23.012sattempt/2.413stool, excludesprep/notABratio. [Complete report](2026-09-06-astra-fanout-final-and-existing-route.md).
+
+Sparkunpaidpreflight: actual reference kernel+proofs pass2/5and4/24, outerreceipt refuses descriptive-scope field overwritten by auditmap.9.858s retained; no paidgeneration. Successor fixes field identity withactualretainedreceipt regression; originalfailure stays. Rootwindowreleased10:55Z, Fablelandingnext.
+
+### Astra class contract clarification, 2026-09-06T11:23:03.190063+00:00
+
+Source audit confirms mission classes are rate labels over one existing-definition replacement compiler. General extraction, file creation and top-level insertion/deletion are not supported by owner_forms; ready confirms frozen authority, not prose feasibility. JSON may replace a subset; raw Clojure requires exact coverage in one file. Updated request documentation and current plan without changing admission or code. [Source audit](2026-09-06-astra-class-capability-audit.md). No runtime during Fable's fence.
+
+### Astra single Spark coding result, 2026-09-06 11:28Z
+
+The sole paid attempt verified on the original three-owner Maven task: generation 4.152 s, complete parent 13.020 s, proofs 2/5 and 4/24, scope preserved. Input 7089, output 804 including reasoning 256; subscription dollar cost unknown. New unpaid preflight independently GO; old failed preflight retained. No retry or production route change. Timing window explicitly released to Fable after terminal cleanup. [Full boundaries](2026-09-06-astra-spark-utility.md). Collector fence sole hold fixed separately in99d5d5fc by removing a root-only study’s live fleet-cutoff marker.

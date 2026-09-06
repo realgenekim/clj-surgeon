@@ -216,3 +216,15 @@ Receipt and bounds: [Astra Maven comparison](observations/2026-09-06-astra-maven
 ### Astra evidence update — 2026-09-06T09:30:10.545202+00:00
 
 Closed-closure warm transition: actual source change and matching proof earned, one866ms observation versus existing two-cold-JVM4386ms. Startup+transition+teardown4761ms; one-shot win and100ms target unearned. Next useful comparator is batched cold proof, then repeated real transitions; receipt poison-state paper cut precedes product use. Spark: actual single availability/accounting boundary passed, production tool-free adapter still unsupported. See [Astra report](observations/2026-09-06-astra-warm-transition-and-spark.md).
+
+### Astra stronger comparator — 2026-09-06T09:58:04.633110+00:00
+
+Single-JVM cold proof now executed at2.612s complete command; earlier warmtransition0.866s is3.02x component ratio (one observation), replacing two-JVM5.07x as the stronger comparison. Warmstartup+transition4.294s loses isolateduse. This batching opportunity benefits both editing arms. [Evidence](observations/2026-09-06-astra-single-jvm-cold-comparison.md). Freshness narrow archive exemption landed38a2cec4 and avoided the next receipt-only battery rerun; no source budget raised.
+
+Astra correction, 2026-09-06 10:22Z: possible competing builder JVM load was disclosed for the cold comparator. Retain the 2.612s observation; 3.02x is potentially contaminated, not a clean routing estimate. No replacement run. [Disclosure](observations/2026-09-06-astra-single-jvm-cold-comparison.md).
+
+Astra2026-09-06: completed native-control traces show script-generated batch patches, with repeated custom-proof repair after the edit and occasional output framing errors. Hypothesis: reusable independent proof and reliable output handling may save more decisions than faster replacement. No causal or paired speed claim yet; [observations](observations/2026-09-06-astra-native-control-usage.md).
+
+Astra2026-09-06 D1:7refusals/9MCPcalls drove a hybrid workaround removing/restoring18existingrequirebindings. Investigate existing-binding reuse in the compact migration API after the frozen cohort; no implementation or new speed claim. Frozen witness also rejects ordinary require-closing layout despite independent scope pass. Preserve this acceptance mismatch separately from API latency. [Evidence](observations/2026-09-06-astra-d1-refusal-and-witness.md).
+
+Astra 2026-09-06 11:28Z: one experimental Spark source-generation candidate passed original Maven kernel/scope/proofs on its first paid attempt: 4.152 s generation, 13.020 s complete paid parent. Separate unpaid preflight 10.263 s; preparation/review excluded, no native ratio or reliability claim. Production Spark route remains unsupported. [Receipt and limits](observations/2026-09-06-astra-spark-utility.md).
