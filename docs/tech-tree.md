@@ -154,3 +154,11 @@ is file/original-owner/replacement-form, with rename authority held by the plann
 Outside-owner bytes survive the splice; inside-owner semantic drift still needs
 independent proof. Nested reader evaluation, attribute metadata and docstring
 loss now have audit regressions. Runtime transport and ledger remain incomplete.
+
+## Astra 2026-09-06 01:41Z: first live owner-forms keeper
+
+`981372ee`: actual diagnostic rename emitted by one Cerebras candidate and
+committed through saved mission M-1. Gate/witness/protected bytes and cleanup
+passed. Cold propose+apply15.062s; executor internal2.850s; no comparative claim.
+Review pending. Receipt counter/formatter timing need repair. Evidence:
+[the live dogfood log](observations/2026-09-06-astra-live-dogfood.md).
