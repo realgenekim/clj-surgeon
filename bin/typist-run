@@ -56,6 +56,28 @@ untouched file against the preimage manifest).
 Clock: t0 is process start (startup is charged). Wall to first verified candidate
 includes queue, transport, apply, gate and acceptance.
 
+THE OFFLINE CONTRACT (TYPIST_OFFLINE=1) -- CHOKEPOINT, NOT SANDBOX.
+Sol fence r4 is right and this is the corrected claim. TYPIST_OFFLINE
+
+  * REFUSES THE RUNNER'S OWN spawn and connect paths at the chokepoint: every
+    spawn and network entry point THIS process reaches through the standard
+    library is wrapped at import (the table below), and a `codex`/`claude`
+    shell word is refused as a string. Exit 6, typed, before the call.
+  * DOES NOT CONFINE CHILDREN. It is NOT a sandbox. A general-purpose child
+    (bash, python3) that this process is allowed to start can still spawn an
+    absolute path, reset PATH, `env -i`, re-exec, or open a socket. Python
+    monkeypatching plus a mutable PATH cannot make that impossible; only an
+    OS-enforced process/network boundary or a strictly confined broker can.
+  * HAS LIMITED TEST WITNESSES: dummy key-path resolution, an unchanged Codex
+    session path set, and no matching priced receipt in the suite fixture.
+    These observations do not establish arbitrary child confinement, a complete
+    network census, or proof that no spending was possible. The test harness
+    adds cooperative Python audit guards and permits only reviewed children.
+
+Receipts written while TYPIST_OFFLINE=1 carry
+:offline_contract "chokepoint-not-sandbox" so a later reader is never invited
+to mistake this for confinement.
+
 No number is ever fabricated: a missing API usage field prints `tokens=unknown`.
 """
 
@@ -78,7 +100,23 @@ import urllib.request
 T0 = time.time()
 
 # --------------------------------------------------------------------------
-# HARD OFFLINE MODE (Astra, 2026-09-06). `bin/typist-run-test` calls itself an
+# THE OFFLINE CONTRACT -- CHOKEPOINT, NOT SANDBOX (Astra 2026-09-06; the name
+# and the claim corrected after Sol fence r4, 2026-09-06).
+#
+# WHAT THIS IS: a refusal of the RUNNER'S OWN spawn and connect paths, at one
+# chokepoint. WHAT THIS IS NOT: a sandbox. It does not confine children. Sol
+# r4 demonstrated the escapes and they are real and unfixable at this layer --
+# `bash -c /abs/path/codex`, a PATH reset, `env -i`, a re-exec from a spawned
+# python3, a socket opened by a child. Python monkeypatching plus a mutable
+# PATH is not a boundary; an OS-enforced process/network boundary or a
+# strictly confined broker is, and NEITHER IS AVAILABLE on this box to this
+# user (`unshare -rn` -> write to uid_map not permitted; no bwrap, no
+# firejail, no sudo). Do not read the refusals below as containment.
+#
+# The suite witnesses configured dummy paths and absence of new artifacts in
+# the observed stores; these are not a complete egress or spending census.
+# Additional cooperative audit guards protect its reviewed Python children.
+# `bin/typist-run-test` calls itself an
 # OFFLINE self-test, and it was one only by accident of geography: its NW
 # "refused before any codex call" check pointed at the WORKTREE, and the write
 # fence admits the worktree. On a checkout that lives inside /var/tmp/forge
@@ -124,6 +162,13 @@ T0 = time.time()
 #   urllib.request.urlopen, http.client.HTTPConnection/HTTPSConnection,
 #   socket.create_connection
 OFFLINE = os.environ.get("TYPIST_OFFLINE") == "1"
+
+# The NAME of what TYPIST_OFFLINE provides, carried into every receipt written
+# under it so no later reader mistakes a chokepoint for confinement.
+OFFLINE_CONTRACT = "chokepoint-not-sandbox"
+OFFLINE_CONTRACT_LINE = (
+    "TYPIST_OFFLINE=1: refuses the runner's OWN spawn and connect paths at the "
+    "chokepoint; it does NOT confine children; NOT a sandbox.")
 
 OFFLINE_BLOCKED_EXES = ("codex", "claude")
 # a blocked name as a WORD inside a shell string: `codex exec`, `/x/codex -m`,
@@ -3014,6 +3059,8 @@ def cost_report(fx_dirs):
     out = os.path.join(fx_dirs[0], "cost-report-%d.edn" % int(T0))
     with open(out, "w") as fh:
         fh.write(edn({"cost_report": True,
+                      "offline": OFFLINE,
+                      "offline_contract": (OFFLINE_CONTRACT if OFFLINE else None),
                       "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                       "prices_date": PRICES_DATE,
                       "prices": PRICES,
@@ -3055,6 +3102,12 @@ def main():
                          "unless DIR resolves under /var/tmp/forge/. There is "
                          "no environment variable and no --model: the key path, "
                          "the model and the upstream order are all fixed.")
+    ap.add_argument("--print-key-paths", action="store_true",
+                    help="DRY RUN: print the RESOLVED provider key path for "
+                         "every provider and exit 0. PATHS ONLY -- the files "
+                         "are never opened, so nothing can leak a key. This is "
+                         "how bin/typist-run-test proves that under its "
+                         "--keys-dir no path resolves into /home/forge/secrets.")
     ap.add_argument("--bench", action="store_true",
                     help="compare providers: `rounds` rounds of k=1 per provider, "
                          "interleaved round-robin, one table at the end")
@@ -3123,8 +3176,9 @@ def main():
 
     if a.cost_report:
         sys.exit(cost_report(a.fx or list(COST_REPORT_DEFAULT_FX)))
-    if not a.arm and not a.replay and not a.bench:
-        ap.error("one of --arm, --replay, --bench or --cost-report is required")
+    if not a.arm and not a.replay and not a.bench and not a.print_key_paths:
+        ap.error("one of --arm, --replay, --bench, --cost-report or "
+                 "--print-key-paths is required")
 
     global KEYS_DIR
     if a.keys_dir is not None:
@@ -3136,6 +3190,21 @@ def main():
         if not os.path.isdir(d):
             die("typist-run: refusing — keys-dir does not exist: %s" % d, 4)
         KEYS_DIR = d
+
+    # THE DRY RUN. After the --keys-dir fence, before anything is built,
+    # spawned or opened. It prints PATHS, never contents: a witness that asks
+    # for a key in order to prove the key is safe has defeated itself.
+    if a.print_key_paths:
+        print("offline=%s offline_contract=%s"
+              % (OFFLINE, OFFLINE_CONTRACT if OFFLINE else "n/a"))
+        print("keys_dir=%s" % (KEYS_DIR or "(none -- fixed registry paths)"))
+        for name in sorted(PROVIDERS):
+            cfg = PROVIDERS[name]
+            if not cfg.get("key_file"):
+                print("%-12s key_path=(none -- no provider key)" % name)
+                continue
+            print("%-12s key_path=%s" % (name, os.path.realpath(key_file_for(cfg))))
+        sys.exit(0)
 
     bench_providers = []
     if a.bench:
@@ -3282,6 +3351,10 @@ def main():
             "warm_rollout": (warm["rollout"] if warm else None),
             "warm_session_created_here": (warm["created_here"] if warm else None),
             "sandbox": ("bypass" if a.arm == "NW" else "codex default (read-only)"),
+            # Sol fence r4: name the contract in the artifact, so a reader of
+            # this receipt is never invited to read a chokepoint as a sandbox.
+            "offline": OFFLINE,
+            "offline_contract": (OFFLINE_CONTRACT if OFFLINE else None),
             "warmup_wall_s": (warm["warmup_wall_s"] if warm else None),
             "warmup_charged": (False if warm else None),
             "warm_orientation_edited": (warm["orientation_edited"] if warm else None),

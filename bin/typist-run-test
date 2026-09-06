@@ -1,12 +1,24 @@
 #!/usr/bin/env python3
 """typist-run-test — the OFFLINE fence tests for bin/typist-run (2026-09-06).
 
-Every test here is monkeypatched, pure, or a subprocess run under
-TYPIST_OFFLINE=1 -- the runner's hard offline mode, which refuses any
-codex/claude spawn and any network open with exit 6 before it happens. That
-env var is set at the TOP of this module, and the suite ends by asserting that
-~/.codex/sessions gained nothing. Nothing here reads a real key either: the
-provider key files come from a --keys-dir under /var/tmp/forge with dummies.
+THE OFFLINE CONTRACT IS A CHOKEPOINT, NOT A SANDBOX (Sol fence r4). Every test
+here is monkeypatched, pure, or a subprocess run under TYPIST_OFFLINE=1, which
+refuses the RUNNER'S OWN codex/claude spawns and network opens with exit 6
+before they happen. It does NOT confine children: a general-purpose child
+(bash, python3) that the runner is allowed to start could still spawn an
+absolute path, reset PATH, `env -i`, re-exec, or open a socket. Python
+monkeypatching plus a mutable PATH cannot make that impossible; only an
+OS-enforced process/network boundary or a strictly confined broker can, and
+NEITHER IS AVAILABLE on this box to this user (`unshare -rn` -> write to
+uid_map not permitted; no bwrap, no firejail, no sudo).
+
+THIS SUITE RETAINS LIMITED WITNESSES: runner key paths resolve to dummy files;
+the Codex session path set is unchanged; the observed ledger does not grow;
+no matching provider-priced receipt remains in the suite fixture tree.
+These checks are not a complete process/network census or proof that arbitrary
+children could not spend. The parent Python audit guard and bootstrapped runner
+children retain the stronger cooperative guard from the root branch. They are
+not an OS sandbox. The default-key-path check prints paths without opening keys.
 
   bin/typist-run-test
 
@@ -44,7 +56,11 @@ RUNNER = os.path.join(HERE, "typist-run")
 FENCE = "/var/tmp/forge"
 CODEX_SESSIONS = os.path.expanduser("~/.codex/sessions")
 
-# HARD OFFLINE, NOT HOPEFUL OFFLINE (Astra, 2026-09-06). This file's docstring
+# THE OFFLINE CONTRACT: CHOKEPOINT, NOT SANDBOX (Astra 2026-09-06; renamed
+# after Sol fence r4). TYPIST_OFFLINE refuses the RUNNER'S OWN spawn/connect
+# paths at one chokepoint. It does not confine children and it is not a
+# sandbox -- see this module's docstring for what is proven instead.
+# This file's docstring
 # claimed every test is "monkeypatched or pure"; the NW check below pointed at
 # the WORKTREE, and the write fence ADMITS the worktree, so on a checkout that
 # lives under /var/tmp/forge the NW refusal never fired and this "offline"
@@ -56,12 +72,54 @@ CODEX_SESSIONS = os.path.expanduser("~/.codex/sessions")
 os.environ["TYPIST_OFFLINE"] = "1"
 
 
-def newest_codex_session():
-    """Identity set, not mtime: other active seats append existing rollouts."""
-    return frozenset(os.path.join(root, name)
-                     for root, _dirs, names in os.walk(CODEX_SESSIONS)
-                     for name in names)
+def codex_session_paths():
+    """The SET of file paths under ~/.codex/sessions.
 
+    A SET, not a newest-mtime (Sol fence r4). A newest-mtime witness answers
+    "did the most recent file change", which is not the question: a rewritten
+    file is not a new session, and a deleted file is not the absence of a new
+    one. A real codex call CREATES a rollout file, so set equality across the
+    suite is the witness -- bound to a store this file never writes."""
+    out = set()
+    for dirpath, _dirs, names in os.walk(CODEX_SESSIONS):
+        for f in names:
+            out.add(os.path.join(dirpath, f))
+    return out
+
+
+def events_ledger_size():
+    """(exists, size) of ~/.clj-surgeon/events.jsonl. Part of the egress
+    canary only: uninstrumented calls need not write this file."""
+    p = os.path.expanduser("~/.clj-surgeon/events.jsonl")
+    try:
+        return (True, os.path.getsize(p))
+    except OSError:
+        return (False, 0)
+
+
+PROVIDER_SPEND_RE = re.compile(r':cost_source\s+"provider"|:upstream\s+"(?!\s*nil)')
+
+
+def provider_priced_receipts(root):
+    """List EDN files matching the priced-receipt canary; not an RPC census."""
+    hits = []
+    for dirpath, _dirs, names in os.walk(root):
+        for f in names:
+            if not f.endswith(".edn"):
+                continue
+            fp = os.path.join(dirpath, f)
+            try:
+                body = open(fp).read()
+            except OSError:
+                continue
+            if PROVIDER_SPEND_RE.search(body):
+                hits.append(fp)
+    return hits
+
+# THE SUITE'S OWN fx TREE. Every artifact this file causes the runner to write
+# lands under here, so the egress canary at the end scans exactly what THIS run
+# produced -- not whatever else happens to sit in /var/tmp/forge/typist-real-fx.
+SUITE_FX = os.path.join(FENCE, "typist-real-fx", "suite-%s" % uuid.uuid4().hex[:8])
 
 FAILURES = []
 
@@ -131,6 +189,19 @@ def harness_audit(event, args):
 
 
 sys.addaudithook(harness_audit)
+
+
+def run_runner(args, env=None, timeout=180):
+    """Use the root audit bootstrap, offline flag and explicit dummy key paths.
+    Explicit --keys-dir values are retained for refusal tests."""
+    a = list(args)
+    if "--keys-dir" not in a:
+        a += ["--keys-dir", keys_dir()]
+    e = dict(os.environ, TYPIST_OFFLINE="1")
+    if env:
+        e.update(env)
+    return offline_run(a, env=e,
+                          capture_output=True, text=True, timeout=timeout)
 
 
 def check(name, ok, detail=""):
@@ -296,8 +367,7 @@ def test_keys(m):
 def test_keys_dir_fence():
     """The fence is enforced in main(), so drive it as a subprocess."""
     for bad in ("/home/forge", "/tmp", FENCE + "/../../etc"):
-        r = offline_run(["--arm", "fake", "--keys-dir", bad],
-                           capture_output=True, text=True, timeout=120)
+        r = run_runner(["--arm", "fake", "--keys-dir", bad], timeout=120)
         check("--keys-dir %s is refused" % bad,
               r.returncode == 4 and "outside the test fence" in r.stderr,
               (r.stderr.strip().splitlines() or [""])[0])
@@ -311,12 +381,7 @@ def test_write_fence():
     repo_root = os.path.realpath(os.path.join(HERE, os.pardir))
 
     def run(args, env=None, name=""):
-        e = dict(os.environ)
-        if env:
-            e.update(env)
-        r = offline_run(args, env=e,
-                           capture_output=True, text=True, timeout=180)
-        return r
+        return run_runner(args, env)
 
     r = run(["--arm", "fake"], {"TYPIST_FX": "/home/forge"})
     check("TYPIST_FX=/home/forge is refused",
@@ -477,16 +542,13 @@ def test_cost(m):
           == (None, None))
 
     # THE REPORT, driven as a real CLI over a tree of unpriceable receipts.
-    fx = os.path.join(FENCE, "typist-real-fx", "cost-%s" % uuid.uuid4().hex[:8])
+    fx = os.path.join(SUITE_FX, "cost-%s" % uuid.uuid4().hex[:8])
     os.makedirs(fx, exist_ok=True)
     try:
         with open(os.path.join(fx, "receipt.edn"), "w") as fh:
             fh.write('{:candidates [{:cand "groq-1" :prompt_tokens nil '
                      ':tokens nil :cost_usd nil :cost_source nil}]}\n')
-        r = offline_run(["--cost-report", "--fx", fx],
-                           env=dict(os.environ, TYPIST_OFFLINE="1",
-                                    TYPIST_FX=fx),
-                           capture_output=True, text=True, timeout=180)
+        r = run_runner(["--cost-report", "--fx", fx], {"TYPIST_FX": fx})
         row = [ln for ln in r.stdout.splitlines() if ln.startswith("groq")]
         tot = [ln for ln in r.stdout.splitlines() if ln.startswith("TOTAL")]
         check("--cost-report: an unpriceable groq row prints unknown",
@@ -507,7 +569,7 @@ def test_cost(m):
         shutil.rmtree(fx, ignore_errors=True)
 
     # A MIXED GROUP: one provider-priced candidate and one unpriceable one.
-    fx2 = os.path.join(FENCE, "typist-real-fx", "cost-%s" % uuid.uuid4().hex[:8])
+    fx2 = os.path.join(SUITE_FX, "cost-%s" % uuid.uuid4().hex[:8])
     os.makedirs(fx2, exist_ok=True)
     try:
         with open(os.path.join(fx2, "receipt.edn"), "w") as fh:
@@ -516,10 +578,7 @@ def test_cost(m):
                      ':cost_usd 0.12345678 :cost_source "provider"} '
                      '{:cand "groq-2" :prompt_tokens nil :tokens nil '
                      ':cost_usd nil :cost_source nil}]}\n')
-        r = offline_run(["--cost-report", "--fx", fx2],
-                           env=dict(os.environ, TYPIST_OFFLINE="1",
-                                    TYPIST_FX=fx2),
-                           capture_output=True, text=True, timeout=180)
+        r = run_runner(["--cost-report", "--fx", fx2], {"TYPIST_FX": fx2})
         row = [ln for ln in r.stdout.splitlines() if ln.startswith("groq")]
         # SOL FENCE R3, finding 5. The r2 test asserted the provider's figure
         # on the DISPLAY only, and the display was already truncating it to
@@ -552,8 +611,52 @@ def test_cost(m):
         shutil.rmtree(fx2, ignore_errors=True)
 
 
+# --------------------------------------------------------------------------
+# (f) Runner key-path resolution, without reading real credentials.
+
+def test_no_real_key_reachable():
+    """Configured path witness only; no claim of child confinement."""
+    d = keys_dir()
+    r = run_runner(["--print-key-paths", "--keys-dir", d], timeout=120)
+    check("--print-key-paths exits 0 and prints the contract",
+          r.returncode == 0 and "offline_contract=chokepoint-not-sandbox" in r.stdout,
+          "exit=%s %r" % (r.returncode, r.stdout.strip().splitlines()[:1]))
+    paths = dict(
+        (ln.split()[0], ln.split("key_path=", 1)[1].strip())
+        for ln in r.stdout.splitlines() if "key_path=" in ln and not ln.startswith("keys_dir"))
+    for prov in ("groq", "openrouter"):
+        p = paths.get(prov, "")
+        check("%s key path resolves under the dummy fence" % prov,
+              bool(p) and (p == d or p.startswith(d + os.sep)), p)
+    check("NO resolved key path touches /home/forge/secrets",
+          not any(v.startswith("/home/forge/secrets") for v in paths.values()),
+          repr(paths))
+    check("--print-key-paths never prints a key VALUE",
+          "gsk_" not in r.stdout and "sk-or-" not in r.stdout)
+    # and the default, WITHOUT the seam, still is the fixed registry path --
+    # so the witness above is a redirection, not an accident of a broken lookup.
+    plain = offline_run(["--print-key-paths"],
+                           env=dict(os.environ, TYPIST_OFFLINE="1"),
+                           capture_output=True, text=True, timeout=120)
+    check("without --keys-dir the groq path is still the fixed registry path",
+          "/home/forge/secrets/groq.edn" in plain.stdout,
+          (plain.stdout.strip().splitlines() or [""])[-1])
+
+
 def main():
-    before = newest_codex_session()
+    os.makedirs(SUITE_FX, exist_ok=True)
+    print(__doc__.strip().splitlines()[0])
+    print("OFFLINE CONTRACT: chokepoint-not-sandbox -- TYPIST_OFFLINE=1 refuses "
+          "the RUNNER'S OWN spawn/connect paths;")
+    print("  it does NOT confine children and is NOT a sandbox. No OS boundary "
+          "is available to this user on")
+    print("  this box (unshare -rn: uid_map not permitted; no bwrap/firejail; "
+          "no sudo). A general-purpose child")
+    print("  Witnesses cover configured dummy paths and observed artifacts only;")
+    print("  they do not prove arbitrary child containment or a full spending census.")
+    print("")
+    before = codex_session_paths()
+    before_ledger = events_ledger_size()
     m = load_runner()
     m.KEYS_DIR = keys_dir()
     print("== scrubber ==");        test_scrub(m)
@@ -564,11 +667,25 @@ def main():
     print("== write fence ==");     test_write_fence()
     print("== offline guard ==");   test_offline_guard(m)
     print("== cost accounting =="); test_cost(m)
-    after = newest_codex_session()
+    print("== configured dummy key paths =="); test_no_real_key_reachable()
+
+    # ---- OBSERVED ARTIFACT CANARIES. Independent checks, both
+    # bound to stores this file never writes.
     print("")
-    check("no codex session was created by this suite",
+    print("== observed artifact canaries ==")
+    after = codex_session_paths()
+    check("the ~/.codex/sessions PATH SET is identical before and after",
           after == before,
-          "before=%s after=%s" % (len(before), len(after)))
+          "added=%s removed=%s" % (sorted(after - before)[:3],
+                                   sorted(before - after)[:3]))
+    after_ledger = events_ledger_size()
+    check("~/.clj-surgeon/events.jsonl did not grow",
+          after_ledger == before_ledger,
+          "before=%s after=%s" % (before_ledger, after_ledger))
+    priced = provider_priced_receipts(SUITE_FX)
+    check("no suite receipt matches the provider-priced canary",
+          not priced, "%s (fx=%s)" % (priced[:3], SUITE_FX))
+    shutil.rmtree(SUITE_FX, ignore_errors=True)
     print("")
     if FAILURES:
         print("FAILED %d: %s" % (len(FAILURES), ", ".join(FAILURES)))

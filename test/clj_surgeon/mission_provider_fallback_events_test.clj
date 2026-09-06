@@ -47,7 +47,7 @@
   (let [ledger (java.io.File/createTempFile "provider-fallback-events-" ".jsonl")]
     (try
       (binding [observer/*context* (atom prior)]
-        (with-redefs [events/default-events-file (fn [] (str ledger))
+        (with-redefs [events/events-file (fn [] (str ledger))
                       process/run-bounded! fake-process]
           (executor/request-one! authority 0 (atom {}))))
       (let [event (json/parse-string (slurp ledger) true)]

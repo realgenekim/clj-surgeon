@@ -175,7 +175,11 @@
 
 (deftest a-tool-call-writes-the-ledger-even-with-per-server-telemetry-off
   (let [file (io/file (temp-dir "events-mode-off-") "events.jsonl")]
-    (with-redefs [events/default-events-file (fn [] (.getAbsolutePath file))]
+    ;; Sol fence r4: the WRITER resolves `events-file` (override, else default),
+    ;; so a test that pins where the writer lands redefines THAT -- redefining
+    ;; `default-events-file` is silently bypassed whenever the harness exports
+    ;; CLJ_SURGEON_EVENTS_FILE, which `~/bin/suite-run` does.
+    (with-redefs [events/events-file (fn [] (.getAbsolutePath file))]
       (let [state (telemetry/start! {:mode :off})]
         (telemetry/record-inspect-call!
           state {:requests [{:operation "outline" :file "a.clj"}]}
@@ -342,7 +346,27 @@
 
 (deftest the-default-path-is-the-home-dotdir
   (is (str/ends-with? (events/default-events-file) "/.clj-surgeon/events.jsonl")
-      "the ledger is a HOME dotdir, not one of the launcher-chosen state roots"))
+      "the ledger is a HOME dotdir, not one of the launcher-chosen state roots")
+  (is (not (str/blank? (events/default-events-file)))))
+
+(deftest the-env-override-wins-for-the-writer
+  ;; Sol fence r4: the DEFAULT and the OVERRIDE are two facts. `default-events-file`
+  ;; states the default and must stay true under `~/bin/suite-run`, which exports
+  ;; CLJ_SURGEON_EVENTS_FILE; `events-file` is what a writer resolves, and the
+  ;; override has to win THERE or the isolation variable does nothing.
+  (let [file (io/file (temp-dir "events-override-") "elsewhere.jsonl")]
+    (with-redefs [events/events-file-override (fn [] (.getAbsolutePath file))]
+      (is (= (.getAbsolutePath file) (events/events-file))
+          "the writer resolves the override, not the home dotdir")
+      (is (not= (events/default-events-file) (events/events-file)))
+      (events/record! {:kind "call" :tool "inspect_clojure" :ok true})
+      (is (.isFile file) "record! with no explicit path appended to the override")
+      (is (= "inspect_clojure" (:tool (json/parse-string (first (lines file)) true)))))
+    (with-redefs [events/events-file-override (fn [] "   ")]
+      (is (= (events/default-events-file) (events/events-file))
+          "a blank override is not an override"))
+    (with-redefs [events/events-file-override (fn [] nil)]
+      (is (= (events/default-events-file) (events/events-file))))))
 
 (def cost-fields
   "The optional cost fields. A caller that has them passes them through; a
