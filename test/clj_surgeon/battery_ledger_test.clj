@@ -154,3 +154,40 @@
     (testing "battery-fresh is a target of its own"
       (is (re-find #"(?m)^battery-fresh:" makefile))
       (is (str/includes? makefile "battery_ledger.clj check")))))
+
+;; @spec TEST-ISO-009b -- closed archival classification; no Git in fast lane.
+(deftest only-existing-regular-archive-content-is-exempt
+  (let [path "docs/observations/2026-09-06-live-astra-typist-commentary.md"
+        raw (fn [status old new p]
+              (str ":" old " " new " " (apply str (repeat 40 "a")) " "
+                   (apply str (repeat 40 "b")) " " status "\u0000" p "\u0000"))
+        good (raw "M" "100644" "100644" path)]
+    (is (ledger/archive-only-diff? good))
+    (testing "every merge parent must independently prove archive-only content"
+      (doseq [[second-out exit expected] [[good 0 true] ["" 0 false]
+                                         [good 1 false]
+                                         [(raw "M" "100644" "100644" "src/x.clj") 0 false]]]
+        (with-redefs-fn {#'ledger/sh (fn [& args]
+                                     (if (= "p2" (nth args (- (count args) 3)))
+                                       {:exit exit :out second-out}
+                                       {:exit 0 :out good}))}
+          #(is (= expected (#'ledger/archive-only-commit? "commit p1 p2"))))))
+    (doseq [bad ["" "garbage" (subs good 0 (dec (count good)))
+                 (raw "A" "000000" "100644" path)
+                 (raw "D" "100644" "000000" path)
+                 (raw "M" "100644" "100755" path)
+                 (raw "M" "120000" "120000" path)
+                 (raw "M" "160000" "160000" path)
+                 (raw "M" "100644" "100644" "docs/observations/battery-ledger.edn")
+                 (str good (raw "M" "100644" "100644" "src/x.clj"))]]
+      (is (not (ledger/archive-only-diff? bad)) (pr-str bad)))))
+
+(deftest archive-distance-keeps-the-raw-audit-and-failure-authority
+  (let [distance (constantly {:commits-behind 22 :raw-commits-behind 55
+                              :ignored-archive-commits 33})
+        r (check (ledger-text (entry)) distance)]
+    (is (:ok r))
+    (is (= 22 (:commits-behind r)))
+    (is (= 55 (:raw-commits-behind r)))
+    (is (= 33 (:ignored-archive-commits r)))
+    (is (= :last-run-failed (:reason (check (ledger-text (entry :verdict :fail)) distance))))))

@@ -117,7 +117,7 @@ document rather than a memory.
 - [x] **TEST-ISO-009b**: `make battery-fresh` shall REFUSE, naming its subject
   and its number and printing the exact remedy, when the newest battery
   receipt is older than 26 h, when it records a failure, when the commit it
-  names is not an ancestor of HEAD, when that commit is more than 30 commits
+  names is not an ancestor of HEAD, when that commit is more than 30 counted commits
   behind HEAD, or when the ledger is empty or corrupt. The battery is out of
   the merge gate by design, which makes its ABSENCE silent; a stale nightly
   shall therefore be a refusal rather than a silence. The verdict shall be a
@@ -259,3 +259,20 @@ correct behaviour is one somebody deletes.
 - [ ] **TEST-ISO-012**: No two fast-lane namespaces share a mutable resource
   -- a relational oracle, KEPT ONLY if it finds a counterexample the native
   witnesses missed.
+
+### TEST-ISO-009b archival distance
+
+Only modifications of existing regular non-executable files at these exact
+paths may be excluded from commit distance:
+
+- `docs/observations/2026-09-03-captains-log-anvil-seat.md`
+- `docs/observations/2026-09-05-captains-log-astra-four-hour-comparison.md`
+- `docs/observations/2026-09-06-live-astra-typist-commentary.md`
+
+Every changed entry against every parent must be status M, mode 100644 before
+and after, and one of these paths. Empty commits, additions, deletion, rename,
+mode/type changes, mixed commits, unknown paths and unreadable diffs count.
+The complete DAG remains authoritative; raw distance and excluded archive count
+must accompany counted distance. Above 1000 raw commits, count all commits
+without archival exemptions to bound per-commit inspection. Ancestry, age,
+newest-failure authority and the 30-commit budget remain unchanged.
