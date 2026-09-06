@@ -1,0 +1,21 @@
+{
+  "frozen_at": "2026-09-06T19:32:16.432106+00:00",
+  "cell": "/var/tmp/forge/cell-prep/out/extract-E",
+  "purpose": "cell apparatus freeze; --execute-preregistered refuses on any drift",
+  "d_arm_registration_argv": "-c mcp_servers.clj-surgeon.url=\"http://127.0.0.1:8171/mcp\" -c mcp_servers.clj-surgeon.required=true",
+  "registration_evidence": "registration-proof-2.json (repo-level .codex NOT loaded under these flags; command-line -c IS)",
+  "files": {
+    "/var/tmp/forge/cell-prep/runner-b/runner-b.py": "0e9446fb33ded1c7131f85aa45c88931a005a85352c9891a91967cb08221fe43",
+    "/var/tmp/forge/cell-prep/runner-b/actor-b.py": "e97d4059edffea9ec42b9bb2cd31b6da37140562cb55fba7260567fd74609c89",
+    "/var/tmp/forge/cell-prep/runner-b/stub-actor.py": "6e8d602d74501a6c8bdaed9b10a3403d28d428ab2c8cb2ecd930f0b529e8907b",
+    "/var/tmp/forge/cell-prep/out/extract-E/proof-e/run.py": "2738ef2d192ef613dec7af7e04f35b8dc1bf3d2644afd7548854a5ea72307112",
+    "/var/tmp/forge/cell-prep/out/extract-E/proof-e/witness.clj": "c86c56a1f7bfde4cbd96a58d32849a4c83875acdf0f5e2a2e0ab1963fc7bc37b",
+    "/var/tmp/forge/cell-prep/out/extract-E/dossier.txt": "06ef1679cf3abf1f84f3658222b20586bff2a78289565661358ddbc7448eafe2",
+    "/var/tmp/forge/cell-prep/out/extract-E/intent.txt": "35b0ff6215649a31a3cfc6d790980beb939e624b2d8d0b19f4225287f3c2c5c6",
+    "/var/tmp/forge/cell-prep/runner-b/prefixes/D.txt": "e0b174f8205b8f1eb955d2dc6a95f31878c7d386c342c0f503871580df1c9ba4",
+    "/var/tmp/forge/cell-prep/out/extract-E/prefixes/E.txt": "e40230b770e552e619e2c980b13d61ae574581af47a7d531f4d79b7a566f7f63",
+    "/var/tmp/forge/cell-prep/runner-b/prefixes/I.txt": "26cd58b2184a9825a11433b4a9a8b6ca8ae15e94591e2003cb3b4f5372266104",
+    "/var/tmp/forge/cell-prep/runner-b/prefixes/J.txt": "1560467a488479fa4dcb06f3e87150217b43ac0d4f60dfbdc4da10b5bb9abe47",
+    "/var/tmp/forge/cell-prep/out/extract-E/prefixes/N.txt": "765ed025b12b6fa82bae0f8ecabc64a19188220071e67a3ea46e1fbed992673a"
+  }
+}
