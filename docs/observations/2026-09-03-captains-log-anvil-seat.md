@@ -2715,3 +2715,79 @@ The proposal is docs/observations/2026-09-06-sublime-tool-for-astra.md; the riff
 ## 06:53Z — land 9e83d4b9 (Astra final tip) RED on battery-fresh only (receipt 53 commits behind, ceiling 30, trunk moved 50 records-only commits); every other gate green on the merged tree (mcp-test 662/8011, run_all 862/7352, recovery battery, oracle, hygiene, audit). Remedy Astra confirmed: fresh battery on a receipt branch (his tip merged onto trunk, src/test identical), commit the runner receipt, land through the normal gates. Quiet window owner=fable to 07:35Z. Proof-cost finding: documentation commits consume the freshness distance budget.
 
 ## 06:53Z — usage watch: tools "admit_clojure_patch": 59 "apply_clojure_changes": 2 "helper_extraction": 2 "inspect_clojure": 252  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 06:48Z load 3.00 ; === rc 0 end 06:53Z)
+
+## 07:14Z — Gene's early-morning questions, and the state of the landing (06:00Z–07:15Z)
+
+**Landing of Astra's typist branch.** Sol's delta fence on 6c864e10 returned LAND YES, conditional
+only on the battery receipt for the tip. Astra's final tip 9e83d4b9 (test-only corpus split, docs)
+passed my small-delta review: the whole-corpus outline witness moved verbatim into an enrolled
+integration namespace, fast lane keeps the four bounded witnesses, manifest 86→87, no src/Make/budget
+change. `~/bin/land 9e83d4b9` ran every gate green on the merged tree (mcp-test 662/8011, run_all
+862/7352, recovery battery, oracle, hygiene, audit) and was refused by battery-fresh alone: the newest
+receipt was 53 commits behind the merge head against a ceiling of 30, because trunk carries 50
+records-only commits since the last landing. Astra confirmed the remedy: a receipt branch
+(fable/astra-typist-route-receipt, his tip merged onto trunk, src/test identical), a fresh battery,
+commit the runner's own receipt, land through the normal gates. First battery run: 691 tests / 13289
+assertions, 0 failures, exit 1 from the temp-leak tripwire — `node-compile-cache` left under the run
+root. Probe: `npx --version` under a fresh TMPDIR writes that directory; with
+NODE_DISABLE_COMPILE_CACHE=1 it writes nothing. npm enables Node's compile cache; the formatter profile
+spawns npx in the battery on this lane. Environmental, not his delta. The seat guard now exports the
+kill switch; rerun in progress under a fable quiet window.
+
+**Paper cuts found tonight by RED/GREEN, not narration.** (1) `~/bin/slot` redirected its own stderr
+for the whole run via a bare `exec {fd}>lock 2>/dev/null`; scoped to a brace group, guard sourced,
+proved by a pure-shell probe (Astra found it). (2) The outline corpus witness read the whole working
+tree from the fast lane; its 8 s budget measured repo growth (+31.8% bytes since enrollment). Astra
+partitioned it by cost class. I misread the failing witness as the refusal-fact-line printer for an
+hour; corrected on the record. (3) npm compile cache under TMPDIR, above. (4) A battery test writes
+`receipt.edn` into the repo root — Astra's read-only diagnosis: a global `clojure.java.io/file` mock in
+mission_test turns the undo-refusal telemetry into a cwd file; repair is an absolute scratch receipt
+and no global override. Filed inb-3c57fd, inb-8e0a87. (5) My commentary-loop restarter used a
+text-matching pgrep inside a harness shell, matched itself, and skipped; the September 5 lesson
+repeated. PID-bound restarter armed.
+
+**Gene: "Executor-first Surgeon — explain."** Old way: the agent reads, thinks, types a patch, spawns
+tests, reads the failure, repeats — one frontier-model turn per step, Surgeon optional and declined.
+New way: the agent states one intent ("in form X, do Y"); Surgeon locates the form, a cheap typist
+rewrites it, Surgeon parses/lints/gates, writes with identity and undo, publishes through the Git seam
+with a mission id. The big model never types; the typist never sees the repo; Surgeon is the only
+thing that touches disk.
+
+**Gene: "The value isn't fast typing; it's that it happens inside the server at API speed, so a slower
+model would still win?"** Yes, up to a boundary. The gain is the loop that never leaves the process —
+no agent turn, no re-read, no spawn. A three-second typist still beats a thirty-second agent turn by
+ten times. Once the gate is resident at 0.13 s the model call is the largest remaining piece, so a
+fifteen-second model would become the wall again. What matters in the typist is correctness inside a
+form, not raw speed — which is why the edit-form result (unified diff 0/20, whole-file 16/20, forms by
+construction) mattered more than the provider bench.
+
+**Gene: "The bottleneck is not generation — what does that mean?"** We assumed the slow part was the
+model writing code and went shopping for a faster model. Measured per step: generation under 1 s; the
+cold gate 0.73 s → resident 0.13 s; gate overhead versus generation 15.7x → 7.9x → 2.9x across three
+cuts; Codex process startup seconds per call, unchanged. The wall was everything around the model.
+Measure the whole pipeline before buying a faster part.
+
+**Gene: "Can we load the namespace into the MCP server and shave off the gate?"** The word is the
+gate: the verification after an edit (parse, clj-kondo, load-ns, focused test). Cold = fresh JVM per
+edit; resident = analyzer and loaded code kept warm. Today resident mode lives in the typist runner as
+a flag (that is where 0.13 s came from); the MCP verbs still pay the cold entrance. Recommended shape:
+one warm sidecar JVM per workspace owned by the server (never the server's own JVM — a bad edit must
+not take the server down, and Surgeon editing Surgeon must not contaminate itself); in it the gate is
+four warm calls; refusals keep the MCP shape. Projection, not measurement: per-edit wall ≈ model call
+plus a few hundred ms; fan-out of twenty forms = twenty API calls against one warm gate. Next A/B on a
+held-out repo.
+
+**Gene: "Are we seeing materially lower codex/fable token costs?"** Unmeasured. The ledger records
+typist tokens and cost only; nothing records the frontier caller's spend per task. The mechanism
+predicts fewer output tokens (one intent line instead of a patch, no re-reads), but verbose receipts
+can raise input tokens. Filed inb-4c3d0e: caller tokens per mission (codex exec JSON usage, Claude
+harness usage) bound to mission_id under the closed-field policy, so A/B reports carry frontier
+tokens per correct task beside wall.
+
+**Dogfooding, honestly.** Two keepers were real edits on a real repo (one live, one published via the
+Git seam as M-1). Astra used Surgeon to build Surgeon (collector 06:53Z: inspect 252, admit 59, apply
+2, helper 2 since 08-30). The ethnographies studied his call sequences rather than asking him. Thin:
+my lane edited wrappers and docs natively (not Clojure forms), and nobody has yet used the typist for
+an ordinary next task on a repo outside the experiment. My seat ledger cannot separate tonight's
+real rows from the battery's test rows because the receipt chain ran `make test-battery` without the
+suite-run isolation — one more paper cut, mine.
