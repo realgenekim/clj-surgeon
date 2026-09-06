@@ -630,3 +630,5 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 - go90 results: docs/observations/2026-09-06-go90-report.md (wiring 4.8x for pre-listable work; warm proof 0.8 s real work behind the timeout-burn defect inb-adcc9e; trace overhead +33 ms clean). Brainstorm + corrected ethnography: 2026-09-06-brainstorm-wall-breakthrough.md, 2026-09-06-real-session-ethnography.md.
 - Open decisions for Gene: (1) pre-list builder work doctrine; (2) account/usage-reset policy if the model drifts a third time; (3) whether to fund the hot-timeout fix (inb-adcc9e) and the receipt-text fixes (inb-2b33ec, inb-186182).
 - Next action: none scheduled; heartbeats only.
+
+## POLICY at 21:56Z (Gene GO on inb-fa0eb7): on the next silent model drift of Astra's thread (status bar ≠ gpt-6-astra medium), (1) stand down, resume pinned, and REDEEM one usage-limit reset from the client's /usage menu (2 available at 20:5xZ); (2) if it drifts again after the reset, switch the Codex account — skiff mints the login.
