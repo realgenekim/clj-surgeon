@@ -48,3 +48,33 @@ bin/mission show "$MID" --workspace "$WS" --state-home "$H"
 ```
 Skip OID-dependent reads if no OID was returned. These reads do not reconcile records. No automatic reconciliation command is supplied; undo/resume refuse pending, uncertain, or published Git state. Successful Git with failed metadata recording still means Git changed.
 Usability ambiguity: generic --help plus help show/apply label a helper_extraction-only sample as THE SPEC (closed shape), while owner_forms has a different top-level shape. Propose help's explicit guide/template links resolve this but a generic-help-only caller could choose the wrong schema. There is no evidence-calibration entrance or standalone verification command; these are explicit limits, not license to invent evidence. Candidate count thresholds describe routing, not measured reliability for this task.
+
+
+## Follow-up: explicit artifact destination
+
+Public-contract follow-up addendum (requested revision f2c0fac8; no Git inspection)
+Clock-derived assessment: 2026-09-06 05:34:41–05:35:13 UTC (32 s). Follow-up to the same fresh subject, not another blind/adoption cohort.
+Read only updated public guide/template and --help/help apply/run/propose/commit. Help roundtrip walls including tool transport: 109/109/101/101/100 ms; all exit 0. No performance comparison implied.
+Correction: my earlier apply command is now incomplete for owner_forms. Explicit --receipt-dir is required; --state-home does not select the artifact destination.
+Conditional replacement chain, unexecuted; SPEC contains honest completed facts, MID is the actual returned id, and all paths are deliberate local choices:
+```sh
+WS=/var/tmp/forge/astra-typist-route-fx
+H=/var/tmp/forge/astra-fresh-caller-fx/mission-state
+D=/var/tmp/forge/astra-fresh-caller-fx/receipts
+SPEC=/var/tmp/forge/astra-fresh-caller-fx/owner-forms.edn
+"$WS/bin/mission" propose --spec-file "$SPEC" --state-home "$H"
+"$WS/bin/mission" show "$MID" --workspace "$WS" --state-home "$H" --full
+"$WS/bin/mission" apply "$MID" --workspace "$WS" --state-home "$H" --receipt-dir "$D"
+"$WS/bin/mission" show "$MID" --workspace "$WS" --state-home "$H"
+# Only after saved verified proof AND review of the live diff and entire index:
+git -C "$WS" add -- src/clj_surgeon/diagnostic_delta.clj
+"$WS/bin/mission" commit "$MID" --workspace "$WS" --state-home "$H"
+```
+Alternative to propose/apply: "$WS/bin/mission" run --spec-file "$SPEC" --state-home "$H" --receipt-dir "$D"; this creates a new mission and immediately executes, without the authority-review pause. Ready-state resume also needs --receipt-dir.
+Missing/blank destination yields typist-receipt-dir-required before source/artifact/provider work; a ready mission stays ready and the suggested path is not created. Run may already have saved a new ready id: recover with the returned id, not another run. Inspect the supplied retry and retain WS/H/D context.
+D retains source-bearing artifacts; it is distinct from ledger storage H. Proposal still writes frozen source/authority to the ledger. Apply generates candidates, runs frozen gate/witness, and may write source; show never reruns proof. There is still no pre-write candidate-diff approval command.
+Earlier undo-before-publication and uncertainty-inspection shapes remain valid; use "$WS/bin/mission" for launch-directory independence. Commit accepts no receipt override, stages nothing, skips hooks/signing, and publishes locally without push. Preserve receipt and publication records for recovery.
+The generic THE SPEC defect is corrected to HELPER EXTRACTION SPEC with owner_forms links. Remaining wording ambiguity: the guide's broad claim that mutation-refusal examples are inspection/help only needs an explicit exception for the new missing-destination retry. I did not trigger the refusal, so its exact emitted context is unverified.
+Previous unmet evidence/source-policy/proof/credential conditions remain; selecting D does not establish admission or semantic correctness. No source, provider, proof, ledger, or Git operations were executed; only this addendum was written.
+
+Astra response: the guide now names the missing-destination retry exception explicitly. This is a prose correction; no new adoption or execution claim.

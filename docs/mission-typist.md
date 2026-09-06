@@ -190,9 +190,12 @@ complete ledger view, which can contain frozen source and large proof details.
 
 A readable failed mission exits zero because the read succeeded. Missing or
 corrupt mission rows exit nonzero with an executable `:example` containing both
-argv and safely quoted shell command. Mission write refusals also supply an
-inspection/help example, never a blind replay of a failed mutation. These
-examples concern the mission entrance, not every Surgeon core operation.
+argv and safely quoted shell command. Mission write refusals normally supply an
+inspection/help example. A missing artifact destination instead supplies an
+`apply` retry with an explicit `--receipt-dir`: this refusal occurs before
+execution and preserves the ready mission. Inspect the suggested destination
+before retrying. These examples concern the mission entrance, not every Surgeon
+core operation.
 
 `--workspace R` is required for ledger reads: `--state-home H` selects storage,
 not the workspace identity. Omitting the workspace returns

@@ -1,0 +1,13 @@
+Astra checkpoint, recorded 2026-09-06 05:42Z (for the 06:00Z checkpoint).
+
+We have an independently checked 3.29x win on one prepared five-owner rename: warm-oriented Sol/native median25.19s versus OSS120B/Cerebras/raw forms k3 median7.66s. All four pairs verified; six native controls came first; the17.54s gap clears the preregistered2SD floor3.57s. A separate reviewer reran both proofs on all14 retained outputs:28/28 commands pass; final source bytes identical. Intent/proof preparation and prior orientation are excluded, so this is not problem-to-done or an Astra/native comparison.
+
+Actual usage: M-1 changed real code and was Git-published through bin/mission commit as6022ad35. Apply7.08s; malformed fastest candidate refused, another passed independent proof. Stale M-2 refused without source change. Each attempt got a usage ledger row and immediate ethno/events inspection; controlled fixture attempts are explicitly not productive edits.
+
+Surprise: candidate generation is already cheap enough that entrance/preparation costs matter. The stale refusal took5.03s as a command but24ms in its service event; the difference is not yet localized. The fresh caller understood the corrected public contract, but did not execute or voluntarily adopt it. Native remains the expected winner for a tiny known literal change.
+
+Landing is still HOLD. Spawn isolation recording and explicit --receipt-dir with recoverable ready-state retry are implemented, focused142tests1069assertions passed. The broad final-tip battery exposed older phase/usage fixtures that now stop at the new receipt-dir precondition. We retain that failure and repair the fixtures without weakening the production guard, then rerun the full gate. The earlier node-compile-cache hygiene failure was independently reproduced and addressed only by a quality-gate environment setting. Fable owns delta fence and routing installation receipts; public main remains frozen.
+
+Owned fast-provider accounting to date:24requests,34263prompt tokens,44691completion tokens (30101reasoning included), known$0.03988755; two earlier requests have unknown cost. Native/review usage excluded; no cost ratio. These are provider receipts, not the Codex subscription meter; I have no verified current weekly percentage/reset to report.
+
+Next: close the actual landing failures; take a genuinely needed multi-owner task from the live queue; measure preparation as well as execution before claiming broader gains. Project assessment:7/10 as a focused tool program, not a universal editor or production-ready claim. The mechanics now show a repeatable narrow gain; request/proof preparation, reliability across tasks and voluntary use remain the tests that can disprove the larger ambition.
