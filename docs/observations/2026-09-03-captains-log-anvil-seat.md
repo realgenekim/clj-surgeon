@@ -2807,3 +2807,5 @@ suite-run isolation — one more paper cut, mine.
 ## 07:48Z — usage watch: tools "inspect_clojure": 3  (collector figures verbatim; window since 2026-08-30T15:00Z; === start 07:48Z load 1.15 ; === rc 0 end 07:48Z)
 
 ## 07:50Z — usage-watch clarification: the 07:48Z line's "window since 2026-08-30" was hardcoded template text; the collector is marker-windowed — its window was 04:44Z (last ethnography marker) → 07:49Z, in which inspect_clojure ran 3 times (the three Codex MCP smoke calls: 5, 5, 147 ms). All-time root rows: inspect 301, admit 59, apply 2, helper 2. usage-watch now prints the collector's own since/until (inb-8f108d).
+
+## 07:55Z — P0 CLOSED: Astra's exact Codex session (01a06e6c…) exited and resumed from the checkout carrying the MCP config; the ledger shows his first Surgeon MCP call at 07:54:56Z (inspect_clojure ok, 45 ms). Full surface (MCP verbs + mission CLI) is callable by the partner seat for the first time. Defect owned: my interrupt landed on an emitting turn before the quit took; goal state preserved and resumed.
