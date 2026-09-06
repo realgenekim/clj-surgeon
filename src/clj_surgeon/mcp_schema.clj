@@ -1,9 +1,24 @@
 (ns clj-surgeon.mcp-schema)
 
+;; @spec MCP-OP-VERIFY-013
+(def verification-profile-names
+  "The verify values every entrance accepts, in one place.
+
+  The set was spelled three times — this schema and two literals in
+  mcp-contract — and drifted the moment `lint` became the only built-in
+  profile: the unconfigured refusal advertised a retry the enum rejected on
+  both write routes. An advertised remedy that nothing accepts is worse than
+  no remedy at all."
+  ["fast" "full" "exact" "lint"])
+
+(def verification-profile-sentence
+  "The same set as one sentence, so a refusal cannot disagree with the enum."
+  "verify must be fast, full, exact, or lint")
+
 (def verification-schema
-  {:type "string" :enum ["fast" "full" "exact"]
+  {:type "string" :enum verification-profile-names
    :description
-   "Optional repository-owned verification profile. exact runs one project-declared exact-exit argv against staged bytes. Formatter, commands, and hot laws roll back on failure. A configured cold job returns verification_complete=false plus one inspect next_call."})
+   "Optional repository-owned verification profile named in .clj-surgeon.edn. lint is the only built-in and runs a lint and format gate, which is NOT a test profile; a name this workspace does not configure is refused before any write. exact runs one project-declared exact-exit argv against staged bytes. Formatter, commands, and hot laws roll back on failure. A configured cold job returns verification_complete=false plus one inspect next_call."})
 
 (def basis-change-schema
   {:type "object"

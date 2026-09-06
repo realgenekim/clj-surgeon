@@ -527,7 +527,9 @@
       ;; verification strings must not throw out of the receipt renderer; the
       ;; real profile shape carries hot and cold verdicts beside :checks; the
       ;; 2000-character failure budget is one TOTAL, not one per check.
-      (is (= 1373 total) (str "manifest declares " total " tests"))
+      ;; +1 round three: the unconfigured refusal may advertise only values
+      ;; the verify enum accepts, on both write routes and in the schema.
+      (is (= 1374 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

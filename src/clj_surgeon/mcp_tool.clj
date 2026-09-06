@@ -1126,10 +1126,22 @@
                        (false? (:ok verification)))
               [["  ✗ exact verifier" (:diagnostics verification)]]))]
       (when (seq entries)
-        (let [header (str "verification: " (or (:profile verification) "unknown")
-                          (when-let [source (:profile-source verification)]
-                            (str " (" (name source) ")"))
-                          " · failed")
+        (let [;; @spec MCP-OP-VERIFY-012
+              ;; the HEADER is inside the budget too. A 2,200-character profile
+              ;; name published a 2,385-character block: a bound the header sat
+              ;; beside is not a bound.
+              header-limit (quot verification-failure-detail-characters 4)
+              raw-header (str "verification: "
+                              (or (:profile verification) "unknown")
+                              (when-let [source (:profile-source verification)]
+                                (str " (" (name source) ")"))
+                              " · failed")
+              header (if (<= (count raw-header) header-limit)
+                       raw-header
+                       (str (subs raw-header 0 header-limit)
+                            " … [header truncated to " header-limit
+                            " characters; the complete verification block is "
+                            "in structuredContent]"))
               ;; room for the omission marker, whose own length depends on
               ;; what it must report; measured longest form is ~200 chars
               reserve 280
