@@ -95,3 +95,13 @@ and the last two inverted the lesson of the first two:
 The general form: **a test that fails under load is not usually asserting
 something too strict; it is usually asserting something about the machine
 while believing it is asserting something about the code.**
+
+### Archival changes and battery distance
+
+TEST-ISO-009b excludes only existing 100644 content modifications in its three
+literal output journals, after inspecting each parent diff without rename or
+submodule suppression. These are observational outputs, not proof inputs.
+The ledger, executable fixtures, live operational briefs and unknown documents
+remain counted. Failed or malformed diff inspection cannot grant an exemption.
+The CLI reports raw, counted and excluded distances; very long histories fall
+back to raw distance rather than granting uninspected exemptions.
