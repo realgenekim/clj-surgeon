@@ -1073,6 +1073,7 @@
 ;; @spec MCP-OP-READ-CONT-002
 ;; @spec MCP-OP-PREP-REQ-001
 ;; @spec MCP-OP-PREP-REQ-006
+;; @spec MCP-OP-FIELD-009
 (defn- enforce-result-budget
   [ordinary-result raw-result]
   (cond
@@ -1108,7 +1109,32 @@
          :source_unchanged true
          :next_action "narrow_request"}))
 
-    :else raw-result))
+    ;; @spec MCP-OP-FIELD-009
+    ;; The ordinary read path -- match, forms, outline. Measured the same way
+    ;; the helper measures a prepare-change result: the UTF-8 byte length of
+    ;; the exact public envelope, with `elapsed_ms` normalized so the figure is
+    ;; deterministic. Over the ceiling the result is REFUSED whole; nothing is
+    ;; truncated, elided, or dropped to make it fit (inb-b60d6e).
+    :else
+    (let [normalized (assoc raw-result :elapsed_ms 0.0)
+          required-bytes
+          (mcp-result-byte-count (inspect-summary normalized) normalized)]
+      (if (<= required-bytes max-public-result-bytes)
+        raw-result
+        (cond-> {:ok false
+                 :operation "inspect_clojure"
+                 :error_type "structural-buffer-output-budget-exceeded"
+                 :error (str "The complete result exceeds the public MCP "
+                             "output budget")
+                 :failed_stage "output-budget"
+                 :required {:public_result_bytes required-bytes}
+                 :limits {:public_result_bytes max-public-result-bytes}
+                 :read_complete false
+                 :source_unchanged true
+                 :remedy (str "split the request into bounded file groups; "
+                              "keep every site and count")
+                 :next_action "narrow_request"}
+          (:mode raw-result) (assoc :mode (:mode raw-result)))))))
 
 ;; @spec MCP-OP-TIME-004
 ;; @spec MCP-OP-ASYNC-001

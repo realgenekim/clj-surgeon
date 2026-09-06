@@ -1356,13 +1356,14 @@
 ;; Round 2, 2026-09-06.
 ;;
 ;; READ THE VERB CAREFULLY. `enforce-public-result-budget` is a HELPER: it
-;; measures a result and returns a typed refusal for one that is over. The
-;; inspect handler only routes prepare-change / basis-view / plan-extraction
-;; results and continuations through it. An ORDINARY match result reaches the
-;; `:else` branch of `enforce-result-budget` and is PUBLISHED WHOLE, over the
-;; budget or not. That is a pre-existing defect, filed inb-b60d6e, and NOT
-;; something these witnesses fix or should be read as fixing. What they pin is
-;; the measured byte count and what the helper says about it.
+;; measures a result and returns a typed refusal for one that is over. These
+;; witnesses call `execute-inspect!` and then ask the helper; they pin the
+;; measured byte count and what the helper says about it, and they are NOT the
+;; enforcement witnesses. Enforcement on the ordinary path -- the handler
+;; refusing rather than publishing -- is MCP-OP-FIELD-009, witnessed through
+;; `handle-inspect` at the bottom of this namespace (inb-b60d6e, fixed
+;; 2026-09-06; when these witnesses were written the ordinary path reached
+;; `:else raw-result` and published whole).
 ;;
 ;; The other budget, `clj-surgeon.mcp-inspect/enforce-output-budget`
 ;; (per-request-result 65,536), IS on the ordinary path and does refuse.
@@ -1432,8 +1433,9 @@
   ;; 200 owners is over the budget with or without the echo. What is pinned:
   ;; the omission never truncates a result to fit, every site and count survives
   ;; at 200 as at 101, and the budget helper -- when it is asked -- names itself
-  ;; and returns no partial result. The handler does NOT ask it for an ordinary
-  ;; match result (inb-b60d6e), so this result IS published whole today.
+  ;; and returns no partial result. `execute-inspect!` is below the handler's
+  ;; ceiling gate, so the whole result is what this witness measures; what the
+  ;; public handler now does with it is MCP-OP-FIELD-009's witness.
   (let [{:keys [result bytes gated]} (measure-repeated-literal 200)]
     (is (:ok result))
     (is (= 200 (:match_count (first (:results result)))))
@@ -1514,9 +1516,17 @@
           (is (false? (:ok structured)))
           (is (= "structural-buffer-output-budget-exceeded"
                  (:error_type structured)))
-          (is (= measured (get-in structured [:required :public_result_bytes])))
           (is (> (get-in structured [:required :public_result_bytes])
                  inspect-tool/max-public-result-bytes))
+          ;; The same request measured independently through `execute-inspect!`.
+          ;; Equality is to within the digits of the result's own timing fields
+          ;; (`inspection_elapsed_ms` is not fixed at measurement time), which
+          ;; is why this is an emission gate and not a final-wire byte cap.
+          (is (< (Math/abs
+                   (- measured
+                      (long (get-in structured
+                                    [:required :public_result_bytes]))))
+                 64))
           (is (= inspect-tool/max-public-result-bytes
                  (get-in structured [:limits :public_result_bytes])))
           (is (= (str "split the request into bounded file groups; "
@@ -1590,7 +1600,10 @@
           (is (false? (:ok structured)))
           (is (= "structural-buffer-output-budget-exceeded"
                  (:error_type structured)))
-          (is (= (:bytes whole)
-                 (get-in structured [:required :public_result_bytes])))
+          (is (< (Math/abs
+                   (- (:bytes whole)
+                      (long (get-in structured
+                                    [:required :public_result_bytes]))))
+                 64))
           (is (nil? (:results structured)))))
       (finally (delete-tree! project)))))
