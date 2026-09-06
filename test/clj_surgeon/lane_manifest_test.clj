@@ -519,7 +519,27 @@
       ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
       (is (= 435 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1372 total) (str "manifest declares " total " tests"))
+      ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
+      ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
+      ;; witnesses, so the number agreed textually and git auto-merged it while
+      ;; the corpus had grown TWICE. The pin is the SUM of both deltas, 1381,
+      ;; and this line records both -- a pin whose two sides collide on the same
+      ;; value is the one case where agreement is not evidence:
+      ;;
+      ;;   +9 on trunk: the public-handler result-ceiling witnesses in
+      ;;      mcp-inspect-tool-test (MCP-OP-FIELD-009, inb-b60d6e), narrated in
+      ;;      the block above, 1363 -> 1372.
+      ;;   +9 here: the hot-verification witnesses in
+      ;;      clj-surgeon.mcp-hot-verify-test (inb-adcc9e) -- that a hot
+      ;;      verification ends at a terminal status instead of blocking to its
+      ;;      :timeout-ms ceiling, that `interrupted` is a failure and not a
+      ;;      pass, that the ceiling is one deadline no response resets, that a
+      ;;      connect failure and a mid-read closure stay distinct typed
+      ;;      refusals, and that both keep their bounded output. 1372 -> 1381.
+      ;;
+      ;; Both namespaces are ROUND-ONE, so all 18 land in r1 and adopted holds
+      ;; at 435.
+      (is (= 1381 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
@@ -663,7 +683,9 @@
    "test/clj_surgeon/scope_stream_test.clj"
    {105 "bounded poll -- System/gc then re-check reachability, succeeds immediately, fails at gc-deadline-ms (round three's fix for the two fixed `Thread/sleep 100` assertions)"}
    "test/clj_surgeon/mcp_tool_test.clj"
-   {1380 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count"}})
+   {1380 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count"}
+   "test/clj_surgeon/mcp_hot_verify_test.clj"
+   {244 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
 
 (deftest every-sleep-on-the-merge-gate-is-declared-with-its-reason
   (let [sources (fn [lane]
