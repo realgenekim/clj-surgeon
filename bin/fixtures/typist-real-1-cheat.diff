@@ -1,0 +1,12 @@
+diff --git a/test/clj_surgeon/diagnostic_delta_test.clj b/test/clj_surgeon/diagnostic_delta_test.clj
+index c88d769..b49de9e 100644
+--- a/test/clj_surgeon/diagnostic_delta_test.clj
++++ b/test/clj_surgeon/diagnostic_delta_test.clj
+@@ -96,5 +96,5 @@
+            (select-keys right [:ok :baseline-count :future-count
+                                :introduced-count :removed-count
+                                :unchanged-count :blocking-introduced-count])))
+-    (is (= (frequencies (map delta/finding-fingerprint (:introduced left)))
+-           (frequencies (map delta/finding-fingerprint (:introduced right)))))))
++    (is (= (frequencies (map delta/finding-identity (:introduced left)))
++           (frequencies (map delta/finding-identity (:introduced right)))))))

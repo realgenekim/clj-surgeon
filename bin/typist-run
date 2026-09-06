@@ -51,7 +51,7 @@ import urllib.request
 
 T0 = time.time()
 
-FX = "/var/tmp/forge/typist-fx"
+FX = os.environ.get("TYPIST_FX", "/var/tmp/forge/typist-fx")
 HERE = os.path.dirname(os.path.abspath(__file__))
 GROQ_KEY_FILE = os.environ.get("TYPIST_GROQ_KEY_FILE", "/home/forge/secrets/groq.edn")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -364,6 +364,120 @@ FANOUT_ACCEPT = r"""(require 'fixture.util 'fixture.scope 'fixture.paths)
   (assert (re-find #"\(normalize " (:doc (meta jn))) "TRAP: docstring example intact")
   (println "ACCEPT-OK"))"""
 
+# ---- mission 4: real-1 (the REAL-REPOSITORY mission) ----------------------
+#
+# The first three missions are five-file toy fixtures. Every ratio measured on
+# them was measured against a gate that costs ~70 ms. This mission is the same
+# protocol pointed at THIS repository: the preimage is a byte-for-byte copy of
+# a real src file and its real focused test namespace, read out of git at a
+# pinned sha, with nothing invented but the two files a standalone project
+# needs (deps.edn and .clj-surgeon.edn).
+#
+# The change: rename the public `finding-identity` to `finding-fingerprint`
+# and the private helper `field` to `finding-field`, across every call site in
+# clj-surgeon.diagnostic-delta. TWO spans in the same file must NOT change:
+# the `let` binding named `identity` inside `representative-difference` (a
+# local, not the function) and the sentence in the docstring that uses the word
+# "identity" as a concept. A blind search-and-replace fails the mission.
+#
+# The gate is the REAL test namespace with its two `delta/finding-identity`
+# references moved to the post-change name -- a red test, in the TDD sense.
+# Nothing else in it changes and it is NOT mutable: a candidate that satisfies
+# the gate by editing it fails acceptance on byte identity.
+
+REAL1_REPO = os.environ.get("TYPIST_REAL1_REPO",
+                            "/home/forge/src/clj-surgeon-fable-typist")
+REAL1_SHA = "f2efc87c72659489544ac996c392233f4ec29172"
+REAL1_SRC = "src/clj_surgeon/diagnostic_delta.clj"
+REAL1_TEST = "test/clj_surgeon/diagnostic_delta_test.clj"
+
+REAL1_EDN = (
+    '{:verification-profiles\n'
+    ' {"typist-real-1"\n'
+    '  {:commands [["bb" "-cp" "src:test" "-e"\n'
+    '               "(require \'clojure.test \'clj-surgeon.diagnostic-delta-test)'
+    ' (let [r (clojure.test/run-tests \'clj-surgeon.diagnostic-delta-test)]'
+    ' (System/exit (if (and (zero? (:fail r)) (zero? (:error r))) 0 1)))"]]}}}\n'
+)
+
+
+def real1_blob(rel):
+    """The file's bytes as of REAL1_SHA. Never the working tree: a preimage
+    read from a dirty checkout is not a preimage."""
+    r = subprocess.run(["git", "show", "%s:%s" % (REAL1_SHA, rel)],
+                       cwd=REAL1_REPO, capture_output=True, text=True)
+    if r.returncode != 0:
+        die("typist-run: refusing — cannot read %s at %s from %s: %s"
+            % (rel, REAL1_SHA[:8], REAL1_REPO, (r.stderr or "").strip()), 5)
+    return r.stdout
+
+
+def real1_seed():
+    """The preimage: two real files, verbatim, plus the two project files a
+    standalone copy needs. The ONE edit is the gate's two references."""
+    src = real1_blob(REAL1_SRC)
+    test = real1_blob(REAL1_TEST)
+    n = test.count("delta/finding-identity")
+    if n != 2:
+        die("typist-run: refusing — real-1 expected exactly 2 "
+            "`delta/finding-identity` references in %s at %s, found %d"
+            % (REAL1_TEST, REAL1_SHA[:8], n), 5)
+    test = test.replace("delta/finding-identity", "delta/finding-fingerprint")
+    return {"deps.edn": '{:paths ["src" "test"]}\n',
+            ".clj-surgeon.edn": REAL1_EDN,
+            REAL1_SRC: src,
+            REAL1_TEST: test}
+
+
+# Independent of the gate: it never loads clj-surgeon.diagnostic-delta-test.
+# Behaviour through the renamed vars, both do-not-change spans checked in the
+# source text, and no residue of either old name.
+REAL1_ACCEPT = r"""(require 'clj-surgeon.diagnostic-delta)
+(let [ff (resolve 'clj-surgeon.diagnostic-delta/finding-fingerprint)
+      fld (resolve 'clj-surgeon.diagnostic-delta/finding-field)
+      dd (resolve 'clj-surgeon.diagnostic-delta/diagnostic-delta)
+      nf (resolve 'clj-surgeon.diagnostic-delta/normalize-filename)
+      src (slurp "src/clj_surgeon/diagnostic_delta.clj")
+      w {:filename "src/sample/core.clj" :type :unresolved-symbol
+         :level :warning :message "Unresolved symbol: legacy" :row 4 :col 7}]
+  (assert ff "finding-fingerprint resolves")
+  (assert (nil? (resolve 'clj-surgeon.diagnostic-delta/finding-identity))
+          "the old public name is gone")
+  (assert fld "the private helper is renamed to finding-field")
+  (assert (nil? (resolve 'clj-surgeon.diagnostic-delta/field))
+          "the old private helper name is gone")
+  (assert (= {:filename "src/sample/core.clj" :type :unresolved-symbol
+              :level :warning :message "Unresolved symbol: legacy"}
+             (ff w))
+          "fingerprint drops row/col")
+  (assert (= (ff w) (ff (assoc w :filename "./src/sample/core.clj")))
+          "fingerprint still normalises dot-relative paths")
+  (assert (= (ff w) (ff (assoc w :filename "src\\sample\\core.clj")))
+          "fingerprint still normalises windows paths")
+  (assert (= "src/a.clj" (nf "./src/a.clj")) "normalize-filename unchanged")
+  (assert (:ok (dd {:findings []} {:findings []})) "empty delta is ok")
+  (assert (false? (:ok (dd {:findings []} {:findings [w]})))
+          "a new warning blocks")
+  (assert (= 1 (:introduced-count (dd {:findings []} {:findings [w]})))
+          "introduced-count")
+  (assert (:ok (dd {:findings [w]} {:findings [(assoc w :row 400)]}))
+          "line drift is not a regression")
+  (assert (= :invalid-diagnostic-snapshot
+             (:error-type (dd nil {:findings []})))
+          "malformed snapshots still refuse")
+  (assert (re-find #"\(get remaining identity 0\)" src)
+          "TRAP: the local binding named `identity` is intact")
+  (assert (re-find
+            #"location-independent identity used for diagnostic multiset deltas"
+            src)
+          "TRAP: the docstring sentence is intact")
+  (assert (not (re-find #"finding-identity" src))
+          "no residual old public name in the source")
+  (assert (not (re-find #"\(defn- field" src))
+          "no residual old private helper definition")
+  (println "ACCEPT-OK"))"""
+
+
 MISSIONS = {
     "scope-roots": {
         "dossier": os.path.join(HERE, "typist-dossier.md"),
@@ -393,6 +507,17 @@ MISSIONS = {
         "accept_expr": FANOUT_ACCEPT,
         "accept_desc": ("independent behavioural witness (fixture.util/scope/paths only, "
                         "never the gate's test ns) + both traps + preimage byte identity"),
+    },
+    "real-1": {
+        "dossier": os.path.join(HERE, "typist-dossier-real-1.md"),
+        "preimage": "/var/tmp/forge/typist-real-fx/preimage",
+        "seed": real1_seed,
+        "profile": "typist-real-1",
+        "mutable": [REAL1_SRC],
+        "accept_expr": REAL1_ACCEPT,
+        "accept_desc": ("independent behavioural witness (clj-surgeon.diagnostic-delta "
+                        "only, never the gate's test ns) + both do-not-change spans "
+                        "checked in the source text + preimage byte identity"),
     },
 }
 
@@ -486,7 +611,9 @@ def materialize_fixture(force=False):
         pass
     else:
         shutil.rmtree(PREIMAGE, ignore_errors=True)
-        for rel, body in MISSIONS[MISSION]["seed"].items():
+        seed = MISSIONS[MISSION]["seed"]
+        seed = seed() if callable(seed) else seed
+        for rel, body in seed.items():
             p = os.path.join(PREIMAGE, rel)
             os.makedirs(os.path.dirname(p), exist_ok=True)
             with open(p, "w") as fh:
@@ -576,6 +703,14 @@ def parse_unified(diff_text):
     """[{:path p :hunks [[(marker, text), ...], ...]}] — `diff --git` optional,
     hunk ranges optional. Returns None when there is no file block at all."""
     lines = diff_text.split("\n")
+    # `extract_diff` guarantees a terminal newline, so split() always leaves one
+    # empty element behind it. Without this, the last hunk of a diff that ends
+    # mid-file acquires a PHANTOM trailing empty context line that exists in no
+    # file, and the hunk anchors nowhere. It was invisible on the toy fixtures
+    # because their last hunk ran to EOF, where the phantom matched the file's
+    # own trailing empty element.
+    if lines and lines[-1] == "":
+        lines.pop()
     blocks, i, n = [], 0, len(lines)
     while i < n:
         line = lines[i]
