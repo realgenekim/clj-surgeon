@@ -376,10 +376,10 @@
 
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
-    (is (= 45 (count (lm/namespaces-for :fast))))
+    (is (= 46 (count (lm/namespaces-for :fast))))
     (is (= 5 (count (lm/namespaces-for :integration))))
     (is (= 18 (count (lm/namespaces-for :battery))))
-    (is (= 68 (count lm/manifest))
+    (is (= 69 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -412,8 +412,9 @@
     clj-surgeon.mission-test 27 ; Adopt existing ledger orphan plus owner-forms routing and recovery witnesses.
     clj-surgeon.mission-typist-test 5 ; Pure routing/dossier boundaries.
     clj-surgeon.mission-candidate-test 5 ; Frozen span lowering boundaries.
+    clj-surgeon.mission-plain-forms-test 8 ; Bounded raw definition decoding and actual escaping failure.
     clj-surgeon.mission-forms-test 4 ; Owner identity and protected syntax.
-    clj-surgeon.mission-typist-executor-test 6 ; Real proof/commit/undo and independent witness.
+    clj-surgeon.mission-typist-executor-test 7 ; Real proof/commit/undo and independent witness.
     clj-surgeon.battery-ledger-test        12 ; TEST-ISO-009a/b's witness (round three)
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
     clj-surgeon.lane-manifest-test         25 ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses
@@ -484,9 +485,9 @@
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
       ;; Fable events adds nine; the one-shot mission entrance adds eight tests.
-      (is (= 297 adopted) (str "adopted tests: " adopted)))
+      (is (= 306 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1218 total) (str "manifest declares " total " tests"))
+      (is (= 1227 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

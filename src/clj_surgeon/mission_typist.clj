@@ -50,8 +50,12 @@
 
 (defn failed-condition
   [{:keys [mission-class intent discovery-complete? owners sources source-policy
-           gate acceptance commit budget provider rate]}]
+           gate acceptance commit budget provider rate candidate-format]}]
   (cond
+    (not (contains? #{nil :owner-forms :clojure-forms} candidate-format))
+    [:candidate-format "Select owner-forms JSON or single-file plain Clojure definitions."]
+    (and (= :clojure-forms candidate-format) (not= 1 (count sources)))
+    [:candidate-format "Plain Clojure definitions require exactly one target file."]
     (not (contains? mechanical-classes mission-class))
     [:mechanical-class "Choose a supported mechanical mission class."]
     (not (and (true? discovery-complete?) (nonblank? intent)
@@ -91,6 +95,7 @@
       {:ok false :executor :typist :error-type :typist-route-refused
        :condition condition :decision decision :mutation-attempted false}
       {:ok true :executor :typist :k (candidate-count (:rate facts))
+       :candidate-format (or (:candidate-format facts) :owner-forms)
        :provider (select-keys (:provider facts) [:id :model :upstream])
        :mission-class (:mission-class facts)
        :rate (select-keys (:rate facts) [:verified :attempted :mission-class :provider
@@ -114,13 +119,16 @@
                                     :source (subs source start end)
                                     :file-sha256 (mission/sha256 source))))
                          (:owners facts))
-            frozen (canonical-data {:schema 2 :candidate-format :owner-forms :intent (:intent facts)
+            format (:candidate-format decision)
+            frozen (canonical-data {:schema 2 :candidate-format format :intent (:intent facts)
                                     :owners owners :route decision})
             serialized (pr-str frozen)]
         {:ok true :dossier frozen :dossier-hash (mission/sha256 serialized)
          :prompt (str "Complete only the mechanical change described by this frozen dossier.\n"
-                      "Return only a JSON array of objects with exactly file, owner, form string fields.\n"
-                      "owner is the ORIGINAL frozen owner name; form is one complete replacement definition.\n"
+                      (if (= :clojure-forms format)
+                        "Return only plain Clojure definitions, separated by real newlines. Emit exactly one complete definition for every frozen owner. No JSON, no encoded source strings, no markdown fences.\n"
+                        (str "Return only a JSON array of objects with exactly file, owner, form string fields.\n"
+                             "owner is the ORIGINAL frozen owner name; form is one complete replacement definition.\n"))
                       "Use new-owner when declared as the definition name; otherwise keep the name.\n"
                       "Do not emit old context, offsets, markdown, or prose. No discovery, shell, or write authority.\n"
                       serialized)}))))

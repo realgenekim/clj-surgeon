@@ -71,6 +71,15 @@
         (is (string? (:decision r)))))))
 
 (deftest dossier-is-frozen-source-evidence
+  (let [raw (typist/dossier (assoc eligible :candidate-format :clojure-forms))]
+    (is (= :clojure-forms (get-in raw [:dossier :candidate-format])))
+    (is (re-find #"plain Clojure" (:prompt raw)))
+    (is (not= (:dossier-hash raw) (:dossier-hash (typist/dossier eligible)))))
+  (is (= :candidate-format (:condition (typist/route (assoc eligible :candidate-format :unknown)))))
+  (is (= :candidate-format
+         (:condition (typist/route (-> eligible
+                                     (assoc :candidate-format :clojure-forms)
+                                     (assoc-in [:sources "src/other.clj"] "(def other 1)"))))))
   (let [d (typist/dossier eligible)]
     (is (:ok d))
     (is (= "(defn run [] 1)\n" (get-in d [:dossier :owners 0 :source])))

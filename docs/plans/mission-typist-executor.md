@@ -125,3 +125,22 @@ calls. Existing mission/helper behavior remains covered by its legacy suite.
 Each public propose/apply/undo boundary emits one bounded completion event to the existing telemetry-events writer and its ~/.clj-surgeon/events.jsonl destination. Kinds are mission-plan, mission-apply and mission-undo; mission id, terminal state, admitted fixed route scalars and observed wall are projected without raw requests, source, provider replies or credentials. Shared line-map validates optional scalar fields as well as the caller projection. Refusals emit their bounded typed reason; exceptions emit a generic mission-exception and are rethrown unchanged. Writer failures cannot turn a successful mission into a failure.
 
 These boundary events do not invent proof or commit stages from a terminal state. Actual verification/commit emission requires a later executor hook at the work site. Tests must witness a real call producing its matching event, refusal leaving workspace unchanged, allowlisted fields, bounded output, and isolated logging failure. Source edits enter the executor first; protected-comment refusal is retained before native fallback.
+
+## Raw Clojure candidate experiment
+
+A caller may select `:typist {:candidate-format :clojure-forms}` for exactly one
+target file. Omission retains `:owner-forms` JSON; other formats and multi-file raw
+requests refuse during planning. The format is frozen in route and dossier, and
+apply dispatches solely from saved authority. The provider emits plain complete
+named definitions, no string envelope. The decoder maps each expected emitted
+name (new-owner or original owner) to exactly one frozen original owner and file.
+It must cover the owner set exactly and lowers literal parsed source to the
+existing compiler. No evaluation, unescaping, prose/fence stripping or scope
+inference. Existing formatting, independent gate/witness, protected syntax,
+byte/mode guards and commit/undo remain mandatory.
+
+Field motivation: T4 in the four-pair JSON cohort emitted double-escaped newline
+characters and was correctly refused before write. This new protocol does not
+reclassify or repair that failed sample. It requires a separately recorded
+hand-drive before another replicated cohort. Any transferred routing prior must
+name its source representation; it is not raw-format reliability evidence.

@@ -121,3 +121,22 @@
         (is (empty? (get-in result [:transport :live-processes])))
         (is (:ok (executor/undo! (:undo_receipt result) (:receipt_hash result))))
         (is (= source (slurp file)))))))
+
+(deftest raw-response-dispatch-is-frozen
+  (with-fixture
+    (fn [root file]
+      (let [request (assoc-in (request root) [:typist :candidate-format] :clojure-forms)
+            plan (edn/read-string (pr-str (executor/plan request profiles)))
+            config {:plan plan :receipt-dir (str (io/file root "raw-receipts"))}]
+        (is (= :clojure-forms (get-in plan [:typist :route :candidate-format])))
+        (with-redefs [executor/request-candidates! (fn [_] [{:usable true :content (json/generate-string replacements)}])]
+          (let [result (executor/execute! request config)]
+            (is (false? (:committed result)))
+            (is (= source (slurp file)))))
+        (with-redefs [executor/request-candidates! (fn [_] [{:usable true :content (:form (first replacements))}])]
+          (let [result (executor/execute! (assoc-in request [:typist :candidate-format] :owner-forms) config)]
+            (is (:committed result) (pr-str result))
+            (is (= 1 (:match-count result)))
+            (when (:committed result)
+              (is (:ok (executor/undo! (:undo_receipt result) (:receipt_hash result))))
+              (is (= source (slurp file))))))))))

@@ -28,10 +28,12 @@ needed. The36.442s native trial stays in the table. Small n is not precision.
 ## Surprise: we reintroduced quoting into the model interface
 
 T4 named the correct original owner in its JSON envelope, but its form string
-contained literal backslash-n sequences after JSON decoding. The parser therefore
-saw a different definition name where the model intended a newline. The source
+contained literal backslash-n sequences after JSON decoding. Exact replay in the JVM shows all five names and definition heads matched;
+two intended docstrings were not parsed as docstrings. The combined definition
+property guard returned forms-owner-mismatch. The earlier name-mismatch
+interpretation was wrong; this paragraph corrects it. The source
 was not repaired, unescaped heuristically, or applied. This is a representation
-failure, not evidence that owner discovery missed a caller. It also shows why
+failure, not evidence that owner discovery missed a caller. JVM evidence: `/var/tmp/forge/plain-forms-T4-JVM-differences.txt`. It also shows why
 whole-file success rates cannot silently calibrate JSON owner-form reliability.
 
 Next bounded option: for one-file missions, accept raw complete Clojure definitions

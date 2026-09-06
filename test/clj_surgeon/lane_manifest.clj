@@ -97,6 +97,7 @@
    'clj-surgeon.mission-candidate-race-test :fast
    'clj-surgeon.mission-candidate-test                 :fast
    'clj-surgeon.mission-forms-test                     :fast
+   'clj-surgeon.mission-plain-forms-test :fast
    'clj-surgeon.battery-ledger-test                     :fast
    'clj-surgeon.census-pool-test                        :fast
    'clj-surgeon.fast-lane-isolation-test                :fast

@@ -50,6 +50,18 @@ fragments into frozen source. Comments, metadata and unsupported reader syntax
 refuse; docstrings must remain byte-identical. Untouched owners and gaps retain
 exact bytes. This does not prove that changed definitions preserve behavior.
 
+An experimental one-file response format is selected with
+`:typist {:candidate-format :clojure-forms}`. The model returns plain complete
+Clojure definitions. The kernel resolves emitted names against frozen owner/new-owner
+names, requires exact coverage, then uses the same formatting, proof and commit.
+There is no JSON-encoded source, guessed unescaping or markdown stripping. The
+format is saved with the plan; apply-time request changes cannot switch it.
+Multi-file raw requests refuse. Anonymous functions, sets and regex literals are
+supported; character literals and other reader dispatch remain outside this first
+prototype. Missing, extra or duplicate owners and changed docstrings refuse.
+This representation has passed boundary tests but has not earned a live or
+comparative claim yet. Omission retains the existing JSON owner-form format.
+
 The executor runs the gate and independent witness before writing live source,
 checks proof inputs for byte/mode changes, rechecks the live frozen snapshot,
 and uses the existing guarded transaction and undo kernel. The ledger records

@@ -10,6 +10,7 @@
    [clj-surgeon.mission :as mission]
    [clj-surgeon.mission-candidate-race :as race]
    [clj-surgeon.mission-forms :as forms]
+   [clj-surgeon.mission-plain-forms :as plain-forms]
    [clj-surgeon.mission-typist :as typist]
    [clj-surgeon.outline :as outline]
    [clojure.edn :as edn]
@@ -192,6 +193,21 @@
     (catch StackOverflowError _ nil)
     (catch Exception _ nil)))
 
+(defn compile-candidate! [authority candidate]
+  (if-not (:usable candidate)
+    (refuse :typist-candidate-unusable)
+    (case (get-in authority [:route :candidate-format] :owner-forms)
+      :clojure-forms
+      (let [decoded (plain-forms/compile-response (:basis authority) (:content candidate))]
+        (if (:ok decoded)
+          (compile-formatted! authority (:replacements decoded))
+          decoded))
+      :owner-forms
+      (if-let [replacements (parse-candidate (:content candidate))]
+        (compile-formatted! authority replacements)
+        (refuse :typist-candidate-unusable))
+      (refuse :typist-candidate-format))))
+
 (defn request-one! [authority index processes]
   (let [route (case (get-in authority [:route :provider :id])
                 :openrouter "openrouter-cerebras" :groq "groq" nil)
@@ -339,9 +355,7 @@
               (let [index (or (:index candidate) ordinal)
                     _ (file-ops/atomic-write! (str (io/file artifacts (str "candidate-" index ".edn")))
                         (pr-str candidate))
-                    replacements (when (:usable candidate) (parse-candidate (:content candidate)))
-                    compiled (if replacements (compile-formatted! authority replacements)
-                                 (refuse :typist-candidate-unusable))
+                    compiled (compile-candidate! authority candidate)
                     proof (when (:ok compiled) (verify-candidate! authority compiled))
                     receipt {:index index :compiled (:ok compiled) :proof proof
                              :error-type (:error-type compiled)}
