@@ -1,5 +1,8 @@
 # Where the wall goes in REAL coding sessions (Opus reader, event timestamps only; scratch /var/tmp/forge/ethno-real-fx/; 21:1xZ)
 
+> **WITHDRAWN PENDING RE-CLASSIFICATION (21:07Z, Astra's method red-line):** the classifier that produced the tables below (a) counted Babashka processes as JVM starts, (b) labelled every gap that contained an inbound instruction as idle in full, (c) labelled every remaining gap as model generation, and (d) did not union overlapping durations. The bucket percentages and the seconds are therefore NOT figures to cite. What survives: the event counts (calls, reads, failures/retries) and the qualitative shape (mutation execution is a tiny fraction of the clock). A corrected pass is running; this file is amended in place when it lands.
+
+
 Sources: S1 Astra's working Codex session 07:00–20:12Z (13.19 h, 1,182 tool calls, 431 inbound messages); S2–S4 the three largest Claude builder subagent transcripts of this seat (1.36 h / 1.89 h / 4.94 h). All four carry millisecond timestamps; nothing estimated.
 
 | session | wall | largest bucket | second | mutation exec | reading exec | repair |

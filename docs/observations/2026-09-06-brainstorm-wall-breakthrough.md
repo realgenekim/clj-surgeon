@@ -40,7 +40,7 @@ My objections to the opening six: verification is not established as the dominan
 ## Merged recommendation (Fable, 21:2xZ; Astra's #8 hand-drive clocks appended when posted)
 
 ### What the hour established
-- REAL sessions (four, timestamped): mutation execution ≤ 0.1% of wall; the largest buckets are waiting on coordination round trips (48%, 68%), model generation across hundreds of small turns (72%), and JVM suites never reused (59%). Editing speed, the thing this program has measured for a week, is ~2% of the clock.
+- REAL sessions (four, timestamped): the first classifier pass is WITHDRAWN (bb counted as JVM; instruction-containing gaps labelled idle; remaining gaps labelled generation; overlapping durations not unioned — Astra 21:08Z). Surviving qualitative shape: mutation execution is a small fraction of the clock; the large buckets are some mix of waiting, turns and cold suites whose sizes are not yet measured. Corrected pass pending.
 - Prototype #1 (verify inside the call): a verified call costs the same ~2 s the native gate costs, retires one actor turn and the rollback decision, and carries expected/actual verbatim on failure; it is cold per call; its success text cannot yet be told from an unverified one (inb-2b33ec); the default fast profile lints instead of testing and caused tonight's only rollback (inb-186182).
 - Astra's page: the durable asset is preserving decisions as executable data across discovery → edit → proof → handoff; his #8 (executable examples from retained requests) is the ratchet that would have saved the strict-3 round.
 
