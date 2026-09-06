@@ -6,8 +6,7 @@
   (:import
    (java.nio.channels FileChannel)
    (java.nio.file Files LinkOption OpenOption StandardOpenOption)
-   (java.security MessageDigest)
-   (java.util.concurrent TimeUnit)))
+   (java.security MessageDigest)))
 
 (def max-bytes 1048576)
 (defn refuse [type] {:ok false :error-type type :source-mutation-attempted false
@@ -93,32 +92,11 @@
     (catch Exception e (cond-> (refuse (or (:error-type (ex-data e)) :git-boundary-failed)) (= :git-ref-update-uncertain (:error-type (ex-data e))) (assoc :git-ref-updated :unknown :possible-commit (:possible-commit (ex-data e)))))))
 
 (defn run-git!
-  "Bounded argv subprocess. No environment Git overrides, hooks, or fsmonitor.
-   Output is capped while reading, before decoding; all failures redact output."
+  "Bounded argv subprocess; deadline includes input delivery."
   [root argv input]
   (let [cmd (into ["git" "--no-optional-locks" "-c" "core.fsmonitor=false"
-                   "-c" "core.hooksPath=/dev/null" "-c" "commit.gpgSign=false"] argv)
-        builder (doto (ProcessBuilder. ^java.util.List cmd)
-                  (.directory (java.io.File. root)) (.redirectErrorStream true))
-        env (.environment builder)]
-    (doseq [k (vec (.keySet env)) :when (str/starts-with? k "GIT_")] (.remove env k))
-    (.put env "GIT_TERMINAL_PROMPT" "0")
-    (.put env "LC_ALL" "C")
-    (let [process (.start builder)
-          output (future (with-open [s (.getInputStream process)]
-                           (let [b (.readNBytes s (inc max-bytes))]
-                             (when (> (alength b) max-bytes)
-                               (.destroyForcibly process) (fail! :git-output-limit)) b)))]
-      (try
-        (with-open [s (.getOutputStream process)]
-          (when input (.write s (.getBytes ^String input "UTF-8"))))
-        (when-not (.waitFor process 10 TimeUnit/SECONDS)
-          (.destroyForcibly process) (fail! :git-timeout))
-        (let [bytes (deref output 1000 ::timeout)]
-          (when (= bytes ::timeout) (fail! :git-timeout))
-          (when-not (zero? (.exitValue process)) (fail! :git-command-failed))
-          (str (.decode (doto (.newDecoder java.nio.charset.StandardCharsets/UTF_8) (.onMalformedInput java.nio.charset.CodingErrorAction/REPORT) (.onUnmappableCharacter java.nio.charset.CodingErrorAction/REPORT)) (java.nio.ByteBuffer/wrap bytes))))
-        (finally (.destroyForcibly process) (future-cancel output))))))
+                   "-c" "core.hooksPath=/dev/null" "-c" "commit.gpgSign=false"] argv)]
+    ((requiring-resolve 'clj-surgeon.mission-git-process/run-process!) root cmd input 10000)))
 
 (defn bounded-bytes [path]
   (when-not (and (Files/isRegularFile path (into-array LinkOption [LinkOption/NOFOLLOW_LINKS]))
@@ -165,6 +143,9 @@
   (try
     (when-not (and (valid-provenance? p) (ifn? ledger-current?)) (fail! :git-invalid-provenance))
     (let [root (:workspace-root p) run (partial run-git! root)
+          _ (try (doseq [identity ["GIT_AUTHOR_IDENT" "GIT_COMMITTER_IDENT"]]
+                   (when (str/blank? (run ["var" identity] nil)) (fail! :git-identity-unavailable)))
+                 (catch Exception _ (fail! :git-identity-unavailable)))
           git-dir (str/trim (run ["rev-parse" "--absolute-git-dir"] nil))
           lock-path (.toPath (java.io.File. git-dir "mission-commit.lock"))]
       (with-open [channel (FileChannel/open lock-path
@@ -174,4 +155,7 @@
                                 (observe! p run)) run)
                (finally (.close channel)))
           (refuse :git-lock-busy))))
-    (catch Exception e (refuse (or (:error-type (ex-data e)) :git-boundary-failed)))))
+    (catch Exception e
+      (cond-> (refuse (or (:error-type (ex-data e)) :git-boundary-failed))
+        (= :git-identity-unavailable (:error-type (ex-data e)))
+        (assoc :decision "Configure repository-local user.name and user.email explicitly, then rerun mission commit. No identity was configured by this command.")))))

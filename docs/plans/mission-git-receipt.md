@@ -86,3 +86,12 @@ in finally. These are synthetic boundary tests, not live mission dogfood. A firs
 scratch run exposed BB's unsupported FileLockImpl.release method after a successful
 ref update; releasing through FileChannel.close fixed that erroneous failure
 report, and the real invocation regression now exercises the whole lifecycle.
+
+Review hardening: stdin delivery now occurs asynchronously under the same
+monotonic deadline as process exit/output capture. A nonreading Python child
+with 2 MiB stdin times out at a 150 ms budget and is killed/reaped. Git author and
+committer identity are preflighted; absence yields `:git-identity-unavailable`
+with an explicit repository-local configuration next action, never guessed or
+silently installed identity. Full seam: 15 tests / 85 assertions. Test lanes:
+mission-git-test :fast (4); boundary :battery (4); fence :battery (5); process
+:battery (2). Source and staged-content preservation remain unchanged.

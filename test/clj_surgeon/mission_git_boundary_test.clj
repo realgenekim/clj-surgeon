@@ -1,4 +1,5 @@
 (ns clj-surgeon.mission-git-boundary-test
+  {:lane :battery}
   (:require
    [clj-surgeon.mission-git :as g]
    [clj-surgeon.mission-git-test :as unit]

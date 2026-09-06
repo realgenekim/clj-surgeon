@@ -1,4 +1,5 @@
 (ns clj-surgeon.mission-git-test
+  {:lane :fast}
   (:require
    [clj-surgeon.mission-git :as g]
    [clojure.test :refer [deftest is testing]]))
