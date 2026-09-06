@@ -113,6 +113,12 @@
   "The caller's own file string, in its canonical safe spelling, only when it
    would survive admission.
 
+  Non-blank is the whole test, because non-blank is the whole test admission
+  applies (`nonblank!`). A value carrying control or format characters is
+  CANONICALIZED here rather than skipped: canonicalization already makes it
+  safe, and skipping would fall back to the schematic example more often,
+  handing the caller less of their own request back.
+
   The encoding happens HERE, when the example is built — not when it is
   rendered. Sol fence r5 (2026-09-06) showed why: a caller path of
   `src/arrow\u2192file.clj` was published raw in `expected_shape_example` and

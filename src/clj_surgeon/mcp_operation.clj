@@ -50,7 +50,7 @@
   "The marks the receipt layout itself uses to assert outcomes. A caller-derived
    string may not spell any of them, whatever it claims to be:
    U+2713 proved, U+26A0 warning, U+2192 remedy, U+00B7 field separator."
-  #{\u2713 \u26A0 \u2192 \u00B7})
+  #{0x2713 0x26A0 0x2192 0x00B7})
 
 (def ^:private extra-collapsible-code-points
   "Separators Java's own predicates miss. Sol fence r5 (2026-09-06) proved the
@@ -59,28 +59,34 @@
    zero-width marks and BOM are here for the same reason a newline is: a caller
    value that renders as nothing can still hide the seam between what the
    server wrote and what the caller did."
-  #{\u0085     ; NEL, next line
-    \u2028     ; LINE SEPARATOR (category Zl)
-    \u2029     ; PARAGRAPH SEPARATOR (category Zp)
-    \u200B     ; ZERO WIDTH SPACE
-    \u200C     ; ZERO WIDTH NON-JOINER
-    \u200D     ; ZERO WIDTH JOINER
-    \uFEFF})   ; ZERO WIDTH NO-BREAK SPACE / BOM
+  #{0x0085     ; NEL, next line
+    0x2028     ; LINE SEPARATOR (category Zl)
+    0x2029     ; PARAGRAPH SEPARATOR (category Zp)
+    0x200B     ; ZERO WIDTH SPACE
+    0x200C     ; ZERO WIDTH NON-JOINER
+    0x200D     ; ZERO WIDTH JOINER
+    0xFEFF})   ; ZERO WIDTH NO-BREAK SPACE / BOM
 
-(defn- collapsible-character?
+(defn- collapsible-code-point?
   "True for anything that can move a receipt to a new line, indent it, or
-   disappear between two visible runs."
-  [character]
-  (let [code-point (int character)]
-    (or (Character/isISOControl code-point)
-        (Character/isWhitespace code-point)
-        (Character/isSpaceChar code-point)
-        (contains? extra-collapsible-code-points character)
-        (contains? #{(long Character/LINE_SEPARATOR)
-                     (long Character/PARAGRAPH_SEPARATOR)
-                     (long Character/FORMAT)
-                     (long Character/CONTROL)}
-                   (long (Character/getType code-point))))))
+   disappear between two visible runs.
+
+  Takes a CODE POINT, not a `char`. Sol fence r6 (2026-09-06) proved why: the
+  previous version walked UTF-16 code units, so a supplementary-plane format
+  mark — `U+E0001 LANGUAGE TAG`, and every tag character in U+E0020..U+E007F —
+  arrived here as two lone surrogates, neither of which `Character/getType`
+  classifies as FORMAT. The mark survived into both faces of the receipt. A
+  predicate about Unicode categories must be asked about Unicode characters."
+  [code-point]
+  (or (Character/isISOControl (int code-point))
+      (Character/isWhitespace (int code-point))
+      (Character/isSpaceChar (int code-point))
+      (contains? extra-collapsible-code-points code-point)
+      (contains? #{(long Character/LINE_SEPARATOR)
+                   (long Character/PARAGRAPH_SEPARATOR)
+                   (long Character/FORMAT)
+                   (long Character/CONTROL)}
+                 (long (Character/getType (int code-point))))))
 
 ;; @spec MCP-OP-EDIT-038
 (defn sanitize-caller-text
@@ -96,14 +102,18 @@
   an empty one."
   [value]
   (when (string? value)
-    (let [sanitized (->> value
-                         (map (fn [character]
-                                (if (or (collapsible-character? character)
-                                        (contains? receipt-glyphs character))
-                                  \space
-                                  character)))
-                         (apply str))
-          collapsed (-> sanitized
+    (let [builder (StringBuilder. (.length ^String value))
+          _ (.forEach (.codePoints ^String value)
+                      (reify java.util.function.IntConsumer
+                        (accept [_ code-point]
+                          (if (or (collapsible-code-point? code-point)
+                                  (contains? receipt-glyphs code-point))
+                            (.append builder \space)
+                            ;; appendCodePoint, not append: a legitimate
+                            ;; supplementary character (an emoji, say) must
+                            ;; survive whole rather than as half a pair.
+                            (.appendCodePoint builder (int code-point))))))
+          collapsed (-> (.toString builder)
                         (str/replace #" +" " ")
                         str/trim)]
       (when-not (str/blank? collapsed)
@@ -122,10 +132,15 @@
    (when-let [collapsed (sanitize-caller-text value)]
      (if (<= (count collapsed) ceiling)
        collapsed
-       (str (subs collapsed
-                  0
-                  (max 0 (- ceiling (count caller-text-truncation-marker))))
-            caller-text-truncation-marker)))))
+       (let [cut (max 0 (- ceiling (count caller-text-truncation-marker)))
+             ;; never cut a surrogate pair in half: a truncation that emits a
+             ;; lone surrogate is a broken string, not a shortened one
+             cut (if (and (pos? cut)
+                          (Character/isHighSurrogate (.charAt ^String collapsed
+                                                              (dec cut))))
+                   (dec cut)
+                   cut)]
+         (str (subs collapsed 0 cut) caller-text-truncation-marker))))))
 
 (defn- finalize-result
   [domain-result started-ns finished-ns]

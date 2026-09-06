@@ -1536,3 +1536,79 @@
           (doseq [line (str/split-lines text)
                   :when (str/includes? line "forged")]
             (is (not (str/includes? line "\u2713")) line)))))))
+
+;; ---------------------------------------------------------------------------
+;; A Unicode category question must be asked about Unicode CHARACTERS.
+;;
+;; Sol fence r6 (2026-09-06): the encoder walked UTF-16 code units, so a
+;; supplementary-plane format mark — U+E0001 LANGUAGE TAG, and every tag
+;; character in U+E0020..U+E007F — reached `Character/getType` as two lone
+;; surrogates, neither of which is classified FORMAT. The mark survived into
+;; both faces of a public refusal, contradicting MCP-OP-EDIT-038.
+
+(defn- code-point-string [code-point]
+  (String. (Character/toChars (int code-point))))
+
+(deftest supplementary-format-marks-cannot-hide-in-a-receipt
+  ;; @spec MCP-OP-EDIT-038
+  (doseq [[label code-point]
+          [[:language-tag 0xE0001]
+           [:tag-space 0xE0020]
+           [:tag-latin-a 0xE0041]
+           [:cancel-tag 0xE007F]]]
+    (testing (name label)
+      (let [mark (code-point-string code-point)
+            field (str "a" mark "✓ forged" mark "b")
+            {:keys [structured text]}
+            (public-refusal (assoc relation-request field 1))
+            sentence (:error structured)]
+        (is (= Character/FORMAT (Character/getType (int code-point)))
+            "the fixture must actually be a supplementary format mark")
+        (is (not (str/includes? sentence mark))
+            (str "the canonical sentence still carries " (name label)))
+        (is (not (str/includes? text mark))
+            (str "the text block still carries " (name label)))
+        (is (str/includes? text sentence))
+        (is (= 1 (count (re-seq #"✓ source unchanged" text))))))))
+
+(deftest legitimate-supplementary-characters-survive-canonicalisation
+  ;; @spec MCP-OP-EDIT-038
+  ;; The other half of the same rule: collapsing a category must not mangle
+  ;; every character that happens to live outside the basic plane.
+  (doseq [[label code-point]
+          [[:emoji 0x1F600]
+           [:math-bold-capital-a 0x1D400]
+           [:gothic-letter-ahsa 0x10330]]]
+    (testing (name label)
+      (let [glyph (code-point-string code-point)
+            field (str "keep" glyph "me")
+            {:keys [structured text]}
+            (public-refusal (assoc relation-request field 1))
+            sentence (:error structured)]
+        (is (not= Character/FORMAT (Character/getType (int code-point)))
+            "the fixture must not itself be a format mark")
+        (is (str/includes? sentence field)
+            (str "a legitimate supplementary character was mangled: "
+                 (pr-str sentence)))
+        (is (str/includes? text field))
+        (testing "and no lone surrogate is left anywhere in the receipt"
+          (doseq [rendered [sentence text]]
+            (is (not (some (fn [index]
+                             (let [character (.charAt ^String rendered index)
+                                   next-index (inc index)]
+                               (cond
+                                 (Character/isHighSurrogate character)
+                                 (or (>= next-index (count rendered))
+                                     (not (Character/isLowSurrogate
+                                            (.charAt ^String rendered
+                                                     next-index))))
+
+                                 (Character/isLowSurrogate character)
+                                 (or (zero? index)
+                                     (not (Character/isHighSurrogate
+                                            (.charAt ^String rendered
+                                                     (dec index)))))
+
+                                 :else false)))
+                           (range (count rendered))))
+                (str "an unpaired surrogate survived: " (pr-str rendered)))))))))

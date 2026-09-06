@@ -1139,11 +1139,15 @@ not a normalized or partial version of what the caller sent, grants no retry
 authority, and is derived without any source read.
 
 The example is built ONLY from caller values that would themselves pass
-admission. A file string that is blank or carries control characters, and a row
+admission, in their canonical safe spelling. A blank file string, and a row
 whose owner is blank, whose `from` is not one or two simple symbols, or whose
-`matches` is not a positive integer, are all skipped rather than echoed — an
+`matches` is not a positive integer, are skipped rather than echoed — an
 example that shows a shape the very next call would refuse teaches the caller
-something untrue. An oversized caller path is shortened from the middle with a
+something untrue. A NON-BLANK file or owner string is accepted and
+canonicalized rather than skipped: admission itself asks only that these be
+non-blank, so canonicalization is enough to make them safe, and skipping them
+would fall back to the schematic form more often — handing the caller less of
+their own request back, which is the opposite of what this field is for. An oversized caller path is shortened from the middle with a
 visible elision marker. When no caller value survives that filter, one fixed
 schematic example stands in, `expected_shape_example_schematic` is `true`, and
 the rendered line is labelled `expected (schematic):` so an invented value can
