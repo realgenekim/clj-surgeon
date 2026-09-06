@@ -124,6 +124,22 @@
       (is (seq routing/required-sections))
       (doseq [section routing/required-sections]
         (is (str/includes? plate section) section))))
+  (testing "the plate routes only witnessed contracts and says when a route retires"
+    (let [plate (slurp "resources/clj-surgeon-agent-routing.md")]
+      (is (str/includes? plate "**Strictly better, or native.**"))
+      (is (str/includes? plate "**Kill switch.**"))
+      (testing "one complete valid call is present for each automatic class"
+        (is (str/includes? plate "\"within\": {\"form\": \"add\"}"))
+        (is (str/includes? plate "\"op\": \"alias_migration\", \"workspace_root\""))
+        (testing "and for the optional supporting read, with expect at the ROOT"
+          (is (str/includes? plate "\"expect\": {\"requests\": 3, \"files\": 3}"))))
+      (testing "every published example carries workspace_root"
+        (is (= 3 (count (re-seq #"\"workspace_root\"" plate)))))
+      (testing "the receipt scope tests a VALUE, not a field name"
+        (is (str/includes? plate "verification_complete=true"))
+        (is (str/includes? plate "prove the WRITE, not task")))
+      (testing "the escape rule reads commit status before falling back"
+        (is (str/includes? plate "a refusal does not imply that nothing was written")))))
   (testing "the plate names the doctrine commit it derives from"
     (is (re-find #"Derived from doctrine commit [0-9a-f]{8}"
                  (slurp "resources/clj-surgeon-agent-routing.md"))))
