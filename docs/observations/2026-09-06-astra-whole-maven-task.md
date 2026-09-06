@@ -68,3 +68,10 @@ Frozen authority: `/var/tmp/forge/astra-whole-maven-fast-fx/`, manifest SHA `7b2
 Both whole-task approaches are now **parked for this trial**. No third variant follows these two losses. Reopening needs a concrete mechanism that removes observed intent-to-commit work, with the same fresh-actor and correctness boundary. Faster generation by itself is insufficient. The separate roughly1.75x proof-inclusive fan-out result remains narrower evidence for batching a known repetitive intent; it does not establish general editor superiority or2–4x whole-feature gains.
 
 Timing disclosure for the first pair: Fable reported a usage-collector JVM overlapping N1 around17:06–17:10Z, with load2.4–3.5. We retained the original pair and disclosed the overlap rather than silently rerunning a favorable control. The later pair was separately preregistered, not a replacement for that result.
+
+
+## Model provenance correction — 2026-09-06 18:04Z
+
+Main-thread narration produced17:35–17:58Z is **MODEL UNVERIFIED**, including the final fast-pair synthesis and commit96d49433. Main rollout `01a06e6c-8bff-7cc3-8402-14d16b3eca60` records Luna settings at17:35:20.220/225Z and17:50:08.569Z, but an Astra/medium turn context at17:50:08.569Z. These conflicting records do not establish the serving model or the initiator of the change. The agent did not deliberately request a model change. At18:01:43.951Z settings and18:01:44.757Z turn context agree on Astra/medium after operator recovery.
+
+This is a narrator-provenance correction, not a regrade of measured results. The four separate experiment rollouts `01a077af`, `01a077b1`, `01a077c5`, and `01a077c8` each record `gpt-6-astra/medium` in their own turn context. Main-thread settings do not prove a change to those independent actors. Retain raw timing, provider and Git receipts and the independent reviews; do not describe the affected synthesis as verified Astra authorship.
