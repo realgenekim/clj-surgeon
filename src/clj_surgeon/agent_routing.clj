@@ -244,13 +244,79 @@
                                          :stale-version])
                         drifted)}))))
 
-(defn -main [operation block-file & target-paths]
-  (let [result (case operation
-                 "install" (install-routing! block-file target-paths)
-                 "check" (check-routing! block-file target-paths)
-                 {:ok false
-                  :error-type :unknown-operation
-                  :operation operation})]
+(def ^:private scratch-root
+  "The ONLY root a --scratch install may write under. Tests need a real
+   filesystem target; they do not need the ability to name one anywhere."
+  "/var/tmp/forge")
+
+(defn- canonical
+  "The path a write would actually land on: symlinks resolved where they exist,
+   `..` and `.` normalized everywhere. Comparing the STRING a caller typed is
+   not confinement -- `$HOME/.codex/../../etc/passwd` is a different string and
+   the same file."
+  [path]
+  (.getCanonicalPath (io/file (str path))))
+
+(defn- allowed-global-targets []
+  (let [home (System/getProperty "user.home")]
+    #{(canonical (io/file home ".codex" "AGENTS.md"))
+      (canonical (io/file home ".claude" "CLAUDE.md"))}))
+
+(defn confine-targets
+  "Fail closed on any target that is not one of the two global instruction
+   files -- or, under --scratch, not under /var/tmp/forge.
+
+   Sol fence r4, finding 5: the default Make invocation names only the two
+   global files, but both the Make overrides and this CLI accepted ARBITRARY
+   destinations, and a scratch installation outside those paths succeeded. A
+   target list is authority, and authority a caller supplies is not authority
+   the tool has checked."
+  [target-paths scratch?]
+  (let [allowed (allowed-global-targets)
+        scratch-prefix (str (canonical scratch-root) java.io.File/separator)
+        refused (for [path target-paths
+                      :let [real (canonical path)]
+                      :when (if scratch?
+                              (not (str/starts-with? real scratch-prefix))
+                              (not (contains? allowed real)))]
+                  {:path path :canonical-path real})]
+    (if (seq refused)
+      {:ok false
+       :error-type :agent-routing-target-refused
+       :scratch scratch?
+       :refused (vec refused)
+       :allowed (if scratch?
+                  [(str scratch-prefix "...")]
+                  (vec (sort allowed)))
+       :diagnosis (str "refused " (count refused) " target path(s): "
+                       (pr-str (mapv :canonical-path refused))
+                       (if scratch?
+                         (str ". Under --scratch every target must resolve under "
+                              scratch-root ".")
+                         (str ". Without --scratch the only permitted targets are "
+                              (pr-str (vec (sort allowed)))
+                              "; pass --scratch to write under " scratch-root
+                              " instead.")))}
+      {:ok true :targets (vec target-paths)})))
+
+(defn -main [operation block-file & args]
+  (let [scratch? (boolean (some #{"--scratch"} args))
+        target-paths (remove #{"--scratch"} args)
+        confined (confine-targets target-paths scratch?)
+        result (cond
+                 (not (:ok confined))
+                 (assoc confined :operation (case operation
+                                              "install" :install-agent-routing
+                                              "check" :check-agent-routing
+                                              operation))
+
+                 :else
+                 (case operation
+                   "install" (install-routing! block-file target-paths)
+                   "check" (check-routing! block-file target-paths)
+                   {:ok false
+                    :error-type :unknown-operation
+                    :operation operation}))]
     (prn result)
     (when-not (:ok result)
       (System/exit 2))))

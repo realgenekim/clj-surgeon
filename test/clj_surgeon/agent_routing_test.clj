@@ -388,3 +388,53 @@
       (is (= :stale (:previous-state result)))
       (is (= 1 (:stale-version result)))
       (is (not (str/includes? (:source result) "OLD-BYTES"))))))
+
+;; ---------------------------------------------------------------------------
+;; Sol fence r4, finding 5: a target list is AUTHORITY. The default Make
+;; invocation named only the two global instruction files, but both the Make
+;; overrides and the installer CLI accepted arbitrary destinations, and Sol's
+;; scratch installation outside those paths succeeded. Confinement lives at the
+;; CLI boundary (`confine-targets`), so the Make recipe is unchanged and an
+;; override that names another path is refused at runtime by the tool itself.
+
+(def ^:private codex-global
+  (str (fs/path (System/getProperty "user.home") ".codex" "AGENTS.md")))
+(def ^:private claude-global
+  (str (fs/path (System/getProperty "user.home") ".claude" "CLAUDE.md")))
+
+(deftest only-the-two-global-files-are-installable-without-scratch
+  (testing "the two real targets are accepted"
+    (is (:ok (routing/confine-targets [codex-global claude-global] false))))
+  (doseq [bad ["/var/tmp/forge/x.md"
+               "/home/forge/other.md"
+               "/etc/passwd"
+               (str codex-global "/../../../etc/passwd")]]
+    (testing (str bad " is refused")
+      (let [r (routing/confine-targets [bad] false)]
+        (is (false? (:ok r)))
+        (is (= :agent-routing-target-refused (:error-type r)))
+        (is (= [bad] (mapv :path (:refused r)))
+            "the refusal names the path the caller typed")
+        (is (string? (:diagnosis r)))))))
+
+(deftest scratch-confines-to-var-tmp-forge-and-nowhere-else
+  (testing "a scratch target under /var/tmp/forge is accepted"
+    (is (:ok (routing/confine-targets ["/var/tmp/forge/routing-fixture.md"] true))))
+  (testing "--scratch does not unlock the home directory"
+    (let [r (routing/confine-targets ["/home/forge/other.md"] true)]
+      (is (false? (:ok r)))
+      (is (= :agent-routing-target-refused (:error-type r)))))
+  (testing "--scratch does not unlock the two global files either"
+    (is (false? (:ok (routing/confine-targets [codex-global] true)))))
+  (testing "a traversal out of the scratch root is refused by CANONICAL path"
+    (let [r (routing/confine-targets ["/var/tmp/forge/../../home/forge/other.md"] true)]
+      (is (false? (:ok r)))
+      (is (= ["/var/home/forge/other.md"] (mapv :canonical-path (:refused r)))
+          "string comparison would have let this through"))))
+
+(deftest one-refused-target-refuses-the-whole-install
+  ;; All-or-nothing: the installer's preflight is already all-or-nothing, and a
+  ;; confinement that let the legal half through would write half an install.
+  (let [r (routing/confine-targets [codex-global "/var/tmp/forge/x.md"] false)]
+    (is (false? (:ok r)))
+    (is (= ["/var/tmp/forge/x.md"] (mapv :path (:refused r))))))
