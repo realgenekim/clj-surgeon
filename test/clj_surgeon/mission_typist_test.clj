@@ -104,3 +104,31 @@
   (let [r (typist/dossier (assoc-in eligible [:owners 0 :new-owner] "renamed"))]
     (is (= :owner-forms (get-in r [:dossier :candidate-format])))
     (is (= "renamed" (get-in r [:dossier :owners 0 :new-owner])))))
+
+(deftest generation-policy-is-frozen
+  (let [default (typist/route eligible)
+        requested (assoc eligible :max-tokens 4096 :fallback {:provider :groq :max-tokens 4096})
+        route (typist/route requested)]
+    (is (= {:max-tokens 8192 :timeout-s 30} (:generation default)))
+    (is (= {:max-tokens 4096 :timeout-s 30 :fallback {:provider :groq :max-tokens 4096}}
+           (:generation route)))
+    (is (= (:k default) (:k route)))
+    (is (= (:generation route) (get-in (typist/dossier requested) [:dossier :route :generation])))
+    (is (= (:generation route) (:generation (typist/route (assoc requested :unrelated-existing-field :ignored))))))
+  (doseq [change [{:max-tokens nil} {:max-tokens true} {:max-tokens 0} {:max-tokens 8193}
+                  {:max-tokens 1.5} {:max-tokens "4096"} {:fallback nil}
+                  {:fallback {}} {:fallback {:provider :groq :max-tokens 1}}
+                  {:max-tokens 4096 :fallback {:provider :groq :max-tokens 4097}}
+                  {:max-tokens 4096 :fallback {:provider :other :max-tokens 1}}
+                  {:max-tokens 4096 :fallback {:provider :groq :max-tokens false}}
+                  {:max-tokens 4096 :fallback {:provider :groq :max-tokens 1 :extra true}}]]
+    (let [r (typist/route (merge eligible change))]
+      (is (false? (:ok r)))
+      (is (= :generation-budget (:condition r)))))
+  (let [groq (-> eligible
+                 (assoc :provider {:id :groq :model "openai/gpt-oss-120b" :upstream "Groq"})
+                 (assoc-in [:rate :provider] :groq)
+                 (assoc-in [:rate :upstream] "Groq"))]
+    (is (:ok (typist/route groq)))
+    (is (= :generation-budget
+           (:condition (typist/route (assoc groq :max-tokens 4096 :fallback {:provider :groq :max-tokens 4096})))))))

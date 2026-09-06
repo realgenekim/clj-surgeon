@@ -48,9 +48,25 @@
        (= (:model provider) (:model rate))
        (= (:upstream provider) (:upstream rate))))
 
+(defn generation-policy
+  "Validate only explicit generation fields; project immutable transport authority."
+  [facts]
+  (let [max-tokens (get facts :max-tokens 8192)
+        fallback? (contains? facts :fallback)
+        fallback (:fallback facts)]
+    (when (and (integer? max-tokens) (<= 1 max-tokens 8192)
+               (or (not fallback?)
+                   (and (= :openrouter (get-in facts [:provider :id]))
+                        (map? fallback) (= #{:provider :max-tokens} (set (keys fallback)))
+                        (= :groq (:provider fallback))
+                        (integer? (:max-tokens fallback)) (<= 1 (:max-tokens fallback) 8192)
+                        (<= (+ max-tokens (:max-tokens fallback)) 8192))))
+      (cond-> {:max-tokens max-tokens :timeout-s 30}
+        fallback? (assoc :fallback (select-keys fallback [:provider :max-tokens]))))))
+
 (defn failed-condition
   [{:keys [mission-class intent discovery-complete? owners sources source-policy
-           gate acceptance commit budget provider rate candidate-format]}]
+           gate acceptance commit budget provider rate candidate-format] :as facts}]
   (cond
     (not (contains? #{nil :owner-forms :clojure-forms} candidate-format))
     [:candidate-format "Select owner-forms JSON or single-file plain Clojure definitions."]
@@ -84,6 +100,8 @@
     [:bounded-scope "Declare a positive file and changed-character budget."]
     (not (provider-admitted? provider))
     [:pinned-provider "Select an admitted pinned model and upstream."]
+    (nil? (generation-policy facts))
+    [:generation-budget "Choose a positive primary token allocation; optional Groq fallback requires an exact provider/token map, OpenRouter primary, and at most 8192 reserved output tokens total."]
     (not (rate-valid? mission-class provider rate))
     [:verified-rate "Supply measured verified/attempted counts for this class and provider."]
     :else nil))
@@ -96,6 +114,7 @@
        :condition condition :decision decision :mutation-attempted false}
       {:ok true :executor :typist :k (candidate-count (:rate facts))
        :candidate-format (or (:candidate-format facts) :owner-forms)
+       :generation (generation-policy facts)
        :provider (select-keys (:provider facts) [:id :model :upstream])
        :mission-class (:mission-class facts)
        :rate (select-keys (:rate facts) [:verified :attempted :mission-class :provider

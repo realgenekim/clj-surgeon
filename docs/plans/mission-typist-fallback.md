@@ -43,3 +43,52 @@ new matrix refused under the old client; a separate over-deadline success
 witness failed before the post-request deadline check. Receipts are retained at
 `/var/tmp/forge/typist-fallback-{red,deadline-red,green}.txt`. AST parse and Git
 whitespace checks pass. No live provider or integrated executor run was made.
+
+## Frozen Clojure admission and execution
+
+The optional public request is
+`{:typist {:max-tokens 4096 :fallback {:provider :groq :max-tokens 4096}}}`.
+Without either field, primary max-tokens remains 8192 and fallback is absent.
+Explicit nil, nonintegers, nonpositive allocations, over-budget sums, a different
+fallback provider, fallback on direct Groq/Spark, or extra fallback-map fields
+refuse during pure route admission as `:condition :generation-budget` under the
+existing typed route refusal. Unrelated existing typist fields keep their prior
+validation behavior; this change does not invent a closed top-level field set.
+
+The route freezes `:generation {:max-tokens P :timeout-s 30 :fallback ...}` with
+only validated scalar values. The dossier hash covers that route. `request-one!`
+uses only saved `authority :route :generation`, translates the optional map to
+Python field spellings, and never reads generation policy from an apply-time
+request. Old saved routes without :generation retain 8192/no-fallback defaults.
+The direct Python child retains the fixed 30-second total request deadline and
+35-second outer process bound. Neither fallback nor k silently enlarges a single
+child's deadline or output-token reservation.
+
+Race k is unchanged: k independent children each receive candidates=1; each may
+make at most two serial route attempts when explicitly opted in. Thus the total
+maximum reserved output across the race is k times the admitted per-child sum,
+not one 8192-token reservation shared by all k. No retries for candidate quality,
+parser/refusal, gate, or acceptance failures. Fallback policy remains outside
+all already-frozen cohorts until explicitly preregistered.
+
+Cost reporting from e805318f is preserved: OpenRouter usage is requested; known
+provider-reported cost and token fields remain in each attempt. A 429/503 HTTP
+response whose usage is unavailable stays unknown, not zero. No estimated Groq
+price is introduced, and top-level selected cost must not substitute for summing
+known per-attempt costs while separately reporting unknown attempts.
+
+Dogfood record: existing Clojure owners were inspected through installed Surgeon
+`:cat`. Parent explicitly authorized native insertions/literal edits after those
+observed anchors because no registered persistent MCP was available and the
+installed CLI documented no top-level insertion entrance. This is new-feature
+work, ineligible for the mechanical typist executor; no unsupported tool syntax
+or large whole-owner replacement was manufactured. No provider calls were made.
+
+Integration verification: pure admission RED (29 failed assertions), followed by
+GREEN; fake saved-policy forwarding RED (2 failed assertions: primary allocation
+and absent fallback), followed by GREEN. Final JVM admission + executor suites:
+14 tests / 243 assertions, no failures/errors. Python cost + fallback matrix:
+29 tests pass. Formatter, AST and Git whitespace checks pass. Receipt directory:
+`/var/tmp/forge/typist-fallback-integration/`. No live provider or timed experiment.
+Lane enrollment remains parent-owned: admission namespace now 6 deftests; executor
+namespace now 8. Full repository landing gates and independent review remain owed.

@@ -62,7 +62,7 @@ def load_key(route):
    return parse_key(f.read(16385))
  except OSError:raise Refusal('key-unavailable') from None
 
-def failure(kind):return {'usable':False,'error_type':kind,'content':None,'finish_reason':None,'reasoning_tokens':None,'cost_usd':None,'cost_source':None}
+def failure(kind):return {'usable':False,'error_type':kind,'content':None,'finish_reason':None,'reasoning_tokens':None,'completion_tokens':None,'prompt_tokens':None,'cost_usd':None,'cost_source':None}
 
 def candidate(d,route):
  if not isinstance(d,dict):return failure('invalid-response')

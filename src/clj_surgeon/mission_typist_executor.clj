@@ -218,8 +218,12 @@
             (reject! :typist-transport-identity-mismatch))
         script (java.io.File/createTempFile "typist-client-" ".py")
         _ (spit script (:source transport))
-        config {:route route :prompt (get-in authority [:dossier :prompt])
-                :candidates 1 :max_tokens 8192 :timeout_s 30}
+        generation (get-in authority [:route :generation])
+        config (cond-> {:route route :prompt (get-in authority [:dossier :prompt])
+                        :candidates 1 :max_tokens (get generation :max-tokens 8192) :timeout_s 30}
+                 (:fallback generation)
+                 (assoc :fallback {:provider (name (get-in generation [:fallback :provider]))
+                                   :max_tokens (get-in generation [:fallback :max-tokens])}))
         result (try (process/run-bounded! {:command [(:interpreter transport) "-I" (str script)]
                                            :cwd (:root authority)
                                            :stdin-text (json/generate-string config)

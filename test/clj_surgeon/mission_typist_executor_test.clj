@@ -140,3 +140,37 @@
             (when (:committed result)
               (is (:ok (executor/undo! (:undo_receipt result) (:receipt_hash result))))
               (is (= source (slurp file))))))))))
+
+(deftest saved-generation-drives-one-request
+  (with-fixture
+    (fn [root _]
+      (let [request (-> (request root)
+                        (assoc-in [:typist :max-tokens] 4096)
+                        (assoc-in [:typist :fallback] {:provider :groq :max-tokens 4096}))
+            plan (edn/read-string (pr-str (executor/plan request profiles)))
+            authority (assoc (:typist plan) :request {:typist {:max-tokens 1 :fallback nil}})
+            calls (atom [])
+            records [{:route "openrouter-cerebras" :error_type "provider-rate-limited" :cost_usd nil}
+                     {:route "groq" :model "openai/gpt-oss-120b" :upstream "Groq"
+                      :completion_tokens 12 :cost_usd 0.001 :cost_source "provider-reported"}]
+            answer {:usable true :content "candidate" :attempts records}]
+        (is (:ok plan))
+        (with-redefs [clj-surgeon.mcp-process/run-bounded!
+                      (fn [config]
+                        (swap! calls conj config)
+                        {:finished? true :exit 0 :termination-confirmed true
+                         :out (json/generate-string {:candidates [answer]}) :elapsed_ms 0})]
+          (let [result (executor/request-one! authority 0 (atom {}))
+                sent (json/parse-string (:stdin-text (first @calls)) true)]
+            (is (= 4096 (:max_tokens sent)))
+            (is (= {:provider "groq" :max_tokens 4096} (:fallback sent)))
+            (is (= "openrouter-cerebras" (:route sent)))
+            (is (= 1 (:candidates sent)))
+            (is (= 30 (:timeout_s sent)))
+            (is (= 35000 (:timeout-ms (first @calls))))
+            (is (= records (:attempts result))))
+          ;; Pre-generation saved plans retain old one-request defaults.
+          (executor/request-one! (update authority :route dissoc :generation) 0 (atom {}))
+          (let [sent (json/parse-string (:stdin-text (last @calls)) true)]
+            (is (= 8192 (:max_tokens sent)))
+            (is (not (contains? sent :fallback)))))))))

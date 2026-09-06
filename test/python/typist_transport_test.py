@@ -152,6 +152,17 @@ class FallbackTests(unittest.TestCase):
   r=json.loads(out.getvalue());self.assertEqual(len(r['candidates'][0]['attempts']),2)
   self.assertTrue(r['fallback']);self.assertEqual(r['fallback_policy'],c['fallback'])
   self.assertEqual([call.args[1] for call in timer.call_args_list],[2,0])
+ def test_fallback_retains_cost_and_token_records(self):
+  response=self.response(provider='Groq',usage={'cost':0.002,'completion_tokens':7,'prompt_tokens':11,'completion_tokens_details':{'reasoning_tokens':3}})
+  r,_,_=self.exercise(self.configured(),[self.http(429),response])
+  self.assertIsNone(r['attempts'][0]['cost_usd'])
+  self.assertIsNone(r['attempts'][0]['cost_source'])
+  self.assertIsNone(r['attempts'][0]['completion_tokens'])
+  self.assertIsNone(r['attempts'][0]['prompt_tokens'])
+  self.assertEqual(r['cost_usd'],0.002)
+  self.assertEqual(r['attempts'][1]['cost_usd'],0.002)
+  self.assertEqual(r['attempts'][1]['cost_source'],'provider-reported')
+  self.assertEqual([r['attempts'][1][k] for k in ['completion_tokens','prompt_tokens','reasoning_tokens']],[7,11,3])
  def test_cli_refusal_is_nonzero_without_dispatch(self):
   c=self.cfg(fallback={'provider':'groq','max_tokens':8192});out=io.StringIO()
   with patch.object(t.sys,'stdin',io.TextIOWrapper(io.BytesIO(json.dumps(c).encode()))),patch.object(t.sys,'stdout',out),patch.object(t,'run_candidate') as run:
