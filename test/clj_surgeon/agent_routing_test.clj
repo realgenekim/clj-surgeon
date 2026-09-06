@@ -6,9 +6,13 @@
    [clojure.test :refer [deftest is testing]]))
 
 (def canonical-block
+  ;; Carries every routing/required-sections line: an installable block that
+  ;; dropped one is refused by design (:missing-required-routing-section), so a
+  ;; fixture without them would exercise the refusal, not the upsert.
   (str routing/managed-begin "\n"
        "## Clojure structural editing\n\n"
        "- Use one compact transaction.\n"
+       (str/join "\n" routing/required-sections) "\n"
        routing/managed-end "\n"))
 
 (deftest upsert-routing-block-preserves-unmanaged-bytes
@@ -113,3 +117,53 @@
     (is (re-find
           #"They never prove\s+that the complete user request is finished\."
           source))))
+
+(deftest fan-out-route-section-is-required-in-every-block
+  (testing "the shipped plate carries every required section byte-exact"
+    (let [plate (slurp "resources/clj-surgeon-agent-routing.md")]
+      (is (seq routing/required-sections))
+      (doseq [section routing/required-sections]
+        (is (str/includes? plate section) section))))
+  (testing "the plate names the doctrine commit it derives from"
+    (is (re-find #"Derived from doctrine commit [0-9a-f]{8}"
+                 (slurp "resources/clj-surgeon-agent-routing.md"))))
+  (testing "a canonical block missing the fan-out route is refused, nothing written"
+    (let [tmp (str (fs/create-temp-dir {:prefix "agent-routing-fanout"}))
+          block-file (str (fs/path tmp "routing.md"))
+          claude-file (str (fs/path tmp "claude" "CLAUDE.md"))]
+      (try
+        (spit block-file (str routing/managed-begin "\n"
+                              "## Clojure structural editing\n"
+                              routing/managed-end "\n"))
+        (fs/create-dirs (fs/parent claude-file))
+        (spit claude-file "claude-original\n")
+        (let [result (routing/install-routing! block-file [claude-file])]
+          (is (false? (:ok result)))
+          (is (= :missing-required-routing-section (:error-type result)))
+          (is (= :canonical (:scope result)))
+          (is (= routing/required-sections (:missing result)))
+          (is (= "claude-original\n" (slurp claude-file))))
+        (finally (fs/delete-tree tmp)))))
+  (testing "check refuses an installed block whose fan-out section drifted"
+    (let [tmp (str (fs/create-temp-dir {:prefix "agent-routing-fanout"}))
+          block-file (str (fs/path tmp "routing.md"))
+          claude-file (str (fs/path tmp "claude" "CLAUDE.md"))
+          full-block (str routing/managed-begin "\n"
+                          (str/join "\n" routing/required-sections) "\n"
+                          routing/managed-end "\n")]
+      (try
+        (spit block-file full-block)
+        (fs/create-dirs (fs/parent claude-file))
+        (let [installed (routing/install-routing! block-file [claude-file])
+              ok (routing/check-routing! block-file [claude-file])]
+          (is (:ok installed))
+          (is (:ok ok))
+          (spit claude-file (str/replace (slurp claude-file)
+                                         (first routing/required-sections)
+                                         "## Fan-out route (paraphrased)"))
+          (let [drifted (routing/check-routing! block-file [claude-file])]
+            (is (false? (:ok drifted)))
+            (is (= :missing-required-routing-section (:error-type drifted)))
+            (is (= :installed (:scope drifted)))
+            (is (= claude-file (:target drifted)))))
+        (finally (fs/delete-tree tmp))))))
