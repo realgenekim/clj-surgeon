@@ -1043,6 +1043,7 @@
           source-safe? (or (:source-unchanged result)
                            (:source_unchanged result)
                            (:rolled-back result))
+          ;; @spec MCP-OP-EDIT-037
           ;; The structured receipt carries a one-sentence `error` naming the
           ;; shape that was refused; the model reads only this text block, so
           ;; text must be a superset of structured. Generic: any refusal whose

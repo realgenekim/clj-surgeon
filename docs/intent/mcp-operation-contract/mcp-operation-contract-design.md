@@ -1129,7 +1129,25 @@ existing error type and ordinary envelope and omit
 `compact_relation_diagnostic` ; they are not rebranded as relation failures.
 
 The refusal includes no source body, generated partial request, executable
-retry, or `terminal_response`. It may claim `source_unchanged=true` only after
+retry, or `terminal_response`. One exception is named and bounded: an
+`invalid-compact-relation` refusal that names a `symbol_migration.files` entry
+carries `expected_shape_example`, a single illustration of the accepted
+`[file, rows]` shape of at most 200 characters, built only from values the
+caller supplied in that same request. It is an example, not a request — it is
+not executable, is not a normalized or partial version of what the caller sent,
+grants no retry authority, and is derived without any source read. An oversized
+caller path is shortened from the middle with a visible elision marker, and if
+even that does not fit, one fixed schematic example is used; the field is never
+omitted for an applicable refusal, because a caller that cannot see the accepted
+shape retries the shape that was just refused.
+
+The same rule governs the visible text block for every refusal, not only this
+one: whenever the structured receipt carries a one-sentence `error`, that
+sentence appears verbatim in the text, after the error type and request path and
+before the remedy. The text a model reads is a superset of the structured
+refusal, never a lossy summary of it. `MCP-OP-EDIT-037` owns both halves.
+
+It may claim `source_unchanged=true` only after
 the source boundary has proved that no write began. Once effects begin, the
 existing verification, rollback, recovery-required, and manual-recovery
 envelopes own the outcome ; relation diagnostics do not overwrite them.

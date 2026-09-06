@@ -1107,7 +1107,7 @@
             "src/sample/review_updates.clj"))
 
 (deftest refusal-text-carries-the-structured-error-sentence
-  ;; @spec MCP-OP-EDIT-025
+  ;; @spec MCP-OP-EDIT-037
   (testing "every enumerable compact-relation admission refusal shows its error sentence"
     (doseq [[label request]
             [[:d1-bare-file-entry d1-bare-file-request]
@@ -1153,7 +1153,7 @@
                    (pr-str sentence) " · text was:\n" text)))))))
 
 (deftest d1-bare-file-entry-names-the-shape-and-one-filled-example
-  ;; @spec MCP-OP-EDIT-025
+  ;; @spec MCP-OP-EDIT-037
   (let [{:keys [structured text]} (refusal-text d1-bare-file-request)
         example (:expected_shape_example structured)]
     (testing "the refusal is still the same typed, source-safe refusal"
@@ -1180,6 +1180,7 @@
                  "  expected: " example "\n"))))))
 
 (deftest refusal-without-an-error-sentence-renders-unchanged
+  ;; @spec MCP-OP-EDIT-037
   ;; The generic rule adds nothing when the receipt carries no error sentence.
   (is (= (str "apply_clojure_changes\n"
               "  refused · invalid-intent-form · 2.50 ms\n"
@@ -1205,3 +1206,111 @@
                   :elapsed_ms 1.25
                   :rolled-back true})
                "\n  apply_clojure_changes refused\n")))))
+
+;; ---------------------------------------------------------------------------
+;; The example is BOUNDED and TOTAL.
+;;
+;; Fence r1 (Sol, 2026-09-06) found the first cut of this change returned nil
+;; whenever the rendered example exceeded 200 characters: a 228-character caller
+;; path made `expected_shape_example` vanish entirely, which is precisely the
+;; state the field exists to prevent. A ceiling must shorten the example, never
+;; delete it.
+
+(defn- d1-request-with-path
+  "The D1 shape (a bare path string where [file rows] belongs) at one exact path."
+  [path]
+  (assoc-in relation-request ["symbol_migration" "files" 0] path))
+
+(defn- example-for-path [path]
+  (:expected_shape_example (:structured (refusal-text (d1-request-with-path path)))))
+
+(defn- ascii-path-rendering-an-example-of-length
+  "An ASCII path chosen so the rendered example is exactly `total` characters.
+   ASCII needs no pr-str escaping, so one path character is one rendered
+   character and the offset is exact rather than approximate."
+  [total]
+  (let [probe "src/a.clj"
+        base (count (example-for-path probe))
+        pad (- total base)]
+    (assert (pos? pad) "probe example is already longer than the target")
+    (str "src/" (apply str (repeat (inc pad) \a)) ".clj")))
+
+(deftest expected-shape-example-is-bounded-at-the-ceiling-boundary
+  ;; @spec MCP-OP-EDIT-037
+  (testing "exactly at the ceiling the caller's own path is quoted whole"
+    (let [path (ascii-path-rendering-an-example-of-length 200)
+          example (example-for-path path)]
+      (is (string? example))
+      (is (= 200 (count example)))
+      (is (str/includes? example path))
+      (is (not (str/includes? example "…")))
+      (is (= example (pr-str (edn/read-string example))))))
+  (testing "one character over the ceiling the example shortens, it does not vanish"
+    (let [path (ascii-path-rendering-an-example-of-length 201)
+          example (example-for-path path)]
+      (is (string? example))
+      (is (<= (count example) 200))
+      (is (str/includes? example "…")
+          "the cut must be visible, never a silent truncation")
+      (is (= example (pr-str (edn/read-string example))))
+      (let [[file rows] (edn/read-string example)]
+        (is (str/starts-with? file "src/"))
+        (is (str/ends-with? file ".clj"))
+        (is (= 3 (count (first rows)))))))
+  (testing "the text block shows the same bounded example the receipt carries"
+    (let [path (ascii-path-rendering-an-example-of-length 201)
+          {:keys [structured text]} (refusal-text (d1-request-with-path path))]
+      (is (str/includes? text (str "expected: "
+                                   (:expected_shape_example structured)))))))
+
+(deftest expected-shape-example-survives-an-oversized-caller-path
+  ;; @spec MCP-OP-EDIT-037
+  ;; The exact r1 counterexample class: a caller path far past the ceiling.
+  (doseq [length [228 500 4000]]
+    (testing (str "caller path of " length " characters")
+      (let [path (str "src/" (apply str (repeat (- length 8) \z)) ".clj")
+            {:keys [structured text]} (refusal-text (d1-request-with-path path))
+            example (:expected_shape_example structured)]
+        (is (= length (count path)))
+        (is (string? example) "the example must exist for every applicable refusal")
+        (is (<= (count example) 200))
+        (is (str/includes? example "…"))
+        (is (= example (pr-str (edn/read-string example))))
+        (is (str/includes? text (str "expected: " example)))
+        (is (str/includes? text "Each migration file must be [file, rows]"))))))
+
+(deftest expected-shape-example-reads-no-source-and-leaks-nothing
+  ;; @spec MCP-OP-EDIT-037
+  (testing "rendering performs no source read at all"
+    ;; An executed probe, not a source scan: if any stage reached the
+    ;; filesystem through slurp or io/reader this throws instead of rendering.
+    (with-redefs [slurp (fn [& _]
+                          (throw (ex-info "source read during refusal rendering" {})))
+                  io/reader (fn [& _]
+                              (throw (ex-info "source read during refusal rendering" {})))]
+      (let [{:keys [structured text]} (refusal-text d1-bare-file-request)]
+        (is (string? (:expected_shape_example structured)))
+        (is (str/includes? text (:expected_shape_example structured))))))
+  (testing "the example carries only values the caller supplied in this request"
+    (let [{:keys [structured]} (refusal-text d1-bare-file-request)
+          example (:expected_shape_example structured)
+          [file rows] (edn/read-string example)
+          request-strings (fn collect [value]
+                            (cond
+                              (string? value) #{value}
+                              (map? value) (into #{} (mapcat collect) (vals value))
+                              (sequential? value) (into #{} (mapcat collect) value)
+                              :else #{}))
+          supplied (request-strings d1-bare-file-request)]
+      (is (contains? supplied file))
+      (doseq [token (first rows) :when (string? token)]
+        (is (contains? supplied token)
+            (str "example token " (pr-str token)
+                 " was not supplied by the caller")))))
+  (testing "no workspace path, file content, or receipt path can appear"
+    (let [example (:expected_shape_example
+                    (:structured (refusal-text d1-bare-file-request)))]
+      (doseq [forbidden ["/home/" "/var/" "/tmp" "file:" ".git"
+                         "workspace_root" "\n"]]
+        (is (not (str/includes? example forbidden))
+            (str "example leaked " (pr-str forbidden)))))))

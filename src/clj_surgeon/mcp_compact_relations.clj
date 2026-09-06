@@ -125,21 +125,69 @@
     (or (entry-of entry)
         (when (vector? files) (some entry-of files)))))
 
+(def ^:private elision-marker
+  "The visible mark that says one caller string was shortened, never truncated silently."
+  "…")
+
+(def ^:private schematic-shape-example
+  "The last-resort example, used only when nothing the caller supplied fits the
+   ceiling. Deliberately still readable EDN of the accepted shape."
+  (pr-str ["<file>" [["<owner>" "<old-ns>/<name>" 1]]]))
+
+(defn- elide-middle
+  "Shorten one caller string to `limit` characters, cutting from the middle and
+   marking the cut, so both ends of the caller's own value stay recognizable."
+  [value limit]
+  (if (<= (count value) limit)
+    value
+    (let [keep (max 0 (- limit (count elision-marker)))
+          head (quot keep 2)
+          tail (- keep head)]
+      (str (subs value 0 head)
+           elision-marker
+           (subs value (- (count value) tail))))))
+
+(defn- fitted-shape-example
+  "Render `[file [row]]` within the ceiling, shortening the caller's own path
+   from the middle when it does not fit. Returns nil only when even a minimal
+   path cannot bring the rendered example under the ceiling — which can happen
+   only when the caller's own row is itself oversized."
+  [file row]
+  (let [render (fn [candidate] (pr-str [candidate [row]]))
+        full (render file)]
+    (if (<= (count full) expected-shape-example-ceiling)
+      full
+      ;; Escaping means one dropped character need not remove one rendered
+      ;; character, so shrink by the observed overflow and re-measure.
+      (loop [limit (count file)
+             guard 0]
+        (let [candidate (render (elide-middle file limit))
+              overflow (- (count candidate) expected-shape-example-ceiling)]
+          (cond
+            (not (pos? overflow)) candidate
+            (or (<= limit (count elision-marker)) (< 64 guard)) nil
+            :else (recur (max (count elision-marker) (- limit (max 1 overflow)))
+                         (inc guard))))))))
+
+;; @spec MCP-OP-EDIT-037
 (defn- expected-shape-example
   "One filled `symbol_migration.files` entry, derived from the caller's own request.
 
-  Bounded: at most one example, at most `expected-shape-example-ceiling`
-  characters. Returns nil when the refusal does not name a files entry or the
-  rendered example would exceed the ceiling."
+  Bounded and total: for every refusal that names a `symbol_migration.files`
+  entry this returns exactly one example of at most
+  `expected-shape-example-ceiling` characters. An oversized caller path is
+  shortened from the middle with a visible marker rather than dropped; only when
+  even that does not fit does it fall back to the fixed schematic example. The
+  field is never omitted for an applicable refusal — a caller who cannot see the
+  accepted shape retries the wrong shape, which is the defect this exists for."
   [request path]
   (when (migration-files-path? path)
     (let [files (get-in request ["symbol_migration" "files"])
           file (or (offending-migration-file files path) "src/example.clj")
           row (or (first-complete-migration-row files)
-                  ["owner-fn" "old.ns/name" 1])
-          example (pr-str [file [row]])]
-      (when (<= (count example) expected-shape-example-ceiling)
-        example))))
+                  ["owner-fn" "old.ns/name" 1])]
+      (or (fitted-shape-example file row)
+          schematic-shape-example))))
 
 (defn- request-files [request]
   (let [literal (mapcat #(if-let [file (get % "file")]
