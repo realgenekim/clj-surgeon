@@ -8,7 +8,8 @@
 ;; overhead the ledger does not need: reading a mission touches ONLY
 ;; `clj-surgeon.mission`, which is why that namespace was kept babashka-safe.
 ;;
-;; Writes are NOT here. open/plan/apply/resume/undo reach a planner and a
+;; Source writes are NOT here. The fallback verb only appends an explicit report.
+;; open/plan/apply/resume/undo reach a planner and a
 ;; guarded transaction kernel and stay on the JVM.
 (require '[clj-surgeon.mission :as mission]
          '[clj-surgeon.mission-display :as display]
@@ -42,6 +43,11 @@
     (System/exit 1))
   (case verb
     ("help" nil) (print (mission/help-text (first args)))
+
+    "fallback" (let [opts (assoc flags :id (first args))
+                     result ((requiring-resolve 'clj-surgeon.mission-fallback/report!) opts)]
+                 (pp/pprint (display/with-recovery result opts))
+                 (when (false? (:ok result)) (System/exit 1)))
 
     "show" (let [m (mission/read-mission @state-dir (first args))
                  result (display/show-result

@@ -8,6 +8,7 @@
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.java.shell :as shell]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is]]))
 
 (defn report [opts]
@@ -89,7 +90,7 @@
         (is (= 0 (:exit result)) (:err result))
         (when (= 0 (:exit result))
           (let [r (edn/read-string (:out result))
-                lines (clojure.string/split-lines (slurp ledger))
+                lines (str/split-lines (slurp ledger))
                 event (json/read-str (first lines) :key-fn keyword)]
             (is (= 1 (count lines)))
             (is (= (:event r) event))
@@ -107,5 +108,74 @@
         (let [bad (apply shell/sh (concat (assoc argv (dec (count argv)) "invalid") [:env env]))]
           (is (= 1 (:exit bad)))
           (when (.exists (io/file ledger))
-            (is (= 1 (count (clojure.string/split-lines (slurp ledger)))))))
+            (is (= 1 (count (str/split-lines (slurp ledger)))))))
         (is (.contains (:out (shell/sh "bin/mission" "help" "fallback" :env env)) "user-reported"))))))
+
+(defn stable-report [report]
+  (update report :event #(dissoc % :ts :pid :wall_ms)))
+
+(deftest fallback-bb-and-jvm-share-the-event-contract
+  (with-ledger
+    (fn [root opts]
+      (let [bb-file (str (io/file root "bb-events" "events.jsonl"))
+            jvm-file (str (io/file root "jvm-events" "events.jsonl"))
+            env (assoc (into {} (System/getenv)) "CLJ_SURGEON_EVENTS_FILE" bb-file)
+            before (bytes-under root)
+            bb-result (shell/sh "bb" "--classpath" "src" "bin/mission-read.clj"
+                                "fallback" "M-1" "--workspace" (:workspace opts)
+                                "--state-home" (:state-home opts) "--reason" "refusal" :env env)
+            jvm-result (with-redefs [events/default-events-file (constantly jvm-file)] (cli/fallback! opts))]
+        (is (= 0 (:exit bb-result)) (:err bb-result))
+        (when (= 0 (:exit bb-result))
+          (is (= (stable-report jvm-result) (stable-report (edn/read-string (:out bb-result))))))
+        (is (= before (apply dissoc (bytes-under root) [bb-file jvm-file])))))))
+
+(deftest public-fallback-starts-bb-and-never-clojure
+  (with-ledger
+    (fn [root opts]
+      (let [bin (io/file root "bin")
+            marker (str (io/file root "runtime-witness"))
+            ledger-dir (io/file root "private-events")
+            ledger (str (io/file ledger-dir "events.jsonl"))
+            real-bb (str/trim (:out (shell/sh "bash" "-c" "command -v bb")))
+            env (assoc (into {} (System/getenv)) "PATH" (str bin ":" (System/getenv "PATH"))
+                       "MISSION_REAL_BB" real-bb "MISSION_BB_WITNESS" marker
+                       "CLJ_SURGEON_EVENTS_FILE" ledger)]
+        (.mkdirs bin)
+        (.mkdirs ledger-dir)
+        (java.nio.file.Files/setPosixFilePermissions (.toPath ledger-dir)
+          (java.nio.file.attribute.PosixFilePermissions/fromString "rwxr-xr-x"))
+        (doseq [[name script] [["bb" "#!/bin/sh\nprintf bb > \"$MISSION_BB_WITNESS\"\nexec \"$MISSION_REAL_BB\" \"$@\"\n"]
+                               ["clojure" "#!/bin/sh\nprintf forbidden-jvm > \"$MISSION_BB_WITNESS\"\nexit 91\n"]]]
+          (let [file (io/file bin name)] (spit file script) (.setExecutable file true)))
+        (let [r (shell/sh "bin/mission" "fallback" "M-1" "--workspace" (:workspace opts)
+                          "--state-home" (:state-home opts) "--reason" "refusal" :env env)]
+          (is (= 0 (:exit r)) (:err r))
+          (is (= "bb" (slurp marker)))
+          (when (= 0 (:exit r))
+            (is (true? (:recorded (edn/read-string (:out r)))))
+            (is (= "rwx------" (java.nio.file.attribute.PosixFilePermissions/toString
+                                 (java.nio.file.Files/getPosixFilePermissions (.toPath ledger-dir)
+                                   (into-array java.nio.file.LinkOption [])))))
+            (is (= 1 (count (str/split-lines (slurp ledger)))))))))))
+
+(deftest bb-fallback-never-adds-owner-write-permission
+  (with-ledger
+    (fn [root opts]
+      (let [dir (io/file root "read-only-events")
+            env (assoc (into {} (System/getenv)) "CLJ_SURGEON_EVENTS_FILE"
+                       (str (io/file dir "new-events.jsonl")))]
+        (.mkdirs dir)
+        (try
+          (java.nio.file.Files/setPosixFilePermissions (.toPath dir)
+            (java.nio.file.attribute.PosixFilePermissions/fromString "r-xr-xr-x"))
+          (let [r (shell/sh "bin/mission" "fallback" "M-1" "--workspace" (:workspace opts)
+                            "--state-home" (:state-home opts) "--reason" "refusal" :env env)]
+            (is (= 1 (:exit r)))
+            (is (false? (:recorded (edn/read-string (:out r)))))
+            (is (= "r-x------" (java.nio.file.attribute.PosixFilePermissions/toString
+                                 (java.nio.file.Files/getPosixFilePermissions (.toPath dir)
+                                   (into-array java.nio.file.LinkOption []))))))
+          (finally
+            (java.nio.file.Files/setPosixFilePermissions (.toPath dir)
+              (java.nio.file.attribute.PosixFilePermissions/fromString "rwx------"))))))))

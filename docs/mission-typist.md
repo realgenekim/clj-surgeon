@@ -162,3 +162,8 @@ not change source or push. Configure your repository's Git identity beforehand.
 The generated commit body contains bounded mission/proof provenance. A receipt
 with `:git-ref-updated :unknown` requires inspecting the branch and
 `:possible-commit` before retrying; it is not evidence that the ref stayed put.
+
+The event-only `fallback` entrance runs under Babashka, using the same handler
+and JSONL schema as the JVM API. It loads no source planner or executor. Failed
+appends still return `:recorded false` and exit 1; moving the runtime does not
+turn user reports into evidence of performed or verified edits.

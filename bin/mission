@@ -17,9 +17,10 @@ cd "$(dirname "$0")/.."
 # NOTE: helper_extraction reaches mcp-hot-verify, which requires nrepl, so the
 # entrance needs the mcp alias's deps. The PURE core (clj-surgeon.mission) has
 # no such dependency and loads under babashka on its own.
-# READ VERBS GO TO BABASHKA. They touch only clj-surgeon.mission, which is
+# READ VERBS GO TO BABASHKA. Event-only fallback reporting does too. Reads use
+# clj-surgeon.mission, which is
 # babashka-safe on purpose; routing them through the JVM costs ~6 s of start and
-# loading for ~1 ms of work. Writes stay on the JVM: they reach a planner and a
+# loading for ~1 ms of work. Source writes stay on the JVM: they reach a planner and a
 # guarded transaction kernel.
 # @bb-help: HELP IS PURE TEXT and goes to babashka too. Probe 2 spent eight
 # returns on `help` at ~5 s of JVM start each -- about a third of its run --
@@ -48,11 +49,11 @@ for ((mission_i=0; mission_i<${#mission_args[@]}; mission_i++)); do
   fi
 done
 case "$mission_verb" in
-  show|list|ready|blocked|help)
+  show|list|ready|blocked|help|fallback)
     exec bb --classpath src bin/mission-read.clj "$@" ;;
   "")
     exec bb --classpath src bin/mission-read.clj help ;;
-  open|plan|propose|run|apply|resume|undo|link|fallback|commit)
+  open|plan|propose|run|apply|resume|undo|link|commit)
     : ;;                      # a real write verb: fall through to the JVM
   *)
     # unknown verb: the same help, the same exit 2, without a JVM
