@@ -134,3 +134,10 @@ contains the actual appended event and `:recorded true`; a failed append
 returns `:recorded false` and exits 1. Missing missions and unsupported reasons
 append no fallback event. For auditing, inspect the returned `:event` rather
 than inferring native activity from a failed mission.
+
+Historical `show` rows are interpreted conservatively: when a saved decision
+has no direct error code, its nested evidence code is displayed with
+`:error_source :saved-decision-evidence`. A saved example targeting another
+mission verb is omitted and labeled `:incompatible-mission-verb`; runnable help
+replaces it. The original row remains available through `--full`, and neither
+reading mode rewrites the ledger.

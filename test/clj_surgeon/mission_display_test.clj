@@ -135,3 +135,47 @@
         (is (= :mission-workspace-required (:error-type value)))
         (is (= value ((requiring-resolve 'clj-surgeon.mission-cli/show) {:id "M-1" :state-home "/var/tmp/forge/astra-live-real1-fx/state"})))
         (is (= 0 (:exit (apply shell/sh (get-in value [:example :argv])))))))))
+
+(def historical-decision
+  ;; Read-only field evidence: astra-telemetry-fx/state M-1, blocked owner_forms.
+  {:decision nil :error_type nil :because nil
+   :evidence {:error-type :forms-protected-syntax :mutation-attempted false}
+   :example {:verb "helper_extraction" :question "why this write is being made"
+             :request {:op "helper_extraction" :workspace_root "/abs/path/to/workspace"
+                       :from {:file "src/acid/web/http.clj"}
+                       :to {:lib "acid.web.response" :alias_policy ["response" "resp"]}
+                       :helpers ["html-response" "see-other" "text-response"]
+                       :scope {:paths ["src/**/*.clj"]}
+                       :verification {:profile "mission-proof"}}}})
+
+(deftest historical-decision-surfaces-saved-type-and-rejects-wrong-verb-example
+  (let [row (assoc saved :state :blocked :receipt nil :decision historical-decision)
+        shown (display row {})]
+    (is (= :forms-protected-syntax (get-in shown [:decision :error_type])))
+    (is (= :saved-decision-evidence (get-in shown [:decision :error_source])))
+    (is (nil? (get-in shown [:decision :example])))
+    (is (= :incompatible-mission-verb (get-in shown [:decision :example_omitted])))
+    (is (= ["bin/mission" "help" "run"] (get-in shown [:decision :recovery :argv])))
+    (is (= row (display row {:full true})))
+    (let [direct (assoc-in row [:decision :error_type] "direct-refusal")]
+      (is (= "direct-refusal" (get-in (display direct {}) [:decision :error_type]))))
+    (let [compatible (-> row (assoc-in [:decision :example :verb] "owner_forms")
+                         (assoc-in [:decision :example :request :op] "owner_forms"))]
+      (is (= "owner_forms" (get-in (display compatible {}) [:decision :example :verb]))))))
+
+(deftest historical-cli-display-does-not-rewrite-ledger
+  (with-ledger
+    (fn [root state]
+      (let [dir (mission/workspace-state-dir (str root) (str state))
+            file (mission/mission-file dir "M-1")
+            row (assoc saved :root (str root) :state :blocked :receipt nil :decision historical-decision)]
+        (mission/write-mission! dir row)
+        (let [before (slurp file)
+              result (shell/sh "bin/mission" "show" "M-1" "--workspace" (str root) "--state-home" (str state))
+              shown (edn/read-string (:out result))]
+          (is (= 0 (:exit result)))
+          (is (= :forms-protected-syntax (get-in shown [:decision :error_type])))
+          (is (not (.contains (:out result) "helper_extraction")))
+          (is (= before (slurp file)))
+          (when-let [argv (get-in shown [:decision :recovery :argv])]
+            (is (= 0 (:exit (apply shell/sh argv))))))))))

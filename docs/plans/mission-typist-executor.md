@@ -183,3 +183,15 @@ a failed append returns `:recorded false`, `:ok false`, and exit 1. Missing
 missions and unsupported reasons append nothing. JSONL admits only fixed
 fallback enums. Tests cover both writer failure modes, all reasons, schema
 rejection, unchanged saved bytes, and the real CLI with an isolated ledger.
+
+
+### Historical decision presentation
+
+Historical blocked owner_forms rows can contain a nil top-level decision
+error and a typed nested evidence refusal, beside an incompatible saved
+helper_extraction example. Default display promotes the saved nested code
+only when the direct code is absent, labels that source, and omits a saved
+example whose declared verb conflicts with the mission verb. An explicit
+omission reason and runnable verb-appropriate help replace that example.
+This is presentation only: saved bytes and --full remain unchanged. Witnesses
+use the actual historical forms-protected-syntax row and the BB CLI reader.

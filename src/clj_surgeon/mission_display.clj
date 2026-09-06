@@ -66,6 +66,26 @@
       result
       (assoc bounded :example (command ["bin/mission" "help" "show"]) :truncated true))))
 
+(defn decision-view
+  "Clarify saved historical diagnostics without changing their authority."
+  [decision verb]
+  (if-not (map? decision)
+    decision
+    (let [direct (or (:error_type decision) (:error-type decision))
+          nested (or (get-in decision [:evidence :error_type])
+                     (get-in decision [:evidence :error-type]))
+          spell (fn [value] (when (or (keyword? value) (string? value)) (name value)))
+          declared (keep spell [(get-in decision [:example :verb])
+                                (get-in decision [:example :request :op])])
+          mismatch (some #(not= (spell verb) %) declared)]
+      (cond-> decision
+        (and (nil? direct) nested)
+        (assoc :error_type nested :error_source :saved-decision-evidence)
+        mismatch (dissoc :example)
+        mismatch (assoc :example_omitted :incompatible-mission-verb
+                        :recovery (command ["bin/mission" "help"
+                                            (if (= "owner_forms" (spell verb)) "run" "plan")]))))))
+
 (defn show-result [view opts]
   (cond
     (false? (:ok view)) (show-refusal view opts)
@@ -87,6 +107,7 @@
                                                  :graph :dependencies :config_sources])
                               {:ok true :operation "mission-show" :authority :saved-mission
                                :details details})
+                 (contains? view :decision) (update :decision decision-view (:verb view))
                  route (assoc :route (select-keys route [:executor :k :candidate-format :provider])))]
       (loop [[[shown text-limit] & more] [[5 192] [2 128] [1 64] [0 32]]]
         (let [raw (assoc base :receipt (when (:receipt view) (assoc receipt
