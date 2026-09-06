@@ -82,15 +82,18 @@ class ScheduleTests(unittest.TestCase):
             captured.update(prompt=module.WARM_TRIAL_PROMPT, argv=cohort.sys.argv)
         module.main = main
         with patch.object(cohort, 'sha', return_value='pinned'), \
+             patch.object(cohort, 'load_frozen', return_value={'seed_inventory': {}}), \
+             patch.object(cohort, 'check_identity'), patch.object(cohort, 'check_fixture'), \
              patch.object(cohort, 'load_native', return_value=module), \
              patch.object(cohort.sys, 'argv', ['offline-test']):
-            cohort.native_entry('pinned')
+            cohort.native_entry('pinned', 'freeze')
         self.assertIn('Orientation is over.', captured['prompt'])
         self.assertIn('Complete the actual edit now', captured['prompt'])
         self.assertIn('KEEP the verified diff', captured['prompt'])
         self.assertIn('Reply DONE', captured['prompt'])
         self.assertEqual(['--arm', 'NW', '--mission', 'real-1', '--warm-session',
-                          cohort.SESSION, '--runs', '1', '--k', '1'], captured['argv'][1:])
+                          cohort.SESSION, '--runs', '1', '--k', '1', '--fixture',
+                          str(cohort.BASE / 'native-preimage')], captured['argv'][1:])
 
 
 class PreflightTests(unittest.TestCase):
@@ -109,6 +112,10 @@ class PreflightTests(unittest.TestCase):
         receipt = cohort.ednjson(self.capture.with_name('receipt.edn'))
         self.assertFalse(cohort.native_correct(receipt,
             '73760d224c67dfa70736f4f031a12192184c875e53c11fa7a203dbf006010a76'))
+        positive = cohort.ednjson('/var/tmp/forge/typist-real-fx/NW-real-1-1788662939-1205718-0/receipt.edn')
+        self.assertTrue(cohort.native_correct(positive, positive['dossier_sha256'], positive['preimage']))
+        with self.assertRaises(cohort.ApparatusFault):
+            cohort.native_correct(positive, positive['dossier_sha256'], '/different/preimage')
 
     def test_only_opening_stderr_header_can_attest_identity(self):
         raw = self.capture.read_bytes()
@@ -157,7 +164,7 @@ class PreflightTests(unittest.TestCase):
         self.assertIsNone(cohort.tool_evidence_fault(view, closed))
 
     def test_source_and_proof_failures_are_not_invented_transport_faults(self):
-        transport = {'terminated?': True, 'cancelled': [], 'completed': [
+        transport = {'terminated?': True, 'cancelled': [1, 2], 'completed': [
             {'index': 0, 'usable': True, 'model': 'openai/gpt-oss-120b', 'upstream': 'Cerebras'}]}
         view = {'receipt': {'candidates': [{'index': 0, 'compiled': False, 'error-type': 'forms-owner-mismatch'}]}}
         self.assertIsNone(cohort.tool_evidence_fault(view, transport))
@@ -177,6 +184,67 @@ class PreflightTests(unittest.TestCase):
         missing = {'receipt': {'candidates': [{'index': 0, 'compiled': True, 'proof': {'ok': False}}]}}
         self.assertEqual('tool-profile-evidence-missing', cohort.tool_evidence_fault(missing, transport))
         self.assertEqual('tool-transport-cleanup-unconfirmed', cohort.tool_evidence_fault(view, {}))
+
+
+class ReviewHoldTests(unittest.TestCase):
+    def test_native_success_must_agree_with_candidate_and_finite_clock(self):
+        receipt = {'arm': 'NW', 'mission': 'real-1', 'warm_session': cohort.SESSION,
+                   'model': 'gpt-5.6-sol', 'dossier_sha256': 'pin',
+                   'first_verified_s': 1, 'semantic_mismatch': 0,
+                   'candidates': [{'verified': False}]}
+        for clock in [1, 'not a time', float('nan'), True]:
+            with self.subTest(clock=clock), self.assertRaises(cohort.ApparatusFault):
+                cohort.native_correct({**receipt, 'first_verified_s': clock}, 'pin')
+
+    def test_real_pilot_requires_winner_proof_and_all_requested_indices(self):
+        view = cohort.ednjson('/var/tmp/forge/astra-raw-live-fx/stdout')
+        closed = cohort.ednjson(Path(view['receipt']['artifacts']) / 'transport-close.edn')
+        self.assertIsNone(cohort.tool_evidence_fault(view, closed))
+        self.assertEqual(1, len(view['receipt']['candidates']))
+        self.assertEqual(3, len(closed['completed']))
+        no_winner = copy.deepcopy(view)
+        no_winner['receipt']['candidates'] = []
+        self.assertIsNotNone(cohort.tool_evidence_fault(no_winner, closed))
+        contradictory = copy.deepcopy(view)
+        contradictory['receipt']['candidates'][0]['proof'] = {
+            'ok': False, 'gate': {'ok': False, 'results': [{'finished?': True, 'exit': 1}]}}
+        self.assertIsNotNone(cohort.tool_evidence_fault(contradictory, closed))
+        incomplete = copy.deepcopy(closed)
+        incomplete['completed'] = [closed['completed'][0]]
+        incomplete['cancelled'] = []
+        self.assertIsNotNone(cohort.tool_evidence_fault(view, incomplete))
+
+
+    def test_corrupt_native_preimage_refuses_before_native_module_dispatch(self):
+        with tempfile.TemporaryDirectory(prefix='raw-v2-seed-', dir='/var/tmp/forge') as tmp:
+            root = Path(tmp)
+            seed = root / 'native-preimage'
+            seed.mkdir()
+            (seed / 'source.clj').write_text('original')
+            expected = cohort.fixture_inventory(seed)
+            (seed / 'source.clj').write_text('changed')
+            original_sha = cohort.sha
+            def pinned_launcher(path):
+                return 'pinned' if Path(path) == cohort.REPO / 'bin/typist-run' else original_sha(path)
+            with patch.object(cohort, 'BASE', root), patch.object(cohort, 'sha', side_effect=pinned_launcher), \
+                 patch.object(cohort, 'load_frozen', return_value={'seed_inventory': expected}), \
+                 patch.object(cohort, 'check_identity'), patch.object(cohort, 'load_native') as load:
+                with self.assertRaises(cohort.ApparatusFault):
+                    cohort.native_entry('pinned', 'freeze')
+                load.assert_not_called()
+                (seed / 'source.clj').write_text('original')
+                cohort.native_entry('pinned', 'freeze')
+                load.assert_called_once()
+
+    def test_tool_preparation_occurs_inside_child_before_unchanged_mission_exec(self):
+        events = []
+        frozen = {'seed_inventory': {}}
+        with patch.object(cohort, 'load_frozen', return_value=frozen), \
+             patch.object(cohort, 'check_identity', side_effect=lambda _: events.append('identity')), \
+             patch.object(cohort, 'prepare_tool', side_effect=lambda *_: events.append('actual-setup')), \
+             patch.object(cohort.os, 'execv', side_effect=lambda *_: events.append('mission-exec')):
+            cohort.tool_entry(1, 'freeze')
+        self.assertEqual(['identity', 'actual-setup', 'mission-exec'], events)
 
 
 if __name__ == '__main__':

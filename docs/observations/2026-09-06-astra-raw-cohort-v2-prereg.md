@@ -20,8 +20,8 @@ A fresh continuation receives this phase transition, without a solution:
 > revert the edit to return to orientation. Reply DONE when finished.
 
 The new [runner](../../bench/raw-cohort-v2/run.py) loads the pinned native launcher
-in a fresh Python process, changes only `WARM_TRIAL_PROMPT`, then invokes its
-existing native main. Its source hash and exact prompt bytes join the freeze.
+in a fresh Python process, changes `WARM_TRIAL_PROMPT`, and passes an explicit
+cohort-owned `--fixture` before invoking its existing native main. Its source hash and exact prompt bytes join the freeze.
 The model, effort, orientation, task, proof and judging logic are unchanged:
 native gpt-5.6-sol/medium, independent forks of orientation
 01a07465-7a8c-7423-b598-cbac0681c1f5, fresh real1 preimage. This is a new prompt epoch;
@@ -67,10 +67,22 @@ win. Report both all-terminal latency and successful-task latency with explicit
 populations, and all correctness denominators. Do not convert failures to free
 latency or cancelled unknown usage to zero cost.
 
-Both public-command clocks include process startup through command exit. Tool
-includes proposal, saved ledger, generation, formatting, proof and commit; native
-includes wrapper/launcher, model/self-check and independent judge. Materialization,
-intent preparation and review are excluded on both sides. The original 10.618s
+Both clocks include actual prepared-task workflow setup from wrapper spawn to
+command exit. Tool includes its own per-trial source copy, workspace-specific
+spec serialization, proposal, saved ledger, generation, formatting, proof and
+commit. Native includes its actual manifest generation, profile-command resolution,
+warm-workspace reset/copy, launcher, model/self-check and independent judge/copy.
+These are real workflow differences, not equal instruction counts. Tool does not
+perform unused native manifest/profile work simply to consume matching time.
+There is no overhead subtraction. Tool records actual setup elapsed time in
+`setup.json` only as a decomposition, already charged in its terminal wall.
+
+One shared seed construction/attestation, empty result directories, human intent
+preparation and review sit outside both trial clocks. T workspaces and generated
+specs are no longer materialized in the untimed prepare phase. Its timed child
+copies the same frozen seed and checks exact bytes/modes before execing the public
+mission CLI. Native receives that cohort-owned frozen seed as its actual PREIMAGE;
+it is checked before every native dispatch and after each completed command. The original 10.618s
 orientation is separately disclosed; this continuation does not charge it again.
 Retain every candidate/proof/token/cost record. Any replay occurs after timing and
 never rewrites the winner. No new measured number or speed claim is supplied by
@@ -79,8 +91,8 @@ this draft or its offline tests.
 ## Parent-owned prelaunch work
 
 The new default fixture root is `/var/tmp/forge/astra-raw-cohort-v2-fx` and must not
-exist before preparation. `prepare` may materialize only fresh fixtures and
-freeze the current subject; it has not been run in this task. Root must approve
+exist before preparation. `prepare` constructs the shared cohort-owned native preimage, empty
+T result directories and a freeze; it has not been run in this task. Root must approve
 and bind final engine/transport/source/spec/proof/model/CLI/session identities,
 verify fixture bytes/modes and actual warm-workspace ownership/quiescence, clear
 live processes and allocate the quiet window. The old runner's hardcoded dead PID
@@ -104,7 +116,7 @@ or provider called, and no timing window allocated for this apparatus repair.
 
 ## Offline witnesses
 
-Eleven tests in [test_run.py](../../bench/raw-cohort-v2/test_run.py) pass: the old
+Fifteen tests in [test_run.py](../../bench/raw-cohort-v2/test_run.py) pass: the old
 sixth-control failure shape remains incorrect rather than a capture fault; six
 fixed attempts retain failures; identity faults save then stop; floor persistence
 happens before any paired dispatch; failure to save it prevents the first pair;
@@ -127,9 +139,12 @@ PYTHONDONTWRITEBYTECODE=1 nice -n 10 python3 bench/raw-cohort-v2/test_run.py
 
 ## Frozen fixture and terminal-evidence policy
 
-Before each T command starts, inventory the actual workspace and match the frozen
-seed exactly: file set, SHA256 and POSIX mode of every regular file, directory set
-and modes. No symlinks or special files are admitted. Prepared files use0644 and
+Before each wrapper dispatch, inventory the actual cohort-owned native PREIMAGE.
+Before the timed T child execs the mission command, inventory its newly copied
+workspace and match that same frozen seed exactly: file set, SHA256 and POSIX mode of every regular file, directory set
+and modes. Native explicitly receives this path via `--fixture`; an existing
+unbound global PREIMAGE is not reused. No symlinks or special files are admitted.
+Prepared files use0644 and
 directories0755, recorded in the manifest. A changed preimage stops before dispatch.
 Post-command protected-byte checks remain part of correctness; a generic failed
 gate does not prove the apparatus is broken.
@@ -146,8 +161,30 @@ gate does not prove the apparatus is broken.
 
 The tool validator reads the actual owned `transport-close.edn`, confirms bounded
 candidate indices and provider identity, and checks terminal proof record shapes.
+Completed union cancelled must account for all three requested indices; overlap
+is allowed, duplicate indices within either list are not. Only the winning
+candidate needs a passing proof; completed losers need not have been compiled.
+A verified tool terminal state must agree with committed/verification flags and
+an actual compiled candidate's passing gate, acceptance and unchanged proof
+inputs. A successful native receipt requires finite nonnegative verification time,
+a verified candidate and passing apply/gate/accept flags. Contradictory success
+claims are malformed evidence, not correct outcomes.
 It does not infer infrastructure failure from `:ok false`, a nonzero proof exit,
 or `:finished? false` alone. Compiled candidates require their gate results, and
 acceptance results when the gate passed. A compiled=false candidate does not
 require a proof that was never run. Evidence-path confinement and read-size
 bounds apply before parsing. All raw receipts and capture paths are retained.
+
+
+### Independent HOLD corrections
+
+The initial prelaunch validator accepted contradictory success flags and incomplete
+k3 accounting. The independent review's native false-verified/nonfinite-clock and
+actual-pilot empty-winner probes were reproduced RED in the offline harness before
+repair (`review-holds-red.txt`). The corrected witnesses reject these, a false
+winner proof, and missing requested indices while retaining the genuine pilot's
+three completed transports with only winner index2 compiled. A corrupt temporary
+native seed refuses before loading the native launcher; restoring the same seed
+admits the mocked launcher. The timed T entry witness checks real setup ordering
+before its unchanged mission exec, without launching a model. No prospective
+cohort fixtures were created and no timing or provider claims follow these tests.

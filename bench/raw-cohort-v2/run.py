@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import shutil
 import stat
 import statistics
 import subprocess
@@ -174,8 +175,20 @@ def tool_evidence_fault(view, closed):
         or closed.get('live-processes')):
         return 'tool-transport-cleanup-evidence-malformed'
     indices = [c.get('index') if isinstance(c, dict) else None for c in completed]
-    if any(type(i) is not int or not 0 <= i < 3 for i in indices) or len(set(indices)) != len(indices):
+    if (any(type(i) is not int or not 0 <= i < 3 for i in indices)
+        or len(set(indices)) != len(indices) or len(set(cancelled)) != len(cancelled)):
         return 'tool-transport-candidate-identities-malformed'
+    if set(indices) | set(cancelled) != {0, 1, 2}:
+        return 'tool-requested-candidate-accounting-incomplete'
+    success_flags = [view.get('state') == 'verified', receipt.get('verification-complete') is True,
+                     receipt.get('committed') is True]
+    if any(success_flags) and not all(success_flags):
+        return 'tool-terminal-success-flags-contradict'
+    evaluated = receipt['candidates']
+    evaluated_indices = [c.get('index') if isinstance(c, dict) else None for c in evaluated]
+    if len(evaluated) > 3 or len(set(evaluated_indices)) != len(evaluated_indices):
+        return 'tool-evaluated-candidate-identities-malformed'
+    passing = []
     for candidate in completed:
         if not isinstance(candidate, dict):
             return 'tool-transport-record-malformed'
@@ -211,8 +224,19 @@ def tool_evidence_fault(view, closed):
                         return 'tool-profile-result-malformed'
                     if result['finished?'] and type(result.get('exit')) is not int:
                         return 'tool-profile-exit-missing'
+                if gate['ok'] and any(r.get('finished?') is not True or r.get('exit') != 0 for r in results):
+                    return 'tool-profile-success-contradicts-results'
                 # Finished nonzero or candidate proof timeout are failed candidates;
                 # neither proves that the proof apparatus itself is broken.
+            if proof['ok']:
+                if (proof.get('gate', {}).get('ok') is not True
+                    or not isinstance(proof.get('acceptance'), dict)
+                    or proof['acceptance'].get('ok') is not True
+                    or proof.get('proof-inputs-unchanged') is not True):
+                    return 'tool-proof-success-contradicts-results'
+                passing.append(candidate['index'])
+    if all(success_flags) and (not passing or receipt.get('ok') is not True):
+        return 'tool-terminal-success-without-passing-winner'
     return None
 
 
@@ -227,13 +251,17 @@ def load_native():
     return module
 
 
-def native_entry(expected_sha):
+def native_entry(expected_sha, frozen_sha):
     if sha(REPO / 'bin/typist-run') != expected_sha:
         raise ApparatusFault('native-runner-identity-changed')
+    frozen = load_frozen(frozen_sha)
+    check_identity(frozen)
+    check_fixture(BASE / 'native-preimage', frozen['seed_inventory'])
     module = load_native()
     module.WARM_TRIAL_PROMPT = PHASE_PROMPT
     sys.argv = [str(REPO / 'bin/typist-run'), '--arm', 'NW', '--mission', 'real-1',
-                '--warm-session', SESSION, '--runs', '1', '--k', '1']
+                '--warm-session', SESSION, '--runs', '1', '--k', '1',
+                '--fixture', str(BASE / 'native-preimage')]
     module.main()
 
 
@@ -252,35 +280,26 @@ def prepare():
     BASE.mkdir(exist_ok=False)
     module = load_native()
     seed = module.real1_seed()
-    inventories = []
+    preimage = BASE / 'native-preimage'
+    preimage.mkdir()
+    for rel, data in seed.items():
+        path = preimage / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(data)
+        path.chmod(0o644)
+    for directory in [preimage, *(p for p in preimage.rglob('*') if p.is_dir())]:
+        directory.chmod(0o755)
+    inventory = fixture_inventory(preimage)
     for i in range(1, 5):
-        directory = BASE / ('T' + str(i))
-        workspace = directory / 'workspace'
-        workspace.mkdir(parents=True)
-        for rel, data in seed.items():
-            path = workspace / rel
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(data)
-            path.chmod(0o644)
-        for directory_path in [workspace, *(p for p in workspace.rglob('*') if p.is_dir())]:
-            directory_path.chmod(0o755)
-        inventories.append(fixture_inventory(workspace))
-        code = ('(require (quote [clojure.edn :as e])) '
-                '(let [[src root dst] *command-line-args* s (e/read-string (slurp src))] '
-                '(spit dst (pr-str (assoc-in s [:request :workspace_root] root))))')
-        subprocess.run(['bb', '-e', code, str(TEMPLATE), str(workspace), str(directory / 'spec.edn')],
-                       check=True, timeout=30)
-    if any(value != inventories[0] for value in inventories):
-        raise ApparatusFault('prepared-seeds-disagree')
+        (BASE / ('T' + str(i))).mkdir()
     (BASE / 'native-phase-prompt.txt').write_text(PHASE_PROMPT + '\n')
     files = [REPO / x for x in ('bin/mission', 'bin/typist-run', 'bin/typist_transport.py',
                                'bin/typist-dossier-real-1.md')]
     files += [Path(__file__).resolve(), PREREG, TEMPLATE, BASE / 'native-phase-prompt.txt']
-    files += list(BASE.glob('T*/spec.edn'))
     frozen = {'at': datetime.now(timezone.utc).isoformat(), 'engine': head(),
               'hashes': {str(p): sha(p) for p in files},
               'seed': {k: hashlib.sha256(v.encode()).hexdigest() for k, v in seed.items()},
-              'seed_inventory': inventories[0],
+              'seed_inventory': inventory, 'native_preimage': str(preimage),
               'native_header': {'cli_version': '0.153.3',
                                 'workdir': '/var/tmp/forge/typist-real-fx/warm-ws-real-1',
                                 'model': 'gpt-5.6-sol', 'provider': 'openai',
@@ -288,6 +307,50 @@ def prepare():
                                 'sandbox': 'danger-full-access'},
               'session': SESSION, 'native_model': 'gpt-5.6-sol', 'native_effort': 'medium'}
     write_new(BASE / 'frozen.json', frozen)
+
+
+def load_frozen(expected_sha):
+    if sha(BASE / 'frozen.json') != expected_sha:
+        raise ApparatusFault('parent-reviewed-freeze-required')
+    frozen = json.loads((BASE / 'frozen.json').read_text())
+    if frozen.get('native_preimage') != str(BASE / 'native-preimage'):
+        raise ApparatusFault('native-preimage-authority-mismatch')
+    return frozen
+
+
+def prepare_tool(directory, frozen):
+    """Actual per-trial copy/spec work, called inside the timed T process."""
+    start = time.monotonic()
+    preimage = BASE / 'native-preimage'
+    check_fixture(preimage, frozen['seed_inventory'])
+    workspace = directory / 'workspace'
+    if workspace.exists() or workspace.is_symlink() or (directory / 'spec.edn').exists():
+        raise ApparatusFault('tool-trial-preparation-already-exists')
+    shutil.copytree(preimage, workspace, copy_function=shutil.copy2)
+    check_fixture(workspace, frozen['seed_inventory'])
+    code = ('(require (quote [clojure.edn :as e])) '
+            '(let [[src root dst] *command-line-args* s (e/read-string (slurp src))] '
+            '(spit dst (pr-str (assoc-in s [:request :workspace_root] root))))')
+    subprocess.run(['bb', '-e', code, str(TEMPLATE), str(workspace), str(directory / 'spec.edn')],
+                   check=True, timeout=30)
+    # Serialization must not change the actual task/proof starting bytes.
+    check_fixture(workspace, frozen['seed_inventory'])
+    write_new(directory / 'setup.json', {'wall_s': time.monotonic() - start,
+              'charged_inside_trial': True, 'spec_sha256': sha(directory / 'spec.edn'),
+              'seed_inventory': frozen['seed_inventory']})
+
+
+def tool_entry(i, frozen_sha):
+    if i not in range(1, 5):
+        raise ApparatusFault('invalid-tool-trial-index')
+    frozen = load_frozen(frozen_sha)
+    check_identity(frozen)
+    directory = BASE / ('T' + str(i))
+    prepare_tool(directory, frozen)
+    # No simulated native manifest/profile work: mission resolves its own plan.
+    os.execv(str(REPO / 'bin/mission'), [str(REPO / 'bin/mission'), 'run',
+             '--spec-file', str(directory / 'spec.edn'), '--state-home', str(directory / 'state'),
+             '--receipt-dir', str(directory / 'receipts')])
 
 
 def head():
@@ -304,10 +367,12 @@ def check_identity(frozen):
         raise ApparatusFault('owned-quiet-window-required')
 
 
-def native_correct(receipt, dossier_sha):
+def native_correct(receipt, dossier_sha, preimage=None):
     if (receipt.get('arm'), receipt.get('mission'), receipt.get('warm_session'), receipt.get('model'),
         receipt.get('dossier_sha256')) != ('NW', 'real-1', SESSION, 'gpt-5.6-sol', dossier_sha):
         raise ApparatusFault('native-receipt-identity-mismatch')
+    if preimage is not None and receipt.get('preimage') != str(preimage):
+        raise ApparatusFault('native-receipt-preimage-mismatch')
     candidates = receipt.get('candidates')
     if (not isinstance(candidates, list) or len(candidates) != 1
         or not isinstance(candidates[0], dict)
@@ -316,14 +381,21 @@ def native_correct(receipt, dossier_sha):
         raise ApparatusFault('native-candidate-evidence-missing')
     if candidates[0].get('error') or candidates[0].get('refusal'):
         raise ApparatusFault('native-transport-refusal-needs-review')
+    clock = receipt['first_verified_s']
+    if clock is not None and (type(clock) not in (int, float) or not math.isfinite(clock) or clock < 0):
+        raise ApparatusFault('native-verification-clock-malformed')
+    verified = candidates[0]['verified']
+    if verified != (clock is not None):
+        raise ApparatusFault('native-terminal-success-contradicts-candidate')
+    if verified and (receipt['semantic_mismatch'] or any(candidates[0].get(k) is not True
+                                                        for k in ['apply_ok', 'gate_ok', 'accept_ok'])):
+        raise ApparatusFault('native-success-without-complete-proof')
     # No diff, wrong patch, failed acceptance are genuine native results.
-    return receipt.get('first_verified_s') is not None and not receipt.get('semantic_mismatch')
+    return verified
 
 
 def run(frozen_sha):
-    if sha(BASE / 'frozen.json') != frozen_sha:
-        raise ApparatusFault('parent-reviewed-freeze-required')
-    frozen = json.loads((BASE / 'frozen.json').read_text())
+    frozen = load_frozen(frozen_sha)
     check_identity(frozen)
     module = load_native()
     seed = module.real1_seed()
@@ -340,13 +412,16 @@ def run(frozen_sha):
                 check_identity(frozen)
                 directory = BASE / (arm + str(i))
                 directory.mkdir(exist_ok=(arm == 'T'))
-                if arm == 'T':
-                    check_fixture(directory / 'workspace', frozen['seed_inventory'])
-                    row['seed_inventory_verified_before_dispatch'] = True
-                cmd = ([str(REPO / 'bin/mission'), 'run', '--spec-file', str(directory / 'spec.edn'),
-                        '--state-home', str(directory / 'state'), '--receipt-dir', str(directory / 'receipts')]
-                       if arm == 'T' else [sys.executable, str(Path(__file__).resolve()), 'native',
-                                           '--runner-sha', frozen['hashes'][str(REPO / 'bin/typist-run')]])
+                check_fixture(BASE / 'native-preimage', frozen['seed_inventory'])
+                row['seed_inventory_verified_before_dispatch'] = True
+                if arm == 'T' and any((directory / name).exists() or (directory / name).is_symlink()
+                                      for name in ['workspace', 'spec.edn', 'setup.json']):
+                    raise ApparatusFault('tool-trial-already-materialized')
+                cmd = ([sys.executable, str(Path(__file__).resolve()), 'tool', '--trial', str(i),
+                        '--frozen-sha', frozen_sha] if arm == 'T' else
+                       [sys.executable, str(Path(__file__).resolve()), 'native',
+                        '--runner-sha', frozen['hashes'][str(REPO / 'bin/typist-run')],
+                        '--frozen-sha', frozen_sha])
                 row.update(argv=cmd, load1=os.getloadavg()[0])
                 start = time.monotonic()
                 with (directory / 'stdout').open('x') as out, (directory / 'stderr').open('x') as err:
@@ -361,6 +436,7 @@ def run(frozen_sha):
                 if row['exit'] == 'timeout':
                     raise ApparatusFault('terminal-receipt-unavailable-after-watchdog')
                 if arm == 'T':
+                    row['setup'] = json.loads((directory / 'setup.json').read_text())
                     receipt = ednjson(directory / 'stdout')
                     row['receipt'] = receipt
                     artifact_dir = Path(receipt.get('receipt', {}).get('artifacts', ''))
@@ -392,7 +468,9 @@ def run(frozen_sha):
                     if attestation['fork_session_id'] in seen_forks:
                         raise ApparatusFault('native-fork-session-reused')
                     seen_forks.add(attestation['fork_session_id'])
-                    row['correct'] = native_correct(row['receipt'], frozen['hashes'][str(REPO / 'bin/typist-dossier-real-1.md')])
+                    row['correct'] = native_correct(row['receipt'], frozen['hashes'][str(REPO / 'bin/typist-dossier-real-1.md')],
+                                                    BASE / 'native-preimage')
+                check_fixture(BASE / 'native-preimage', frozen['seed_inventory'])
                 check_identity(frozen)
             except Exception as error:
                 row['fault'] = str(error) if isinstance(error, ApparatusFault) else 'apparatus-exception-' + type(error).__name__
@@ -403,14 +481,17 @@ def run(frozen_sha):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('operation', choices=['prepare', 'run', 'native'])
+    parser.add_argument('operation', choices=['prepare', 'run', 'native', 'tool'])
     parser.add_argument('--frozen-sha')
     parser.add_argument('--runner-sha')
+    parser.add_argument('--trial', type=int)
     args = parser.parse_args()
     if args.operation == 'prepare':
         prepare()
     elif args.operation == 'native':
-        native_entry(args.runner_sha)
+        native_entry(args.runner_sha, args.frozen_sha)
+    elif args.operation == 'tool':
+        tool_entry(args.trial, args.frozen_sha)
     elif not args.frozen_sha:
         parser.error('run requires the parent-reviewed --frozen-sha')
     else:
