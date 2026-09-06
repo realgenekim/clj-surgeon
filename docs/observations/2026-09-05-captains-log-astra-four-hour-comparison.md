@@ -276,3 +276,14 @@ Second task reused the unchanged v3 profile and passed on its first public call 
 The existing usage plan’s description guidance was applied through installed CLI stdin :change! after preview: exactly one owner/file, guarded receipt5849276f, post-image19f43825. Only the description string changes, not schema/validation/verification. Paved lint before/after:0errors, same2existingwarnings+1info (rows shift by10); no introduced findings. Focused registration and normalgate results pending at this entry. Public catalog remains old until deliberate refresh; no exposure claim. Artifacts astra-description-dogfood-fx and astra-admission-use-2-fx.
 
 Astra 2026-09-06T14:52:34.263681+00:00: description validation update — one-Var attempt hit three whole-suite refusal-census fixture failures (retained; not a green partial suite). A separate direct public catalog probe passed3checks: one entry, description carried unchanged from its source Var, expected outcome classes. No live catalog refresh. Normal gate follows on the committed tip.
+
+
+### 2026-09-06 15:00Z — Astra checkpoint: second keeper and final description gate
+
+The second real-source helper extraction succeeded on its first public admission call in **2.069 s**, with two unchanged tests passing, clean lint and zero outside-hunk drift. Across the two tasks: **2/3 successful calls, 1/2 first-call-complete tasks**. These are verified scratch keepers, not free-choice adoption or publication to the original repository. Proof-profile reuse worked; preparation is excluded from these call times, so they establish no new native speedup ratio.
+
+Description-only source tip `e127047805cbc3355607fc7ef13bcf312780c372` passed the normal gate in **389.435 s**: 665 JVM tests / 8,046 assertions and 864 Babashka tests / 7,415 assertions, zero failures/errors, repository hygiene green, exact HEAD unchanged and worktree clean. Pushed to `astra/typist-route`; Fable's final review/landing requested. Live catalog refresh remains pending. Evidence: `/var/tmp/forge/astra-description-normal-gate-fx/{result.json,stdout}`. Earlier isolated test-Var census failure remains retained, not relabelled green.
+
+The bounded usage study found the public success event but its service wall remains null; it also missed the Python-wrapped installed CLI calls, whose successful preview/apply timings are supplemental receipt evidence. Study: `/var/tmp/forge/astra-admission-use-2-fx/usage/report.md`. A restart alone cannot repair the current producer-ordering omission.
+
+Assessment: **7/10**. Useful bounded wins are real; cheap preparation, proof selection, orientation and sustained optional adoption remain unearned. Next priority is reusable proof profiles and observed usage, not more editing verbs. Full checkpoint and meter evidence: `/var/tmp/forge/astra-gene-report-1500.md`. Runtime meter observed 14:55Z: **38% weekly remaining**, reset **2026-09-12 15:48:08 UTC**; no honest conversion to remaining tokens.
