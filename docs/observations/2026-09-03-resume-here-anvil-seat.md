@@ -624,3 +624,9 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 ## STATE at 20:39Z 2026-09-06 — strictly-better landed
 - MCP/main 30d7920c = tag stable/2026-09-06-strict: agent skill + plate steer a clean agent to Surgeon only for fan-out and alias migration; native by rule elsewhere. Installed on this box (block 043e607a, skill receipts). Tripwire pulls MCP/main into the records worktree before checking. Skiff install: docs/observations/2026-09-06-skiff-install-stable.md.
 - All runtime stopped; no open ledger rows; servers 7906/8171 on e8076379 (rebuild to 30d7920c is only needed for server-side changes — the strict landing is text + checker, no server change).
+
+## STATE at 21:35Z 2026-09-06 — go90 closed
+- Both seats idle, no open ledger rows, no window, no runtime. Trunk 30d7920c (= stable/2026-09-06-strict) + records commits after. Seven docs-only branches queued for the mayor (docs/observations/2026-09-03-merge-queue-for-mayor.md); mayor note inb-4a0f43.
+- go90 results: docs/observations/2026-09-06-go90-report.md (wiring 4.8x for pre-listable work; warm proof 0.8 s real work behind the timeout-burn defect inb-adcc9e; trace overhead +33 ms clean). Brainstorm + corrected ethnography: 2026-09-06-brainstorm-wall-breakthrough.md, 2026-09-06-real-session-ethnography.md.
+- Open decisions for Gene: (1) pre-list builder work doctrine; (2) account/usage-reset policy if the model drifts a third time; (3) whether to fund the hot-timeout fix (inb-adcc9e) and the receipt-text fixes (inb-2b33ec, inb-186182).
+- Next action: none scheduled; heartbeats only.
