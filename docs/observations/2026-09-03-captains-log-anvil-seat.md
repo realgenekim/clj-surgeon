@@ -3021,3 +3021,5 @@ Astra's nREPL riff, in substance: a warm runtime is the right instrument, but po
 ## 15:14Z — land e1270478: functional gates green; battery-fresh refused on commit distance (his branch's docs count). Receipt chain 5 running (battery on the merged tree → receipt → land).
 
 ## 15:33Z — LANDED: Astra's description-guidance tip e1270478 (+ receipt 3ecd0cfc) → MCP/main 10f03973 at 15:33:08Z; battery PASS 15:28Z; all gates green. Sixth and last landing of the window. Window released. Servers held on 181c365c pending the agreed catalog check.
+
+## 15:53Z — usage watch: tools "admit_clojure_patch": 4 "apply_clojure_changes": 31 "inspect_clojure": 8  (collector figures verbatim; collector window: "since": "2026-09-06T04:44:02Z" → "until": "2026-09-06T15:48:44.144857Z"; === start 15:48Z load 1.32 ; === rc 0 end 15:53Z)
