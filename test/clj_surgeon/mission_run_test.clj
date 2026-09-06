@@ -225,3 +225,43 @@
         (is (= result (edn/read-string (:out full))))
         (is (= "mission-unknown-verb" (:error_type result)))
         (is (nil? (:id result)))))))
+
+(deftest proposal-display-refusal-exits-nonzero-after-real-save
+  (with-fixture
+    (fn [root]
+      (let [spec (io/file root "request.edn")
+            state-home (str (io/file root "state"))
+            source (io/file root "subject.clj")
+            _ (spit source "(defn subject [x] (inc x))\n")
+            request {:workspace_root (str root) :intent "Rename local x to value."
+                     :owners [{:file "subject.clj" :owner "subject"}] :proof-files []
+                     :verification {:profile "gate"} :acceptance_profile "witness"
+                     :typist {:mission-class :rename
+                              :source-policy {"subject.clj" {:generated? false :reader-conditionals? false :format-sensitive? false}}
+                              :budget {:max-files 1 :max-changed-chars 100}
+                              :provider {:id :groq :model "openai/gpt-oss-120b" :upstream "Groq"}
+                              :rate {:verified 1 :attempted 1 :evidence "SYNTHETIC-display-only"
+                                     :mission-class :rename :provider :groq :model "openai/gpt-oss-120b" :upstream "Groq"}}}
+            ;; Ready-plan display fixture only; no execution, proof or provider.
+            profiles {"gate" {:commands [["never-run-gate"]] :measured-ms 1 :evidence "synthetic-gate"}
+                      "witness" {:commands [["never-run-witness"]] :measured-ms 1 :evidence "synthetic-witness"}}
+            _ (spit spec (pr-str {:verb "owner_forms" :request request :profiles profiles}))
+            args ["propose" "--spec-file" (str spec) "--state-home" state-home]
+            invoke (fn [args]
+                     (shell/sh "clojure" "-J-Xmx512m" "-J-XX:ActiveProcessorCount=2"
+                               "-M:clj-surgeon/test-deps" "-e"
+                               (str "(require 'clj-surgeon.mission-cli) "
+                                    "(with-redefs [clj-surgeon.mission-cli/show "
+                                    "(fn [_] {:ok false :error_type \"mission-injected-display-read-failure\"})] "
+                                    "(apply clj-surgeon.mission-cli/-main " (pr-str args) "))")))
+            compact (invoke args)
+            full (invoke (conj args "--full"))
+            state-dir (mission/workspace-state-dir (str root) state-home)]
+        (is (= 1 (:exit compact)))
+        (is (= "mission-injected-display-read-failure"
+               (:error_type (edn/read-string (:out compact)))))
+        (is (= "M-1" (:id (mission/read-mission state-dir "M-1"))))
+        (is (= 0 (:exit full)))
+        (is (= "M-2" (:id (edn/read-string (:out full)))))
+        (is (= :ready (:state (mission/read-mission state-dir "M-1"))))
+        (is (= :ready (:state (mission/read-mission state-dir "M-2"))))))))

@@ -253,3 +253,11 @@ and workspace/state-home-bound full-details command. `propose --full` retains
 the previous complete result. Internal propose!, run!, saved bytes and exit
 classification stay unchanged. This is an authority display, not candidate-diff
 approval or proof. Refusals without a saved id keep their existing response.
+
+### Proposal presentation failure exit
+
+A saved proposal and its later compact display are separate outcomes. If the
+display read returns a typed refusal, stdout must not report that failure with
+exit zero. Classify both the original operation and rendered response; preserve
+the saved ledger and --full bypass. A subprocess witness injects failure only
+at show after real proposal persistence. No execution/provider behavior changes.
