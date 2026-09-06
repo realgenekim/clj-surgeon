@@ -378,8 +378,8 @@
   (testing "counts are pinned so a silent re-partition is loud"
     (is (= 46 (count (lm/namespaces-for :fast))))
     (is (= 5 (count (lm/namespaces-for :integration))))
-    (is (= 18 (count (lm/namespaces-for :battery))))
-    (is (= 69 (count lm/manifest))
+    (is (= 19 (count (lm/namespaces-for :battery))))
+    (is (= 70 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -408,13 +408,14 @@
    the corpus grows without the arithmetic below going red."
   '{clj-surgeon.mission-candidate-race-test 5 ; Completion-order delivery, bounded cancellation and retained results.
     clj-surgeon.mission-events-test 7 ; Public completion events and isolated logging failure.
+    clj-surgeon.mission-phase-events-test 7 ; Actual phase receipts, identity and isolated logging failure.
     clj-surgeon.mission-run-test 8 ; One-process saved plan, refusal and CLI boundaries.
     clj-surgeon.mission-test 27 ; Adopt existing ledger orphan plus owner-forms routing and recovery witnesses.
-    clj-surgeon.mission-typist-test 5 ; Pure routing/dossier boundaries.
+    clj-surgeon.mission-typist-test 6 ; Pure routing/dossier and frozen generation policy boundaries.
     clj-surgeon.mission-candidate-test 5 ; Frozen span lowering boundaries.
     clj-surgeon.mission-plain-forms-test 8 ; Bounded raw definition decoding and actual escaping failure.
     clj-surgeon.mission-forms-test 4 ; Owner identity and protected syntax.
-    clj-surgeon.mission-typist-executor-test 7 ; Real proof/commit/undo and independent witness.
+    clj-surgeon.mission-typist-executor-test 8 ; Real proof/commit/undo, independent witness and saved fallback forwarding.
     clj-surgeon.battery-ledger-test        12 ; TEST-ISO-009a/b's witness (round three)
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
     clj-surgeon.lane-manifest-test         25 ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses
@@ -484,10 +485,10 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      ;; Merged source census: events grows 9 to 16; 921 original + 313 adopted = 1234.
-      (is (= 313 adopted) (str "adopted tests: " adopted)))
+      ;; Add seven phase-event and two fallback witnesses: 921 original + 322 adopted = 1243.
+      (is (= 322 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1234 total) (str "manifest declares " total " tests"))
+      (is (= 1243 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
