@@ -43,6 +43,62 @@
     true
     (catch Exception _ false)))
 
+;; @spec OP-ALG-FORM-COUNT-001
+(deftest single-form-cardinality-refusals-report-syntax-units-without-source
+  (let [sources {"src/a.clj" "(ns app.a)\n(def values [:old])\n"}
+        expected {:intent-count 1 :edit-count 1 :changed-file-count 1}
+        cases [{:from ":old :other" :to ":new" :field ":from" :count 2}
+               {:from ":old" :to ":new :other" :field ":to" :count 2}
+               {:from " \n\t" :to ":new" :field ":from" :count 0}
+               {:from ":old" :to " \n\t" :field ":to" :count 0}
+               {:from ":old" :to "#_private-marker :new" :field ":to" :count 2}]]
+    (doseq [{:keys [from to field count]} cases]
+      (testing (str field " with " count " syntax units")
+        (let [result (transaction/compile-transaction
+                       sources
+                       (spec [(intent ["src/a.clj"] from to 1)] expected))]
+          (is (= :invalid-intent-form (:error-type result)))
+          (is (= field (:field result)))
+          (is (= 1 (:expected result)))
+          (is (= count (:actual result)))
+          (is (= count (:form-count result)))
+          (is (= (str field ": one complete form expected; " count " supplied.")
+                 (:error result)))
+          (is (nil? (:future-sources result))))))
+    (doseq [replacement ["; private-marker\n:new" "; private-marker\n"]]
+      (testing "detached comments retain their existing explanation"
+        (let [result (transaction/compile-transaction
+                       sources
+                       (spec [(intent ["src/a.clj"] ":old" replacement 1)] expected))]
+          (is (= :invalid-intent-form (:error-type result)))
+          (is (= ":to must contain exactly one complete form with no detached comments"
+                 (:error result)))
+          (is (not (contains? result :expected)))
+          (is (not (contains? result :actual)))
+          (is (nil? (:future-sources result))))))
+    (testing "malformed reader input does not invent a cardinality"
+      (let [result (transaction/compile-transaction
+                     sources
+                     (spec [(intent ["src/a.clj"] ":old" "[" 1)] expected))]
+        (is (= :invalid-intent-form (:error-type result)))
+        (is (= ":to" (:field result)))
+        (is (not (contains? result :expected)))
+        (is (not (contains? result :actual)))
+        (is (not (contains? result :form-count)))
+        (is (nil? (:future-sources result)))))
+    (doseq [[replacement future]
+            [[":new" "(ns app.a)\n(def values [:new])\n"]
+             ["(comment :private-marker)"
+              "(ns app.a)\n(def values [(comment :private-marker)])\n"]
+             ["#_private-marker"
+              "(ns app.a)\n(def values [#_private-marker])\n"]]]
+      (testing "one complete form retains the existing accepted bytes"
+        (let [result (transaction/compile-transaction
+                       sources
+                       (spec [(intent ["src/a.clj"] ":old" replacement 1)] expected))]
+          (is (nil? (:error-type result)))
+          (is (= {"src/a.clj" future} (:future-sources result))))))))
+
 (deftest compiles-one-model-plan-into-heterogeneous-edits
   (let [sources
         {"src/a.clj"

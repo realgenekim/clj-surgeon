@@ -1,5 +1,6 @@
 (ns ^{:lane :fast} clj-surgeon.mcp-contract-test
   (:require
+   [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-contract :as contract]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.string :as str]
@@ -658,6 +659,36 @@
       (let [normalized (contract/classify-kernel-result "/work/project" result)]
         (is (false? (:ok normalized)))
         (is (= reason (:reason normalized)))))))
+
+;; @spec OP-ALG-FORM-COUNT-001
+(deftest real-two-require-replacement-refusal-keeps-public-cardinality
+  ;; inb-e68905: actual transmitted 2026-09-06 08:18:04.452Z request,
+  ;; recovered from the bound rollout, not the later draft edit-request.json.
+  (let [request {"edits" [{"file" "src/example.clj"
+                           "within" {"namespace" true}
+                           "from" "[clojure.edn :as edn]"
+                           "to" "[cheshire.core :as json]\n   [clojure.edn :as edn]"
+                           "matches" 1}]}
+        validated (contract/validate-tool-params request)
+        compiled (transaction/compile-transaction
+                   {"src/example.clj" "(ns example (:require [clojure.edn :as edn]))\n"}
+                   (contract/tool-params->transaction (:params validated)))
+        result (contract/classify-kernel-result "/work/project" compiled)]
+    (is (:ok validated))
+    (is (= :invalid-intent-form (:error-type compiled)))
+    (is (= 1 (:expected compiled)))
+    (is (= 2 (:actual compiled)))
+    (is (nil? (:future-sources compiled)))
+    (is (false? (:ok result)))
+    (is (= "invalid-intent-form" (:error_type result)))
+    (is (= ":do replacement" (:field result)))
+    (is (= 1 (:expected result)))
+    (is (= 2 (:actual result)))
+    (is (= 2 (:form_count result)))
+    (is (:source_unchanged result))
+    (is (= ":do replacement: one complete form expected; 2 supplied." (:error result)))
+    (is (str/includes? (:remedy result) ":do replacement: one complete form expected; 2 supplied."))
+    (is (not (str/includes? (:error result) "cheshire.core")))))
 
 (deftest classifies-kernel-refusal-with-the-exact-actionable-diagnostic
   (let [refusal {:error ":find must contain exactly one complete form with no detached comments"

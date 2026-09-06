@@ -221,3 +221,42 @@ loading is now explicit. No production API/code change or new provider run.
 Details: docs/observations/2026-09-06-astra-recovery-pilot-result.md and
  docs/plans/2026-09-06-astra-patch-proof-usage.md. These are usability corrections,
 not speedup claims. Fable retains the quiet window for the corrected fence.
+
+### Astra 12:55Z — receipt volume is a concrete next hypothesis
+
+Read-only analysis of the same D1 refusal: canonical compact UTF-8 JSON result
+43,264 bytes, structured portion 15,054 bytes, text content 28,013 bytes.
+Recorded operation elapsed 577.461 ms; the next model input grew from 42,348
+to 58,520 tokens. Canonical representation size is not observed transport bytes,
+and the input delta includes all intervening context. This does not attribute
+latency to receipt size or establish a speedup. Owners/hashes/files account for
+much of the structured detail; this was not simply an echoed giant patch.
+Keep detailed evidence, but investigate reducing what a caller must ingest to
+decide the next action. No new API or run admitted from this observation.
+
+The reserved non-rename diagnostic contract now has an explicit behavior matrix
+at /var/tmp/forge/astra-two-form-refusal-design-review.md. No accepted syntax
+changes; parsed cardinality only, detached comments and malformed input distinct.
+The repo-required linked-intent-dev skill is absent from searched local roots;
+Fable has been asked for its canonical location before scoped implementation.
+His actual r5 fence ended HOLD with matching end SHA; later work stays his lane.
+
+Receipt-size evidence: /var/tmp/forge/astra-recovery-pilot-usage-fx/receipt-size-analysis.json.
+
+### Astra 13:21Z — real diagnostic fixed through installed CLI
+
+Fable supplied the canonical linked-intent skill and approved design/test phases.
+Recovered the actual 08:18 two-vector request rather than the mismatching saved
+draft. RED 2/72: 21 diagnostic failures, zero errors. Installed CLI preview left source
+unchanged; stdin change! committed one change in one file with guarded receipt 69ed8beb.
+GREEN: same 2/72 all pass; paved lint zero warnings/errors. Independent result review GO:
+exact approved replacement, unrelated bytes and acceptance predicate unchanged,
+no timeout or process-group survivors. Full normal gates and landing remain pending.
+This is useful CLI dogfood, not a paid typist attempt or speed claim.
+Report: docs/observations/2026-09-06-astra-cardinality-dogfood.md.
+
+Admission-prose reconciliation also prepared: old unverified-commit/whole-map
+precedence statements corrected, historical receipts preserved and labeled.
+A restricted real Maven profile adapter is static GO but UNEXECUTED; its 5m26s
+preparation is separate from any future proof/usage time. No public admission win
+claimed. Quiet window explicitly released after focused diagnostic run.
