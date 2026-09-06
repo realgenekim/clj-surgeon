@@ -27,18 +27,32 @@ cd "$(dirname "$0")/.."
 for arg in "$@"; do
   case "$arg" in
     --help|-h)
-      if [[ "${1:-}" == run ]]; then
-        exec bb --classpath src bin/mission-read.clj help run
+      if [[ "${1:-}" == run || "${1:-}" == commit ]]; then
+        exec bb --classpath src bin/mission-read.clj help "$1"
       fi
       exec bb --classpath src bin/mission-read.clj help ;;
   esac
 done
-case "${1:-}" in
+# Match the Clojure parser's global option pairs when finding the command.
+# This keeps --workspace R commit M-ID on the same route as commit M-ID --workspace R.
+mission_args=("$@")
+mission_verb=""
+for ((mission_i=0; mission_i<${#mission_args[@]}; mission_i++)); do
+  if [[ "${mission_args[mission_i]}" == --* ]]; then
+    if ((mission_i+1<${#mission_args[@]})) && [[ "${mission_args[mission_i+1]}" != --* ]]; then
+      ((mission_i+=1))
+    fi
+  else
+    mission_verb="${mission_args[mission_i]}"
+    break
+  fi
+done
+case "$mission_verb" in
   show|list|ready|blocked|help)
     exec bb --classpath src bin/mission-read.clj "$@" ;;
   "")
     exec bb --classpath src bin/mission-read.clj help ;;
-  open|plan|propose|run|apply|resume|undo|link|fallback)
+  open|plan|propose|run|apply|resume|undo|link|fallback|commit)
     : ;;                      # a real write verb: fall through to the JVM
   *)
     # unknown verb: the same help, the same exit 2, without a JVM

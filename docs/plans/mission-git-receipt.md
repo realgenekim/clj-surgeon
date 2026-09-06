@@ -40,7 +40,7 @@ kernel source mutation and declares skipped hooks.
 This lane provides the pure planner, injected executor, and actual bounded argv,
 Git/index/live observation and repository locking adapters. Root owns normalized
 saved-ledger extraction, its reread/hash callback, CLI help and wiring. The seam
-is not yet exposed as a production command. Git `write-tree` may refresh internal
+is exposed by the experimental `bin/mission commit` command. Git `write-tree` may refresh internal
 index cache metadata; no staging or staged-content mutation occurs. Source blobs
 must be UTF-8 and at most 1 MiB; every subprocess has a 10-second wall limit and
 1 MiB output cap enforced while reading. Environment Git overrides are removed;

@@ -3,7 +3,7 @@
 Public handler: `mission-git-ledger/commit!` accepts exactly `:id`, `:workspace`
 and optional `:state-home`. Proof, source, profile or receipt overrides refuse.
 The first supported verb is `owner_forms`; other verbs refuse explicitly.
-CLI/launcher wiring remains root-owned and retains the explicit-staging and
+The public `bin/mission commit` boundary retains the explicit-staging and
 hook-skipping disclosures in `mission-git-receipt.md`.
 
 The handler uses the existing mission directory/id APIs but reads bounded EDN
@@ -44,11 +44,39 @@ saved plan/receipt/undo artifacts and actual independent proof commands from the
 existing executor fixture. Seven modified saved-state/proof/snapshot variants
 refuse in pure normalization; a tampered on-disk inverse refuses without changing
 HEAD; successful handler publication preserves live bytes and commits exactly
-the mission source path. No user mission or provider was invoked. Root still owns
-CLI dispatch, help, launcher routing, and test manifest enrollment.
+the mission source path. No user mission or provider was invoked. Public CLI verification is recorded
+below; the integrating branch owns test manifest enrollment.
 
 Combined isolated JVM verification of all five Git seam namespaces: 18 tests /
 112 assertions green; formatter and lint clean. Namespace enrollment counts are
 mission-git-test :fast 4, mission-git-boundary-test :battery 4,
 mission-git-fence-test :battery 5, mission-git-process-test :battery 2, and
 mission-git-ledger-test :battery 3.
+
+## Public CLI boundary
+
+`bin/mission commit M-ID --workspace R [--state-home H]` passes exactly these
+three fields to the saved-ledger adapter. A pure option gate rejects missing
+values, extra positional arguments and every spec/proof/config override before
+reading a spec file or touching Git. Ordinary mission verbs retain their paths.
+Help and the receipt explicitly distinguish verified source mutation from Git
+ref publication: no staging, source write, push, Git hooks or signing. Users
+stage precisely the verified changed files first. Ref-update uncertainty remains
+`:git-ref-updated :unknown`; callers must inspect Git before retrying.
+Verification includes closed pure parser/dispatch witnesses, supported help,
+nonzero typed refusals without eager spec reads, and a real public CLI roundtrip
+from synthetic saved proof through explicit staging to verified Git tree/body.
+
+Public wiring verification: six Git namespaces pass 22 tests / 156 assertions,
+including four new CLI witnesses. Existing display/run/fallback launcher
+regressions pass 22 tests / 183 assertions. The actual successful subprocess
+uses global options before `commit`; the same fixture first refuses without
+staging. Git tree, provenance body, HEAD, skipped hooks/signing, unchanged
+source and unchanged ledger are asserted. Events use a scratch override inherited
+by subprocesses. No user mission or provider call occurred. CLI/source lint
+has zero errors and one pre-existing redundant-let warning, reproduced on the
+base revision; shell syntax and diff whitespace checks pass.
+
+Enrollment delta for the whole imported seam plus CLI: one fast namespace
+(four tests), five battery namespaces (18 tests), 22 adopted tests total. The
+new CLI namespace alone contributes one battery namespace and four tests.

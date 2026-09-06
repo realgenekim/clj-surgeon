@@ -852,6 +852,7 @@
    "link"   "link <id> --depends-on <id> | --supersedes <id> --workspace R\n    Order two missions. A cycle is refused before it is written."
    "ready"  "ready --workspace R\n    :ready — what a machine can start now.\n    :waiting — real work held by a dependency or owed a re-plan."
    "list"   "list --workspace R\n    The human index, one fixed-column line per mission."
+   "commit" "commit <id> --workspace R [--state-home H]\n    Publish a Git commit from saved verified owner_forms proof; stages nothing.\n    Stage exactly the verified changed files first. No spec/proof/config overrides.\n    Skips Git hooks and signing; no source write or push. Source kernel commit and Git ref commit are separate.\n    An unknown ref-update result requires inspecting Git before retrying."
    "fallback" "fallback <id> --reason TYPE --workspace R\n    Record user-reported native-tool fallback, never perform or verify an edit.\n    TYPE: refusal | unsupported | slower-than-native | user-choice.\n    Saved mission state and proof stay unchanged. Failed append exits 1 with :recorded false."
    "help"   "help [verb]\n    This text, or one verb's. Runs on babashka: ~0.05 s, not ~5 s."})
 

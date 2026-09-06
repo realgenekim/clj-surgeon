@@ -29,6 +29,7 @@
    [clj-surgeon.mission :as mission]
    [clj-surgeon.mission-display :as display]
    [clj-surgeon.mission-events :as mission-events]
+   [clj-surgeon.mission-git-ledger :as mission-git-ledger]
    [clj-surgeon.telemetry-events :as telemetry-events]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -611,10 +612,35 @@
                 (or (= :failed (:state result))
                     (false? (get-in result [:receipt :committed]))))))
 
+(defn commit-options
+  "Pure closed CLI request: proof authority can only come from the saved mission."
+  [{:keys [positional workspace state-home] :as flags}]
+  (if (and (every? #{:positional :workspace :state-home} (keys flags))
+           (= 2 (count positional)) (= "commit" (first positional))
+           (string? (second positional)) (re-matches #"M-[0-9]{1,12}" (second positional))
+           (string? workspace) (not (str/blank? workspace))
+           (or (not (contains? flags :state-home))
+               (and (string? state-home) (not (str/blank? state-home)))))
+    {:ok true :options (cond-> {:id (second positional) :workspace workspace}
+                         (contains? flags :state-home) (assoc :state-home state-home))}
+    {:ok false :error-type :mission-commit-options
+     :error "Use commit M-ID --workspace R [--state-home H]; no spec, proof or config overrides."
+     :git-ref-updated false :source-mutation-attempted false :index-staging false}))
+
+(defn commit!
+  "CLI boundary for Git ref publication, distinct from the source kernel commit."
+  [flags]
+  (let [request (commit-options flags)
+        result (if (:ok request) (mission-git-ledger/commit! (:options request)) request)]
+    (cond-> (assoc result :operation "mission-git-commit" :push-requested false
+              :contract "Git ref publication from saved verified proof; stages nothing, changes no source, skips Git hooks and signing, never pushes.")
+      (= :unknown (:git-ref-updated result))
+      (assoc :next-action "Inspect the Git branch and possible-commit before retrying; ref update outcome is unknown."))))
+
 (defn -main [& args]
   (let [{:keys [positional] :as flags} (parse-flags args)
         verb (first positional)
-        spec (read-spec (:spec-file flags))
+        spec (when-not (= "commit" verb) (read-spec (:spec-file flags)))
         opts (merge {:workspace (:workspace flags)
                      :state-home (:state-home flags)
                      :config (:config flags)
@@ -630,7 +656,7 @@
       (do (println (help-text (second positional))) (System/exit 0))
 
       (not (contains? #{"open" "plan" "propose" "run" "show" "apply" "resume" "undo"
-                        "link" "ready" "blocked" "list" "fallback"} verb))
+                        "link" "ready" "blocked" "list" "fallback" "commit"} verb))
       (do (binding [*out* *err*]
             (println (str "bin/mission: no verb named " (pr-str verb) ".\n")))
           (println (help-text nil))
@@ -651,6 +677,7 @@
                      "run" (run! opts)
                      "resume" (resume opts)
                      "undo" (undo! opts)
+                     "commit" (commit! flags)
                      "fallback" (fallback! opts)
                      "link" (link! opts)
                      ("ready" "blocked") (ready opts)
