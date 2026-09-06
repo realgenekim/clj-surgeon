@@ -60,9 +60,8 @@ known-intent fan-out -- this is the default route:
 **Evidence and boundary.** Cohort I measured the INFORMED BATCHED EDIT route
 (fresh actors discovering owners themselves) at 1.75x proof-inclusive median,
 101.2 s vs 57.8 s; frozen-witness outcomes tool 4/4, native 3/4 with a known
-layout false negative -- no quality-superiority claim. Served discovery
-(cohort J, `owner_counts`) was wall-neutral -- a usability handoff, no
-demonstrated wall gain; its 0/4 was that spelling-sensitive witness failing the
+layout false negative -- no quality-superiority claim. Served discovery in cohort J was wall-neutral. `owner_counts` is a later
+usability change with no measured additional wall gain; its 0/4 was that spelling-sensitive witness failing the
 self-match workaround, not four self-recursion defects. This witnessed class
 ONLY: not a general Clojure editing default; whole-feature work stays native.
 
