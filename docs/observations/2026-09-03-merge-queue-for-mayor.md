@@ -120,3 +120,4 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - LANDED: fable/strictly-better-skill 5d0b31f7 (+receipt 2c68e673) → MCP/main 30d7920c at 20:37Z; tag stable/2026-09-06-strict — 20:39Z
 - QUEUED docs-only: astra e3a3cd64 (brainstorm hand-drive report + scripts + raw clocks + captain) — 21:08Z
 - QUEUED docs-only: astra dc33eba2 (trace report + raw trace) and 43b99afb (keeper) — 21:35Z
+- LANDED: fable/public-result-ceiling c10a90f6 (+receipt 5c7c9e79) → MCP/main 7030bb56 at 22:50Z (inb-b60d6e; fence r3 LAND YES; Astra GO) — 22:51Z
