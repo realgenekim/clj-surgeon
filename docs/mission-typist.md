@@ -136,9 +136,17 @@ format is saved with the plan; apply-time request changes cannot switch it.
 Multi-file raw requests refuse. Anonymous functions, sets and regex literals are
 supported; character literals and other reader dispatch remain outside this first
 prototype. Missing, extra or duplicate owners and changed docstrings refuse.
-This representation has passed boundary tests and one live mission; all three
-retained candidates also passed non-writing proof replay. It has no comparative
-performance or calibrated reliability claim yet. Omission retains the existing JSON owner-form format.
+Prepared-task comparisons now exist: a five-owner rename achieved 3.29x versus
+native Sol in the [raw-v2 cohort](observations/2026-09-06-astra-raw-cohort-v2-result.md).
+A separate real-repository three-owner rename achieved 1.98x versus Sol and
+1.82x versus actual Astra, including execution and proof. All ten outcomes in
+that comparison passed independent replay. Its 1035 seconds of shared preparation
+reduces the first epoch's two-attempt comparison to 1.028x when charged.
+These are bounded execution results, not calibrated reliability across task
+classes, free-choice adoption, or a problem-to-done guarantee. See the
+[Maven report](observations/2026-09-06-astra-maven-native-comparison.md) for sample
+sizes, controls, token counts and exclusions. Omission retains the existing JSON
+owner-form format.
 
 The executor runs the gate and independent witness before writing live source,
 checks proof inputs for byte/mode changes, rechecks the live frozen snapshot,

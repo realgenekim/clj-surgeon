@@ -127,3 +127,19 @@ Independent diagnosis found the whole-repository differential corpus is31.8%larg
 Split fullmcp run executed662tests8011assertions with zero assertion failures/errors but failed a workingtree snapshot because the author edited a plan while it ran. An unnecessary duplicate was interrupted after lead coordination; neither is a passing gate. Fable owns the final frozen merged-tree make test, still REQUIRED before landing. The passing691test/13289assertion battery receipt remains committed on the unchanged battery code.
 
 Fable independently repaired the local slot stderr bug after pure-shell red/green; root made no shared wrapper change. Explicit per-child cohort capture files are unaffected. The separate warning-only structural read fix at92795197 has independentGO and both owning analyzer8/46 and normalgate662JVM+862BB pass; its required Solfence and installation remain pending. Main remains frozen.
+
+### Astra 2026-09-06T08:15:56.611443+00:00 — landing completed; stronger-model comparison verified
+
+Fable landed 9e83d4b9 plus fresh receipt cd1eb5cc on working MCP/main as 39a4e858 at07:21Z. Spawn-site ledger, artifact-destination opt-in and fresh battery close the earlier Sol r2 HOLD. Final gates passed: battery691/13289, JVM662/8011, BB862/7352, recovery3/3, oracle, hygiene and audit. One skipped precondition in the receipt battery remains disclosed; the following recovery gate passed. Public main remains frozen.
+
+Completed new real Maven three-owner task with actual application JVM closure, independent behavioral/candidate witnesses and outbound-network denial. Paired complete prepared medians: Sol29.713s vs executor15.038s=1.976x; separate actual-Astra extension27.508s vs15.088s=1.823x. Fable replayed all10outcomes/20commands successfully. Shared preparation1035s reduces first-epoch two-attempt ratio to1.028x when charged. Small n2pairs/epoch, no free-choice or general superiority claim. Twelve provider requests cost known$0.01981695, no unknowns; reasoning tokens retained as subsets. Full report: [Maven native comparison](2026-09-06-astra-maven-native-comparison.md).
+
+Gene's adopted cadence is small usable slice → use immediately → ledger row. Two actual test leaks are next: Node compile-cache suppression belongs at the guarded test-child boundary; the root receipt leak comes from a global io/file test mock. A separately reviewed warm-profile prototype uses the existing trusted profile argv, owned immutable runtime generation and verification-only lock. Changed candidates initially refuse/restart: no premature per-edit-speed claim. Groq live boundary and Spark adapter remain unfinished.
+
+### Astra 2026-09-06T08:26:57.350919+00:00 — two real leak cuts and live fallback boundary
+
+Node-cache test-child enforcement016685f0 passed owningratchet and fullnormalgate JVM662/8011 +BB863/7358, zero failures/errors; independentreview verified all7testedfilehashes againstcommit. No productionformatter/Make/JVMmanifest change. Fullnormalwall retained as399.79–420.65s interval, not invented precision.
+
+Receipt test globalio/filemock faithfully reproduced rootreceipt leak while old7assertionspassed; correctedtest14assertions and externalrootinventorypass. MCPdogfood firstrefused two-form require replacement, correctedcompleteform committed2edits696ms; formatted and explicittelemetryrequire resolvedlintwarning. IndependentstaticGO and focusedJVMRED/GREEN complete; combinednormalgatepending. [Receipt report](2026-09-06-astra-receipt-fixture-leak.md).
+
+Singlepreregistered induced429→actualGroqtransport passed: onepaidrequest,84prompt/175completion/159reasoningsubset, unknowncost;0.515sexternalwall, no retry. No realoutage/missionfailover/speedclaim. [Groq boundary report](2026-09-06-astra-groq-live-boundary.md). Warmprototype now owns next window; exact runtime authority and parity still required.

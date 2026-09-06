@@ -227,6 +227,8 @@
             (str "cannot be used as a temp base: " detail)
             :sentinel-mismatch
             (str "was handed a re-exec sentinel it does not own: " detail)
+            :node-compile-cache-not-disabled
+            "was launched WITHOUT NODE_DISABLE_COMPILE_CACHE=1 required by the test runner."
             :home-not-isolated
             (str "was launched WITHOUT the isolated user.home this run "
                  "requires (TEST-ISO-006): " detail)
@@ -405,7 +407,9 @@
    (cond-> {reexec-sentinel (str root)
             "TMPDIR" (str root)
             "TMP" (str root)
-            "TEMP" (str root)}
+            "TEMP" (str root)
+            ;; @spec MCP-OP-TMPHYG-005 -- test descendants must not leak npm's cache.
+            "NODE_DISABLE_COMPILE_CACHE" "1"}
      ;; @spec TEST-ISO-006 -- a subprocess reads $HOME, never the JVM
      ;; property, so an isolated run that set only -Duser.home would leak
      ;; through the first thing that shells out.
@@ -439,67 +443,73 @@
    runner's own argv, forwarded to the child."
   ([target] (secure-tmpdir! target nil))
   ([target args]
-  (let [base (env-or-current-tmpdir)
-        isolate-home? (boolean (:isolate-home? target))]
-    (try (fs/create-dirs base) (catch Throwable _ nil))
-    ;; @spec MCP-OP-TMPHYG-008
-    (if-let [refusal (base-refusal base)]
-      (refuse! refusal)
-      (if-let [declared (System/getenv reexec-sentinel)]
-        ;; CHILD branch. The sentinel is only believed when it NAMES the root
-        ;; this process was actually launched on, and that root carries this
-        ;; namespace's own name shape. Anything else is an inherited sentinel
-        ;; in a process the parent never spawned -- refuse (MCP-OP-TMPHYG-004).
-        (let [actual (System/getProperty "java.io.tmpdir")]
-          (if (and (= (canonical declared) (canonical actual))
-                   (own-isolated-root? actual))
-            (let [root (io/file actual)]
-              ;; @spec TEST-ISO-006 -- when this run asked for home isolation,
-              ;; the child REFUSES unless it is actually running on the
-              ;; throwaway. Without this the isolation could be silently
-              ;; absent (a stripped flag, an inherited sentinel) and the lane
-              ;; would run on the seat's real home while every witness that
-              ;; asks the JVM what its home is agreed that it had not.
-              (if (and isolate-home?
-                       (not= (canonical (isolated-home root))
-                             (canonical (System/getProperty "user.home"))))
-                (refuse! {:reason :home-not-isolated
-                          :base actual
-                          :detail (format (str "user.home is %s but this run asked for "
-                                               "an isolated home at %s.")
-                                          (pr-str (System/getProperty "user.home"))
-                                          (pr-str (str (isolated-home root))))})
-                (do (register-root-sweep! root (atom nil))
-                    {:refused false :root root})))
-            (refuse! {:reason :sentinel-mismatch
-                      :base actual
-                      :detail (format (str "it names root=%s but this process's java.io.tmpdir "
-                                           "is %s. Refusing to treat a shared base as a private "
-                                           "run root.")
-                                      (pr-str declared) (pr-str actual))})))
-        (let [root (io/file base (format "%s%d-%s" isolated-root-prefix (current-pid)
-                                         (subs (str (random-uuid)) 0 8)))]
-          (sweep-stale-roots! base)
-          (try
-            (fs/create-dirs root)
-            ;; @spec TEST-ISO-006 -- created by the same act that creates the
-            ;; run root, so `sweep-root!` destroys both.
-            (when isolate-home? (fs/create-dirs (isolated-home root)))
-            (catch Throwable t
-              (refuse! {:reason :unusable-base :base base
-                        :detail (str (.getSimpleName (class t)) ": " (.getMessage t))})
-              (System/exit 97)))
-          (let [child (atom nil)
-                _ (register-root-sweep! root child)
-                cmd (reexec-child-command target root args)
-                proc (apply proc/process
-                            {:inherit true
-                             :extra-env (child-environment root isolate-home?)}
-                            cmd)
-                _ (reset! child proc)
-                exit (:exit @proc)]
-            (sweep-root! root)
-            (System/exit exit))))))))
+   (let [base (env-or-current-tmpdir)
+         isolate-home? (boolean (:isolate-home? target))]
+     (try (fs/create-dirs base) (catch Throwable _ nil))
+     ;; @spec MCP-OP-TMPHYG-008
+     (if-let [refusal (base-refusal base)]
+       (refuse! refusal)
+       (if-let [declared (System/getenv reexec-sentinel)]
+         ;; CHILD branch. The sentinel is only believed when it NAMES the root
+         ;; this process was actually launched on, and that root carries this
+         ;; namespace's own name shape. Anything else is an inherited sentinel
+         ;; in a process the parent never spawned -- refuse (MCP-OP-TMPHYG-004).
+         (let [actual (System/getProperty "java.io.tmpdir")]
+           (if (and (= (canonical declared) (canonical actual))
+                    (own-isolated-root? actual))
+             (let [root (io/file actual)]
+               ;; @spec TEST-ISO-006 -- when this run asked for home isolation,
+               ;; the child REFUSES unless it is actually running on the
+               ;; throwaway. Without this the isolation could be silently
+               ;; absent (a stripped flag, an inherited sentinel) and the lane
+               ;; would run on the seat's real home while every witness that
+               ;; asks the JVM what its home is agreed that it had not.
+               (cond
+                 ;; @spec MCP-OP-TMPHYG-005 -- never trust a stripped child environment.
+                 (not= "1" (System/getenv "NODE_DISABLE_COMPILE_CACHE"))
+                 (refuse! {:reason :node-compile-cache-not-disabled :base actual})
+
+                 (and isolate-home?
+                      (not= (canonical (isolated-home root))
+                            (canonical (System/getProperty "user.home"))))
+                 (refuse! {:reason :home-not-isolated
+                           :base actual
+                           :detail (format (str "user.home is %s but this run asked for "
+                                                "an isolated home at %s.")
+                                           (pr-str (System/getProperty "user.home"))
+                                           (pr-str (str (isolated-home root))))})
+                 :else
+                 (do (register-root-sweep! root (atom nil))
+                     {:refused false :root root})))
+             (refuse! {:reason :sentinel-mismatch
+                       :base actual
+                       :detail (format (str "it names root=%s but this process's java.io.tmpdir "
+                                            "is %s. Refusing to treat a shared base as a private "
+                                            "run root.")
+                                       (pr-str declared) (pr-str actual))})))
+         (let [root (io/file base (format "%s%d-%s" isolated-root-prefix (current-pid)
+                                          (subs (str (random-uuid)) 0 8)))]
+           (sweep-stale-roots! base)
+           (try
+             (fs/create-dirs root)
+             ;; @spec TEST-ISO-006 -- created by the same act that creates the
+             ;; run root, so `sweep-root!` destroys both.
+             (when isolate-home? (fs/create-dirs (isolated-home root)))
+             (catch Throwable t
+               (refuse! {:reason :unusable-base :base base
+                         :detail (str (.getSimpleName (class t)) ": " (.getMessage t))})
+               (System/exit 97)))
+           (let [child (atom nil)
+                 _ (register-root-sweep! root child)
+                 cmd (reexec-child-command target root args)
+                 proc (apply proc/process
+                             {:inherit true
+                              :extra-env (child-environment root isolate-home?)}
+                             cmd)
+                 _ (reset! child proc)
+                 exit (:exit @proc)]
+             (sweep-root! root)
+             (System/exit exit))))))))
 
 (defn tmp-entries
   "Names of the top-level entries currently under java.io.tmpdir."

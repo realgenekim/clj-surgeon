@@ -202,3 +202,11 @@
   (testing "the suite's own current java.io.tmpdir base is NOT tmpfs -- the
             suite would not have gotten this far otherwise"
     (is (false? (tmp-leak/tmpfs? (tmp-leak/env-or-current-tmpdir))))))
+
+;; @spec MCP-OP-TMPHYG-005
+(deftest test-child-environment-fixes-node-cache-policy-in-both-home-modes
+  (doseq [isolate-home? [false true]]
+    (let [env (#'tmp-leak/child-environment "/var/tmp/clj-surgeon-suite-42-node" isolate-home?)]
+      (is (= "1" (get env "NODE_DISABLE_COMPILE_CACHE")))
+      (is (= "/var/tmp/clj-surgeon-suite-42-node" (get env "TMPDIR")))
+      (is (= isolate-home? (contains? env "HOME"))))))
