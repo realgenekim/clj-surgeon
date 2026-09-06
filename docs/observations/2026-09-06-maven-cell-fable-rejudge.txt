@@ -18,3 +18,11 @@ N1 unchanged: 0 / 17 changed: [] missing: ['seed/deps.edn', 'seed/proof/gate.clj
 N2 unchanged: 0 / 17 changed: [] missing: ['seed/deps.edn', 'seed/proof/gate.clj', 'seed/proof/no-network.py']
 T1 unchanged: 0 / 17 changed: [] missing: ['seed/deps.edn', 'seed/proof/gate.clj', 'seed/proof/no-network.py']
 T2 unchanged: 0 / 17 changed: [] missing: ['seed/deps.edn', 'seed/proof/gate.clj', 'seed/proof/no-network.py']
+
+frozen-file check (seed/ prefix stripped), corrected run:
+C1 unchanged: 10 / 17 changed: ['src/maven/recording_query.clj'] missing: ['run.py', 'native.py', 'outcome.py', 'dossier.txt', 'spec-template.edn', 'preregistration.md']
+C2 unchanged: 10 / 17 changed: ['src/maven/recording_query.clj'] missing: ['run.py', 'native.py', 'outcome.py', 'dossier.txt', 'spec-template.edn', 'preregistration.md']
+N1 unchanged: 10 / 17 changed: ['src/maven/recording_query.clj'] missing: ['run.py', 'native.py', 'outcome.py', 'dossier.txt', 'spec-template.edn', 'preregistration.md']
+N2 unchanged: 10 / 17 changed: ['src/maven/recording_query.clj'] missing: ['run.py', 'native.py', 'outcome.py', 'dossier.txt', 'spec-template.edn', 'preregistration.md']
+T1 unchanged: 10 / 17 changed: ['src/maven/recording_query.clj'] missing: ['run.py', 'native.py', 'outcome.py', 'dossier.txt', 'spec-template.edn', 'preregistration.md']
+T2 unchanged: 10 / 17 changed: ['src/maven/recording_query.clj'] missing: ['run.py', 'native.py', 'outcome.py', 'dossier.txt', 'spec-template.edn', 'preregistration.md']
