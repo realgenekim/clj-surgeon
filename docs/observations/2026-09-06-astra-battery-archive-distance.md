@@ -29,7 +29,7 @@ Evidence retained under `/var/tmp/forge/astra-battery-freshness-fx/`:
   admitted existing archive; patched public check passes the same subject.
 - `public-green.json`: 15 public BB cases, including actual failed merged tree,
   source/bin/fixtures/config/unknown-doc/ledger churn, archive type/mode and
-  addition/deletion churn, mixed second-parent merge, failed/old/orphan receipt.
+  addition/deletion churn, mixed merge plus pure second-parent source/empty/failed-diff cases, failed/old/orphan receipt.
 - `pure-red.log`, `pure-green.log`: classifier missing RED; 14 tests / 73
   assertions GREEN, including unchanged prior freshness witnesses.
 
