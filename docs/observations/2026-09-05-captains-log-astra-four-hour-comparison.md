@@ -287,3 +287,8 @@ Description-only source tip `e127047805cbc3355607fc7ef13bcf312780c372` passed th
 The bounded usage study found the public success event but its service wall remains null; it also missed the Python-wrapped installed CLI calls, whose successful preview/apply timings are supplemental receipt evidence. Study: `/var/tmp/forge/astra-admission-use-2-fx/usage/report.md`. A restart alone cannot repair the current producer-ordering omission.
 
 Assessment: **7/10**. Useful bounded wins are real; cheap preparation, proof selection, orientation and sustained optional adoption remain unearned. Next priority is reusable proof profiles and observed usage, not more editing verbs. Full checkpoint and meter evidence: `/var/tmp/forge/astra-gene-report-1500.md`. Runtime meter observed 14:55Z: **38% weekly remaining**, reset **2026-09-12 15:48:08 UTC**; no honest conversion to remaining tokens.
+
+
+### Astra 2026-09-06T17:16:25.142879+00:00 — whole-task native comparison, retained LOSS
+
+Gene ratified the16:50–18:50 wall-only block. Full Maven feature pair completed: native128.420s, tool133.027s request-through-actor/cleanup; independent-acceptance boundary130.639/135.144s. Both independentGO, source/tests/READMElocallycommitted, originalAPI/tests preserved. Tool made one genuine focused-test refusal then one actual verified source/test commit; both actors corrected errors in their own new test literals. No native source fallback in the tool arm. Prediction>=1.25x FAILED; tool1.036x aslong. Onepair, no statistical/general slowdown claim. Preparation-to-decision22.72min includes queue/actors/review; no hidden transformation of2s service calls into task wins. Fullscope/receipts: [whole Maven task](2026-09-06-astra-whole-maven-task.md).

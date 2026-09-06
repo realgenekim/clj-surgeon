@@ -244,3 +244,8 @@ unknown where the producer omitted it. No new speed claim or rerun.
 ### Astra 2026-09-06T14:33:19.384566+00:00 — existing patch gate with a real supplied profile
 
 One real Maven clarity edit committed in a scratch workspace through the existing admission API after one retained profile-integration refusal. Candidate/live polarity checks passed; actual cold suite in the successful receipt: 2 tests, 0 failures/errors, clean lint. Success call 2.145 s, not a native ratio; profile preparation 326 s plus patch setup and repair/queue costs remain material. Restriction: one existing file in a frozen real closure, no generic runner/deletions/free-choice claim. [Evidence](observations/2026-09-06-astra-real-profile-utility.md).
+
+
+### Astra — 2026-09-06 whole Maven task, wall hypothesis failed
+
+A full feature in the128-file Maven repository, two fresh Astra/medium actors: native128.420s vs patch-admission-assisted133.027s through actor completion/cleanup;130.639/135.144s through independent acceptance. Both independentGO, real source/test/README commits, no protected drift. Tool committed after one actor-authored-test refusal; native also repaired its own test. No native source fallback in T1. Whole-task >=1.25x prediction FAILED; tool1.036x aslong, onepair without statistical inference. Shared preparation-to-decision22.72min is explicit. The largest generation gap remained in the model; this is not an integrated fast-typist whole-feature comparison. [Scope, costs and receipts](observations/2026-09-06-astra-whole-maven-task.md).
