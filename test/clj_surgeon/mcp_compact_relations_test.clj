@@ -1081,3 +1081,127 @@
         (change-buffer/clear-bases!)
         (mcp-tool/init! nil)
         (delete-tree! workspace)))))
+
+;; ---------------------------------------------------------------------------
+;; text ⊇ structured for compact-relation refusals
+;;
+;; Field finding (fan-out B, D1/D2, 2026-09-06): apply_clojure_changes refused
+;; with error_type invalid-compact-relation and structuredContent carrying
+;; `error "Each migration file must be [file, rows]"`, but the TEXT block the
+;; model reads named only the error_type, the path, and the remedy. The shape
+;; was invisible, and a fresh session retried the same wrong shape eight times.
+;; The 2026-09-03 "text ⊇ structured" ratchet did not reach this refusal class.
+
+(defn- refusal-text
+  "The visible text block a caller receives for one compact-relation refusal."
+  [request]
+  (let [normalized (assoc (contract/normalize-refusal
+                            (relations/compile-source-blind request))
+                          :elapsed_ms 3.29)]
+    {:structured normalized
+     :text (mcp-tool/concise-summary normalized)}))
+
+(def ^:private d1-bare-file-request
+  "The exact D1 shape: a `files` entry that is a bare path string, not [file rows]."
+  (assoc-in relation-request ["symbol_migration" "files" 0]
+            "src/sample/review_updates.clj"))
+
+(deftest refusal-text-carries-the-structured-error-sentence
+  ;; @spec MCP-OP-EDIT-025
+  (testing "every enumerable compact-relation admission refusal shows its error sentence"
+    (doseq [[label request]
+            [[:d1-bare-file-entry d1-bare-file-request]
+             [:missing-pair (dissoc relation-request "require_change")]
+             [:null-relation (assoc relation-request "symbol_migration" nil)]
+             [:unknown-nested
+              (assoc-in relation-request ["symbol_migration" "unexpected"] true)]
+             [:wrong-file-tuple-arity
+              (update-in relation-request ["symbol_migration" "files" 0] pop)]
+             [:wrong-row-arity
+              (update-in relation-request ["symbol_migration" "files" 0 1 0] pop)]
+             [:empty-rows
+              (assoc-in relation-request ["symbol_migration" "files" 0 1] [])]
+             [:duplicate-file
+              (update-in relation-request ["symbol_migration" "files"]
+                         #(assoc % 1 (first %)))]
+             [:mismatched-file-order
+              (update-in relation-request ["require_change" "files"]
+                         (comp vec reverse))]
+             [:alias-mismatch
+              (assoc-in relation-request ["require_change" "add" "as"] "other")]
+             [:duplicate-row
+              (update-in relation-request ["symbol_migration" "files" 0 1]
+                         #(conj % (first %)))]
+             [:disallowed-route (assoc relation-request "changes" [])]
+             [:legacy-mask (assoc relation-request "symbol_rewrites" {})]
+             [:multiply-qualified-symbol
+              (assoc-in relation-request
+                        ["symbol_migration" "files" 0 1 0 1] "one/two/three")]
+             [:bad-target-rule
+              (assoc-in relation-request
+                        ["symbol_migration" "target_rule"] "rename")]
+             [:bad-columns
+              (assoc-in relation-request
+                        ["symbol_migration" "columns"] ["a" "b" "c"])]]]
+      (testing (name label)
+        (let [{:keys [structured text]} (refusal-text request)
+              sentence (:error structured)]
+          (is (false? (:ok structured)) (pr-str structured))
+          (is (string? sentence))
+          (is (str/includes? text sentence)
+              (str "text must carry the structured error sentence "
+                   (pr-str sentence) " · text was:\n" text)))))))
+
+(deftest d1-bare-file-entry-names-the-shape-and-one-filled-example
+  ;; @spec MCP-OP-EDIT-025
+  (let [{:keys [structured text]} (refusal-text d1-bare-file-request)
+        example (:expected_shape_example structured)]
+    (testing "the refusal is still the same typed, source-safe refusal"
+      (is (= "invalid-compact-relation" (:error_type structured)))
+      (is (= ["symbol_migration" "files" 0] (:path structured)))
+      (is (true? (:source_unchanged structured))))
+    (testing "structuredContent gains one bounded, filled example"
+      (is (string? example))
+      (is (<= (count example) 200))
+      (is (str/includes? example "src/sample/review_updates.clj"))
+      (is (= example (pr-str (edn/read-string example))))
+      (let [[file rows] (edn/read-string example)]
+        (is (string? file))
+        (is (= 1 (count rows)))
+        (is (= 3 (count (first rows))))))
+    (testing "the text block carries both the sentence and the example"
+      (is (str/includes? text "Each migration file must be [file, rows]"))
+      (is (str/includes? text (str "expected: " example)))
+      (is (str/includes?
+            text
+            (str "  refused · invalid-compact-relation"
+                 " at [\"symbol_migration\" \"files\" 0] · 3.29 ms\n"
+                 "  Each migration file must be [file, rows]\n"
+                 "  expected: " example "\n"))))))
+
+(deftest refusal-without-an-error-sentence-renders-unchanged
+  ;; The generic rule adds nothing when the receipt carries no error sentence.
+  (is (= (str "apply_clojure_changes\n"
+              "  refused · invalid-intent-form · 2.50 ms\n"
+              "  change 0 · gallery-resolver · field :find\n\n"
+              "✓ source unchanged\n"
+              "→ Pass exactly one complete parseable Clojure form in :find for change 0 (gallery-resolver).")
+         (mcp-tool/concise-summary
+           {:ok false
+            :error_type "invalid-intent-form"
+            :reason "invalid-intent-form"
+            :elapsed_ms 2.5
+            :change_index 0
+            :change_id "gallery-resolver"
+            :field :find
+            :source_unchanged true
+            :remedy "Pass exactly one complete parseable Clojure form in :find for change 0 (gallery-resolver)."})))
+  (testing "a placeholder error sentence adds no line either"
+    (is (not (str/includes?
+               (mcp-tool/concise-summary
+                 {:ok false
+                  :error_type "verification-failed"
+                  :error "apply_clojure_changes refused"
+                  :elapsed_ms 1.25
+                  :rolled-back true})
+               "\n  apply_clojure_changes refused\n")))))
