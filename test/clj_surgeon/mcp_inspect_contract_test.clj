@@ -745,3 +745,88 @@
     (testing "the per-site source echo is gone from the text projection"
       (is (not (str/includes? summary "\"source\"")))
       (is (not (str/includes? summary "(send! :a)"))))))
+
+;; ---------------------------------------------------------------------------
+;; The per-site `source` echo. Round 2, 2026-09-06: for a LITERAL pattern every
+;; site's `source` is byte-for-byte the request's own `match` string -- one
+;; constant repeated once per match, for nothing. Omitting exactly that case
+;; makes absent source mean `source = result.match`, which is a CHANGE to the
+;; structured output contract, not an addition. The test is byte equality of the
+;; exact source STRING and nothing weaker: parsed equality, normalized printing,
+;; and "the pattern has no wildcard" all admit sites whose spelling differs.
+;; ---------------------------------------------------------------------------
+
+(defn- match-once
+  [source pattern]
+  (let [raw {"requests" [{"id" "m00" "operation" "match"
+                          "file" "src/demo.clj" "match" pattern}]
+             "expect" {"requests" 1 "files" 1}}
+        params (:params (inspect/validate-inspect-params raw))]
+    (get-in (inspect/evaluate-snapshots
+              params {"src/demo.clj" (snapshot "src/demo.clj" source)})
+            [:results 0])))
+
+(deftest a-site-echoing-the-request-match-byte-for-byte-omits-its-source
+  ;; @spec MCP-OP-FIELD-008
+  (let [result (match-once (str "(ns demo)\n"
+                                "(defn rows! []\n"
+                                "  (send! :ping)\n"
+                                "  (send! :ping))\n")
+                           "(send! :ping)")]
+    (is (= 2 (:match_count result)))
+    (is (true? (:source_omitted_when_equal_to_match result)))
+    (testing "every derivable site drops source and keeps everything else"
+      (doseq [site (:matches result)]
+        (is (not (contains? site :source)))
+        (is (string? (:hash site)))
+        (is (string? (:file_hash site)))
+        (is (contains? site :address))
+        (is (contains? site :line))))
+    (testing "the request-level match is the reconstruction basis and survives"
+      (is (= "(send! :ping)" (:match result))))
+    (testing "no site is lost to the omission"
+      (is (= 2 (count (:matches result))))
+      (is (= [{:inside "rows!" :matches 2}] (:owner_counts result))))))
+
+(deftest a-literal-whose-site-spelling-differs-keeps-its-source
+  ;; @spec MCP-OP-FIELD-008
+  ;; A pattern with no wildcard is NOT enough to prove the bytes match: the
+  ;; site can carry different internal whitespace, a comment, or a different
+  ;; reader spelling of the same value. Every such byte has to survive.
+  (testing "extra internal whitespace"
+    (let [result (match-once (str "(ns demo)\n"
+                                  "(defn rows! []\n"
+                                  "  (send!  :ping))\n")
+                             "(send! :ping)")]
+      (is (= 1 (:match_count result)))
+      (is (= "(send!  :ping)" (get-in result [:matches 0 :source])))))
+  (testing "a comment inside the matched form"
+    (let [result (match-once (str "(ns demo)\n"
+                                  "(defn rows! []\n"
+                                  "  (send! ; why\n"
+                                  "   :ping))\n")
+                             "(send! :ping)")]
+      (is (= 1 (:match_count result)))
+      (is (str/includes? (get-in result [:matches 0 :source]) "; why"))))
+  (testing "a different reader spelling of the same value"
+    (let [result (match-once (str "(ns demo)\n"
+                                  "(defn rows! []\n"
+                                  "  (send! 1000))\n")
+                             "(send! 1000)")
+          spelled (match-once (str "(ns demo)\n"
+                                   "(defn rows! []\n"
+                                   "  (send! 1000N))\n")
+                              "(send! 1000)")]
+      (is (not (contains? (get-in result [:matches 0]) :source)))
+      (is (= "(send! 1000N)" (get-in spelled [:matches 0 :source]))))))
+
+(deftest wildcard-matches-keep-every-captured-site-source
+  ;; @spec MCP-OP-FIELD-008
+  (let [result (match-once (str "(ns demo)\n"
+                                "(defn rows! []\n"
+                                "  (send! :a)\n"
+                                "  (send! :b))\n")
+                           "(send! _)")]
+    (is (= 2 (:match_count result)))
+    (is (= ["(send! :a)" "(send! :b)"] (mapv :source (:matches result))))
+    (is (true? (:source_omitted_when_equal_to_match result)))))

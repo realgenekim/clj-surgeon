@@ -88,7 +88,12 @@
         (is (= "(def alpha :old)"
                (get-in result [:results 0 :forms 0 :source])))
         (is (= 1 (get-in result [:results 2 :match_count])))
-        (is (= ":old" (get-in result [:results 2 :matches 0 :source])))
+        ;; @spec MCP-OP-FIELD-008 -- this site's source WAS ":old", byte-for-byte
+        ;; the request's own match string, so it is now omitted as derivable.
+        ;; The reconstruction basis is the request-level match on the receipt.
+        (is (not (contains? (get-in result [:results 2 :matches 0]) :source)))
+        (is (= ":old" (get-in result [:results 2 :match])))
+        (is (true? (get-in result [:results 2 :source_omitted_when_equal_to_match])))
         (is (= (get-in result [:file_hashes "src/demo.clj"])
                (get-in result [:results 0 :file_hash]))) (is (= {:file "src/demo.clj"
                                                                  :source_sha256 (get-in result [:file_hashes "src/demo.clj"])
@@ -1345,3 +1350,80 @@
       (finally
         (inspect-tool/init! nil)
         (delete-tree! project)))))
+
+;; ---------------------------------------------------------------------------
+;; The public 32 KB result fence, measured through the public tool path. Round
+;; 2, 2026-09-06. Dropping the derivable per-site `source` echo buys back real
+;; capacity on a repeated-literal match; it does NOT make an arbitrarily large
+;; result fit, and nothing is truncated to pretend otherwise.
+;;
+;; 200 owners is a TESTED FIXTURE, not a capacity guarantee: the admitted owner
+;; count depends on the length of each site's path, address, and owner name, so
+;; a file with longer names or deeper paths crosses the fence sooner.
+;; ---------------------------------------------------------------------------
+
+(def ^:private fence-literal "(send! :ping)")
+
+(defn- repeated-literal-source
+  [owner-count]
+  (str "(ns many)\n"
+       (str/join
+         (map (fn [i] (format "(defn owner-%03d []\n  %s)\n" i fence-literal))
+              (range owner-count)))))
+
+(defn- measure-repeated-literal
+  "One real inspect_clojure request through the public tool path, measured the
+   way the server measures it before it publishes anything."
+  [owner-count]
+  (let [project (temp-dir)]
+    (try
+      (write-source! project "src/many.clj" (repeated-literal-source owner-count))
+      (let [result (inspect-tool/execute-inspect!
+                     {:project-root (.getPath project)}
+                     {"requests" [{"id" "m00" "operation" "match"
+                                   "file" "src/many.clj"
+                                   "match" fence-literal}]
+                      "expect" {"requests" 1 "files" 1}})
+            normalized (assoc result :elapsed_ms 0.0)
+            summary (#'inspect-tool/inspect-summary normalized)]
+        {:result result
+         :bytes (inspect-tool/mcp-result-byte-count summary normalized)
+         :gated (inspect-tool/enforce-public-result-budget summary normalized)})
+      (finally (delete-tree! project)))))
+
+(deftest omitting-the-derivable-source-echo-moves-the-public-result-fence
+  ;; @spec MCP-OP-FIELD-008
+  (let [{:keys [result bytes gated]} (measure-repeated-literal 101)
+        request (first (:results result))]
+    (testing "101 repeated-literal owners now fit inside the published ceiling"
+      (is (:ok result))
+      (is (pos? bytes))
+      (is (< bytes inspect-tool/max-public-result-bytes))
+      (is (:ok gated))
+      (is (nil? (:error-type gated))))
+    (testing "with every site, count, hash and owner tally intact"
+      (is (= 101 (:match_count request)))
+      (is (= 101 (count (:matches request))))
+      (is (= 101 (count (:owner_counts request))))
+      (is (= 101 (reduce + 0 (map :matches (:owner_counts request)))))
+      (is (every? :hash (:matches request)))
+      (is (every? :file_hash (:matches request))))
+    (testing "and the reconstruction basis on the receipt"
+      (is (true? (:source_omitted_when_equal_to_match request)))
+      (is (= fence-literal (:match request)))
+      (is (not-any? #(contains? % :source) (:matches request))))))
+
+(deftest an-oversized-non-compressible-match-still-refuses-without-truncating
+  ;; @spec MCP-OP-FIELD-008
+  ;; 200 owners is over the ceiling with or without the echo. The fence must
+  ;; still fire, name itself, and return no partial result.
+  (let [{:keys [result bytes gated]} (measure-repeated-literal 200)]
+    (is (:ok result))
+    (is (= 200 (:match_count (first (:results result)))))
+    (is (> bytes inspect-tool/max-public-result-bytes))
+    (is (false? (:ok gated)))
+    (is (= :structural-buffer-output-budget-exceeded (:error-type gated)))
+    (is (nil? (:results gated)))
+    (is (true? (:source-unchanged gated)))
+    (is (= inspect-tool/max-public-result-bytes
+           (get-in gated [:limits :public-result-bytes])))))
