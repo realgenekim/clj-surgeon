@@ -23,7 +23,7 @@
 ;; byte-exact needle. Update this vector and the plate in the same commit.
 (def required-sections
   ["## Fan-out route (experimental default, 2026-09-06)"
-   "1. Discover owners FIRST: `rg -l`, then one `inspect_clojure` `match` batch,"
+   "1. Discover owners FIRST using native reads or one inspect_clojure match batch"
    "2. THEN patch helper and `require`/alias natively with `apply_patch`. A helper"
    "3. ONE `apply_clojure_changes` call, edits"
    "4. Clear argument error: repair once from the refusal. Route unavailable,"

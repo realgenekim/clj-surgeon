@@ -132,8 +132,10 @@ before `make install-agent-routing`. For a Clojure edit changing the same call
 or symbol inside MANY named top-level forms across files -- a batched,
 known-intent fan-out -- this is the default route:
 
-1. Discover owners FIRST: `rg -l`, then one `inspect_clojure` `match` batch,
-   one request per file, in bounded file groups, keeping every site and count.
+1. Discover owners FIRST using native reads or one inspect_clojure match batch
+   when structural information is still needed. If native discovery already
+   supplies the complete owners and counts, skip inspect. Group requests by
+   bounded file sets, keeping every site and count.
    Truncated output is never complete discovery: size follows source and path
    lengths and the public 32 KB enforcement is defective (inb-b60d6e). "~100
    owners" is a heuristic; splitting discovery never implies per-owner writes.
