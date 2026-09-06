@@ -343,6 +343,16 @@
         (assoc (dissoc result :receipt) :undo_receipt receipt-file :receipt_hash (:receipt-hash inverse)
                :mutation-attempted true)))))
 
+(defn candidate-refusal! [artifacts index compiled]
+  (when-not (:ok compiled)
+    (let [path (str (io/file artifacts (str "candidate-" index "-diagnostic.edn")))
+          diagnostic (select-keys compiled [:error-type :error :condition :lost :moved :next_call])
+          bounded (if (<= (count (pr-str diagnostic)) 4096)
+                    diagnostic
+                    {:error-type (:error-type compiled) :truncated true})]
+      (file-ops/atomic-write! path (pr-str compiled))
+      {:refusal bounded :diagnostics-file path})))
+
 (defn execute!
   "Apply uses saved plan authority only. Tests replace transport, not proof/commit."
   [_request config]
@@ -364,8 +374,9 @@
                     proof (when (:ok compiled)
                             (mission-events/observe-phase! "verify"
                               #(verify-candidate! authority compiled)))
-                    receipt {:index index :compiled (:ok compiled) :proof proof
-                             :error-type (:error-type compiled)}
+                    receipt (merge {:index index :compiled (:ok compiled) :proof proof
+                                    :error-type (:error-type compiled)}
+                                   (candidate-refusal! artifacts index compiled))
                     receipts (conj receipts receipt)]
                 (file-ops/atomic-write! (str (io/file artifacts "candidates.edn")) (pr-str receipts))
                 (if (:ok proof)

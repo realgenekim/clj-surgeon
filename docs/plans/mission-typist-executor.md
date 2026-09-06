@@ -144,3 +144,7 @@ characters and was correctly refused before write. This new protocol does not
 reclassify or repair that failed sample. It requires a separately recorded
 hand-drive before another replicated cohort. Any transferred routing prior must
 name its source representation; it is not raw-format reliability evidence.
+
+## Candidate refusal survival (Astra, paper cuts round)
+
+Every rejected compilation retains its typed diagnostic in the candidate receipt. The public response projects only error-type, error, condition, lost, moved and next_call, capped at 4096 printed characters per candidate. If oversized, it returns the type and explicit truncation plus a path to the complete diagnostic artifact; it never presents a truncated next call as runnable. Full compilation refusal data is retained locally in the mission artifact directory. Successful compilations do not copy staged source into receipts. Proof failures retain their existing independent gate/witness receipt. Witnesses: faithful lost-comment diagnostic survives all-candidates-rejected without write; oversized diagnostic points to complete artifact; valid later candidate retains earlier refusal. Transport failures remain typed separately; no raw provider message is promoted into these fields.

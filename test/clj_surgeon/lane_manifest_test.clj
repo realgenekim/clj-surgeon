@@ -415,7 +415,7 @@
     clj-surgeon.mission-candidate-test 5 ; Frozen span lowering boundaries.
     clj-surgeon.mission-plain-forms-test 8 ; Bounded raw definition decoding and actual escaping failure.
     clj-surgeon.mission-forms-test 4 ; Owner identity and protected syntax.
-    clj-surgeon.mission-typist-executor-test 8 ; Real proof/commit/undo, independent witness and saved fallback forwarding.
+    clj-surgeon.mission-typist-executor-test 9 ; Add candidate diagnostic survival to proof/commit/undo and saved fallback forwarding.
     clj-surgeon.battery-ledger-test        12 ; TEST-ISO-009a/b's witness (round three)
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
     clj-surgeon.lane-manifest-test         25 ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses
@@ -485,10 +485,10 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      ;; Add seven phase-event and two fallback witnesses: 921 original + 322 adopted = 1243.
-      (is (= 322 adopted) (str "adopted tests: " adopted)))
+      ;; Add seven phase-event and two fallback witnesses: 921 original + 323 adopted = 1244; includes candidate diagnostic survival.
+      (is (= 323 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1243 total) (str "manifest declares " total " tests"))
+      (is (= 1244 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

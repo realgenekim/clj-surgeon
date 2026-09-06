@@ -174,3 +174,27 @@
           (let [sent (json/parse-string (:stdin-text (last @calls)) true)]
             (is (= 8192 (:max_tokens sent)))
             (is (not (contains? sent :fallback)))))))))
+
+(deftest candidate-diagnostics-survive-the-public-executor
+  (with-fixture
+    (fn [root file]
+      (let [req (request root)
+            plan (executor/plan req profiles)
+            diagnostic {:ok false :error-type :forms-comment-lost
+                        :lost ["; keep this directive attached"]
+                        :next_call {:op :propose :reason :restore-comment}}]
+        (doseq [failure [diagnostic (assoc diagnostic :lost [(apply str (repeat 5000 "x"))])]]
+          (with-redefs [executor/request-candidates! (fn [_] [{:usable true :content "unused"}])
+                        executor/compile-candidate! (fn [_ _] failure)]
+            (let [result (executor/execute! req {:plan plan :receipt-dir (str (io/file root "receipts"))})
+                  refusal (get-in result [:candidates 0 :refusal])
+                  artifact (get-in result [:candidates 0 :diagnostics-file])]
+              (is (= :typist-all-candidates-rejected (:error-type result)))
+              (is (= :forms-comment-lost (:error-type refusal)))
+              (is (= failure (when artifact (edn/read-string (slurp artifact)))))
+              (if (= failure diagnostic)
+                (do (is (= (:lost diagnostic) (:lost refusal)))
+                    (is (= (:next_call diagnostic) (:next_call refusal))))
+                (do (is (true? (:truncated refusal)))
+                    (is (not (contains? refusal :next_call)))))
+              (is (= source (slurp file))))))))))
