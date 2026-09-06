@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""Derive the WHOLE-FILE variant of a mission dossier from the diff dossier.
+
+The variant is a DERIVATION, not a rewrite: the context, the intended change,
+the do-not-change spans, the file listings and the proof gate are the same
+bytes. Exactly three spans move — the one-line statement of what to emit, the
+sentence in the proof gate that says how the candidate reaches the tree, and
+THE RULE. Anything else differing between the two dossiers would make the A/B
+a comparison of two prompts rather than of two edit forms.
+
+Usage: bin/typist-dossier-wholefile-gen real-1 fanout
+"""
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+RULE_ONE = """## THE RULE
+
+Emit the **COMPLETE new contents** of `%(path)s` inside
+**one** ```clojure fence, and nothing else. No prose, no explanation, no
+commentary before or after the fence, no second fence, no diff.
+
+**Every byte you do not intend to change must be reproduced exactly** —
+every blank line, every space of indentation, every docstring, every comment,
+in the same order. The file you emit replaces the file on disk verbatim.
+"""
+
+RULE_MANY = """## THE RULE
+
+Emit the **COMPLETE new contents** of each of the %(n)d files you may change,
+each inside its own ```clojure fence, and each fence immediately preceded by a
+line naming its path:
+
+```
+FILE: %(first)s
+```
+
+followed by the fence. Emit exactly these paths, each once:
+
+%(list)s
+
+Nothing else: no prose, no explanation, no commentary before or after, no
+fourth fence, no diff.
+
+**Every byte you do not intend to change must be reproduced exactly** —
+every blank line, every space of indentation, every docstring, every comment,
+in the same order. Each file you emit replaces the file on disk verbatim.
+"""
+
+SPECS = {
+    "real-1": {
+        "src": "typist-dossier-real-1.md",
+        "dst": "typist-dossier-real-1-wholefile.md",
+        "files": ["src/clj_surgeon/diagnostic_delta.clj"],
+        "intro": ("You are editing a real Clojure project (`clj-surgeon`). Make ONE bounded\n"
+                  "mechanical change to ONE file and emit ONLY a unified diff.",
+                  "You are editing a real Clojure project (`clj-surgeon`). Make ONE bounded\n"
+                  "mechanical change to ONE file and emit the COMPLETE new contents of that\n"
+                  "file."),
+        "gate": ("Your diff is applied with `git apply` and then this command must exit 0 in the\n"
+                 "project root:",
+                 "The contents you emit replace that file and then this command must exit 0 in\n"
+                 "the project root:"),
+    },
+    "fanout": {
+        "src": "typist-dossier-fanout.md",
+        "dst": "typist-dossier-fanout-wholefile.md",
+        "files": ["src/fixture/util.clj", "src/fixture/scope.clj",
+                  "src/fixture/paths.clj"],
+        "intro": ("You are editing a small Clojure project. Make ONE bounded but MULTI-FILE change\n"
+                  "and emit ONLY a unified diff.",
+                  "You are editing a small Clojure project. Make ONE bounded but MULTI-FILE change\n"
+                  "and emit the COMPLETE new contents of every file you change."),
+        "gate": ("Your diff is applied with `git apply` and then this command must exit 0 in the\n"
+                 "project root:",
+                 "The contents you emit replace those files and then this command must exit 0 in\n"
+                 "the project root:"),
+    },
+}
+
+
+def derive(name):
+    spec = SPECS[name]
+    src = os.path.join(HERE, spec["src"])
+    with open(src) as fh:
+        text = fh.read()
+    for old, new in (spec["intro"], spec["gate"]):
+        if text.count(old) != 1:
+            raise SystemExit("refusing: %s span appears %d times in %s"
+                             % (name, text.count(old), spec["src"]))
+        text = text.replace(old, new)
+    head, sep, _tail = text.partition("## THE RULE")
+    if not sep:
+        raise SystemExit("refusing: no THE RULE section in " + spec["src"])
+    files = spec["files"]
+    if len(files) == 1:
+        rule = RULE_ONE % {"path": files[0]}
+    else:
+        rule = RULE_MANY % {
+            "n": len(files), "first": files[0],
+            "list": "\n".join("- `%s`" % f for f in files)}
+    out = head + rule
+    dst = os.path.join(HERE, spec["dst"])
+    with open(dst, "w") as fh:
+        fh.write(out)
+    print("wrote %s (%d bytes)" % (dst, len(out)))
+
+
+if __name__ == "__main__":
+    for n in (sys.argv[1:] or sorted(SPECS)):
+        if n not in SPECS:
+            raise SystemExit("unknown dossier variant: " + n)
+        derive(n)
