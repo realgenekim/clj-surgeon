@@ -1446,3 +1446,151 @@
     (is (true? (:source-unchanged gated)))
     (is (= inspect-tool/max-public-result-bytes
            (get-in gated [:limits :public-result-bytes])))))
+
+;; ---------------------------------------------------------------------------
+;; The 32,768-byte public-result ceiling, ENFORCED on the ordinary read path.
+;; inb-b60d6e, fixed 2026-09-06.
+;;
+;; The witnesses above measure through `execute-inspect!` and ask the budget
+;; HELPER what it says. These drive the PUBLIC handler Var the MCP server
+;; registers (`handle-inspect`) and read what it actually published: an
+;; oversized ordinary match result is now refused with the typed refusal and no
+;; results, and an under-budget one is published whole with every site.
+;;
+;; The measurement is the real one: the UTF-8 byte length of the exact JSON
+;; envelope the transport sends, never a character count and never an estimate.
+;; ---------------------------------------------------------------------------
+
+(defn- published
+  "One inspect_clojure call through the public handler, with the exact JSON
+   envelope that publication produces measured in both characters and UTF-8
+   bytes."
+  [project params]
+  (let [calls (atom [])]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (inspect-tool/handle-inspect
+        nil params
+        (fn [content error? structured]
+          (swap! calls conj {:content content :error? error?
+                             :structured structured})))
+      (let [{:keys [content structured error?]} (first @calls)
+            envelope (json/generate-string
+                       {:content [{:type "text" :text (first content)}]
+                        :structuredContent structured
+                        :isError (boolean error?)})]
+        {:summary (first content)
+         :structured structured
+         :envelope-characters (count envelope)
+         :envelope-bytes (count (.getBytes envelope "UTF-8"))})
+      (finally (inspect-tool/init! nil)))))
+
+(defn- match-params
+  []
+  {"requests" [{"id" "m00" "operation" "match"
+                "file" "src/many.clj"
+                "match" fence-literal}]
+   "expect" {"requests" 1 "files" 1}})
+
+(defn- named-owner-source
+  [owner-count owner-name]
+  (str "(ns many)\n"
+       (str/join
+         (map (fn [i] (format "(defn %s []\n  %s)\n"
+                              (owner-name i) fence-literal))
+              (range owner-count)))))
+
+(deftest the-public-handler-refuses-an-ordinary-match-over-the-result-ceiling
+  ;; @spec MCP-OP-FIELD-009
+  ;; 200 repeated-literal owners: 62,150 measured bytes against a 32,768-byte
+  ;; ceiling. Before this fix the handler published all of it with ok=true.
+  (let [project (temp-dir)]
+    (try
+      (write-source! project "src/many.clj" (repeated-literal-source 200))
+      (let [{:keys [structured summary envelope-bytes]}
+            (published project (match-params))
+            measured (:bytes (measure-repeated-literal 200))]
+        (testing "the typed refusal, naming the measured bytes and the ceiling"
+          (is (false? (:ok structured)))
+          (is (= "structural-buffer-output-budget-exceeded"
+                 (:error_type structured)))
+          (is (= measured (get-in structured [:required :public_result_bytes])))
+          (is (> (get-in structured [:required :public_result_bytes])
+                 inspect-tool/max-public-result-bytes))
+          (is (= inspect-tool/max-public-result-bytes
+                 (get-in structured [:limits :public_result_bytes])))
+          (is (= (str "split the request into bounded file groups; "
+                      "keep every site and count")
+                 (:remedy structured))))
+        (testing "and no false completion: nothing read, nothing published"
+          (is (nil? (:results structured)))
+          (is (false? (:read_complete structured)))
+          (is (true? (:source_unchanged structured)))
+          (is (not= "none" (:next_action structured))))
+        (testing "the refusal itself fits the ceiling it names"
+          (is (<= envelope-bytes inspect-tool/max-public-result-bytes))
+          (is (str/includes? summary "split the request into bounded file groups"))))
+      (finally (delete-tree! project)))))
+
+(deftest a-match-under-the-ceiling-is-still-published-whole-with-every-site
+  ;; @spec MCP-OP-FIELD-009
+  ;; The ceiling refuses; it never truncates, elides, or drops a site. 101
+  ;; owners measure under it, so all 101 sites are published.
+  (let [project (temp-dir)]
+    (try
+      (write-source! project "src/many.clj" (repeated-literal-source 101))
+      (let [{:keys [structured envelope-bytes envelope-characters]}
+            (published project (match-params))
+            request (first (:results structured))]
+        (is (true? (:ok structured)))
+        (is (<= envelope-bytes inspect-tool/max-public-result-bytes))
+        (is (pos? envelope-characters))
+        (is (= 101 (:match_count request)))
+        (is (= 101 (count (:matches request))))
+        (is (= 101 (reduce + 0 (map :matches (:owner_counts request)))))
+        (is (every? :hash (:matches request))))
+      (finally (delete-tree! project)))))
+
+(deftest the-public-ceiling-is-measured-in-utf-8-bytes-not-characters
+  ;; @spec MCP-OP-FIELD-009
+  ;; 55 owners whose names are multi-byte characters: the would-be result is
+  ;; UNDER the ceiling counted in characters and OVER it counted in UTF-8
+  ;; bytes. A character-counting ceiling would publish it.
+  (let [project (temp-dir)
+        owner-name (fn [i] (str (apply str (repeat 60 "漢"))
+                                "-" (format "%03d" i)))]
+    (try
+      (write-source! project "src/many.clj"
+                     (named-owner-source 55 owner-name))
+      (let [whole (let [calls (atom [])]
+                    (try
+                      (inspect-tool/init! {:project-root (.getPath project)})
+                      (let [result (inspect-tool/execute-inspect!
+                                     {:project-root (.getPath project)}
+                                     (match-params))
+                            normalized (assoc result :elapsed_ms 0.0)
+                            envelope (json/generate-string
+                                       {:content
+                                        [{:type "text"
+                                          :text (#'inspect-tool/inspect-summary
+                                                  normalized)}]
+                                        :structuredContent normalized
+                                        :isError (not (:ok normalized))})]
+                        (swap! calls conj result)
+                        {:match-count (:match_count (first (:results result)))
+                         :characters (count envelope)
+                         :bytes (count (.getBytes envelope "UTF-8"))})
+                      (finally (inspect-tool/init! nil))))
+            {:keys [structured]} (published project (match-params))]
+        (testing "the fixture separates the two counts across the ceiling"
+          (is (= 55 (:match-count whole)))
+          (is (< (:characters whole) inspect-tool/max-public-result-bytes))
+          (is (> (:bytes whole) inspect-tool/max-public-result-bytes)))
+        (testing "and the handler refuses on the byte count"
+          (is (false? (:ok structured)))
+          (is (= "structural-buffer-output-budget-exceeded"
+                 (:error_type structured)))
+          (is (= (:bytes whole)
+                 (get-in structured [:required :public_result_bytes])))
+          (is (nil? (:results structured)))))
+      (finally (delete-tree! project)))))
