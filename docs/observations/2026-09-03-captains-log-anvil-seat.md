@@ -2881,3 +2881,5 @@ Astra's nREPL riff, in substance: a warm runtime is the right instrument, but po
 ## 09:49Z — usage watch: tools "apply_clojure_changes": 2 "inspect_clojure": 8  (collector figures verbatim; collector window: "since": "2026-09-06T04:44:02Z" → "until": "2026-09-06T09:48:32.609496Z"; === start 09:48Z load 3.31 ; === rc 0 end 09:49Z)
 
 ## 09:52Z — LANDED: freshness tip 455a8dd9 → MCP/main 38a2cec4 at 09:51Z; all gates green (mcp-test 664/8031, run_all 863/7358); battery-fresh ACCEPTED at merge by the content-bound authority — the receipt-branch remedy (used twice tonight, ~20 min each) is retired by this landing. Ratchet closed: inb-79ae9e.
+
+## 09:54Z — Fan-out B witness complete (builder A, claims pending my run): a4 five-arg delegation; e6 inverted to no-.codex-anywhere (argv registration); e4 as complete parsed forms with protected bytes; reference N and D 494/0/0, baseline RED 472/73; 8/8 negatives. Disclosure: its JVM runs (09:52Z) may have overlapped the first minute of Astra's cold-batch window (declared 09:52Z) — told him; his numbers for that minute are suspect until he says otherwise.
