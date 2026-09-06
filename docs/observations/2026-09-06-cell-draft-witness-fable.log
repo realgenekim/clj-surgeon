@@ -1,0 +1,20 @@
+[witness] PASS draft/deterministic.json present
+[witness] fresh gate: Ran 2 tests containing 10 assertions
+[witness] PASS recorded baseline counts match a fresh gate run
+[witness] PASS provider + rate present and route block non-empty
+[witness] PASS drafted witness file exists
+[witness] PASS drafted witness marked DRAFT
+[witness] deftests in draft = 2
+[witness] PASS drafted witness has >= 2 deftests (got 2)
+[witness] WITNESS-SPLIT deftests=2 red=1 green=1 split_ok=True wall=1.93s
+[witness] PASS executed draft goes RED on >= 1 deftest
+[witness] PASS executed draft goes GREEN on >= 1 deftest
+[witness] PASS witness-run.json records the red/green split
+[witness] admissible (no accepts) rc=3
+[witness] PASS admissibility REFUSES while DRAFTs lack .accept
+[witness] PASS refusal names the unaccepted DRAFTs
+[witness] created 4 .accept sentinels
+[witness] admissible (accepted) rc=0
+[witness] PASS admissibility ACCEPTS once every DRAFT has .accept
+[witness] PASS admissibility refuses again after the sentinels are removed
+[witness] WITNESS GREEN
