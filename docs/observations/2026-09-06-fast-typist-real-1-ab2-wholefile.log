@@ -1,0 +1,14 @@
+## ab-2 whole-file edit form — started Sun Sep  6 12:52:09 AM UTC 2026
+### real-1 whole-file round 1 load1=2.30 00:52:09Z
+arm=F mission=real-1 edit_form=whole-file run=F-real-1-wf-1788655930-0 first_verified_s=1.72 candidates=5 apply_ok=5 gate_ok=3 accept_ok=3 semantic_mismatch=0 refusals=0 tokens=11504 reasoning_tokens=7694
+### real-1 whole-file round 2 load1=2.30 00:52:11Z
+arm=F mission=real-1 edit_form=whole-file run=F-real-1-wf-1788655932-0 first_verified_s=2.06 candidates=5 apply_ok=5 gate_ok=5 accept_ok=5 semantic_mismatch=0 refusals=0 tokens=11157 reasoning_tokens=7347
+### real-1 whole-file round 3 load1=2.20 00:52:14Z
+arm=F mission=real-1 edit_form=whole-file run=F-real-1-wf-1788655934-0 first_verified_s=1.41 candidates=5 apply_ok=5 gate_ok=5 accept_ok=5 semantic_mismatch=0 refusals=0 tokens=11560 reasoning_tokens=7750
+### real-1 whole-file round 4 load1=2.20 00:52:16Z
+arm=F mission=real-1 edit_form=whole-file run=F-real-1-wf-1788655936-0 first_verified_s=2.86 candidates=5 apply_ok=5 gate_ok=3 accept_ok=3 semantic_mismatch=0 refusals=0 tokens=13756 reasoning_tokens=9946
+### fanout whole-file round 1 load1=2.10 00:52:19Z
+arm=F mission=fanout edit_form=whole-file run=F-fanout-wf-1788655939-0 first_verified_s=2.36 candidates=5 apply_ok=5 gate_ok=5 accept_ok=5 semantic_mismatch=0 refusals=0 tokens=16265 reasoning_tokens=13432
+### fanout whole-file round 2 load1=2.10 00:52:21Z
+arm=F mission=fanout edit_form=whole-file run=F-fanout-wf-1788655942-0 first_verified_s=5.91 candidates=5 apply_ok=5 gate_ok=5 accept_ok=5 semantic_mismatch=0 refusals=0 tokens=17750 reasoning_tokens=14974
+## ab-2 done Sun Sep  6 12:52:28 AM UTC 2026

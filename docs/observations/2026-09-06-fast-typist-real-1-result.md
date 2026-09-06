@@ -21,3 +21,20 @@ This is not a verdict on the typist; it is a verdict on the EDIT FORM. A unified
 
 ## Standing
 Real-repo, unified-diff typist: NEGATIVE, preregistered, recorded. Arm T (2026-09-02) negative stands. Toy-fixture ratios stay labelled as fixture results. Next: the edit-form A/B above; Astra owns the form-level executor (pieces 2–3), Fable builds the whole-file arm in the runner as the control.
+
+## A/B 2 (00:52Z) — the whole-file edit form on the same real file: the prediction held by 2x
+
+Same mission, same preimage, same gate and acceptance, same provider (Cerebras, pinned), k=5; only the EDIT FORM changed: the model emits the complete new file inside one fence; the applier replaces the file's bytes, then a changed-region budget (3x the known-good diff's changed lines = 78) runs before the gate. Preregistered first (prereg.md "whole-file arm"); raw log 2026-09-06-fast-typist-real-1-ab2-wholefile.log; quiet window held, load 2.1–2.3 (not a quiet box; affects only sub-second judging).
+
+| arm | rounds verified | candidates verified | first-verified wall, sorted (s) | median | max |
+|---|---|---|---|---|---|
+| F diff form (A/B 1) | 0/4 | 0/20 | — | none | — |
+| **F whole-file form** | **4/4** | **16/20 (80%)** | 1.41 1.72 2.06 2.86 | **1.89** | 2.86 |
+| N cold Sol (A/B 1) | 3/4 | 3/4 | 17.43 29.68 52.02 | 29.68 | 52.02 |
+| fanout, whole-file (2 rounds) | 2/2 | 10/10 | 2.36 5.91 | 4.14 | 5.91 |
+
+Prediction ≥40% single-candidate: observed 80%. Rounds ≥3/4: 4/4. Apply failures: 0/30 (the diff form's failure class is gone entirely). The four whole-file losses are a new class: SILENT DRIFT IN UNRELATED BYTES — a closing paren dropped from a line the mission never named (2), the namespace name rewritten in file-path spelling `clj_surgeon.diagnostic-delta` (2). All four carried exactly one extra changed line (28 vs 26); the changed-region budget cannot see a one-line drift, the gate caught every one. Replay of the four retained diff-form runs under the fixed parser: still 0/20 — the diff loss was real.
+
+Reading: on a real Clojure file, five whole-file candidates from a 1.6k tok/s model reach a verified 12-site rename in a median 1.89 s, every round; one cold Sol author needs 29.7 s and fails one round in four. That is 15.7x on wall, cold vs cold, on real bytes, with a 0.06 s gate. The remaining failure class (drift outside the intended spans) is exactly what a FORM-level request removes by construction: the kernel prints only the named forms and cannot touch the rest. So the bar for Astra's forms arm is: match 80% or better, with untouched-region identity guaranteed rather than checked.
+
+Caveats that stay: one mission, one file, k=5, a bb gate; the gate cost that would erase this on a JVM-gated mission was not measured tonight (the JVM run of the same test namespace was 0.75 s, so the ratio there would still be ~10x); warm Sol not measured.
