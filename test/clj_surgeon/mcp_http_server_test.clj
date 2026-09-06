@@ -2,8 +2,10 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.alias-migration-fixture :as fixture]
+   [clj-surgeon.mcp-contract :as contract]
    [clj-surgeon.mcp-http-server :as http-server]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
+   [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-tool :as tool]
    [clj-surgeon.mcp-workspace :as workspace]
@@ -924,5 +926,58 @@
       (is (= "fast" (get-in result [:verification :profile])))
       (is (true? (get-in result [:verification :ok])))
       (is (str/includes? (slurp source-file) ":new"))
+      (finally
+        (delete-tree! workspace)))))
+
+;; --- Round three: the advertised retry must be a legal one ------------------
+
+(deftest the-refusal-advertises-only-values-the-verify-enum-accepts
+  ;; @spec MCP-OP-VERIFY-013
+  ;; The refusal told the caller to retry with `lint`, and the verify enum
+  ;; rejected `lint` on both write routes: an advertised remedy nothing would
+  ;; accept. A refusal that names an impossible retry is worse than one that
+  ;; names none.
+  (let [[workspace source-file] (verify-workspace!)
+        selection (http-server/resolve-verification-profiles nil {})
+        refusal (tool/execute-request!
+                  {:project-root (.getPath workspace)
+                   :receipt-dir (.getPath (io/file workspace "receipts"))
+                   :verification-profiles (:profiles selection)
+                   :verification-profile-source (:source selection)}
+                  {"changes" [verify-change]
+                   "verify" "fast"})
+        accepted (:accepted refusal)]
+    (try
+      (is (= "verification-profiles-unconfigured" (:error_type refusal)))
+      (is (seq accepted) "a refusal that names no retry teaches nothing")
+      (is (= verify-sample-source (slurp source-file)))
+      (testing "every advertised value is admitted by the enum on BOTH routes"
+        (doseq [value accepted]
+          (let [direct (contract/validate-tool-params
+                         {"changes" [verify-change] "verify" value})
+                extraction (contract/validate-extraction-tool-params
+                             {"extraction"
+                              {"file" "src/sample/core.clj"
+                               "to" "src/sample/moved.clj"
+                               "forms" ["helper"]
+                               "require_policy" "copy-all"
+                               "caller_changes" []
+                               "ignored_caller_files" []}
+                              "verify" value})]
+            (is (not= :invalid-enum (:reason direct))
+                (str "the direct route rejects the advertised " (pr-str value)
+                     ": " (pr-str direct)))
+            (is (not= :invalid-enum (:reason extraction))
+                (str "the extraction route rejects the advertised "
+                     (pr-str value) ": " (pr-str extraction))))))
+      (testing "and the published schema advertises the same set"
+        (doseq [value accepted]
+          (is (contains? (set (:enum mcp-schema/verification-schema)) value)
+              (str "the published schema omits " (pr-str value)))))
+      (testing "an actually-unknown profile is still refused by the enum"
+        (is (= :invalid-enum
+               (:reason (contract/validate-tool-params
+                          {"changes" [verify-change]
+                           "verify" "no-such-profile"})))))
       (finally
         (delete-tree! workspace)))))

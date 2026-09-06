@@ -2559,6 +2559,27 @@
                          (str/starts-with? % "…"))
                     (str/split-lines block))
             "every rendered output line is a whole line")))
+    (testing "an over-long header is inside the budget, not beside it"
+      ;; a 2,200-character profile name yielded a 2,385-character block: the
+      ;; header sat OUTSIDE the budget whenever it was long.
+      (doseq [[label verification]
+              [["long profile"
+                {:ok false :profile (apply str (repeat 2200 \p))
+                 :checks [(check 0)]}]
+               ["long command"
+                {:ok false :profile "fast"
+                 :checks [{:ok false :exit 1
+                           :command (apply str (repeat 2200 \c))
+                           :output long-line}]}]
+               ["long profile and no output"
+                {:ok false :profile (apply str (repeat 3000 \p))
+                 :checks [{:ok false :command "c" :exit 1}]}]]]
+        (let [block (mcp-tool/verification-failure-block verification)]
+          (is (<= (count block) bound)
+              (str label " emitted " (count block)
+                   " characters against a stated bound of " bound))
+          (is (str/includes? block "verification:")
+              (str label " lost its header entirely")))))
     (testing "the whole refusal text still lands inside the outer ceiling"
       (let [text (mcp-tool/concise-summary
                    {:ok false :operation "apply_clojure_changes"
