@@ -57,8 +57,8 @@
       (reduce
         (fn [{:keys [remaining] :as state} finding]
           (let [identity (finding-fingerprint finding)
-                count-left (get remaining identity 0)]
-            (if (pos? count-left)
+                remaining-right-count (get remaining identity 0)]
+            (if (pos? remaining-right-count)
               (assoc state :remaining (update remaining identity dec))
               (update state :selected conj finding))))
         {:remaining right-counts :selected []}
