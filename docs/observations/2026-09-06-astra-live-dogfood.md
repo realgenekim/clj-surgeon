@@ -72,3 +72,13 @@ The next real edit targeted three executor owners to preserve actual form count 
 Three assertions in the existing real-proof/commit/undo witness failed on the pre-fix code (zero count and missing formatter status/time). After the fix, the executor plus lane-accounting suite passes **31 tests, 121 assertions**; formatting and diff checks pass. Raw logs: `astra-telemetry-fx/red.log` and `green-corrected.log`. An intervening test command used nonexistent alias `:mcp` and failed before loading tests; it is retained in `green.log`, not counted as a test result. The actual gate uses `-M:clj-surgeon/test-deps`.
 
 Receipt `:format` now preserves the kernel formatter subprocess time, status and owned-fragment counts. It is not the complete staging/formatting phase wall. `:match-count` reflects submitted, successfully compiled owner replacements instead of a hardcoded zero. The prior live keeper receipt is historical evidence and was not rewritten.
+
+## Astra 02:08Z — one-process entrance hand-driven
+
+The real-1 fresh fixture verified through `bin/mission run` in7.681950729s complete command wall; internal executor2.313261372s; gate19.415ms; acceptance14.418ms; owned-fragment formatter494.449ms. Receipt correctly reports five owners and one changed file. k1 pinned Cerebras, no fallback, no surviving transport process. Raw prereg, stdout, stderr and wall are in `/var/tmp/forge/astra-one-shot-live-fx`; this fixture run was retained rather than a second repository rename.
+
+**Timing qualification:** Fable reported that fence-review PID290129 had started concurrently. The pilot start sampled load1=1.195; Fable separately reported1.89. It is functional evidence, excluded from the clean timing cohort, not a replicated comparison or startup-only effect estimate. The subsequent four-pair preregistration waits for that actual process to exit.
+
+## Astra 02:10Z — delegated event-hook dogfood
+
+The event-hook builder attempted the actual owner_forms planner on mission_cli/propose! before editing. It returned forms-protected-syntax with committed=false and mutation-attempted=false; zero provider calls. Receipt `/var/tmp/forge/mission-events-admission.log`. Native fallback preserves the protected comments. This is another observed coverage refusal, not an adoption or speed win.

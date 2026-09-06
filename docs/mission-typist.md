@@ -67,7 +67,7 @@ not implemented yet. The executor starts at most five separately bounded request
 completion order. Before commit it cancels remaining work and checks both worker
 termination and tracked transport-process liveness. Completed replies are retained;
 cancelled requests have unknown billed usage. The three-process fake-client path passes real proof, guarded commit and undo;
-live-provider validation is still pending.
+two live pinned-provider hand-drives now verify (one retained repository change, one fresh fixture). Independent combined fence review and replicated complete-wall performance validation remain pending.
 
 Fake-provider real-program hand-drive:
 

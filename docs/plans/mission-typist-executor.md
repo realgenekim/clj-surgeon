@@ -119,3 +119,9 @@ one saved plan/one execution; persisted authority rather than supplied profiles;
 CLI parsing, global/per-verb help, launcher dispatch, EDN and nonzero refusal;
 filesystem refusal preserves source. Fake executor tests must make no network
 calls. Existing mission/helper behavior remains covered by its legacy suite.
+
+## Function-emitted mission events (Astra, 02:10Z)
+
+Each public propose/apply/undo boundary emits one bounded completion event to the existing telemetry-events writer and its ~/.clj-surgeon/events.jsonl destination. Kinds are mission-plan, mission-apply and mission-undo; mission id, terminal state, admitted fixed route scalars and observed wall are projected without raw requests, source, provider replies or credentials. Shared line-map validates optional scalar fields as well as the caller projection. Refusals emit their bounded typed reason; exceptions emit a generic mission-exception and are rethrown unchanged. Writer failures cannot turn a successful mission into a failure.
+
+These boundary events do not invent proof or commit stages from a terminal state. Actual verification/commit emission requires a later executor hook at the work site. Tests must witness a real call producing its matching event, refusal leaving workspace unchanged, allowlisted fields, bounded output, and isolated logging failure. Source edits enter the executor first; protected-comment refusal is retained before native fallback.
