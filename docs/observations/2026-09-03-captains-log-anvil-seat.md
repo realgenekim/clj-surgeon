@@ -2475,3 +2475,5 @@ landed (his branch; gates + review owed; mayor queue note added).
 ## 01:57Z — Gene: "Give him the commit hash and tell him to merge asap." Sent Astra 40cc6be13e208e883c525843d62761bf69bf692a (fable/typist-real-repo) with the exact merge command; hardening commit to follow the same way.
 
 ## 02:02Z — provider fence landed on fable/typist-real-repo as  (fixed key paths, unconditional pin, --model removed, scrubbed typed errors, stat-only preflight, upstream-mismatch refusal; five offline proofs incl. a gsk_DUMMY leak probe with zero occurrences in the run dir). Sent to Astra as the second merge. Sol fence r1 launched on my tip (ledger red-team, the three HOLD items, resident/NW safety, lane pins).
+
+## 02:03Z — Astra merged 40cc6be1 into astra/typist-route as 147177c9 (took my bin/typist-run; combined lane registry 45 fast / 5 integration / 16 battery = 66 namespaces). Second merge (0fc84122, provider fence) sent. Sol fence r1 on my tip runs 02:02Z–; Astra opened a one-shot functional-pilot window 02:02–02:07Z concurrently — told him to mark or rerun.
