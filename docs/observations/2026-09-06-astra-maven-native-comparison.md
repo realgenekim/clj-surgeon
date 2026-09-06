@@ -2,7 +2,7 @@
 
 Recorded 2026-09-06T08:15:56.611443+00:00. Exploratory evidence, not a shipped performance guarantee.
 
-The forms executor completed the same real Clojure maintenance task with proof in **1.98× less wall time than fresh Sol sessions and 1.82× less than fresh Astra sessions**. All ten outcomes passed independent replay. Shared task selection, fixture, dossier and proof preparation took **1035 seconds** before the first dispatch; charging it once to each two-attempt route reduces the first epoch's advantage to **1.028×**. The remaining opportunity is making preparation reusable or unnecessary.
+The forms executor completed the same real Clojure maintenance task with proof at **1.98× the speed of fresh Sol sessions and 1.82× the speed of fresh Astra sessions**. All ten outcomes passed independent replay. Shared task selection, fixture, dossier and proof preparation took **1035 seconds** before the first dispatch; charging it once to each two-attempt route reduces the first epoch's advantage to **1.028×**. The remaining opportunity is making preparation reusable or unnecessary.
 
 ## Task and authority
 
