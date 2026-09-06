@@ -2,10 +2,13 @@
 """Bounded prototype provider transport: one trusted JSON request on stdin.
 
 Input keys: route, prompt, candidates (1..5), max_tokens (1..8192),
-timeout_s (1..120); all required, unknown fields refuse. The executor supplies
+timeout_s (1..120); all required. Optional fallback is exactly
+{provider: "groq", max_tokens: N}, only with one OpenRouter candidate. Unknown
+fields refuse; primary plus fallback token allocations must fit 8192. The executor supplies
 this trusted config and must close stdin / bound the complete process lifetime.
 Keys never come from stdin/environment. Output candidates are untrusted text,
-not applied edits. Batch is sequential and waits for all k attempts; no fallback.
+not applied edits. Batch is sequential and waits for all k candidates. Explicit
+fallback permits only HTTP 429/503 and shares one deadline across two attempts.
 """
 import json,math,os,re,signal,socket,stat,sys,time,urllib.error,urllib.request
 from pathlib import Path
@@ -19,10 +22,17 @@ ROUTES={
 class Refusal(Exception):pass
 
 def validate(value):
- if not isinstance(value,dict) or set(value)!={'route','prompt','candidates','max_tokens','timeout_s'}:raise Refusal('invalid-config')
+ required={'route','prompt','candidates','max_tokens','timeout_s'}
+ if not isinstance(value,dict) or not required<=set(value) or set(value)-required-{'fallback'}:raise Refusal('invalid-config')
  if value['route'] not in ROUTES:raise Refusal('unsupported-route')
  for key,maximum in [('candidates',5),('max_tokens',8192),('timeout_s',120)]:
   if type(value[key]) is not int or not 1<=value[key]<=maximum:raise Refusal('invalid-budget')
+ if 'fallback' in value:
+  f=value['fallback']
+  if (not isinstance(f,dict) or set(f)!={'provider','max_tokens'} or f['provider']!='groq'
+      or type(f['max_tokens']) is not int or f['max_tokens']<1
+      or value['max_tokens']+f['max_tokens']>8192
+      or value['route']!='openrouter-cerebras' or value['candidates']!=1):raise Refusal('invalid-fallback')
  if not isinstance(value['prompt'],str) or not value['prompt'].strip():raise Refusal('empty-prompt')
  if len(json.dumps(payload(value),ensure_ascii=False).encode())>MAX_REQUEST:raise Refusal('request-too-large')
  return dict(value)
@@ -89,20 +99,60 @@ def request(route,key,body,timeout):
   if response.geturl()!=ROUTES[route][0]:raise Refusal('redirect-refused')
   return response.read(MAX_RESPONSE+1)
 
-def attempt(c,key,send=request):
+def attempt(c,key,send=request,secrets=()):
  started=time.monotonic()
  try:
   raw=send(c['route'],key,json.dumps(payload(c),ensure_ascii=False).encode(),c['timeout_s'])
   if len(raw)>MAX_RESPONSE:raise Refusal('response-too-large')
-  if key.encode() in raw:raise Refusal('secret-in-response')
+  if any(k.encode() in raw for k in (*secrets,key)):raise Refusal('secret-in-response')
   r=candidate(json.loads(raw),c['route'])
-  if isinstance(r.get('content'),str) and key in r['content']:raise Refusal('secret-in-response')
+  if isinstance(r.get('content'),str) and any(k in r['content'] for k in (*secrets,key)):raise Refusal('secret-in-response')
  except (TimeoutError,socket.timeout):r=failure('timeout')
- except urllib.error.HTTPError:r=failure('http-error')
+ except urllib.error.HTTPError as e:
+  r=failure({429:'provider-rate-limited',503:'provider-unavailable'}.get(e.code,'http-error'))
+  r['http_status']=e.code
+  e.close()
  except Refusal as e:r=failure(str(e) if str(e) in {'response-too-large','secret-in-response','redirect-refused'} else 'transport-refused')
  except Exception:r=failure('transport-or-response-error')
  r['request_wall_s']=time.monotonic()-started
  return r
+
+def run_candidate(c,send=request,keys=load_key,clock=time.monotonic):
+ """One candidate, optional two-route attempt; caller enforces the wall alarm.
+
+ Injected clock/send/keys are only testing seams, never accepted input fields.
+ Reserve full token caps rather than infer available tokens from partial usage.
+ """
+ deadline=clock()+c['timeout_s'];records=[];secrets=[];activated=False;skipped=None
+ routes=[(c['route'],c['max_tokens'])]
+ if c.get('fallback'):routes.append(('groq',c['fallback']['max_tokens']))
+ for index,(route,tokens) in enumerate(routes):
+  if index and records[-1]['error_type'] not in {'provider-rate-limited','provider-unavailable'}:break
+  remaining=deadline-clock()
+  if remaining<=0:
+   if index:skipped='deadline-exhausted';break
+   r=failure('timeout');break
+  started=clock();dispatched=False
+  if index:activated=True
+  try:
+   key=keys(route);secrets.append(key)
+   remaining=deadline-clock()
+   if remaining<=0:r=failure('timeout')
+   else:
+    dispatched=True
+    r=attempt(dict(c,route=route,max_tokens=tokens,timeout_s=remaining),key,send,secrets)
+  except TimeoutError:r=failure('timeout')
+  except Refusal as e:r=failure(str(e) if str(e) in {'key-unavailable','invalid-key-file'} else 'transport-refused')
+  except Exception:r=failure('transport-or-response-error')
+  if clock()>=deadline and r.get('usable'):r.update(usable=False,error_type='timeout')
+  r.update(route=route,request_started=dispatched,requested_model=MODEL,requested_upstream=ROUTES[route][2],
+           requested_max_tokens=tokens,attempt_wall_s=clock()-started)
+  r.setdefault('request_wall_s',None)
+  records.append(r)
+ result=dict(records[-1] if records else r)
+ result.update(attempts=records,fallback=activated)
+ if skipped:result['fallback_skipped']=skipped
+ return result
 
 def alarm(_signum,_frame):raise TimeoutError()
 
@@ -110,18 +160,18 @@ def main():
  try:
   raw=sys.stdin.buffer.read(MAX_REQUEST+1)
   if len(raw)>MAX_REQUEST:raise Refusal('request-too-large')
-  c=validate(json.loads(raw));key=load_key(c['route']);results=[]
+  c=validate(json.loads(raw));results=[]
   # CLI is single-threaded. Wall deadline covers connection and body read,
-  # unlike a socket timeout alone. Each attempt is bounded independently.
+  # unlike a socket timeout alone. Fallback shares the candidate alarm.
   previous=signal.signal(signal.SIGALRM,alarm)
   try:
    for i in range(c['candidates']):
     signal.setitimer(signal.ITIMER_REAL,c['timeout_s'])
-    try:r=attempt(c,key)
+    try:r=run_candidate(c)
     finally:signal.setitimer(signal.ITIMER_REAL,0)
     r['index']=i;results.append(r)
   finally:signal.signal(signal.SIGALRM,previous)
-  print(json.dumps({'route':c['route'],'model':MODEL,'batch_mode':'sequential-waits-all','fallback':False,'candidates':results},ensure_ascii=False))
+  print(json.dumps({'route':c['route'],'model':MODEL,'batch_mode':'sequential-waits-all','fallback':any(r.get('fallback',False) for r in results),'fallback_policy':c.get('fallback'),'candidates':results},ensure_ascii=False))
   return 0 if any(r['usable'] for r in results) else 2
  except Refusal as e:print(json.dumps(failure(str(e))));return 2
  except Exception:print(json.dumps(failure('invalid-input-or-runtime')));return 2
