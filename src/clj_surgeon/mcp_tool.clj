@@ -1042,15 +1042,35 @@
                                        "")))
           source-safe? (or (:source-unchanged result)
                            (:source_unchanged result)
-                           (:rolled-back result))]
+                           (:rolled-back result))
+          ;; The structured receipt carries a one-sentence `error` naming the
+          ;; shape that was refused; the model reads only this text block, so
+          ;; text must be a superset of structured. Generic: any refusal whose
+          ;; receipt has an error sentence renders it, not one error class.
+          error-sentence
+          (let [sentence (or (:error result) (:error-message result))]
+            (when (and (string? sentence)
+                       (not (str/blank? sentence))
+                       ;; the placeholder normalize-refusal fills when the
+                       ;; refusal carried no sentence of its own
+                       (not= sentence (str operation " refused")))
+              sentence))
+          error-line (when error-sentence (str "  " error-sentence "\n"))
+          expected-shape (or (:expected_shape_example result)
+                             (:expected-shape-example result))
+          expected-shape-line
+          (when (and (string? expected-shape) (not (str/blank? expected-shape)))
+            (str "  expected: " expected-shape "\n"))]
       (format (str operation "\n"
                    "  refused · %s%s · %s\n"
-                   "%s%s\n"
+                   "%s%s%s%s\n"
                    "%s\n"
                    "→ %s")
               reason
               (if path (str " at " (pr-str path)) "")
               (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+              (or error-line "")
+              (or expected-shape-line "")
               (or change-line "")
               (or named-field-line "")
               (if source-safe?

@@ -86,6 +86,61 @@
            :source-unchanged true}
     path (assoc :path path)))
 
+(def ^:private expected-shape-example-ceiling
+  "Hard character ceiling for the single filled example carried in a refusal."
+  200)
+
+(defn- migration-files-path?
+  "True for a refusal path that names a `symbol_migration.files` entry."
+  [path]
+  (and (vector? path)
+       (= "symbol_migration" (nth path 0 nil))
+       (= "files" (nth path 1 nil))))
+
+(defn- first-complete-migration-row
+  "The caller's own first well-formed [owner from matches] row, when one exists."
+  [files]
+  (when (vector? files)
+    (some (fn [entry]
+            (when (and (vector? entry) (= 2 (count entry)))
+              (let [rows (second entry)]
+                (when (vector? rows)
+                  (some (fn [row]
+                          (when (and (vector? row) (= 3 (count row))
+                                     (every? some? row))
+                            row))
+                        rows)))))
+          files)))
+
+(defn- offending-migration-file
+  "The file name the caller wrote at the refused entry, else any file it declared."
+  [files path]
+  (let [entry-of (fn [entry]
+                   (cond
+                     (string? entry) entry
+                     (and (vector? entry) (string? (first entry))) (first entry)))
+        index (nth path 2 nil)
+        entry (when (and (integer? index) (vector? files))
+                (nth files index nil))]
+    (or (entry-of entry)
+        (when (vector? files) (some entry-of files)))))
+
+(defn- expected-shape-example
+  "One filled `symbol_migration.files` entry, derived from the caller's own request.
+
+  Bounded: at most one example, at most `expected-shape-example-ceiling`
+  characters. Returns nil when the refusal does not name a files entry or the
+  rendered example would exceed the ceiling."
+  [request path]
+  (when (migration-files-path? path)
+    (let [files (get-in request ["symbol_migration" "files"])
+          file (or (offending-migration-file files path) "src/example.clj")
+          row (or (first-complete-migration-row files)
+                  ["owner-fn" "old.ns/name" 1])
+          example (pr-str [file [row]])]
+      (when (<= (count example) expected-shape-example-ceiling)
+        example))))
+
 (defn- request-files [request]
   (let [literal (mapcat #(if-let [file (get % "file")]
                            [file]
@@ -321,11 +376,17 @@
           :deleted_owners (deletion-count ordinary-request)
           :declared_matches symbol-matches}})
       (catch clojure.lang.ExceptionInfo error
-        (let [data (ex-data error)]
-          (relation-refusal
-            (or (:relation-error-type data) :invalid-compact-relation)
-            (or (:failed-stage data) :relation-admission)
-            (.getMessage error) (:path data)))))))
+        (let [data (ex-data error)
+              error-type (or (:relation-error-type data)
+                             :invalid-compact-relation)
+              path (:path data)
+              example (when (= :invalid-compact-relation error-type)
+                        (expected-shape-example request path))]
+          (cond-> (relation-refusal
+                    error-type
+                    (or (:failed-stage data) :relation-admission)
+                    (.getMessage error) path)
+            example (assoc :expected-shape-example example)))))))
 
 (defn validate-path-resolution
   "Prove that one existing resolver result gives each raw relation path one canonical identity."

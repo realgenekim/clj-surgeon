@@ -1251,6 +1251,8 @@
 
                           (integer? (nth path 4 nil))
                           (assoc :row_index (nth path 4)))))))
+      (contains? result :expected-shape-example)
+      (assoc :expected_shape_example (:expected-shape-example result))
       (contains? result :change-ids)
       (assoc :change_ids (mapv #(if (keyword? %) (name %) (str %))
                                (:change-ids result)))
