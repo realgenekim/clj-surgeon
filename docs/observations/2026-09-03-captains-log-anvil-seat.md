@@ -2879,3 +2879,5 @@ Astra's nREPL riff, in substance: a warm runtime is the right instrument, but po
 ## 09:46Z — Sol fence r1 on freshness 846c8631 (gate-authority brief): LAND YES, no release-authority counterexample. Landing 455a8dd9 (docs-only over it) launched 09:46Z under a fable window.
 
 ## 09:49Z — usage watch: tools "apply_clojure_changes": 2 "inspect_clojure": 8  (collector figures verbatim; collector window: "since": "2026-09-06T04:44:02Z" → "until": "2026-09-06T09:48:32.609496Z"; === start 09:48Z load 3.31 ; === rc 0 end 09:49Z)
+
+## 09:52Z — LANDED: freshness tip 455a8dd9 → MCP/main 38a2cec4 at 09:51Z; all gates green (mcp-test 664/8031, run_all 863/7358); battery-fresh ACCEPTED at merge by the content-bound authority — the receipt-branch remedy (used twice tonight, ~20 min each) is retired by this landing. Ratchet closed: inb-79ae9e.
