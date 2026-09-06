@@ -1,0 +1,1732 @@
+{
+ "content": [
+  {
+   "type": "text",
+   "text": "inspect_clojure\n  20 requests \u00b7 20 files \u00b7 59 matches\n\n\u2713 all requests resolved\n\u2713 ordered snapshot\n\u2713 hashes attached\n\u2713 terminal evidence \u00b7 read_complete=true \u00b7 next action none\n\n  m00: 2 matches \u00b7 [{\"inside\":\"rows!\",\"source\":\"jdbc/execute!\"},{\"inside\":\"row1!\",\"source\":\"jdbc/execute!\"}]\n  m01: 4 matches \u00b7 [{\"inside\":\"mark-moments!\",\"source\":\"jdbc/execute!\"},{\"inside\":\"moments\",\"source\":\"jdbc/execute!\"},{\"inside\":\"candidate-uuids\",\"source\":\"jdbc/execute!\"},{\"inside\":\"ground!\",\"source\":\"jdbc/execute!\"}]\n  m02: 2 matches \u00b7 [{\"inside\":\"rebuild-projection!\",\"source\":\"jdbc/execute!\"},{\"inside\":\"search\",\"source\":\"jdbc/execute!\"}]\n  m03: 3 matches \u00b7 [{\"inside\":\"load-result!\",\"source\":\"jdbc/execute!\"},{\"inside\":\"load-result!\",\"source\":\"jdbc/execute!\"},{\"inside\":\"un-enriched\",\"source\":\"jdbc/execute!\"}]\n  m04: 2 matches \u00b7 [{\"inside\":\"refold-video!\",\"source\":\"jdbc/execute!\"},{\"inside\":\"project-recordings\",\"source\":\"jdbc/execute!\"}]\n  m05: 2 matches \u00b7 [{\"inside\":\"fetch-seed-rows\",\"source\":\"jdbc/execute!\"},{\"inside\":\"existing-event-ids\",\"source\":\"jdbc/execute!\"}]\n  m06: 2 matches \u00b7 [{\"inside\":\"candidate-rows\",\"source\":\"jdbc/execute!\"},{\"inside\":\"run\",\"source\":\"jdbc/execute!\"}]\n  m07: 4 matches \u00b7 [{\"inside\":\"embed-batch!\",\"source\":\"jdbc/execute!\"},{\"inside\":\"similar-to\",\"source\":\"jdbc/execute!\"},{\"inside\":\"search\",\"source\":\"jdbc/execute!\"},{\"inside\":\"search-recordings\",\"source\":\"jdbc/execute!\"}]\n  m08: 4 matches \u00b7 [{\"inside\":\"un-enriched\",\"source\":\"jdbc/execute!\"},{\"inside\":\"load-result!\",\"source\":\"jdbc/execute!\"},{\"inside\":\"load-result!\",\"source\":\"jdbc/execute!\"},{\"inside\":\"un-enriched-any\",\"source\":\"jdbc/execute!\"}]\n  m09: 5 matches \u00b7 [{\"inside\":\"relaxed-or-search\",\"source\":\"jdbc/execute!\"},{\"inside\":\"relaxed-or-search\",\"source\":\"jdbc/execute!\"},{\"inside\":\"search\",\"source\":\"jdbc/execute!\"},{\"inside\":\"show\",\"source\":\"jdbc/execute!\"},{\"inside\":\"research-detail\",\"source\":\"jdbc/execute!\"}]\n  m10: 4 matches \u00b7 [{\"inside\":\"stats\",\"source\":\"jdbc/execute!\"},{\"inside\":\"titles\",\"source\":\"jdbc/execute!\"},{\"inside\":\"search\",\"source\":\"jdbc/execute!\"},{\"inside\":\"search-content\",\"source\":\"jdbc/execute!\"}]\n  m11: 2 matches \u00b7 [{\"inside\":\"worklist\",\"source\":\"jdbc/execute!\"},{\"inside\":\"write!\",\"source\":\"jdbc/execute!\"}]\n  m12: 2 matches \u00b7 [{\"inside\":\"run\",\"source\":\"jdbc/execute!\"},{\"inside\":\"run\",\"source\":\"jdbc/execute!\"}]\n  m13: 2 matches \u00b7 [{\"inside\":\"run\",\"source\":\"jdbc/execute!\"},{\"inside\":\"missing\",\"source\":\"jdbc/execute!\"}]\n  m14: 2 matches \u00b7 [{\"inside\":\"run\",\"source\":\"jdbc/execute!\"},{\"inside\":\"run\",\"source\":\"jdbc/execute!\"}]\n  m15: 4 matches \u00b7 [{\"inside\":\"rows\",\"source\":\"jdbc/execute!\"},{\"inside\":\"exact-search\",\"source\":\"jdbc/execute!\"},{\"inside\":\"corpus-stats\",\"source\":\"jdbc/execute!\"},{\"inside\":\"candidate-rows\",\"source\":\"jdbc/execute!\"}]\n  m16: 2 matches \u00b7 [{\"inside\":\"read-rows\",\"source\":\"jdbc/execute!\"},{\"inside\":\"run\",\"source\":\"jdbc/execute!\"}]\n  m17: 4 matches \u00b7 [{\"inside\":\"list-items\",\"source\":\"jdbc/execute!\"},{\"inside\":\"show\",\"source\":\"jdbc/execute!\"},{\"inside\":\"stale\",\"source\":\"jdbc/execute!\"},{\"inside\":\"standup\",\"source\":\"jdbc/execute!\"}]\n  m18: 4 matches \u00b7 [{\"inside\":\"latest\",\"source\":\"jdbc/execute!\"},{\"inside\":\"exact-search\",\"source\":\"jdbc/execute!\"},{\"inside\":\"corpus-stats\",\"source\":\"jdbc/execute!\"},{\"inside\":\"candidate-rows\",\"source\":\"jdbc/execute!\"}]\n  m19: 3 matches \u00b7 [{\"inside\":\"worklist\",\"source\":\"jdbc/execute!\"},{\"inside\":\"write!\",\"source\":\"jdbc/execute!\"},{\"inside\":\"tier-stats\",\"source\":\"jdbc/execute!\"}]\n  767 source characters \u00b7 310.57 ms"
+  }
+ ],
+ "isError": false,
+ "structuredContent": {
+  "file_count": 20,
+  "workspace_root": "/var/tmp/forge/j-probe/workspace",
+  "inspection_elapsed_ms": 307.278958,
+  "source_character_count": 767,
+  "request_count": 20,
+  "file_read_count": 20,
+  "read_complete": true,
+  "result_character_count": 24563,
+  "elapsed_ms": 310.5737,
+  "file_hashes": {
+   "src/maven/feedly_fetch.clj": "79b1224827de4a7f0f1e432ac10c91be12602309ed746aa478ff65ec4834e535",
+   "src/maven/import.clj": "de8346824a3ec840d500a3a9357576138874cf0ee86341daf444df002acfcbf4",
+   "src/maven/feedly_enrich.clj": "437f349c3da5df722de6b7278828656417ad79ef82d887c2f40ca26c41d92442",
+   "src/maven/migrate.clj": "cc128e0ac13ef7c50fcd76fe99409e8c5ed8b71db329bd29b3bb17a899f40d59",
+   "src/maven/inbox.clj": "c03424083280d4028a046f7214d47a625048a24bbcb5ffe48772051fbe8f4105",
+   "src/maven/feedly_resolve.clj": "d4c0c2d733cf5c23606092e3dabe0a2977d91ef72ffaa9fa02f1267dcda72a12",
+   "src/maven/recording_query.clj": "a481ee0afc11db6195bf00e60733aaf41c15034c5d74b228c0a7625cc27b0837",
+   "src/maven/yt_transcript_import.clj": "dd4da2e48b239962464f547b44f722de4fc070e155fd138ef968c6679a244a91",
+   "src/maven/feedly_enrich_api.clj": "307ed44484503f7edfa75182bfef89fe6dd9ea542d8a18f0033d458860b456f5",
+   "src/maven/article.clj": "ffc398fa2ea9a6770d9a9858ec0aef0471814189c6f24f98152912308e0982e7",
+   "src/maven/feedly.clj": "a5bcf73ffdf7509b4eb0d13af60ed2f3c6fcb3068205b955b7c193d3919764ca",
+   "src/maven/import_sorter.clj": "53ddef97cb67720a19c17cd0f96cf8282c3e171fd8ecc543ec8cf4b0e40bc808",
+   "src/maven/youtube.clj": "d3973491beb9a6159d048750e65b606f04e7e6c82bdfd8abfcb865289d1f22c2",
+   "src/maven/pool_relaxed.clj": "5cc7dc30d2841b5a2b3951ac3e38576986f0fe7259759d516b9bc05d1f9a6a11",
+   "src/maven/tweets_import.clj": "faea67ee1bf7402b481920fd8cd8c4fbcd2c1af43abcee7f5232b5c325fe7cd0",
+   "src/maven/db.clj": "8a579d7f6da3009971f93cb49a877fa4c71e0d464e5790d119d99e30737507f6",
+   "src/maven/feedly_ground.clj": "1a6e78af8b64a3f9cd051bcfeb412829728286ee21eb871153956d7de8410cbf",
+   "src/maven/embed.clj": "06b1b149e6e572dd242eb8f51afa53b698261b8d730bb07ee1925ebfcd93f0de",
+   "src/maven/tweets.clj": "072e9391691f2521a166611289f12f9857b7f6b8973abed2c12c5e90979a3b4b",
+   "src/maven/moment.clj": "dade2ace05f3351a7e062c78776936d241f11a89db4b642fa9a9d5762fd3081c"
+  },
+  "next_action": "none",
+  "ok": true,
+  "operation": "inspect_clojure",
+  "results": [
+   {
+    "source_character_count": 26,
+    "inside": null,
+    "file_hash": "5cc7dc30d2841b5a2b3951ac3e38576986f0fe7259759d516b9bc05d1f9a6a11",
+    "file": "src/maven/pool_relaxed.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 424
+      },
+      "line": 122,
+      "end_line": 122,
+      "source": "jdbc/execute!",
+      "inside": "rows!",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "5cc7dc30d2841b5a2b3951ac3e38576986f0fe7259759d516b9bc05d1f9a6a11"
+     },
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "first"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 439
+      },
+      "line": 125,
+      "end_line": 125,
+      "source": "jdbc/execute!",
+      "inside": "row1!",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "5cc7dc30d2841b5a2b3951ac3e38576986f0fe7259759d516b9bc05d1f9a6a11"
+     }
+    ],
+    "match_count": 2,
+    "id": "m00",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 52,
+    "inside": null,
+    "file_hash": "dade2ace05f3351a7e062c78776936d241f11a89db4b642fa9a9d5762fd3081c",
+    "file": "src/maven/moment.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "rows"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 105
+      },
+      "line": 40,
+      "end_line": 40,
+      "source": "jdbc/execute!",
+      "inside": "mark-moments!",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "dade2ace05f3351a7e062c78776936d241f11a89db4b642fa9a9d5762fd3081c"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 322
+      },
+      "line": 96,
+      "end_line": 96,
+      "source": "jdbc/execute!",
+      "inside": "moments",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "dade2ace05f3351a7e062c78776936d241f11a89db4b642fa9a9d5762fd3081c"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "->>"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 387
+      },
+      "line": 113,
+      "end_line": 113,
+      "source": "jdbc/execute!",
+      "inside": "candidate-uuids",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "dade2ace05f3351a7e062c78776936d241f11a89db4b642fa9a9d5762fd3081c"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "ms"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 601
+      },
+      "line": 165,
+      "end_line": 165,
+      "source": "jdbc/execute!",
+      "inside": "ground!",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "dade2ace05f3351a7e062c78776936d241f11a89db4b642fa9a9d5762fd3081c"
+     }
+    ],
+    "match_count": 4,
+    "id": "m01",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 26,
+    "inside": null,
+    "file_hash": "8a579d7f6da3009971f93cb49a877fa4c71e0d464e5790d119d99e30737507f6",
+    "file": "src/maven/db.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": [
+         "ds",
+         "uuids"
+        ]
+       },
+       {
+        "call": "if"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "evs"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 203
+      },
+      "line": 74,
+      "end_line": 74,
+      "source": "jdbc/execute!",
+      "inside": "rebuild-projection!",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "8a579d7f6da3009971f93cb49a877fa4c71e0d464e5790d119d99e30737507f6"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 356
+      },
+      "line": 116,
+      "end_line": 116,
+      "source": "jdbc/execute!",
+      "inside": "search",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "8a579d7f6da3009971f93cb49a877fa4c71e0d464e5790d119d99e30737507f6"
+     }
+    ],
+    "match_count": 2,
+    "id": "m02",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 39,
+    "inside": null,
+    "file_hash": "307ed44484503f7edfa75182bfef89fe6dd9ea542d8a18f0033d458860b456f5",
+    "file": "src/maven/feedly_enrich_api.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 457
+      },
+      "line": 114,
+      "end_line": 114,
+      "source": "jdbc/execute!",
+      "inside": "load-result!",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "307ed44484503f7edfa75182bfef89fe6dd9ea542d8a18f0033d458860b456f5"
+     },
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 473
+      },
+      "line": 116,
+      "end_line": 116,
+      "source": "jdbc/execute!",
+      "inside": "load-result!",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "307ed44484503f7edfa75182bfef89fe6dd9ea542d8a18f0033d458860b456f5"
+     },
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 498
+      },
+      "line": 120,
+      "end_line": 120,
+      "source": "jdbc/execute!",
+      "inside": "un-enriched",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "307ed44484503f7edfa75182bfef89fe6dd9ea542d8a18f0033d458860b456f5"
+     }
+    ],
+    "match_count": 3,
+    "id": "m03",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 26,
+    "inside": null,
+    "file_hash": "d3973491beb9a6159d048750e65b606f04e7e6c82bdfd8abfcb865289d1f22c2",
+    "file": "src/maven/youtube.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "evs"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 494
+      },
+      "line": 107,
+      "end_line": 107,
+      "source": "jdbc/execute!",
+      "inside": "refold-video!",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "d3973491beb9a6159d048750e65b606f04e7e6c82bdfd8abfcb865289d1f22c2"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "vids"
+       },
+       {
+        "call": "if"
+       },
+       {
+        "call": "map"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 957
+      },
+      "line": 235,
+      "end_line": 235,
+      "source": "jdbc/execute!",
+      "inside": "project-recordings",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "d3973491beb9a6159d048750e65b606f04e7e6c82bdfd8abfcb865289d1f22c2"
+     }
+    ],
+    "match_count": 2,
+    "id": "m04",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 26,
+    "inside": null,
+    "file_hash": "faea67ee1bf7402b481920fd8cd8c4fbcd2c1af43abcee7f5232b5c325fe7cd0",
+    "file": "src/maven/tweets_import.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "mapv"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 434
+      },
+      "line": 102,
+      "end_line": 102,
+      "source": "jdbc/execute!",
+      "inside": "fetch-seed-rows",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "faea67ee1bf7402b481920fd8cd8c4fbcd2c1af43abcee7f5232b5c325fe7cd0"
+     },
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "->>"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 648
+      },
+      "line": 146,
+      "end_line": 146,
+      "source": "jdbc/execute!",
+      "inside": "existing-event-ids",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "faea67ee1bf7402b481920fd8cd8c4fbcd2c1af43abcee7f5232b5c325fe7cd0"
+     }
+    ],
+    "match_count": 2,
+    "id": "m05",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 26,
+    "inside": null,
+    "file_hash": "53ddef97cb67720a19c17cd0f96cf8282c3e171fd8ecc543ec8cf4b0e40bc808",
+    "file": "src/maven/import_sorter.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "rows"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 70
+      },
+      "line": 37,
+      "end_line": 37,
+      "source": "jdbc/execute!",
+      "inside": "candidate-rows",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "53ddef97cb67720a19c17cd0f96cf8282c3e171fd8ecc543ec8cf4b0e40bc808"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "seen"
+       },
+       {
+        "call": "if"
+       },
+       {
+        "call": "into"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 184
+      },
+      "line": 75,
+      "end_line": 75,
+      "source": "jdbc/execute!",
+      "inside": "run",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "53ddef97cb67720a19c17cd0f96cf8282c3e171fd8ecc543ec8cf4b0e40bc808"
+     }
+    ],
+    "match_count": 2,
+    "id": "m06",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 52,
+    "inside": null,
+    "file_hash": "06b1b149e6e572dd242eb8f51afa53b698261b8d730bb07ee1925ebfcd93f0de",
+    "file": "src/maven/embed.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "rows"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 231
+      },
+      "line": 74,
+      "end_line": 74,
+      "source": "jdbc/execute!",
+      "inside": "embed-batch!",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "06b1b149e6e572dd242eb8f51afa53b698261b8d730bb07ee1925ebfcd93f0de"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 442
+      },
+      "line": 128,
+      "end_line": 128,
+      "source": "jdbc/execute!",
+      "inside": "similar-to",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "06b1b149e6e572dd242eb8f51afa53b698261b8d730bb07ee1925ebfcd93f0de"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 478
+      },
+      "line": 143,
+      "end_line": 143,
+      "source": "jdbc/execute!",
+      "inside": "search",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "06b1b149e6e572dd242eb8f51afa53b698261b8d730bb07ee1925ebfcd93f0de"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 515
+      },
+      "line": 159,
+      "end_line": 159,
+      "source": "jdbc/execute!",
+      "inside": "search-recordings",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "06b1b149e6e572dd242eb8f51afa53b698261b8d730bb07ee1925ebfcd93f0de"
+     }
+    ],
+    "match_count": 4,
+    "id": "m07",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 52,
+    "inside": null,
+    "file_hash": "437f349c3da5df722de6b7278828656417ad79ef82d887c2f40ca26c41d92442",
+    "file": "src/maven/feedly_enrich.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 191
+      },
+      "line": 46,
+      "end_line": 46,
+      "source": "jdbc/execute!",
+      "inside": "un-enriched",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "437f349c3da5df722de6b7278828656417ad79ef82d887c2f40ca26c41d92442"
+     },
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 210
+      },
+      "line": 53,
+      "end_line": 53,
+      "source": "jdbc/execute!",
+      "inside": "load-result!",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "437f349c3da5df722de6b7278828656417ad79ef82d887c2f40ca26c41d92442"
+     },
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 229
+      },
+      "line": 55,
+      "end_line": 55,
+      "source": "jdbc/execute!",
+      "inside": "load-result!",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "437f349c3da5df722de6b7278828656417ad79ef82d887c2f40ca26c41d92442"
+     },
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 420
+      },
+      "line": 87,
+      "end_line": 87,
+      "source": "jdbc/execute!",
+      "inside": "un-enriched-any",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "437f349c3da5df722de6b7278828656417ad79ef82d887c2f40ca26c41d92442"
+     }
+    ],
+    "match_count": 4,
+    "id": "m08",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 65,
+    "inside": null,
+    "file_hash": "072e9391691f2521a166611289f12f9857b7f6b8973abed2c12c5e90979a3b4b",
+    "file": "src/maven/tweets.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "dfrow"
+       },
+       {
+        "call": "first"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 1279
+      },
+      "line": 267,
+      "end_line": 267,
+      "source": "jdbc/execute!",
+      "inside": "relaxed-or-search",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "072e9391691f2521a166611289f12f9857b7f6b8973abed2c12c5e90979a3b4b"
+     },
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "rows"
+       },
+       {
+        "call": "parse-pg-data"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 1454
+      },
+      "line": 296,
+      "end_line": 296,
+      "source": "jdbc/execute!",
+      "inside": "relaxed-or-search",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "072e9391691f2521a166611289f12f9857b7f6b8973abed2c12c5e90979a3b4b"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "rows"
+       },
+       {
+        "call": "parse-pg-data"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 1687
+      },
+      "line": 340,
+      "end_line": 340,
+      "source": "jdbc/execute!",
+      "inside": "search",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "072e9391691f2521a166611289f12f9857b7f6b8973abed2c12c5e90979a3b4b"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "row"
+       },
+       {
+        "call": "first"
+       },
+       {
+        "call": "parse-pg-data"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 1907
+      },
+      "line": 378,
+      "end_line": 378,
+      "source": "jdbc/execute!",
+      "inside": "show",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "072e9391691f2521a166611289f12f9857b7f6b8973abed2c12c5e90979a3b4b"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "row"
+       },
+       {
+        "call": "first"
+       },
+       {
+        "call": "parse-pg-data"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 2012
+      },
+      "line": 397,
+      "end_line": 397,
+      "source": "jdbc/execute!",
+      "inside": "research-detail",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "072e9391691f2521a166611289f12f9857b7f6b8973abed2c12c5e90979a3b4b"
+     }
+    ],
+    "match_count": 5,
+    "id": "m09",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 52,
+    "inside": null,
+    "file_hash": "a481ee0afc11db6195bf00e60733aaf41c15034c5d74b228c0a7625cc27b0837",
+    "file": "src/maven/recording_query.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "by-kind"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 679
+      },
+      "line": 162,
+      "end_line": 162,
+      "source": "jdbc/execute!",
+      "inside": "stats",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "a481ee0afc11db6195bf00e60733aaf41c15034c5d74b228c0a7625cc27b0837"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "rows"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 858
+      },
+      "line": 196,
+      "end_line": 196,
+      "source": "jdbc/execute!",
+      "inside": "titles",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "a481ee0afc11db6195bf00e60733aaf41c15034c5d74b228c0a7625cc27b0837"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "rows"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 1029
+      },
+      "line": 226,
+      "end_line": 226,
+      "source": "jdbc/execute!",
+      "inside": "search",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "a481ee0afc11db6195bf00e60733aaf41c15034c5d74b228c0a7625cc27b0837"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "rows"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 1170
+      },
+      "line": 262,
+      "end_line": 262,
+      "source": "jdbc/execute!",
+      "inside": "search-content",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "a481ee0afc11db6195bf00e60733aaf41c15034c5d74b228c0a7625cc27b0837"
+     }
+    ],
+    "match_count": 4,
+    "id": "m10",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 26,
+    "inside": null,
+    "file_hash": "1a6e78af8b64a3f9cd051bcfeb412829728286ee21eb871153956d7de8410cbf",
+    "file": "src/maven/feedly_ground.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 273
+      },
+      "line": 66,
+      "end_line": 66,
+      "source": "jdbc/execute!",
+      "inside": "worklist",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "1a6e78af8b64a3f9cd051bcfeb412829728286ee21eb871153956d7de8410cbf"
+     },
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 289
+      },
+      "line": 81,
+      "end_line": 81,
+      "source": "jdbc/execute!",
+      "inside": "write!",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "1a6e78af8b64a3f9cd051bcfeb412829728286ee21eb871153956d7de8410cbf"
+     }
+    ],
+    "match_count": 2,
+    "id": "m11",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 26,
+    "inside": null,
+    "file_hash": "cc128e0ac13ef7c50fcd76fe99409e8c5ed8b71db329bd29b3bb17a899f40d59",
+    "file": "src/maven/migrate.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 174
+      },
+      "line": 53,
+      "end_line": 53,
+      "source": "jdbc/execute!",
+      "inside": "run",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "cc128e0ac13ef7c50fcd76fe99409e8c5ed8b71db329bd29b3bb17a899f40d59"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "try"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 200
+      },
+      "line": 59,
+      "end_line": 59,
+      "source": "jdbc/execute!",
+      "inside": "run",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "cc128e0ac13ef7c50fcd76fe99409e8c5ed8b71db329bd29b3bb17a899f40d59"
+     }
+    ],
+    "match_count": 2,
+    "id": "m12",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 26,
+    "inside": null,
+    "file_hash": "dd4da2e48b239962464f547b44f722de4fc070e155fd138ef968c6679a244a91",
+    "file": "src/maven/yt_transcript_import.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "done-v2"
+       },
+       {
+        "call": "->>"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 582
+      },
+      "line": 139,
+      "end_line": 139,
+      "source": "jdbc/execute!",
+      "inside": "run",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "dd4da2e48b239962464f547b44f722de4fc070e155fd138ef968c6679a244a91"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "have"
+       },
+       {
+        "call": "if"
+       },
+       {
+        "call": "->>"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 795
+      },
+      "line": 179,
+      "end_line": 179,
+      "source": "jdbc/execute!",
+      "inside": "missing",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "dd4da2e48b239962464f547b44f722de4fc070e155fd138ef968c6679a244a91"
+     }
+    ],
+    "match_count": 2,
+    "id": "m13",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 26,
+    "inside": null,
+    "file_hash": "d4c0c2d733cf5c23606092e3dabe0a2977d91ef72ffaa9fa02f1267dcda72a12",
+    "file": "src/maven/feedly_resolve.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "cards"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 166
+      },
+      "line": 42,
+      "end_line": 42,
+      "source": "jdbc/execute!",
+      "inside": "run",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "d4c0c2d733cf5c23606092e3dabe0a2977d91ef72ffaa9fa02f1267dcda72a12"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "cp/with-shutdown!"
+       },
+       {
+        "call": "doall"
+       },
+       {
+        "call": "cp/upmap"
+       },
+       {
+        "call": "fn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 251
+      },
+      "line": 56,
+      "end_line": 56,
+      "source": "jdbc/execute!",
+      "inside": "run",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "d4c0c2d733cf5c23606092e3dabe0a2977d91ef72ffaa9fa02f1267dcda72a12"
+     }
+    ],
+    "match_count": 2,
+    "id": "m14",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 52,
+    "inside": null,
+    "file_hash": "a5bcf73ffdf7509b4eb0d13af60ed2f3c6fcb3068205b955b7c193d3919764ca",
+    "file": "src/maven/feedly.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 37
+      },
+      "line": 22,
+      "end_line": 22,
+      "source": "jdbc/execute!",
+      "inside": "rows",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "a5bcf73ffdf7509b4eb0d13af60ed2f3c6fcb3068205b955b7c193d3919764ca"
+     },
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "if"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "->>"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 382
+      },
+      "line": 123,
+      "end_line": 123,
+      "source": "jdbc/execute!",
+      "inside": "exact-search",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "a5bcf73ffdf7509b4eb0d13af60ed2f3c6fcb3068205b955b7c193d3919764ca"
+     },
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "when"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "row"
+       },
+       {
+        "call": "first"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 446
+      },
+      "line": 138,
+      "end_line": 138,
+      "source": "jdbc/execute!",
+      "inside": "corpus-stats",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "a5bcf73ffdf7509b4eb0d13af60ed2f3c6fcb3068205b955b7c193d3919764ca"
+     },
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "when"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 526
+      },
+      "line": 155,
+      "end_line": 155,
+      "source": "jdbc/execute!",
+      "inside": "candidate-rows",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "a5bcf73ffdf7509b4eb0d13af60ed2f3c6fcb3068205b955b7c193d3919764ca"
+     }
+    ],
+    "match_count": 4,
+    "id": "m15",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 26,
+    "inside": null,
+    "file_hash": "de8346824a3ec840d500a3a9357576138874cf0ee86341daf444df002acfcbf4",
+    "file": "src/maven/import.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 62
+      },
+      "line": 26,
+      "end_line": 26,
+      "source": "jdbc/execute!",
+      "inside": "read-rows",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "de8346824a3ec840d500a3a9357576138874cf0ee86341daf444df002acfcbf4"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "seen"
+       },
+       {
+        "call": "if"
+       },
+       {
+        "call": "into"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 117
+      },
+      "line": 43,
+      "end_line": 43,
+      "source": "jdbc/execute!",
+      "inside": "run",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "de8346824a3ec840d500a3a9357576138874cf0ee86341daf444df002acfcbf4"
+     }
+    ],
+    "match_count": 2,
+    "id": "m16",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 52,
+    "inside": null,
+    "file_hash": "c03424083280d4028a046f7214d47a625048a24bbcb5ffe48772051fbe8f4105",
+    "file": "src/maven/inbox.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "rows"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 912
+      },
+      "line": 205,
+      "end_line": 205,
+      "source": "jdbc/execute!",
+      "inside": "list-items",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "c03424083280d4028a046f7214d47a625048a24bbcb5ffe48772051fbe8f4105"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "events"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 992
+      },
+      "line": 224,
+      "end_line": 224,
+      "source": "jdbc/execute!",
+      "inside": "show",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "c03424083280d4028a046f7214d47a625048a24bbcb5ffe48772051fbe8f4105"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "rows"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 1235
+      },
+      "line": 254,
+      "end_line": 254,
+      "source": "jdbc/execute!",
+      "inside": "stale",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "c03424083280d4028a046f7214d47a625048a24bbcb5ffe48772051fbe8f4105"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "rows"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 1537
+      },
+      "line": 341,
+      "end_line": 341,
+      "source": "jdbc/execute!",
+      "inside": "standup",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "c03424083280d4028a046f7214d47a625048a24bbcb5ffe48772051fbe8f4105"
+     }
+    ],
+    "match_count": 4,
+    "id": "m17",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 52,
+    "inside": null,
+    "file_hash": "ffc398fa2ea9a6770d9a9858ec0aef0471814189c6f24f98152912308e0982e7",
+    "file": "src/maven/article.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "rows"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 384
+      },
+      "line": 88,
+      "end_line": 88,
+      "source": "jdbc/execute!",
+      "inside": "latest",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "ffc398fa2ea9a6770d9a9858ec0aef0471814189c6f24f98152912308e0982e7"
+     },
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "->>"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 958
+      },
+      "line": 254,
+      "end_line": 254,
+      "source": "jdbc/execute!",
+      "inside": "exact-search",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "ffc398fa2ea9a6770d9a9858ec0aef0471814189c6f24f98152912308e0982e7"
+     },
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "when"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "row"
+       },
+       {
+        "call": "first"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 1026
+      },
+      "line": 284,
+      "end_line": 284,
+      "source": "jdbc/execute!",
+      "inside": "corpus-stats",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "ffc398fa2ea9a6770d9a9858ec0aef0471814189c6f24f98152912308e0982e7"
+     },
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "when"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 1106
+      },
+      "line": 304,
+      "end_line": 304,
+      "source": "jdbc/execute!",
+      "inside": "candidate-rows",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "ffc398fa2ea9a6770d9a9858ec0aef0471814189c6f24f98152912308e0982e7"
+     }
+    ],
+    "match_count": 4,
+    "id": "m18",
+    "match": "jdbc/execute!"
+   },
+   {
+    "source_character_count": 39,
+    "inside": null,
+    "file_hash": "79b1224827de4a7f0f1e432ac10c91be12602309ed746aa478ff65ec4834e535",
+    "file": "src/maven/feedly_fetch.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 403
+      },
+      "line": 82,
+      "end_line": 82,
+      "source": "jdbc/execute!",
+      "inside": "worklist",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "79b1224827de4a7f0f1e432ac10c91be12602309ed746aa478ff65ec4834e535"
+     },
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 420
+      },
+      "line": 94,
+      "end_line": 94,
+      "source": "jdbc/execute!",
+      "inside": "write!",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "79b1224827de4a7f0f1e432ac10c91be12602309ed746aa478ff65ec4834e535"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "by-tier"
+       },
+       {
+        "call": "jdbc/execute!"
+       }
+      ],
+      "address": {
+       "preorder": 708
+      },
+      "line": 138,
+      "end_line": 138,
+      "source": "jdbc/execute!",
+      "inside": "tier-stats",
+      "hash": "5610e5b28cd29be1ebffb1197c143e032e087975378fb5285c2f0ca13c855273",
+      "file_hash": "79b1224827de4a7f0f1e432ac10c91be12602309ed746aa478ff65ec4834e535"
+     }
+    ],
+    "match_count": 3,
+    "id": "m19",
+    "match": "jdbc/execute!"
+   }
+  ]
+ }
+}

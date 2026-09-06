@@ -1,0 +1,22 @@
+{
+  "frozen_at": "2026-09-06T17:10:18.546713+00:00",
+  "purpose": "fan-out B apparatus freeze; --execute-preregistered refuses on any drift",
+  "d_arm_registration_argv": "-c mcp_servers.clj-surgeon.url=\"http://127.0.0.1:8171/mcp\" -c mcp_servers.clj-surgeon.required=true",
+  "registration_evidence": "registration-proof-2.json (repo-level .codex NOT loaded under these flags; command-line -c IS)",
+  "files": {
+    "/var/tmp/forge/cell-prep/out/fanout-B/proof-b/witness.clj": "d9ac88f6534eb1bd855a962a73e11f8f773d7586bd219c709d57f3f94582a62b",
+    "/var/tmp/forge/cell-prep/out/fanout-B/proof-b/run.py": "f5964726b3bf6b8f8dd7db9c0927b7a5c6c72c201b20835fa5918f1b13445702",
+    "/var/tmp/forge/cell-prep/out/fanout-B/proof-b/make-reference.py": "1813bb530320131acc36ef0247f6839e734160c55bac33640b3bd00bf981e57e",
+    "/var/tmp/forge/cell-prep/runner-b/runner-b.py": "77cee40e60c8214a43842ee4ad33b4ae3a1a5d084f3048901b91f9e1a1706139",
+    "/var/tmp/forge/cell-prep/runner-b/actor-b.py": "e97d4059edffea9ec42b9bb2cd31b6da37140562cb55fba7260567fd74609c89",
+    "/var/tmp/forge/cell-prep/runner-b/stub-actor.py": "f0c09f1c7b19db2bbf95a0f84764a10256882541f5bc6b671ca3309a29e636dc",
+    "/var/tmp/forge/cell-prep/runner-b/outcome-b.py": "c2b4732936261de0ddf388ed3f81ba61b90fc196f8c8110f0a0387eef02f9938",
+    "/var/tmp/forge/cell-prep/out/fanout-B/preregistration-DN.md": "94dd671406619eac7b6073c8c7d06ffd6727e564d4382d9f91a8a5aec64ac537",
+    "/var/tmp/forge/astra-fanout-owner-fx/owners.json": "fb02f327ebfa0c9747f4fab8c20bad9dea1a9c6e5e785668620804c178223922",
+    "/var/tmp/forge/cell-prep/out/fanout-B/frozen.json": "5280071b11fc0d89190711a02a90307ee4462418272f001c17301f49f497404e",
+    "/var/tmp/forge/cell-prep/out/fanout-B/dossier.txt": "c86995f69c2342bf7123e782d4bc4613501f730684339176b6fcd2ca18592c4e",
+    "/var/tmp/forge/cell-prep/out/fanout-B/intent.txt": "6d73c43eb04c41502c8375c66c24688439136578a29a223ef9777d2c108ea44b",
+    "/var/tmp/forge/cell-prep/runner-b/fixtures/mcp-call-structure.jsonl": "ad4bf3f3db2d3c1ddb732fc6dd2bd44339786e3cd86334b861902bdfe908f157",
+    "/var/tmp/forge/cell-prep/runner-b/fixtures/exec-only.jsonl": "3a82122c11e228d90e5fe82a064a30ca29cd6646aec525995336a6fff2e88d29"
+  }
+}
