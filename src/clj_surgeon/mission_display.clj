@@ -98,7 +98,7 @@
           receipt (select-keys (:receipt view)
                                [:ok :committed :verification-complete :error-type :error_type
                                 :error :elapsed_ms :receipt_hash :undo_receipt :artifacts
-                                :mutation-attempted :refusal])
+                                :mutation-attempted :refusal :usage])
           route (get-in view [:plan :typist :route])
           route (when route (cond-> (select-keys route [:executor :k :candidate-format])
                               (:provider route) (assoc :provider (select-keys (:provider route) [:id :model :upstream]))))

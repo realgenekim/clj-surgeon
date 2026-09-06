@@ -13,6 +13,7 @@
    [clj-surgeon.mission-forms :as forms]
    [clj-surgeon.mission-plain-forms :as plain-forms]
    [clj-surgeon.mission-typist :as typist]
+   [clj-surgeon.mission-usage :as usage]
    [clj-surgeon.outline :as outline]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -362,7 +363,8 @@
   "Apply uses saved plan authority only. Tests replace transport, not proof/commit."
   [_request config]
   (let [started (System/nanoTime)
-        authority (get-in config [:plan :typist])]
+        authority (get-in config [:plan :typist])
+        closed-snapshot (atom nil)]
     (try
       (when-not (and authority (unchanged? authority)) (reject! :typist-stale-plan))
       (let [artifacts (make-artifacts! config)
@@ -385,24 +387,29 @@
                     receipts (conj receipts receipt)]
                 (file-ops/atomic-write! (str (io/file artifacts "candidates.edn")) (pr-str receipts))
                 (if (:ok proof)
-                  (let [closed (close-candidates! handle artifacts)]
+                  (let [closed (close-candidates! handle artifacts)
+                        _ (reset! closed-snapshot closed)]
                     (when-not (:terminated? closed) (reject! :typist-transport-cleanup-incomplete))
                     (reset! closed? true)
                     (let [committed (mission-events/observe-phase! "commit"
                                       #(commit-candidate! authority compiled artifacts config))]
                       (assoc committed :executor :typist :route (:route authority) :candidates receipts
-                             :artifacts artifacts :transport (dissoc closed :completed)
+                             :artifacts artifacts :usage (usage/summarize closed) :transport (dissoc closed :completed)
                              :verification-complete (true? (:committed committed))
                              :elapsed_ms (/ (double (- (System/nanoTime) started)) 1000000.0))))
                   (recur (rest pending) (inc ordinal) receipts)))
-              (let [closed (close-candidates! handle artifacts)]
+              (let [closed (close-candidates! handle artifacts)
+                    _ (reset! closed-snapshot closed)]
                 (reset! closed? (:terminated? closed))
                 (assoc (refuse (if (:terminated? closed) :typist-all-candidates-rejected
                                  :typist-transport-cleanup-incomplete))
                        :executor :typist :route (:route authority) :candidates receipts
-                       :transport (dissoc closed :completed) :artifacts artifacts))))
-          (finally (when-not @closed? (close-candidates! handle artifacts)))))
-      (catch Exception e (refuse (or (:error-type (ex-data e)) :typist-execution-failed))))))
+                       :usage (usage/summarize closed) :transport (dissoc closed :completed) :artifacts artifacts))))
+          (finally (when-not @closed?
+                     (reset! closed-snapshot (close-candidates! handle artifacts))))))
+      (catch Exception e
+        (assoc (refuse (or (:error-type (ex-data e)) :typist-execution-failed))
+               :usage (usage/summarize @closed-snapshot))))))
 
 (defn undo!
   ([receipt-file] (undo! receipt-file nil))
