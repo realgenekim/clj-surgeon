@@ -366,9 +366,7 @@
                                     "chain is visible from either end"))))))))))
 
 (defn show
-  "The mission, plus the graph around it. @migration-plan: `show` is where a
-   caller learns that M-2 is held by M-1, so the DAG is rendered here rather
-   than behind a second verb nobody would call."
+  "Read saved state and bounded publication recovery metadata without reading Git."
   [{:keys [id workspace state-home] :as opts}]
   (if-not (and (string? workspace) (seq workspace))
     display/workspace-required
@@ -377,9 +375,10 @@
       (if (mission/refused? m)
         (display/show-result m opts)
         (display/show-result
-          (assoc (mission/show-view (mission/read-all state-dir) id)
-            :config_sources (mission/config-sources (or workspace (:root m))
-                                                    (:config opts))) opts)))))
+          (display/publication-view
+            (assoc (mission/show-view (mission/read-all state-dir) id)
+                   :config_sources (mission/config-sources (or workspace (:root m)) (:config opts)))
+            (when-not (:full opts) (mission-git-ledger/publication-status opts))) opts)))))
 
 (defn fallback!
   "Shared event-only handler; public launcher uses the same function under BB."
@@ -534,41 +533,46 @@
   [{:keys [id workspace state-home]}]
   (mission-events/observe! "undo" {:id id}
     (fn []
-      (let [state-dir (state-dir-for workspace state-home)
-            m (mission/read-mission state-dir id)
-            _ (mission-events/remember! m)]
-        (if (mission/refused? m)
-          m
-          (let [receipt-file (get-in m [:undo :receipt])]
-            (cond
-              (not= :verified (:state m))
-              (mission/advance m :undone "undo" {:at (now)})   ; refuses, typed
+      (let [opts {:id id :workspace workspace :state-home state-home}]
+        (mission-git-ledger/with-publication-lock opts
+          (fn []
+            (if-let [refused (mission-git-ledger/undo-publication-refusal opts)]
+              refused
+              (let [state-dir (state-dir-for workspace state-home)
+                    m (mission/read-mission state-dir id)
+                    _ (mission-events/remember! m)]
+                (if (mission/refused? m)
+                  m
+                  (let [receipt-file (get-in m [:undo :receipt])]
+                    (cond
+                      (not= :verified (:state m))
+                      (mission/advance m :undone "undo" {:at (now)})   ; refuses, typed
 
-              (not (and (string? receipt-file) (.isFile (io/file receipt-file))))
-              (mission/refusal "undo-receipt-missing"
-                               (str "The mission's undo receipt is not on disk: "
-                                    (pr-str receipt-file))
-                               {:id id :undo_receipt receipt-file
-                                :decision "how this write is to be inverted"})
+                      (not (and (string? receipt-file) (.isFile (io/file receipt-file))))
+                      (mission/refusal "undo-receipt-missing"
+                                       (str "The mission's undo receipt is not on disk: "
+                                            (pr-str receipt-file))
+                                       {:id id :undo_receipt receipt-file
+                                        :decision "how this write is to be inverted"})
 
-              :else
-              (let [undo (get-in verbs [(:verb m) :undo])
-                    result (if (= "owner_forms" (:verb m))
-                             (undo receipt-file (get-in m [:undo :receipt_hash]))
-                             (undo receipt-file))]
-                (if-not (:ok result)
-                  (mission/refusal "undo-failed"
-                                   (str "The inverse did not verify: "
-                                        (or (:error result) (:error-type result)))
-                                   {:id id :evidence result
-                                    :decision "which files the failed inverse left standing"})
-                  (let [undone (mission/advance m :undone "undo"
-                                                {:at (now) :updated_at (now)
-                                                 :undo (assoc (:undo m)
-                                                              :verified (:verified result))})]
-                    (if (mission/refused? undone)
-                      undone
-                      (save! state-dir undone))))))))))))
+                      :else
+                      (let [undo (get-in verbs [(:verb m) :undo])
+                            result (if (= "owner_forms" (:verb m))
+                                     (undo receipt-file (get-in m [:undo :receipt_hash]))
+                                     (undo receipt-file))]
+                        (if-not (:ok result)
+                          (mission/refusal "undo-failed"
+                                           (str "The inverse did not verify: "
+                                                (or (:error result) (:error-type result)))
+                                           {:id id :evidence result
+                                            :decision "which files the failed inverse left standing"})
+                          (let [undone (mission/advance m :undone "undo"
+                                                        {:at (now) :updated_at (now)
+                                                         :undo (assoc (:undo m)
+                                                                      :verified (:verified result))})]
+                            (if (mission/refused? undone)
+                              undone
+                              (save! state-dir undone))))))))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; entrance

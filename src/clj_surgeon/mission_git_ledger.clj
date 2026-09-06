@@ -7,7 +7,8 @@
    [clojure.java.io :as io]
    [clojure.string :as str])
   (:import
-   (java.nio.file Files LinkOption OpenOption)))
+   (java.nio.channels FileChannel)
+   (java.nio.file Files LinkOption OpenOption StandardCopyOption StandardOpenOption)))
 
 (def artifact-cap 16777216)
 (defn fail! [reason] (throw (ex-info "Saved mission Git admission refused" {:error-type reason})))
@@ -101,7 +102,126 @@
         (require! (<= (alength bytes) artifact-cap) :git-ledger-artifact-limit)
         {:hash (git/digest bytes) :text (str (.decode (doto (.newDecoder java.nio.charset.StandardCharsets/UTF_8) (.onMalformedInput java.nio.charset.CodingErrorAction/REPORT) (.onUnmappableCharacter java.nio.charset.CodingErrorAction/REPORT)) (java.nio.ByteBuffer/wrap bytes)))}))))
 
-(defn commit!
+(defn publication-path [{:keys [workspace state-home id]}]
+  (str (io/file (mission/missions-dir (mission/workspace-state-dir workspace state-home))
+                (str id ".git-publication.edn"))))
+
+(defn with-publication-lock [{:keys [workspace id] :as opts} f]
+  (if-not (and (string? workspace) (seq workspace) (string? id)
+               (re-matches #"M-[0-9]{1,12}" id))
+    (git/refuse :mission-publication-invalid-options)
+    (let [channel (try
+                    (let [file (io/file (str (publication-path opts) ".lock"))]
+                      (io/make-parents file)
+                      (FileChannel/open (.toPath file)
+                        (into-array OpenOption [StandardOpenOption/CREATE StandardOpenOption/WRITE LinkOption/NOFOLLOW_LINKS])))
+                    (catch Exception _ nil))]
+      (if-not channel
+        (git/refuse :mission-publication-lock-unavailable)
+        (let [locked (try (some? (.tryLock channel)) (catch Exception _ false))]
+          (try (if locked (f) (git/refuse :mission-publication-lock-busy))
+               (finally (try (.close channel) (catch Exception _ nil)))))))))
+
+(defn marker-valid? [marker opts ledger]
+  (and (map? marker)
+       (every? #{:version :id :workspace-root :ledger-sha256 :status :commit :tree :parent :possible-commit} (keys marker))
+       (= 1 (:version marker)) (= (:id opts) (:id marker))
+       (= (.getCanonicalPath (io/file (:workspace opts))) (:workspace-root marker))
+       (git/hash? (:ledger-sha256 marker))
+       (contains? #{:pending :published :uncertain} (:status marker))
+       (or (= (:ledger-sha256 marker) (:hash ledger))
+           (= marker (get-in ledger [:saved :git-publication])))
+       (every? (fn [k] (or (not (contains? marker k)) (git/oid? (get marker k))))
+               [:commit :tree :parent :possible-commit])
+       (or (not= :published (:status marker))
+           (every? #(git/oid? (get marker %)) [:commit :tree :parent]))))
+
+(defn publication-status [{:keys [workspace state-home id] :as opts}]
+  (let [file (.toPath (io/file (publication-path opts)))
+        exists? (Files/exists file (into-array LinkOption [LinkOption/NOFOLLOW_LINKS]))
+        ledger (try (let [a (artifact (str (mission/mission-file
+                                             (mission/workspace-state-dir workspace state-home) id)))]
+                      (assoc a :saved (edn/read-string (:text a))))
+                    (catch Throwable _ nil))]
+    (when (or exists? (contains? (:saved ledger) :git-publication))
+      (try
+        (let [marker (if exists?
+                       (do (require! (<= (Files/size file) 4096) :git-publication-marker-limit)
+                           (edn/read-string (:text (artifact (str file)))))
+                       (get-in ledger [:saved :git-publication]))]
+          (if (marker-valid? marker opts ledger)
+            marker
+            {:status :invalid :error-type :git-publication-marker-invalid}))
+        (catch Throwable _ {:status :invalid :error-type :git-publication-marker-invalid})))))
+
+(defn force-directory! [path]
+  (with-open [channel (FileChannel/open path (into-array OpenOption [StandardOpenOption/READ]))]
+    (.force channel true)))
+
+(defn write-publication! [opts marker]
+  (let [target (.toPath (io/file (publication-path opts)))
+        parent (.getParent target)
+        bytes (.getBytes (str (pr-str marker) "\n") "UTF-8")]
+    (require! (<= (alength bytes) 4096) :git-publication-marker-limit)
+    (let [temporary (Files/createTempFile parent ".publication-" ".edn"
+                      (make-array java.nio.file.attribute.FileAttribute 0))]
+      (try
+        (with-open [channel (FileChannel/open temporary
+                              (into-array OpenOption [StandardOpenOption/WRITE LinkOption/NOFOLLOW_LINKS]))]
+          (let [buffer (java.nio.ByteBuffer/wrap bytes)]
+            (while (.hasRemaining buffer) (.write channel buffer)))
+          (.force channel true))
+        (Files/move temporary target
+          (into-array java.nio.file.CopyOption [StandardCopyOption/ATOMIC_MOVE StandardCopyOption/REPLACE_EXISTING]))
+        (force-directory! parent)
+        (require! (= marker (edn/read-string (:text (artifact (str target))))) :git-publication-marker-write-failed)
+        marker
+        (finally (Files/deleteIfExists temporary))))))
+
+(defn clear-publication! [opts]
+  (let [path (.toPath (io/file (publication-path opts)))]
+    (Files/deleteIfExists path)
+    (force-directory! (.getParent path))))
+
+(def proven-pre-ref-refusals
+  #{:git-invalid-provenance :git-wrong-root :git-unsupported-head :git-staged-scope
+    :git-stale-or-unsupported-files :git-observation-drift :git-invalid-commit-object
+    :git-stale-ledger :git-lock-busy :git-identity-unavailable})
+
+(defn record-publication-result! [opts saved intent result]
+  (if (and (false? (:git-ref-updated result)) (contains? proven-pre-ref-refusals (:error-type result)))
+    (try (clear-publication! opts) result
+         (catch Exception _ (assoc result :metadata-recorded false :publication-status :pending)))
+    (let [published? (true? (:git-ref-updated result))
+          result (if published? result (assoc result :ok false :git-ref-updated :unknown))
+          marker (merge intent {:status (if published? :published :uncertain)}
+                        (select-keys result [:commit :tree :parent :possible-commit]))]
+      (try
+        (write-publication! opts marker)
+        (mission/write-mission! (mission/workspace-state-dir (:workspace opts) (:state-home opts))
+          (assoc saved :git-publication marker :next-action nil))
+        (let [state-dir (mission/workspace-state-dir (:workspace opts) (:state-home opts))
+              saved-again (edn/read-string (:text (artifact (str (mission/mission-file state-dir (:id opts))))))]
+          (require! (= marker (:git-publication saved-again)) :git-publication-ledger-write-failed))
+        (require! (= marker (publication-status opts)) :git-publication-marker-write-failed)
+        (assoc result :metadata-recorded true :git-publication marker)
+        (catch Throwable _
+          (assoc result :ok false :metadata-recorded false
+                        :error-type :git-publication-metadata-failed
+                        :decision "Git outcome is preserved in this response. Inspect Git and the publication sidecar before any recovery; source undo remains blocked."))))))
+
+(defn undo-publication-refusal [opts]
+  (when-let [publication (publication-status opts)]
+    (mission/refusal "undo-after-git-publication"
+      "Source undo is blocked because Git publication succeeded or requires recovery. Git will not be undone automatically; inspect the branch and publication records."
+      (cond-> {:id (:id opts) :publication-status (:status publication)
+               :git-publication publication :mutation_attempted false
+               :source-mutation-attempted false
+               :decision "Inspect Git and the saved publication record before recovery."}
+        (:commit publication) (assoc :published-commit (:commit publication))
+        (:possible-commit publication) (assoc :possible-commit (:possible-commit publication))))))
+
+(defn- commit-under-lock!
   "Public mission commit handler. Exact saved proof only; index must already match.
    commit-tree skips Git hooks/signing; no source write, staging, or push."
   [{:keys [id workspace state-home] :as opts}]
@@ -123,8 +243,28 @@
           inverse (edn/read-string (:text inverse-bytes))
           result (normalize saved inverse (:hash ledger) root)]
       (if-not (:ok result) result
-        (git/commit! (:provenance result)
-                     #(and (= (:hash ledger) (:hash (artifact ledger-file)))
-                           (= (:hash inverse-bytes) (:hash (artifact inverse-file)))))))
+        (let [intent {:version 1 :id id :workspace-root root :ledger-sha256 (:hash ledger) :status :pending}
+              _ (write-publication! opts intent)
+              outcome (try (git/commit! (:provenance result)
+                             #(and (= (:hash ledger) (:hash (artifact ledger-file)))
+                                   (= (:hash inverse-bytes) (:hash (artifact inverse-file)))
+                                   (= intent (publication-status opts))))
+                           (catch Throwable _ {:ok false :git-ref-updated :unknown
+                                               :error-type :git-publication-boundary-uncertain}))]
+          (record-publication-result! opts saved intent outcome))))
     (catch StackOverflowError _ (git/refuse :git-ledger-depth))
     (catch Exception e (git/refuse (or (:error-type (ex-data e)) :git-ledger-invalid)))))
+
+(defn commit!
+  "Publication is serialized with undo and preceded by a forced recovery intent."
+  [{:keys [id workspace state-home] :as opts}]
+  (if-not (and (map? opts) (every? #{:id :workspace :state-home} (keys opts))
+               (string? id) (re-matches #"M-[0-9]{1,12}" id) (string? workspace)
+               (or (nil? state-home) (string? state-home)))
+    (git/refuse :git-ledger-invalid-options)
+    (with-publication-lock opts
+      (fn []
+        (if-let [publication (publication-status opts)]
+          (assoc (git/refuse :git-publication-recovery-required) :git-publication publication
+                 :decision "Inspect the existing publication and Git before retrying; no automatic ref undo.")
+          (commit-under-lock! opts))))))

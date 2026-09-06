@@ -195,7 +195,7 @@
                          :depends-on :supersedes
                          :recommendation :because
                          :snapshot :dossier :decision :plan :proof :receipt
-                         :undo :next-action :history])
+                         :undo :git-publication :next-action :history])
         body (str "{"
                   (str/join "\n "
                             (for [k ordered :when (contains? mission k)]
@@ -962,26 +962,27 @@
   from the state. `nil` where nothing can move — a blocked mission's next action
   belongs to a human, and inventing `[:apply id]` for it would be a prescription
   the ledger cannot honour."
-  [{:keys [id state]}]
-  (case state
-    :proposed [:plan id]
-    :ready [:apply id]
-    :applied [:resume id]
-    :verified [:resume id]
-    ;; @caller-probe: a dead mission USED to return nil here, on the reasoning
-    ;; that its next move belonged to a human. A caller reported the cost of
-    ;; that honesty: the ledger "accumulated blocked/failed missions but
-    ;; offered no resolution transition". The human move now has a verb —
-    ;; `plan <id> --spec-file <narrower intent>` opens the superseding mission
-    ;; — so the ledger names it instead of going quiet.
-    (:blocked :failed) [:plan id]
-    nil))
+  [{:keys [id state] :as mission}]
+  (when-not (contains? mission :git-publication)
+    (case state
+      :proposed [:plan id]
+      :ready [:apply id]
+      :applied [:resume id]
+      :verified [:resume id]
+      ;; @caller-probe: a dead mission USED to return nil here, on the reasoning
+      ;; that its next move belonged to a human. A caller reported the cost of
+      ;; that honesty: the ledger "accumulated blocked/failed missions but
+      ;; offered no resolution transition". The human move now has a verb —
+      ;; `plan <id> --spec-file <narrower intent>` opens the superseding mission
+      ;; — so the ledger names it instead of going quiet.
+      (:blocked :failed) [:plan id]
+      nil)))
 
 (defn effective-next-action
   "The next move for the state a READER sees, not the stored one. A mission
    whose dependency moved the tree under it is told to re-plan, not to apply."
   [mission index]
-  (next-action {:id (:id mission) :state (effective-state mission index)}))
+  (next-action (assoc mission :state (effective-state mission index))))
 
 (defn ready-missions
   "Missions that can move RIGHT NOW, and who has to move them.

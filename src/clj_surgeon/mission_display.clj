@@ -86,6 +86,12 @@
                         :recovery (command ["bin/mission" "help"
                                             (if (= "owner_forms" (spell verb)) "run" "plan")]))))))
 
+(defn publication-view [view publication]
+  (if-not publication
+    view
+    (assoc view :git-publication publication :effective_next_action nil
+                :publication_recovery "Inspect Git and the publication records before recovery. Source undo and resume are blocked; no Git inverse is automatic.")))
+
 (defn show-result [view opts]
   (cond
     (false? (:ok view)) (show-refusal view opts)
@@ -104,7 +110,7 @@
                               (:provider route) (assoc :provider (select-keys (:provider route) [:id :model :upstream]))))
           base (cond-> (merge (select-keys view [:id :state :effective_state :verb :question
                                                  :decision :decision_summary :effective_next_action
-                                                 :graph :dependencies :config_sources])
+                                                 :graph :dependencies :config_sources :git-publication :publication_recovery])
                               {:ok true :operation "mission-show" :authority :saved-mission
                                :details details})
                  (contains? view :decision) (update :decision decision-view (:verb view))
@@ -124,6 +130,7 @@
               (limit-data
                 {:ok true :operation "mission-show" :authority :saved-mission
                  :id (:id view) :state (:state view) :effective_state (:effective_state view)
+                 :git-publication (:git-publication view)
                  :truncated true :details {:flag "--full" :instruction "Repeat this show command with --full for omitted detail."}
                  :receipt (assoc (select-keys receipt [:committed :verification-complete :error-type :error_type])
                                  :candidate-count total :candidates-omitted total)}

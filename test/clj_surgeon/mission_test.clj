@@ -17,6 +17,7 @@
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.mission :as mission]
    [clj-surgeon.mission-cli :as cli]
+   [clj-surgeon.mission-git-ledger :as publication]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.java.shell]
@@ -1031,6 +1032,8 @@
                     {:undo (fn [path expected]
                              (swap! calls conj [path expected])
                              {:ok false :error-type :typist-invalid-undo-hash})}}
+       #'publication/with-publication-lock (fn [_ f] (f))
+       #'publication/undo-publication-refusal (constantly nil)
        #'cli/state-dir-for (fn [& _] "/ledger")
        #'mission/read-mission (fn [& _] stored)
        #'io/file (fn [& _] (proxy [java.io.File] ["receipt.edn"] (isFile [] true)))

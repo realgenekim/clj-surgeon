@@ -85,7 +85,7 @@
             (when-not (oid? new-oid) (fail! :git-invalid-commit-object))
             (when-not (= initial (observe)) (fail! :git-observation-drift))
             (try (run ["update-ref" (:branch initial) new-oid (:head initial)] nil) (catch Exception _ (throw (ex-info "Ref update outcome requires inspection" {:error-type :git-ref-update-uncertain :possible-commit new-oid}))))
-            {:ok true :mission-id (:id p) :commit new-oid :parent (:head initial)
+            {:ok true :mission-id (:id p) :commit new-oid :tree (:tree initial) :parent (:head initial)
              :git-ref-updated true :source-mutation-attempted false :index-staging false
              :hooks-run false :signing-requested false :receipt-sha256 (:receipt-sha256 p)
              :concurrency "Repository lock; external Git writers may not honor it."}))))

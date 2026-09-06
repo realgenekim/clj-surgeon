@@ -104,5 +104,5 @@
             (is (= source (run ["show" "HEAD:src/fixture/core.clj"] nil)))
             (is (= "src/fixture/core.clj\n" (run ["diff-tree" "--no-commit-id" "--name-only" "-r" "HEAD"] nil)))
             (is (str/includes? (run ["show" "-s" "--format=%B" "HEAD"] nil) (str "Mission: " (:id opened))))
-            (is (= saved (slurp ledger-file)))
+            (is (= (assoc (edn/read-string saved) :next-action nil) (dissoc (edn/read-string (slurp ledger-file)) :git-publication)))
             (is (= source (slurp file)))))))))

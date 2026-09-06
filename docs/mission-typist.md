@@ -176,3 +176,18 @@ The event-only `fallback` entrance runs under Babashka, using the same handler
 and JSONL schema as the JVM API. It loads no source planner or executor. Failed
 appends still return `:recorded false` and exit 1; moving the runtime does not
 turn user reports into evidence of performed or verified edits.
+
+Successful Git publication records its oid/tree on the mission. `undo` and
+`resume` then refuse with `mission-undo-after-git-publication`; they do not
+silently revert source beneath the published Git ref or undo Git automatically.
+A forced sidecar intent blocks undo during pending or uncertain publication,
+including failure to finish recording the ledger metadata. When Git succeeded
+but metadata recording failed, the response retains `:git-ref-updated true` and
+the known oid/tree with `:metadata-recorded false`. Inspect Git and the
+publication records before recovery; an uncertain result is not an unchanged ref.
+
+Default `show` reads saved publication/sidecar metadata without querying Git and
+suppresses resume/undo recommendations while recovery is required. `--full`
+retains the saved ledger view, which can predate a failed metadata write. This
+protection applies to publications made through the corrected command; older
+publications made before it had no marker and require manual Git inspection.

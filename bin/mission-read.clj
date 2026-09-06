@@ -53,9 +53,13 @@
                  result (display/show-result
                           (if (mission/refused? m)
                             m
-                            (assoc (mission/show-view @missions (first args))
-                                   :config_sources
-                                   (mission/config-sources (:workspace flags) (:config flags))))
+                            (display/publication-view
+                              (assoc (mission/show-view @missions (first args))
+                                     :config_sources
+                                     (mission/config-sources (:workspace flags) (:config flags)))
+                              (when-not (:full flags)
+                                ((requiring-resolve 'clj-surgeon.mission-git-ledger/publication-status)
+                                 (assoc flags :id (first args))))))
                           (assoc flags :id (first args)))]
              (pp/pprint result)
              (when (false? (:ok result)) (System/exit 1)))
