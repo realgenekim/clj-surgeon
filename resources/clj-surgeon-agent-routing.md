@@ -10,8 +10,104 @@ quality meter clearing the noise floor, because it keeps its native read/patch
 loop and layers the tool on top. Given a free choice, agents decline it, and
 decline it correctly.
 
-**Call Surgeon only for these, and only when one applies** — each has no native
-equivalent or measured as a win:
+## Strictly better, or native (2026-09-06)
+
+**Strictly better, or native.** Route automatically only when the task matches a witnessed contract and the complete receipt path is available; otherwise use native. On one clear refusal repair once, then native fallback with a receipt. Meter complete verified wall, first-attempt success, fallback and unknown telemetry; retire a route when evidence no longer clears its native control.
+
+TWO classes are routed automatically, both mutations. Outside them native is the
+PERFORMANCE default; an explicit user request or a separately approved experiment
+may still use any other capability. Each example below is a SCHEMA EXAMPLE INSTANTIATED against a fixture repository
+and executed there, published byte-identical to the request that ran. Substitute the
+task inputs: `workspace_root`, lib, Var, file, form, path and every count. Ratios, fixtures, caveats and how the
+meter is operated live in
+`docs/observations/2026-09-06-strictly-better-evidence.md`.
+
+### Fan-out -- one call, many named owners
+
+Trigger: one known old/new form, a complete bounded set of NAMED owners already in
+hand, and a valid proof profile.
+
+```json
+{"workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+ "edits": [{"file": "src/maven/inbox.clj", "within": {"form": "add"},
+            "from": "(mdb/get-ds)", "to": "(mdb/get-ds2)", "matches": 1},
+           {"file": "src/maven/inbox.clj", "within": {"form": "snooze"},
+            "from": "(mdb/get-ds)", "to": "(mdb/get-ds2)", "matches": 1},
+           {"file": "src/maven/tweets.clj", "within": {"form": "search"},
+            "from": "(mdb/get-ds)", "to": "(mdb/get-ds2)", "matches": 1}]}
+```
+
+<!-- executed 2026-09-06 20:03Z, this exact request, against a scratch copy of the
+     fanout-B seed: ok, atomic commit, 3 edits / 2 files, 293.94 ms. -->
+
+### Alias migration -- one whole-repository call
+
+Trigger: known old/new alias intent (`from` lib+Var, `to` lib+Var, an alias policy)
+and an eligible path scope with its expected file count. No proof profile and no
+pre-enumerated match set: the measured run used neither. Afterwards run the
+repository's own required load and tests unless the receipt explicitly proves them.
+
+```json
+{"op": "alias_migration", "workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+ "from": {"lib": "maven.db", "var": "get-ds2"},
+ "to": {"lib": "maven.relaxed-search", "var": "tokenize",
+        "alias_policy": ["rsearch", "rs", "relaxed", "r-search"]},
+ "scope": {"paths": ["src"]}, "expect": {"files": 2}}
+```
+
+<!-- executed 2026-09-06 20:03Z, this exact request, against a scratch copy of the
+     fanout-B seed: ok, atomic commit, 2 files / 3 sites, 628.12 ms. -->
+
+### Optional supporting read
+
+`inspect_clojure` is a SUPPORTING read, not an automatic route: use it when
+structural information is actually needed and native discovery has not already
+supplied it. Never insert an inspect pass after sufficient native discovery. The
+root-level `expect` is required. A wildcard `_` matches ONE subtree, so it does not
+enumerate calls of arbitrary arity -- write the exact arity you mean.
+
+```json
+{"workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+ "requests": [{"id": "r1", "operation": "outline", "file": "src/maven/db.clj"},
+              {"id": "r2", "operation": "match", "file": "src/maven/inbox.clj",
+               "match": "(mdb/get-ds)"},
+              {"id": "r3", "operation": "match", "file": "src/maven/tweets.clj",
+               "match": "(mdb/get-ds)"}],
+ "expect": {"requests": 3, "files": 3}}
+```
+
+<!-- executed 2026-09-06 20:03Z, this exact request, against a scratch copy of the
+     fanout-B seed: ok, read_complete=true, 3 requests / 3 files / 12 matches,
+     74.6 ms. Note the topology: three DISTINCT files, so expect.files is 3. -->
+
+### Receipts: test values, not field names
+
+Proof is `verification_complete=true` TOGETHER WITH the named successful checks over
+the current snapshot; a false or pending field is not evidence. `atomic commit
+complete` and `written bytes read back and verified` prove the WRITE, not task
+semantics -- do not re-verify a proven write, and do not treat it as behavioural
+proof. Run the outstanding required checks and repair any failure before claiming
+completion. No receipt retires user-required review, independent acceptance, or a
+check that was never performed.
+
+### Escape rule
+
+Repair ONE clear, safely correctable argument error from the refusal text. A stale
+or conflicting snapshot needs fresh evidence, not a repair. An unavailable
+capability goes native immediately. Before any fallback, read the receipt's mutation
+and commit status: a refusal does not imply that nothing was written, and a
+completed change is never reapplied blindly.
+
+**Kill switch.** A correctness failure SUSPENDS a routed class immediately. A wall
+loss is assessed against that class's controls, never banned on one noisy pair.
+Unknown telemetry means unknown PERFORMANCE -- use native pending investigation, not
+a recorded loss. Required per routed class: first-attempt success, refusal rate,
+fallback rate, and complete request-to-verified wall; collector coverage of those is
+itself unproven, so unknowns are retained as unknown.
+
+**Other capabilities** — not automatically routed. The only exceptions to the
+performance default are an explicit user request and a separately approved
+experiment:
 
 - `:extract!` — move forms to a new namespace.
 - `:rename-ns!` — structural namespace rename.
@@ -36,8 +132,10 @@ before `make install-agent-routing`. For a Clojure edit changing the same call
 or symbol inside MANY named top-level forms across files -- a batched,
 known-intent fan-out -- this is the default route:
 
-1. Discover owners FIRST: `rg -l`, then one `inspect_clojure` `match` batch,
-   one request per file, in bounded file groups, keeping every site and count.
+1. Discover owners FIRST using native reads or one inspect_clojure match batch
+   when structural information is still needed. If native discovery already
+   supplies the complete owners and counts, skip inspect. Group requests by
+   bounded file sets, keeping every site and count.
    Truncated output is never complete discovery: size follows source and path
    lengths and the public 32 KB enforcement is defective (inb-b60d6e). "~100
    owners" is a heuristic; splitting discovery never implies per-owner writes.
