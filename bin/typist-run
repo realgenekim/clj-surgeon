@@ -94,9 +94,43 @@ T0 = time.time()
 # The guard is installed at the CHOKEPOINT, not at each call site. There are
 # four `codex exec` spawn sites and a `urlopen`, and a guard that must be
 # remembered at each of them is a guard that is missing from the fifth.
+#
+# SOL FENCE R3, finding 3: the r2 guard was a guard on TWO NAMES, not a
+# boundary. `subprocess.run(cmd, shell=True)`, a `bash -c` trampoline and
+# `os.system` all walked straight past it, because each of those hands the
+# command to a SHELL and the shell -- not this process -- does the exec. Two
+# independent guards cover the reviewed paths, and each is listed here rather than
+# remembered at a call site:
+#
+#   (a) THE CHOKEPOINT TABLE below -- every spawn and every network entry
+#       point in the standard library that this process can reach is wrapped
+#       at import, in one place. A shell STRING (os.system, os.popen, or any
+#       subprocess call with shell=True) is scanned as a string, so
+#       `codex exec ...` inside it is refused with the same exit 6.
+#   (b) THE PATH SHIM -- under TYPIST_OFFLINE the runner prepends a temp dir
+#       holding executable `codex` and `claude` scripts that print the typed
+#       refusal and exit 6. A shell string that this process never sees the
+#       inside of (`bash -c 'codex ...'`, an alias, a Makefile, a child of a
+#       child) cannot resolve the real binary through this PATH. Absolute execs
+#       in child programs remain outside this cooperative guard: it is not an
+#       OS sandbox. The offline test harness separately audits external effects.
+#
+# THE CHOKEPOINT TABLE (wrapped at import when OFFLINE):
+#   os.system, os.popen
+#   os.execl/execle/execlp/execv/execve/execvp/execvpe
+#   os.spawnl/spawnle/spawnlp/spawnv/spawnve/spawnvp/spawnvpe, os.posix_spawn
+#   subprocess.run, subprocess.call, subprocess.check_call,
+#   subprocess.check_output, subprocess.Popen
+#   urllib.request.urlopen, http.client.HTTPConnection/HTTPSConnection,
+#   socket.create_connection
 OFFLINE = os.environ.get("TYPIST_OFFLINE") == "1"
 
 OFFLINE_BLOCKED_EXES = ("codex", "claude")
+# a blocked name as a WORD inside a shell string: `codex exec`, `/x/codex -m`,
+# `FOO=1 codex`, `bash -c "claude ..."` -- but never `codexish` or `my-codex`.
+OFFLINE_SHELL_RE = re.compile(
+    r"(?:(?<=^)|(?<=[\s;&|(`]))(?:[\w./-]*/)?(%s)(?=$|[\s;&|)])"
+    % "|".join(OFFLINE_BLOCKED_EXES))
 
 
 def offline_refuse(what):
@@ -106,40 +140,169 @@ def offline_refuse(what):
     die("typist-run: refusing — offline: %s refused (TYPIST_OFFLINE=1)" % what, 6)
 
 
-def guard_spawn(cmd):
+def _blocked_name(cmd, shell=False):
+    """The blocked executable this command would start, or None.
+
+    A LIST is judged by its argv[0] only -- `bash -c "codex ..."` is a bash
+    spawn and is allowed to proceed straight into the PATH shim, which is the
+    stop designed for it. A STRING is a shell command line, so every word in
+    it is a candidate exec and the whole line is scanned."""
+    if isinstance(cmd, (list, tuple)):
+        if shell:
+            return _blocked_name(" ".join(str(c) for c in cmd), shell=False)
+        if not cmd:
+            return None
+        base = os.path.basename(str(cmd[0]))
+        return base if base in OFFLINE_BLOCKED_EXES else None
+    m = OFFLINE_SHELL_RE.search(str(cmd))
+    return m.group(1) if m else None
+
+
+def guard_spawn(cmd, shell=False):
     """Refuse a model-executor spawn BEFORE it happens."""
     if not OFFLINE:
         return
-    exe = cmd[0] if isinstance(cmd, (list, tuple)) and cmd else cmd
-    if os.path.basename(str(exe)) in OFFLINE_BLOCKED_EXES:
-        offline_refuse("spawn of %s" % os.path.basename(str(exe)))
+    name = _blocked_name(cmd, shell=shell)
+    if name:
+        offline_refuse("spawn of %s" % name)
+
+
+def guard_network(what="network open"):
+    if OFFLINE:
+        offline_refuse(what)
+
+
+def _install_offline_path_shim():
+    """Prepend a PATH dir whose `codex` and `claude` print the typed refusal
+    and exit 6. This covers ordinary PATH-based shell/grandchild dispatch;
+    it cannot govern an arbitrary child program using an absolute executable."""
+    import tempfile
+    base = "/var/tmp/forge"
+    d = tempfile.mkdtemp(prefix="typist-offline-shim-",
+                         dir=base if os.path.isdir(base) else None)
+    for exe in OFFLINE_BLOCKED_EXES:
+        p = os.path.join(d, exe)
+        with open(p, "w") as fh:
+            fh.write("#!/bin/sh\n"
+                     "echo \"typist-run: refusing \u2014 offline: "
+                     "spawn of %s refused (TYPIST_OFFLINE=1)\" >&2\n"
+                     "exit 6\n" % exe)
+        os.chmod(p, 0o755)
+    os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
+    atexit.register(shutil.rmtree, d, True)
+    return d
 
 
 _real_subprocess_run = subprocess.run
+_real_subprocess_call = subprocess.call
+_real_subprocess_check_call = subprocess.check_call
+_real_subprocess_check_output = subprocess.check_output
 _real_subprocess_popen = subprocess.Popen
 _real_urlopen = urllib.request.urlopen
+_real_os_system = os.system
+_real_os_popen = os.popen
+_real_socket_create_connection = socket.create_connection
+
+_OS_EXEC_SPAWN = ("execl", "execle", "execlp", "execv", "execve", "execvp",
+                  "execvpe", "spawnl", "spawnle", "spawnlp", "spawnv",
+                  "spawnve", "spawnvp", "spawnvpe", "posix_spawn",
+                  "posix_spawnp")
 
 
 def _guarded_run(cmd, *args, **kwargs):
-    guard_spawn(cmd)
+    guard_spawn(cmd, shell=kwargs.get("shell", False))
     return _real_subprocess_run(cmd, *args, **kwargs)
+
+
+def _guarded_call(cmd, *args, **kwargs):
+    guard_spawn(cmd, shell=kwargs.get("shell", False))
+    return _real_subprocess_call(cmd, *args, **kwargs)
+
+
+def _guarded_check_call(cmd, *args, **kwargs):
+    guard_spawn(cmd, shell=kwargs.get("shell", False))
+    return _real_subprocess_check_call(cmd, *args, **kwargs)
+
+
+def _guarded_check_output(cmd, *args, **kwargs):
+    guard_spawn(cmd, shell=kwargs.get("shell", False))
+    return _real_subprocess_check_output(cmd, *args, **kwargs)
 
 
 class _GuardedPopen(_real_subprocess_popen):
     def __init__(self, cmd, *args, **kwargs):
-        guard_spawn(cmd)
+        guard_spawn(cmd, shell=kwargs.get("shell", False)
+                    or (len(args) >= 7 and args[6]))
         super().__init__(cmd, *args, **kwargs)
 
 
 def _guarded_urlopen(req, *args, **kwargs):
-    if OFFLINE:
-        offline_refuse("network open")
+    guard_network()
     return _real_urlopen(req, *args, **kwargs)
 
 
+def _guarded_os_system(cmd):
+    guard_spawn(cmd, shell=True)
+    return _real_os_system(cmd)
+
+
+def _guarded_os_popen(cmd, *args, **kwargs):
+    guard_spawn(cmd, shell=True)
+    return _real_os_popen(cmd, *args, **kwargs)
+
+
+def _guarded_create_connection(*args, **kwargs):
+    guard_network()
+    return _real_socket_create_connection(*args, **kwargs)
+
+
+def _guard_os_exec_family():
+    """exec/posix_spawn use path first; spawn* put mode before the path."""
+    def wrap(name, fn):
+        def guarded(*args, **kwargs):
+            index = 1 if name.startswith("spawn") else 0
+            path = args[index] if len(args) > index else kwargs.get("path", kwargs.get("file"))
+            guard_spawn([path], shell=False)
+            return fn(*args, **kwargs)
+        guarded.__name__ = name
+        return guarded
+    for name in _OS_EXEC_SPAWN:
+        fn = getattr(os, name, None)
+        if fn is not None:
+            setattr(os, name, wrap(name, fn))
+
+
+def _guard_http_client():
+    import http.client
+
+    for cls_name in ("HTTPConnection", "HTTPSConnection"):
+        cls = getattr(http.client, cls_name, None)
+        if cls is None:
+            continue
+        real_init = cls.__init__
+
+        def guarded_init(self, *args, _real=real_init, **kwargs):
+            guard_network()
+            return _real(self, *args, **kwargs)
+
+        cls.__init__ = guarded_init
+
+
 subprocess.run = _guarded_run
+subprocess.call = _guarded_call
+subprocess.check_call = _guarded_check_call
+subprocess.check_output = _guarded_check_output
 subprocess.Popen = _GuardedPopen
 urllib.request.urlopen = _guarded_urlopen
+
+OFFLINE_SHIM_DIR = None
+if OFFLINE:
+    os.system = _guarded_os_system
+    os.popen = _guarded_os_popen
+    socket.create_connection = _guarded_create_connection
+    _guard_os_exec_family()
+    _guard_http_client()
+    OFFLINE_SHIM_DIR = _install_offline_path_shim()
 
 FX = os.environ.get("TYPIST_FX", "/var/tmp/forge/typist-fx")
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -956,11 +1119,45 @@ def edn_str(s):
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+# --------------------------------------------------------------------------
+# COST FIELDS ARE WRITTEN AT FULL PRECISION (Sol fence r3, finding 5).
+# The generic EDN float branch writes ordinary floats at "%.3f" because the
+# receipts are full of millisecond timings. A COST IS NOT A TIMING: the whole
+# point of :cost_usd is that it is the provider's OWN figure, and 0.12345678
+# written as 0.123 is a fabricated number in the one field that must not be.
+# The earlier fix only reached candidate receipts (values below 0.01); the
+# cost-report receipt writes rows whose cost is 0.12345678, which is NOT below
+# 0.01, so it went through "%.3f" unnoticed. So the rule is by FIELD, not by
+# magnitude: every key whose name is a cost/USD field is serialized repr-style,
+# digit for digit, wherever it appears in a receipt.
+COST_KEY_RE = re.compile(r"(^|_)(cost|usd)($|_)")
+
+
+class Exact(float):
+    """A float whose EDN spelling is repr(), i.e. the provider's own digits."""
+
+
+def exact_cost(v):
+    """Wrap a float so the EDN writer never rounds it. nil/int pass through."""
+    return Exact(v) if isinstance(v, float) and not isinstance(v, Exact) else v
+
+
+def usd_str(v):
+    """USD for a HUMAN table, at least 6 decimals and never fewer digits than
+    the provider gave us: 0.12345678 -> $0.12345678, 0.123 -> $0.123000."""
+    from decimal import Decimal
+    head, _, frac = format(Decimal(repr(float(v))), "f").partition(".")
+    frac = frac.rstrip("0")
+    return "$" + head + "." + frac.ljust(6, "0")
+
+
 def edn(v, indent=0):
     pad = " " * indent
     if isinstance(v, dict):
         items = []
         for k, val in v.items():
+            if COST_KEY_RE.search(k):
+                val = exact_cost(val)
             items.append(pad + " :" + k + " " + edn(val, indent + 2 + len(k)))
         return "{" + "\n".join(items).lstrip() + "}"
     if isinstance(v, (list, tuple)):
@@ -972,6 +1169,8 @@ def edn(v, indent=0):
     if isinstance(v, str):
         return edn_str(v)
     if isinstance(v, float):
+        if isinstance(v, Exact):
+            return repr(float(v))
         # Timings are written at millisecond resolution. COSTS ARE NOT TIMINGS:
         # a sub-cent USD figure rounded to 3 places becomes 0.001 or 0.000 —
         # a fabricated number in a receipt whose whole point is the real one.
@@ -2800,12 +2999,12 @@ def cost_report(fx_dirs):
         rows.append((k, a, usd, src))
         print("%-26s %6d %10d %11d %10d %9d %12s"
               % (k, a["calls"], a["prompt"], a["completion"], a["reasoning"],
-                 a["no_usage"], ("$%.4f" % usd) if usd is not None else "unknown"))
+                 a["no_usage"], usd_str(usd) if usd is not None else "unknown"))
     any_priced = any(a["priced"] for a in agg.values())
     print("%-26s %6d %10s %11s %10s %9d %12s"
           % ("TOTAL", sum(a["calls"] for a in agg.values()), "", "", "",
              sum(a["no_usage"] for a in agg.values()),
-             ("$%.4f" % total) if any_priced else "unknown"))
+             usd_str(total) if any_priced else "unknown"))
     print("reasoning tokens are INCLUDED in the completion column "
           "(both providers bill them as output).")
     if unpriced:
@@ -2827,7 +3026,10 @@ def cost_report(fx_dirs):
                                 "no_usage_calls": a["no_usage"],
                                 "cost_usd": usd, "cost_source": src}
                                for (k, a, usd, src) in rows],
-                      "total_usd": round(total, 6) if any_priced else None,
+                      # NOT rounded: the sum of one provider-reported cost
+                      # IS that provider's figure, and rounding it here made
+                      # the receipt disagree with the candidate it came from.
+                      "total_usd": total if any_priced else None,
                       "unpriced_calls": unpriced}) + "\n")
     print("cost report written to %s" % out)
     return 0
