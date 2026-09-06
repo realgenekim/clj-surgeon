@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# The mission ledger's entrance. PROTOTYPE (2026-09-05).
+#
+# Mirrors the production launcher's shape: one JVM, one -m, EDN on stdin for
+# structured arguments. It deliberately does not register an op in
+# core/ops-registry -- a prototype that edits the production dispatch table has
+# to be reviewed as a production change.
+#
+#   bin/mission propose --spec-file -   < spec.edn
+#   bin/mission show  M-1 --workspace /path/to/workspace
+#   bin/mission apply M-1 --workspace /path/to/workspace --spec-file profiles.edn
+#   bin/mission undo  M-1 --workspace /path/to/workspace
+#   bin/mission ready     --workspace /path/to/workspace
+#   bin/mission list      --workspace /path/to/workspace
+set -euo pipefail
+cd "$(dirname "$0")/.."
+# NOTE: helper_extraction reaches mcp-hot-verify, which requires nrepl, so the
+# entrance needs the mcp alias's deps. The PURE core (clj-surgeon.mission) has
+# no such dependency and loads under babashka on its own.
+# READ VERBS GO TO BABASHKA. They touch only clj-surgeon.mission, which is
+# babashka-safe on purpose; routing them through the JVM costs ~6 s of start and
+# loading for ~1 ms of work. Writes stay on the JVM: they reach a planner and a
+# guarded transaction kernel.
+# @bb-help: HELP IS PURE TEXT and goes to babashka too. Probe 2 spent eight
+# returns on `help` at ~5 s of JVM start each -- about a third of its run --
+# to print a string that touches no planner and no tree.
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h) exec bb --classpath src bin/mission-read.clj help ;;
+  esac
+done
+case "${1:-}" in
+  show|list|ready|blocked|help)
+    exec bb --classpath src bin/mission-read.clj "$@" ;;
+  "")
+    exec bb --classpath src bin/mission-read.clj help ;;
+  open|plan|propose|apply|resume|undo|link)
+    : ;;                      # a real write verb: fall through to the JVM
+  *)
+    # unknown verb: the same help, the same exit 2, without a JVM
+    exec bb --classpath src bin/mission-read.clj "$@" ;;
+esac
+
+exec clojure -M:clj-surgeon/mcp -m clj-surgeon.mission-cli "$@"

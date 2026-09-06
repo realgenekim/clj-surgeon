@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""Derive the real-2 / real-2j dossiers from the frozen real-1 dossiers.
+
+ONE span changes: the shell command under `## Proof gate`. The change, the
+preimage listing, the two do-not-change traps, the acceptance paragraph and
+THE RULE are byte-identical to real-1's, because the point of real-2 is to
+vary the COST of the gate and nothing else. real-2j's line additionally names
+the two extra namespaces it runs, because a dossier that named only one would
+be false.
+"""
+import io, os, sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+BB = ('bb -cp src:test -e "(require \'clojure.test \'clj-surgeon.diagnostic-delta-test) '
+      "(let [r (clojure.test/run-tests 'clj-surgeon.diagnostic-delta-test)] "
+      '(System/exit (if (and (zero? (:fail r)) (zero? (:error r))) 0 1)))"')
+
+JVM = ('java -cp "src:test:$(clojure -Spath -A:clj-surgeon/mcp-test)" clojure.main '
+       '-e "(require \'clojure.test %s) (let [r (apply clojure.test/run-tests \'(%s))] '
+       '(System/exit (if (and (zero? (:fail r)) (zero? (:error r))) 0 1)))"')
+
+SETS = {
+    "real-2": ["clj-surgeon.diagnostic-delta-test"],
+    "real-2j": ["clj-surgeon.diagnostic-delta-test",
+                "clj-surgeon.mcp-change-buffer-test",
+                "clj-surgeon.mcp-compact-location-test",
+                "clj-surgeon.ns-isolation-test"],
+}
+
+def derive(src, dst, nss):
+    text = io.open(src, encoding="utf-8").read()
+    if text.count(BB) != 1:
+        sys.stderr.write("refusing: %s does not contain exactly one bb gate line\n" % src)
+        sys.exit(3)
+    cmd = JVM % (" ".join("'" + n for n in nss), " ".join(nss))
+    io.open(dst, "w", encoding="utf-8").write(text.replace(BB, cmd))
+    print("wrote %s" % os.path.basename(dst))
+
+for mission, nss in SETS.items():
+    for suffix in ("", "-wholefile"):
+        derive(os.path.join(HERE, "typist-dossier-real-1%s.md" % suffix),
+               os.path.join(HERE, "typist-dossier-%s%s.md" % (mission, suffix)), nss)

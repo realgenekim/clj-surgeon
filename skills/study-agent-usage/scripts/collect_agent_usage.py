@@ -1569,6 +1569,40 @@ def write_fixture(path: Path, events: list[dict]) -> None:
     path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
 
 
+def self_test_events_ledger() -> None:
+    """Two roots' worth of calls in one ledger, counted count-first."""
+    with tempfile.TemporaryDirectory(prefix="study-agent-events-") as tmp:
+        path = Path(tmp) / "events.jsonl"
+        path.write_text(
+            "\n".join([
+                json.dumps({"ts": "2026-09-06T01:00:00Z", "seat": "astra", "pid": 11, "kind": "mcp-call", "tool": "inspect_clojure", "ok": True, "error_type": None, "wall_ms": 30, "mission_id": None}),
+                json.dumps({"ts": "2026-09-06T01:00:01Z", "seat": "astra", "pid": 11, "kind": "mcp-call", "tool": "inspect_clojure", "ok": True, "error_type": None, "wall_ms": 10, "mission_id": None}),
+                json.dumps({"ts": "2026-09-06T01:00:02Z", "seat": "fable", "pid": 22, "kind": "mcp-call", "tool": "apply_clojure_changes", "ok": False, "error_type": "verification-incomplete", "wall_ms": 90, "mission_id": "m-1", "telemetry_dropped": 3}),
+                "{not json",
+            ]) + "\n",
+            encoding="utf-8",
+        )
+        summary = read_events_ledger(path)
+        assert summary["events"] == 3, summary["events"]
+        assert summary["unparsable_lines"] == 1, summary["unparsable_lines"]
+        assert summary["dropped"] == 3, summary["dropped"]
+        assert len(summary["pids"]) == 2, summary["pids"]
+        assert summary["outcomes"]["ok"] == 2 and summary["outcomes"]["refused"] == 1
+        assert summary["tools"]["inspect_clojure"] == {"ok": 2, "refused": 0}
+        assert summary["refusals"]["verification-incomplete"] == 1
+        rendered = render_events_ledger(summary)
+        first = rendered.splitlines()[0]
+        assert first == "events: 3 (seats: astra 2, fable 1, pids: 2, dropped: 3)", first
+        assert "UNPARSABLE LINES: 1" in rendered
+        assert "verification-incomplete" in rendered
+        missing = read_events_ledger(Path(tmp) / "absent.jsonl")
+        assert missing["events"] == 0 and missing["exists"] is False
+        assert render_events_ledger(missing).splitlines()[0] == (
+            "events: 0 (seats: none, pids: 0, dropped: 0)"
+        )
+    return 0
+
+
 def self_test_registered_surgeon_alias() -> None:
     """Field regression: optional caller used registered server `surgeon`."""
     start = parse_time("2026-09-05T02:20:00Z")
@@ -1605,6 +1639,7 @@ def self_test_registered_surgeon_alias() -> None:
 
 
 def self_test() -> int:
+    self_test_events_ledger()
     self_test_registered_surgeon_alias()
     assert [
         match.group(1)
@@ -2340,6 +2375,117 @@ def self_test() -> int:
     return 0
 
 
+DEFAULT_EVENTS_FILE = Path.home() / ".clj-surgeon" / "events.jsonl"
+
+
+def read_events_ledger(path: Path) -> dict:
+    """Read the box-wide JSONL ledger the public MCP functions append to.
+
+    THE POINT OF THIS MODE. The directory scan below asks "what did the roots I
+    was told about contain?" and answers zero for every call written somewhere
+    else -- which on 2026-09-05 was most of them. This asks the ledger the
+    tools themselves write, at one path that does not depend on how any server
+    was launched. A malformed line is COUNTED and skipped: a corrupt tail must
+    not blind the reader it exists to serve.
+    """
+    summary = {
+        "file": str(path),
+        "exists": path.is_file(),
+        "events": 0,
+        "unparsable_lines": 0,
+        "dropped": 0,
+        "seats": Counter(),
+        "pids": set(),
+        "kinds": Counter(),
+        "tools": {},
+        "outcomes": Counter(),
+        "refusals": Counter(),
+        "first_ts": None,
+        "last_ts": None,
+        "wall_ms_total": 0,
+    }
+    if not summary["exists"]:
+        return summary
+    with path.open("r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except (ValueError, TypeError):
+                summary["unparsable_lines"] += 1
+                continue
+            if not isinstance(event, dict):
+                summary["unparsable_lines"] += 1
+                continue
+            summary["events"] += 1
+            seat = str(event.get("seat") or "unknown")
+            summary["seats"][seat] += 1
+            if event.get("pid") is not None:
+                summary["pids"].add(event.get("pid"))
+            summary["kinds"][str(event.get("kind") or "unknown")] += 1
+            # `telemetry_dropped` is a per-process count of appends that FAILED,
+            # reported on the next line that landed. It is the ledger telling
+            # you how much of itself is missing; it is an alarm, not a footnote.
+            dropped = event.get("telemetry_dropped")
+            if isinstance(dropped, int):
+                summary["dropped"] += dropped
+            tool = str(event.get("tool") or "unknown")
+            bucket = summary["tools"].setdefault(tool, {"ok": 0, "refused": 0})
+            ok = event.get("ok") is True
+            bucket["ok" if ok else "refused"] += 1
+            summary["outcomes"]["ok" if ok else "refused"] += 1
+            if not ok and event.get("error_type"):
+                summary["refusals"][str(event.get("error_type"))] += 1
+            wall = event.get("wall_ms")
+            if isinstance(wall, (int, float)):
+                summary["wall_ms_total"] += wall
+            timestamp = event.get("ts")
+            if isinstance(timestamp, str):
+                if summary["first_ts"] is None or timestamp < summary["first_ts"]:
+                    summary["first_ts"] = timestamp
+                if summary["last_ts"] is None or timestamp > summary["last_ts"]:
+                    summary["last_ts"] = timestamp
+    return summary
+
+
+def render_events_ledger(summary: dict) -> str:
+    """Count-first: the number a reader would panic about leads the first line."""
+    seats = ", ".join(f"{seat} {count}" for seat, count in sorted(summary["seats"].items())) or "none"
+    pids = len(summary["pids"])
+    lines = [
+        "events: {n} (seats: {seats}, pids: {pids}, dropped: {dropped})".format(
+            n=summary["events"], seats=seats, pids=pids, dropped=summary["dropped"]
+        )
+    ]
+    if not summary["exists"]:
+        lines.append(f"  ledger absent: {summary['file']} -- no call has been made, OR no build that writes it is deployed")
+        return "\n".join(lines)
+    lines.append(f"  file: {summary['file']}")
+    if summary["unparsable_lines"]:
+        lines.append(f"  UNPARSABLE LINES: {summary['unparsable_lines']}")
+    if summary["events"]:
+        lines.append(f"  window: {summary['first_ts']} .. {summary['last_ts']}")
+        lines.append(
+            "  outcomes: ok {ok}, refused {refused}".format(
+                ok=summary["outcomes"].get("ok", 0),
+                refused=summary["outcomes"].get("refused", 0),
+            )
+        )
+        lines.append(f"  kinds: " + ", ".join(f"{k} {v}" for k, v in sorted(summary["kinds"].items())))
+        lines.append("")
+        lines.append(f"  {'tool':<28} {'ok':>6} {'refused':>8}")
+        for tool, counts in sorted(summary["tools"].items(), key=lambda kv: -(kv[1]["ok"] + kv[1]["refused"])):
+            lines.append(f"  {tool:<28} {counts['ok']:>6} {counts['refused']:>8}")
+        if summary["refusals"]:
+            lines.append("")
+            lines.append("  top refusal reasons:")
+            for reason, count in summary["refusals"].most_common(10):
+                lines.append(f"    {count:>4}  {reason}")
+    return "\n".join(lines)
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("--since", help="ISO-8601 lower bound; defaults to newest observation marker")
@@ -2402,6 +2548,19 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument(
         "--all-turns", action="store_true",
         help="Include turns with no Surgeon call in event-clock rendering",
+    )
+    result.add_argument(
+        "--events",
+        nargs="?",
+        const=str(DEFAULT_EVENTS_FILE),
+        default=None,
+        metavar="FILE",
+        help=(
+            "Report the box-wide JSONL ledger the public MCP functions append "
+            "to (default ~/.clj-surgeon/events.jsonl, env "
+            "CLJ_SURGEON_EVENTS_FILE) and exit. Unlike --surgeon-telemetry-root "
+            "this does not depend on knowing where a server was launched."
+        ),
     )
     result.add_argument("--pretty", action="store_true")
     result.add_argument("--self-test", action="store_true")
@@ -2672,6 +2831,17 @@ def main() -> int:
     args = parser().parse_args()
     if args.self_test:
         return self_test()
+    if args.events:
+        # An explicit --events FILE beats the environment; the environment
+        # beats the built-in default. A flag the caller typed must never be
+        # silently overridden by ambient state.
+        chosen = args.events
+        if chosen == str(DEFAULT_EVENTS_FILE):
+            chosen = os.environ.get("CLJ_SURGEON_EVENTS_FILE") or chosen
+        events_file = Path(chosen).expanduser()
+        summary = read_events_ledger(events_file)
+        print(render_events_ledger(summary))
+        return 0
     if args.render_read_chains:
         receipt = json.loads(Path(args.render_read_chains).expanduser().read_text(encoding="utf-8"))
         print(render_read_chain_receipt(receipt, top=args.read_chain_top))

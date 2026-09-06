@@ -1,0 +1,3447 @@
+#!/usr/bin/env python3
+"""typist-run — runner for the fast-typist preregistration (2026-09-05).
+
+Two arms over ONE frozen dossier (bin/typist-dossier.md, byte-identical to both):
+
+  --arm N --runs 1   one careful author  (codex exec -m gpt-5.6-sol)
+  --arm F --k 5      k parallel typists   (--provider groq|openrouter|spark)
+  --arm fake --k 2   the ratchet: known-good + known-bad diffs, no network
+  --replay <dir>     re-judge RETAINED candidate bytes; no network
+  --bench            compare typists head to head; one table at the end
+
+WHICH fast typist arm F buys is a provider choice, not a different arm: every
+provider returns the same candidate record and every candidate goes through the
+same apply / gate / acceptance judging.
+
+  groq        Groq openai/gpt-oss-120b        (reports completion/queue time)
+  openrouter  openai/gpt-oss-120b via OpenRouter, pinned to Cerebras then Groq
+  spark       codex exec -m gpt-5.3-codex-spark, low reasoning; k = k processes
+
+PROVIDER FENCE (2026-09-06, after the Sol fence review). Nothing about a live
+provider call is caller-selectable:
+
+  * KEY PATHS ARE FIXED — /home/forge/secrets/groq.edn and
+    /home/forge/secrets/openrouter.edn. No TYPIST_*_KEY_FILE, no env of any
+    kind: an environment-selected path is an environment-selected key. The one
+    seam is --keys-dir, refused unless it resolves under /var/tmp/forge/, and
+    used only by the offline tests.
+  * THE MODEL AND THE UPSTREAM ARE PINNED IN THE REGISTRY — there is no
+    --model. Every OpenRouter request carries
+    {"provider": {"order": ["Cerebras", "Groq"], "allow_fallbacks": false}}
+    unconditionally, and a response routed anywhere else is the typed refusal
+    `upstream-mismatch`, never a scored candidate.
+  * ERRORS ARE TYPED, NEVER QUOTED — a provider exception can carry the
+    Authorization header, so its text is never copied into a candidate record
+    or a receipt. What is recorded is :error_class (http-4xx | http-5xx |
+    timeout | transport | parse), :http_status, and one generic line. Every
+    string written into an EDN receipt additionally passes through `scrub`.
+  * The bench pre-flight checks that the key file EXISTS and is MODE 600. It
+    never opens it; the key is read only inside the scope that builds one
+    request.
+
+  bin/typist-run --bench --providers groq,openrouter,spark \
+                 --dossier bin/typist-dossier-onesite.md --rounds 6
+
+--bench runs `rounds` rounds of k=1 per provider, INTERLEAVED round-robin so
+every provider shares the same time-of-day weather, and writes the table to
+/var/tmp/forge/typist-fx/bench-<epoch>.edn. A provider with no key, or one whose
+calls all refuse, gets a row of refusals and "n/a" — never a fabricated time.
+
+Every candidate diff is applied onto its OWN fresh copy of the fixture preimage,
+then the GATE runs (the verification profile the mission ledger would resolve for
+this workspace), then an INDEPENDENT ACCEPTANCE CHECK runs (a behavioural witness
+that never loads the gate's test namespace, plus a byte-identity check of every
+untouched file against the preimage manifest).
+
+Clock: t0 is process start (startup is charged). Wall to first verified candidate
+includes queue, transport, apply, gate and acceptance.
+
+THE OFFLINE CONTRACT (TYPIST_OFFLINE=1) -- CHOKEPOINT, NOT SANDBOX.
+Sol fence r4 is right and this is the corrected claim. TYPIST_OFFLINE
+
+  * REFUSES THE RUNNER'S OWN spawn and connect paths at the chokepoint: every
+    spawn and network entry point THIS process reaches through the standard
+    library is wrapped at import (the table below), and a `codex`/`claude`
+    shell word is refused as a string. Exit 6, typed, before the call.
+  * DOES NOT CONFINE CHILDREN. It is NOT a sandbox. A general-purpose child
+    (bash, python3) that this process is allowed to start can still spawn an
+    absolute path, reset PATH, `env -i`, re-exec, or open a socket. Python
+    monkeypatching plus a mutable PATH cannot make that impossible; only an
+    OS-enforced process/network boundary or a strictly confined broker can.
+  * IS UNAVAILABLE TO UPGRADE ON THIS BOX AS THIS USER: `unshare -rn` fails
+    (write to uid_map not permitted), there is no bwrap and no firejail, and
+    there is no sudo. So the guarantee the test suite actually offers is a
+    WITNESSED one, not a confinement one -- see bin/typist-run-test:
+      (a) NO REAL KEY IS REACHABLE -- the suite always runs the runner with
+          --keys-dir pointed at a dummy-key directory under /var/tmp/forge,
+          and proves it with `--print-key-paths` (paths only, never contents).
+      (b) NOTHING WAS SPENT -- the ~/.codex/sessions PATH SET is identical
+          before and after, and an egress canary shows no receipt written by
+          the suite carries :cost_source "provider" or a real :upstream.
+    A child COULD have spawned or connected; what is proven is that it DID
+    NOT, and that it COULD NOT have spent.
+
+Receipts written while TYPIST_OFFLINE=1 carry
+:offline_contract "chokepoint-not-sandbox" so a later reader is never invited
+to mistake this for confinement.
+
+No number is ever fabricated: a missing API usage field prints `tokens=unknown`.
+"""
+
+import argparse
+import atexit
+import concurrent.futures as cf
+import difflib
+import hashlib
+import json
+import os
+import re
+import shutil
+import socket
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+
+T0 = time.time()
+
+# --------------------------------------------------------------------------
+# THE OFFLINE CONTRACT -- CHOKEPOINT, NOT SANDBOX (Astra 2026-09-06; the name
+# and the claim corrected after Sol fence r4, 2026-09-06).
+#
+# WHAT THIS IS: a refusal of the RUNNER'S OWN spawn and connect paths, at one
+# chokepoint. WHAT THIS IS NOT: a sandbox. It does not confine children. Sol
+# r4 demonstrated the escapes and they are real and unfixable at this layer --
+# `bash -c /abs/path/codex`, a PATH reset, `env -i`, a re-exec from a spawned
+# python3, a socket opened by a child. Python monkeypatching plus a mutable
+# PATH is not a boundary; an OS-enforced process/network boundary or a
+# strictly confined broker is, and NEITHER IS AVAILABLE on this box to this
+# user (`unshare -rn` -> write to uid_map not permitted; no bwrap, no
+# firejail, no sudo). Do not read the refusals below as containment.
+#
+# The guarantee the SUITE offers instead is witnessed, not enforced: no real
+# key is reachable (--keys-dir dummies under /var/tmp/forge, proved with
+# --print-key-paths) and nothing was spent (~/.codex/sessions path set
+# unchanged; no provider-priced receipt written by the suite). See
+# bin/typist-run-test. `bin/typist-run-test` calls itself an
+# OFFLINE self-test, and it was one only by accident of geography: its NW
+# "refused before any codex call" check pointed at the WORKTREE, and the write
+# fence admits the worktree. On a checkout that lives inside /var/tmp/forge
+# the fence therefore correctly ADMITTED the workspace, the refusal never
+# fired, and the "offline" test made a real codex warm-up call -- 12.2 s and a
+# created session. A test whose offline-ness is a property of where the repo
+# happens to sit is not offline; it is lucky.
+#
+# So offline-ness becomes a state the program ENFORCES rather than a property
+# the caller hopes for. TYPIST_OFFLINE is read ONCE, here, at import: this is
+# a TEST SEAM, never a key or a policy dial -- it can only ever REFUSE more.
+#
+# The guard is installed at the CHOKEPOINT, not at each call site. There are
+# four `codex exec` spawn sites and a `urlopen`, and a guard that must be
+# remembered at each of them is a guard that is missing from the fifth.
+#
+# SOL FENCE R3, finding 3: the r2 guard was a guard on TWO NAMES, not a
+# boundary. `subprocess.run(cmd, shell=True)`, a `bash -c` trampoline and
+# `os.system` all walked straight past it, because each of those hands the
+# command to a SHELL and the shell -- not this process -- does the exec. Two
+# independent stops now close that, and each is listed here rather than
+# remembered at a call site:
+#
+#   (a) THE CHOKEPOINT TABLE below -- every spawn and every network entry
+#       point in the standard library that this process can reach is wrapped
+#       at import, in one place. A shell STRING (os.system, os.popen, or any
+#       subprocess call with shell=True) is scanned as a string, so
+#       `codex exec ...` inside it is refused with the same exit 6.
+#   (b) THE PATH SHIM -- under TYPIST_OFFLINE the runner prepends a temp dir
+#       holding executable `codex` and `claude` scripts that print the typed
+#       refusal and exit 6, so a shell string this process never sees the
+#       inside of (`bash -c 'codex ...'`, an alias, a Makefile, a child of a
+#       child) that resolves the NAME `codex` gets the refusal instead of the
+#       real binary.
+#
+#       SOL FENCE R4 DEMONSTRATED ITS BYPASSES, and they are written here
+#       rather than left as an impression: the shim is a NAME redirect on one
+#       inherited variable, not a boundary. A child that invokes the ABSOLUTE
+#       path, that rewrites or resets PATH, that runs under `env -i`, or that
+#       re-execs through anything restoring the original environment reaches
+#       the real binary. (a) fails loud in-process and (b) covers name lookups
+#       (a) structurally cannot see -- NEITHER catches everything, and the
+#       pair is not confinement. That is why the contract is named
+#       chokepoint-not-sandbox and why the suite proves a WITNESSED guarantee
+#       (no real key reachable; no session created; ledger did not grow)
+#       instead of an impossibility claim.
+#
+# THE CHOKEPOINT TABLE (wrapped at import when OFFLINE):
+#   os.system, os.popen
+#   os.execl/execle/execlp/execv/execve/execvp/execvpe
+#   os.spawnl/spawnle/spawnlp/spawnv/spawnve/spawnvp/spawnvpe, os.posix_spawn
+#   subprocess.run, subprocess.call, subprocess.check_call,
+#   subprocess.check_output, subprocess.Popen
+#   urllib.request.urlopen, http.client.HTTPConnection/HTTPSConnection,
+#   socket.create_connection
+OFFLINE = os.environ.get("TYPIST_OFFLINE") == "1"
+
+# The NAME of what TYPIST_OFFLINE provides, carried into every receipt written
+# under it so no later reader mistakes a chokepoint for confinement.
+OFFLINE_CONTRACT = "chokepoint-not-sandbox"
+OFFLINE_CONTRACT_LINE = (
+    "TYPIST_OFFLINE=1: refuses the runner's OWN spawn and connect paths at the "
+    "chokepoint; it does NOT confine children; NOT a sandbox.")
+
+OFFLINE_BLOCKED_EXES = ("codex", "claude")
+# a blocked name as a WORD inside a shell string: `codex exec`, `/x/codex -m`,
+# `FOO=1 codex`, `bash -c "claude ..."` -- but never `codexish` or `my-codex`.
+OFFLINE_SHELL_RE = re.compile(
+    r"(?:(?<=^)|(?<=[\s;&|(`]))(?:[\w./-]*/)?(%s)(?=$|[\s;&|)])"
+    % "|".join(OFFLINE_BLOCKED_EXES))
+
+
+def offline_refuse(what):
+    """The typed offline refusal. Exit 6 -- its own class, distinct from the
+    write fence's 4, so a test can tell "the fence stopped it" from "offline
+    stopped it" without reading prose."""
+    die("typist-run: refusing — offline: %s refused (TYPIST_OFFLINE=1)" % what, 6)
+
+
+def _blocked_name(cmd, shell=False):
+    """The blocked executable this command would start, or None.
+
+    A LIST is judged by its argv[0] only -- `bash -c "codex ..."` is a bash
+    spawn and is allowed to proceed straight into the PATH shim, which is the
+    stop designed for it. A STRING is a shell command line, so every word in
+    it is a candidate exec and the whole line is scanned."""
+    if isinstance(cmd, (list, tuple)):
+        if shell:
+            return _blocked_name(" ".join(str(c) for c in cmd), shell=False)
+        if not cmd:
+            return None
+        base = os.path.basename(str(cmd[0]))
+        return base if base in OFFLINE_BLOCKED_EXES else None
+    m = OFFLINE_SHELL_RE.search(str(cmd))
+    return m.group(1) if m else None
+
+
+def guard_spawn(cmd, shell=False):
+    """Refuse a model-executor spawn BEFORE it happens."""
+    if not OFFLINE:
+        return
+    name = _blocked_name(cmd, shell=shell)
+    if name:
+        offline_refuse("spawn of %s" % name)
+
+
+def guard_network(what="network open"):
+    if OFFLINE:
+        offline_refuse(what)
+
+
+def _install_offline_path_shim():
+    """Prepend a PATH dir whose `codex` and `claude` print the typed refusal
+    and exit 6. This is the stop for every route the in-process wrappers
+    cannot see: a shell trampoline, an alias, a grandchild process."""
+    import tempfile
+    base = "/var/tmp/forge"
+    d = tempfile.mkdtemp(prefix="typist-offline-shim-",
+                         dir=base if os.path.isdir(base) else None)
+    for exe in OFFLINE_BLOCKED_EXES:
+        p = os.path.join(d, exe)
+        with open(p, "w") as fh:
+            fh.write("#!/bin/sh\n"
+                     "echo \"typist-run: refusing \u2014 offline: "
+                     "spawn of %s refused (TYPIST_OFFLINE=1)\" >&2\n"
+                     "exit 6\n" % exe)
+        os.chmod(p, 0o755)
+    os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
+    atexit.register(shutil.rmtree, d, True)
+    return d
+
+
+_real_subprocess_run = subprocess.run
+_real_subprocess_call = subprocess.call
+_real_subprocess_check_call = subprocess.check_call
+_real_subprocess_check_output = subprocess.check_output
+_real_subprocess_popen = subprocess.Popen
+_real_urlopen = urllib.request.urlopen
+_real_os_system = os.system
+_real_os_popen = os.popen
+_real_socket_create_connection = socket.create_connection
+
+_OS_EXEC_SPAWN = ("execl", "execle", "execlp", "execv", "execve", "execvp",
+                  "execvpe", "spawnl", "spawnle", "spawnlp", "spawnv",
+                  "spawnve", "spawnvp", "spawnvpe", "posix_spawn",
+                  "posix_spawnp")
+
+
+def _guarded_run(cmd, *args, **kwargs):
+    guard_spawn(cmd, shell=kwargs.get("shell", False))
+    return _real_subprocess_run(cmd, *args, **kwargs)
+
+
+def _guarded_call(cmd, *args, **kwargs):
+    guard_spawn(cmd, shell=kwargs.get("shell", False))
+    return _real_subprocess_call(cmd, *args, **kwargs)
+
+
+def _guarded_check_call(cmd, *args, **kwargs):
+    guard_spawn(cmd, shell=kwargs.get("shell", False))
+    return _real_subprocess_check_call(cmd, *args, **kwargs)
+
+
+def _guarded_check_output(cmd, *args, **kwargs):
+    guard_spawn(cmd, shell=kwargs.get("shell", False))
+    return _real_subprocess_check_output(cmd, *args, **kwargs)
+
+
+class _GuardedPopen(_real_subprocess_popen):
+    def __init__(self, cmd, *args, **kwargs):
+        guard_spawn(cmd, shell=kwargs.get("shell", False)
+                    or (len(args) >= 7 and args[6]))
+        super().__init__(cmd, *args, **kwargs)
+
+
+def _guarded_urlopen(req, *args, **kwargs):
+    guard_network()
+    return _real_urlopen(req, *args, **kwargs)
+
+
+def _guarded_os_system(cmd):
+    guard_spawn(cmd, shell=True)
+    return _real_os_system(cmd)
+
+
+def _guarded_os_popen(cmd, *args, **kwargs):
+    guard_spawn(cmd, shell=True)
+    return _real_os_popen(cmd, *args, **kwargs)
+
+
+def _guarded_create_connection(*args, **kwargs):
+    guard_network()
+    return _real_socket_create_connection(*args, **kwargs)
+
+
+def _guard_os_exec_family():
+    """os.exec*/os.spawn* take the program as their FIRST argument in every
+    spelling, so one wrapper shape covers the whole family."""
+    def wrap(name, fn):
+        def guarded(path, *args, **kwargs):
+            guard_spawn([path], shell=False)
+            return fn(path, *args, **kwargs)
+        guarded.__name__ = name
+        return guarded
+    for name in _OS_EXEC_SPAWN:
+        fn = getattr(os, name, None)
+        if fn is not None:
+            setattr(os, name, wrap(name, fn))
+
+
+def _guard_http_client():
+    import http.client
+
+    for cls_name in ("HTTPConnection", "HTTPSConnection"):
+        cls = getattr(http.client, cls_name, None)
+        if cls is None:
+            continue
+        real_init = cls.__init__
+
+        def guarded_init(self, *args, _real=real_init, **kwargs):
+            guard_network()
+            return _real(self, *args, **kwargs)
+
+        cls.__init__ = guarded_init
+
+
+subprocess.run = _guarded_run
+subprocess.call = _guarded_call
+subprocess.check_call = _guarded_check_call
+subprocess.check_output = _guarded_check_output
+subprocess.Popen = _GuardedPopen
+urllib.request.urlopen = _guarded_urlopen
+
+OFFLINE_SHIM_DIR = None
+if OFFLINE:
+    os.system = _guarded_os_system
+    os.popen = _guarded_os_popen
+    socket.create_connection = _guarded_create_connection
+    _guard_os_exec_family()
+    _guard_http_client()
+    OFFLINE_SHIM_DIR = _install_offline_path_shim()
+
+FX = os.environ.get("TYPIST_FX", "/var/tmp/forge/typist-fx")
+HERE = os.path.dirname(os.path.abspath(__file__))
+# ---- the secrets fence -------------------------------------------------
+# FIXED paths. Never environment-selected: a caller-controlled path is a
+# caller-controlled key. The only seam is --keys-dir, fenced to /var/tmp/forge.
+GROQ_KEY_FILE = "/home/forge/secrets/groq.edn"
+OPENROUTER_KEY_FILE = "/home/forge/secrets/openrouter.edn"
+TEST_KEYS_FENCE = "/var/tmp/forge"
+KEYS_DIR = None            # set ONLY by --keys-dir, after the fence check
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = "openai/gpt-oss-120b"
+GROQ_UA = "curl/8.5.0 forge-anvil-typist-run"   # urllib's default UA gets 403
+GROQ_MAX_TOKENS = 6000   # reasoning tokens are spent first; budget covers both
+
+# --------------------------------------------------------------------------
+# MISSIONS. Each dossier is paired with exactly one mission: its own preimage
+# tree, its own manifest, its own verification profile, its own authorized file,
+# and its own INDEPENDENT acceptance witness. The dossier is the prompt; the
+# mission is everything the runner must know to judge a candidate for it.
+#
+# Adding a dossier without its mission is a refusal, not a default: judging a
+# candidate against another mission's witness would be a silent wrong answer.
+
+UTIL_CLJ = '''(ns fixture.util
+  "Path helpers shared by the scope expander. NOT part of this mission."
+  (:require [clojure.string :as str]))
+
+(defn normalize
+  "Trim a path and drop any trailing slash."
+  [p]
+  (str/replace (str/trim p) #"/+$" ""))
+'''
+
+SCOPE_CLJ = '''(ns fixture.scope
+  "Scope expansion for the helper-extraction fence."
+  (:require [fixture.util :as util]))
+
+(def default-roots
+  "The roots this workspace admits when the caller names none."
+  ["src"])
+
+(defn scope-roots
+  "The admitted roots for this scope expansion."
+  []
+  default-roots)
+
+(defn expand
+  "Every admitted root plus the caller's paths, normalised, in order."
+  [paths]
+  (vec (distinct (map util/normalize (concat (scope-roots) paths)))))
+'''
+
+# ---- mission 1: scope-roots (cohort 1; a multi-line signature change) -----
+
+SCOPE_SEED = {
+"deps.edn": '{:paths ["src" "test"]}\n',
+
+".clj-surgeon.edn": '''{:verification-profiles
+ {"typist-narrow"
+  {:commands [["bb" "-cp" "src:test" "-e"
+               "(require 'clojure.test 'fixture.scope-test) (let [r (clojure.test/run-tests 'fixture.scope-test)] (System/exit (if (and (zero? (:fail r)) (zero? (:error r))) 0 1)))"]]}}}
+''',
+
+"src/fixture/util.clj": UTIL_CLJ,
+"src/fixture/scope.clj": SCOPE_CLJ,
+
+"test/fixture/scope_test.clj": '''(ns fixture.scope-test
+  (:require [clojure.test :refer [deftest is testing]]
+            [fixture.scope :as scope]))
+
+(deftest default-roots-unchanged
+  (is (= ["src"] (scope/scope-roots))))
+
+(deftest roots-opt-is-honoured
+  (testing "(:roots opts) replaces the default roots"
+    (is (= ["src" "test"] (scope/scope-roots {:roots ["src" "test"]})))
+    (is (= ["lib"] (scope/scope-roots {:roots ["lib"]})))))
+
+(deftest empty-roots-falls-back
+  (is (= ["src"] (scope/scope-roots {:roots []}))))
+
+(deftest expand-still-normalises
+  (is (= ["src" "test"] (scope/expand ["test/"]))))
+''',
+}
+
+# The independent acceptance witness. It requires ONLY fixture.scope — never the
+# gate's test namespace — so a candidate that satisfies the gate by editing the
+# tests cannot satisfy this.
+SCOPE_ACCEPT = (
+    "(require 'fixture.scope) "
+    "(let [f (resolve 'fixture.scope/scope-roots)] "
+    "(assert (= [\"src\"] (f)) \"0-arity default\") "
+    "(assert (= [\"src\" \"test\"] (f {:roots [\"src\" \"test\"]})) \":roots honoured\") "
+    "(assert (= [\"lib\"] (f {:roots [\"lib\"]})) \":roots honoured (single)\") "
+    "(assert (= [\"src\"] (f {:roots []})) \"empty :roots falls back\") "
+    "(assert (= [\"src\"] (f nil)) \"nil opts falls back\") "
+    "(assert (vector? (f {:roots [\"a\"]})) \"returns a vector\") "
+    "(println \"ACCEPT-OK\"))"
+)
+
+# ---- mission 2: onesite (the ONE-SITE CONTROL; a single literal) ----------
+#
+# The preregistration requires a control the careful author is expected to win
+# or tie. This is it: one known site, one literal, no signature change, no
+# call-site fan-out.
+
+ONESITE_UTIL_CLJ = '''(ns fixture.util
+  "Path helpers shared by the scope expander."
+  (:require [clojure.string :as str]))
+
+(def max-path-segments
+  "The most path segments this workspace will normalise in one call."
+  16)
+
+(defn normalize
+  "Trim a path and drop any trailing slash."
+  [p]
+  (str/replace (str/trim p) #"/+$" ""))
+'''
+
+ONESITE_SEED = {
+"deps.edn": '{:paths ["src" "test"]}\n',
+
+".clj-surgeon.edn": '''{:verification-profiles
+ {"typist-onesite"
+  {:commands [["bb" "-cp" "src:test" "-e"
+               "(require 'clojure.test 'fixture.util-test) (let [r (clojure.test/run-tests 'fixture.util-test)] (System/exit (if (and (zero? (:fail r)) (zero? (:error r))) 0 1)))"]]}}}
+''',
+
+"src/fixture/util.clj": ONESITE_UTIL_CLJ,
+"src/fixture/scope.clj": SCOPE_CLJ,
+
+"test/fixture/util_test.clj": '''(ns fixture.util-test
+  (:require [clojure.test :refer [deftest is]]
+            [fixture.util :as util]))
+
+(deftest max-path-segments-is-64
+  (is (= 64 util/max-path-segments)))
+
+(deftest normalize-unchanged
+  (is (= "a/b" (util/normalize "  a/b//  "))))
+''',
+}
+
+ONESITE_ACCEPT = (
+    "(require 'fixture.util) "
+    "(let [v @(resolve 'fixture.util/max-path-segments) "
+    "      n (resolve 'fixture.util/normalize)] "
+    "(assert (= 64 v) \"max-path-segments is 64\") "
+    "(assert (integer? v) \"max-path-segments is an integer literal\") "
+    "(assert (= \"a/b\" (n \"  a/b//  \")) \"normalize unchanged\") "
+    "(assert (= \"\" (n \"   \")) \"normalize unchanged (blank)\") "
+    "(println \"ACCEPT-OK\"))"
+)
+
+# ---- mission 3: fanout (the SEARCH mission; multi-file, multi-hunk) ------
+#
+# Cohort 1 found a single gpt-oss-120b candidate verifying 12/12 on both of the
+# missions above, which makes k=5 unmeasurable: parallel search cannot beat a
+# ceiling already reached at k=1. This mission is deliberately harder — six
+# hunks across three files, a signature change fanned out to five call sites,
+# and TWO traps a fast typist gets wrong: the old name survives inside a
+# docstring example and inside a string literal, and must NOT be renamed.
+
+FANOUT_UTIL_CLJ = r"""(ns fixture.util
+  "Path helpers shared by the scope expander."
+  (:require [clojure.string :as str]))
+
+(defn normalize
+  "Trim a path and drop any trailing slash."
+  [p]
+  (str/replace (str/trim p) #"/+$" ""))
+"""
+
+FANOUT_SCOPE_CLJ = r"""(ns fixture.scope
+  "Scope expansion for the helper-extraction fence."
+  (:require [fixture.util :as util]))
+
+(def default-roots
+  "The roots this workspace admits when the caller names none."
+  ["src"])
+
+(defn scope-roots
+  "The admitted roots for this scope expansion."
+  []
+  default-roots)
+
+(defn expand
+  "Every admitted root plus the caller's paths, normalised, in order."
+  [paths]
+  (vec (distinct (map util/normalize (concat (scope-roots) paths)))))
+
+(defn admits?
+  "Does this scope admit the given path?"
+  [p]
+  (contains? (set (expand [])) (util/normalize p)))
+"""
+
+FANOUT_PATHS_CLJ = r"""(ns fixture.paths
+  "Path assembly built on the shared helpers."
+  (:require [clojure.string :as str]
+            [fixture.util :as util]))
+
+(def op-name
+  "The operation name reported in telemetry."
+  "normalize")
+
+(defn join
+  "Join segments into one path.
+
+  Example:
+    (normalize \"a/b/\")  ;=> \"a/b\""
+  [segs]
+  (util/normalize (str/join "/" segs)))
+
+(defn relative-to
+  "Strip the root prefix from a path."
+  [root p]
+  (let [r (util/normalize root)
+        n (util/normalize p)]
+    (if (str/starts-with? n (str r "/"))
+      (subs n (inc (count r)))
+      n)))
+
+(defn clean-all
+  "Normalise every path in the collection."
+  [paths]
+  (mapv util/normalize paths))
+"""
+
+FANOUT_TEST_CLJ = r"""(ns fixture.fanout-test
+  (:require [clojure.test :refer [deftest is testing]]
+            [fixture.util :as util]
+            [fixture.scope :as scope]
+            [fixture.paths :as paths]))
+
+(deftest normalize-path-renamed
+  (is (= "a//b" (util/normalize-path "  a//b//  ")))
+  (is (= "" (util/normalize-path "   ")))
+  (is (nil? (resolve 'fixture.util/normalize))))
+
+(deftest strict-collapses-inner-slashes
+  (is (= "a/b" (util/normalize-path "  a//b//  " {:strict? true})))
+  (is (= "a//b" (util/normalize-path "a//b" {:strict? false})))
+  (is (= "a//b" (util/normalize-path "a//b" nil))))
+
+(deftest expand-threads-strict
+  (is (= ["src" "test"] (scope/expand ["test/"])))
+  (is (= ["src" "a//b"] (scope/expand ["a//b/"])))
+  (is (= ["src" "a/b"] (scope/expand ["a//b/"] {:strict? true}))))
+
+(deftest admits-still-works
+  (is (true? (scope/admits? "src/")))
+  (is (false? (scope/admits? "lib"))))
+
+(deftest join-threads-strict
+  (is (= "a/b" (paths/join ["a" "b/"])))
+  (is (= "a//b" (paths/join ["a" "" "b"])))
+  (is (= "a/b" (paths/join ["a" "" "b"] {:strict? true}))))
+
+(deftest relative-to-and-clean-all
+  (is (= "a/b" (paths/relative-to "src/" "src/a/b")))
+  (is (= "lib/x" (paths/relative-to "src" "lib/x")))
+  (is (= ["a" "b"] (paths/clean-all ["a/" "b//"]))))
+
+(deftest the-two-traps
+  (testing "the string literal and the docstring example keep the OLD name"
+    (is (= "normalize" paths/op-name))
+    (is (re-find #"\(normalize " (:doc (meta #'paths/join))))))
+"""
+
+FANOUT_EDN = (
+    '{:verification-profiles\n'
+    ' {"typist-fanout"\n'
+    '  {:commands [["bb" "-cp" "src:test" "-e"\n'
+    '               "(require \'clojure.test \'fixture.fanout-test)'
+    ' (let [r (clojure.test/run-tests \'fixture.fanout-test)]'
+    ' (System/exit (if (and (zero? (:fail r)) (zero? (:error r))) 0 1)))"]]}}}\n'
+)
+
+FANOUT_SEED = {
+    "deps.edn": '{:paths ["src" "test"]}\n',
+    ".clj-surgeon.edn": FANOUT_EDN,
+    "src/fixture/util.clj": FANOUT_UTIL_CLJ,
+    "src/fixture/scope.clj": FANOUT_SCOPE_CLJ,
+    "src/fixture/paths.clj": FANOUT_PATHS_CLJ,
+    "test/fixture/fanout_test.clj": FANOUT_TEST_CLJ,
+}
+
+# Independent of the gate: requires only the three SOURCE namespaces, never
+# fixture.fanout-test. Asserts the end state, both traps, and that the old name
+# is gone from code while surviving in the docstring and the string literal.
+FANOUT_ACCEPT = r"""(require 'fixture.util 'fixture.scope 'fixture.paths)
+(let [np (resolve 'fixture.util/normalize-path)
+      ex (resolve 'fixture.scope/expand)
+      ad (resolve 'fixture.scope/admits?)
+      jn (resolve 'fixture.paths/join)
+      rl (resolve 'fixture.paths/relative-to)
+      ca (resolve 'fixture.paths/clean-all)]
+  (assert np "normalize-path resolves")
+  (assert (nil? (resolve 'fixture.util/normalize)) "the old name is gone from code")
+  (assert (= "a//b" (np "  a//b//  ")) "1-arity trims and drops trailing slashes")
+  (assert (= "" (np "   ")) "1-arity on blank")
+  (assert (= "a/b" (np "  a//b//  " {:strict? true})) ":strict? collapses inner slashes")
+  (assert (= "a//b" (np "a//b" nil)) "nil opts is lenient")
+  (assert (= ["src" "test"] (ex ["test/"])) "expand 1-arity unchanged")
+  (assert (= ["src" "a//b"] (ex ["a//b/"])) "expand lenient by default")
+  (assert (= ["src" "a/b"] (ex ["a//b/"] {:strict? true})) "expand threads :strict?")
+  (assert (true? (ad "src/")) "admits? still works")
+  (assert (= "a/b" (jn ["a" "b/"])) "join 1-arity")
+  (assert (= "a//b" (jn ["a" "" "b"])) "join lenient by default")
+  (assert (= "a/b" (jn ["a" "" "b"] {:strict? true})) "join threads :strict?")
+  (assert (= "a/b" (rl "src/" "src/a/b")) "relative-to")
+  (assert (= ["a" "b"] (ca ["a/" "b//"])) "clean-all")
+  (assert (= "normalize" @(resolve 'fixture.paths/op-name)) "TRAP: string literal intact")
+  (assert (re-find #"\(normalize " (:doc (meta jn))) "TRAP: docstring example intact")
+  (println "ACCEPT-OK"))"""
+
+# ---- mission 4: real-1 (the REAL-REPOSITORY mission) ----------------------
+#
+# The first three missions are five-file toy fixtures. Every ratio measured on
+# them was measured against a gate that costs ~70 ms. This mission is the same
+# protocol pointed at THIS repository: the preimage is a byte-for-byte copy of
+# a real src file and its real focused test namespace, read out of git at a
+# pinned sha, with nothing invented but the two files a standalone project
+# needs (deps.edn and .clj-surgeon.edn).
+#
+# The change: rename the public `finding-identity` to `finding-fingerprint`
+# and the private helper `field` to `finding-field`, across every call site in
+# clj-surgeon.diagnostic-delta. TWO spans in the same file must NOT change:
+# the `let` binding named `identity` inside `representative-difference` (a
+# local, not the function) and the sentence in the docstring that uses the word
+# "identity" as a concept. A blind search-and-replace fails the mission.
+#
+# The gate is the REAL test namespace with its two `delta/finding-identity`
+# references moved to the post-change name -- a red test, in the TDD sense.
+# Nothing else in it changes and it is NOT mutable: a candidate that satisfies
+# the gate by editing it fails acceptance on byte identity.
+
+REAL1_REPO = os.environ.get("TYPIST_REAL1_REPO",
+                            "/home/forge/src/clj-surgeon-fable-typist")
+REAL1_SHA = "f2efc87c72659489544ac996c392233f4ec29172"
+REAL1_SRC = "src/clj_surgeon/diagnostic_delta.clj"
+REAL1_TEST = "test/clj_surgeon/diagnostic_delta_test.clj"
+
+REAL1_EDN = (
+    '{:verification-profiles\n'
+    ' {"typist-real-1"\n'
+    '  {:commands [["bb" "-cp" "src:test" "-e"\n'
+    '               "(require \'clojure.test \'clj-surgeon.diagnostic-delta-test)'
+    ' (let [r (clojure.test/run-tests \'clj-surgeon.diagnostic-delta-test)]'
+    ' (System/exit (if (and (zero? (:fail r)) (zero? (:error r))) 0 1)))"]]}}}\n'
+)
+
+
+def real1_blob(rel):
+    """The file's bytes as of REAL1_SHA. Never the working tree: a preimage
+    read from a dirty checkout is not a preimage."""
+    r = subprocess.run(["git", "show", "%s:%s" % (REAL1_SHA, rel)],
+                       cwd=REAL1_REPO, capture_output=True, text=True)
+    if r.returncode != 0:
+        die("typist-run: refusing — cannot read %s at %s from %s: %s"
+            % (rel, REAL1_SHA[:8], REAL1_REPO, (r.stderr or "").strip()), 5)
+    return r.stdout
+
+
+def real1_seed():
+    """The preimage: two real files, verbatim, plus the two project files a
+    standalone copy needs. The ONE edit is the gate's two references."""
+    src = real1_blob(REAL1_SRC)
+    test = real1_blob(REAL1_TEST)
+    n = test.count("delta/finding-identity")
+    if n != 2:
+        die("typist-run: refusing — real-1 expected exactly 2 "
+            "`delta/finding-identity` references in %s at %s, found %d"
+            % (REAL1_TEST, REAL1_SHA[:8], n), 5)
+    test = test.replace("delta/finding-identity", "delta/finding-fingerprint")
+    return {"deps.edn": '{:paths ["src" "test"]}\n',
+            ".clj-surgeon.edn": REAL1_EDN,
+            REAL1_SRC: src,
+            REAL1_TEST: test}
+
+
+# Independent of the gate: it never loads clj-surgeon.diagnostic-delta-test.
+# Behaviour through the renamed vars, both do-not-change spans checked in the
+# source text, and no residue of either old name.
+REAL1_ACCEPT = r"""(require 'clj-surgeon.diagnostic-delta)
+(let [ff (resolve 'clj-surgeon.diagnostic-delta/finding-fingerprint)
+      fld (resolve 'clj-surgeon.diagnostic-delta/finding-field)
+      dd (resolve 'clj-surgeon.diagnostic-delta/diagnostic-delta)
+      nf (resolve 'clj-surgeon.diagnostic-delta/normalize-filename)
+      src (slurp "src/clj_surgeon/diagnostic_delta.clj")
+      w {:filename "src/sample/core.clj" :type :unresolved-symbol
+         :level :warning :message "Unresolved symbol: legacy" :row 4 :col 7}]
+  (assert ff "finding-fingerprint resolves")
+  (assert (nil? (resolve 'clj-surgeon.diagnostic-delta/finding-identity))
+          "the old public name is gone")
+  (assert fld "the private helper is renamed to finding-field")
+  (assert (nil? (resolve 'clj-surgeon.diagnostic-delta/field))
+          "the old private helper name is gone")
+  (assert (= {:filename "src/sample/core.clj" :type :unresolved-symbol
+              :level :warning :message "Unresolved symbol: legacy"}
+             (ff w))
+          "fingerprint drops row/col")
+  (assert (= (ff w) (ff (assoc w :filename "./src/sample/core.clj")))
+          "fingerprint still normalises dot-relative paths")
+  (assert (= (ff w) (ff (assoc w :filename "src\\sample\\core.clj")))
+          "fingerprint still normalises windows paths")
+  (assert (= "src/a.clj" (nf "./src/a.clj")) "normalize-filename unchanged")
+  (assert (:ok (dd {:findings []} {:findings []})) "empty delta is ok")
+  (assert (false? (:ok (dd {:findings []} {:findings [w]})))
+          "a new warning blocks")
+  (assert (= 1 (:introduced-count (dd {:findings []} {:findings [w]})))
+          "introduced-count")
+  (assert (:ok (dd {:findings [w]} {:findings [(assoc w :row 400)]}))
+          "line drift is not a regression")
+  (assert (= :invalid-diagnostic-snapshot
+             (:error-type (dd nil {:findings []})))
+          "malformed snapshots still refuse")
+  (assert (re-find #"\(get remaining identity 0\)" src)
+          "TRAP: the local binding named `identity` is intact")
+  (assert (re-find
+            #"location-independent identity used for diagnostic multiset deltas"
+            src)
+          "TRAP: the docstring sentence is intact")
+  (assert (not (re-find #"finding-identity" src))
+          "no residual old public name in the source")
+  (assert (not (re-find #"\(defn- field" src))
+          "no residual old private helper definition")
+  (println "ACCEPT-OK"))"""
+
+
+# ---- missions 5 & 6: real-2 / real-2j (the GATE-DOMINATED variants) -------
+#
+# real-1 measured the fast typist against a gate that costs 0.06 s (babashka,
+# one focused namespace). That flatters the typist: whatever the model saves is
+# nearly the whole wall. real-2 and real-2j change ONE thing — the proof
+# profile — and nothing else: same preimage bytes, same change, same traps,
+# same independent acceptance witness, same authorized file.
+#
+#   real-2   the SAME focused namespace, run on the JVM (~0.75 s cold).
+#   real-2j  a broader honest set that still exercises the change: three real
+#            test namespaces from this repository, two of which load
+#            clj-surgeon.diagnostic-delta transitively through
+#            clj-surgeon.mcp-change-buffer and clj-surgeon.mcp-admit-tool.
+#            (~18 s cold.) clj-surgeon.analyzer-contract-test was measured and
+#            REJECTED from the set: it asserts on clojure.test's global report
+#            counters and fails when run after another namespace — an
+#            order-dependent test is not an honest gate.
+#
+# The JVM classpath is resolved ONCE from this repository's
+# :clj-surgeon/mcp-test alias and baked into the profile, because a candidate
+# workspace is a standalone two-file project that cannot resolve deps itself.
+# The candidate's own `src` and `test` come FIRST, so the candidate's file is
+# what loads; the repository entries are only there so the JVM has clojure and,
+# for real-2j, the additional test namespaces.
+
+REAL2_CP_CACHE = {}
+
+
+def real2_classpath(jars_only):
+    """`clojure -Spath -A:clj-surgeon/mcp-test` from the real repository, with
+    relative entries made absolute and the candidate's own src/test in front.
+    jars_only drops the repository's source/test roots: real-2's gate must see
+    ONLY the candidate's two files."""
+    key = bool(jars_only)
+    if key in REAL2_CP_CACHE:
+        return REAL2_CP_CACHE[key]
+    r = subprocess.run(["clojure", "-Spath", "-A:clj-surgeon/mcp-test"],
+                       cwd=REAL1_REPO, capture_output=True, text=True, timeout=300)
+    if r.returncode != 0:
+        die("typist-run: refusing — cannot resolve the JVM classpath for the "
+            "real-2 gate: %s" % (r.stderr or "").strip(), 5)
+    REAL2_SPATH_RAW[key] = r.stdout.strip()
+    entries = []
+    for e in r.stdout.strip().split(os.pathsep):
+        if not e:
+            continue
+        p = e if os.path.isabs(e) else os.path.join(REAL1_REPO, e)
+        if jars_only and not p.endswith(".jar"):
+            continue
+        entries.append(p)
+    if not entries:
+        die("typist-run: refusing — the resolved JVM classpath is empty", 5)
+    cp = os.pathsep.join(["src", "test"] + entries)
+    REAL2_CP_CACHE[key] = cp
+    return cp
+
+
+REAL2_NSS = ["clj-surgeon.diagnostic-delta-test"]
+REAL2J_NSS = ["clj-surgeon.diagnostic-delta-test",
+              "clj-surgeon.mcp-change-buffer-test",
+              "clj-surgeon.mcp-compact-location-test",
+              "clj-surgeon.ns-isolation-test"]
+
+
+def real2_gate_argv(nss, jars_only):
+    quoted = " ".join("'" + n for n in nss)
+    expr = ("(require 'clojure.test %s)"
+            " (let [r (apply clojure.test/run-tests '(%s))]"
+            " (System/exit (if (and (zero? (:fail r)) (zero? (:error r))) 0 1)))"
+            % (quoted, " ".join(nss)))
+    return ["java", "-cp", real2_classpath(jars_only), "clojure.main", "-e", expr]
+
+
+def real2_edn(profile, nss, jars_only):
+    argv = real2_gate_argv(nss, jars_only)
+    return ('{:verification-profiles\n'
+            ' {%s\n'
+            '  {:commands [[%s]]}}}\n'
+            % (edn_str(profile), "\n               ".join(edn_str(a) for a in argv)))
+
+
+def real2_seed_factory(profile, nss, jars_only):
+    """The real-1 preimage with ONE file different: `.clj-surgeon.edn`, whose
+    single verification profile is the JVM gate instead of the bb gate."""
+    def seed():
+        s = real1_seed()
+        s[".clj-surgeon.edn"] = real2_edn(profile, nss, jars_only)
+        return s
+    return seed
+
+
+MISSIONS = {
+    "scope-roots": {
+        "dossier": os.path.join(HERE, "typist-dossier.md"),
+        "preimage": os.path.join(FX, "fixture-preimage"),
+        "seed": SCOPE_SEED,
+        "profile": "typist-narrow",
+        "mutable": "src/fixture/scope.clj",
+        "accept_expr": SCOPE_ACCEPT,
+        "accept_desc": "independent behavioural witness (fixture.scope only) + preimage byte identity",
+    },
+    "onesite": {
+        "dossier": os.path.join(HERE, "typist-dossier-onesite.md"),
+        "preimage": os.path.join(FX, "fixture-preimage-onesite"),
+        "seed": ONESITE_SEED,
+        "profile": "typist-onesite",
+        "mutable": "src/fixture/util.clj",
+        "accept_expr": ONESITE_ACCEPT,
+        "accept_desc": "independent behavioural witness (fixture.util only) + preimage byte identity",
+    },
+    "fanout": {
+        "dossier": os.path.join(HERE, "typist-dossier-fanout.md"),
+        "dossier_wholefile": os.path.join(HERE, "typist-dossier-fanout-wholefile.md"),
+        "budget_ref": os.path.join(HERE, "fixtures", "typist-fanout-good.diff"),
+        "preimage": os.path.join(FX, "fixture-preimage-fanout"),
+        "seed": FANOUT_SEED,
+        "profile": "typist-fanout",
+        "mutable": ["src/fixture/util.clj", "src/fixture/scope.clj",
+                    "src/fixture/paths.clj"],
+        "accept_expr": FANOUT_ACCEPT,
+        "accept_desc": ("independent behavioural witness (fixture.util/scope/paths only, "
+                        "never the gate's test ns) + both traps + preimage byte identity"),
+    },
+    "real-1": {
+        "dossier": os.path.join(HERE, "typist-dossier-real-1.md"),
+        "dossier_wholefile": os.path.join(HERE, "typist-dossier-real-1-wholefile.md"),
+        "budget_ref": os.path.join(HERE, "fixtures", "typist-real-1-good.diff"),
+        "preimage": "/var/tmp/forge/typist-real-fx/preimage",
+        "seed": real1_seed,
+        "profile": "typist-real-1",
+        "mutable": [REAL1_SRC],
+        "accept_expr": REAL1_ACCEPT,
+        "accept_desc": ("independent behavioural witness (clj-surgeon.diagnostic-delta "
+                        "only, never the gate's test ns) + both do-not-change spans "
+                        "checked in the source text + preimage byte identity"),
+    },
+    "real-2": {
+        "dossier": os.path.join(HERE, "typist-dossier-real-2.md"),
+        "dossier_wholefile": os.path.join(HERE, "typist-dossier-real-2-wholefile.md"),
+        "budget_ref": os.path.join(HERE, "fixtures", "typist-real-1-good.diff"),
+        "preimage": "/var/tmp/forge/typist-real-fx/preimage-real-2",
+        "seed": real2_seed_factory("typist-real-2", REAL2_NSS, True),
+        "profile": "typist-real-2",
+        "jvm_nss": REAL2_NSS, "jvm_jars_only": True,
+        "mutable": [REAL1_SRC],
+        "accept_expr": REAL1_ACCEPT,
+        "accept_desc": ("independent behavioural witness (clj-surgeon.diagnostic-delta "
+                        "only, never the gate's test ns) + both do-not-change spans "
+                        "checked in the source text + preimage byte identity"),
+    },
+    "real-2j": {
+        "dossier": os.path.join(HERE, "typist-dossier-real-2j.md"),
+        "dossier_wholefile": os.path.join(HERE, "typist-dossier-real-2j-wholefile.md"),
+        "budget_ref": os.path.join(HERE, "fixtures", "typist-real-1-good.diff"),
+        "preimage": "/var/tmp/forge/typist-real-fx/preimage-real-2j",
+        "seed": real2_seed_factory("typist-real-2j", REAL2J_NSS, False),
+        "profile": "typist-real-2j",
+        "jvm_nss": REAL2J_NSS, "jvm_jars_only": False,
+        "mutable": [REAL1_SRC],
+        "accept_expr": REAL1_ACCEPT,
+        "accept_desc": ("independent behavioural witness (clj-surgeon.diagnostic-delta "
+                        "only, never the gate's test ns) + both do-not-change spans "
+                        "checked in the source text + preimage byte identity"),
+    },
+}
+
+# Bound at startup from the selected mission; every judging function reads them.
+GATE_MODE = "cold"
+RESIDENT = None
+REAL2_SPATH_RAW = {}
+COLD_CP_HASH = [None]
+MISSION = None
+DOSSIER = None
+PREIMAGE = None
+MANIFEST = None
+PROFILE = None
+MUTABLE = None
+ACCEPT_EXPR = None
+# The EDIT FORM is how a candidate expresses its change. It is NOT a different
+# arm, a different mission, or a different judge: the same dossier context, the
+# same preimage, the same gate and the same independent acceptance witness judge
+# both forms. Only the bytes the model is asked to emit, and the applier that
+# reads them, differ.
+EDIT_FORM = "diff"
+BUDGET_REF = None
+
+
+def select_mission(name, dossier=None, fixture=None, edit_form="diff"):
+    """Bind the module-level mission state. Refuses an unknown mission."""
+    global MISSION, DOSSIER, PREIMAGE, MANIFEST, PROFILE, MUTABLE, ACCEPT_EXPR
+    global EDIT_FORM, BUDGET_REF
+    if name not in MISSIONS:
+        die("typist-run: refusing — unknown mission %r (known: %s)"
+            % (name, ", ".join(sorted(MISSIONS))), 7)
+    m = MISSIONS[name]
+    MISSION = name
+    EDIT_FORM = edit_form
+    if edit_form == "whole-file":
+        BUDGET_REF = m.get("budget_ref")
+        if not BUDGET_REF or not os.path.isfile(BUDGET_REF):
+            die("typist-run: refusing — mission %r has no known-good reference "
+                "diff, so the changed-region budget cannot be computed" % name, 7)
+        default_dossier = m.get("dossier_wholefile")
+        if not default_dossier:
+            die("typist-run: refusing — mission %r has no whole-file dossier"
+                % name, 7)
+    else:
+        default_dossier = m["dossier"]
+    DOSSIER = os.path.abspath(dossier) if dossier else default_dossier
+    # THE PREIMAGE IS A WRITABLE PATH: `materialize_fixture` rmtrees and
+    # recreates it, so --fixture is fenced exactly like --keys-dir is.
+    PREIMAGE = fenced_path(os.path.abspath(fixture) if fixture else m["preimage"],
+                           "--fixture preimage directory")
+    MANIFEST = PREIMAGE + ".manifest.edn"
+    PROFILE = m["profile"]
+    mut = m["mutable"]
+    MUTABLE = list(mut) if isinstance(mut, (list, tuple)) else [mut]
+    ACCEPT_EXPR = m["accept_expr"]
+    return m
+
+
+def mission_for_dossier(path):
+    """The mission whose dossier basename this is. Refuses an unpaired dossier."""
+    base = os.path.basename(os.path.abspath(path))
+    hits = []
+    for name, m in MISSIONS.items():
+        known = [m["dossier"]] + ([m["dossier_wholefile"]]
+                                  if m.get("dossier_wholefile") else [])
+        if base in [os.path.basename(d) for d in known]:
+            hits.append(name)
+    if len(hits) > 1:
+        die("typist-run: refusing — dossier %s is registered under %d missions "
+            "(%s); pass --mission explicitly. Judging a candidate against the "
+            "wrong mission's gate is a silent wrong answer."
+            % (path, len(hits), ", ".join(sorted(hits))), 7)
+    if hits:
+        return hits[0]
+    die("typist-run: refusing — dossier %s is not paired with a mission. "
+        "Pass --mission explicitly, or register it in MISSIONS." % path, 7)
+
+
+def die(msg, code=1):
+    sys.stderr.write(msg + "\n")
+    sys.exit(code)
+
+
+# --------------------------------------------------------------------------
+# THE WRITE FENCE
+#
+# Sol's fence review (r1, 2026-09-06) found the runner could not honestly claim
+# it writes only beneath /var/tmp/forge or the worktree: `TYPIST_FX` was read
+# straight from the environment, `--fixture` became an arbitrary absolute path,
+# and `materialize_fixture` will `rmtree` and recreate whatever that path names.
+# An unconstrained rmtree target reached through an environment variable is not
+# a test knob, it is a delete primitive with a nice name.
+#
+# WHAT CONTAINMENT MEANS HERE, said plainly, because Sol's other finding was
+# that the docstring overclaimed: containment is THIS PATH FENCE plus the warm
+# workspace directory. It is NOT a kernel sandbox. Arm NW passes codex
+# `--dangerously-bypass-approvals-and-sandbox`, which by codex's own
+# documentation "execute[s] commands without sandboxing ... Intended solely for
+# running in environments that are externally sandboxed", and Sol demonstrated
+# an executed child writing OUTSIDE the warm workspace. So the fence below
+# bounds what THE RUNNER writes and deletes; it bounds a cooperative child only
+# by its working directory. Arm NW therefore refuses outright unless its warm
+# workspace resolves under /var/tmp/forge, so the blast radius of a
+# non-cooperative child is at worst the seat's own scratch tmpfs -- the same
+# fence ~/bin/sol-yolo has always used -- rather than $HOME or the worktree.
+
+REPO_ROOT = os.path.realpath(os.path.join(HERE, os.pardir))
+WRITE_FENCES = (os.path.realpath("/var/tmp/forge"), REPO_ROOT)
+
+
+def under_fence(p):
+    """(resolved, ok) -- `p` fully resolved, and whether it lands inside a
+    fence. realpath, so a SYMLINK planted under /var/tmp/forge that points at
+    $HOME resolves to $HOME and is refused on its target, not excused by its
+    name."""
+    r = os.path.realpath(p)
+    return r, any(r == f or r.startswith(f + os.sep) for f in WRITE_FENCES)
+
+
+def fenced_path(p, purpose):
+    """Resolve `p` and REFUSE (typed, exit 4) unless it is inside the write
+    fence. Every path this runner creates, copies onto, or removes goes
+    through here; the refusal names the purpose and both fences, because a
+    refusal that does not say where writing IS allowed just gets retried."""
+    r, ok = under_fence(p)
+    if not ok:
+        die("typist-run: refusing — %s outside the write fence "
+            "(%s resolves to %s, which is under neither %s nor %s)"
+            % (purpose, p, r, WRITE_FENCES[0], WRITE_FENCES[1]), 4)
+    return r
+
+
+# --------------------------------------------------------------------------
+# SECRET SCRUBBER + TYPED ERRORS
+#
+# A provider exception can carry the request -- and the request carries the
+# Authorization header. So no exception text is ever copied into a candidate
+# record or a receipt. `classify_error` types it, `generic_error` writes one
+# provider-neutral line, and `scrub` is the belt-and-braces last pass every
+# string takes on its way into EDN.
+
+SECRET_RE = re.compile(r"gsk_[A-Za-z0-9_-]+"
+                       r"|sk-or-[A-Za-z0-9_-]+"
+                       r"|Bearer\s+[A-Za-z0-9_.\-]+")
+
+
+def refuse_nw_outside_scratch(ws_path):
+    """ARM NW REFUSES WITHOUT A FENCED WORKSPACE. NW hands codex
+    --dangerously-bypass-approvals-and-sandbox, which codex documents as
+    "execute commands without sandboxing ... Intended solely for running in
+    environments that are externally sandboxed", and Sol demonstrated an
+    executed child writing OUTSIDE the warm workspace. We do not have an
+    external kernel sandbox on this seat, so the honest position is not to
+    claim containment we lack: the workspace must be under /var/tmp/forge --
+    the seat's scratch fence, the same one ~/bin/sol-yolo uses -- and NW
+    refuses outright when it is not. The worktree is deliberately NOT accepted
+    here even though the general write fence allows it: a non-cooperative
+    child inside the source tree is a different blast radius from one inside
+    scratch.
+
+    PURE apart from the realpath reads: it creates nothing, so it is safe to
+    call as the first act of main()."""
+    ws_real = os.path.realpath(ws_path)
+    scratch = os.path.realpath(TEST_KEYS_FENCE)
+    if not (ws_real == scratch or ws_real.startswith(scratch + os.sep)):
+        die("typist-run: refusing — NW: sandbox unavailable — workspace "
+            "not under the fence (%s resolves to %s, not under %s). Arm NW "
+            "runs codex with --dangerously-bypass-approvals-and-sandbox; "
+            "its ONLY containment is this directory, so a workspace "
+            "outside it is an unsandboxed child with no fence at all."
+            % (ws_path, ws_real, scratch), 4)
+
+
+def scrub(s):
+    """Pure. Replace anything that looks like a provider key or a bearer token
+    with <redacted>. Non-strings pass through untouched."""
+    if not isinstance(s, str):
+        return s
+    return SECRET_RE.sub("<redacted>", s)
+
+
+def classify_error(e):
+    """Type an exception WITHOUT retaining any of its text.
+    Returns (error_class, http_status|None)."""
+    if isinstance(e, urllib.error.HTTPError):
+        c = int(e.code)
+        if 400 <= c < 500:
+            return "http-4xx", c
+        if 500 <= c < 600:
+            return "http-5xx", c
+        return "transport", c
+    if isinstance(e, (TimeoutError, socket.timeout)):
+        return "timeout", None
+    if isinstance(e, urllib.error.URLError):
+        if isinstance(getattr(e, "reason", None), (TimeoutError, socket.timeout)):
+            return "timeout", None
+        return "transport", None
+    if isinstance(e, ValueError):        # json.JSONDecodeError is a ValueError
+        return "parse", None
+    return "transport", None
+
+
+def generic_error(label, klass, status):
+    """The ONLY error string that reaches a record. No exception text."""
+    return "%s request failed (%s%s)" % (
+        label, klass, "" if status is None else ", status %d" % status)
+
+
+def sha256_bytes(b):
+    return hashlib.sha256(b).hexdigest()
+
+
+def edn_str(s):
+    # belt and braces: EVERY string that reaches a receipt is scrubbed here,
+    # whatever path it arrived on.
+    s = scrub(s)
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+# --------------------------------------------------------------------------
+# COST FIELDS ARE WRITTEN AT FULL PRECISION (Sol fence r3, finding 5).
+# The generic EDN float branch writes ordinary floats at "%.3f" because the
+# receipts are full of millisecond timings. A COST IS NOT A TIMING: the whole
+# point of :cost_usd is that it is the provider's OWN figure, and 0.12345678
+# written as 0.123 is a fabricated number in the one field that must not be.
+# The earlier fix only reached candidate receipts (values below 0.01); the
+# cost-report receipt writes rows whose cost is 0.12345678, which is NOT below
+# 0.01, so it went through "%.3f" unnoticed. So the rule is by FIELD, not by
+# magnitude: every key whose name is a cost/USD field is serialized repr-style,
+# digit for digit, wherever it appears in a receipt.
+COST_KEY_RE = re.compile(r"(^|_)(cost|usd)($|_)")
+
+
+class Exact(float):
+    """A float whose EDN spelling is repr(), i.e. the provider's own digits."""
+
+
+def exact_cost(v):
+    """Wrap a float so the EDN writer never rounds it. nil/int pass through."""
+    return Exact(v) if isinstance(v, float) and not isinstance(v, Exact) else v
+
+
+def usd_str(v):
+    """USD for a HUMAN table, at least 6 decimals and never fewer digits than
+    the provider gave us: 0.12345678 -> $0.12345678, 0.123 -> $0.123000."""
+    head, _, frac = ("%.8f" % v).rstrip("0").partition(".")
+    return "$" + head + "." + frac.ljust(6, "0")
+
+
+def edn(v, indent=0):
+    pad = " " * indent
+    if isinstance(v, dict):
+        items = []
+        for k, val in v.items():
+            if COST_KEY_RE.search(k):
+                val = exact_cost(val)
+            items.append(pad + " :" + k + " " + edn(val, indent + 2 + len(k)))
+        return "{" + "\n".join(items).lstrip() + "}"
+    if isinstance(v, (list, tuple)):
+        return "[" + "\n ".join(edn(x, indent + 1) for x in v) + "]"
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if v is None:
+        return "nil"
+    if isinstance(v, str):
+        return edn_str(v)
+    if isinstance(v, float):
+        if isinstance(v, Exact):
+            return repr(float(v))
+        # Timings are written at millisecond resolution. COSTS ARE NOT TIMINGS:
+        # a sub-cent USD figure rounded to 3 places becomes 0.001 or 0.000 —
+        # a fabricated number in a receipt whose whole point is the real one.
+        # Anything smaller than 0.01 keeps its digits.
+        if v != 0.0 and abs(v) < 0.01:
+            t = ("%.10f" % v).rstrip("0")
+            return t + "0" if t.endswith(".") else t
+        return "%.3f" % v
+    return str(v)
+
+
+# --------------------------------------------------------------------------
+# fixture
+
+def tree_files(root):
+    out = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d != ".git"]
+        for f in filenames:
+            p = os.path.join(dirpath, f)
+            out.append(os.path.relpath(p, root))
+    return sorted(out)
+
+
+def materialize_fixture(force=False):
+    """(Re)build the frozen preimage plus its content-hash manifest."""
+    if os.path.isdir(PREIMAGE) and not force:
+        pass
+    else:
+        shutil.rmtree(PREIMAGE, ignore_errors=True)
+        seed = MISSIONS[MISSION]["seed"]
+        seed = seed() if callable(seed) else seed
+        for rel, body in seed.items():
+            p = os.path.join(PREIMAGE, rel)
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, "w") as fh:
+                fh.write(body)
+    man = {}
+    for rel in tree_files(PREIMAGE):
+        with open(os.path.join(PREIMAGE, rel), "rb") as fh:
+            man[rel] = sha256_bytes(fh.read())
+    with open(MANIFEST, "w") as fh:
+        fh.write("{:preimage %s\n :files\n {%s}}\n" % (
+            edn_str(PREIMAGE),
+            "\n  ".join('%s %s' % (edn_str(k), edn_str(v)) for k, v in sorted(man.items()))))
+    return man
+
+
+def resolve_gate_commands():
+    """The verification profile the ledger resolves for this workspace, read
+    from the PREIMAGE `.clj-surgeon.edn` at plan time (mission/resolve-verification
+    copies the commands once, at plan time, and the mission carries them)."""
+    r2 = subprocess.run(
+        ["bb", "-e",
+         '(require (quote [cheshire.core :as j])) '
+         '(println (j/generate-string (:commands (get (:verification-profiles '
+         '(clojure.edn/read-string (slurp ".clj-surgeon.edn"))) "%s"))))' % PROFILE],
+        cwd=PREIMAGE, capture_output=True, text=True, timeout=120)
+    if r2.returncode != 0:
+        die("typist-run: cannot serialize verification profile: %s" % r2.stderr.strip(), 5)
+    cmds = json.loads(r2.stdout.strip())
+    if not cmds:
+        die("typist-run: verification profile %r configures no commands" % PROFILE, 5)
+    return cmds
+
+
+# --------------------------------------------------------------------------
+# candidate evaluation
+
+def fresh_copy(dest):
+    dest = fenced_path(dest, "candidate workspace")
+    shutil.rmtree(dest, ignore_errors=True)
+    shutil.copytree(PREIMAGE, dest)
+    subprocess.run(["git", "init", "-q", "."], cwd=dest, check=True,
+                   capture_output=True)
+    subprocess.run(["git", "add", "-A"], cwd=dest, check=True, capture_output=True)
+    subprocess.run(["git", "-c", "user.email=typist@anvil", "-c", "user.name=typist",
+                    "commit", "-qm", "preimage"], cwd=dest, check=True, capture_output=True)
+    return dest
+
+
+DIFF_START = re.compile(r"^(diff --git |--- )", re.M)
+
+
+def extract_diff(text):
+    """The unified diff inside a model response; None when there is none."""
+    if not text:
+        return None
+    t = text.replace("\r\n", "\n")
+    # strip a single fenced block if the whole diff is fenced
+    fence = re.search(r"```(?:diff|patch)?\n(.*?)```", t, re.S)
+    if fence and DIFF_START.search(fence.group(1)):
+        t = fence.group(1)
+    m = DIFF_START.search(t)
+    if not m:
+        return None
+    body = t[m.start():]
+    body = re.sub(r"\n```.*$", "\n", body, flags=re.S)
+    if not body.endswith("\n"):
+        body += "\n"
+    return body
+
+
+# --------------------------------------------------------------------------
+# THE WHOLE-FILE EDIT FORM  (--edit-form whole-file)
+#
+# The diff form asks for a patch, and a patch charges the model for whitespace
+# fidelity in CONTEXT lines it never meant to touch: real-1 round 1 lost 20/20
+# candidates that way, on a real repository file, with the change itself
+# correct. The whole-file form removes context from the contract — the model
+# emits the COMPLETE new contents of each authorized file — and buys a
+# different failure mode instead: silent drift in the bytes it was supposed to
+# reproduce.
+#
+# The CHANGED-REGION BUDGET is the ratchet for that mode. A candidate whose
+# diff against the preimage marks more lines than 3x the known-good change is
+# REFUSED BEFORE THE GATE, so a candidate that rewrites the file wholesale can
+# never buy a pass by accident. The multiplier is fixed in advance and the two
+# numbers are printed in every receipt (:changed_lines and :budget) — a budget
+# that is not visible is not a control.
+
+FENCE_RE = re.compile(r"^```[A-Za-z0-9_+.-]*[ \t]*\n(.*?)^```[ \t]*$", re.S | re.M)
+PAIR_RE = re.compile(
+    r"^FILE:[ \t]*(\S+)[ \t]*\n+^```[A-Za-z0-9_+.-]*[ \t]*\n(.*?)^```[ \t]*$",
+    re.S | re.M)
+
+
+def changed_line_count(before, after):
+    """How many lines a unified diff of these two texts marks `+` or `-`.
+    Headers and hunk markers are never counted. `n=0` so only the changed
+    region is measured, never the context around it."""
+    n = 0
+    for line in difflib.unified_diff(before.splitlines(True),
+                                     after.splitlines(True), "a", "b", n=0):
+        if line.startswith(("+++", "---", "@@")):
+            continue
+        if line.startswith(("+", "-")):
+            n += 1
+    return n
+
+
+def reference_changed_lines(path):
+    """The same predicate applied to a known-good unified diff on disk: the
+    budget's denominator is measured, never typed in."""
+    n = 0
+    with open(path) as fh:
+        for line in fh:
+            if line.startswith(("+++", "---")):
+                continue
+            if line.startswith(("+", "-")):
+                n += 1
+    return n
+
+
+def extract_wholefile(text, mutable):
+    """-> (mapping rel-path -> new contents, detail) or (None, refusal detail).
+
+    ONE authorized file: exactly one fenced block, nothing else is read.
+    SEVERAL: one `FILE: <path>` line immediately before each fence; every
+    authorized path present exactly once, and no unauthorized path."""
+    if not text or not text.strip():
+        return None, "whole-file: empty response"
+    t = text.replace("\r\n", "\n")
+    if not t.endswith("\n"):
+        t += "\n"
+    fences = FENCE_RE.findall(t)
+    if len(mutable) == 1:
+        if len(fences) != 1:
+            return None, ("whole-file: expected exactly one fenced block, found %d"
+                          % len(fences))
+        body = fences[0]
+        if not body.strip():
+            return None, "whole-file: the fenced block is empty"
+        return {mutable[0]: body}, "1 fenced block"
+    pairs = PAIR_RE.findall(t)
+    if len(pairs) != len(fences):
+        return None, ("whole-file: %d fenced block(s) but %d carried a `FILE:` line"
+                      % (len(fences), len(pairs)))
+    got = {}
+    for path, body in pairs:
+        path = path.strip().strip("`").lstrip("./")
+        if path in got:
+            return None, "whole-file: %s appears more than once" % path
+        if path not in mutable:
+            return None, "whole-file: unauthorized path: %s" % path
+        if not body.strip():
+            return None, "whole-file: the fenced block for %s is empty" % path
+        got[path] = body
+    missing = [f for f in mutable if f not in got]
+    if missing:
+        return None, "whole-file: authorized file(s) missing: " + ",".join(missing)
+    return got, "%d fenced block(s)" % len(got)
+
+
+def apply_wholefile(workdir, text):
+    """Replace the authorized file(s) with the fenced contents, then run the
+    changed-region budget BEFORE the gate. -> (ok, detail, applier, extra)
+
+    The candidate's bytes are RETAINED whether they apply or not: a candidate
+    that fails is the evidence for the class that produced it."""
+    with open(os.path.join(workdir, "candidate.wholefile.txt"), "w") as fh:
+        fh.write(text or "")
+    files, detail = extract_wholefile(text, MUTABLE)
+    if files is None:
+        return False, detail, None, {}
+    changed = 0
+    for rel in sorted(files):
+        full = safe_path(workdir, rel)
+        if full is None:
+            return False, "whole-file: path escapes the workspace: " + rel, None, {}
+        pre = os.path.join(PREIMAGE, rel)
+        if not os.path.isfile(pre):
+            return False, "whole-file: no such preimage file: " + rel, None, {}
+        with open(pre) as fh:
+            before = fh.read()
+        with open(full, "w") as fh:
+            fh.write(files[rel])
+        changed += changed_line_count(before, files[rel])
+    budget = 3 * reference_changed_lines(BUDGET_REF)
+    extra = {"changed_lines": changed, "budget": budget}
+    if changed > budget:
+        return False, "budget: %d changed lines > %d" % (changed, budget), None, extra
+    return (True,
+            "whole-file: %s (%s, %d changed lines, budget %d)"
+            % (",".join(sorted(files)), detail, changed, budget),
+            "whole-file", extra)
+
+
+def extract_candidate(text):
+    """The candidate bytes a provider response carries, in the ACTIVE edit form.
+    diff: the unified diff inside the response. whole-file: the response
+    itself — the fences are read by the applier, which is the only place that
+    knows which files this mission authorizes."""
+    if EDIT_FORM == "whole-file":
+        return text or None
+    return extract_diff(text)
+
+
+# --------------------------------------------------------------------------
+# the context-anchored hunk applier
+#
+# gpt-oss-120b (like Codex's own apply_patch format) emits hunks with a BARE
+# `@@` header and no line ranges, and sometimes omits the `diff --git` line.
+# That is a context-anchored patch, not a malformed one: the hunk locates itself
+# by its context and `-` lines rather than by line numbers. `git apply` cannot
+# read it, so the runner does — as a FALLBACK, only after git apply refuses.
+#
+# It never repairs whitespace INSIDE a line. A `+` line carrying an extra
+# leading space is written exactly as the model emitted it, and the gate and the
+# acceptance check do the judging.
+
+HUNK_HEADER = re.compile(r"^@@")
+
+
+def parse_unified(diff_text):
+    """[{:path p :hunks [[(marker, text), ...], ...]}] — `diff --git` optional,
+    hunk ranges optional. Returns None when there is no file block at all."""
+    lines = diff_text.split("\n")
+    # `extract_diff` guarantees a terminal newline, so split() always leaves one
+    # empty element behind it. Without this, the last hunk of a diff that ends
+    # mid-file acquires a PHANTOM trailing empty context line that exists in no
+    # file, and the hunk anchors nowhere. It was invisible on the toy fixtures
+    # because their last hunk ran to EOF, where the phantom matched the file's
+    # own trailing empty element.
+    if lines and lines[-1] == "":
+        lines.pop()
+    blocks, i, n = [], 0, len(lines)
+    while i < n:
+        line = lines[i]
+        if line.startswith("--- "):
+            old = line[4:].strip()
+            if i + 1 >= n or not lines[i + 1].startswith("+++ "):
+                i += 1
+                continue
+            new = lines[i + 1][4:].strip()
+            path = new if new not in ("/dev/null", "") else old
+            for pre in ("a/", "b/"):
+                if path.startswith(pre):
+                    path = path[2:]
+            path = path.split("\t")[0].strip()
+            i += 2
+            hunks = []
+            while i < n and HUNK_HEADER.match(lines[i]):
+                i += 1
+                body = []
+                while i < n:
+                    l = lines[i]
+                    if HUNK_HEADER.match(l) or l.startswith("--- ") or \
+                       l.startswith("diff --git ") or l.startswith("```"):
+                        break
+                    if l == "":
+                        # a bare empty line inside a hunk is an empty context line
+                        body.append((" ", ""))
+                    elif l[0] in " +-":
+                        body.append((l[0], l[1:]))
+                    elif l.startswith("\\ No newline"):
+                        pass
+                    else:
+                        break
+                    i += 1
+                if body:
+                    hunks.append(body)
+            if hunks:
+                blocks.append({"path": path, "hunks": hunks})
+        else:
+            i += 1
+    return blocks or None
+
+
+def safe_path(workdir, rel):
+    full = os.path.realpath(os.path.join(workdir, rel))
+    root = os.path.realpath(workdir)
+    return full if full == root or full.startswith(root + os.sep) else None
+
+
+def apply_anchored(workdir, diff_text):
+    """Locate every hunk by VERBATIM context, require exactly one match, and
+    splice. -> (ok, detail)"""
+    blocks = parse_unified(diff_text)
+    if not blocks:
+        return False, "anchor: no file block in the response"
+    staged = {}
+    for b in blocks:
+        full = safe_path(workdir, b["path"])
+        if full is None:
+            return False, "anchor: path escapes the workspace: " + b["path"]
+        if not os.path.isfile(full):
+            return False, "anchor: no such file: " + b["path"]
+        with open(full) as fh:
+            cur = fh.read().split("\n")
+        for body in b["hunks"]:
+            old = [t for (m, t) in body if m in " -"]
+            new = [t for (m, t) in body if m in " +"]
+            if not old:
+                return False, "anchor: hunk has no context to locate it"
+            hits = [j for j in range(len(cur) - len(old) + 1)
+                    if cur[j:j + len(old)] == old]
+            if not hits:
+                return False, "anchor: no match in " + b["path"]
+            if len(hits) > 1:
+                return False, "anchor: ambiguous (%d) in %s" % (len(hits), b["path"])
+            j = hits[0]
+            cur = cur[:j] + new + cur[j + len(old):]
+        staged[full] = "\n".join(cur)
+    for full, text in staged.items():
+        with open(full, "w") as fh:
+            fh.write(text)
+    return True, "anchored: %d file block(s)" % len(blocks)
+
+
+def apply_diff(workdir, diff_text):
+    """git apply --check then git apply. -> (ok, detail)
+
+    The candidate's bytes are RETAINED at `candidate.diff` whether it applies or
+    not: the preregistration says failed candidates are counted, never dropped,
+    and a malformed diff is the evidence for the defect class that produced it.
+    Nothing here repairs the bytes — apply, gate and acceptance do the judging."""
+    with open(os.path.join(workdir, "candidate.diff"), "w") as fh:
+        fh.write(diff_text)
+    patch = os.path.join(workdir, ".typist.patch")
+    with open(patch, "w") as fh:
+        fh.write(diff_text)
+    git_detail = None
+    for stage in (["git", "apply", "--check", "-p1", ".typist.patch"],
+                  ["git", "apply", "-p1", ".typist.patch"]):
+        r = subprocess.run(stage, cwd=workdir, capture_output=True, text=True)
+        if r.returncode != 0:
+            git_detail = (r.stderr or r.stdout).strip()[:200]
+            break
+    os.remove(patch)
+    if git_detail is None:
+        return True, "applied", "git"
+    # git refused; try the context-anchored applier on the untouched tree
+    ok, detail = apply_anchored(workdir, diff_text)
+    return ok, "git refused (%s); %s" % (git_detail, detail), ("anchored" if ok else None)
+
+
+# --------------------------------------------------------------------------
+# RESIDENT JVM GATE (--gate-mode resident)
+#
+# Gene's ask: "in my ideal, we'd have accommodations where tests are running in
+# watch mode, obviating JVM startup time."  A resident gate is one nREPL JVM,
+# started ONCE by the runner with the SAME classpath string the cold gate uses,
+# whose working directory holds the `src` and `test` roots that classpath names
+# FIRST.  Per candidate the runner overwrites those two roots with the
+# candidate's bytes, unmaps every clj-surgeon namespace (and drops them from
+# *loaded-libs*), and re-requires the gate's test namespaces -- so the load
+# order is identical to cold: the candidate's file is the one that loads.
+#
+# The tool owns the resident.  Before every candidate it proves (a) LIVENESS --
+# a 2 s round trip -- and (b) that the classpath the server was started with is
+# still the classpath `clojure -Spath` resolves now, by sha256 of the -Spath
+# string, recorded in the server's own metadata file.  Either proof failing is
+# a TYPED refusal that falls back to the cold gate and says so in the receipt
+# (:gate_mode "cold-fallback"), because a resident that has drifted is a silent
+# wrong answer machine.
+
+def bencode(obj):
+    if isinstance(obj, bytes):
+        return str(len(obj)).encode() + b":" + obj
+    if isinstance(obj, str):
+        return bencode(obj.encode())
+    if isinstance(obj, int):
+        return b"i" + str(obj).encode() + b"e"
+    if isinstance(obj, (list, tuple)):
+        return b"l" + b"".join(bencode(x) for x in obj) + b"e"
+    if isinstance(obj, dict):
+        out = b"d"
+        for k in sorted(obj):
+            out += bencode(k) + bencode(obj[k])
+        return out + b"e"
+    raise TypeError("bencode: %r" % (obj,))
+
+
+class BDecoder(object):
+    """Incremental bencode reader over a socket file object."""
+
+    def __init__(self, fh):
+        self.fh = fh
+
+    def _byte(self):
+        b = self.fh.read(1)
+        if not b:
+            raise EOFError("nrepl: connection closed")
+        return b
+
+    def read(self):
+        return self._val(self._byte())
+
+    def _val(self, c):
+        if c == b"i":
+            num = b""
+            while True:
+                d = self._byte()
+                if d == b"e":
+                    return int(num)
+                num += d
+        if c == b"l":
+            out = []
+            while True:
+                n = self._byte()
+                if n == b"e":
+                    return out
+                out.append(self._val(n))
+            return out
+        if c == b"d":
+            out = {}
+            while True:
+                k = self._byte()
+                if k == b"e":
+                    return out
+                # RHS-first evaluation would read the VALUE before the KEY:
+                # bind the key on its own line or the stream desynchronizes.
+                key = self._val(k)
+                out[key] = self.read()
+            return out
+        num = c
+        while True:
+            d = self._byte()
+            if d == b":":
+                break
+            num += d
+        n = int(num)
+        buf = b""
+        while len(buf) < n:
+            chunk = self.fh.read(n - len(buf))
+            if not chunk:
+                raise EOFError("nrepl: short read")
+            buf += chunk
+        return buf.decode("utf-8", "replace")
+
+
+class Nrepl(object):
+    def __init__(self, port, host="127.0.0.1", timeout=10.0):
+        import socket
+        self.sock = socket.create_connection((host, port), timeout=timeout)
+        self.fh = self.sock.makefile("rb")
+        self.dec = BDecoder(self.fh)
+        self.counter = 0
+        self.session = None
+        r = self.request({"op": "clone"}, timeout=timeout)
+        self.session = r.get("new_session")
+        if not self.session:
+            raise RuntimeError("nrepl: clone returned no session")
+
+    def request(self, msg, timeout=300.0):
+        self.counter += 1
+        mid = "m%d" % self.counter
+        msg = dict(msg)
+        msg["id"] = mid
+        if self.session and "session" not in msg:
+            msg["session"] = self.session
+        self.sock.settimeout(timeout)
+        self.sock.sendall(bencode(msg))
+        vals, outs, errs, status, ex, newsess = [], [], [], [], None, None
+        while True:
+            m = self.dec.read()
+            if not isinstance(m, dict) or m.get("id") != mid:
+                continue
+            if "value" in m:
+                vals.append(m["value"])
+            if "out" in m:
+                outs.append(m["out"])
+            if "err" in m:
+                errs.append(m["err"])
+            if "ex" in m:
+                ex = m["ex"]
+            if "new-session" in m:
+                newsess = m["new-session"]
+            st = m.get("status") or []
+            if isinstance(st, str):
+                st = [st]
+            status.extend(st)
+            if "done" in status:
+                return {"value": vals, "out": "".join(outs), "err": "".join(errs),
+                        "ex": ex, "status": status, "new_session": newsess}
+
+    def close(self):
+        try:
+            self.sock.close()
+        except Exception:                                        # noqa: BLE001
+            pass
+
+
+# The per-candidate reload, evaluated in the resident.  It unmaps every
+# clj-surgeon namespace and drops them from *loaded-libs* so `require` really
+# reloads from the classpath -- whose FIRST two entries are the candidate's own
+# src and test roots, exactly as in the cold gate.
+RESIDENT_EVAL = """(do
+  (require (quote clojure.string) (quote clojure.test))
+  (try
+    (let [pfx "clj-surgeon."
+          stale (doall (filter #(clojure.string/starts-with? (str (ns-name %%)) pfx) (all-ns)))]
+      (doseq [n stale] (remove-ns (ns-name n)))
+      (dosync (commute @#'clojure.core/*loaded-libs*
+                       (fn [s] (into #{} (remove #(clojure.string/starts-with? (str %%) pfx) s)))))
+      (apply require (quote (%s)))
+      (let [r (apply clojure.test/run-tests (quote (%s)))]
+        (str "GATE " (:fail r) " " (:error r) " " (:test r) " " (:pass r)
+             " unmapped=" (count stale))))
+    (catch Throwable t
+      (str "GATE-ERR " (.getName (class t)) ": "
+           (clojure.string/replace (str (.getMessage t)) "\\n" " ")))))"""
+
+
+def free_port(lo=7960, hi=7969):
+    """A free port in the seat's reserved band, proven free with ss(1)."""
+    used = set()
+    r = subprocess.run(["ss", "-ltnH"], capture_output=True, text=True)
+    for line in (r.stdout or "").splitlines():
+        f = line.split()
+        if len(f) >= 4 and ":" in f[3]:
+            try:
+                used.add(int(f[3].rsplit(":", 1)[1]))
+            except ValueError:
+                pass
+    for p in range(lo, hi + 1):
+        if p not in used:
+            return p
+    die("typist-run: refusing -- no free port in %d-%d for the resident nREPL"
+        % (lo, hi), 5)
+
+
+class Resident(object):
+    """One nREPL JVM owned by the runner: liveness + classpath hash + reload."""
+
+    def __init__(self, mission, port=None):
+        m = MISSIONS[mission]
+        if "jvm_nss" not in m:
+            die("typist-run: refusing -- mission %s has no JVM gate; "
+                "--gate-mode resident is only defined for the JVM missions "
+                "(real-2, real-2j)" % mission, 7)
+        self.mission = mission
+        self.nss = m["jvm_nss"]
+        self.jars_only = m["jvm_jars_only"]
+        self.cp = real2_classpath(self.jars_only)
+        self.spath = REAL2_SPATH_RAW[bool(self.jars_only)]
+        self.cp_hash = sha256_bytes(self.spath.encode())
+        self.dir = os.path.join(FX, "resident-%s-%d" % (mission, os.getpid()))
+        self.port = port or free_port()
+        self.proc = None
+        self.client = None
+        self.startup_wall_s = None
+        self.meta = os.path.join(self.dir, "resident.json")
+
+    def start(self):
+        self.dir = fenced_path(self.dir, "resident server workspace")
+        if os.path.isdir(self.dir):
+            shutil.rmtree(self.dir)
+        os.makedirs(os.path.join(self.dir, "src"))
+        os.makedirs(os.path.join(self.dir, "test"))
+        with open(self.meta, "w") as fh:
+            json.dump({"mission": self.mission, "port": self.port,
+                       "classpath_hash": self.cp_hash, "nss": self.nss}, fh)
+        t0 = time.time()
+        log = open(os.path.join(self.dir, "nrepl.log"), "wb")
+        self.proc = subprocess.Popen(
+            ["java", "-cp", self.cp, "clojure.main", "-m", "nrepl.cmdline",
+             "--port", str(self.port)],
+            cwd=self.dir, stdout=log, stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL)
+        deadline = time.time() + 180
+        last = None
+        while time.time() < deadline:
+            if self.proc.poll() is not None:
+                die("typist-run: refusing -- the resident nREPL server exited "
+                    "rc=%s; see %s" % (self.proc.returncode,
+                                       os.path.join(self.dir, "nrepl.log")), 5)
+            try:
+                self.client = Nrepl(self.port, timeout=5.0)
+                break
+            except Exception as e:                               # noqa: BLE001
+                last = e
+                time.sleep(0.2)
+        if self.client is None:
+            die("typist-run: refusing -- the resident nREPL server never "
+                "answered on port %d: %s" % (self.port, last), 5)
+        self.startup_wall_s = round(time.time() - t0, 3)
+        return self
+
+    def alive(self):
+        """(ok, seconds). A 2 s round trip is the liveness proof."""
+        t0 = time.time()
+        try:
+            r = self.client.request({"op": "eval", "code": "(+ 1 1)"}, timeout=2.0)
+            ok = bool(r["value"]) and r["value"][-1] == "2"
+        except Exception:                                        # noqa: BLE001
+            ok = False
+        return bool(ok), round(time.time() - t0, 3)
+
+    def hash_ok(self):
+        try:
+            with open(self.meta) as fh:
+                return json.load(fh).get("classpath_hash") == self.cp_hash
+        except Exception:                                        # noqa: BLE001
+            return False
+
+    def stage(self, cand_dir):
+        fenced_path(self.dir, "resident staging root")
+        for root in ("src", "test"):
+            dst = os.path.join(self.dir, root)
+            if os.path.isdir(dst):
+                shutil.rmtree(dst)
+            src = os.path.join(cand_dir, root)
+            if os.path.isdir(src):
+                shutil.copytree(src, dst)
+            else:
+                os.makedirs(dst)
+
+    def gate(self, cand_dir, timeout=300):
+        self.stage(cand_dir)
+        quoted = " ".join(self.nss)
+        code = RESIDENT_EVAL % (quoted, quoted)
+        r = self.client.request({"op": "eval", "code": code}, timeout=timeout)
+        if r.get("ex"):
+            return False, ("resident eval threw: %s | %s"
+                           % (r["ex"], r["err"][-200:]))[:400]
+        raw = r["value"][-1] if r["value"] else ""
+        val = raw.strip()
+        if val.startswith('"') and val.endswith('"'):
+            val = val[1:-1]
+        if val.startswith("GATE-ERR"):
+            return False, val[:400]
+        parts = val.split()
+        if len(parts) < 3 or parts[0] != "GATE":
+            return False, ("resident gate returned no verdict: %r | out=%s"
+                           % (raw[:200], r["out"][-200:]))[:400]
+        fail, err = int(parts[1]), int(parts[2])
+        if fail or err:
+            tail = r["out"].strip().splitlines()[-4:]
+            return False, ("%s | %s" % (val, " | ".join(tail)))[:400]
+        return True, "0 failures, 0 errors (%s)" % val
+
+    def stop(self):
+        if self.client:
+            self.client.close()
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=10)
+            except Exception:                                    # noqa: BLE001
+                self.proc.kill()
+
+
+def run_gate_dispatch(cand_dir, cmds, rec):
+    """The gate, in whichever mode was asked for. Records the mode ACTUALLY
+    used, the liveness proof, and the classpath hash on the candidate."""
+    if GATE_MODE != "resident" or RESIDENT is None:
+        rec["gate_mode"] = "cold"
+        rec["resident_liveness_check_s"] = None
+        rec["classpath_hash"] = COLD_CP_HASH[0]
+        return run_gate(cand_dir, cmds)
+    rec["classpath_hash"] = RESIDENT.cp_hash
+    alive, live_s = RESIDENT.alive()
+    rec["resident_liveness_check_s"] = live_s
+    if not RESIDENT.hash_ok():
+        rec["gate_mode"] = "cold-fallback"
+        rec["gate_fallback_reason"] = "resident: classpath hash mismatch"
+        return run_gate(cand_dir, cmds)
+    if not alive:
+        rec["gate_mode"] = "cold-fallback"
+        rec["gate_fallback_reason"] = "resident: not alive"
+        return run_gate(cand_dir, cmds)
+    rec["gate_mode"] = "resident"
+    try:
+        return RESIDENT.gate(cand_dir)
+    except Exception as e:                                       # noqa: BLE001
+        rec["gate_mode"] = "cold-fallback"
+        rec["gate_fallback_reason"] = "resident: not alive (%s)" % e
+        return run_gate(cand_dir, cmds)
+
+
+def run_gate(workdir, cmds, timeout=300):
+    for cmd in cmds:
+        r = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True,
+                           timeout=timeout)
+        if r.returncode != 0:
+            tail = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()
+            return False, " | ".join(tail[-4:])[:400]
+    return True, "0 failures, 0 errors"
+
+
+def run_acceptance(workdir, manifest, timeout=300):
+    """INDEPENDENT of the gate: behaviour + byte identity of untouched files."""
+    now = {}
+    for rel in tree_files(workdir):
+        if rel.startswith(".git/") or rel in (".typist.patch", "candidate.diff",
+                                              "candidate.wholefile.txt"):
+            continue
+        with open(os.path.join(workdir, rel), "rb") as fh:
+            now[rel] = sha256_bytes(fh.read())
+    added = sorted(set(now) - set(manifest))
+    removed = sorted(set(manifest) - set(now))
+    changed = sorted(k for k in now if k in manifest and now[k] != manifest[k])
+    illegal = [k for k in changed if k not in MUTABLE] + added + removed
+    if illegal:
+        return False, "files outside the mission changed: " + ",".join(illegal[:6])
+    untouched = [f for f in MUTABLE if f not in changed]
+    if untouched:
+        return False, ("authorized file(s) byte-identical to the preimage: %s"
+                       % ",".join(untouched))
+    r = subprocess.run(["bb", "-cp", "src", "-e", ACCEPT_EXPR], cwd=workdir,
+                       capture_output=True, text=True, timeout=timeout)
+    if r.returncode != 0 or "ACCEPT-OK" not in r.stdout:
+        tail = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()
+        return False, "behaviour: " + (" | ".join(tail[-3:])[:300] or "no ACCEPT-OK")
+    return True, "behaviour ok; only %s changed" % ",".join(MUTABLE)
+
+
+def evaluate(cand_dir, diff_text, manifest, cmds):
+    # Per-candidate judging cost, recorded so a gate-dominated mission can be
+    # decomposed into model wall vs judging wall without re-running anything.
+    t_judge0 = time.time()
+    rec = {"edit_form": EDIT_FORM}
+    if diff_text is None:
+        rec["apply_ok"] = False
+        rec["apply_detail"] = ("no response body" if EDIT_FORM == "whole-file"
+                               else "no unified diff in the response")
+        rec["applier"] = None
+        rec["gate_ok"] = False
+        rec["accept_ok"] = False
+        rec["judge_wall_s"] = round(time.time() - t_judge0, 3)
+        return rec
+    if EDIT_FORM == "whole-file":
+        ok, detail, applier, extra = apply_wholefile(cand_dir, diff_text)
+        rec.update(extra)
+    else:
+        ok, detail, applier = apply_diff(cand_dir, diff_text)
+    rec["apply_ok"], rec["apply_detail"], rec["applier"] = ok, detail, applier
+    rec["apply_wall_s"] = round(time.time() - t_judge0, 3)
+    if not ok:
+        rec["gate_ok"] = False
+        rec["accept_ok"] = False
+        rec["judge_wall_s"] = round(time.time() - t_judge0, 3)
+        return rec
+    t_gate0 = time.time()
+    try:
+        g_ok, g_detail = run_gate_dispatch(cand_dir, cmds, rec)
+    except subprocess.TimeoutExpired:
+        g_ok, g_detail = False, "gate timed out"
+        rec.setdefault("gate_mode", GATE_MODE)
+    rec["gate_ok"], rec["gate_detail"] = g_ok, g_detail
+    rec["gate_wall_s"] = round(time.time() - t_gate0, 3)
+    t_acc0 = time.time()
+    try:
+        a_ok, a_detail = run_acceptance(cand_dir, manifest)
+    except subprocess.TimeoutExpired:
+        a_ok, a_detail = False, "acceptance timed out"
+    rec["accept_ok"], rec["accept_detail"] = a_ok, a_detail
+    rec["accept_wall_s"] = round(time.time() - t_acc0, 3)
+    rec["judge_wall_s"] = round(time.time() - t_judge0, 3)
+    return rec
+
+
+# --------------------------------------------------------------------------
+# arms
+
+def fake_body(path):
+    """The fixture bytes, shaped as the ACTIVE edit form's candidate.
+
+    A whole-file fixture is stored as the real source file it is (so it can be
+    read, diffed and compiled on its own). A model would have wrapped it in a
+    fence, so the ratchet wraps it here — and ONLY when the fixture carries no
+    fence of its own, so a multi-file fixture with its own `FILE:` markers is
+    passed through verbatim."""
+    with open(path) as fh:
+        text = fh.read()
+    if EDIT_FORM != "whole-file" or "```" in text:
+        return text
+    if len(MUTABLE) != 1:
+        die("typist-run: refusing — mission %s authorizes %d files, so a fake "
+            "whole-file fixture must carry its own `FILE:` markers and fences: %s"
+            % (MISSION, len(MUTABLE), path), 7)
+    return "```clojure\n" + text + ("" if text.endswith("\n") else "\n") + "```\n"
+
+
+def arm_fake(k, good, bad):
+    """Deterministic candidates: alternating known-good / known-bad fixtures."""
+    out = []
+    for i in range(k):
+        path = good if i % 2 == 0 else bad
+        text = fake_body(path)
+        out.append({"cand": "c%d" % i, "source": path, "text": text,
+                    "response_s": time.time() - T0,
+                    "tokens": None, "error": None})
+    return out
+
+
+def arm_replay(run_dir):
+    """Re-feed the RETAINED bytes of an earlier run through apply+gate+acceptance.
+    No network, no model call: the candidates are read off disk exactly as they
+    were received. This is how a protocol amendment is tested against candidates
+    that already exist, instead of buying new ones."""
+    run_dir = os.path.abspath(run_dir)
+    out = []
+    for name in sorted(os.listdir(run_dir)):
+        f = os.path.join(run_dir, name,
+                         "candidate.wholefile.txt" if EDIT_FORM == "whole-file"
+                         else "candidate.diff")
+        if not os.path.isfile(f):
+            continue
+        with open(f) as fh:
+            out.append({"cand": name, "source": "replay:" + f, "text": fh.read(),
+                        "response_s": 0.0, "tokens": None, "error": None})
+    if not out:
+        die("typist-run: no retained %s candidate under %s"
+            % (EDIT_FORM, run_dir), 6)
+    return out
+
+
+def arm_n(prompt, k):
+    """codex exec -m gpt-5.6-sol; stdin from /dev/null."""
+    def one(i):
+        d = None
+        scratch = fresh_copy(os.path.join(RUN_DIR, "n%d-scratch" % i))
+        cmd = ["codex", "exec", "-m", "gpt-5.6-sol",
+               "-c", 'model_reasoning_effort="medium"',
+               "--skip-git-repo-check", prompt]
+        try:
+            with open(os.devnull) as devnull:
+                r = subprocess.run(cmd, cwd=scratch, stdin=devnull,
+                                   capture_output=True, text=True, timeout=900)
+            text, err = r.stdout, (r.stderr or "").strip()[:300] if r.returncode else None
+        except Exception as e:                                   # noqa: BLE001
+            text, err = "", generic_error("codex exec", *classify_error(e))
+        d = extract_candidate(text)
+        if d is None and EDIT_FORM == "diff":
+            # it may have edited the tree in place
+            g = subprocess.run(["git", "diff"], cwd=scratch,
+                               capture_output=True, text=True)
+            if g.stdout.strip():
+                d = g.stdout
+        return {"cand": "n%d" % i, "source": "codex exec gpt-5.6-sol",
+                "text": d, "response_s": time.time() - T0,
+                "tokens": None, "error": err}
+    with cf.ThreadPoolExecutor(max_workers=max(1, k)) as ex:
+        return list(ex.map(one, range(k)))
+
+
+# --------------------------------------------------------------------------
+# TYPIST PROVIDERS (arm F)
+#
+# Arm F is "a fast typist". WHICH fast typist is a provider choice, not a
+# rewrite of the arm: every provider returns the SAME candidate record shape and
+# every candidate goes through the same apply / gate / acceptance judging.
+#
+# A field the provider does not report is `None` — never a computed stand-in.
+# Groq reports `completion_time` and `queue_time`; OpenRouter usually does not;
+# `codex exec` exposes no token counts at all. Those are nil in the record and
+# "n/a" in the bench table. Nothing here invents a number.
+
+PROVIDERS = {
+    "groq": {
+        "kind": "openai-chat",
+        "url": GROQ_URL,
+        "model": GROQ_MODEL,
+        "key_file": GROQ_KEY_FILE,
+        "key_label": "Groq",
+        "headers": {"User-Agent": GROQ_UA},
+    },
+    "openrouter": {
+        "kind": "openai-chat",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "model": "openai/gpt-oss-120b",
+        "key_file": OPENROUTER_KEY_FILE,
+        "key_label": "OpenRouter",
+        # The upstream pin lives HERE and is applied UNCONDITIONALLY. Default
+        # OpenRouter routing chose DigitalOcean/DeepInfra/CoreWeave/SiliconFlow;
+        # more to the point, an unpinned request is not the request this
+        # experiment preregistered.
+        "upstream_order": ["Cerebras", "Groq"],
+        # OpenRouter's usage accounting: the response then carries
+        # `usage.cost` in USD, the PROVIDER's own number for this call.
+        "usage_include": True,
+        "headers": {
+            "User-Agent": GROQ_UA,
+            # OpenRouter's attribution headers; they identify the caller, not a secret.
+            "HTTP-Referer": "https://github.com/realgenekim/clj-surgeon",
+            "X-Title": "clj-surgeon typist",
+        },
+    },
+    "spark": {
+        "kind": "codex-exec",
+        "model": "gpt-5.3-codex-spark",
+        "reasoning_effort": "low",
+    },
+}
+
+# --------------------------------------------------------------------------
+# PRICES — USD per 1,000,000 tokens.  DATED 2026-09-06.  SOURCED, not remembered.
+#
+#   groq                  read 2026-09-06 from https://console.groq.com/docs/models,
+#                         the model card keyed "openai/gpt-oss-120b-price":
+#                         "$0.15 input" / "$0.60 output".
+#   openrouter:<upstream> read 2026-09-06 from
+#                         https://openrouter.ai/api/v1/models/openai/gpt-oss-120b/endpoints
+#                         (public, no key), each endpoint's pricing.prompt /
+#                         pricing.completion, which are USD PER TOKEN — multiplied
+#                         by 1e6 here.  Cerebras: 0.00000035 / 0.00000075.
+#   spark                 codex exec on the ChatGPT subscription: no metered cost.
+#
+# REASONING TOKENS ARE BILLED AS COMPLETION TOKENS on both providers, and both
+# already INCLUDE them in `usage.completion_tokens` — so reasoning is never
+# added again here.  A table rate is an ESTIMATE; when the provider reports its
+# own USD (OpenRouter `usage.cost`), that number wins and :cost_source says so.
+PRICES_DATE = "2026-09-06"
+PRICES = {
+    "groq":                    {"in": 0.15,  "out": 0.60},
+    "openrouter:Cerebras":     {"in": 0.35,  "out": 0.75},
+    "openrouter:Groq":         {"in": 0.15,  "out": 0.60},
+    "openrouter:DigitalOcean": {"in": 0.055, "out": 0.385},
+    "openrouter:DeepInfra":    {"in": 0.037, "out": 0.17},
+    "openrouter:CoreWeave":    {"in": 0.03,  "out": 0.17},
+    "openrouter:SiliconFlow":  {"in": 0.05,  "out": 0.45},
+    "spark":                   {"in": 0.0,   "out": 0.0},
+}
+
+
+def price_key(provider, upstream):
+    """The PRICES key for a call. OpenRouter is priced by the UPSTREAM it routed
+    to; an unreported upstream has no rate and must stay unknown, never zero."""
+    if provider == "openrouter":
+        return ("openrouter:%s" % upstream) if upstream else None
+    return provider
+
+
+def cost_for(provider, upstream, prompt_tokens, completion_tokens,
+             provider_cost=None):
+    """(cost_usd, cost_source). None when the tokens or the rate are missing —
+    an unpriceable call is UNKNOWN, never $0. `provider_cost` is the provider's
+    own reported USD and always wins."""
+    if provider_cost is not None:
+        return (round(float(provider_cost), 8), "provider")
+    if provider == "spark":
+        return (0.0, "unmetered:subscription")
+    key = price_key(provider, upstream)
+    rate = PRICES.get(key) if key else None
+    if rate is None or prompt_tokens is None or completion_tokens is None:
+        return (None, None)
+    usd = (prompt_tokens * rate["in"] + completion_tokens * rate["out"]) / 1e6
+    return (round(usd, 8), "table:%s:%s" % (PRICES_DATE, key))
+
+
+# The provider-side usage-limit refusal. It is a TYPED REFUSAL, exactly like
+# Groq's finish_reason=length: nothing is applied, nothing is gated, and it is
+# counted in `refusals`. It is never retried in a loop.
+USAGE_LIMIT_RE = re.compile(r"hit your usage limit", re.I)
+
+
+def registry_key_path(provider):
+    """The provider's FIXED registry key path, as a STRING. Pure: it ignores
+    KEYS_DIR, resolves nothing, stats nothing and opens nothing.
+
+    Sol fence r5 (b): the witness that "without --keys-dir the path is still
+    the fixed registry path" used to be a SUBPROCESS that resolved and printed
+    the real path -- so the suite that proves no real key is reachable was
+    itself reaching for one. A claim about a path is a claim about a string;
+    prove it as a string."""
+    return PROVIDERS[provider].get("key_file")
+
+
+def key_file_for(cfg):
+    """The provider's key file. FIXED by the registry; only --keys-dir (already
+    fenced to /var/tmp/forge) may redirect it, and only for the offline tests."""
+    if KEYS_DIR:
+        return os.path.join(KEYS_DIR, os.path.basename(cfg["key_file"]))
+    return cfg["key_file"]
+
+
+def preflight_key_file(cfg):
+    """EXISTENCE and MODE ONLY -- os.stat, never open(). A pre-flight that
+    reads the file is holding a secret it has no use for.
+    Returns (blocked_reason|None, path)."""
+    path = key_file_for(cfg)
+    if not os.path.exists(path):
+        return "no-key", path
+    if (os.stat(path).st_mode & 0o777) != 0o600:
+        return "key-mode", path
+    return None, path
+
+
+def provider_key(cfg):
+    """Read the API key AT THE POINT OF THE REQUEST. Never echoed, logged, or
+    written to a receipt, and never held outside its caller's request scope.
+
+    OFFLINE FORBIDS A REAL KEY PATH (Sol fence r5, finding (b)). strace proved
+    the offline suite opened /home/forge/secrets/openrouter.edn four times and
+    groq.edn once: an in-process probe monkeypatched urlopen but left KEYS_DIR
+    unset, so request construction reached here and opened the real key before
+    the fake transport ever ran. Belt and braces: under TYPIST_OFFLINE the only
+    key path this function will open is one under the test fence. Anything else
+    is a TYPED REFUSAL (exit 6, the offline exit), never a silent read."""
+    path = key_file_for(cfg)
+    if OFFLINE:
+        fence = os.path.realpath(TEST_KEYS_FENCE)
+        real = os.path.realpath(path)
+        if real != fence and not real.startswith(fence + os.sep):
+            die("typist-run: refusing — TYPIST_OFFLINE=1 and the resolved key "
+                "path is not under %s: %s (offline mode forbids opening a real "
+                "key; pass --keys-dir)" % (fence, real), 6)
+    with open(path) as fh:
+        m = re.search(r':(?:openrouter-api-)?key\s+"([^"]+)"', fh.read())
+    if not m:
+        die("typist-run: refusing — no %s key at %s" % (cfg["key_label"], path), 4)
+    return m.group(1)
+
+
+def build_request(cfg, body, headers):
+    """The one scope a key is live in: read it, put it on the request, drop it."""
+    key = provider_key(cfg)
+    h = dict(headers)
+    h["Authorization"] = "Bearer " + key
+    req = urllib.request.Request(cfg["url"], body, h)
+    del key, h
+    return req
+
+
+def call_openai_chat(cfg, prompt, k, temperature, tag):
+    """Groq and OpenRouter share the OpenAI chat-completions wire format.
+
+    The model is the registry's; there is no override. The key file is checked
+    for existence and mode BEFORE any network call, and its contents are read
+    only inside build_request."""
+    model = cfg["model"]
+    blocked, path = preflight_key_file(cfg)   # BEFORE any network call
+    if blocked:
+        die("typist-run: refusing — %s key at %s %s"
+            % (cfg["key_label"], path,
+               "does not exist" if blocked == "no-key" else "is not mode 600"), 4)
+
+    def one(i):
+        cand = "%s%d" % (tag, i)
+        payload = {"model": model,
+                   "messages": [{"role": "user", "content": prompt}],
+                   "temperature": temperature,
+                   # gpt-oss-120b is a REASONING model: reasoning tokens
+                   # are spent BEFORE any output token, so the budget has
+                   # to cover reasoning + diff, not the diff alone.
+                   "max_tokens": GROQ_MAX_TOKENS}
+        # The upstream pin is UNCONDITIONAL: it comes from the registry, not
+        # from an environment variable a caller could omit.
+        order = cfg.get("upstream_order")
+        if order:
+            payload["provider"] = {"order": list(order), "allow_fallbacks": False}
+        if cfg.get("usage_include"):
+            payload["usage"] = {"include": True}
+        body = json.dumps(payload).encode()
+        headers = {"Content-Type": "application/json"}
+        headers.update(cfg["headers"])
+        req = build_request(cfg, body, headers)
+        t_call = time.time()
+        try:
+            d = json.load(urllib.request.urlopen(req, timeout=300))
+        except Exception as e:                                   # noqa: BLE001
+            klass, status = classify_error(e)
+            return {"cand": cand, "source": model, "text": None,
+                    "response_s": time.time() - T0,
+                    "call_wall_s": time.time() - t_call,
+                    "tokens": None, "provider_cost_usd": None,
+                    "error_class": klass, "http_status": status,
+                    "error": generic_error(cfg["key_label"], klass, status)}
+        call_wall = time.time() - t_call
+        u = d.get("usage") or {}
+        details = u.get("completion_tokens_details") or {}
+        choice = (d.get("choices") or [{}])[0]
+        msg = choice.get("message") or {}
+        content = msg.get("content") or ""
+        # the reasoning trace is measured, never stored: length only.
+        reasoning_chars = len(msg.get("reasoning") or "")
+        finish = choice.get("finish_reason")
+        # `length` is a TYPED REFUSAL — the budget ran out. It is not a wrong
+        # candidate and must never be scored as one.
+        refusal = "length" if finish == "length" else None
+        if msg.get("refusal"):
+            refusal = refusal or "refusal"
+        # UPSTREAM VALIDATION: a pinned provider whose response did not come
+        # from a pinned upstream is a TYPED REFUSAL, never a scored candidate.
+        upstream = d.get("provider")
+        if order and upstream not in order:
+            refusal = refusal or "upstream-mismatch"
+        return {"cand": cand, "source": model,
+                "text": None if refusal else extract_candidate(content),
+                "raw_chars": len(content),
+                "reasoning_chars": reasoning_chars,
+                "finish_reason": finish,
+                "refusal": refusal,
+                "response_s": time.time() - T0,
+                "call_wall_s": call_wall,
+                "tokens": u.get("completion_tokens"),
+                "reasoning_tokens": details.get("reasoning_tokens"),
+                "prompt_tokens": u.get("prompt_tokens"),
+                # provider-reported timings; absent on most OpenRouter upstreams.
+                "completion_time_s": u.get("completion_time"),
+                "queue_time": u.get("queue_time"),
+                # which upstream OpenRouter actually routed to (Cerebras/Groq/...).
+                "upstream": upstream,
+                # the PROVIDER's own USD for this call, when it reports one
+                # (OpenRouter `usage.cost`, enabled by usage.include). None on
+                # Groq, which reports no cost field.
+                "provider_cost_usd": u.get("cost"),
+                "error_class": None, "http_status": None,
+                "error": None}
+    with cf.ThreadPoolExecutor(max_workers=max(1, k)) as ex:
+        return list(ex.map(one, range(k)))
+
+
+def call_codex_exec(model, prompt, k, tag, reasoning_effort, run_dir):
+    """`codex exec` as a typist: k parallel invocations = k PROCESSES.
+
+    Each gets a fresh scratch copy of the fixture as its cwd, stdin from
+    /dev/null, and the dossier bytes as its prompt. Wall is measured from
+    process spawn to exit. codex exec exposes NO token counts, so every token
+    field is nil — never a guess."""
+    def one(i):
+        cand = "%s%d" % (tag, i)
+        scratch = fresh_copy(os.path.join(run_dir, "%s-scratch" % cand))
+        cmd = ["codex", "exec", "-m", model,
+               "-c", 'model_reasoning_effort="%s"' % reasoning_effort,
+               "--skip-git-repo-check", prompt]
+        t_call = time.time()
+        try:
+            with open(os.devnull) as devnull:
+                r = subprocess.run(cmd, cwd=scratch, stdin=devnull,
+                                   capture_output=True, text=True, timeout=900)
+            text = r.stdout or ""
+            # The WHOLE stderr is what refusal detection reads. codex exec
+            # prints a banner FIRST and the refusal LAST, so truncating the
+            # head would hide exactly the sentence we are looking for.
+            full_err = (r.stderr or "").strip()
+            err = full_err[-600:] if r.returncode else None
+        except Exception as e:                                   # noqa: BLE001
+            text, full_err = "", ""
+            err = generic_error("codex exec", *classify_error(e))
+        call_wall = time.time() - t_call
+        blob = text + "\n" + full_err + "\n" + (err or "")
+        refusal = "usage-limit" if USAGE_LIMIT_RE.search(blob) else None
+        d = None
+        if not refusal:
+            d = extract_candidate(text)
+            if d is None and EDIT_FORM == "diff":
+                # it may have edited the scratch tree in place
+                g = subprocess.run(["git", "diff"], cwd=scratch,
+                                   capture_output=True, text=True)
+                if g.stdout.strip():
+                    d = g.stdout
+        return {"cand": cand, "source": "codex exec " + model,
+                "text": d,
+                # a refusal must carry its own evidence, verbatim
+                # a refusal must carry its own evidence -- scrubbed, never raw
+                "refusal_evidence": (scrub((full_err or text).strip()[-400:])
+                                     if refusal else None),
+                "raw_chars": len(text),
+                "reasoning_chars": None,
+                "finish_reason": None,
+                "refusal": refusal,
+                "response_s": time.time() - T0,
+                "call_wall_s": call_wall,
+                "tokens": None, "reasoning_tokens": None, "prompt_tokens": None,
+                "completion_time_s": None, "queue_time": None,
+                "upstream": None,
+                "error": None if refusal else err}
+    with cf.ThreadPoolExecutor(max_workers=max(1, k)) as ex:
+        return list(ex.map(one, range(k)))
+
+
+def arm_f(prompt, k, temperature=0.7, provider="groq", tag="f", run_dir=None):
+    """The fast-typist arm, over whichever provider was named. The MODEL is the
+    registry's -- a provider choice is not a model choice."""
+    if provider not in PROVIDERS:
+        die("typist-run: refusing — unknown provider %r (known: %s)"
+            % (provider, ", ".join(sorted(PROVIDERS))), 7)
+    cfg = PROVIDERS[provider]
+    if cfg["kind"] == "codex-exec":
+        cands = call_codex_exec(cfg["model"], prompt, k, tag,
+                                cfg["reasoning_effort"], run_dir or RUN_DIR)
+    else:
+        cands = call_openai_chat(cfg, prompt, k, temperature, tag)
+    # the provider NAME travels with the candidate: pricing is a property of
+    # who was called, and a receipt read later has no other way to know.
+    for c in cands:
+        c["provider"] = provider
+    return cands
+
+
+# --------------------------------------------------------------------------
+# judging — one path for every arm, every provider, every mode
+
+REFUSAL_DETAIL = {
+    "length": "finish_reason=length: the token budget ran out before a complete diff",
+    "refusal": "the model returned a refusal message instead of a diff",
+    "usage-limit": ("the provider reported a usage limit; apply, gate and "
+                    "acceptance were NOT run and nothing was retried"),
+    "upstream-mismatch": ("the response did not come from a pinned upstream; "
+                          "apply, gate and acceptance were NOT run"),
+    "no-key": "no API key on this box; nothing was called",
+    "key-mode": "the key file is not mode 600; nothing was called",
+}
+
+
+def run_cost(records):
+    """Sum of the priceable candidates. None when NOTHING could be priced —
+    a run whose cost is unknown must not report $0."""
+    xs = [r["cost_usd"] for r in records if r.get("cost_usd") is not None]
+    return round(sum(xs), 8) if xs else None
+
+
+def judge_candidates(cands, manifest, cmds, run_dir, t_ref=None):
+    """Apply + gate + acceptance for every candidate, in one place.
+
+    `t_ref` is the clock a verified candidate's wall is measured from: process
+    start for a normal run, ROUND start in --bench (so rounds are comparable)."""
+    t_ref = T0 if t_ref is None else t_ref
+    records = []
+    for c in cands:
+        refusal = c.get("refusal")
+        if refusal:
+            # A TYPED REFUSAL is not a wrong candidate: nothing is applied,
+            # nothing is gated, and it is scored in `refusals`, never as
+            # apply_ok=false. nil, not false — we did not run the check.
+            cand_dir = None
+            ev = {"apply_ok": None, "gate_ok": None, "accept_ok": None,
+                  "edit_form": EDIT_FORM,
+                  "refusal_detail": REFUSAL_DETAIL.get(
+                      refusal, "provider refused: %s" % refusal)}
+        else:
+            t_copy0 = time.time()
+            cand_dir = fresh_copy(os.path.join(run_dir, c["cand"]))
+            copy_s = round(time.time() - t_copy0, 3)
+            ev = evaluate(cand_dir, c.get("text"), manifest, cmds)
+            ev["copy_wall_s"] = copy_s
+            if ev.get("judge_wall_s") is not None:
+                ev["judge_wall_s"] = round(ev["judge_wall_s"] + copy_s, 3)
+        verified = bool(ev.get("apply_ok") and ev.get("gate_ok") and ev.get("accept_ok"))
+        rec = {"cand": c["cand"], "source": c["source"],
+               "dir": cand_dir,
+               "response_wall_s": round(c["response_s"], 3),
+               "call_wall_s": (round(c["call_wall_s"], 3)
+                               if c.get("call_wall_s") is not None else None),
+               "upstream": c.get("upstream"),
+               # arm NW: which channel the edit arrived on (the model's own
+               # in-place write, or a diff in its response body) and the
+               # orientation session it was forked from.
+               "edit_channel": c.get("edit_channel"),
+               "warm_session": c.get("warm_session"),
+               "refusal": refusal,
+               "finish_reason": c.get("finish_reason"),
+               "tokens": c.get("tokens"),
+               "reasoning_tokens": c.get("reasoning_tokens"),
+               "reasoning_chars": c.get("reasoning_chars"),
+               "raw_chars": c.get("raw_chars"),
+               "prompt_tokens": c.get("prompt_tokens"),
+               "refusal_evidence": scrub(c.get("refusal_evidence")),
+               "completion_time_s": c.get("completion_time_s"),
+               "queue_time_s": c.get("queue_time"),
+               "provider": c.get("provider"),
+               # typed, never the exception's text
+               "error_class": c.get("error_class"),
+               "http_status": c.get("http_status"),
+               "error": scrub(c.get("error"))}
+        rec.update(ev)
+        cost, cost_src = cost_for(c.get("provider"), c.get("upstream"),
+                                  c.get("prompt_tokens"), c.get("tokens"),
+                                  c.get("provider_cost_usd"))
+        rec["cost_usd"] = cost
+        rec["cost_source"] = cost_src
+        rec["verified"] = verified
+        rec["verified_wall_s"] = round(time.time() - t_ref, 3) if verified else None
+        rec["semantic_mismatch"] = bool(ev.get("gate_ok") and not ev.get("accept_ok"))
+        records.append(rec)
+    return records
+
+
+# --------------------------------------------------------------------------
+# --bench — the provider comparison
+#
+# Round-robin, k=1, one shared apply/gate/acceptance path. Round-robin is the
+# point: a provider measured in a block of six would carry that block's
+# time-of-day load. Interleaving makes every provider share the same weather.
+
+def median(xs):
+    s = sorted(xs)
+    n = len(s)
+    if not n:
+        return None
+    return s[n // 2] if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2.0
+
+
+def fmt(x, spec="%.2f"):
+    return "n/a" if x is None else (spec % x)
+
+
+def bench(prompt, providers, rounds, temperature, manifest, cmds):
+    """Per provider: `rounds` rounds of k=1, interleaved. Prints ONE table."""
+    # Pre-flight, before any network call: a provider whose key file is absent
+    # or wrongly permissioned is BLOCKED, not slow. It gets a row of typed
+    # refusals and "n/a" times. (Outside --bench the same condition is a hard
+    # exit 4 — a single-provider run has nothing to compare it against.)
+    # The pre-flight NEVER OPENS THE FILE: existence and mode 600, os.stat only.
+    blocked = {}
+    for p in providers:
+        cfg = PROVIDERS[p]
+        if cfg["kind"] != "openai-chat":
+            continue
+        why, path = preflight_key_file(cfg)
+        if why:
+            blocked[p] = why
+            print("bench: %s is BLOCKED — %s key at %s (%s); it will show "
+                  "refusals, never a time" % (p, cfg["key_label"], path, why))
+
+    per = {p: [] for p in providers}
+    for r_i in range(rounds):
+        for p in providers:
+            if p in blocked:
+                per[p].append({
+                    "cand": "%s-r%d-0" % (p, r_i), "round": r_i, "provider": p,
+                    "source": PROVIDERS[p]["model"],
+                    "refusal": blocked[p],
+                    "refusal_detail": REFUSAL_DETAIL[blocked[p]],
+                    "verified": False, "verified_wall_s": None,
+                    "call_wall_s": None, "response_wall_s": None,
+                    "tokens": None, "completion_time_s": None, "upstream": None,
+                    "cost_usd": None, "cost_source": None,
+                    "apply_ok": None, "gate_ok": None, "accept_ok": None})
+                continue
+            run_dir = os.path.join(FX, "bench-%d-%s-r%d" % (int(T0), p, r_i))
+            os.makedirs(run_dir, exist_ok=True)
+            global RUN_DIR
+            RUN_DIR = run_dir
+            t_round = time.time()
+            cands = arm_f(prompt, 1, temperature, provider=p,
+                          tag="%s-r%d-" % (p, r_i), run_dir=run_dir)
+            recs = judge_candidates(cands, manifest, cmds, run_dir, t_ref=t_round)
+            rec = recs[0]
+            rec["round"] = r_i
+            rec["provider"] = p
+            rec["run_dir"] = run_dir
+            per[p].append(rec)
+            print("  bench round %d/%d %-11s verified=%s wall=%s refusal=%s"
+                  % (r_i + 1, rounds, p, rec["verified"],
+                     fmt(rec["verified_wall_s"] or rec["call_wall_s"]),
+                     rec["refusal"] or "-"), flush=True)
+
+    rows = []
+    for p in providers:
+        recs = per[p]
+        model = PROVIDERS[p]["model"]
+        firsts = sorted(round(r["verified_wall_s"], 2)
+                        for r in recs if r["verified_wall_s"] is not None)
+        walls = [r["call_wall_s"] for r in recs if r["call_wall_s"] is not None]
+        # provider-REPORTED completion throughput only. No provider timing ->
+        # no tok/s. We never divide by our own wall and call it the provider's.
+        tps = [r["tokens"] / r["completion_time_s"]
+               for r in recs
+               if r.get("tokens") and r.get("completion_time_s")]
+        rows.append({
+            "provider": p, "model": model,
+            "rounds": len(recs),
+            "verified": len(firsts),
+            "first_verified_s": firsts,
+            "median_first_verified_s": median(firsts),
+            "max_first_verified_s": max(firsts) if firsts else None,
+            "median_response_wall_s": median(walls),
+            "median_completion_tok_s": median(tps),
+            "refusals": sum(1 for r in recs if r.get("refusal")),
+            "upstreams": sorted({r["upstream"] for r in recs if r.get("upstream")}),
+        })
+
+    hdr = ("provider", "model", "rounds verified", "first_verified_s (sorted)",
+           "median", "max", "med resp_wall_s", "med tok/s", "refusals")
+    body = [(r["provider"], r["model"],
+             "%d/%d" % (r["verified"], r["rounds"]),
+             ("[" + ", ".join("%.2f" % x for x in r["first_verified_s"]) + "]")
+             if r["first_verified_s"] else "n/a",
+             fmt(r["median_first_verified_s"]),
+             fmt(r["max_first_verified_s"]),
+             fmt(r["median_response_wall_s"]),
+             fmt(r["median_completion_tok_s"], "%.1f"),
+             str(r["refusals"])) for r in rows]
+    widths = [max(len(hdr[i]), *(len(b[i]) for b in body)) for i in range(len(hdr))]
+    line = "  ".join("-" * w for w in widths)
+    print("")
+    print("BENCH  mission=%s  dossier=%s  rounds=%d  k=1  round-robin"
+          % (MISSION, os.path.basename(DOSSIER), rounds))
+    print(line)
+    print("  ".join(h.ljust(w) for h, w in zip(hdr, widths)))
+    print(line)
+    for b in body:
+        print("  ".join(c.ljust(w) for c, w in zip(b, widths)))
+    print(line)
+
+    out = os.path.join(FX, "bench-%d.edn" % int(T0))
+    with open(out, "w") as fh:
+        fh.write(edn({"bench": True,
+                      # THE OFFLINE CONTRACT TRAVELS WITH EVERY RECEIPT (Sol
+                      # fence r5, finding (a)): an offline, preflight-blocked
+                      # bench wrote a receipt carrying neither field, so a
+                      # later reader of that one file had no way to know the
+                      # run was offline -- or that "offline" here is a
+                      # chokepoint and not confinement.
+                      "offline": OFFLINE,
+                      "offline_contract": (OFFLINE_CONTRACT if OFFLINE else None),
+                      "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                      "mission": MISSION, "dossier": DOSSIER,
+                      "dossier_sha256": sha256_bytes(prompt.encode()),
+                      "preimage": PREIMAGE, "gate_profile": PROFILE,
+                      "gate_commands": cmds, "rounds": rounds, "k": 1,
+                      "interleaved": True,
+                      "rows": rows,
+                      "prices_date": PRICES_DATE,
+                      "run_cost_usd": run_cost([r for p in providers
+                                                for r in per[p]]),
+                      "candidates": [r for p in providers for r in per[p]]}) + "\n")
+    print("\nbench table written to %s" % out)
+    return 0
+
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+# arm NW — the CONTEXT-WARM / PROCESS-COLD comparator (Astra, 2026-09-06)
+#
+# Arm N pays a COLD `codex exec` per round: a new process, and a model turn
+# that must read the dossier and the source from scratch. Arm NW freezes that
+# reading cost into a WARM-UP that is recorded and NOT charged to any trial.
+#
+# WARM is defined, frozen, exactly this and nothing else:
+#   one `codex exec -m gpt-5.6-sol --skip-git-repo-check` in a scratch copy of
+#   the mission preimage, whose prompt is the frozen dossier plus "Read the
+#   file now and reply READY; do not edit yet". That session's transcript
+#   therefore holds the dossier AND the source it read. It solves nothing.
+#
+# Per trial the session is NOT resumed and evolved -- it is FORKED. A resumed
+# session would carry the previous trial's SOLUTION, and the fast typist is
+# stateless; reuse would compare a model that already knows the answer against
+# one that does not. `codex exec fork <id>` starts every trial from the same
+# frozen orientation transcript. The process is still cold (spawn charged);
+# only the CONTEXT is warm. Hence the label.
+#
+# The workspace path is fixed across trials so the loaded context stays valid:
+# per trial the preimage bytes are restored IN PLACE (everything but .git is
+# deleted and re-copied), and the model's own in-place edit is read back with
+# `git diff` against the preimage commit made at warm-up time.
+#
+# The clock per trial runs from the fork SPAWN to independent acceptance --
+# process start charged, warm-up not.
+
+# MEASURED 2026-09-06, and the reason this flag is here: `codex exec fork` runs
+# `sandbox: read-only` and this box has no working bubblewrap -- the bundled one
+# dies with "bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted". Under
+# that sandbox the model cannot even READ the source: the first orientation
+# session's two read attempts both failed and it replied READY having loaded
+# nothing, which VOIDS the frozen definition of WARM ("loaded source"). The seat's
+# established fence for an unsandboxed codex is the scratch directory itself
+# (~/bin/sol-yolo), and this arm's fence is the warm workspace under
+# /var/tmp/forge/typist-real-fx. Recorded in every receipt as :sandbox "bypass",
+# because it is a real difference from arm N (cold Sol, read-only, diff-in-response).
+# WHAT CONTAINS THIS ARM, stated exactly (Sol fence r1, 2026-09-06, which
+# demonstrated an executed child writing outside the warm workspace): the
+# containment is THE RUNNER'S PATH FENCE plus THE WARM WORKSPACE DIRECTORY --
+# it is NOT a kernel sandbox, and this flag explicitly turns codex's own off.
+# `cwd=ws` is a working directory, not confinement; a child that chooses to
+# write an absolute path elsewhere will succeed. That is why main() REFUSES
+# arm NW unless the warm workspace resolves under /var/tmp/forge: the fence we
+# can actually enforce is which directory the damage lands in, so the arm is
+# only allowed to run where that directory is the seat's scratch tmpfs.
+WARM_SANDBOX = ["--dangerously-bypass-approvals-and-sandbox"]
+
+WARM_ORIENT_SUFFIX = "\n\nRead the file now and reply READY; do not edit yet.\n"
+
+WARM_TRIAL_PROMPT = (
+    "The workspace has been reset to the original file. Perform the change now "
+    "exactly as specified; emit your edit by editing the file in place (any "
+    "script or batched patch is allowed); reply DONE.")
+
+UUID_RE = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
+CODEX_SESSIONS = os.path.expanduser("~/.codex/sessions")
+
+
+def warm_workspace_path():
+    """One fixed path per mission. Fixed BECAUSE the orientation session read
+    the source at this path; a different path per trial would invalidate the
+    very context the arm is measuring."""
+    return fenced_path(os.path.join(FX, "warm-ws-%s" % MISSION),
+                       "warm workspace")
+
+
+def newest_rollout():
+    """(mtime, path) of the newest codex rollout file, or (0.0, None)."""
+    best = (0.0, None)
+    for dirpath, _dirnames, filenames in os.walk(CODEX_SESSIONS):
+        for f in filenames:
+            if f.startswith("rollout-") and f.endswith(".jsonl"):
+                p = os.path.join(dirpath, f)
+                try:
+                    t = os.path.getmtime(p)
+                except OSError:
+                    continue
+                if t > best[0]:
+                    best = (t, p)
+    return best
+
+
+def reset_preimage_in_place(dest):
+    """Restore the preimage AT THE SAME PATH, keeping .git. Returns the
+    `git diff --stat` of the result, which MUST be empty: a non-empty value
+    means the reset did not reach the preimage and the trial is not comparable."""
+    dest = fenced_path(dest, "resident/warm workspace reset target")
+    for name in sorted(os.listdir(dest)):
+        if name == ".git":
+            continue
+        p = os.path.join(dest, name)
+        if os.path.isdir(p) and not os.path.islink(p):
+            shutil.rmtree(p)
+        else:
+            os.remove(p)
+    for rel in tree_files(PREIMAGE):
+        src = os.path.join(PREIMAGE, rel)
+        dst = os.path.join(dest, rel)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copy2(src, dst)
+    r = subprocess.run(["git", "diff", "--stat"], cwd=dest,
+                       capture_output=True, text=True)
+    return (r.stdout or "").strip()
+
+
+def create_warm_session(prompt):
+    """The warm-up call. Its wall is RECORDED and never charged to a trial."""
+    ws = fresh_copy(warm_workspace_path())
+    before_t, _before_p = newest_rollout()
+    cmd = ["codex", "exec", "-m", "gpt-5.6-sol",
+           "-c", 'model_reasoning_effort="medium"',
+           "--skip-git-repo-check"] + WARM_SANDBOX + [prompt + WARM_ORIENT_SUFFIX]
+    t0 = time.time()
+    try:
+        with open(os.devnull) as devnull:
+            r = subprocess.run(cmd, cwd=ws, stdin=devnull, capture_output=True,
+                               text=True, timeout=900)
+        out, err_s, rc = (r.stdout or ""), (r.stderr or ""), r.returncode
+    except Exception as e:                                       # noqa: BLE001
+        die("typist-run: warm-up failed: %s" % e, 8)
+    wall = time.time() - t0
+    blob = out + "\n" + err_s
+    if USAGE_LIMIT_RE.search(blob):
+        die("typist-run: refusing — warm-up hit the provider usage limit; "
+            "no session was created", 8)
+    sid = None
+    m = re.search(r"session[ _-]?id\D{0,4}(" + UUID_RE.pattern + ")", blob, re.I)
+    if m:
+        sid = m.group(1)
+    after_t, after_p = newest_rollout()
+    roll = after_p if after_t > before_t else None
+    if sid is None and roll:
+        m2 = UUID_RE.search(os.path.basename(roll))
+        sid = m2.group(0) if m2 else None
+    if sid is None:
+        die("typist-run: refusing — could not identify the warm session id "
+            "(rc=%s); no trial may run without it" % rc, 8)
+    g = subprocess.run(["git", "diff"], cwd=ws, capture_output=True, text=True)
+    return {"session": sid, "rollout": roll,
+            "warmup_wall_s": round(wall, 3),
+            "workspace": ws, "warmup_rc": rc,
+            "orientation_tail": out.strip()[-300:],
+            "orientation_edited": bool((g.stdout or "").strip())}
+
+
+def arm_nw(session_id, run_dir):
+    """One trial: reset in place, fork the frozen orientation, read the edit
+    back with `git diff`. Returns (spawn_clock, [candidate])."""
+    ws = warm_workspace_path()
+    if not os.path.isdir(os.path.join(ws, ".git")):
+        die("typist-run: refusing — no warm workspace at %s (create the warm "
+            "session first, or drop --warm-session)" % ws, 8)
+    dirty = reset_preimage_in_place(ws)
+    if dirty:
+        die("typist-run: refusing — warm workspace is not byte-identical to "
+            "the preimage after reset: %s" % dirty, 8)
+    cmd = ["codex", "exec", "fork", session_id, "-m", "gpt-5.6-sol",
+           "-c", 'model_reasoning_effort="medium"',
+           "--skip-git-repo-check"] + WARM_SANDBOX + [WARM_TRIAL_PROMPT]
+    t_spawn = time.time()
+    try:
+        with open(os.devnull) as devnull:
+            r = subprocess.run(cmd, cwd=ws, stdin=devnull, capture_output=True,
+                               text=True, timeout=900)
+        text, full_err = (r.stdout or ""), (r.stderr or "").strip()
+        err = full_err[-600:] if r.returncode else None
+    except Exception as e:                                       # noqa: BLE001
+        text, full_err = "", ""
+        err = generic_error("codex exec fork", *classify_error(e))
+    call_wall = time.time() - t_spawn
+    with open(os.path.join(run_dir, "nw-stdout.txt"), "w") as fh:
+        fh.write(text + "\n----- stderr -----\n" + full_err + "\n")
+    blob = text + "\n" + full_err
+    refusal = "usage-limit" if USAGE_LIMIT_RE.search(blob) else None
+    d, how = None, None
+    if not refusal:
+        g = subprocess.run(["git", "diff"], cwd=ws, capture_output=True, text=True)
+        if (g.stdout or "").strip():
+            d, how = g.stdout, "in-place"
+        else:
+            d = extract_candidate(text)
+            how = "response-body" if d else None
+    return t_spawn, [{
+        "cand": "nw0", "source": "codex exec fork gpt-5.6-sol (context-warm)",
+        "text": d,
+        "edit_channel": how,
+        "warm_session": session_id,
+        "refusal_evidence": scrub(blob.strip()[-400:]) if refusal else None,
+        "raw_chars": len(text), "reasoning_chars": None,
+        "finish_reason": None, "refusal": refusal,
+        "response_s": time.time() - t_spawn,
+        "call_wall_s": call_wall,
+        "tokens": None, "reasoning_tokens": None, "prompt_tokens": None,
+        "completion_time_s": None, "queue_time": None, "upstream": None,
+        "error": None if refusal else err}]
+
+
+# --------------------------------------------------------------------------
+# --cost-report — walk the fx trees and price everything that was spent.
+#
+# It reads receipt.edn, bench-*.edn and candidate-*.edn. It does NOT re-read a
+# candidate's tokens from anywhere else, and it never guesses a missing number:
+# a candidate with no usage fields is counted in `no-usage`, which is UNKNOWN,
+# not zero. Older receipts predate the :provider field; those are attributed
+# from the candidate's :upstream, then its :cand prefix, then — for a bare
+# `openai/gpt-oss-120b` source with neither — groq, which was the default
+# provider before the field existed. That fallback is printed as a caveat.
+COST_REPORT_DEFAULT_FX = ["/var/tmp/forge/typist-fx",
+                          "/var/tmp/forge/typist-real-fx"]
+
+_NUM = re.compile(r"^-?\d+(?:\.\d+)?$")
+
+
+def edn_scalar(tok):
+    if tok == "nil":
+        return None
+    if tok in ("true", "false"):
+        return tok == "true"
+    if _NUM.match(tok):
+        return float(tok) if "." in tok else int(tok)
+    return tok
+
+
+def edn_read(text):
+    """A SMALL reader for the EDN this script itself writes: maps, vectors,
+    strings, keywords, numbers, nil/true/false. Not a general EDN reader — it
+    is deliberately narrow so a surprising file fails loudly."""
+    i = [0]
+    n = len(text)
+
+    def ws():
+        while i[0] < n and (text[i[0]].isspace() or text[i[0]] == ","):
+            i[0] += 1
+
+    def read():
+        ws()
+        if i[0] >= n:
+            raise ValueError("eof")
+        ch = text[i[0]]
+        if ch == "{":
+            i[0] += 1
+            d = {}
+            while True:
+                ws()
+                if text[i[0]] == "}":
+                    i[0] += 1
+                    return d
+                k = read()
+                v = read()
+                d[k] = v
+        if ch == "[":
+            i[0] += 1
+            out = []
+            while True:
+                ws()
+                if text[i[0]] == "]":
+                    i[0] += 1
+                    return out
+                out.append(read())
+        if ch == '"':
+            i[0] += 1
+            buf = []
+            while text[i[0]] != '"':
+                if text[i[0]] == "\\":
+                    i[0] += 1
+                    c = text[i[0]]
+                    buf.append({"n": "\n", "t": "\t", "r": "\r"}.get(c, c))
+                else:
+                    buf.append(text[i[0]])
+                i[0] += 1
+            i[0] += 1
+            return "".join(buf)
+        if ch == ":":
+            i[0] += 1
+            st = i[0]
+            while i[0] < n and (text[i[0]].isalnum() or text[i[0]] in "-_?!*+./"):
+                i[0] += 1
+            return text[st:i[0]]
+        st = i[0]
+        while i[0] < n and not text[i[0]].isspace() and text[i[0]] not in "{}[],":
+            i[0] += 1
+        return edn_scalar(text[st:i[0]])
+    return read()
+
+
+def attribute(top, c):
+    """The PRICES key for one candidate record read back off disk."""
+    src = str(c.get("source") or "")
+    up = c.get("upstream")
+    cand = str(c.get("cand") or "")
+    prov = top.get("provider")
+    if "codex exec" in src:
+        return "spark"
+    if up:
+        return "openrouter:%s" % up
+    if cand.startswith("openrouter"):
+        return "openrouter:unreported"
+    if cand.startswith("groq"):
+        return "groq"
+    if cand.startswith("spark"):
+        return "spark"
+    if prov:
+        return "openrouter:unreported" if prov == "openrouter" else prov
+    if src == GROQ_MODEL:
+        return "groq"          # pre-:provider receipts; groq was the default
+    return "no-model-call"     # fake / replay arms
+
+
+def candidate_cost(key, cand):
+    """(usd, source) for ONE candidate, or (None, None) when it cannot be
+    priced. NEVER a zero standing in for a missing number.
+
+    A candidate that already carries `cost_usd` keeps it verbatim -- that is
+    the provider's own authoritative figure when `cost_source` says
+    `provider`, and re-deriving it from a table would be the report
+    overruling the vendor. Only a candidate with NO recorded cost and a
+    COMPLETE usage pair is priced from the dated table; a missing usage field
+    yields unknown, because zero tokens and unreported tokens are different
+    facts."""
+    cu = cand.get("cost_usd")
+    if cu is not None:
+        return float(cu), (cand.get("cost_source") or "receipt")
+    pt, ct = cand.get("prompt_tokens"), cand.get("tokens")
+    if pt is None or ct is None:
+        return None, None
+    rate = PRICES.get(key)
+    if rate is None:
+        return None, None
+    return (pt * rate["in"] + ct * rate["out"]) / 1e6, "table:%s" % PRICES_DATE
+
+
+def cost_report(fx_dirs):
+    want = ("receipt.edn",)
+    agg = {}
+    files = 0
+    unreadable = []
+    for root in fx_dirs:
+        for dirpath, _dirs, names in os.walk(root):
+            for nm in sorted(names):
+                if not nm.endswith(".edn"):
+                    continue
+                if not (nm in want or nm.startswith("bench-")
+                        or nm.startswith("candidate-")):
+                    continue
+                path = os.path.join(dirpath, nm)
+                try:
+                    with open(path) as fh:
+                        top = edn_read(fh.read())
+                except Exception as e:                          # noqa: BLE001
+                    unreadable.append((path, type(e).__name__))
+                    continue
+                if not isinstance(top, dict):
+                    continue
+                files += 1
+                for c in (top.get("candidates") or []):
+                    if not isinstance(c, dict):
+                        continue
+                    k = attribute(top, c)
+                    a = agg.setdefault(k, {"calls": 0, "prompt": 0,
+                                           "completion": 0, "reasoning": 0,
+                                           "no_usage": 0, "usd": 0.0,
+                                           "priced": 0, "sources": set()})
+                    pt, ct = c.get("prompt_tokens"), c.get("tokens")
+                    a["calls"] += 1
+                    # `or 0` ONLY in the display columns, and never in the
+                    # arithmetic that prices anything -- see `candidate_cost`.
+                    a["prompt"] += pt or 0
+                    a["completion"] += ct or 0
+                    a["reasoning"] += c.get("reasoning_tokens") or 0
+                    if pt is None and ct is None:
+                        a["no_usage"] += 1
+                    usd, src = candidate_cost(k, c)
+                    if usd is not None:
+                        a["usd"] += usd
+                        a["priced"] += 1
+                        a["sources"].add(src)
+    hdr = ("provider/upstream", "calls", "prompt", "completion", "reasoning",
+           "no-usage", "est USD")
+    print("\nCOST REPORT   prices dated %s   fx: %s"
+          % (PRICES_DATE, ", ".join(fx_dirs)))
+    print("%-26s %6s %10s %11s %10s %9s %12s" % hdr)
+    total = 0.0
+    unpriced = 0
+    rows = []
+    for k, a in sorted(agg.items(), key=lambda kv: -kv[1]["calls"]):
+        # THE AGGREGATE IS A SUM OF CANDIDATES, NOT A RE-PRICING OF THE GROUP.
+        # Sol fence r2: the old row priced the group's SUMMED tokens, so one
+        # Groq call with no usage at all summed to zero tokens, hit the table
+        # rate, and printed `$0.0000` for a call nobody can price -- and a
+        # mixed group threw away the provider's own authoritative figure to
+        # re-derive the whole row from the table. Both are the same mistake:
+        # an aggregate that outranks its members. A row is now exactly the sum
+        # of the members that HAVE a cost, and it is `unknown` when none does.
+        usd = a["usd"] if a["priced"] else None
+        src = "+".join(sorted(a["sources"])) if a["sources"] else "no rate"
+        unpriced += a["calls"] - a["priced"]
+        if usd is not None:
+            total += usd
+        rows.append((k, a, usd, src))
+        print("%-26s %6d %10d %11d %10d %9d %12s"
+              % (k, a["calls"], a["prompt"], a["completion"], a["reasoning"],
+                 a["no_usage"], usd_str(usd) if usd is not None else "unknown"))
+    any_priced = any(a["priced"] for a in agg.values())
+    print("%-26s %6d %10s %11s %10s %9d %12s"
+          % ("TOTAL", sum(a["calls"] for a in agg.values()), "", "", "",
+             sum(a["no_usage"] for a in agg.values()),
+             usd_str(total) if any_priced else "unknown"))
+    print("reasoning tokens are INCLUDED in the completion column "
+          "(both providers bill them as output).")
+    if unpriced:
+        print("%d call(s) have no rate and are UNKNOWN, not zero." % unpriced)
+    if unreadable:
+        print("%d file(s) unreadable: %s" % (len(unreadable), unreadable[:3]))
+    out = os.path.join(fx_dirs[0], "cost-report-%d.edn" % int(T0))
+    with open(out, "w") as fh:
+        fh.write(edn({"cost_report": True,
+                      "offline": OFFLINE,
+                      "offline_contract": (OFFLINE_CONTRACT if OFFLINE else None),
+                      "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                      "prices_date": PRICES_DATE,
+                      "prices": PRICES,
+                      "fx_dirs": fx_dirs,
+                      "files_read": files,
+                      "rows": [{"key": k, "calls": a["calls"],
+                                "prompt_tokens": a["prompt"],
+                                "completion_tokens": a["completion"],
+                                "reasoning_tokens": a["reasoning"],
+                                "no_usage_calls": a["no_usage"],
+                                "cost_usd": usd, "cost_source": src}
+                               for (k, a, usd, src) in rows],
+                      # NOT rounded: the sum of one provider-reported cost
+                      # IS that provider's figure, and rounding it here made
+                      # the receipt disagree with the candidate it came from.
+                      "total_usd": total if any_priced else None,
+                      "unpriced_calls": unpriced}) + "\n")
+    print("cost report written to %s" % out)
+    return 0
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="typist-run", add_help=True)
+    ap.add_argument("--arm", choices=["N", "NW", "F", "fake"])
+    ap.add_argument("--warm-session", default=None, metavar="SESSION_ID",
+                    help="--arm NW only: reuse an EXISTING frozen orientation "
+                         "session instead of creating one. Every trial FORKS "
+                         "this session, so no trial ever sees another trial's "
+                         "solution. Without it the runner creates the session "
+                         "and records its wall as :warmup_wall_s (never charged).")
+    ap.add_argument("--replay", metavar="RUN_DIR",
+                    help="re-run apply+gate+acceptance on the RETAINED "
+                         "candidate.diff files of an earlier run. No network.")
+    ap.add_argument("--provider", default="groq", choices=sorted(PROVIDERS),
+                    help="which fast typist arm F buys (default: groq)")
+    ap.add_argument("--keys-dir", default=None, metavar="DIR",
+                    help="TEST SEAM, offline only: read the provider key files "
+                         "from DIR instead of /home/forge/secrets. REFUSED "
+                         "unless DIR resolves under /var/tmp/forge/. There is "
+                         "no environment variable and no --model: the key path, "
+                         "the model and the upstream order are all fixed.")
+    ap.add_argument("--print-key-paths", action="store_true",
+                    help="DRY RUN: print the RESOLVED provider key path for "
+                         "every provider and exit 0. PATHS ONLY -- the files "
+                         "are never opened, so nothing can leak a key. This is "
+                         "how bin/typist-run-test proves that under its "
+                         "--keys-dir no path resolves into /home/forge/secrets.")
+    ap.add_argument("--bench", action="store_true",
+                    help="compare providers: `rounds` rounds of k=1 per provider, "
+                         "interleaved round-robin, one table at the end")
+    ap.add_argument("--providers", default="groq",
+                    help="--bench only: comma-separated provider list")
+    ap.add_argument("--rounds", type=int, default=6,
+                    help="--bench only: rounds per provider (default 6)")
+    ap.add_argument("--runs", type=int, default=1)
+    ap.add_argument("--k", type=int, default=None)
+    ap.add_argument("--temperature", type=float, default=0.7)
+    ap.add_argument("--fake-good", default=os.path.join(HERE, "fixtures", "typist-good.diff"))
+    ap.add_argument("--fake-bad", default=os.path.join(HERE, "fixtures", "typist-bad.diff"))
+    ap.add_argument("--rebuild-fixture", action="store_true")
+    ap.add_argument("--edit-form", default="diff", choices=["diff", "whole-file"],
+                    help="how a candidate expresses its change. diff (default): "
+                         "a unified diff. whole-file: the COMPLETE new contents "
+                         "of every authorized file inside one fenced block each, "
+                         "judged under a changed-region budget. Same dossier "
+                         "context, same gate, same acceptance witness.")
+    ap.add_argument("--gate-mode", default="cold", choices=["cold", "resident"],
+                    help="cold (default): one JVM per candidate, exactly as the "
+                         "mission profile says. resident: ONE nREPL JVM owned by "
+                         "the runner, same classpath, per-candidate namespace "
+                         "reload; refuses (typed) and falls back to cold on a "
+                         "liveness or classpath-hash failure. JVM missions only.")
+    ap.add_argument("--dossier", default=None,
+                    help="the frozen dossier to hand every arm "
+                         "(default: bin/typist-dossier.md, the scope-roots mission)")
+    ap.add_argument("--mission", default=None, choices=sorted(MISSIONS),
+                    help="the mission whose fixture, gate profile, authorized file "
+                         "and acceptance witness judge the candidates. Default: "
+                         "derived from the dossier basename.")
+    ap.add_argument("--cost-report", action="store_true",
+                    help="walk the fx trees, price every recorded call, exit")
+    ap.add_argument("--fx", action="append", default=None, metavar="DIR",
+                    help="--cost-report only: an fx tree to walk (repeatable)")
+    ap.add_argument("--fixture", default=None, metavar="PREIMAGE_DIR",
+                    help="override the mission's preimage directory; its manifest "
+                         "is written beside it as <dir>.manifest.edn")
+    a = ap.parse_args()
+
+    # THE WRITE FENCE, applied to the artifact root BEFORE anything is built,
+    # copied onto, or removed under it. TYPIST_FX is an environment variable,
+    # and `materialize_fixture`/`fresh_copy`/the resident workspace all rmtree
+    # paths derived from it: unfenced, it is a delete primitive reachable from
+    # the environment (Sol fence r1).
+    global FX
+    FX = fenced_path(FX, "TYPIST_FX artifact root")
+
+    # ARM NW REFUSES BEFORE ANYTHING IS WRITTEN. Sol fence r2 traced the
+    # syscalls: `materialize_fixture` ran first, so an NW invocation with an
+    # out-of-fence workspace created the artifact root, the fixture preimage,
+    # five source files and a manifest, and only THEN refused. The refusal was
+    # correct and it was late, which is the same defect as no refusal for
+    # every byte written before it. So the NW check is the FIRST thing main()
+    # does after resolving the artifact root -- before mission selection,
+    # fixture materialization, gate resolution, resident startup, or any other
+    # filesystem mutation. The mission name is computed purely here (argparse
+    # restricts --mission to MISSIONS, and `mission_for_dossier` is a basename
+    # lookup), because the workspace path is FX/warm-ws-<mission> and the FX
+    # component is the only part a caller can steer.
+    if a.arm == "NW":
+        nw_mission = a.mission or (mission_for_dossier(a.dossier)
+                                   if a.dossier else "scope-roots")
+        refuse_nw_outside_scratch(os.path.join(FX, "warm-ws-%s" % nw_mission))
+
+    if a.cost_report:
+        sys.exit(cost_report(a.fx or list(COST_REPORT_DEFAULT_FX)))
+    if not a.arm and not a.replay and not a.bench and not a.print_key_paths:
+        ap.error("one of --arm, --replay, --bench, --cost-report or "
+                 "--print-key-paths is required")
+
+    global KEYS_DIR
+    if a.keys_dir is not None:
+        d = os.path.realpath(a.keys_dir)
+        fence = os.path.realpath(TEST_KEYS_FENCE)
+        if not (d == fence or d.startswith(fence + os.sep)):
+            die("typist-run: refusing — keys-dir outside the test fence "
+                "(%s does not resolve under %s)" % (d, fence), 4)
+        if not os.path.isdir(d):
+            die("typist-run: refusing — keys-dir does not exist: %s" % d, 4)
+        KEYS_DIR = d
+
+    # THE DRY RUN. After the --keys-dir fence, before anything is built,
+    # spawned or opened. It prints PATHS, never contents: a witness that asks
+    # for a key in order to prove the key is safe has defeated itself.
+    if a.print_key_paths:
+        print("offline=%s offline_contract=%s"
+              % (OFFLINE, OFFLINE_CONTRACT if OFFLINE else "n/a"))
+        print("keys_dir=%s" % (KEYS_DIR or "(none -- fixed registry paths)"))
+        for name in sorted(PROVIDERS):
+            cfg = PROVIDERS[name]
+            if not cfg.get("key_file"):
+                print("%-12s key_path=(none -- no provider key)" % name)
+                continue
+            print("%-12s key_path=%s" % (name, os.path.realpath(key_file_for(cfg))))
+        sys.exit(0)
+
+    bench_providers = []
+    if a.bench:
+        bench_providers = [p.strip() for p in a.providers.split(",") if p.strip()]
+        if not bench_providers:
+            ap.error("--bench needs a non-empty --providers list")
+        for p in bench_providers:
+            if p not in PROVIDERS:
+                die("typist-run: refusing — unknown provider %r (known: %s)"
+                    % (p, ", ".join(sorted(PROVIDERS))), 7)
+        if a.rounds < 1:
+            ap.error("--rounds must be >= 1")
+
+    mission = a.mission or (mission_for_dossier(a.dossier) if a.dossier else "scope-roots")
+    select_mission(mission, a.dossier, a.fixture, a.edit_form)
+
+    if shutil.which("bb") is None:
+        die("typist-run: refusing — bb (babashka) is not on PATH; the gate cannot run", 5)
+    if not os.path.isfile(DOSSIER):
+        die("typist-run: refusing — no dossier at %s" % DOSSIER, 7)
+    with open(DOSSIER) as fh:
+        prompt = fh.read()
+    dossier_sha = sha256_bytes(prompt.encode())
+
+    manifest = materialize_fixture(force=a.rebuild_fixture)
+    cmds = resolve_gate_commands()
+
+    global GATE_MODE, RESIDENT
+    GATE_MODE = a.gate_mode
+    if "jvm_jars_only" in MISSIONS[mission]:
+        # the cold gate's classpath identity, recorded on every candidate so a
+        # cold and a resident receipt can be compared without trusting a label
+        real2_classpath(MISSIONS[mission]["jvm_jars_only"])
+        COLD_CP_HASH[0] = sha256_bytes(
+            REAL2_SPATH_RAW[bool(MISSIONS[mission]["jvm_jars_only"])].encode())
+    if GATE_MODE == "resident":
+        RESIDENT = Resident(mission).start()
+        atexit.register(RESIDENT.stop)
+        print("resident: port=%d startup_wall_s=%.2f classpath_sha256=%s cwd=%s"
+              % (RESIDENT.port, RESIDENT.startup_wall_s,
+                 RESIDENT.cp_hash[:16], RESIDENT.dir))
+
+    if a.bench:
+        sys.exit(bench(prompt, bench_providers, a.rounds,
+                       a.temperature, manifest, cmds))
+
+    if a.replay:
+        a.arm = a.arm or "replay"
+        runs = 1
+        k = 0
+    else:
+        k = a.k if a.k is not None else (1 if a.arm in ("N", "NW") else 5)
+        runs = a.runs
+
+    warm = None
+    if a.arm == "NW":
+        # Re-asserted here, AFTER select_mission has bound MISSION, so the
+        # path checked is the exact one `create_warm_session` will use. The
+        # decisive check already ran at the top of main(); this one cannot
+        # fire, and it stays because a fence that is only checked once is a
+        # fence that a later refactor moves the mutation in front of.
+        refuse_nw_outside_scratch(warm_workspace_path())
+        if EDIT_FORM != "diff":
+            die("typist-run: refusing — arm NW reads the model's OWN in-place "
+                "edit back as a git diff; --edit-form whole-file is not its "
+                "edit form", 8)
+        if k != 1:
+            die("typist-run: refusing — arm NW is one trial per fork (k=1); "
+                "k=%d was asked for" % k, 8)
+        if a.warm_session:
+            warm = {"session": a.warm_session, "rollout": None,
+                    "warmup_wall_s": None, "workspace": warm_workspace_path(),
+                    "warmup_rc": None, "orientation_tail": None,
+                    "orientation_edited": None, "created_here": False}
+        else:
+            warm = create_warm_session(prompt)
+            warm["created_here"] = True
+            print("warm_session=%s warmup_wall_s=%.2f workspace=%s rollout=%s "
+                  "orientation_edited=%s"
+                  % (warm["session"], warm["warmup_wall_s"], warm["workspace"],
+                     warm["rollout"], warm["orientation_edited"]))
+
+    exit_code = 0
+    for r_i in range(runs):
+        # T0 has second resolution, so two runs started in the same second --
+        # two --replay calls in a loop, say -- collided on one RUN_DIR and the
+        # second overwrote the first's receipt. The pid makes the id unique.
+        run_id = "%s-%s%s-%d-%d-%d" % (a.arm, MISSION,
+                                       "-wf" if EDIT_FORM == "whole-file" else "",
+                                       int(T0), os.getpid(), r_i)
+        global RUN_DIR
+        RUN_DIR = os.path.join(FX, run_id)
+        os.makedirs(RUN_DIR, exist_ok=True)
+
+        if a.replay:
+            cands = arm_replay(a.replay)
+        elif a.arm == "fake":
+            cands = arm_fake(k, a.fake_good, a.fake_bad)
+        elif a.arm == "N":
+            cands = arm_n(prompt, k)
+        elif a.arm == "NW":
+            t_spawn, cands = arm_nw(warm["session"], RUN_DIR)
+        else:
+            cands = arm_f(prompt, k, a.temperature,
+                          provider=a.provider, run_dir=RUN_DIR)
+
+        # Arm NW's clock starts at the FORK SPAWN, not at process start: the
+        # warm-up is a recorded cost of the arm, never a cost of a trial.
+        records = judge_candidates(cands, manifest, cmds, RUN_DIR,
+                                   t_ref=(t_spawn if a.arm == "NW" else None))
+
+        verified_walls = [r["verified_wall_s"] for r in records if r["verified"]]
+        first = min(verified_walls) if verified_walls else None
+        apply_ok = sum(1 for r in records if r.get("apply_ok"))
+        gate_ok = sum(1 for r in records if r.get("gate_ok"))
+        accept_ok = sum(1 for r in records if r.get("accept_ok"))
+        mismatch = sum(1 for r in records if r["semantic_mismatch"])
+        refusals = sum(1 for r in records if r.get("refusal"))
+
+        receipt = {
+            "run": run_id, "arm": a.arm, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "startup_charged" : True,
+            "t0_epoch": round(T0, 3),
+            "dossier": DOSSIER, "dossier_sha256": dossier_sha,
+            "preimage": PREIMAGE, "manifest": MANIFEST,
+            "gate_profile": PROFILE, "gate_commands": cmds,
+            "gate_mode": GATE_MODE,
+            "resident_port": (RESIDENT.port if RESIDENT else None),
+            "resident_startup_wall_s": (RESIDENT.startup_wall_s if RESIDENT else None),
+            "classpath_sha256": (RESIDENT.cp_hash if RESIDENT else COLD_CP_HASH[0]),
+            "edit_form": EDIT_FORM,
+            "budget_reference_diff": BUDGET_REF,
+            "changed_line_budget": (3 * reference_changed_lines(BUDGET_REF)
+                                    if EDIT_FORM == "whole-file" else None),
+            "mission": MISSION, "mutable_file": MUTABLE,
+            "provider": (a.provider if a.arm == "F" else None),
+            "model": (PROVIDERS[a.provider]["model"]
+                      if a.arm == "F" else
+                      ("gpt-5.6-sol" if a.arm in ("N", "NW") else None)),
+            # Arm NW's frozen definition of WARM, carried in every receipt.
+            "warm_session": (warm["session"] if warm else None),
+            "warm_kind": ("fork" if warm else None),
+            "warm_workspace": (warm["workspace"] if warm else None),
+            "warm_rollout": (warm["rollout"] if warm else None),
+            "warm_session_created_here": (warm["created_here"] if warm else None),
+            "sandbox": ("bypass" if a.arm == "NW" else "codex default (read-only)"),
+            # Sol fence r4: name the contract in the artifact, so a reader of
+            # this receipt is never invited to read a chokepoint as a sandbox.
+            "offline": OFFLINE,
+            "offline_contract": (OFFLINE_CONTRACT if OFFLINE else None),
+            "warmup_wall_s": (warm["warmup_wall_s"] if warm else None),
+            "warmup_charged": (False if warm else None),
+            "warm_orientation_edited": (warm["orientation_edited"] if warm else None),
+            "clock": ("fork-spawn-to-independent-acceptance" if a.arm == "NW"
+                      else "process-start-to-independent-acceptance"),
+            "acceptance": MISSIONS[MISSION]["accept_desc"],
+            "candidates": records,
+            "run_cost_usd": run_cost(records),
+            "prices_date": PRICES_DATE,
+            "first_verified_s": first,
+            "semantic_mismatch": mismatch,
+            "refusals": refusals,
+        }
+        with open(os.path.join(RUN_DIR, "receipt.edn"), "w") as fh:
+            fh.write(edn(receipt) + "\n")
+
+        tok = [r["tokens"] for r in records if r["tokens"] is not None]
+        tok_s = ("tokens=%d" % sum(tok)) if tok else "tokens=unknown"
+        rt = [r["reasoning_tokens"] for r in records if r.get("reasoning_tokens") is not None]
+        rt_s = ("reasoning_tokens=%d" % sum(rt)) if rt else "reasoning_tokens=unknown"
+        rc = run_cost(records)
+        cost_s = ("cost=$%.6f" % rc) if rc is not None else "cost=unknown"
+        print("arm=%s mission=%s edit_form=%s run=%s first_verified_s=%s candidates=%d apply_ok=%d "
+              "gate_ok=%d accept_ok=%d semantic_mismatch=%d refusals=%d %s %s %s%s"
+              % (a.arm, MISSION, EDIT_FORM, run_id,
+                 ("%.2f" % first) if first is not None else "none",
+                 len(records), apply_ok, gate_ok, accept_ok, mismatch, refusals,
+                 tok_s, rt_s, cost_s,
+                 ("" if a.arm != "NW" else
+                  " warm_kind=fork warm_session=%s call_wall_s=%s edit_channel=%s"
+                  % (warm["session"], fmt(records[0].get("call_wall_s")),
+                     records[0].get("edit_channel")))))
+        if mismatch:
+            exit_code = 3
+    sys.exit(exit_code)
+
+
+if __name__ == "__main__":
+    main()

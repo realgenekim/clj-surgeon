@@ -1,0 +1,72 @@
+diff --git a/src/fixture/paths.clj b/src/fixture/paths.clj
+index 1728975..e0c2e19 100644
+--- a/src/fixture/paths.clj
++++ b/src/fixture/paths.clj
+@@ -12,14 +12,15 @@
+ 
+   Example:
+     (normalize \"a/b/\")  ;=> \"a/b\""
+-  [segs]
+-  (util/normalize (str/join "/" segs)))
++  ([segs] (join segs nil))
++  ([segs opts]
++   (util/normalize-path (str/join "/" segs) opts)))
+ 
+ (defn relative-to
+   "Strip the root prefix from a path."
+   [root p]
+-  (let [r (util/normalize root)
+-        n (util/normalize p)]
++  (let [r (util/normalize-path root)
++        n (util/normalize-path p)]
+     (if (str/starts-with? n (str r "/"))
+       (subs n (inc (count r)))
+       n)))
+@@ -27,4 +28,4 @@
+ (defn clean-all
+   "Normalise every path in the collection."
+   [paths]
+-  (mapv util/normalize paths))
++  (mapv util/normalize-path paths))
+diff --git a/src/fixture/scope.clj b/src/fixture/scope.clj
+index d6de54a..b1c8c0f 100644
+--- a/src/fixture/scope.clj
++++ b/src/fixture/scope.clj
+@@ -13,10 +13,12 @@
+ 
+ (defn expand
+   "Every admitted root plus the caller's paths, normalised, in order."
+-  [paths]
+-  (vec (distinct (map util/normalize (concat (scope-roots) paths)))))
++  ([paths] (expand paths nil))
++  ([paths opts]
++   (vec (distinct (map #(util/normalize-path % opts)
++                       (concat (scope-roots) paths))))))
+ 
+ (defn admits?
+   "Does this scope admit the given path?"
+   [p]
+-  (contains? (set (expand [])) (util/normalize p)))
++  (contains? (set (expand [])) (util/normalize-path p)))
+diff --git a/src/fixture/util.clj b/src/fixture/util.clj
+index 63ed97d..5db5f1d 100644
+--- a/src/fixture/util.clj
++++ b/src/fixture/util.clj
+@@ -2,7 +2,13 @@
+   "Path helpers shared by the scope expander."
+   (:require [clojure.string :as str]))
+ 
+-(defn normalize
+-  "Trim a path and drop any trailing slash."
+-  [p]
+-  (str/replace (str/trim p) #"/+$" ""))
++(defn normalize-path
++  "Trim a path and drop any trailing slash.
++
++  With `{:strict? true}` also collapse repeated inner slashes."
++  ([p] (normalize-path p nil))
++  ([p opts]
++   (let [t (str/replace (str/trim p) #"/+$" "")]
++     (if (:strict? opts)
++       (str/replace t #"/{2,}" "/")
++       t))))

@@ -377,10 +377,10 @@
 
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
-    (is (= 40 (count (lm/namespaces-for :fast))))
+    (is (= 41 (count (lm/namespaces-for :fast))))
     (is (= 5 (count (lm/namespaces-for :integration))))
-    (is (= 14 (count (lm/namespaces-for :battery))))
-    (is (= 59 (count lm/manifest))
+    (is (= 15 (count (lm/namespaces-for :battery))))
+    (is (= 61 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -416,7 +416,9 @@
     clj-surgeon.mcp-inspect-cold-job-test  1  ; MOVED, not new (round five): the one inspect-tool test that drives /bin/sh, out of :fast into :battery
     clj-surgeon.ns-isolation-test          24  ; TEST-ISO-002/003/004/005/007/010's witnesses (round four) + round five's four spawn-ledger witnesses
     clj-surgeon.helper-extraction-test     34  ; MCP-OP-HELPER's pure planner witnesses, enrolled into :fast when the planner went green (it requires only the planner, the fixture and clojure.test, and spawns nothing)
-    clj-surgeon.mcp-helper-extraction-test 51}) ; 48 -> 51 on 2026-09-05: the three request-shape-refusal witnesses (a runnable :example, the named :field, and the enriched refusal still validating against exactly the refusal face) added after a real caller needed seven refused plan calls to reverse-engineer the closed shape; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
+    clj-surgeon.telemetry-events-test      18  ; TELEMETRY-EVENTS-001's witnesses: the box-wide JSONL ledger the public MCP fns append to as a side effect (2026-09-06, the night the hourly watch reported four figures while a dozen calls landed in launcher-chosen roots it never read). 16 -> 17 on Sol fence r2: `an-extra-field-name-can-neither-shadow-nor-smuggle` pins the two defects he found in the pass-through rule -- a string key "ok" beside the keyword :ok serialized to ONE JSON name and the caller's copy won, and an extra's NAME reached the file unscrubbed (`gsk_FIELDNAMECANARY`). Extra names are now normalized, shape-checked, collision-rejected and counted in `dropped_fields`. 17 -> 18 on Sol fence r4: `the-env-override-wins-for-the-writer` pins the split of `default-events-file` (PURE, the home dotdir) from `events-file` (the CLJ_SURGEON_EVENTS_FILE override, else the default). One fn stating both facts made `the-default-path-is-the-home-dotdir` red under `~/bin/suite-run`, which exports that variable -- the test that pins the default was failing in exactly the harness the landing gates run under.
+    clj-surgeon.mission-test               20  ; the MISSION LEDGER prototype's witnesses, adopted 2026-09-06 with the real-repo typist merge. :battery, not :fast, for the same reason mcp-inspect-cold-job-test is: its end-to-end half launches a shell child process (via clojure's java-shell namespace, spelled out here only in prose because the fast-lane scanner reads THIS file too) and materializes a fixture tree under /var/tmp/forge, and the fast lane's rule is that spawning is unrepresentable there, not merely discouraged. It arrived on this branch with NO lane at all -- the disk->manifest witness caught it, which is the witness working.
+    clj-surgeon.mcp-helper-extraction-test 51}) ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions. 48 -> 51 on 2026-09-05 (trunk, merged here): the three request-shape-refusal witnesses (a runnable :example, the named :field, and the enriched refusal still validating against exactly the refusal face) added after a real caller needed seven refused plan calls to reverse-engineer the closed shape
 
 (deftest the-corpus-only-ever-grows-and-the-arithmetic-is-shown
   ;; THE NOTHING-DROPPED PIN, recomputed for round three.
@@ -427,9 +429,9 @@
   ;; actually holds the line:
   ;;
   ;;   round one's 49 namespaces, today ........... 920 deftests  (>= 865)
-  ;;   adopted since round one .................... 221 deftests  (12+4+25+3+69+1+1+24+34+48)
+  ;;   adopted since round one .................... 262 deftests  (12+4+25+3+69+1+1+24+34+51+18+20)
   ;;                                                --------------
-  ;;   total declared by the manifest ............. 1142 deftests
+  ;;   total declared by the manifest ............. 1183 deftests
   ;;
   ;; ROUND SIX ADOPTED THE HELPER-EXTRACTION PAIR, 68 deftests, on the day the
   ;; planner and the boundary both went green. They had been `excluded` with
@@ -473,9 +475,9 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      (is (= 224 adopted) (str "adopted tests: " adopted)))
+      (is (= 262 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1145 total) (str "manifest declares " total " tests"))
+      (is (= 1183 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

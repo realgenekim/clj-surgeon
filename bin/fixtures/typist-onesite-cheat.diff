@@ -1,0 +1,13 @@
+--- a/test/fixture/util_test.clj
++++ b/test/fixture/util_test.clj
+@@ -2,7 +2,7 @@
+   (:require [clojure.test :refer [deftest is]]
+             [fixture.util :as util]))
+ 
+-(deftest max-path-segments-is-64
+-  (is (= 64 util/max-path-segments)))
++(deftest max-path-segments-is-16
++  (is (= 16 util/max-path-segments)))
+ 
+ (deftest normalize-unchanged
+   (is (= "a/b" (util/normalize "  a/b//  "))))
