@@ -135,3 +135,33 @@ set refuses :git-staged-scope; HEAD, index tree and source remain unchanged.
 Two real repository witnesses retain both settings as provenance. This repairs
 the observed omission; it does not claim that a full recursive tree comparison
 or every possible Git configuration interaction has been proved.
+
+
+## Git subprocess namespace-isolation accounting
+
+Every successful ProcessBuilder start in mission-git-process must append its
+actual PID and trusted argv to clj-surgeon.spawn-ledger exactly once. This is the
+repository's in-memory namespace-isolation ledger, separate from public usage
+events. Record inside the existing cleanup-protected try, before waiting; a
+recorder exception must still pass through the existing kill/reap finally.
+No stdin or environment values enter the ledger. A failed start has no PID and
+must not fabricate a launch. The six allowed Git identity variables and timeout,
+output-limit and cleanup behavior remain unchanged.
+
+The existing nonreading-child deadline witness also snapshots the spawn ledger
+and checks one recorded PID/command after timeout. No new deftest or lane count is
+needed. The src-spawn-site enumeration is an independent structural guard;
+behavioral process tests remain necessary because that enumeration cannot prove
+that recording occurs on the actual runtime path. After the lead released the timed window, the focused enumeration and timeout
+witness ran RED: four failed assertions (missing source recording and missing
+recorded launch/PID/argv). Adding the ledger require and record call made the same
+two tests pass all six assertions. Full process+identity focused suites pass five
+tests / thirteen assertions. Formatter and diff checks pass. The existing process
+namespace still has two deftests; no lane-count adjustment is needed.
+
+Evidence is retained under /var/tmp/forge/git-spawn-ledger-fix: red.txt,
+focused-green.txt, process-identity-green.txt and red-command.txt. Tests ran at
+nice10 through suite-run, with their own CLJ_SURGEON_EVENTS_FILE and Node compile
+cache disabled. No provider, root checkout, shared service or real user Git commit
+was touched. Existing owners/protocol were read with Surgeon; the two known
+literal source additions used the working-tree skill's native edit route.

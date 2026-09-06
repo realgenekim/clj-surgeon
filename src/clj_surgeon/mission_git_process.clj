@@ -1,6 +1,7 @@
 (ns clj-surgeon.mission-git-process
   "One bounded subprocess including stdin delivery; argv only."
   (:require
+   [clj-surgeon.spawn-ledger :as spawn]
    [clojure.string :as str])
   (:import
    (java.util.concurrent TimeUnit)))
@@ -33,6 +34,7 @@
           await #(let [result (deref % (remaining) ::timeout)]
                    (when (= result ::timeout) (fail! :git-timeout)) result)]
       (try
+        (spawn/record! (.pid process) cmd)
         (when-not (.waitFor process (remaining) TimeUnit/MILLISECONDS) (fail! :git-timeout))
         (await writer)
         (let [bytes (await output)]
