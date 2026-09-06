@@ -38,3 +38,19 @@ Prediction ≥40% single-candidate: observed 80%. Rounds ≥3/4: 4/4. Apply fail
 Reading: on a real Clojure file, five whole-file candidates from a 1.6k tok/s model reach a verified 12-site rename in a median 1.89 s, every round; one cold Sol author needs 29.7 s and fails one round in four. That is 15.7x on wall, cold vs cold, on real bytes, with a 0.06 s gate. The remaining failure class (drift outside the intended spans) is exactly what a FORM-level request removes by construction: the kernel prints only the named forms and cannot touch the rest. So the bar for Astra's forms arm is: match 80% or better, with untouched-region identity guaranteed rather than checked.
 
 Caveats that stay: one mission, one file, k=5, a bb gate; the gate cost that would erase this on a JVM-gated mission was not measured tonight (the JVM run of the same test namespace was 0.75 s, so the ratio there would still be ~10x); warm Sol not measured.
+
+## A/B 3 (01:08–01:13Z) — the multiplier as a function of gate cost
+
+Same change, same preimage, dossier, acceptance, provider (Cerebras k=5, whole-file form); only the PROOF GATE changes: real-1 = focused test under bb (0.06 s); real-2 = the same test on the JVM (0.75 s); real-2j = four real namespaces on the JVM that transitively exercise the change (65 tests / 518 assertions, 7.1 s). A heavier honest gate does not exist in this repo for a two-file candidate workspace (the 17 s and 70 s candidates are order-dependent or read repo-relative fixtures; recorded as a finding). Cold Sol was run under the 7.1 s gate. Preregistered; raw log 2026-09-06-fast-typist-real-2-ab3-gates.log; quiet window; load 2.7–3.3.
+
+| gate | cost | F whole-file k=5: rounds / candidates | F median first-verified | cold Sol median | ratio |
+|---|---|---|---|---|---|
+| bb focused test (real-1) | 0.06 s | 4/4, 16/20 | 1.89 s | 29.68 s (earlier session) | 15.7x |
+| JVM focused test (real-2) | 0.75 s | 3/3, 13/15 | 2.34 s | ≈18.4 s (reconstructed: this session's Sol model wall 17.7 s + one gate) | ≈7.9x |
+| JVM four namespaces (real-2j) | 7.1 s | 3/3, 10/15 | 8.55 s | **24.80 s** (measured, 3/3) | **2.90x** |
+
+Decomposition of one real-2j round, per candidate: model 1.0–1.5 s; copy 14 ms; apply 1 ms; gate 6.8–7.1 s; acceptance 13 ms. The gate is 86% of a candidate's cost at 7 s and 1.5% at 0.06 s. Candidates are judged SERIALLY (only the model calls are parallel), so first-verified ≈ model wall + the gates of every candidate up to and including the first verified; in 5 of 6 rounds the winner sat first or second, so parallel gating would move the median only from 8.55 to ~8.3 s and cannot change the trend: the ceiling on the ratio is Sol_model / (F_model + gate), which collapses toward 1 as the gate grows.
+
+Predictions vs observed: absolute F medians missed LOW (I priced the winner as if it sat late in the queue; it usually sits first — the serial penalty is charged on failures ahead of the winner, not on k); the ratios hit at both ends (5–15x at 0.75 s → 7.9x; 1.5–3x at heavy → 2.90x); monotone collapse hit; rate unchanged hit (87% / 67% per candidate).
+
+Reading for Gene's question ("neighborhood multiplier vs native"): on a real file with real gates, the fast typist's multiplier over a cold careful author is ~16x at a 0.06 s gate, ~8x at 0.75 s, ~3x at 7 s. The gate, not the model, sets the number. Cheap, narrow, honest proof profiles are therefore the highest-leverage piece of the machinery — which is what the mission ledger's per-mission profile is for.
