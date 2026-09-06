@@ -359,7 +359,7 @@ def route_kinds(text: str, action: str) -> list[str]:
             kinds.add("surgeon-read")
     if any(method.endswith("__inspect_clojure") for method in surgeon_methods):
         kinds.add("surgeon-read")
-    if any(method.endswith(("__apply_clojure_changes", "__alias_migration")) for method in surgeon_methods):
+    if any(method.endswith(("__apply_clojure_changes", "__alias_migration", "__edit_clojure")) for method in surgeon_methods):
         kinds.add("surgeon-apply")
     if cclsp_methods:
         kinds.add("semantic-read")
@@ -806,6 +806,7 @@ def empty_session(provider: str, path: Path) -> dict:
         "clj_surgeon_result_actions": 0,
         "clj_surgeon_refusal_actions": 0,
         "clj_surgeon_refusal_types": Counter(),
+        "clj_surgeon_typed_mcp_outcomes": Counter(),
         "clj_surgeon_execution_error_actions": 0,
         "clj_surgeon_output_chars": 0,
         "clj_surgeon_action_wall_ms": [],
@@ -889,6 +890,8 @@ def finalize_session(session: dict) -> dict:
         "clj_surgeon_result_actions": session["clj_surgeon_result_actions"],
         "clj_surgeon_refusal_actions": session["clj_surgeon_refusal_actions"],
         "clj_surgeon_refusal_types": dict(sorted(session["clj_surgeon_refusal_types"].items())),
+        "clj_surgeon_typed_mcp_outcomes": dict(sorted(session["clj_surgeon_typed_mcp_outcomes"].items())),
+        "clj_surgeon_refusal_evidence": "typed-mcp-items-only" if session["clj_surgeon_typed_mcp_outcomes"] else "unknown",
         "clj_surgeon_execution_error_actions": session["clj_surgeon_execution_error_actions"],
         "clj_surgeon_output_chars": session["clj_surgeon_output_chars"],
         "clj_surgeon_action_wall": distribution(session["clj_surgeon_action_wall_ms"]),
@@ -910,6 +913,24 @@ def finalize_session(session: dict) -> dict:
     }
 
 
+def codex_mcp_result_outcome(item: dict) -> tuple[str, str | None] | None:
+    """Only completed registered-server metadata is authority; content is opaque."""
+    server = item.get("server")
+    if item.get("type") != "McpToolCall" or not isinstance(server, str) or server not in SURGEON_MCP_SERVERS:
+        return None
+    result = item.get("result")
+    result = result if isinstance(result, dict) else {}
+    structured = result.get("structuredContent")
+    structured = structured if isinstance(structured, dict) else {}
+    if structured.get("ok") is False or result.get("isError") is True:
+        error = structured.get("error_type") or structured.get("error-type")
+        error = error if isinstance(error, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}", error) else None
+        return "refused", error
+    if structured.get("ok") is True or result.get("isError") is False:
+        return "ok", None
+    return "unknown", None
+
+
 def analyze_codex_file(path: Path, since: datetime, until: datetime) -> dict | None:
     session = empty_session("codex", path)
     pending = {}
@@ -926,6 +947,16 @@ def analyze_codex_file(path: Path, since: datetime, until: datetime) -> dict | N
         record_time(session, timestamp)
         if event.get("type") == "event_msg":
             event_payload = event.get("payload") or {}
+            if event_payload.get("type") == "item_completed":
+                item = event_payload.get("item")
+                outcome = codex_mcp_result_outcome(item) if isinstance(item, dict) else None
+                if outcome:
+                    kind, error = outcome
+                    session["clj_surgeon_typed_mcp_outcomes"][kind] += 1
+                    if kind == "refused":
+                        session["clj_surgeon_refusal_actions"] += 1
+                        if error:
+                            session["clj_surgeon_refusal_types"][error] += 1
             if event_payload.get("type") == "task_started":
                 current_turn = {
                     "_turn_id": str(event_payload.get("turn_id") or ""),
@@ -1030,14 +1061,8 @@ def analyze_codex_file(path: Path, since: datetime, until: datetime) -> dict | N
                         call["turn"]["clj_surgeon_action_wall_ms"].append(wall_ms)
                     session["clj_surgeon_result_actions"] += 1
                     session["clj_surgeon_output_chars"] += len(output)
-                    refusal = bool(re.search(r":error(?:-type)?\b|\"error-type\"", output))
-                    if refusal:
-                        session["clj_surgeon_refusal_actions"] += 1
-                        refusal_types = re.findall(r":error-type\s+(:[\w!?-]+)|\"error-type\"\s*:\s*\"?([:\w!?-]+)", output)
-                        for edn_type, json_type in refusal_types:
-                            session["clj_surgeon_refusal_types"][edn_type or json_type] += 1
-                    if not refusal and re.search(r"Script failed|Traceback|Exception|(?:exit_code|exit code)[^0-9]*[1-9]", output, re.IGNORECASE):
-                        session["clj_surgeon_execution_error_actions"] += 1
+                    # Output may contain arbitrary source or prose. Without a completed
+                    # typed MCP result its outcome is unknown, not success or refusal.
                 if call["native_apply_patch"]:
                     session["native_apply_patch_action_wall_ms"].append(wall_ms)
     if current_turn:
@@ -1164,6 +1189,7 @@ def provider_summary(provider: str, sessions: list[dict]) -> dict:
     route_action_kinds = Counter()
     cclsp_methods = Counter()
     refusal_types = Counter()
+    typed_mcp_outcomes = Counter()
     clock_item_wall_by_kind = Counter()
     post_surgeon_boundary_wall = []
     post_surgeon_reasoning_wall = []
@@ -1177,6 +1203,7 @@ def provider_summary(provider: str, sessions: list[dict]) -> dict:
         route_features.update(session["route_features"])
         cclsp_methods.update(session["cclsp_methods"])
         refusal_types.update(session["clj_surgeon_refusal_types"])
+        typed_mcp_outcomes.update(session.get("clj_surgeon_typed_mcp_outcomes", {}))
         surgeon_wall.extend(session["clj_surgeon_action_wall_samples_ms"])
         native_patch_wall.extend(session["native_apply_patch_action_wall_samples_ms"])
         for phase in session["route_phases"]:
@@ -1203,6 +1230,8 @@ def provider_summary(provider: str, sessions: list[dict]) -> dict:
         "clj_surgeon_result_actions": sum(s["clj_surgeon_result_actions"] for s in relevant),
         "clj_surgeon_refusal_actions": sum(s["clj_surgeon_refusal_actions"] for s in relevant),
         "clj_surgeon_refusal_types": dict(sorted(refusal_types.items())),
+        "clj_surgeon_typed_mcp_outcomes": dict(sorted(typed_mcp_outcomes.items())),
+        "clj_surgeon_refusal_evidence": "typed-mcp-items-only" if typed_mcp_outcomes else "unknown",
         "clj_surgeon_execution_error_actions": sum(s["clj_surgeon_execution_error_actions"] for s in relevant),
         "clj_surgeon_output_chars": sum(s["clj_surgeon_output_chars"] for s in relevant),
         "clj_surgeon_action_wall": distribution(surgeon_wall),
@@ -1638,7 +1667,67 @@ def self_test_registered_surgeon_alias() -> None:
         assert route_kinds('await tools.mcp__unrelated__alias_migration({});', "exec") == []
 
 
+def self_test_edit_clojure_route() -> None:
+    """2026-09-06 field: completed edits vanished from exec route phases."""
+    assert route_kinds('await tools.mcp__clj_surgeon__edit_clojure({});', 'exec') == ['surgeon-apply']
+    assert route_kinds('const text = "tools.mcp__clj_surgeon__edit_clojure({})";', 'exec') == []
+    assert route_kinds('await tools.mcp__unrelated__edit_clojure({});', 'exec') == []
+
+
+def self_test_codex_typed_refusals() -> None:
+    """2026-09-06: source error literals are data; underscore typed errors are authority."""
+    since = parse_time('2026-09-06T07:52:00Z')
+    until = parse_time('2026-09-06T08:45:00Z')
+    cases = [
+        ('source', 'inspect_clojure', {'structuredContent': {'ok': True}, 'isError': False},
+         ':error-type :typist-route-refused :error-type :typist-route-refused', 'ok', None),
+        ('refused', 'edit_clojure', {'structuredContent': {'ok': False, 'error_type': 'invalid-intent-form'}, 'isError': True},
+         '{"error_type":"invalid-intent-form"}', 'refused', 'invalid-intent-form'),
+        ('legacy-key', 'edit_clojure', {'structuredContent': {'ok': False, 'error-type': 'match-count-mismatch'}},
+         'PRIVATE_RESULT', 'refused', 'match-count-mismatch'),
+        ('text-only', 'inspect_clojure', None, ':error-type :PRIVATE_SOURCE', None, None),
+        ('unknown-item', 'inspect_clojure', {'content': [{'type': 'text', 'text': ':error-type :PRIVATE_SOURCE'}]},
+         'PRIVATE_RESULT', 'unknown', None),
+        ('unrelated', 'inspect_clojure', {'structuredContent': {'ok': False, 'error_type': 'PRIVATE_ERROR'}},
+         'PRIVATE_RESULT', None, None),
+    ]
+    # Typed-field privacy and absence stay closed; never search nested content.
+    for error in ['PRIVATE / SOURCE', 'x' * 121, ['private'], {'private': True}, 'line\nbreak']:
+        assert codex_mcp_result_outcome({'type': 'McpToolCall', 'server': 'clj-surgeon',
+            'result': {'structuredContent': {'ok': False, 'error_type': error}}}) == ('refused', None)
+    assert codex_mcp_result_outcome({'type': 'McpToolCall', 'server': ['clj-surgeon']}) is None
+    assert codex_mcp_result_outcome({'type': 'McpToolCall', 'server': 'not-clj-surgeon',
+        'result': {'isError': True}}) is None
+    assert codex_mcp_result_outcome({'type': 'McpToolCall', 'server': 'clj-surgeon',
+        'result': {'structuredContent': {'ok': 0}, 'isError': 'false'}}) == ('unknown', None)
+    with tempfile.TemporaryDirectory(prefix='study-typed-result-') as tmp:
+        for label, tool, result, output, outcome, error in cases:
+            path = Path(tmp) / ('rollout-' + label + '.jsonl')
+            server = 'unrelated' if label == 'unrelated' else 'clj_surgeon'
+            rows = [
+                {'timestamp': '2026-09-06T08:18:00Z', 'type': 'response_item', 'payload': {
+                    'type': 'custom_tool_call', 'name': 'exec', 'call_id': label,
+                    'input': 'text(await tools.mcp__' + server + '__' + tool + '({}));'}},
+                {'timestamp': '2026-09-06T08:18:01Z', 'type': 'response_item', 'payload': {
+                    'type': 'custom_tool_call_output', 'call_id': label, 'output': output}},
+            ]
+            # Completed metadata may follow custom output; no positional/pending association.
+            if result is not None:
+                rows.append({'timestamp': '2026-09-06T08:18:01Z', 'type': 'event_msg', 'payload': {
+                    'type': 'item_completed', 'item': {'type': 'McpToolCall', 'id': label,
+                        'server': server, 'tool': tool, 'result': result}}})
+            write_fixture(path, rows)
+            session = analyze_codex_file(path, since, until)
+            assert session['clj_surgeon_refusal_actions'] == int(outcome == 'refused'), label
+            assert session['clj_surgeon_refusal_types'] == ({error: 1} if error else {}), label
+            assert session['clj_surgeon_typed_mcp_outcomes'] == ({outcome: 1} if outcome else {}), label
+            assert session['clj_surgeon_refusal_evidence'] == ('typed-mcp-items-only' if outcome else 'unknown'), label
+            assert 'PRIVATE_' not in json.dumps(session), label
+
+
 def self_test() -> int:
+    self_test_edit_clojure_route()
+    self_test_codex_typed_refusals()
     self_test_events_ledger()
     self_test_registered_surgeon_alias()
     assert [
