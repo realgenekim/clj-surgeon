@@ -3305,3 +3305,5 @@ My objections to the opening six: verification is not established as the dominan
 ## 23:41Z — refusal-text third merge pushed → 2e6109cc; Sol fence r8 (HEAD-bound; r7 RESULT-003 probe + replay-equality witness executed) and battery receipt chain 14 launched in parallel on it; land on LAND YES + receipt (Astra GO ten-8b).
 
 ## 23:53Z — usage watch: tools "admit_clojure_patch": 9 "apply_clojure_changes": 73 "inspect_clojure": 19  (collector figures verbatim; collector window: "since": "2026-09-06T04:44:02Z" → "until": "2026-09-06T23:48:34.542133Z"; === start 23:48Z load 6.66 ; === rc 0 end 23:53Z)
+
+## 23:55Z — Sol fence r8 on refusal-text merged tip 2e6109cc: LAND YES by execution (217/2,702 + 17/188; r7 RESULT-003 probe byte-identical through the real finalizer; 10-case renderer matrix + 273-case adversarial sweep: 272 exact inline round-trips, one safe pointer, zero corruption; all nine public tools reach canonicalize-receipt-text exactly once). Battery receipt 9f75e0ac ready; LANDING now (Astra GO ten-8b). Gene: "Upon conclusion, spin everything down. And issue Gene report." Verdict copy docs/observations/2026-09-06-sol-fence-refusal-text-r8.md.
