@@ -97,28 +97,60 @@
        (= "symbol_migration" (nth path 0 nil))
        (= "files" (nth path 1 nil))))
 
-(defn- first-complete-migration-row
-  "The caller's own first well-formed [owner from matches] row, when one exists."
+;; An example is a PROMISE about the accepted shape. Sol fence r2 (2026-09-06)
+;; found the first cut breaking that promise two ways: with
+;; `symbol_migration.files` nil or empty it invented `src/example.clj`,
+;; `owner-fn` and `old.ns/name` — none of which the caller had written — and it
+;; echoed three-element rows that were themselves invalid (blank owner, a
+;; non-symbol `from`, `matches` of 0) as the shape to copy. Both teach the
+;; caller something untrue. So: an example is built ONLY from caller values
+;; that would themselves pass admission, and when no such value exists the
+;; schematic form is used and LABELLED, so nothing invented can pass itself off
+;; as caller-derived.
+
+(defn- valid-example-file
+  "The caller's own file string, only when it would survive admission."
+  [value]
+  (when (and (string? value)
+             (not (str/blank? value))
+             (not-any? #(Character/isISOControl ^char %) value))
+    value))
+
+(defn- valid-example-row
+  "The caller's own [owner from matches] row, only when every cell is valid.
+
+  Deliberately the same predicates admission itself applies, so an example can
+  never show a row the very next call would refuse."
+  [row]
+  (when (and (vector? row) (= 3 (count row)))
+    (let [[owner from matches] row
+          from-parts (when (string? from) (str/split from #"/" -1))]
+      (when (and (valid-example-file owner)
+                 (#{1 2} (count from-parts))
+                 (every? simple-symbol-token? from-parts)
+                 (integer? matches)
+                 (pos? matches))
+        [owner from matches]))))
+
+(defn- first-valid-migration-row
+  "The caller's own first fully valid [owner from matches] row, if any."
   [files]
   (when (vector? files)
     (some (fn [entry]
             (when (and (vector? entry) (= 2 (count entry)))
               (let [rows (second entry)]
                 (when (vector? rows)
-                  (some (fn [row]
-                          (when (and (vector? row) (= 3 (count row))
-                                     (every? some? row))
-                            row))
-                        rows)))))
+                  (some valid-example-row rows)))))
           files)))
 
 (defn- offending-migration-file
-  "The file name the caller wrote at the refused entry, else any file it declared."
+  "The valid file name the caller wrote at the refused entry, else any valid
+   file name it declared. Never a value the caller did not supply."
   [files path]
   (let [entry-of (fn [entry]
                    (cond
-                     (string? entry) entry
-                     (and (vector? entry) (string? (first entry))) (first entry)))
+                     (string? entry) (valid-example-file entry)
+                     (vector? entry) (valid-example-file (first entry))))
         index (nth path 2 nil)
         entry (when (and (integer? index) (vector? files))
                 (nth files index nil))]
@@ -173,21 +205,23 @@
 (defn- expected-shape-example
   "One filled `symbol_migration.files` entry, derived from the caller's own request.
 
-  Bounded and total: for every refusal that names a `symbol_migration.files`
-  entry this returns exactly one example of at most
-  `expected-shape-example-ceiling` characters. An oversized caller path is
-  shortened from the middle with a visible marker rather than dropped; only when
-  even that does not fit does it fall back to the fixed schematic example. The
-  field is never omitted for an applicable refusal — a caller who cannot see the
-  accepted shape retries the wrong shape, which is the defect this exists for."
+  Returns `{:example s :schematic? bool}`, never nil for an applicable refusal —
+  a caller who cannot see the accepted shape retries the wrong shape, which is
+  the defect this exists for. Bounded and total: at most
+  `expected-shape-example-ceiling` characters, with an oversized caller path
+  shortened from the middle under a visible marker rather than dropped.
+  `:schematic? true` means nothing the caller supplied was usable and the fixed
+  placeholder form stands in; the renderer labels that case so an invented value
+  can never read as one the caller wrote."
   [request path]
   (when (migration-files-path? path)
     (let [files (get-in request ["symbol_migration" "files"])
-          file (or (offending-migration-file files path) "src/example.clj")
-          row (or (first-complete-migration-row files)
-                  ["owner-fn" "old.ns/name" 1])]
-      (or (fitted-shape-example file row)
-          schematic-shape-example))))
+          file (offending-migration-file files path)
+          row (first-valid-migration-row files)
+          derived (when (and file row) (fitted-shape-example file row))]
+      (if derived
+        {:example derived :schematic? false}
+        {:example schematic-shape-example :schematic? true}))))
 
 (defn- request-files [request]
   (let [literal (mapcat #(if-let [file (get % "file")]
@@ -434,7 +468,9 @@
                     error-type
                     (or (:failed-stage data) :relation-admission)
                     (.getMessage error) path)
-            example (assoc :expected-shape-example example)))))))
+            example (assoc :expected-shape-example (:example example)
+                           :expected-shape-example-schematic
+                           (:schematic? example))))))))
 
 (defn validate-path-resolution
   "Prove that one existing resolver result gives each raw relation path one canonical identity."

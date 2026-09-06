@@ -2270,3 +2270,63 @@
         (is (not (contains? result :expect_matched))))
       (finally
         (delete-tree! workspace)))))
+
+;; ---------------------------------------------------------------------------
+;; text ⊇ structured, for EVERY public verb.
+;;
+;; The 2026-09-03 ratchet said the visible text block must be a superset of the
+;; structured receipt, because the text is the only part a model reads. It was
+;; enforced one verb at a time, and Sol fence r2 (2026-09-06) showed what that
+;; costs: `inspect_clojure` published
+;;
+;;     :error "inspect_clojure server is not initialized"
+;;
+;; and showed the caller only `refused · server-not-initialized`. Eight of the
+;; nine public verbs carried their sentence; one did not, and nothing could
+;; tell us which. This witness asks every verb the catalog advertises, so a
+;; tenth verb added tomorrow is asked the same question on its first run.
+
+(defn- refuse-through-the-real-entrance!
+  "Force one refusal from a public verb through its own tool-fn, with no
+   workspace configured — the same uninitialized path a caller hits."
+  [tool]
+  (mcp-tool/init! nil)
+  (let [result (promise)]
+    ((:tool-fn tool) nil {}
+     (fn [content error? structured]
+       (deliver result {:content content
+                        :error? error?
+                        :structured structured})))
+    (deref result 30000 ::timed-out)))
+
+(deftest every-public-verb-shows-the-structured-error-sentence-it-publishes
+  ;; @spec MCP-OP-EDIT-037
+  (let [tools (mcp-tool/tools-for-profile :full)]
+    (testing "the catalog is enumerated, not sampled"
+      (is (<= 9 (count tools)))
+      (is (every? :tool-fn tools))
+      (is (= (count tools) (count (distinct (map :name tools))))))
+    (try
+      (doseq [tool tools]
+        (testing (:name tool)
+          (let [outcome (refuse-through-the-real-entrance! tool)]
+            (is (not= ::timed-out outcome))
+            (when (map? outcome)
+              (let [{:keys [content error? structured]} outcome
+                    text (if (string? content) content (pr-str content))
+                    sentence (:error structured)]
+                (is error? "an uninitialized or empty request must refuse")
+                (is (false? (:ok structured)))
+                (is (string? sentence)
+                    (str (:name tool)
+                         " published no structured error sentence: "
+                         (pr-str structured)))
+                (when (string? sentence)
+                  (is (str/includes? text sentence)
+                      (str (:name tool)
+                           " dropped its structured error sentence from the "
+                           "text block a caller reads.\n  structured: "
+                           (pr-str sentence)
+                           "\n  text: " (pr-str text)))))))))
+      (finally
+        (mcp-tool/init! nil)))))

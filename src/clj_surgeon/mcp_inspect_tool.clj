@@ -993,6 +993,15 @@
                      "  refused · %s · %s\n")
                 (if (keyword? reason) (name reason) reason)
                 (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
+        ;; @spec MCP-OP-EDIT-037
+        ;; @spec MCP-OP-EDIT-038
+        ;; Sol fence r2 (2026-09-06) found this verb alone dropped its
+        ;; structured `error`: an uninitialized inspect_clojure published
+        ;; `error "inspect_clojure server is not initialized"` and showed the
+        ;; caller only the error type. Text must be a superset of structured
+        ;; here for the same reason it must be everywhere else.
+        (when-let [sentence (mcp-operation/encode-caller-text (:error result))]
+          (format "  %s\n" sentence))
         (when diagnostic?
           (str
             (format "  request %s · %s\n"

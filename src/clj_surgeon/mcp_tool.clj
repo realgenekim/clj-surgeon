@@ -1048,27 +1048,41 @@
           ;; shape that was refused; the model reads only this text block, so
           ;; text must be a superset of structured. Generic: any refusal whose
           ;; receipt has an error sentence renders it, not one error class.
+          ;; @spec MCP-OP-EDIT-038
+          ;; The sentence is caller-influenced, so it is encoded to one bounded
+          ;; line before it enters the receipt; see mcp-operation.
           error-sentence
           (let [sentence (or (:error result) (:error-message result))]
-            (when (and (string? sentence)
-                       (not (str/blank? sentence))
-                       ;; the placeholder normalize-refusal fills when the
-                       ;; refusal carried no sentence of its own
-                       (not= sentence (str operation " refused")))
-              sentence))
+            (when-not (= sentence (str operation " refused"))
+              ;; the placeholder normalize-refusal fills when the refusal
+              ;; carried no sentence of its own
+              (mcp-operation/encode-caller-text sentence)))
           error-line (when error-sentence (str "  " error-sentence "\n"))
           expected-shape (or (:expected_shape_example result)
                              (:expected-shape-example result))
+          expected-shape-schematic?
+          (boolean (or (:expected_shape_example_schematic result)
+                       (:expected-shape-example-schematic result)))
           expected-shape-line
-          (when (and (string? expected-shape) (not (str/blank? expected-shape)))
-            (str "  expected: " expected-shape "\n"))]
+          (when-let [encoded (mcp-operation/encode-caller-text expected-shape)]
+            (str (if expected-shape-schematic?
+                   "  expected (schematic): "
+                   "  expected: ")
+                 encoded
+                 "\n"))]
       (format (str operation "\n"
                    "  refused · %s%s · %s\n"
                    "%s%s%s%s\n"
                    "%s\n"
                    "→ %s")
               reason
-              (if path (str " at " (pr-str path)) "")
+              ;; @spec MCP-OP-EDIT-038
+              ;; pr-str keeps trunk's escaping of the caller's own value; the
+              ;; encoder then bounds it and strips receipt glyphs.
+              (if path
+                (str " at "
+                     (or (mcp-operation/encode-caller-text (pr-str path)) ""))
+                "")
               (mcp-operation/format-elapsed-ms (:elapsed_ms result))
               (or error-line "")
               (or expected-shape-line "")
