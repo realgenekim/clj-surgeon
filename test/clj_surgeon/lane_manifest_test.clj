@@ -412,7 +412,7 @@
     clj-surgeon.mission-events-test 7 ; Public completion events and isolated logging failure.
     clj-surgeon.mission-phase-events-test 7 ; Actual phase receipts, identity and isolated logging failure.
     clj-surgeon.mission-provider-fallback-events-test 8 ; Actual dispatched fallback, thread context and isolated logging.
-    clj-surgeon.mission-display-test 11 ; Add historical nested refusal and incompatible-example witnesses.
+    clj-surgeon.mission-display-test 14 ; Add historical nested refusal and incompatible-example witnesses.
     clj-surgeon.mission-fallback-test 8 ; Explicit report, actual event write and unchanged proof.
     clj-surgeon.mission-git-identity-test 3 ; Explicit seat author/committer survive subprocess sanitization.
     clj-surgeon.mission-git-submodule-test 2 ; Git config cannot hide staged gitlinks from scope guard.
@@ -426,7 +426,7 @@
     clj-surgeon.mission-usage-test 7 ; Observed legacy/attempt usage and unknowns.
     clj-surgeon.mission-typist-executor-admission-test 2 ; Unsupported adapter refused before readiness.
     clj-surgeon.mission-usage-executor-test 2 ; Saved success/refusal usage snapshots.
-    clj-surgeon.mission-run-test 8 ; One-process saved plan, refusal and CLI boundaries.
+    clj-surgeon.mission-run-test 10 ; One-process saved plan, refusal and CLI boundaries.
     clj-surgeon.mission-test 27 ; Adopt existing ledger orphan plus owner-forms routing and recovery witnesses.
     clj-surgeon.mission-typist-test 6 ; Pure routing/dossier and frozen generation policy boundaries.
     clj-surgeon.mission-candidate-test 5 ; Frozen span lowering boundaries.
@@ -503,12 +503,12 @@
                (pr-str (sort (remove (some-fn round-one-jvm-namespaces
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
-      ;; 921 original + 423 adopted = 1344: retain Astra identity/receipt witnesses and add trunk
+      ;; 921 original + 428 adopted = 1349: retain Astra identity/receipt witnesses and add trunk
       ;; helper request-shape refusals (48 -> 51); closed telemetry remains 17, not trunk
       ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
-      (is (= 423 adopted) (str "adopted tests: " adopted)))
+      (is (= 428 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1344 total) (str "manifest declares " total " tests"))
+      (is (= 1349 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
