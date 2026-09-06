@@ -163,6 +163,9 @@
 (defn compile-formatted!
   "Validate before invoking a formatter; then validate its owned-fragment output."
   [authority replacements]
+  ;; There is no route option that repositions a comment. A comment that comes
+  ;; back missing or against a different expression is a typed refusal
+  ;; (:forms-comment-lost / :forms-comment-moved), never a machine's guess.
   (let [initial (forms/compile-forms (:basis authority) replacements)]
     (if-not (:ok initial)
       initial

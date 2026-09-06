@@ -9,7 +9,9 @@
   This prototype permits plain def/defn/defn- lists, with arbitrary legitimate
   string contents. Anonymous functions, sets and regex literals are framed without evaluation.
   Other dispatch macros and character literals outside strings remain unsupported;
-  comments/metadata refuse as protected syntax.
+  metadata refuses as protected syntax. Comments inside a form are carried to
+  mission-forms, which refuses `:forms-comment-lost` rather than dropping one
+  silently; a top-level comment belongs to no owner span and still refuses.
   Nothing unescapes JSON, strips fences, or repairs a refused response.
   Fixed preparse limits: 262144 UTF8 bytes, 2048 opening delimiters, depth 64,
   and at most the existing compiler's 128 changes. These are admission limits,
@@ -55,7 +57,17 @@
             (refuse! :plain-unsupported-reader-syntax))
 
           (= c \\) (refuse! :plain-unsupported-reader-syntax)
-          (contains? #{\; \^} c) (refuse! :forms-protected-syntax)
+          ;; A comment INSIDE a form belongs to that owner's span and is carried
+          ;; through to mission-forms verbatim. A comment at top level belongs to
+          ;; no span, so accepting it would drop it silently -- still refused.
+          (= c \;)
+          (do
+            (when (empty? stack) (refuse! :forms-protected-syntax))
+            (let [nl (.indexOf ^String response (int \newline) (int i))]
+              (recur (if (neg? nl) (count response) nl)
+                     stack false false start opens spans)))
+
+          (= c \^) (refuse! :forms-protected-syntax)
 
           opening?
           (do
