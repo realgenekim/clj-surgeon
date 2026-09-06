@@ -438,3 +438,102 @@
   (let [r (routing/confine-targets [codex-global "/var/tmp/forge/x.md"] false)]
     (is (false? (:ok r)))
     (is (= ["/var/tmp/forge/x.md"] (mapv :path (:refused r))))))
+
+(deftest an-unparseable-oversized-version-refuses-and-never-compares-nils
+  ;; Sol fence r2, gap 1: `parse-long` returns nil for a version too large for a
+  ;; Long, so TWO DIFFERENT oversized versions compared equal (nil = nil), the
+  ;; pair read as a matching stale pair, and the installer REWROTE the file and
+  ;; lost the version. A version the installer cannot represent is malformed.
+  (doseq [[label source]
+          [["two DIFFERENT oversized versions must not compare equal as nil"
+            (str "head\n"
+                 "<!-- BEGIN CLJ-SURGEON ROUTING v:999999999999999999999999999998 -->\n"
+                 "BODY\n"
+                 "<!-- END CLJ-SURGEON ROUTING v:999999999999999999999999999999 -->\n"
+                 "tail\n")]
+           ["a single oversized version on a matching pair"
+            (str "head\n"
+                 "<!-- BEGIN CLJ-SURGEON ROUTING v:99999999999999999999 -->\n"
+                 "BODY\n"
+                 "<!-- END CLJ-SURGEON ROUTING v:99999999999999999999 -->\n"
+                 "tail\n")]
+           ["a version of exactly ten digits is over the accepted ceiling"
+            (str "head\n<!-- BEGIN CLJ-SURGEON ROUTING v:1000000000 -->\nBODY\n"
+                 "<!-- END CLJ-SURGEON ROUTING v:1000000000 -->\ntail\n")]
+           ["version 0 is not positive"
+            (str "head\n<!-- BEGIN CLJ-SURGEON ROUTING v:0 -->\nBODY\n"
+                 "<!-- END CLJ-SURGEON ROUTING v:0 -->\ntail\n")]
+           ["version 01 has a leading zero"
+            (str "head\n<!-- BEGIN CLJ-SURGEON ROUTING v:01 -->\nBODY\n"
+                 "<!-- END CLJ-SURGEON ROUTING v:01 -->\ntail\n")]]]
+    (testing label
+      (let [result (routing/upsert-routing-block source canonical-block)]
+        (is (malformed-refusal? result)
+            (str label " -- expected :invalid-managed-routing, got "
+                 (pr-str (dissoc result :source))))
+        (testing "it is never reported stale"
+          (is (not= :stale (:previous-state result)))
+          (is (nil? (:stale-version result))))
+        (testing "the file's bytes are untouched"
+          (is (= source (:source result))))))))
+
+(deftest trailing-bytes-after-the-marker-arrow-refuse
+  ;; Sol fence r2, gap 2: `.lookingAt` accepted anything after `-->`, so a
+  ;; marker line that is NOT exactly the managed marker still bounded a managed
+  ;; region and the installer rewrote it. The marker line must match EXACTLY.
+  (doseq [[label source]
+          [["a trailing word"
+            (str "head\n" routing/managed-begin "TRAILING-BYTES\nBODY\n"
+                 routing/managed-end "\ntail\n")]
+           ["a trailing space"
+            (str "head\n" routing/managed-begin " \nBODY\n"
+                 routing/managed-end "\ntail\n")]
+           ["a trailing x on the END marker"
+            (str "head\n" routing/managed-begin "\nBODY\n"
+                 routing/managed-end "x\ntail\n")]
+           ["a trailing carriage return"
+            (str "head\n" routing/managed-begin "\r\nBODY\n"
+                 routing/managed-end "\r\ntail\n")]]]
+    (testing label
+      (let [result (routing/upsert-routing-block source canonical-block)]
+        (is (malformed-refusal? result)
+            (str label " -- expected :invalid-managed-routing, got "
+                 (pr-str (dissoc result :source))))
+        (testing "the file's bytes are untouched"
+          (is (= source (:source result))))
+        (testing "it is never reported absent, current or replaced"
+          (is (nil? (:previous-state result))))))))
+
+(deftest install-refuses-an-oversized-version-and-writes-nothing
+  (let [dir (fs/create-temp-dir {:prefix "clj-surgeon-routing-oversized"})
+        block-file (str (fs/path dir "block.md"))
+        target (str (fs/path dir "target.md"))
+        original (str "keep me\n"
+                      "<!-- BEGIN CLJ-SURGEON ROUTING v:999999999999999999999999999998 -->\n"
+                      "OLD-BODY\n"
+                      "<!-- END CLJ-SURGEON ROUTING v:999999999999999999999999999999 -->\n")]
+    (try
+      (spit block-file canonical-block)
+      (spit target original)
+      (let [result (routing/install-routing! block-file [target])]
+        (is (false? (:ok result)))
+        (is (= :invalid-managed-routing (:error-type result)))
+        (testing "the target is byte-identical"
+          (is (= original (slurp target)))))
+      (finally (fs/delete-tree dir)))))
+
+(deftest install-refuses-trailing-marker-bytes-and-writes-nothing
+  (let [dir (fs/create-temp-dir {:prefix "clj-surgeon-routing-trailing"})
+        block-file (str (fs/path dir "block.md"))
+        target (str (fs/path dir "target.md"))
+        original (str "keep me\n" routing/managed-begin "TRAILING-BYTES\n"
+                      "OLD-BODY\n" routing/managed-end "\n")]
+    (try
+      (spit block-file canonical-block)
+      (spit target original)
+      (let [result (routing/install-routing! block-file [target])]
+        (is (false? (:ok result)))
+        (is (= :invalid-managed-routing (:error-type result)))
+        (testing "the target is byte-identical"
+          (is (= original (slurp target)))))
+      (finally (fs/delete-tree dir)))))

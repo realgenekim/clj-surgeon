@@ -20,11 +20,20 @@
 (def ^:private begin-prefix "<!-- BEGIN CLJ-SURGEON ROUTING")
 (def ^:private end-prefix "<!-- END CLJ-SURGEON ROUTING")
 
-;; A marker is WELL FORMED only if the prefix is followed by exactly
-;; " v:<positive integer> -->". `v:x`, `v:`, `v:2a`, `v:0` and a missing `v:`
-;; are all malformed -- and malformed is a REFUSAL, never an absence.
-(def ^:private well-formed-begin #"<!-- BEGIN CLJ-SURGEON ROUTING v:([1-9]\d*) -->")
-(def ^:private well-formed-end #"<!-- END CLJ-SURGEON ROUTING v:([1-9]\d*) -->")
+;; A marker is WELL FORMED only if the marker line is EXACTLY the prefix
+;; followed by " v:<positive integer> -->" and nothing else -- no trailing
+;; word, no trailing space, no carriage return. `v:x`, `v:`, `v:2a`, `v:0`,
+;; `v:01`, a missing `v:`, and any version too large to represent are all
+;; malformed -- and malformed is a REFUSAL, never an absence.
+;;
+;; The digit ceiling is load bearing. `parse-long` returns nil for a version
+;; wider than a Long, and TWO DIFFERENT oversized versions then compared equal
+;; as nil = nil: the pair read as a matching stale pair, the installer rewrote
+;; the file, and the version was lost (Sol fence r2, gap 1). At most nine
+;; digits is representable by construction, so no version that reaches the
+;; comparison is ever nil.
+(def ^:private well-formed-begin #"<!-- BEGIN CLJ-SURGEON ROUTING v:([1-9][0-9]{0,8}) -->")
+(def ^:private well-formed-end #"<!-- END CLJ-SURGEON ROUTING v:([1-9][0-9]{0,8}) -->")
 
 (defn- line-bounds
   "[start end) of the line containing `idx`."
@@ -52,10 +61,16 @@
         (let [[line-start line-end] (line-bounds source idx)
               matcher (doto (re-matcher pattern source)
                         (.region idx line-end))
-              hit (if (.lookingAt matcher)
+              ;; `.matches`, not `.lookingAt`: the marker must consume the
+              ;; WHOLE rest of the line. `.lookingAt` accepted trailing bytes
+              ;; after `-->`, so a line that is not the managed marker still
+              ;; bounded a managed region (Sol fence r2, gap 2).
+              version (when (.matches matcher)
+                        (parse-long (.group matcher 1)))
+              hit (if version
                     {:start idx
                      :end (.end matcher)
-                     :version (parse-long (.group matcher 1))}
+                     :version version}
                     {:start idx
                      :malformed true
                      :line (str/trim (subs source line-start line-end))})]
