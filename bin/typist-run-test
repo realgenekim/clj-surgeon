@@ -1,0 +1,221 @@
+#!/usr/bin/env python3
+"""typist-run-test — the OFFLINE fence tests for bin/typist-run (2026-09-06).
+
+Every test here is monkeypatched or pure. NOTHING in this file makes a network
+call, and nothing reads a real key: the provider key files come from a
+--keys-dir under /var/tmp/forge with dummy contents.
+
+  bin/typist-run-test
+
+Covers the three Sol fence findings:
+  (1) key paths are fixed; the only seam is --keys-dir, fenced to /var/tmp/forge
+  (2) the OpenRouter upstream pin and the registry model are UNCONDITIONAL
+  (3) no exception text -- and no key -- reaches a record or a receipt
+"""
+
+import importlib.machinery
+import importlib.util
+import io
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import urllib.error
+import urllib.request
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+RUNNER = os.path.join(HERE, "typist-run")
+FENCE = "/var/tmp/forge"
+
+FAILURES = []
+
+
+def check(name, ok, detail=""):
+    print("%-58s %s%s" % (name, "ok" if ok else "FAIL",
+                          ("  " + detail) if detail else ""))
+    if not ok:
+        FAILURES.append(name)
+
+
+def load_runner():
+    loader = importlib.machinery.SourceFileLoader("typist_run", RUNNER)
+    spec = importlib.util.spec_from_loader("typist_run", loader)
+    m = importlib.util.module_from_spec(spec)
+    loader.exec_module(m)
+    return m
+
+
+def keys_dir():
+    d = os.path.join(FENCE, "typist-real-fx", "keys-test")
+    os.makedirs(d, exist_ok=True)
+    for name, body in (("groq.edn", '{:key "gsk_DUMMY123"}\n'),
+                       ("openrouter.edn", '{:openrouter-api-key "sk-or-DUMMY456"}\n')):
+        p = os.path.join(d, name)
+        with open(p, "w") as fh:
+            fh.write(body)
+        os.chmod(p, 0o600)
+    return d
+
+
+# --------------------------------------------------------------------------
+# (a) the scrubber is a pure function
+
+def test_scrub(m):
+    cases = [
+        ("OpenRouter request failed: gsk_DUMMY123", "OpenRouter request failed: <redacted>"),
+        ("key sk-or-v1_abcDEF-09 rejected", "key <redacted> rejected"),
+        ("Authorization: Bearer sk-live.ABC-123", "Authorization: <redacted>"),
+        ("nothing secret here", "nothing secret here"),
+        ("two gsk_AAA and sk-or-BBB", "two <redacted> and <redacted>"),
+    ]
+    for src, want in cases:
+        check("scrub(%r)" % src[:34], m.scrub(src) == want, repr(m.scrub(src)))
+    check("scrub is pure (same input, same output)",
+          m.scrub("gsk_X1") == m.scrub("gsk_X1") == "<redacted>")
+    check("scrub passes non-strings through",
+          m.scrub(None) is None and m.scrub(7) == 7 and m.scrub(True) is True)
+    check("scrub is total (no key survives a receipt string)",
+          "gsk_DUMMY123" not in m.edn_str("boom gsk_DUMMY123"))
+
+
+def test_classify(m):
+    def cls(e):
+        return m.classify_error(e)
+    h404 = urllib.error.HTTPError("u", 404, "nf", {}, None)
+    h502 = urllib.error.HTTPError("u", 502, "bg", {}, None)
+    check("classify HTTPError 404 -> http-4xx", cls(h404) == ("http-4xx", 404))
+    check("classify HTTPError 502 -> http-5xx", cls(h502) == ("http-5xx", 502))
+    check("classify TimeoutError -> timeout", cls(TimeoutError()) == ("timeout", None))
+    check("classify URLError -> transport",
+          cls(urllib.error.URLError("refused")) == ("transport", None))
+    check("classify ValueError -> parse", cls(ValueError("bad json")) == ("parse", None))
+    check("classify Exception('gsk_DUMMY123') -> transport, no text",
+          cls(Exception("gsk_DUMMY123")) == ("transport", None))
+    check("generic_error carries no exception text",
+          m.generic_error("OpenRouter", "http-5xx", 502)
+          == "OpenRouter request failed (http-5xx, status 502)")
+
+
+# --------------------------------------------------------------------------
+# (b) the routing pin: registry model + provider block, unconditionally
+
+def probe_request(m, provider, upstream="Cerebras"):
+    """Monkeypatch urlopen; return (payload, headers) of the request built."""
+    seen = {}
+
+    def fake_urlopen(req, timeout=None):
+        seen["payload"] = json.loads(req.data.decode())
+        seen["headers"] = dict(req.headers)
+        return io.BytesIO(json.dumps({
+            "provider": upstream,
+            "choices": [{"finish_reason": "stop",
+                         "message": {"content": "```diff\n--- a\n+++ b\n```"}}],
+            "usage": {"completion_tokens": 3}}).encode())
+
+    real = urllib.request.urlopen
+    urllib.request.urlopen = fake_urlopen
+    try:
+        recs = m.arm_f("PROMPT", 1, 0.0, provider=provider, tag="probe",
+                       run_dir="/var/tmp/forge/typist-real-fx")
+    finally:
+        urllib.request.urlopen = real
+    return seen, recs[0]
+
+
+def test_routing(m):
+    # no env, no flag: the environment is emptied of every legacy knob first.
+    for k in ("TYPIST_OPENROUTER_ORDER", "TYPIST_GROQ_KEY_FILE",
+              "TYPIST_OPENROUTER_KEY_FILE"):
+        os.environ.pop(k, None)
+    seen, rec = probe_request(m, "openrouter")
+    print("  openrouter request body: %s" % json.dumps(
+        {k: v for k, v in seen["payload"].items() if k != "messages"},
+        sort_keys=True))
+    check("openrouter pins the upstream order unconditionally",
+          seen["payload"].get("provider")
+          == {"order": ["Cerebras", "Groq"], "allow_fallbacks": False})
+    check("openrouter uses the REGISTRY model",
+          seen["payload"]["model"] == m.PROVIDERS["openrouter"]["model"],
+          seen["payload"]["model"])
+    check("no --model flag is registered",
+          'ap.add_argument("--model"' not in open(RUNNER).read())
+    check("a pinned upstream is accepted", rec["refusal"] is None, str(rec["refusal"]))
+
+    seen2, rec2 = probe_request(m, "openrouter", upstream="DeepInfra")
+    check("an UNPINNED upstream is the typed refusal upstream-mismatch",
+          rec2["refusal"] == "upstream-mismatch" and rec2["text"] is None,
+          str(rec2["refusal"]))
+    check("a missing upstream is refused too",
+          probe_request(m, "openrouter", upstream=None)[1]["refusal"]
+          == "upstream-mismatch")
+
+    seen3, _ = probe_request(m, "groq")
+    check("groq carries NO provider block (it is not a router)",
+          "provider" not in seen3["payload"])
+    check("groq uses the registry model",
+          seen3["payload"]["model"] == m.PROVIDERS["groq"]["model"])
+
+    # even with the retired env var set, nothing changes.
+    os.environ["TYPIST_OPENROUTER_ORDER"] = "DeepInfra"
+    seen4, _ = probe_request(m, "openrouter")
+    os.environ.pop("TYPIST_OPENROUTER_ORDER")
+    check("the retired TYPIST_OPENROUTER_ORDER cannot change the pin",
+          seen4["payload"]["provider"]["order"] == ["Cerebras", "Groq"])
+
+
+# --------------------------------------------------------------------------
+# (c) the key fence
+
+def test_keys(m):
+    src = open(RUNNER).read()
+    check("no TYPIST_*_KEY_FILE read remains",
+          "TYPIST_GROQ_KEY_FILE" not in src and "TYPIST_OPENROUTER_KEY_FILE" not in src)
+    check("groq key path is fixed", m.PROVIDERS["groq"]["key_file"]
+          == "/home/forge/secrets/groq.edn")
+    check("openrouter key path is fixed", m.PROVIDERS["openrouter"]["key_file"]
+          == "/home/forge/secrets/openrouter.edn")
+    d = keys_dir()
+    m.KEYS_DIR = d
+    check("--keys-dir redirects the groq key file",
+          m.key_file_for(m.PROVIDERS["groq"]) == os.path.join(d, "groq.edn"))
+    check("preflight passes on a mode-600 dummy key",
+          m.preflight_key_file(m.PROVIDERS["groq"])[0] is None)
+    os.chmod(os.path.join(d, "groq.edn"), 0o644)
+    check("preflight refuses a key file that is not mode 600",
+          m.preflight_key_file(m.PROVIDERS["groq"])[0] == "key-mode")
+    os.chmod(os.path.join(d, "groq.edn"), 0o600)
+    missing = dict(m.PROVIDERS["groq"], key_file="/home/forge/secrets/nope.edn")
+    check("preflight refuses a missing key file",
+          m.preflight_key_file(missing)[0] == "no-key")
+    m.KEYS_DIR = None
+
+
+def test_keys_dir_fence():
+    """The fence is enforced in main(), so drive it as a subprocess."""
+    for bad in ("/home/forge", "/tmp", FENCE + "/../../etc"):
+        r = subprocess.run([sys.executable, RUNNER, "--arm", "fake",
+                            "--keys-dir", bad],
+                           capture_output=True, text=True, timeout=120)
+        check("--keys-dir %s is refused" % bad,
+              r.returncode == 4 and "outside the test fence" in r.stderr,
+              (r.stderr.strip().splitlines() or [""])[0])
+
+
+def main():
+    m = load_runner()
+    print("== scrubber ==");        test_scrub(m)
+    print("== typed errors ==");    test_classify(m)
+    print("== routing pin ==");     test_routing(m)
+    print("== key fence ==");       test_keys(m)
+    print("== --keys-dir fence =="); test_keys_dir_fence()
+    print("")
+    if FAILURES:
+        print("FAILED %d: %s" % (len(FAILURES), ", ".join(FAILURES)))
+        return 1
+    print("typist-run-test: all checks ok")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -14,8 +14,30 @@ provider returns the same candidate record and every candidate goes through the
 same apply / gate / acceptance judging.
 
   groq        Groq openai/gpt-oss-120b        (reports completion/queue time)
-  openrouter  openai/gpt-oss-120b via OpenRouter (records the routed :upstream)
+  openrouter  openai/gpt-oss-120b via OpenRouter, pinned to Cerebras then Groq
   spark       codex exec -m gpt-5.3-codex-spark, low reasoning; k = k processes
+
+PROVIDER FENCE (2026-09-06, after the Sol fence review). Nothing about a live
+provider call is caller-selectable:
+
+  * KEY PATHS ARE FIXED — /home/forge/secrets/groq.edn and
+    /home/forge/secrets/openrouter.edn. No TYPIST_*_KEY_FILE, no env of any
+    kind: an environment-selected path is an environment-selected key. The one
+    seam is --keys-dir, refused unless it resolves under /var/tmp/forge/, and
+    used only by the offline tests.
+  * THE MODEL AND THE UPSTREAM ARE PINNED IN THE REGISTRY — there is no
+    --model. Every OpenRouter request carries
+    {"provider": {"order": ["Cerebras", "Groq"], "allow_fallbacks": false}}
+    unconditionally, and a response routed anywhere else is the typed refusal
+    `upstream-mismatch`, never a scored candidate.
+  * ERRORS ARE TYPED, NEVER QUOTED — a provider exception can carry the
+    Authorization header, so its text is never copied into a candidate record
+    or a receipt. What is recorded is :error_class (http-4xx | http-5xx |
+    timeout | transport | parse), :http_status, and one generic line. Every
+    string written into an EDN receipt additionally passes through `scrub`.
+  * The bench pre-flight checks that the key file EXISTS and is MODE 600. It
+    never opens it; the key is read only inside the scope that builds one
+    request.
 
   bin/typist-run --bench --providers groq,openrouter,spark \
                  --dossier bin/typist-dossier-onesite.md --rounds 6
@@ -46,16 +68,24 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 
 T0 = time.time()
 
 FX = os.environ.get("TYPIST_FX", "/var/tmp/forge/typist-fx")
 HERE = os.path.dirname(os.path.abspath(__file__))
-GROQ_KEY_FILE = os.environ.get("TYPIST_GROQ_KEY_FILE", "/home/forge/secrets/groq.edn")
+# ---- the secrets fence -------------------------------------------------
+# FIXED paths. Never environment-selected: a caller-controlled path is a
+# caller-controlled key. The only seam is --keys-dir, fenced to /var/tmp/forge.
+GROQ_KEY_FILE = "/home/forge/secrets/groq.edn"
+OPENROUTER_KEY_FILE = "/home/forge/secrets/openrouter.edn"
+TEST_KEYS_FENCE = "/var/tmp/forge"
+KEYS_DIR = None            # set ONLY by --keys-dir, after the fence check
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = "openai/gpt-oss-120b"
 GROQ_UA = "curl/8.5.0 forge-anvil-typist-run"   # urllib's default UA gets 403
@@ -723,11 +753,63 @@ def die(msg, code=1):
     sys.exit(code)
 
 
+# --------------------------------------------------------------------------
+# SECRET SCRUBBER + TYPED ERRORS
+#
+# A provider exception can carry the request -- and the request carries the
+# Authorization header. So no exception text is ever copied into a candidate
+# record or a receipt. `classify_error` types it, `generic_error` writes one
+# provider-neutral line, and `scrub` is the belt-and-braces last pass every
+# string takes on its way into EDN.
+
+SECRET_RE = re.compile(r"gsk_[A-Za-z0-9_-]+"
+                       r"|sk-or-[A-Za-z0-9_-]+"
+                       r"|Bearer\s+[A-Za-z0-9_.\-]+")
+
+
+def scrub(s):
+    """Pure. Replace anything that looks like a provider key or a bearer token
+    with <redacted>. Non-strings pass through untouched."""
+    if not isinstance(s, str):
+        return s
+    return SECRET_RE.sub("<redacted>", s)
+
+
+def classify_error(e):
+    """Type an exception WITHOUT retaining any of its text.
+    Returns (error_class, http_status|None)."""
+    if isinstance(e, urllib.error.HTTPError):
+        c = int(e.code)
+        if 400 <= c < 500:
+            return "http-4xx", c
+        if 500 <= c < 600:
+            return "http-5xx", c
+        return "transport", c
+    if isinstance(e, (TimeoutError, socket.timeout)):
+        return "timeout", None
+    if isinstance(e, urllib.error.URLError):
+        if isinstance(getattr(e, "reason", None), (TimeoutError, socket.timeout)):
+            return "timeout", None
+        return "transport", None
+    if isinstance(e, ValueError):        # json.JSONDecodeError is a ValueError
+        return "parse", None
+    return "transport", None
+
+
+def generic_error(label, klass, status):
+    """The ONLY error string that reaches a record. No exception text."""
+    return "%s request failed (%s%s)" % (
+        label, klass, "" if status is None else ", status %d" % status)
+
+
 def sha256_bytes(b):
     return hashlib.sha256(b).hexdigest()
 
 
 def edn_str(s):
+    # belt and braces: EVERY string that reaches a receipt is scrubbed here,
+    # whatever path it arrived on.
+    s = scrub(s)
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
@@ -1601,7 +1683,7 @@ def arm_n(prompt, k):
                                    capture_output=True, text=True, timeout=900)
             text, err = r.stdout, (r.stderr or "").strip()[:300] if r.returncode else None
         except Exception as e:                                   # noqa: BLE001
-            text, err = "", "codex exec failed: %s" % e
+            text, err = "", generic_error("codex exec", *classify_error(e))
         d = extract_candidate(text)
         if d is None and EDIT_FORM == "diff":
             # it may have edited the tree in place
@@ -1641,9 +1723,13 @@ PROVIDERS = {
         "kind": "openai-chat",
         "url": "https://openrouter.ai/api/v1/chat/completions",
         "model": "openai/gpt-oss-120b",
-        "key_file": os.environ.get("TYPIST_OPENROUTER_KEY_FILE",
-                                   "/home/forge/secrets/openrouter.edn"),
+        "key_file": OPENROUTER_KEY_FILE,
         "key_label": "OpenRouter",
+        # The upstream pin lives HERE and is applied UNCONDITIONALLY. Default
+        # OpenRouter routing chose DigitalOcean/DeepInfra/CoreWeave/SiliconFlow;
+        # more to the point, an unpinned request is not the request this
+        # experiment preregistered.
+        "upstream_order": ["Cerebras", "Groq"],
         "headers": {
             "User-Agent": GROQ_UA,
             # OpenRouter's attribution headers; they identify the caller, not a secret.
@@ -1664,12 +1750,30 @@ PROVIDERS = {
 USAGE_LIMIT_RE = re.compile(r"hit your usage limit", re.I)
 
 
-def provider_key(cfg):
-    """Read the provider's API key. Refuses BEFORE any network call is made.
-    The key is never echoed, logged, or written to a receipt."""
-    path = cfg["key_file"]
+def key_file_for(cfg):
+    """The provider's key file. FIXED by the registry; only --keys-dir (already
+    fenced to /var/tmp/forge) may redirect it, and only for the offline tests."""
+    if KEYS_DIR:
+        return os.path.join(KEYS_DIR, os.path.basename(cfg["key_file"]))
+    return cfg["key_file"]
+
+
+def preflight_key_file(cfg):
+    """EXISTENCE and MODE ONLY -- os.stat, never open(). A pre-flight that
+    reads the file is holding a secret it has no use for.
+    Returns (blocked_reason|None, path)."""
+    path = key_file_for(cfg)
     if not os.path.exists(path):
-        die("typist-run: refusing — no %s key at %s" % (cfg["key_label"], path), 4)
+        return "no-key", path
+    if (os.stat(path).st_mode & 0o777) != 0o600:
+        return "key-mode", path
+    return None, path
+
+
+def provider_key(cfg):
+    """Read the API key AT THE POINT OF THE REQUEST. Never echoed, logged, or
+    written to a receipt, and never held outside its caller's request scope."""
+    path = key_file_for(cfg)
     with open(path) as fh:
         m = re.search(r':(?:openrouter-api-)?key\s+"([^"]+)"', fh.read())
     if not m:
@@ -1677,9 +1781,28 @@ def provider_key(cfg):
     return m.group(1)
 
 
-def call_openai_chat(cfg, model, prompt, k, temperature, tag):
-    """Groq and OpenRouter share the OpenAI chat-completions wire format."""
-    key = provider_key(cfg)   # refuses BEFORE any network call is made
+def build_request(cfg, body, headers):
+    """The one scope a key is live in: read it, put it on the request, drop it."""
+    key = provider_key(cfg)
+    h = dict(headers)
+    h["Authorization"] = "Bearer " + key
+    req = urllib.request.Request(cfg["url"], body, h)
+    del key, h
+    return req
+
+
+def call_openai_chat(cfg, prompt, k, temperature, tag):
+    """Groq and OpenRouter share the OpenAI chat-completions wire format.
+
+    The model is the registry's; there is no override. The key file is checked
+    for existence and mode BEFORE any network call, and its contents are read
+    only inside build_request."""
+    model = cfg["model"]
+    blocked, path = preflight_key_file(cfg)   # BEFORE any network call
+    if blocked:
+        die("typist-run: refusing — %s key at %s %s"
+            % (cfg["key_label"], path,
+               "does not exist" if blocked == "no-key" else "is not mode 600"), 4)
 
     def one(i):
         cand = "%s%d" % (tag, i)
@@ -1690,26 +1813,26 @@ def call_openai_chat(cfg, model, prompt, k, temperature, tag):
                    # are spent BEFORE any output token, so the budget has
                    # to cover reasoning + diff, not the diff alone.
                    "max_tokens": GROQ_MAX_TOKENS}
-        # OpenRouter upstream pin: TYPIST_OPENROUTER_ORDER="Cerebras,Groq" routes
-        # only to those upstreams (no fallback); default routing chose slow ones.
-        order = os.environ.get("TYPIST_OPENROUTER_ORDER")
-        if order and "openrouter" in cfg["url"]:
-            payload["provider"] = {"order": [o.strip() for o in order.split(",") if o.strip()],
-                                   "allow_fallbacks": False}
+        # The upstream pin is UNCONDITIONAL: it comes from the registry, not
+        # from an environment variable a caller could omit.
+        order = cfg.get("upstream_order")
+        if order:
+            payload["provider"] = {"order": list(order), "allow_fallbacks": False}
         body = json.dumps(payload).encode()
-        headers = {"Content-Type": "application/json",
-                   "Authorization": "Bearer " + key}
+        headers = {"Content-Type": "application/json"}
         headers.update(cfg["headers"])
-        req = urllib.request.Request(cfg["url"], body, headers)
+        req = build_request(cfg, body, headers)
         t_call = time.time()
         try:
             d = json.load(urllib.request.urlopen(req, timeout=300))
         except Exception as e:                                   # noqa: BLE001
+            klass, status = classify_error(e)
             return {"cand": cand, "source": model, "text": None,
                     "response_s": time.time() - T0,
                     "call_wall_s": time.time() - t_call,
                     "tokens": None,
-                    "error": "%s request failed: %s" % (cfg["key_label"], e)}
+                    "error_class": klass, "http_status": status,
+                    "error": generic_error(cfg["key_label"], klass, status)}
         call_wall = time.time() - t_call
         u = d.get("usage") or {}
         details = u.get("completion_tokens_details") or {}
@@ -1724,6 +1847,11 @@ def call_openai_chat(cfg, model, prompt, k, temperature, tag):
         refusal = "length" if finish == "length" else None
         if msg.get("refusal"):
             refusal = refusal or "refusal"
+        # UPSTREAM VALIDATION: a pinned provider whose response did not come
+        # from a pinned upstream is a TYPED REFUSAL, never a scored candidate.
+        upstream = d.get("provider")
+        if order and upstream not in order:
+            refusal = refusal or "upstream-mismatch"
         return {"cand": cand, "source": model,
                 "text": None if refusal else extract_candidate(content),
                 "raw_chars": len(content),
@@ -1739,7 +1867,8 @@ def call_openai_chat(cfg, model, prompt, k, temperature, tag):
                 "completion_time_s": u.get("completion_time"),
                 "queue_time": u.get("queue_time"),
                 # which upstream OpenRouter actually routed to (Cerebras/Groq/...).
-                "upstream": d.get("provider"),
+                "upstream": upstream,
+                "error_class": None, "http_status": None,
                 "error": None}
     with cf.ThreadPoolExecutor(max_workers=max(1, k)) as ex:
         return list(ex.map(one, range(k)))
@@ -1770,7 +1899,8 @@ def call_codex_exec(model, prompt, k, tag, reasoning_effort, run_dir):
             full_err = (r.stderr or "").strip()
             err = full_err[-600:] if r.returncode else None
         except Exception as e:                                   # noqa: BLE001
-            text, full_err, err = "", "", "codex exec failed: %s" % e
+            text, full_err = "", ""
+            err = generic_error("codex exec", *classify_error(e))
         call_wall = time.time() - t_call
         blob = text + "\n" + full_err + "\n" + (err or "")
         refusal = "usage-limit" if USAGE_LIMIT_RE.search(blob) else None
@@ -1786,7 +1916,9 @@ def call_codex_exec(model, prompt, k, tag, reasoning_effort, run_dir):
         return {"cand": cand, "source": "codex exec " + model,
                 "text": d,
                 # a refusal must carry its own evidence, verbatim
-                "refusal_evidence": (full_err or text).strip()[-400:] if refusal else None,
+                # a refusal must carry its own evidence -- scrubbed, never raw
+                "refusal_evidence": (scrub((full_err or text).strip()[-400:])
+                                     if refusal else None),
                 "raw_chars": len(text),
                 "reasoning_chars": None,
                 "finish_reason": None,
@@ -1801,18 +1933,17 @@ def call_codex_exec(model, prompt, k, tag, reasoning_effort, run_dir):
         return list(ex.map(one, range(k)))
 
 
-def arm_f(prompt, k, temperature=0.7, provider="groq", model=None,
-          tag="f", run_dir=None):
-    """The fast-typist arm, over whichever provider was named."""
+def arm_f(prompt, k, temperature=0.7, provider="groq", tag="f", run_dir=None):
+    """The fast-typist arm, over whichever provider was named. The MODEL is the
+    registry's -- a provider choice is not a model choice."""
     if provider not in PROVIDERS:
         die("typist-run: refusing — unknown provider %r (known: %s)"
             % (provider, ", ".join(sorted(PROVIDERS))), 7)
     cfg = PROVIDERS[provider]
-    model = model or cfg["model"]
     if cfg["kind"] == "codex-exec":
-        return call_codex_exec(model, prompt, k, tag,
+        return call_codex_exec(cfg["model"], prompt, k, tag,
                                cfg["reasoning_effort"], run_dir or RUN_DIR)
-    return call_openai_chat(cfg, model, prompt, k, temperature, tag)
+    return call_openai_chat(cfg, prompt, k, temperature, tag)
 
 
 # --------------------------------------------------------------------------
@@ -1823,6 +1954,10 @@ REFUSAL_DETAIL = {
     "refusal": "the model returned a refusal message instead of a diff",
     "usage-limit": ("the provider reported a usage limit; apply, gate and "
                     "acceptance were NOT run and nothing was retried"),
+    "upstream-mismatch": ("the response did not come from a pinned upstream; "
+                          "apply, gate and acceptance were NOT run"),
+    "no-key": "no API key on this box; nothing was called",
+    "key-mode": "the key file is not mode 600; nothing was called",
 }
 
 
@@ -1871,10 +2006,13 @@ def judge_candidates(cands, manifest, cmds, run_dir, t_ref=None):
                "reasoning_chars": c.get("reasoning_chars"),
                "raw_chars": c.get("raw_chars"),
                "prompt_tokens": c.get("prompt_tokens"),
-               "refusal_evidence": c.get("refusal_evidence"),
+               "refusal_evidence": scrub(c.get("refusal_evidence")),
                "completion_time_s": c.get("completion_time_s"),
                "queue_time_s": c.get("queue_time"),
-               "error": c.get("error")}
+               # typed, never the exception's text
+               "error_class": c.get("error_class"),
+               "http_status": c.get("http_status"),
+               "error": scrub(c.get("error"))}
         rec.update(ev)
         rec["verified"] = verified
         rec["verified_wall_s"] = round(time.time() - t_ref, 3) if verified else None
@@ -1902,26 +2040,23 @@ def fmt(x, spec="%.2f"):
     return "n/a" if x is None else (spec % x)
 
 
-def bench(prompt, providers, models, rounds, temperature, manifest, cmds):
+def bench(prompt, providers, rounds, temperature, manifest, cmds):
     """Per provider: `rounds` rounds of k=1, interleaved. Prints ONE table."""
     # Pre-flight, before any network call: a provider whose key file is absent
-    # is BLOCKED, not slow. It gets a row of typed refusals and "n/a" times.
-    # (Outside --bench the same condition is a hard exit 4 — a single-provider
-    # run has nothing to compare it against.)
+    # or wrongly permissioned is BLOCKED, not slow. It gets a row of typed
+    # refusals and "n/a" times. (Outside --bench the same condition is a hard
+    # exit 4 — a single-provider run has nothing to compare it against.)
+    # The pre-flight NEVER OPENS THE FILE: existence and mode 600, os.stat only.
     blocked = {}
     for p in providers:
         cfg = PROVIDERS[p]
         if cfg["kind"] != "openai-chat":
             continue
-        path = cfg["key_file"]
-        ok = False
-        if os.path.exists(path):
-            with open(path) as fh:
-                ok = bool(re.search(r':(?:openrouter-api-)?key\s+"([^"]+)"', fh.read()))
-        if not ok:
-            blocked[p] = "no-key"
-            print("bench: %s is BLOCKED — no %s key at %s; it will show refusals, "
-                  "never a time" % (p, cfg["key_label"], path))
+        why, path = preflight_key_file(cfg)
+        if why:
+            blocked[p] = why
+            print("bench: %s is BLOCKED — %s key at %s (%s); it will show "
+                  "refusals, never a time" % (p, cfg["key_label"], path, why))
 
     per = {p: [] for p in providers}
     for r_i in range(rounds):
@@ -1929,9 +2064,9 @@ def bench(prompt, providers, models, rounds, temperature, manifest, cmds):
             if p in blocked:
                 per[p].append({
                     "cand": "%s-r%d-0" % (p, r_i), "round": r_i, "provider": p,
-                    "source": models.get(p) or PROVIDERS[p]["model"],
+                    "source": PROVIDERS[p]["model"],
                     "refusal": blocked[p],
-                    "refusal_detail": "no API key on this box; nothing was called",
+                    "refusal_detail": REFUSAL_DETAIL[blocked[p]],
                     "verified": False, "verified_wall_s": None,
                     "call_wall_s": None, "response_wall_s": None,
                     "tokens": None, "completion_time_s": None, "upstream": None,
@@ -1943,8 +2078,7 @@ def bench(prompt, providers, models, rounds, temperature, manifest, cmds):
             RUN_DIR = run_dir
             t_round = time.time()
             cands = arm_f(prompt, 1, temperature, provider=p,
-                          model=models.get(p), tag="%s-r%d-" % (p, r_i),
-                          run_dir=run_dir)
+                          tag="%s-r%d-" % (p, r_i), run_dir=run_dir)
             recs = judge_candidates(cands, manifest, cmds, run_dir, t_ref=t_round)
             rec = recs[0]
             rec["round"] = r_i
@@ -1959,7 +2093,7 @@ def bench(prompt, providers, models, rounds, temperature, manifest, cmds):
     rows = []
     for p in providers:
         recs = per[p]
-        model = models.get(p) or PROVIDERS[p]["model"]
+        model = PROVIDERS[p]["model"]
         firsts = sorted(round(r["verified_wall_s"], 2)
                         for r in recs if r["verified_wall_s"] is not None)
         walls = [r["call_wall_s"] for r in recs if r["call_wall_s"] is not None]
@@ -2181,7 +2315,8 @@ def arm_nw(session_id, run_dir):
         text, full_err = (r.stdout or ""), (r.stderr or "").strip()
         err = full_err[-600:] if r.returncode else None
     except Exception as e:                                       # noqa: BLE001
-        text, full_err, err = "", "", "codex exec fork failed: %s" % e
+        text, full_err = "", ""
+        err = generic_error("codex exec fork", *classify_error(e))
     call_wall = time.time() - t_spawn
     with open(os.path.join(run_dir, "nw-stdout.txt"), "w") as fh:
         fh.write(text + "\n----- stderr -----\n" + full_err + "\n")
@@ -2200,7 +2335,7 @@ def arm_nw(session_id, run_dir):
         "text": d,
         "edit_channel": how,
         "warm_session": session_id,
-        "refusal_evidence": blob.strip()[-400:] if refusal else None,
+        "refusal_evidence": scrub(blob.strip()[-400:]) if refusal else None,
         "raw_chars": len(text), "reasoning_chars": None,
         "finish_reason": None, "refusal": refusal,
         "response_s": time.time() - t_spawn,
@@ -2224,8 +2359,12 @@ def main():
                          "candidate.diff files of an earlier run. No network.")
     ap.add_argument("--provider", default="groq", choices=sorted(PROVIDERS),
                     help="which fast typist arm F buys (default: groq)")
-    ap.add_argument("--model", default=None,
-                    help="override the provider's default model id")
+    ap.add_argument("--keys-dir", default=None, metavar="DIR",
+                    help="TEST SEAM, offline only: read the provider key files "
+                         "from DIR instead of /home/forge/secrets. REFUSED "
+                         "unless DIR resolves under /var/tmp/forge/. There is "
+                         "no environment variable and no --model: the key path, "
+                         "the model and the upstream order are all fixed.")
     ap.add_argument("--bench", action="store_true",
                     help="compare providers: `rounds` rounds of k=1 per provider, "
                          "interleaved round-robin, one table at the end")
@@ -2264,6 +2403,17 @@ def main():
     a = ap.parse_args()
     if not a.arm and not a.replay and not a.bench:
         ap.error("one of --arm, --replay or --bench is required")
+
+    global KEYS_DIR
+    if a.keys_dir is not None:
+        d = os.path.realpath(a.keys_dir)
+        fence = os.path.realpath(TEST_KEYS_FENCE)
+        if not (d == fence or d.startswith(fence + os.sep)):
+            die("typist-run: refusing — keys-dir outside the test fence "
+                "(%s does not resolve under %s)" % (d, fence), 4)
+        if not os.path.isdir(d):
+            die("typist-run: refusing — keys-dir does not exist: %s" % d, 4)
+        KEYS_DIR = d
 
     bench_providers = []
     if a.bench:
@@ -2307,8 +2457,7 @@ def main():
                  RESIDENT.cp_hash[:16], RESIDENT.dir))
 
     if a.bench:
-        models = {p: a.model for p in bench_providers} if a.model else {}
-        sys.exit(bench(prompt, bench_providers, models, a.rounds,
+        sys.exit(bench(prompt, bench_providers, a.rounds,
                        a.temperature, manifest, cmds))
 
     if a.replay:
@@ -2363,7 +2512,7 @@ def main():
             t_spawn, cands = arm_nw(warm["session"], RUN_DIR)
         else:
             cands = arm_f(prompt, k, a.temperature,
-                          provider=a.provider, model=a.model, run_dir=RUN_DIR)
+                          provider=a.provider, run_dir=RUN_DIR)
 
         # Arm NW's clock starts at the FORK SPAWN, not at process start: the
         # warm-up is a recorded cost of the arm, never a cost of a trial.
@@ -2395,7 +2544,7 @@ def main():
                                     if EDIT_FORM == "whole-file" else None),
             "mission": MISSION, "mutable_file": MUTABLE,
             "provider": (a.provider if a.arm == "F" else None),
-            "model": ((a.model or PROVIDERS[a.provider]["model"])
+            "model": (PROVIDERS[a.provider]["model"]
                       if a.arm == "F" else
                       ("gpt-5.6-sol" if a.arm in ("N", "NW") else None)),
             # Arm NW's frozen definition of WARM, carried in every receipt.
