@@ -58,3 +58,5 @@ Line127/130 own byte audit reports no unexpected changes;136/139 custom forwardi
 proof fails its empty-args sequence expectation, then143/146 passes after vec.
 External proof still runs afterward and catches the narrower layout rule. Cumulative input1,152,491 includes1,094,912cached; this is repeated context, not
 unique prompt volume or free cached work. No overall paired conclusion is drawn.
+
+Follow-up source review: ordinary batched owner-scoped exact edits already support existing target bindings. Compact relations intentionally refuse them under EDIT-022. D1 received the structured errors in its actual tool outputs; compact text omission did not make the diagnostics invisible to this actor. See [existing-route analysis](2026-09-06-astra-existing-binding-reuse.md). No suggested call has been executed or timed.
