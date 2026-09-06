@@ -107,7 +107,9 @@
                                        comment-moved?
                                        (str "The replacement re-attached " (count moved)
                                             " comment(s) to a different expression: " (pr-str moved)
-                                            ". Nothing was written; the comments are intact on disk.")
+                                            ". :from and :to name the expression each comment was and "
+                                            "is attached to, not a position. Nothing was written; the "
+                                            "comments are intact on disk.")
 
                                        :else
                                        (or (:error plan) (str "owner_forms refused this plan: " code ".")))
@@ -118,7 +120,10 @@
                                           (or comment-lost? comment-moved?)
                                           (or (:next_call plan)
                                               (str "Re-emit the form with its comments verbatim and against "
-                                                   "the same expressions they guard."))
+                                                   "the same expressions they guard. If this mission "
+                                                   "intends to rewrite a guarded expression, re-emit the "
+                                                   "comment on the rewritten expression or set "
+                                                   ":comment-follows-rewrite true on the basis."))
 
                                           :else
                                           (or (:decision plan)

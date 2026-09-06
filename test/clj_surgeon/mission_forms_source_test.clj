@@ -29,12 +29,19 @@
 
 (defn replacement [form] {:file "src/a.clj" :owner "field" :form form})
 
+;; The faithful re-emission RENAMES the owner and leaves the guarded expression
+;; alone. That is deliberate: `;; inner reason` guards `(get x :value)`, and
+;; preservation now compares that expression's identity, so editing it in the
+;; same breath is the REWRITE case (see a-rewritten-guarded-expression-* below),
+;; not the faithful one. The leading note guards the owner definition itself,
+;; whose text the rename does change -- accepted, because at the span's top level
+;; the owner's identity is `:forms-owner-mismatch`'s job, not the comment rule's.
 (def faithful
   (str ";; leading note\n"
        "(defn- finding-field\n"
        "  [x]\n"
        "  ;; inner reason\n"
-       "  (get x :value2))"))
+       "  (get x :value))"))
 
 (def bare "(defn- finding-field [x] (get x :value2))")
 
@@ -104,24 +111,28 @@
     (is (string? (:next_call r)))
     (is (false? (:mutation-attempted r)))))
 
-(deftest attachment-is-a-structural-path-not-a-position
-  ;; A comment's path names the expression it guards: `[:before n]` for the n-th
-  ;; sexpr at that level, `[:after n]` when it trails the last one. Whitespace and
-  ;; neighbouring comments do not shift it, which is what makes it comparable
-  ;; between the owner span and a re-emitted replacement.
-  (testing "leading, interior and trailing paths"
-    (is (= [{:text ";; up" :path [[:before 0]]}
-            {:text ";; in" :path [0 [:before 2]]}
-            {:text "; down" :path [[:after 0]]}]
+(deftest attachment-names-the-guarded-expression-not-a-position
+  ;; A comment's attachment names the EXPRESSION it guards -- that expression's
+  ;; own canonical source, the side it sits on, and the depth-path of the
+  ;; containing sexpr. The ordinal rides alongside as a tie-break; it is not the
+  ;; identity. At the span's own top level the expression is the owner
+  ;; definition, which the mission replaces by design, so `:expr` is the
+  ;; sentinel `:owner-form` there.
+  (testing "leading, interior and trailing attachments"
+    (is (= [{:comment ";; up" :expr :owner-form :side :before :depth-path [] :ordinal 0}
+            {:comment ";; in" :expr "1" :side :before :depth-path [0] :ordinal 2}
+            {:comment "; down" :expr :owner-form :side :after :depth-path [] :ordinal 0}]
            (source/comment-attachments ";; up\n(def a ;; in\n 1)\n; down"))))
   (testing "the fixture owner span"
-    (is (= [{:text ";; leading note" :path [[:before 0]]}
-            {:text ";; inner reason" :path [0 [:before 3]]}]
+    (is (= [{:comment ";; leading note" :expr :owner-form :side :before :depth-path [] :ordinal 0}
+            {:comment ";; inner reason" :expr "(get x :value)" :side :before
+             :depth-path [0] :ordinal 3}]
            (source/comment-attachments owner-span))))
-  (testing "extra blank lines and a second comment do not move a path"
-    (is (= [[[:before 0]] [[:before 0]] [[:before 0]] [0 [:before 3]]]
-           (mapv :path (source/comment-attachments
-                         (str ";; one\n;; two\n\n" owner-span)))))))
+  (testing "extra blank lines and a second comment do not move an attachment"
+    (is (= [[:owner-form :before []] [:owner-form :before []] [:owner-form :before []]
+            ["(get x :value)" :before [0]]]
+           (mapv (juxt :expr :side :depth-path)
+                 (source/comment-attachments (str ";; one\n;; two\n\n" owner-span)))))))
 
 ;; RED first, and the reason this round exists (Astra, review of dce1d9ed):
 ;; "comment text AND structural attachment paths, no guessed positional
@@ -148,22 +159,22 @@
         r (forms/compile-forms (span-basis two-body-span) [(replacement moved-form)])]
     (testing "the text is all present, so text-only comparison would pass"
       (is (= (source/comment-nodes two-body-span) (source/comment-nodes moved-form))))
-    (testing "attachment comparison refuses, with the from/to paths"
+    (testing "expression-identity comparison refuses, with the from/to expressions"
       (is (false? (:ok r)))
       (is (= :forms-comment-moved (:error-type r)))
       (is (= [{:comment ";; note: guards the get, not the touch"
-               :from [0 [:before 4]]
-               :to [0 [:before 3]]}]
+               :from {:expr "(get x :value)" :side :before :depth-path [0]}
+               :to {:expr "(touch x)" :side :before :depth-path [0]}}]
              (:moved r)))
       (is (string? (:next_call r)))
       (is (false? (:mutation-attempted r))))))
 
-(deftest the-same-text-at-the-same-path-is-accepted
+(deftest the-same-text-against-the-same-expression-is-accepted
   (let [kept (str "(defn- finding-field\n"
                   "  [x]\n"
                   "  (touch x)\n"
                   "  ;; note: guards the get, not the touch\n"
-                  "  (get x :value2))")
+                  "  (get x :value))")
         r (forms/compile-forms (span-basis two-body-span) [(replacement kept)])]
     (is (:ok r) (pr-str r))
     (is (= kept (get-in r [:future-sources "src/a.clj"])))))
@@ -185,7 +196,9 @@
                    "  (get x :value))")
         r (forms/compile-forms (span-basis span) [(replacement moved)])]
     (is (= :forms-comment-moved (:error-type r)))
-    (is (= [{:comment ";; clj-kondo/ignore" :from [0 [:before 4]] :to [0 [:before 3]]}]
+    (is (= [{:comment ";; clj-kondo/ignore"
+             :from {:expr "(get x :value)" :side :before :depth-path [0]}
+             :to {:expr "(touch x)" :side :before :depth-path [0]}}]
            (:moved r)))
     (is (false? (:mutation-attempted r)))))
 
@@ -224,7 +237,7 @@
         b (assoc basis :sources {"src/a.clj" span}
                  :owners [{:file "src/a.clj" :owner "field" :new-owner "finding-field"
                            :start 0 :end (count span)}])
-        faithful-plain "(defn- finding-field [x]\n  ;; inner reason\n  (get x :value2))"]
+        faithful-plain "(defn- finding-field [x]\n  ;; inner reason\n  (get x :value))"]
     (testing "a comment inside a form reaches mission-forms and survives"
       (let [r (plain/compile-response b faithful-plain)]
         (is (:ok r))
@@ -258,7 +271,7 @@
                      :end (+ (count ";; neighbour above\n") (count span))}]
            :budget {:max-files 1 :max-changed-chars 4000}}
         echoed (str ";; neighbour above\n"
-                    "(defn- finding-field [x]\n  ;; interior reason\n  (get x :value2))"
+                    "(defn- finding-field [x]\n  ;; interior reason\n  (get x :value))"
                     "\n; neighbour below")
         r (forms/compile-forms b [(replacement echoed)])
         staged (get-in r [:future-sources "src/a.clj"])]
@@ -267,6 +280,132 @@
            (source/comment-nodes staged))
         "each comment appears exactly once")
     (is (= (str ";; neighbour above\n"
-                "(defn- finding-field [x]\n  ;; interior reason\n  (get x :value2))"
+                "(defn- finding-field [x]\n  ;; interior reason\n  (get x :value))"
                 "\n; neighbour below\n")
            staged))))
+
+;; ---------------------------------------------------------------------------
+;; RED first, and the reason THIS round exists (Astra, direct BB probe of
+;; c1614bf9): "owner `(defn f [] ; guards risky (risky) (safe))`, replacement
+;; `(defn f [] ; guards risky (safe) (risky))` => comment-preservation returns
+;; {:preserved true}. Same path is NOT same expression."
+;;
+;; The previous round compared a structural PATH whose last element was an
+;; ordinal. Swapping two body expressions leaves every ordinal intact and every
+;; guard pointing at the wrong code, so the comparison is now the attached
+;; expression's own identity.
+
+(def guard-span
+  (str "(defn- field\n"
+       "  []\n"
+       "  ; guards risky\n"
+       "  (risky)\n"
+       "  (safe))"))
+
+(deftest swapping-the-guarded-expression-refuses-though-the-ordinal-is-intact
+  (let [swapped (str "(defn- finding-field\n"
+                     "  []\n"
+                     "  ; guards risky\n"
+                     "  (safe)\n"
+                     "  (risky))")
+        r (forms/compile-forms (span-basis guard-span) [(replacement swapped)])]
+    (testing "the comment sits at the same ordinal in both, so the old rule passed"
+      (is (= [3] (mapv :ordinal (source/comment-attachments guard-span))))
+      (is (= [3] (mapv :ordinal (source/comment-attachments swapped)))))
+    (testing "expression identity refuses, naming both expressions"
+      (is (false? (:ok r)))
+      (is (= :forms-comment-moved (:error-type r)))
+      (is (= [{:comment "; guards risky"
+               :from {:expr "(risky)" :side :before :depth-path [0]}
+               :to {:expr "(safe)" :side :before :depth-path [0]}}]
+             (:moved r)))
+      (is (false? (:mutation-attempted r))))))
+
+(deftest inserting-an-expression-before-a-commented-one-is-accepted
+  ;; The previous round's ordinal rule refused this: inserting `(setup)` shifts
+  ;; `(risky)` from ordinal 3 to 4 and the comment with it. Nothing MOVED --
+  ;; `; guards risky` still guards `(risky)` -- so the narrowing is gone.
+  (let [inserted (str "(defn- finding-field\n"
+                      "  []\n"
+                      "  (setup)\n"
+                      "  ; guards risky\n"
+                      "  (risky)\n"
+                      "  (safe))")
+        r (forms/compile-forms (span-basis guard-span) [(replacement inserted)])]
+    (testing "the ordinal did change"
+      (is (= [3] (mapv :ordinal (source/comment-attachments guard-span))))
+      (is (= [4] (mapv :ordinal (source/comment-attachments inserted)))))
+    (is (= {:preserved true} (source/comment-preservation guard-span inserted)))
+    (is (:ok r) (pr-str r))
+    (is (= inserted (get-in r [:future-sources "src/a.clj"])))))
+
+(deftest identical-expressions-carrying-one-comment-text-tie-break-by-order
+  ;; Two identical guarded expressions with the same comment text are
+  ;; indistinguishable BY CONSTRUCTION -- there is no fact that separates them.
+  ;; They are matched in document order, and swapping them is a no-op that must
+  ;; be accepted rather than refused on a distinction that does not exist.
+  (let [twins (str "(defn- field\n"
+                   "  []\n"
+                   "  ; guard\n"
+                   "  (risky)\n"
+                   "  ; guard\n"
+                   "  (risky))")
+        renamed (str "(defn- finding-field\n"
+                     "  []\n"
+                     "  ; guard\n"
+                     "  (risky)\n"
+                     "  ; guard\n"
+                     "  (risky))")
+        r (forms/compile-forms (span-basis twins) [(replacement renamed)])]
+    (testing "the two attachments have equal identity and differ only by ordinal"
+      (is (= [{:comment "; guard" :expr "(risky)" :side :before :depth-path [0] :ordinal 3}
+              {:comment "; guard" :expr "(risky)" :side :before :depth-path [0] :ordinal 4}]
+             (source/comment-attachments twins))))
+    (is (= {:preserved true} (source/comment-preservation twins renamed)))
+    (is (:ok r) (pr-str r))
+    (is (= renamed (get-in r [:future-sources "src/a.clj"])))))
+
+(deftest a-rewritten-guarded-expression-refuses-without-the-opt-in
+  ;; The honest hard case: the mission MEANS to change the expression the
+  ;; comment guards. Its identity changed, so the comment no longer demonstrably
+  ;; guards what it used to. Refuse, name both expressions, and say in
+  ;; :next_call what the caller may do about it.
+  (let [rewritten (str "(defn- finding-field\n"
+                       "  []\n"
+                       "  ; guards risky\n"
+                       "  (risky-v2)\n"
+                       "  (safe))")
+        r (forms/compile-forms (span-basis guard-span) [(replacement rewritten)])]
+    (is (= :forms-comment-moved (:error-type r)))
+    (is (= [{:comment "; guards risky"
+             :from {:expr "(risky)" :side :before :depth-path [0]}
+             :to {:expr "(risky-v2)" :side :before :depth-path [0]}}]
+           (:moved r)))
+    (is (re-find #":comment-follows-rewrite" (:next_call r)))
+    (is (false? (:mutation-attempted r)))))
+
+(deftest a-rewritten-guarded-expression-is-accepted-when-the-caller-opts-in
+  (let [rewritten (str "(defn- finding-field\n"
+                       "  []\n"
+                       "  ; guards risky\n"
+                       "  (risky-v2)\n"
+                       "  (safe))")
+        b (assoc (span-basis guard-span) :comment-follows-rewrite true)
+        r (forms/compile-forms b [(replacement rewritten)])]
+    (is (:ok r) (pr-str r))
+    (is (= rewritten (get-in r [:future-sources "src/a.clj"])))
+    (testing "the opt-in is an ordinal rule, and says so: a swap passes under it"
+      (is (= {:preserved true}
+             (source/comment-preservation
+               guard-span
+               "(defn- finding-field\n  []\n  ; guards risky\n  (safe)\n  (risky))"
+               {:comment-follows-rewrite true}))))
+    (testing "and it is opt-in only -- the same swap still refuses by default"
+      (is (false? (:preserved (source/comment-preservation
+                                guard-span
+                                (str "(defn- finding-field\n  []\n  ; guards risky\n"
+                                     "  (safe)\n  (risky))")))))))
+  (testing "the opt-in does not resurrect a LOST comment"
+    (is (= {:preserved false :lost ["; guards risky"]}
+           (source/comment-preservation guard-span "(defn- finding-field [] (risky) (safe))"
+                                        {:comment-follows-rewrite true})))))
