@@ -1065,9 +1065,12 @@ def die(msg, code=1):
 # an executed child writing OUTSIDE the warm workspace. So the fence below
 # bounds what THE RUNNER writes and deletes; it bounds a cooperative child only
 # by its working directory. Arm NW therefore refuses outright unless its warm
-# workspace resolves under /var/tmp/forge, so the blast radius of a
-# non-cooperative child is at worst the seat's own scratch tmpfs -- the same
-# fence ~/bin/sol-yolo has always used -- rather than $HOME or the worktree.
+# workspace resolves under /var/tmp/forge. That is NOT a blast-radius bound on a
+# non-cooperative child: the Codex child runs with the sandbox bypassed and can
+# write anywhere this user can, and /var/tmp on this seat is disk, not tmpfs.
+# What the refusal guarantees is only where a cooperative child's cwd lands
+# (the same convention ~/bin/sol-yolo uses); the runner's own writes are the
+# only ones the path fence actually confines (Astra, 2026-09-06 04:49Z).
 
 REPO_ROOT = os.path.realpath(os.path.join(HERE, os.pardir))
 WRITE_FENCES = (os.path.realpath("/var/tmp/forge"), REPO_ROOT)
@@ -2734,9 +2737,9 @@ def bench(prompt, providers, rounds, temperature, manifest, cmds):
 # it is NOT a kernel sandbox, and this flag explicitly turns codex's own off.
 # `cwd=ws` is a working directory, not confinement; a child that chooses to
 # write an absolute path elsewhere will succeed. That is why main() REFUSES
-# arm NW unless the warm workspace resolves under /var/tmp/forge: the fence we
-# can actually enforce is which directory the damage lands in, so the arm is
-# only allowed to run where that directory is the seat's scratch tmpfs.
+# arm NW unless the warm workspace resolves under /var/tmp/forge: the only
+# thing the runner can enforce is the child's starting directory; an
+# unsandboxed child is not confined by it, and /var/tmp here is disk.
 WARM_SANDBOX = ["--dangerously-bypass-approvals-and-sandbox"]
 
 WARM_ORIENT_SUFFIX = "\n\nRead the file now and reply READY; do not edit yet.\n"
