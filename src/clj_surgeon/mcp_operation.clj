@@ -142,6 +142,28 @@
                    cut)]
          (str (subs collapsed 0 cut) caller-text-truncation-marker))))))
 
+(defn receipt-safe-line?
+  "True when every character of `value` can sit on a receipt line as itself.
+
+  The negative of `sanitize-caller-text`'s substitution rule, asked as a
+  QUESTION rather than applied as a transformation, and with one deliberate
+  difference: an ordinary space is safe. A space cannot start a line, spell an
+  outcome glyph, or hide a seam, so collapsing runs of them is a prose nicety
+  and nothing more -- which is exactly why prose canonicalization must never
+  touch an EXECUTABLE serialization, where two spaces and one space are two
+  different requests.
+
+  Use this to CHECK a string a faithful encoder produced (JSON escaping, say),
+  not to repair one. A false answer means render the pointer at
+  structuredContent, never a lossy line."
+  [value]
+  (and (string? value)
+       (not (some (fn [code-point]
+                    (and (not= 32 code-point)
+                         (or (collapsible-code-point? code-point)
+                             (contains? receipt-glyphs code-point))))
+                  (iterator-seq (.iterator (.codePoints ^String value)))))))
+
 (defn canonicalize-receipt-text
   "One receipt map with its caller-quoted sentences in canonical safe form.
 

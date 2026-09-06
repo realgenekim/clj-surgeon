@@ -553,8 +553,14 @@
       ;;       the oversized caller path, the leak and totality witnesses, the
       ;;       forged-line/size/escaping witnesses, and the Unicode separator,
       ;;       supplementary-format-mark and legitimate-supplementary triple.
-      ;;   +1  mcp-tool-test: every-public-verb-shows-the-structured-error-
-      ;;       sentence-it-publishes (EDIT-037's per-verb sweep).
+      ;;   +3  mcp-tool-test: every-public-verb-shows-the-structured-error-
+      ;;       sentence-it-publishes (EDIT-037's per-verb sweep), plus round
+      ;;       two's two next_call REPLAY witnesses --
+      ;;       a-rendered-next-call-replays-to-the-structured-next-call-exactly
+      ;;       and an-oversized-next-call-renders-the-structured-pointer-not-a-
+      ;;       lossy-line (Astra's replay review of e67a6f13: the rendered
+      ;;       next_call was prose-sanitised, so the text and
+      ;;       structuredContent.next_call named DIFFERENT requests).
       ;;   +1  mcp-inspect-tool-test: inspect-diagnostic-fields-cannot-forge-
       ;;       receipt-lines (EDIT-038, Sol fence r5).
       ;;   +3  mcp-operation-test: the RESULT-003 byte-identity witness Sol
@@ -562,11 +568,11 @@
       ;;       the "canonicalization touches only the two quoted sentences"
       ;;       witness (inb-2da8ea).
       ;;                                                    ------
-      ;;   1381 + 20 ..................................... 1401
+      ;;   1381 + 22 ..................................... 1403
       ;;
-      ;; All four namespaces are ROUND-ONE, so the whole +20 lands in r1 and
+      ;; All four namespaces are ROUND-ONE, so the whole +22 lands in r1 and
       ;; `adopted` holds at 435.
-      (is (= 1401 total) (str "manifest declares " total " tests"))
+      (is (= 1403 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
@@ -710,7 +716,7 @@
    "test/clj_surgeon/scope_stream_test.clj"
    {105 "bounded poll -- System/gc then re-check reachability, succeeds immediately, fails at gc-deadline-ms (round three's fix for the two fixed `Thread/sleep 100` assertions)"}
    "test/clj_surgeon/mcp_tool_test.clj"
-   {1380 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count"}
+   {1381 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count (1380 -> 1381 on 2026-09-06: the `cheshire.core` require the next_call REPLAY witnesses need moved the whole namespace down one line -- the pin costing one number is the point)"}
    "test/clj_surgeon/mcp_hot_verify_test.clj"
    {244 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
 

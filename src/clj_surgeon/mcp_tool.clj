@@ -1056,7 +1056,11 @@
           ;; receipt has an error sentence renders it, not one error class.
           ;; @spec MCP-OP-EDIT-037
           ;; Both of these were canonicalized at receipt construction — the
-          ;; sentence in mcp-operation/finalize-result, the example in
+          ;; sentence by mcp-operation/canonicalize-receipt-text, called at
+          ;; each verb's own invoke! construction exit (it lived in
+          ;; mcp-operation/finalize-result until Sol fence r7, 2026-09-06,
+          ;; showed a finalizer that rewrites a domain field breaks
+          ;; MCP-OP-RESULT-003); the example in
           ;; mcp-compact-relations — so they are rendered byte-identically and
           ;; the text contains the structured values VERBATIM. Encoding again
           ;; here is what Sol fence r5 (2026-09-06) refuted: two renderers
@@ -1867,11 +1871,29 @@
   stops looking."
   [result]
   (if-let [call (:next_call result)]
-    (let [;; @spec MCP-OP-EDIT-038
-          encoded (or (mcp-operation/sanitize-caller-text
-                        (json/generate-string call))
-                      "")]
-      (if (<= (count encoded) max-rendered-next-call-characters)
+    ;; @spec MCP-OP-EDIT-038
+    ;; This line is EXECUTABLE, so it is ENCODED, never prose-canonicalized.
+    ;; Astra's replay review (2026-09-06, e67a6f13) found the whole serialized
+    ;; JSON running through `sanitize-caller-text`: `"a  b"` rendered as
+    ;; `"a b"`, `"src/a→b.clj"` as `"src/a b.clj"`, `"a✓b"` as
+    ;; `"a b"` -- each unequal to `structuredContent.next_call`, so a caller
+    ;; who copies the text sends a DIFFERENT request than the server composed.
+    ;; A receipt that misquotes its own remedy is worse than one with none.
+    ;;
+    ;; `:escape-non-ascii` gives EDIT-038 everything it asks for without
+    ;; destroying data: JSON already escapes every control character, and this
+    ;; escapes every non-ASCII one, so no receipt glyph, line or paragraph
+    ;; separator, zero-width mark or supplementary format character can appear
+    ;; as itself -- while spaces inside strings stay spaces and the line still
+    ;; parses back to the identical map.
+    ;;
+    ;; `receipt-safe-line?` is the check, not a repair: if a faithful encoding
+    ;; ever fails it, the POINTER at structuredContent is rendered instead of
+    ;; a lossy call. A caller can always send an unrendered call; it can never
+    ;; recover a corrupted one.
+    (let [encoded (json/generate-string call {:escape-non-ascii true})]
+      (if (and (<= (count encoded) max-rendered-next-call-characters)
+               (mcp-operation/receipt-safe-line? encoded))
         (str "next_call · " encoded)
         (str "next_call · " (count encoded)
              " characters, in structuredContent.next_call — send it verbatim")))

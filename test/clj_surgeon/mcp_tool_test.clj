@@ -9,6 +9,7 @@
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.structural-lens :as structural-lens]
+   [cheshire.core :as json]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -2367,3 +2368,72 @@
         (finally
           (mcp-tool/init! nil)
           (delete-tree! workspace))))))
+
+;; ---------------------------------------------------------------------------
+;; The next_call line is EXECUTABLE, not prose.
+;;
+;; Astra's replay review of e67a6f13 (2026-09-06) found `rendered-next-call`
+;; running the whole serialized JSON through `sanitize-caller-text` — a prose
+;; canonicalizer — so the rendered call and `structuredContent.next_call`
+;; DISAGREED about their argument values: `"a  b"` came back `"a b"`,
+;; `"src/a→b.clj"` came back `"src/a b.clj"`, `"a✓b"` came back `"a b"`. A
+;; caller who copies the text sends a DIFFERENT request than the one the
+;; server composed, and the receipt cannot say which one it meant.
+;;
+;; MCP-OP-EDIT-038's requirement is that no caller value can add a line to a
+;; receipt, spell one of its glyphs, or set the size of the text block. JSON
+;; string escaping satisfies all three WITHOUT destroying data: every unsafe
+;; display character becomes `\uXXXX`, spaces inside strings stay spaces, and
+;; the text still parses back to the map byte for byte. Where a faithful
+;; display cannot be produced, the pointer at structuredContent is rendered
+;; instead of a lossy line.
+;; ---------------------------------------------------------------------------
+
+(defn- replayed-next-call
+  "Parse the rendered next_call line back into the map a caller would send."
+  [line]
+  (let [prefix "next_call · "]
+    (is (str/starts-with? line prefix) line)
+    (json/parse-string (subs line (count prefix)) true)))
+
+;; @spec MCP-OP-ALIAS-059
+;; @spec MCP-OP-EDIT-038
+(deftest a-rendered-next-call-replays-to-the-structured-next-call-exactly
+  (doseq [value ["a  b"                            ; repeated spaces
+                 "src/a\u2192b.clj"                ; the remedy arrow glyph
+                 "a\u2713b"                        ; the proved glyph
+                 "a\u26a0b\u00b7c"                 ; warning glyph, separator
+                 "line\nbreak\ttab\rreturn"        ; control characters
+                 "a\u2028b\u2029c\u0085d"          ; Unicode line separators
+                 "a\u200bb\ufeffc\u200dd"          ; zero-width marks and BOM
+                 (str "tag" (String. (Character/toChars 0xE0001)) "char")
+                 (str "emoji " (String. (Character/toChars 0x1F600)) " kept")
+                 "back\\slash \"quote\" /solidus"
+                 "  leading and trailing  "]]
+    (testing (pr-str value)
+      (let [call {:tool "inspect_clojure"
+                  :arguments {:file value :forms [value] :expect {:forms 1}}}
+            line (mcp-tool/rendered-next-call {:next_call call})
+            replay (replayed-next-call line)]
+        (testing "the caller replays the server's own call, value for value"
+          (is (= call replay)))
+        (testing "and the line is still one safe receipt line"
+          (is (= 1 (count (str/split-lines line))))
+          (let [json-part (subs line (count "next_call \u00b7 "))]
+            (doseq [glyph ["\u2713" "\u2192" "\u26a0" "\u2028" "\u2029"
+                           "\u0085" "\u200b" "\ufeff" "\u200d"]]
+              (is (not (str/includes? json-part glyph)) glyph))
+            (is (every? #(< (int %) 128) json-part)
+                "the rendered call is pure ASCII, so no glyph can hide in it")))))))
+
+;; @spec MCP-OP-ALIAS-059
+(deftest an-oversized-next-call-renders-the-structured-pointer-not-a-lossy-line
+  (let [call {:tool "inspect_clojure"
+              :arguments {:file (apply str (repeat 4000 "x"))}}
+        line (mcp-tool/rendered-next-call {:next_call call})]
+    (is (str/starts-with? line "next_call · "))
+    (is (str/includes? line "in structuredContent.next_call"))
+    (is (str/includes? line "send it verbatim"))
+    (testing "the pointer never inlines a truncated, unsendable call"
+      (is (not (str/includes? line "{"))))
+    (is (= 1 (count (str/split-lines line))))))
