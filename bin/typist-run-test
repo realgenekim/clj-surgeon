@@ -24,11 +24,13 @@ Covers the three Sol fence findings:
       zero tokens, never a provider's own figure discarded for a re-derivation
 """
 
+import atexit
 import importlib.machinery
 import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -96,6 +98,41 @@ def offline_run(args, **kwargs):
 
 
 
+def allowed_test_child(executable, command, environment):
+    if not isinstance(command, (list, tuple)):
+        return False
+    bootstrap = (list(command[:4]) == [sys.executable, "-c", OFFLINE_BOOTSTRAP, RUNNER]
+                 and os.path.realpath(executable) == os.path.realpath(sys.executable))
+    echo = list(command) == ["/bin/echo", "ordinary"] and executable == "/bin/echo"
+    shim = (list(command) == ["/bin/bash", "--noprofile", "--norc", "-c", "codex exec -m gpt-5.6-sol"]
+            and executable == "/bin/bash" and isinstance(environment, dict)
+            and environment.get("BASH_ENV") == "/dev/null"
+            and environment.get("ENV") == "/dev/null"
+            and os.path.realpath(environment.get("PATH", "")).startswith(FENCE + "/typist-offline-shim-")
+            and os.pathsep not in environment.get("PATH", ""))
+    return bootstrap or echo or shim
+
+
+def harness_audit(event, args):
+    if event.startswith("socket.") or event in {"os.system", "os.exec", "os.fork"}:
+        raise RuntimeError("offline test blocked " + event)
+    if event == "open" and isinstance(args[0], (str, bytes)):
+        path = os.path.realpath(os.fsdecode(args[0]))
+        if path.startswith("/home/forge/secrets/"):
+            raise RuntimeError("offline test blocked real key access")
+    if event == "subprocess.Popen":
+        executable, command, _cwd, environment = args
+        if not allowed_test_child(executable, command, environment):
+            raise RuntimeError("offline test blocked unreviewed subprocess")
+    if event == "os.posix_spawn":
+        executable, command, environment = args
+        if not allowed_test_child(executable, command, environment):
+            raise RuntimeError("offline test blocked unreviewed posix_spawn")
+
+
+sys.addaudithook(harness_audit)
+
+
 def check(name, ok, detail=""):
     print("%-58s %s%s" % (name, "ok" if ok else "FAIL",
                           ("  " + detail) if detail else ""))
@@ -112,8 +149,8 @@ def load_runner():
 
 
 def keys_dir():
-    d = os.path.join(FENCE, "typist-real-fx", "keys-test")
-    os.makedirs(d, exist_ok=True)
+    d = tempfile.mkdtemp(prefix="typist-keys-test-", dir=FENCE)
+    atexit.register(shutil.rmtree, d, True)
     for name, body in (("groq.edn", '{:key "gsk_DUMMY123"}\n'),
                        ("openrouter.edn", '{:openrouter-api-key "sk-or-DUMMY456"}\n')):
         p = os.path.join(d, name)
@@ -353,6 +390,50 @@ def test_offline_guard(m):
         ok, detail = e.code == 6, "exit=%s" % e.code
     check("offline refuses a network open (exit 6)", ok, detail)
 
+    # SOL FENCE R3, finding 3: the three routes that walked past the r2 guard.
+    # Each of them hands the command line to a SHELL, so argv[0] is `sh` or
+    # `bash` and a guard that only looks at argv[0] sees nothing. Two stops
+    # close them: the shell STRING is scanned in-process, and a PATH shim
+    # makes `codex`/`claude` unstartable even for a shell string this process
+    # never sees the inside of.
+    try:
+        m.os.system("codex exec -m gpt-5.6-sol")
+        ok, detail = False, "no refusal"
+    except SystemExit as e:
+        ok, detail = e.code == 6, "exit=%s" % e.code
+    check("offline refuses os.system('codex ...') (exit 6)", ok, detail)
+    try:
+        m.subprocess.run("codex exec -m gpt-5.6-sol", shell=True)
+        ok, detail = False, "no refusal"
+    except SystemExit as e:
+        ok, detail = e.code == 6, "exit=%s" % e.code
+    check("offline refuses a shell string (shell=True) (exit 6)", ok, detail)
+    # Even a broken runner shim cannot fall through to the live PATH.
+    r = m.subprocess.run(["/bin/bash", "--noprofile", "--norc", "-c", "codex exec -m gpt-5.6-sol"],
+                         env=dict(os.environ, PATH=m.OFFLINE_SHIM_DIR, BASH_ENV="/dev/null", ENV="/dev/null"),
+                         capture_output=True, text=True)
+    check("a bash -c trampoline hits the PATH shim (exit 6)",
+          r.returncode == 6 and "offline: spawn of codex refused" in r.stderr,
+          "exit=%s %r" % (r.returncode, r.stderr.strip()))
+    for name, arguments in [("spawnv", (os.P_WAIT, "/usr/local/bin/codex", ["codex", "--version"])),
+                            ("posix_spawn", ("/usr/local/bin/codex", ["codex", "--version"], {}))]:
+        if hasattr(m.os, name):
+            try:
+                getattr(m.os, name)(*arguments)
+                refused = False
+            except SystemExit as e:
+                refused = e.code == 6
+            check("offline refuses %s with its actual argument order" % name, refused)
+    check("the offline PATH shim is installed under /var/tmp/forge",
+          bool(m.OFFLINE_SHIM_DIR)
+          and m.OFFLINE_SHIM_DIR.startswith(FENCE + os.sep)
+          and os.access(os.path.join(m.OFFLINE_SHIM_DIR, "claude"), os.X_OK),
+          str(m.OFFLINE_SHIM_DIR))
+    r = m.subprocess.run(["/bin/echo", "ordinary"], capture_output=True, text=True)
+    check("offline still RUNS an ordinary tool (echo)",
+          r.returncode == 0 and r.stdout.strip() == "ordinary",
+          "exit=%s %r" % (r.returncode, r.stdout.strip()))
+
 
 # --------------------------------------------------------------------------
 # (e) cost accounting -- an aggregate never outranks its members
@@ -362,6 +443,10 @@ def test_cost(m):
     so one call with NO usage summed to zero tokens, met the table rate, and
     printed $0.0000 for a call nobody can price. Zero is a number a reader
     acts on; unknown is not."""
+    for value, spelling in [(0.123456789123, "0.123456789123"), (1e-9, "0.000000001")]:
+        check("human cost preserves %s" % spelling, m.usd_str(value) == "$" + spelling)
+        check("cost-field EDN preserves float repr %r" % value,
+              ":cost_usd " + repr(value) in m.edn({"cost_usd": value}))
     check("a candidate with missing usage is (None, None), never zero",
           m.cost_for("groq", None, None, None, None) == (None, None))
     check("a missing completion count is unknown, not zero",
@@ -398,8 +483,7 @@ def test_cost(m):
         with open(os.path.join(fx, "receipt.edn"), "w") as fh:
             fh.write('{:candidates [{:cand "groq-1" :prompt_tokens nil '
                      ':tokens nil :cost_usd nil :cost_source nil}]}\n')
-        r = subprocess.run([sys.executable, RUNNER, "--cost-report",
-                            "--fx", fx],
+        r = offline_run(["--cost-report", "--fx", fx],
                            env=dict(os.environ, TYPIST_OFFLINE="1",
                                     TYPIST_FX=fx),
                            capture_output=True, text=True, timeout=180)
@@ -432,14 +516,36 @@ def test_cost(m):
                      ':cost_usd 0.12345678 :cost_source "provider"} '
                      '{:cand "groq-2" :prompt_tokens nil :tokens nil '
                      ':cost_usd nil :cost_source nil}]}\n')
-        r = subprocess.run([sys.executable, RUNNER, "--cost-report",
-                            "--fx", fx2],
+        r = offline_run(["--cost-report", "--fx", fx2],
                            env=dict(os.environ, TYPIST_OFFLINE="1",
                                     TYPIST_FX=fx2),
                            capture_output=True, text=True, timeout=180)
         row = [ln for ln in r.stdout.splitlines() if ln.startswith("groq")]
+        # SOL FENCE R3, finding 5. The r2 test asserted the provider's figure
+        # on the DISPLAY only, and the display was already truncating it to
+        # $0.1235; the RECEIPT -- the artifact anyone would later read as the
+        # authority -- went through the generic EDN float branch and became
+        # 0.123. A cost is not a timing: the receipt must round-trip the
+        # provider's own digits exactly, and the table must not print fewer.
         check("--cost-report: a mixed group keeps the provider's figure",
-              bool(row) and "$0.1235" in row[0], (row or [""])[0].strip())
+              bool(row) and "$0.12345678" in row[0], (row or [""])[0].strip())
+        check("--cost-report: the table prints at least 6 decimals",
+              bool(row) and re.search(r"\$\d+\.\d{6,}", row[0]),
+              (row or [""])[0].strip())
+        written = [f for f in os.listdir(fx2) if f.startswith("cost-report-")]
+        body = open(os.path.join(fx2, written[0])).read() if written else ""
+        check("--cost-report: the RECEIPT round-trips 0.12345678 exactly",
+              ":cost_usd 0.12345678" in body,
+              "; ".join(ln.strip() for ln in body.splitlines()
+                        if "cost_usd" in ln))
+        check("--cost-report: :total_usd is the provider figure, unrounded",
+              ":total_usd 0.12345678" in body,
+              "; ".join(ln.strip() for ln in body.splitlines()
+                        if "total_usd" in ln))
+        check("--cost-report: no truncated 0.123 in the receipt",
+              ":cost_usd 0.123 " not in body and ":total_usd 0.123 " not in body
+              and ":cost_usd 0.123\n" not in body
+              and ":total_usd 0.123\n" not in body)
         check("--cost-report: the unpriced member is still counted UNKNOWN",
               "1 call(s) have no rate and are UNKNOWN, not zero." in r.stdout)
     finally:
@@ -449,6 +555,7 @@ def test_cost(m):
 def main():
     before = newest_codex_session()
     m = load_runner()
+    m.KEYS_DIR = keys_dir()
     print("== scrubber ==");        test_scrub(m)
     print("== typed errors ==");    test_classify(m)
     print("== routing pin ==");     test_routing(m)
