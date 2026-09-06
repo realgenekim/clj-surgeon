@@ -539,7 +539,39 @@
       ;;
       ;; Both namespaces are ROUND-ONE, so all 18 land in r1 and adopted holds
       ;; at 435.
-      (is (= 1381 total) (str "manifest declares " total " tests"))
+      ;;
+      ;; MERGE RESOLUTION, 2026-09-06 (fable/receipt-truth x MCP/main
+      ;; 387424cc). THE SAME TRAP, one merge later: this branch's own pin line
+      ;; also read 1375, which is neither side's answer. The pin is trunk's
+      ;; CURRENT value plus THIS branch's own delta, computed, never adopted
+      ;; from whichever side git happened to keep:
+      ;;
+      ;;   trunk today ............................................... 1381
+      ;;   + this branch's delta, 1363 -> 1375 ......................... +12
+      ;;   ---------------------------------------------------------------
+      ;;   merged pin ................................................ 1393
+      ;;
+      ;; The +12, by round (MCP-OP-VERIFY-011/012/013, receipt truth):
+      ;;   +7 round one: four in mcp-tool-test (the success text states the
+      ;;      verification actually performed; the failure text carries the
+      ;;      check's own bytes; its bound cuts at a line boundary; alias
+      ;;      receipts do the same) and three in mcp-http-server-test (built-in
+      ;;      profiles are lint-only; an unconfigured workspace refuses
+      ;;      `verify` before any write; a configured one is unchanged).
+      ;;   +3 round two (peer-review HOLD, executed bb probes): percent-bearing
+      ;;      verification strings must not throw out of the receipt renderer;
+      ;;      the real profile shape carries hot and cold verdicts beside
+      ;;      :checks; the 2000-character failure budget is one TOTAL, not one
+      ;;      per check.
+      ;;   +1 round three: the unconfigured refusal may advertise only values
+      ;;      the verify enum accepts, on both write routes and in the schema.
+      ;;   +1 final tidy: the published descriptions must say that lint is the
+      ;;      only built-in, that it is a lint/format gate and NOT a test
+      ;;      profile, and that test profiles are named in .clj-surgeon.edn.
+      ;;
+      ;; All three namespaces are ROUND-ONE, so the 12 land in r1 and adopted
+      ;; holds at 435.
+      (is (= 1393 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
