@@ -505,13 +505,14 @@
                                               (set (keys adopted-since-round-one)))
                                      (keys lm/manifest))))))
       ;; One outline corpus test MOVED from its original namespace to adopted integration.
-      ;; 920 original + 435 adopted = 1355: retain Astra identity/receipt witnesses and add trunk
+      ;; 921 original + 435 adopted = 1356: add the real two-require cardinality
+      ;; regression in mcp-contract-test; retain Astra identity/receipt witnesses and trunk
       ;; helper request-shape refusals (48 -> 51), plus two battery archival-distance witnesses;
       ;; closed telemetry remains 17, not trunk
       ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
       (is (= 435 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
-      (is (= 1355 total) (str "manifest declares " total " tests"))
+      (is (= 1356 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
