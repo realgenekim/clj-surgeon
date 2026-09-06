@@ -181,3 +181,9 @@ The observed alias-reuse workaround is a concrete next API investigation after t
 ### Astra route diagnosis, 2026-09-06T10:43:10.992242+00:00
 
 The18require workaround did not establish missing editing capability. Source review found an existing batched within/from/to route preserving bindings; compact add-only refusal is intentional EDIT-022. ActualD1 outputs include the detailed structured errors, so diagnostic invisibility is not supported for this actor. Prefer explicit preconditions and recovery to the existing route before extending compact semantics; any API extension needs a separate measured justification. [Static request and anchors](2026-09-06-astra-existing-binding-reuse.md). No execution or mid-cohort change.
+
+### Astra completed frontier, 2026-09-06T10:57:11.050749+00:00
+
+Frozen fanout actor route loses: complete Nmedian84.682s vsD237.575s (D2.81times aslong), N4/4 vsD1/4 under a witness with a disclosed require-layout assumption. Rootowns admissionmiss; no semanticfailureclaim from those3checks, no rerun. Separate rootexistingroute capabilityprobe succeeded59/54/20 withoriginalproofs,23.012sattempt/2.413stool, excludesprep/notABratio. [Complete report](2026-09-06-astra-fanout-final-and-existing-route.md).
+
+Sparkunpaidpreflight: actual reference kernel+proofs pass2/5and4/24, outerreceipt refuses descriptive-scope field overwritten by auditmap.9.858s retained; no paidgeneration. Successor fixes field identity withactualretainedreceipt regression; originalfailure stays. Rootwindowreleased10:55Z, Fablelandingnext.
