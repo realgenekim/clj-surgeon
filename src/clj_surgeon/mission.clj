@@ -837,9 +837,9 @@
              :verification {:profile "mission-proof"}}})
 
 (def example-config
-  "What `<workspace_root>/.clj-surgeon.edn` must contain for that profile to be
-   ADMITTED. `plan` and `apply` read this file themselves."
-  {:verification-profiles {"mission-proof" {:commands [["/bin/true"]]}}})
+  "Profile shape only: empty commands deliberately refuse admission.
+   Replace with real behavioral proof before plan or apply."
+  {:verification-profiles {"mission-proof" {:commands []}}})
 
 (def verb-help
   {"open"   "open --spec-file <file|-> [--workspace R] [--state-home H]\n    One bounded intent -> a mission id and its dossier. Writes no bytes."
@@ -866,7 +866,8 @@
 
 (defn help-text
   [verb]
-  (if (= "run" verb)
+  (cond
+    (= "run" verb)
     (str "bin/mission — explicit owner_forms write in one process.\n\n"
          (get verb-help "run")
          "\n\nUse the owner_forms spec documented in docs/mission-typist.md.\n"
@@ -875,6 +876,14 @@
          "Structured stdin: bin/mission run --spec-file - < owner-forms.edn\n"
          "A blocked run returns :error_type \"mission-not-ready\" and its id.\n"
          "Use show <id> --workspace R to inspect it; apply failures exit nonzero.\n")
+    (contains? #{"commit" "fallback"} verb)
+    (str "bin/mission — " verb ".\n\n"
+         (get verb-help verb)
+         "\n\nGlobal options --workspace R and --state-home H may come before or after the verb.\n"
+         (if (= "commit" verb)
+           "  bin/mission commit M-1 --workspace /absolute/workspace --state-home H\n"
+           "  bin/mission fallback M-1 --reason refusal --workspace /absolute/workspace --state-home H\n"))
+    :else
     (str "bin/mission — the mission ledger. Global options may come BEFORE or\n"
       "AFTER the verb: --workspace <root> --state-home <dir> --config <file>\n\n"
       (if-let [one (get verb-help verb)]
@@ -884,11 +893,12 @@
       "\nTHE SPEC (copy-paste, closed shape — every field below is required\n"
       "unless marked optional; nothing else is accepted):\n\n"
       (with-out-str (pp/pprint example-request))
-      "\nTHE PROFILE CONFIG — write this to <workspace_root>/"
+      "\nTHE PROFILE TEMPLATE — after adding real behavioral proof, write it to <workspace_root>/"
       config-file-name
       ", which\n`plan` and `apply` read themselves (`show` reports :config_sources):\n\n"
+      "Empty :commands are not runnable and refuse admission. Replace them with commands that check the intended behavior.\n"
       (with-out-str (pp/pprint example-config))
-      "\nRunnable end to end:\n"
+      "\nWorkflow after configuring real behavioral proof:\n"
       "  bin/mission open  --spec-file spec.edn --state-home $H\n"
       "  bin/mission ready --workspace $WS --state-home $H\n"
       "  bin/mission apply M-1 --workspace $WS --state-home $H\n"

@@ -5,6 +5,7 @@
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.java.shell :as shell]
+   [clojure.pprint :as pp]
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]))
 
@@ -15,7 +16,7 @@
     m))
 
 (defn printed [m]
-  (with-out-str (clojure.pprint/pprint m)))
+  (with-out-str (pp/pprint m)))
 
 (def saved
   ;; Faithful minimized executor receipt: protected-content refusal survives
@@ -179,3 +180,20 @@
           (is (= before (slurp file)))
           (when-let [argv (get-in shown [:decision :recovery :argv])]
             (is (= 0 (:exit (apply shell/sh argv))))))))))
+
+(deftest commit-and-fallback-help-do-not-append-unrelated-planning-examples
+  ;; Actual dogfood: both commands printed helper_extraction plus /bin/true proof.
+  (doseq [[verb terms] [["commit" ["stages nothing" "hooks" "signing" "push"]]
+                        ["fallback" ["user-reported" "--reason" "recorded false"]]]]
+    (let [r (shell/sh "bin/mission" "help" verb)]
+      (is (= 0 (:exit r)))
+      (is (= (:out r) (mission/help-text verb)))
+      (doseq [term terms] (is (str/includes? (:out r) term)))
+      (doseq [unrelated ["helper_extraction" "/bin/true" "THE SPEC" "THE PROFILE CONFIG"]]
+        (is (not (str/includes? (:out r) unrelated)))))))
+
+(deftest generic-help-does-not-offer-a-no-op-as-verification
+  (let [r (shell/sh "bin/mission" "help")]
+    (is (= 0 (:exit r)))
+    (is (not (str/includes? (:out r) "/bin/true")))
+    (is (str/includes? (:out r) "behavioral proof"))))
