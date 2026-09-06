@@ -52,3 +52,22 @@ remain new; the final namespace delta is +2 tests, not the initial +3.
 The combined fixture's actual pre-fix command exits2 with zero errors/one warning;
 the error-threshold command exits0 with the same warning. Raw receipts are
 combined-pre-fix.json and combined-fixed.json in the artifact directory.
+
+## Final branch gates
+
+After merging root battery records c1ef2284 and packaging correction2cc32d3a,
+the final combined fixture passed its owning `make analyzer-contract-test`:
+8 tests,46 assertions,zero skips/failures/errors,exit0. The fixed production
+five-launch authority was not changed. Independent reviewer accepted the
+combined fixture and this retained gate without a duplicate execution; see
+2026-09-06-forward-reference-warning-independent-review.md.
+
+On the same frozen branch code, normal `make test` passed,exit0: visible JVM
+662 tests/8009 assertions and BB862 tests/7352 assertions,zero failures/errors;
+repository hygiene passed. Both gates ran sequentially through suite-run at
+nice10 with NODE_DISABLE_COMPILE_CACHE=1 and isolated events. No slot stderr
+redirection, timeout/budget override or installation. Final logs are
+analyzer-contract-final.log and normal-gate.log in the existing artifact folder.
+The failed initial six-launch owning gate remains retained, not reclassified.
+Final change adds two tests to the separate analyzer-contract namespace, excluded
+from the JVM lane manifest; no manifest count or namespace enrollment changes.
