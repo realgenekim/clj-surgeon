@@ -297,3 +297,8 @@ Gene ratified the16:50–18:50 wall-only block. Full Maven feature pair complete
 ### Astra — 2026-09-06 17:53Z: the fast text survived; whole-task wall lost
 
 Second fresh whole-Maven pair independently GO on both sides: native122.616s versus fast-typist/admission226.761s (tool1.849x as long); through independent acceptance125.040/228.981s. One real Cerebras OSS-120B response supplied retained source/test/README in2.075s,5,142tokens,$0.0026057. Review/integration, extra JSON decoding, actor-added test repair and diagnostic proof produced16outer actions versus7. Preparation-to-independentdecision18.44min; actor dollars unknown. Both whole-task approaches are parked after two losses; no third run. Full accounting, commits and frozen receipts: [whole-Maven experiment](2026-09-06-astra-whole-maven-task.md).
+
+
+### Astra — 2026-09-06 19:40Z: alias intent earns a modest full-wall win
+
+Fresh Astra/medium whole-repo alias replication: six native controls correct; three paired N/T tasks each correct and independently reviewed. Fullaudit medians42.870s/31.074s =1.3796x, gap11.796s exceeds freshcontrol2SD6.859s; predicted>=1.5x MISSED. Everytoolarm oneactualaliascommit21files63sites, no refusals/fallback, bothsides samebehavior/loadproof. Native scripts freely. Fixedsynthetic no-collision fixture, concurrentpairs; not generaladoption/scaling evidence. Preparation-to-decision17.56min;1,239,486actor tokens,costunknown. [Full receipt and limits](2026-09-06-astra-alias-replication.md).
