@@ -632,3 +632,8 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 - Next action: none scheduled; heartbeats only.
 
 ## POLICY at 21:56Z (Gene GO on inb-fa0eb7): on the next silent model drift of Astra's thread (status bar ≠ gpt-6-astra medium), (1) stand down, resume pinned, and REDEEM one usage-limit reset from the client's /usage menu (2 available at 20:5xZ); (2) if it drifts again after the reset, switch the Codex account — skiff mints the login.
+
+## STATE at 23:41Z 2026-09-06 — Gene's ten decisions, three of four code items landed
+- LANDED on MCP/main: ceiling 7030bb56 (inb-b60d6e), hot verification 0ddf8ec5 (inb-adcc9e), receipt truth 2b4080fe (inb-2b33ec, inb-186182). In flight: refusal-text last item fable/refusal-text-shape (ca68adc4 + third trunk merge pending) → fence r8 → battery → land (inb-2da8ea). Doctrine (1) in both role skills; drift policy (2) above; (6)(7) hold; (9) rode (4); (10) mayor (inb-4a0f43; eight docs-only branches queued).
+- Instruments: block-ledger (row gene-ten open), cadence-watch cron (MODEL_MISMATCH, session-id liveness), usage-watch window-guarded, land verdict line, runner --cell/--parallel/--first-pair-gate/--dry-run receipt/--shared-box.
+- Next action if resumed mid-flight: check origin/fable/refusal-text-shape tip; if merged past ca68adc4, run ~/bin/fence-run <tip> /var/tmp/forge/refusal-text-fence-brief-r8.md refusal-text-r8 (replace __TIP__ in the brief) and receipt-chain (copy receipt-chain-13.sh pattern) in parallel; land on LAND YES + receipt.
