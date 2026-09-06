@@ -93,7 +93,7 @@
                      #'mission/read-all (fn [_] [])
                      #'cli/save! (fn [_ m] (swap! calls conj [:save (:state m)])
                                    (reset! saved m))}
-      #(let [result (invoke-run {:verb "owner_forms" :request request})]
+      #(let [result (invoke-run {:verb "owner_forms" :request request :receipt-dir "/fixture/receipts"})]
          (is (= :verified (:state result)))
          (is (= [:plan :save :save :execute :save] (mapv first @calls)))
          (is (= [:ready :applied :verified]
@@ -106,7 +106,7 @@
     (is (str/includes? help "immediately"))
     (is (str/includes? help "propose"))
     (is (str/includes? help "docs/mission-typist.md"))
-    (is (not (str/includes? help "THE SPEC")))
+    (is (not (str/includes? help "HELPER EXTRACTION SPEC")))
     (is (str/includes? (mission/help-text nil) "run --spec-file")))
   (let [direct (shell/sh "bin/mission" "help" "run")
         flag (shell/sh "bin/mission" "run" "--help")]

@@ -468,6 +468,16 @@
             ;; snapshot is even checked, because a stale-plan refusal would send the
             ;; caller to re-plan against a tree its dependency has not touched yet.
             (mission/dependency-refusal m (mission/by-id (mission/read-all state-dir)))
+            (when (and (= "owner_forms" (:verb m))
+                       (not (and (string? receipt-dir) (not (str/blank? receipt-dir)))))
+              {:ok false :id id :error_type "typist-receipt-dir-required"
+               :error "Choose where to retain source-bearing artifacts with --receipt-dir; no destination is created by this refusal."
+               :mutation-attempted false
+               :next_call
+               (display/command
+                 (into (cond-> ["bin/mission" "apply" id "--workspace" workspace]
+                         state-home (conj "--state-home" state-home))
+                       ["--receipt-dir" (str (io/file workspace ".clj-surgeon/typist"))]))})
             ;; @stale-resume: nothing is staged, nothing is written, and the refusal
             ;; names the files that moved.
             (stale? m)

@@ -286,8 +286,7 @@
     result))
 
 (defn make-artifacts! [config]
-  (let [parent (io/file (or (:receipt-dir config)
-                            (str (System/getProperty "user.home") "/.local/state/clj-surgeon/typist")))]
+  (let [parent (io/file (:receipt-dir config))]
     (.mkdirs parent)
     (str (Files/createTempDirectory (.toPath parent) "mission-" (make-array FileAttribute 0)))))
 
@@ -375,6 +374,8 @@
         closed-snapshot (atom nil)]
     (try
       (when-not (and authority (unchanged? authority)) (reject! :typist-stale-plan))
+      (when-not (and (string? (:receipt-dir config)) (not (str/blank? (:receipt-dir config))))
+        (reject! :typist-receipt-dir-required))
       (let [artifacts (make-artifacts! config)
             _ (file-ops/atomic-write! (str (io/file artifacts "authority.edn")) (pr-str authority))
             handle (request-candidates! authority)

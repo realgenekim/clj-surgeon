@@ -108,7 +108,7 @@
                                                              {:committed true
                                                               :receipt_hash "sha"
                                                               :undo_receipt "undo.edn"})}}}
-      #(let [result (cli/apply! {:id "M-1" :workspace "/fixture"})]
+      #(let [result (cli/apply! {:id "M-1" :workspace "/fixture" :receipt-dir "/fixture/receipts"})]
          (is (= :verified (:state result)))
          (is (= (:id result) (:mission_id (first @seen))))
          (is (= (name (:state result)) (:mission_state (first @seen))))))
@@ -140,3 +140,12 @@
         (is (= (:id receipt) (:mission_id (first lines))))
         (is (false? (:ok (first lines)))))
       (finally (doseq [p (reverse (file-seq root))] (io/delete-file p true))))))
+
+(deftest observed-stale-and-destination-refusals-retain-closed-event-types
+  (doseq [reason ["mission-snapshot-stale" "typist-receipt-dir-required"]]
+    (let [seen (atom [])]
+      (with-redefs [events/record! #(swap! seen conj %)]
+        (observer/observe! "apply" {:id "M-1"}
+          (fn [] {:ok false :error_type reason})))
+      (is (= reason (:error_type (first @seen))))
+      (is (false? (:ok (first @seen)))))))

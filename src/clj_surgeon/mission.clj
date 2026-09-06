@@ -846,9 +846,9 @@
    "propose" "propose --spec-file <file|-> [--state-home H] [--full]\n    Save frozen intent/source/proof authority and a mission id; no provider call or source write.\n    This is an authority preview, not a generated candidate diff.\n    Apply generates candidates, proves them, and may write source; there is no intervening candidate-diff approval command."
    "plan"   "plan  [--spec-file <file|->] | plan <id> [--spec-file <file|->]\n    With no id: open-and-plan (same as `open`).\n    With an id: RE-plan that mission against the tree as it now is.\n    With an id AND --spec-file on a :blocked/:failed mission: open a NEW\n    mission carrying the repaired intent, linked :supersedes to the old one."
    "show"   "show <id> --workspace R [--full]\n    Bounded saved state, receipt, route and candidate refusals (no proof rerun).\n    --full prints the previous complete ledger view, including frozen source.\n    Readable failed missions exit 0; missing/corrupt missions exit 1 with a runnable recovery example."
-   "run"    "run --spec-file <file|-> [--state-home H]\n    owner_forms only: save a frozen plan and immediately apply it in one JVM.\n    WRITES source after proof. For authority review before write, use propose then apply.\n    No existing id. A blocked plan is saved; exits nonzero with its decision."
-   "apply"  "apply <id> --workspace R\n    Run the guarded transaction and its proof. The mission carries its own\n    verification authority; no spec is re-supplied. Exits non-zero on a\n    refusal OR a failed receipt."
-   "resume" "resume <id> --workspace R\n    Move it from wherever it is: :ready -> apply, :verified -> undo.\n    Publication/recovery records block verified -> undo; see help undo."
+   "run"    "run --spec-file <file|-> --receipt-dir D [--state-home H]\n    owner_forms only: save a frozen plan and immediately apply it in one JVM.\n    --receipt-dir explicitly chooses where source-bearing artifacts are retained.\n    WRITES source after proof. For authority review before write, use propose then apply.\n    No existing id. A blocked plan is saved; exits nonzero with its decision."
+   "apply"  "apply <id> --workspace R [--receipt-dir D]\n    owner_forms requires --receipt-dir; its suggested path is not created on refusal.\n    Run the guarded transaction and its proof. The mission carries its own\n    verification authority; no spec is re-supplied. Exits non-zero on a\n    refusal OR a failed receipt."
+   "resume" "resume <id> --workspace R [--receipt-dir D]\n    A ready owner_forms mission requires --receipt-dir for its apply.\n    Move it from wherever it is: :ready -> apply, :verified -> undo.\n    Publication/recovery records block verified -> undo; see help undo."
    "undo"   "undo <id> --workspace R\n    The explicit source inverse, from the receipt apply published.\n    Refuses mission-undo-after-git-publication for published, pending or uncertain Git publication.\n    Git is not undone automatically."
    "link"   "link <id> --depends-on <id> | --supersedes <id> --workspace R\n    Order two missions. A cycle is refused before it is written."
    "ready"  "ready --workspace R\n    :ready — what a machine can start now.\n    :waiting — real work held by a dependency or owed a re-plan."
@@ -890,8 +890,8 @@
          (get verb-help "run")
          "\n\nUse the owner_forms spec documented in docs/mission-typist.md.\n"
          "The helper_extraction example in global help is not a run spec.\n"
-         "  bin/mission run --spec-file owner-forms.edn --state-home H\n"
-         "Structured stdin: bin/mission run --spec-file - < owner-forms.edn\n"
+         "  bin/mission run --spec-file owner-forms.edn --state-home H --receipt-dir /absolute/project/.clj-surgeon/typist\n"
+         "Structured stdin: bin/mission run --spec-file - --receipt-dir /absolute/project/.clj-surgeon/typist < owner-forms.edn\n"
          "A blocked run returns :error_type \"mission-not-ready\" and its id.\n"
          "Use show <id> --workspace R to inspect it; apply failures exit nonzero.\n")
     (contains? #{"commit" "fallback"} verb)
@@ -908,7 +908,7 @@
         (str "  " one "\n")
         (str/join "\n" (for [[_ text] (sort verb-help)]
                          (str "  " text "\n"))))
-      "\nTHE SPEC (copy-paste, closed shape — every field below is required\n"
+      "\nFor owner_forms use docs/examples/owner-forms-template.edn and docs/mission-typist.md.\nHELPER EXTRACTION SPEC (copy-paste, closed shape — every field below is required\n"
       "unless marked optional; nothing else is accepted):\n\n"
       (with-out-str (pp/pprint example-request))
       "\nTHE PROFILE TEMPLATE — after adding real behavioral proof, write it to <workspace_root>/"
@@ -919,7 +919,7 @@
       "\nWorkflow after configuring real behavioral proof:\n"
       "  bin/mission open  --spec-file spec.edn --state-home $H\n"
       "  bin/mission ready --workspace $WS --state-home $H\n"
-      "  bin/mission apply M-1 --workspace $WS --state-home $H\n"
+      "  bin/mission apply M-1 --workspace $WS --state-home $H --receipt-dir $WS/.clj-surgeon/typist\n"
       "  bin/mission show  M-1 --workspace $WS --state-home $H\n")))
 
 ;; ---------------------------------------------------------------------------

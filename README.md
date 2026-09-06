@@ -2257,13 +2257,15 @@ The branch-only `bin/mission` prototype can save and immediately execute a
 bounded [`owner_forms` request](docs/mission-typist.md) in one JVM:
 
 ```bash
-bin/mission run --spec-file owner-forms.edn --state-home "$MISSION_STATE"
+bin/mission run --spec-file owner-forms.edn --state-home "$MISSION_STATE" --receipt-dir "$WORKSPACE/.clj-surgeon/typist"
 ```
 
 This is a write command: a ready plan is applied immediately, with its frozen
 owners, independent acceptance and guarded commit. For an intervening review,
 use `bin/mission propose --spec-file owner-forms.edn`, inspect its dossier, then
-`bin/mission apply M-1 --workspace "$WORKSPACE"`. `run` accepts no existing id
+`bin/mission apply M-1 --workspace "$WORKSPACE" --receipt-dir "$WORKSPACE/.clj-surgeon/typist"`. Owner-forms execution requires this explicit destination for source-bearing
+artifacts; a missing destination refuses before artifact/provider work and leaves
+the saved ready mission available for retry. `run` accepts no existing id
 and no other mission verb. It returns the ordinary terminal mission receipt;
 blocked planning returns `:error_type "mission-not-ready"` with the saved id
 and decision and exits nonzero, without changing source. `show` can inspect

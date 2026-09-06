@@ -261,3 +261,15 @@ display read returns a typed refusal, stdout must not report that failure with
 exit zero. Classify both the original operation and rendered response; preserve
 the saved ledger and --full bypass. A subprocess witness injects failure only
 at show after real proposal persistence. No execution/provider behavior changes.
+
+### Explicit artifact destination
+
+Owner-forms execution must receive an explicit nonblank receipt directory; it
+may not silently retain frozen source in a home-directory default. CLI apply
+(and run through apply) refuses before :applied, leaving the ready mission
+unchanged and returning exact retry argv bound to id/workspace/state-home. The
+executor independently rejects missing destinations before artifact or provider
+calls. Explicit destinations keep their existing semantics; helper_extraction
+is unchanged. Refusal does not create a suggested directory. The closed event
+normalizer admits only the new typist-receipt-dir-required code and the separately
+observed mission-snapshot-stale spelling; no arbitrary-code passthrough.

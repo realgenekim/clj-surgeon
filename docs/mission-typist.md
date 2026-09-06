@@ -6,11 +6,20 @@ it has not earned a production or end-to-end performance claim.
 
 ```sh
 bin/mission propose --spec-file - < owner-forms.edn
-bin/mission apply M-1 --workspace /absolute/project
+bin/mission apply M-1 --workspace /absolute/project --receipt-dir /absolute/project/.clj-surgeon/typist
 bin/mission undo M-1 --workspace /absolute/project
 ```
 
-For a fully decided mission, `bin/mission run --spec-file owner-forms.edn`
+Owner-forms execution requires an explicit `--receipt-dir`: artifacts include
+frozen source, candidates and receipts. Choose an appropriate local destination;
+there is no implicit home-directory fallback. A missing/blank destination returns
+`typist-receipt-dir-required` before source/artifact/provider work, with a retry
+command bound to the saved id and workspace. CLI refusal leaves a ready mission
+ready; the suggested directory is not created until an explicit execution.
+`run` also retains its newly saved ready id when this preflight refuses. Explicit
+destinations keep their existing behavior; helper extraction is unaffected.
+
+For a fully decided mission, `bin/mission run --spec-file owner-forms.edn --receipt-dir /absolute/project/.clj-surgeon/typist`
 saves and immediately applies the plan in one JVM. This is an explicit write
 command, restricted to `owner_forms` and no existing mission id. Use `propose`
 then `apply` when an intervening authority review matters. Proposal is an
@@ -102,7 +111,7 @@ After supplying genuine facts and reviewing the template:
 bin/mission propose --spec-file - < owner-forms.edn
 bin/mission show M-1 --workspace /absolute/project
 # M-1 is illustrative: use the id actually returned, and inspect refusals.
-bin/mission apply M-1 --workspace /absolute/project
+bin/mission apply M-1 --workspace /absolute/project --receipt-dir /absolute/project/.clj-surgeon/typist
 ```
 
 A candidate is a JSON array of objects with exactly `file`, `owner`, and `form`

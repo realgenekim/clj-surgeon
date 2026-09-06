@@ -985,7 +985,7 @@
          (is (= :ready (:state @saved)))
          (is (= typist-planned (:plan @saved)))
          (is (= typist-request (:intent @saved)))
-         (cli/apply! {:id "m1" :workspace "/fixture"})
+         (cli/apply! {:id "m1" :workspace "/fixture" :receipt-dir "/fixture/receipts"})
          (is (= [:plan :execute] (mapv first @calls)))
          (is (= typist-planned (get-in @calls [1 2 :plan])))
          (is (= :verified (:state @saved)))))))
@@ -1062,7 +1062,7 @@
        #'cli/save! (fn [_ m] (reset! saved m))}
       #(do
          (is (thrown? clojure.lang.ExceptionInfo
-                      (cli/apply! {:id "m1" :workspace "/fixture"})))
+                      (cli/apply! {:id "m1" :workspace "/fixture" :receipt-dir "/fixture/receipts"})))
          (is (= :applied (:state @saved)))
          (is (= @published @saved))
          (is (= (select-keys recovery [:receipt :receipt_hash]) (:undo @saved)))
@@ -1087,6 +1087,6 @@
                                (throw (ex-info "recovery persistence failed" {}))))}
       #(do
          (is (thrown? clojure.lang.ExceptionInfo
-                      (cli/apply! {:id "m1" :workspace "/fixture"})))
+                      (cli/apply! {:id "m1" :workspace "/fixture" :receipt-dir "/fixture/receipts"})))
          (is (= 2 @saves))
          (is (false? @continued))))))

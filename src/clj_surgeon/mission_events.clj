@@ -13,7 +13,7 @@
   #{"mission-unknown-id" "mission-corrupt-mission" "mission-unreadable-mission"
     "mission-verification-profile-not-admitted"
     "mission-unknown-verb" "mission-not-found" "mission-invalid-id"
-    "mission-corrupt" "mission-stale-snapshot" "mission-illegal-transition"
+    "mission-corrupt" "mission-stale-snapshot" "mission-snapshot-stale" "mission-illegal-transition"
     "mission-dependency-unverified" "mission-verification-profile-required"
     "mission-verification-profile-not-found" "mission-undo-receipt-missing"
     "mission-undo-failed" "mission-not-ready" "mission-run-request"
@@ -22,7 +22,7 @@
     "typist-identical-proof-commands" "typist-parser-depth"
     "forms-protected-syntax" "typist-all-candidates-rejected"
     "typist-proof-failed" "typist-acceptance-failed"
-    "typist-stale-plan" "typist-format-failed" "typist-formatter-failed"
+    "typist-stale-plan" "typist-receipt-dir-required" "typist-format-failed" "typist-formatter-failed"
     "typist-gate-failed" "typist-candidate-format-failed"
     "typist-execution-failed" "typist-transport-cleanup-incomplete"})
 

@@ -189,14 +189,16 @@
       (is (= 0 (:exit r)))
       (is (= (:out r) (mission/help-text verb)))
       (doseq [term terms] (is (str/includes? (:out r) term)))
-      (doseq [unrelated ["helper_extraction" "/bin/true" "THE SPEC" "THE PROFILE CONFIG"]]
+      (doseq [unrelated ["helper_extraction" "/bin/true" "HELPER EXTRACTION SPEC" "THE PROFILE CONFIG"]]
         (is (not (str/includes? (:out r) unrelated)))))))
 
 (deftest generic-help-does-not-offer-a-no-op-as-verification
   (let [r (shell/sh "bin/mission" "help")]
     (is (= 0 (:exit r)))
     (is (not (str/includes? (:out r) "/bin/true")))
-    (is (str/includes? (:out r) "behavioral proof"))))
+    (is (str/includes? (:out r) "behavioral proof"))
+    (is (str/includes? (:out r) "HELPER EXTRACTION SPEC"))
+    (is (str/includes? (:out r) "docs/examples/owner-forms-template.edn"))))
 
 (deftest propose-help-is-discoverable-and-distinguishes-authority-from-diff
   (let [r (shell/sh "bin/mission" "help" "propose")]
@@ -205,7 +207,7 @@
     (doseq [term ["authority preview" "candidate diff" "docs/mission-typist.md"
                   "docs/examples/owner-forms-template.edn" "source"]]
       (is (str/includes? (:out r) term)))
-    (is (not (str/includes? (:out r) "THE SPEC")))))
+    (is (not (str/includes? (:out r) "HELPER EXTRACTION SPEC")))))
 
 (deftest undo-help-explains-publication-refusal-and-read-only-inspection
   (let [r (shell/sh "bin/mission" "help" "undo")]
@@ -214,7 +216,7 @@
                   "git --no-optional-locks" "symbolic-ref" "show --no-patch"
                   "--no-ext-diff" "--no-textconv" "Do not delete"]]
       (is (str/includes? (:out r) term)))
-    (is (not (str/includes? (:out r) "THE SPEC")))))
+    (is (not (str/includes? (:out r) "HELPER EXTRACTION SPEC")))))
 
 (deftest caller-template-keeps-unmeasured-facts-unknown
   (let [template (edn/read-string (slurp "docs/examples/owner-forms-template.edn"))

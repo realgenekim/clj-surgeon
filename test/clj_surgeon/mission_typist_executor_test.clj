@@ -198,3 +198,44 @@
                 (do (is (true? (:truncated refusal)))
                     (is (not (contains? refusal :next_call)))))
               (is (= source (slurp file))))))))))
+
+(deftest missing-receipt-destination-refuses-before-artifacts-or-transport
+  (with-fixture
+    (fn [root file]
+      (let [req (request root) plan (executor/plan req profiles) calls (atom [])]
+        (with-redefs [executor/make-artifacts! (fn [_] (swap! calls conj :artifacts)
+                                                 (throw (ex-info "offline write guard" {})))
+                      executor/request-candidates! (fn [_] (swap! calls conj :transport) [])]
+          (doseq [destination [nil "" "   "]]
+            (let [result (executor/execute! req {:plan plan :receipt-dir destination})]
+              (is (= :typist-receipt-dir-required (:error-type result)))
+              (is (false? (:mutation-attempted result))))))
+        (is (empty? @calls))
+        (is (= source (slurp file)))))))
+
+(deftest missing-cli-destination-preserves-ready-mission-with-runnable-retry
+  (with-fixture
+    (fn [root file]
+      (let [home (str (io/file root "state"))
+            opened (cli/propose! {:verb "owner_forms" :request (request root)
+                                  :profiles profiles :state-home home})
+            state-dir (mission/workspace-state-dir root home)
+            before (mission/read-mission state-dir (:id opened))
+            calls (atom [])]
+        (with-redefs [executor/request-candidates! (fn [_] (swap! calls conj :transport) [])
+                      executor/make-artifacts! (fn [_] (swap! calls conj :artifacts)
+                                                 (throw (ex-info "offline write guard" {})))]
+          (let [result (cli/apply! {:id (:id opened) :workspace root :state-home home})
+                argv (get-in result [:next_call :argv])]
+            (is (= false (:ok result)))
+            (is (= "typist-receipt-dir-required" (:error_type result)))
+            (is (= ["bin/mission" "apply" (:id opened) "--workspace" root
+                    "--state-home" home "--receipt-dir" (str (io/file root ".clj-surgeon/typist"))]
+                   argv))
+            (is (= before (mission/read-mission state-dir (:id opened)))))
+          (let [result (cli/run! {:verb "owner_forms" :request (request root)
+                                  :profiles profiles :state-home home})]
+            (is (= "typist-receipt-dir-required" (:error_type result)))
+            (is (= :ready (:state (mission/read-mission state-dir (:id result)))))))
+        (is (empty? @calls))
+        (is (= source (slurp file)))))))
