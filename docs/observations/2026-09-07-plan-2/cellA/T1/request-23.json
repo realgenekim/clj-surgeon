@@ -1,0 +1,26 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "extraction": {
+  "file": "src/cfp_scheduler_killer/views.clj",
+  "to": "src/cfp_scheduler_killer/views/event_setup.clj",
+  "forms": [
+   "default-start-date",
+   "default-end-date",
+   "example-name",
+   "example-location",
+   "example-website",
+   "event-details-page",
+   "event-marquee",
+   "events-list-page",
+   "new-event-page",
+   "slug-status"
+  ],
+  "require_policy": "minimal",
+  "caller_changes": [],
+  "ignored_caller_files": [
+   "src/cfp_scheduler_killer/server.clj",
+   "test/cfp_scheduler_killer/server_test.clj"
+  ]
+ }
+}

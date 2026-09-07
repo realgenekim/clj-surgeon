@@ -1,0 +1,7 @@
+{
+ "status": "refused",
+ "code": "expect-count-mismatch",
+ "ms": 331.32,
+ "text": "Intent 0 expected 1 matches, found 0\nchange 0 \u00b7 edit-1\n\u2713 source unchanged\n\u2192 Correct the declared scope or count and call apply_clojure_changes once.",
+ "cause": "I supplied a truncated docstring literal; abandoned (cosmetic only)"
+}

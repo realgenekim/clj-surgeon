@@ -1,0 +1,27 @@
+{
+ "status": "ok",
+ "elapsed_ms": 809.797297,
+ "read_complete": true,
+ "next_action": "fill_caller_decisions_then_apply_once",
+ "source_hash": "81192516828482afd0653311127bbac1f9ef9c8b923952940ebf1e31e7004202",
+ "plan": {
+  "target-ns": "cc-split-T1.src.cfp-scheduler-killer.views.shell",
+  "required-public-forms": [
+   "datastar-script"
+  ],
+  "callers-to-review": [
+   "dev/enrich_demo_submissions.clj",
+   "dev/generate_aie_submissions.clj",
+   "src/cfp_scheduler_killer/auth.clj",
+   "src/cfp_scheduler_killer/seed_flood.clj",
+   "src/cfp_scheduler_killer/server.clj"
+  ],
+  "target-requires": [
+   "hiccup.page",
+   "hiccup2.core"
+  ],
+  "lines-extracted": 40,
+  "target-alias": "shell"
+ },
+ "note": "DEFECT OBSERVED: target-ns derived as cc-split-T1.src.cfp-scheduler-killer.views.shell because file-path->ns-name matched the FIRST '/src/' in the absolute path (/home/forge/src/...)."
+}

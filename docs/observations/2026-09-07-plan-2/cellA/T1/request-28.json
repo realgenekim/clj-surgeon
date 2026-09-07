@@ -1,0 +1,25 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "extraction": {
+  "file": "src/cfp_scheduler_killer/views.clj",
+  "to": "src/cfp_scheduler_killer/views/schedule.clj",
+  "forms": [
+   "agenda-page",
+   "block-card",
+   "conflict-chips",
+   "day-tab",
+   "placed-card",
+   "place-form",
+   "room-options",
+   "schedule-grid",
+   "schedule-page",
+   "schedule-status-bar"
+  ],
+  "require_policy": "minimal",
+  "caller_changes": [],
+  "ignored_caller_files": [
+   "src/cfp_scheduler_killer/server.clj"
+  ]
+ }
+}

@@ -1,0 +1,25 @@
+{
+ "tool": "inspect_clojure",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "mode": "plan-extraction",
+ "file": "src/cfp_scheduler_killer/views.clj",
+ "to": "src/cfp_scheduler_killer/views/format.clj",
+ "forms": [
+  "date-fmt",
+  "datetime-fmt",
+  "when-fmt",
+  "iso-date-fmt",
+  "->instant",
+  "->local-date",
+  "cfp-public-url",
+  "fmt-cfp-window",
+  "fmt-close-date",
+  "fmt-date",
+  "fmt-date-range",
+  "fmt-instant",
+  "fmt-when",
+  "not-blank",
+  "relative-when"
+ ],
+ "require_policy": "minimal"
+}

@@ -1,0 +1,23 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "extraction": {
+  "file": "src/cfp_scheduler_killer/views.clj",
+  "to": "src/cfp_scheduler_killer/views/integrations.clj",
+  "forms": [
+   "api-docs-page",
+   "exports-page",
+   "mask-webhook-url",
+   "settings-page",
+   "slack-form"
+  ],
+  "require_policy": "minimal",
+  "caller_changes": [],
+  "ignored_caller_files": [
+   "src/cfp_scheduler_killer/server.clj",
+   "test/cfp_scheduler_killer/exports_test.clj",
+   "test/cfp_scheduler_killer/server_test.clj",
+   "test/cfp_scheduler_killer/sinks_test.clj"
+  ]
+ }
+}

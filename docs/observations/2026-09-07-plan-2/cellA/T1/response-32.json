@@ -1,0 +1,16 @@
+{
+ "status": "ok",
+ "committed": true,
+ "changes": 20,
+ "edits": 63,
+ "files": 20,
+ "elapsed_ms": 1806.82153,
+ "verification_complete": true,
+ "canonical_effect_identity": {
+  "version": 1,
+  "sha256": "ab4998c97db95fed5f82910956cbb921ce3d909b62266fefa4e92e054767e664",
+  "files": 20,
+  "effects": 63
+ },
+ "receipt_hash": "9cebf87a1476e8a4cbb4c7dce1c27d4965ef661ae32c6fdc26634fd4f2d91892"
+}

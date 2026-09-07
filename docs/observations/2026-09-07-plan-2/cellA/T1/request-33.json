@@ -1,0 +1,6 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "edits": "<52 caller edits, event-marquee matches=3, form-builder-page matches=4>",
+ "note": "see caller-edits-v1.json"
+}

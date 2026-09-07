@@ -1,0 +1,26 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "extraction": {
+  "file": "src/cfp_scheduler_killer/views.clj",
+  "to": "src/cfp_scheduler_killer/views/public_cfp.clj",
+  "forms": [
+   "speaker-inputs",
+   "md-token",
+   "cfp-about-you",
+   "cfp-closed-notice",
+   "cfp-page",
+   "cfp-success-page",
+   "md-inline",
+   "md-lite",
+   "render-markdown",
+   "speaker-input"
+  ],
+  "require_policy": "minimal",
+  "caller_changes": [],
+  "ignored_caller_files": [
+   "src/cfp_scheduler_killer/server.clj",
+   "test/cfp_scheduler_killer/server_test.clj"
+  ]
+ }
+}

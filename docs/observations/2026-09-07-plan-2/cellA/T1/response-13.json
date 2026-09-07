@@ -1,0 +1,25 @@
+{
+ "status": "ok",
+ "elapsed_ms": 802.799518,
+ "source_hash": "470f8978edf3c2b407357459e1e402c1b59ce3dcd051ceb708495310bd3bd916",
+ "plan": {
+  "form-count": 15,
+  "target-ns": "cc-split-T1.src.cfp-scheduler-killer.views.format",
+  "required-public-forms": [
+   "not-blank"
+  ],
+  "target-requires": [
+   "cfp-scheduler-killer.events",
+   "clojure.string"
+  ],
+  "callers-to-review": [
+   "dev/migrate_pg_to_store.clj",
+   "src/cfp_scheduler_killer/events.clj",
+   "src/cfp_scheduler_killer/exports.clj",
+   "src/cfp_scheduler_killer/server.clj",
+   "test/cfp_scheduler_killer/polish_test.clj"
+  ],
+  "lines-extracted": 109,
+  "target-alias": "format"
+ }
+}

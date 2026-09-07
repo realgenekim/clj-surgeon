@@ -1,0 +1,10 @@
+{
+ "status": "ok",
+ "committed": true,
+ "changes": 52,
+ "edits": 91,
+ "files": 5,
+ "elapsed_ms": 13723.643076,
+ "verification_complete": true,
+ "receipt_hash": "3c904148060433fc3b8682841910208cea099a42bcdeefc581082bd64dc1ebd3"
+}

@@ -1,0 +1,27 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "extraction": {
+  "file": "src/cfp_scheduler_killer/views.clj",
+  "to": "src/cfp_scheduler_killer/views/shell.clj",
+  "forms": [
+   "versioned",
+   "favicon-data-uri",
+   "page-shell",
+   "datastar-script"
+  ],
+  "require_policy": "minimal",
+  "public_forms": [
+   "datastar-script"
+  ],
+  "source_hash": "81192516828482afd0653311127bbac1f9ef9c8b923952940ebf1e31e7004202",
+  "caller_changes": [],
+  "ignored_caller_files": [
+   "dev/enrich_demo_submissions.clj",
+   "dev/generate_aie_submissions.clj",
+   "src/cfp_scheduler_killer/auth.clj",
+   "src/cfp_scheduler_killer/seed_flood.clj",
+   "src/cfp_scheduler_killer/server.clj"
+  ]
+ }
+}

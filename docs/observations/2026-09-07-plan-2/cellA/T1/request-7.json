@@ -1,0 +1,14 @@
+{
+ "tool": "inspect_clojure",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "mode": "plan-extraction",
+ "file": "src/cfp_scheduler_killer/views.clj",
+ "to": "src/cfp_scheduler_killer/views/shell.clj",
+ "forms": [
+  "versioned",
+  "favicon-data-uri",
+  "page-shell",
+  "datastar-script"
+ ],
+ "require_policy": "minimal"
+}

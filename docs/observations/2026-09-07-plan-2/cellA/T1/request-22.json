@@ -1,0 +1,23 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "extraction": {
+  "file": "src/cfp_scheduler_killer/views.clj",
+  "to": "src/cfp_scheduler_killer/views/dashboard.clj",
+  "forms": [
+   "alert-rows-partial",
+   "checklist-item",
+   "dash-days-left",
+   "dash-feed-talk",
+   "dash-recent-line",
+   "dash-rel-time",
+   "event-dashboard-page",
+   "event-dashboard-region"
+  ],
+  "require_policy": "minimal",
+  "caller_changes": [],
+  "ignored_caller_files": [
+   "src/cfp_scheduler_killer/server.clj"
+  ]
+ }
+}

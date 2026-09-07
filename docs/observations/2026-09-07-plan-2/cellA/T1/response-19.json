@@ -1,0 +1,16 @@
+{
+ "status": "ok",
+ "committed": true,
+ "changes": 1,
+ "edits": 2,
+ "files": 2,
+ "elapsed_ms": 1173.485878,
+ "verification_complete": true,
+ "next_action": "none",
+ "caller_proof": {
+  "level": "structural-candidates-only",
+  "scan_complete": true,
+  "semantic_provider_used": false,
+  "zero_callers_authoritative": false
+ }
+}

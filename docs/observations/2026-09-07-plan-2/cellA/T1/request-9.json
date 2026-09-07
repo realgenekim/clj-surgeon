@@ -1,0 +1,17 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "extraction": {
+  "file": "src/cfp_scheduler_killer/views.clj",
+  "to": "src/cfp_scheduler_killer/views/avatar.clj",
+  "forms": [
+   "face-pool-size",
+   "initials",
+   "pool-face"
+  ],
+  "require_policy": "minimal",
+  "public_forms": [
+   "initials"
+  ]
+ }
+}

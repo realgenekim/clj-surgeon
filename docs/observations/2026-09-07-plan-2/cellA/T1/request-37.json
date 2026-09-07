@@ -1,0 +1,14 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "edits": [
+  {
+   "file": "src/cfp_scheduler_killer/server.clj",
+   "within": {
+    "form": "handle-events-preview"
+   },
+   "from": "<partial docstring>",
+   "to": "<...>"
+  }
+ ]
+}

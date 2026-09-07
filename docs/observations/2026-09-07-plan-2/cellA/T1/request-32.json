@@ -1,0 +1,6 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "edits": "<20 grouped root-scope symbol renames cc-split-T1.src.cfp-scheduler-killer.views.X -> cfp-scheduler-killer.views.X across the 20 new files; verbatim payload in caller-edits/nsfix-edits.json>",
+ "note": "see nsfix-edits.json"
+}

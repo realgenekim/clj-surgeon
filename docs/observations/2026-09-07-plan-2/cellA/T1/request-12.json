@@ -1,0 +1,36 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "extraction": {
+  "file": "src/cfp_scheduler_killer/views.clj",
+  "to": "src/cfp_scheduler_killer/views/format.clj",
+  "forms": [
+   "date-fmt",
+   "datetime-fmt",
+   "when-fmt",
+   "iso-date-fmt",
+   "->instant",
+   "->local-date",
+   "cfp-public-url",
+   "fmt-cfp-window",
+   "fmt-close-date",
+   "fmt-date",
+   "fmt-date-range",
+   "fmt-instant",
+   "fmt-when",
+   "not-blank",
+   "relative-when"
+  ],
+  "require_policy": "minimal",
+  "public_forms": [
+   "not-blank"
+  ],
+  "caller_changes": [],
+  "ignored_caller_files": [
+   "dev/migrate_pg_to_store.clj",
+   "src/cfp_scheduler_killer/exports.clj",
+   "src/cfp_scheduler_killer/server.clj",
+   "test/cfp_scheduler_killer/polish_test.clj"
+  ]
+ }
+}

@@ -1,0 +1,51 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "extraction": {
+  "file": "src/cfp_scheduler_killer/views.clj",
+  "to": "src/cfp_scheduler_killer/views/organizer_layout.clj",
+  "forms": [
+   "breadcrumb",
+   "dev-strip",
+   "event-resume-path",
+   "event-setup-done?",
+   "header",
+   "organizer-shell",
+   "sb-group",
+   "sb-link",
+   "sb-out",
+   "sidebar",
+   "time-travel-bar",
+   "whoami-strip"
+  ],
+  "require_policy": "minimal",
+  "public_forms": [
+   "header"
+  ],
+  "caller_changes": [],
+  "ignored_caller_files": [
+   "src/cfp_scheduler_killer/auth.clj",
+   "src/cfp_scheduler_killer/auth_google.clj",
+   "src/cfp_scheduler_killer/ds.clj",
+   "src/cfp_scheduler_killer/events.clj",
+   "src/cfp_scheduler_killer/exports.clj",
+   "src/cfp_scheduler_killer/server.clj",
+   "src/cfp_scheduler_killer/sinks.clj",
+   "src/cfp_scheduler_killer/store.clj",
+   "test/cfp_scheduler_killer/authz_event_scope_test.clj",
+   "test/cfp_scheduler_killer/authz_security_test.clj",
+   "test/cfp_scheduler_killer/board_test.clj",
+   "test/cfp_scheduler_killer/comms_test.clj",
+   "test/cfp_scheduler_killer/exports_test.clj",
+   "test/cfp_scheduler_killer/forms_test.clj",
+   "test/cfp_scheduler_killer/polish_test.clj",
+   "test/cfp_scheduler_killer/portal_test.clj",
+   "test/cfp_scheduler_killer/replay_test.clj",
+   "test/cfp_scheduler_killer/schedule_test.clj",
+   "test/cfp_scheduler_killer/server_test.clj",
+   "test/cfp_scheduler_killer/sinks_test.clj",
+   "test/cfp_scheduler_killer/speaker_flow_test.clj",
+   "test/cfp_scheduler_killer/validation_test.clj"
+  ]
+ }
+}

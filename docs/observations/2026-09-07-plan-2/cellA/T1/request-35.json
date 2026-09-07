@@ -1,0 +1,5 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "changes": "<3 insert_after changes adding the remaining view libspecs to server.clj (16), polish_test.clj (1), forms_test.clj (1)>"
+}

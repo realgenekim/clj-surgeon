@@ -1,0 +1,7 @@
+{
+ "status": "refused",
+ "code": "expect-count-mismatch",
+ "ms": 3202.19,
+ "text": "Intent 17 expected 3 matches, found 2\nchange 17 \u00b7 edit-18\n\u2713 source unchanged\n\u2192 Correct the declared scope or count and call apply_clojure_changes once.",
+ "cause": "my per-file counts included occurrences inside docstrings; the tool counts CST symbol nodes only"
+}

@@ -1,0 +1,22 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "extraction": {
+  "file": "src/cfp_scheduler_killer/views.clj",
+  "to": "src/cfp_scheduler_killer/views/portal.clj",
+  "forms": [
+   "edit-form",
+   "portal-page",
+   "portal-submission",
+   "profile-form",
+   "status-pill",
+   "task-row"
+  ],
+  "require_policy": "minimal",
+  "caller_changes": [],
+  "ignored_caller_files": [
+   "src/cfp_scheduler_killer/server.clj",
+   "test/cfp_scheduler_killer/portal_test.clj"
+  ]
+ }
+}

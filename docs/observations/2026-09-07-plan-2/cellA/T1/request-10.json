@@ -1,0 +1,21 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "extraction": {
+  "file": "src/cfp_scheduler_killer/views.clj",
+  "to": "src/cfp_scheduler_killer/views/form_controls.clj",
+  "forms": [
+   "answer-input",
+   "field-error",
+   "field-errors",
+   "req-mark"
+  ],
+  "require_policy": "minimal",
+  "public_forms": [
+   "answer-input",
+   "field-error",
+   "field-errors",
+   "req-mark"
+  ]
+ }
+}

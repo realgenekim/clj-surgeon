@@ -1,0 +1,45 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "extraction": {
+  "file": "src/cfp_scheduler_killer/views.clj",
+  "to": "src/cfp_scheduler_killer/views/review.clj",
+  "forms": [
+   "board-page",
+   "board-qs",
+   "board-region",
+   "board-row",
+   "capture-page",
+   "chair-on-event?",
+   "coverage-bar",
+   "fmt-mean",
+   "fmt-stars",
+   "inform-banner",
+   "notice-region",
+   "opinions-block",
+   "private-note-block",
+   "row-controls",
+   "row-controls*",
+   "sort-chip",
+   "sort-click",
+   "sort-th",
+   "star-form",
+   "star-histogram",
+   "status-chip",
+   "submission-detail-page",
+   "submissions-sparkline",
+   "track-chip",
+   "submissions-page"
+  ],
+  "require_policy": "minimal",
+  "caller_changes": [],
+  "ignored_caller_files": [
+   "src/cfp_scheduler_killer/server.clj",
+   "src/cfp_scheduler_killer/sinks.clj",
+   "test/cfp_scheduler_killer/board_test.clj",
+   "test/cfp_scheduler_killer/forms_test.clj",
+   "test/cfp_scheduler_killer/polish_test.clj",
+   "test/cfp_scheduler_killer/views_test.clj"
+  ]
+ }
+}

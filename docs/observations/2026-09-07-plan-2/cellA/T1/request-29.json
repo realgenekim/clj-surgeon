@@ -1,0 +1,27 @@
+{
+ "tool": "apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-split-T1",
+ "extraction": {
+  "file": "src/cfp_scheduler_killer/views.clj",
+  "to": "src/cfp_scheduler_killer/views/form_builder.clj",
+  "forms": [
+   "fb-post",
+   "field-form-fields",
+   "field-row",
+   "finish-cfp-bar",
+   "form-builder-page",
+   "form-edit-panel",
+   "form-fields-region",
+   "form-grid-region",
+   "form-preview-region",
+   "type-label",
+   "fb-tags"
+  ],
+  "require_policy": "minimal",
+  "caller_changes": [],
+  "ignored_caller_files": [
+   "src/cfp_scheduler_killer/server.clj",
+   "test/cfp_scheduler_killer/forms_test.clj"
+  ]
+ }
+}
