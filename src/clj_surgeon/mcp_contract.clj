@@ -602,6 +602,117 @@
    :edits (reduce + (map #(get-in % [:expect :matches]) changes))
    :files (count (set (mapcat :files changes)))})
 
+(def ^:private aggregate-expect-order [:changes :edits :files])
+
+;; @spec MCP-OP-EDIT-040
+(defn- aggregate-expect-mismatches
+  [supplied derived]
+  (vec (keep (fn [key]
+               (when (and (contains? supplied key)
+                          (not= (get supplied key) (get derived key)))
+                 {:field (name key)
+                  :expected (get supplied key)
+                  :derived (get derived key)}))
+             aggregate-expect-order)))
+
+(defn- program-match-total
+  ;; @spec MCP-OP-EDIT-039
+  "The concrete matches a program set will commit, which is also its count of
+   addressed intents: `mcp-tool` flattens one intent per match."
+  [programs]
+  (reduce + 0 (map #(get-in % [:expect :matches]) programs)))
+
+(defn- corrected-expect-next-call
+  ;; @spec MCP-OP-EDIT-039
+  "The caller's OWN request with `expect` replaced, and nothing else touched.
+
+   Two ways this was wrong at the fence (Sol r1, 2026-09-07). First, public
+   execution keywordizes the request before validation, so `assoc`ing a
+   string `\"expect\"` beside the surviving `:expect` published a map with two
+   `expect` keys that serialized as duplicate JSON keys -- a `next_call` no
+   client can parse deterministically. `without-field` removes the caller's
+   key whatever its kind, so exactly one survives. Second, `workspace_root` is
+   stripped by the workspace router before validation ever sees the request, so
+   the guard cannot restore it here; `mcp-tool/execute-request!` puts it back
+   at the one place that knows the resolved root."
+  [caller-params corrected]
+  (assoc (without-field caller-params "expect") "expect" corrected))
+
+(defn- guard-aggregate-expect!
+  ;; @spec MCP-OP-EDIT-039
+  ;; @spec MCP-OP-EDIT-040
+  "`expect` is a GUARD on the declared fan-out size, never bookkeeping.
+
+   The schema declares `expect` on every write route, so a caller who states
+   it has bound its intent to the effect. Until 2026-09-07 a disagreement was
+   reported as `input_normalization {ignored [\"expect\"]}` and the write went
+   ahead: a caller who mis-stated the fan-out size got a silent success over
+   every file it named. Now each stated count must equal the derived count or
+   the whole call refuses before any write, naming every disagreeing field with
+   both values and composing the caller's own request with `expect` repaired.
+
+   `expect` omitted is no guard at all, exactly as before."
+  [supplied derived caller-params]
+  (when supplied
+    (let [mismatches (aggregate-expect-mismatches supplied derived)]
+      (when (seq mismatches)
+        (let [corrected {"changes" (:changes derived)
+                         "edits" (:edits derived)
+                         "files" (:files derived)}
+              rendered (str/join ", "
+                                 (map #(str (:field %)
+                                            " expected " (:expected %)
+                                            " derived " (:derived %))
+                                      mismatches))]
+          (refuse!
+            :expect-mismatch ["expect"]
+            (str "Declared expect disagrees with the derived effect: "
+                 rendered)
+            {:mismatch mismatches
+             :mutation-attempted false
+             :next-call (corrected-expect-next-call caller-params corrected)
+             :remedy
+             (str "Set expect to {\"changes\": " (:changes derived)
+                  ", \"edits\": " (:edits derived)
+                  ", \"files\": " (:files derived)
+                  "}, or correct the request so it makes the effect you"
+                  " declared, and call apply_clojure_changes once."
+                  " No source was changed.")}))))))
+
+(defn- refuse-expect-on-create-only!
+  ;; @spec MCP-OP-EDIT-041
+  "A create-only transaction cannot honour `expect`, so it says so.
+
+   RULE CHOSEN (2026-09-07): `expect` on a create-only request refuses as
+   unsupported on that route, and publishes NO corrected `next_call`.
+
+   The alternative -- count created files -- was rejected. `expect` is three
+   numbers about CHANGED existing source: changes, exact replacements, and the
+   files those changes touch. A create-only transaction changes none of them,
+   so `changes` and `edits` are honestly zero however `files` is redefined, and
+   the published schema's own minimum for each is one. Every corrected
+   `next_call` we could compose would therefore be a remedy the boundary
+   rejects -- an unexecutable instruction is worse than an honest refusal --
+   and quietly re-pointing `files` at created files would change the meaning of
+   a published field for one route only.
+
+   This is the brief's `expect unsupported on route X` branch: a declared field
+   this route cannot honour is REFUSED, never ignored. A hybrid request that
+   creates files AND carries changes is not create-only and is guarded
+   normally against those changes."
+  []
+  (refuse!
+    :expect-unsupported-on-route ["expect"]
+    (str "expect unsupported on route create_files: a create-only transaction"
+         " changes no existing source, so changes, edits, and files have no"
+         " honest non-zero value to guard")
+    {:route "create_files"
+     :mutation-attempted false
+     :remedy
+     (str "Remove expect and call apply_clojure_changes once, or add the"
+          " changes this transaction is meant to guard."
+          " No source was changed.")}))
+
 ;; @spec MCP-OP-MATCHED-002
 ;; @spec MCP-OP-MATCHED-003
 (defn- validate-expect-matched!
@@ -650,17 +761,13 @@
               (refuse! :duplicate-id ["changes" index "id"]
                        "Change IDs must be unique" {:id id}))
             (recur (conj seen id) (inc index)))))
-      (cond-> {:ok true
-               :params
-               (cond-> {:changes changes
-                        :expect derived-expect}
-                 expect-matched (assoc :expect-matched expect-matched)
-                 verify (assoc :verify verify))}
-        (and supplied-expect (not= supplied-expect derived-expect))
-        (assoc :input-normalization
-               {:ignored ["expect"]
-                :reason
-                "aggregate counts are derived from exact change guards"})))
+      (guard-aggregate-expect! supplied-expect derived-expect params)
+      {:ok true
+       :params
+       (cond-> {:changes changes
+                :expect derived-expect}
+         expect-matched (assoc :expect-matched expect-matched)
+         verify (assoc :verify verify))})
     (catch clojure.lang.ExceptionInfo error
       (let [result (ex-data error)
             retry-template
@@ -677,7 +784,13 @@
   ;; @spec MCP-OP-EDIT-005
   ;; @spec MCP-OP-EDIT-011
   (try
-    (let [redundant-expect? (present? params "expect")
+    (let [caller-params params
+          supplied-expect
+          (when (present? params "expect")
+            (validate-count-map!
+              (field params "expect")
+              aggregate-expect-fields required-aggregate-expect-fields
+              ["expect"]))
           params (without-field params "expect")]
       (validate-fields! params editor-top-fields required-editor-top-fields [])
       (let [edits
@@ -896,14 +1009,87 @@
                                (count (distinct (map :file creations)))))
                 (refuse! :duplicate-path ["create_files"]
                          "Created file paths must be unique"))
+            ;; @spec MCP-OP-EDIT-039
+            ;; EVERY transformation this transaction will commit, not only the
+            ;; ones lowered into `changes`. Sol fence r2 (2026-09-07): counts
+            ;; derived from `changes` alone let a mixed edit+program request
+            ;; declare {changes 1, edits 1, files 1}, pass the guard, and
+            ;; commit {2, 2, 1} -- the guard authorized one transformation and
+            ;; two were written, which is the exact failure the guard exists to
+            ;; prevent. `delete_owners` was never at risk (it lowers into
+            ;; `changes` above), and `create_files` cannot be guarded at all
+            ;; (MCP-OP-EDIT-041). The receipt reports one change and its
+            ;; declared `matches` edits per program, so these counts are the
+            ;; same arithmetic the committed receipt publishes.
+            ;; The `changes` array's OWN aggregate, which is what the
+            ;; transaction compiler is handed and what its per-change guards
+            ;; are checked against. It is deliberately NOT the guard's number.
+            changes-expect
+            {:changes (count changes)
+             :edits (reduce + (map #(get-in % ["expect" "matches"]) changes))
+             :files (count (set (mapcat #(field % "files") changes)))}
+            ;; ONE addressed intent PER CONCRETE MATCH, not one per program:
+            ;; `mcp-tool` flattens each program into one addressed edit per
+            ;; match before compiling the transaction, and the receipt counts
+            ;; those intents. Sol fence r3 (2026-09-07): counting a program as
+            ;; one change let a request declaring {changes 2, edits 3} commit a
+            ;; receipt whose intent-count was 3 -- the same class of blindness
+            ;; as not counting programs at all, one match further in.
+            derived-expect
+            {:changes (+ (:changes changes-expect) (program-match-total programs))
+             :edits (+ (:edits changes-expect) (program-match-total programs))
+             :files (count (into (set (mapcat #(field % "files") changes))
+                                 (map :file programs)))}
+            ;; @spec MCP-OP-EDIT-041
+            ;; Create-only is decided BEFORE the count guard, because its
+            ;; derived counts are all zero and every "corrected" expect they
+            ;; could compose is one the schema minimum rejects.
+            _ (when (and supplied-expect
+                         (seq creations)
+                         (empty? changes)
+                         (empty? programs))
+                (refuse-expect-on-create-only!))
+            ;; @spec MCP-OP-EDIT-006
+            ;; @spec MCP-OP-EDIT-039
+            ;; The declared fan-out size is a guard on this route too. It is
+            ;; checked HERE, against the caller's own request, so the composed
+            ;; next_call is the shape the caller sent and not the compiled
+            ;; direct form it never wrote.
+            ;; Only when this shape can actually execute. A request carrying
+            ;; `programs` but no change lowers to an empty `changes` array,
+            ;; which `validate-direct-tool-params` refuses `non-empty-array`
+            ;; -- a rule that predates this guard (proved against f3d922ac
+            ;; with no `expect` at all). Guarding it first would answer an
+            ;; unexecutable request with a corrected `expect`, a remedy that
+            ;; refuses again for a different reason.
+            ;; @spec MCP-OP-EDIT-042
+            ;; A programs-only request is denied at the public boundary, but a
+            ;; caller that reaches the validator another way used to be told
+            ;; `non-empty-array` at ["changes"] -- true, and useless: it names
+            ;; a field the editor routes do not accept. Sol fence r4
+            ;; (2026-09-07) called the remediation weak. Name the companion.
+            _ (when (and (seq programs) (empty? changes))
+                (refuse!
+                  :programs-require-a-companion-gesture ["programs"]
+                  (str "programs is not a write route of its own: it lowers"
+                       " into the same changes transaction edits and"
+                       " delete_owners build, so it must accompany at least"
+                       " one of them")
+                  {:mutation-attempted false
+                   :accepted ["edits" "delete_owners"]
+                   :remedy
+                   (str "Add the edits or delete_owners this program set runs"
+                        " alongside and call apply_clojure_changes once."
+                        " No source was changed.")}))
+            _ (when (seq changes)
+                (guard-aggregate-expect! supplied-expect derived-expect
+                                         caller-params))
             direct
             (cond->
               {"changes" changes
-               "expect" {"changes" (count changes)
-                         "edits" (reduce + (map #(get-in % ["expect" "matches"])
-                                                changes))
-                         "files" (count (set (mapcat #(field % "files")
-                                                     changes)))}}
+               "expect" {"changes" (:changes changes-expect)
+                         "edits" (:edits changes-expect)
+                         "files" (:files changes-expect)}}
               (present? params "verify")
               (assoc "verify" (field params "verify")))]
         (cond-> {:ok true :params direct}
@@ -927,12 +1113,7 @@
 
           (seq (:evidence normalized-edits))
           (assoc :compact-field-normalization
-                 (:evidence normalized-edits))
-
-          redundant-expect?
-          (assoc :input-normalization
-                 {:ignored ["expect"]
-                  :reason "editor counts are derived"}))))
+                 (:evidence normalized-edits)))))
     (catch clojure.lang.ExceptionInfo error
       (ex-data error))))
 

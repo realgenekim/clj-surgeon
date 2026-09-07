@@ -28,7 +28,9 @@
   ;; @spec MCP-OP-EDIT-008
   ;; @spec MCP-OP-EDIT-009
   (is (str/includes? mcp-tool/tool-description
-                     "aggregate expect is optional"))
+                     "aggregate expect is an optional GUARD"))
+  (is (str/includes? mcp-tool/tool-description
+                     "refuses the whole call before any write when a stated count disagrees"))
   (is (str/includes? mcp-tool/tool-description
                      "one array item may contain several complete forms"))
   (is (str/includes? mcp-tool/tool-description
@@ -149,7 +151,7 @@
            "within" {"form" "route-event"}
            "from" ":done"
            "to" ":complete"}]
-         "expect" {"changes" 0 "edits" 1 "files" 1}
+         "expect" {"changes" 1 "edits" 1 "files" 1}
          "verify" "fast"}]
     (try
       (.mkdirs (.getParentFile source-file))
@@ -173,9 +175,8 @@
         (is (re-matches #"[0-9a-f]{64}"
                         (get-in result
                                 [:canonical_effect_identity :sha256])))
-        (is (= {:ignored ["expect"]
-                :reason "editor counts are derived"}
-               (:input_normalization result)))
+        (is (not (contains? result :input_normalization))
+            "a matching expect is honoured, never reported as ignored")
         (is (= after (slurp source-file))
             "every unrelated byte, including the extra EOF newline, survives")
         (let [stale (mcp-tool/execute-request!
@@ -449,7 +450,7 @@
            "forms" ["selector"]
            "insert_after" [packed]
            "expect" {"matches" 1 "each_form" 1}}]
-         "expect" {"changes" 31 "edits" 32 "files" 33}}]
+         "expect" {"changes" 3 "edits" 3 "files" 2}}]
     (try
       (io/make-parents source-file)
       (io/make-parents test-file)
@@ -480,6 +481,21 @@
         (is (not (contains? refused :next_call)))
         (is (= source-before (slurp source-file)))
         (is (= test-before (slurp test-file))))
+      ;; a top-level `expect` that mis-states the fan-out size refuses before
+      ;; any write and hands back the corrected call
+      (let [wrong (mcp-tool/execute-request!
+                    {:project-root (.getPath workspace)
+                     :receipt-dir (.getPath receipt-dir)}
+                    (assoc request "expect"
+                           {"changes" 3 "edits" 3 "files" 3}))]
+        (is (false? (:ok wrong)) (pr-str wrong))
+        (is (= "expect-mismatch" (:reason wrong)))
+        (is (true? (:source_unchanged wrong)))
+        (is (false? (:mutation_attempted wrong)))
+        (is (= [{:field "files" :expected 3 :derived 2}] (:mismatch wrong)))
+        (is (= 2 (get-in wrong [:next_call "expect" "files"])))
+        (is (= source-before (slurp source-file)))
+        (is (= test-before (slurp test-file))))
       (let [result
             (mcp-tool/execute-request!
               {:project-root (.getPath workspace)
@@ -487,10 +503,7 @@
               request)
             changed-tests (slurp test-file)]
         (is (:ok result) (pr-str result))
-        (is (= {:ignored ["expect"]
-                :reason
-                "aggregate counts are derived from exact change guards"}
-               (:input_normalization result)))
+        (is (not (contains? result :input_normalization)))
         (is (= 3 (:edits result)))
         (is (= 2 (:files result)))
         (is (str/includes? (slurp source-file) ":new"))

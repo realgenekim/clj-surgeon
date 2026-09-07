@@ -42,19 +42,19 @@
    (let [validated (contract/validate-tool-params request)]
      (if-not (:ok validated)
        validated
-       (let [spec (contract/tool-params->transaction (:params validated))]
-         (let [sources {file source}
-               prepared
-               (compact-location/normalize-spec
-                 sources spec
-                 (:compact-location-normalization validated))]
-           (if (:error prepared)
+       (let [spec (contract/tool-params->transaction (:params validated))
+             sources {file source}
              prepared
-             (let [compiled
-                   (transaction/compile-transaction sources (:spec prepared))]
-               (if (:error compiled)
-                 compiled
-                 (assoc prepared :compiled compiled))))))))))
+             (compact-location/normalize-spec
+               sources spec
+               (:compact-location-normalization validated))]
+         (if (:error prepared)
+           prepared
+           (let [compiled
+                 (transaction/compile-transaction sources (:spec prepared))]
+             (if (:error compiled)
+               compiled
+               (assoc prepared :compiled compiled)))))))))
 
 (deftest source-blind-validation-preserves-omitted-location
   ;; @spec MCP-OP-EDIT-011
@@ -405,7 +405,14 @@
               (is (false? (:ok result)) (pr-str result))
               (is (= "invalid-mcp-request" (:error_type result))
                   (pr-str result))
-              (is (= ["changes"] (:path result)) (pr-str result))
+              ;; @spec MCP-OP-EDIT-042
+              ;; ["changes"] -> ["programs"] on 2026-09-07: a programs-only
+              ;; request was told `non-empty-array` at a field the editor
+              ;; routes do not accept. The refusal now names the companion
+              ;; gesture programs must ride on.
+              (is (= ["programs"] (:path result)) (pr-str result))
+              (is (= ["edits" "delete_owners"] (:accepted result))
+                  (pr-str result))
               (is (:source_unchanged result) (pr-str result))
               (is (= "(ns sample.app)\n(defn f [] :old)\n"
                      (slurp source-file))))
