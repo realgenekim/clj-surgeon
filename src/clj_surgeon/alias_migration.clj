@@ -1143,6 +1143,15 @@
   - a REFERRED Var named like a policy entry collides, even when it is referred
     FROM to.lib -- referring `newlib` does not make `newlib/x` resolve.
 
+  Reuse is POLICY-RESTRICTED: the reused alias must itself be an entry of
+  `to.alias_policy`. An alias bound to to.lib under a name OUTSIDE the policy is
+  neither reused nor a collision of the policy's entries -- the policy is walked
+  normally, because MCP-OP-ALIAS-008's witness forbids publishing any alias the
+  caller did not send. Round 2 kept an unrestricted `existing` fallback, so
+  `[to.lib :as forbidden]` under a one-entry policy COMMITTED
+  `forbidden/fetch-event`, and an off-policy target alias silently rescued a
+  policy that was genuinely exhausted (Sol's fence counterexamples, 2026-09-07).
+
   `to-lib` is nil when reuse is not offered (lib-mode migrations, where a kept
   :refer set would have to be merged into the existing libspec)."
   [_root direct policy to-lib]
@@ -1155,11 +1164,7 @@
                     (and to-lib
                          (not (contains? referred candidate))
                          (= to-lib (get aliases candidate))))
-        existing (when to-lib
-                   (first (remove #(contains? referred %)
-                                  (mapcat :aliases
-                                          (filter #(= to-lib (:lib %)) direct)))))
-        reuse (or (first (filter reusable? policy)) existing)]
+        reuse (first (filter reusable? policy))]
     (if reuse
       {:alias reuse :collided [] :reuse? true :bindings bindings}
       {:alias (first (drop-while bound? policy))
