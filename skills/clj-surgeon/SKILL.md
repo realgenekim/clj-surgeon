@@ -16,7 +16,7 @@ the unusual case. Ratios, fixtures and caveats:
   owners, a proof profile. Narrowed 2026-09-07 (pair-1, n=2/arm): with owners AND
   counts known, native won (124 vs 181 s; 117 vs 198 s; server < 1 s). Route only
   when discovery is the cost; else one native scripted edit with count guards. Tool
-  route: bare-symbol `from` in `within {form}` (`match` misses `#(...)`), `matches` guard.
+  route: literal `from` in `within {form}`, `matches` guard; `match` includes `#()` bodies.
 - ALIAS migration: one `alias_migration` — known alias intent, eligible scope, no proof
   profile. Still routed (deletes caller work); live-proven 2026-09-07, 9 files / 21 sites.
 Outside those two, native is the PERFORMANCE default — that is a default, not an

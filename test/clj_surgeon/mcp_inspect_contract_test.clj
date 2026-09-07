@@ -830,3 +830,66 @@
     (is (= 2 (:match_count result)))
     (is (= ["(send! :a)" "(send! :b)"] (mapv :source (:matches result))))
     (is (true? (:source_omitted_when_equal_to_match result)))))
+
+
+;; @spec MCP-OP-MATCH-001
+(deftest anonymous-call-inspect-retains-reader-bytes-and-owner-counts
+  (let [source "(defn owner [submission]\n  (update submission :speakers #(mapv current-speaker-identity %)))"
+        result (inspect/evaluate-snapshots
+                 {:requests [{:id "r1" :operation "match" :file "src/demo.clj"
+                              :inside "owner" :match "(mapv current-speaker-identity _)"
+                              :expect {:matches 1}}]
+                  :expect {:requests 1 :files 1}}
+                 {"src/demo.clj" (snapshot "src/demo.clj" source)})
+        found (get-in result [:results 0])
+        site (first (:matches found))]
+    (is (:ok result))
+    (is (= [{:inside "owner" :matches 1}] (:owner_counts found)))
+    (is (= "#(mapv current-speaker-identity %)" (:source site)))
+    (is (= (structural-lens/source-hash "#(mapv current-speaker-identity %)")
+           (:hash site)))
+    (is (nil? (:note found)))))
+
+;; @spec MCP-OP-MATCH-003
+(deftest arity-correct-misses-do-not-prescribe-longer-patterns
+  (doseq [[source pattern expected actual]
+          [["(defn owner [x] #(mapv g %))" "(mapv f _)" nil 0]
+           ["(defn owner [x] (mapv g x))" "(mapv f _)" 1 0]
+           ["(defn owner [x] (mapv f x))" "(mapv f _)" 2 1]
+           ["(defn owner [x] (other f x))" "(mapv f _)" nil 0]
+           ["(defn other [x] (mapv f x y))\n(defn owner [x] (mapv g x))"
+            "(mapv f _)" nil 0]
+           ["(defn owner [x] [(mapv f x y) (mapv g x)])" "(mapv f _)" nil 0]]]
+    (let [result (inspect/evaluate-snapshots
+                   {:requests [(cond-> {:id "r1" :operation "match" :file "src/demo.clj"
+                                        :inside "owner" :match pattern}
+                                 expected (assoc :expect {:matches expected}))]
+                    :expect {:requests 1 :files 1}}
+                   {"src/demo.clj" (snapshot "src/demo.clj" source)})
+          found (if expected result (get-in result [:results 0]))
+          note (:note found)]
+      (testing (pr-str [source expected])
+        (is (= actual (:match_count found)))
+        (is (string? note))
+        (is (not (str/includes? (or note "") "a longer form needs a longer pattern")))
+        (is (str/includes? (or note "") "reader bodies"))
+        (is (str/includes? (or note "") "owner"))))))
+
+
+;; @spec MCP-OP-MATCH-002
+(deftest cardinality-failure-cannot-disappear-into-a-later-selector-continuation
+  (let [source "(defn owner [x] (f x))"
+        result (inspect/evaluate-snapshots
+                 {:requests [{:id "r1" :operation "match" :file "src/demo.clj"
+                              :match "(f _)" :expect {:matches 1}}
+                             {:id "r2" :operation "match" :file "src/demo.clj"
+                              :match "(f _)" :expect {:matches 2}}
+                             {:id "r3" :operation "forms" :file "src/demo.clj"
+                              :forms ['missing] :expect {:forms 1}}]
+                  :expect {:requests 3 :files 1}}
+                 {"src/demo.clj" (snapshot "src/demo.clj" source)})]
+    (is (= "inspect-cardinality-mismatch" (:error_type result)))
+    (is (= "r2" (:request_id result)))
+    (is (= ["r2"] (mapv :request_id (:cardinality_failures result))))
+    (is (nil? (:continuation result)))
+    (is (nil? (:results result)))))
