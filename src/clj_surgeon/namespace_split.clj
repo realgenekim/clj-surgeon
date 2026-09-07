@@ -1,15 +1,16 @@
 (ns clj-surgeon.namespace-split
   "Pure single-snapshot namespace partition compiler. Reference identities come
   from clj-kondo; this namespace neither evaluates Clojure nor writes files."
-  (:require [clj-surgeon.extract :as extract]
-            [clj-surgeon.outline :as outline]
-            [clj-surgeon.quoted-var-refs :as quoted-vars]
-            [clj-surgeon.structural-lens :as lens]
-            [clojure.set :as set]
-            [clojure.string :as str]
-            [rewrite-clj.node :as n]
-            [rewrite-clj.parser :as parser]
-            [rewrite-clj.zip :as z]))
+  (:require
+   [clj-surgeon.extract :as extract]
+   [clj-surgeon.outline :as outline]
+   [clj-surgeon.quoted-var-refs :as quoted-vars]
+   [clj-surgeon.structural-lens :as lens]
+   [clojure.set :as set]
+   [clojure.string :as str]
+   [rewrite-clj.node :as n]
+   [rewrite-clj.parser :as parser]
+   [rewrite-clj.zip :as z]))
 
 (defn snapshot-hash [sources]
   (lens/source-hash (pr-str (into (sorted-map) sources))))
@@ -55,16 +56,16 @@
                        (recur (rest nodes) (str pending (n/string node)) result)
                        f (recur (rest nodes) ""
                                 (conj result (assoc f :name (str (:name f)) :node node
-                                                   :start start :end end :prefix pending)))
+                                               :start start :end end :prefix pending)))
                        :else (recur (rest nodes) "" result)))
                    (cond-> result (seq result) (update (dec (count result)) assoc :suffix pending))))]
     {:file file :source source :root root :starts starts :ns-node ns-node
      :lib (str (second ns-value)) :ns-value ns-value :owners pieces
      :unsupported (vec (for [node (n/children root)
-                            :when (and (meaningful? node) (not (identical? node ns-node))
-                                       (not (definition-for node))
-                                       (not (and (= :list (n/tag node)) (= 'declare (first (sexpr node))))))]
-                        {:type :unowned-top-level :file file :row (:row (meta node))}))}))
+                             :when (and (meaningful? node) (not (identical? node ns-node))
+                                        (not (definition-for node))
+                                        (not (and (= :list (n/tag node)) (= 'declare (first (sexpr node))))))]
+                         {:type :unowned-top-level :file file :row (:row (meta node))}))}))
 
 (defn- libspecs [parsed]
   (vec (mapcat rest (filter #(and (sequential? %) (= :require (first %)))
@@ -73,7 +74,7 @@
 (defn- options [entry] (when (sequential? entry) (apply hash-map (rest entry))))
 (defn- aliases [entries]
   (into {} (keep (fn [entry] (when-let [a (or (:as (options entry)) (:as-alias (options entry)))]
-                             [(str a) (lib-of entry)]))) entries))
+                               [(str a) (lib-of entry)]))) entries))
 
 (defn- lexical-required-libs [owners entries]
   ;; Preserve existing libspecs used by alias-qualified keywords or quoted Vars
@@ -108,9 +109,9 @@
 
 (defn- located? [usage]
   (every? pos-int? [(or (:name-row usage) (:row usage))
-                   (or (:name-col usage) (:col usage))
-                   (or (:name-end-row usage) (:end-row usage))
-                   (or (:name-end-col usage) (:end-col usage))]))
+                    (or (:name-col usage) (:col usage))
+                    (or (:name-end-row usage) (:end-row usage))
+                    (or (:name-end-col usage) (:end-col usage))]))
 
 (defn- quoted-sites [parsed source-lib names]
   (for [reference (quoted-vars/references-in-source-for-subjects
@@ -172,45 +173,119 @@
                 (z/root-string (z/replace loc (dissoc (sexpr (z/node loc)) :private)))
                 (recur (z/next loc)))))))))
 
+;; INTENT: NS-SPLIT-019
 (defn- header [parsed lib entries used-classes]
   (let [clauses (for [clause (drop 2 (:ns-value parsed))
-                     :when (and (sequential? clause) (not= :require (first clause)))
-                     :let [clause (if (= :import (first clause))
-                                    (cons :import
-                                          (keep (fn [entry]
-                                                  (if (sequential? entry)
-                                                    (let [classes (filter #(contains? used-classes (str (first entry) "." %)) (rest entry))]
-                                                      (when (seq classes) (cons (first entry) classes)))
-                                                    (when (contains? used-classes (str entry)) entry)))
-                                                (rest clause))) clause)]
-                     :when (or (not= :import (first clause)) (seq (rest clause)))] clause)]
+                      :when (and (sequential? clause) (not= :require (first clause)))
+                      :let [clause (if (= :import (first clause))
+                                     (cons :import
+                                           (keep (fn [entry]
+                                                   (if (sequential? entry)
+                                                     (let [classes (filter #(contains? used-classes (str (first entry) "." %)) (rest entry))]
+                                                       (when (seq classes) (cons (first entry) classes)))
+                                                     (when (contains? used-classes (str entry)) entry)))
+                                                 (rest clause))) clause)]
+                      :when (or (not= :import (first clause)) (seq (rest clause)))] clause)]
     (str "(ns " lib
-         (apply str (for [value (drop 2 (:ns-value parsed)) :when (or (string? value) (map? value))]
-                      (str "\n  " (pr-str value))))
+         (apply str (for [node (drop 2 (filter meaningful? (n/children (:ns-node parsed))))
+                          :when (or (string? (sexpr node)) (map? (sexpr node)))]
+                      (str "\n  " (n/string node))))
          (when (seq entries) (str "\n  (:require\n    " (str/join "\n    " (map pr-str entries)) ")"))
          (apply str (map #(str "\n  " (pr-str %)) clauses)) ")")))
 
+(defn- require-clauses [parsed]
+  (filter #(and (= :list (n/tag %)) (= :require (first (sexpr %))))
+          (n/children (:ns-node parsed))))
+
+(defn- require-entries [clause]
+  (rest (filter meaningful? (n/children clause))))
+
+(defn- line-start [source offset]
+  (inc (or (str/last-index-of source "\n" (dec offset)) -1)))
+
+(defn- line-indent [source start]
+  (let [prefix (subs source (line-start source start) start)]
+    (when (re-matches #"[ \t]*" prefix) prefix)))
+
+(defn- remove-libspec [source starts node]
+  (let [[start end] (node-span starts node)
+        beginning (line-start source start)
+        newline (str/index-of source "\n" end)
+        tail-end (or newline (count source))
+        alone? (and (some? (line-indent source start))
+                    (re-matches #"[ \t\r]*" (subs source end tail-end)))
+        closing-line? (and (some? (line-indent source start))
+                           (re-matches #"[) \t\r]+" (subs source end tail-end))
+                           (pos? beginning)
+                           (= \] (nth source (- beginning 2) nil)))]
+    {:start (cond alone? beginning closing-line? (dec beginning) :else start)
+     :end (if alone? (if newline (inc newline) tail-end) end) :text ""}))
+
+;; INTENT: NS-SPLIT-017
 (defn- caller-header [parsed source-lib added]
-  (let [ns-node (:ns-node parsed)
-        clause? #(and (= :list (n/tag %)) (= :require (first (sexpr %))))
-        clauses (filter clause? (n/children ns-node))
-        append-nodes (fn [children]
-                       (into (vec children) (mapcat #(vector (n/newline-node "\n") (n/spaces 4)
-                                                           (parser/parse-string (pr-str %)))) added))
-        changed (if (seq clauses)
-                  (let [first-clause (first clauses)]
-                    (n/replace-children ns-node
-                      (mapv (fn [child]
-                              (if (clause? child)
-                                (let [kids (remove #(and (meaningful? %)
-                                                         (= source-lib (lib-of (sexpr %)))) (n/children child))]
-                                  (n/replace-children child (if (identical? child first-clause) (append-nodes kids) (vec kids))))
-                                child)) (n/children ns-node))))
-                  (n/replace-children ns-node
-                    (into (vec (n/children ns-node))
-                          [(n/newline-node "\n") (n/spaces 2)
-                           (parser/parse-string (str "(:require " (str/join " " (map pr-str added)) ")"))])))]
-    (n/string changed)))
+  ;; Reparse only the small owned header after deletion. Insertions use exact
+  ;; spans; no existing libspec, comment or indentation is reprinted.
+  (let [source (n/string (:ns-node parsed))
+        parsed (parse-file "header.clj" source)
+        clauses (require-clauses parsed)
+        original-entries (mapcat require-entries clauses)
+        indent (or (some (fn [node] (line-indent source (first (node-span (:starts parsed) node))))
+                         original-entries) "    ")
+        removed (splice source (for [node original-entries :when (= source-lib (lib-of (sexpr node)))]
+                                 (remove-libspec source (:starts parsed) node)))]
+    (reduce
+      (fn [source entry]
+        (let [p (parse-file "header.clj" source)
+              clause (first (require-clauses p))
+              entries (when clause (require-entries clause))
+              before (first (filter #(pos? (compare (lib-of (sexpr %)) (lib-of entry))) entries))
+              printed (pr-str entry)]
+          (cond
+            before
+            (let [[start _] (node-span (:starts p) before)
+                  own-indent (line-indent source start)
+                  start (if own-indent (line-start source start) start)]
+              (splice source [{:start start :end start
+                               :text (if own-indent (str indent printed "\n")
+                                         (str printed "\n" indent))}]))
+            (seq entries)
+            (let [[_ end] (node-span (:starts p) (last entries))]
+              (splice source [{:start end :end end :text (str "\n" indent printed)}]))
+            clause
+            (let [[_ end] (node-span (:starts p) clause)
+                  end (dec end)]
+              (splice source [{:start end :end end :text (str printed)}]))
+            :else
+            (let [end (dec (count source))]
+              (splice source [{:start end :end end :text (str "\n  (:require " printed ")")}])))))
+      removed (sort-by lib-of added))))
+
+;; INTENT: NS-SPLIT-018
+(defn prose-mentions
+  "Advisory candidate lines in strings/comments; original aliases remain useful
+  even after the require binding is retired. Executable tokens are excluded."
+  [source-lib parsed future-sources source-file]
+  (vec
+    (sort-by (juxt :file :line)
+      (distinct
+        (mapcat
+          (fn [[file source]]
+            (when source
+              (let [p (get parsed file (get parsed source-file))
+                    qualifiers (conj (set (for [[alias lib] (aliases (libspecs p)) :when (= lib source-lib)] alias))
+                                     source-lib (last (str/split source-lib #"\.")))
+                    patterns (map #(re-pattern (str "(?<![A-Za-z0-9_.-])" (java.util.regex.Pattern/quote %)
+                                                    (if (= % source-lib) "(?=/|[^A-Za-z0-9_.-]|$)" "/"))) qualifiers)
+                    lines (str/split-lines source)
+                    nodes (when (some #(re-find % source) patterns)
+                            (tree-seq n/inner? n/children (parser/parse-string-all source)))]
+                (for [node nodes :when (or (n/comment? node) (= :multi-line (n/tag node))
+                                         (and (= :token (n/tag node)) (string? (sexpr node))))
+                      [i text] (map-indexed vector (str/split-lines (n/string node)))
+                      :when (some #(re-find % text) patterns)
+                      :let [line (+ (:row (meta node)) i)]]
+                  {:file file :line line :text (nth lines (dec line))}))))
+          future-sources)))))
 
 (defn- allocate [entries needed destinations]
   (reduce (fn [{:keys [bound] :as state} lib]
@@ -243,18 +318,18 @@
         mapping (into {} (map (fn [[name xs]] [name (second (first xs))])) assignments)
         known (set (map :name owners))
         duplicates (vec (sort (concat (keep (fn [[name xs]] (when (> (count xs) 1) name)) assignments)
-                                     (keep (fn [[name xs]] (when (> (count xs) 1) name)) (group-by :name owners)))))
+                                (keep (fn [[name xs]] (when (> (count xs) 1) name)) (group-by :name owners)))))
         unmapped (vec (sort (set/difference known (set (keys mapping)))))
         usages (for [u (:var-usages analysis) :let [p (get parsed (:filename u))] :when (and p (located? u))] (site p u))
         moved-sites (->> (concat (filter #(and (= source-lib (:to-lib %)) (known (:var %))) usages)
-                                  (mapcat #(quoted-sites % source-lib known) (vals parsed)))
+                           (mapcat #(quoted-sites % source-lib known) (vals parsed)))
                          (reduce (fn [m s] (assoc m [(:file s) (:start s) (:end s)] s)) (sorted-map)) vals vec)
         load-callers (for [[file p] parsed :when (and (not= source-file file)
-                                                     (some #(= source-lib (lib-of %)) (libspecs p)))] file)
+                                                   (some #(= source-lib (lib-of %)) (libspecs p)))] file)
         sites-by-file (merge (zipmap load-callers (repeat [])) (group-by :file moved-sites))
         edges (mapv (fn [s] (assoc (select-keys s [:file :row :col :owner :var :token :var_quote])
-                                  :from (if (= source-file (:file s)) (get mapping (:owner s)) (:lib (get parsed (:file s))))
-                                  :to (get mapping (:var s)))) moved-sites)
+                              :from (if (= source-file (:file s)) (get mapping (:owner s)) (:lib (get parsed (:file s))))
+                              :to (get mapping (:var s)))) moved-sites)
         private-names (into #{} (comp (filter #(and (= source-lib (str (:ns %))) (:private %))) (map #(str (:name %)))) (:var-definitions analysis))
         promotions (vec (for [name (sort private-names)
                               :let [callers (filterv #(and (= name (:var %)) (not (:var_quote %)) (not= (:from %) (:to %))) edges)]
@@ -265,97 +340,97 @@
         missing-promotions (remove authorized (map :form promotions))
         snapshot (snapshot-hash sources)
         blocks (vec (concat
-                     (when-not original [{:type :missing-source :file source-file}])
-                     (when-not (= source-lib (:lib original)) [{:type :source-lib-mismatch :expected source-lib :actual (:lib original)}])
-                     (:unsupported original)
-                     (for [o owners :when (not (#{'def 'defn 'defn-} (:type o)))]
-                       {:type :unsupported-owner :form (:name o) :owner_type (str (:type o))})
-                     (when-not (and (str/ends-with? source-file ".clj") (every? #(str/ends-with? (:file %) ".clj") dests))
-                       [{:type :unsupported-dialect :supported ".clj"}])
-                     (for [name duplicates] {:type :duplicate-owner :form name})
-                     (for [name unmapped] {:type :unmapped-owner :form name})
-                     (for [name (sort (set/difference (set (keys mapping)) known))] {:type :unknown-owner :form name})
-                     (for [name missing-promotions] {:type :undecided-promotion :form name})
-                     (when (and (:snapshot_hash request) (not= snapshot (:snapshot_hash request))) [{:type :snapshot-drift :expected (:snapshot_hash request) :actual snapshot}])
-                     (for [d dests :let [derived (extract/file-path->ns-name (:file d) source-paths (:workspace_root request))]
-                           :when (not= derived (:lib d))] {:type :destination-lib-path-mismatch :lib (:lib d) :file (:file d) :path-lib derived})
-                     (for [d dests :when (contains? sources (:file d))] {:type :destination-exists :file (:file d)})
-                     (when-not (= (count dests) (count dest-by-lib) (count (set (map :file dests)))) [{:type :duplicate-destination}])
-                     (when-not (#{"delete" "retain-empty"} (:source_retirement request)) [{:type :invalid-source-retirement}])) )
+                      (when-not original [{:type :missing-source :file source-file}])
+                      (when-not (= source-lib (:lib original)) [{:type :source-lib-mismatch :expected source-lib :actual (:lib original)}])
+                      (:unsupported original)
+                      (for [o owners :when (not (#{'def 'defn 'defn-} (:type o)))]
+                        {:type :unsupported-owner :form (:name o) :owner_type (str (:type o))})
+                      (when-not (and (str/ends-with? source-file ".clj") (every? #(str/ends-with? (:file %) ".clj") dests))
+                        [{:type :unsupported-dialect :supported ".clj"}])
+                      (for [name duplicates] {:type :duplicate-owner :form name})
+                      (for [name unmapped] {:type :unmapped-owner :form name})
+                      (for [name (sort (set/difference (set (keys mapping)) known))] {:type :unknown-owner :form name})
+                      (for [name missing-promotions] {:type :undecided-promotion :form name})
+                      (when (and (:snapshot_hash request) (not= snapshot (:snapshot_hash request))) [{:type :snapshot-drift :expected (:snapshot_hash request) :actual snapshot}])
+                      (for [d dests :let [derived (extract/file-path->ns-name (:file d) source-paths (:workspace_root request))]
+                            :when (not= derived (:lib d))] {:type :destination-lib-path-mismatch :lib (:lib d) :file (:file d) :path-lib derived})
+                      (for [d dests :when (contains? sources (:file d))] {:type :destination-exists :file (:file d)})
+                      (when-not (= (count dests) (count dest-by-lib) (count (set (map :file dests)))) [{:type :duplicate-destination}])
+                      (when-not (#{"delete" "retain-empty"} (:source_retirement request)) [{:type :invalid-source-retirement}])))
         forward (vec (for [e edges :when (and (= source-file (:file e)) (= (:from e) (:to e)))
                            :let [target (first (filter #(= (:var e) (:name %)) owners))]
                            :when (< (+ (nth (:starts original) (dec (:row e))) (dec (:col e))) (:start target))]
                        (select-keys e [:from :owner :var :row :col])))
         owner-usages (group-by :owner (filter #(= source-file (:file %)) usages))
         unknowns (vec (concat
-                       (mapcat #(unresolved-qualified-sites % source-lib
-                                                            (set (map (juxt :file :start :end) moved-sites))) (vals parsed))
-                       (for [u (:var-usages analysis)
-                             :when (and (= source-lib (str (:to u))) (not (located? u)))]
-                         {:file (:filename u) :var (str (:name u)) :reason :unlocated-source-reference})
-                       (for [s usages :when (and (= source-file (:file s)) (= "clj-kondo/unknown-namespace" (:to-lib s)))]
-                         (assoc (select-keys s [:file :row :col :token]) :reason :unresolved-reference))
-                       (for [owner owners node (tree-seq n/inner? n/children (:node owner))
-                             :when (or (= :syntax-quote (n/tag node))
-                                       (str/starts-with? (n/string node) "#::")
-                                       (and (= :token (n/tag node)) (str/starts-with? (n/string node) "::")
-                                            (not (str/includes? (n/string node) "/"))))]
-                         {:file source-file :row (:row (meta node)) :reason :namespace-sensitive-source})))
+                        (mapcat #(unresolved-qualified-sites % source-lib
+                                                             (set (map (juxt :file :start :end) moved-sites))) (vals parsed))
+                        (for [u (:var-usages analysis)
+                              :when (and (= source-lib (str (:to u))) (not (located? u)))]
+                          {:file (:filename u) :var (str (:name u)) :reason :unlocated-source-reference})
+                        (for [s usages :when (and (= source-file (:file s)) (= "clj-kondo/unknown-namespace" (:to-lib s)))]
+                          (assoc (select-keys s [:file :row :col :token]) :reason :unresolved-reference))
+                        (for [owner owners node (tree-seq n/inner? n/children (:node owner))
+                              :when (or (= :syntax-quote (n/tag node))
+                                        (str/starts-with? (n/string node) "#::")
+                                        (and (= :token (n/tag node)) (str/starts-with? (n/string node) "::")
+                                             (not (str/includes? (n/string node) "/"))))]
+                          {:file source-file :row (:row (meta node)) :reason :namespace-sensitive-source})))
         builds (mapv
-                (fn [d]
-                  (let [selected (filterv #(= (:lib d) (get mapping (:name %))) owners)
-                        selected-names (set (map :name selected))
-                        local-sites (filterv #(selected-names (:owner %)) (get sites-by-file source-file))
-                        used-libs (into (lexical-required-libs selected (libspecs original))
-                                        (map :to-lib (mapcat #(get owner-usages (:name %)) selected)))
-                        entries (filterv #(and (not= source-lib (lib-of %))
-                                               (or (used-libs (lib-of %))
-                                                   (empty? (options %))
-                                                   (= :all (:refer (options %))))) (libspecs original))
-                        needed (disj (set (keep #(get mapping (:var %)) local-sites)) (:lib d))
-                        allocation (allocate entries needed dest-by-lib)
-                        chosen (:chosen allocation)
-                        entries (into entries (for [lib (sort needed) :let [a (get chosen lib)] :when a] [(symbol lib) :as (symbol a)]))
-                        edits (for [s local-sites :let [target (get mapping (:var s))
-                                                       text (if (= (:lib d) target) (:var s) (str (get chosen target) "/" (:var s)))]]
-                                (assoc s :text text))
-                        bodies (for [owner selected
-                                     :let [body (splice (subs (:source original) (:start owner) (:end owner))
-                                                        (for [e edits :when (= (:owner e) (:name owner))]
-                                                          (-> e (update :start - (:start owner)) (update :end - (:start owner)))))
-                                           body (if (contains? (set (map :form promotions)) (:name owner)) (promote-source body) body)]]
-                                 (str (:prefix owner) body (:suffix owner)))
-                        classes (set (for [u (:java-class-usages analysis)
-                                           :when (and (= source-file (:filename u))
-                                                      (selected-names (:name (owner-at original (:row u) (:col u)))))]
-                                       (str (:class u))))
-                        declares (sort (set (map :var (filter #(= (:lib d) (:from %)) forward))))
-                        ns-source (header original (:lib d) entries classes)]
-                    {:file (:file d) :lib (:lib d) :entries entries :classes (vec (sort classes))
-                     :blockers (:blockers allocation)
-                     :source (str ns-source "\n\n" (when (seq declares) (str "(declare " (str/join " " declares) ")\n"))
-                                  (str/join "\n" bodies) "\n")})) dests)
+                 (fn [d]
+                   (let [selected (filterv #(= (:lib d) (get mapping (:name %))) owners)
+                         selected-names (set (map :name selected))
+                         local-sites (filterv #(selected-names (:owner %)) (get sites-by-file source-file))
+                         used-libs (into (lexical-required-libs selected (libspecs original))
+                                         (map :to-lib (mapcat #(get owner-usages (:name %)) selected)))
+                         entries (filterv #(and (not= source-lib (lib-of %))
+                                                (or (used-libs (lib-of %))
+                                                    (empty? (options %))
+                                                    (= :all (:refer (options %))))) (libspecs original))
+                         needed (disj (set (keep #(get mapping (:var %)) local-sites)) (:lib d))
+                         allocation (allocate entries needed dest-by-lib)
+                         chosen (:chosen allocation)
+                         entries (into entries (for [lib (sort needed) :let [a (get chosen lib)] :when a] [(symbol lib) :as (symbol a)]))
+                         edits (for [s local-sites :let [target (get mapping (:var s))
+                                                         text (if (= (:lib d) target) (:var s) (str (get chosen target) "/" (:var s)))]]
+                                 (assoc s :text text))
+                         bodies (for [owner selected
+                                      :let [body (splice (subs (:source original) (:start owner) (:end owner))
+                                                         (for [e edits :when (= (:owner e) (:name owner))]
+                                                           (-> e (update :start - (:start owner)) (update :end - (:start owner)))))
+                                            body (if (contains? (set (map :form promotions)) (:name owner)) (promote-source body) body)]]
+                                  (str (:prefix owner) body (:suffix owner)))
+                         classes (set (for [u (:java-class-usages analysis)
+                                            :when (and (= source-file (:filename u))
+                                                       (selected-names (:name (owner-at original (:row u) (:col u)))))]
+                                        (str (:class u))))
+                         declares (sort (set (map :var (filter #(= (:lib d) (:from %)) forward))))
+                         ns-source (header original (:lib d) entries classes)]
+                     {:file (:file d) :lib (:lib d) :entries entries :classes (vec (sort classes))
+                      :blockers (:blockers allocation)
+                      :source (str ns-source "\n\n" (when (seq declares) (str "(declare " (str/join " " declares) ")\n"))
+                                   (str/join "\n" bodies) "\n")})) dests)
         caller-builds (vec
-                       (for [[file ss] (sort-by key sites-by-file) :when (not= file source-file)
-                             :let [p (get parsed file)
-                                   entries (filterv #(not= source-lib (lib-of %)) (libspecs p))
-                                   ;; An explicit load-only dependency still loads the
-                                   ;; complete partition after its source is retired.
-                                   needed (if (seq ss) (set (map #(get mapping (:var %)) ss)) (set (keys dest-by-lib)))
-                                   allocation (allocate entries needed dest-by-lib)
-                                   chosen (:chosen allocation)
-                                   added (vec (for [lib (sort needed) :let [a (get chosen lib)] :when a] [(symbol lib) :as (symbol a)]))
-                                   entries (into entries added)
-                                   [ns-start ns-end] (node-span (:starts p) (:ns-node p))
-                                   edits (cons {:start ns-start :end ns-end :text (caller-header p source-lib added)}
-                                               (for [s ss] (assoc s :text (str (get chosen (get mapping (:var s))) "/" (:var s)))))] ]
-                         {:file file :lib (:lib p) :entries entries :sites (count ss) :blockers (:blockers allocation)
-                          :source (splice (:source p) edits)}))
+                        (for [[file ss] (sort-by key sites-by-file) :when (not= file source-file)
+                              :let [p (get parsed file)
+                                    entries (filterv #(not= source-lib (lib-of %)) (libspecs p))
+                                    ;; An explicit load-only dependency still loads the
+                                    ;; complete partition after its source is retired.
+                                    needed (if (seq ss) (set (map #(get mapping (:var %)) ss)) (set (keys dest-by-lib)))
+                                    allocation (allocate entries needed dest-by-lib)
+                                    chosen (:chosen allocation)
+                                    added (vec (for [lib (sort needed) :let [a (get chosen lib)] :when a] [(symbol lib) :as (symbol a)]))
+                                    entries (into entries added)
+                                    [ns-start ns-end] (node-span (:starts p) (:ns-node p))
+                                    edits (cons {:start ns-start :end ns-end :text (caller-header p source-lib added)}
+                                                (for [s ss] (assoc s :text (str (get chosen (get mapping (:var s))) "/" (:var s)))))]]
+                          {:file file :lib (:lib p) :entries entries :sites (count ss) :blockers (:blockers allocation)
+                           :source (splice (:source p) edits)}))
         all-builds (concat builds caller-builds)
         graph-edges (vec (sort (set (concat
-                                    (for [b all-builds entry (:entries b)] [(:lib b) (lib-of entry)])
-                                    (for [[file p] parsed :when (and (not= file source-file) (not (contains? sites-by-file file)))
-                                          entry (libspecs p)] [(:lib p) (lib-of entry)])))))
+                                      (for [b all-builds entry (:entries b)] [(:lib b) (lib-of entry)])
+                                      (for [[file p] parsed :when (and (not= file source-file) (not (contains? sites-by-file file)))
+                                            entry (libspecs p)] [(:lib p) (lib-of entry)])))))
         cycles (sccs graph-edges)
         rules (vec (for [edge (get-in request [:constraints :forbidden_edges]) :when ((set graph-edges) edge)]
                      {:type :architecture-violation :edge edge}))
@@ -374,6 +449,7 @@
                     :promotions promotions :forward_reference_groups forward
                     :external_requires (mapv #(select-keys % [:lib :entries :classes]) builds)
                     :caller_inventory (mapv #(select-keys % [:file :lib :sites]) caller-builds)
+                    :prose_mentions (prose-mentions source-lib parsed (merge sources futures) source-file)
                     :unmapped_owners unmapped :duplicate_owners duplicates :cycle_sccs cycles
                     :rule_violations rules :unknowns unknowns :blockers blockers
                     :coverage {:roots (:roots request) :reference_authority "clj-kondo captured snapshot plus structural quoted-Var supplement"
@@ -396,4 +472,5 @@
      :snapshot_hash (:snapshot_hash p) :map_hash (:map_hash p)
      :promotions (mapv #(-> % (dissoc :callers) (assoc :reference_count (count (:callers %)))) (:promotions p))
      :graph (:projected_ns_graph p) :coverage (:coverage p) :blockers (:blockers compiled)
+     :prose_mentions (:prose_mentions p)
      :checks checks :verification_complete false :next_call nil}))

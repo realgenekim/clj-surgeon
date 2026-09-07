@@ -1,0 +1,38 @@
+{:ledger "Append-only namespace split paper-cut intents. Retire or supersede; never renumber."
+ :intents
+ [{:id :NS-SPLIT-016 :status :active
+   :ears "When verifying a split candidate, the boundary shall refuse newly introduced error findings relative to the captured baseline before publication."
+   :misreadings ["Exit 3 means the split broke the program." "A removed error can cancel a different new error." "Baseline counts alone prove the candidate."]
+   :boundaries ["existing errors" "new error with unchanged total" "warnings only" "analyzer failure"]
+   :tests [:baseline-lint-is-relative-and-new-errors-block]
+   :rationale "Cell C D1/D2, 2026-09-07: green receipt labelled 108 baseline errors completed."}
+  {:id :NS-SPLIT-017 :status :active
+   :ears "When replacing a caller require, the compiler shall splice sorted destination entries using the existing block indentation without changing unrelated bytes."
+   :misreadings ["Append at the end." "Reformat the entire ns." "Delete only the libspec and leave a blank line."]
+   :boundaries ["first/middle/last entry" "inline clause" "comments" "three-space and tab indentation"]
+   :tests [:caller-requires-have-no-layout-paper-cuts]
+   :rationale "Cell C server.clj: four-space appended requires and whitespace-only retired line."}
+  {:id :NS-SPLIT-018 :status :active
+   :ears "When retired namespace or alias references remain in candidate prose, the receipt shall list advisory file, line and text rows."
+   :misreadings ["Prose is a semantic reference blocker." "Only the full library name counts." "Report executable symbols as prose."]
+   :boundaries ["comments" "multiline docstrings" "unchanged callers" "alias prefix collisions"]
+   :tests [:retired-prose-is-advisory]
+   :rationale "Cell C server.clj and replay_test.clj retained views/ prose."}
+  {:id :NS-SPLIT-019 :status :active
+   :ears "When generating destination namespace docstrings, the compiler shall preserve the original string token bytes."
+   :misreadings ["Equal string values imply equal presentation." "Unescape all backslashes."]
+   :boundaries ["literal newlines" "escaped quotes" "literal backslash-n"]
+   :tests [:destination-docstrings-preserve-token-spelling]
+   :rationale "Cell C destination docstrings were re-encoded with literal newline escapes."}
+  {:id :NS-SPLIT-020 :status :active
+   :ears "When reporting executed profile checks, the receipt shall identify each command by name with its own exit and measured duration."
+   :misreadings ["A numbered profile row is a useful check name." "Wall is inferred from total call time."]
+   :boundaries ["kaocha unit" "owner oracle" "failure" "skipped later commands"]
+   :tests [:proof-rows-name-the-command]
+   :rationale "Cell C hides kaocha timing behind split-unit/1."}
+  {:id :NS-SPLIT-021 :status :active
+   :ears "When an earlier configured verification command fails, the split shall restore its captured files before returning without running later commands."
+   :misreadings ["Fail fast means remove the suite." "Reorder arbitrary profile commands automatically."]
+   :boundaries ["owner oracle first" "parse before publication" "failed oracle" "green suite still required"]
+   :tests [:early-oracle-failure-restores-without-suite]
+   :rationale "Cell C owner oracle ran after the expensive suite; ordered profiles already support safe fail-fast."}]}

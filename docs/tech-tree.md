@@ -292,3 +292,13 @@ mission-ledger implementation change.
   feasibility result, not a matched fresh-caller native crossover or routing claim.
   [Design](intent/helper-extraction/namespace-split-design.md); full receipts and
   caveats: `/var/tmp/forge/plan2/split-build-report.md`.
+
+- 2026-09-07T23:35:46.950536+00:00, `astra/namespace-split`: Cell C paper cuts
+  repaired with NS-SPLIT-016..021 and eight new witnesses. Candidate lint is
+  baseline-relative and blocks new error findings before publication; caller
+  requires preserve indentation/order/trivia, ns docstrings preserve raw tokens,
+  prose mentions are advisory, and checks name their commands and wall. Fresh
+  d9205abc split passes all four oracles. Observed in-call 33.866 s versus original
+  D1/D2 30.666/30.382 s; added candidate lint costs 3.375 s, no verification cut.
+  One functional replay, not a replicated crossover claim.
+  [Proof, red/green witnesses and retained warning delta](observations/2026-09-07-namespace-split-papercuts.md).

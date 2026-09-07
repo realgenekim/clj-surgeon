@@ -16,7 +16,7 @@ future file map consumed by the existing extraction transaction and inverse.
 
 `namespace-split/compile-split` is pure: request plus captured bytes, configured
 source roots and clj-kondo facts produce relations, grouped blockers, and future
-sources. `namespace-split-io/execute!` owns confinement, one analyzer invocation,
+sources. `namespace-split-io/execute!` owns confinement, captured reference analysis and candidate lint,
 profile admission, guarded publication and receipt persistence. MCP and CLI call
 this same boundary. Plan-only calls the same compiler and returns its projection;
 it skips publication and verification execution. No nREPL dependency is required
@@ -121,8 +121,11 @@ Success leads with committed and returns counts, correct destination libraries,
 actual promotions with reasons, graph result/unknown count, named checks with exits
 and durations, verification_complete, details and inverse paths. The compact graph
 summary links to full projection details. Analysis exit 2/3 can still yield complete
-reference facts; it is reported as completed with lint findings, never as a clean
-lint pass. Verification completeness means the named checks passed over the guarded
+reference facts; it is labelled pre-mutation baseline lint, never a clean lint pass.
+Before publication, the candidate is parsed and linted in the same isolated
+analyzer environment. Error type/message multisets ignore moved coordinates;
+new error identities or increased multiplicity block publication even when total
+errors are unchanged. Warnings and info deltas remain visible and advisory. Verification completeness means the named checks passed over the guarded
 candidate, not that arbitrary runtime behavior or external callers were proved.
 
 ## Entrances and continuation
@@ -160,3 +163,31 @@ application acceptance: 141 definitions, 20 destinations, five callers, 87 sites
 unit suite including the supplied architecture test, source absence and exact
 owner assignment all pass. Complete receipts, outputs, timings and gate results
 are in `/var/tmp/forge/plan2/split-build-report.md`.
+
+
+## Cell C receipt and source preservation amendments
+
+[NS-SPLIT-016..021](namespace-split-papercuts.edn) register the 2026-09-07
+paper cuts with INTENT/INTENT-TEST witnesses and a bidirectional suite guard.
+The branch feasibility claim above is historical; Cell C D1/D2 supplied the
+field failures motivating this amendment, not evidence of universal speedup.
+
+Caller requires are inserted at their lexical library position using the block's
+existing indentation. Only retired libspec spans/lines and new insertion spans
+are owned; existing entries and comments are never reordered or reprinted.
+An already unsorted block remains otherwise unchanged. Destination ns docstrings
+reuse the original string token, including literal newlines and escapes.
+
+The receipt's `:prose_mentions [{:file :line :text}]` names surviving candidate
+lines in strings and comments. It recognizes the retired library, original local
+aliases and the library's short name (for prose in files with no direct require).
+These rows are advisory, not semantic reference claims or blockers; source prose
+is left intact. Lines refer to candidate bytes. A short-name hit can be ambiguous.
+
+Executed checks name the actual program (`kaocha unit`, `cc-oracle.py`) and retain
+profile, argv, exit and measured wall separately. The boundary preserves profile
+order and the shared runner stops at the first failure. The Cell C acceptance
+profile explicitly places its read-only owner oracle before kaocha; arbitrary
+profiles are not reordered. Candidate parse/lint run before publication, and a
+post-publication oracle failure invokes the existing guarded inverse. Success
+still requires all configured checks plus the final snapshot guard.

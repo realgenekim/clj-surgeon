@@ -1,19 +1,21 @@
 (ns clj-surgeon.namespace-split-io
-  "Confined snapshot, one analyzer pass, shared extraction publish/proof/inverse."
-  (:require [clj-surgeon.namespace-split :as split]
-            [clj-surgeon.extract :as extract]
-            [clj-surgeon.file-ops :as file-ops]
-            [clj-surgeon.mcp-extraction :as kernel]
-            [clj-surgeon.synchronous-verification :as proof]
-            [clj-surgeon.mcp-paths :as paths]
-            [clj-surgeon.mcp-process :as process]
-            [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [clojure.string :as str]
-            [clojure.walk :as walk]
-            [rewrite-clj.parser :as parser])
-  (:import [java.nio.file Files LinkOption FileVisitOption]
-           [java.util UUID]))
+  "Confined snapshot, baseline-relative lint, shared extraction publish/proof/inverse."
+  (:require
+   [clj-surgeon.extract :as extract]
+   [clj-surgeon.file-ops :as file-ops]
+   [clj-surgeon.mcp-extraction :as kernel]
+   [clj-surgeon.mcp-paths :as paths]
+   [clj-surgeon.mcp-process :as process]
+   [clj-surgeon.namespace-split :as split]
+   [clj-surgeon.synchronous-verification :as proof]
+   [clojure.edn :as edn]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [clojure.walk :as walk]
+   [rewrite-clj.parser :as parser])
+  (:import
+   (java.nio.file FileVisitOption Files LinkOption)
+   (java.util UUID)))
 
 (def max-files 4000)
 (def max-bytes (* 16 1024 1024))
@@ -29,17 +31,17 @@
     {"workspace_root" string-schema
      "source" (object-schema {"file" string-schema "lib" string-schema} ["file" "lib"])
      "destinations" {:type "array" :minItems 1 :maxItems 1000
-                      :items (object-schema {"lib" string-schema "file" string-schema
-                                             "forms" strings-schema
-                                             "alias_policy" (assoc strings-schema :minItems 1)}
-                                            ["lib" "file" "forms" "alias_policy"])}
+                     :items (object-schema {"lib" string-schema "file" string-schema
+                                            "forms" strings-schema
+                                            "alias_policy" (assoc strings-schema :minItems 1)}
+                                           ["lib" "file" "forms" "alias_policy"])}
      "promotion_policy" {:oneOf [{:type "string" :enum ["promote-required"]} strings-schema]}
      "source_retirement" {:type "string" :enum ["delete" "retain-empty"]}
      "roots" (assoc strings-schema :minItems 1 :maxItems 32)
      "constraints" (object-schema {"forbidden_edges" {:type "array" :items {:type "array" :items string-schema :minItems 2 :maxItems 2}}} [])
      "verification" (object-schema {"profile" string-schema} ["profile"])
      "expect" (object-schema (into {} (for [k ["files" "forms" "destinations" "caller_files" "caller_sites"]]
-                                       [k {:type "integer" :minimum 0}])) [])
+                                        [k {:type "integer" :minimum 0}])) [])
      "snapshot_hash" string-schema
      "plan_only" {:type "boolean"}}
     ["workspace_root" "source" "destinations" "promotion_policy" "source_retirement" "roots" "verification"]))
@@ -99,9 +101,9 @@
                                  (let [entries (vec (take 50001 (iterator-seq (.iterator stream))))]
                                    (when (> (count entries) 50000)
                                      (refuse! :entry-bound "Discovery entry bound exceeded" {:max_entries 50000}))
-                                 (->> entries
-                                      (filter #(re-find #"\.clj[sc]?$" (str %)))
-                                      (take (inc max-files)) vec)))) paths)))]
+                                   (->> entries
+                                        (filter #(re-find #"\.clj[sc]?$" (str %)))
+                                        (take (inc max-files)) vec)))) paths)))]
     (when (> (count files) max-files) (refuse! :file-bound "Source file bound exceeded" {:max_files max-files}))
     (doseq [p files]
       (when-not (and (Files/isRegularFile p (into-array LinkOption [LinkOption/NOFOLLOW_LINKS]))
@@ -126,20 +128,57 @@
                      {:command [(str (System/getProperty "user.home") "/bin/clj-kondo") "--lint" (str temp)
                                 "--cache" "false" "--config"
                                 (pr-str {:output {:format :edn :analysis {:var-definitions true :var-usages true
-                                                                         :namespace-usages true :java-class-usages true :keywords true}}})]
+                                                                          :namespace-usages true :java-class-usages true :keywords true}}})]
                       :cwd (str temp) :timeout-ms 120000 :visible-byte-limit max-bytes})
             data (when (and (:finished? result) (not (:out-truncated result)))
                    (edn/read-string (:out result)))]
         (when-not (and (= :admitted (get-in result [:admission :status]))
-                       (#{0 2 3} (:exit result)) (map? (:analysis data)))
+                       (#{0 2 3} (:exit result)) (map? (:analysis data))
+                       (vector? (:findings data)))
           (refuse! :analysis-unavailable "The captured-snapshot analyzer did not complete"
                    {:exit (:exit result) :finished (:finished? result) :truncated (:out-truncated result)}))
         {:analysis (walk/postwalk (fn [x] (if (and (map? x) (:filename x))
-                                           (update x :filename #(str (.relativize temp (.toPath (io/file %))))) x))
-                                 (:analysis data))
+                                            (update x :filename #(str (.relativize temp (.toPath (io/file %))))) x))
+                     (:analysis data))
+         :findings (:findings data)
          :check {:name "captured-reference-analysis" :exit (:exit result) :duration_ms (/ (double (- (System/nanoTime) started)) 1000000.0)
-                 :status "completed" :findings (:summary data)}})
+                 :status "baseline" :baseline (select-keys (:summary data) [:error :warning :info])
+                 :note "Non-zero exit is pre-mutation baseline lint, not split damage; candidate delta is checked separately."}})
       (finally (delete-tree! (str temp))))))
+
+(defn- finding-counts [findings]
+  (merge {:error 0 :warning 0 :info 0} (frequencies (map :level findings))))
+
+;; INTENT: NS-SPLIT-016
+(defn lint-comparison
+  "Compare error type/message multisets, ignoring coordinates that move during a
+  split. Removing one error never cancels a different introduced error."
+  [baseline candidate]
+  (let [before (finding-counts (:findings baseline))
+        after (finding-counts (:findings candidate))
+        errors #(frequencies (map (juxt :type :message) (filter (fn [f] (= :error (:level f))) (:findings %))))
+        old (errors baseline)
+        introduced (reduce-kv (fn [total k v] (+ total (max 0 (- v (get old k 0))))) 0 (errors candidate))]
+    {:name "candidate-lint-delta" :exit (get-in candidate [:check :exit])
+     :duration_ms (get-in candidate [:check :duration_ms])
+     :status (if (pos? introduced) "failed" "passed")
+     :baseline before :post after :delta (merge-with - after before)
+     :introduced_errors introduced
+     :note (if (pos? introduced)
+             "New error findings relative to baseline lint block publication."
+             "Non-zero exit is baseline lint, not split damage; no new error findings.")}))
+
+;; INTENT: NS-SPLIT-020
+(defn proof-check [profile check]
+  (let [[executable argument] (:command check)
+        executable (.getName (io/file executable))
+        label (cond
+                (= "kaocha" executable) (str executable (when argument (str " " argument)))
+                (and argument (re-find #"\.(py|sh|clj)$" argument)) (.getName (io/file argument))
+                :else executable)]
+    {:name label :profile profile :command (:command check)
+     :exit (:exit check) :duration_ms (:elapsed_ms check)
+     :status (if (and (:finished? check) (zero? (or (:exit check) 1))) "passed" "failed")}))
 
 (defn- canonical-compiled [root compiled]
   (let [canonical #(str (.resolve root %))
@@ -160,10 +199,10 @@
   (into {} (for [[profile spec] profiles]
              [profile (if-let [capability (proof/profile-capability spec)]
                         (cond-> {:commands (mapv (fn [argv]
-                                                  (let [exe (first argv)]
-                                                    (if (and (str/includes? exe "/") (not (.isAbsolute (io/file exe))))
-                                                      (assoc argv 0 (str (.resolve root exe))) argv)))
-                                                (:commands capability))}
+                                                   (let [exe (first argv)]
+                                                     (if (and (str/includes? exe "/") (not (.isAbsolute (io/file exe))))
+                                                       (assoc argv 0 (str (.resolve root exe))) argv)))
+                                             (:commands capability))}
                           (:timeout-ms capability) (assoc :timeout-ms (:timeout-ms capability)))
                         spec)])))
 
@@ -178,6 +217,7 @@
 
 ;; @spec NS-SPLIT-010
 ;; @spec NS-SPLIT-012
+;; INTENT: NS-SPLIT-021
 (defn publish!
   "Shared kernel publication and shared synchronous profile; failures use its inverse."
   [root compiled profile-name capability receipt-dir checks]
@@ -190,7 +230,7 @@
                                 (every? (fn [file] (not (.exists (io/file file)))) (:deleted-files candidate))))]
     (if-not (:ok committed)
       (merge base {:ok false :state (cond (:rolled-back committed) "rolled-back"
-                                         (:recovery committed) "recovery-required" :else "refused")
+                                      (:recovery committed) "recovery-required" :else "refused")
                    :error_type (some-> (:error-type committed) name) :error (:error committed)
                    :mutation_attempted (boolean (:recovery committed)) :source_retired (retired?) :kernel committed})
       (let [id (str (UUID/randomUUID))]
@@ -199,11 +239,7 @@
                 verification (proof/run-proof! (str root) profile-name capability)
                 guard-start (System/nanoTime)
                 snapshot-current? (result-snapshot-current? root compiled)
-                checks (into checks (map-indexed (fn [i check]
-                                                  {:name (str profile-name "/" (inc i)) :command (:command check)
-                                                   :exit (:exit check) :duration_ms (:elapsed_ms check)
-                                                   :status (if (and (:finished? check) (zero? (or (:exit check) 1))) "passed" "failed")})
-                                                (:process_evidence verification)))
+                checks (into checks (map (partial proof-check profile-name) (:process_evidence verification)))
                 checks (conj checks {:name "verified-snapshot-guard" :exit (if snapshot-current? 0 1)
                                      :duration_ms (/ (double (- (System/nanoTime) guard-start)) 1000000.0)
                                      :status (if snapshot-current? "passed" "failed")})
@@ -266,19 +302,29 @@
                  checks [(:check analyzed)]
                  result (cond
                           (:plan_only request) (cond-> (assoc (split/receipt compiled checks) :analysis (split/analysis-projection compiled)
-                                                             :read_complete true :source_unchanged true)
+                                                         :read_complete true :source_unchanged true)
                                                  (not (:ok compiled)) (assoc :error "Split analysis contains blockers" :error_type "split-refused"))
                           (not (:ok compiled)) (assoc (split/receipt compiled checks) :error "Split decisions or static proof are incomplete"
-                                                     :error_type "split-refused" :source_unchanged true
-                                                     :next_call (assoc request :plan_only true))
+                                                 :error_type "split-refused" :source_unchanged true
+                                                 :next_call (assoc request :plan_only true))
                           :else
                           (let [parse-start (System/nanoTime)
                                 _ (doseq [[_ s] (:future-sources compiled) :when s] (parser/parse-string-all s))
-                                parse-ms (/ (double (- (System/nanoTime) parse-start)) 1000000.0)]
+                                parse-ms (/ (double (- (System/nanoTime) parse-start)) 1000000.0)
+                                candidate-sources (into (sorted-map) (remove (comp nil? val))
+                                                        (merge sources (:future-sources compiled)))
+                                candidate-analysis (analyze! candidate-sources)
+                                delta (lint-comparison analyzed candidate-analysis)
+                                checks (conj checks {:name "future-source-parse" :exit 0 :duration_ms parse-ms :status "passed"} delta)]
+                            (if (= "failed" (:status delta))
+                              (assoc (split/receipt compiled checks) :ok false :state "refused"
+                                     :error "Candidate introduces error findings relative to baseline lint"
+                                     :error_type "lint-regression" :source_unchanged true
+                                     :blockers [{:type :lint-regression :introduced_errors (:introduced_errors delta)}])
                               (publish! root compiled profile-name (proof/profile-capability (get profiles profile-name))
                                         (or (:receipt-dir config)
                                             (str (System/getProperty "java.io.tmpdir") "/namespace-split-receipts"))
-                                        (conj checks {:name "future-source-parse" :exit 0 :duration_ms parse-ms :status "passed"}))))]
+                                        checks))))]
              (assoc result :elapsed_ms (elapsed)))))
        (catch Throwable error
          {:ok false :operation "namespace_split" :state "refused" :committed false
@@ -300,5 +346,5 @@
         request (cond-> request (:plan-only opts) (assoc :plan_only true))]
     ;; EDN remains machine-readable while its first field answers what happened.
     (into (sorted-map-by (fn [a b] (compare [(if (= :state a) 0 1) (name a)]
-                                           [(if (= :state b) 0 1) (name b)])))
+                                     [(if (= :state b) 0 1) (name b)])))
           (execute! request))))

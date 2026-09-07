@@ -32,3 +32,22 @@ The implemented leaf is [namespace-split-design](../intent/helper-extraction/nam
 with NS-SPLIT-001..015 and direct @spec witnesses. The CLI and MCP share the pure
 compiler and existing extraction inverse; the common synchronous proof code was
 moved into dependency-light leaves so Babashka does not load the MCP/nREPL facade.
+
+## Cell C paper-cut round
+
+Gene's 2026-09-07 brief authorizes this leaf's repair and fresh-fixture proof.
+The append-only `namespace-split-papercuts.edn` registry fixes NS-SPLIT-016..021
+with misreadings and boundary cases before implementation. Add failing witnesses
+first, then repair the pure compiler and confined boundary. Caller headers use
+source splices; destination docstrings retain string-node bytes. Prose is scanned
+structurally in candidate strings/comments using the original namespace aliases.
+Lint compares the same isolated analyzer configuration on captured and candidate
+bytes; a multiset of error type/message identities ignores moved coordinates but
+never lets a removed different error cancel a new one. Keep summaries separate
+from newly introduced errors. Candidate parse and lint precede publication.
+The fixture explicitly orders its independent owner oracle before kaocha; the
+compiler must preserve arbitrary profile order. Every successful proof still runs
+all configured commands, and a failing early command exercises the guarded inverse.
+Acceptance: fresh d9205abc worktree, exact supplied manifest, all four oracles,
+server require diff, branch suite and touched-file lint. Retain red/green and wall
+receipts; this repair run does not establish a new comparative speed claim.
