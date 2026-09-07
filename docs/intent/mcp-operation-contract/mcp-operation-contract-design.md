@@ -21,6 +21,49 @@ finalizer owns only evidence that is common to every public MCP result.
 
 # #Public Operation Inventory
 
+## Structural match recovery (inb-f313b8)
+
+Match walks concrete syntax, including anonymous functions, sets, quoted lists,
+and syntax-quoted lists. A `#(mapv f %)` node also exposes its unexpanded body
+as `(mapv f %)` for comparison. Its receipt retains the full original `#(...)`
+bytes and existing preorder address, never a synthetic address or expanded `%`.
+Bare-symbol matching and existing reader-wrapper matching remain available.
+`inside` applies the same owner scope to all these candidates. Quoted syntax is
+syntax evidence, not a claim of an executable call or a resolved reference.
+
+A batch collects cardinality failures in request order while evaluating the
+same frozen snapshots. The refusal retains the first failure's legacy scalar
+fields and adds `cardinality_failures` with request ID, zero-based request index,
+file, expected and actual counts, and any note. It returns no successful partial
+results or selector continuation. Other kernel errors retain their existing
+fail-fast behavior. A later non-cardinality error stops evaluation and retains
+the accumulated cardinality refusal; it cannot issue a selector continuation
+that drops an earlier failure. Text renders every collected failure's identity
+and counts. Caller-derived IDs and files retain their exact values in structured
+data; their quoted text spellings and each note pass through the bounded
+single-line encoder (MCP-OP-EDIT-038). Request indexes distinguish identities
+whose safe spellings collide or truncate. Counts and failure ordering survive
+this presentation step. Sol's round-one hostile `rogue<U+2028>→ forged` ID is
+the public-handler regression; Unicode separators, receipt glyphs, long IDs,
+hostile paths, and notes are its adjacent boundaries.
+
+Reader-discard syntax (`#_`) remains matchable as on the base commit. Excluding
+discarded descendants would change selection semantics and is deferred as
+MCP-OP-MATCH-005, an unimplemented follow-up boundary requiring scoped/unscoped
+and nested-discard witnesses before activation. This repair does not change it.
+
+For wildcard misses or count shortfalls, the historical longer-pattern hint is
+emitted only if a longer candidate matches the pattern prefix and no same-head,
+same-arity candidate exists within the selected scope. Otherwise the note reports
+the observed match count and scope, explicitly including reader bodies, without
+guessing which pattern token or expected count the caller should change.
+
+The regression matrix covers the A-T1 source shape, literal and wildcard calls,
+bare symbols, scoped/unscoped reads, sets/quotes/syntax quotes, exact source and
+address retention, only the second of three requests failing, several failures,
+zero versus excess counts, arity-correct misses, and genuine longer-form misses.
+Existing match tests are immutable controls. No service or benchmark is required.
+
 | Public tool | Handler family | Outcome classes |
 |---|---|---|
 | `inspect_clojure` | inspect | read success, prepared basis, verification pending, verification complete, verification failed, typed refusal |

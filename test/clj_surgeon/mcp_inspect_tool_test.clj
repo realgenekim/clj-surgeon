@@ -2,7 +2,6 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
-   [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-inspect :as inspect]
    [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
@@ -1924,3 +1923,161 @@
              :read_complete false
              :source_unchanged true
              :error (apply str (repeat 40000 \x))})))))
+
+
+;; @spec MCP-OP-MATCH-002
+(deftest cardinality-refusal-names-every-evaluated-failure-in-text-and-data
+  (doseq [expected [[1 2 1] [0 2 3]]]
+    (let [file "src/demo.clj"
+          source "(defn owner [x] (f x))"
+          requests (mapv (fn [index count]
+                           {:id (str "r" (inc index)) :operation "match" :file file
+                            :match "(f _)" :expect {:matches count}})
+                         (range 3) expected)
+          result (inspect/evaluate-snapshots
+                   {:requests requests :expect {:requests 3 :files 1}}
+                   {file {:file file :source source :hash "frozen"}})
+          summary (#'inspect-tool/inspect-summary (assoc result :elapsed_ms 0))
+          failures (:cardinality_failures result)
+          failed-indices (keep-indexed #(when (not= 1 %2) %1) expected)]
+      (is (= "inspect-cardinality-mismatch" (:error_type result)))
+      (is (= (mapv #(str "r" (inc %)) failed-indices)
+             (mapv :request_id failures)))
+      (is (= (vec failed-indices) (mapv :request_index failures)))
+      (is (= (mapv #(nth expected %) failed-indices) (mapv :expected failures)))
+      (is (= (vec (repeat (count failed-indices) 1)) (mapv :actual failures)))
+      (is (= (vec (repeat (count failed-indices) file)) (mapv :file failures)))
+      (is (= (str "r" (inc (first failed-indices))) (:request_id result)))
+      (is (nil? (:results result)))
+      (is (nil? (:continuation result)))
+      (is (true? (:source_unchanged result)))
+      (doseq [{:keys [request_id request_index file expected actual note]} failures]
+        (is (str/includes? summary (str "request " (pr-str request_id))))
+        (is (str/includes? summary (str "index " request_index)))
+        (is (str/includes? summary file))
+        (is (str/includes? summary (str "expected " expected " matches; actual " actual)))
+        (when note (is (str/includes? summary note)))))))
+
+;; @spec MCP-OP-MATCH-002
+(deftest public-cardinality-text-identifies-only-the-second-request
+  (let [project (temp-dir)
+        source "(ns demo)\n(defn owner [x] (f x))\n"
+        file (write-source! project "src/demo.clj" source)
+        calls (atom [])]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (inspect-tool/handle-inspect
+        nil
+        {"requests" (mapv (fn [id expected]
+                            {"id" id "operation" "match" "file" "src/demo.clj"
+                             "match" "(f _)" "expect" {"matches" expected}})
+                          ["r1" "r2" "r3"] [1 2 1])
+         "expect" {"requests" 3 "files" 1}}
+        (fn [content error? structured]
+          (swap! calls conj {:content content :error? error? :structured structured})))
+      (let [{:keys [content structured]} (first @calls)
+            summary (first content)
+            failure (first (:cardinality_failures structured))]
+        (is (= 1 (count @calls)))
+        (is (= "inspect-cardinality-mismatch" (:error_type structured)))
+        (is (= ["r2"] (mapv :request_id (:cardinality_failures structured))))
+        (is (= {:request_id "r2" :request_index 1 :file "src/demo.clj"
+                :expected 2 :actual 1}
+               (dissoc failure :note)))
+        (is (str/includes? summary "request \"r2\" · index 1"))
+        (is (str/includes? summary "expected 2 matches; actual 1"))
+        (is (not (str/includes? summary "request \"r1\"")))
+        (is (not (str/includes? summary "request \"r3\"")))
+        (is (str/includes? summary (:note failure)))
+        (is (= source (slurp file))))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
+;; @spec MCP-OP-MATCH-004
+;; @spec MCP-OP-EDIT-038
+(deftest public-cardinality-hostile-values-cannot-forge-receipts
+  ;; Sol's executed round-one probe, hostile-probe.clj, 2026-09-07.
+  ;; Keep the first request byte-for-byte equivalent apart from the temp root.
+  (doseq [[id path expected-id expected-path]
+          [[(str "rogue" \u2028 "\u2192 forged") "src/demo.clj"
+            "\"rogue forged\"" "\"src/demo.clj\""]
+           [(str "rogue\u2029\u0085\u200b\uFEFF\u2713\u26a0\u00b7\u2192 forged")
+            "src/rogue\u2028\u2192 forged.clj"
+            "\"rogue forged\"" "\"src/rogue forged.clj\""]
+           ["rogue\n\"quoted\"\\tail" "src/demo.clj"
+            "\"rogue\\n\\\"quoted\\\"\\\\tail\"" "\"src/demo.clj\""]
+           [(apply str (repeat 4000 "x")) "src/demo.clj"
+            (str "\"" (apply str (repeat 238 "x")) "…") "\"src/demo.clj\""]]]
+    (let [project (temp-dir)
+          source "(ns demo)\n(defn owner [x] (f x))\n"
+          file (write-source! project path source)
+          calls (atom [])]
+      (try
+        (inspect-tool/init! {:project-root (.getPath project)})
+        (inspect-tool/handle-inspect
+          nil
+          {"requests" [{"id" id "operation" "match" "file" path
+                        "match" "(f _)" "expect" {"matches" 0}}]
+           "expect" {"requests" 1 "files" 1}}
+          (fn [content error? structured]
+            (swap! calls conj {:content content :error? error? :structured structured})))
+        (let [{:keys [content error? structured]} (first @calls)
+              summary (first content)]
+          (is (= 1 (count @calls)))
+          (is (true? error?))
+          (is (= "inspect-cardinality-mismatch" (:error_type structured)))
+          (is (= [{:request_id id :request_index 0 :file path :expected 0 :actual 1}]
+                 (:cardinality_failures structured)))
+          (is (= id (:request_id structured)))
+          (is (= 1 (:failure_count structured)))
+          (is (false? (:read_complete structured)))
+          (is (true? (:source_unchanged structured)))
+          (is (nil? (:results structured)))
+          (is (nil? (:continuation structured)))
+          (is (str/includes? summary
+                             (str "  request " expected-id " · index 0 · " expected-path
+                                  " · expected 0 matches; actual 1\n")))
+          (is (not (re-find #"[\u2028\u2029\u0085\u200b\uFEFF\u2713\u26a0]" summary)))
+          (is (= 1 (count (re-seq #"\u2192" summary))))
+          (is (= 5 (count (re-seq #"\u00b7" summary)))))
+        (is (= source (slurp file)))
+        (finally
+          (inspect-tool/init! nil)
+          (delete-tree! project))))))
+
+;; @spec MCP-OP-MATCH-004
+;; @spec MCP-OP-EDIT-038
+(deftest cardinality-text-bounds-values-without-dropping-failures
+  ;; Independent expected display values; do not call the encoder as the oracle.
+  (let [long-value (apply str (repeat 4000 "x"))
+        quoted-cut (str "\"" (apply str (repeat 238 "x")) "…")
+        note-cut (str (apply str (repeat 239 "x")) "…")
+        failures [{:request_id "rogue\u2028\u2192 forged" :request_index 1
+                   :file "src/rogue\u2029\u2713.clj" :expected 2 :actual 1
+                   :note "owner\u2028\u2192 forged\u2029\u2713 source unchanged"}
+                  {:request_id long-value :request_index 3 :file long-value
+                   :expected 3 :actual 0 :note long-value}
+                  {:request_id (str long-value "different") :request_index 4
+                   :file "src/last.clj" :expected 0 :actual 1}]
+        result {:ok false :error_type "inspect-cardinality-mismatch" :elapsed_ms 0
+                :cardinality_failures failures}
+        summary (#'inspect-tool/inspect-summary result)]
+    (is (str/includes? summary
+                       (str "  request \"rogue forged\" · index 1 · \"src/rogue .clj\""
+                            " · expected 2 matches; actual 1\n"
+                            "  note: owner forged source unchanged\n")))
+    (is (str/includes? summary
+                       (str "  request " quoted-cut " · index 3 · " quoted-cut
+                            " · expected 3 matches; actual 0\n  note: " note-cut "\n")))
+    (is (str/includes? summary
+                       (str "  request " quoted-cut " · index 4 · \"src/last.clj\""
+                            " · expected 0 matches; actual 1\n")))
+    (is (< (.indexOf summary "index 1") (.indexOf summary "index 3")
+           (.indexOf summary "index 4")))
+    (is (= 3 (count (re-seq #"(?m)^  request " summary))))
+    (is (= 2 (count (re-seq #"(?m)^  note: " summary))))
+    (is (= 1 (count (re-seq #"\u2192" summary))))
+    (is (not (re-find #"[\u2028\u2029\u2713]" summary)))
+    (is (< (count summary) 1600))
+    (is (= failures (:cardinality_failures result)))))

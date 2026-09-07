@@ -56,8 +56,11 @@
           ;; forwarded-refusal-kind
           (throw (ex-info (str label " must contain exactly one complete form")
                           {:error-type error-type})))
-        {:sexpr (z/sexpr (first forms))
-         :source (z/string (first forms))})
+        (cond-> {:sexpr (z/sexpr (first forms))
+                 :source (z/string (first forms))}
+          (= :fn (z/tag (first forms)))
+          (assoc :reader-body (node/sexpr
+                                (node/list-node (node/children (z/node (first forms))))))))
       (catch clojure.lang.ExceptionInfo e
         (if (= error-type (:error-type (ex-data e)))
           (throw e)
@@ -619,6 +622,29 @@
      (catch Exception e
        (query-error-result source query e)))))
 
+;; @spec MCP-OP-MATCH-001
+(defn- match-value
+  "The anonymous function's concrete call body, without generated fn* arguments.
+   Other reader wrappers keep their ordinary value; the zipper visits children."
+  [candidate]
+  (if (= :fn (z/tag candidate))
+    (node/sexpr (node/list-node (node/children (z/node candidate))))
+    (z/sexpr candidate)))
+
+;; @spec MCP-OP-MATCH-003
+(defn- longer-pattern-evidence?
+  [pattern values]
+  (and (sequential? pattern)
+       (seq pattern)
+       (not-any? #(and (sequential? %)
+                       (= (count pattern) (count %))
+                       (wildcard-match? (first pattern) (first %))) values)
+       (boolean (some #(and (sequential? %)
+                            (< (count pattern) (count %))
+                            (wildcard-match? pattern (take (count pattern) %)))
+                      values))))
+
+;; @spec MCP-OP-MATCH-001
 (defn find-subforms
   "Structural subform search.
 
@@ -629,7 +655,7 @@
   [source {:keys [inside match file]}]
   (try
     (let [_ (admission/admit! (or file "<source>") source)
-          {pattern :sexpr match-source :source}
+          {pattern :sexpr match-source :source reader-body :reader-body}
           (one-complete-form match :invalid-match "Match")
           root (z/of-string source {:track-position? true})
           top-levels (vec (top-level-locations root))
@@ -639,12 +665,25 @@
          :error-type :inside-not-found
          :inside (str inside) :match match-source :match-count 0 :matches []
          :source-hash (source-hash source)}
-        (let [matches (->> (zipper-locations root)
-                           (map-indexed vector)
-                           (keep (fn [[index candidate]]
-                                   (when (and (or (nil? range) (within-range? range candidate))
-                                              (try (wildcard-match? pattern (z/sexpr candidate))
-                                                   (catch Exception _ false)))
+        (let [candidates (->> (zipper-locations root)
+                              (map-indexed vector)
+                              (filter (fn [[_ candidate]]
+                                        (or (nil? range) (within-range? range candidate)))))
+              values (mapv (fn [[_ candidate]]
+                             (try {:value (match-value candidate)}
+                                  (catch Exception _ nil)))
+                           candidates)
+              matches (->> (map vector candidates values)
+                           (keep (fn [[[index candidate] value]]
+                                   (when (and value
+                                              (or (wildcard-match?
+                                                    (if (= :fn (z/tag candidate))
+                                                      (or reader-body pattern) pattern)
+                                                    (:value value))
+                                                  ;; Preserve explicit expanded reader-wrapper queries.
+                                                  (and (= :fn (z/tag candidate))
+                                                       (try (wildcard-match? pattern (z/sexpr candidate))
+                                                            (catch Exception _ false)))))
                                      (let [{:keys [row end-row]} (meta (z/node candidate))
                                            owner (enclosing-form-name top-levels candidate)]
                                        (cond-> {:path (semantic-path candidate inside)
@@ -653,9 +692,11 @@
                                                 :source (z/string candidate)}
                                          owner (assoc :inside owner))))))
                            vec)]
-          {:inside (when inside (str inside)) :match match-source
-           :match-count (count matches) :matches matches
-           :source-hash (source-hash source)})))
+          (cond-> {:inside (when inside (str inside)) :match match-source
+                   :match-count (count matches) :matches matches
+                   :source-hash (source-hash source)}
+            (longer-pattern-evidence? pattern (map :value (remove nil? values)))
+            (assoc :longer-pattern-evidence true)))))
     ;; @spec MCP-OP-MEM-005
     ;; A refusal reaches the caller TYPED. Flattening it to `:error` would leave
     ;; `:reason`, `:limit`, `:observed` and `:remedy` nil, which is the witness

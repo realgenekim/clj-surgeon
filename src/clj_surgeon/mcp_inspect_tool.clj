@@ -52,6 +52,10 @@
     "a changed guard refuses without source or write authority. Hypotheses are "
     "never selection authority, and continuation is never write authority. "
     "Every match result carries its file and an owner_counts vector of "
+    "{inside, matches}. Match includes #() call bodies, sets, quotes and syntax quotes; "
+    "a matched #() body retains the whole reader form's source and address. "
+    "Cardinality refusals list request IDs and expected/actual counts in "
+    "cardinality_failures and text. owner_counts contains "
     "{inside, matches} in first-occurrence order summing to match_count. Those "
     "counts are the query's per-owner tallies: they are the apply_clojure_changes "
     "edits matches only when one concrete from/to replacement addresses every "
@@ -1037,6 +1041,17 @@
         ;; here: text contains the structured value VERBATIM, by construction.
         (when-let [sentence (not-empty (str (:error result)))]
           (format "  %s\n" sentence))
+        ;; @spec MCP-OP-MATCH-002
+        ;; @spec MCP-OP-MATCH-004
+        ;; @spec MCP-OP-EDIT-038
+        (when (seq (:cardinality_failures result))
+          (apply str
+                 (map (fn [{:keys [request_id request_index file expected actual note]}]
+                        (str "  request " (safe (pr-str request_id))
+                             " · index " request_index " · " (safe (pr-str file))
+                             " · expected " expected " matches; actual " actual "\n"
+                             (when note (str "  note: " (safe note) "\n"))))
+                      (:cardinality_failures result))))
         (when diagnostic?
           (str
             (format "  request %s · %s\n"
@@ -1062,7 +1077,7 @@
         (missing-field-lines result)
         (named-field-lines result)
         ;; @spec MCP-OP-FIELD-003
-        (when (:note result)
+        (when (and (:note result) (empty? (:cardinality_failures result)))
           (format "  note: %s\n" (safe (:note result))))
         (str (when (seq available-owners)
                (str "\n  All listed owners are real snapshot evidence; "
