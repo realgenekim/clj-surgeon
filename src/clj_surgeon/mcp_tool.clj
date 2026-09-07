@@ -965,7 +965,13 @@
    pure contract ever sees it, so a `next_call` the contract composes from the
    caller's own request is missing the one field the caller MUST send back. It
    is restored here, at the one place that knows the resolved root, and only
-   when the composed call does not already carry it."
+   when the composed call does not already carry it.
+
+   Called ONLY on the branch where the caller sent a `workspace_root`. Sol
+   fence r2 (2026-09-07): adding one to a request that validly omitted the
+   optional root makes `next_call` differ from the caller's request by more
+   than `expect`, which is the exact-shape contract MCP-OP-EDIT-039 states.
+   `workspace_root` in the composed call iff `workspace_root` in the request."
   [result workspace-root]
   (let [next-call (:next_call result)]
     (if (and (map? next-call)
@@ -987,10 +993,11 @@
       (let [result (execute-request-in-context!
                      config normalized public-operation)
             resolved (workspace/canonical-root (:project-root config))]
+        ;; @spec MCP-OP-EDIT-039
+        ;; The caller omitted the optional root, so the composed `next_call`
+        ;; must omit it too. The RECEIPT still reports the resolved root.
         (cond-> result
-          (:ok resolved)
-          (-> (assoc :workspace_root (:workspace-root resolved))
-              (next-call-with-workspace-root (:workspace-root resolved)))))
+          (:ok resolved) (assoc :workspace_root (:workspace-root resolved))))
       (let [workspace-router (or (:workspace-router config)
                                  (workspace/router config))
             routed (workspace/resolve-request workspace-router normalized)]

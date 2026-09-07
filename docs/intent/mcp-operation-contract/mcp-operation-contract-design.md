@@ -549,11 +549,46 @@ is weaker than a project-owned exact-exit profile.
 # #Tolerant Direct-Change Compilation
 
 Direct `changes` keep exact per-change `matches`, `each_form`, and `each_file`
-guards as mutation authority. Top-level aggregate `expect` is bookkeeping that
-the compiler can derive after every change has validated. Its absence therefore
-does not create an unknown, and a supplied disagreement does not override the
-guarded compiled transaction. The public result reports that normalization so
-the caller can learn the smaller request shape.
+guards as mutation authority. Top-level aggregate `expect` is OPTIONAL, and it
+is a GUARD wherever it is supplied. Its absence creates no unknown: the
+compiler derives exact `changes`, `edits`, and distinct `files` counts after
+every change has validated, applies no aggregate guard, and reports no ignored
+input normalization.
+
+Its presence binds the caller's declared size of the transaction to the effect
+the transaction will actually commit. Every supplied count must equal the
+derived count. A single disagreement refuses the complete request before any
+write, names each disagreeing field with both its expected and its derived
+value, publishes source unchanged and mutation not attempted, and publishes a
+`next_call` that is the caller's own request with only `expect` replaced by the
+derived counts. That composed call carries `workspace_root` exactly when the
+caller's request did, and carries exactly one `expect` key.
+
+Two consequences follow from making it authoritative, and both are load-bearing.
+
+First, the derived counts must cover EVERY transformation the transaction will
+commit, not only the ones lowered into the `changes` array. `delete_owners`
+lowers into `changes` and is therefore already inside them; `programs` do not,
+and are added explicitly. A guard blind to half a transaction is worse than no
+guard, because it authorizes a size the receipt then exceeds. The derived
+counts are the same arithmetic the committed receipt publishes, so a receipt's
+counts always equal the counts its request was guarded against.
+
+Second, a create-only transaction cannot honour `expect` at all: it changes no
+existing source, so `changes`, `edits`, and `files` are all honestly zero,
+while the published schema's minimum for each is one. Every corrected `expect`
+such a request could be handed is one the boundary itself rejects. That route
+therefore refuses `expect` as unsupported, naming the route and publishing no
+`next_call`. A declared field a route cannot honour is refused, never ignored.
+
+Superseded, and named so the change is legible: before 2026-09-07 this section
+read that aggregate `expect` was bookkeeping, that a supplied disagreement did
+not override the guarded compiled transaction, and that the public result
+reported that normalization as `input_normalization {ignored ["expect"]}`. A
+dogfood caller then sent three edits over three files with a matching `expect`,
+received `ok=true` with its one binding field discarded, and the receipt could
+not have told it apart from a caller that had mis-stated the size. The field
+the schema declared for binding intent to effect bound nothing.
 
 Insertion arrays remain explicit action boundaries, but one array item may be
 a pasted block containing several complete forms. The compiler parses the

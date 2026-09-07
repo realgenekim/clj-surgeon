@@ -206,7 +206,7 @@
     "expect"
     {:type "object"
      :additionalProperties false
-     :description "Optional aggregate GUARD. Surgeon derives exact counts from per-change guards; any stated count that disagrees refuses the whole call before any write, naming the field, the expected value and the derived value, and returning a corrected next_call."
+     :description "Optional aggregate GUARD covering every transformation the transaction commits, including programs. Surgeon derives exact counts from per-change guards; any stated count that disagrees refuses the whole call before any write, naming the field, the expected value and the derived value, and returning a corrected next_call. One exception: a create-only request, which carries create_files with no changes, edits, or programs, changes no existing source, so every count would be zero and it refuses expect as unsupported on that route. Omit expect there."
      :properties
      {"changes" (assoc positive-integer-schema :description "Number of change objects.")
       "edits" (assoc positive-integer-schema :description "Total exact replacements.")

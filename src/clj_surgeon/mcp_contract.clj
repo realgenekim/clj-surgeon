@@ -1002,10 +1002,31 @@
                                (count (distinct (map :file creations)))))
                 (refuse! :duplicate-path ["create_files"]
                          "Created file paths must be unique"))
-            derived-expect
+            ;; @spec MCP-OP-EDIT-039
+            ;; EVERY transformation this transaction will commit, not only the
+            ;; ones lowered into `changes`. Sol fence r2 (2026-09-07): counts
+            ;; derived from `changes` alone let a mixed edit+program request
+            ;; declare {changes 1, edits 1, files 1}, pass the guard, and
+            ;; commit {2, 2, 1} -- the guard authorized one transformation and
+            ;; two were written, which is the exact failure the guard exists to
+            ;; prevent. `delete_owners` was never at risk (it lowers into
+            ;; `changes` above), and `create_files` cannot be guarded at all
+            ;; (MCP-OP-EDIT-041). The receipt reports one change and its
+            ;; declared `matches` edits per program, so these counts are the
+            ;; same arithmetic the committed receipt publishes.
+            ;; The `changes` array's OWN aggregate, which is what the
+            ;; transaction compiler is handed and what its per-change guards
+            ;; are checked against. It is deliberately NOT the guard's number.
+            changes-expect
             {:changes (count changes)
              :edits (reduce + (map #(get-in % ["expect" "matches"]) changes))
              :files (count (set (mapcat #(field % "files") changes)))}
+            derived-expect
+            {:changes (+ (:changes changes-expect) (count programs))
+             :edits (+ (:edits changes-expect)
+                       (reduce + (map #(get-in % [:expect :matches]) programs)))
+             :files (count (into (set (mapcat #(field % "files") changes))
+                                 (map :file programs)))}
             ;; @spec MCP-OP-EDIT-041
             ;; Create-only is decided BEFORE the count guard, because its
             ;; derived counts are all zero and every "corrected" expect they
@@ -1021,14 +1042,22 @@
             ;; checked HERE, against the caller's own request, so the composed
             ;; next_call is the shape the caller sent and not the compiled
             ;; direct form it never wrote.
-            _ (guard-aggregate-expect! supplied-expect derived-expect
-                                       caller-params)
+            ;; Only when this shape can actually execute. A request carrying
+            ;; `programs` but no change lowers to an empty `changes` array,
+            ;; which `validate-direct-tool-params` refuses `non-empty-array`
+            ;; -- a rule that predates this guard (proved against f3d922ac
+            ;; with no `expect` at all). Guarding it first would answer an
+            ;; unexecutable request with a corrected `expect`, a remedy that
+            ;; refuses again for a different reason.
+            _ (when (seq changes)
+                (guard-aggregate-expect! supplied-expect derived-expect
+                                         caller-params))
             direct
             (cond->
               {"changes" changes
-               "expect" {"changes" (:changes derived-expect)
-                         "edits" (:edits derived-expect)
-                         "files" (:files derived-expect)}}
+               "expect" {"changes" (:changes changes-expect)
+                         "edits" (:edits changes-expect)
+                         "files" (:files changes-expect)}}
               (present? params "verify")
               (assoc "verify" (field params "verify")))]
         (cond-> {:ok true :params direct}

@@ -268,3 +268,152 @@
                       {"create_files" [{"file" "src/created.clj"
                                         "content" "(ns created)\n"}]})]
       (is (:ok validated) (pr-str validated)))))
+
+;;; ---------------------------------------------------------------------------
+;;; Round three: Sol's round-2 review (verdict at
+;;; /var/tmp/forge/expectfix-r2-verdict.md) found the guard counting only
+;;; lowered `changes`, so the `programs` route was invisible to it.
+
+(def ^:private mixed-source
+  "(ns gamma)\n(defn three [] :old)\n(defn four [] \"keep\")\n")
+
+(def ^:private one-program
+  {"file" "src/gamma.clj"
+   "expression" "(-> (form 'four) (match \"keep\") (transform (constantly \"kept\")))"
+   "expect" {"matches" 1 "max_changed_characters" 6}})
+
+(def ^:private one-mixed-edit
+  {"file" "src/gamma.clj" "within" {"form" "three"}
+   "from" ":old" "to" ":new" "matches" 1})
+
+(defn- execute-mixed
+  "One workspace holding src/gamma.clj; returns the receipt and the final bytes."
+  [request]
+  (let [workspace (temp-dir)]
+    (try
+      (let [gamma (io/file workspace "src/gamma.clj")]
+        (io/make-parents gamma)
+        (spit gamma mixed-source)
+        {:result (mcp-tool/execute-request!
+                   {:project-root (.getPath workspace)
+                    :receipt-dir (.getPath (io/file workspace "receipts"))}
+                   (assoc request "workspace_root" (.getPath workspace)))
+         :workspace-root (.getPath workspace)
+         :source (slurp gamma)})
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-EDIT-039
+(deftest derived-counts-cover-every-transformation-the-transaction-commits
+  ;; Sol fence r2 defect 1. A mixed edit+program request declaring
+  ;; {changes 1, edits 1, files 1} PASSED the guard and committed {2,2,1}:
+  ;; the guard authorized one transformation and two were written. A guard
+  ;; that cannot see half the transaction is not a guard.
+  (testing "a one-short expect on a mixed edit+program request refuses"
+    (let [{:keys [result source]}
+          (execute-mixed {"edits" [one-mixed-edit]
+                          "programs" [one-program]
+                          "expect" {"changes" 1 "edits" 1 "files" 1}})]
+      (is (false? (:ok result)) (pr-str result))
+      (is (= "expect-mismatch" (:reason result)))
+      (is (= [{:field "changes" :expected 1 :derived 2}
+              {:field "edits" :expected 1 :derived 2}]
+             (:mismatch result))
+          "the program is counted as one change and its matches as edits")
+      (is (true? (:source_unchanged result)))
+      (is (= mixed-source source) "not one byte was written")
+      (is (= 2 (get-in result [:next_call "expect" "changes"])))
+      (is (= 2 (get-in result [:next_call "expect" "edits"])))
+      (is (= 1 (get-in result [:next_call "expect" "files"])))))
+  (testing "the matching expect commits, and the receipt's counts equal it"
+    (let [{:keys [result source]}
+          (execute-mixed {"edits" [one-mixed-edit]
+                          "programs" [one-program]
+                          "expect" {"changes" 2 "edits" 2 "files" 1}})]
+      (is (:ok result) (pr-str result))
+      (is (= 2 (:changes result)))
+      (is (= 2 (:edits result)))
+      (is (= 1 (:files result)))
+      (is (str/includes? source ":new"))
+      (is (str/includes? source "kept"))))
+  (testing "programs-only cannot execute at all, with or without expect"
+    ;; NOT a property of this guard. A request carrying `programs` and no
+    ;; change lowers to an empty `changes` array, which the direct validator
+    ;; has always refused; proved against the pre-guard base commit f3d922ac
+    ;; with no `expect` in the request. The guard therefore stands aside and
+    ;; lets the real reason surface, rather than answering an unexecutable
+    ;; request with a corrected `expect` that would refuse again.
+    (doseq [request [{"programs" [one-program]}
+                     {"programs" [one-program]
+                      "expect" {"changes" 1 "edits" 1 "files" 1}}
+                     {"programs" [one-program]
+                      "expect" {"changes" 2 "edits" 2 "files" 2}}]]
+      (let [{:keys [result source]} (execute-mixed request)]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "non-empty-array" (:reason result))
+            "the pre-existing reason, not an expect-mismatch")
+        (is (= ["changes"] (:path result)))
+        (is (= mixed-source source))))))
+
+;; @spec MCP-OP-EDIT-039
+(deftest delete-owners-are-already-inside-the-derived-counts
+  ;; delete_owners lower into `changes` before the guard runs, so they were
+  ;; never invisible to it. Pinned so a future lowering change cannot quietly
+  ;; move them out of the count the way `programs` sat outside it.
+  (let [{:keys [result source]}
+        (execute-mixed {"delete_owners" [{"file" "src/gamma.clj"
+                                          "forms" ["four"]}]
+                        "expect" {"changes" 1 "edits" 1 "files" 1}})]
+    (is (:ok result) (pr-str result))
+    (is (= 1 (:changes result)))
+    (is (not (str/includes? source "keep"))))
+  (let [{:keys [result source]}
+        (execute-mixed {"delete_owners" [{"file" "src/gamma.clj"
+                                          "forms" ["four"]}]
+                        "expect" {"changes" 2 "edits" 1 "files" 1}})]
+    (is (false? (:ok result)) (pr-str result))
+    (is (= [{:field "changes" :expected 2 :derived 1}] (:mismatch result)))
+    (is (= mixed-source source))))
+
+;; @spec MCP-OP-EDIT-039
+(deftest next-call-carries-workspace-root-iff-the-caller-sent-one
+  ;; Sol fence r2 defect 3: restoring the resolved root unconditionally makes
+  ;; next_call differ from the caller's request by more than `expect`.
+  (testing "omitted by the caller, absent from next_call"
+    (let [workspace (temp-dir)]
+      (try
+        (let [gamma (io/file workspace "src/gamma.clj")
+              _ (io/make-parents gamma)
+              _ (spit gamma mixed-source)
+              request {"edits" [one-mixed-edit]
+                       "expect" {"changes" 1 "edits" 1 "files" 2}}
+              result (mcp-tool/execute-request!
+                       {:project-root (.getPath workspace)
+                        :receipt-dir (.getPath (io/file workspace "receipts"))}
+                       request)]
+          (is (false? (:ok result)) (pr-str result))
+          (is (nil? (get-in result [:next_call "workspace_root"])))
+          (is (= (json-round-trip
+                   (assoc request "expect" {"changes" 1 "edits" 1 "files" 1}))
+                 (json-round-trip (:next_call result)))
+              "the caller's exact request shape, only expect replaced"))
+        (finally (delete-tree! workspace)))))
+  (testing "sent by the caller, preserved in next_call"
+    (let [{:keys [result workspace-root]}
+          (execute-mixed {"edits" [one-mixed-edit]
+                          "expect" {"changes" 1 "edits" 1 "files" 2}})]
+      (is (false? (:ok result)))
+      (is (= workspace-root (get-in result [:next_call "workspace_root"]))))))
+
+;; @spec MCP-OP-EDIT-042
+(deftest a-zero-declared-count-refuses-at-runtime-on-the-edits-route
+  ;; Sol fence r2 probe (c): the published minimum is one, but the only
+  ;; witness was schema inspection. This one is a runtime refusal.
+  (let [{:keys [result source]}
+        (execute-mixed {"edits" [one-mixed-edit]
+                        "expect" {"changes" 0 "edits" 1 "files" 1}})]
+    (is (false? (:ok result)) (pr-str result))
+    (is (= "positive-integer" (:reason result)))
+    (is (= ["expect" "changes"] (:path result)))
+    (is (true? (:source_unchanged result)))
+    (is (= mixed-source source))))
