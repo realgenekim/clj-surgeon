@@ -3320,3 +3320,5 @@ My objections to the opening six: verification is not established as the dominan
 ## 00:42Z — CORRECTION to the dogfood entry: instrument wall is 151.8 s (stopwatch verify-done stamp); the 103 s I wrote was kaocha's observed completion (≤ 00:41:29Z) — the stamp lagged ≈ 49 s behind it because I polled on a 10 s loop and ran other commands before stamping. Ledger correction row appended (151.8). Ratchet: background verifies stamp their own exit.
 
 ## 00:43Z — Astra red-line on dogfood-1 (verbatim gist): "raw stopwatch =151.8 s to green /153.3 s pushed, not103 (report prose still wrong). Separate n=1 dogfood from prior pairs; apply stamp is completion." → receipt prose corrected IN PLACE (raw stopwatch figures as the only walls; n = 1 reported separately, not pooled or called consistent; phase stamps = completions).
+
+## 00:44Z — Astra's meter-semantics points folded into the dogfood receipt (stamps = completions; server vs client meters named; verify bracket 73.67 s ≈ 48.5%, mutation ≈ 1.4% of the measured wall as observed fractions; n = 1, zero paired comparisons).
