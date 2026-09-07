@@ -594,7 +594,7 @@
                                                        children %)
                                             nodes))))
             potential? (potential-in? [node])]
-        ;; @spec MCP-OP-ALIAS-008
+        ;; @spec MCP-OP-ALIAS-066
         ;; The `:or`-default and metadata-vector boundaries are about sites
         ;; INSIDE the binding construct, whose evaluation scope this walk does
         ;; not model. A site in the BODY is not one of them: dogfood3
@@ -760,10 +760,23 @@
                        [target]
                        (subvec kids (inc last-libspec-index)))))))))
 
-;; @spec MCP-OP-ALIAS-008
+;; @spec MCP-OP-ALIAS-010
+;; @spec MCP-OP-ALIAS-011
+;; @spec MCP-OP-ALIAS-067
+(def ^:private separator-tags
+  "The ONLY nodes a libspec removal may consume besides the libspec itself.
+
+  `meaningful?` also rejects `:comment` and `:uneval`, which are CONTENT the
+  contract promises to preserve byte-for-byte. Round 1 walked backward with
+  `meaningful?` and deleted an adjacent comment and a `#_[example.decoy :as d]`
+  along with the retired libspec (Sol's fence probe, 2026-09-07)."
+  #{:whitespace :newline :comma})
+
+;; @spec MCP-OP-ALIAS-010
+;; @spec MCP-OP-ALIAS-011
 (defn- remove-libspec
-  "Drop one libspec from a :require clause, with the trivia that separated it
-  from its predecessor.
+  "Drop one libspec from a :require clause, with the whitespace that separated
+  it from its predecessor and nothing else.
 
   Used only when to.lib is ALREADY required in this file under a reusable
   alias: the retired libspec goes and nothing takes its place, so the file
@@ -775,7 +788,8 @@
     (if (nil? index)
       clause-node
       (let [start (loop [i index]
-                    (if (and (> i 1) (not (meaningful? (nth kids (dec i)))))
+                    (if (and (> i 1)
+                             (contains? separator-tags (n/tag (nth kids (dec i)))))
                       (recur (dec i))
                       i))]
         (n/replace-children
@@ -1089,39 +1103,67 @@
   [direct]
   (into #{} (concat (mapcat :aliases direct) (mapcat :referred direct))))
 
-(defn- ns-binding-namespaces
-  "Each alias/referred name in this file's ns form -> the lib it is bound to."
+(defn- ns-alias-namespaces
+  "Each NAMESPACE ALIAS in this file's ns form -> the lib it resolves.
+
+  `:refer` names are deliberately absent. An alias resolves the namespace part
+  of a qualified symbol; a referred Var is an unqualified binding and resolves
+  nothing. Round 1 recorded both in one map, so `[example.new :refer [newlib]]`
+  read as \"newlib is bound to example.new\" and the verb wrote
+  `newlib/fetch-event` against an alias map that said example.unrelated -- a
+  silent semantic mismigration (Sol's fence counterexample, 2026-09-07)."
   [direct]
-  (reduce (fn [acc {:keys [lib aliases referred]}]
-            (into (into acc (map (fn [a] [a lib])) aliases)
-                  (map (fn [r] [r lib]))
-                  referred))
+  (reduce (fn [acc {:keys [lib aliases]}]
+            (into acc (map (fn [a] [a lib])) aliases))
           {}
           direct))
 
+(defn- ns-referred-names
+  "Every name this file's ns form introduces through `:refer`."
+  [direct]
+  (into #{} (mapcat :referred direct)))
+
+;; @spec MCP-OP-ALIAS-007
 ;; @spec MCP-OP-ALIAS-008
+;; @spec MCP-OP-ALIAS-067
 (defn- choose-alias
   "The alias this file will bind to to.lib, and the policy entries that collide.
 
-  An alias already bound to TO.LIB is NOT a collision -- it is the happy path
-  of an incremental migration: the file has already adopted the helper
-  namespace, so that alias is REUSED and no second require is added. Exhaustion
-  is only ever about aliases bound to a DIFFERENT namespace. dogfood3
-  (2026-09-07) refused six files whose `mjson` was bound to the request's own
-  to.lib, which is precisely the case this verb exists to serve.
+  A NAMESPACE ALIAS already bound to TO.LIB is not a collision -- it is the
+  happy path of an incremental migration: the file has already adopted the
+  helper namespace, so that alias is REUSED and no second require is added.
+  dogfood3 (2026-09-07) refused six files whose `mjson` was an alias for the
+  request's own to.lib, which is precisely the case this verb exists to serve.
+
+  Everything else in the collision set of MCP-OP-ALIAS-007 stays a collision,
+  and the two halves are judged separately:
+
+  - an alias bound to a DIFFERENT namespace collides, even when a same-named
+    `:refer` of to.lib also exists;
+  - a REFERRED Var named like a policy entry collides, even when it is referred
+    FROM to.lib -- referring `newlib` does not make `newlib/x` resolve.
 
   `to-lib` is nil when reuse is not offered (lib-mode migrations, where a kept
   :refer set would have to be merged into the existing libspec)."
   [_root direct policy to-lib]
-  (let [bindings (ns-binding-namespaces direct)
-        reusable? (fn [candidate] (and to-lib (= to-lib (get bindings candidate))))
+  (let [aliases (ns-alias-namespaces direct)
+        referred (ns-referred-names direct)
+        bindings (merge (into {} (map (fn [r] [r ::referred])) referred) aliases)
+        bound? (fn [candidate]
+                 (or (contains? aliases candidate) (contains? referred candidate)))
+        reusable? (fn [candidate]
+                    (and to-lib
+                         (not (contains? referred candidate))
+                         (= to-lib (get aliases candidate))))
         existing (when to-lib
-                   (first (mapcat :aliases (filter #(= to-lib (:lib %)) direct))))
+                   (first (remove #(contains? referred %)
+                                  (mapcat :aliases
+                                          (filter #(= to-lib (:lib %)) direct)))))
         reuse (or (first (filter reusable? policy)) existing)]
     (if reuse
       {:alias reuse :collided [] :reuse? true :bindings bindings}
-      {:alias (first (drop-while #(contains? bindings %) policy))
-       :collided (vec (take-while #(contains? bindings %) policy))
+      {:alias (first (drop-while bound? policy))
+       :collided (vec (take-while bound? policy))
        :bindings bindings})))
 
 (defn- libspec-with-refer
@@ -1167,7 +1209,7 @@
          (replace-child
            ns-node clause
            (cond
-             ;; @spec MCP-OP-ALIAS-008
+             ;; @spec MCP-OP-ALIAS-067
              ;; The alias already binds to.lib in this file. `:replace` retires
              ;; the old libspec and adds nothing; `:add` keeps the old libspec
              ;; (other uses remain) and still adds nothing.
@@ -1280,7 +1322,7 @@
           {:refusal (refer-all-refusal request file target)}
 
           :else
-          ;; @spec MCP-OP-ALIAS-008
+          ;; @spec MCP-OP-ALIAS-067
           ;; Reuse is offered for var-mode migrations only. A lib-mode
           ;; migration under `preserve-refer` would have to MERGE a kept :refer
           ;; set into the file's existing target libspec; that is not modelled,
@@ -1311,7 +1353,11 @@
                                        "form to a namespace other than "
                                        to-lib ": "
                                        (str/join ", "
-                                                 (map #(str % " → " (get bindings %))
+                                                 (map #(str % " → "
+                                                            (let [bound (get bindings %)]
+                                                              (if (= ::referred bound)
+                                                                "a Var referred into this namespace"
+                                                                bound)))
                                                       collided))
                                        ". No "
                                        "next_call is composed, because any "
