@@ -640,3 +640,7 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 
 ## STATE at 00:01Z 2026-09-07 — SPUN DOWN
 - All four code items landed: 7030bb56 ceiling, 0ddf8ec5 hot, 2b4080fe receipts, 57c48894 refusal-text (trunk ≥ 57c48894). No runtime; no open ledger rows; no window. Servers 7906/8171 on e8076379: FIRST ACT next window = announce + rebuild to trunc via /var/tmp/forge/rebuild-servers.sh <trunk sha>, then verify one inspect + one verified apply. Then consider a new stable tag after one real task passes. Eight docs-only branches for the mayor (inb-4a0f43). Holds: inb-e02822, inb-a36079. Report: docs/observations/2026-09-07-gene-report-ten-decisions.md.
+
+## STATE at 00:43Z 2026-09-07 — dogfood done, servers on trunk
+- Servers 7906/8171 rebuilt on trunk 2a2126d0 (all four landings) and proven live. Dogfood: marvin-voice-remote branch fable/json-parse-helper 9f9cf61 (pushed, NOT merged — Gene's repo; PR link printed by the push): json parsing helper + 9 sites/8 files via the plate route; instrument wall 151.8 s (kaocha observed green ≈103 s; 49 s coordinator lag named); receipts docs/observations/2026-09-07-dogfood-mvr/. Tool-perfect block: nothing in the tool to fix from this run; the ratchet is on the apparatus (dogfood-verify.sh stamps itself).
+- Next: Gene decides on the mvr PR; next dogfood uses /var/tmp/forge/dogfood-verify.sh for the verify phase; a fresh stable tag once one real task passes through the plate on the rebuilt servers (this one did, on this seat).
