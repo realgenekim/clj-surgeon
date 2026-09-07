@@ -123,3 +123,4 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - LANDED: fable/public-result-ceiling c10a90f6 (+receipt 5c7c9e79) → MCP/main 7030bb56 at 22:50Z (inb-b60d6e; fence r3 LAND YES; Astra GO) — 22:51Z
 - LANDED: fable/hot-verify-done 10f5131d (+receipt 3c2e023c) → MCP/main 0ddf8ec5 at 23:17Z (inb-adcc9e; Astra GO ten-3c; 61 s → 1.1 s live) — 23:18Z
 - LANDED: fable/receipt-truth 4f42168b (+receipt 23837e5e) → MCP/main 2b4080fe at 23:39Z (inb-2b33ec, inb-186182; Astra GO ten-4c) — 23:39Z
+- LANDED: fable/refusal-text-shape 2e6109cc (+receipt 9f75e0ac) → MCP/main 57c48894 at 00:00Z (inb-2da8ea; fence r8 LAND YES; Astra GO ten-8b) — 00:01Z
