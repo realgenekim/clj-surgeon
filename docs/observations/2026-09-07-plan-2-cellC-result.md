@@ -20,3 +20,21 @@ Manifest defect (all four hand arms): `:declares` marks every entry forward-refe
 Verb paper cuts (D1/D2 callers): kondo capture exit 3 unlabelled inside a green receipt; requires appended unsorted / 4-space indent / whitespace-only line left; stale prose mentions of the retired ns unflagged; ns docstrings re-encoded with literal \\n. Handed to Astra (gpt-6-astra) on the branch 23:24Z.
 
 Caveats: n=2 per arm, one fixture, 4-concurrent; D callers skipped plan-only; R arms both needed a classpath repair the :nrepl alias lacks (test deps) — a fixture defect that cost R3 ~40 s and R4 ~60 s, not enough to change the ordering. Raw stamps and receipts: 2026-09-07-plan-2/cellC/<arm>/.
+
+## Wave 2 + 3 (23:44Z): warm-JVM REPL arms, and the verb on Astra's paper-cut build (9b205fd4) via CLI and MCP
+
+Conditions: R5/R6 on split/base2 (4f6283aa = d9205abc + `make nrepl` composing :run-tests:test:nrepl + guard tracked) with the nREPL ALREADY WARM and eval-probed before orient-start; D3/D4 (CLI launcher) and M3/M4 (MCP `namespace_split` on the branch server 7907 via ~/bin/surgeon-call) on d9205abc with the same request. SIX arms concurrent for wave 3 (Cell A/C wave 1 had four) — walls may read slightly high.
+
+| arm | connect | plan | moves/split | callers | warm green | cold suite | total | correct |
+|---|---|---|---|---|---|---|---|---|
+| D3 verb CLI, fixed build | — | 12 s | 59 s (in-call 37.3 s, kaocha 23.5 s + lint-delta 5.0 s) | in call | — | in call | **116 s** (oracle→done 32 s of caller reporting) | 4/4 |
+| D4 verb CLI, fixed build | — | | | | | | **87 s** | pending report |
+| M3 verb MCP, fixed build | — | | | | | | **151 s** | pending report |
+| M4 verb MCP, fixed build | — | | | | | | **80 s** | pending report |
+| R5 REPL, warm JVM | 60 s (client written, JVM was up) | 254 s | 353 s | 445 s | 445 s | 471 s | **513 s** | pending report |
+| R6 REPL, warm JVM | 21 s | 279 s | 341 s | 478 s | 482 s | 515 s | **554 s** | pending report |
+| controls N5/N6 native + manifest | | 242 / 90 s | | | | | 408 / 486 s | 4/4 |
+
+Verb medians: wave 1 78 s → wave 3 102 s (six-concurrent, +5 s lint-delta check, caller reporting inside the clock on D3). Still ÷4.4 native. REPL with a warm JVM: 513/554 vs native 408/486 — the JVM start was NOT what held the REPL arms back; planning (254/279 s) and emission are. Paper cuts confirmed fixed by D3: requires merged in sorted position with the host's 3-space indent, 3 prose-mention advisory rows emitted, lint-delta baseline-relative (introduced_errors 0, +4 warnings), kondo capture row labelled baseline. New wart (D3): all 20 destinations carry a verbatim copy of the monolith's docstring ("this file"), correct-by-construction but misleading on format/avatar/shell.
+
+Review: Sol GO for 913020c8 (r1 verdict, 2 JUDGMENT rows: unknown_count scope honest-narrow; dry merge shows two additive conflicts vs origin/MCP/main 8a64a092). Delta review r2 of 9b205fd4 launched 23:44Z (pid 3948537).
