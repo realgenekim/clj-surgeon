@@ -1,0 +1,86 @@
+{
+ "workspace_root": "/home/forge/src/mvr-dogfood",
+ "edits": [
+  {
+   "file": "src/marvin_voice_remote/bridge3_new.clj",
+   "within": {
+    "form": "handle-say"
+   },
+   "from": "(json/read-str (let [b (:body req)]\n                                          (if (string? b) b (slurp b)))\n                                        :key-fn keyword)",
+   "to": "(mjson/parse (let [b (:body req)]\n                                          (if (string? b) b (slurp b))))",
+   "matches": 1
+  },
+  {
+   "file": "src/marvin_voice_remote/capture_archive.clj",
+   "within": {
+    "form": "list-objects"
+   },
+   "from": "(json/read-str body :key-fn keyword)",
+   "to": "(mjson/parse body)",
+   "matches": 1
+  },
+  {
+   "file": "src/marvin_voice_remote/channel.clj",
+   "within": {
+    "form": "body-json"
+   },
+   "from": "(json/read-str (slurp (:body req)) :key-fn keyword)",
+   "to": "(mjson/parse (slurp (:body req)))",
+   "matches": 1
+  },
+  {
+   "file": "src/marvin_voice_remote/channel.clj",
+   "within": {
+    "form": "handle-voice-lab-clientlog"
+   },
+   "from": "(json/read-str body :key-fn keyword)",
+   "to": "(mjson/parse body)",
+   "matches": 1
+  },
+  {
+   "file": "src/marvin_voice_remote/codex_app_server.clj",
+   "within": {
+    "form": "json-read"
+   },
+   "from": "(json/read-str line :key-fn keyword)",
+   "to": "(mjson/parse line)",
+   "matches": 1
+  },
+  {
+   "file": "src/marvin_voice_remote/director_control.clj",
+   "within": {
+    "form": "parse-json-body"
+   },
+   "from": "(json/read-str (slurp (:body request)) :key-fn keyword)",
+   "to": "(mjson/parse (slurp (:body request)))",
+   "matches": 1
+  },
+  {
+   "file": "src/marvin_voice_remote/director_outbox.clj",
+   "within": {
+    "form": "parse-json-body"
+   },
+   "from": "(json/read-str (slurp (:body request)) :key-fn keyword)",
+   "to": "(mjson/parse (slurp (:body request)))",
+   "matches": 1
+  },
+  {
+   "file": "src/marvin_voice_remote/groq.clj",
+   "within": {
+    "form": "transcribe-audio"
+   },
+   "from": "(json/read-str (:body resp) :key-fn keyword)",
+   "to": "(mjson/parse (:body resp))",
+   "matches": 1
+  },
+  {
+   "file": "src/marvin_voice_remote/reducer_session.clj",
+   "within": {
+    "form": "parse-envelopes"
+   },
+   "from": "(json/read-str body :key-fn keyword)",
+   "to": "(mjson/parse body)",
+   "matches": 1
+  }
+ ]
+}

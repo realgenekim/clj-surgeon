@@ -1,0 +1,39 @@
+{
+ "content": [
+  {
+   "type": "text",
+   "text": "apply_clojure_changes\n  9 edits \u00b7 8 files \u00b7 2101.95 ms\n\n\u2713 atomic commit complete\n\u2713 written bytes read back\n\u2713 verification: none requested \u2014 bytes read back only\n\u2713 terminal evidence \u00b7 verification_complete=true \u00b7 next action none"
+  }
+ ],
+ "isError": false,
+ "structuredContent": {
+  "canonical_effect_identity": {
+   "version": 1,
+   "sha256": "bfe2d6ae381abc56ed1531dab1b02c43367f5359d7616842a547a981861efc87",
+   "files": 8,
+   "effects": 9
+  },
+  "workspace_root": "/home/forge/src/mvr-dogfood",
+  "committed": true,
+  "changes": 9,
+  "verification_complete": true,
+  "elapsed_ms": 2101.945605,
+  "edits": 9,
+  "read_back_hashes": {
+   "src/marvin_voice_remote/bridge3_new.clj": "92932ce794d67f62ba879bac0a4700357ef774793f6e6f4f74bba85539c03e1f",
+   "src/marvin_voice_remote/capture_archive.clj": "fc9f6ac664bb947ba9454af9a71eb29da05ea5087043ce4a0a6aace7ab629b46",
+   "src/marvin_voice_remote/channel.clj": "32464216f8bc8eef49d2cb1c754e2e16b932cd87e41befaf6ed647c6b7569e17",
+   "src/marvin_voice_remote/codex_app_server.clj": "d079ed5e5de07f5893471b660e3548e5068b18be7ee05dcdc6e015183ca7f206",
+   "src/marvin_voice_remote/director_control.clj": "70a57e5c2c741f4825ddd295eaa5cdeeed889c52770efd694a6383ba0f9ce0f2",
+   "src/marvin_voice_remote/director_outbox.clj": "d46330d5c010903b655f2a08c0f5b39f19fc0d6a40277cfc81bce259079463b4",
+   "src/marvin_voice_remote/groq.clj": "6e37d2bdc81c9b8831163d473743f51673ff00c0a7b3f66c735d343611751853",
+   "src/marvin_voice_remote/reducer_session.clj": "a2d09b5637063ba80bffe11337b719faa1412a5a903fc6baba5a3a106660dbd5"
+  },
+  "next_action": "none",
+  "files": 8,
+  "receipt_hash": "6a59f64565218467baa9d2f7a78991ad68a89f1717b4fa0c3190f689dcf4d0aa",
+  "ok": true,
+  "operation": "apply_clojure_changes",
+  "undo_receipt": "/home/forge/.local/state/clj-surgeon/workspaces/0211932c478b8e1c6121b9868b4731212925b2e70eaa941d71fd4f25b05848df/receipts/b7308a26-3977-48c3-a12f-0ae095c3ff87.edn"
+ }
+}

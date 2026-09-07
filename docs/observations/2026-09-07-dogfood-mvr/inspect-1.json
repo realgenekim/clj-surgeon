@@ -1,0 +1,464 @@
+{
+ "content": [
+  {
+   "type": "text",
+   "text": "inspect_clojure\n  8 requests \u00b7 8 files \u00b7 9 matches\n\n\u2713 all requests resolved\n\u2713 ordered snapshot\n\u2713 hashes attached\n\u2713 terminal evidence \u00b7 read_complete=true \u00b7 next action none\n\n  m00 src/marvin_voice_remote/bridge3_new.clj: 1 match \u00b7 owners [{\"inside\":\"handle-say\",\"matches\":1}]\n  m01 src/marvin_voice_remote/capture_archive.clj: 1 match \u00b7 owners [{\"inside\":\"list-objects\",\"matches\":1}]\n  m02 src/marvin_voice_remote/channel.clj: 2 matches \u00b7 owners [{\"inside\":\"body-json\",\"matches\":1},{\"inside\":\"handle-voice-lab-clientlog\",\"matches\":1}]\n  m03 src/marvin_voice_remote/codex_app_server.clj: 1 match \u00b7 owners [{\"inside\":\"json-read\",\"matches\":1}]\n  m04 src/marvin_voice_remote/director_control.clj: 1 match \u00b7 owners [{\"inside\":\"parse-json-body\",\"matches\":1}]\n  m05 src/marvin_voice_remote/director_outbox.clj: 1 match \u00b7 owners [{\"inside\":\"parse-json-body\",\"matches\":1}]\n  m06 src/marvin_voice_remote/groq.clj: 1 match \u00b7 owners [{\"inside\":\"transcribe-audio\",\"matches\":1}]\n  m07 src/marvin_voice_remote/reducer_session.clj: 1 match \u00b7 owners [{\"inside\":\"parse-envelopes\",\"matches\":1}]\n  513 source characters \u00b7 671.32 ms"
+  }
+ ],
+ "isError": false,
+ "structuredContent": {
+  "file_count": 8,
+  "workspace_root": "/home/forge/src/mvr-dogfood",
+  "inspection_elapsed_ms": 666.457538,
+  "source_character_count": 513,
+  "request_count": 8,
+  "file_read_count": 8,
+  "read_complete": true,
+  "result_character_count": 6791,
+  "elapsed_ms": 671.324806,
+  "file_hashes": {
+   "src/marvin_voice_remote/bridge3_new.clj": "b0f7d4ce038bd00d94ed5d1ce5455f406d4634d09b5bc2768ff371d5e492baea",
+   "src/marvin_voice_remote/capture_archive.clj": "2ae7cfed605a6e0185a20653698657d4f9cdb2fac522536863d0d9a7acb16137",
+   "src/marvin_voice_remote/channel.clj": "9d8485c6138defdfd784c2a05569fa70ff017eb31c8432f101b222137c4a88fe",
+   "src/marvin_voice_remote/codex_app_server.clj": "373edcfca10af9aa2313063fca9f73e0681467b8bdb421fc26670326e69342d4",
+   "src/marvin_voice_remote/director_control.clj": "3ebfd377478a4c47d5b4d5e7a73fe33fbf44fe3ac0d45727fe1d3b78e7c4994c",
+   "src/marvin_voice_remote/director_outbox.clj": "a8e721a2031b3f5123e635d644c13dd4d20ab5a16919f420f17ce5fa89ddb156",
+   "src/marvin_voice_remote/groq.clj": "e0243c6f8f6fd2819515776b6e197dca6dcd3901f7385e697414ed8a6a0d6978",
+   "src/marvin_voice_remote/reducer_session.clj": "5ee41814c2016f50a85149dadf0576d63370792a5441c4873684a6118029cafa"
+  },
+  "next_action": "none",
+  "ok": true,
+  "operation": "inspect_clojure",
+  "results": [
+   {
+    "source_character_count": 164,
+    "inside": null,
+    "file_hash": "b0f7d4ce038bd00d94ed5d1ce5455f406d4634d09b5bc2768ff371d5e492baea",
+    "file": "src/marvin_voice_remote/bridge3_new.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "text"
+       },
+       {
+        "call": "try"
+       },
+       {
+        "call": "text"
+       },
+       {
+        "call": "json/read-str"
+       }
+      ],
+      "address": {
+       "preorder": 2688
+      },
+      "line": 1229,
+      "end_line": 1231,
+      "source": "(json/read-str (let [b (:body req)]\n                                          (if (string? b) b (slurp b)))\n                                        :key-fn keyword)",
+      "inside": "handle-say",
+      "hash": "99bb13137ab3fccd2dd5ee78a61e29ab9e0a2eabfab1ddc734f992db2db71047",
+      "file_hash": "b0f7d4ce038bd00d94ed5d1ce5455f406d4634d09b5bc2768ff371d5e492baea"
+     }
+    ],
+    "match_count": 1,
+    "id": "m00",
+    "owner_counts": [
+     {
+      "inside": "handle-say",
+      "matches": 1
+     }
+    ],
+    "source_omitted_when_equal_to_match": true,
+    "match": "(json/read-str _ :key-fn keyword)"
+   },
+   {
+    "source_character_count": 36,
+    "inside": null,
+    "file_hash": "2ae7cfed605a6e0185a20653698657d4f9cdb2fac522536863d0d9a7acb16137",
+    "file": "src/marvin_voice_remote/capture_archive.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "try"
+       },
+       {
+        "call": "concat"
+       },
+       {
+        "call": "when"
+       },
+       {
+        "call": "when-let"
+       },
+       {
+        "call": "vec"
+       },
+       {
+        "call": "for"
+       },
+       {
+        "binding": "item"
+       },
+       {
+        "call": "items"
+       },
+       {
+        "call": "json/read-str"
+       }
+      ],
+      "address": {
+       "preorder": 999
+      },
+      "line": 325,
+      "end_line": 325,
+      "source": "(json/read-str body :key-fn keyword)",
+      "inside": "list-objects",
+      "hash": "5991ca91f3c55b32fa8e31237c313fba741dd2eb5b00657dcda7c74cb62e4600",
+      "file_hash": "2ae7cfed605a6e0185a20653698657d4f9cdb2fac522536863d0d9a7acb16137"
+     }
+    ],
+    "match_count": 1,
+    "id": "m01",
+    "owner_counts": [
+     {
+      "inside": "list-objects",
+      "matches": 1
+     }
+    ],
+    "source_omitted_when_equal_to_match": true,
+    "match": "(json/read-str _ :key-fn keyword)"
+   },
+   {
+    "source_character_count": 87,
+    "inside": null,
+    "file_hash": "9d8485c6138defdfd784c2a05569fa70ff017eb31c8432f101b222137c4a88fe",
+    "file": "src/marvin_voice_remote/channel.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "try"
+       },
+       {
+        "call": "json/read-str"
+       }
+      ],
+      "address": {
+       "preorder": 798
+      },
+      "line": 258,
+      "end_line": 258,
+      "source": "(json/read-str (slurp (:body req)) :key-fn keyword)",
+      "inside": "body-json",
+      "hash": "0931581544f751df6645bba2dd6a349d6280370e57eb6d2d98dec34e10a767d8",
+      "file_hash": "9d8485c6138defdfd784c2a05569fa70ff017eb31c8432f101b222137c4a88fe"
+     },
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "parsed"
+       },
+       {
+        "call": "when"
+       },
+       {
+        "call": "try"
+       },
+       {
+        "call": "json/read-str"
+       }
+      ],
+      "address": {
+       "preorder": 7422
+      },
+      "line": 2323,
+      "end_line": 2323,
+      "source": "(json/read-str body :key-fn keyword)",
+      "inside": "handle-voice-lab-clientlog",
+      "hash": "5991ca91f3c55b32fa8e31237c313fba741dd2eb5b00657dcda7c74cb62e4600",
+      "file_hash": "9d8485c6138defdfd784c2a05569fa70ff017eb31c8432f101b222137c4a88fe"
+     }
+    ],
+    "match_count": 2,
+    "id": "m02",
+    "owner_counts": [
+     {
+      "inside": "body-json",
+      "matches": 1
+     },
+     {
+      "inside": "handle-voice-lab-clientlog",
+      "matches": 1
+     }
+    ],
+    "source_omitted_when_equal_to_match": true,
+    "match": "(json/read-str _ :key-fn keyword)"
+   },
+   {
+    "source_character_count": 36,
+    "inside": null,
+    "file_hash": "373edcfca10af9aa2313063fca9f73e0681467b8bdb421fc26670326e69342d4",
+    "file": "src/marvin_voice_remote/codex_app_server.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "json/read-str"
+       }
+      ],
+      "address": {
+       "preorder": 60
+      },
+      "line": 24,
+      "end_line": 24,
+      "source": "(json/read-str line :key-fn keyword)",
+      "inside": "json-read",
+      "hash": "f14ff4d81ac563d08726a22af17ae6b422235f5be5a3190d48265b7abfe43013",
+      "file_hash": "373edcfca10af9aa2313063fca9f73e0681467b8bdb421fc26670326e69342d4"
+     }
+    ],
+    "match_count": 1,
+    "id": "m03",
+    "owner_counts": [
+     {
+      "inside": "json-read",
+      "matches": 1
+     }
+    ],
+    "source_omitted_when_equal_to_match": true,
+    "match": "(json/read-str _ :key-fn keyword)"
+   },
+   {
+    "source_character_count": 55,
+    "inside": null,
+    "file_hash": "3ebfd377478a4c47d5b4d5e7a73fe33fbf44fe3ac0d45727fe1d3b78e7c4994c",
+    "file": "src/marvin_voice_remote/director_control.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "json/read-str"
+       }
+      ],
+      "address": {
+       "preorder": 160
+      },
+      "line": 38,
+      "end_line": 38,
+      "source": "(json/read-str (slurp (:body request)) :key-fn keyword)",
+      "inside": "parse-json-body",
+      "hash": "272d39d2ffa0e0f8ea1e8002830edc9aff344a60144676346854a9b6a9e3e592",
+      "file_hash": "3ebfd377478a4c47d5b4d5e7a73fe33fbf44fe3ac0d45727fe1d3b78e7c4994c"
+     }
+    ],
+    "match_count": 1,
+    "id": "m04",
+    "owner_counts": [
+     {
+      "inside": "parse-json-body",
+      "matches": 1
+     }
+    ],
+    "source_omitted_when_equal_to_match": true,
+    "match": "(json/read-str _ :key-fn keyword)"
+   },
+   {
+    "source_character_count": 55,
+    "inside": null,
+    "file_hash": "a8e721a2031b3f5123e635d644c13dd4d20ab5a16919f420f17ce5fa89ddb156",
+    "file": "src/marvin_voice_remote/director_outbox.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn-"
+       },
+       {
+        "call": "json/read-str"
+       }
+      ],
+      "address": {
+       "preorder": 648
+      },
+      "line": 153,
+      "end_line": 153,
+      "source": "(json/read-str (slurp (:body request)) :key-fn keyword)",
+      "inside": "parse-json-body",
+      "hash": "272d39d2ffa0e0f8ea1e8002830edc9aff344a60144676346854a9b6a9e3e592",
+      "file_hash": "a8e721a2031b3f5123e635d644c13dd4d20ab5a16919f420f17ce5fa89ddb156"
+     }
+    ],
+    "match_count": 1,
+    "id": "m05",
+    "owner_counts": [
+     {
+      "inside": "parse-json-body",
+      "matches": 1
+     }
+    ],
+    "source_omitted_when_equal_to_match": true,
+    "match": "(json/read-str _ :key-fn keyword)"
+   },
+   {
+    "source_character_count": 44,
+    "inside": null,
+    "file_hash": "e0243c6f8f6fd2819515776b6e197dca6dcd3901f7385e697414ed8a6a0d6978",
+    "file": "src/marvin_voice_remote/groq.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "loop"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "outcome"
+       },
+       {
+        "call": "try"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "call": "if"
+       },
+       {
+        "attr": "ok"
+       },
+       {
+        "attr": "transcript"
+       },
+       {
+        "call": "str"
+       },
+       {
+        "call": "text"
+       },
+       {
+        "call": "json/read-str"
+       }
+      ],
+      "address": {
+       "preorder": 334
+      },
+      "line": 104,
+      "end_line": 104,
+      "source": "(json/read-str (:body resp) :key-fn keyword)",
+      "inside": "transcribe-audio",
+      "hash": "162f3ba2b95d2078dc663c60bf33c95afb13897e1a1d161d744775fa1b795b77",
+      "file_hash": "e0243c6f8f6fd2819515776b6e197dca6dcd3901f7385e697414ed8a6a0d6978"
+     }
+    ],
+    "match_count": 1,
+    "id": "m06",
+    "owner_counts": [
+     {
+      "inside": "transcribe-audio",
+      "matches": 1
+     }
+    ],
+    "source_omitted_when_equal_to_match": true,
+    "match": "(json/read-str _ :key-fn keyword)"
+   },
+   {
+    "source_character_count": 36,
+    "inside": null,
+    "file_hash": "5ee41814c2016f50a85149dadf0576d63370792a5441c4873684a6118029cafa",
+    "file": "src/marvin_voice_remote/reducer_session.clj",
+    "operation": "match",
+    "matches": [
+     {
+      "path": [
+       {
+        "call": "defn"
+       },
+       {
+        "call": "if"
+       },
+       {
+        "call": "let"
+       },
+       {
+        "binding": "parsed"
+       },
+       {
+        "call": "try"
+       },
+       {
+        "call": "json/read-str"
+       }
+      ],
+      "address": {
+       "preorder": 2260
+      },
+      "line": 1128,
+      "end_line": 1128,
+      "source": "(json/read-str body :key-fn keyword)",
+      "inside": "parse-envelopes",
+      "hash": "5991ca91f3c55b32fa8e31237c313fba741dd2eb5b00657dcda7c74cb62e4600",
+      "file_hash": "5ee41814c2016f50a85149dadf0576d63370792a5441c4873684a6118029cafa"
+     }
+    ],
+    "match_count": 1,
+    "id": "m07",
+    "owner_counts": [
+     {
+      "inside": "parse-envelopes",
+      "matches": 1
+     }
+    ],
+    "source_omitted_when_equal_to_match": true,
+    "match": "(json/read-str _ :key-fn keyword)"
+   }
+  ]
+ }
+}

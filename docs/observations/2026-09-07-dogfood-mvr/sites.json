@@ -1,0 +1,47 @@
+[
+ {
+  "file": "src/marvin_voice_remote/bridge3_new.clj",
+  "inside": "handle-say",
+  "source": "(json/read-str (let [b (:body req)]\n                                          (if (string? b) b (slurp b)))\n                                        :key-fn keyword)"
+ },
+ {
+  "file": "src/marvin_voice_remote/capture_archive.clj",
+  "inside": "list-objects",
+  "source": "(json/read-str body :key-fn keyword)"
+ },
+ {
+  "file": "src/marvin_voice_remote/channel.clj",
+  "inside": "body-json",
+  "source": "(json/read-str (slurp (:body req)) :key-fn keyword)"
+ },
+ {
+  "file": "src/marvin_voice_remote/channel.clj",
+  "inside": "handle-voice-lab-clientlog",
+  "source": "(json/read-str body :key-fn keyword)"
+ },
+ {
+  "file": "src/marvin_voice_remote/codex_app_server.clj",
+  "inside": "json-read",
+  "source": "(json/read-str line :key-fn keyword)"
+ },
+ {
+  "file": "src/marvin_voice_remote/director_control.clj",
+  "inside": "parse-json-body",
+  "source": "(json/read-str (slurp (:body request)) :key-fn keyword)"
+ },
+ {
+  "file": "src/marvin_voice_remote/director_outbox.clj",
+  "inside": "parse-json-body",
+  "source": "(json/read-str (slurp (:body request)) :key-fn keyword)"
+ },
+ {
+  "file": "src/marvin_voice_remote/groq.clj",
+  "inside": "transcribe-audio",
+  "source": "(json/read-str (:body resp) :key-fn keyword)"
+ },
+ {
+  "file": "src/marvin_voice_remote/reducer_session.clj",
+  "inside": "parse-envelopes",
+  "source": "(json/read-str body :key-fn keyword)"
+ }
+]
