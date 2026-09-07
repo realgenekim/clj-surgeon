@@ -23,3 +23,12 @@ Interpretation and design response: design-fable-split-verb.md (one-call split_p
 - The interim "5 calls / 1 call" figures were mid-run; final: T1 37 calls (27 ok / 10 refused, 58.3 s server), T2 35 calls (30 ok / 5 refused, 51.2 s server).
 - Astra's causal ranking: (1) incomplete task coverage + repeated interaction incl. caller bookkeeping; (2) demonstrated defects and recovery (ns derivation from the absolute path; helper→kernel caller-candidate disagreement with a missing next_call); (3) absent whole-mapping analysis; (4) caller habits / route mandate; (5) shared load, unquantified. "Twenty calls alone caused the loss" is not justified by the receipts.
 - Astra's forecast for a working whole-split route on this supplied-plan cell: 150 s to all four gates (range 100–240), not my 82 s; a machine-ready mapping with integrated acceptance might reach ~80 s.
+
+## Arm R — REPL-driven (Gene's hypothesis: "REPL-driven development is faster"), same base, same plan, two fresh Opus callers, 21:38–21:49Z
+
+| arm | nrepl ready | plan | moves | callers | repl-green (in-JVM tests) | cold suite green | oracle |
+|---|---|---|---|---|---|---|---|
+| R1 | 30 | 266 | 266 | 365 | 372 | 394 | **451** |
+| R2 | 83 | 234 | 362 | 434 | 441 | 463 | **496** |
+
+Both correct (4/4 oracles). Native controls 331 / 393. R median 474 s → native 0.76x of R. Inner loop: in-JVM affected tests 0.75 s vs 22 s cold (~29x), a broken ns form diagnosed in ~20 s. Why it did not win the wall: planning cost the same ~4 min in every arm; the JVM cost 30–83 s to start; the warm loop had almost nothing to iterate on because a supplied plan made the first cold run green in every arm. Reading: REPL-driven pays in proportion to red-fix iterations; this task, plan supplied, had ~1. Caveats: R1 ran without guardrails in the warm loop (cold run had them); add-lib mutated the live classpath; n=2.
