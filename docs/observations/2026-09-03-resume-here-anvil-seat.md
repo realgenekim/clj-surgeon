@@ -614,7 +614,7 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 ## 16:18Z — WINDOW CLOSED (16:20Z). Final report: docs/observations/2026-09-06-gene-report-1620z-night.md. Next window first acts: agree the live-catalog check and rebuild 7906/8171 on trunk; pick up inb-2da8ea (one item) in a tool-perfect block.
 
 
-## STATE (2026-09-07T07:03Z): DOGFOOD-2 RUNNING (block dogfood-2, deadline 12:02Z, 5 h budget from ~07:00Z) — two Opus callers on mvr-dogfood2 and cc-dogfood; stable tag stable/2026-09-07 (4287bc03); crontab restored; loops: heartbeat crons NOT re-created (Gene stopped them)
+## STATE (2026-09-07T07:13Z): DOGFOOD-2 phase 1 done (both native, green, pushed); P0 FINDING: this session's clj-surgeon MCP client is wired to 7888 (stale config) — DO NOT call mcp__clj-surgeon tools from this session; use ~/bin/surgeon-call (raw HTTP to 7906). Block dogfood-2 open, deadline 12:02Z; next: rerun tool side via surgeon-call on fresh branches
 - Trunk MCP/main carries 7f920915 (inspect owner_counts) and 38e40a94 (fan-out route plate); tag stable/2026-09-06 = 38e40a94. Block installed on THIS box (hash ffc885d9); tripwire ~/bin/check-prompt-plate.sh re-pointed to the records worktree + MCP/main and green. Servers 7906/8171 on e8076379.
 - Wins: fan-out informed route 1.75x; Astra's alias migration 1.38x. Losses: whole-task ×2, served discovery, extract-to-namespace. All in docs/observations/2026-09-06-* with receipts; report: 2026-09-06-gene-report-1950z-crank.md.
 - Instruments: ~/bin/block-ledger, ~/bin/cadence-watch (cron */5), ~/bin/usage-watch (window-guarded), ~/bin/land (verdict line), runner-b --cell/--parallel/--first-pair-gate/--dry-run receipt gate/--shared-box.

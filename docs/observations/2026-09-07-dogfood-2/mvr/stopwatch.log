@@ -1,0 +1,8 @@
+2026-09-07T07:03:13.977015582Z orient-start MCP tools confirmed callable
+2026-09-07T07:03:45.363777654Z native-helper json.clj write fn added natively
+2026-09-07T07:04:12.897949169Z apply-1-refused invalid-workspace-root
+2026-09-07T07:04:21.683848384Z inspect-1 diagnose invalid-workspace-root
+2026-09-07T07:05:46.734732209Z apply-1 native fallback migration complete: 21 sites, 9 files
+2026-09-07T07:06:11.756272229Z verify-start kaocha: bin/kaocha
+2026-09-07T07:06:28.880754030Z verify-done kaocha rc=0 wall=17.1s
+2026-09-07T07:10:49.355431865Z done task complete natively; 3 friction entries

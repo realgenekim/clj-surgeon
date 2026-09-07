@@ -1,0 +1,10 @@
+[
+ {"n":1,"call":"inspect_clojure","workspace_root":"/home/forge/src/cc-dogfood","response":{"path":["workspace_root"],"operation":"workspace-route","error_type":"invalid-workspace-root","reason":"invalid-workspace-root","next_action":"pass_an_existing_absolute_workspace_root","source_unchanged":true,"ok":false,"error":"workspace_root must be an existing directory","workspace_root":"/home/forge/src/cc-dogfood"}},
+ {"n":2,"call":"inspect_clojure","workspace_root":"/home/forge/src/cc-dogfood/","response":"identical invalid-workspace-root"},
+ {"n":3,"call":"inspect_clojure","workspace_root":"(omitted)","response":{"path":"src/cfp_scheduler_killer/portal.clj","elapsed_ms":53.728881,"read_complete":false,"remedy":"Use an existing project-relative source path inside the configured project root.","operation":"inspect_clojure","error_type":"source-file-not-found","next_action":"correct_request","source_unchanged":true,"ok":false,"error":"Source file does not exist","workspace_root":"/srv/fleet/shared-tools/clj-surgeon-e7f72e2"}},
+ {"n":4,"call":"inspect_clojure","workspace_root":"/home/forge","response":{"path":"src/cfp_scheduler_killer/portal.clj","elapsed_ms":6.210483,"read_complete":false,"remedy":"Use an existing project-relative source path inside the configured project root.","operation":"inspect_clojure","error_type":"invalid-source-path","next_action":"correct_request","source_unchanged":true,"ok":false,"error":"/home/forge/src/cfp_scheduler_killer/portal.clj","workspace_root":"/home/forge"}},
+ {"n":5,"call":"inspect_clojure","workspace_root":"/home/forge/src/cc-dogfood/src","response":"invalid-workspace-root"},
+ {"n":6,"call":"inspect_clojure","workspace_root":"/home/forge/src","response":"invalid-workspace-root"},
+ {"n":7,"call":"inspect_clojure","workspace_root":"/home/forge/src/curtaincall-cfp","response":"invalid-workspace-root"},
+ {"n":8,"call":"apply_clojure_changes","workspace_root":"/home/forge/src/cc-dogfood","response_text_block":"edit_clojure\n  refused · invalid-workspace-root at [\"workspace_root\"]\n\n✓ source unchanged\n→ pass_an_existing_absolute_workspace_root"}
+]

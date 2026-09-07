@@ -1,0 +1,6 @@
+{"op":"alias_migration",
+ "workspace_root":"/home/forge/src/mvr-dogfood2",
+ "from":{"lib":"clojure.data.json","var":"write-str"},
+ "to":{"lib":"marvin-voice-remote.json","var":"write","alias_policy":["mjson"]},
+ "scope":{"paths":["src"]},
+ "expect":{"files":7}}

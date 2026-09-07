@@ -1,0 +1,1 @@
+{"result":"error","text":"apply_clojure_changes\n  refused · invalid-workspace-root at [\"workspace_root\"]\n\n✓ source unchanged\n→ pass_an_existing_absolute_workspace_root"}

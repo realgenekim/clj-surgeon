@@ -1,0 +1,9 @@
+2026-09-07T07:03:34.354433364Z orient-start dogfood2 cc speaker-identity
+2026-09-07T07:03:48.957234516Z inspect-1 match batch 3 files
+2026-09-07T07:05:02.318074911Z native-helper creating speaker_identity.clj natively (MCP unreachable for this root)
+2026-09-07T07:05:08.61916918Z requires-complete 3 ns requires added natively
+2026-09-07T07:05:19.73500757Z apply-1 fan-out 3 edits
+2026-09-07T07:05:34.491931881Z native-delete removing 3 private defns
+2026-09-07T07:05:44.739414250Z verify-start kaocha: bin/kaocha unit
+2026-09-07T07:07:09.49635201Z verify-done kaocha rc=0 wall=84.3s
+2026-09-07T07:10:46.905731507Z done native fallback complete, suite green
