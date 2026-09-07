@@ -3362,3 +3362,5 @@ My objections to the opening six: verification is not established as the dominan
 ## 08:39Z — expect lane: Sol r2 = NO-GO (programs route under-counted: a mixed edit+program declared 1 and committed 2 — real hole; LLD still says bookkeeping; next_call adds workspace_root the caller omitted). Round 3 dispatched. Alias lane: round 2 d32a3c9d pushed; Sol review aliasfix-r3 launched.
 
 ## 08:59Z — alias lane: Sol r3 = NO-GO with ONE blocker left (reuse bypasses alias_policy via the unrestricted existing fallback: an alias outside the policy was reused and written); all r2 items NOT-REPRODUCED through execute!. Round 3 dispatched (policy-restricted reuse, execute!-path preservation witness, LLD). Expect lane: round 3 a917b5a9 pushed; Sol review expectfix-r3 launched.
+
+## 09:22Z — expect lane: Sol r3 = NO-GO, one blocker (multi-match programs: guard counted one change per program, the receipt counts one per concrete match → declared 2, committed 3). Round 4 dispatched. Pre-existing found by the review: programs + delete_owners + edits refuses stale-subform even on f3d922ac (to file). Alias lane: round 3 f17b50e1 pushed; Sol review aliasfix-r4 launched.
