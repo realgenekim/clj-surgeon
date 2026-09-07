@@ -25,7 +25,7 @@ Losses: I announced three Sol runs as Astra (one-shot default model); a stale wo
 - Prose intents in tests are invisible; refused now in CC.
 - Any skills/ edit: sync mirrors + 70-line check before push (memory).
 - sol-yolo runs are Sol unless CODEX_MODEL=gpt-6-astra with the newer codex (memory).
-- Compare commits with , never a worktree another process modified (memory).
+- Compare commits with `git diff <sha-a> <sha-b>`, never against a worktree another process modified (memory).
 
 ## 5. Decisions pending Gene
 1. CC PR #10: historical API keys without a stored scope read as organizer — refuse, migrate, or keep?
