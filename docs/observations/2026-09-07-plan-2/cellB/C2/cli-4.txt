@@ -1,0 +1,34 @@
+{:intent-count 9,
+ :receipt-hash
+ "6cd8da9bca3554b3a206b61e8ae96f70bd6a9fb7fa8954f6bf96b369af79a278",
+ :inverse {:operation :undo-change!, :guarded-file-count 9},
+ :changed-file-count 9,
+ :operation :change!,
+ :committed true,
+ :receipt-file "/var/tmp/forge/plan2/cellB/C2/change-receipt.edn",
+ :ok true,
+ :change-count 9,
+ :transaction-version 1,
+ :verified
+ {:whole-files true,
+  :file-count 9,
+  :read-back-hashes
+  {"/home/forge/src/cc-cellB-C2/src/cfp_scheduler_killer/inform.clj"
+   "15eaabcb6fb46cc079fa4c3738df362ed905bf72b9cb73836895f35df6c75ec8",
+   "/home/forge/src/cc-cellB-C2/src/cfp_scheduler_killer/handlers/exports.clj"
+   "62b317533bde580b5e96f9ec46653ca59dbb75adc7c13d364dca1b66dc7d6a5a",
+   "/home/forge/src/cc-cellB-C2/src/cfp_scheduler_killer/handlers/public_widgets.clj"
+   "ddf88f176ae2d5c82521433ab66666098035929431979b0fca50f0c4158a53fb",
+   "/home/forge/src/cc-cellB-C2/test/cfp_scheduler_killer/comms_test.clj"
+   "5be685a26ba8cf9b7fff62b134e3c9e05f65979a2dd71fd62259d01cd1627d04",
+   "/home/forge/src/cc-cellB-C2/src/cfp_scheduler_killer/agent/commands.clj"
+   "1551b95ff51b24fe2f09bc63fbd925de46f73846380610982c1d253196ca2482",
+   "/home/forge/src/cc-cellB-C2/test/cfp_scheduler_killer/schedule_test.clj"
+   "b4ae46455d0f3e2ddbc2275f6be6011840aa53a9699cd3d3a3dec41c32391973",
+   "/home/forge/src/cc-cellB-C2/test/cfp_scheduler_killer/exports_test.clj"
+   "7c2b828a9f86a9b1f2634d75c35c047d7b7b90dcc03d65a12299969215865bad",
+   "/home/forge/src/cc-cellB-C2/src/cfp_scheduler_killer/session_invites.clj"
+   "75f04ef8d9660de578d9cd42603c29f6282740cc5e1eb5d33fab9a2b903eca93",
+   "/home/forge/src/cc-cellB-C2/src/cfp_scheduler_killer/handlers/public_cfp.clj"
+   "7683368ea74ddd2ad5a401bbd4d79a131259ff5c231c3fbfb7a6ce125d107673"}},
+ :match-count 43}

@@ -10,6 +10,11 @@ Task frozen by the independent acceptance owner (cellB/task.md); helpers list su
 | 2 | N2 native (lane 6–11) | 96 | 153 | **185** | 284 | **530** | yes |
 | 2 | C1 CLI :extract! (lane 0–5) | 57 | 82 | **148** | 245 | **490** | yes |
 
+| 3 | N3 native (lane 0–5) | 153 | 217 | **263** | — | **602** | yes |
+| 3 | C2 CLI :extract! (lane 6–11) | 73 | 92 | **230** | 333 | **578** | yes |
+
+Pair 3 reading: both correct; C2 work 230 s vs N3 263 s (CLI again faster on work, by 33 s); oracle 578 vs 602. CLI arms so far: 148, 230 s; native controls so far: 142, 185, 263 s.
+
 Pair 2 reading: both correct; the CLI move took 25 s after a 57 s plan; C1 work 148 s vs N2 185 s (native 1.25x SLOWER — first tool win on work time today); to the oracle 490 vs 530. The caller repaired the CLI's known defects (cyclic source require, unresolved retained refs) inside its callers phase.
 
 Pair 1 reading: both correct; native work time 142 s vs MCP 290 s (native 0.49x); to the oracle 491 vs 627 (0.78x). Pairs 2–4 (N2+C1, N3+C2, N4+M2) follow per the precommitted order.

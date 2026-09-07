@@ -3482,3 +3482,5 @@ My objections to the opening six: verification is not established as the dominan
 ## 22:17Z — friction batch 1: Sol r1 NO-GO (hostile request ids rendered with raw pr-str bypassed the safe-line encoder → forged receipt lines), r2 GO on a3ce2df1. 31 commits since the last battery receipt → receipt chain 17 running, then land. Cell B pair 3 running.
 
 ## 22:17Z — Machine-ready split manifest built and validated (Astra intervention 1): manifest.edn — 141 defs, 141 mapped, 20 destinations, the 12 private names recovered by name, row-controls* distinct, 8 promotions confirmed four ways (kondo join, the historical commit's de-privatisation set, N1, N2), 3 declares all single-file load-order only (no destination needs a declare), fb-tags/submissions-page dispositions recorded (both dead code); validator 55 PASS / 0 FAIL. This is the input for the split-verb rerun.
+
+## 22:25Z — Cell B pair 3: C2 CLI 230 s work / 578 s oracle vs N3 native 263 s / 602 s, both correct. Pair 4 (N4 lane 6–11, M2 MCP lane 0–5) launched — the last precommitted pair.
