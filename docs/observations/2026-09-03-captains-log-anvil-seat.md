@@ -3324,3 +3324,5 @@ My objections to the opening six: verification is not established as the dominan
 ## 00:44Z — Astra's meter-semantics points folded into the dogfood receipt (stamps = completions; server vs client meters named; verify bracket 73.67 s ≈ 48.5%, mutation ≈ 1.4% of the measured wall as observed fractions; n = 1, zero paired comparisons).
 
 ## 00:53Z — usage watch: tools "admit_clojure_patch": 9 "apply_clojure_changes": 77 "inspect_clojure": 20  (collector figures verbatim; collector window: "since": "2026-09-06T04:44:02Z" → "until": "2026-09-07T00:48:32.736362Z"; === start 00:48Z load 0.95 ; === rc 0 end 00:53Z)
+
+## 01:33Z — Watcher NO_ROW_30M at 01:30Z during the ORDERED stand-down: expected (nothing runs; owner=fable; action answered: nothing to reconstruct). To stop it mailing every 5 min for an intentional idle, a stand-down marker (/var/tmp/forge/standdown.md, owner/since/until/reason) is being added to cadence-watch: NO_ROW/APPARATUS become INFO while it exists, an expired marker alarms STANDDOWN_EXPIRED, every other alarm still fires. Marker written now; remove it when work resumes.
