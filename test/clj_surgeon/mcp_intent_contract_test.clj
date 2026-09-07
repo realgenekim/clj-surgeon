@@ -94,6 +94,10 @@
 (deftest legacy-mcp-amendment-spelling-keeps-its-historical-result
   ;; The legacy row parser ignores lowercase suffixes; its witness parser reads
   ;; the uppercase/numeric stem. Widening must not reinterpret that MCP behavior.
+  (is (:ok (audit-contract
+             {:spec-text (spec-line "x" "MCP-OP-FIXTURE-001")
+              :implementation-sources {"f.clj" (annotation "MCP-OP-FIXTURE-001a")}
+              :test-sources {"t.clj" (annotation "MCP-OP-FIXTURE-001a")}})))
   (is (= {:ok false :specs {}
           :implementation-witnesses #{"MCP-OP-FIXTURE-001"}
           :test-witnesses #{}
@@ -104,7 +108,7 @@
                           :test-sources {}}))))
 
 ;; @spec MCP-OP-TRACE-005
-(deftest amendment-identifiers-are-not-parent-witnesses
+(deftest non-mcp-amendment-identifiers-are-not-parent-witnesses
   (let [parent "TEST-ISO-001"
         amendment "TEST-ISO-001a"
         result (audit-contract
@@ -119,7 +123,50 @@
            (:violations result)))))
 
 ;; @spec MCP-OP-TRACE-005
-(deftest explicit-prefix-debt-never-hides-unknown-or-new-prefixes
+(deftest exact-witness-debt-rejects-growth-repairs-and-orphans
+  ;; Sol's September 7 review: removing WTL-APPLY-001's real test marker
+  ;; grew debt 144 -> 145; repairing MEASURE-EVID-001 did not retire its debt.
+  (let [gate (requiring-resolve 'clj-surgeon.mcp-intent-contract/defer-missing-witnesses)
+        intent "WTL-APPLY-001"
+        raw (fn [status impl? test?]
+              (audit-contract
+                {:spec-text (spec-line status intent)
+                 :implementation-sources (if impl? {"f.clj" (annotation intent)} {})
+                 :test-sources (if test? {"t.clj" (annotation intent)} {})}))]
+    (doseq [[kind impl? test?] [[:implementation false true] [:test true false]]]
+      (testing (str "new missing witness remains blocking: " kind)
+        (is (:ok (gate (raw "x" true true) {})))
+        (is (false? (:ok (gate (raw "x" impl? test?) {})))))
+      (testing (str "one exact missing pair can be deferred, then must retire: " kind)
+        (is (:ok (gate (raw "x" impl? test?) {intent #{kind}})))
+        (is (= [{:type :stale-witness-debt :intent intent :source-kind kind}]
+               (:violations (gate (raw "x" true true) {intent #{kind}})))))
+      (testing "the other witness kind cannot silently join the ledger"
+        (is (false? (:ok (gate (raw "x" false false) {intent #{kind}}))))))
+    (testing "partial repair forces removal of that pair, retaining the other debt"
+      (is (= [{:type :stale-witness-debt :intent intent :source-kind :implementation}]
+             (:violations (gate (raw "x" true false) {intent #{:implementation :test}}))))
+      (is (:ok (gate (raw "x" true false) {intent #{:test}}))))
+    (testing "status changes cannot retain obsolete exceptions"
+      (is (false? (:ok (gate (raw " " false false) {intent #{:implementation :test}}))))
+      (is (false? (:ok (gate (raw "D" false false) {intent #{:test}})))))
+    (testing "an orphan ledger ID is a failure even without any source annotations"
+      (is (= [{:type :unknown-intent-debt :intent "WTL-GONE-999"}]
+             (:violations (gate (raw "x" true true) {"WTL-GONE-999" #{:test}})))))))
+
+;; @spec MCP-OP-TRACE-005
+(deftest invalid-witness-debt-ledgers-fail-closed
+  (let [gate (requiring-resolve 'clj-surgeon.mcp-intent-contract/defer-missing-witnesses)
+        raw (audit-contract {:spec-text "" :implementation-sources {} :test-sources {}})]
+    (doseq [ledger [nil [] {"WTL-001" #{}} {"WTL-001" #{:other}}
+                    {"WTL-001" [:test]} {:WTL-001 #{:test}}]]
+      (is (= :invalid-witness-debt-ledger
+             (try (gate raw ledger) nil
+                  (catch clojure.lang.ExceptionInfo e (:type (ex-data e)))))
+          (pr-str ledger)))))
+
+;; @spec MCP-OP-TRACE-005
+(deftest explicit-id-debt-never-hides-unknown-or-new-prefixes
   (let [defer-missing-witnesses
         (requiring-resolve 'clj-surgeon.mcp-intent-contract/defer-missing-witnesses)
         debt-id "WTL-FIXTURE-001"
@@ -129,7 +176,7 @@
               {:spec-text (str (spec-line "x" debt-id) (spec-line "x" future-id))
                :implementation-sources {"f.clj" (annotation unknown-id)}
                :test-sources {"t.clj" (annotation unknown-id)}})
-        allowed {"WTL-" "TODO: fixture debt"}
+        allowed {debt-id #{:implementation :test}}
         gated (defer-missing-witnesses raw allowed)]
     (is (= raw (defer-missing-witnesses raw {})))
     (is (false? (:ok gated)))
@@ -143,7 +190,7 @@
            (:violations gated)))
     (is (= (select-keys raw [:specs :implementation-witnesses :test-witnesses])
            (select-keys gated [:specs :implementation-witnesses :test-witnesses])))
-    (is (= allowed (:missing-witness-prefix-allowlist gated)))
+    (is (= allowed (:witness-debt-ledger gated)))
     (let [only-debt (audit-contract {:spec-text (spec-line "x" debt-id)
                                      :implementation-sources {} :test-sources {}})]
       (is (:ok (defer-missing-witnesses only-debt allowed)))
@@ -218,16 +265,14 @@
           'clj-surgeon.mcp-intent-contract/audit-current-repository)
         result (audit-current-repository)]
     (is (:ok result) (pr-str (:violations result)))
-    (is (= #{"MEASURE-" "OP-ALG-" "PERF-SENT-" "TEST-ISO-" "WTL-"}
-           (set (keys (:missing-witness-prefix-allowlist result)))))
-    (doseq [[prefix reason] (:missing-witness-prefix-allowlist result)]
-      (is (str/starts-with? reason "TODO:"))
-      (is (some #(str/starts-with? (:intent %) prefix)
-                (:pending-witness-violations result))
-          (str "remove repaired prefix exception: " prefix)))
+    (is (= (set (for [[intent kinds] (:witness-debt-ledger result)
+                      kind kinds]
+                  [intent kind]))
+           (set (map (juxt :intent :source-kind) (:pending-witness-violations result))))
+        "every exact debt pair remains missing; remove repaired or orphan entries")
     (let [unrestricted (audit-current-repository "." {})]
-      (is (false? (:ok unrestricted)))
-      (is (= (:pending-witness-violations result) (:violations unrestricted)))
+      (is (= (empty? (:pending-witness-violations result)) (:ok unrestricted)))
+      (is (= (vec (:pending-witness-violations result)) (:violations unrestricted)))
       (is (= (:specs result) (:specs unrestricted))))))
 
 ;; ---------------------------------------------------------------------------

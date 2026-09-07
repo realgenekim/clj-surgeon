@@ -14,7 +14,7 @@ avoid filesystem setup; the existing repository test covers real discovery.
 Run the unrestricted real-tree audit before adding any exception. Preserve the
 findings in the batch report. Repair only TELEMETRY-EVENTS-001 by registering
 the existing ledger promise and linking its existing implementation and direct
-test. Postpone other missing-witness debt only through explicit prefix TODOs;
+test. Postpone other missing-witness debt only through the exact per-ID ledger;
 retain every parsed row and never exempt unknown annotations. Source discovery,
 Makefile witness policy, other leaf implementations, and suite wiring are out
 of scope. The existing excluded spec documents remain excluded.
@@ -44,9 +44,27 @@ from Clojure source and Makefile, and tests from Clojure and Prolog files.
 | `TEST-ISO-` | 11 / 7 | Admit runner implementations in test infrastructure deliberately and reconcile annotations, including amendment IDs. |
 | `WTL-` | 30 / 5 | Reconcile worktree implementation and direct test annotations, including abbreviated marker lists. |
 
-These five entries allow only missing-witness debt. They do not hide rows,
-annotations, or unknown IDs. Inspect `:pending-witness-violations` in the
-ordinary result; call `(audit-current-repository "." {})` for all failures.
-New prefixes are enforced without configuration. Remove each exception once
-its unrestricted missing-witness count reaches zero. Do not expand this table
-without a separate bounded repair decision.
+These prefix rows document repair ownership only. The executable debt snapshot
+is `docs/intent/unlinked-spec-ids.edn`: ID -> set of missing witness kinds.
+Inspect `:pending-witness-violations` in the ordinary result; call
+`(audit-current-repository "." {})` for all failures. The ledger may only shrink.
+No missing witness outside its exact pairs is deferred. A repaired pair or an ID
+absent from the audited specs fails until its ledger entry is removed.
+
+## Round 2 repair contract
+
+Sol's executed review found that removing WTL-APPLY-001's valid test witness
+grew pending debt from 144 to 145 under the prefix exemption; repairing
+MEASURE-EVID-001 also left the suite green without shrinking the exception.
+Freeze the original 144 missing pairs across 123 IDs once, then enforce exact
+membership and stale/orphan detection in the pure gate. Red-first witnesses
+cover a lost same-prefix witness, both witness kinds, partial and full repair,
+status changes, orphan IDs, and invalid ledger shape. Exercise the real-tree
+inputs as immutable source maps to reproduce removal and marker addition.
+
+The existing non-MCP amendment witness remains; state explicitly that legacy
+MCP-OP amendments still witness parents. Default changed-files kondo must exit
+zero; remove only the two unused telemetry destructuring bindings. Gates are
+the intent namespace, operation oracle, fast lane, recomputed manifest pins,
+default kondo, and mcp-test if the 35-minute budget allows. Preserve every red
+and final gate tail in `/var/tmp/forge/lid-batch/surgeon-b2-report.md`.

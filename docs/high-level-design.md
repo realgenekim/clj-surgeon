@@ -23,7 +23,9 @@ evidence against a frozen source snapshot.
 
 Repository intent is checked bidirectionally using spec rows and implementation
 and test annotations, independent of the identifier prefix. Existing witness
-debt must be explicit rather than hidden by parsing. The
+debt must be explicit per identifier and missing witness in a shrinking ledger;
+new missing witnesses, repaired ledger entries, and nonexistent ledger IDs fail
+the gate. The
 [traceability design](intent/mcp-operation-contract/mcp-operation-contract-design.md#linked-intent-and-logic-oracle)
 owns this gate and its staged coverage policy.
 Completed public calls also feed the

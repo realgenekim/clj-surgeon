@@ -307,17 +307,24 @@ The parser accepts every `[A-Z][A-Z0-9-]*-[0-9]{3}` identifier, while retaining
 the historical MCP-OP matching behavior exactly. Non-MCP identifiers also accept
 one lowercase amendment letter after the three digits, as used by
 TEST-ISO-001a/001b/001c and TEST-ISO-009a/009b. Those complete amendment markers
-never witness their parent IDs. Prefix choice never hides a numeric identifier.
+never witness their parent IDs. Legacy MCP-OP amendment markers still witness
+their parent IDs, preserving byte-identical historical MCP behavior.
+Prefix choice never hides a numeric identifier.
 The source roots and supported extensions
 remain unchanged, including Makefile implementation witnesses.
 
-During the bounded migration, an explicit allowlist may postpone missing-witness
-failures for existing prefixes with documented debt. All rows and witnesses stay
-in the audit result; postponed violations are reported separately. Unknown
-annotations always fail, including within an allowlisted prefix. The unrestricted
-audit remains callable. Each exception needs a TODO row with its repair condition.
-No new prefix is exempt by default. TRACE-005 links this rule to literal fixtures
-and the real repository gate.
+During the bounded migration, `docs/intent/unlinked-spec-ids.edn` records exactly
+which existing IDs lack `:implementation` and/or `:test` witnesses. The EDN map
+maps each ID to a nonempty set of these witness kinds. Only those exact pairs
+may become `:pending-witness-violations`; all other missing and unknown witnesses
+block. A ledger ID absent from the audited specs produces `:unknown-intent-debt`.
+A listed witness no longer missing produces `:stale-witness-debt`, even if its
+sibling witness is still missing, so each repair requires removing that pair
+(and the ID when its set becomes empty). Invalid ledger shapes fail closed.
+The ledger is checked in, never regenerated during audit, and may only shrink.
+All parsed rows and witnesses remain visible, and passing an empty ledger keeps
+the unrestricted audit callable. Prefix reasons in the plan are documentation,
+not exemptions. TRACE-005 links this rule to literal fixtures and the repository gate.
 
 The initial implementation may construct a Prolog shadow oracle over:
 

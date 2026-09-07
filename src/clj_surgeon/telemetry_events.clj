@@ -239,8 +239,7 @@
    and nested fields are dropped; retained values still pass the shared
    scrubber and byte bound. Named fields own their validation."
   [{:keys [ts seat pid kind tool ok error_type wall_ms mission_id dropped
-           prompt_tokens completion_tokens reasoning_tokens cost_usd
-           provider upstream]
+           prompt_tokens completion_tokens reasoning_tokens cost_usd]
     :as event}]
   (let [[error truncated?] (truncate error_type)
         tok (fn [v] (when (and (integer? v) (<= 0 v Long/MAX_VALUE)) (long v)))

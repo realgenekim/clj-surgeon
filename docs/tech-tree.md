@@ -252,3 +252,15 @@ The telemetry row is now linked; five explicit prefix TODOs retain the other
 144 as visible debt. The numeric-only proposal would have missed amendments
 and conflated their witnesses with parent IDs. [Plan and debt table](plans/intent-contract-all-prefixes.md);
 receipts: `/var/tmp/forge/lid-batch/surgeon-b1-report.md`. No performance claim.
+
+Astra 2026-09-07T18:05:15.776609+00:00: LID batch 2 repairs the
+prefix exemption rejected by Sol: a removed WTL-APPLY-001 marker had grown
+pending debt 144 -> 145 while green. The exact ID/witness ledger now blocks
+new missing pairs, repaired pairs, and orphan IDs; all three attacks turn
+red, and retiring the repaired MEASURE-EVID-001 pair returns green. The
+initial ledger preserves 123 IDs / 144 missing pairs. Raw audit results on
+identical repository inputs remain byte-identical to bd854b91. The existing
+non-MCP amendment regression rejects parent truncation; legacy MCP behavior
+is explicitly preserved. Default changed-files kondo is warning-free.
+Receipts and limits: `/var/tmp/forge/lid-batch/surgeon-b2-report.md`. No
+performance claim; deferred witness debt remains unrepaired.
