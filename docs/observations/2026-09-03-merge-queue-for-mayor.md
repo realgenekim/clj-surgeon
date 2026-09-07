@@ -126,3 +126,4 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 - LANDED: fable/refusal-text-shape 2e6109cc (+receipt 9f75e0ac) → MCP/main 57c48894 at 00:00Z (inb-2da8ea; fence r8 LAND YES; Astra GO ten-8b) — 00:01Z
 
 LANDED 2026-09-07T09:44Z: bridge/alias-migration-bound-to-target b3a8371c → MCP/main 9b7e22f8 (alias reuse bound-to-target, policy-restricted; libspec removal preserves comments; binding-scope refusal file:line).
+LANDED 2026-09-07T10:45Z: bridge/apply-expect-honoured 4711be05 (+receipt 02f16605) → MCP/main 2d1a3c98 (expect is a guard on every write route; programs per-match; EARS 039–042).
