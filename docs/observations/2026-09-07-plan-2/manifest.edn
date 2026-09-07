@@ -1,0 +1,156 @@
+{:source {:file "src/cfp_scheduler_killer/views.clj"
+          :lib cfp-scheduler-killer.views
+          :sha "d9205abcc9b9f31d93bd4a76537b74fccd583ca6"}
+ :destinations
+ [
+  {:lib cfp-scheduler-killer.views.auth
+   :file "src/cfp_scheduler_killer/views/auth.clj"
+   :forms [landing-page login-page]}
+  {:lib cfp-scheduler-killer.views.avatar
+   :file "src/cfp_scheduler_killer/views/avatar.clj"
+   :forms [initials face-pool-size pool-face]}
+  {:lib cfp-scheduler-killer.views.committee
+   :file "src/cfp_scheduler_killer/views/committee.clj"
+   :forms [member-row committee-card committee-page]}
+  {:lib cfp-scheduler-killer.views.communications
+   :file "src/cfp_scheduler_killer/views/communications.clj"
+   :forms [comms-page letter-block inform-page]}
+  {:lib cfp-scheduler-killer.views.dashboard
+   :file "src/cfp_scheduler_killer/views/dashboard.clj"
+   :forms [alert-rows-partial checklist-item dash-days-left dash-feed-talk
+           dash-recent-line dash-rel-time event-dashboard-region event-dashboard-page]}
+  {:lib cfp-scheduler-killer.views.event-setup
+   :file "src/cfp_scheduler_killer/views/event_setup.clj"
+   :forms [default-end-date default-start-date event-details-page event-marquee
+           events-list-page example-location example-name example-website
+           slug-status new-event-page]}
+  {:lib cfp-scheduler-killer.views.form-builder
+   :file "src/cfp_scheduler_killer/views/form_builder.clj"
+   :forms [fb-post finish-cfp-bar form-preview-region type-label
+           field-form-fields field-row form-edit-panel form-fields-region
+           form-grid-region form-builder-page fb-tags]}
+  {:lib cfp-scheduler-killer.views.form-controls
+   :file "src/cfp_scheduler_killer/views/form_controls.clj"
+   :forms [field-errors req-mark field-error answer-input]}
+  {:lib cfp-scheduler-killer.views.format
+   :file "src/cfp_scheduler_killer/views/format.clj"
+   :forms [->instant ->local-date cfp-public-url date-fmt
+           datetime-fmt iso-date-fmt not-blank relative-when
+           when-fmt fmt-date fmt-instant fmt-close-date
+           fmt-when fmt-date-range fmt-cfp-window]}
+  {:lib cfp-scheduler-killer.views.integrations
+   :file "src/cfp_scheduler_killer/views/integrations.clj"
+   :forms [api-docs-page exports-page mask-webhook-url slack-form
+           settings-page]}
+  {:lib cfp-scheduler-killer.views.live-drafts
+   :file "src/cfp_scheduler_killer/views/live_drafts.clj"
+   :forms [cfp-note cfp-draft-status portal-draft-status]}
+  {:lib cfp-scheduler-killer.views.log
+   :file "src/cfp_scheduler_killer/views/log.clj"
+   :forms [log-summary log-region log-page]}
+  {:lib cfp-scheduler-killer.views.organizer-layout
+   :file "src/cfp_scheduler_killer/views/organizer_layout.clj"
+   :forms [breadcrumb event-resume-path header sb-group
+           sb-link sb-out time-travel-bar whoami-strip
+           event-setup-done? sidebar dev-strip organizer-shell]}
+  {:lib cfp-scheduler-killer.views.people
+   :file "src/cfp_scheduler_killer/views/people.clj"
+   :forms [profile-links person-page]}
+  {:lib cfp-scheduler-killer.views.portal
+   :file "src/cfp_scheduler_killer/views/portal.clj"
+   :forms [edit-form profile-form status-pill task-row
+           portal-submission portal-page]}
+  {:lib cfp-scheduler-killer.views.public-cfp
+   :file "src/cfp_scheduler_killer/views/public_cfp.clj"
+   :forms [cfp-closed-notice cfp-success-page md-token speaker-input
+           speaker-inputs md-inline cfp-about-you md-lite
+           render-markdown cfp-page]}
+  {:lib cfp-scheduler-killer.views.replay
+   :file "src/cfp_scheduler_killer/views/replay.clj"
+   :forms [replay-progress-bar replay-page]}
+  {:lib cfp-scheduler-killer.views.review
+   :file "src/cfp_scheduler_killer/views/review.clj"
+   :forms [board-qs capture-page chair-on-event? coverage-bar
+           fmt-mean fmt-stars inform-banner notice-region
+           private-note-block sort-chip status-chip submissions-sparkline
+           track-chip sort-click star-form star-histogram
+           sort-th row-controls* opinions-block row-controls
+           board-row submission-detail-page board-region board-page
+           submissions-page]}
+  {:lib cfp-scheduler-killer.views.schedule
+   :file "src/cfp_scheduler_killer/views/schedule.clj"
+   :forms [agenda-page block-card conflict-chips day-tab
+           room-options schedule-status-bar place-form placed-card
+           schedule-grid schedule-page]}
+  {:lib cfp-scheduler-killer.views.shell
+   :file "src/cfp_scheduler_killer/views/shell.clj"
+   :forms [versioned favicon-data-uri page-shell datastar-script]}
+ ]
+ :dispositions
+ {
+  fb-tags {:destination cfp-scheduler-killer.views.form-builder
+          :reason "Dropped by the historical split, not renamed: `(defn- fb-tags [f] ...)` at views.clj:3409 is dead code at d9205abc -- `git grep fb-tags d9205abc -- src test` returns only that definition line, and `git grep fb-tags c4299615 -- src test` returns nothing at all. This manifest preserves all 141 defs, so fb-tags goes to form-builder: it is defined inside the form-builder region between type-label and fb-post, and calls forms/locked? and forms/retired? like the rest of that namespace. It stays ^:private (no cross-destination caller)."}
+  submissions-page {:destination cfp-scheduler-killer.views.review
+                   :reason "Dropped by the historical split, not renamed: `(defn submissions-page ...)` at views.clj:997 is dead code at d9205abc -- `git grep submissions-page d9205abc -- src test` returns only that definition line, and `git grep submissions-page c4299615 -- src test` returns nothing. This manifest preserves all 141 defs, so submissions-page goes to review: it is the section '3b. Submissions list' that feeds the review board, it links to /capture and /board, and its only view calls are organizer-shell + header (organizer-layout) and fmt-date (format), both of which review already requires. It stays public (it was public in views.clj)."}
+  row-controls* {:destination cfp-scheduler-killer.views.review
+                :reason "NOT a missing name -- a name the earlier derived plan lost. views.clj defines BOTH `row-controls` (line 1466, ^:private) and `row-controls*` (line 1435, ^:private); the earlier plan.md printed 'row-controls' twice because its parser dropped the trailing `*`. Both are distinct vars, both live in cfp-scheduler-killer.views.review in the historical file, and `row-controls*` is also one of the three declare targets (views.clj:1304). Recorded here so the doubling cannot recur."}
+ }
+ :declares
+ [
+  {:symbol time-travel-bar :line 210 :destination cfp-scheduler-killer.views.organizer-layout
+   :forward-reference-within-destination false
+   :callers [dev-strip log-page]
+   :caller-destinations [cfp-scheduler-killer.views.log cfp-scheduler-killer.views.organizer-layout]}
+  {:symbol row-controls* :line 1304 :destination cfp-scheduler-killer.views.review
+   :forward-reference-within-destination false
+   :callers [row-controls]
+   :caller-destinations [cfp-scheduler-killer.views.review]}
+  {:symbol datastar-script :line 3059 :destination cfp-scheduler-killer.views.shell
+   :forward-reference-within-destination false
+   :callers [cfp-page portal-page]
+   :caller-destinations [cfp-scheduler-killer.views.portal cfp-scheduler-killer.views.public-cfp]}
+  {:symbol cfp-note :line 3059 :destination cfp-scheduler-killer.views.live-drafts
+   :forward-reference-within-destination false
+   :callers [cfp-about-you cfp-page edit-form profile-form]
+   :caller-destinations [cfp-scheduler-killer.views.portal cfp-scheduler-killer.views.public-cfp]}
+  {:symbol portal-draft-status :line 3059 :destination cfp-scheduler-killer.views.live-drafts
+   :forward-reference-within-destination false
+   :callers [edit-form profile-form]
+   :caller-destinations [cfp-scheduler-killer.views.portal]}
+ ]
+ :promotions-expected
+ [
+  {:symbol answer-input :destination cfp-scheduler-killer.views.form-controls
+   :referencing-destinations [cfp-scheduler-killer.views.form-builder cfp-scheduler-killer.views.portal cfp-scheduler-killer.views.public-cfp]
+   :referencing-vars [cfp-page edit-form form-grid-region form-preview-region]
+   :same-destination-callers []}
+  {:symbol datastar-script :destination cfp-scheduler-killer.views.shell
+   :referencing-destinations [cfp-scheduler-killer.views.portal cfp-scheduler-killer.views.public-cfp]
+   :referencing-vars [cfp-page portal-page]
+   :same-destination-callers []}
+  {:symbol field-error :destination cfp-scheduler-killer.views.form-controls
+   :referencing-destinations [cfp-scheduler-killer.views.portal cfp-scheduler-killer.views.public-cfp cfp-scheduler-killer.views.review]
+   :referencing-vars [capture-page cfp-about-you profile-form speaker-input]
+   :same-destination-callers [answer-input]}
+  {:symbol field-errors :destination cfp-scheduler-killer.views.form-controls
+   :referencing-destinations [cfp-scheduler-killer.views.committee cfp-scheduler-killer.views.event-setup cfp-scheduler-killer.views.form-builder]
+   :referencing-vars [committee-card field-form-fields new-event-page]
+   :same-destination-callers []}
+  {:symbol header :destination cfp-scheduler-killer.views.organizer-layout
+   :referencing-destinations [cfp-scheduler-killer.views.committee cfp-scheduler-killer.views.communications cfp-scheduler-killer.views.dashboard cfp-scheduler-killer.views.event-setup cfp-scheduler-killer.views.form-builder cfp-scheduler-killer.views.integrations cfp-scheduler-killer.views.log cfp-scheduler-killer.views.people cfp-scheduler-killer.views.replay cfp-scheduler-killer.views.review cfp-scheduler-killer.views.schedule]
+   :referencing-vars [board-page capture-page committee-page comms-page event-dashboard-page event-details-page events-list-page exports-page form-builder-page inform-page log-page person-page replay-page schedule-page settings-page submission-detail-page submissions-page]
+   :same-destination-callers []}
+  {:symbol initials :destination cfp-scheduler-killer.views.avatar
+   :referencing-destinations [cfp-scheduler-killer.views.review]
+   :referencing-vars [submission-detail-page]
+   :same-destination-callers []}
+  {:symbol not-blank :destination cfp-scheduler-killer.views.format
+   :referencing-destinations [cfp-scheduler-killer.views.committee cfp-scheduler-killer.views.dashboard cfp-scheduler-killer.views.event-setup cfp-scheduler-killer.views.integrations cfp-scheduler-killer.views.people cfp-scheduler-killer.views.public-cfp cfp-scheduler-killer.views.review]
+   :referencing-vars [board-qs board-region board-row cfp-page committee-card dash-feed-talk event-marquee new-event-page person-page profile-links settings-page sort-chip status-chip submission-detail-page track-chip]
+   :same-destination-callers []}
+  {:symbol req-mark :destination cfp-scheduler-killer.views.form-controls
+   :referencing-destinations [cfp-scheduler-killer.views.event-setup cfp-scheduler-killer.views.form-builder cfp-scheduler-killer.views.public-cfp]
+   :referencing-vars [cfp-about-you event-details-page field-form-fields field-row speaker-input]
+   :same-destination-callers [answer-input]}
+ ]
+ :counts {:defs 141 :mapped 141 :unmapped 0 :destinations 20 :declare-forms 3 :declared-symbols 5 :promotions 8}}
