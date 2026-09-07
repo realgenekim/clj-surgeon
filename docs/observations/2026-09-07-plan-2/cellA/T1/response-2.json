@@ -1,0 +1,2 @@
+{"status":"refused","code":"helper-extraction-ambiguous-owner","ms":173.06,
+"text":"The selected helper datastar-script does not resolve to exactly one top-level owner in the source.\nfacts · committed=false · decision=\"which single top-level form owns datastar-script\" · helper=\"datastar-script\" · mutation_attempted=false · owners=[{:kind \"declare\", :line 3059} {:kind \"defn-\", :line 3806}] · source_unchanged=true · target_unchanged=true · write_authority=false\nnext_call · none"}

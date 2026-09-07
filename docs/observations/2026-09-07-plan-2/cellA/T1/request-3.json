@@ -1,0 +1,5 @@
+{"tool":"mcp__clj-surgeon__apply_clojure_changes","workspace_root":"/home/forge/src/cc-split-T1",
+ "edits":[
+  {"files":["src/cfp_scheduler_killer/views.clj"],"within":{"root":true},"from":"(declare datastar-script cfp-note portal-draft-status)","to":"(declare)"},
+  {"files":["src/cfp_scheduler_killer/views.clj"],"within":{"root":true},"from":"(declare time-travel-bar)","to":"(declare)"},
+  {"files":["src/cfp_scheduler_killer/views.clj"],"within":{"root":true},"from":"(declare row-controls*)","to":"(declare)"}]}

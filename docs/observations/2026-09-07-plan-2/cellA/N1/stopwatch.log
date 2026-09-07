@@ -1,0 +1,8 @@
+2026-09-07T21:16:13.259733284Z orient-start 
+2026-09-07T21:20:21.64416410Z plan-complete 
+2026-09-07T21:20:55.201514049Z moves-complete 
+2026-09-07T21:21:50.782227018Z callers-complete 
+2026-09-07T21:21:50.803512101Z verify-start kaocha: bin/kaocha unit --fail-fast
+2026-09-07T21:22:11.946770428Z verify-done kaocha rc=0 wall=21.1s
+2026-09-07T21:22:45.794187839Z oracle 
+2026-09-07T21:22:45.810835765Z done 

@@ -1,0 +1,2 @@
+{"status":"refused","code":"helper-extraction-caller-outside-scope","ms":1819.87,
+"text":"A supported reference to a selected helper sits under an admitted discovery root that scope.paths does not authorize for writing.\nfacts · admitted_roots=[\"src\" \"test\"] · committed=false · decision=\"whether scope.paths should cover this root\" · files_outside_scope=[\"src/cfp_scheduler_killer/server.clj\"] · mutation_attempted=false · source_unchanged=true · target_unchanged=true · write_authority=false\nnext_call · none"}

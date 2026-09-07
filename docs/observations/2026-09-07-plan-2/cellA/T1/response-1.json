@@ -1,0 +1,2 @@
+{"status":"refused","code":"helper-extraction-verification-preflight-unavailable","ms":3.58,
+"text":"The verification profile \"fast\" is not a synchronous, rollback-capable profile this workspace configures.\nfacts · admitted_profiles=[\"lint\"] · committed=false · configured_profiles=[\"lint\"] · decision=\"which admitted profile proves this write\" · mutation_attempted=false · needed={:synchronous true, :rollback_capable true, :fresh_process true} · profile=\"fast\" · source_unchanged=true · staged=false · write_authority=false\nnext_call · none"}

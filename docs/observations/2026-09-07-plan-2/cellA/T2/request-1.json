@@ -1,0 +1,1 @@
+{"tool":"mcp__clj-surgeon__inspect_clojure","workspace_root":"/home/forge/src/cc-split-T2","requests":[{"operation":"outline","file":"src/cfp_scheduler_killer/views.clj","id":"r1"}],"expect":{"requests":1,"files":1}}
