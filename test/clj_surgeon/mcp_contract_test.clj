@@ -150,15 +150,23 @@
            (get-in (contract/tool-params->transaction (:params validated))
                    [:changes 0 :owner])))))
 
-(deftest editor-gesture-tolerates-redundant-aggregate-expect
+(deftest editor-gesture-guards-the-declared-aggregate-expect
+  ;; Until 2026-09-07 a disagreeing `expect` was reported as ignored
+  ;; normalization and the write went ahead. `expect` is a guard: it refuses.
   (let [validated
         (contract/validate-tool-params
           (assoc gesture-request "expect"
-                 {"changes" 0 "edits" 1 "files" 1}))]
+                 {"changes" 2 "edits" 1 "files" 1}))]
+    (is (false? (:ok validated)) (pr-str validated))
+    (is (= :expect-mismatch (:reason validated)))
+    (is (= [{:field "changes" :expected 2 :derived 1}] (:mismatch validated)))
+    (is (true? (:source-unchanged validated))))
+  (let [validated
+        (contract/validate-tool-params
+          (assoc gesture-request "expect"
+                 {"changes" 1 "edits" 1 "files" 1}))]
     (is (:ok validated) (pr-str validated))
-    (is (= {:ignored ["expect"]
-            :reason "editor counts are derived"}
-           (:input-normalization validated)))
+    (is (not (contains? validated :input-normalization)))
     (is (= {:changes 1 :edits 1 :files 1}
            (get-in validated [:params :expect])))))
 
@@ -885,22 +893,30 @@
                    (dissoc "replace")
                    (assoc "insert_after" [packed]))
         request {"changes" [change]
-                 "expect" {"changes" 91 "edits" 92 "files" 93}}
+                 "expect" {"changes" 1 "edits" 1 "files" 1}}
         validated (contract/validate-tool-params request)
         without-aggregate
         (contract/validate-tool-params (dissoc request "expect"))
+        wrong-aggregate
+        (contract/validate-tool-params
+          (assoc request "expect" {"changes" 91 "edits" 92 "files" 93}))
         transaction (some-> validated :params
                             contract/tool-params->transaction)]
     (is (:ok validated) (pr-str validated))
-    (is (= {:ignored ["expect"]
-            :reason "aggregate counts are derived from exact change guards"}
-           (:input-normalization validated)))
+    (is (not (contains? validated :input-normalization)))
     (is (= {:changes 1 :edits 1 :files 1}
            (get-in validated [:params :expect])))
     (is (:ok without-aggregate) (pr-str without-aggregate))
     (is (= {:changes 1 :edits 1 :files 1}
            (get-in without-aggregate [:params :expect])))
     (is (not (contains? without-aggregate :input-normalization)))
+    ;; a stated aggregate that disagrees is a guard failure, not bookkeeping
+    (is (false? (:ok wrong-aggregate)) (pr-str wrong-aggregate))
+    (is (= :expect-mismatch (:reason wrong-aggregate)))
+    (is (= [{:field "changes" :expected 91 :derived 1}
+            {:field "edits" :expected 92 :derived 1}
+            {:field "files" :expected 93 :derived 1}]
+           (:mismatch wrong-aggregate)))
     (is (= [:insert-right
             ["(deftest renders-a-button (is true))"
              "(deftest renders-a-link (is true))"]]

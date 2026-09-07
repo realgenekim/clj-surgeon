@@ -206,7 +206,7 @@
     "expect"
     {:type "object"
      :additionalProperties false
-     :description "Optional redundant aggregate bookkeeping. Surgeon derives exact counts from per-change guards and reports any supplied disagreement as ignored normalization."
+     :description "Optional aggregate GUARD. Surgeon derives exact counts from per-change guards; any stated count that disagrees refuses the whole call before any write, naming the field, the expected value and the derived value, and returning a corrected next_call."
      :properties
      {"changes" (assoc positive-integer-schema :description "Number of change objects.")
       "edits" (assoc positive-integer-schema :description "Total exact replacements.")

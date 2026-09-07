@@ -602,6 +602,57 @@
    :edits (reduce + (map #(get-in % [:expect :matches]) changes))
    :files (count (set (mapcat :files changes)))})
 
+(def ^:private aggregate-expect-order [:changes :edits :files])
+
+(defn- aggregate-expect-mismatches
+  [supplied derived]
+  (vec (keep (fn [key]
+               (when (and (contains? supplied key)
+                          (not= (get supplied key) (get derived key)))
+                 {:field (name key)
+                  :expected (get supplied key)
+                  :derived (get derived key)}))
+             aggregate-expect-order)))
+
+(defn- guard-aggregate-expect!
+  "`expect` is a GUARD on the declared fan-out size, never bookkeeping.
+
+   The schema declares `expect` on both write routes, so a caller who states
+   it has bound its intent to the effect. Until 2026-09-07 a disagreement was
+   reported as `input_normalization {ignored [\"expect\"]}` and the write went
+   ahead: a caller who mis-stated the fan-out size got a silent success over
+   every file it named. Now each stated count must equal the derived count or
+   the whole call refuses before any write, naming every disagreeing field with
+   both values and composing the caller's own request with `expect` repaired.
+
+   `expect` omitted is no guard at all, exactly as before."
+  [supplied derived caller-params]
+  (when supplied
+    (let [mismatches (aggregate-expect-mismatches supplied derived)]
+      (when (seq mismatches)
+        (let [corrected {"changes" (:changes derived)
+                         "edits" (:edits derived)
+                         "files" (:files derived)}
+              rendered (str/join ", "
+                                 (map #(str (:field %)
+                                            " expected " (:expected %)
+                                            " derived " (:derived %))
+                                      mismatches))]
+          (refuse!
+            :expect-mismatch ["expect"]
+            (str "Declared expect disagrees with the derived effect: "
+                 rendered)
+            {:mismatch mismatches
+             :mutation-attempted false
+             :next-call (assoc caller-params "expect" corrected)
+             :remedy
+             (str "Set expect to {\"changes\": " (:changes derived)
+                  ", \"edits\": " (:edits derived)
+                  ", \"files\": " (:files derived)
+                  "}, or correct the request so it makes the effect you"
+                  " declared, and call apply_clojure_changes once."
+                  " No source was changed.")}))))))
+
 ;; @spec MCP-OP-MATCHED-002
 ;; @spec MCP-OP-MATCHED-003
 (defn- validate-expect-matched!
@@ -650,17 +701,13 @@
               (refuse! :duplicate-id ["changes" index "id"]
                        "Change IDs must be unique" {:id id}))
             (recur (conj seen id) (inc index)))))
-      (cond-> {:ok true
-               :params
-               (cond-> {:changes changes
-                        :expect derived-expect}
-                 expect-matched (assoc :expect-matched expect-matched)
-                 verify (assoc :verify verify))}
-        (and supplied-expect (not= supplied-expect derived-expect))
-        (assoc :input-normalization
-               {:ignored ["expect"]
-                :reason
-                "aggregate counts are derived from exact change guards"})))
+      (guard-aggregate-expect! supplied-expect derived-expect params)
+      {:ok true
+       :params
+       (cond-> {:changes changes
+                :expect derived-expect}
+         expect-matched (assoc :expect-matched expect-matched)
+         verify (assoc :verify verify))})
     (catch clojure.lang.ExceptionInfo error
       (let [result (ex-data error)
             retry-template
@@ -677,7 +724,13 @@
   ;; @spec MCP-OP-EDIT-005
   ;; @spec MCP-OP-EDIT-011
   (try
-    (let [redundant-expect? (present? params "expect")
+    (let [caller-params params
+          supplied-expect
+          (when (present? params "expect")
+            (validate-count-map!
+              (field params "expect")
+              aggregate-expect-fields required-aggregate-expect-fields
+              ["expect"]))
           params (without-field params "expect")]
       (validate-fields! params editor-top-fields required-editor-top-fields [])
       (let [edits
@@ -896,14 +949,23 @@
                                (count (distinct (map :file creations)))))
                 (refuse! :duplicate-path ["create_files"]
                          "Created file paths must be unique"))
+            derived-expect
+            {:changes (count changes)
+             :edits (reduce + (map #(get-in % ["expect" "matches"]) changes))
+             :files (count (set (mapcat #(field % "files") changes)))}
+            ;; @spec MCP-OP-EDIT-006
+            ;; The declared fan-out size is a guard on this route too. It is
+            ;; checked HERE, against the caller's own request, so the composed
+            ;; next_call is the shape the caller sent and not the compiled
+            ;; direct form it never wrote.
+            _ (guard-aggregate-expect! supplied-expect derived-expect
+                                       caller-params)
             direct
             (cond->
               {"changes" changes
-               "expect" {"changes" (count changes)
-                         "edits" (reduce + (map #(get-in % ["expect" "matches"])
-                                                changes))
-                         "files" (count (set (mapcat #(field % "files")
-                                                     changes)))}}
+               "expect" {"changes" (:changes derived-expect)
+                         "edits" (:edits derived-expect)
+                         "files" (:files derived-expect)}}
               (present? params "verify")
               (assoc "verify" (field params "verify")))]
         (cond-> {:ok true :params direct}
@@ -927,12 +989,7 @@
 
           (seq (:evidence normalized-edits))
           (assoc :compact-field-normalization
-                 (:evidence normalized-edits))
-
-          redundant-expect?
-          (assoc :input-normalization
-                 {:ignored ["expect"]
-                  :reason "editor counts are derived"}))))
+                 (:evidence normalized-edits)))))
     (catch clojure.lang.ExceptionInfo error
       (ex-data error))))
 

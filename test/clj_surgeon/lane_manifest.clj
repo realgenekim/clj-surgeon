@@ -114,6 +114,7 @@
    'clj-surgeon.mcp-compact-relations-test              :fast
    'clj-surgeon.mcp-contract-test                       :fast
    'clj-surgeon.mcp-create-files-test                   :fast
+   'clj-surgeon.mcp-expect-guard-test                   :fast
    'clj-surgeon.mcp-extraction-plan-test                :fast
    'clj-surgeon.mcp-extraction-test                     :fast
    'clj-surgeon.mcp-formatter-test                      :fast
