@@ -208,7 +208,7 @@
     ;; `make landing-gate` is THE target ~/bin/land runs. It is asserted here
     ;; by RESOLUTION, not by grepping for a word: the target must exist, and
     ;; its prerequisite/recipe closure must contain both names.
-    (let [{:keys [makefile-text] :as ctx} (rm/repo-context)
+    (let [{:keys [makefile-text]} (rm/repo-context)
           rule (rm/make-target makefile-text "landing-gate")
           closure (set (concat (:prerequisites rule)
                                (map second (re-seq #"\$\(MAKE\)(?:\s+--[a-z\-]+)*\s+([a-z0-9\-]+)"
@@ -569,12 +569,21 @@
       ;;       fence r7 demanded, the construction-then-finalizer witness, and
       ;;       the "canonicalization touches only the two quoted sentences"
       ;;       witness (inb-2da8ea).
+      ;;   +3  mcp-alias-migration-test: the round-three PUBLIC-PATH witnesses
+      ;;       for alias reuse (Sol fence r3 on d32a3c9d) --
+      ;;       r3-reuse-never-writes-an-alias-outside-alias-policy,
+      ;;       r3-an-off-policy-target-alias-does-not-rescue-an-exhausted-policy
+      ;;       and r3-committed-reuse-preserves-comments-and-discard-forms.
+      ;;       The planner-level twins already existed; these drive `execute!`
+      ;;       and assert the COMMITTED bytes, because reuse that bypassed
+      ;;       `alias_policy` committed `forbidden/fetch-event` under a receipt
+      ;;       that read ok=true -- a planner assertion could not have seen it.
       ;;                                                    ------
-      ;;   1393 + 22 ..................................... 1415
+      ;;   1393 + 22 + 3 ................................. 1418
       ;;
-      ;; All four namespaces are ROUND-ONE, so the whole +22 lands in r1 and
+      ;; All five namespaces are ROUND-ONE, so the whole +25 lands in r1 and
       ;; `adopted` holds at 435.
-      (is (= 1415 total) (str "manifest declares " total " tests"))
+      (is (= 1418 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

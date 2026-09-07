@@ -3647,7 +3647,7 @@
 (deftest detail-retention-is-published-as-best-effort-because-peers-are-pruned
   (let [workspace (workspace!)
         receipt-dir (io/file workspace "receipts")
-        details (io/file workspace ".clj-surgeon" "alias-migration")
+        _details (io/file workspace ".clj-surgeon" "alias-migration")
         ;; twenty peers, each holding a details_path its own receipt published
         ;; a moment ago and its own caller may not have read yet. They are real
         ;; runs of this writer, recorded in the manifest every run shares, so a
@@ -6926,3 +6926,87 @@
                  (pr-str (:next_call result)))))
       (finally
         (delete-tree! workspace)))))
+
+;; ---------------------------------------------------------------------------
+;; round 3 -- Sol's executed counterexamples, driven through execute! itself.
+;; The planner-level suite proves the bytes; these prove the PUBLIC PATH writes
+;; them (or refuses), because a receipt is only worth what the tree says after.
+
+(defn- probe-execute!
+  "One execute! over a single probe file, outside the corpus's own scope.
+
+  Returns [receipt source-after]."
+  [source overrides]
+  (let [workspace (workspace!)
+        relative "src/probe/a.clj"]
+    (write-tree! workspace {relative source})
+    (try
+      [(execute! workspace (merge {:scope {:paths ["src/probe/**"]}
+                                   :expect {:files 1}}
+                                  overrides))
+       (slurp (io/file workspace relative))]
+      (finally (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-008
+;; @spec MCP-OP-ALIAS-067
+(deftest r3-reuse-never-writes-an-alias-outside-alias-policy
+  ;; `[to.lib :as forbidden]` with policy ["newlib"]: `forbidden` is bound to
+  ;; to.lib but is NOT an entry of the policy the caller sent, so it is not
+  ;; reusable. MCP-OP-ALIAS-008's witness forbids publishing any alias outside
+  ;; the policy, so the policy is walked normally and the free entry is written.
+  (let [before (str "(ns probe.a\n  (:require\n   [" fixture/to-lib " :as forbidden]\n"
+                    "   [" fixture/from-lib " :as old]))\n"
+                    "(defn r [] (old/" fixture/from-var " 1))\n")
+        [receipt after] (probe-execute! before {:to {:lib fixture/to-lib
+                                                     :var fixture/to-var
+                                                     :alias_policy ["newlib"]}})]
+    (is (= true (:ok receipt)) (pr-str receipt))
+    (is (str/includes? after (str "(newlib/" fixture/to-var " 1)")) after)
+    (is (not (str/includes? after (str "forbidden/" fixture/to-var))) after)
+    (is (str/includes? after (str "[" fixture/to-lib " :as newlib]")) after)
+    ;; the off-policy alias is left exactly as the caller had it
+    (is (str/includes? after (str "[" fixture/to-lib " :as forbidden]")) after)
+    ;; `from-lib` is a PREFIX of `to-lib`; assert the retired LIBSPEC is gone
+    (is (not (str/includes? after (str "[" fixture/from-lib " :as old]"))) after)))
+
+;; @spec MCP-OP-ALIAS-008
+;; @spec MCP-OP-ALIAS-067
+(deftest r3-an-off-policy-target-alias-does-not-rescue-an-exhausted-policy
+  ;; `forbidden` is bound to to.lib but off-policy, so it cannot be reused; the
+  ;; policy's only entry `newlib` is bound to a DIFFERENT namespace, so the
+  ;; policy really is exhausted and the run must refuse without writing.
+  (let [before (str "(ns probe.a\n  (:require\n   [" fixture/to-lib " :as forbidden]\n"
+                    "   [acid.unrelated :as newlib]\n"
+                    "   [" fixture/from-lib " :as old]))\n"
+                    "(defn r [] (old/" fixture/from-var " 1))\n")
+        [receipt after] (probe-execute! before {:to {:lib fixture/to-lib
+                                                     :var fixture/to-var
+                                                     :alias_policy ["newlib"]}})]
+    (is (= false (:ok receipt)) (pr-str receipt))
+    (is (= "alias-migration-alias-policy-exhausted" (:error_type receipt)) (pr-str receipt))
+    (is (= true (:source_unchanged receipt)) (pr-str receipt))
+    (is (= before after) "the probe file must be byte-identical after a refusal")
+    (is (str/includes? (str (:remedy receipt)) "acid.unrelated") (pr-str (:remedy receipt)))))
+
+;; @spec MCP-OP-ALIAS-010
+;; @spec MCP-OP-ALIAS-011
+;; @spec MCP-OP-ALIAS-067
+(deftest r3-committed-reuse-preserves-comments-and-discard-forms
+  ;; The planner-level twin asserts the same bytes; this one asserts the WRITE.
+  (let [before (str "(ns probe.a\n  (:require\n"
+                    "   [" fixture/to-lib " :as store2]\n"
+                    "   ;; keep me: this comment is not trivia\n"
+                    "   #_[acid.decoy :as d]\n"
+                    "   [" fixture/from-lib " :as old]))\n"
+                    "(defn r [] (old/" fixture/from-var " 1))\n")
+        [receipt after] (probe-execute! before {})]
+    (is (= true (:ok receipt)) (pr-str receipt))
+    (is (str/includes? after ";; keep me: this comment is not trivia") after)
+    (is (str/includes? after "#_[acid.decoy :as d]") after)
+    (is (str/includes? after (str "[" fixture/to-lib " :as store2]")) after)
+    (is (not (str/includes? after (str "[" fixture/from-lib " :as old]"))) after)
+    (is (str/includes? after (str "(store2/" fixture/to-var " 1)")) after)
+    ;; exactly one libspec for the target: reuse never adds a second
+    (is (= 1 (count (re-seq (re-pattern (str "\\[" (str/replace fixture/to-lib "." "\\.")))
+                            after)))
+        after)))

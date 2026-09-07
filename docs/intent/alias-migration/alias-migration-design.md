@@ -214,9 +214,37 @@ change to a data value — is precisely the failure class this repository treats
 worse than an error, because it terminates investigation. (The anchor repo
 contains zero `::store/` occurrences, so this costs nothing there.)
 
-**Alias choice — and why the collision set is exactly the `ns` form.** The
-chosen alias is the first `alias_policy` entry that collides with nothing in
-that file's `ns` form. The collision set is precisely:
+**Alias choice — reuse first, then the collision set.** The chosen alias is the
+first `alias_policy` entry that is REUSABLE, and failing that the first entry
+that collides with nothing in that file's `ns` form.
+
+An entry is **reusable** when the file's `ns` form already binds that exact name
+as a namespace alias (`:as` / `:as-alias`) whose lib is exactly `to.lib`. Reuse
+rewrites the sites under that alias, adds no second libspec, and — when every
+use of `from.lib` was migrated — removes the `from.lib` libspec together with
+the whitespace that separated it and nothing else, so adjacent comments and
+`#_` discard forms survive byte-for-byte. This is the incremental case: a repo
+that has already begun adopting a helper namespace. Refusing it as a collision
+is what made dogfood3 (2026-09-07) return zero sites over nine migratable files.
+
+Three restrictions travel with reuse, each of them load-bearing:
+
+- **Alias map only.** A name introduced by `:refer` is never reusable, even when
+  it is referred from `to.lib`: referring `newlib` does not make `newlib/x`
+  resolve. Conflating the two wrote a qualifier against the wrong namespace.
+- **Policy-restricted.** The reused alias must itself be an entry of
+  `to.alias_policy`. An alias bound to `to.lib` under a name *outside* the
+  policy is neither reused nor a collision of the policy's entries — the policy
+  is walked normally — because MCP-OP-ALIAS-008's witness forbids publishing any
+  alias the caller did not send. So `[to.lib :as forbidden]` under policy
+  `["newlib"]` writes `[to.lib :as newlib]` (a second alias for an already
+  aliased namespace is valid Clojure), and that same file with `newlib` bound
+  elsewhere is genuinely exhausted and refuses.
+- **Var-mode only.** A lib-mode migration under `preserve-refer` would have to
+  merge a kept `:refer` set into the existing libspec, a merge this migration
+  does not model, so lib-mode keeps the plain first-free-entry behaviour.
+
+The collision set, for the second half of that choice, is precisely:
 
 > {aliases introduced by `:as` and `:as-alias`} ∪ {names introduced by `:refer`}
 

@@ -577,19 +577,34 @@
                                                 (take-nth 2 (meaningful-children part)))))
                                    (tree-seq n/inner? children binding-form)))
                            binding-forms)
-            metadata-vector? (and (or (contains? function-heads head)
-                                      (contains? local-binding-vector-heads head))
-                                  (when-let [first-vector (first (filter #(= :vector (n/tag (unmeta-node %)))
+            metadata-node (when (or (contains? function-heads head)
+                                    (contains? local-binding-vector-heads head))
+                            (when-let [first-vector (first (filter #(= :vector (n/tag (unmeta-node %)))
                                                                    (rest (meaningful-children node))))]
-                                    (= :meta (n/tag first-vector))))
-            potential? (some (fn [part]
-                               (when (= :token (n/tag part))
-                                 (let [facts (decide part context live-bare)]
-                                   (or (:rewrite facts) (:refer-hit? facts)))))
-                             (tree-seq #(and (n/inner? %) (not= :uneval (n/tag %)))
-                                       children node))]
+                              (when (= :meta (n/tag first-vector)) first-vector)))
+            potential-in? (fn [nodes]
+                            (boolean
+                              (some (fn [part]
+                                      (when (= :token (n/tag part))
+                                        (let [facts (decide part context live-bare)]
+                                          (or (:rewrite facts) (:refer-hit? facts)))))
+                                    (mapcat #(tree-seq (fn [candidate]
+                                                         (and (n/inner? candidate)
+                                                              (not= :uneval (n/tag candidate))))
+                                                       children %)
+                                            nodes))))
+            potential? (potential-in? [node])]
+        ;; @spec MCP-OP-ALIAS-066
+        ;; The `:or`-default and metadata-vector boundaries are about sites
+        ;; INSIDE the binding construct, whose evaluation scope this walk does
+        ;; not model. A site in the BODY is not one of them: dogfood3
+        ;; (2026-09-07) refused a plain `(json/write-str {...})` in ordinary
+        ;; value position because the enclosing `defn` merely HAD `:or`
+        ;; defaults elsewhere in its parameter vector. Scope the site test to
+        ;; the construct that motivates the refusal.
         (and potential?
-             (or default? metadata-vector?
+             (or (and default? (potential-in? binding-forms))
+                 (and metadata-node (potential-in? [metadata-node]))
                  (and (seq live-bare)
                       (or (contains? #{"if-let" "if-some" "as->" "for" "doseq"} head)
                           (> (count params) 1)
@@ -600,8 +615,13 @@
                                        (and (vector-node? part)
                                             (some live-bare (binding-form-names part))))
                                      (rest (tree-seq n/inner? children node)))))))))
-      (assoc (leaf node) :indirect [{:reason :unsupported-binding-scope
-                                     :form (n/string node)}])
+      ;; @spec MCP-OP-ALIAS-066
+      ;; A receipt must name its subject: carry the node's own row/col so the
+      ;; caller gets file:line, not the enclosing defn's docstring.
+      (assoc (leaf node) :indirect [(cond-> {:reason :unsupported-binding-scope
+                                             :form (n/string node)}
+                                      (:row (meta node)) (assoc :row (:row (meta node)))
+                                      (:col (meta node)) (assoc :col (:col (meta node))))])
 
       (n/inner? node)
       (let [head (head-name node)
@@ -739,6 +759,42 @@
                        separator
                        [target]
                        (subvec kids (inc last-libspec-index)))))))))
+
+;; @spec MCP-OP-ALIAS-010
+;; @spec MCP-OP-ALIAS-011
+;; @spec MCP-OP-ALIAS-067
+(def ^:private separator-tags
+  "The ONLY nodes a libspec removal may consume besides the libspec itself.
+
+  `meaningful?` also rejects `:comment` and `:uneval`, which are CONTENT the
+  contract promises to preserve byte-for-byte. Round 1 walked backward with
+  `meaningful?` and deleted an adjacent comment and a `#_[example.decoy :as d]`
+  along with the retired libspec (Sol's fence probe, 2026-09-07)."
+  #{:whitespace :newline :comma})
+
+;; @spec MCP-OP-ALIAS-010
+;; @spec MCP-OP-ALIAS-011
+(defn- remove-libspec
+  "Drop one libspec from a :require clause, with the whitespace that separated
+  it from its predecessor and nothing else.
+
+  Used only when to.lib is ALREADY required in this file under a reusable
+  alias: the retired libspec goes and nothing takes its place, so the file
+  never ends up requiring the target namespace twice."
+  [clause-node old-node]
+  (let [kids (children clause-node)
+        index (first (keep-indexed (fn [i child] (when (identical? child old-node) i))
+                                   kids))]
+    (if (nil? index)
+      clause-node
+      (let [start (loop [i index]
+                    (if (and (> i 1)
+                             (contains? separator-tags (n/tag (nth kids (dec i)))))
+                      (recur (dec i))
+                      i))]
+        (n/replace-children
+          clause-node
+          (vec (concat (subvec kids 0 start) (subvec kids (inc index)))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; refusals
@@ -928,6 +984,25 @@
   (when-let [node (ns-form root)]
     (some-> (nth (meaningful-children node) 1 nil) token-symbol name)))
 
+;; @spec MCP-OP-ALIAS-066
+(defn- indirect-facts
+  "Refusal facts for one unmodellable site.
+
+  A receipt must name its SUBJECT. dogfood3 (2026-09-07) reported `form` as the
+  enclosing `defn` -- truncated to its docstring -- so the caller had to grep to
+  find the site. Carry the node's own row and column, and bound the form."
+  [file blocking]
+  (let [form (str (:form blocking))]
+    (cond-> {:file file
+             :reason (name (:reason blocking))
+             :form (str/trim (subs form 0 (min 200 (count form))))}
+      (:row blocking) (assoc :line (:row blocking))
+      (:col blocking) (assoc :col (:col blocking))
+      (= :unsupported-binding-scope (:reason blocking))
+      (assoc :remedy (str "This migration does not model this binding scope. "
+                          "Review and migrate its bindings and uses explicitly; "
+                          "no scope-changing next_call is provided.")))))
+
 (defn- analyze-requires
   "Classify one file's ns requires.
 
@@ -1028,13 +1103,73 @@
   [direct]
   (into #{} (concat (mapcat :aliases direct) (mapcat :referred direct))))
 
+(defn- ns-alias-namespaces
+  "Each NAMESPACE ALIAS in this file's ns form -> the lib it resolves.
+
+  `:refer` names are deliberately absent. An alias resolves the namespace part
+  of a qualified symbol; a referred Var is an unqualified binding and resolves
+  nothing. Round 1 recorded both in one map, so `[example.new :refer [newlib]]`
+  read as \"newlib is bound to example.new\" and the verb wrote
+  `newlib/fetch-event` against an alias map that said example.unrelated -- a
+  silent semantic mismigration (Sol's fence counterexample, 2026-09-07)."
+  [direct]
+  (reduce (fn [acc {:keys [lib aliases]}]
+            (into acc (map (fn [a] [a lib])) aliases))
+          {}
+          direct))
+
+(defn- ns-referred-names
+  "Every name this file's ns form introduces through `:refer`."
+  [direct]
+  (into #{} (mapcat :referred direct)))
+
+;; @spec MCP-OP-ALIAS-007
+;; @spec MCP-OP-ALIAS-008
+;; @spec MCP-OP-ALIAS-067
 (defn- choose-alias
-  "First alias_policy entry bound to nothing in this file's ns form."
-  [_root direct policy]
-  (let [bound (ns-bound-names direct)
-        collided (vec (take-while #(contains? bound %) policy))]
-    {:alias (first (drop-while #(contains? bound %) policy))
-     :collided collided}))
+  "The alias this file will bind to to.lib, and the policy entries that collide.
+
+  A NAMESPACE ALIAS already bound to TO.LIB is not a collision -- it is the
+  happy path of an incremental migration: the file has already adopted the
+  helper namespace, so that alias is REUSED and no second require is added.
+  dogfood3 (2026-09-07) refused six files whose `mjson` was an alias for the
+  request's own to.lib, which is precisely the case this verb exists to serve.
+
+  Everything else in the collision set of MCP-OP-ALIAS-007 stays a collision,
+  and the two halves are judged separately:
+
+  - an alias bound to a DIFFERENT namespace collides, even when a same-named
+    `:refer` of to.lib also exists;
+  - a REFERRED Var named like a policy entry collides, even when it is referred
+    FROM to.lib -- referring `newlib` does not make `newlib/x` resolve.
+
+  Reuse is POLICY-RESTRICTED: the reused alias must itself be an entry of
+  `to.alias_policy`. An alias bound to to.lib under a name OUTSIDE the policy is
+  neither reused nor a collision of the policy's entries -- the policy is walked
+  normally, because MCP-OP-ALIAS-008's witness forbids publishing any alias the
+  caller did not send. Round 2 kept an unrestricted `existing` fallback, so
+  `[to.lib :as forbidden]` under a one-entry policy COMMITTED
+  `forbidden/fetch-event`, and an off-policy target alias silently rescued a
+  policy that was genuinely exhausted (Sol's fence counterexamples, 2026-09-07).
+
+  `to-lib` is nil when reuse is not offered (lib-mode migrations, where a kept
+  :refer set would have to be merged into the existing libspec)."
+  [_root direct policy to-lib]
+  (let [aliases (ns-alias-namespaces direct)
+        referred (ns-referred-names direct)
+        bindings (merge (into {} (map (fn [r] [r ::referred])) referred) aliases)
+        bound? (fn [candidate]
+                 (or (contains? aliases candidate) (contains? referred candidate)))
+        reusable? (fn [candidate]
+                    (and to-lib
+                         (not (contains? referred candidate))
+                         (= to-lib (get aliases candidate))))
+        reuse (first (filter reusable? policy))]
+    (if reuse
+      {:alias reuse :collided [] :reuse? true :bindings bindings}
+      {:alias (first (drop-while bound? policy))
+       :collided (vec (take-while bound? policy))
+       :bindings bindings})))
 
 (defn- libspec-with-refer
   "The new libspec, carrying :as only when the file still needs the alias."
@@ -1050,7 +1185,8 @@
                                (mapv #(n/token-node (symbol %)) (sort referred))))]))))
 
 (defn- ns-form-edit
-  [ns-node clause target-node mode to-lib alias referred alias-needed? remove-refer]
+  [ns-node clause target-node mode to-lib alias referred alias-needed? remove-refer
+   reuse?]
   ;; @spec MCP-OP-ALIAS-062 MCP-OP-ALIAS-063 MCP-OP-ALIAS-064
   ;; Partition the old import without interpreting discarded forms or losing
   ;; metadata wrappers, unrelated entries, options, and surrounding trivia.
@@ -1077,8 +1213,20 @@
        (n/string
          (replace-child
            ns-node clause
-           (if (empty? referred)
+           (cond
+             ;; @spec MCP-OP-ALIAS-067
+             ;; The alias already binds to.lib in this file. `:replace` retires
+             ;; the old libspec and adds nothing; `:add` keeps the old libspec
+             ;; (other uses remain) and still adds nothing.
+             reuse?
+             (if (= :replace mode)
+               (remove-libspec retained-clause retained-target)
+               retained-clause)
+
+             (empty? referred)
              (rewrite-require-clause retained-clause retained-target mode to-lib alias)
+
+             :else
              (replace-child retained-clause retained-target
                             (libspec-with-refer to-lib alias referred
                                                 alias-needed?)))))})))
@@ -1119,16 +1267,14 @@
             sites (reduce + 0 (map :sites walked))]
         (cond
           (seq indirect)
-          {:refusal (refusal :alias-migration-indirect-reference
-                             (str "An indirect reference to " from-lib " in " file
-                                  " cannot be closed mechanically")
-                             (cond-> {:file file
-                                      :reason (name (:reason (first indirect)))
-                                      :form (:form (first indirect))}
-                               (= :unsupported-binding-scope (:reason (first indirect)))
-                               (assoc :remedy "This migration does not model this binding scope. Review and migrate its bindings and uses explicitly; no scope-changing next_call is provided."))
-                             (when-not (= :unsupported-binding-scope (:reason (first indirect)))
-                               (excluding-call request file)))}
+          (let [blocking (first indirect)]
+            {:refusal (refusal :alias-migration-indirect-reference
+                               (str "An indirect reference to " from-lib " in " file
+                                    (when (:row blocking) (str ":" (:row blocking)))
+                                    " cannot be closed mechanically")
+                               (indirect-facts file blocking)
+                               (when-not (= :unsupported-binding-scope (:reason blocking))
+                                 (excluding-call request file)))})
 
           (zero? sites) nil
 
@@ -1181,7 +1327,13 @@
           {:refusal (refer-all-refusal request file target)}
 
           :else
-          (let [{:keys [alias collided]} (choose-alias root direct policy)]
+          ;; @spec MCP-OP-ALIAS-067
+          ;; Reuse is offered for var-mode migrations only. A lib-mode
+          ;; migration under `preserve-refer` would have to MERGE a kept :refer
+          ;; set into the file's existing target libspec; that is not modelled,
+          ;; so lib-mode keeps the pre-existing free-alias behaviour exactly.
+          (let [{:keys [alias collided bindings reuse?]}
+                (choose-alias root direct policy (when-not lib-mode? to-lib))]
             (if (nil? alias)
               ;; @spec MCP-OP-ALIAS-008
               ;; NO next_call. The composition used to append
@@ -1202,8 +1354,17 @@
                                        file ": every one of its "
                                        (count policy) " entries — "
                                        (pr-str (vec policy))
-                                       " — is already bound to another "
-                                       "namespace in that file's ns form. No "
+                                       " — is already bound in that file's ns "
+                                       "form to a namespace other than "
+                                       to-lib ": "
+                                       (str/join ", "
+                                                 (map #(str % " → "
+                                                            (let [bound (get bindings %)]
+                                                              (if (= ::referred bound)
+                                                                "a Var referred into this namespace"
+                                                                bound)))
+                                                      collided))
+                                       ". No "
                                        "next_call is composed, because any "
                                        "alias this verb could propose would "
                                        "be outside the policy you sent and "
@@ -1257,12 +1418,10 @@
                   blocking
                   {:refusal (refusal :alias-migration-indirect-reference
                                      (str "An indirect or macro-mediated reference in "
-                                          file " cannot be closed mechanically")
-                                     (cond-> {:file file
-                                              :reason (name (:reason blocking))
-                                              :form (:form blocking)}
-                                       (= :unsupported-binding-scope (:reason blocking))
-                                       (assoc :remedy "This migration does not model this binding scope. Review and migrate its bindings and uses explicitly; no scope-changing next_call is provided."))
+                                          file
+                                          (when (:row blocking) (str ":" (:row blocking)))
+                                          " cannot be closed mechanically")
+                                     (indirect-facts file blocking)
                                      (when-not (= :unsupported-binding-scope (:reason blocking))
                                        (excluding-call request file)))}
 
@@ -1279,15 +1438,24 @@
                      :collided collided
                      :sites sites
                      :refer-sites refer-sites
-                     :require-mode mode
-                     :edits (into [(ns-form-edit ns-node clause (:node target)
-                                                 mode to-lib alias
-                                                 (if (= :add mode) #{} kept-refer)
-                                                 (pos? sites)
-                                                 (when (and (not lib-mode?)
-                                                            (= :add mode)
-                                                            (not unselected?))
-                                                   from-var))]
+                     :require-mode (if reuse?
+                                     (if (= :replace mode) :reuse :reuse-keep)
+                                     mode)
+                     :edits (into (let [ns-edit (ns-form-edit ns-node clause (:node target)
+                                                             mode to-lib alias
+                                                             (if (= :add mode) #{} kept-refer)
+                                                             (pos? sites)
+                                                             (when (and (not lib-mode?)
+                                                                        (= :add mode)
+                                                                        (not unselected?))
+                                                               from-var)
+                                                             reuse?)]
+                                    ;; a reused alias with nothing to drop from
+                                    ;; the ns form leaves it byte-identical --
+                                    ;; never emit a no-op edit
+                                    (if (= (:original ns-edit) (:replacement ns-edit))
+                                      []
+                                      [ns-edit]))
                                   (keep (fn [[form result]]
                                           (when (pos? (:sites result))
                                             {:kind :form
