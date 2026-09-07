@@ -66,6 +66,15 @@ they are not restated here; ids remain unique across the whole `MCP-OP` prefix.
   `exact-witness-debt-rejects-growth-repairs-and-orphans` witness these rules.
   Historical MCP-OP matching is pinned by
   `legacy-mcp-amendment-spelling-keeps-its-historical-result`.
+- [x] **MCP-OP-TRACE-006**: When `make mcp-test` executes, it shall fail if the performance-regression-sentinel intent audit reports a missing or unknown PERF-SENT test witness, including a multi-part identifier such as `PERF-SENT-LEDGER-ROOT-001`.
+
+  Misreadings: a standalone target is enough; a successful generic audit with
+  PERF-SENT missing-test debt proves the shell witnesses; the entire sentinel
+  behavioral suite belongs in the fast JVM lane. Boundaries: removed marker,
+  invented marker, intact 50-row witness set, and removed Make dependency or
+  audit recipe. Witness: `sentinel-intent-audit-is-required-by-the-merge-gate`,
+  `test/performance_regression_sentinel_intent_self_test.sh`, and retained
+  scratch-copy Make drives in the batch report.
 - [x] **MCP-OP-ORACLE-001**: Where a Prolog shadow oracle is retained after finding an independent counterexample, `make runtests` shall execute that oracle as a blocking gate.
 
 # #Compact Root-Scoped Data Edits

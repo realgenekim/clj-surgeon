@@ -264,3 +264,16 @@ non-MCP amendment regression rejects parent truncation; legacy MCP behavior
 is explicitly preserved. Default changed-files kondo is warning-free.
 Receipts and limits: `/var/tmp/forge/lid-batch/surgeon-b2-report.md`. No
 performance claim; deferred witness debt remains unrepaired.
+
+Astra 2026-09-07T19:11:35Z: LID gate/HLD batch wires the PERF-SENT shell
+audit into the ordinary Make merge gate, outside the child-free JVM fast
+lane. Scratch deletion exposed a second defect: the old single-topic regex
+reported 49/49 while omitting PERF-SENT-LEDGER-ROOT-001 from a 50-row leaf.
+The repaired audit reports 50/50; its permanent scratch self-test rejects
+missing simple/multi-part and unknown multi-part IDs. WTL and OP-ALG already
+reject lost and invented witnesses under the exact per-ID ledger; their
+35 and 37 pending pairs remain debt. The HLD gains three flagship operation
+accounts, mission-name disambiguation and the audit's 15 leaf references.
+Plan: [sentinel gate and HLD](plans/sentinel-intent-gate-and-hld.md); receipts:
+`/var/tmp/forge/lid-batch/surgeon-b3-report.md`. No performance claim or
+mission-ledger implementation change.

@@ -602,7 +602,9 @@
       ;; (11 -> 18 tests); 1432 + 7 = 1439. No namespace or lane was added.
       ;; Round 2 adds exact debt retirement/growth and malformed-ledger witnesses
       ;; (18 -> 20). Recomputed: 992 original + 449 adopted = 1441.
-      (is (= 1441 total) (str "manifest declares " total " tests"))
+      ;; Sentinel merge-gate wiring witness: source census recomputed as
+      ;; 993 original + 449 adopted = 1442; lane membership is unchanged.
+      (is (= 1442 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
