@@ -1,0 +1,6 @@
+{"verb":"apply_clojure_changes","route":"require_change+symbol_migration","status":"refused",
+ "code":"require-change-unprovable","path":["require_change","files",4],"elapsed_ms":33.96,
+ "message":"Require entries must be direct [lib :as alias] vectors",
+ "source_unchanged":true,
+ "remedy_text":"Correct the declared scope or count and call apply_clojure_changes once.",
+ "diagnosis":"files[4] = src/cfp_scheduler_killer/inform.clj, whose :require block contains [com.fulcrologic.guardrails.core :refer [=> >defn ?]]"}

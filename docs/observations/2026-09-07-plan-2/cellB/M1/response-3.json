@@ -1,0 +1,8 @@
+{"verb":"apply_clojure_changes","route":"extraction","workspace_root":"/home/forge/src/cc-cellB-M1","committed":true,"ok":true,
+ "changes":1,"edits":25,"files":2,"elapsed_ms":1247.361143,
+ "format":{"status":"complete","file-count":1,"changed-file-count":1,"elapsed_ms":489.239107},
+ "verification_complete":true,"next_action":"none",
+ "read_back_hashes":{"src/cfp_scheduler_killer/exports.clj":"45bf73232e4140037955420f02cf1cd5eb343699638a18558facea3d3e3b16f8","src/cfp_scheduler_killer/exports/calendar.clj":"b79350cffc0d4feedc1985c15ccaf03be9ed19685349cb88f3d934508bd9e08b"},
+ "receipt_hash":"e9c5e1100115041fc20db414b6f87064ef62966bc6b4aad63d75a44dfb798192",
+ "caller_proof":{"meaning":"Exact structural scans completed; aliases, macros, or generated callers may remain.","level":"structural-candidates-only","scan_complete":true,"semantic_provider_used":false,"zero_callers_authoritative":false},
+ "undo_receipt":"/home/forge/.local/state/clj-surgeon/workspaces/61f0e96a8a95da175b80154dd5e5c4af26db1300dfc47fe7036115f630bd463d/receipts/9ea47fbc-1d25-4a15-8b2a-d0ae15f098da.edn"}
