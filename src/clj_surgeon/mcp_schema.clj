@@ -206,7 +206,7 @@
     "expect"
     {:type "object"
      :additionalProperties false
-     :description "Optional redundant aggregate bookkeeping. Surgeon derives exact counts from per-change guards and reports any supplied disagreement as ignored normalization."
+     :description "Optional aggregate GUARD covering every change and exact replacement the transaction commits, including one change per concrete program match. It does not cover created files: create_files is a literal effect with no derived counts. Surgeon derives exact counts from per-change guards; any stated count that disagrees refuses the whole call before any write, naming the field, the expected value and the derived value, and returning a corrected next_call. One exception: a create-only request, which carries create_files with no changes, edits, or programs, changes no existing source, so every count would be zero and it refuses expect as unsupported on that route. Omit expect there."
      :properties
      {"changes" (assoc positive-integer-schema :description "Number of change objects.")
       "edits" (assoc positive-integer-schema :description "Total exact replacements.")
@@ -336,7 +336,7 @@
   {:type "array"
    :minItems 1
    :maxItems 16
-   :description "Optional independent computed relations compiled against the same original snapshot as edits."
+   :description "Optional independent computed relations compiled against the same original snapshot as edits. Programs ride on a changes transaction: each is flattened into one addressed change per concrete match and combined with the edits or delete_owners in the same request, so programs alone is refused. Each program contributes expect.matches to the top-level aggregate expect."
    :items
    {:type "object"
     :additionalProperties false
@@ -424,8 +424,16 @@
       (assoc-in [:properties "create_files"] editor-create-files-schema)
       (assoc-in [:properties "symbol_migration"] symbol-migration-schema)
       (assoc-in [:properties "require_change"] require-change-schema)
+      ;; @spec MCP-OP-EDIT-042
+      ;; `programs` is NOT a route of its own. It lowers into the same changes
+      ;; transaction the other gestures build, so a programs-only request was
+      ;; admitted here and then refused `non-empty-array` at ["changes"] by the
+      ;; validator (Sol fence r3, 2026-09-07). The boundary now refuses the
+      ;; shape the runtime cannot execute.
       (assoc :anyOf [{:required ["edits"]}
-                     {:required ["programs"]}
+                     {:allOf [{:required ["programs"]}
+                              {:anyOf [{:required ["edits"]}
+                                       {:required ["delete_owners"]}]}]}
                      {:required ["delete_owners"]}
                      {:required ["create_files"]}
                      {:required ["symbol_migration" "require_change"]}])
@@ -523,7 +531,16 @@
                    {:required ["require_change"]}
                    {:required ["expect_matched"]}
                    {:required ["extraction"]}]}}
-    {:required ["changes" "expect"]
+    ;; @spec MCP-OP-EDIT-042
+    ;; `expect` is OPTIONAL on every write route and a GUARD when present.
+    ;; Until 2026-09-07 this branch REQUIRED it with `changes` and the editor
+    ;; branch below FORBADE it, so the boundary denied `edits` + `expect`
+    ;; outright and denied `changes` without it: the two shapes the contract
+    ;; now defines could not be sent. The route list also omitted
+    ;; `create_files`, so a create-only transaction was denied with or without
+    ;; `expect`. Both are fixed here, and the branches stay disjoint so `oneOf`
+    ;; still matches exactly one.
+    {:required ["changes"]
      :not {:anyOf [{:required ["basis"]}
                    {:required ["decisions"]}
                    {:required ["edits"]}
@@ -533,9 +550,24 @@
                    {:required ["require_change"]}
                    {:required ["extraction"]}]}}
     {:anyOf [{:required ["edits"]}
-             {:required ["programs"]}
+             {:allOf [{:required ["programs"]}
+                      {:anyOf [{:required ["edits"]}
+                               {:required ["delete_owners"]}]}]}
              {:required ["delete_owners"]}
-             {:required ["symbol_migration" "require_change"]}]
+             {:required ["create_files"]}]
+     :not {:anyOf [{:required ["basis"]}
+                   {:required ["decisions"]}
+                   {:required ["changes"]}
+                   {:required ["symbol_migration"]}
+                   {:required ["require_change"]}
+                   {:required ["expect_matched"]}
+                   {:required ["extraction"]}]}}
+    ;; The compact-relation route is the ONE write route that does not accept
+    ;; `expect`: `clj-surgeon.mcp-compact-relations/allowed-request-fields`
+    ;; refuses it as an unknown field, and a schema that admitted it would
+    ;; promise a shape the adapter rejects. It may carry `edits`, so it is its
+    ;; own branch rather than a member of the one above.
+    {:required ["symbol_migration" "require_change"]
      :not {:anyOf [{:required ["basis"]}
                    {:required ["decisions"]}
                    {:required ["changes"]}

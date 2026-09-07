@@ -42,9 +42,11 @@
     "Apply one failure-atomic Clojure transaction. For exact nested replacements, "
     "send only workspace_root, edits, and optional verify. Each edits item contains "
     "file, within {form}, from, to, and optional positive matches (default 1). "
-    "Do not send changes, expect, basis, or decisions with edits; Surgeon derives "
-    "IDs and counts. A redundant top-level expect is ignored and reported, while "
-    "every exact per-edit guard remains authoritative. If inspect_clojure returned "
+    "Do not send changes, basis, or decisions with edits; Surgeon derives "
+    "IDs and counts. An optional top-level expect is a GUARD: every count you "
+    "state must equal the derived count or the whole call refuses before any "
+    "write, naming each disagreeing field and returning a corrected next_call. "
+    "Every exact per-edit guard remains authoritative. If inspect_clojure returned "
     "basis and next_call, preserve workspace_root, basis, site IDs, and verify; "
     "fill every decision and submit once. To move named owners into one new "
     "namespace, use extraction once. Supply exact caller_changes or explicitly "
@@ -77,8 +79,8 @@
     "matches counts the binding and its resolved local usages. "
     "To add one key/value to logically equal maps while preserving comments, use "
     "find with assoc_entry: {key: :status, value: :ready}. "
-    "Top-level aggregate expect is optional redundant bookkeeping: Surgeon derives changes, edits, and files "
-    "from the exact per-change guards and reports a supplied mismatch as ignored normalization. "
+    "Top-level aggregate expect is an optional GUARD: Surgeon derives changes, edits, and files "
+    "from the exact per-change guards and refuses the whole call before any write when a stated count disagrees. "
     "When a prior inspect_clojure match on the same snapshot found the sites, copy its file, "
     "file_hash, pattern, and match_count into the optional expect_matched object; the receipt then "
     "reports matched_count, addressed_matches, and every matched site this transaction did not "
@@ -955,6 +957,31 @@
                :remedy "Correct the project root or request and call apply_clojure_changes once."}
               total-start {:validation_ms validation-ms})))))))
 
+(defn- next-call-with-workspace-root
+  ;; @spec MCP-OP-EDIT-039
+  "Restore `workspace_root` on a composed `next_call`.
+
+   The workspace router strips `workspace_root` from the request before the
+   pure contract ever sees it, so a `next_call` the contract composes from the
+   caller's own request is missing the one field the caller MUST send back. It
+   is restored here, at the one place that knows the resolved root, and only
+   when the composed call does not already carry it.
+
+   Called ONLY on the branch where the caller sent a `workspace_root`. Sol
+   fence r2 (2026-09-07): adding one to a request that validly omitted the
+   optional root makes `next_call` differ from the caller's request by more
+   than `expect`, which is the exact-shape contract MCP-OP-EDIT-039 states.
+   `workspace_root` in the composed call iff `workspace_root` in the request."
+  [result workspace-root]
+  (let [next-call (:next_call result)]
+    (if (and (map? next-call)
+             (string? workspace-root)
+             (not (some #{"workspace_root"}
+                        (map #(if (keyword? %) (name %) (str %))
+                             (keys next-call)))))
+      (assoc result :next_call (assoc next-call "workspace_root" workspace-root))
+      result)))
+
 (defn execute-request!
   "Route one request to a canonical workspace context, then execute it."
   [config params]
@@ -966,6 +993,9 @@
       (let [result (execute-request-in-context!
                      config normalized public-operation)
             resolved (workspace/canonical-root (:project-root config))]
+        ;; @spec MCP-OP-EDIT-039
+        ;; The caller omitted the optional root, so the composed `next_call`
+        ;; must omit it too. The RECEIPT still reports the resolved root.
         (cond-> result
           (:ok resolved) (assoc :workspace_root (:workspace-root resolved))))
       (let [workspace-router (or (:workspace-router config)
@@ -973,9 +1003,10 @@
             routed (workspace/resolve-request workspace-router normalized)]
         (if-not (:ok routed)
           routed
-          (assoc (execute-request-in-context!
-                   (:config routed) (:params routed) public-operation)
-                 :workspace_root (:workspace-root routed)))))))
+          (-> (execute-request-in-context!
+                (:config routed) (:params routed) public-operation)
+              (assoc :workspace_root (:workspace-root routed))
+              (next-call-with-workspace-root (:workspace-root routed))))))))
 
 (def verification-line-characters
   "Stated bound on the visible verification line of a success receipt."

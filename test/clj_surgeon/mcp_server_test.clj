@@ -66,8 +66,14 @@
     (is (= #{"workspace_root" "edits" "programs" "delete_owners" "create_files"
              "symbol_migration" "require_change" "confirm" "fill" "preview"}
            (set (keys (get-in tools [2 :schema :properties])))))
+    ;; @spec MCP-OP-EDIT-042
+    ;; `programs` stopped being a route of its own on 2026-09-07: it lowers
+    ;; into the same changes transaction the other gestures build, so the
+    ;; boundary requires a gesture that produces one.
     (is (= [{:required ["edits"]}
-            {:required ["programs"]}
+            {:allOf [{:required ["programs"]}
+                     {:anyOf [{:required ["edits"]}
+                              {:required ["delete_owners"]}]}]}
             {:required ["delete_owners"]}
             {:required ["create_files"]}
             {:required ["symbol_migration" "require_change"]}
@@ -103,7 +109,10 @@
              "workspace_root" "symbol_migration" "require_change"
              "expect_matched"}
            (set (keys (get-in tools [1 :schema :properties])))))
-    (is (= 4 (count (get-in tools [1 :schema :oneOf]))))
+    ;; @spec MCP-OP-EDIT-042
+    ;; 4 -> 5 on 2026-09-07: the compact-relation route became its own
+    ;; branch so every other write route can carry optional `expect`.
+    (is (= 5 (count (get-in tools [1 :schema :oneOf]))))
     (testing "the direct route accepts the same verify field it publishes"
       (let [direct-route (second (get-in tools [1 :schema :oneOf]))
             excluded (set (map (comp set :required)
