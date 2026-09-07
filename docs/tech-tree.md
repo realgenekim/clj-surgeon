@@ -244,3 +244,23 @@ unknown where the producer omitted it. No new speed claim or rerun.
 ### Astra 2026-09-06T14:33:19.384566+00:00 — existing patch gate with a real supplied profile
 
 One real Maven clarity edit committed in a scratch workspace through the existing admission API after one retained profile-integration refusal. Candidate/live polarity checks passed; actual cold suite in the successful receipt: 2 tests, 0 failures/errors, clean lint. Success call 2.145 s, not a native ratio; profile preparation 326 s plus patch setup and repair/queue costs remain material. Restriction: one existing file in a frozen real closure, no generic runner/deletions/free-choice claim. [Evidence](observations/2026-09-06-astra-real-profile-utility.md).
+
+Astra 2026-09-07T17:27:26Z: LID batch 1 widens intent parsing beyond MCP-OP, including
+the five TEST-ISO amendment IDs. The original committed tree exposes 145
+violations: 144 missing witnesses and one dangling TELEMETRY-EVENTS-001.
+The telemetry row is now linked; five explicit prefix TODOs retain the other
+144 as visible debt. The numeric-only proposal would have missed amendments
+and conflated their witnesses with parent IDs. [Plan and debt table](plans/intent-contract-all-prefixes.md);
+receipts: `/var/tmp/forge/lid-batch/surgeon-b1-report.md`. No performance claim.
+
+Astra 2026-09-07T18:05:15.776609+00:00: LID batch 2 repairs the
+prefix exemption rejected by Sol: a removed WTL-APPLY-001 marker had grown
+pending debt 144 -> 145 while green. The exact ID/witness ledger now blocks
+new missing pairs, repaired pairs, and orphan IDs; all three attacks turn
+red, and retiring the repaired MEASURE-EVID-001 pair returns green. The
+initial ledger preserves 123 IDs / 144 missing pairs. Raw audit results on
+identical repository inputs remain byte-identical to bd854b91. The existing
+non-MCP amendment regression rejects parent truncation; legacy MCP behavior
+is explicitly preserved. Default changed-files kondo is warning-free.
+Receipts and limits: `/var/tmp/forge/lid-batch/surgeon-b2-report.md`. No
+performance claim; deferred witness debt remains unrepaired.
