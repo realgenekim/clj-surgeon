@@ -350,9 +350,11 @@
                       "expect" {"changes" 2 "edits" 2 "files" 2}}]]
       (let [{:keys [result source]} (execute-mixed request)]
         (is (false? (:ok result)) (pr-str result))
-        (is (= "non-empty-array" (:reason result))
-            "the pre-existing reason, not an expect-mismatch")
-        (is (= ["changes"] (:path result)))
+        (is (= "programs-require-a-companion-gesture" (:reason result))
+            "the refusal names the companion gesture, not an expect-mismatch")
+        (is (= ["programs"] (:path result)))
+        (is (= ["edits" "delete_owners"] (:accepted result)))
+        (is (str/includes? (:error result) "delete_owners"))
         (is (= mixed-source source))))))
 
 ;; @spec MCP-OP-EDIT-039

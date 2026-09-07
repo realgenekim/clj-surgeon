@@ -1062,6 +1062,25 @@
             ;; with no `expect` at all). Guarding it first would answer an
             ;; unexecutable request with a corrected `expect`, a remedy that
             ;; refuses again for a different reason.
+            ;; @spec MCP-OP-EDIT-042
+            ;; A programs-only request is denied at the public boundary, but a
+            ;; caller that reaches the validator another way used to be told
+            ;; `non-empty-array` at ["changes"] -- true, and useless: it names
+            ;; a field the editor routes do not accept. Sol fence r4
+            ;; (2026-09-07) called the remediation weak. Name the companion.
+            _ (when (and (seq programs) (empty? changes))
+                (refuse!
+                  :programs-require-a-companion-gesture ["programs"]
+                  (str "programs is not a write route of its own: it lowers"
+                       " into the same changes transaction edits and"
+                       " delete_owners build, so it must accompany at least"
+                       " one of them")
+                  {:mutation-attempted false
+                   :accepted ["edits" "delete_owners"]
+                   :remedy
+                   (str "Add the edits or delete_owners this program set runs"
+                        " alongside and call apply_clojure_changes once."
+                        " No source was changed.")}))
             _ (when (seq changes)
                 (guard-aggregate-expect! supplied-expect derived-expect
                                          caller-params))
