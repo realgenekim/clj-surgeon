@@ -128,3 +128,4 @@ parent named src. Lane when capacity allows; the 7906/8171 stable build carries 
 LANDED 2026-09-07T09:44Z: bridge/alias-migration-bound-to-target b3a8371c → MCP/main 9b7e22f8 (alias reuse bound-to-target, policy-restricted; libspec removal preserves comments; binding-scope refusal file:line).
 LANDED 2026-09-07T10:45Z: bridge/apply-expect-honoured 4711be05 (+receipt 02f16605) → MCP/main 2d1a3c98 (expect is a guard on every write route; programs per-match; EARS 039–042).
 LANDED 2026-09-07T18:58Z: astra/intent-contract-all-prefixes f61769da (+receipt 11248cb0) → MCP/main 42c55d96 (intent contract prefix-agnostic, per-ID debt ledger, TRACE-005).
+LANDED 2026-09-07T19:41Z: astra/lid-batch-2-perf-gate-hld 94715053 → MCP/main eb8a7686 (PERF-SENT audit in the merge gate; HLD flagship ops).
