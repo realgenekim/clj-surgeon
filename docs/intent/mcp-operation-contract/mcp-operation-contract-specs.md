@@ -47,6 +47,25 @@ they are not restated here; ids remain unique across the whole `MCP-OP` prefix.
 - [x] **MCP-OP-TRACE-002**: When `make runtests` executes, it shall fail if an MCP operation-contract implementation or test witness names an unknown intent ID.
 - [x] **MCP-OP-TRACE-003**: When `make runtests` executes, it shall fail if an implemented `[x]` MCP operation-contract intent lacks an implementation witness or a direct test witness.
 - [x] **MCP-OP-TRACE-004**: When `make runtests` executes, it shall not require implementation or test witnesses for a deferred `[D]` MCP operation-contract intent.
+- [x] **MCP-OP-TRACE-005**: While the intent contract audits spec rows and annotations, when an identifier uses any prefix with the shape `[A-Z][A-Z0-9-]*-[0-9]{3}`, the audit shall apply the existing bidirectional witness rules to that identifier.
+
+  Witness: `non-mcp-intent-with-missing-witnesses-is-reported` and
+  `prefix-agnostic-witness-rules-preserve-the-legacy-contract` in
+  `test/clj_surgeon/mcp_intent_contract_test.clj`.
+  Boundaries: implemented/active-gap/deferred, either missing witness, unknown
+  annotations in either direction, arbitrary future prefixes, and legacy MCP-OP
+  identifiers. The repository audit shall defer only exact ID/missing-witness
+  pairs in `docs/intent/unlinked-spec-ids.edn`, retaining visible pending findings.
+  It shall fail for any unlisted missing witness, any listed witness now present
+  (remove that pair), and any ledger ID absent from the audited specs. The ledger
+  shall only shrink; unknown annotations shall never be exempt.
+  Non-MCP IDs also accept one lowercase amendment letter, and their amendment
+  markers shall not witness numeric parents; legacy MCP-OP amendment markers
+  shall still witness their parents, preserving byte-identical MCP behavior.
+  `non-mcp-amendment-identifiers-are-not-parent-witnesses` and
+  `exact-witness-debt-rejects-growth-repairs-and-orphans` witness these rules.
+  Historical MCP-OP matching is pinned by
+  `legacy-mcp-amendment-spelling-keeps-its-historical-result`.
 - [x] **MCP-OP-ORACLE-001**: Where a Prolog shadow oracle is retained after finding an independent counterexample, `make runtests` shall execute that oracle as a blocking gate.
 
 # #Compact Root-Scoped Data Edits
@@ -254,6 +273,7 @@ caller's explicit act rather than a built-in lint gate wearing the word
 | `MCP-OP-TRACE-002` | A plausible-looking annotation may introduce a new intent without design review. | Typo ; retired ID; ID from another leaf; code-only or test-only invention. |
 | `MCP-OP-TRACE-003` | Marking a spec implemented is documentation enough even when code or test linkage disappeared. | Missing code annotation ; missing direct test; helper-only annotation. |
 | `MCP-OP-TRACE-004` | Deferred intent must carry placeholder code or a skipped test to satisfy traceability. | No witnesses ; accidental witness to deferred ID; transition from deferred to active gap. |
+| `MCP-OP-TRACE-005` | Exempt a whole prefix; retain repaired debt; let a non-MCP amendment witness its parent; change legacy MCP matching. | Same-prefix lost witness; partial/full repair forces ledger shrink; orphan ID; unknown annotations; future prefix; both amendment rules; unrestricted audit. |
 | `MCP-OP-ORACLE-001` | Keeping a Prolog file in the repository is sufficient even if the normal suite never runs it. | Missing `swipl` ; expected-fail case begins succeeding; oracle command exits nonzero. |
 | `MCP-OP-EDIT-011` | Omitted `within` means root scope, or the JSON adapter may choose a location before source is frozen. | Clojure omission ; EDN omission; explicit malformed `within`; adapter output before source capture. |
 | `MCP-OP-EDIT-012` | An exact namespace-name match may override an existing named owner, or lexical similarity is close enough. | One named owner ; duplicate named owners; exact unique namespace; wrong namespace; one-character typo. |

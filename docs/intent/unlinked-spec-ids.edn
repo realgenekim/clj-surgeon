@@ -1,0 +1,128 @@
+;; Frozen missing-witness debt from bd854b91, 2026-09-07: 123 IDs / 144 pairs.
+;; ID -> missing witness kinds. Remove repaired pairs; never add debt.
+;; Prefix repair reasons: docs/plans/intent-contract-all-prefixes.md.
+{
+ "MEASURE-EVID-001" #{:test}
+ "MEASURE-WALL-001" #{:test}
+ "MEASURE-WALL-002" #{:test}
+ "MEASURE-WALL-003" #{:test}
+ "OP-ALG-COMMIT-002" #{:test}
+ "OP-ALG-COMMIT-004" #{:implementation :test}
+ "OP-ALG-CONTEXT-002" #{:test}
+ "OP-ALG-DECODE-001" #{:implementation :test}
+ "OP-ALG-EFFECT-002" #{:implementation}
+ "OP-ALG-EFFECT-003" #{:implementation}
+ "OP-ALG-EFFECT-004" #{:implementation :test}
+ "OP-ALG-MCP-001" #{:test}
+ "OP-ALG-OUTCOME-001" #{:implementation}
+ "OP-ALG-OUTCOME-002" #{:test}
+ "OP-ALG-OUTCOME-003" #{:implementation :test}
+ "OP-ALG-PARITY-001" #{:implementation :test}
+ "OP-ALG-PARITY-002" #{:implementation :test}
+ "OP-ALG-PERF-001" #{:implementation :test}
+ "OP-ALG-PERF-002" #{:implementation :test}
+ "OP-ALG-PREVIEW-001" #{:implementation :test}
+ "OP-ALG-PREVIEW-002" #{:implementation :test}
+ "OP-ALG-RECEIPT-001" #{:implementation :test}
+ "OP-ALG-RECEIPT-002" #{:implementation :test}
+ "OP-ALG-RECEIPT-003" #{:test}
+ "OP-ALG-REFUSE-001" #{:implementation :test}
+ "OP-ALG-RUNTIME-001" #{:test}
+ "OP-ALG-SHADOW-001" #{:implementation}
+ "OP-ALG-STALE-001" #{:implementation}
+ "PERF-SENT-ADMIT-001" #{:test}
+ "PERF-SENT-ADMIT-002" #{:test}
+ "PERF-SENT-ATTEMPT-001" #{:test}
+ "PERF-SENT-ATTEMPT-002" #{:test}
+ "PERF-SENT-ATTEMPT-003" #{:test}
+ "PERF-SENT-AUTH-001" #{:test}
+ "PERF-SENT-AUTH-002" #{:test}
+ "PERF-SENT-AUTH-003" #{:test}
+ "PERF-SENT-BACKFILL-001" #{:test}
+ "PERF-SENT-BASELINE-001" #{:test}
+ "PERF-SENT-CLIENT-001" #{:test}
+ "PERF-SENT-CONFIG-001" #{:test}
+ "PERF-SENT-CUTOVER-001" #{:test}
+ "PERF-SENT-CUTOVER-002" #{:test}
+ "PERF-SENT-CUTOVER-003" #{:test}
+ "PERF-SENT-IDENT-001" #{:test}
+ "PERF-SENT-IDENT-002" #{:test}
+ "PERF-SENT-IMPORT-001" #{:test}
+ "PERF-SENT-IMPORT-002" #{:test}
+ "PERF-SENT-INVALID-001" #{:test}
+ "PERF-SENT-INVALID-002" #{:test}
+ "PERF-SENT-LEDGER-001" #{:test}
+ "PERF-SENT-LEDGER-002" #{:test}
+ "PERF-SENT-LEDGER-003" #{:test}
+ "PERF-SENT-LEDGER-004" #{:test}
+ "PERF-SENT-LEDGER-ROOT-001" #{:test}
+ "PERF-SENT-PROJECT-001" #{:test}
+ "PERF-SENT-PROMOTION-001" #{:test}
+ "PERF-SENT-PROMOTION-002" #{:test}
+ "PERF-SENT-PUBLISH-001" #{:test}
+ "PERF-SENT-PUBLISH-002" #{:test}
+ "PERF-SENT-RECEIPT-001" #{:test}
+ "PERF-SENT-RECEIPT-002" #{:test}
+ "PERF-SENT-RECONCILE-001" #{:test}
+ "PERF-SENT-RECOVERY-001" #{:test}
+ "PERF-SENT-RECOVERY-002" #{:test}
+ "PERF-SENT-RECOVERY-003" #{:test}
+ "PERF-SENT-RECOVERY-004" #{:test}
+ "PERF-SENT-RELEASE-001" #{:test}
+ "PERF-SENT-RETAIN-001" #{:test}
+ "PERF-SENT-SCHEDULE-001" #{:test}
+ "PERF-SENT-SCHEDULE-002" #{:test}
+ "PERF-SENT-SCHEDULE-003" #{:test}
+ "PERF-SENT-SCHEDULE-004" #{:test}
+ "PERF-SENT-SURFACE-001" #{:test}
+ "PERF-SENT-THRESHOLD-001" #{:test}
+ "PERF-SENT-TIME-001" #{:test}
+ "PERF-SENT-VERDICT-001" #{:test}
+ "PERF-SENT-VERDICT-002" #{:test}
+ "PERF-SENT-VERDICT-003" #{:test}
+ "TEST-ISO-001a" #{:implementation :test}
+ "TEST-ISO-001b" #{:implementation :test}
+ "TEST-ISO-001c" #{:implementation :test}
+ "TEST-ISO-003" #{:implementation}
+ "TEST-ISO-004" #{:implementation}
+ "TEST-ISO-005" #{:implementation}
+ "TEST-ISO-006" #{:implementation}
+ "TEST-ISO-007" #{:implementation}
+ "TEST-ISO-008" #{:test}
+ "TEST-ISO-009" #{:test}
+ "TEST-ISO-010" #{:implementation}
+ "TEST-ISO-011" #{:test}
+ "TEST-ISO-012" #{:test}
+ "TEST-ISO-RACE-001" #{:implementation}
+ "TEST-ISO-RACE-002" #{:implementation}
+ "WTL-APPLY-002" #{:implementation}
+ "WTL-APPLY-003" #{:implementation}
+ "WTL-APPLY-004" #{:implementation}
+ "WTL-APPLY-006" #{:implementation}
+ "WTL-APPLY-007" #{:implementation}
+ "WTL-APPLY-008" #{:implementation}
+ "WTL-APPLY-010" #{:implementation}
+ "WTL-APPLY-011" #{:implementation}
+ "WTL-APPLY-012" #{:implementation}
+ "WTL-CLI-002" #{:implementation}
+ "WTL-CLI-003" #{:implementation}
+ "WTL-HAND-002" #{:implementation}
+ "WTL-HAND-004" #{:implementation :test}
+ "WTL-HAND-005" #{:implementation}
+ "WTL-INV-002" #{:implementation}
+ "WTL-INV-003" #{:implementation}
+ "WTL-INV-005" #{:implementation}
+ "WTL-INV-006" #{:implementation}
+ "WTL-INV-008" #{:implementation}
+ "WTL-PLAN-002" #{:implementation :test}
+ "WTL-PLAN-003" #{:implementation}
+ "WTL-PLAN-004" #{:implementation}
+ "WTL-PLAN-006" #{:implementation :test}
+ "WTL-PRUNE-008" #{:implementation :test}
+ "WTL-PRUNE-009" #{:implementation :test}
+ "WTL-SEAL-002" #{:implementation}
+ "WTL-SEAL-003" #{:implementation}
+ "WTL-SEAL-004" #{:implementation}
+ "WTL-SEAL-006" #{:implementation}
+ "WTL-SEAL-007" #{:implementation}
+}

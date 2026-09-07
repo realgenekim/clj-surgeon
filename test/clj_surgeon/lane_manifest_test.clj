@@ -598,7 +598,11 @@
       ;; for a tree that no longer exists, and averaging or picking one is how
       ;; a corpus ledger silently stops counting. The number below was read off
       ;; the merged tree.
-      (is (= 1432 total) (str "manifest declares " total " tests"))
+      ;; LID batch 1: seven TRACE-005 regressions in mcp-intent-contract-test
+      ;; (11 -> 18 tests); 1432 + 7 = 1439. No namespace or lane was added.
+      ;; Round 2 adds exact debt retirement/growth and malformed-ledger witnesses
+      ;; (18 -> 20). Recomputed: 992 original + 449 adopted = 1441.
+      (is (= 1441 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
