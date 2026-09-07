@@ -3492,3 +3492,25 @@ My objections to the opening six: verification is not established as the dominan
 ## 23:08Z — ASTRA BUILD DONE (REPL-driven, 2 h 30): b53714fb batch 1 (Andon repair: ns identity from source roots + lib/path check; classified caller handoff; decisions refusal with candidates + continuation; four SPLIT-REPAIR EARS rows) and 913020c8 batch 2 (namespace_split MCP + `:op :split-ns!` CLI with :plan-only; one snapshot, final graph, promote-required, failure-atomic publish via existing txn/undo; proof profile runs the repo's own commands inside the call). REAL FIXTURE: the views.clj split (141 forms → 20 ns) on a copy of base d9205abc passed ALL FOUR oracles inside ONE call: 27.9 s warm nREPL boundary, 30.05 s real CLI, 30.33 s guarded replay (kaocha 22 s inside). Gates: mcp-test 768/9682, test-fast 603/6177, run_all 873/7511, oracle, kondo 0. Astra's own caveat: not a fresh-caller comparison; native 331/393 s is a different denominator. Branch pushed; Sol fence review split-build-r1 launched. Next: land → rebuild 7906 → Cell C (fresh callers, same manifest to both arms).
 
 ## 23:10Z — Gene: "Go for expeditious route — would love to see how REPL driven development fares. Fast feedback loops should be universal win, human or LLM." Cell C launched WITHOUT waiting for the landing: the branch's bb launcher answers :split-ns! from any cwd (plan-only verified). Wave 1 (4 concurrent, same conditions as Cell A): D1/D2 = one-call `:op :split-ns!` with the ready request; N5/N6 = native with the same machine-ready manifest. Wave 2 staged: R3/R4 = REPL-driven + manifest. Sol review of 913020c8 continues in parallel.
+
+## 23:18Z — Cell C wave 1 result: the one-call split verb beats native 5.2x with the SAME machine-ready plan on both sides
+
+Gene, verbatim: "OMG, we beat native by 5x, even with paper cuts??? Let's make tool perfect, and try again!!!!"
+
+| arm | plan | moves/split | callers | verify | oracle | total wall | correct |
+|---|---|---|---|---|---|---|---|
+| D1 new verb, one CLI call (`:op :split-ns!`) | 12 s | 50 s (in-call 30.7 s, 22 s of it kaocha) | in call | in call | 70 s | **70 s** | 4/4 |
+| D2 new verb, one CLI call | 15 s | 53 s (in-call 30.4 s) | in call | in call | 73 s | **86 s** | 4/4 |
+| N5 native + manifest (scripted Python) | 242 s | 251 s | 322 s | 349 s (22.1 s green) | 386 s | **408 s** | 4/4 |
+| N6 native + manifest | 90 s | 248 s | 382 s | 408 s (22.2 s green) | 453 s | pending done stamp | pending |
+| Cell A native, no manifest (N1/N2) | 248 / 183 s | | | | | 393 / 331 s | 4/4 |
+| Cell A old tool surface (T1/T2) | | | | | | 1066 / 1039 s | 4/4 |
+| Cell A REPL-driven (R1/R2) | | | | | | 451 / 520 s | 4/4 |
+
+D median 78 s vs native-with-manifest 408 s (N5; N6 ≥ 453 s) → native wall ÷ 5.2; against Cell A's plan-free native median 362 s → ÷ 4.6. Astra's killer threshold (≥ 30% matched median reduction, > 2σ of controls, every treated run accepted, no regression) is cleared at n=2; the pre-registration wants two consecutive reruns, which follow the paper-cut round.
+
+Learning, one line: the manifest did NOT rescue native (N5 still spent 242 s planning and 71 s on callers with a scripted pipeline), so the win is the verb's interface — one request, decisions not files — not the plan. Second line: native N5 caught that the manifest's `:declares` block is WRONG (two genuine within-destination forward references, `time-travel-bar`→`dev-strip` in organizer-layout and `row-controls*`→`row-controls` in review, marked false); the verb derived its own declares and was unaffected. Manifest defect filed with the paper cuts.
+
+Caveats: n=2 per arm, 4-concurrent on 16 cores (same as Cell A), one fixture (views.clj, 141 forms → 20 destinations). Both D callers went straight to the mutating call with no plan-only pre-pass.
+
+Paper cuts (inb-525d27), handed to Astra on the branch at 23:18Z (gpt-6-astra, model line verified, worktree clj-surgeon-split): kondo capture exit 3 unlabelled inside a green receipt → baseline-relative framing; requires appended unsorted with the wrong indent + a whitespace-only line left → sorted insert, inherited indent, whole-line delete; stale prose mentions of the retired ns → advisory receipt rows; ns docstrings re-encoded with literal `\n` → verbatim. Then D3/D4 rerun, and the MCP entrance gets a pair too. Sol review of 913020c8 still running in parallel; R3/R4 (REPL-driven + manifest) running.
