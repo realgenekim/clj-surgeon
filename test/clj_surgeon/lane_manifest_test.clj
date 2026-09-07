@@ -606,7 +606,9 @@
       ;; 993 original + 449 adopted = 1442; lane membership is unchanged.
       ;; Friction batch 1 adds five inspect witnesses: three contract + two tool.
       ;; 1442 + 5 = 1447; the structural-lens witness belongs to the BB suite.
-      (is (= 1447 total) (str "manifest declares " total " tests"))
+      ;; Round-two cardinality receipt forgery: two additive inspect-tool
+      ;; witnesses; 1447 + 2 = 1449, no lane membership changes.
+      (is (= 1449 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

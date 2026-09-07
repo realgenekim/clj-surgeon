@@ -16,3 +16,11 @@ Gates: affected namespaces; `make mcp-operation-oracle`;
 `clojure -M:clj-surgeon/test-fast`; `bb test/run_all.clj`;
 `~/bin/clj-kondo --lint` changed Clojure files with recorded exit codes.
 Temporary artifacts and report: `/var/tmp/forge/plan2/`. No push or servers.
+
+Round 2 repairs Sol's confirmed receipt forgery through a hostile cardinality
+request ID. MCP-OP-MATCH-004 specializes the existing MCP-OP-EDIT-038 encoder
+contract without changing selection or structured identities. Red-first public
+handler and pure renderer witnesses cover separators, glyphs, escaping, bounds,
+and complete ordered failure evidence. Reader-discard exclusion remains the
+unimplemented follow-up MCP-OP-MATCH-005. The same gates apply; report:
+`/var/tmp/forge/plan2/friction1-r2-report.md`.

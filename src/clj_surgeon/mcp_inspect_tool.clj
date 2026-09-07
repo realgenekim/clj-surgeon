@@ -1042,13 +1042,15 @@
         (when-let [sentence (not-empty (str (:error result)))]
           (format "  %s\n" sentence))
         ;; @spec MCP-OP-MATCH-002
+        ;; @spec MCP-OP-MATCH-004
+        ;; @spec MCP-OP-EDIT-038
         (when (seq (:cardinality_failures result))
           (apply str
                  (map (fn [{:keys [request_id request_index file expected actual note]}]
-                        (str "  request " (pr-str request_id)
-                             " · index " request_index " · " (pr-str file)
+                        (str "  request " (safe (pr-str request_id))
+                             " · index " request_index " · " (safe (pr-str file))
                              " · expected " expected " matches; actual " actual "\n"
-                             (when note (str "  note: " note "\n"))))
+                             (when note (str "  note: " (safe note) "\n"))))
                       (:cardinality_failures result))))
         (when diagnostic?
           (str
