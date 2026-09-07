@@ -3522,3 +3522,18 @@ Correction first: the REPL arms were charged the JVM start (30–95 s) because M
 The fix, on the fixture: curtaincall-cfp `make nrepl` now runs `clojure -M:run-tests:test:nrepl` (test paths, kaocha, ring-mock, guardrails on the session JVM) instead of `-M:nrepl`, which could not load 3 of the 4 caller test namespaces (R3 relaunched, ~40 s; R4 hacked .addURL, ~60 s). New base split/base2 = 4f6283aa (Makefile fix + the architecture guard tracked). R5/R6 launched 23:34Z on worktrees whose nREPL was ALREADY WARM (ports probed with an eval before orient-start); the brief forbids starting, restarting or killing a JVM or touching the classpath. Controls stay N5/N6 (408/486 s, same manifest).
 
 Codification queued for the skill: session-long `make nrepl` with the test aliases composed; agents connect, never start; warm affected tests are the PROBE, the cold suite is the PROOF (nrepl-probe-vs-proof); `.nrepl-port` is the handshake.
+
+## 23:45Z — Cell C waves 2+3 complete: warm-JVM REPL does not beat native; the verb holds ÷4–5 on the paper-cut build, via CLI and MCP
+
+| arm | total | correct |
+|---|---|---|
+| D3 / D4 verb CLI (9b205fd4) | 116 / 87 s | 4/4 |
+| M3 / M4 verb MCP (7907, 9b205fd4) | 151 / 80 s | 4/4 |
+| R5 / R6 REPL, nREPL already warm, test deps on the classpath | 513 / 554 s | 4/4 |
+| N5 / N6 native + manifest | 408 / 486 s | 4/4 |
+
+Six arms concurrent for wave 3 (vs four in wave 1), and D3/M3 spent 32–66 s of their clocks on caller-side reporting after the oracle stamp; the in-call wall was 33–38 s in all four (23 s kaocha + 5 s lint-delta). Verb median across all eight D/M runs today: 86 s.
+
+REPL, Gene's warm-JVM assumption granted: R5 254 s / R6 279 s to plan-complete (the same ~4 min every hand arm pays), 60/21 s writing the bencode client, 100/62 s emission, 93/137 s callers; repl-green 26–33 s before the cold suite could say the same. Both callers say the REPL was decisive for DISCOVERY (the edit-form false edge, kondo-in-the-image in 204 ms) and FEEDBACK (parse errors caught in seconds), neutral for writing files. The JVM start was never the gap; planning and emission are, and the verb removes both.
+
+Round-1 paper cuts confirmed fixed by all four fresh callers. Round 2 filed (inb-7be8dd): docstring cloned into 20 destinations; :import pruned by token not usage (+4 warnings = the entire lint delta); continuation lines not re-indented; destination :require two-group/4-space, test-file require prepended; advisory row for unrequired fully-qualified refs; my dogfood-stamp.sh used %3N which uutils date ignores (fixed to %N|cut). Astra round 2 launched 23:45Z (gpt-6-astra verified) on the branch; Sol delta review r2 of 9b205fd4 running (pid 3948537). Sol r1: GO for 913020c8, two additive conflicts vs origin/MCP/main 8a64a092 to compose at landing.
