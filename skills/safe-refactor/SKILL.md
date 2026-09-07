@@ -49,3 +49,11 @@ and proof. Surgeon can win by several times on high-fan-out structural work,
 but native tools usually win a one-site edit or literal search. Keep the native
 route when the structural operation cannot remove enough model interaction to
 pay for itself.
+
+### Timings on record (2026-09-07 pair-1, Curtain Call, same caller model, fresh worktrees)
+| task | native median to green | tool median to green |
+|---|---|---|
+| 3 owners / 3 files (+ new ns, 3 requires, 3 deletions) | 124 s | 181 s |
+| 21 sites / 6 owners / 1 file | 117 s | 198 s |
+Verify was 85 s in every run; the difference is compose time. With owners and counts
+known, native wins; use the tool for discovery-heavy fan-outs and for alias migration.

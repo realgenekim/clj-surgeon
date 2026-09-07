@@ -13,9 +13,22 @@ carries one complete call for each; act from the plate, and open this file only 
 the unusual case. Ratios, fixtures and caveats:
 `docs/observations/2026-09-06-strictly-better-evidence.md`.
 - FAN-OUT: one `apply_clojure_changes` `edits` list — known old/new form, a complete
-  bounded set of NAMED owners in hand, a valid proof profile.
+  bounded set of NAMED owners in hand, a valid proof profile. NARROWED 2026-09-07
+  (pair-1, n=2 per arm, 8/8 correct): when the owners AND counts are already known,
+  native is faster — 124 s vs 181 s (3 owners / 3 files) and 117 s vs 198 s (21
+  sites / 6 owners), the whole gap being caller compose time (21–36 s native vs
+  76–106 s tool; server < 1 s; verify 85 s either way). Route a fan-out to the tool
+  ONLY when discovery is the cost: owners unknown across many files, or a count you
+  cannot guard natively. With owners and counts in hand, do ONE native scripted edit
+  with count guards (assert exactly-N matches per owner before writing) and verify.
+  On the tool route: use a bare-symbol `from` scoped by `within {form}` — the
+  structural `match` cannot see inside `#(...)` reader forms (inb-f313b8), the edit
+  route can; let per-edit `matches` be the guard and omit a guessed aggregate `expect`
+  (a wrong one now refuses before writing — that is the guard working, not a bug).
 - ALIAS migration: one `alias_migration` — known old/new alias intent and an eligible
-  scope. No proof profile and no pre-enumerated match set; the measured run used
+  scope. Still routed: it is the one class where the tool deletes caller work (require
+  rewriting and alias reuse across files); live-proven 2026-09-07 on a real repository
+  (9 files / 21 sites / 4.1 s server, suite green) after the bound-to-target fix. No proof profile and no pre-enumerated match set; the measured run used
   neither. Run the repository's required load and tests afterward.
 Outside those two, native is the PERFORMANCE default — that is a default, not an
 impossibility claim: an explicit user request or a separately approved experiment may
