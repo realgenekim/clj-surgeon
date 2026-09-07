@@ -1,0 +1,12 @@
+{
+  "workspace_root": "/home/forge/src/cc-pair-B-T2",
+  "edits": [
+    {"file": "src/cfp_scheduler_killer/domain/crm.clj", "within": {"form": "decide-save-segment"}, "from": "rejected", "to": "speakers/rejected", "matches": 3},
+    {"file": "src/cfp_scheduler_killer/domain/crm.clj", "within": {"form": "decide-add-tag"}, "from": "rejected", "to": "speakers/rejected", "matches": 4},
+    {"file": "src/cfp_scheduler_killer/domain/crm.clj", "within": {"form": "decide-remove-tag"}, "from": "rejected", "to": "speakers/rejected", "matches": 2},
+    {"file": "src/cfp_scheduler_killer/domain/crm.clj", "within": {"form": "decide-remove-segment"}, "from": "rejected", "to": "speakers/rejected", "matches": 1},
+    {"file": "src/cfp_scheduler_killer/domain/crm.clj", "within": {"form": "decide-add-note"}, "from": "rejected", "to": "speakers/rejected", "matches": 4},
+    {"file": "src/cfp_scheduler_killer/domain/crm.clj", "within": {"form": "prepare-outreach"}, "from": "rejected", "to": "speakers/rejected", "matches": 7}
+  ],
+  "expect": {"changes": 6, "edits": 21, "files": 1}
+}

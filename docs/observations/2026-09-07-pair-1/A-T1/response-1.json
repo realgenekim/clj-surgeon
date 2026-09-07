@@ -1,0 +1,3 @@
+{"tool":"inspect_clojure","status":"refused","reason":"inspect-cardinality-mismatch","server_ms":30.81,
+ "message":"Structural match cardinality did not meet the declared expectation","next":"correct_request",
+ "verbatim":"inspect_clojure\n  refused · inspect-cardinality-mismatch · 30.81 ms\n  Structural match cardinality did not meet the declared expectation\n\n→ correct_request"}

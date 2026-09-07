@@ -1,0 +1,8 @@
+{"workspace_root": "/home/forge/src/cc-pair-A-T2",
+ "edits": [
+  {"file": "src/cfp_scheduler_killer/portal.clj", "within": {"form": "current-submission-speakers"},
+   "from": "current-speaker-identity", "to": "ident/current-speaker-identity", "matches": 1},
+  {"file": "src/cfp_scheduler_killer/inform.clj", "within": {"form": "merge-values"},
+   "from": "current-speaker-identity", "to": "ident/current-speaker-identity", "matches": 1},
+  {"file": "src/cfp_scheduler_killer/handlers/files.clj", "within": {"form": "current-submission-speakers"},
+   "from": "current-speaker-identity", "to": "ident/current-speaker-identity", "matches": 1}]}

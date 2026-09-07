@@ -1,0 +1,30 @@
+{
+  "workspace_root": "/home/forge/src/cc-pair-A-T1",
+  "requests": [
+    {
+      "id": "r1",
+      "operation": "match",
+      "file": "src/cfp_scheduler_killer/portal.clj",
+      "inside": "current-submission-speakers",
+      "match": "(mapv current-speaker-identity %)"
+    },
+    {
+      "id": "r2",
+      "operation": "match",
+      "file": "src/cfp_scheduler_killer/handlers/files.clj",
+      "inside": "current-submission-speakers",
+      "match": "(mapv current-speaker-identity %)"
+    },
+    {
+      "id": "r3",
+      "operation": "match",
+      "file": "src/cfp_scheduler_killer/inform.clj",
+      "inside": "merge-values",
+      "match": "(current-speaker-identity speaker)"
+    }
+  ],
+  "expect": {
+    "requests": 3,
+    "files": 3
+  }
+}

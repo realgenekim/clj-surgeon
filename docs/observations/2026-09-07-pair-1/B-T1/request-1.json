@@ -1,0 +1,12 @@
+{
+  "workspace_root": "/home/forge/src/cc-pair-B-T1",
+  "requests": [
+    {"id": "r1", "operation": "match", "file": "src/cfp_scheduler_killer/domain/crm.clj", "inside": "decide-save-segment", "match": "(rejected _ _)", "expect": {"matches": 3}},
+    {"id": "r2", "operation": "match", "file": "src/cfp_scheduler_killer/domain/crm.clj", "inside": "decide-add-tag", "match": "(rejected _ _)", "expect": {"matches": 4}},
+    {"id": "r3", "operation": "match", "file": "src/cfp_scheduler_killer/domain/crm.clj", "inside": "decide-remove-tag", "match": "(rejected _ _)", "expect": {"matches": 2}},
+    {"id": "r4", "operation": "match", "file": "src/cfp_scheduler_killer/domain/crm.clj", "inside": "decide-remove-segment", "match": "(rejected _ _)", "expect": {"matches": 1}},
+    {"id": "r5", "operation": "match", "file": "src/cfp_scheduler_killer/domain/crm.clj", "inside": "decide-add-note", "match": "(rejected _ _)", "expect": {"matches": 4}},
+    {"id": "r6", "operation": "match", "file": "src/cfp_scheduler_killer/domain/crm.clj", "inside": "prepare-outreach", "match": "(rejected _ _)", "expect": {"matches": 7}}
+  ],
+  "expect": {"requests": 6, "files": 1}
+}
