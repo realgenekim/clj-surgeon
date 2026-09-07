@@ -192,7 +192,15 @@
   (let [public-forms-supplied? (contains? request :public-forms)
         request (normalize-mechanical-fields request)
         {:keys [expect caller-changes ignored-caller-files]} request
-        validation (validate-request request)]
+        ;; @spec SPLIT-REPAIR-002
+        derived-ns (when (:workspace-root request)
+                     (extract/file-path->ns-name to (:source-paths request)
+                                                (:workspace-root request)))
+        validation (if (and (:workspace-root request) (not= target-ns derived-ns))
+                     (refusal :destination-lib-path-mismatch
+                              "Destination library disagrees with source-root-relative path"
+                              {:lib target-ns :path-lib derived-ns :file to})
+                     (validate-request request))]
     (if-not (:ok validation)
       validation
       (if (and source-hash
@@ -210,6 +218,7 @@
                           :to to
                           :target-ns target-ns
                           :workspace-sources workspace-sources
+                          :caller-candidates (:caller-candidates request)
                           :require-policy require-policy}
               plan (extract/compile-plan plan-input)]
           (cond
@@ -283,6 +292,12 @@
                       :extraction-decisions-required
                       "Caller candidates require an explicit change or ignore decision"
                       {:files (vec (sort omitted))
+                       ;; @spec SPLIT-REPAIR-004
+                       :next-call (cond-> {:mode "plan-extraction"
+                                          :file file :to to :forms forms
+                                          :require_policy (name require-policy)}
+                                    (:workspace-root request)
+                                    (assoc :workspace_root (:workspace-root request)))
                        :mutation-attempted false
                        :write-authority false
                        :remedy

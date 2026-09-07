@@ -25,6 +25,38 @@
    :target-ns "sample.moved"
    :workspace-sources {}})
 
+;; @spec SPLIT-REPAIR-001
+(deftest namespace-identity-is-relative-to-anchored-configured-roots
+  (doseq [[path roots expected]
+          [["/home/forge/src/work/src/sample/new_file.clj" ["src"] "sample.new-file"]
+           ["/home/forge/src/work/code/clj/sample/new_file.clj" ["code/clj"] "sample.new-file"]
+           ["src/sample/new_file.clj" ["src"] "sample.new-file"]]]
+    (is (= expected (extract/file-path->ns-name path roots "/home/forge/src/work")))))
+
+;; @spec SPLIT-REPAIR-002
+(deftest authoritative-library-mismatch-refuses
+  (is (= :destination-lib-path-mismatch
+         (:error-type (extraction/compile-extraction
+                       (assoc request :workspace-root "/project"
+                              :source-paths ["src"] :target-ns "wrong.lib"))))))
+
+;; @spec SPLIT-REPAIR-003
+(deftest versioned-docstring-is-not-remanufactured-as-a-caller
+  (let [r (assoc request :source "(ns sample.core)\n(defn versioned [] 1)\n"
+                 :forms ["versioned"] :caller-candidates []
+                 :workspace-sources {"src/sample/bystander.clj"
+                                     "(ns sample.bystander)\n(defn f \"versioned data\" [] 0)\n"})]
+    (is (:ok (extraction/compile-extraction r)))))
+
+;; @spec SPLIT-REPAIR-004
+(deftest decisions-required-has-candidates-and-planning-continuation
+  (let [r (extraction/compile-extraction
+           (assoc request :workspace-sources
+                  {"src/sample/caller.clj" "(ns sample.caller)\n(defn f [] (sample.core/helper 1))"}))]
+    (is (= :extraction-decisions-required (:error-type r)))
+    (is (= ["src/sample/caller.clj"] (:files r)))
+    (is (= "plan-extraction" (get-in r [:next-call :mode])))))
+
 (deftest compiles-source-and-new-target-as-one-pure-future-snapshot
   (let [result (extraction/compile-extraction request)]
     (is (:ok result))

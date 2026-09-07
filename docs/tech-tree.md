@@ -277,3 +277,8 @@ accounts, mission-name disambiguation and the audit's 15 leaf references.
 Plan: [sentinel gate and HLD](plans/sentinel-intent-gate-and-hld.md); receipts:
 `/var/tmp/forge/lid-batch/surgeon-b3-report.md`. No performance claim or
 mission-ledger implementation change.
+
+- 2026-09-07, `astra/namespace-split`: Andon inb-731473 repairs anchored destination
+  namespace identity and helper-classified caller handoff. Five regression witnesses;
+  588 fast tests green, operation oracle green, kondo zero warnings/errors. Evidence:
+  `/var/tmp/forge/plan2/split-build-report.md`. Correctness repair, no wall claim.

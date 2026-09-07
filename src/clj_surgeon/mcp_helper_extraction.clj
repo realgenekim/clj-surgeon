@@ -38,6 +38,7 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.file-ops :as file-ops]
+   [clj-surgeon.extract :as extract]
    [clj-surgeon.helper-extraction :as planner]
    [clj-surgeon.mcp-alias-migration :as alias-migration]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
@@ -1262,6 +1263,11 @@
         :source-hash (:source_hash change)
         :created-directories (mapv str (:missing-parent-directories target))
         :caller-changes callers
+        ;; @spec SPLIT-REPAIR-003
+        :caller-candidates (vec (distinct (concat (mapcat :in callers)
+                                                  (map :path ignored))))
+        :workspace-root (str root)
+        :source-paths (extract/workspace-source-paths root)
         :ignored-caller-files (mapv :path ignored)
         :expect {:forms (count (:forms change))
                  :caller-edits (count callers)

@@ -395,7 +395,9 @@
         request (assoc request
                        :source (get sources (:file request))
                        :target-ns (extract/file-path->ns-name
-                                    (:to request) ["src" "test" "dev"])
+                                    (:to request) (extract/workspace-source-paths root) root)
+                       :workspace-root (str root)
+                       :source-paths (extract/workspace-source-paths root)
                        :workspace-sources sources)
         compiled (->> (extraction/compile-extraction request)
                       (publicize-extraction-decision-refusal

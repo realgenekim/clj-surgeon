@@ -604,7 +604,8 @@
       ;; (18 -> 20). Recomputed: 992 original + 449 adopted = 1441.
       ;; Sentinel merge-gate wiring witness: source census recomputed as
       ;; 993 original + 449 adopted = 1442; lane membership is unchanged.
-      (is (= 1442 total) (str "manifest declares " total " tests"))
+      ;; +5 extraction Andon witnesses: identity, handoff, continuation and real roots.
+      (is (= 1447 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
