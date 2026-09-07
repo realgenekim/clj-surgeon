@@ -16,3 +16,10 @@ Where the time went: planning was equal (183–248 s in all four arms — every 
 Labels: throughput cell (4 concurrent runs), plan supplied (execution of a known plan, not discovery), Opus callers only, n=2 per arm. Receipts under 2026-09-07-plan-2/cellA/<arm>/ (stamps, MCP request/response JSON, the callers' scripts).
 
 Interpretation and design response: design-fable-split-verb.md (one-call split_plan read + split_namespace write, MCP + CLI), Astra's opinion astra-opine.md (pending at write time), program-of-record.md.
+
+## Corrections after Astra's read of the sessions (astra-opine.md)
+- "Both native arms used parse → clj-kondo analysis" is false as written: N1 used clj-kondo var-usages; N2 used a string/comment-stripped token scan and removed the false `edit-form` edge by hand, running kondo later as a check. Both synthesized one bulk program — that is the fair statement.
+- views.clj had 141 top-level defs (129 named + 12 `^:private` placeholders in the derived plan), not 129.
+- The interim "5 calls / 1 call" figures were mid-run; final: T1 37 calls (27 ok / 10 refused, 58.3 s server), T2 35 calls (30 ok / 5 refused, 51.2 s server).
+- Astra's causal ranking: (1) incomplete task coverage + repeated interaction incl. caller bookkeeping; (2) demonstrated defects and recovery (ns derivation from the absolute path; helper→kernel caller-candidate disagreement with a missing next_call); (3) absent whole-mapping analysis; (4) caller habits / route mandate; (5) shared load, unquantified. "Twenty calls alone caused the loss" is not justified by the receipts.
+- Astra's forecast for a working whole-split route on this supplied-plan cell: 150 s to all four gates (range 100–240), not my 82 s; a machine-ready mapping with integrated acceptance might reach ~80 s.
