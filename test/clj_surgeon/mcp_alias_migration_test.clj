@@ -3647,7 +3647,7 @@
 (deftest detail-retention-is-published-as-best-effort-because-peers-are-pruned
   (let [workspace (workspace!)
         receipt-dir (io/file workspace "receipts")
-        details (io/file workspace ".clj-surgeon" "alias-migration")
+        _details (io/file workspace ".clj-surgeon" "alias-migration")
         ;; twenty peers, each holding a details_path its own receipt published
         ;; a moment ago and its own caller may not have read yet. They are real
         ;; runs of this writer, recorded in the manifest every run shares, so a

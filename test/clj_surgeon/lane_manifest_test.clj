@@ -208,7 +208,7 @@
     ;; `make landing-gate` is THE target ~/bin/land runs. It is asserted here
     ;; by RESOLUTION, not by grepping for a word: the target must exist, and
     ;; its prerequisite/recipe closure must contain both names.
-    (let [{:keys [makefile-text] :as ctx} (rm/repo-context)
+    (let [{:keys [makefile-text]} (rm/repo-context)
           rule (rm/make-target makefile-text "landing-gate")
           closure (set (concat (:prerequisites rule)
                                (map second (re-seq #"\$\(MAKE\)(?:\s+--[a-z\-]+)*\s+([a-z0-9\-]+)"
