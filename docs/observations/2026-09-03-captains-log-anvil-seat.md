@@ -3322,3 +3322,5 @@ My objections to the opening six: verification is not established as the dominan
 ## 00:43Z — Astra red-line on dogfood-1 (verbatim gist): "raw stopwatch =151.8 s to green /153.3 s pushed, not103 (report prose still wrong). Separate n=1 dogfood from prior pairs; apply stamp is completion." → receipt prose corrected IN PLACE (raw stopwatch figures as the only walls; n = 1 reported separately, not pooled or called consistent; phase stamps = completions).
 
 ## 00:44Z — Astra's meter-semantics points folded into the dogfood receipt (stamps = completions; server vs client meters named; verify bracket 73.67 s ≈ 48.5%, mutation ≈ 1.4% of the measured wall as observed fractions; n = 1, zero paired comparisons).
+
+## 00:53Z — usage watch: tools "admit_clojure_patch": 9 "apply_clojure_changes": 77 "inspect_clojure": 20  (collector figures verbatim; collector window: "since": "2026-09-06T04:44:02Z" → "until": "2026-09-07T00:48:32.736362Z"; === start 00:48Z load 0.95 ; === rc 0 end 00:53Z)
