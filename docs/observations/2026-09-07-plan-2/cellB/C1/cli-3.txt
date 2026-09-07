@@ -1,0 +1,81 @@
+{:target-requires
+ ["cfp-scheduler-killer.events"
+  "cfp-scheduler-killer.store"
+  "clojure.string"],
+ :remaining-source-callers [],
+ :source-referred-forms [],
+ :file "src/cfp_scheduler_killer/exports.clj",
+ :summary
+ {:forms-extracted 25,
+  :new-file-lines 388,
+  :source-require-added false,
+  :callers-to-review 14,
+  :quoted-var-references 0},
+ :receipt-file "/var/tmp/forge/plan2/cellB/C1/extract-receipt.edn",
+ :quoted-var-references [],
+ :callers-to-review
+ ["/home/forge/src/cc-cellB-C1/src/cfp_scheduler_killer/agent/commands.clj"
+  "/home/forge/src/cc-cellB-C1/src/cfp_scheduler_killer/handlers/exports.clj"
+  "/home/forge/src/cc-cellB-C1/src/cfp_scheduler_killer/handlers/public_cfp.clj"
+  "/home/forge/src/cc-cellB-C1/src/cfp_scheduler_killer/handlers/public_widgets.clj"
+  "/home/forge/src/cc-cellB-C1/src/cfp_scheduler_killer/inform.clj"
+  "/home/forge/src/cc-cellB-C1/src/cfp_scheduler_killer/routes_additive.clj"
+  "/home/forge/src/cc-cellB-C1/src/cfp_scheduler_killer/rubric_predicates.clj"
+  "/home/forge/src/cc-cellB-C1/src/cfp_scheduler_killer/session_invites.clj"
+  "/home/forge/src/cc-cellB-C1/src/cfp_scheduler_killer/views/public_cfp.clj"
+  "/home/forge/src/cc-cellB-C1/test/cfp_scheduler_killer/canonical_links_test.clj"
+  "/home/forge/src/cc-cellB-C1/test/cfp_scheduler_killer/comms_test.clj"
+  "/home/forge/src/cc-cellB-C1/test/cfp_scheduler_killer/exports_test.clj"
+  "/home/forge/src/cc-cellB-C1/test/cfp_scheduler_killer/predicates_cfp_test.clj"
+  "/home/forge/src/cc-cellB-C1/test/cfp_scheduler_killer/schedule_test.clj"],
+ :omitted-target-requires
+ ["cfp-scheduler-killer.refusals"
+  "cfp-scheduler-killer.submissions"
+  "cfp-scheduler-killer.talks"
+  "clojure.data.json"
+  "taoensso.timbre"],
+ :log
+ [{:action :create-file,
+   :file "src/cfp_scheduler_killer/exports/calendar.clj",
+   :forms 25,
+   :lines 388}
+  {:action :remove-form, :form "calendar-ics", :from-line 1030}
+  {:action :remove-form, :form "calendar-ics-for", :from-line 1017}
+  {:action :remove-form, :form "submission-ics", :from-line 998}
+  {:action :remove-form, :form "cfp-deadline-ics", :from-line 957}
+  {:action :remove-form, :form "cfp-deadline-sequence", :from-line 950}
+  {:action :remove-form, :form "cfp-deadline-uid", :from-line 942}
+  {:action :remove-form, :form "hold-the-date-vevent", :from-line 905}
+  {:action :remove-form,
+   :form "hold-the-date-sequence",
+   :from-line 897}
+  {:action :remove-form, :form "hold-the-date-uid", :from-line 890}
+  {:action :remove-form, :form "cancellation-for", :from-line 872}
+  {:action :remove-form, :form "cancellation-vevent", :from-line 838}
+  {:action :remove-form, :form "ics-sequence-at", :from-line 831}
+  {:action :remove-form,
+   :form "last-publication-snapshot",
+   :from-line 821}
+  {:action :remove-form, :form "snapshot-published?", :from-line 815}
+  {:action :remove-form, :form "vevent", :from-line 774}
+  {:action :remove-form, :form "absolute-link", :from-line 768}
+  {:action :remove-form, :form "ics-local-datetime", :from-line 752}
+  {:action :remove-form, :form "ics-sequence", :from-line 743}
+  {:action :remove-form, :form "ics-uid", :from-line 736}
+  {:action :remove-form, :form "ics-stamp", :from-line 732}
+  {:action :remove-form, :form "ics-date", :from-line 729}
+  {:action :remove-form, :form "fold-line", :from-line 718}
+  {:action :remove-form, :form "ics-escape", :from-line 706}
+  {:action :remove-form, :form "ical-domain", :from-line 78}
+  {:action :remove-form, :form "calendar-prodid", :from-line 41}],
+ :verified
+ {:source-hash
+  "e650cfe296abada1146244653ccdd7326a431758a2a9adc3faa28ce159c29556",
+  :source-result-hash
+  "6439cb5426350fae448243924e2a1089b06f515b74e168294113617634ce59da",
+  :target-result-hash
+  "39c77057007759a2412d09cc21e6cca716793706dbf873c15d893903bef49865",
+  :parsed true,
+  :atomic-write true,
+  :read-back true},
+ :to "src/cfp_scheduler_killer/exports/calendar.clj"}
