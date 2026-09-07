@@ -64,6 +64,7 @@
 
 (defn- lines [file] (->> (slurp file) str/split-lines (remove str/blank?)))
 
+;; @spec TELEMETRY-EVENTS-001
 (deftest one-call-appends-one-valid-json-line-with-every-field
   (let [file (io/file (temp-dir "events-one-line-") "events.jsonl")]
     (events/record! file {:kind "mcp-call" :tool "inspect_clojure" :ok true
@@ -173,6 +174,7 @@
              (Files/getPosixFilePermissions
                (.toPath (.getParentFile file)) (into-array java.nio.file.LinkOption [])))))))
 
+;; @spec TELEMETRY-EVENTS-001
 (deftest a-tool-call-writes-the-ledger-even-with-per-server-telemetry-off
   (let [file (io/file (temp-dir "events-mode-off-") "events.jsonl")]
     ;; Sol fence r4: the WRITER resolves `events-file` (override, else default),

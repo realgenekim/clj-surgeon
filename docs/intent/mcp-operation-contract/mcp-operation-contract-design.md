@@ -303,6 +303,22 @@ Status controls the gate deliberately:
 This lets tests preload intent before code exists without turning deferred ideas
 into permanent suite failures.
 
+The parser accepts every `[A-Z][A-Z0-9-]*-[0-9]{3}` identifier, while retaining
+the historical MCP-OP matching behavior exactly. Non-MCP identifiers also accept
+one lowercase amendment letter after the three digits, as used by
+TEST-ISO-001a/001b/001c and TEST-ISO-009a/009b. Those complete amendment markers
+never witness their parent IDs. Prefix choice never hides a numeric identifier.
+The source roots and supported extensions
+remain unchanged, including Makefile implementation witnesses.
+
+During the bounded migration, an explicit allowlist may postpone missing-witness
+failures for existing prefixes with documented debt. All rows and witnesses stay
+in the audit result; postponed violations are reported separately. Unknown
+annotations always fail, including within an allowlisted prefix. The unrestricted
+audit remains callable. Each exception needs a TODO row with its repair condition.
+No new prefix is exempt by default. TRACE-005 links this rule to literal fixtures
+and the real repository gate.
+
 The initial implementation may construct a Prolog shadow oracle over:
 
 ```text

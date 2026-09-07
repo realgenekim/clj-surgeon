@@ -21,6 +21,15 @@ human retain architectural judgment. The kernel supplies exact structural
 perception, guarded mutation, failure-atomic transactions, and terminal
 evidence against a frozen source snapshot.
 
+Repository intent is checked bidirectionally using spec rows and implementation
+and test annotations, independent of the identifier prefix. Existing witness
+debt must be explicit rather than hidden by parsing. The
+[traceability design](intent/mcp-operation-contract/mcp-operation-contract-design.md#linked-intent-and-logic-oracle)
+owns this gate and its staged coverage policy.
+Completed public calls also feed the
+[event ledger](intent/telemetry-events/telemetry-events-design.md) at the function
+boundary, so usage evidence does not depend on launcher-specific log discovery.
+
 The CLI and persistent MCP service are transport-native projections over one
 operation algebra and canonical domain outcome. Each entrance decodes its own
 public contract and selects a trusted policy profile. Small operation-specific

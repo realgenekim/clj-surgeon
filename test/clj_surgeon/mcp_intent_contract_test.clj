@@ -1,9 +1,9 @@
-(ns ^{:lane :fast} clj-surgeon.mcp-intent-contract-test
+(ns clj-surgeon.mcp-intent-contract-test
+  {:lane :fast}
   (:require
    [clj-surgeon.mcp-intent-contract]
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.java.io :as io]
-   [clojure.set :as set]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing use-fixtures]]))
 
@@ -28,6 +28,126 @@
 (defn- annotation
   [intent]
   (str ";; @" "spec " intent "\n"))
+
+;; @spec MCP-OP-TRACE-005
+(deftest non-mcp-intent-with-missing-witnesses-is-reported
+  ;; September 7 audit gap 1: a literal WTL-shaped fixture, not live WTL edits.
+  (let [intent "WTL-FIXTURE-001"]
+    (is (= [{:type :missing-implementation-witness
+             :intent intent :source-kind :implementation}
+            {:type :missing-test-witness
+             :intent intent :source-kind :test}]
+           (:violations
+             (audit-contract {:spec-text (spec-line "x" intent)
+                              :implementation-sources {}
+                              :test-sources {}}))))))
+
+;; @spec MCP-OP-TRACE-005
+(deftest prefix-agnostic-witness-rules-preserve-the-legacy-contract
+  (doseq [intent ["MCP-OP-FIXTURE-001" "MCP-OP-LEGACY-NONNUMERIC"
+                  "MCP-OP-LEGACY-1" "WTL-APPLY-001" "PERF-SENT-TIME-001"
+                  "OP-ALG-COMMIT-001" "TEST-ISO-003" "MEASURE-WALL-001"
+                  "TELEMETRY-EVENTS-001" "FUTURE2-001" "A-001"]
+          [status implementation? test? expected]
+          [["x" false false [:missing-implementation-witness :missing-test-witness]]
+           ["x" true false [:missing-test-witness]]
+           ["x" false true [:missing-implementation-witness]]
+           ["x" true true []]
+           [" " false false [:missing-test-witness]]
+           [" " true false [:missing-test-witness]]
+           [" " false true []]
+           [" " true true []]
+           ["D" false false []]
+           ["D" true false []]
+           ["D" false true []]
+           ["D" true true []]]]
+    (testing (str [intent status implementation? test?])
+      (let [result (audit-contract
+                     {:spec-text (spec-line status intent)
+                      :implementation-sources (if implementation? {"f.clj" (annotation intent)} {})
+                      :test-sources (if test? {"t.clj" (annotation intent)} {})})]
+        (is (= [intent] (vec (keys (:specs result)))))
+        (is (= expected (mapv :type (:violations result))))
+        (is (= (empty? expected) (:ok result))))))
+  (doseq [intent ["WTL-UNKNOWN-999" "FUTURE2-999" "TELEMETRY-EVENTS-001"]]
+    (is (= [{:type :unknown-intent-witness :intent intent :source-kind :implementation}
+            {:type :unknown-intent-witness :intent intent :source-kind :test}]
+           (:violations
+             (audit-contract {:spec-text ""
+                              :implementation-sources {"f.clj" (annotation intent)}
+                              :test-sources {"t.clj" (annotation intent)}}))))))
+
+;; @spec MCP-OP-TRACE-005
+(deftest generic-witnesses-require-complete-numeric-identifiers
+  (doseq [intent ["PERF-SENT-" "TEST-ISO-" "WTL-0012" "WTL-001-MORE" "WTL-01"]]
+    (is (empty? (:implementation-witnesses
+                  (audit-contract {:spec-text ""
+                                   :implementation-sources {"f.clj" (annotation intent)}
+                                   :test-sources {}})))))
+  (is (= #{"TEST-ISO-002"}
+         (:implementation-witnesses
+           (audit-contract {:spec-text ""
+                            :implementation-sources {"f.clj" (annotation "TEST-ISO-002/003/004")}
+                            :test-sources {}})))))
+
+;; @spec MCP-OP-TRACE-005
+(deftest legacy-mcp-amendment-spelling-keeps-its-historical-result
+  ;; The legacy row parser ignores lowercase suffixes; its witness parser reads
+  ;; the uppercase/numeric stem. Widening must not reinterpret that MCP behavior.
+  (is (= {:ok false :specs {}
+          :implementation-witnesses #{"MCP-OP-FIXTURE-001"}
+          :test-witnesses #{}
+          :violations [{:type :unknown-intent-witness
+                        :intent "MCP-OP-FIXTURE-001" :source-kind :implementation}]}
+         (audit-contract {:spec-text (spec-line "x" "MCP-OP-FIXTURE-001a")
+                          :implementation-sources {"f.clj" (annotation "MCP-OP-FIXTURE-001a")}
+                          :test-sources {}}))))
+
+;; @spec MCP-OP-TRACE-005
+(deftest amendment-identifiers-are-not-parent-witnesses
+  (let [parent "TEST-ISO-001"
+        amendment "TEST-ISO-001a"
+        result (audit-contract
+                 {:spec-text (str (spec-line "x" parent) (spec-line "x" amendment))
+                  :implementation-sources {"f.clj" (annotation amendment)}
+                  :test-sources {"t.clj" (annotation amendment)}})]
+    (is (= {parent :implemented amendment :implemented} (:specs result)))
+    (is (= #{amendment} (:implementation-witnesses result)))
+    (is (= #{amendment} (:test-witnesses result)))
+    (is (= [{:type :missing-implementation-witness :intent parent :source-kind :implementation}
+            {:type :missing-test-witness :intent parent :source-kind :test}]
+           (:violations result)))))
+
+;; @spec MCP-OP-TRACE-005
+(deftest explicit-prefix-debt-never-hides-unknown-or-new-prefixes
+  (let [defer-missing-witnesses
+        (requiring-resolve 'clj-surgeon.mcp-intent-contract/defer-missing-witnesses)
+        debt-id "WTL-FIXTURE-001"
+        future-id "FUTURE2-001"
+        unknown-id "WTL-UNKNOWN-999"
+        raw (audit-contract
+              {:spec-text (str (spec-line "x" debt-id) (spec-line "x" future-id))
+               :implementation-sources {"f.clj" (annotation unknown-id)}
+               :test-sources {"t.clj" (annotation unknown-id)}})
+        allowed {"WTL-" "TODO: fixture debt"}
+        gated (defer-missing-witnesses raw allowed)]
+    (is (= raw (defer-missing-witnesses raw {})))
+    (is (false? (:ok gated)))
+    (is (= [{:type :missing-implementation-witness :intent debt-id :source-kind :implementation}
+            {:type :missing-test-witness :intent debt-id :source-kind :test}]
+           (:pending-witness-violations gated)))
+    (is (= [{:type :missing-implementation-witness :intent future-id :source-kind :implementation}
+            {:type :missing-test-witness :intent future-id :source-kind :test}
+            {:type :unknown-intent-witness :intent unknown-id :source-kind :implementation}
+            {:type :unknown-intent-witness :intent unknown-id :source-kind :test}]
+           (:violations gated)))
+    (is (= (select-keys raw [:specs :implementation-witnesses :test-witnesses])
+           (select-keys gated [:specs :implementation-witnesses :test-witnesses])))
+    (is (= allowed (:missing-witness-prefix-allowlist gated)))
+    (let [only-debt (audit-contract {:spec-text (spec-line "x" debt-id)
+                                     :implementation-sources {} :test-sources {}})]
+      (is (:ok (defer-missing-witnesses only-debt allowed)))
+      (is (false? (:ok only-debt))))))
 
 ;; @spec MCP-OP-TRACE-001
 (deftest active-gap-requires-a-direct-test-witness
@@ -95,8 +215,20 @@
 (deftest repository-operation-intent-contract-is-coherent
   (let [audit-current-repository
         (requiring-resolve
-          'clj-surgeon.mcp-intent-contract/audit-current-repository)]
-    (is (:ok (audit-current-repository)))))
+          'clj-surgeon.mcp-intent-contract/audit-current-repository)
+        result (audit-current-repository)]
+    (is (:ok result) (pr-str (:violations result)))
+    (is (= #{"MEASURE-" "OP-ALG-" "PERF-SENT-" "TEST-ISO-" "WTL-"}
+           (set (keys (:missing-witness-prefix-allowlist result)))))
+    (doseq [[prefix reason] (:missing-witness-prefix-allowlist result)]
+      (is (str/starts-with? reason "TODO:"))
+      (is (some #(str/starts-with? (:intent %) prefix)
+                (:pending-witness-violations result))
+          (str "remove repaired prefix exception: " prefix)))
+    (let [unrestricted (audit-current-repository "." {})]
+      (is (false? (:ok unrestricted)))
+      (is (= (:pending-witness-violations result) (:violations unrestricted)))
+      (is (= (:specs result) (:specs unrestricted))))))
 
 ;; ---------------------------------------------------------------------------
 ;; The spec-document registry is DERIVED, not listed.
@@ -122,7 +254,7 @@
   @(requiring-resolve 'clj-surgeon.mcp-intent-contract/excluded-spec-docs))
 
 (defn- spec-ids
-  "The MCP-OP intent IDs the audit would parse out of these repo-relative files."
+  "The intent IDs the audit would parse out of these repo-relative files."
   [root paths]
   (set (keys (:specs (audit-contract
                        {:spec-text (str/join
@@ -144,14 +276,15 @@
           leaf (io/file root "docs" "intent" "temp-lane")]
       (.mkdirs leaf)
       (spit (io/file leaf "temp-lane-specs.md")
-            (spec-line "x" "MCP-OP-TEMPLANE-001"))
+            (str (spec-line "x" "MCP-OP-TEMPLANE-001")
+                 (spec-line "x" "FUTURE2-001")))
       ;; a sibling that is NOT a spec document, and a `-specs.from-*.md` variant,
       ;; must both be ignored.
       (spit (io/file leaf "temp-lane-design.md") "design\n")
       (spit (io/file leaf "temp-lane-specs.from-docs--x.md")
             (spec-line "x" "MCP-OP-TEMPLANE-999"))
       (is (= ["docs/intent/temp-lane/temp-lane-specs.md"] (spec-doc-paths root {})))
-      (is (= #{"MCP-OP-TEMPLANE-001"}
+      (is (= #{"MCP-OP-TEMPLANE-001" "FUTURE2-001"}
              (spec-ids root (spec-doc-paths root {})))))))
 
 (deftest an-orphan-spec-doc-listing-fails-loudly
@@ -208,6 +341,7 @@
    "docs/intent/relation-census/relation-census-specs.md"
    "docs/intent/shell-argv-safety/shell-argv-safety-specs.md"
    "docs/intent/sibling-pair-edit/sibling-pair-edit-specs.md"
+   "docs/intent/telemetry-events/telemetry-events-specs.md"
    "docs/intent/temp-dir-hygiene/temp-dir-hygiene-specs.md"
    "docs/intent/test-isolation/test-isolation-specs.md"
    "docs/intent/worktree-lifecycle/worktree-lifecycle-specs.md"
@@ -243,15 +377,22 @@
   (testing "drift in docs/intent is visible here, not silent"
     (is (= expected-spec-docs (spec-doc-paths ".")))))
 
-(deftest the-derived-audit-covers-exactly-the-registered-lane-intents
-  (testing "deriving the list changed WHICH FILES are scanned, not WHICH INTENTS are audited"
+(deftest the-derived-audit-preserves-the-registered-mcp-intents
+  (testing "prefix widening preserves the previously registered MCP-OP intent set"
     (let [registered (spec-ids "." (concat pre-derivation-literal-vector
                                            lanes-added-since-derivation))
           derived (spec-ids "." (spec-doc-paths "."))]
-      ;; The additionally-scanned documents contribute either no MCP-OP IDs at all
-      ;; (measurement-evidence, operation-algebra, performance-regression-sentinel,
-      ;; sibling-pair-edit, worktree-lifecycle use other prefixes) or a duplicate of
-      ;; the prepared-request IDs (the 2026-08-30 ratification copy).
-      (is (= registered derived)
-          (str "added: " (sort (set/difference derived registered))
-               " removed: " (sort (set/difference registered derived)))))))
+      (is (= (set (filter #(str/starts-with? % "MCP-OP-") registered))
+             (set (filter #(str/starts-with? % "MCP-OP-") derived)))))))
+
+;; @spec MCP-OP-TRACE-005
+(deftest the-derived-audit-includes-every-previously-invisible-row
+  (let [ids (spec-ids "." (spec-doc-paths "."))
+        non-mcp (set (remove #(str/starts-with? % "MCP-OP-") ids))]
+    ;; Audit ledger: 165 original non-MCP rows, plus the repaired telemetry row.
+    (is (= 166 (count non-mcp)))
+    (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 19
+            "MEASURE-" 4 "TELEMETRY-EVENTS-" 1}
+           (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"
+                                  "MEASURE-" "TELEMETRY-EVENTS-"]]
+                      [prefix (count (filter #(str/starts-with? % prefix) non-mcp))]))))))

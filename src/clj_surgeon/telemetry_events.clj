@@ -371,6 +371,7 @@
       true)
     (catch Throwable _ false)))
 
+;; @spec TELEMETRY-EVENTS-001
 (defn record!
   "Append one ledger line for a completed public MCP call. Never throws, never
    fails the call. A failed append increments `dropped`; the count rides out

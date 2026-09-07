@@ -47,6 +47,20 @@ they are not restated here; ids remain unique across the whole `MCP-OP` prefix.
 - [x] **MCP-OP-TRACE-002**: When `make runtests` executes, it shall fail if an MCP operation-contract implementation or test witness names an unknown intent ID.
 - [x] **MCP-OP-TRACE-003**: When `make runtests` executes, it shall fail if an implemented `[x]` MCP operation-contract intent lacks an implementation witness or a direct test witness.
 - [x] **MCP-OP-TRACE-004**: When `make runtests` executes, it shall not require implementation or test witnesses for a deferred `[D]` MCP operation-contract intent.
+- [x] **MCP-OP-TRACE-005**: While the intent contract audits spec rows and annotations, when an identifier uses any prefix with the shape `[A-Z][A-Z0-9-]*-[0-9]{3}`, the audit shall apply the existing bidirectional witness rules to that identifier.
+
+  Witness: `non-mcp-intent-with-missing-witnesses-is-reported` and
+  `prefix-agnostic-witness-rules-preserve-the-legacy-contract` in
+  `test/clj_surgeon/mcp_intent_contract_test.clj`.
+  Boundaries: implemented/active-gap/deferred, either missing witness, unknown
+  annotations in either direction, arbitrary future prefixes, and legacy MCP-OP
+  identifiers. Repository-only missing-witness debt may be explicitly allowlisted
+  with visible pending violations and one TODO per prefix; unknown IDs never are.
+  Non-MCP IDs also accept one lowercase amendment letter;
+  `amendment-identifiers-are-not-parent-witnesses` witnesses their distinction
+  from numeric parents. Historical MCP-OP matching remains unchanged, including
+  its treatment of lowercase suffixes, as pinned by
+  `legacy-mcp-amendment-spelling-keeps-its-historical-result`.
 - [x] **MCP-OP-ORACLE-001**: Where a Prolog shadow oracle is retained after finding an independent counterexample, `make runtests` shall execute that oracle as a blocking gate.
 
 # #Compact Root-Scoped Data Edits
@@ -254,6 +268,7 @@ caller's explicit act rather than a built-in lint gate wearing the word
 | `MCP-OP-TRACE-002` | A plausible-looking annotation may introduce a new intent without design review. | Typo ; retired ID; ID from another leaf; code-only or test-only invention. |
 | `MCP-OP-TRACE-003` | Marking a spec implemented is documentation enough even when code or test linkage disappeared. | Missing code annotation ; missing direct test; helper-only annotation. |
 | `MCP-OP-TRACE-004` | Deferred intent must carry placeholder code or a skipped test to satisfy traceability. | No witnesses ; accidental witness to deferred ID; transition from deferred to active gap. |
+| `MCP-OP-TRACE-005` | Add today's prefixes to the regex; omit a leaf with its own gate; suppress unknown IDs along with existing missing-witness debt. | Future prefix ; both witness directions; legacy matching preserved; unrestricted audit and visible prefix TODOs. |
 | `MCP-OP-ORACLE-001` | Keeping a Prolog file in the repository is sufficient even if the normal suite never runs it. | Missing `swipl` ; expected-fail case begins succeeding; oracle command exits nonzero. |
 | `MCP-OP-EDIT-011` | Omitted `within` means root scope, or the JSON adapter may choose a location before source is frozen. | Clojure omission ; EDN omission; explicit malformed `within`; adapter output before source capture. |
 | `MCP-OP-EDIT-012` | An exact namespace-name match may override an existing named owner, or lexical similarity is close enough. | One named owner ; duplicate named owners; exact unique namespace; wrong namespace; one-character typo. |

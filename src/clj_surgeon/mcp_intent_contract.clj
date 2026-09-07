@@ -4,10 +4,10 @@
    [clojure.string :as str]))
 
 (def ^:private spec-pattern
-  #"(?m)^- \[([ xD])\] \*\*(MCP-OP-[A-Z0-9-]+)\*\*:")
+  #"(?m)^- \[([ xD])\] \*\*(MCP-OP-[A-Z0-9-]+|(?!MCP-OP-)[A-Z][A-Z0-9-]*-[0-9]{3}[a-z]?)\*\*:")
 
 (def ^:private witness-pattern
-  #"@spec\s+(MCP-OP-[A-Z0-9-]+)")
+  #"@spec\s+(MCP-OP-[A-Z0-9-]+|(?!MCP-OP-)[A-Z][A-Z0-9-]*-[0-9]{3}[a-z]?(?![A-Za-z0-9-]))")
 
 (defn- parse-specs
   [spec-text]
@@ -37,6 +37,7 @@
 ;; @spec MCP-OP-TRACE-002
 ;; @spec MCP-OP-TRACE-003
 ;; @spec MCP-OP-TRACE-004
+;; @spec MCP-OP-TRACE-005
 (defn audit-contract
   "Audit one linked-intent leaf from literal spec and witness source texts."
   [{:keys [spec-text implementation-sources test-sources]}]
@@ -107,6 +108,33 @@
    "docs/intent/substantiation-telemetry/substantiation-telemetry-specs.md"
    "frozen-red pre-product leaf (substantiation-telemetry-frozen-red.md, 2026-08-30): 19 MCP-OP-SUBST specs marked [x] to record Gene's advance ratification, not shipped code, so every one reports missing implementation AND test witnesses; re-include when substantiation telemetry ships."})
 
+(def missing-witness-prefix-allowlist
+  "Temporary missing-witness debt, never a parser or unknown-ID exemption.
+   TODO rows and removal conditions: docs/plans/intent-contract-all-prefixes.md."
+  {"MEASURE-" "TODO: link the four measurement rows to direct executable test witnesses."
+   "OP-ALG-" "TODO: reconcile operation-algebra implementation and direct test annotations."
+   "PERF-SENT-" "TODO: admit the sentinel's shell/bench witnesses through an explicit source policy."
+   "TEST-ISO-" "TODO: reconcile test-runner implementation locations and missing test annotations."
+   "WTL-" "TODO: reconcile worktree-lifecycle implementation and direct test annotations."})
+
+;; @spec MCP-OP-TRACE-005
+(defn defer-missing-witnesses
+  "Retain all parsed evidence and expose allowlisted missing-witness debt separately.
+   Unknown annotations always remain violations. An empty allowlist is unrestricted."
+  [audit prefix-allowlist]
+  (let [pending? (fn [{:keys [type intent]}]
+                   (and (#{:missing-implementation-witness :missing-test-witness} type)
+                        (some #(str/starts-with? intent %) (keys prefix-allowlist))))
+        pending (filterv pending? (:violations audit))
+        blocking (filterv (complement pending?) (:violations audit))]
+    (if (empty? prefix-allowlist)
+      audit
+      (assoc audit
+             :ok (empty? blocking)
+             :violations blocking
+             :pending-witness-violations pending
+             :missing-witness-prefix-allowlist prefix-allowlist))))
+
 (defn- spec-doc-file?
   [^java.io.File file]
   (and (.isFile file)
@@ -157,18 +185,22 @@
      found)))
 
 (defn audit-current-repository
-  "Audit the repository's MCP operation intent leaves and all executable witnesses."
+  "Audit all discovered intent prefixes with explicit, visible missing-witness debt.
+   Pass {} as the second argument for the unrestricted audit."
   ([] (audit-current-repository "."))
-  ([root]
+  ([root] (audit-current-repository root missing-witness-prefix-allowlist))
+  ([root prefix-allowlist]
    ;; Trunk's derived scan REPLACES this branch's hand-kept vector, and it
    ;; subsumes it: `spec-doc-paths` discovers every
    ;; `docs/intent/<leaf>/<name>-specs.md`, so the census specs this branch
    ;; added to the list are found by the scan rather than listed.
    (let [spec-files (map #(io/file root %) (spec-doc-paths root))]
-     (audit-contract
-       {:spec-text (str/join "\n" (map slurp spec-files))
-        :implementation-sources
-        (merge (read-sources root ["src"] [".clj" ".cljc" ".cljs"])
-               (read-sources root ["Makefile"] ["Makefile"]))
-        :test-sources
-        (read-sources root ["test"] [".clj" ".cljc" ".cljs" ".pl"])}))))
+     (defer-missing-witnesses
+       (audit-contract
+         {:spec-text (str/join "\n" (map slurp spec-files))
+          :implementation-sources
+          (merge (read-sources root ["src"] [".clj" ".cljc" ".cljs"])
+                 (read-sources root ["Makefile"] ["Makefile"]))
+          :test-sources
+          (read-sources root ["test"] [".clj" ".cljc" ".cljs" ".pl"])})
+       prefix-allowlist))))
