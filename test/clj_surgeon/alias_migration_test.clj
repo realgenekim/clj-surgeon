@@ -1081,3 +1081,172 @@
     (is (= :untouched (binding-scope-behavior bystander false)))
     (is (= true (:ok plan)))
     (is (= ["src/shadow/client.clj"] (mapv :file (:files plan))))))
+
+;; ---------------------------------------------------------------------------
+;; dogfood3 (marvin-voice-remote, 2026-09-07): two field defects
+;; F1 — an alias already bound to to.lib is REUSABLE, not a collision
+;; F2 — a qualified call in value position is not an unsupported binding scope
+
+(defn- dogfood-request
+  [overrides]
+  (merge {:workspace-root "/workspace"
+          :from {:lib "example.old" :var "find-event"}
+          :to {:lib "example.new" :var "fetch-event" :alias-policy ["newlib"]}
+          :scope {:paths ["src/**"]}
+          :expect {:files 1}}
+         overrides))
+
+;; @spec MCP-OP-ALIAS-008
+(deftest f1-alias-already-bound-to-the-target-namespace-is-reused
+  (let [req (dogfood-request {:expect {:files 2}})
+        bound (str "(ns example.a\n  (:require [example.new :as newlib]\n"
+                   "            [example.old :as old]))\n"
+                   "(defn r [] (old/find-event 1))")
+        unbound (str "(ns example.b\n  (:require [example.old :as old]))\n"
+                     "(defn r [] (old/find-event 2))")
+        plan (alias-migration/plan req [{:file "src/example/a.clj" :source bound}
+                                        {:file "src/example/b.clj" :source unbound}])
+        by-file (into {} (map (juxt :file identity)) (:files plan))
+        a (apply-edits bound (:edits (get by-file "src/example/a.clj")))
+        b (apply-edits unbound (:edits (get by-file "src/example/b.clj")))]
+    (is (= true (:ok plan)) (pr-str plan))
+    (is (= 2 (count (:files plan))) (pr-str plan))
+    (is (str/includes? a "(newlib/fetch-event 1)") a)
+    (is (str/includes? b "(newlib/fetch-event 2)") b)
+    ;; the existing require is REUSED: exactly one mention of the target lib,
+    ;; and the retired lib is gone
+    (is (= 1 (count (re-seq #"example\.new" a))) a)
+    (is (not (str/includes? a "example.old")) a)
+    (is (str/includes? b "[example.new :as newlib]") b)
+    (is (= ["newlib" "newlib"] (mapv :alias (:files plan))) (pr-str (:files plan)))))
+
+;; @spec MCP-OP-ALIAS-008
+(deftest f1-alias-bound-to-a-different-namespace-still-refuses-and-names-it
+  (let [req (dogfood-request {})
+        source (str "(ns example.a\n  (:require [example.unrelated :as newlib]\n"
+                    "            [example.old :as old]))\n"
+                    "(defn r [] (old/find-event 1))")
+        plan (alias-migration/plan req [{:file "src/example/a.clj" :source source}])]
+    (is (= false (:ok plan)) (pr-str plan))
+    (is (= "alias-migration-alias-policy-exhausted" (:error_type plan)) (pr-str plan))
+    (is (= ["newlib"] (vec (:collided_bindings plan))) (pr-str plan))
+    (is (str/includes? (str (:remedy plan)) "example.unrelated")
+        (str "remedy must name the namespace the alias is bound to: "
+             (pr-str (:remedy plan))))))
+
+;; @spec MCP-OP-ALIAS-066
+(deftest f2-qualified-call-in-value-position-under-destructuring-defaults-migrates
+  (let [req (dogfood-request {})
+        source (str "(ns example.client\n  (:require [example.old :as old]))\n"
+                    "(defn synthesize\n"
+                    "  \"Convert text to speech.\"\n"
+                    "  [text & {:keys [speed] :or {speed 1.0}}]\n"
+                    "  (let [started 0\n"
+                    "        resp (post \"/x\"\n"
+                    "                   {:headers {\"a\" \"b\"}\n"
+                    "                    :body (old/find-event\n"
+                    "                            {:text text :speed speed})\n"
+                    "                    :as :byte-array})]\n"
+                    "    [started resp]))")
+        plan (alias-migration/plan req [{:file "src/example/client.clj" :source source}])
+        entry (first (:files plan))]
+    (is (= true (:ok plan)) (pr-str plan))
+    (is (= 1 (:sites entry)) (pr-str entry))
+    (is (str/includes? (apply-edits source (:edits entry)) "(newlib/fetch-event"))))
+
+;; @spec MCP-OP-ALIAS-066
+(deftest f2-refusal-locator-names-a-line-not-a-docstring
+  ;; A binding scope this migration really cannot model must still say WHERE.
+  ;; Round 2: these assertions used to hang off `when (= false (:ok plan))`, so
+  ;; an unexpected SUCCESS passed the test vacuously. The refusal is now itself
+  ;; asserted, and the locator is checked positively AND negatively.
+  (let [req (dogfood-request {})
+        docstring "A docstring long enough to fill the truncated form field entirely."
+        source (str "(ns example.client\n  (:require [example.old :refer [find-event]]))\n"
+                    "(defn synthesize\n"
+                    "  \"" docstring "\"\n"
+                    "  [text & {:keys [find-event] :or {find-event 1}}]\n"
+                    "  (find-event text))")
+        plan (alias-migration/plan req [{:file "src/example/client.clj" :source source}])]
+    (is (= false (:ok plan)) (pr-str plan))
+    (is (= "alias-migration-indirect-reference" (:error_type plan)) (pr-str plan))
+    (is (= "unsupported-binding-scope" (:reason plan)) (pr-str plan))
+    (is (= 3 (:line plan)) (pr-str (dissoc plan :next_call)))
+    (is (pos-int? (:col plan)) (pr-str (dissoc plan :next_call)))
+    ;; the SUBJECT is a file:line, not the enclosing defn's docstring
+    (is (str/includes? (:error plan) "src/example/client.clj:3") (pr-str (:error plan)))
+    (is (not (str/includes? (:error plan) docstring)) (pr-str (:error plan)))))
+
+;; ---------------------------------------------------------------------------
+;; round 2 -- Sol's executed counterexamples against the reuse path
+
+;; @spec MCP-OP-ALIAS-067
+(deftest r2-a-referred-var-is-not-a-reusable-alias
+  ;; An alias RESOLVES a qualifier; a referred Var does not. Reuse that reads
+  ;; `:refer [newlib]` as "newlib is bound to to.lib" writes `newlib/fetch-event`
+  ;; against whatever the ALIAS map actually says -- example.unrelated in the
+  ;; first case, nothing at all in the second. Both are silent mismigrations.
+  (doseq [[id requires]
+          [["alias-elsewhere-plus-refer-to-target"
+            (str "[example.unrelated :as newlib]\n            "
+                 "[example.new :refer [newlib]]\n            "
+                 "[example.old :as old]")]
+           ["refer-to-target-only"
+            (str "[example.new :refer [newlib]]\n            "
+                 "[example.old :as old]")]]]
+    (testing id
+      (let [source (str "(ns example.a\n  (:require " requires "))\n"
+                        "(defn r [] (old/find-event 1))")
+            plan (alias-migration/plan (dogfood-request {})
+                                       [{:file "src/example/a.clj" :source source}])]
+        (is (= false (:ok plan)) (pr-str plan))
+        (is (= "alias-migration-alias-policy-exhausted" (:error_type plan)) (pr-str plan))
+        (is (empty? (:files plan)) (pr-str plan))
+        (is (= ["newlib"] (vec (:collided_bindings plan))) (pr-str plan))))))
+
+;; @spec MCP-OP-ALIAS-067
+(deftest r2-a-referred-var-collision-falls-through-to-the-next-policy-entry
+  (doseq [[id requires]
+          [["alias-elsewhere-plus-refer-to-target"
+            (str "[example.unrelated :as newlib]\n            "
+                 "[example.new :refer [newlib]]\n            "
+                 "[example.old :as old]")]
+           ["refer-to-target-only"
+            (str "[example.new :refer [newlib]]\n            "
+                 "[example.old :as old]")]]]
+    (testing id
+      (let [req (dogfood-request {:to {:lib "example.new" :var "fetch-event"
+                                       :alias-policy ["newlib" "freshlib"]}})
+            source (str "(ns example.a\n  (:require " requires "))\n"
+                        "(defn r [] (old/find-event 1))")
+            plan (alias-migration/plan req [{:file "src/example/a.clj" :source source}])
+            entry (first (:files plan))
+            after (apply-edits source (:edits entry))]
+        (is (= true (:ok plan)) (pr-str plan))
+        (is (= "freshlib" (:alias entry)) (pr-str entry))
+        ;; a NEW require is added; the referred name is never used as a qualifier
+        (is (str/includes? after "(freshlib/fetch-event 1)") after)
+        (is (not (str/includes? after "newlib/fetch-event")) after)
+        (is (str/includes? after "[example.new :as freshlib]") after)))))
+
+;; @spec MCP-OP-ALIAS-010
+;; @spec MCP-OP-ALIAS-011
+(deftest r2-libspec-removal-preserves-comments-and-discard-forms
+  (let [source (str "(ns example.a\n"
+                    "  (:require\n"
+                    "   [example.new :as newlib]\n"
+                    "   ;; keep me: this comment is not trivia\n"
+                    "   #_[example.decoy :as d]\n"
+                    "   [example.old :as old]))\n"
+                    "(defn r [] (old/find-event 1))")
+        plan (alias-migration/plan (dogfood-request {})
+                                   [{:file "src/example/a.clj" :source source}])
+        entry (first (:files plan))
+        after (apply-edits source (:edits entry))]
+    (is (= true (:ok plan)) (pr-str plan))
+    (is (= :reuse (:require-mode entry)) (pr-str entry))
+    (is (str/includes? after ";; keep me: this comment is not trivia") after)
+    (is (str/includes? after "#_[example.decoy :as d]") after)
+    (is (str/includes? after "[example.new :as newlib]") after)
+    (is (not (str/includes? after "example.old")) after)
+    (is (str/includes? after "(newlib/fetch-event 1)") after)))

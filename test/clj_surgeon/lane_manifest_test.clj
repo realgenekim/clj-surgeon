@@ -208,7 +208,7 @@
     ;; `make landing-gate` is THE target ~/bin/land runs. It is asserted here
     ;; by RESOLUTION, not by grepping for a word: the target must exist, and
     ;; its prerequisite/recipe closure must contain both names.
-    (let [{:keys [makefile-text] :as ctx} (rm/repo-context)
+    (let [{:keys [makefile-text]} (rm/repo-context)
           rule (rm/make-target makefile-text "landing-gate")
           closure (set (concat (:prerequisites rule)
                                (map second (re-seq #"\$\(MAKE\)(?:\s+--[a-z\-]+)*\s+([a-z0-9\-]+)"
@@ -570,12 +570,35 @@
       ;;       fence r7 demanded, the construction-then-finalizer witness, and
       ;;       the "canonicalization touches only the two quoted sentences"
       ;;       witness (inb-2da8ea).
+      ;;   +3  mcp-alias-migration-test: the round-three PUBLIC-PATH witnesses
+      ;;       for alias reuse (Sol fence r3 on d32a3c9d) --
+      ;;       r3-reuse-never-writes-an-alias-outside-alias-policy,
+      ;;       r3-an-off-policy-target-alias-does-not-rescue-an-exhausted-policy
+      ;;       and r3-committed-reuse-preserves-comments-and-discard-forms.
+      ;;       The planner-level twins already existed; these drive `execute!`
+      ;;       and assert the COMMITTED bytes, because reuse that bypassed
+      ;;       `alias_policy` committed `forbidden/fetch-event` under a receipt
+      ;;       that read ok=true -- a planner assertion could not have seen it.
       ;;                                                    ------
-      ;;   1393 + 22 ..................................... 1415
+      ;;   1393 + 22 + 3 ................................. 1418
       ;;
-      ;; All four namespaces are ROUND-ONE, so the whole +22 lands in r1 and
+      ;; All five namespaces are ROUND-ONE, so the whole +25 lands in r1 and
       ;; `adopted` holds at 435.
-      (is (= 1429 total) (str "manifest declares " total " tests"))
+      ;;
+      ;; MERGE, 2026-09-07: the aggregate-`expect` guard branch adopted ONE new
+      ;; namespace, mcp-expect-guard-test, carrying 14 deftests, and it is not
+      ;; round-one, so this is the one addition that moves `adopted`: 435 -> 449.
+      ;; Both ledgers are live; neither replaces the other.
+      ;;
+      ;;   1418 + 14 ..................................... 1432
+      ;;
+      ;; RECOMPUTED, not reconciled. Neither side of the merge conflict was
+      ;; right: this branch pinned 1429 (blind to the alias witnesses' +3) and
+      ;; trunk pinned 1418 (blind to the 14 above). Both numbers were correct
+      ;; for a tree that no longer exists, and averaging or picking one is how
+      ;; a corpus ledger silently stops counting. The number below was read off
+      ;; the merged tree.
+      (is (= 1432 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

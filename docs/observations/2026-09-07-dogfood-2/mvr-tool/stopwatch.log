@@ -1,0 +1,8 @@
+2026-09-07T07:15:09.521533135Z orient-start dogfood3 mvr json write helper
+2026-09-07T07:15:16.10054340Z native-helper added json/write to json.clj
+2026-09-07T07:15:26.647807244Z scan-complete 9 files besides json.clj, 18 real call sites + 1 docstring mention (bridge3_new:281)
+2026-09-07T07:15:26.828723543Z apply-1 alias_migration returned
+2026-09-07T07:15:48.952549814Z apply-2 retry with widened alias_policy
+2026-09-07T07:16:39.629454530Z verify-start kaocha: bin/kaocha
+2026-09-07T07:16:57.275838163Z verify-done kaocha rc=0 wall=17.6s
+2026-09-07T07:17:51.224060814Z done native migration, 579 tests 0 failures, kondo clean
