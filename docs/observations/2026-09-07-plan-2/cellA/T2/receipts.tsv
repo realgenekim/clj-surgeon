@@ -1,0 +1,35 @@
+1	inspect_clojure	outline views.clj	ok	92.8	-
+2	apply_clojure_changes	extraction avatar (3 forms)	ok	1329.1	3
+3	apply_clojure_changes	extraction shell	REFUSED extraction-decisions-required	1027.47	0
+4	inspect_clojure	plan-extraction shell	ok	846.1	-
+5	apply_clojure_changes	extraction shell (4 forms)	ok	1501.0	4
+6	apply_clojure_changes	extraction format	REFUSED extraction-decisions-required	1003.44	0
+7	apply_clojure_changes	extraction format (superset ignore list)	REFUSED extraction-decisions-required	926.64	0
+8	inspect_clojure	plan-extraction format	ok	870.6	-
+9	apply_clojure_changes	extraction format (15 forms)	ok	1536.4	15
+10	inspect_clojure	plan-extraction form-controls	ok	587.6	-
+11	apply_clojure_changes	extraction form-controls (4 forms)	ok	1243.3	4
+12	apply_clojure_changes	extraction live-drafts (3 forms)	ok	1463.2	3
+13	apply_clojure_changes	extraction organizer-layout	REFUSED extraction-decisions-required	1289.87	0
+14	inspect_clojure	plan-extraction organizer-layout	ok	1161.1	-
+15	apply_clojure_changes	extraction organizer-layout (12 forms)	ok	1852.4	12
+16	inspect_clojure	plan-extraction review	ok	842.0	-
+17	apply_clojure_changes	extraction review (25 forms)	ok	1911.2	25
+18	inspect_clojure	plan-extraction auth	ok	571.6	-
+19	apply_clojure_changes	extraction auth (2 forms)	ok	1153.8	2
+20	apply_clojure_changes	extraction committee (3 forms)	ok	1102.3	3
+21	apply_clojure_changes	extraction communications (3 forms)	ok	1146.6	3
+22	apply_clojure_changes	extraction dashboard (8 forms)	ok	1081.9	8
+23	apply_clojure_changes	extraction event-setup (10 forms)	ok	1112.9	10
+24	apply_clojure_changes	extraction form-builder (11 forms)	ok	1084.9	11
+25	apply_clojure_changes	extraction integrations (5 forms)	ok	1057.3	5
+26	apply_clojure_changes	extraction log (3 forms)	ok	877.4	3
+27	apply_clojure_changes	extraction people (2 forms)	ok	886.9	2
+28	apply_clojure_changes	extraction portal (6 forms)	ok	833.7	6
+29	apply_clojure_changes	extraction public-cfp (10 forms)	ok	864.3	10
+30	apply_clojure_changes	extraction replay (2 forms)	ok	761.8	2
+31	apply_clojure_changes	extraction schedule (10 forms)	ok	789.8	10
+32	apply_clojure_changes	edits caller symbols (48)	REFUSED expect-count-mismatch	3194.01	0
+33	apply_clojure_changes	edits caller symbols (48 changes / 5 files)	ok	13624.6	87
+34	apply_clojure_changes	changes require insert_after (3 files)	ok	1139.6	3
+35	apply_clojure_changes	edits require replace (4 files)	ok	427.1	4
