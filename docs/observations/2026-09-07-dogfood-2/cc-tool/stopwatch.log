@@ -1,0 +1,9 @@
+2026-09-07T07:15:29.523537872Z orient-start dogfood3 begin
+2026-09-07T07:15:43.615268963Z native-helper speaker_identity.clj written
+2026-09-07T07:15:50.578618513Z requires-complete 3 requires added
+2026-09-07T07:15:55.829557303Z inspect-1 sent
+2026-09-07T07:16:12.147725437Z apply-1 ok first attempt, 0 refusals, 276.94ms
+2026-09-07T07:16:20.393593490Z native-delete 3 private defns removed
+2026-09-07T07:16:25.709140693Z verify-start kaocha: bin/kaocha unit
+2026-09-07T07:17:51.160205985Z verify-done kaocha rc=0 wall=85.5s
+2026-09-07T07:18:18.348788070Z done kaocha 1021/0, kondo clean
