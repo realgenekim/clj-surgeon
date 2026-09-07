@@ -14,3 +14,5 @@ Then rebuild/restart the skiff's Surgeon server from the same checkout (the seat
 Tripwire: the hourly ~/bin/check-prompt-plate.sh must read origin/MCP/main (not origin/main) from a checkout that exists on that box; on Anvil it had pointed at a missing checkout and never run (fixed 2026-09-06 19:0xZ). Verify with `tail -1 ~/logs/prompt-plate.log` → `OK main=<sha> :block-hash ...`.
 
 Hardening still open (filed): public-handler ceiling enforcement (inb-b60d6e); compact counts mode (inb-e02822, P2); hash policy for 150–200-owner single calls (inb-a36079); parked refusal-text item (inb-2da8ea).
+
+**Update 2026-09-07T06:57Z:** newer stable tag `stable/2026-09-07` = 4287bc03 (adds the ceiling, hot-verify, receipt-truth and refusal-text fixes; real-repo dogfood green). Prefer it over stable/2026-09-06-strict.

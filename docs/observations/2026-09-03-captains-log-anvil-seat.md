@@ -3342,3 +3342,5 @@ My objections to the opening six: verification is not established as the dominan
 ## 05:53Z — usage watch: tools "admit_clojure_patch": 9 "apply_clojure_changes": 77 "inspect_clojure": 20  (collector figures verbatim; collector window: "since": "2026-09-06T04:44:02Z" → "until": "2026-09-07T05:48:32.625216Z"; === start 05:48Z load 1.03 ; === rc 0 end 05:53Z)
 
 ## 06:29Z — Gene: "Stop all loops." Stopped: session crons (10-min heartbeat 86f5277f, hourly usage watch d8f78e6b) and the OS crontab (cadence-watch */5, check-prompt-plate hourly; backup at /var/tmp/forge/crontab-backup-*.txt). No loop processes were running. Disabled tripwires expire: the prompt-plate tripwire and the cadence watcher need a re-review when work resumes (restore with `crontab /var/tmp/forge/crontab-backup-<stamp>.txt`). Stand-down marker stays.
+
+## 06:57Z — Gene: "Tag this commit as a new stable build." Tagged stable/2026-09-07 = 4287bc03 (MCP/main tip; src/test/deps/Makefile identical to the servers' 2a2126d0, which passed the real dogfood). Supersedes stable/2026-09-06-strict (30d7920c) for the skiff install.
