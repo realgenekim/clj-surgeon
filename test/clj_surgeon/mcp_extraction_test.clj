@@ -51,6 +51,12 @@
 ;; @spec SPLIT-REPAIR-004
 (deftest decisions-required-has-candidates-and-planning-continuation
   (let [r (extraction/compile-extraction
+           (assoc request :workspace-root "/project" :source-paths ["src"]
+                  :file "/project/src/sample/core.clj" :to "/project/src/sample/moved.clj"
+                  :workspace-sources {"/project/src/sample/caller.clj" "(ns sample.caller)\n(defn f [] (sample.core/helper 1))"}))]
+    (is (= "src/sample/core.clj" (get-in r [:next-call :file])))
+    (is (= "src/sample/moved.clj" (get-in r [:next-call :to]))))
+  (let [r (extraction/compile-extraction
            (assoc request :workspace-sources
                   {"src/sample/caller.clj" "(ns sample.caller)\n(defn f [] (sample.core/helper 1))"}))]
     (is (= :extraction-decisions-required (:error-type r)))

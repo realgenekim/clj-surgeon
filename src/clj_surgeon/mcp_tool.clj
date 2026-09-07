@@ -16,6 +16,7 @@
    [clj-surgeon.mcp-feature-thread :as feature-thread]
    [clj-surgeon.mcp-formatter :as formatter]
    [clj-surgeon.mcp-helper-extraction :as helper-extraction]
+   [clj-surgeon.mcp-namespace-split :as namespace-split]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-paths :as mcp-paths]
@@ -2550,6 +2551,7 @@
            census-tool/relation-census-tool
            alias-migration-tool
            (helper-extraction/tool)
+           namespace-split/tool
            admit-tool/admit-clojure-patch-tool
            feature-thread/feature-thread-tool]
     :edit [edit-clojure-tool]

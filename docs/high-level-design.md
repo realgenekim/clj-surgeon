@@ -1316,6 +1316,9 @@ the shrinking [per-ID debt ledger](intent/unlinked-spec-ids.edn).
 - [Feature thread](intent/feature-thread/feature-thread-design.md)
 - [Relation census](intent/relation-census/relation-census-design.md)
 - [Helper extraction](intent/helper-extraction/helper-extraction-design.md)
+- [Whole namespace partition](intent/helper-extraction/namespace-split-design.md):
+  a complete mapping closes over one snapshot into one final graph and one guarded
+  file set; MCP and CLI share its nonmutating projection, proof and inverse.
 - [Embedded elaborator](intent/embedded-elaborator/embedded-elaborator-design.md) — frozen pre-product intent, excluded from the current witness audit.
 - [Substantiation telemetry](intent/substantiation-telemetry/substantiation-telemetry-design.md) — advance ratification, excluded from the current witness audit.
 - [Test isolation and lane cadence](intent/test-isolation/test-isolation-design.md)

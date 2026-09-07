@@ -282,3 +282,13 @@ mission-ledger implementation change.
   namespace identity and helper-classified caller handoff. Five regression witnesses;
   588 fast tests green, operation oracle green, kondo zero warnings/errors. Evidence:
   `/var/tmp/forge/plan2/split-build-report.md`. Correctness repair, no wall claim.
+
+- 2026-09-07, `astra/namespace-split`: whole namespace partition compiler, one
+  captured reference analysis and final graph, shared extraction transaction/proof/
+  inverse, MCP `namespace_split` and CLI `:split-ns!` with the same plan-only
+  projection. The d9205abc views copy passes all four acceptance oracles: 141
+  owners, 20 destinations, five callers and 87 sites. Final ready-mapping CLI wall
+  is 30.33 s including those checks; mapping/profile setup is excluded. This is a
+  feasibility result, not a matched fresh-caller native crossover or routing claim.
+  [Design](intent/helper-extraction/namespace-split-design.md); full receipts and
+  caveats: `/var/tmp/forge/plan2/split-build-report.md`.

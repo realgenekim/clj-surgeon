@@ -107,7 +107,7 @@
                      :ls-extract :ls-deps
                      :rename-ns :rename-ns!
                      :fix-declares :fix-declares!
-                     :extract :extract! :undo-extract!
+                     :extract :extract! :undo-extract! :split-ns!
                      :find-subform :lens :xray :edit :change :change! :undo-change!
                      :replace-subform :replace-subform!
                      :cljc-merge :cljc-split :cljc-add-require :cljc-analyze

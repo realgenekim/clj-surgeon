@@ -27,3 +27,8 @@ Non-goals: architectural advice, new evaluator/reference engine/transaction syst
 site-table inputs, per-destination transactions, dynamic caller guarantees, batteries,
 or performance superiority inferred from compiler time alone. Gates and measured
 wall are recorded in /var/tmp/forge/plan2/split-build-report.md.
+
+The implemented leaf is [namespace-split-design](../intent/helper-extraction/namespace-split-design.md),
+with NS-SPLIT-001..015 and direct @spec witnesses. The CLI and MCP share the pure
+compiler and existing extraction inverse; the common synchronous proof code was
+moved into dependency-light leaves so Babashka does not load the MCP/nREPL facade.
