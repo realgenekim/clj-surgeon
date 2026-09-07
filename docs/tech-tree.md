@@ -277,3 +277,29 @@ accounts, mission-name disambiguation and the audit's 15 leaf references.
 Plan: [sentinel gate and HLD](plans/sentinel-intent-gate-and-hld.md); receipts:
 `/var/tmp/forge/lid-batch/surgeon-b3-report.md`. No performance claim or
 mission-ledger implementation change.
+
+## Structural match recovery — 2026-09-07T21:23:46+00:00
+
+Pair-1/A-T1 (inb-f313b8), Recommendation 4 batch 1: native probes reproduce
+the missing `#()` call-body view; bare-symbol, set, quote and syntax-quote
+descent already worked. Added the unexpanded anonymous call-body view while
+retaining original reader bytes/address. Cardinality failures now identify all
+evaluated failing requests with expected/actual counts in data and text; the
+longer-pattern hint requires scoped shape evidence. Existing match-test bodies
+remain byte-identical. Linked intent: MCP-OP-MATCH-001..003 in
+[the operation-contract registry](intent/mcp-operation-contract/mcp-operation-contract-specs.md).
+Red/green receipts and required gates: `/var/tmp/forge/plan2/friction1-report.md`.
+This is a correctness and recovery repair; no battery or performance claim.
+
+## Cardinality receipt integrity — 2026-09-07T21:59:25+00:00
+
+Sol reproduced a forged receipt line through `rogue<U+2028>→ forged` at
+`7acf599b`. Round 2 routes quoted cardinality IDs/files and diagnostic notes
+through the existing bounded safe-line encoder. Structured identity and ordered
+counts remain exact; display collisions are distinguished by request index.
+Two additive witnesses reproduce the public attack and cover escaped strings,
+hostile paths/notes, truncation and complete failure membership. Red: 14
+failures; affected green: 77 tests / 803 assertions. Linked intent:
+MCP-OP-MATCH-004 and MCP-OP-EDIT-038. Reader-discard exclusion remains deferred
+as MCP-OP-MATCH-005; base matching semantics are unchanged. Gates and doubts:
+`/var/tmp/forge/plan2/friction1-r2-report.md`. No performance claim.

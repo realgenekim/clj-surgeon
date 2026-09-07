@@ -600,12 +600,27 @@
     (mapv (fn [owner] (array-map :inside owner :matches (get tally owner)))
           (distinct owners))))
 
+;; @spec MCP-OP-MATCH-003
+(defn- match-note
+  [request found]
+  (when (and (wildcard-pattern? (:match request))
+             (or (zero? (:match-count found))
+                 (< (:match-count found) (get-in request [:expect :matches] 0))))
+    (if (:longer-pattern-evidence found)
+      wildcard-note
+      (str "found " (:match-count found) " matching subtrees in "
+           (if-let [inside (:inside request)]
+             (str "owner " (pr-str inside)) "the file")
+           "; search includes #(), sets, quote and syntax-quote reader bodies; "
+           "this count does not establish an arity mismatch"))))
+
 (defn- match-result
   [request snapshot]
   (let [found (structural-lens/find-subforms
                 (:source snapshot)
                 (cond-> {:match (:match request)}
-                  (:inside request) (assoc :inside (symbol (:inside request)))))]
+                  (:inside request) (assoc :inside (symbol (:inside request)))))
+        note (when-not (:error found) (match-note request found))]
     (cond
       (:error found) found
 
@@ -617,9 +632,7 @@
                :actual (:match-count found)
                :match-count (:match-count found)}
         ;; @spec MCP-OP-FIELD-003
-        (and (< (:match-count found) (get-in request [:expect :matches]))
-             (wildcard-pattern? (:match request)))
-        (assoc :note wildcard-note))
+        note (assoc :note note))
 
       :else
       ;; @spec MCP-OP-FIELD-008
@@ -655,9 +668,7 @@
            :source_omitted_when_equal_to_match true
            :matches matches}
           ;; @spec MCP-OP-FIELD-003
-          (and (zero? (:match-count found))
-               (wildcard-pattern? (:match request)))
-          (assoc :note wildcard-note))))))
+          note (assoc :note note))))))
 
 (defn- xray-result
   [request snapshot]
@@ -796,6 +807,17 @@
           (selector-retry-template
             pending-requests selector-result snapshot-guards)}}))))
 
+;; @spec MCP-OP-MATCH-002
+(defn- cardinality-refusal
+  [failures]
+  (assoc (first failures)
+         :failure_count (count failures)
+         :cardinality_failures
+         (mapv #(select-keys % [:request_id :request_index :file
+                                :expected :actual :note])
+               failures)))
+
+;; @spec MCP-OP-MATCH-002
 (defn evaluate-snapshots
   "Evaluate a validated ordered request batch over supplied immutable snapshots.
 
@@ -804,7 +826,8 @@
    (evaluate-snapshots params snapshots default-output-limits))
   ([{:keys [requests expect snapshot-guards]} snapshots limits]
    (loop [index 0
-          results []]
+          results []
+          cardinality-failures []]
      (if (< index (count requests))
        (let [request (nth requests index)
              snapshot (get snapshots (:file request))]
@@ -819,7 +842,17 @@
             :source_unchanged true
             :next_action "retry_call"}
            (let [result (evaluate-request request snapshot)]
-             (if (:error result)
+             (cond
+               (= :inspect-cardinality-mismatch (:error-type result))
+               (recur (inc index) results
+                      (conj cardinality-failures
+                            (assoc (kernel-refusal request index result)
+                                   :file (:file request))))
+
+               (and (:error result) (seq cardinality-failures))
+               (cardinality-refusal cardinality-failures)
+
+               (:error result)
                (let [refusal (kernel-refusal request index result)
                      continuation
                      (when (= :selector (:failed-stage result))
@@ -831,28 +864,31 @@
                    continuation (assoc refusal :continuation
                                        (:continuation continuation))
                    :else refusal))
-               (recur (inc index) (conj results result))))))
-       (let [budget (enforce-output-budget results limits)]
-         (if-not (:ok budget)
-           budget
-           (let [files (distinct (map :file requests))
-                 file-hashes (into (array-map)
-                                   (map (fn [file]
-                                          [file (:hash (get snapshots file))]))
-                                   files)
-                 source-count (reduce + 0 (map :source_character_count results))]
-             (cond->
-               {:ok true
-                :operation "inspect_clojure"
-                :read_complete true
-                :request_count (:requests expect)
-                :file_count (:files expect)
-                :results results
-                :file_hashes file-hashes
-                :source_character_count source-count
-                :result_character_count (:result_character_count budget)
-                :next_action "none"}
-               snapshot-guards (assoc :snapshot_guards snapshot-guards)))))))))
+               :else
+               (recur (inc index) (conj results result) cardinality-failures)))))
+       (if (seq cardinality-failures)
+         (cardinality-refusal cardinality-failures)
+         (let [budget (enforce-output-budget results limits)]
+           (if-not (:ok budget)
+             budget
+             (let [files (distinct (map :file requests))
+                   file-hashes (into (array-map)
+                                     (map (fn [file]
+                                            [file (:hash (get snapshots file))]))
+                                     files)
+                   source-count (reduce + 0 (map :source_character_count results))]
+               (cond->
+                 {:ok true
+                  :operation "inspect_clojure"
+                  :read_complete true
+                  :request_count (:requests expect)
+                  :file_count (:files expect)
+                  :results results
+                  :file_hashes file-hashes
+                  :source_character_count source-count
+                  :result_character_count (:result_character_count budget)
+                  :next_action "none"}
+                 snapshot-guards (assoc :snapshot_guards snapshot-guards))))))))))
 
 (defn- plural
   [count singular]
