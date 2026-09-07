@@ -13,6 +13,21 @@ Task frozen by the independent acceptance owner (cellB/task.md); helpers list su
 | 3 | N3 native (lane 0–5) | 153 | 217 | **263** | — | **602** | yes |
 | 3 | C2 CLI :extract! (lane 6–11) | 73 | 92 | **230** | 333 | **578** | yes |
 
+| 4 | N4 native (lane 6–11) | 164 | 200 | **248** | 337 | **581** | yes |
+| 4 | M2 helper_extraction MCP (lane 0–5) | 84 | 238 | **280** | 367 | **614** | yes |
+
+Pair 4 reading: both correct; N4 work 248 s vs M2 280 s.
+
+## Headline (8 runs, all correct)
+
+| arm | work (s) | median | oracle (s) | median |
+|---|---|---|---|---|
+| native ×4 | 142, 185, 248, 263 | 217 | 491, 530, 581, 602 | 556 |
+| CLI :extract! ×2 | 148, 230 | 189 | 490, 578 | 534 |
+| MCP extraction ×2 | 290, 280 | 285 | 627, 614 | 621 |
+
+Verdict against the preregistered killer threshold: NOT met. CLI is ~13% faster on work (27 s), inside the native spread (142–263 s); MCP ~32% slower. The CLI's win is the move step alone (19–25 s vs 36–64 s); discovery, retained-ref qualification, promotions, cycle-breaking and callers stayed native (C2 put the 43-site caller sweep through one :change! transaction). MCP lost to a categorical helper refusal plus repairs of its fallback's output. Planning/discovery 57–164 s did not differ by route. n=2 per tool arm; 4 native controls (deviation from 6 recorded).
+
 Pair 3 reading: both correct; C2 work 230 s vs N3 263 s (CLI again faster on work, by 33 s); oracle 578 vs 602. CLI arms so far: 148, 230 s; native controls so far: 142, 185, 263 s.
 
 Pair 2 reading: both correct; the CLI move took 25 s after a 57 s plan; C1 work 148 s vs N2 185 s (native 1.25x SLOWER — first tool win on work time today); to the oracle 490 vs 530. The caller repaired the CLI's known defects (cyclic source require, unresolved retained refs) inside its callers phase.

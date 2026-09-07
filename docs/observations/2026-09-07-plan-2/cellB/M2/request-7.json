@@ -1,0 +1,204 @@
+{
+ "tool": "mcp__clj-surgeon__apply_clojure_changes",
+ "workspace_root": "/home/forge/src/cc-cellB-M2",
+ "edits": [
+  {
+   "file": "src/cfp_scheduler_killer/session_invites.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/cancellation-for",
+   "to": "calendar/cancellation-for",
+   "matches": 1
+  },
+  {
+   "file": "src/cfp_scheduler_killer/session_invites.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/submission-ics",
+   "to": "calendar/submission-ics",
+   "matches": 1
+  },
+  {
+   "file": "src/cfp_scheduler_killer/agent/commands.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/calendar-ics",
+   "to": "calendar/calendar-ics",
+   "matches": 1
+  },
+  {
+   "file": "src/cfp_scheduler_killer/inform.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/submission-ics",
+   "to": "calendar/submission-ics",
+   "matches": 1
+  },
+  {
+   "file": "src/cfp_scheduler_killer/handlers/public_widgets.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/calendar-ics-for",
+   "to": "calendar/calendar-ics-for",
+   "matches": 1
+  },
+  {
+   "file": "src/cfp_scheduler_killer/handlers/public_cfp.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/cfp-deadline-ics",
+   "to": "calendar/cfp-deadline-ics",
+   "matches": 1
+  },
+  {
+   "file": "src/cfp_scheduler_killer/handlers/exports.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/calendar-ics",
+   "to": "calendar/calendar-ics",
+   "matches": 1
+  },
+  {
+   "file": "test/cfp_scheduler_killer/comms_test.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/calendar-ics",
+   "to": "calendar/calendar-ics",
+   "matches": 1
+  },
+  {
+   "file": "test/cfp_scheduler_killer/comms_test.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/ics-uid",
+   "to": "calendar/ics-uid",
+   "matches": 1
+  },
+  {
+   "file": "test/cfp_scheduler_killer/comms_test.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/submission-ics",
+   "to": "calendar/submission-ics",
+   "matches": 1
+  },
+  {
+   "file": "test/cfp_scheduler_killer/exports_test.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/calendar-ics",
+   "to": "calendar/calendar-ics",
+   "matches": 6
+  },
+  {
+   "file": "test/cfp_scheduler_killer/exports_test.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/calendar-ics-for",
+   "to": "calendar/calendar-ics-for",
+   "matches": 1
+  },
+  {
+   "file": "test/cfp_scheduler_killer/exports_test.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/cfp-deadline-ics",
+   "to": "calendar/cfp-deadline-ics",
+   "matches": 3
+  },
+  {
+   "file": "test/cfp_scheduler_killer/exports_test.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/fold-line",
+   "to": "calendar/fold-line",
+   "matches": 1
+  },
+  {
+   "file": "test/cfp_scheduler_killer/exports_test.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/ics-escape",
+   "to": "calendar/ics-escape",
+   "matches": 4
+  },
+  {
+   "file": "test/cfp_scheduler_killer/exports_test.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/ics-sequence",
+   "to": "calendar/ics-sequence",
+   "matches": 2
+  },
+  {
+   "file": "test/cfp_scheduler_killer/exports_test.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/ics-uid",
+   "to": "calendar/ics-uid",
+   "matches": 1
+  },
+  {
+   "file": "test/cfp_scheduler_killer/exports_test.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/submission-ics",
+   "to": "calendar/submission-ics",
+   "matches": 3
+  },
+  {
+   "file": "test/cfp_scheduler_killer/schedule_test.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/calendar-ics",
+   "to": "calendar/calendar-ics",
+   "matches": 5
+  },
+  {
+   "file": "test/cfp_scheduler_killer/schedule_test.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/cancellation-for",
+   "to": "calendar/cancellation-for",
+   "matches": 2
+  },
+  {
+   "file": "test/cfp_scheduler_killer/schedule_test.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/ics-sequence",
+   "to": "calendar/ics-sequence",
+   "matches": 3
+  },
+  {
+   "file": "test/cfp_scheduler_killer/schedule_test.clj",
+   "within": {
+    "root": true
+   },
+   "from": "exports/ics-uid",
+   "to": "calendar/ics-uid",
+   "matches": 2
+  }
+ ]
+}
