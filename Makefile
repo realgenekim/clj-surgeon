@@ -211,7 +211,8 @@ repository-hygiene-self-test:
 
 runtests: mcp-test
 
-mcp-test: mcp-operation-oracle
+# @spec MCP-OP-TRACE-006
+mcp-test: mcp-operation-oracle performance-regression-sentinel-intent-test
 	@# @spec MCP-OP-TMPHYG-001
 	@# @spec MCP-OP-TMPHYG-002
 	clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/mcp-test
@@ -816,8 +817,13 @@ benchmark-agent-skills-self-test:
 clj-surgeon-skill-self-test:
 	bb bench/verify_clj_surgeon_skill.clj
 
-performance-regression-sentinel-test:
+.PHONY: performance-regression-sentinel-intent-test
+
+performance-regression-sentinel-intent-test:
 	bash test/performance_regression_sentinel_intent_test.sh
+	bash test/performance_regression_sentinel_intent_self_test.sh
+
+performance-regression-sentinel-test: performance-regression-sentinel-intent-test
 	clojure $(MCP_JAVA_OPTS) -Sdeps '{:paths ["bench"]}' -M -e \
 	  '(require (quote clojure.test) \
 	            (quote performance-regression-sentinel-test) \

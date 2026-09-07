@@ -339,6 +339,25 @@ counterexample that the native contract tests missed. If it is retained, both
 the coherence check and oracle run from `make runtests` ; otherwise only the
 native linked-intent gate remains.
 
+### Sentinel witness audit on the ordinary merge gate
+
+MCP-OP-TRACE-006 closes the orphaned PERF-SENT shell audit. The Make merge
+gate requires a dedicated `performance-regression-sentinel-intent-test`
+target that executes the existing bidirectional audit; the full sentinel
+behavioral target reuses that prerequisite. This shell check belongs beside
+the merge gate's existing shell checks, outside the JVM fast lane's ban on
+child processes. A fast source witness resolves the actual Make prerequisite
+and recipe, and scratch-copy marker deletion and invention exercise both
+failure directions through the Make entrance. A Makefile implementation
+annotation is appropriate here because the promise is target execution.
+The shell audit accepts multi-part topics on both sides: the original regex
+silently skipped PERF-SENT-LEDGER-ROOT-001 and reported 49/49 for a 50-row
+leaf. Its ordinary target also executes a scratch-copy self-test that removes
+simple and multi-part witnesses and introduces an unknown multi-part ID.
+WTL and OP-ALG retain the ordinary TRACE-005 gate and their exact per-ID debt;
+this wiring neither claims their missing witnesses are repaired nor broadens
+the generic audit's source policy to shell or bench files.
+
 # #CLI Boundary
 
 The exact-form selector recovery evidence is transport-neutral. CLI EDN and MCP

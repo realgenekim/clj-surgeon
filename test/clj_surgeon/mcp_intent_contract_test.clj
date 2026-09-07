@@ -2,6 +2,7 @@
   {:lane :fast}
   (:require
    [clj-surgeon.mcp-intent-contract]
+   [clj-surgeon.runner-membership :as membership]
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -28,6 +29,22 @@
 (defn- annotation
   [intent]
   (str ";; @" "spec " intent "\n"))
+
+;; @spec MCP-OP-TRACE-006
+(deftest sentinel-intent-audit-is-required-by-the-merge-gate
+  (let [makefile (slurp "Makefile")
+        target "performance-regression-sentinel-intent-test"
+        merge-gate (membership/make-target makefile "mcp-test")
+        sentinel (membership/make-target makefile "performance-regression-sentinel-test")
+        audit (membership/make-target makefile target)]
+    (is (some #{target} (:prerequisites merge-gate))
+        "the ordinary merge gate must execute the sentinel witness audit")
+    (is (some #{target} (:prerequisites sentinel))
+        "the full sentinel suite must reuse the same audit")
+    (is (= ["bash test/performance_regression_sentinel_intent_test.sh"
+            "bash test/performance_regression_sentinel_intent_self_test.sh"]
+           (mapv str/trim (str/split-lines (or (:recipe audit) ""))))
+        "the prerequisite must execute the audit and propagate its exit")))
 
 ;; @spec MCP-OP-TRACE-005
 (deftest non-mcp-intent-with-missing-witnesses-is-reported

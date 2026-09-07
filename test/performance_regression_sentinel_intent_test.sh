@@ -21,11 +21,11 @@ for test_file in "${test_files[@]}"; do
   test -f "$test_file" || fail "missing red witness file ${test_file#$repo_root/}"
 done
 
-sed -nE 's/^- \[ \] \*\*(PERF-SENT-[A-Z]+-[0-9]{3})\*\*:.*/\1/p' \
+sed -nE 's/^- \[ \] \*\*(PERF-SENT-[A-Z]+(-[A-Z]+)*-[0-9]{3})\*\*:.*/\1/p' \
   "$spec_file" | LC_ALL=C sort -u > "$tmp_root/requirements.txt"
 
 grep -hE '@spec PERF-SENT-' "${test_files[@]}" \
-  | grep -Eo 'PERF-SENT-[A-Z]+-[0-9]{3}' \
+  | grep -Eo 'PERF-SENT-[A-Z]+(-[A-Z]+)*-[0-9]{3}' \
   | LC_ALL=C sort -u > "$tmp_root/witnesses.txt"
 
 test -s "$tmp_root/requirements.txt" || fail "no sentinel requirements decoded"

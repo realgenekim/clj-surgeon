@@ -1203,3 +1203,127 @@ Any of these conditions falsifies the design:
 - [Testing guidelines](testing-guidelines.md)
 - [Uniform MCP elapsed-time plan](plans/uniform-mcp-elapsed-time.md)
 - [Positional mutation authority](intent/positional-mutation-authority/positional-mutation-authority-design.md)
+
+## Alias migration: one intent across requiring namespaces
+
+`alias_migration` is an automatically routed mutation class for a known old/new
+library and Var, an ordered alias policy, and a bounded path scope with an
+expected file count; its 67-row [specification](intent/alias-migration/alias-migration-specs.md)
+owns that public contract.
+MCP-OP-ALIAS-003, MCP-OP-ALIAS-004, MCP-OP-ALIAS-005 and MCP-OP-ALIAS-060
+place complete discovery on the tool, including an independent enumeration
+check, so the caller need not provide a per-file or per-site table.
+MCP-OP-ALIAS-007 and MCP-OP-ALIAS-067 select or reuse an alias only under the
+declared namespace alias policy, while MCP-OP-ALIAS-010 and MCP-OP-ALIAS-011
+protect unrelated source bytes and reader-discarded forms.
+The compiler hands every affected file to one guarded transaction under
+MCP-OP-ALIAS-012 and MCP-OP-ALIAS-016 through MCP-OP-ALIAS-018, refusing count
+mismatches and stale source before write and rolling back commit failures.
+The caller relies on `ok`, `committed`, `files`, `sites`, `alias_histogram`
+and `details_path` to distinguish the bounded summary from retained per-file
+detail, as specified by MCP-OP-ALIAS-019 and MCP-OP-ALIAS-020.
+MCP-OP-ALIAS-028 makes verification opt-in: a successful write with
+`kondo_delta.status` and `focused_test.status` reporting `not-requested` does not establish application
+behavior, and outstanding repository checks still belong to the caller.
+Typed refusals expose `error_type` and actionable recovery under
+MCP-OP-ALIAS-015, except where the caller must decide, such as an exhausted
+alias policy under MCP-OP-ALIAS-008, which deliberately supplies no `next_call`.
+
+## Feature thread: bounded evidence across a feature's parts
+
+`feature_thread` answers a repository-level read question by joining a subject
+and optional additional seeds to convention-defined feature parts, governed by
+the 52-row [specification](intent/feature-thread/feature-thread-specs.md).
+MCP-OP-THREAD-001 through MCP-OP-THREAD-005 require explicit request shape,
+repository conventions, every declared part, and parsed top-level boundaries
+for Clojure evidence, while MCP-OP-THREAD-033 and MCP-OP-THREAD-043 confine
+discovery to the workspace.
+The caller reads each part's `status`, `file`, `from`, `to`, `evidence` and
+`sha256`; FOUND evidence is distinct from CANDIDATE leads, ABSENT searches
+and N/A reasons, and only FOUND evidence supplies an insertion anchor under
+MCP-OP-THREAD-004, MCP-OP-THREAD-024 and MCP-OP-THREAD-034.
+MCP-OP-THREAD-013 allows overall COMPLETE only when every counted part is
+FOUND, so a plausible lead cannot silently satisfy the feature's closure.
+The `verify` row is advice about test discovery, with `runs_namespace` and
+`picks_up` grounded in readable runner configuration under MCP-OP-THREAD-048;
+it does not claim that those tests executed.
+MCP-OP-THREAD-045 through MCP-OP-THREAD-047 keep locators, hashes, anchors and
+refetch commands in `structuredContent`, place bodies in text with
+`body_in_text`, and account for cuts through `elided`, their reasons and
+`structured_bytes` instead of silently dropping evidence.
+MCP-OP-THREAD-049 and MCP-OP-THREAD-052 bind the reported digests to their
+observed bytes and clock: `next_call.computed_at` records when whole-file
+pre-images were captured, and the mutation gate must still check them at write time.
+
+## Relation census: locate collection-write review work
+
+The read-only `relation_census` MCP tool and `:relation-census` CLI operation
+classify collection writes inside `defmethod fold-event` arms under the
+35-row [specification](intent/relation-census/relation-census-specs.md).
+MCP-OP-CENSUS-001 through MCP-OP-CENSUS-009 define the ordered `door`, `set`,
+`guarded`, `unknown` and `raw` classifications, preserving uncertainty when
+the recognized vocabulary cannot establish the target, identity or guard.
+This census locates review work, does not prove idempotency, and grants no
+mutation authority, as MCP-OP-CENSUS-009 and MCP-OP-CENSUS-015 require.
+The caller relies on `census_version`, `files`, `arms`, `sites`, per-file
+class counts, `outside_arms`, guard lines and uncertainty reasons, while
+`receipt_truncated` distinguishes bounded displayed evidence from the totals
+under MCP-OP-CENSUS-013 and MCP-OP-CENSUS-022.
+MCP-OP-CENSUS-025 prevents `next_action=none` when unmodelled calls inside
+arms may hide writes, and MCP-OP-CENSUS-028 requires `read_complete=false`
+with `oversized_skipped` evidence when discovery omits oversized sources.
+MCP-OP-CENSUS-011, MCP-OP-CENSUS-020, MCP-OP-CENSUS-021 and MCP-OP-CENSUS-031
+make ordered results independent of pool size, report the pool that actually
+ran, shut down its workers, and expose only executed phases in
+`phases_elapsed_ms` alongside the observational `elapsed_ms`.
+MCP-OP-CENSUS-014, MCP-OP-CENSUS-027, MCP-OP-CENSUS-032 and MCP-OP-CENSUS-033
+require bounded, confined discovery and typed refusals carrying either a
+computed continuation or a usable remedy, so an incomplete tree walk cannot
+masquerade as a complete census.
+
+## Two things called mission
+
+The **read mission** in [the read-path section](#compress-a-coherent-read-mission-without-guessing)
+is one immutable batch of structural questions, selectors and snapshot guards,
+owned by the [MCP operation contract](intent/mcp-operation-contract/mcp-operation-contract-design.md)
+and its read continuation requirements.
+The **MISSION LEDGER** is a separate durable EDN state object implemented in
+[`mission.clj`](../src/clj_surgeon/mission.clj), dispatched by
+[`mission_cli.clj`](../src/clj_surgeon/mission_cli.clj), and used by the
+[typist executor plan](plans/mission-typist-executor.md) and
+[`mission_git_ledger.clj`](../src/clj_surgeon/mission_git_ledger.clj) for saved
+work and publication receipts.
+A read snapshot or continuation is not a saved ledger lifecycle, execution
+authorization or publication receipt.
+The ledger subsystem's missing linked intents remain a separate follow-up;
+these pointers disambiguate the names without claiming that debt is closed.
+
+## Ordinary execution of the sentinel intent gate
+
+MCP-OP-TRACE-006 requires the 50-row PERF-SENT shell witness audit from
+`make mcp-test`, through `performance-regression-sentinel-intent-test`, with
+missing and unknown IDs blocking the merge gate.
+The shell audit and its scratch-copy self-test run outside the JVM fast lane,
+whose manifest forbids child processes; the full sentinel behavioral suite
+remains separately invoked.
+The widened ordinary intent contract already audits WTL and OP-ALG under
+MCP-OP-TRACE-005, retaining their existing missing witness pairs visibly in
+the shrinking [per-ID debt ledger](intent/unlinked-spec-ids.edn).
+
+## References for previously omitted or thin intent leaves
+
+- [Alias migration](intent/alias-migration/alias-migration-design.md)
+- [Feature thread](intent/feature-thread/feature-thread-design.md)
+- [Relation census](intent/relation-census/relation-census-design.md)
+- [Helper extraction](intent/helper-extraction/helper-extraction-design.md)
+- [Embedded elaborator](intent/embedded-elaborator/embedded-elaborator-design.md) — frozen pre-product intent, excluded from the current witness audit.
+- [Substantiation telemetry](intent/substantiation-telemetry/substantiation-telemetry-design.md) — advance ratification, excluded from the current witness audit.
+- [Test isolation and lane cadence](intent/test-isolation/test-isolation-design.md)
+- [Prepared request actions](intent/prepared-request-actions/prepared-request-actions-design.md)
+- [Temporary-directory hygiene](intent/temp-dir-hygiene/temp-dir-hygiene-design.md)
+- [Insertion boundary and gap](intent/insertion-boundary-and-gap/design.md)
+- [Sibling-pair edit](intent/sibling-pair-edit/sibling-pair-edit-design.md)
+- [Write refusal completeness](intent/write-refusal-completeness/write-refusal-completeness-design.md)
+- [Shell argv safety](intent/shell-argv-safety/shell-argv-safety-design.md)
+- [Read request normalization](intent/read-request-normalization/read-request-normalization-design.md)
+- [Hot verification](intent/hot-verification/hot-verification-design.md)
