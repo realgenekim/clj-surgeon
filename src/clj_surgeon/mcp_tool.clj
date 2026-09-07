@@ -957,6 +957,25 @@
                :remedy "Correct the project root or request and call apply_clojure_changes once."}
               total-start {:validation_ms validation-ms})))))))
 
+(defn- next-call-with-workspace-root
+  ;; @spec MCP-OP-EDIT-039
+  "Restore `workspace_root` on a composed `next_call`.
+
+   The workspace router strips `workspace_root` from the request before the
+   pure contract ever sees it, so a `next_call` the contract composes from the
+   caller's own request is missing the one field the caller MUST send back. It
+   is restored here, at the one place that knows the resolved root, and only
+   when the composed call does not already carry it."
+  [result workspace-root]
+  (let [next-call (:next_call result)]
+    (if (and (map? next-call)
+             (string? workspace-root)
+             (not (some #{"workspace_root"}
+                        (map #(if (keyword? %) (name %) (str %))
+                             (keys next-call)))))
+      (assoc result :next_call (assoc next-call "workspace_root" workspace-root))
+      result)))
+
 (defn execute-request!
   "Route one request to a canonical workspace context, then execute it."
   [config params]
@@ -969,15 +988,18 @@
                      config normalized public-operation)
             resolved (workspace/canonical-root (:project-root config))]
         (cond-> result
-          (:ok resolved) (assoc :workspace_root (:workspace-root resolved))))
+          (:ok resolved)
+          (-> (assoc :workspace_root (:workspace-root resolved))
+              (next-call-with-workspace-root (:workspace-root resolved)))))
       (let [workspace-router (or (:workspace-router config)
                                  (workspace/router config))
             routed (workspace/resolve-request workspace-router normalized)]
         (if-not (:ok routed)
           routed
-          (assoc (execute-request-in-context!
-                   (:config routed) (:params routed) public-operation)
-                 :workspace_root (:workspace-root routed)))))))
+          (-> (execute-request-in-context!
+                (:config routed) (:params routed) public-operation)
+              (assoc :workspace_root (:workspace-root routed))
+              (next-call-with-workspace-root (:workspace-root routed))))))))
 
 (def verification-line-characters
   "Stated bound on the visible verification line of a success receipt."

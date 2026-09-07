@@ -604,6 +604,7 @@
 
 (def ^:private aggregate-expect-order [:changes :edits :files])
 
+;; @spec MCP-OP-EDIT-040
 (defn- aggregate-expect-mismatches
   [supplied derived]
   (vec (keep (fn [key]
@@ -614,10 +615,28 @@
                   :derived (get derived key)}))
              aggregate-expect-order)))
 
+(defn- corrected-expect-next-call
+  ;; @spec MCP-OP-EDIT-039
+  "The caller's OWN request with `expect` replaced, and nothing else touched.
+
+   Two ways this was wrong at the fence (Sol r1, 2026-09-07). First, public
+   execution keywordizes the request before validation, so `assoc`ing a
+   string `\"expect\"` beside the surviving `:expect` published a map with two
+   `expect` keys that serialized as duplicate JSON keys -- a `next_call` no
+   client can parse deterministically. `without-field` removes the caller's
+   key whatever its kind, so exactly one survives. Second, `workspace_root` is
+   stripped by the workspace router before validation ever sees the request, so
+   the guard cannot restore it here; `mcp-tool/execute-request!` puts it back
+   at the one place that knows the resolved root."
+  [caller-params corrected]
+  (assoc (without-field caller-params "expect") "expect" corrected))
+
 (defn- guard-aggregate-expect!
+  ;; @spec MCP-OP-EDIT-039
+  ;; @spec MCP-OP-EDIT-040
   "`expect` is a GUARD on the declared fan-out size, never bookkeeping.
 
-   The schema declares `expect` on both write routes, so a caller who states
+   The schema declares `expect` on every write route, so a caller who states
    it has bound its intent to the effect. Until 2026-09-07 a disagreement was
    reported as `input_normalization {ignored [\"expect\"]}` and the write went
    ahead: a caller who mis-stated the fan-out size got a silent success over
@@ -644,7 +663,7 @@
                  rendered)
             {:mismatch mismatches
              :mutation-attempted false
-             :next-call (assoc caller-params "expect" corrected)
+             :next-call (corrected-expect-next-call caller-params corrected)
              :remedy
              (str "Set expect to {\"changes\": " (:changes derived)
                   ", \"edits\": " (:edits derived)
@@ -652,6 +671,40 @@
                   "}, or correct the request so it makes the effect you"
                   " declared, and call apply_clojure_changes once."
                   " No source was changed.")}))))))
+
+(defn- refuse-expect-on-create-only!
+  ;; @spec MCP-OP-EDIT-041
+  "A create-only transaction cannot honour `expect`, so it says so.
+
+   RULE CHOSEN (2026-09-07): `expect` on a create-only request refuses as
+   unsupported on that route, and publishes NO corrected `next_call`.
+
+   The alternative -- count created files -- was rejected. `expect` is three
+   numbers about CHANGED existing source: changes, exact replacements, and the
+   files those changes touch. A create-only transaction changes none of them,
+   so `changes` and `edits` are honestly zero however `files` is redefined, and
+   the published schema's own minimum for each is one. Every corrected
+   `next_call` we could compose would therefore be a remedy the boundary
+   rejects -- an unexecutable instruction is worse than an honest refusal --
+   and quietly re-pointing `files` at created files would change the meaning of
+   a published field for one route only.
+
+   This is the brief's `expect unsupported on route X` branch: a declared field
+   this route cannot honour is REFUSED, never ignored. A hybrid request that
+   creates files AND carries changes is not create-only and is guarded
+   normally against those changes."
+  []
+  (refuse!
+    :expect-unsupported-on-route ["expect"]
+    (str "expect unsupported on route create_files: a create-only transaction"
+         " changes no existing source, so changes, edits, and files have no"
+         " honest non-zero value to guard")
+    {:route "create_files"
+     :mutation-attempted false
+     :remedy
+     (str "Remove expect and call apply_clojure_changes once, or add the"
+          " changes this transaction is meant to guard."
+          " No source was changed.")}))
 
 ;; @spec MCP-OP-MATCHED-002
 ;; @spec MCP-OP-MATCHED-003
@@ -953,7 +1006,17 @@
             {:changes (count changes)
              :edits (reduce + (map #(get-in % ["expect" "matches"]) changes))
              :files (count (set (mapcat #(field % "files") changes)))}
+            ;; @spec MCP-OP-EDIT-041
+            ;; Create-only is decided BEFORE the count guard, because its
+            ;; derived counts are all zero and every "corrected" expect they
+            ;; could compose is one the schema minimum rejects.
+            _ (when (and supplied-expect
+                         (seq creations)
+                         (empty? changes)
+                         (empty? programs))
+                (refuse-expect-on-create-only!))
             ;; @spec MCP-OP-EDIT-006
+            ;; @spec MCP-OP-EDIT-039
             ;; The declared fan-out size is a guard on this route too. It is
             ;; checked HERE, against the caller's own request, so the composed
             ;; next_call is the shape the caller sent and not the compiled

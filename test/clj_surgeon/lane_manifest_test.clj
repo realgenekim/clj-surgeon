@@ -408,7 +408,7 @@
   "Namespaces in a lane today that round one did NOT measure, each with the
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
-  '{clj-surgeon.mcp-expect-guard-test 5 ; `expect` is a guard on both write routes, not discarded bookkeeping (dogfood-3, 2026-09-07).
+  '{clj-surgeon.mcp-expect-guard-test 8 ; `expect` is a guard on both write routes, not discarded bookkeeping (dogfood-3, 2026-09-07).
     clj-surgeon.outline-corpus-integration-test 1 ; MOVED: full repository differential out of the bounded fast namespace.
     clj-surgeon.mission-candidate-race-test 5 ; Completion-order delivery, bounded cancellation and retained results.
     clj-surgeon.mission-events-test 8 ; Public completion events and isolated logging failure.
@@ -518,7 +518,7 @@
       ;; helper request-shape refusals (48 -> 51), plus two battery archival-distance witnesses;
       ;; closed telemetry remains 17, not trunk
       ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
-      (is (= 440 adopted) (str "adopted tests: " adopted)))
+      (is (= 443 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -575,7 +575,7 @@
       ;;
       ;; All four namespaces are ROUND-ONE, so the whole +22 lands in r1 and
       ;; `adopted` holds at 435.
-      (is (= 1420 total) (str "manifest declares " total " tests"))
+      (is (= 1423 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

@@ -76,11 +76,20 @@
                          [:properties "delete_owners" :items])
         program (get-in schema/editor-tool-schema
                         [:properties "programs" :items])]
+    ;; @spec MCP-OP-EDIT-042
+    ;; The paired symbol_migration/require_change route split out of this
+    ;; anyOf on 2026-09-07: it is the one write route whose adapter refuses
+    ;; top-level `expect`, so it needs its own branch while the routes that DO
+    ;; accept expect as an optional guard share this one. create_files joined
+    ;; here at the same time -- the old list omitted it, so a create-only
+    ;; transaction was denied at the boundary.
     (is (some #(= [{:required ["edits"]}
                    {:required ["programs"]}
                    {:required ["delete_owners"]}
-                   {:required ["symbol_migration" "require_change"]}]
+                   {:required ["create_files"]}]
                   (:anyOf %))
+              routes))
+    (is (some #(= ["symbol_migration" "require_change"] (:required %))
               routes))
     (is (= #{"file" "files" "within" "from" "to"
              "old" "new" "before" "after" "matches"}

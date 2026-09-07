@@ -103,7 +103,10 @@
              "workspace_root" "symbol_migration" "require_change"
              "expect_matched"}
            (set (keys (get-in tools [1 :schema :properties])))))
-    (is (= 4 (count (get-in tools [1 :schema :oneOf]))))
+    ;; @spec MCP-OP-EDIT-042
+    ;; 4 -> 5 on 2026-09-07: the compact-relation route became its own
+    ;; branch so every other write route can carry optional `expect`.
+    (is (= 5 (count (get-in tools [1 :schema :oneOf]))))
     (testing "the direct route accepts the same verify field it publishes"
       (let [direct-route (second (get-in tools [1 :schema :oneOf]))
             excluded (set (map (comp set :required)

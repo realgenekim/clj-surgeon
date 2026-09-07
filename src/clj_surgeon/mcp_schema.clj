@@ -523,7 +523,16 @@
                    {:required ["require_change"]}
                    {:required ["expect_matched"]}
                    {:required ["extraction"]}]}}
-    {:required ["changes" "expect"]
+    ;; @spec MCP-OP-EDIT-042
+    ;; `expect` is OPTIONAL on every write route and a GUARD when present.
+    ;; Until 2026-09-07 this branch REQUIRED it with `changes` and the editor
+    ;; branch below FORBADE it, so the boundary denied `edits` + `expect`
+    ;; outright and denied `changes` without it: the two shapes the contract
+    ;; now defines could not be sent. The route list also omitted
+    ;; `create_files`, so a create-only transaction was denied with or without
+    ;; `expect`. Both are fixed here, and the branches stay disjoint so `oneOf`
+    ;; still matches exactly one.
+    {:required ["changes"]
      :not {:anyOf [{:required ["basis"]}
                    {:required ["decisions"]}
                    {:required ["edits"]}
@@ -535,7 +544,20 @@
     {:anyOf [{:required ["edits"]}
              {:required ["programs"]}
              {:required ["delete_owners"]}
-             {:required ["symbol_migration" "require_change"]}]
+             {:required ["create_files"]}]
+     :not {:anyOf [{:required ["basis"]}
+                   {:required ["decisions"]}
+                   {:required ["changes"]}
+                   {:required ["symbol_migration"]}
+                   {:required ["require_change"]}
+                   {:required ["expect_matched"]}
+                   {:required ["extraction"]}]}}
+    ;; The compact-relation route is the ONE write route that does not accept
+    ;; `expect`: `clj-surgeon.mcp-compact-relations/allowed-request-fields`
+    ;; refuses it as an unknown field, and a schema that admitted it would
+    ;; promise a shape the adapter rejects. It may carry `edits`, so it is its
+    ;; own branch rather than a member of the one above.
+    {:required ["symbol_migration" "require_change"]
      :not {:anyOf [{:required ["basis"]}
                    {:required ["decisions"]}
                    {:required ["changes"]}
