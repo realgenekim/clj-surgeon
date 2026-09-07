@@ -29,6 +29,6 @@ Interpretation and design response: design-fable-split-verb.md (one-call split_p
 | arm | nrepl ready | plan | moves | callers | repl-green (in-JVM tests) | cold suite green | oracle |
 |---|---|---|---|---|---|---|---|
 | R1 | 30 | 266 | 266 | 365 | 372 | 394 | **451** |
-| R2 | 83 | 234 | 362 | 434 | 441 | 463 | **496** |
+| R2 | 83 | 234 | 362 | 434 | 441 | 478 | **520** |
 
-Both correct (4/4 oracles). Native controls 331 / 393. R median 474 s → native 0.76x of R. Inner loop: in-JVM affected tests 0.75 s vs 22 s cold (~29x), a broken ns form diagnosed in ~20 s. Why it did not win the wall: planning cost the same ~4 min in every arm; the JVM cost 30–83 s to start; the warm loop had almost nothing to iterate on because a supplied plan made the first cold run green in every arm. Reading: REPL-driven pays in proportion to red-fix iterations; this task, plan supplied, had ~1. Caveats: R1 ran without guardrails in the warm loop (cold run had them); add-lib mutated the live classpath; n=2.
+Both correct (4/4 oracles). Native controls 331 / 393. R median 486 s → native 0.74x of R. Inner loop: in-JVM affected tests 0.75 s vs 22 s cold (~29x), a broken ns form diagnosed in ~20 s. Why it did not win the wall: planning cost the same ~4 min in every arm; the JVM cost 30–83 s to start; the warm loop had almost nothing to iterate on because a supplied plan made the first cold run green in every arm. Reading: REPL-driven pays in proportion to red-fix iterations; this task, plan supplied, had ~1. Caveats: R1 ran without guardrails in the warm loop (cold run had them); add-lib mutated the live classpath; n=2.
