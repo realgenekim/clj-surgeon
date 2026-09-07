@@ -84,7 +84,9 @@
     ;; here at the same time -- the old list omitted it, so a create-only
     ;; transaction was denied at the boundary.
     (is (some #(= [{:required ["edits"]}
-                   {:required ["programs"]}
+                   {:allOf [{:required ["programs"]}
+                            {:anyOf [{:required ["edits"]}
+                                     {:required ["delete_owners"]}]}]}
                    {:required ["delete_owners"]}
                    {:required ["create_files"]}]
                   (:anyOf %))

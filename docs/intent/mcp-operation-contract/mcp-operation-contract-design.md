@@ -566,13 +566,23 @@ caller's request did, and carries exactly one `expect` key.
 
 Two consequences follow from making it authoritative, and both are load-bearing.
 
-First, the derived counts must cover EVERY transformation the transaction will
-commit, not only the ones lowered into the `changes` array. `delete_owners`
-lowers into `changes` and is therefore already inside them; `programs` do not,
-and are added explicitly. A guard blind to half a transaction is worse than no
-guard, because it authorizes a size the receipt then exceeds. The derived
-counts are the same arithmetic the committed receipt publishes, so a receipt's
-counts always equal the counts its request was guarded against.
+First, the derived counts must cover EVERY change and exact replacement the
+transaction will commit, not only the ones lowered into the `changes` array.
+`delete_owners` lowers into `changes` and is therefore already inside them.
+`programs` do not, and are added explicitly — at ONE CHANGE PER CONCRETE MATCH,
+not one per program, because a program is flattened into one addressed intent
+per match before the transaction compiles and the receipt counts those intents.
+A program therefore contributes its declared `expect.matches` to both `changes`
+and `edits`, and its file to `files`. A guard blind to part of a transaction is
+worse than no guard, because it authorizes a size the receipt then exceeds. The
+derived counts are the same arithmetic the committed receipt publishes, so a
+receipt's counts always equal the counts its request was guarded against.
+
+Created files are the stated exception and are counted nowhere. `create_files`
+is a literal effect with no match, no owner, and no derived count, so a request
+that both edits and creates is guarded against its edits alone and reports its
+creations separately. A create-only request has nothing left to guard, which is
+the second consequence below.
 
 Second, a create-only transaction cannot honour `expect` at all: it changes no
 existing source, so `changes`, `edits`, and `files` are all honestly zero,

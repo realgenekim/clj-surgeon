@@ -66,8 +66,14 @@
     (is (= #{"workspace_root" "edits" "programs" "delete_owners" "create_files"
              "symbol_migration" "require_change" "confirm" "fill" "preview"}
            (set (keys (get-in tools [2 :schema :properties])))))
+    ;; @spec MCP-OP-EDIT-042
+    ;; `programs` stopped being a route of its own on 2026-09-07: it lowers
+    ;; into the same changes transaction the other gestures build, so the
+    ;; boundary requires a gesture that produces one.
     (is (= [{:required ["edits"]}
-            {:required ["programs"]}
+            {:allOf [{:required ["programs"]}
+                     {:anyOf [{:required ["edits"]}
+                              {:required ["delete_owners"]}]}]}
             {:required ["delete_owners"]}
             {:required ["create_files"]}
             {:required ["symbol_migration" "require_change"]}

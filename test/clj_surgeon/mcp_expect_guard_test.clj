@@ -417,3 +417,90 @@
     (is (= ["expect" "changes"] (:path result)))
     (is (true? (:source_unchanged result)))
     (is (= mixed-source source))))
+
+;;; ---------------------------------------------------------------------------
+;;; Round four: Sol's round-3 review found the last committed-count escape.
+;;; A program is flattened into ONE ADDRESSED INTENT PER CONCRETE MATCH
+;;; (mcp-tool/…-with-programs), and the receipt counts those intents, so a
+;;; program's contribution to `changes` is its match count, not one.
+
+(def ^:private multi-match-source
+  "(ns delta)\n(defn three [] :old)\n(defn four [] [\"keep\" \"keep\"])\n")
+
+(def ^:private two-match-program
+  {"file" "src/delta.clj"
+   "expression" "(-> (form 'four) (match \"keep\") (transform (constantly \"kept\")))"
+   "expect" {"matches" 2 "max_changed_characters" 24}})
+
+(def ^:private one-multi-edit
+  {"file" "src/delta.clj" "within" {"form" "three"}
+   "from" ":old" "to" ":new" "matches" 1})
+
+(defn- execute-multi
+  [request]
+  (let [workspace (temp-dir)]
+    (try
+      (let [delta (io/file workspace "src/delta.clj")]
+        (io/make-parents delta)
+        (spit delta multi-match-source)
+        {:result (mcp-tool/execute-request!
+                   {:project-root (.getPath workspace)
+                    :receipt-dir (.getPath (io/file workspace "receipts"))}
+                   (assoc request "workspace_root" (.getPath workspace)))
+         :source (slurp delta)})
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-EDIT-039
+(deftest a-multi-match-program-contributes-one-change-per-concrete-match
+  ;; Sol fence r3: one literal edit (1 match) plus one program with
+  ;; expect.matches=2, declaring {changes 2, edits 3, files 1}, was ACCEPTED
+  ;; and committed a receipt whose intent-count was 3. Counting a program as
+  ;; ONE change is the same class of blindness as not counting it at all: the
+  ;; guard authorizes a size the receipt then exceeds.
+  (testing "one change per program is one short, and refuses"
+    (let [{:keys [result source]}
+          (execute-multi {"edits" [one-multi-edit]
+                          "programs" [two-match-program]
+                          "expect" {"changes" 2 "edits" 3 "files" 1}})]
+      (is (false? (:ok result)) (pr-str result))
+      (is (= "expect-mismatch" (:reason result)))
+      (is (= [{:field "changes" :expected 2 :derived 3}] (:mismatch result)))
+      (is (= multi-match-source source) "not one byte was written")
+      (is (= {"changes" 3 "edits" 3 "files" 1}
+             (get-in result [:next_call "expect"])))))
+  (testing "the per-match count commits, and the receipt reports it"
+    (let [{:keys [result source]}
+          (execute-multi {"edits" [one-multi-edit]
+                          "programs" [two-match-program]
+                          "expect" {"changes" 3 "edits" 3 "files" 1}})]
+      (is (:ok result) (pr-str result))
+      (is (= 3 (:changes result)))
+      (is (= 3 (:edits result)))
+      (is (= 1 (:files result)))
+      (is (= "(ns delta)\n(defn three [] :new)\n(defn four [] [\"kept\" \"kept\"])\n"
+             source)))))
+
+;; @spec MCP-OP-EDIT-042
+(deftest the-schema-refuses-programs-without-a-gesture-that-lowers-to-changes
+  ;; Sol fence r3 judgment: the schema admitted programs-only while the runtime
+  ;; refused `non-empty-array` at ["changes"]. Programs ride on a changes
+  ;; transaction, so the boundary now says so.
+  (let [admits? (fn [request]
+                  (boolean (:ok (admission/authorize
+                                  schema/clj-change-schema request))))
+        edit {"file" "src/delta.clj" "within" {"form" "three"}
+              "from" ":old" "to" ":new"}
+        program {"file" "src/delta.clj"
+                 "expression" "(-> (form 'four) (match \"keep\"))"
+                 "expect" {"matches" 1 "max_changed_characters" 6}}]
+    (is (false? (admits? {"programs" [program]}))
+        "programs alone is denied at the boundary, not only at validation")
+    (is (true? (admits? {"programs" [program] "edits" [edit]})))
+    (is (true? (admits? {"programs" [program]
+                         "delete_owners" [{"file" "src/delta.clj"
+                                           "forms" ["four"]}]})))
+    (is (str/includes?
+          (get-in schema/clj-change-schema [:properties "programs" :description])
+          "changes")
+        "the description names the changes transaction programs ride on")))

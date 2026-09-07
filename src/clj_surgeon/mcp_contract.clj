@@ -615,6 +615,13 @@
                   :derived (get derived key)}))
              aggregate-expect-order)))
 
+(defn- program-match-total
+  ;; @spec MCP-OP-EDIT-039
+  "The concrete matches a program set will commit, which is also its count of
+   addressed intents: `mcp-tool` flattens one intent per match."
+  [programs]
+  (reduce + 0 (map #(get-in % [:expect :matches]) programs)))
+
 (defn- corrected-expect-next-call
   ;; @spec MCP-OP-EDIT-039
   "The caller's OWN request with `expect` replaced, and nothing else touched.
@@ -1021,10 +1028,16 @@
             {:changes (count changes)
              :edits (reduce + (map #(get-in % ["expect" "matches"]) changes))
              :files (count (set (mapcat #(field % "files") changes)))}
+            ;; ONE addressed intent PER CONCRETE MATCH, not one per program:
+            ;; `mcp-tool` flattens each program into one addressed edit per
+            ;; match before compiling the transaction, and the receipt counts
+            ;; those intents. Sol fence r3 (2026-09-07): counting a program as
+            ;; one change let a request declaring {changes 2, edits 3} commit a
+            ;; receipt whose intent-count was 3 -- the same class of blindness
+            ;; as not counting programs at all, one match further in.
             derived-expect
-            {:changes (+ (:changes changes-expect) (count programs))
-             :edits (+ (:edits changes-expect)
-                       (reduce + (map #(get-in % [:expect :matches]) programs)))
+            {:changes (+ (:changes changes-expect) (program-match-total programs))
+             :edits (+ (:edits changes-expect) (program-match-total programs))
              :files (count (into (set (mapcat #(field % "files") changes))
                                  (map :file programs)))}
             ;; @spec MCP-OP-EDIT-041
