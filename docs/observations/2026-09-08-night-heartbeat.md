@@ -33,3 +33,6 @@ Rules of this file: one entry per hour (UTC), quote receipts verbatim, DELTA per
 
 ## 2026-09-08T09:12Z
 - DELTA: row 2 stage 2 done (caller work ÷2.6, 6/6 token-golden, gate fails on a verb paper cut + meter constant → Sol ruling running; Astra fixing the paper cut). Row 3: capability built, task not admissible (deferred). B07 landed (trunk 1ab53e0e). Running: row-5 native floor, CX-18 fix + p25. Disk 34G remaining.
+
+## 2026-09-08T09:40Z
+- DELTA: CX-18 closed, CX-19 fixed in the skill (9293a55), p26 PASS; pilot 5 (p27–p29) running for the clean four-cell claim. Row 2: verdict UNKNOWN pending fixed-build cohort (Astra fixing the verb; stage 3 staged). Row 5: native floor run 3–4/6. Row 3: verb built, task not admissible. Trunk 1ab53e0e. Disk 34 G remaining.
