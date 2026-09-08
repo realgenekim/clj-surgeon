@@ -555,3 +555,24 @@ stages; the final packer previously still charged 1 ms. Frozen pair coverage,
 one launch per cell, shard eligibility and grouped timing have direct witnesses.
 Report: `/var/tmp/forge/plan2/cellC/astra-battery-floor-report.md`.
 Evidence: `/var/tmp/forge/battery-floor/`.
+
+
+### 2026-09-08T23:18:24.814479+00:00 — comment identity diff
+
+NS-SPLIT-060 now matches comment occurrences by original file, owning form and
+content before constructing replacement hunks. The row5-adopt-2 retained
+exports.clj failure (original 1822 → candidate 1465) is reconstructed exactly;
+the survivor is absent from the diff. A moved owner has explicit movement
+evidence. Longest increasing survivor order prevents a moved comment from
+turning its untouched neighbours into moves. Lossless owner/range/indentation
+encoding retains the complete Cell C diff under the unchanged receipt ceiling:
+58,874 UTF-8 EDN bytes and 59,575 escaped-JSON bytes.
+
+Red: 31 regression failures; the additional reorder adversary found four false
+move reports before the stationary-subsequence repair. Green: 182 affected
+warm tests / 1,838 assertions plus three CLI witnesses / 36 assertions; one
+affected cold gate passes the same set. Cell C has 141 owners in 20 destinations,
+PAPERCUTS=0, and an independent line oracle verifies every reported comment
+location and byte value. No split meter or routing-performance claim is added.
+Report: `/var/tmp/forge/plan2/cellC/astra-comment-edits-report.md`.
+Evidence: `/var/tmp/forge/comment-edits/`.

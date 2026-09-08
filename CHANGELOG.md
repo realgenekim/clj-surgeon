@@ -8,6 +8,12 @@ is cut.
 
 ## [Unreleased]
 
+- Fixed namespace-split `:comment_edits` positional pairing after removals.
+  Comments now match by original owning form and exact content; shifted
+  survivors disappear from the diff, owner moves and replacements are distinct,
+  and surviving duplicate content is never reported deleted. File groups now
+  contain explicit `:edits` variants instead of positional `:lines` rows.
+
 - Namespace-split receipts now carry candidate comment edits, scoped stale-reference
   and facade scans, actual per-owner definition counts, and body hashes separating
   raw equality from authorized replay. Contradictory evidence refuses before write.

@@ -831,10 +831,19 @@ workspace `:unexpected_paths`. Caller strings use the receipt encoder; raw
 captured facts stay in `:details_path`. The receipt is capped at 65,536 bytes.
 The receipt also carries candidate evidence across the captured roots:
 
-- `:comment_edits`: changed comment lines grouped by original/candidate file,
-  with `[:line :after_line :before :after]` rows and the applied `:comment_policy`.
-  An `[:indent N]` after-value preserves the before line's suffix with N leading
-  spaces. Identical moved comment lines are relocations, not content edits.
+- `:comment_edits`: an owner/content identity diff, grouped by `:file` and
+  `:after_file`. Each `:edits` entry names an `:owner` and its `:changes`.
+  `:moved {:from [original-lines] :to [candidate-lines]}` records every matched
+  occurrence without repeating unchanged text. Location vectors may contain
+  inclusive `[start end]` ranges. `:changed {:before :after}` carries corresponding
+  text vectors plus `:line`/`:after_line`, or `:moved` locations when relocated.
+  A before-text `[N text]` expands to N spaces followed by text.
+  `[:indent N]` after-text reuses the before suffix with N leading spaces,
+  as declared in `:comment_after_encoding`. `:added` and `:deleted` carry text
+  and the corresponding line; removal of a duplicate whose text survives is
+  `:removed_occurrence`, never `:deleted`. Untouched comments shifted by earlier
+  edits are omitted; no changes is `[]`. The applied `:comment_policy` and
+  lossless `:text_encoding` remain explicit.
 - `:stale_references`: count, located token list, expected empty list and scan
   scope. This is a static qualified-symbol/require scan, including unchanged
   test files; strings, semicolon prose and dynamic resolution are excluded.
