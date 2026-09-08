@@ -648,3 +648,7 @@ Set in ~/.bashrc and ~/.profile (TMPDIR/TMP/TEMP + JAVA_TOOL_OPTIONS); ~/bin/sea
 ## 2026-09-08T03:51:14+00:00 — B01 tree correction
 
 B01 in progress on astra/namespace-split and records/MCP-main, no push. Corrected scheduler: docs/observations/2026-09-08-perfect-the-wins-tree.md. Next B02 consumes docs/observations/2026-09-08-row1-split-ledger.md for explicit-session resume, one external lease, terminal exits, bound proof and actual-child observer qualification. Row 1 remains medium ceiling; running cold-start pilot is untouched. Row 5 primary = Astra's registered 25% + 90 s + >2SD; 30% fixed secondary. Row 1 primary remains ≥30%.
+
+## 2026-09-08T03:57:12+00:00 — B01 evidence freeze
+
+B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa; tree correction 7ab11965. B02 consumes explicit session/one external lease/terminal exits/bound proof/actual child observer plus real ready-image smoke and the no-build self-owner refusal counterexample. B01 round/audit pass, but full make test is blocked by stale battery receipt (31 counted commits behind, max 30). Keep that gate outstanding; no low/installed-route/certified-round claim. Pilot 2 and its worktrees remain untouched.

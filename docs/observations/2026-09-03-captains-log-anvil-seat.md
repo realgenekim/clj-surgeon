@@ -3691,3 +3691,7 @@ Plan (cellC/astra-plan-tree.md, 142 lines): tree corrections (8×/9× descriptiv
 ## 2026-09-08T03:51:14+00:00 — B01 tree correction
 
 B01 corrects the perfect-the-wins tree: exact Cell C contract only; 8.0×/9.1× descriptive across different endpoints; uncalibrated capabilities and scoped 3/21-site fan-out suspension; five-item phase hole closed. Gene's B01 instruction fixes row 5 at Astra's registered primary, with 30% a stricter secondary, superseding the 03:41Z gate sentence. Row 1 keeps its separate ≥30% fresh-wave gate. No route installation or push. The row-1 ledger is the B02 input; medium is a ceiling pending gate receipts.
+
+## 2026-09-08T03:57:12+00:00 — B01 evidence freeze
+
+B01 ledger frozen: exact Cell C grammar/mapping and exclusions, pilot-2 input pins with delivery/red-seed gaps, six fresh native floors plus two three-pair row-1 waves, absent gate receipts, route/escape/kill examples and proposed copyable receipt schema. Code 4856f5aa; round b01 intents=ok, 0 paper cuts, 4/4 oracles, 35/428/0, 57 s grade-only; direct audit {:ok true, :violations []}. Literal no-build command self-refused; existing --adopt owner handle plus an outer normal lock allowed the bounded no-build grade. make test stopped at stale battery (31>30); full landing gate remains unproven. No harness/routing edits or pushes.
