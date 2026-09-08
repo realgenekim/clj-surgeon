@@ -417,10 +417,10 @@
   "Namespaces in a lane today that round one did NOT measure, each with the
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
-  '{clj-surgeon.receipt-artifacts-boundary-test 13 ; Sol r10 per-verb publication witnesses.
+  '{clj-surgeon.receipt-artifacts-boundary-test 15 ; Sol r10 + two Row 5 real-process witnesses (battery).
     clj-surgeon.namespace-split-test 35 ; B07 adds nine partial-retention, facts, bounded-analysis and preservation witnesses.
     clj-surgeon.namespace-split-warm-test 2 ; Round 3: real nREPL failure/green matrix and stale/foreign discovery, integration.
-    clj-surgeon.mcp-namespace-split-test 8 ; B07 adds effect-free facts boundary to schema, capture, projection and rollback.
+    clj-surgeon.mcp-namespace-split-test 13 ; B07 + five Row 5 pure/path witnesses; two real-process witnesses live in receipt-artifacts-boundary-test.
     clj-surgeon.cell-b-oracle-test 2 ; B07: shell lint mutation test and independent partial-preservation mutants; battery (Python subprocess).
     clj-surgeon.mcp-expect-guard-test 14 ; `expect` is a guard on both write routes, not discarded bookkeeping (dogfood-3, 2026-09-07).
     clj-surgeon.outline-corpus-integration-test 1 ; MOVED: full repository differential out of the bounded fast namespace.
@@ -539,7 +539,8 @@
       ;; B07 adds 9 compiler + 1 boundary + 2 oracle tests: 484 + 12 = 496.
       ;; Row 3 adds 9 pure + 12 real boundary/CLI witnesses: 496 + 21 = 517.
       ;; Sol r10 adds 13 per-verb publication witnesses: 517 + 13 = 530.
-      (is (= 530 adopted) (str "adopted tests: " adopted)))
+      ;; Rows sublime adds seven external-profile/proof-honesty boundary witnesses.
+      (is (= 537 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -635,7 +636,9 @@
       ;; B07 adds 12 JVM witnesses; one new CLI test runs separately in the BB suite.
       ;; Standalone require intent: 1501 + 21 = 1522, with boundary processes in battery.
       ;; Sol r10 adds 13 witnesses: 1530 + 13 = 1543.
-      (is (= 1543 total) (str "manifest declares " total " tests"))
+      ;; Rows sublime: seven split boundaries plus six alias telemetry witnesses.
+      ;; 1543 + 7 + 6 = 1556; no test or namespace leaves the corpus.
+      (is (= 1556 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

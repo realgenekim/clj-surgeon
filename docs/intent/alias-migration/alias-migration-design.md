@@ -441,3 +441,11 @@ The complete alias boundary battery runs through `make alias-migration-test` on
 every `make test` and `make landing-gate` (`~/bin/land`). A freshness receipt
 for the other battery namespaces does not substitute for this affected suite.
 ALIAS-MIGRATION-003 owns the permanent lane membership witness.
+
+Per-call route telemetry measures request-to-operation-result wall in milliseconds
+and records refusal_price only for refusal. Caller fallback, first-attempt status
+and complete verified wall are unknown. Missing counts remain nil with named
+unknowns. The MCP route and direct execution share one nested-call-safe recorder;
+its append-only external ledger uses process/thread serialization. Ledger failure
+preserves the operation result with explicit unknown evidence. See the
+[telemetry requirements](receipt-artifacts-specs.md).

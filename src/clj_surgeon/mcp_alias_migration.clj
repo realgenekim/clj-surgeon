@@ -2743,7 +2743,7 @@
                                    (when-let [rename (:lib-rename plan)] [(:file rename) (:new-file rename)])))))))))))))
 
 ;; @spec MCP-OP-ALIAS-047
-(defn execute!
+(defn- execute-unmetered!
   "One alias_migration, with heap exhaustion published as a typed refusal.
 
   The ceilings above make an OutOfMemoryError unreachable for any scope the verb
@@ -2779,3 +2779,76 @@
                           "authority, not this refusal.")
                      (str "Narrow scope.paths; the whole scope is held in "
                           "memory at once."))})))))
+
+(def ^:dynamic *recording-call* false)
+(defonce ^:private telemetry-lock (Object.))
+
+;; @spec ALIAS-MIGRATION-004
+;; INTENT: ALIAS-MIGRATION-004
+(defn telemetry-row
+  "Pure observation: absent counts and caller follow-up are unknown, never zero."
+  [id wall-ms result]
+  (let [outcome (cond (= "unknown" (:state result)) "unknown"
+                      (:committed result) "committed"
+                      (false? (:ok result)) "refused" :else "unknown")
+        counts {:files (:files result) :sites (:sites result) :collisions (:collisions_resolved result)}]
+    (merge {:type :telemetry :id id :wall_ms wall-ms :outcome outcome
+            :refusal_price (when (= "refused" outcome) wall-ms)
+            :fallback "unknown"
+            :unknown (into ["fallback" "first_attempt" "verified_wall"]
+                           (keep (fn [k] (when (nil? (get counts k)) (name k)))
+                                 [:files :sites :collisions]))}
+           counts)))
+
+;; @spec ALIAS-MIGRATION-005
+;; INTENT: ALIAS-MIGRATION-005
+(defn append-telemetry!
+  "One line per call. Local plus file locking prevents thread/process interleave."
+  [row]
+  (let [dir (io/file artifacts/*artifact-root* (str "alias-migration" "-receipts"))
+        ledger (io/file dir "ledger.edn")]
+    (.mkdirs dir)
+    (when-not (= (.getCanonicalFile ledger) (.getAbsoluteFile ledger))
+      (throw (ex-info "Telemetry ledger must not traverse a symlink" {})))
+    (locking telemetry-lock
+      (with-open [channel (java.nio.channels.FileChannel/open
+                            (.toPath ledger)
+                            (into-array java.nio.file.OpenOption
+                                        [java.nio.file.StandardOpenOption/CREATE
+                                         java.nio.file.StandardOpenOption/WRITE
+                                         java.nio.file.StandardOpenOption/APPEND
+                                         LinkOption/NOFOLLOW_LINKS]))
+                  _guard (.lock channel)]
+        (let [buffer (java.nio.ByteBuffer/wrap (.getBytes (str (pr-str row) "\n") "UTF-8"))]
+          (while (.hasRemaining buffer) (.write channel buffer)))
+        (.force channel false)))
+    (str ledger)))
+
+;; @spec ALIAS-MIGRATION-004
+;; @spec ALIAS-MIGRATION-005
+(defn measured-call!
+  "Meter the outermost entrance, including MCP routing refusals, exactly once.
+  Wall ends at operation return, before ledger I/O; caller verification is unknown."
+  [f]
+  (if *recording-call*
+    (f)
+    (binding [*recording-call* true]
+      (let [start (System/nanoTime)
+            id (str (UUID/randomUUID))
+            attempted (try {:result (f)} (catch Throwable e {:thrown e}))
+            result (or (:result attempted) {:state "unknown"})
+            row (telemetry-row id (/ (double (- (System/nanoTime) start)) 1e6) result)
+            recorded (try {:recorded true :ledger (append-telemetry! row)}
+                          (catch Exception e {:recorded false :error (.getMessage e)}))]
+        ;; Unexpected throws keep their existing transport semantics, but the
+        ;; ledger still records this call with unknown outcome and counts.
+        (when-let [error (:thrown attempted)] (throw error))
+        (merge result
+               (select-keys row [:refusal_price :fallback :unknown])
+               {:telemetry (merge (select-keys row [:id :wall_ms :outcome]) recorded)}
+               (when-not (:recorded recorded)
+                 {:unknown (conj (:unknown row) "telemetry_ledger")}))))))
+
+(defn execute!
+  [config params]
+  (measured-call! #(execute-unmetered! config params)))

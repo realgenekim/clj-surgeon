@@ -479,3 +479,30 @@ Final r10 landing gate passes: 156 affected-battery tests / 3,393 assertions,
 zero failures/errors. Intent audit is clean; serialized changed-files lint has
 zero errors/warnings. The first cold gate's five count/catalog failures and their
 repairs remain in the report.
+
+
+### 2026-09-08T13:35:31.736584+00:00 — rows sublime: proof configuration, honesty and route telemetry
+
+NS-SPLIT-047..049 add external profile files, a named empty-profile refusal and
+incomplete receipts for true-only cold profiles. The Row 5 D2–D6 receipt shape
+was red before the fix; a fresh Cell C in-image loop passes 52 tests / 530
+assertions with PAPERCUTS=0. Configuration adds no workspace file; the CLI
+external profile path is exercised through its actual Babashka entrance.
+
+ALIAS-MIGRATION-004/005 record refusal price and unknown caller outcomes, plus
+one external ledger line per call. The full alias boundary passes 143 tests /
+3,331 assertions. A fresh frozen nine-file / 21-site replay has three resolved
+collisions, no workspace artifact pollution, and all five Row 2 oracles PASS.
+Missing counts, fallback, first-attempt and complete verified wall are not
+manufactured. Ledger failure preserves the operation result.
+
+Single hand-driven Cell C observation on split/base2 4f6283aa (d9205abc source
+plus the authorized nREPL test alias and architecture test): warm 19.736 s,
+cold 43.305 s, then the hand-run pending cold gate on the warm candidate
+23.915 s. Warm remains verification_complete=false with all three cold commands
+pending in its immutable receipt; the separate hand gate closes them, including
+231 tests / 2,258 assertions. This is one observation, without native controls
+or variance qualification, and carries no routing-performance claim.
+
+Final commit, red/green logs, intent audit and cold repository gate are recorded
+in `/var/tmp/forge/plan2/cellC/astra-rows-sublime-report.md`.

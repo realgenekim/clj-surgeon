@@ -7200,3 +7200,102 @@
     (is (= #{"copy.clj" "source.clj" "changed.clj"}
            (paths " C copy.clj\u0000source.clj\u0000 M changed.clj\u0000")))
     (is (= #{} (paths "")))))
+
+;; @spec ALIAS-MIGRATION-004
+;; @spec ALIAS-MIGRATION-005
+;; INTENT-TEST: ALIAS-MIGRATION-004
+;; INTENT-TEST: ALIAS-MIGRATION-005
+(deftest route-telemetry-records-commit-and-refusal
+  (let [workspace (workspace!) artifact-root (temp-dir)]
+    (try
+      (binding [artifacts/*artifact-root* (str artifact-root)]
+        (let [good (alias-migration/execute! (config workspace artifact-root) (request workspace))
+              bad (alias-migration/execute! (config workspace artifact-root) {})
+              ledger (io/file artifact-root "alias-migration-receipts/ledger.edn")]
+          (is (:committed good) (pr-str good))
+          (is (false? (:ok bad)))
+          (doseq [r [good bad]]
+            (is (contains? r :refusal_price))
+            (is (= "unknown" (:fallback r)))
+            (is (every? (set (:unknown r)) ["fallback" "first_attempt" "verified_wall"]))
+            (is (number? (get-in r [:telemetry :wall_ms]))))
+          (is (nil? (:refusal_price good)))
+          (is (number? (:refusal_price bad)))
+          (is (.isFile ledger))
+          (when (.isFile ledger)
+            (let [rows (mapv edn/read-string (str/split-lines (slurp ledger)))]
+              (is (= 2 (count rows)))
+              (is (= [:telemetry :telemetry] (mapv :type rows)))
+              (is (= ["committed" "refused"] (mapv :outcome rows)))
+              (is (= [12 nil] (mapv :files rows)))
+              (is (= [(:sites good) nil] (mapv :sites rows)))
+              (is (= [(:collisions_resolved good) nil] (mapv :collisions rows)))
+              (is (= (mapv #(get-in % [:telemetry :id]) [good bad]) (mapv :id rows)))
+              (is (= (:refusal_price bad) (:wall_ms (second rows))))))))
+      (finally (delete-tree! workspace) (delete-tree! artifact-root)))))
+
+;; @spec ALIAS-MIGRATION-004
+;; INTENT-TEST: ALIAS-MIGRATION-004
+(deftest route-telemetry-preserves-unknowns-and-units
+  (is (= {:type :telemetry :id "r1" :wall_ms 12.5 :outcome "refused"
+          :refusal_price 12.5 :fallback "unknown"
+          :unknown ["fallback" "first_attempt" "verified_wall" "files" "sites" "collisions"]
+          :files nil :sites nil :collisions nil}
+         (alias-migration/telemetry-row "r1" 12.5 {:ok false})))
+  (is (= ["fallback" "first_attempt" "verified_wall"]
+         (:unknown (alias-migration/telemetry-row "r2" 0.0
+                     {:ok true :committed true :files 0 :sites 0 :collisions_resolved 0})))))
+
+;; @spec ALIAS-MIGRATION-005
+;; INTENT-TEST: ALIAS-MIGRATION-005
+(deftest route-telemetry-nests-once-and-preserves-commit-on-ledger-failure
+  (let [rows (atom []) result {:ok true :committed true :undo_receipt "/external/undo.edn"}]
+    (with-redefs [alias-migration/append-telemetry! (fn [row] (swap! rows conj row) "/external/ledger.edn")]
+      (let [r (alias-migration/measured-call! #(alias-migration/measured-call! (constantly result)))]
+        (is (= 1 (count @rows)))
+        (is (= (:id (first @rows)) (get-in r [:telemetry :id])))
+        (is (= result (select-keys r (keys result))))))
+    (with-redefs [alias-migration/append-telemetry! (fn [_] (throw (ex-info "disk full" {})))]
+      (let [r (alias-migration/measured-call! (constantly result))]
+        (is (= result (select-keys r (keys result))))
+        (is (false? (get-in r [:telemetry :recorded])))
+        (is (some #{"telemetry_ledger"} (:unknown r)))))))
+
+;; @spec ALIAS-MIGRATION-005
+;; INTENT-TEST: ALIAS-MIGRATION-005
+(deftest route-telemetry-includes-mcp-routing-refusals
+  (let [rows (atom []) captured (atom nil)]
+    (with-redefs [alias-migration/append-telemetry! (fn [row] (swap! rows conj row) "/external/ledger.edn")]
+      ;; Routing refuses a nonexistent workspace before execute! can be called.
+      (mcp-tool/handle-alias-migration nil {:workspace_root "/var/tmp/forge/rows-sublime/no-such-workspace"}
+        (fn [_ _ result] (reset! captured result)))
+      (is (false? (:ok @captured)))
+      (is (= 1 (count @rows)))
+      (is (= (:id (first @rows)) (get-in @captured [:telemetry :id])))
+      (is (number? (:refusal_price @captured))))))
+
+;; @spec ALIAS-MIGRATION-005
+;; INTENT-TEST: ALIAS-MIGRATION-005
+(deftest route-telemetry-records-unknown-on-unexpected-throw
+  (let [rows (atom []) error (ex-info "unexpected operation failure" {})]
+    (with-redefs [alias-migration/append-telemetry! (fn [row] (swap! rows conj row) "/external/ledger.edn")]
+      (is (identical? error (try (alias-migration/measured-call! #(throw error))
+                              (catch Throwable e e))))
+      (is (= ["unknown"] (mapv :outcome @rows)))
+      (is (nil? (:refusal_price (first @rows)))))))
+
+;; @spec ALIAS-MIGRATION-005
+;; INTENT-TEST: ALIAS-MIGRATION-005
+(deftest route-telemetry-appends-whole-concurrent-lines
+  (let [artifact-root (temp-dir)]
+    (try
+      (binding [artifacts/*artifact-root* (str artifact-root)]
+        (let [calls (mapv (fn [id] (future (alias-migration/append-telemetry!
+                                             (alias-migration/telemetry-row (str id) 1.0 {:ok false}))))
+                      (range 16))]
+          (doseq [call calls] @call)
+          (let [rows (map edn/read-string (str/split-lines
+                                            (slurp (io/file artifact-root "alias-migration-receipts/ledger.edn"))))]
+            (is (= 16 (count rows)))
+            (is (= (set (map str (range 16))) (set (map :id rows)))))))
+      (finally (delete-tree! artifact-root)))))
