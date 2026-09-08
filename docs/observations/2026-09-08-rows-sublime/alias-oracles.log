@@ -1,0 +1,88 @@
+O1.1 require rc=0
+O1.2 server-test-run rc=0
+O1.3 runtests-once rc=0
+O1 counts: 579 tests, 7833 assertions, 0 failures
+O1 VERDICT: PASS
+--- O2.a changed path set ---
+src/marvin_voice_remote/app_route.clj
+src/marvin_voice_remote/bridge3_new.clj
+src/marvin_voice_remote/channel.clj
+src/marvin_voice_remote/codex_app_server.clj
+src/marvin_voice_remote/director_control.clj
+src/marvin_voice_remote/director_outbox.clj
+src/marvin_voice_remote/reducer_session.clj
+src/marvin_voice_remote/server.clj
+src/marvin_voice_remote/tts.clj
+O2.a PASS (exactly the nine caller files)
+--- O2.b seeded helper unchanged ---
+O2.b PASS (seeded helper json.clj byte-identical)
+--- O2.c token-level live census over the nine caller files ---
+live old atoms (*/write-str) = 0   live target atoms (<alias>/write) = 21
+O2.c PASS (0 live old / 21 live target)
+--- O2.d alias-neutral token-stream comparison against the historical golden ---
+  app_route: PASS (alias='mjson'; 412 tokens; non-alias tokens byte-identical and in order; live old=0 live target=1)
+  bridge3_new: PASS (alias='mjson'; 3872 tokens; non-alias tokens byte-identical and in order; live old=0 live target=3)
+  channel: PASS (alias='mjson'; 14352 tokens; non-alias tokens byte-identical and in order; live old=0 live target=6)
+  codex_app_server: PASS (alias='mjson'; 1736 tokens; non-alias tokens byte-identical and in order; live old=0 live target=2)
+  director_control: PASS (alias='mjson'; 1413 tokens; non-alias tokens byte-identical and in order; live old=0 live target=3)
+  director_outbox: PASS (alias='mjson'; 1540 tokens; non-alias tokens byte-identical and in order; live old=0 live target=3)
+  reducer_session: PASS (alias='mjson'; 5488 tokens; non-alias tokens byte-identical and in order; live old=0 live target=1)
+  server: PASS (alias='mjson'; 1463 tokens; non-alias tokens byte-identical and in order; live old=0 live target=1)
+  tts: PASS (alias='mjson'; 582 tokens; non-alias tokens byte-identical and in order; live old=0 live target=1)
+O2 VERDICT: PASS
+kondo exit=3 (non-zero is normal when findings exist)
+--- seed tracked-category findings: 14 ---
+--- candidate tracked-category findings: 14 ---
+--- candidate MINUS seed ---
+--- seed MINUS candidate ---
+lint errors: candidate=37 seed=37
+O3 VERDICT: PASS
+--- O4.1 protected prose ---
+raw old-name occurrences across the nine callers: 1 (expect exactly 1)
+candidate: 280:   its expectation by calling the same `json/write-str` on the same map, so it
+seed     : 281:   its expectation by calling the same `json/write-str` on the same map, so it
+O4.1 PASS (cmd-attrs docstring byte-identical)
+O4.1 PASS (helper delegation json/write-str byte-identical)
+--- O4.2 one effective target alias per namespace; no live old require ---
+  app_route            target-libspecs=1 alias=mjson      old-require=0  PASS
+  bridge3_new          target-libspecs=1 alias=mjson      old-require=0  PASS
+  channel              target-libspecs=1 alias=mjson      old-require=0  PASS
+  codex_app_server     target-libspecs=1 alias=mjson      old-require=0  PASS
+  director_control     target-libspecs=1 alias=mjson      old-require=0  PASS
+  director_outbox      target-libspecs=1 alias=mjson      old-require=0  PASS
+  reducer_session      target-libspecs=1 alias=mjson      old-require=0  PASS
+  server               target-libspecs=1 alias=mjson      old-require=0  PASS
+  tts                  target-libspecs=1 alias=mjson      old-require=0  PASS
+--- O4.3 collision reconstruction (expect 3 resolved, 6 reuse) ---
+  app_route            seed-had-mjson=0 seed-json-occupied=1 now-mjson=1  COLLISION-RESOLVED
+  bridge3_new          seed-had-mjson=1 seed-json-occupied=1 now-mjson=1  REUSE
+  channel              seed-had-mjson=1 seed-json-occupied=1 now-mjson=1  REUSE
+  codex_app_server     seed-had-mjson=1 seed-json-occupied=1 now-mjson=1  REUSE
+  director_control     seed-had-mjson=1 seed-json-occupied=1 now-mjson=1  REUSE
+  director_outbox      seed-had-mjson=1 seed-json-occupied=1 now-mjson=1  REUSE
+  reducer_session      seed-had-mjson=1 seed-json-occupied=1 now-mjson=1  REUSE
+  server               seed-had-mjson=0 seed-json-occupied=1 now-mjson=1  COLLISION-RESOLVED
+  tts                  seed-had-mjson=0 seed-json-occupied=1 now-mjson=1  COLLISION-RESOLVED
+  reuse=6 collisions_resolved=3
+O4 VERDICT: PASS
+--- O5.1 candidate diffstat vs golden diffstat ---
+ src/marvin_voice_remote/server.clj           | 4 ++--
+ src/marvin_voice_remote/tts.clj              | 4 ++--
+ 9 files changed, 21 insertions(+), 27 deletions(-)
+golden reference (caller-only): 9 files changed, 30 insertions(+), 30 deletions(-) expected shape
+golden   changed-lines: +21 -27
+candidate changed-lines: +21 -27
+--- O5.2 stray artifacts left in the tree ---
+new tracked files: <none>
+stray ignored paths: <none>
+--- O5.3 require-block churn beyond the migration ---
+papercut MINOR count = 0 (golden reference = 0)
+O5 VERDICT: PASS
+
+===== ORACLE SUMMARY for astra-rows-sublime =====
+O1 load+suite        : PASS
+O2 structural+golden : PASS   (v2 alias-neutral)
+O3 kondo delta       : PASS
+O4 prose+collision   : PASS
+O5 papercut          : PASS
+ACCEPTED             : YES

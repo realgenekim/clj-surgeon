@@ -1,0 +1,35 @@
+{
+  "recorded_at": "2026-09-08T13:30:24.300320+00:00",
+  "workspace": "/var/tmp/forge/rows-sublime/cellC-warm",
+  "wall_ms": 23914.787753950804,
+  "checks": [
+    {
+      "command": [
+        "python3",
+        "/var/tmp/forge/plan2/cellC/cc-oracle.py",
+        "/var/tmp/forge/rows-sublime/cellC-warm"
+      ],
+      "exit": 0,
+      "wall_ms": 31.989187002182007
+    },
+    {
+      "command": [
+        "python3",
+        "/home/forge/src/clj-surgeon-split/test/oracles/namespace_split_papercut_oracle.py",
+        "/var/tmp/forge/rows-sublime/cellC-warm"
+      ],
+      "exit": 0,
+      "wall_ms": 1867.9433781653643
+    },
+    {
+      "command": [
+        "bin/kaocha",
+        "unit",
+        "--fail-fast"
+      ],
+      "exit": 0,
+      "wall_ms": 22014.758413191885
+    }
+  ],
+  "ok": true
+}
