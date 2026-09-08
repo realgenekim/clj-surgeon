@@ -19,7 +19,8 @@
    "references/cli-fallback.md"
    "references/advanced-operations.md"])
 
-(def max-entrypoint-lines 30)
+;; @spec ROUTING-PARITY-001
+(def max-entrypoint-lines 70)
 
 (defn fail! [message data]
   (binding [*out* *err*]

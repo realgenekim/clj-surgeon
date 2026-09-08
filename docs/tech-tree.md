@@ -401,3 +401,16 @@ friction-low promotion. Full gates and operator commands are retained at
 `/var/tmp/forge/plan2/cellC/astra-B03prep-report.md`; the first make test attempt
 stopped at the pre-existing stale battery receipt.
 [Intent and witness matrix](intent/agent-routing/agent-routing-design.md).
+
+### 2026-09-08T05:22:34.331594+00:00 — B03b routing verifier repair
+
+Sol r7 found four doctrine mutations that the 18-needle verifier accepted.
+The [routing intent registry](intent/agent-routing/agent-routing-specs.md) now
+owns complete passages and schemas, consumed by the verifier with declared-ID
+coverage checks. Four independent mutant witnesses fail before the repair and
+refuse afterward; every registered passage has a deletion witness. The plate
+limits nonzero exits to the two baseline-attributed analysis checks, and the
+69-line canonical skill and both worktree mirrors match its admission boundary.
+Both trunk battery rows and the branch row are preserved in receipt order.
+No routing performance claim, installation or push; verification and merge
+receipts are in `/var/tmp/forge/plan2/cellC/astra-B03b-report.md`.

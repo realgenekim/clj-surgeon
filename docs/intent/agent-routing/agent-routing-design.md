@@ -26,6 +26,8 @@ It covers 87 static sites in five caller files. Dynamic resolution, architectura
 decomposition, other grammars and changed manifests require new admission.
 Proof requires committed state, complete verification, no pending proof, all
 profile checks present and exit zero, including papercuts when registered.
+Only the two analysis checks with baseline attribution in a `:baseline` map
+may have nonzero exits; every other nonzero exit refuses, regardless of status.
 Uncertain mapping starts plan-only. Read state before one safe next_call repair
 or native fallback; never repeat a committed split. Correctness failure or a
 complete-wall loss against registered controls suspends this exact route.
@@ -49,6 +51,27 @@ boundary tests using scratch targets only. Run warm focused tests, formatter,
 serialized kondo, direct intent audit, plate-only Make check and `make test`.
 Preserve failures and any unrelated gate limitation in the operator report.
 
+## B03b verifier repair
+
+The executable EDN registry in agent-routing-specs.md owns every required plate
+passage, grouped by the existing ROUTING IDs. The verifier reads that registry
+relative to its own source, never a caller-selected working directory. A pure
+parser requires exactly one registry and nonempty string vectors for exactly
+the declared IDs; invalid or missing registry data fails closed. Required needles
+are derived in intent declaration order. Full paragraphs (including wrapped
+qualifiers), call schemas and evidence boundaries are pinned, so removing a
+promise cannot retain only its heading and pass. This validates registered text,
+not arbitrary prose semantics or the truth of a runtime receipt.
+
+The four Sol r7 mutations must each fail before implementation and refuse after
+it. Remove every registry passage independently; add a new promise through the
+registry alone and prove enforcement; reject empty, missing and malformed entries.
+Also witness the baseline exception, all three skill mirrors and 70-line cap,
+the ordered trunk/branch ledger receipts, and the design EOF whitespace repair.
+Synchronize skills only in the worktree. Fetch trunk, preserve both sequences of
+ledger receipts byte-for-byte, and verify a dry merge against that fetched tip.
+User's B03b repair request authorizes this leaf through verification and branch
+commits; installation and push remain excluded.
+
 The installed hash witness runs against disposable targets during prep. It does
 not claim that either real global instruction file contains the branch plate.
-

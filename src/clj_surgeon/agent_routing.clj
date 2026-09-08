@@ -2,6 +2,7 @@
   "Install one canonical clj-surgeon routing block into agent instructions."
   (:require
    [clj-surgeon.file-ops :as file-ops]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str])
   (:import
@@ -12,39 +13,40 @@
 (def managed-begin "<!-- BEGIN CLJ-SURGEON ROUTING v:1 -->")
 (def managed-end "<!-- END CLJ-SURGEON ROUTING v:1 -->")
 
-;; The doctrine-agreement ratchet. A plate change that agents must READ is not
-;; landed because a file changed; it is landed when the text is present, byte
-;; for byte, in every managed block that takes effect. These lines are checked
-;; both in the canonical source (so a generator that drops one cannot install)
-;; and in every installed target (so a seat whose block was hand-edited or left
-;; on an older plate is a LOUD refusal, not a silent disagreement).
-;;
-;; Every entry must be a SINGLE line of the plate; a wrapped paragraph is not a
-;; byte-exact needle. Update this vector and the plate in the same commit.
+;; @spec ROUTING-PARITY-001
+(defn registry-sections
+  "Derive mandatory passages in declared intent order; invalid registries refuse."
+  [source]
+  (try
+    (let [ids (mapv second (re-seq #"(?m)^- \[x\] \*\*(ROUTING-[A-Z]+-[0-9]+)\*\*:" source))
+          blocks (re-seq #"(?ms)^```edn routing-requirements\n(.*?)^```$" source)]
+      (when-not (and (seq ids) (= (count ids) (count (distinct ids)))
+                  (= 1 (count blocks)))
+        (throw (ex-info "Expected declared intents and one routing registry" {})))
+      (let [reader (java.io.PushbackReader. (java.io.StringReader. (second (first blocks))))
+            registry (edn/read {:eof nil} reader)]
+        (when-not (and (map? registry) (= (set ids) (set (keys registry)))
+                    (every? (fn [needles]
+                              (and (vector? needles) (seq needles)
+                                   (every? #(and (string? %) (not (str/blank? %))) needles)))
+                            (vals registry))
+                    (= ::eof (edn/read {:eof ::eof} reader)))
+          (throw (ex-info "Each declared intent requires nonempty plate passages" {})))
+        (vec (mapcat registry ids))))
+    (catch Exception cause
+      (throw (ex-info "Invalid routing intent registry"
+               {:error-type :invalid-routing-registry} cause)))))
+
+;; This is a repository installer: anchor its intent authority to its source,
+;; including when Make invokes it from outside the checkout. Missing docs fail closed.
 ;; @spec ROUTING-FANOUT-001
 ;; @spec ROUTING-SPLIT-001
+;; @spec ROUTING-PARITY-001
 (def required-sections
-  ["**SUSPENDED 2026-09-08 (pair-1: tool 0.68×/0.59× native at 3 and 21 sites, equal acceptance; retest only as a whole-intent redesign)**"
-   "Capability example only; no automatic fan-out route."
-   "### Namespace split -- EXACT witnessed contract only"
-   "Only the frozen Cell C source shape AND manifest qualify (experimental)."
-   "`promotion_policy=promote-required`, `source_retirement=delete`,"
-   "`roots=[src,test]` and a named cold `verification.profile`."
-   "141 named owners / 20 absent destinations / 87 static sites / five caller files."
-   "`state=committed`, `verification_complete=true`, `proof_pending=[]`,"
-   "every required profile check present with `:exit 0`;"
-   "`papercuts` must pass when the profile carries that oracle."
-   "Escape: plan-only first when the mapping is uncertain (`plan_only=true` in X)."
-   "A safely correctable typed refusal: repair once from `next_call`, then native."
-   "Never re-run a committed split; finish pending proof or follow guarded recovery."
-   "wall loss vs the registered controls suspends this route."
-   "Non-claims: dynamic references, open-ended decomposition, other source grammars"
-   "*Derived from doctrine commit 3c2eb6a9 on clj-surgeon astra/namespace-split (2026-09-08).*"
-   ;; The strictly-better rule and its kill switch. A plate that routes a class
-   ;; without stating WHEN the route is withdrawn is an unbounded default, so the
-   ;; rule line and the retirement line are pinned together.
-   "**Strictly better, or native.** Route automatically only when the task matches a witnessed contract and the complete receipt path is available; otherwise use native. On one clear refusal repair once, then native fallback with a receipt. Meter complete verified wall, first-attempt success, fallback and unknown telemetry; retire a route when evidence no longer clears its native control."
-   "**Kill switch.** A correctness failure SUSPENDS a routed class immediately. A wall"])
+  (registry-sections
+    (slurp (io/file (-> (io/resource "clj_surgeon/agent_routing.clj")
+                      io/file .getParentFile .getParentFile .getParentFile)
+             "docs/intent/agent-routing/agent-routing-specs.md"))))
 
 (defn missing-sections
   "Required plate sections absent from `source`, in declaration order."

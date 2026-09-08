@@ -2,11 +2,8 @@
 ## Clojure editing
 
 **Native `rg` plus a native patch is the default route for reading and editing
-Clojure.** Do not reach for clj-surgeon for ordinary edits. Measured 2026-09-02
-(81 arm-runs, verified servers, two blind judges; receipts:
-`docs/observations/2026-09-02-captains-log-bridge-wall-clock-ideal-program.md`):
-instructed Surgeon use cost about 2x wall and actions without a quality win;
-free-choice agents declined it.
+Clojure.** Ordinary edits stay native: 81 arm-runs found 2x wall/actions and no
+quality win. Receipt: `docs/observations/2026-09-02-captains-log-bridge-wall-clock-ideal-program.md`.
 
 ## Strictly better, or native (2026-09-08)
 
@@ -77,7 +74,9 @@ fixture; MCP takes that same request data. A changed mapping/policy/source shape
 
 Proof over the current snapshot requires ALL of:
 `state=committed`, `verification_complete=true`, `proof_pending=[]`,
-every required profile check present with `:exit 0`;
+every required profile check present with `:exit 0`; all failed checks refuse.
+Nonzero exit is excused ONLY with a `:baseline` map on `captured-reference-analysis`
+or `candidate-lint-delta`. Any other nonzero exit refuses, even `:status "passed"`.
 `papercuts` must pass when the profile carries that oracle.
 A warm `committed-probe-only` receipt is unfinished proof. Run outstanding
 user-required checks/review; a commit alone proves no behavior.

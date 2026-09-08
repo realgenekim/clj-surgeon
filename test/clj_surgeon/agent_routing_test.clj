@@ -16,6 +16,97 @@
        (str/join "\n" routing/required-sections) "\n"
        routing/managed-end "\n"))
 
+(defn assert-sol-mutation-refused [old replacement]
+  ;; Sol r7 review of d31c3af7: the original valid plate certified all four mutants.
+  (let [plate (slurp "resources/clj-surgeon-agent-routing.md")
+        mutant (str/replace plate old replacement)
+        result (routing/validate-routing-block mutant)]
+    (is (:ok (routing/validate-routing-block plate)))
+    (is (not= plate mutant) "the mutation must actually change the valid fixture")
+    (is (= :missing-required-routing-section (:error-type result)))
+    (is (false? (:ok result)))))
+
+;; @spec ROUTING-PARITY-001
+(deftest sol-r7-class-count
+  (assert-sol-mutation-refused "TWO classes are routed automatically" "THREE classes are routed automatically"))
+
+;; @spec ROUTING-SPLIT-001
+(deftest sol-r7-frozen-witness
+  (assert-sol-mutation-refused
+    "Witness: curtaincall-cfp `d9205abc`, `src/cfp_scheduler_killer/views.clj`:" ""))
+
+;; @spec ROUTING-SPLIT-001
+(deftest sol-r7-readmission
+  (assert-sol-mutation-refused "A changed mapping/policy/source shape needs new admission." ""))
+
+;; @spec ROUTING-PARITY-001
+(deftest sol-r7-alias-operation
+  (assert-sol-mutation-refused "\"op\": \"alias_migration\"" "\"op\": \"other_operation\""))
+
+;; @spec ROUTING-PARITY-001
+(deftest registry-controls-every-promise
+  (if-let [parse (ns-resolve 'clj-surgeon.agent-routing 'registry-sections)]
+    (let [registry (slurp "docs/intent/agent-routing/agent-routing-specs.md")
+          plate (slurp "resources/clj-surgeon-agent-routing.md")
+          sections (parse registry)]
+      (is (= sections routing/required-sections))
+      (doseq [section sections]
+        (let [result (routing/validate-routing-block (str/replace plate section ""))]
+          (is (= :missing-required-routing-section (:error-type result)) section)
+          (is (some #{section} (:missing result)) section)))
+      (testing "a new registry promise is enforced without editing a code list"
+        (let [extended (str/replace registry "```edn routing-requirements\n{"
+                         "```edn routing-requirements\n{\"ROUTING-NEW-001\" [\"A new mandatory promise.\"]\n")
+              extended (str "- [x] **ROUTING-NEW-001**: New promise.\n" extended)]
+          (with-redefs [routing/required-sections (parse extended)]
+            (is (= ["A new mandatory promise."]
+                   (:missing (routing/validate-routing-block plate)))))))
+      (doseq [broken ["" (str registry "\n```edn routing-requirements\n{}\n```\n")
+                      (str/replace registry "\"ROUTING-SPLIT-001\"" "\"ROUTING-UNKNOWN-001\"")
+                      (str/replace registry "```edn routing-requirements\n{" "```edn routing-requirements\n{broken ")
+                      "- [x] **ROUTING-EMPTY-001**: Required.\n```edn routing-requirements\n{\"ROUTING-EMPTY-001\" []}\n```\n"
+                      "- [x] **ROUTING-EMPTY-001**: Required.\n```edn routing-requirements\n{\"ROUTING-EMPTY-001\" [\"\"]}\n```\n"]]
+        (is (= :invalid-routing-registry
+               (try (parse broken) :accepted
+                    (catch clojure.lang.ExceptionInfo e (:error-type (ex-data e))))))))
+    (is false "requirements must derive from the intent registry")))
+
+;; @spec ROUTING-SPLIT-001
+(deftest split-baseline-exception-is-explicit
+  (let [plate (slurp "resources/clj-surgeon-agent-routing.md")]
+    (doseq [needle ["all failed checks refuse."
+                    "Nonzero exit is excused ONLY with a `:baseline` map on `captured-reference-analysis`"
+                    "or `candidate-lint-delta`. Any other nonzero exit refuses, even `:status \"passed\"`."]]
+      (is (str/includes? plate needle) needle))))
+
+;; @spec ROUTING-FANOUT-001
+;; @spec ROUTING-SPLIT-001
+;; @spec ROUTING-PARITY-001
+(deftest working-tree-skill-matches-plate
+  (doseq [path ["skills/clj-surgeon/SKILL.md" "skill.md" ".claude/skills/clj-surgeon/SKILL.md"]]
+    (let [skill (slurp path)]
+      (is (<= (count (str/split-lines skill)) 70) path)
+      (doseq [needle ["FAN-OUT: SUSPENDED" "ALIAS migration" "NAMESPACE SPLIT: exact frozen Cell C"
+                      "d9205abc" "141 owners / 20 absent destinations / 87 static sites / five callers"
+                      "changed mapping/policy/source shape needs new admission"
+                      "Any other nonzero exit refuses"]]
+        (is (str/includes? skill needle) (str path ": " needle)))
+      (is (not (str/includes? skill "Route only\n  when discovery is the cost"))))))
+
+;; @spec ROUTING-PARITY-001
+(deftest routing-prep-artifacts-preserve-evidence
+  ;; B03b: both trunk receipts must survive before this branch's later receipt.
+  (let [rows (mapv edn/read-string (str/split-lines (slurp "docs/observations/battery-ledger.edn")))
+        shas (mapv :sha rows)
+        receipts ["9d132e7f9a8a5887970adbfbbf5297e48e2c4915"
+                  "8795741f07b0991642b28116730f82e25df84b26"
+                  "ec64f322499c397de972f0b1cbb8c29342d7f145"]]
+    (doseq [sha receipts] (is (= 1 (count (filter #{sha} shas))) sha))
+    (is (apply < (map #(.indexOf shas %) receipts))))
+  (let [design (slurp "docs/intent/agent-routing/agent-routing-design.md")]
+    (is (str/ends-with? design "\n"))
+    (is (not (str/ends-with? design "\n\n")))))
+
 (deftest upsert-routing-block-preserves-unmanaged-bytes
   (testing "missing block appends after one blank line"
     (let [result (routing/upsert-routing-block "alpha\n" canonical-block)]
