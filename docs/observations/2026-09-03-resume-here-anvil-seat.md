@@ -689,3 +689,9 @@ B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa;
 - Gene decisions: inb-19e57b ref split; inb-9c04cc owners + commit contract; inb-3fa126 Hetzner (snoozed 2026-09-22). Reports: 2026-09-08-gene-report-evening.md.
 
 ## STATE at 2026-09-08T21:24Z — six lanes: ship #2 on rows batch 4 (8b1dd01d; run-bg ship-rows4-2); item 4b consumers → kaocha-sublime b1a838a; row-2 pilot 2 (schema pre-loaded Claude cells); 5-day sublime chart (Opus → 2026-09-08-sublime-score-5-days.md); ship v3 auto-close build STAGED at /var/tmp/forge/ship-v3/ (install only when no ship/receipt-chain/fence-run runs; Astra's 16 amendments sent); Astra idle — its next batch (row 5) is the auto-close dogfood.
+
+## STATE at 2026-09-08T23:05Z — trunk 36730c11 (battery floor landed; default battery ~165 s); 7906 srv7906g pid 1712480 + CLI on it
+- IN FLIGHT: Astra  real diff on branch astra/comment-edits in /home/forge/src/clj-surgeon-astra-consult (codex 1427953; report → cellC/astra-comment-edits-report.md) → ship v3 with LAND_EXTRA_TRAILERS + SHIP_INDEPENDENT_REVIEWER_CMD=/home/forge/bin/independent-review exported and the SHIP-FIX-BLOCK spec appended to the fence brief — the auto-close dogfood candidate.
+- Landed today via ship v3: rows batch 3, rows batch 4, parallel battery, battery floor. Rows: 1 friction-low (background gate = capability), 2 friction-low (entrance 4/4; residual = orientation + post-receipt verification), 5 friction-medium (inspection 12→9→5, ratio 0.81 vs gate 0.5; comment_edits defect in flight), 3 uncalibrated.
+- Box 1 purchased (Hetzner CX53); waiting on hostname + key; then provisioning (inb-94ba79) + cold-start proof. docs/two-vm-plan.md.
+- Rules learned today: records lane pulls --rebase and publishes via records-push only; add files by name; never edit a running bash script; agents must not push records during a landing.
