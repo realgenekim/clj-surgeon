@@ -95,3 +95,7 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 - 2026-09-08T11:3xZ ROW 5 WIN (÷2.3 caller work, 6/6) → friction-high. Three rows now hold measured wins vs native (1: ÷8–9.7; 2: ÷3.98 caller work; 5: ÷2.3 caller work).
 - 2026-09-08T11:5xZ row-2 fix LANDED (trunk ccb33ef4+) → row 2 friction-medium.
 - 2026-09-08T13:03Z block tighten-1 opened (deadline 2026-09-08T16:48Z): skill tighten-the-loop (Astra) + daily one-shots (Opus) + first tighten day here; then Sol review + land. NEXT block staged: squares reassessment 2 (brief cellC/brief-squares-reassess-2.md; Sol + Astra independently, cross-attack).
+
+- 2026-09-08T14:48Z row 5: F arms 6/6 accepted, F/N 0.83, D/F 0.485 → EMISSION EARNS CREDIT but 0/6 used facts inside the clock (attribution open on adoption); verb paper cuts (047/048/049) LANDED f27a87d4; stays friction-high until apparatus share < 50 % and the facts fold into the verb receipt.
+- 2026-09-08T14:48Z row 2: refusal_price + unknowns + entrance ledger LANDED f27a87d4; friction-medium; next = cold-start pilot of the alias route on a fresh seat.
+- 2026-09-08T14:48Z row 1: proof tiers measured once — warm 19.7 s (probe-only) vs cold 43.3 s; warm + hand gate = cold, so the warm tier pays only with a background pending gate; friction-low; next = background gate design + apparatus share on the canary.
