@@ -325,6 +325,11 @@ ROOT_DIGEST=$(printf '%s' "$WT" | sha256sum | cut -d' ' -f1)
 RSTATE=$OUT/state/$ROOT_DIGEST
 mkdir -p "$RSTATE" || refuse "cannot create state dir $RSTATE"
 printf '%s\n' "$WT" > "$RSTATE/root"     # the digest's preimage, for a human
+# The per-seat key that signs a COLLECTED terminal status [B02e item 8]. It lives beside
+# the state, one level above the per-worktree digest so every round on this seat shares
+# it, mode 600. It is never printed, never logged, and never carried in a receipt — only
+# its effect (a MAC that either verifies or does not) is ever visible.
+ROUND_KEYFILE=$OUT/state/.key
 LOCKF=$RSTATE/lease
 MYPGID=$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ')
 
@@ -622,8 +627,9 @@ EOF
       "$WT/AGENTS.md" "$WT/CLAUDE.md" 2>/dev/null | sha256sum | cut -d' ' -f1)
     _meta=$(EFF_PROVIDER="$EFF_PROVIDER" EFF_APPROVAL="$EFF_APPROVAL" EFF_SANDBOX="$EFF_SANDBOX" \
             EFF_REASONING="$EFF_REASONING" EFF_PROFILE="$EFF_PROFILE" \
+            ROUND_HMAC_KEY="$ROUND_KEYFILE" \
             python3 - "$RSTATE/session.json" <<'PY' 2>/dev/null
-import json, os, shlex, sys
+import hashlib, hmac, json, os, shlex, sys
 try:
     r = json.load(open(sys.argv[1]))
 except Exception as ex:
@@ -649,13 +655,55 @@ elif str(prof) != env["EFF_PROFILE"]:
     differ.append(f"instruction profile: recorded {str(prof)[:16]}…, "
                   f"this round runs {env['EFF_PROFILE'][:16]}…")
 basis = str(r.get("terminal_status_basis") or "")
-verified = basis.startswith("wait(2)")
+# B02e item 8 — A LABEL IS VERIFIED ONLY IF THE RECORD IS SIGNED BY THIS SEAT.
+# What stood here was `basis.startswith("wait(2)")`: a substring test over a field in
+# this very file, which nothing authenticated. Acceptance-3 NA-7 wrote the basis
+# "wait(2) collected by nobody at all" and was ADMITTED as a verified prior
+# termination. The upgrade now requires an HMAC-SHA256 over the label AND the evidence
+# it rests on — session, root, worktree, status, basis, the collecting pid, the boot id
+# and that pid's starttime, the round's name and the moment it was recorded — made with
+# the per-seat key only `round`'s wait(2) path can use. No key, no MAC, a MAC that does
+# not verify, or any bound field edited after signing all mean the same thing:
+# carried(unverified). The reason is carried out with the label, because a refusal to
+# upgrade that cannot say why is just a different unexplained string.
+att = r.get("terminal_status_attestation")
+att = att if isinstance(att, dict) else {}
+mac = str(att.get("mac") or "")
+verified = False
+if not basis.startswith("wait(2)"):
+    why = "the recorded basis is not a wait(2) collection"
+elif not mac:
+    why = "unsigned: nothing attested that this status was collected"
+else:
+    try:
+        with open(os.environ.get("ROUND_HMAC_KEY") or "", "rb") as kfh:
+            key = kfh.read().strip()
+    except OSError:
+        key = b""
+    if not key:
+        why = "this seat holds no signing key, so no record can be shown to be its own"
+    else:
+        payload = "\n".join([
+            "round-terminal-status-v1",
+            str(r.get("session_id") or ""), str(r.get("root") or ""),
+            str(r.get("worktree") or ""), str(r.get("terminal_status") or ""),
+            basis, str(r.get("terminal_status_pid") or ""),
+            str(r.get("terminal_status_boot_id") or ""),
+            str(r.get("terminal_status_starttime") or ""),
+            str(r.get("round") or ""), str(r.get("recorded_utc") or ""),
+        ]).encode()
+        verified = hmac.compare_digest(
+            hmac.new(key, payload, hashlib.sha256).hexdigest(), mac)
+        why = "" if verified else ("the attestation does not verify — this record was "
+                                   "not written by this seat's round wait(2) path, or a "
+                                   "signed field was edited after it was written")
 print("META_OK=1")
 for k, v in (("PREV_ROOT", r.get("root")), ("PREV_MODEL", r.get("model")),
              ("PREV_MODEL_REQ", r.get("model_requested")),
              ("PREV_STATUS", r.get("terminal_status")), ("PREV_SID", r.get("session_id")),
              ("PREV_BASIS", basis or "none recorded"),
-             ("PREV_STATUS_LABEL", (str(r.get("terminal_status") or "unknown") + "(wait2)")
+             ("PREV_BASIS_WHY", why),
+             ("PREV_STATUS_LABEL", (str(r.get("terminal_status") or "unknown") + "(wait2,signed)")
               if verified else "carried(unverified)"),
              ("SET_MISSING", ", ".join(missing)), ("SET_DIFFER", "; ".join(differ)),
              ("PREV_SETTINGS", ";".join(f"{k2}={v2}" for k2, v2 in sorted(s.items()) if v2))):
@@ -666,7 +714,7 @@ PY
     : "${META_OK:=0}" "${META_ERR:=unreadable}" "${PREV_ROOT:=}" "${PREV_MODEL:=}" \
       "${PREV_MODEL_REQ:=}" "${PREV_STATUS:=}" "${PREV_SID:=}" "${PREV_SETTINGS:=}" \
       "${SET_MISSING:=}" "${SET_DIFFER:=}" "${PREV_BASIS:=none recorded}" \
-      "${PREV_STATUS_LABEL:=carried(unverified)}"
+      "${PREV_STATUS_LABEL:=carried(unverified)}" "${PREV_BASIS_WHY:=no attestation was evaluated}"
     [ "$META_OK" = 1 ] || refuse "resume-bad-metadata: $RSTATE/session.json could not be read as a session record ($META_ERR)"
     [ -n "$PREV_ROOT" ] || refuse "resume-missing-root: $RSTATE/session.json records no root for session $SID. An unknown previous root cannot be compared with '$WT', and an unverifiable scope is not a verified scope."
     [ "$PREV_ROOT" = "$WT" ] || \
@@ -692,7 +740,7 @@ PY
     # kept SEPARATE from this run's own status so the two can never be confused.
     PREV_TERMINAL_VERIFIED="$PREV_BASIS"
     PREV_STATUS="$PREV_STATUS_LABEL"
-    say "$(stamp)  RESUME ADMISSION: session=$SID root='$PREV_ROOT'==\$WT model='$_pm'==$MODEL settings='$PREV_SETTINGS'==effective(provider=$EFF_PROVIDER;approval=$EFF_APPROVAL;sandbox=$EFF_SANDBOX;reasoning effort=$EFF_REASONING) instruction_profile=${EFF_PROFILE:0:16} previous_terminal_status=$PREV_STATUS_LABEL (stored label '$PREV_STATUS', basis: $PREV_BASIS) instruction_digest=${INSTR_DIGEST:0:16}"
+    say "$(stamp)  RESUME ADMISSION: session=$SID root='$PREV_ROOT'==\$WT model='$_pm'==$MODEL settings='$PREV_SETTINGS'==effective(provider=$EFF_PROVIDER;approval=$EFF_APPROVAL;sandbox=$EFF_SANDBOX;reasoning effort=$EFF_REASONING) instruction_profile=${EFF_PROFILE:0:16} previous_terminal_status=$PREV_STATUS_LABEL (stored label '$PREV_STATUS', basis: $PREV_BASIS)${PREV_BASIS_WHY:+ [not upgraded: $PREV_BASIS_WHY]} instruction_digest=${INSTR_DIGEST:0:16}"
   fi
 
   LAUNCH_EPOCH=$(date +%s)
@@ -792,10 +840,13 @@ PY
     SESSION_ID="$SESSION_ID" WT="$WT" LOGROOT="$LOGROOT" LOGMODEL="$LOGMODEL" MODEL="$MODEL" \
     INSTR_DIGEST="$INSTR_DIGEST" BRIEF="$BRIEF" NAME="$NAME" STATUS="$1" PREV_STATUS="$PREV_STATUS" \
     STATUS_BASIS="${2:-carried label (no wait status collected by this apparatus)}" \
+    STATUS_COLLECTED="${3:-0}" \
+    STATUS_PID="$WRAPPER" STATUS_BOOT_ID="$BOOT_ID" STATUS_STARTTIME="$WRAPPER_START" \
     INSTR_PROFILE="$(cat "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md" "$WT/AGENTS.md" "$WT/CLAUDE.md" 2>/dev/null | sha256sum | cut -d' ' -f1)" \
     BLOG="$BLOG" RESUME="$RESUME" BUILDER_PID="$BUILDER_PID" \
+    ROUND_HMAC_KEY="$ROUND_KEYFILE" \
     python3 - "$RSTATE" <<'PY'
-import json, os, subprocess, sys, time
+import hashlib, hmac, json, os, subprocess, sys, time
 state = sys.argv[1]
 e = os.environ
 def hdr(label):
@@ -826,6 +877,11 @@ rec = {
     "instruction_profile_sha256": e["INSTR_PROFILE"],
     # A terminal label is only a RESULT when this apparatus collected a wait status.
     "terminal_status_basis": e["STATUS_BASIS"],
+    # ...and the EVIDENCE that status rests on, as fields a verifier can check rather
+    # than as prose inside the basis string [B02e item 8].
+    "terminal_status_pid": e.get("STATUS_PID", ""),
+    "terminal_status_boot_id": e.get("STATUS_BOOT_ID", ""),
+    "terminal_status_starttime": e.get("STATUS_STARTTIME", ""),
     "instruction_file": e["BRIEF"],
     "terminal_status": e["STATUS"],
     "previous_terminal_status": e["PREV_STATUS"],
@@ -834,6 +890,60 @@ rec = {
     "builder_pid": e["BUILDER_PID"],
     "recorded_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
 }
+
+# ---------------------------------------------------------------------------
+# THE VERIFIED/CARRIED DISTINCTION IS SIGNED, NOT SPELLED [B02e item 8].
+#
+# Acceptance-3 NA-7: `round-resume` upgraded a label to "verified prior termination"
+# on `basis.startswith("wait(2)")` — a substring test over a field in this very file,
+# which nothing authenticated. A record whose basis merely BEGAN with the right eight
+# characters ("wait(2) collected by nobody at all") was ADMITTED as
+# `previous_terminal_status=completed(wait2)`. The one field separating a collected
+# status from a claim was unsigned text.
+#
+# Only the wait(2) path signs. The MAC covers the label AND the evidence it rests on —
+# session, root, status, basis, the collecting pid, the boot id and that pid's
+# starttime — so changing any of them invalidates it. The key is per-seat, mode 600,
+# under the state root; it is never printed, never logged, and never travels in a
+# receipt. A reader without the key can still read the record; it just cannot forge
+# the one bit that says "this was collected".
+# ---------------------------------------------------------------------------
+def _mac_payload(r):
+    return "\n".join([
+        "round-terminal-status-v1",
+        str(r.get("session_id") or ""), str(r.get("root") or ""),
+        str(r.get("worktree") or ""), str(r.get("terminal_status") or ""),
+        str(r.get("terminal_status_basis") or ""), str(r.get("terminal_status_pid") or ""),
+        str(r.get("terminal_status_boot_id") or ""),
+        str(r.get("terminal_status_starttime") or ""),
+        str(r.get("round") or ""), str(r.get("recorded_utc") or ""),
+    ]).encode()
+
+
+if e.get("STATUS_COLLECTED") == "1":
+    kf = e.get("ROUND_HMAC_KEY") or ""
+    key = b""
+    try:
+        if not os.path.exists(kf):
+            old = os.umask(0o077)
+            try:
+                fd = os.open(kf, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, "wb") as f:
+                    f.write(os.urandom(32).hex().encode() + b"\n")
+            except FileExistsError:
+                pass
+            finally:
+                os.umask(old)
+        os.chmod(kf, 0o600)
+        with open(kf, "rb") as f:
+            key = f.read().strip()
+    except OSError:
+        key = b""
+    if key:
+        rec["terminal_status_attestation"] = {
+            "alg": "HMAC-SHA256", "version": "round-terminal-status-v1",
+            "mac": hmac.new(key, _mac_payload(rec), hashlib.sha256).hexdigest(),
+        }
 if sid:
     with open(os.path.join(state, "session.id"), "w") as f:
         f.write(sid + "\n")
@@ -935,7 +1045,12 @@ PY
     ceiling-kill)           _sb="ceiling kill by round '$NAME' — the status is this apparatus's, not the builder's own completion" ;;
     *)                      _sb="carried label (termination=$TERMINATION; no wait status was collected by this apparatus)" ;;
   esac
-  [ -n "$SESSION_ID" ] && write_session "$BUILD" "$_sb"
+  # ONLY the wait(2) path may sign [B02e item 8]. A ceiling kill is this apparatus's own
+  # act, not the builder's completion, and a carried label was never collected at all;
+  # neither gets an attestation, so neither can ever be read back as verified.
+  _sc=0
+  case "$TERMINATION" in collected|nonzero-exit) _sc=1 ;; esac
+  [ -n "$SESSION_ID" ] && write_session "$BUILD" "$_sb" "$_sc"
   step BUILD "$BW" "$BUILD (termination=$TERMINATION wrapper_exit=$WRAPPER_RC pid=${BUILDER_PID:-none} model='${LOGMODEL:-none}' session=${SESSION_ID:-none} mode=$([ "$RESUME" = 1 ] && echo resume || echo fresh))"
 fi
 

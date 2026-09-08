@@ -163,6 +163,7 @@ GATE=$(sed -nE 's/^GATE:[[:space:]]*//p' "$TASK" | head -1)
 # task that tells the agent which test to watch go red has coached the very behaviour the
 # cell exists to measure. Optional: a task without a RED: line simply is not graded on it,
 # because an oracle that invents an intended failure is scoring its own guess.
+PORT="" ; GATE_SCRIPT="" ; GATE_SCRIPT_SHA="" ; RED_ATTESTED=unattested ; RED_GOLDEN=none ; WORKER_STATUS_CONTRADICTION=no
 RED=$(sed -nE 's/^RED:[[:space:]]*//p' "$TASK" | head -1)
 # B02d item 9 — MANDATORY, not opt-in. Astra: `astra10-no-red.log` PASSes when RED is
 # omitted, and the old seeds asked the caller to CREATE the test namespace, so nothing
@@ -350,7 +351,28 @@ git -C "$WT" checkout -q -- . 2>/dev/null
 git -C "$WT" clean -fdq -e .claude 2>/dev/null
 dirty=$(git -C "$WT" status --porcelain --untracked-files=no -- . ':!00SERVER-LOGS.txt' 2>/dev/null)
 [ -z "$dirty" ] || refuse "the qualified gate left the specimen dirty and it could not be restored"
-step GATE_QUALIFY "$GATE_WALL" "ok: \`$GATE\` exits 0 on the untouched base ${BASIS:0:12} in ${GATE_WALL}s (log: $GQLOG)"
+# FREEZE THE GATE'S OWN PROGRAM, HERE, BEFORE THE AGENT EXISTS [B02e item 1].
+# `bin/kaocha` (or whatever the declared gate's argv[0] is) is what the grader reads to
+# learn that `bin/kaocha unit` IS `clojure -M:run-tests unit` — and therefore which
+# observed JVMs are exempt from F9. That file lives in the SPECIMEN, which is the graded
+# agent's own worktree: acceptance-3 G5 added one line to it (`java -version "$@"`) and an
+# entirely unrelated `java -Xmx1g some.unrelated.Main` was exempted as gate-owned, turning
+# a FAIL into a PASS on a byte-identical trace. The subject may not write the oracle's
+# exemption rules. A copy is taken NOW, its sha256 recorded, and the grader is handed the
+# copy; it compares the specimen's copy at grade time and calls any difference
+# `specimen-gate-modified`.
+GATE_PROG=$(printf '%s\n' "$GATE" | awk '{print $1}')
+GATE_SCRIPT=""; GATE_SCRIPT_SHA=""
+if [ -n "$GATE_PROG" ] && [ -f "$WT/$GATE_PROG" ]; then
+  GATE_SCRIPT=$RUN/gate-program.frozen
+  cp "$WT/$GATE_PROG" "$GATE_SCRIPT" || refuse "could not freeze the gate program $WT/$GATE_PROG"
+  chmod 0444 "$GATE_SCRIPT"
+  GATE_SCRIPT_SHA=$(sha256sum "$GATE_SCRIPT" | cut -d' ' -f1)
+  say "$(stamp)  GATE PROGRAM FROZEN: $GATE_PROG sha256=${GATE_SCRIPT_SHA:0:16} -> $GATE_SCRIPT (captured before the agent ran; the grader never reads the specimen's copy for expansions) [B02e item 1]"
+else
+  say "$(stamp)  NOTE: the declared gate's program '$GATE_PROG' is not a file in the specimen, so there is nothing to freeze; the grader will have no gate expansions and will say so [B02e item 1]"
+fi
+step GATE_QUALIFY "$GATE_WALL" "ok: \`$GATE\` exits 0 on the untouched base ${BASIS:0:12} in ${GATE_WALL}s (log: $GQLOG) gate_program=${GATE_PROG:-none} gate_program_sha256=${GATE_SCRIPT_SHA:0:16}"
 
 # ---------------------------------------------------------------------------
 # 1c. READINESS — the PRE-COMMITTED INTENDED RED, installed and ATTESTED [B02d item 9]
@@ -375,8 +397,83 @@ if [ $RED_RC -eq 0 ]; then
   say "$(stamp)  red-qualify output (tail):"; tail -20 "$RQLOG" | tee -a "$LOG"
   refuse "red-not-qualified: with the readiness overlay ($OVERLAY_FILES) installed, the declared gate \`$GATE\` still exits 0. The declared RED \`$RED\` is not failing on this base, so nothing this cell later calls a red-first observation could be that assertion going red (B02d item 9)."
 fi
-grep -qF "${RED%%/*}" "$RQLOG" \
-  || say "$(stamp)  NOTE: the red-qualify output does not name '${RED%%/*}'; the gate is red, but this harness cannot show that THIS namespace is why"
+# THE RED MUST BE THE DECLARED ASSERTION'S RED [B02e item 5].
+#
+# What used to stand here was `grep -qF "${RED%%/*}"` over the gate's stdout, printing an
+# advisory NOTE when it missed. Two things were wrong with it and acceptance-3 executed
+# both. (a) It is a SUBSTRING test for the NAMESPACE, and the overlay's own FILENAME
+# satisfies it: an overlay with a deliberate shell syntax error, renamed
+# `tests/intended-red.sh`, was ATTESTED with no NOTE at all — the file naming silenced the
+# only guard there was. (b) Even when it fired it was advisory, so a gate that died at
+# PARSE TIME, having never run a line of the declared assertion, was recorded as
+# `intended red ATTESTED` with nothing in the receipt to tell a regrader otherwise.
+#
+# So: parse the gate's own output for the declared VAR (the half after the `/`), with
+# every overlay path and basename blanked first so a filename can never be the evidence.
+# A parse/compile death or an unrelated failure is `red-wrong-reason` and REFUSES —
+# a red we cannot attribute is not a pre-committed intended red, and every later
+# red-first observation in this cell would rest on it.
+RED_NS=${RED%%/*}; RED_VAR=${RED##*/}
+RED_ATTESTED=$(RQLOG="$RQLOG" RED_NS="$RED_NS" RED_VAR="$RED_VAR" \
+  OVERLAY_FILES="$OVERLAY_FILES" python3 - <<'PY' 2>/dev/null || echo "red-wrong-reason/classifier-failed"
+import os, re, sys
+try:
+    txt = open(os.environ["RQLOG"], errors="replace").read()
+except OSError:
+    print("red-wrong-reason/no-output"); raise SystemExit
+# A FILENAME IS NOT EVIDENCE. Blank every overlay path, its basename, and that
+# basename without its extension, before looking for the declared var anywhere.
+for f in (os.environ.get("OVERLAY_FILES") or "").split():
+    for token in {f, os.path.basename(f), os.path.splitext(os.path.basename(f))[0]}:
+        if token:
+            txt = txt.replace(token, " ")
+var = os.environ["RED_VAR"].strip()
+ns = os.environ["RED_NS"].strip()
+# `/` is allowed before the var: `ns/var` is the canonical spelling of a Clojure test
+# var and is exactly what a failing runner prints. Filenames that would also match
+# through their `/` were blanked above, which is the point of blanking them.
+named = bool(var) and re.search(r"(?<![A-Za-z0-9_.\-])" + re.escape(var)
+                                + r"(?![A-Za-z0-9_\-])", txt) is not None
+# A gate that never parsed never ran the assertion. These are the deaths that happen
+# BEFORE any test var is reached; each was observed in an acceptance-3 negative or is
+# the same class as one.
+PARSE = re.compile(r"Syntax error|PARSE ERROR|unexpected|Unable to resolve|"
+                   r"Could not locate|CompilerException|ClassNotFoundException|"
+                   r"FileNotFoundException|SyntaxError|command not found|"
+                   r"No such file or directory|cannot find|Parse error", re.I)
+if named:
+    print("assertion")
+elif PARSE.search(txt):
+    print("red-wrong-reason/parse-or-load-error")
+else:
+    print("red-wrong-reason/unrelated-failure" + ("" if ns in txt else "/ns-not-named"))
+PY
+)
+case "$RED_ATTESTED" in
+  assertion) : ;;
+  *) say "$(stamp)  red-qualify output (tail):"; tail -20 "$RQLOG" | tee -a "$LOG"
+     refuse "red-wrong-reason ($RED_ATTESTED): with the readiness overlay ($OVERLAY_FILES) installed the declared gate \`$GATE\` exits $RED_RC, but its output never names the declared assertion \`$RED_VAR\` at a failure site — after every overlay filename was blanked, so a file named after the RED cannot stand in for the assertion going red. A red this harness cannot attribute to the declared var is not a pre-committed intended red, and every red-first observation in this cell would rest on it [B02e item 5]." ;;
+esac
+# THE GOLDEN REPAIR, WHEN THE SEED SHIPS ONE. A red that the seed's own known-good fix
+# turns green in THIS run is the strongest form of the attestation; without it the
+# attestation is honest but one-sided, and the receipt says which one this was.
+RED_GOLDEN=none
+GOLDEN=${TASK%.md}.golden
+if [ -d "$GOLDEN" ]; then
+  (cd "$GOLDEN" && tar cf - .) | (cd "$WT" && tar xf -) \
+    || refuse "could not install the golden repair from $GOLDEN"
+  GLOG=$RUN/red-golden.log
+  ( cd "$WT" && eval "$GATE" ) > "$GLOG" 2>&1 </dev/null
+  GOLD_RC=$?
+  git -C "$WT" checkout -q -- . 2>/dev/null
+  git -C "$WT" clean -fdq -e .claude 2>/dev/null
+  if [ $GOLD_RC -eq 0 ]; then
+    RED_GOLDEN=green
+  else
+    say "$(stamp)  golden output (tail):"; tail -20 "$GLOG" | tee -a "$LOG"
+    refuse "red-golden-not-green: the seed's own golden repair ($GOLDEN) leaves the declared gate exiting $GOLD_RC. A red whose known-good fix does not turn it green is not the red this seed claims to have pre-committed [B02e item 5]."
+  fi
+fi
 # Restore whatever the red gate wrote, then RE-INSTALL the overlay: `git clean` cannot
 # be trusted to spare the overlay's own untracked files (they are not always under
 # test/ — the harness's own selftest seed drops a marker at the repo root), and
@@ -393,7 +490,7 @@ GIT_COMMITTER_NAME=forge-anvil GIT_COMMITTER_EMAIL=forge-anvil@anvil \
 BASIS=$(git -C "$WT" rev-parse HEAD)
 dirty=$(git -C "$WT" status --porcelain --untracked-files=no -- . ':!00SERVER-LOGS.txt' 2>/dev/null)
 [ -z "$dirty" ] || refuse "the specimen is dirty after the readiness overlay was committed"
-step READINESS "$RED_WALL" "intended red ATTESTED: \`$GATE\` exits $RED_RC with the overlay installed ($OVERLAY_FILES) at basis ${BASIS:0:12}; declared RED=$RED (log: $RQLOG)"
+step READINESS "$RED_WALL" "intended red ATTESTED: \`$GATE\` exits $RED_RC with the overlay installed ($OVERLAY_FILES) at basis ${BASIS:0:12}; declared RED=$RED red_attested=$RED_ATTESTED red_golden=$RED_GOLDEN (log: $RQLOG)"
 
 # ---------------------------------------------------------------------------
 # 2. CONDITION
@@ -542,8 +639,28 @@ while True:
 fi
 say "  $out"
 AGENT_PGID=$(printf '%s' "$out" | sed -nE 's/.*pid=([0-9]+).*/\1/p')
-[ -n "$AGENT_PGID" ] || refuse "run-bg did not print a pid for the agent launch"
+if [ -z "$AGENT_PGID" ]; then
+  # A JOB THAT FINISHED IS NOT A JOB THAT NEVER STARTED [B02e item 11]. run-bg decides
+  # a launch failed when its `kill -0` finds no live process — but the pidfile is
+  # written BY THE JOB ITSELF, before exec, so a job that exited between those two
+  # instants is indistinguishable from one that never ran. Acceptance-3 NA-9:
+  # `--selftest-agent "echo 'no-op agent'"` produced `FAILED to start` over a 7-byte
+  # pidfile. The pidfile's existence is the start receipt; read it, and refuse only
+  # when there is no pidfile at all.
+  _apf=/var/tmp/forge/run-bg/$NAME-agent.pid
+  AGENT_PGID=$(tr -dc '0-9' < "$_apf" 2>/dev/null)
+  [ -n "$AGENT_PGID" ] && say "$(stamp)  run-bg reported no live pid, but $_apf names pid $AGENT_PGID: the job wrote its own pid before exec and had already exited when the liveness poll ran. STARTED AND FINISHED, not a failed launch [B02e item 11]."
+fi
+[ -n "$AGENT_PGID" ] || refuse "run-bg did not print a pid for the agent launch, and /var/tmp/forge/run-bg/$NAME-agent.pid holds no pid either — nothing started"
 LAUNCH_EPOCH=$(date +%s)
+# THE CEILING STARTS AT LAUNCH, NOT AFTER DISCOVERY [B02e item 6]. `DEADLINE` used to be
+# computed AFTER the worker-discovery loop below, so `--minutes` bounded only the second
+# of two loops. Acceptance-3 NA-5b: a worker that was never discoverable made 90
+# iterations of a /proc scan cost 248 s under a 120 s ceiling, and the run reported
+# `ceiling=no`. The deadline is a WALL from the moment the launch happened, and every
+# loop that can spend that wall checks it.
+DEADLINE=$(( LAUNCH_EPOCH + MINUTES * 60 ))
+CEILING=no
 
 # The real worker is a CHILD of that shell. run-bg setsids, so the printed pid is
 # the process-group leader and killing the GROUP is exact. We still name the worker
@@ -565,12 +682,16 @@ WORKER=""
 for _ in $(seq 1 90); do
   WORKER=$(worker_pids | head -1); [ -n "$WORKER" ] && break
   [ -e "$AGENT_RC_FILE" ] && break
+  # the discovery loop spends the declared wall like any other loop [B02e item 6]
+  if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+    CEILING=yes
+    say "$(stamp)  the declared wall (--minutes $MINUTES) expired during worker DISCOVERY, before the agent was ever located — ceiling=yes"
+    break
+  fi
   sleep 1
 done
-say "START RECEIPT: name=$NAME pgid=$AGENT_PGID worker=${WORKER:-<not-discovered>} runner=$RUNNER model=$MODEL transcript=$TRANSCRIPT"
+say "START RECEIPT: name=$NAME pgid=$AGENT_PGID worker=${WORKER:-<not-discovered>} runner=$RUNNER model=$MODEL transcript=$TRANSCRIPT discovery_ceiling=$CEILING"
 
-DEADLINE=$(( LAUNCH_EPOCH + MINUTES * 60 ))
-CEILING=no
 AGENT_RC=unknown
 # WAIT ON THE AGENT, NOT ON THE TRACER [CX-14]. Three exits from this loop, and only
 # the second is a ceiling: the agent's own shell wrote its status; the agent overran
@@ -593,6 +714,10 @@ while :; do
 done
 AGENT_WALL=$(( $(date +%s) - t ))
 LAUNCH_WALL_MS=$(( $(now_ms) - t_ms ))
+# WHATEVER ENDED THE PHASE, THE WALL IS THE WALL [B02e item 6]. `ceiling` is a
+# statement about elapsed time, not about which branch of which loop exited last, and a
+# field that only reports one of the ways time can run out is not a bound.
+[ "$(date +%s)" -ge "$DEADLINE" ] && CEILING=yes
 
 # THE TRACER OUTLIVES THE AGENT ON PURPOSE, AND MUST NOT OUTLIVE THIS PHASE [CX-14].
 # `setsid` starts a new session; it does NOT detach from ptrace, so the nREPL the agent
@@ -668,7 +793,22 @@ WORKER_RC=$(cat "$WORKER_RC_FILE" 2>/dev/null)
 : "${WORKER_SHELL_PID:=none}" "${WORKER_RC:=unknown}"
 AGENT_RC_SOURCE="wait(2) on worker pid $WORKER_SHELL_PID inside the launch shell"
 [ "$WORKER_RC" = unknown ] && AGENT_RC_SOURCE="NOT COLLECTED (the launch shell wrote no worker status)"
-say "$(stamp)  WORKER TERMINAL RECEIPT: pid=$WORKER_SHELL_PID exit=$WORKER_RC source=$AGENT_RC_SOURCE (never the logger pipeline's status)"
+# TWO AUTHORITIES ON ONE SUBJECT — TYPED, NEVER PRINTED SIDE BY SIDE [B02e item 7].
+# `worker.rc` is written by the launch shell's `wait`; `agent.rc` is written by the same
+# shell one command later. Acceptance-3 NA-5b killed that shell in between, and the run
+# printed `exit=0 source=wait(2)` on one line and `agent_rc=unknown` on the next, with
+# no refusal and nothing typed. A reader of the receipt line alone would conclude the
+# worker exited 0 cleanly. When the two disagree the disagreement IS the finding: it is
+# named, it reaches the integrity gate, and `source=wait(2)` is never printed for a
+# status this run then calls unknown.
+WORKER_STATUS_CONTRADICTION=no
+if [ "$WORKER_RC" != unknown ] && { [ -z "$AGENT_RC" ] || [ "$AGENT_RC" = unknown ]; }; then
+  WORKER_STATUS_CONTRADICTION=yes
+  AGENT_RC_SOURCE="CONTRADICTION(worker-status-without-agent-status): the launch shell recorded worker pid $WORKER_SHELL_PID exiting $WORKER_RC, then did not survive to record the agent's own status. Neither figure is this cell's terminal status."
+  say "$(stamp)  WORKER TERMINAL RECEIPT: pid=$WORKER_SHELL_PID exit=$WORKER_RC UNRECONCILED — the launch shell wrote worker.rc but never wrote agent.rc, so this exit code is NOT the collected agent status and must not be read as one [B02e item 7]"
+else
+  say "$(stamp)  WORKER TERMINAL RECEIPT: pid=$WORKER_SHELL_PID exit=$WORKER_RC source=$AGENT_RC_SOURCE (never the logger pipeline's status)"
+fi
 step LAUNCH "$AGENT_WALL" "agent_rc=$AGENT_RC (worker pid $WORKER_SHELL_PID, $AGENT_RC_SOURCE) ceiling=$CEILING worker=${WORKER:-none} model_from_log='${LOGMODEL:-none}' ($MODEL_OK) observer=$OBSERVER_FIELD execve_lines=$OBS_EXECS launch_wall_ms=$LAUNCH_WALL_MS"
 
 # ---------------------------------------------------------------------------
@@ -679,6 +819,9 @@ GRADEOUT=$RUN/grade.txt
 "$GRADER" "$TRANSCRIPT" --format "$FMT" --cond "$COND" \
   --observer "$OBSFILE" --observer-kind "$OBSERVER" --observer-loss "$OBS_LOSS" \
   --gate "$GATE" --specimen "$WT" ${RED:+--red-test "$RED"} \
+  ${GATE_SCRIPT:+--gate-script "$GATE_SCRIPT"} \
+  ${GATE_SCRIPT_SHA:+--gate-script-sha256 "$GATE_SCRIPT_SHA"} \
+  ${PORT:+--nrepl-port "$PORT"} \
   --json "$RUN/grade.json" > "$GRADEOUT" 2>&1 </dev/null
 GLINE=$(grep -m1 '^COLDSTART-GRADE:' "$GRADEOUT")
 GRADE=$(printf '%s' "$GLINE" | awk '{print $2}')
@@ -772,6 +915,7 @@ case "$AGENT_RC" in
   *) add_i "worker_exit=$AGENT_RC" ;;
 esac
 [ "$CEILING" = no ] || add_i "ceiling=yes"
+[ "${WORKER_STATUS_CONTRADICTION:-no}" = no ] || add_i "worker_status=contradiction"
 if [ -z "$SELFAGENT" ]; then
   [ "$MODEL_OK" = verified ] || add_i "model=$MODEL_OK"
 fi
@@ -788,7 +932,7 @@ say ""
 # from /proc/uptime (CLOCK_BOOTTIME, monotonic). `launch_wall` is the agent's own
 # launch→terminal-status span and is NESTED inside `total`; neither is a continuation
 # economics measurement and neither is row-1 timing qualification.
-LINE="COLDSTART $NAME:${SELFAGENT:+ selftest_agent=yes} model=$MODEL($MODEL_OK) cond=$COND grade=$GRADE task=$TASK_RESULT integrity=$INTEGRITY delivery=$DELIVERY gate='$GATE' gate_qualify_wall=${GATE_WALL}s red_qualify_wall=${RED_WALL}s red='$RED' overlay='${OVERLAY_FILES:-none}' warm_first=$WARMF calls=$CALLS apparatus=$APPA agent_wall(launch_wall)=${AGENT_WALL}s(${LAUNCH_WALL_MS}ms) agent_rc=$AGENT_RC agent_rc_source='$AGENT_RC_SOURCE' worker_pid=$WORKER_SHELL_PID total_wall=${TOTAL}s(${TOTAL_MS}ms) duration_source=/proc/uptime ceiling=$CEILING observer=$OBSERVER_FIELD observer_execve_lines=$OBS_EXECS profile=${PROFILE:0:16} profile_isolated=$PROFILE_ISOLATED inherited_global=${INHERITED:0:16} runner_sha256=${RUNNER_SHA:0:16} grader_sha256=${GRADER_SHA:0:16} diff='${DIFFSTAT:-none}'"
+LINE="COLDSTART $NAME:${SELFAGENT:+ selftest_agent=yes} model=$MODEL($MODEL_OK) cond=$COND grade=$GRADE task=$TASK_RESULT integrity=$INTEGRITY delivery=$DELIVERY gate='$GATE' gate_qualify_wall=${GATE_WALL}s red_qualify_wall=${RED_WALL}s red='$RED' red_attested=$RED_ATTESTED red_golden=$RED_GOLDEN overlay='${OVERLAY_FILES:-none}' warm_first=$WARMF calls=$CALLS apparatus=$APPA agent_wall(launch_wall)=${AGENT_WALL}s(${LAUNCH_WALL_MS}ms) agent_rc=$AGENT_RC agent_rc_source='$AGENT_RC_SOURCE' worker_rc=$WORKER_RC worker_status_contradiction=$WORKER_STATUS_CONTRADICTION worker_pid=$WORKER_SHELL_PID total_wall=${TOTAL}s(${TOTAL_MS}ms) duration_source=/proc/uptime ceiling=$CEILING observer=$OBSERVER_FIELD observer_execve_lines=$OBS_EXECS profile=${PROFILE:0:16} profile_isolated=$PROFILE_ISOLATED inherited_global=${INHERITED:0:16} runner_sha256=${RUNNER_SHA:0:16} grader_sha256=${GRADER_SHA:0:16} gate_program_sha256=${GATE_SCRIPT_SHA:0:16} diff='${DIFFSTAT:-none}'"
 say "$LINE"
 printf '%s  %s\n' "$(stamp)" "$LINE" >> "$LEDGER"
 say "$(stamp)  frozen: $RUN/{transcript.*,grade.txt,grade.json,diff.patch,verify.log,prompt.md,coldstart.log,gate-qualify.log,instruction-profile.json,observer/}"

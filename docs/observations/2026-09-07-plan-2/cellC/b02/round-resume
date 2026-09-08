@@ -54,6 +54,10 @@ esac
 WTC=$(readlink -f "$WT")
 RSTATE=/var/tmp/forge/round/state/$(printf '%s' "$WTC" | sha256sum | cut -d' ' -f1)
 MODEL=${CODEX_MODEL:-gpt-5.6-sol}
+# The per-seat key that `round`'s wait(2) path signs a COLLECTED terminal status with
+# [B02e item 8]. Read-only here: this entrance verifies, it never signs — a wrapper that
+# could mint its own attestation would be the same hole in a new coat. Never printed.
+ROUND_KEYFILE=/var/tmp/forge/round/state/.key
 refuse() { echo "round-resume: REFUSED $*" >&2; exit 3; }
 
 [ -s "$RSTATE/session.json" ] || refuse "resume-no-metadata: $RSTATE/session.json does not exist, so nothing is known about session $SID for root '$WTC' — not its root, not its model, not its settings, not how it ended. A continuation with no history is a fresh session wearing a session id."
@@ -72,8 +76,9 @@ EFF_PROFILE=$(cat "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md" \
 
 _meta=$(EFF_PROVIDER="$EFF_PROVIDER" EFF_APPROVAL="$EFF_APPROVAL" EFF_SANDBOX="$EFF_SANDBOX" \
         EFF_REASONING="$EFF_REASONING" EFF_PROFILE="$EFF_PROFILE" \
+        ROUND_HMAC_KEY="$ROUND_KEYFILE" \
         python3 - "$RSTATE/session.json" <<'PY' 2>/dev/null
-import json, os, shlex, sys
+import hashlib, hmac, json, os, shlex, sys
 try:
     r = json.load(open(sys.argv[1]))
 except Exception as ex:
@@ -102,13 +107,55 @@ elif str(prof) != env["EFF_PROFILE"]:
                   f"this invocation runs {env['EFF_PROFILE'][:16]}…")
 # a terminal label is only a RESULT if this apparatus collected a wait status for it
 basis = str(r.get("terminal_status_basis") or "")
-verified = basis.startswith("wait(2)")
+# B02e item 8 — A LABEL IS VERIFIED ONLY IF THE RECORD IS SIGNED BY THIS SEAT.
+# What stood here was `basis.startswith("wait(2)")`: a substring test over a field in
+# this very file, which nothing authenticated. Acceptance-3 NA-7 wrote the basis
+# "wait(2) collected by nobody at all" and was ADMITTED as a verified prior
+# termination. The upgrade now requires an HMAC-SHA256 over the label AND the evidence
+# it rests on — session, root, worktree, status, basis, the collecting pid, the boot id
+# and that pid's starttime, the round's name and the moment it was recorded — made with
+# the per-seat key only `round`'s wait(2) path can use. No key, no MAC, a MAC that does
+# not verify, or any bound field edited after signing all mean the same thing:
+# carried(unverified). The reason is carried out with the label, because a refusal to
+# upgrade that cannot say why is just a different unexplained string.
+att = r.get("terminal_status_attestation")
+att = att if isinstance(att, dict) else {}
+mac = str(att.get("mac") or "")
+verified = False
+if not basis.startswith("wait(2)"):
+    why = "the recorded basis is not a wait(2) collection"
+elif not mac:
+    why = "unsigned: nothing attested that this status was collected"
+else:
+    try:
+        with open(os.environ.get("ROUND_HMAC_KEY") or "", "rb") as kfh:
+            key = kfh.read().strip()
+    except OSError:
+        key = b""
+    if not key:
+        why = "this seat holds no signing key, so no record can be shown to be its own"
+    else:
+        payload = "\n".join([
+            "round-terminal-status-v1",
+            str(r.get("session_id") or ""), str(r.get("root") or ""),
+            str(r.get("worktree") or ""), str(r.get("terminal_status") or ""),
+            basis, str(r.get("terminal_status_pid") or ""),
+            str(r.get("terminal_status_boot_id") or ""),
+            str(r.get("terminal_status_starttime") or ""),
+            str(r.get("round") or ""), str(r.get("recorded_utc") or ""),
+        ]).encode()
+        verified = hmac.compare_digest(
+            hmac.new(key, payload, hashlib.sha256).hexdigest(), mac)
+        why = "" if verified else ("the attestation does not verify — this record was "
+                                   "not written by this seat's round wait(2) path, or a "
+                                   "signed field was edited after it was written")
 print("META_OK=1")
 for k, v in (("PREV_ROOT", r.get("root")), ("PREV_MODEL", r.get("model")),
              ("PREV_MODEL_REQ", r.get("model_requested")),
              ("PREV_STATUS", r.get("terminal_status")), ("PREV_SID", r.get("session_id")),
              ("PREV_BASIS", basis or "none recorded"),
-             ("PREV_STATUS_LABEL", (str(r.get("terminal_status") or "unknown") + "(wait2)")
+             ("PREV_BASIS_WHY", why),
+             ("PREV_STATUS_LABEL", (str(r.get("terminal_status") or "unknown") + "(wait2,signed)")
               if verified else ("carried(unverified)")),
              ("SET_MISSING", ", ".join(missing)),
              ("SET_DIFFER", "; ".join(differ)),
@@ -120,7 +167,7 @@ eval "$_meta"
 : "${META_OK:=0}" "${META_ERR:=unreadable}" "${PREV_ROOT:=}" "${PREV_MODEL:=}" \
   "${PREV_MODEL_REQ:=}" "${PREV_STATUS:=}" "${PREV_SID:=}" "${PREV_SETTINGS:=}" \
   "${SET_MISSING:=}" "${SET_DIFFER:=}" "${PREV_BASIS:=none recorded}" \
-  "${PREV_STATUS_LABEL:=carried(unverified)}"
+  "${PREV_STATUS_LABEL:=carried(unverified)}" "${PREV_BASIS_WHY:=no attestation was evaluated}"
 [ "$META_OK" = 1 ] || refuse "resume-bad-metadata: $RSTATE/session.json could not be read as a session record ($META_ERR)"
 [ -n "$PREV_ROOT" ] || refuse "resume-missing-root: $RSTATE/session.json records no root for session $SID. An unknown previous root cannot be compared with '$WTC'."
 [ "$PREV_ROOT" = "$WTC" ] || refuse "resume-root-mismatch: session $SID was recorded against root '$PREV_ROOT'; this invocation asks to continue it in '$WTC'. A scope change gets a deliberate fresh session, never a resume."
@@ -140,7 +187,7 @@ fi
 [ -n "$PREV_SID" ] || refuse "resume-missing-session-id: $RSTATE/session.json records no session_id to compare '$SID' against"
 [ "$PREV_SID" = "$SID" ] || refuse "resume-state-inconsistent: asked to continue '$SID' but $RSTATE/session.json records session '$PREV_SID' for this root"
 [ -n "$PREV_STATUS" ] || PREV_STATUS=unknown
-echo "round-resume: ADMITTED session=$SID root='$PREV_ROOT' model='$PM' settings='$PREV_SETTINGS'==effective(provider=$EFF_PROVIDER;approval=$EFF_APPROVAL;sandbox=$EFF_SANDBOX;reasoning effort=$EFF_REASONING) instruction_profile=${EFF_PROFILE:0:16} previous_terminal_status=$PREV_STATUS_LABEL (stored label '$PREV_STATUS', basis: $PREV_BASIS)" >&2
+echo "round-resume: ADMITTED session=$SID root='$PREV_ROOT' model='$PM' settings='$PREV_SETTINGS'==effective(provider=$EFF_PROVIDER;approval=$EFF_APPROVAL;sandbox=$EFF_SANDBOX;reasoning effort=$EFF_REASONING) instruction_profile=${EFF_PROFILE:0:16} previous_terminal_status=$PREV_STATUS_LABEL (stored label '$PREV_STATUS', basis: $PREV_BASIS)${PREV_BASIS_WHY:+ [not upgraded: $PREV_BASIS_WHY]}" >&2
 
 # ---------------------------------------------------------------------------
 # Same MCP fence as sol-yolo: a repo-declared server may point at a port this seat must

@@ -9,3 +9,6 @@ Rules of this file: one entry per hour (UTC), quote receipts verbatim, DELTA per
 
 ## 2026-09-08T07:24Z
 - DELTA: acceptance 3 (Opus, independent) → certified rounds LIFTED; continuation + cohorts stand; 11 defects → B02e (running). DELTA: row 2 pre-registered on a real MVR migration (Sol); six native controls running. B07 (row 5 feasibility, Astra) running since 06:55Z. Trunk unchanged (ec1e57d1+). Disk 45 G remaining.
+
+## 2026-09-08T07:41Z
+- DELTA: B02e delivered (grader no longer reads the specimen's gate; 11 items closed). Acceptance 4 + pilot 4 launched. Row-2 native controls running (stage 1). B07 (row 5, Astra) running since 06:55Z. Sol row-3 design running. No landing since 06:2xZ. Disk: check at next tick.
