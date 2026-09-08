@@ -48,3 +48,6 @@ Rules of this file: one entry per hour (UTC), quote receipts verbatim, DELTA per
 
 ## 2026-09-08T11:01Z
 - DELTA: Sol r11 GO on the row-2 fix; landing refused by battery-fresh (52 behind) → receipt-chain-20 running (~13 min), then land. Row 5 D2–D6 running with runner-side proof. Row 1 friction-low. Gene report amendment at 11:40Z. Disk ~30 G.
+
+## 2026-09-08T11:16Z
+- DELTA: row 5 D2–D6 caller work 112–154 s (median 140) vs native 317 → ÷2.3 on the primary clock; acceptance lines pending. Row-2 fix landing (receipt 5495aa93). Gene report amended. Disk ~30 G.
