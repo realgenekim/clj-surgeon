@@ -63,3 +63,14 @@ Verb median 80 s vs native-with-manifest median 447 s → ÷ 5.6; vs plan-free n
 | N5 / N6 native + manifest (2026-09-07, not rerun) | 242 / 90 s | | 408 / 486 s | | 4/4 | 32 (N6) |
 
 Same map_hash and snapshot_hash in both, same 8 promotions, lint delta 0/0/0. Verb vs native-with-manifest median 447 s: **÷8 (D7) / ÷9 (M7)**; caller-side reporting is now outside the clock (done stamped at the last oracle), which is where the earlier 79–92 s figures carried their overhead. In-call wall is 22 s kaocha + ~6 s lint + ~3–6 s analysis and write; the warm probe tier (`:proof :warm`) is landed but was not used here — the record keeps the cold proof inside the call.
+
+## Wave 6 (2026-09-08T04:23Z): second consecutive rerun on the SAME frozen build (2b39bd37, verified before and after) — the two-rerun gate for friction-low
+
+| arm | total wall | in-call | correct | papercuts | map/snapshot hash |
+|---|---|---|---|---|---|
+| D8 verb CLI | **56 s** | 34.7 s | 4/4 | 0 | = wave 5 |
+| M8 verb MCP | **46 s** | 31.1 s | 4/4 | 0 | = wave 5 |
+| D7 / M7 (wave 5, same build) | 56 / 49 s | 34.4 / 30.5 s | 4/4 | 0 | b3ac9adc… / 43b15c85… |
+| N5 / N6 native + manifest (not rerun) | 408 / 486 s | | 4/4 | 32 (N6) | |
+
+Two consecutive frozen-build reruns: 56/46 s and 56/49 s, byte-identical map and snapshot hashes, identical papercut reports, ÷8–9.7 vs the native median. Load 3.4 → 6.6 during the pair (pilot 3 and Astra running). One caller error (inline JSON to surgeon-call) refused at the wrapper's file guard with zero server contact; rerun clean; aborted clock preserved.
