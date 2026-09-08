@@ -39,3 +39,6 @@ Rules of this file: one entry per hour (UTC), quote receipts verbatim, DELTA per
 
 ## 2026-09-08T10:13Z
 - DELTA: row 2 WIN on the fixed build (3.98× caller work) → friction-high; Sol r10 NO-GO on that fix (battery lane gap) → Astra fixing. Row 5 floor 6/6 (317 s median caller work) → D/F arms running. Pilot 5 3/4 (CX-20 fixed) → p30 running. Gene report pushed 10:12Z (amend at 11:40Z). Disk ~31 G remaining. Load 4.46.
+
+## 2026-09-08T10:38Z
+- DELTA: ROW 1 → friction-low (pilot 7: 4/4 on one frozen package). Row 5 D/F arms running. Astra r10 fix running (row 2 landing). Disk 30 G remaining. Load ~4–8 (cells).

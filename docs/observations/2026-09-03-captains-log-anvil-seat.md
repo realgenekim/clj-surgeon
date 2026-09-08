@@ -3880,3 +3880,14 @@ Floor: candidate-work 226–382 s; all-oracle median 758 s (R1's 337 s runner ha
 ## 2026-09-08T10:16Z — p30 (opus/Ø on block 08c79a61…): PASS 11/11, red at seq 7 before the first edit, warm_first 24.6 s — CX-20 before/after N=1 per arm; pilot 7 (p31–p33) launched for the clean four-cell claim on one package
 
 The wait was ~free on this task (agent_wall 218 → 213 s; a 25 s boot against a 213 s task). Launch gotcha: bare `coldstart` dies in the harness's non-interactive shell (~/bin not on PATH) — absolute path from now on.
+
+## 2026-09-08T10:38Z — PILOT 7: the clean four-cell cold-start pilot — 4/4 PASS 11/11 on ONE frozen package (block 08c79a61…, grader 95879522…, runner eb1f17c7…), red observed before the first edit in every cell, every diff one file, final gate green, integrity ok, observer strace with zero truncation
+
+| cell | warm_first | agent wall | total |
+|---|---|---|---|
+| p30 opus/Ø cc | 24.6 s | 213 s | 603 s |
+| p31 opus/W cc | 14.2 s | 202 s | 576 s |
+| p32 sol/Ø mvr | 38.8 s | 151 s | 252 s |
+| p33 sol/W mvr | 21.2 s | 134 s | 220 s |
+
+Caveats carried, not cured: profile_isolated=no in all four (the seat's global instructions were present); model confounded with repo; N=1 per cell; no native control in the set (the timing gates are met separately by the frozen-build reruns). From pilot 1's 1/4 to this 4/4 took seven pilots and six one-sentence fixes to the block (temp location; a promised receipt; the client; the declared gate; run before edit; the boot is a barrier) plus five apparatus rounds. ROW 1 gates for friction-low per the tree: routed class installed ✓, two frozen reruns ✓ (56/49 s, 56/46 s), four-cell observed pilot ✓, LID debt 0 ✓, acceptance refusals: certified rounds lifted ✓, cohorts lifted ✓ (continuation stands — not a row-1 gate). **Row 1 → friction-low**, with Astra's row-1 ledger (2026-09-08-row1-split-ledger.md) to confirm on its next pass.

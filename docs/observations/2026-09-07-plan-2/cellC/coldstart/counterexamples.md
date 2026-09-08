@@ -1158,3 +1158,87 @@ R10 on the OLD block, so the amendment's measured effect is on opus only.
 **Mixing rule, unchanged:** `block_sha256` differs, so p30 is not comparable cell-for-cell
 with p26–p29 on anything the block text touches. It is comparable to p27 precisely because
 that is the contrast being drawn, and the difference between them is the block.
+
+---
+
+## pilot 7 — the clean four-cell pilot, all four cells on block 08c79a61 (2026-09-08T10:36:55Z)
+
+The observed four-cell pilot for row 1, run to the acceptance-3 §5 pass criterion. p30 was
+already on the record (above); p31/p32/p33 were run sequentially and uncoached on the same
+block, grader, runner and bases.
+
+| cell | model | cond | repo | grade | task | warm_first_s | calls | cold_gates | starts | apparatus | agent_wall | total_wall |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| p30-opus-0-cc  | opus | 0 | curtaincall-cfp    | PASS 11/11 | PASS | 24.6 | 8 | 1 | 1/1 | 50.0% | 213s | 603s |
+| p31-opus-W-cc  | opus | W | curtaincall-cfp    | PASS 11/11 | PASS | 14.2 | 8 | 1 | 0/0 | 50.0% | 202s | 576s |
+| p32-sol-0-mvr  | sol  | 0 | marvin-voice-remote| PASS 11/11 | PASS | 38.8 | 8 | 1 | 1/1 | 62.5% | 151s | 252s |
+| p33-sol-W-mvr  | sol  | W | marvin-voice-remote| PASS 11/11 | PASS | 21.2 | 8 | 1 | 0/0 | 62.5% | 134s | 220s |
+
+**Set identity.** block_sha256=08c79a616e40dfb8, grader_sha256=95879522f7ff2335 and
+runner_sha256=eb1f17c7042e863e are identical across all four. Seeds are identical per repo
+(cc-1.md + cc-1.overlay for p30/p31; mvr-1.md + mvr-1.overlay for p32/p33). Bases are the
+exact current `origin/nrepl/test-alias` tips, fetched before the run: curtaincall-cfp
+8aec4c93c50d61266fe9de79e889a2fd919f8cef, marvin-voice-remote
+94393708b6312c4de114f4ebf31dc82313e2914e. Gate program frozen per repo:
+43086bc124debac2 (cc), 9780013d1ee077d3 (mvr).
+
+**Acceptance-3 §5, all five parts, all four cells.**
+1. `integrity=ok`, `worker_rc=0` collected by wait(2) on the named worker pid,
+   `model=…(verified)` from the runner's own log, `ceiling=no`, no apparatus refusal.
+2. `grade=PASS required=11/11 forbidden=0`, `observer=strace`, `truncated=0`, no coverage-gap
+   note. R10.red_first OK on all four (red at seq 7 / 5 / 7 / 4, each before the first src edit).
+3. `task=PASS` and `gate_final_exit=0`; every diff is one file and it is the task's declared
+   src file — `src/cfp_scheduler_killer/views/format.clj` (p30/p31),
+   `src/marvin_voice_remote/reducer/echo_guard.clj` (p32/p33). No test file touched.
+4. `red_attested=assertion` with `red_golden=green`, naming the declared var:
+   `cfp-scheduler-killer.views.format-test/fmt-percent-renders-whole-percents` and
+   `marvin-voice-remote.echo-guard-coverage-test/coverage-percent-renders-whole-percents`.
+5. `profile_isolated=no` on all four — **reported, not silent.** The named confound: the seat's
+   inherited global instructions (inherited_global=f11fc731b0dc5b4d) were present in every cell,
+   so none of the four is a clean-room instruction profile. `profile_drift=no` and
+   `final_source_drift=no` throughout.
+
+Receipt lines:
+
+```
+COLDSTART p31-opus-W-cc: model=opus(verified) cond=W grade=PASS task=PASS gate_final_exit=0
+  gate_final_wall=87s integrity=ok delivery=inline+P+T/evidenced warm_first=14.2 calls=8
+  apparatus=50.0% agent_wall=202s total_wall=576s profile=ba9e60764f2ca07b profile_drift=no
+  src_hash_at_verify=40f7cb058fcfd821 final_source_drift=no diff=' 1 file changed, 10 insertions(+)'
+COLDSTART-GRADE: PASS required=11/11 forbidden=0 warm_first_s=14.2 calls=8 cold_gates=1
+  apparatus=50.0% delivery_evidence=evidenced gate_exit=0 starts=0/0 observer=strace observer_execve=127
+
+COLDSTART p32-sol-0-mvr: model=sol(verified) cond=0 grade=PASS task=PASS gate_final_exit=0
+  gate_final_wall=18s integrity=ok delivery=inline+P/evidenced warm_first=38.8 calls=8
+  apparatus=62.5% agent_wall=151s total_wall=252s profile=dbb7fafc34a30cb6 profile_drift=no
+  src_hash_at_verify=af1fae6416e28afd final_source_drift=no diff=' 1 file changed, 6 insertions(+)'
+COLDSTART-GRADE: PASS required=11/11 forbidden=0 warm_first_s=38.8 calls=8 cold_gates=1
+  apparatus=62.5% delivery_evidence=evidenced gate_exit=0 starts=1/1 observer=strace observer_execve=473
+
+COLDSTART p33-sol-W-mvr: model=sol(verified) cond=W grade=PASS task=PASS gate_final_exit=0
+  gate_final_wall=18s integrity=ok delivery=inline+P/evidenced warm_first=21.2 calls=8
+  apparatus=62.5% agent_wall=134s total_wall=220s profile=dbb7fafc34a30cb6 profile_drift=no
+  src_hash_at_verify=3835730cdd087fb2 final_source_drift=no diff=' 1 file changed, 9 insertions(+)'
+COLDSTART-GRADE: PASS required=11/11 forbidden=0 warm_first_s=21.2 calls=8 cold_gates=1
+  apparatus=62.5% delivery_evidence=evidenced gate_exit=0 starts=0/0 observer=strace observer_execve=455
+```
+
+**What this closes, and only this.** The readiness obligation from acceptance-3 §5: the
+apparatus ran four observed cells clean, with no cell capped at UNVERIFIED and no apparatus
+refusal. It is **not** a friction-low claim for row 1, and it is not a W-vs-0 result.
+
+**What it does NOT establish.**
+- **No native control.** Every cell is a tool arm. There is no measured native floor here, so
+  nothing in this table is a vs-native performance claim. B05's six native floor runs and the
+  two three-pair frozen-build waves remain outstanding.
+- **N=1 per cell.** Four cells, four distinct (model, cond, repo) combinations — nothing is
+  replicated, so no difference between any two rows survives as a measurement. In particular
+  `warm_first_s` is lower under W than under 0 in both pairs (24.6→14.2 opus, 38.8→21.2 sol),
+  which is exactly what a prestarted endpoint should buy, but with one pair per model it is a
+  consistent direction and not an effect size.
+- **Model and repo are confounded with each other.** opus only ever ran on curtaincall-cfp and
+  sol only on marvin-voice-remote, so an opus/sol comparison here is also a cc/mvr comparison.
+  The mvr gate is 18s against cc's 87s, which alone explains most of the total_wall gap.
+- **`profile_isolated=no` on all four**, per part 5 above.
+- **Delivery differs by repo:** `inline+P+T` on cc, `inline+P` on mvr. Both evidenced, but the
+  cells are not byte-identical in how the block arrived.
