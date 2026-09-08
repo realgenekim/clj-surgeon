@@ -386,3 +386,31 @@ The independent fixture oracle is unchanged and was also zero on the red code;
 the literal witnesses supply the missing detection. Later collection-boundary
 coverage and final gates are recorded in `/var/tmp/forge/round/r5-report.md` and
 `/var/tmp/forge/round/r5-loop.log`. No comparative performance claim.
+
+
+### 2026-09-08T04:27:53.453439+00:00 — B03 routing prep
+
+Branch-only doctrine suspends the informed 3/21-site fan-out route and admits
+only the frozen Cell C namespace split source shape and manifest. Generic
+partition routing stays native. The existing verifier gains explicit plate-only
+validation, a fixed 188-line / 10,738-byte budget, doctrine identity and installed
+block hashes; no-target installed checks now refuse. Ten focused tests / 142
+assertions pass, and the direct intent audit is green with existing debt visible.
+No global installation, push, observer qualification, fresh timing claim or
+friction-low promotion. Full gates and operator commands are retained at
+`/var/tmp/forge/plan2/cellC/astra-B03prep-report.md`; the first make test attempt
+stopped at the pre-existing stale battery receipt.
+[Intent and witness matrix](intent/agent-routing/agent-routing-design.md).
+
+### 2026-09-08T05:22:34.331594+00:00 — B03b routing verifier repair
+
+Sol r7 found four doctrine mutations that the 18-needle verifier accepted.
+The [routing intent registry](intent/agent-routing/agent-routing-specs.md) now
+owns complete passages and schemas, consumed by the verifier with declared-ID
+coverage checks. Four independent mutant witnesses fail before the repair and
+refuse afterward; every registered passage has a deletion witness. The plate
+limits nonzero exits to the two baseline-attributed analysis checks, and the
+69-line canonical skill and both worktree mirrors match its admission boundary.
+Both trunk battery rows and the branch row are preserved in receipt order.
+No routing performance claim, installation or push; verification and merge
+receipts are in `/var/tmp/forge/plan2/cellC/astra-B03b-report.md`.

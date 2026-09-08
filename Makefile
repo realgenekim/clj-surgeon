@@ -99,7 +99,7 @@ help:
 	@echo "  make install-codex-skill       Install only the stable copied Codex skill"
 	@echo "  make install-claude-skill      Install only the stable copied Claude skill"
 	@echo "  make install-agent-routing     Install compact routing into Codex and Claude globals"
-	@echo "  make check-agent-routing       Verify both global routing blocks without writing"
+	@echo "  make check-agent-routing       Verify globals; PLATE_ONLY=1 validates only the branch plate"
 	@echo "  make sync-clj-surgeon-skill    Regenerate Claude/root mirrors from the canonical skill"
 	@echo "  make install-dev               Branch-live CLI and skill links (development only)"
 	@echo "  make nrepl                     Start bb nREPL"
@@ -188,7 +188,8 @@ install-agent-routing:
 	bb --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.agent-routing install "$(AGENT_ROUTING_SOURCE)" "$(CODEX_GLOBAL_INSTRUCTIONS)" "$(CLAUDE_GLOBAL_INSTRUCTIONS)"
 
 check-agent-routing:
-	bb --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.agent-routing check "$(AGENT_ROUTING_SOURCE)" "$(CODEX_GLOBAL_INSTRUCTIONS)" "$(CLAUDE_GLOBAL_INSTRUCTIONS)"
+	@# @spec ROUTING-PARITY-001
+	bb --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.agent-routing check "$(AGENT_ROUTING_SOURCE)" $(if $(filter 1,$(PLATE_ONLY)),--plate-only,"$(CODEX_GLOBAL_INSTRUCTIONS)" "$(CLAUDE_GLOBAL_INSTRUCTIONS)")
 
 sync-clj-surgeon-skill:
 	bash bench/sync_clj_surgeon_skill.sh --write

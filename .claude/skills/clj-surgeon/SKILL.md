@@ -12,13 +12,16 @@ bounded escape — not a per-invocation guarantee. The always-loaded routing pla
 carries one complete call for each; act from the plate, and open this file only for
 the unusual case. Ratios, fixtures and caveats:
 `docs/observations/2026-09-06-strictly-better-evidence.md`.
-- FAN-OUT: one `apply_clojure_changes` `edits` list — known old/new form, NAMED
-  owners, a proof profile. Narrowed 2026-09-07 (pair-1, n=2/arm): with owners AND
-  counts known, native won (124 vs 181 s; 117 vs 198 s; server < 1 s). Route only
-  when discovery is the cost; else one native scripted edit with count guards. Tool
-  route: literal `from` in `within {form}`, `matches` guard; `match` includes `#()` bodies.
+- FAN-OUT: SUSPENDED 2026-09-08 at the witnessed informed 3/21 sites. Schema
+  remains a capability; unknown-owner discovery is not an automatic route.
 - ALIAS migration: one `alias_migration` — known alias intent, eligible scope, no proof
   profile. Still routed (deletes caller work); live-proven 2026-09-07, 9 files / 21 sites.
+- NAMESPACE SPLIT: exact frozen Cell C source shape AND manifest only (experimental):
+  curtaincall-cfp `d9205abc`, `src/cfp_scheduler_killer/views.clj`;
+  141 owners / 20 absent destinations / 87 static sites / five callers.
+  Supplied mapping and aliases, `promotion_policy=promote-required`,
+  `source_retirement=delete`, `roots=[src,test]`, named cold `verification.profile`;
+  changed mapping/policy/source shape needs new admission. Use the plate's full contract.
 Outside those two, native is the PERFORMANCE default — that is a default, not an
 impossibility claim: an explicit user request or a separately approved experiment may
 use any other capability. `inspect_clojure` is a SUPPORTING read, never an automatic
@@ -36,30 +39,26 @@ never reapplied blindly.
 
 ## Receipts test values, not field names
 
-Optimize complete verified task time: count the complete verified task wall,
-including all discovery and repair costs. Tool runtime is never subtracted. Proof is `verification_complete=true` TOGETHER WITH the named successful
-checks over the current snapshot; a false or pending field is not evidence. An atomic
-commit with bytes read back proves the WRITE, not task semantics: do not re-verify a
-proven write, and do not treat it as behavioural proof. Run the outstanding required
-checks and repair any failure before claiming completion. No receipt retires
-user-required review, independent acceptance, or a check never performed.
+Optimize complete verified task time, including discovery, repair and tool runtime.
+Split proof: `state=committed`, `verification_complete=true`, `proof_pending=[]`,
+all named profile checks present with exit zero; registered `papercuts` must pass.
+All failed checks refuse. Nonzero exits are excused ONLY with a `:baseline` map on
+`captured-reference-analysis` or `candidate-lint-delta`. Any other nonzero exit refuses.
+A commit proves the write only; finish outstanding user checks and review.
+Plan-only if mapping is uncertain; never repeat a committed split. Warm-only is pending.
 
 ## Meter and kill switch
 
 Required per routed class: first-attempt success, refusal rate, fallback rate, and
 complete request-to-verified wall, plus a periodic preregistered native pair. A
 correctness failure SUSPENDS the class. A wall loss is assessed against that class's
-controls, never banned on one noisy pair. Unknown telemetry means unknown
-performance — use native pending investigation, not a recorded loss.
+controls; split's complete-wall loss vs registered controls suspends its exact route.
+Unknown telemetry means unknown performance — use native pending investigation.
 
 ## Syntax trip-wire
 
-Every CLI call is `:op <name>` plus key-value pairs; positional guesses produce
-`Unknown op`. Put any nontrivial plan on stdin with `:spec-file -`. Smoke test:
-
-```bash
-clj-surgeon :op :ls :file src/my/ns.clj
-```
+CLI uses `:op <name>` plus key-value pairs; split uses `:op :split-ns! :request-file X`.
+Other nontrivial plans use `:spec-file -`; smoke: `clj-surgeon :op :ls :file src/my/ns.clj`.
 
 ## References
 
