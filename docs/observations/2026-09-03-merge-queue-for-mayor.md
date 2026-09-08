@@ -141,3 +141,5 @@ LANDED 2026-09-07T19:41Z: astra/lid-batch-2-perf-gate-hld 94715053 → MCP/main 
 - LANDED 2026-09-08T04:23Z: round-5 intent registration 4856f5aa → merge a90055b4, trunk 88754ffe; gates green (/var/tmp/forge/land-4856f5aa.log). Row-1 LID debt = 0. No install/restart needed (docs + markers only).
 
 - LANDED 2026-09-08T06:02Z: routing plate a4868ca9 → merge 90e305b3, trunk ec1e57d1; gates green (/var/tmp/forge/land-a4868ca9.log); Sol GO r8. Fan-out route SUSPENDED; namespace_split admitted (exact contract). Install on this seat follows (announced inb-a67d24).
+
+- 2026-09-08T08:44Z Sol GO r9 (capability only) → `~/bin/land 02bbf482` launched via run-bg (pid 3121741; log /var/tmp/forge/run-bg/land-b07.log); distance 26 since receipt a4868ca9.
