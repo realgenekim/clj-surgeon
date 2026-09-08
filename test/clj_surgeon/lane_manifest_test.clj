@@ -421,9 +421,9 @@
   '{clj-surgeon.receipt-artifacts-boundary-test 15 ; Sol r10 + two Row 5 real-process witnesses (battery).
     clj-surgeon.namespace-split-test 35 ; B07 adds nine partial-retention, facts, bounded-analysis and preservation witnesses.
     clj-surgeon.namespace-split-warm-test 2 ; Round 3: real nREPL failure/green matrix and stale/foreign discovery, integration.
-    clj-surgeon.mcp-namespace-split-test 19 ; Batch 3 adds six receipt/facts/budget witnesses to the previous 13.
-    clj-surgeon.split-proof-gate-test 2 ; Batch 3 pure status/state matrix.
-    clj-surgeon.split-proof-gate-boundary-test 2 ; Batch 3 detached worker and caller-exit boundaries.
+    clj-surgeon.mcp-namespace-split-test 21 ; Batch 3's six receipt/facts/budget witnesses on the previous 13, plus Sol's a9da4344 committed-facts witness and the 0956951b delta fence's actionable unsafe-tmpdir refusal.
+    clj-surgeon.split-proof-gate-test 4 ; Batch 3 pure status/state matrix, plus Sol's a9da4344 temp-root admission and receipt-ceiling witnesses.
+    clj-surgeon.split-proof-gate-boundary-test 3 ; Batch 3 detached worker and caller-exit boundaries, plus Sol's a9da4344 worker-identity boundary.
     clj-surgeon.cell-b-oracle-test 2 ; B07: shell lint mutation test and independent partial-preservation mutants; battery (Python subprocess).
     clj-surgeon.mcp-expect-guard-test 14 ; `expect` is a guard on both write routes, not discarded bookkeeping (dogfood-3, 2026-09-07).
     clj-surgeon.outline-corpus-integration-test 1 ; MOVED: full repository differential out of the bounded fast namespace.
@@ -544,7 +544,11 @@
       ;; Sol r10 adds 13 per-verb publication witnesses: 517 + 13 = 530.
       ;; Rows sublime adds seven external-profile/proof-honesty boundary witnesses.
       ;; Batch 3: six receipt/facts witnesses + two pure status + two detached boundary tests.
-      (is (= 547 adopted) (str "adopted tests: " adopted)))
+      ;; Sol's landing fence for a9da4344 added four JVM witnesses (2 gate, 1 gate
+      ;; boundary, 1 mcp) without moving these pins, so this arithmetic was RED at
+      ;; branch tip 0956951b; the delta fence for that tip adds the fifth, the
+      ;; actionable unsafe-tmpdir refusal (NS-SPLIT-059). 547 + 4 + 1 = 552.
+      (is (= 552 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -643,7 +647,11 @@
       ;; Rows sublime: seven split boundaries plus six alias telemetry witnesses.
       ;; 1543 + 7 + 6 = 1556; no test or namespace leaves the corpus.
       ;; Batch 3 adds ten JVM witnesses; the encoder CLI witness stays in the BB lane.
-      (is (= 1566 total) (str "manifest declares " total " tests"))
+      ;; Sol's a9da4344 fence (+4) and the 0956951b delta fence (+1) carry the same
+      ;; five witnesses through the source census; the delta fence's help witness
+      ;; lives in the BB lane's cli-dispatch-test and is not counted here.
+      ;; 1566 + 4 + 1 = 1571.
+      (is (= 1571 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

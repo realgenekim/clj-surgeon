@@ -40,15 +40,27 @@
       (is (= ["check-b"] (:failed_command (status original "o" (assoc-in closure [:checks 1 :exit] 1) "h")))))))
 
 ;; @spec NS-SPLIT-056
+;; @spec NS-SPLIT-059
 ;; INTENT-TEST: NS-SPLIT-056
+;; INTENT-TEST: NS-SPLIT-059
 (deftest background-temp-root-refuses-tmpfs-and-relative-paths
-  (let [safe? (try (requiring-resolve 'clj-surgeon.split-proof-gate/safe-tmpdir?) (catch Exception _ nil))]
+  (let [safe? (try (requiring-resolve 'clj-surgeon.split-proof-gate/safe-tmpdir?) (catch Exception _ nil))
+        admit (ns-resolve 'clj-surgeon.split-proof-gate 'admitted-tmpdir!)
+        next-call {:action "set-java-tmpdir-and-retry"
+                   :java_tmpdir "/var/tmp/<owned-temp-directory>"}]
     (is (some? safe?) "background proof must expose its pure temp-root admission rule")
     (when safe?
       (is (true? (safe? (System/getProperty "java.io.tmpdir"))))
       (is (false? (safe? "/tmp/forge/sol")))
       (is (false? (safe? "relative/tmp")))
-      (is (false? (safe? nil))))))
+      (is (false? (safe? nil))))
+    (is (some? admit) "the boundary must retain a typed, actionable refusal")
+    (when admit
+      (with-redefs [gate/safe-tmpdir? (constantly false)]
+        (let [refusal (try (admit) nil
+                           (catch clojure.lang.ExceptionInfo error error))]
+          (is (= :background-gate-unsafe-tmpdir (:error-type (ex-data refusal))))
+          (is (= next-call (:next_call (ex-data refusal)))))))))
 
 ;; @spec NS-SPLIT-051
 (deftest status-retains-cold-and-trivial-proof-honesty

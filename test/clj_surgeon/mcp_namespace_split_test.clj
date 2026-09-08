@@ -7,6 +7,7 @@
    [clj-surgeon.namespace-split-io :as boundary]
    [clj-surgeon.namespace-split-test :as fixture]
    [clj-surgeon.namespace-split-warm :as warm]
+   [clj-surgeon.split-proof-gate :as gate]
    [clj-surgeon.synchronous-verification :as proof]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -65,6 +66,27 @@
   (let [result {:ok false :state "refused" :blockers [{:type "x"}] :elapsed_ms 1}]
     (is (= (json/parse-string (json/generate-string result))
            (json/parse-string (second (str/split (tool/summary result) #"\n" 2)))))))
+
+;; @spec NS-SPLIT-059
+;; INTENT-TEST: NS-SPLIT-059
+(deftest unsafe-background-temp-root-refusal-is-actionable
+  (with-workspace
+    (fn [_ request]
+      (let [next-call {:action "set-java-tmpdir-and-retry"
+                       :java_tmpdir "/var/tmp/<owned-temp-directory>"}
+            background-profiles
+            {"unit" {:commands [["/bin/true"]] :proof :warm :gate :background}}]
+        (with-redefs [warm/discover! (constantly {:port 1})
+                      gate/runner-commands!
+                      (fn []
+                        (throw (ex-info "Background proof requires java.io.tmpdir below /var/tmp"
+                                 {:error-type :background-gate-unsafe-tmpdir
+                                  :java_tmpdir "/tmp"
+                                  :next_call next-call})))]
+          (let [result (boundary/execute! {:verification-profiles background-profiles} request)]
+            (is (= "background-gate-unsafe-tmpdir" (:error_type result)))
+            (is (= next-call (:next_call result)))
+            (is (false? (:mutation_attempted result)))))))))
 
 ;; @spec NS-SPLIT-011
 ;; @spec NS-SPLIT-015

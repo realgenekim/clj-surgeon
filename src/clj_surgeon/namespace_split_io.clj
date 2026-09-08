@@ -519,12 +519,17 @@
                                             (artifacts/directory "namespace-split" (str root))
                                             checks))))]
                  (assoc result :elapsed_ms (elapsed)))))))
+       ;; @spec NS-SPLIT-059
+       ;; INTENT: NS-SPLIT-059
+       ;; A typed refusal that names no repair is a dead end: preserve the
+       ;; refusing boundary's own next_call all the way to the public receipt.
        (catch Throwable error
          {:ok false :operation "namespace_split" :state "refused" :committed false
           :mutation_attempted false :source_unchanged true :verification_complete false
           :error_type (name (or (:error-type (ex-data error)) :split-failed))
-          :error (.getMessage error) :evidence (dissoc (ex-data error) :error-type)
-          :next_call nil :proof_pending (or (:proof_pending (ex-data error)) []) :elapsed_ms (elapsed)})))))
+          :error (.getMessage error) :evidence (dissoc (ex-data error) :error-type :next_call)
+          :next_call (:next_call (ex-data error))
+          :proof_pending (or (:proof_pending (ex-data error)) []) :elapsed_ms (elapsed)})))))
 
 ;; @spec NS-SPLIT-014
 (defn cli! [opts]

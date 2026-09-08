@@ -179,6 +179,13 @@
         (is (= "invalid-request" (:error_type (edn/read-string (:out bad))))))
       (finally (.delete profile-file) (doseq [file (reverse (file-seq root))] (.delete file))))))
 
+;; @spec NS-SPLIT-059
+;; INTENT-TEST: NS-SPLIT-059
+(deftest background-proof-help-names-temp-root-requirement
+  (let [help (core/format-op-help :split-ns! (get core/ops-registry :split-ns!))]
+    (doseq [phrase ["TMPDIR=/var/tmp/" "-Djava.io.tmpdir=/var/tmp/"]]
+      (is (str/includes? help phrase) phrase))))
+
 ;; @spec NS-SPLIT-041
 (deftest cli-partial-retention-facts-and-publication
   (let [root (.toFile (java.nio.file.Files/createTempDirectory "partial-cli-" (make-array java.nio.file.attribute.FileAttribute 0)))

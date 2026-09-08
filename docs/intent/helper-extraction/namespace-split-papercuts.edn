@@ -284,4 +284,10 @@
  :boundaries ["byte-identical replay; one-byte snapshot hash change; deleted source; plan-only typed refusal"]
  :tests [:printed-manifest-roundtrips]
  :rationale "Sol landing fence found the printed manifest omitted the computed snapshot hash."}
+{:id :NS-SPLIT-059 :status :active
+ :ears "When a background proof refuses an unsafe java.io.tmpdir, the public receipt shall carry an executable next_call naming the /var/tmp repair before any mutation."
+ :misreadings ["A typed error_type is actionable on its own." "The caller can read the required temp root out of the gate's exception message." "The public boundary may drop a refusing boundary's next_call because the top-level default is nil."]
+ :boundaries ["gate ex-data; public namespace_split receipt; mutation_attempted=false; CLI help naming TMPDIR= and -Djava.io.tmpdir="]
+ :tests [:background-temp-root-refuses-tmpfs-and-relative-paths :unsafe-background-temp-root-refusal-is-actionable :background-proof-help-names-temp-root-requirement]
+ :rationale "Sol delta fence for 0956951b ruling (a): /var/tmp stays this repository's convention, so the refusal has to tell the caller how to satisfy it."}
 ]}

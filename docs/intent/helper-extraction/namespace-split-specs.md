@@ -88,3 +88,7 @@ and all ownership, behavior, architecture and protected-content gates are unchan
 - [x] **NS-SPLIT-056**: When a background proof worker is admitted, its `java.io.tmpdir` shall be an existing absolute descendant of `/var/tmp`; `/tmp`, relative, missing, and root-only paths shall refuse before publication.
 - [x] **NS-SPLIT-057**: When a receipt is bounded, both its UTF-8 EDN bytes and escaped-JSON transport bytes shall fit the ceiling; hostile newline and bidi filename text shall remain encoded.
 - [x] **NS-SPLIT-058**: When facts print a replay manifest, it shall bind the captured snapshot hash so a one-byte hash change returns the typed snapshot-drift refusal.
+
+## Sol delta fence for 0956951b, ruling (a)
+
+- [x] **NS-SPLIT-059**: When a background proof refuses an unsafe `java.io.tmpdir`, the public receipt shall carry an executable `next_call` naming the `/var/tmp` repair before any mutation, and `:split-ns!` help shall state both the Babashka `TMPDIR=` and the JVM/MCP `-Djava.io.tmpdir=` form.

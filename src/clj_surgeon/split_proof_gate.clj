@@ -63,11 +63,21 @@
            (and (.startsWith candidate allowed) (not= candidate allowed))))
     (catch Exception _ false)))
 
+;; @spec NS-SPLIT-059
+;; INTENT: NS-SPLIT-059
+(def unsafe-tmpdir-next-call
+  "The one repair a refused caller can execute: relaunch below /var/tmp."
+  {:action "set-java-tmpdir-and-retry"
+   :java_tmpdir "/var/tmp/<owned-temp-directory>"})
+
 (defn- admitted-tmpdir! []
   (let [tmpdir (System/getProperty "java.io.tmpdir")]
     (when-not (safe-tmpdir? tmpdir)
-      (throw (ex-info "Background proof requires java.io.tmpdir below /var/tmp"
-                      {:error-type :background-gate-unsafe-tmpdir :java_tmpdir tmpdir})))
+      (throw (ex-info (str "Background proof requires java.io.tmpdir below /var/tmp. "
+                           "Run Babashka with TMPDIR=/var/tmp/<owned-dir> and the JVM/MCP server "
+                           "with -Djava.io.tmpdir=/var/tmp/<owned-dir>.")
+                      {:error-type :background-gate-unsafe-tmpdir :java_tmpdir tmpdir
+                       :next_call unsafe-tmpdir-next-call})))
     (str (.toRealPath (.toPath (io/file tmpdir)) (make-array LinkOption 0)))))
 
 ;; @spec NS-SPLIT-051
