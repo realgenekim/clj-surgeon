@@ -32,6 +32,7 @@
      "source" (object-schema {"file" string-schema "lib" string-schema} ["file" "lib"])
      "destinations" {:type "array" :minItems 1 :maxItems 1000
                      :items (object-schema {"lib" string-schema "file" string-schema
+                                            "doc" string-schema
                                             "forms" strings-schema
                                             "alias_policy" (assoc strings-schema :minItems 1)}
                                            ["lib" "file" "forms" "alias_policy"])}

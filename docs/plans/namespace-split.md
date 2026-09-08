@@ -39,7 +39,8 @@ Gene's 2026-09-07 brief authorizes this leaf's repair and fresh-fixture proof.
 The append-only `namespace-split-papercuts.edn` registry fixes NS-SPLIT-016..021
 with misreadings and boundary cases before implementation. Add failing witnesses
 first, then repair the pure compiler and confined boundary. Caller headers use
-source splices; destination docstrings retain string-node bytes. Prose is scanned
+source splices. The original destination doc-token preservation policy is
+superseded by NS-SPLIT-022 below. Prose is scanned
 structurally in candidate strings/comments using the original namespace aliases.
 Lint compares the same isolated analyzer configuration on captured and candidate
 bytes; a multiset of error type/message identities ignores moved coordinates but
@@ -51,3 +52,29 @@ all configured commands, and a failing early command exercises the guarded inver
 Acceptance: fresh d9205abc worktree, exact supplied manifest, all four oracles,
 server require diff, branch suite and touched-file lint. Retain red/green and wall
 receipts; this repair run does not establish a new comparative speed claim.
+
+## Round 2 destination ownership and layout
+
+Gene authorizes the complete repair/proof cycle in this leaf. NS-SPLIT-022..027
+supersede NS-SPLIT-019: the original docstring goes into none of the destinations.
+Optional destination :doc is a nonblank string; absent it, a deterministic summary
+names the source, form count and first three public names in source order (including
+promotions). Private-only destinations say no public forms. No clock enters the
+pure compiler. Explicit docs preserve their values as valid Clojure string literals.
+
+Imports use located kondo java-class-usages excluding declarations and fully
+qualified class tokens. A replaced call head with a same-line first argument
+shifts only continuation whitespace equal to the original argument column inside
+that call; string contents stay intact. Ordinary and anonymous #(...) calls share
+the rule, including shorter aliases and nested heads on the same line. Destination requires use one sorted block
+at the source continuation indent (default three spaces). Caller entries retain
+existing groups and trivia; additions join the matching library-prefix group.
+The same rule applies to source and test callers.
+
+The receipt's :unrequired_qualified_refs rows contain candidate :file, :line,
+:token and :lib. Java classes, aliases, required namespaces and prose are excluded.
+These rows neither add requires nor block writes. Captured facts are reused with
+no extra analyzer or suite invocation. The registry records the behavioral matrix
+before code. Fresh d9205abc before/after fixtures use the supplied request and same
+profile. Gates: all four oracles, baseline-relative view lint, make test and touched
+file lint. Single replay timing does not establish a new native crossover.

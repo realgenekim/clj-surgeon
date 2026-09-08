@@ -302,3 +302,14 @@ mission-ledger implementation change.
   D1/D2 30.666/30.382 s; added candidate lint costs 3.375 s, no verification cut.
   One functional replay, not a replicated crossover claim.
   [Proof, red/green witnesses and retained warning delta](observations/2026-09-07-namespace-split-papercuts.md).
+
+- 2026-09-08T00:15:34.529206+00:00, `astra/namespace-split`: round-2
+  NS-SPLIT-022..027 replace cloned docs with explicit/generated role summaries,
+  prune FQ-only imports, preserve grouped caller and sorted host-indented destination
+  requires, align ordinary/anonymous/nested call heads, and report unrequired
+  qualified references as advisory. Fresh d9205abc split passes four oracles,
+  isolated whole-snapshot lint delta 0/0; direct view lint has no new warning
+  identities, but repeats one pre-existing store warning per destination (14 → 15
+  raw rows). In-call before 35.393 s, after 33.391 s, with suite variation explaining
+  the difference; no new native crossover claim.
+  [Witnesses, raw warning caveat, source diff and proof](observations/2026-09-08-namespace-split-papercuts-round2.md).

@@ -173,8 +173,103 @@
                 (z/root-string (z/replace loc (dissoc (sexpr (z/node loc)) :private)))
                 (recur (z/next loc)))))))))
 
-;; INTENT: NS-SPLIT-019
-(defn- header [parsed lib entries used-classes]
+(declare require-indent)
+
+;; INTENT: NS-SPLIT-022
+(defn destination-doc
+  "Describe the assigned forms, without cloning source-specific prose."
+  [source-lib destination owners promoted]
+  (or (:doc destination)
+      (let [private? (fn [owner]
+                       (let [[head name & tail] (sexpr (:node owner))
+                             attr (first (drop-while string? tail))]
+                         (or (= 'defn- head) (:private (meta name))
+                             (and (#{'defn 'defn-} head) (map? attr) (:private attr)))))
+            public (map :name (remove #(and (private? %) (not (promoted (:name %)))) owners))]
+        (str "Split from " source-lib ": " (count owners) " forms — "
+             (if (seq public)
+               (str (str/join ", " (take 3 public)) (if (> (count public) 3) "…" "."))
+               "no public forms.")))))
+
+;; INTENT: NS-SPLIT-023
+(defn imported-class-usage?
+  "Kondo class identity alone does not imply a short-name import dependency."
+  [parsed usage]
+  (when (and (not (:import usage)) (located? usage))
+    (let [[start end] (span (:starts parsed)
+                            (or (:name-row usage) (:row usage))
+                            (or (:name-col usage) (:col usage))
+                            (or (:name-end-row usage) (:end-row usage))
+                            (or (:name-end-col usage) (:end-col usage)))
+          token (subs (:source parsed) start end)
+          class (str (:class usage))]
+      (not (or (= token class) (str/starts-with? token (str class "/"))
+               (str/starts-with? token (str class ".")))))))
+
+;; INTENT: NS-SPLIT-024
+(defn aligned-reference-edits
+  "Add only matching continuation whitespace edits inside replaced calls.
+  Positions remain relative to the captured source; nested edits compose."
+  [parsed edits]
+  (let [by-start (into {} (map (juxt :start identity)) edits)
+        nodes (mapcat (fn [top]
+                        (let [[start end] (node-span (:starts parsed) top)]
+                          (when (some #(<= start % (dec end)) (keys by-start))
+                            (tree-seq n/inner? n/children top))))
+                      (n/children (:root parsed)))
+        protected (for [node nodes :when (= :multi-line (n/tag node))]
+                    (node-span (:starts parsed) node))
+        shifts (for [node nodes :when (#{:list :fn} (n/tag node))
+                     :let [[head arg] (filter meaningful? (n/children node))]
+                     :when (and head arg (= (:row (meta head)) (:row (meta arg))))
+                     :let [[start end] (node-span (:starts parsed) head)
+                           edit (get by-start start)
+                           line-start (nth (:starts parsed) (dec (:row (meta head))))
+                           delta (when edit
+                                   (reduce + (for [e edits
+                                                   :when (and (<= line-start (:start e) start)
+                                                              (<= (:end e) end)
+                                                              (not (str/includes? (:text e) "\n")))]
+                                               (- (count (:text e)) (- (:end e) (:start e))))))
+                           column (dec (:col (meta arg)))]
+                     :when (and delta (not (zero? delta)) (= end (:end edit)))
+                     row (range (inc (:row (meta head))) (inc (:end-row (meta node))))
+                     :let [start (nth (:starts parsed) (dec row))
+                           end (+ start column)]
+                     :when (and (<= end (count (:source parsed)))
+                                (re-matches #" *" (subs (:source parsed) start end))
+                                (not (#{\space \tab \newline \return} (get (:source parsed) end)))
+                                (not-any? (fn [[a b]] (< a start b)) protected))]
+                 {:start start :end end :delta delta :owner (:owner edit)})
+        whitespace (for [[start xs] (group-by :start shifts)
+                         :let [{:keys [end owner]} (first xs)
+                               width (+ (- end start) (reduce + (map :delta xs)))]]
+                     {:start start :end end :text (apply str (repeat width " ")) :owner owner})]
+    (concat edits whitespace)))
+
+;; INTENT: NS-SPLIT-027
+(defn unrequired-qualified-refs
+  "Advisory executable fully qualified Var tokens, in candidate coordinates."
+  [builds java-classes]
+  (vec (sort-by (juxt :file :line :token)
+         (mapcat
+           (fn [{:keys [file lib entries source]}]
+             (let [required (conj (set (map lib-of entries)) lib "clojure.core")
+                   bound (aliases entries)
+                   root (parser/parse-string-all source)]
+               (for [top (n/children root)
+                     :when (not (and (= :list (n/tag top)) (= 'ns (first (sexpr top)))))
+                     node (tree-seq #(and (n/inner? %) (not= :uneval (n/tag %))) n/children top)
+                     :when (= :token (n/tag node))
+                     :let [value (sexpr node) qualifier (when (symbol? value) (namespace value))]
+                     :when (and qualifier (str/includes? qualifier ".")
+                                (not (required qualifier)) (not (bound qualifier))
+                                (not (java-classes qualifier)))]
+                 {:file file :line (:row (meta node)) :token (n/string node) :lib qualifier})))
+           builds))))
+
+;; INTENT: NS-SPLIT-025
+(defn- header [parsed lib entries used-classes doc]
   (let [clauses (for [clause (drop 2 (:ns-value parsed))
                       :when (and (sequential? clause) (not= :require (first clause)))
                       :let [clause (if (= :import (first clause))
@@ -186,11 +281,12 @@
                                                      (when (contains? used-classes (str entry)) entry)))
                                                  (rest clause))) clause)]
                       :when (or (not= :import (first clause)) (seq (rest clause)))] clause)]
-    (str "(ns " lib
+    (str "(ns " lib "\n  " (pr-str doc)
          (apply str (for [node (drop 2 (filter meaningful? (n/children (:ns-node parsed))))
-                          :when (or (string? (sexpr node)) (map? (sexpr node)))]
-                      (str "\n  " (n/string node))))
-         (when (seq entries) (str "\n  (:require\n    " (str/join "\n    " (map pr-str entries)) ")"))
+                          :when (map? (sexpr node))]
+                      (str "\n  " (pr-str (dissoc (sexpr node) :doc)))))
+         (when (seq entries) (let [indent (require-indent parsed)]
+                               (str "\n  (:require\n" indent (str/join (str "\n" indent) (map pr-str (sort-by lib-of entries))) ")")))
          (apply str (map #(str "\n  " (pr-str %)) clauses)) ")")))
 
 (defn- require-clauses [parsed]
@@ -207,6 +303,10 @@
   (let [prefix (subs source (line-start source start) start)]
     (when (re-matches #"[ \t]*" prefix) prefix)))
 
+(defn- require-indent [parsed]
+  (or (some (fn [node] (line-indent (:source parsed) (first (node-span (:starts parsed) node))))
+            (mapcat require-entries (require-clauses parsed))) "   "))
+
 (defn- remove-libspec [source starts node]
   (let [[start end] (node-span starts node)
         beginning (line-start source start)
@@ -222,49 +322,65 @@
      :end (if alone? (if newline (inc newline) tail-end) end) :text ""}))
 
 ;; INTENT: NS-SPLIT-017
+;; INTENT: NS-SPLIT-026
 (defn- caller-header [parsed source-lib added]
-  ;; Reparse only the small owned header after deletion. Insertions use exact
-  ;; spans; no existing libspec, comment or indentation is reprinted.
+  ;; Keep the retired entry as a group anchor until additions are placed.
+  ;; Reparse only this small header; existing entries and trivia are not reprinted.
   (let [source (n/string (:ns-node parsed))
         parsed (parse-file "header.clj" source)
         clauses (require-clauses parsed)
         original-entries (mapcat require-entries clauses)
         indent (or (some (fn [node] (line-indent source (first (node-span (:starts parsed) node))))
                          original-entries) "    ")
-        removed (splice source (for [node original-entries :when (= source-lib (lib-of (sexpr node)))]
-                                 (remove-libspec source (:starts parsed) node)))]
-    (reduce
-      (fn [source entry]
-        (let [p (parse-file "header.clj" source)
-              clause (first (require-clauses p))
-              entries (when clause (require-entries clause))
-              before (first (filter #(pos? (compare (lib-of (sexpr %)) (lib-of entry))) entries))
-              printed (pr-str entry)]
-          (cond
-            before
-            (let [[start _] (node-span (:starts p) before)
-                  own-indent (line-indent source start)
-                  start (if own-indent (line-start source start) start)]
-              (splice source [{:start start :end start
-                               :text (if own-indent (str indent printed "\n")
-                                         (str printed "\n" indent))}]))
-            (seq entries)
-            (let [[_ end] (node-span (:starts p) (last entries))]
-              (splice source [{:start end :end end :text (str "\n" indent printed)}]))
-            clause
-            (let [[_ end] (node-span (:starts p) clause)
-                  end (dec end)]
-              (splice source [{:start end :end end :text (str printed)}]))
-            :else
-            (let [end (dec (count source))]
-              (splice source [{:start end :end end :text (str "\n  (:require " printed ")")}])))))
-      removed (sort-by lib-of added))))
+        group-key #(first (str/split % #"\."))
+        libs (map #(lib-of (sexpr %)) original-entries)
+        sorted? (= libs (sort libs))
+        inserted (reduce
+                   (fn [source entry]
+                     (let [p (parse-file "header.clj" source)
+                           clause (first (require-clauses p))
+                           entries (when clause (require-entries clause))
+                           remaining (remove #(= source-lib (lib-of (sexpr %))) entries)
+                           group (filter #(= (group-key (lib-of entry)) (group-key (lib-of (sexpr %)))) remaining)
+                           anchor (filter #(= source-lib (lib-of (sexpr %))) entries)
+                           candidates (cond
+                                        (seq group) group
+                                        (and (= (group-key (lib-of entry)) (group-key source-lib))
+                                             (seq anchor)) anchor
+                                        sorted? (if (seq remaining) remaining entries)
+                                        (seq anchor) anchor
+                                        :else entries)
+                           before (first (filter #(pos? (compare (lib-of (sexpr %)) (lib-of entry))) candidates))
+                           printed (pr-str entry)]
+                       (cond
+                         before
+                         (let [[start _] (node-span (:starts p) before)
+                               own-indent (line-indent source start)
+                               start (if own-indent (line-start source start) start)]
+                           (splice source [{:start start :end start
+                                            :text (if own-indent (str indent printed "\n")
+                                                      (str printed "\n" indent))}]))
+                         (seq entries)
+                         (let [[_ end] (node-span (:starts p) (last candidates))]
+                           (splice source [{:start end :end end :text (str "\n" indent printed)}]))
+                         clause
+                         (let [[_ end] (node-span (:starts p) clause)
+                               end (dec end)]
+                           (splice source [{:start end :end end :text (str printed)}]))
+                         :else
+                         (let [end (dec (count source))]
+                           (splice source [{:start end :end end :text (str "\n  (:require " printed ")")}])))))
+                   source (sort-by lib-of added))
+        p (parse-file "header.clj" inserted)]
+    (splice inserted (for [node (mapcat require-entries (require-clauses p))
+                           :when (= source-lib (lib-of (sexpr node)))]
+                       (remove-libspec inserted (:starts p) node)))))
 
 ;; INTENT: NS-SPLIT-018
 (defn prose-mentions
   "Advisory candidate lines in strings/comments; original aliases remain useful
   even after the require binding is retired. Executable tokens are excluded."
-  [source-lib parsed future-sources source-file]
+  [source-lib parsed future-sources source-file generated-doc-files]
   (vec
     (sort-by (juxt :file :line)
       (distinct
@@ -279,8 +395,9 @@
                     lines (str/split-lines source)
                     nodes (when (some #(re-find % source) patterns)
                             (tree-seq n/inner? n/children (parser/parse-string-all source)))]
-                (for [node nodes :when (or (n/comment? node) (= :multi-line (n/tag node))
-                                         (and (= :token (n/tag node)) (string? (sexpr node))))
+                (for [node nodes :when (not (and (generated-doc-files file) (= 2 (:row (meta node)))))
+                      :when (or (n/comment? node) (= :multi-line (n/tag node))
+                              (and (= :token (n/tag node)) (string? (sexpr node))))
                       [i text] (map-indexed vector (str/split-lines (n/string node)))
                       :when (some #(re-find % text) patterns)
                       :let [line (+ (:row (meta node)) i)]]
@@ -394,6 +511,7 @@
                          edits (for [s local-sites :let [target (get mapping (:var s))
                                                          text (if (= (:lib d) target) (:var s) (str (get chosen target) "/" (:var s)))]]
                                  (assoc s :text text))
+                         edits (aligned-reference-edits original edits)
                          bodies (for [owner selected
                                       :let [body (splice (subs (:source original) (:start owner) (:end owner))
                                                          (for [e edits :when (= (:owner e) (:name owner))]
@@ -402,10 +520,12 @@
                                   (str (:prefix owner) body (:suffix owner)))
                          classes (set (for [u (:java-class-usages analysis)
                                             :when (and (= source-file (:filename u))
-                                                       (selected-names (:name (owner-at original (:row u) (:col u)))))]
+                                                       (selected-names (:name (owner-at original (:row u) (:col u))))
+                                                       (imported-class-usage? original u))]
                                         (str (:class u))))
                          declares (sort (set (map :var (filter #(= (:lib d) (:from %)) forward))))
-                         ns-source (header original (:lib d) entries classes)]
+                         ns-source (header original (:lib d) entries classes
+                                           (destination-doc source-lib d selected (set (map :form promotions))))]
                      {:file (:file d) :lib (:lib d) :entries entries :classes (vec (sort classes))
                       :blockers (:blockers allocation)
                       :source (str ns-source "\n\n" (when (seq declares) (str "(declare " (str/join " " declares) ")\n"))
@@ -425,7 +545,7 @@
                                     edits (cons {:start ns-start :end ns-end :text (caller-header p source-lib added)}
                                                 (for [s ss] (assoc s :text (str (get chosen (get mapping (:var s))) "/" (:var s)))))]]
                           {:file file :lib (:lib p) :entries entries :sites (count ss) :blockers (:blockers allocation)
-                           :source (splice (:source p) edits)}))
+                           :source (splice (:source p) (aligned-reference-edits p edits))}))
         all-builds (concat builds caller-builds)
         graph-edges (vec (sort (set (concat
                                       (for [b all-builds entry (:entries b)] [(:lib b) (lib-of entry)])
@@ -449,7 +569,9 @@
                     :promotions promotions :forward_reference_groups forward
                     :external_requires (mapv #(select-keys % [:lib :entries :classes]) builds)
                     :caller_inventory (mapv #(select-keys % [:file :lib :sites]) caller-builds)
-                    :prose_mentions (prose-mentions source-lib parsed (merge sources futures) source-file)
+                    :unrequired_qualified_refs (unrequired-qualified-refs builds (set (map (comp str :class) (:java-class-usages analysis))))
+                    :prose_mentions (prose-mentions source-lib parsed (merge sources futures) source-file
+                                                    (set (map :file (remove :doc dests))))
                     :unmapped_owners unmapped :duplicate_owners duplicates :cycle_sccs cycles
                     :rule_violations rules :unknowns unknowns :blockers blockers
                     :coverage {:roots (:roots request) :reference_authority "clj-kondo captured snapshot plus structural quoted-Var supplement"
@@ -473,4 +595,5 @@
      :promotions (mapv #(-> % (dissoc :callers) (assoc :reference_count (count (:callers %)))) (:promotions p))
      :graph (:projected_ns_graph p) :coverage (:coverage p) :blockers (:blockers compiled)
      :prose_mentions (:prose_mentions p)
+     :unrequired_qualified_refs (:unrequired_qualified_refs p)
      :checks checks :verification_complete false :next_call nil}))

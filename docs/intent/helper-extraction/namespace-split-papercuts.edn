@@ -18,7 +18,7 @@
    :boundaries ["comments" "multiline docstrings" "unchanged callers" "alias prefix collisions"]
    :tests [:retired-prose-is-advisory]
    :rationale "Cell C server.clj and replay_test.clj retained views/ prose."}
-  {:id :NS-SPLIT-019 :status :active
+  {:id :NS-SPLIT-019 :status :superseded :superseded-by :NS-SPLIT-022
    :ears "When generating destination namespace docstrings, the compiler shall preserve the original string token bytes."
    :misreadings ["Equal string values imply equal presentation." "Unescape all backslashes."]
    :boundaries ["literal newlines" "escaped quotes" "literal backslash-n"]
@@ -35,4 +35,66 @@
    :misreadings ["Fail fast means remove the suite." "Reorder arbitrary profile commands automatically."]
    :boundaries ["owner oracle first" "parse before publication" "failed oracle" "green suite still required"]
    :tests [:early-oracle-failure-restores-without-suite]
-   :rationale "Cell C owner oracle ran after the expensive suite; ordered profiles already support safe fail-fast."}]}
+   :rationale "Cell C owner oracle ran after the expensive suite; ordered profiles already support safe fail-fast."}
+{:id :NS-SPLIT-022,
+ :status :active,
+ :ears
+ "When generating a destination header, the compiler shall use its supplied doc or a deterministic summary of assigned forms.",
+ :misreadings ["Clone monolith prose in every destination."],
+ :boundaries
+ ["explicit doc; absent doc; private-only; first three public names"],
+ :tests [:destination-docstrings-describe-the-destination],
+ :rationale "Cell C round 2, Gene repair brief."}
+
+{:id :NS-SPLIT-023,
+ :status :active,
+ :ears
+ "When deriving destination imports, the compiler shall retain only classes with short-name usages in captured kondo facts.",
+ :misreadings ["A fully qualified class call needs an import."],
+ :boundaries
+ ["short and fully qualified calls; constructors; type hints; declaration facts"],
+ :tests [:destination-imports-follow-short-class-usage],
+ :rationale "Cell C round 2, Gene repair brief."}
+
+{:id :NS-SPLIT-024,
+ :status :active,
+ :ears
+ "When replacing a call head changes its width, the compiler shall shift continuation indentation equal to the original first-argument column by that width delta.",
+ :misreadings
+ ["Shift every following line, including string contents."],
+ :boundaries
+ ["caller and destination; growth and shrinkage; nesting; unaligned lines; strings"],
+ :tests [:qualified-call-continuations-track-head-width],
+ :rationale "Cell C round 2, Gene repair brief."}
+
+{:id :NS-SPLIT-025,
+ :status :active,
+ :ears
+ "When generating destination requires, the compiler shall emit one sorted block at the source continuation indent, defaulting to three spaces.",
+ :misreadings ["Sort external and sibling groups separately."],
+ :boundaries
+ ["mixed requires; inline first entry; absent require; tabs"],
+ :tests [:destination-requires-share-source-layout],
+ :rationale "Cell C round 2, Gene repair brief."}
+
+{:id :NS-SPLIT-026,
+ :status :active,
+ :ears
+ "When inserting caller requires into a grouped block, the compiler shall insert lexically within the matching library group while preserving existing entries.",
+ :misreadings
+ ["Prepend ahead of clojure.test or reorder the entire block."],
+ :boundaries
+ ["source and test callers; retired only project entry; globally sorted block"],
+ :tests [:caller-require-groups-remain-in-place],
+ :rationale "Cell C round 2, Gene repair brief."}
+
+{:id :NS-SPLIT-027,
+ :status :active,
+ :ears
+ "When a destination retains a fully qualified Var reference to an unrequired namespace, the receipt shall report an advisory candidate file and line.",
+ :misreadings ["Add a require or refuse the split."],
+ :boundaries
+ ["pre-existing store/now-inst; required namespace; Java classes; prose exclusions"],
+ :tests [:unrequired-qualified-refs-are-advisory],
+ :rationale "Cell C round 2, Gene repair brief."}
+]}

@@ -31,7 +31,8 @@ object is closed (`additionalProperties: false`). Both transports accept:
 {:workspace_root "/work/project"
  :source {:file "src/app/views.clj" :lib "app.views"}
  :destinations [{:lib "app.format" :file "src/app/format.clj"
-                 :forms ["fmt-date"] :alias_policy ["fmt" "vfmt"]}
+                 :forms ["fmt-date"] :alias_policy ["fmt" "vfmt"]
+                 :doc "Date formatting helpers."}
                 {:lib "app.page" :file "src/app/page.clj"
                  :forms ["page"] :alias_policy ["page" "vpage"]}]
  :promotion_policy "promote-required" ; alternatively ["fmt-date"]
@@ -75,7 +76,7 @@ Symlink source roots/files and destination traversal refuse.
    promotions, external requires and imports, destination dependencies, aliases,
    and forward declarations. Alias choices follow supplied order against existing
    external bindings. Preserve body text and attached comments, changing only
-   reference tokens and necessary private metadata. Generated namespace headers
+   reference tokens, necessary private metadata, and matching call-continuation alignment. Generated namespace headers
    are deliberately owned text; caller headers preserve unrelated original nodes.
 4. Rewrite all bounded callers, including test roots, in the same future map.
    A caller whose only relation is loading the old namespace loads the partition.
@@ -175,8 +176,9 @@ field failures motivating this amendment, not evidence of universal speedup.
 Caller requires are inserted at their lexical library position using the block's
 existing indentation. Only retired libspec spans/lines and new insertion spans
 are owned; existing entries and comments are never reordered or reprinted.
-An already unsorted block remains otherwise unchanged. Destination ns docstrings
-reuse the original string token, including literal newlines and escapes.
+An already unsorted block remains otherwise unchanged. The round-1 doc-token
+cloning policy is superseded by NS-SPLIT-022 below; original source prose is no
+longer assigned to destinations.
 
 The receipt's `:prose_mentions [{:file :line :text}]` names surviving candidate
 lines in strings and comments. It recognizes the retired library, original local
@@ -191,3 +193,29 @@ profile explicitly places its read-only owner oracle before kaocha; arbitrary
 profiles are not reordered. Candidate parse/lint run before publication, and a
 post-publication oracle failure invokes the existing guarded inverse. Success
 still requires all configured checks plus the final snapshot guard.
+
+## Round 2 destination ownership and layout
+
+Gene authorizes the complete repair/proof cycle in this leaf. NS-SPLIT-022..027
+supersede NS-SPLIT-019: the original docstring goes into none of the destinations.
+Optional destination :doc is a nonblank string; absent it, a deterministic summary
+names the source, form count and first three public names in source order (including
+promotions). Private-only destinations say no public forms. No clock enters the
+pure compiler. Explicit docs preserve their values as valid Clojure string literals.
+
+Imports use located kondo java-class-usages excluding declarations and fully
+qualified class tokens. A replaced call head with a same-line first argument
+shifts only continuation whitespace equal to the original argument column inside
+that call; string contents stay intact. Ordinary and anonymous #(...) calls share
+the rule, including shorter aliases and nested heads on the same line. Destination requires use one sorted block
+at the source continuation indent (default three spaces). Caller entries retain
+existing groups and trivia; additions join the matching library-prefix group.
+The same rule applies to source and test callers.
+
+The receipt's :unrequired_qualified_refs rows contain candidate :file, :line,
+:token and :lib. Java classes, aliases, required namespaces and prose are excluded.
+These rows neither add requires nor block writes. Captured facts are reused with
+no extra analyzer or suite invocation. The registry records the behavioral matrix
+before code. Fresh d9205abc before/after fixtures use the supplied request and same
+profile. Gates: all four oracles, baseline-relative view lint, make test and touched
+file lint. Single replay timing does not establish a new native crossover.

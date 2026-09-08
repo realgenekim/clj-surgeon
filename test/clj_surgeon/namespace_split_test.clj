@@ -185,12 +185,8 @@
     (is (:ok r))
     (is (str/includes? (get-in r [:future-sources "test/app/caller.clj"]) "[app.new :as fresh]"))))
 
-;; INTENT-TEST: NS-SPLIT-019
-(deftest destination-docstrings-preserve-token-spelling
-  (doseq [doc ["\"First line.\n\n   Second \\\"quoted\\\" line.\"" "\"Keep literal \\n spelling.\""]]
-    (let [r (paper-split (str "(ns app.views\n  " doc ")\n(def x 1)\n") nil)]
-      (is (:ok r))
-      (is (str/includes? (get-in r [:future-sources "src/app/new.clj"]) doc)))))
+;; NS-SPLIT-019 superseded by NS-SPLIT-022: preserve explicit string values;
+;; the monolith's misleading doc token no longer travels to any destination.
 
 ;; INTENT-TEST: NS-SPLIT-018
 (deftest retired-prose-is-advisory
@@ -311,3 +307,157 @@
     (is (every? tests active))
     (is (every? known code))
     (is (every? known tests))))
+
+(defn paper-request [groups]
+  (assoc request :destinations
+         (mapv (fn [[lib names]] {:lib (str "app." lib) :file (str "src/app/" lib ".clj")
+                                  :forms names :alias_policy [lib]}) groups)))
+
+(defn paper-compile [request sources analysis]
+  (split/compile-split request {:sources sources :analysis analysis :source-paths ["src" "test"]}))
+
+(defn literal-usage [file source token to name]
+  (let [start (str/index-of source token)
+        prefix (subs source 0 start)
+        row (inc (count (filter #{\newline} prefix)))
+        col (- (inc start) (inc (or (str/last-index-of prefix "\n") -1)))]
+    {:filename file :row row :col col :end-row row :end-col (+ col (count token))
+     :name name :to to}))
+
+;; INTENT-TEST: NS-SPLIT-022
+(deftest destination-docstrings-describe-the-destination
+  (doseq [form ["(def ^:private x 1)" "(def ^{:private true} x 1)" "(defn x {:private true} [] 1)"]]
+    (let [r (paper-split (str "(ns app.views)\n" form "\n") nil)]
+      (is (str/includes? (get-in r [:future-sources "src/app/new.clj"]) "no public forms."))))
+  (let [r (paper-request [["one" ["a" "b" "c" "d"]] ["two" ["hidden"]]])
+        source "(ns app.views \"This file uses form POST.\")\n(def a 1)\n(def b 2)\n(def c 3)\n(def d 4)\n(defn- hidden [] 5)\n"
+        result (paper-compile r {"src/app/views.clj" source} {})]
+    (is (:ok result))
+    (is (str/includes? (get-in result [:future-sources "src/app/one.clj"])
+          "\"Split from app.views: 4 forms — a, b, c…\""))
+    (is (str/includes? (get-in result [:future-sources "src/app/two.clj"])
+          "\"Split from app.views: 1 forms — no public forms.\""))
+    (doseq [text (remove nil? (vals (:future-sources result)))]
+      (is (not (str/includes? text "This file uses form POST."))))
+    (doseq [doc ["Formatting helpers." "First line.\nA \"quote\" and literal \\n."]]
+      (let [r (assoc-in r [:destinations 0 :doc] doc)
+            result (paper-compile r {"src/app/views.clj" source} {})]
+        (is (empty? (boundary/validate-request r)))
+        (is (= doc (nth (edn/read-string (get-in result [:future-sources "src/app/one.clj"])) 2)))))
+    (is (seq (boundary/validate-request (assoc-in r [:destinations 0 :doc] 42))))))
+
+;; INTENT-TEST: NS-SPLIT-023
+(deftest destination-imports-follow-short-class-usage
+  ;; Real kondo facts identify the class even when the token is fully qualified.
+  (doseq [[short full] [["ZoneId/of" "java.time.ZoneId/of"]
+                        ["ZoneId" "java.time.ZoneId"]
+                        ["ZoneId." "java.time.ZoneId."]]]
+    (let [source (str "(ns app.views (:import (java.time ZoneId Instant)))\n"
+                      "(def a " short ")\n(def b " full ")\n")
+          facts (for [[name token] [["a" short] ["b" full]]
+                      :let [u (literal-usage "src/app/views.clj" source (str "(def " name " " token) nil nil)]]
+                  (assoc u :col (+ 7 (:col u)) :class "java.time.ZoneId"))
+          result (paper-compile (paper-request [["one" ["a"]] ["two" ["b"]]])
+                                {"src/app/views.clj" source} {:java-class-usages facts})]
+      (is (:ok result))
+      (is (str/includes? (get-in result [:future-sources "src/app/one.clj"])
+            "(:import (java.time ZoneId))"))
+      (is (not (str/includes? (get-in result [:future-sources "src/app/two.clj"]) ":import")))))
+  (let [source "(ns app.views (:import java.time.Instant))\n(defn a [^Instant x] x)\n"
+        fact (assoc (literal-usage "src/app/views.clj" source "Instant x" nil nil)
+                    :end-col 18 :class "java.time.Instant")
+        result (paper-compile (paper-request [["one" ["a"]]]) {"src/app/views.clj" source}
+                              {:java-class-usages [fact]})]
+    (is (str/includes? (get-in result [:future-sources "src/app/one.clj"])
+          "(:import java.time.Instant)"))))
+
+;; INTENT-TEST: NS-SPLIT-024
+(deftest qualified-call-continuations-track-head-width
+  (let [caller (str "(ns app.caller (:require [app.views :as views]))\n"
+                    "(def z (views/x (views/x 1\n                         2)\n                3))\n")
+        result (paper-compile (paper-request [["l" ["x"]]])
+                 {"src/app/views.clj" "(ns app.views)\n(defn x [a b] [a b])\n"
+                  "test/app/caller.clj" caller}
+                 {:var-usages (for [col [9 18]]
+                                {:filename "test/app/caller.clj" :to 'app.views :name 'x
+                                 :row 2 :col col :end-row 2 :end-col (+ col 7)})})]
+    (is (str/includes? (get-in result [:future-sources "test/app/caller.clj"])
+          "(def z (l/x (l/x 1\n                 2)\n            3))")))
+  (doseq [caller? [false true]
+          anonymous? [false true]
+          alias ["longer" "q"]
+          aligned? [false true]]
+    (let [head (if caller? "views/x" "x")
+          old-col (+ 3 (count head) 1 (if anonymous? 1 0))
+          indent (if aligned? old-col 4)
+          call (str "(defn y []\n  " (when anonymous? "#") "(" head " 1\n" (apply str (repeat indent " ")) "2))\n")
+          source (str "(ns app.views)\n(defn x [a b] [a b])\n" (when-not caller? call))
+          caller (str "(ns app.caller (:require [app.views :as views]))\n" call)
+          file (if caller? "test/app/caller.clj" "src/app/views.clj")
+          sources (cond-> {"src/app/views.clj" source} caller? (assoc file caller))
+          request (paper-request (cond-> [[alias ["x"]]] (not caller?) (conj ["dest" ["y"]])))
+          usage (literal-usage file (get sources file) (str head " 1") 'app.views 'x)
+          usage (assoc usage :end-col (+ (:col usage) (count head)))
+          result (paper-compile request sources {:var-usages [usage]})
+          target (if caller? file "src/app/dest.clj")
+          new-head (str alias "/x")
+          new-indent (if aligned? (+ indent (- (count new-head) (count head))) indent)]
+      (is (:ok result))
+      (is (str/includes? (get-in result [:future-sources target])
+            (str "(" new-head " 1\n" (apply str (repeat new-indent " ")) "2)")))))
+  ;; Strings and neighboring calls are not continuation whitespace. A head on
+  ;; its own line has no same-line argument column to preserve.
+  (doseq [body ["(v/x\n       1\n       2)" "(v/x \"one\n            string\"\n       2)"]]
+    (let [source "(ns app.views)\n(defn x [a b] [a b])\n"
+          caller (str "(ns app.caller (:require [app.views :as v]))\n(def y " body ")\n")
+          result (paper-compile (paper-request [["longer" ["x"]]])
+                                {"src/app/views.clj" source "test/app/caller.clj" caller}
+                                {:var-usages [(literal-usage "test/app/caller.clj" caller "v/x" 'app.views 'x)]})]
+      (is (str/includes? (get-in result [:future-sources "test/app/caller.clj"])
+            (str/replace body "v/x" "longer/x"))))))
+
+;; INTENT-TEST: NS-SPLIT-025
+(deftest destination-requires-share-source-layout
+  (doseq [indent ["   " "\t" "      "]]
+    (let [source (str "(ns app.views\n  (:require [z.lib :as z]\n" indent "[a.lib :as a]))\n"
+                      "(def x 1)\n(def y [x (z/f) (a/f)])\n")
+          result (paper-compile (paper-request [["one" ["x"]] ["two" ["y"]]])
+                                {"src/app/views.clj" source}
+                                {:var-usages [(let [u (literal-usage "src/app/views.clj" source "x (z/f)" 'app.views 'x)]
+                                                (assoc u :end-col (inc (:col u))))]})]
+      (is (str/includes? (get-in result [:future-sources "src/app/two.clj"])
+            (str "(:require\n" indent "[a.lib :as a]\n" indent
+                 "[app.one :as one]\n" indent "[z.lib :as z])")))))
+  (let [result (compile-fixture)]
+    (is (str/includes? (get-in result [:future-sources "src/app/other.clj"])
+          "(:require\n   [app.util :as u]"))))
+
+;; INTENT-TEST: NS-SPLIT-026
+(deftest caller-require-groups-remain-in-place
+  (doseq [file ["src/app/caller.clj" "test/app/caller.clj"]
+          core-only? [false true]]
+    (let [caller (str "(ns app.caller\n  (:require [clojure.test :refer [is]]\n"
+                      (when-not core-only? "            [clojure.string :as str]\n")
+                      (when-not core-only? "            [ring.mock.request :as mock]\n")
+                      "            [app.views :as views]))\n")
+          result (paper-compile (paper-request [["new" ["x"]]])
+                                {"src/app/views.clj" "(ns app.views)\n(def x 1)\n" file caller} {})]
+      (is (= (str/replace caller "[app.views :as views]" "[app.new :as new]")
+             (get-in result [:future-sources file]))))))
+
+;; INTENT-TEST: NS-SPLIT-027
+(deftest unrequired-qualified-refs-are-advisory
+  (let [source (str "(ns app.views (:require [app.present :as p]))\n"
+                    "(def x [(app.store/now-inst) (app.present/now-inst) (p/now-inst)\n"
+                    "        (java.time.ZoneId/of \"UTC\") \"app.false/x\"])\n;; app.comment/x\n")
+        result (paper-compile (paper-request [["new" ["x"]]]) {"src/app/views.clj" source}
+                              {:java-class-usages [(assoc (literal-usage "src/app/views.clj" source
+                                                                         "java.time.ZoneId/of" nil nil)
+                                                     :class "java.time.ZoneId")]})
+        text (get-in result [:future-sources "src/app/new.clj"])
+        rows (:unrequired_qualified_refs (split/receipt result []))]
+    (is (:ok result))
+    (is (= [{:file "src/app/new.clj" :line 7 :token "app.store/now-inst" :lib "app.store"}] rows))
+    (is (not (str/includes? text "[app.store")))
+    (doseq [{:keys [line token]} rows]
+      (is (str/includes? (nth (str/split-lines text) (dec line)) token)))))

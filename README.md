@@ -751,6 +751,22 @@ receipt available. Running and terminal status carry the same `undo_receipt`
 and `receipt_hash`, so recovery needs no archaeology. Do not replay the edit or
 reread its source while the job is running.
 
+For a whole namespace partition, `namespace_split` (CLI `:split-ns!`) accepts one
+complete destination mapping and verifies one transaction. Each destination may
+supply a nonblank `:doc` string. Otherwise its generated doc names the source,
+form count and up to three public forms; the original monolith doc is not cloned.
+Destination requires form one sorted block with the source indentation. Imports
+are retained for short class names, and aligned multiline calls follow alias-width
+changes. Caller require groups and unrelated source text remain in place.
+The receipt's `:unrequired_qualified_refs` lists advisory destination file/line
+references to namespaces without a require; it never adds requires on that basis.
+See the [request, proof and undo contract](docs/intent/helper-extraction/namespace-split-design.md).
+
+```sh
+clj-surgeon :op :split-ns! :request-file split.edn :plan-only true
+clj-surgeon :op :split-ns! :request-file split.edn
+```
+
 For a namespace extraction, send the architectural decision once. The typed
 route creates the absent destination, moves the named owners, applies every
 exact caller rewrite, verifies the coherent future file set, and emits one
