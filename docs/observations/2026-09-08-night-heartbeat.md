@@ -30,3 +30,6 @@ Rules of this file: one entry per hour (UTC), quote receipts verbatim, DELTA per
 
 ## 2026-09-08T09:02Z
 - DELTA: B07 landed (trunk 1ab53e0e; CLI + 7906 rebuilt). Pilot 4b ran 4/4 under the observer (task PASS ×4; one grader FP + one genuine red-first miss) → CX-18 fix, regrade, p25 rerun running. Row-2 stage 2, row-5 stage 1, Astra row-3 still running.
+
+## 2026-09-08T09:12Z
+- DELTA: row 2 stage 2 done (caller work ÷2.6, 6/6 token-golden, gate fails on a verb paper cut + meter constant → Sol ruling running; Astra fixing the paper cut). Row 3: capability built, task not admissible (deferred). B07 landed (trunk 1ab53e0e). Running: row-5 native floor, CX-18 fix + p25. Disk 34G remaining.
