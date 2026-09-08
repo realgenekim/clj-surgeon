@@ -27,3 +27,6 @@ Rules of this file: one entry per hour (UTC), quote receipts verbatim, DELTA per
 
 ## 2026-09-08T08:11Z
 - Five lanes: row-2 stage 2 (six N/D pairs), pilot 4b (seed + harness fixes then p21–p24), row-5 stage 1 (six native controls on the B07 apparatus), Sol r9 (review of the partial-retention commit 02bbf482), Astra row-3 schema admission (standalone require_change). Trunk unchanged since the plate landing. Disk ~41 G remaining. Load 1.97.
+
+## 2026-09-08T09:02Z
+- DELTA: B07 landed (trunk 1ab53e0e; CLI + 7906 rebuilt). Pilot 4b ran 4/4 under the observer (task PASS ×4; one grader FP + one genuine red-first miss) → CX-18 fix, regrade, p25 rerun running. Row-2 stage 2, row-5 stage 1, Astra row-3 still running.

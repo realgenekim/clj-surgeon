@@ -853,7 +853,64 @@ fi
 step GRADE $(( $(date +%s) - t )) "$GLINE delivery=$DELIVERY"
 
 # ---------------------------------------------------------------------------
-# 5. INDEPENDENT TASK CHECK — the task's own VERIFY, run COLD in the specimen.
+# THE TRACKED-TREE DIGEST [acceptance-4 control C2 / PILOT-final-source-after-proof].
+#
+# Nothing bound the tree the PROOF ran over to the tree that is FROZEN. Acceptance-4's
+# agent left a detached writer that appended to a tracked file once the VERIFY had
+# already produced its evidence, and the run wrote `task=PASS integrity=ok` over a
+# frozen diff.patch containing a line the proof never saw. A receipt has to be able to
+# name the causal binding between its proof and its subject.
+#
+# The SUBJECT is exactly diff.patch's subject, so the digest uses diff.patch's own
+# pathspec. `git add -A` is what makes this the tracked tree: it honours .gitignore, so
+# build caches (.cpcache/, target/, *.log) never move the digest, and it stages the
+# agent's untracked new files, which ARE part of the subject. `ls-files -s` is
+# content-addressed (mode + blob sha + stage + path), never mtime. The index is reset
+# immediately; FREEZE does this same add/reset pair already. `00SERVER-LOGS.txt` is
+# excluded on the grounds it is excluded from diff.patch: the CC suite APPENDS to it, so
+# the harness's own gate would otherwise be the drift it reports.
+src_index() {  # $1 = file to write the index listing to; echoes the digest
+  git -C "$WT" add -A >/dev/null 2>&1 </dev/null
+  git -C "$WT" ls-files -s -- . ':!00SERVER-LOGS.txt' > "$1" 2>/dev/null
+  git -C "$WT" reset -q >/dev/null 2>&1 </dev/null
+  sha256sum < "$1" | cut -d' ' -f1
+}
+
+# ---------------------------------------------------------------------------
+# 5a. THE DECLARED GATE, COLD, ON THE AGENT'S FINAL TREE [acceptance-4 §2, §5].
+#
+# `coldstart` ran the declared GATE exactly twice — green on the untouched base at
+# GATE_QUALIFY and red with the readiness overlay at READINESS — and never again. Only
+# VERIFY, the task's own FOCUSED check, ran after the agent. The pilot's pass criterion 3
+# is "the declared VERIFY focus green AND the declared GATE green", so half of it was not
+# measured by the apparatus at all and an operator had to run the gate by hand — which is
+# to say it was not measured. A focused green over a suite the change broke is exactly the
+# shape of work this cohort exists to detect, and a receipt that cannot see it is not a
+# receipt about the suite.
+#
+# It runs BEFORE the verify, deliberately: the gate is a superset of the focused check, so
+# after it every compile cache the verify would otherwise create is already warm, and the
+# tree hash taken at the end of the proofs is not moved by the proofs' own side effects.
+#
+# `timeout` is correct here and forbidden around the agent launch, for the same reason in
+# both places: it kills the child it spawned, not your wait. Here the child IS the gate.
+# A descendant JVM can outlive it, and the /proc + cwd sweep below is what reaps that.
+# 124 is a timeout and is a non-zero gate exit like any other.
+# ---------------------------------------------------------------------------
+t=$(date +%s)
+GFLOG=$RUN/gate-final.log
+GF_LIMIT=$(( GATE_WALL * 6 )); [ "$GF_LIMIT" -lt 600 ] && GF_LIMIT=600
+( cd "$WT" && timeout -k 15 "$GF_LIMIT" bash -c "$GATE" ) > "$GFLOG" 2>&1 </dev/null
+GATE_FINAL_EXIT=$?
+GATE_FINAL_WALL=$(( $(date +%s) - t ))
+GATE_FINAL_SUM=$(grep -oE '[0-9]+ tests?, [0-9]+ assertions?[^\n]*' "$GFLOG" | tail -1)
+if [ "$GATE_FINAL_EXIT" -ne 0 ]; then
+  say "$(stamp)  gate-final output (tail):"; tail -20 "$GFLOG" | tee -a "$LOG"
+fi
+step GATE_FINAL "$GATE_FINAL_WALL" "gate_final_exit=$GATE_FINAL_EXIT (\`$GATE\`, cold, on the agent's final tree; qualified green on the base in ${GATE_WALL}s, limit ${GF_LIMIT}s) ${GATE_FINAL_SUM:-<no kaocha summary line>} ($GFLOG)"
+
+# ---------------------------------------------------------------------------
+# 5b. INDEPENDENT TASK CHECK — the task's own VERIFY, run COLD in the specimen.
 #    The agent's evidence is never the harness's evidence.
 # ---------------------------------------------------------------------------
 t=$(date +%s)
@@ -868,7 +925,11 @@ else
   TASK_RESULT=FAIL
 fi
 VSUM=$(grep -oE '[0-9]+ tests?, [0-9]+ assertions?[^\n]*' "$VLOG" | tail -1)
-step TASK_CHECK $(( $(date +%s) - t )) "$TASK_RESULT rc=$VRC ${VSUM:-<no kaocha summary line>} ($VLOG)"
+# THE TREE THE PROOFS RAN OVER. Taken here, after the last proof has exited, so the
+# window it opens is exactly acceptance-4's gap: everything that touches the subject
+# between the proof producing its evidence and the freeze taking its artifact.
+SRC_AT_VERIFY=$(src_index "$RUN/src-index-verify.txt")
+step TASK_CHECK $(( $(date +%s) - t )) "$TASK_RESULT rc=$VRC ${VSUM:-<no kaocha summary line>} ($VLOG) gate_final_exit=$GATE_FINAL_EXIT src_hash_at_verify=${SRC_AT_VERIFY:0:16}"
 
 # ---------------------------------------------------------------------------
 # 6. FREEZE + RECEIPT
@@ -877,6 +938,58 @@ git -C "$WT" add -A >/dev/null 2>&1 </dev/null
 git -C "$WT" diff --cached "$BASIS" -- . ':!00SERVER-LOGS.txt' > "$RUN/diff.patch" 2>/dev/null
 git -C "$WT" reset -q >/dev/null 2>&1 </dev/null
 DIFFSTAT=$(git -C "$WT" diff --stat "$BASIS" -- . ':!00SERVER-LOGS.txt' 2>/dev/null | tail -1)
+
+# C2 — THE FROZEN ARTIFACT MUST BE THE TREE THE PROOF SAW.
+SRC_AT_FREEZE=$(src_index "$RUN/src-index-freeze.txt")
+FINAL_SOURCE_DRIFT=no
+if [ -z "$SRC_AT_VERIFY" ] || [ -z "$SRC_AT_FREEZE" ]; then
+  FINAL_SOURCE_DRIFT=unknown
+elif [ "$SRC_AT_VERIFY" != "$SRC_AT_FREEZE" ]; then
+  FINAL_SOURCE_DRIFT=yes
+  say "$(stamp)  FINAL SOURCE DRIFT: the tracked tree changed AFTER the proofs and BEFORE the freeze. diff.patch is an artifact of a tree neither the gate nor the verify ran over [acceptance-4 PILOT-final-source-after-proof]:"
+  diff "$RUN/src-index-verify.txt" "$RUN/src-index-freeze.txt" 2>&1 | head -40 | tee -a "$LOG"
+fi
+
+# C1 — THE PROFILE DIGEST MUST STILL BE THE PROFILE THIS RUN CLAIMS TO HAVE RUN UNDER.
+# `profile=` was computed once, at SPECIMEN, and never re-verified. Acceptance-4's agent
+# appended one line to the specimen's own CLAUDE.md — a file the run names as half of its
+# own declared profile — and the receipt still said `integrity=ok` with the SPECIMEN-time
+# digest. The recompute is over the run's OWN recorded component list, so a changed digest
+# is attributed to a named file instead of merely noticed. The seat-global half can drift
+# from outside the cell and would not appear in `diff=` at all; this sees that too.
+PROFILE_RECHECK=$RUN/profile-recheck.txt
+PJ="$PROFILE_JSON" python3 - > "$PROFILE_RECHECK" 2>/dev/null <<'PY' || true
+import hashlib, json, os
+try:
+    spec = json.load(open(os.environ["PJ"]))
+except Exception as e:
+    print("unknown"); print(f"could not re-read the run's own instruction-profile.json: {e}"); raise SystemExit
+recorded = {c["path"]: c for c in spec.get("components", [])}
+h = hashlib.sha256(); drift = []
+for path in spec.get("order", []):
+    try:
+        b = open(path, "rb").read(); present, sha = True, hashlib.sha256(b).hexdigest()
+    except OSError:
+        b, present, sha = b"", False, None
+    h.update(b)
+    was = recorded.get(path, {})
+    if was.get("present") != present or was.get("sha256") != sha:
+        drift.append(f"{path}: {was.get('sha256')} ({was.get('bytes')} bytes) -> {sha} ({len(b)} bytes)")
+print(h.hexdigest())
+for d in drift:
+    print(d)
+PY
+PROFILE_NOW=$(head -1 "$PROFILE_RECHECK" 2>/dev/null)
+PROFILE_DRIFT=no
+if [ -z "$PROFILE_NOW" ] || [ "$PROFILE_NOW" = unknown ]; then
+  PROFILE_DRIFT=unknown
+elif [ "$PROFILE_NOW" != "$PROFILE" ]; then
+  PROFILE_DRIFT=yes
+fi
+if [ "$PROFILE_DRIFT" != no ]; then
+  say "$(stamp)  PROFILE DRIFT ($PROFILE_DRIFT): the receipt's profile=${PROFILE:0:16} recomputes to ${PROFILE_NOW:0:16} over this run's own component list. The instructions this cell claims to have run under are not the instructions on disk [acceptance-4 PILOT-profile-drift]:"
+  tail -n +2 "$PROFILE_RECHECK" 2>/dev/null | head -20 | tee -a "$LOG"
+fi
 
 # kill the W JVM we started, by the exact process group we created
 if [ -n "$JVM_PID" ]; then
@@ -919,6 +1032,17 @@ esac
 if [ -z "$SELFAGENT" ]; then
   [ "$MODEL_OK" = verified ] || add_i "model=$MODEL_OK"
 fi
+# The declared GATE, cold, on the final tree. A focused VERIFY green over a suite the
+# change broke is not a green cell, and until now nothing in this script asked.
+case "${GATE_FINAL_EXIT:-unknown}" in
+  0) : ;;
+  124) add_i "gate_final=timeout" ;;
+  ""|unknown) add_i "gate_final=unknown" ;;
+  *) add_i "gate_final=$GATE_FINAL_EXIT" ;;
+esac
+# C1 and C2, failing closed on unknown like every other field here.
+[ "${PROFILE_DRIFT:-unknown}" = no ] || add_i "profile_drift=${PROFILE_DRIFT:-unknown}"
+[ "${FINAL_SOURCE_DRIFT:-unknown}" = no ] || add_i "final_source_drift=${FINAL_SOURCE_DRIFT:-unknown}"
 INTEGRITY=${INTEG:-ok}
 say ""
 say "  $(printf '%-12s %8s  %s' PHASE 'WALL s' RESULT)"
@@ -932,13 +1056,13 @@ say ""
 # from /proc/uptime (CLOCK_BOOTTIME, monotonic). `launch_wall` is the agent's own
 # launch→terminal-status span and is NESTED inside `total`; neither is a continuation
 # economics measurement and neither is row-1 timing qualification.
-LINE="COLDSTART $NAME:${SELFAGENT:+ selftest_agent=yes} model=$MODEL($MODEL_OK) cond=$COND grade=$GRADE task=$TASK_RESULT integrity=$INTEGRITY delivery=$DELIVERY gate='$GATE' gate_qualify_wall=${GATE_WALL}s red_qualify_wall=${RED_WALL}s red='$RED' red_attested=$RED_ATTESTED red_golden=$RED_GOLDEN overlay='${OVERLAY_FILES:-none}' warm_first=$WARMF calls=$CALLS apparatus=$APPA agent_wall(launch_wall)=${AGENT_WALL}s(${LAUNCH_WALL_MS}ms) agent_rc=$AGENT_RC agent_rc_source='$AGENT_RC_SOURCE' worker_rc=$WORKER_RC worker_status_contradiction=$WORKER_STATUS_CONTRADICTION worker_pid=$WORKER_SHELL_PID total_wall=${TOTAL}s(${TOTAL_MS}ms) duration_source=/proc/uptime ceiling=$CEILING observer=$OBSERVER_FIELD observer_execve_lines=$OBS_EXECS profile=${PROFILE:0:16} profile_isolated=$PROFILE_ISOLATED inherited_global=${INHERITED:0:16} runner_sha256=${RUNNER_SHA:0:16} grader_sha256=${GRADER_SHA:0:16} gate_program_sha256=${GATE_SCRIPT_SHA:0:16} diff='${DIFFSTAT:-none}'"
+LINE="COLDSTART $NAME:${SELFAGENT:+ selftest_agent=yes} model=$MODEL($MODEL_OK) cond=$COND grade=$GRADE task=$TASK_RESULT gate_final_exit=${GATE_FINAL_EXIT:-unknown} gate_final_wall=${GATE_FINAL_WALL:-unknown}s gate_final='${GATE_FINAL_SUM:-none}' integrity=$INTEGRITY delivery=$DELIVERY gate='$GATE' gate_qualify_wall=${GATE_WALL}s red_qualify_wall=${RED_WALL}s red='$RED' red_attested=$RED_ATTESTED red_golden=$RED_GOLDEN overlay='${OVERLAY_FILES:-none}' warm_first=$WARMF calls=$CALLS apparatus=$APPA agent_wall(launch_wall)=${AGENT_WALL}s(${LAUNCH_WALL_MS}ms) agent_rc=$AGENT_RC agent_rc_source='$AGENT_RC_SOURCE' worker_rc=$WORKER_RC worker_status_contradiction=$WORKER_STATUS_CONTRADICTION worker_pid=$WORKER_SHELL_PID total_wall=${TOTAL}s(${TOTAL_MS}ms) duration_source=/proc/uptime ceiling=$CEILING observer=$OBSERVER_FIELD observer_execve_lines=$OBS_EXECS profile=${PROFILE:0:16} profile_drift=${PROFILE_DRIFT:-unknown} profile_isolated=$PROFILE_ISOLATED inherited_global=${INHERITED:0:16} runner_sha256=${RUNNER_SHA:0:16} grader_sha256=${GRADER_SHA:0:16} gate_program_sha256=${GATE_SCRIPT_SHA:0:16} src_hash_at_verify=${SRC_AT_VERIFY:0:16} src_hash_at_freeze=${SRC_AT_FREEZE:0:16} final_source_drift=${FINAL_SOURCE_DRIFT:-unknown} diff='${DIFFSTAT:-none}'"
 say "$LINE"
 printf '%s  %s\n' "$(stamp)" "$LINE" >> "$LEDGER"
-say "$(stamp)  frozen: $RUN/{transcript.*,grade.txt,grade.json,diff.patch,verify.log,prompt.md,coldstart.log,gate-qualify.log,instruction-profile.json,observer/}"
+say "$(stamp)  frozen: $RUN/{transcript.*,grade.txt,grade.json,diff.patch,verify.log,gate-final.log,prompt.md,coldstart.log,gate-qualify.log,red-qualify.log,instruction-profile.json,profile-recheck.txt,src-index-{verify,freeze}.txt,observer/}"
 
 if [ "$INTEGRITY" != ok ]; then
-  say "$(stamp)  NOT CERTIFIED: run integrity is $INTEGRITY. Whatever the grade and the task check say, this run was not the run that was asked for — an uncollected or non-zero worker status, a ceiling kill, or an unverified model each mean the evidence belongs to something other than the declared cell [B02d item 8]."
+  say "$(stamp)  NOT CERTIFIED: run integrity is $INTEGRITY. Whatever the grade and the task check say, this run was not the run that was asked for — an uncollected or non-zero worker status, a ceiling kill, an unverified model, a declared GATE that is not green on the final tree, a drifted instruction profile, or a source tree that changed between the proof and the freeze each mean the evidence belongs to something other than the declared cell [B02d item 8; acceptance-4 §5 C1/C2 and the unmeasured half of pass criterion 3]."
 fi
 [ "$GRADE" = PASS ] && [ "$TASK_RESULT" = PASS ] && [ "$INTEGRITY" = ok ] && exit 0
 exit 1

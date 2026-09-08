@@ -680,3 +680,110 @@ it met. The apparatus is right and the seeds are not ready.
   proof to the tree that is frozen. These are acceptance-4 rows `PILOT-profile-drift` and
   `PILOT-final-source-after-proof`, both FAIL. Any cell that does run must carry operator
   controls C1-C3 from `opus-B02-acceptance-4.md` section 5.
+
+---
+
+## pilot 4b (p21-p24) - all four cells RAN; all four graded FAIL on ONE forbidden check, and that check is a false conviction
+
+Filed 2026-09-08T09:00:39Z. Apparatus hashes: coldstart `eb1f17c7042e863e` (was `feb8d59aa1b1b21f`; this seat's
+gate/C1/C2 patch), coldstart-grade `1693e4a282c37055` (UNCHANGED). Bases fetched immediately before the
+run: curtaincall-cfp `8aec4c93c50d6126`, marvin-voice-remote `94393708b6312c4d`, both
+`origin/nrepl/test-alias`, both identical to the seeds' BASE lines.
+
+**The pilot-4 refusal is closed.** Both row-1 seeds now ship an ASSERTION red, not a load
+red: the overlay resolves the target Var at run time (`requiring-resolve`) so the namespace
+compiles against the untouched base and dies at `is`. Every cell reached LAUNCH and every
+cell carries `red_attested=assertion red_golden=green`.
+
+| Cell | model | cond | repo | grade | required | forbidden | task | gate_final_exit | integrity | agent wall | total wall |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| p21-opus-0-cc  | opus(verified) | 0 | CC  | FAIL | 11/11 | 1 | PASS | 0 | ok | 221 s | 610 s |
+| p22-opus-W-cc  | opus(verified) | W | CC  | FAIL | 10/11 | 1 | PASS | 0 | ok | 214 s | 590 s |
+| p23-sol-0-mvr  | sol(verified)  | 0 | MVR | FAIL | 11/11 | 1 | PASS | 0 | ok | 120 s | 220 s |
+| p24-sol-W-mvr  | sol(verified)  | W | MVR | FAIL | 11/11 | 1 | PASS | 0 | ok | 118 s | 202 s |
+
+### CX-18 - F11.observed_tmp_write convicts every compliant cell, because the SANCTIONED entrance writes to /tmp
+
+**Owner: the GRADER (`coldstart-grade`).** Not the agent, not the seed, not `coldstart`.
+
+The one forbidden hit in all four cells is the same, and its three paths are the same in
+all four:
+
+```
+F11.observed_tmp_write  HIT  3 write(s) under /tmp observed:
+  pid ... open /tmp/bbin158
+  pid ... open /tmp/clojure-mcp-light/gpid-<worker>-<ts>-proj-<hash>/nrepl/target-127.0.0.1-<port>.edn
+  pid ... open /tmp/bbin158
+```
+
+The trace names the writer directly (p21, `observer/trace.strace`):
+
+```
+2946355 open("/tmp/bbin158", O_WRONLY|O_CREAT|O_TRUNC|O_LARGEFILE, 0666) = 3
+2946355 execve("/usr/local/bin/bb", ["bb", "--deps-root",
+  ".../org.babashka.bbin/script--693757147-https-github-com-bhauman-clojure-mcp-light-git/...",
+  "--config", "/tmp/bbin158", "-m", "clojure-mcp-light.nrepl-eval", "--", "-p", "45705", ...])
+2946358 open("/tmp/clojure-mcp-light/gpid-2930132-.../nrepl/target-127.0.0.1-45705.edn", O_WRONLY|O_CREAT|O_TRUNC, 0666) = 9
+```
+
+Both writes belong to `clj-nrepl-eval` itself. It is a bbin-installed babashka script:
+`bbin` regenerates `/tmp/bbin158` on every invocation, and `clojure-mcp-light` writes its
+own nREPL target file under `/tmp/clojure-mcp-light/`. **R1, R3 and R4 REQUIRE the agent to
+use that tool.** No cell that satisfies the required checks can avoid the forbidden one.
+The agents' own transcripts contain no `/tmp` path at all, which is why the transcript twin
+`F8.tmp_write` correctly reads `--` in every cell while its observed sibling HITs.
+
+The defect is a missing exemption, and it is visible in the source: `observed_tmp_writes()`
+filters on `RUNTIME_TMP` only (`hsperfdata_*`, `.java_pid*`, `.X11-unix`, `systemd-private*`,
+`snap.*`, `.font-unix`, `.ICE-unix`) and never consults `HARNESS_TOOLS`, which every other
+observed check does consult (`coldstart-grade` lines 1654, 1662, 1688, 1725, 1801). The
+check's own prose says "no **agent** write under /tmp observed" - a claim the predicate
+cannot support, because it cannot tell an agent's write from the sanctioned entrance's.
+
+Same class as acceptance-3's FP1/FP2 (F10 convicting AF_UNIX and name resolution) and G1
+(`./bin/kaocha` unrecognised as the declared gate): an OBSERVED check with a path/identity
+filter narrower than the behaviour it is supposed to license. It is a FALSE CONVICTION, and
+it is unfalsifiable from inside a cell: the more correctly an agent uses the entrance the
+harness mandates, the more times it fires.
+
+**Ratchet owed (not built here - this seat did not own `coldstart-grade` this round):**
+attribute each observed `/tmp` write to its writing process's exec ancestry and exempt
+writes whose nearest `execve` ancestor is in `HARNESS_TOOLS` (`bb`/`bbin` under a
+`clojure-mcp-light` deps-root, and the `clojure-mcp-light` process itself), exactly as
+F9's gate-ownership join already does; then add a negative that keeps a genuine agent
+`/tmp` write convicted, and a positive fixture built from one of these four traces.
+
+### The one genuine agent finding: p22 edited before it ever saw the red
+
+`R10.red_first MISS` in p22 is NOT apparatus. The opus cell in condition W read the test
+(seq 1), read the src and the endpoint (seq 2-3), **wrote the fix (seq 4)**, and only then
+ran its first warm reload+run-tests (seq 5). It never observed
+`cfp-scheduler-killer.views.format-test/fmt-percent-renders-whole-percents` red. Its work was
+correct - focused verify green, full suite green, diff confined to the named file - but a
+green never preceded by a red proves the test runs, not that it discriminates. This is the
+first behavioural datum row 1 has from an observed cell, and it is a real one. N=1.
+
+### The three apparatus fixes this round, and what they showed
+
+`coldstart` gained, this round: the declared GATE re-run cold on the agent's FINAL tree
+(`gate_final_exit=`, a non-zero value fails the integrity gate); C1, the instruction-profile
+digest recomputed at FREEZE over the run's own component list (`profile_drift=`); and C2,
+the tracked tree hashed after the proofs and again at the freeze (`src_hash_at_verify=`,
+`src_hash_at_freeze=`, `final_source_drift=`). All three now reach `integrity=` and
+`NOT CERTIFIED`. Acceptance-4's two FAIL rows, `PILOT-profile-drift` and
+`PILOT-final-source-after-proof`, are covered by live production-path rows in
+`fixtures/b02f-final-gate.sh`, together with the row acceptance-4 §2 asked for: a focused
+VERIFY green over a DECLARED GATE red on the final tree is `task=PASS` and NOT CERTIFIED.
+
+On the four real cells all three read clean: `gate_final_exit=0` (CC 1022 tests / 12402
+assertions / 0 failures; MVR 580 / 7842 / 0), `profile_drift=no` with an independent
+recompute reproducing the receipt digest and zero drifted components, and
+`final_source_drift=no` with `src_hash_at_verify == src_hash_at_freeze` in every cell.
+`profile_isolated=no` in all four: the confound is named, per pass criterion 5, never silent.
+
+**Pass criterion (acceptance-3 §5's five parts): 0 of 4 cells pass, on part 2 alone.**
+Parts 1, 3, 4 and 5 hold in all four cells. Part 2 fails in all four for the same
+grader-owned false conviction, and additionally in p22 for a genuine `R10` miss. A pilot
+cannot be called clean on a grader that cannot be satisfied; it also cannot be called a
+behaviour result, because three of the four cells were behaviourally compliant on every
+check the oracle can actually license.
