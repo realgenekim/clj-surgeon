@@ -36,3 +36,8 @@
       (spit (io/file root ".gitmodules")
         "[submodule \"vendor/sub\"]\n\tpath = vendor/sub\n\turl = ./nowhere\n\tignore = all\n")
       (is (= "all" (str/trim (run ["config" "--file" ".gitmodules" "--get" "submodule.vendor/sub.ignore"] nil)))))))
+
+;; TEMPORARY FAULT INJECTION -- TEST-ISO-013 witness, removed in the same session.
+(deftest injected-failure-for-the-parallel-battery-witness
+  (is (= :expected :actually-different)
+      "deliberate injected failure: the parallel battery must name this lane and namespace"))
