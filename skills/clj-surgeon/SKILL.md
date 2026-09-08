@@ -30,7 +30,6 @@ not already supplied it. Every lib, Var, file, form and count in an example is a
 input; include `workspace_root` when the target is not the server's default project.
 
 ## One repair, then native
-
 Repair ONE clear, safely correctable argument error from the refusal text. A stale or
 conflicting snapshot needs fresh evidence, not a repair; an unavailable capability
 goes native immediately. Before any fallback, read the receipt's mutation and commit
@@ -47,6 +46,9 @@ All failed checks refuse. Nonzero exits are excused ONLY with a `:baseline` map 
 A commit proves the write only; finish outstanding user checks and review.
 Plan-only if mapping is uncertain; never repeat a committed split. Warm-only is pending.
 
+Profiles may select `:proof :warm :gate :background`: a detached pid closes a separate receipt; use `:op :proof-status :receipt ORIGINAL`. The original stays pending forever. Failed/stale closure never rolls back caller work.
+Committed receipts embed bounded facts; committed facts-only reads reuse them or name the closure in a typed refusal. The printed manifest includes verification for direct plan-only replay.
+
 ## Meter and kill switch
 
 Required per routed class: first-attempt success, refusal rate, fallback rate, and
@@ -56,7 +58,6 @@ controls; split's complete-wall loss vs registered controls suspends its exact r
 Unknown telemetry means unknown performance — use native pending investigation.
 
 ## Syntax trip-wire
-
 CLI uses `:op <name>` plus key-value pairs; split uses `:op :split-ns! :request-file X`.
 Other nontrivial plans use `:spec-file -`; smoke: `clj-surgeon :op :ls :file src/my/ns.clj`.
 

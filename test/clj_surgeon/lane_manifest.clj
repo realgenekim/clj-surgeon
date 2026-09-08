@@ -120,6 +120,7 @@
    'clj-surgeon.mcp-extraction-test                     :fast
    'clj-surgeon.cell-b-oracle-test                      :battery ; B07 invokes Python to mutation-test the shell oracle.
    'clj-surgeon.namespace-split-test                    :fast
+   'clj-surgeon.split-proof-gate-test                   :fast
    'clj-surgeon.require-change-test                     :fast
    'clj-surgeon.require-change-boundary-test             :battery
    'clj-surgeon.namespace-split-warm-test               :integration
@@ -181,6 +182,7 @@
    'clj-surgeon.admit-patch-test                        :battery
    'clj-surgeon.core-discovery-test                     :battery
    'clj-surgeon.receipt-artifacts-boundary-test :battery
+   'clj-surgeon.split-proof-gate-boundary-test :battery
    'clj-surgeon.mcp-alias-migration-test                :battery
    'clj-surgeon.mcp-cold-verify-test                    :battery
    'clj-surgeon.mcp-feature-thread-sed-test             :battery

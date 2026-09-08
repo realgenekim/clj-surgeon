@@ -103,16 +103,17 @@
   [value]
   (when (string? value)
     (let [builder (StringBuilder. (.length ^String value))
-          _ (.forEach (.codePoints ^String value)
-                      (reify java.util.function.IntConsumer
-                        (accept [_ code-point]
-                          (if (or (collapsible-code-point? code-point)
-                                  (contains? receipt-glyphs code-point))
-                            (.append builder \space)
-                            ;; appendCodePoint, not append: a legitimate
-                            ;; supplementary character (an emoji, say) must
-                            ;; survive whole rather than as half a pair.
-                            (.appendCodePoint builder (int code-point))))))
+          _ (loop [index 0]
+              (when (< index (.length ^String value))
+                (let [code-point (.codePointAt ^String value index)]
+                  (if (or (collapsible-code-point? code-point)
+                          (contains? receipt-glyphs code-point))
+                    (.append builder \space)
+                    ;; appendCodePoint, not append: a legitimate
+                    ;; supplementary character (an emoji, say) must
+                    ;; survive whole rather than as half a pair.
+                    (.appendCodePoint builder (int code-point)))
+                  (recur (+ index (Character/charCount code-point))))))
           collapsed (-> (.toString builder)
                         (str/replace #" +" " ")
                         str/trim)]

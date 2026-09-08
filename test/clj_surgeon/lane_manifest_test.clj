@@ -383,12 +383,13 @@
 
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
-    (is (= 53 (count (lm/namespaces-for :fast))))
+    ;; Batch 3 adds one pure status namespace and one detached process battery.
+    (is (= 54 (count (lm/namespaces-for :fast))))
     (is (= 7 (count (lm/namespaces-for :integration))))
     ;; B07 enrolls its independent oracle mutation witnesses in one new battery namespace.
     ;; Sol r10 enrolls the per-verb artifact boundary battery.
-    (is (= 35 (count (lm/namespaces-for :battery))))
-    (is (= 95 (count lm/manifest))
+    (is (= 36 (count (lm/namespaces-for :battery))))
+    (is (= 97 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -420,7 +421,9 @@
   '{clj-surgeon.receipt-artifacts-boundary-test 15 ; Sol r10 + two Row 5 real-process witnesses (battery).
     clj-surgeon.namespace-split-test 35 ; B07 adds nine partial-retention, facts, bounded-analysis and preservation witnesses.
     clj-surgeon.namespace-split-warm-test 2 ; Round 3: real nREPL failure/green matrix and stale/foreign discovery, integration.
-    clj-surgeon.mcp-namespace-split-test 13 ; B07 + five Row 5 pure/path witnesses; two real-process witnesses live in receipt-artifacts-boundary-test.
+    clj-surgeon.mcp-namespace-split-test 19 ; Batch 3 adds six receipt/facts/budget witnesses to the previous 13.
+    clj-surgeon.split-proof-gate-test 2 ; Batch 3 pure status/state matrix.
+    clj-surgeon.split-proof-gate-boundary-test 2 ; Batch 3 detached worker and caller-exit boundaries.
     clj-surgeon.cell-b-oracle-test 2 ; B07: shell lint mutation test and independent partial-preservation mutants; battery (Python subprocess).
     clj-surgeon.mcp-expect-guard-test 14 ; `expect` is a guard on both write routes, not discarded bookkeeping (dogfood-3, 2026-09-07).
     clj-surgeon.outline-corpus-integration-test 1 ; MOVED: full repository differential out of the bounded fast namespace.
@@ -540,7 +543,8 @@
       ;; Row 3 adds 9 pure + 12 real boundary/CLI witnesses: 496 + 21 = 517.
       ;; Sol r10 adds 13 per-verb publication witnesses: 517 + 13 = 530.
       ;; Rows sublime adds seven external-profile/proof-honesty boundary witnesses.
-      (is (= 537 adopted) (str "adopted tests: " adopted)))
+      ;; Batch 3: six receipt/facts witnesses + two pure status + two detached boundary tests.
+      (is (= 547 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -638,7 +642,8 @@
       ;; Sol r10 adds 13 witnesses: 1530 + 13 = 1543.
       ;; Rows sublime: seven split boundaries plus six alias telemetry witnesses.
       ;; 1543 + 7 + 6 = 1556; no test or namespace leaves the corpus.
-      (is (= 1556 total) (str "manifest declares " total " tests"))
+      ;; Batch 3 adds ten JVM witnesses; the encoder CLI witness stays in the BB lane.
+      (is (= 1566 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
