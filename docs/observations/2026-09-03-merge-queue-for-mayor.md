@@ -155,3 +155,4 @@ LANDED 2026-09-07T19:41Z: astra/lid-batch-2-perf-gate-hld 94715053 → MCP/main 
 - LANDED 2026-09-08T11:24Z: row-2 fix + row-3 intent 398679fa (receipt 5495aa93) → merge ccb33ef4, trunk 96819291; gates green; CLI reinstalled; 7906 rebuilt. ROW 2 → friction-medium (oracle 0 on the fixed build, Sol GO r11, landed, open items < 5).
 - LANDED 2026-09-08T14:48Z: f27a87d4 (astra/namespace-split 77ac921c + receipt) — Sol fence GO, battery pass 809 s.
 - LANDED 2026-09-08T18:29Z: c5c89be5 (astra/namespace-split 6e8891e6 — rows batch 3, NS-SPLIT-050..059) via ship v2; Sol GO.
+- LANDED 2026-09-08T20:28Z: 2929428b (fable/battery-parallel cbef534b — TEST-ISO-013 parallel battery, 839 s → 218 s; 8 lanes + prereqs default) via ship v2; Sol GO.
