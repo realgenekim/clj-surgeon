@@ -3650,15 +3650,17 @@ Squares: ordinary edits native (sharper: Surgeon loses wherever the agent's own 
 
 **The arc, by the meter (all walls process-stamped, proof-inclusive, fixture d9205abc, four oracles):**
 
-| stage | tool | native | note |
-|---|---|---|---|
-| Cell A, old MCP surface | 1066 / 1039 s | 393 / 331 s | tool 2.9x SLOWER: one call per destination |
-| Cell A, REPL-driven | 451 / 520 s | | inner loop 29x faster, ~1 iteration to spend it on |
-| Cell C wave 1, new one-call verb | 70 / 86 s | 408 / 486 s (with the same machine-ready manifest) | ÷5.7; manifest did NOT rescue native |
-| REPL with an already-warm JVM + test deps | 513 / 554 s | | JVM start was never the gap; planning was |
-| wave 3, paper-cut round 1, CLI + MCP | 80–151 s | | zero refusals, both entrances |
-| wave 4, round 3 (paper cuts 0) | 79–92 s | | Astra's killer threshold, second consecutive rerun |
-| wave 5, LANDED build (trunk 2b39bd37) | **56 s CLI / 49 s MCP** | 447 s median | **÷8–9**; 0 paper cuts vs 32 on the hand-made split |
+| name | stage | tool wall | native wall | vs native | note |
+|---|---|---|---|---|---|
+| T1/T2 — old MCP surface (apply_clojure_changes extraction, one call per destination) | Cell A | 1066 / 1039 s | 393 / 331 s | **0.34x** (2.9x slower) | interface cost per file |
+| R1/R2 — REPL-driven, plan supplied | Cell A | 451 / 520 s | 393 / 331 s | **0.75x** | inner loop 29x faster, ~1 iteration to spend it on |
+| D1/D2 — new one-call verb `namespace_split`, first build | Cell C wave 1 | 70 / 86 s | 408 / 486 s (same machine-ready manifest) | **5.7x** | manifest did NOT rescue native |
+| R5/R6 — REPL-driven, JVM already warm + test deps | Cell C wave 2 | 513 / 554 s | 408 / 486 s | **0.8x** | JVM start was never the gap; planning was |
+| D3/D4 + M3/M4 — verb after paper-cut round 1, CLI + MCP | wave 3 | 80–151 s | 447 s median | **3.0–5.6x** | zero refusals on both entrances; six arms concurrent |
+| D5/D6 + M5/M6 — verb after round 3, paper cuts 0 | wave 4 | 79–92 s | 447 s | **4.9–5.7x** | second consecutive rerun over Astra's killer threshold |
+| D7/M7 — verb on the LANDED build (trunk 2b39bd37) | wave 5 | **56 s CLI / 49 s MCP** | 447 s | **8.0x / 9.1x** | 0 paper cuts vs 32 on the hand-made split |
+
+Potential, by design: in-call wall is 22 s cold kaocha + ~6 s lint + ~3–6 s analysis and write; with the landed warm probe tier (`:proof :warm`, receipt says proof pending) the same split is ~25–30 s end to end → **~15x**; a persistent evidence service (kondo snapshot cached across calls) removes most of the remaining 8 s → **~20x** is the ceiling for this fixture. REPL-driven refactor with a plan supplied: **~1x** by construction (no iterations to accelerate). Old MCP surface: **0.3x**, retired for this class.
 
 **How the win was made.** Astra's design: a programmable, lossless candidate compiler with an evidence service; interface cost scales with decisions, not files; static analysis authoritative (clj-kondo snapshot + quoted-Var supplement, ~8 s), live image additional. Built as `namespace_split` (MCP) and `clj-surgeon :op :split-ns!` (CLI) with undo receipts and the verification profile inside the call. Then five paper-cut rounds: cloned docstrings, imports by usage, structural continuation realignment (paren structure, never column — a design ruling after Sol r3/r4 disagreed), in-place require replacement, advisory unrequired refs, the warm probe tier (`:proof :warm` never claims proof), the registry witness. Sol GO on rounds 1, 2, 5; NO-GO on 3 and 4 with real reproductions; battery caught a lane gap (a battery-only witness red on trunk for two hours while every landing gate read green — inb-45b82d).
 
