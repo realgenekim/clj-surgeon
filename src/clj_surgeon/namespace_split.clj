@@ -210,6 +210,8 @@
 ;; INTENT: NS-SPLIT-024
 ;; @spec NS-SPLIT-032
 ;; INTENT: NS-SPLIT-032
+;; @spec NS-SPLIT-034
+;; INTENT: NS-SPLIT-034
 (defn aligned-reference-edits
   "Shift every owned continuation line, except multiline string contents.
   Positions remain relative to the captured source; nested edits compose."
@@ -323,6 +325,8 @@
 ;; INTENT: NS-SPLIT-028
 ;; @spec NS-SPLIT-033
 ;; INTENT: NS-SPLIT-033
+;; @spec NS-SPLIT-035
+;; INTENT: NS-SPLIT-035
 (defn- caller-header [parsed source-lib added]
   ;; Keep the retired entry as a group anchor until additions are placed.
   ;; Reparse only this small header; existing entries and trivia are not reprinted.

@@ -2540,6 +2540,8 @@
    :structured? true
    :tool-fn #'handle-apply-clojure-changes})
 
+;; @spec NS-SPLIT-036
+;; INTENT: NS-SPLIT-036
 (defn tools-for-profile
   "Return the exact public tool catalog for one startup profile."
   [profile]
