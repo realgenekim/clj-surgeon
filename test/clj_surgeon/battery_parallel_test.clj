@@ -42,7 +42,7 @@
     ;; it can never add a namespace, and it can never keep one alive after the
     ;; manifest drops it.
     (is (= [] (bp/apply-serial-groups [] bp/serial-groups)))
-    (is (= [] (bp/shard-units [] bp/shardable {})))
+    (is (= [] (bp/shard-units [] bp/shardable {} {})))
     (is (every? (set (lm/namespaces-for :battery)) (keys bp/shardable)))
     (is (every? (set (lm/namespaces-for :battery))
                 (mapcat identity bp/serial-groups)))))
@@ -353,3 +353,63 @@
   (is (= [] (bp/pending-prerequisites [{:produces "Makefile"}]))
       "a stage whose product is on disk is evidence, not work to redo")
   (is (= 1 (count (bp/pending-prerequisites [{:produces "no/such/receipt.edn"}])))))
+
+;; ---------------------------------------------------------------------------
+;; The three defects run one found, each pinned by the shape that produced it.
+;; ---------------------------------------------------------------------------
+
+(deftest a-correctly-sharded-lane-is-not-a-lane-that-ran-less
+  ;; RUN 1, 2026-09-08: the battery exited 1 and the ledger recorded :fail
+  ;; because this check compared SELECTORS against the NAMESPACES a child
+  ;; reports. A lane asked for seven var shards of one namespace correctly
+  ;; reports that ONE namespace. The claim is "every namespace this lane was
+  ;; given produced a result", and that is a claim about namespaces.
+  (let [asked '[clj-surgeon.mission-test
+                clj-surgeon.reader-eval-fence-test/a-non-string-paths-entry-never-reaches-io-file
+                clj-surgeon.reader-eval-fence-test/the-oracle-names-every-evaluator-it-claims-to-fence]
+        lane {:index 1 :namespaces asked :exit 0 :log "L"
+              :emitted {:namespaces '[clj-surgeon.mission-test
+                                      clj-surgeon.reader-eval-fence-test]}}]
+    (is (= [] (bp/lane-failures [lane]))
+        "a lane that ran every namespace it was given is not a failure"))
+  (testing "and a genuinely short lane still fails, named, in the same shape"
+    (let [[msg] (bp/lane-failures
+                 [{:index 1 :exit 0 :log "L"
+                   :namespaces '[clj-surgeon.mission-test
+                                 clj-surgeon.reader-eval-fence-test/the-oracle-names-every-evaluator-it-claims-to-fence]
+                   :emitted {:namespaces '[clj-surgeon.mission-test]}}])]
+      (is (str/includes? msg "reader-eval-fence-test"))
+      (is (not (str/includes? msg "/the-oracle"))
+          "the refusal names the NAMESPACE that produced no result, not a selector")))
+  (is (= 'clj-surgeon.reader-eval-fence-test
+         (bp/selector-namespace 'clj-surgeon.reader-eval-fence-test/a-non-string-paths-entry-never-reaches-io-file)))
+  (is (= 'clj-surgeon.mission-test (bp/selector-namespace 'clj-surgeon.mission-test))))
+
+(deftest a-lane-child-reports-that-it-sharded-and-which-vars
+  ;; RUN 1: the child computed :sharded and :vars and the EDN writer's
+  ;; select-keys dropped both. The coordinator could therefore never re-derive
+  ;; a sharded namespace's TEST-ISO-007 budget, and never record a per-var
+  ;; cost -- so the schedule could not improve on the next run. A field the
+  ;; producer computes and the serialiser discards is invisible in exactly the
+  ;; way a passing suite cannot show.
+  (let [src (slurp (io/file "test/clj_surgeon/mcp_test_runner.clj"))
+        emit (re-find #"(?s):runs \(mapv #\(select-keys % \[[^]]*\]\)" src)]
+    (is (some? emit) "the lane child's result writer must be readable here")
+    (doseq [k [":namespace" ":counters" ":elapsed-ms" ":violations" ":sharded" ":vars"]]
+      (is (str/includes? emit k)
+          (str "the lane child must emit " k " -- the coordinator folds over it")))))
+
+(deftest a-lane-of-only-shards-is-still-a-battery-lane-for-home-isolation
+  ;; RUN 1 survived this only by luck: every sharded lane happened to also
+  ;; carry a whole battery namespace. `lane-of` on a var SELECTOR answers nil,
+  ;; so a lane holding only shards of a battery namespace would have been
+  ;; launched on a throwaway $HOME (TEST-ISO-006) -- losing ~/.m2 and
+  ;; ~/.gitlibs for precisely the cold children that lane exists to drive.
+  (let [shard 'clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-a-build-file-it-discovers]
+    (is (nil? (lm/lane-of shard))
+        "a var selector is in no manifest -- which is the trap")
+    (is (= :battery (lm/lane-of (runner/selector-namespace shard)))
+        "read through the selector and the lane is battery")
+    (is (str/includes? (slurp (io/file "test/clj_surgeon/mcp_test_runner.clj"))
+                       "(lm/lane-of (selector-namespace %))")
+        "the home-isolation decision must read through the selector")))

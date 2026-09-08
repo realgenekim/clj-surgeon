@@ -278,24 +278,33 @@
 (defn shard-vars
   "Split `vars` into at most `n` groups by `var-walls` (LPT), evenly by sorted
    name when nothing has been measured. PURE, and every var lands in exactly
-   one group -- a var dropped here is a test that stops running."
-  [vars var-walls n]
-  (let [cost #(get var-walls % 1)]
-    (->> (sort-by (juxt (comp - cost) str) vars)
-         (reduce (fn [bins v]
-                   (let [i (first (apply min-key (fn [[_ l]] l)
-                                         (map-indexed (fn [i b] [i (:load b)]) bins)))]
-                     (-> bins (update-in [i :vars] conj v) (update-in [i :load] + (cost v)))))
-                 (vec (repeat (max 1 (min n (count vars))) {:vars [] :load 0})))
-         (mapv :vars)
-         (filterv seq))))
+   one group -- a var dropped here is a test that stops running.
+
+   `unknown-ms` is what an UNMEASURED var is charged. It must be the
+   namespace's own share, never a token 1: the first run charged 1 ms per var
+   and LPT correctly packed all seven of `reader-eval-fence-test`'s shards into
+   ONE lane -- 461.8 s of work estimated at 7 ms, which is a schedule computed
+   from a number nobody measured. Charging each var the namespace's wall
+   divided by its shard count spreads them on the very first run, and the
+   measured numbers replace the estimate on the second."
+  ([vars var-walls n] (shard-vars vars var-walls n 1))
+  ([vars var-walls n unknown-ms]
+   (let [cost #(get var-walls % unknown-ms)]
+     (->> (sort-by (juxt (comp - cost) str) vars)
+          (reduce (fn [bins v]
+                    (let [i (first (apply min-key (fn [[_ l]] l)
+                                          (map-indexed (fn [i b] [i (:load b)]) bins)))]
+                      (-> bins (update-in [i :vars] conj v) (update-in [i :load] + (cost v)))))
+                  (vec (repeat (max 1 (min n (count vars))) {:vars [] :load 0})))
+          (mapv :vars)
+          (filterv seq)))))
 
 (defn shard-units
   "Expands `namespaces` into schedulable units, splitting every DECLARED
    shardable namespace into `:shards` groups of its deftest vars by measured
    var cost (LPT), or evenly by sorted name when nothing has been measured.
    A namespace that cannot be sharded degrades to one whole unit, loudly."
-  [namespaces decls var-walls]
+  [namespaces decls var-walls walls]
   (vec
    (mapcat
     (fn [n]
@@ -305,7 +314,8 @@
                                                 n (.getMessage t)))))
             (if-let [why (shard-refusal n)]
               (do (println (str "battery-parallel: NOT sharding -- " why)) [[n]])
-              (shard-vars (test-var-names n) var-walls shards)))
+              (shard-vars (test-var-names n) var-walls shards
+                          (quot (get walls n fallback-wall-ms) (max 1 shards)))))
         [[n]]))
     namespaces)))
 
@@ -433,6 +443,12 @@
 ;; the fold -- every verdict, over the union
 ;; ---------------------------------------------------------------------------
 
+(defn selector-namespace
+  "The namespace a lane selector names: a bare namespace symbol is itself, and
+   a var selector `<namespace>/<deftest>` answers its namespace."
+  [sel]
+  (if (namespace sel) (symbol (namespace sel)) sel))
+
 (defn lane-failures
   "Lanes that did not deliver a readable result. A lane that died before
    writing its EDN has counters nobody can add up, so it is a NAMED failure
@@ -453,11 +469,18 @@
                  (format "lane %d wrote an unreadable result (%s); namespaces: %s (log %s)"
                          index (::unreadable emitted) (str/join " " namespaces) log)
 
-                 (not= (set namespaces) (set (:namespaces emitted)))
+                 ;; Compared as NAMESPACES, not as selectors: a lane asked for
+                 ;; seven var shards of one namespace correctly reports that ONE
+                 ;; namespace, and round one failed a perfectly good lane for it.
+                 ;; The claim being checked is "every namespace this lane was
+                 ;; given produced a result", and that is a claim about
+                 ;; namespaces.
+                 (not= (set (map selector-namespace namespaces))
+                       (set (:namespaces emitted)))
                  (format (str "lane %d ran %s but was asked for %s -- a lane that "
                               "silently ran less is the failure this check exists for (log %s)")
                          index (pr-str (vec (:namespaces emitted)))
-                         (pr-str (vec namespaces)) log)
+                         (pr-str (vec (distinct (map selector-namespace namespaces)))) log)
 
                  :else nil))
              lanes)))
@@ -551,7 +574,7 @@
         var-walls (:var-walls-ms walls-file {})
         units (-> battery-namespaces
                   (apply-serial-groups serial-groups)
-                  (->> (mapcat #(shard-units % shardable var-walls)))
+                  (->> (mapcat #(shard-units % shardable var-walls walls)))
                   vec)
         unknown (vec (remove walls battery-namespaces))
         floor (floor-unit units walls var-walls)

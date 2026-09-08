@@ -279,8 +279,15 @@
         ;; holds under one spelling of an invocation and not another is the
         ;; same class as doctrine that disagrees with the installed prompt:
         ;; true where it is written, false where it takes effect.
+        ;; @spec TEST-ISO-006 -- read through the SELECTOR to its namespace. A
+        ;; var selector (`ns/deftest`) is in no manifest, so asking
+        ;; `lane-of` for it answers nil, and a lane holding only shards of a
+        ;; BATTERY namespace would have been launched on a throwaway $HOME --
+        ;; losing ~/.m2 and ~/.gitlibs for precisely the cold children that
+        ;; lane exists to drive. Round one survived this only because every
+        ;; sharded lane happened to also carry a whole battery namespace.
         isolate-home? (and (seq (:namespaces resolved))
-                           (not-any? #(= :battery (lm/lane-of %))
+                           (not-any? #(= :battery (lm/lane-of (selector-namespace %)))
                                      (:namespaces resolved)))
         ;; @spec MCP-OP-TMPHYG-003 -- THE TEMP GUARD RUNS FIRST, before any
         ;; lane refusal, unconditionally. It is the check that refuses to write
@@ -352,8 +359,8 @@
       ;; exit code carries only what it alone can decide.
       (do (spit emit-edn
                 (pr-str {:namespaces (mapv :namespace runs)
-                         :runs (mapv #(select-keys % [:namespace :counters
-                                                      :elapsed-ms :violations])
+                         :runs (mapv #(select-keys % [:namespace :counters :elapsed-ms
+                                                      :violations :sharded :vars])
                                      runs)
                          :result result
                          :notes (summary-notes)

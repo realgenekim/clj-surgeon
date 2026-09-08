@@ -38,3 +38,4 @@
 {:sha "a4e91687376ff6f0db96b1554d45734a848cb95b", :started "2026-09-08T11:01:13Z", :wall_s 814, :verdict :pass, :host "anvil-server"}
 {:sha "afde6652f16196cbe19e4d20bc5c8e8c08946d23", :started "2026-09-08T14:25:48Z", :wall_s 809, :verdict :pass, :host "anvil-server"}
 {:sha "23417eb012f33d2ec10be1afb91f4e8170da707e", :started "2026-09-08T16:39:28Z", :wall_s 839, :verdict :pass, :host "anvil-server"}
+{:sha "042d80f5077a4fdd1ee85f9c6e072a0db556ec64", :started "2026-09-08T17:07:04Z", :wall_s 540, :verdict :fail, :host "anvil-server", :lanes 8, :skipped 1}
