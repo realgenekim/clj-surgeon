@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# round-resume <worktree> <session-id> <prompt-file> [report-path] — resume an EXPLICIT,
+# PERSISTED codex session in a worktree and feed it a new prompt on stdin.
+#
+# The sibling of ~/bin/sol-yolo for continuation work (Astra, B02 contract:
+# "use explicit persisted session ID, never --last").  Two mechanical facts about
+# codex 0.153.3 that this script exists to encode:
+#
+#   * `codex exec resume` takes NO `-C/--cd` and NO `--color`.  The working root of a
+#     resumed session is the process CWD, so this script chdirs into the worktree and
+#     the worktree fence is the cd, not a flag.  (`round`'s /proc discovery already
+#     accepts cwd==worktree as a match, so a resumed builder is still discoverable.)
+#   * options must precede the positional SESSION_ID; `--color never` is rejected
+#     outright, which is how the first attempt failed.
+#
+# NEVER `--last`: "the most recent recorded session" is whatever else this box did
+# last, which is exactly the wrong-session class Astra requires us to refuse.
+. "$HOME/bin/seat-tmp-guard.sh"   # temp on /var/tmp/forge, never tmpfs
+set -euo pipefail
+WT=${1:?worktree}; SID=${2:?session-id}; PF=${3:?prompt-file}; OUT=${4:-$WT/../sol-report.md}
+[ -d "$WT" ] || { echo "round-resume: no such worktree: $WT" >&2; exit 2; }
+[ -f "$PF" ] || { echo "round-resume: no such prompt file: $PF" >&2; exit 2; }
+case "$WT" in /home/forge/src/clj-surgeon|/home/forge/src/clj-surgeon/)
+  echo "round-resume: refusing: that checkout serves my MCP server on 7906" >&2; exit 3;; esac
+case "$SID" in
+  --last|--*) echo "round-resume: refusing '$SID' — resume takes an explicit session uuid, never a flag (no --last)" >&2; exit 3 ;;
+  [0-9a-fA-F]*-*-*-*-*) ;;
+  *) echo "round-resume: refusing '$SID' — not a session uuid" >&2; exit 3 ;;
+esac
+
+# Same MCP fence as sol-yolo: a repo-declared server may point at a port this seat must
+# never contact (curtain-call declares clj-surgeon on 7888 = another seat's production).
+if [ -f "$WT/.codex/config.toml" ]; then
+  for n in $(grep -oE '^\[mcp_servers\.[^]]+\]' "$WT/.codex/config.toml" | sed -E 's/\[mcp_servers\.([^]]+)\]/\1/'); do
+    echo "round-resume: neutralising repo-declared MCP server '$n'" >&2
+  done
+  mv "$WT/.codex/config.toml" "$WT/.codex/config.toml.disabled-by-round-resume"
+fi
+
+cd "$WT"
+"${CODEX_BIN:-/usr/bin/codex}" exec resume \
+  --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox \
+  -m "${CODEX_MODEL:-gpt-5.6-sol}" -c 'model_reasoning_effort="high"' \
+  -o "$OUT.last.md" "$SID" - < "$PF"
+rc=$?
+if [ ! -s "$OUT" ] && [ -s "$OUT.last.md" ]; then cp "$OUT.last.md" "$OUT"; fi
+exit $rc

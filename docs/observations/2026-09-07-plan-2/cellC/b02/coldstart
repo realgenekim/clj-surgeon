@@ -1,0 +1,561 @@
+#!/usr/bin/env bash
+# coldstart <name> --repo <path> --base <sha> --model <opus|sonnet|sol|astra>
+#           --cond <W|0> --task <task.md> [--minutes 20]
+#           [--selftest-tamper delivery]   apparatus self-test only: corrupt the inlined
+#                                          block after installing it, so the delivery gate
+#                                          can be shown refusing. Refuses before launch.
+#
+# ONE cold-start acceptance session, end to end, with every gotcha this seat paid for
+# baked in. Design of record: /var/tmp/forge/plan2/cellC/astra-coldstart.md (steps 5-8).
+#
+#   SPECIMEN  own worktree + the COLD START block INLINED into CLAUDE.md and AGENTS.md
+#             (plus the .claude/skills symlink and the pointer line), committed clean,
+#             the block's EXACT BYTES re-read back out of both files
+#   GATE_QUAL the repo's DECLARED cold gate, run on the UNTOUCHED base before any agent
+#             exists. A gate that is already red makes every later PASS/FAIL meaningless,
+#             so it is qualified first and its wall is recorded.
+#   CONDITION W = one attested prestarted nREPL / 0 = assert no endpoint exists
+#   LAUNCH    a FRESH agent whose entire prompt is the task file (VERIFY/GATE stripped)
+#   OBSERVE   every runner line stamped with a real receive time by coldstart-stamp, AND
+#             the whole process tree traced (strace -f: execve/exit/chdir/clone), so a
+#             child the transcript never showed is still on the record [CX-8]
+#   GRADE     coldstart-grade — the action-log oracle
+#   CHECK     the task's own VERIFY command, run COLD in the specimen, independently
+#   RECEIPT   one ledger line; transcript, diff, grade and receipt frozen under the run dir
+#
+# RATCHETS BAKED IN (each one is a scar, not a preference):
+#  * [[waiters-bind-to-pid-not-argv]] no `pgrep -f` anywhere; every scan is /proc + argv.
+#  * never `pkill`. The ceiling kills the run's OWN process group (run-bg setsids, so the
+#    printed pid IS the pgid) — an id we created, never a pattern.
+#  * never wrap the runner in an outer `timeout`: timeout kills your WAIT, not the child.
+#  * `</dev/null` on every subprocess; a codex/clojure that inherits a tty stdin hangs.
+#  * temp under /var/tmp/forge, never /tmp (RAM tmpfs, filled twice).
+#  * `date` here is uutils: no %3N. Take %N and cut.
+#  * the CC suite APPENDS to the tracked 00SERVER-LOGS.txt — excluded from dirt checks.
+#  * worktree-add, never `git worktree add`: create and TRUST are one step, or a folder
+#    trust dialog reaches Gene's phone.
+#  * the model is verified from the runner's OWN log, never from the flag we passed.
+#    A flag is a request; the log is the receipt.
+#  * DELIVERY is inlined, not pointed at, and recorded per run as installed/observed.
+#    A cell whose instructions never arrived is UNVERIFIED(delivery), never a behavior
+#    FAIL: pilot 1 scored two Codex cells FAIL for an apparatus defect (CX-1).
+set -uo pipefail
+. "$HOME/bin/seat-tmp-guard.sh" 2>/dev/null || true
+
+ROOT=/var/tmp/forge/coldstart
+SKILL=/home/forge/src/claude-skills-nrepl/clojure-fast-feedback
+COLDBLOCK=$SKILL/COLDSTART.md   # CX-1: delivery is INLINING this file, not pointing at it
+LEDGER=$ROOT/ledger.txt
+POINTER='Clojure work: load the clojure-fast-feedback skill first; cold-start commands are at its top.'
+
+usage() { sed -n '2,45p' "$0" >&2; exit 2; }
+[ $# -ge 1 ] || usage
+NAME=$1; shift
+REPO="" BASE="" MODEL="" COND="" TASK="" MINUTES=20 TAMPER=none
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --repo) REPO=$(readlink -f "${2:?}"); shift 2 ;;
+    --base) BASE=${2:?}; shift 2 ;;
+    --model) MODEL=${2:?}; shift 2 ;;
+    --cond) COND=${2:?}; shift 2 ;;
+    --task) TASK=$(readlink -f "${2:?}"); shift 2 ;;
+    --minutes) MINUTES=${2:?}; shift 2 ;;
+    --selftest-tamper) TAMPER=${2:?}; shift 2 ;;
+    *) echo "coldstart: unknown option $1" >&2; usage ;;
+  esac
+done
+
+RUN=$ROOT/$NAME
+WT=$RUN/wt
+LOG=$RUN/coldstart.log
+mkdir -p "$RUN"
+: > "$LOG"
+stamp() { date -u +%FT%T.%N | cut -c1-23; }
+T0=$(date +%s)
+say() { printf '%s\n' "$*" | tee -a "$LOG"; }
+PHASES=()
+step() { PHASES+=("$1|$2|$3"); say "$(stamp)  [+$(( $(date +%s) - T0 ))s]  $1 ${2}s :: $3"; }
+refuse() { say "$(stamp)  REFUSED: $*"; exit 3; }
+
+say "$(stamp)  COLDSTART $NAME  repo=$REPO base=${BASE:0:12} model=$MODEL cond=$COND task=$TASK minutes=$MINUTES"
+
+# ---------------------------------------------------------------------------
+# 0. PREFLIGHT — refuse placeholders and moving refs before anything is created
+# ---------------------------------------------------------------------------
+t=$(date +%s)
+[ -n "$REPO" ] && [ -d "$REPO/.git" ] || refuse "--repo must be a git repository"
+[ -n "$BASE" ] || refuse "--base <sha> is required (a moving ref is not a base)"
+git -C "$REPO" rev-parse --verify -q "$BASE^{commit}" >/dev/null || refuse "base $BASE is not a commit in $REPO"
+[ -f "$TASK" ] || refuse "--task file not found: $TASK"
+case "$COND" in W|0) ;; *) refuse "--cond must be W or 0" ;; esac
+case "$MODEL" in opus|sonnet) RUNNER=claude ;; sol) RUNNER=codex; CMODEL=gpt-5.6-sol ;;
+  astra) RUNNER=codex; CMODEL=gpt-6-astra ;; *) refuse "--model must be opus|sonnet|sol|astra" ;; esac
+[ -d "$SKILL" ] || refuse "skill not installed at $SKILL"
+[ -f "$COLDBLOCK" ] || refuse "cold-start block missing: $COLDBLOCK (CX-1 — a pointer is not delivery)"
+[ -x /home/forge/bin/coldstart-grade ] || refuse "coldstart-grade missing"
+[ -x /home/forge/bin/coldstart-stamp ] || refuse "coldstart-stamp missing"
+[ -x /home/forge/bin/run-bg ] || refuse "run-bg missing"
+[ -e "$WT" ] && refuse "specimen already exists: $WT (a run dir is never reused)"
+VERIFY=$(sed -nE 's/^VERIFY:[[:space:]]*//p' "$TASK" | head -1)
+# NOTE the single quotes: backticks inside a double-quoted string are command
+# substitution, and this seat has already shipped prose that executed itself once.
+[ -n "$VERIFY" ] || refuse 'task file has no "VERIFY: <cmd>" line — there would be no independent check'
+# CX-3: the repo's DECLARED cold gate, published to the specimen so no agent hunts the
+# Makefile for one. p2 spent four calls hunting and then ran four gates against a
+# contract of one; that cost was an apparatus failure paid in agent turns.
+GATE=$(sed -nE 's/^GATE:[[:space:]]*//p' "$TASK" | head -1)
+[ -n "$GATE" ] || refuse 'task file has no "GATE: <cmd>" line — the declared cold gate is not optional (CX-3)'
+SKILL_SHA=$(cat "$SKILL/SKILL.md" | sha256sum | cut -c1-16)
+BLOCK_SHA=$(sha256sum < "$COLDBLOCK" | cut -c1-16)
+case "$TAMPER" in none|delivery) ;; *) refuse "--selftest-tamper takes 'delivery' or 'none'" ;; esac
+
+# ---------------------------------------------------------------------------
+# THE PROCESS OBSERVER [CX-8, first bullet].  A transcript is what the agent
+# ATTEMPTED; it is not a record of what ran. `strace -f` records every descendant
+# execve with its pid, argv and time, every chdir, every clone (so a pid can be
+# joined to its parent and a cwd inherited), and every exit_group. That is the
+# only way a second JVM started inside `( ... ) >/dev/null 2>&1` reaches the grade.
+#
+# ptrace_scope on this box is 1 (restricted), which is fine: strace is the direct
+# PARENT of the run, not an attacher. If strace is missing, the fallback is a 50 ms
+# /proc sampler, which is LOSSY BY CONSTRUCTION — anything shorter than the interval
+# is invisible — so it reports its own loss and is labelled as such in the receipt.
+# ---------------------------------------------------------------------------
+STRACE=$(command -v strace 2>/dev/null || true)
+if [ -n "$STRACE" ]; then OBSERVER=strace; else OBSERVER=proc-sampler; fi
+OBSDIR=$RUN/observer
+mkdir -p "$OBSDIR"
+OBSFILE=$OBSDIR/trace.$( [ "$OBSERVER" = strace ] && echo strace || echo sampler )
+
+# THE EFFECTIVE INSTRUCTION PROFILE. A PASS has to name the instructions it ran
+# under: this seat's own global prompt files are inherited by both runners (CX-8,
+# "global seat instructions are inherited"), so the digest covers them AND the
+# specimen's own files. Recomputed after the specimen is built; the seat half is
+# hashed here so a mid-run edit to a global file is visible as a changed digest.
+SEAT_CLAUDE=$HOME/.claude/CLAUDE.md
+SEAT_AGENTS=$HOME/.codex/AGENTS.md
+step PREFLIGHT $(( $(date +%s) - t )) "runner=$RUNNER verify='$VERIFY' gate='$GATE' skill_sha256=$SKILL_SHA block_sha256=$BLOCK_SHA observer=$OBSERVER${STRACE:+ ($STRACE)} tamper=$TAMPER"
+
+# ---------------------------------------------------------------------------
+# 1. SPECIMEN — own worktree, skill installed, boot pointer, committed clean
+# ---------------------------------------------------------------------------
+t=$(date +%s)
+/home/forge/bin/worktree-add "$REPO" "$WT" "coldstart/$NAME" "$BASE" >>"$LOG" 2>&1 </dev/null \
+  || refuse "worktree-add failed (see $LOG)"
+HEAD0=$(git -C "$WT" rev-parse HEAD)
+[ "$HEAD0" = "$(git -C "$REPO" rev-parse "$BASE^{commit}")" ] || refuse "specimen HEAD != requested base"
+
+# DELIVERY (CX-1). Three mechanisms, named separately in the receipt because they are
+# not equally supported by every runner:
+#   T  the .claude/skills symlink   — Claude Code resolves it; codex exec does not
+#   P  the one-line pointer         — an instruction to load something, not the thing
+#   inline  the block's own bytes appended to CLAUDE.md and AGENTS.md — the only one
+#           that survives a runner with no skill mechanism at all.
+mkdir -p "$WT/.claude/skills"
+ln -sfn "$SKILL" "$WT/.claude/skills/clojure-fast-feedback"
+BLOCK=$RUN/coldstart-block.md
+{
+  cat "$COLDBLOCK"
+  printf '\n%s\n' "This repo's cold gate: \`$GATE\`"
+} > "$BLOCK"
+for f in CLAUDE.md AGENTS.md; do
+  [ -f "$WT/$f" ] || : > "$WT/$f"
+  { printf '\n%s\n\n' "$POINTER"; cat "$BLOCK"; } >> "$WT/$f"
+done
+case "$RUNNER" in claude) DELIVERY_INSTALLED="inline+P+T" ;; *) DELIVERY_INSTALLED="inline+P" ;; esac
+
+# APPARATUS SELF-TEST HOOK, and nothing else. It corrupts one byte of the installed
+# block so the exact-bytes gate below can be SHOWN refusing. It always ends in a
+# refusal, so no agent ever runs under a tampered profile.
+if [ "$TAMPER" = delivery ]; then
+  say "$(stamp)  SELFTEST: tampering with the inlined block in $WT/AGENTS.md (one byte) — this run MUST refuse"
+  python3 - "$WT/AGENTS.md" <<'PY'
+import sys
+p = sys.argv[1]
+b = open(p, "rb").read()
+i = b.find(b"COLDSTART-RECEIPT")
+assert i >= 0, "nothing to tamper with"
+open(p, "wb").write(b[:i] + b"COLDSTART-RECEIPX" + b[i + 17:])
+PY
+fi
+
+# DELIVERY, VERIFIED AS EXACT BYTES — not as a marker word.
+# The old check grepped for `COLDSTART-RECEIPT` and for the gate line. Both survive a
+# block that was truncated, re-wrapped, half-appended by a failed write, or edited by
+# anything that touched the file afterwards: the marker is present and the instructions
+# are still wrong. The gate now asks the only question that matters at the place it
+# takes effect — do the block's OWN BYTES appear, contiguously, in this file?
+for f in CLAUDE.md AGENTS.md; do
+  dmsg=$(python3 - "$WT/$f" "$BLOCK" "$f" 2>&1 <<'PY'
+
+import sys
+target, block, label = sys.argv[1], sys.argv[2], sys.argv[3]
+want = open(block, "rb").read()
+have = open(target, "rb").read()
+if want in have:
+    sys.exit(0)
+# name the closest thing to a diagnosis a byte comparison can give
+head = want[:80]
+where = have.find(head)
+print(f"delivery-bytes: {label} does not contain the {len(want)}-byte cold-start block verbatim "
+      f"({'the block starts at offset %d but diverges after that' % where if where >= 0 else 'the block does not start anywhere in the file'})",
+      file=sys.stdout)
+sys.exit(1)
+PY
+) || refuse "$dmsg"
+  grep -qF "This repo's cold gate: \`$GATE\`" "$WT/$f" || refuse "delivery check: $f does not carry the declared gate"
+done
+say "$(stamp)  delivery: the $(wc -c < "$BLOCK") bytes of $COLDBLOCK are present VERBATIM in CLAUDE.md and AGENTS.md"
+git -C "$WT" add -A CLAUDE.md AGENTS.md >>"$LOG" 2>&1 </dev/null
+GIT_AUTHOR_NAME=forge-anvil GIT_AUTHOR_EMAIL=forge-anvil@anvil \
+GIT_COMMITTER_NAME=forge-anvil GIT_COMMITTER_EMAIL=forge-anvil@anvil \
+  git -C "$WT" commit -q -m "coldstart specimen $NAME: fast-feedback skill + boot pointer" \
+  >>"$LOG" 2>&1 </dev/null || refuse "could not commit the specimen basis"
+BASIS=$(git -C "$WT" rev-parse HEAD)
+dirty=$(git -C "$WT" status --porcelain --untracked-files=no -- . ':!00SERVER-LOGS.txt' 2>/dev/null)
+[ -z "$dirty" ] || refuse "specimen is dirty before the agent ever ran"
+
+# ---------------------------------------------------------------------------
+# THE EFFECTIVE INSTRUCTION PROFILE — what this cell actually ran under.
+# Both runners inherit this seat's own global prompt files on top of the specimen's
+# (CX-8: "global seat instructions are inherited"), so a PASS that names only the
+# block is naming a quarter of its own instructions. The digest is over the
+# concatenation, in a fixed order, and every component is listed with its own hash so
+# a changed digest can be attributed instead of merely noticed.
+# ---------------------------------------------------------------------------
+PROFILE_JSON=$RUN/instruction-profile.json
+PROFILE=$(python3 - "$PROFILE_JSON" "$SEAT_CLAUDE" "$SEAT_AGENTS" "$WT/CLAUDE.md" "$WT/AGENTS.md" <<'PY'
+import hashlib, json, os, sys
+out, paths = sys.argv[1], sys.argv[2:]
+h = hashlib.sha256()
+comps = []
+for p in paths:
+    try:
+        b = open(p, "rb").read()
+    except OSError:
+        b = b""
+        comps.append({"path": p, "present": False, "bytes": 0, "sha256": None})
+    else:
+        comps.append({"path": p, "present": True, "bytes": len(b),
+                      "sha256": hashlib.sha256(b).hexdigest()})
+    h.update(b)
+digest = h.hexdigest()
+json.dump({"profile_sha256": digest, "order": paths, "components": comps},
+          open(out, "w"), indent=2)
+print(digest)
+PY
+)
+say "$(stamp)  instruction profile: sha256=$PROFILE  (components: $PROFILE_JSON)"
+step SPECIMEN $(( $(date +%s) - t )) "basis=${BASIS:0:12} delivery=$DELIVERY_INSTALLED (block bytes verbatim in CLAUDE.md+AGENTS.md, gate='$GATE'), profile=${PROFILE:0:16}, tree clean"
+
+# ---------------------------------------------------------------------------
+# 1b. GATE QUALIFICATION — the declared cold gate, on the UNTOUCHED base, BEFORE
+# the agent exists.
+#
+# CX-2 is the scar: curtaincall's `make runtests-once` cannot pass in a fresh
+# worktree at all (its new-mission-worktree-test prerequisite dies), and we found
+# that out from an agent's failure, at agent prices. A gate that is already red
+# makes every later reading of it meaningless — a FAIL cannot be attributed and a
+# PASS cannot be trusted — so it is qualified here, once, and its wall is recorded
+# as the floor any four-minute claim has to clear.
+# ---------------------------------------------------------------------------
+t=$(date +%s)
+GQLOG=$RUN/gate-qualify.log
+( cd "$WT" && eval "$GATE" ) > "$GQLOG" 2>&1 </dev/null
+GATE_RC=$?
+GATE_WALL=$(( $(date +%s) - t ))
+if [ $GATE_RC -ne 0 ]; then
+  say "$(stamp)  gate output (tail):"; tail -20 "$GQLOG" | tee -a "$LOG"
+  refuse "gate-not-qualified: the declared cold gate \`$GATE\` exits $GATE_RC on the untouched base ${BASIS:0:12} after ${GATE_WALL}s. Nothing this gate says about the agent's work would mean anything. Fix the gate or the base before spending a cell (CX-2)."
+fi
+# restore whatever the gate wrote (CC's suite appends to a TRACKED log file)
+git -C "$WT" checkout -q -- . 2>/dev/null
+git -C "$WT" clean -fdq -e .claude 2>/dev/null
+dirty=$(git -C "$WT" status --porcelain --untracked-files=no -- . ':!00SERVER-LOGS.txt' 2>/dev/null)
+[ -z "$dirty" ] || refuse "the qualified gate left the specimen dirty and it could not be restored"
+step GATE_QUALIFY "$GATE_WALL" "ok: \`$GATE\` exits 0 on the untouched base ${BASIS:0:12} in ${GATE_WALL}s (log: $GQLOG)"
+
+# ---------------------------------------------------------------------------
+# 2. CONDITION
+# ---------------------------------------------------------------------------
+t=$(date +%s)
+JVM_PID=""
+if [ "$COND" = W ]; then
+  rm -f "$WT/.nrepl-port"
+  out=$(cd "$WT" && /home/forge/bin/run-bg "$NAME-jvm" make nrepl 2>&1 </dev/null)
+  say "  $out"
+  JVM_PID=$(printf '%s' "$out" | sed -nE 's/.*pid=([0-9]+).*/\1/p')
+  [ -n "$JVM_PID" ] || refuse "condition W: run-bg did not print a pid"
+  for _ in $(seq 1 180); do [ -s "$WT/.nrepl-port" ] && break; sleep 1; done
+  [ -s "$WT/.nrepl-port" ] || refuse "condition W: no .nrepl-port after 180 s"
+  PORT=$(cat "$WT/.nrepl-port")
+  # attest: the endpoint answers AND its root is THIS worktree. A port file is a
+  # handshake, not an identity — prestarting an endpoint we never attested would
+  # hand the agent someone else's JVM and call that the experiment's condition.
+  ATT=$(clj-nrepl-eval --port "$PORT" '(vector (+ 1 2) (System/getProperty "user.dir"))' \
+        2>&1 </dev/null | tr -d '\n')
+  case "$ATT" in *"3"*"$WT"*) ;; *) refuse "condition W: attestation failed — got: $ATT" ;; esac
+  step CONDITION $(( $(date +%s) - t )) "W: nREPL prestarted port=$PORT jvm_pid_group=$JVM_PID attested root=$WT"
+else
+  [ -e "$WT/.nrepl-port" ] && refuse "condition 0: a .nrepl-port already exists in a fresh worktree"
+  step CONDITION $(( $(date +%s) - t )) "0: no endpoint present (asserted absent)"
+fi
+
+# ---------------------------------------------------------------------------
+# 3. LAUNCH — the agent's ENTIRE prompt is the task, VERIFY line stripped.
+#    The VERIFY command is the harness's independent check; showing it to the
+#    agent would be coaching (Astra: the task contains no verification hints).
+# ---------------------------------------------------------------------------
+t=$(date +%s)
+PROMPT=$RUN/prompt.md
+grep -vE '^(VERIFY|GATE|REPO|BASE|BASE_REF|QUALIFIED):' "$TASK" > "$PROMPT"
+TRANSCRIPT=$RUN/transcript.$([ "$RUNNER" = claude ] && echo jsonl || echo log)
+REPORT=$RUN/report.md
+
+if [ "$RUNNER" = claude ]; then
+  FMT=claude
+  LAUNCH="cd '$WT' && claude -p --model '$MODEL' --output-format stream-json --verbose \
+--dangerously-skip-permissions --add-dir '$WT' < '$PROMPT' 2>&1 \
+| /home/forge/bin/coldstart-stamp > '$TRANSCRIPT'"
+else
+  FMT=codex
+  LAUNCH="CODEX_BIN=/home/forge/.local/bin/codex CODEX_MODEL='$CMODEL' \
+/home/forge/bin/sol-yolo '$WT' '$PROMPT' '' '$REPORT' 2>&1 \
+| /home/forge/bin/coldstart-stamp > '$TRANSCRIPT'"
+fi
+
+# ---------------------------------------------------------------------------
+# THE RUN IS LAUNCHED UNDER THE OBSERVER, not beside it. `strace -f` becomes the
+# parent of the whole tree, so a child created inside a subshell whose output was
+# redirected to /dev/null still produces an execve line with its pid, argv and time.
+# clone/chdir are traced too: without them a pid cannot be joined to its parent and
+# a cwd cannot be inherited, and "which JVM was this" stops being answerable.
+# `-s 4096` because a truncated argv is exactly the argv we care about (a long inline
+# `python3 -c` is the hidden-client shape). `abbrev=none` is deliberately NOT set: it
+# expands the environment array of EVERY execve, multiplying the trace ~40x and copying
+# the seat's whole environment into a file we keep.
+# ---------------------------------------------------------------------------
+SAMPLER_PGID=""
+if [ "$OBSERVER" = strace ]; then
+  out=$(/home/forge/bin/run-bg "$NAME-agent" "$STRACE" -f -qq -ttt -s 4096 \
+        -e trace=execve,execveat,chdir,fchdir,exit_group,clone,clone3,fork,vfork \
+        -o "$OBSFILE" -- bash -c "$LAUNCH" 2>&1 </dev/null)
+else
+  # LOSSY BY CONSTRUCTION and labelled as such: a process that lives less than one
+  # sampling interval is invisible to it. It counts its own misses so the receipt can
+  # say how blind it was rather than implying it saw everything.
+  sout=$(/home/forge/bin/run-bg "$NAME-sampler" python3 -c '
+import os, sys, time
+out, interval = sys.argv[1], float(sys.argv[2])
+seen = set(); n = 0; t0 = time.time()
+f = open(out, "w", buffering=1)
+while True:
+    n += 1
+    for d in os.listdir("/proc"):
+        if not d.isdigit() or d in seen:
+            continue
+        try:
+            argv = open(f"/proc/{d}/cmdline", "rb").read().replace(b"\0", b" ").decode("utf8", "replace").strip()
+            cwd = os.readlink(f"/proc/{d}/cwd")
+            st = os.stat(f"/proc/{d}")
+        except OSError:
+            continue
+        seen.add(d)
+        f.write(f"{time.time():.6f} pid={d} cwd={cwd} argv={argv}\n")
+    expected = int((time.time() - t0) / interval) + 1
+    f.write(f"#STAT samples={n} expected={expected} loss={max(0, expected - n)}\n")
+    time.sleep(interval)
+' "$OBSFILE" 0.05 2>&1 </dev/null)
+  say "  $sout"
+  SAMPLER_PGID=$(printf '%s' "$sout" | sed -nE 's/.*pid=([0-9]+).*/\1/p')
+  out=$(/home/forge/bin/run-bg "$NAME-agent" bash -c "$LAUNCH" 2>&1 </dev/null)
+fi
+say "  $out"
+AGENT_PGID=$(printf '%s' "$out" | sed -nE 's/.*pid=([0-9]+).*/\1/p')
+[ -n "$AGENT_PGID" ] || refuse "run-bg did not print a pid for the agent launch"
+LAUNCH_EPOCH=$(date +%s)
+
+# The real worker is a CHILD of that shell. run-bg setsids, so the printed pid is
+# the process-group leader and killing the GROUP is exact. We still name the worker
+# in the start receipt: a receipt that cannot name its subject is not a receipt.
+worker_pids() {  # /proc scan by argv + start time. NEVER pgrep -f.
+  local p args
+  for p in /proc/[0-9]*; do
+    p=${p#/proc/}
+    args=$({ tr '\0' ' ' < "/proc/$p/cmdline"; } 2>/dev/null) || continue
+    case "$args" in
+      *"codex exec "*" -C ${WT} "*|*"codex exec "*" -C ${WT}/ "*) echo "$p" ;;
+      *"claude"*" -p "*"--add-dir ${WT}"*) echo "$p" ;;
+    esac
+  done | sort -n
+}
+WORKER=""
+for _ in $(seq 1 90); do WORKER=$(worker_pids | head -1); [ -n "$WORKER" ] && break; sleep 1; done
+say "START RECEIPT: name=$NAME pgid=$AGENT_PGID worker=${WORKER:-<not-discovered>} runner=$RUNNER model=$MODEL transcript=$TRANSCRIPT"
+
+DEADLINE=$(( LAUNCH_EPOCH + MINUTES * 60 ))
+CEILING=no
+while kill -0 "$AGENT_PGID" 2>/dev/null; do
+  if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+    # exact: our OWN process group, an id we created. Never pkill, never a pattern.
+    kill -TERM -- "-$AGENT_PGID" 2>/dev/null
+    sleep 5
+    kill -KILL -- "-$AGENT_PGID" 2>/dev/null
+    CEILING=yes
+    break
+  fi
+  sleep 5
+done
+AGENT_WALL=$(( $(date +%s) - t ))
+
+# the model is verified from the runner's OWN log, not from the flag we passed
+if [ "$RUNNER" = claude ]; then
+  LOGMODEL=$(python3 - "$TRANSCRIPT" <<'PY' 2>/dev/null
+import json,re,sys
+for line in open(sys.argv[1],errors="replace"):
+    line=re.sub(r'^@[\d.]+\|','',line).strip()
+    if not line.startswith('{'): continue
+    try: o=json.loads(line)
+    except Exception: continue
+    if o.get('type')=='system' and o.get('model'):
+        print(o['model']); break
+PY
+)
+else
+  LOGMODEL=$(sed -E 's/^@[0-9.]+\|//' "$TRANSCRIPT" 2>/dev/null | grep -m1 -E '^[[:space:]]*model:' \
+             | sed -E 's/.*model:[[:space:]]*//' | tr -d '\r')
+fi
+MODEL_OK=unknown
+case "$LOGMODEL" in
+  "") MODEL_OK=no-model-line ;;
+  *"$MODEL"*|*"${CMODEL:-@@}"*) MODEL_OK=verified ;;
+  *) MODEL_OK="MISMATCH(asked=$MODEL got=$LOGMODEL)" ;;
+esac
+# stop the fallback sampler by the exact group we created (never pkill, never a pattern)
+if [ -n "$SAMPLER_PGID" ]; then
+  kill -TERM -- "-$SAMPLER_PGID" 2>/dev/null; sleep 1; kill -KILL -- "-$SAMPLER_PGID" 2>/dev/null
+fi
+# what the observer actually captured — reported as facts, never as reassurance
+OBS_LINES=0; OBS_EXECS=0; OBS_LOSS=0; OBS_TRUNC=0
+if [ -s "$OBSFILE" ]; then
+  OBS_LINES=$(wc -l < "$OBSFILE")
+  # execve LINES, not successful execs: strace prints one line per attempt (a PATH
+  # search misses several times per command) and splits interleaved calls across two.
+  # The grader's `observer_execve` is the count of execs that actually HAPPENED; this
+  # is deliberately a different, larger number and is named so it cannot be confused
+  # with it.
+  OBS_EXECS=$(grep -c 'execve' "$OBSFILE" 2>/dev/null || echo 0)
+  # TRUNCATION, not interleaving: `<unfinished ...>` is lossless and reassembled by the
+  # grader. A real hole is a string cut by -s ("abc"...) or an abbreviated array (...]).
+  OBS_TRUNC=$(grep -c -e '"\.\.\.' -e '\.\.\.\]' "$OBSFILE" 2>/dev/null || echo 0)
+  [ "$OBSERVER" = proc-sampler ] && OBS_LOSS=$(grep '^#STAT' "$OBSFILE" | tail -1 | sed -nE 's/.*loss=([0-9]+).*/\1/p')
+  : "${OBS_LOSS:=0}"
+else
+  say "$(stamp)  OBSERVER PRODUCED NOTHING ($OBSFILE) — process evidence for this cell is UNVERIFIED"
+  OBSERVER="none"
+fi
+OBSERVER_FIELD=$OBSERVER
+[ "$OBSERVER" = proc-sampler ] && OBSERVER_FIELD="proc-sampler(loss=$OBS_LOSS)"
+say "$(stamp)  observer: $OBSERVER_FIELD lines=$OBS_LINES execve_lines=$OBS_EXECS truncated=$OBS_TRUNC file=$OBSFILE"
+step LAUNCH "$AGENT_WALL" "ceiling=$CEILING worker=${WORKER:-none} model_from_log='${LOGMODEL:-none}' ($MODEL_OK) observer=$OBSERVER_FIELD execve_lines=$OBS_EXECS"
+
+# ---------------------------------------------------------------------------
+# 4. GRADE — the action-log oracle over what the agent actually attempted
+# ---------------------------------------------------------------------------
+t=$(date +%s)
+GRADEOUT=$RUN/grade.txt
+/home/forge/bin/coldstart-grade "$TRANSCRIPT" --format "$FMT" --cond "$COND" \
+  --observer "$OBSFILE" --observer-kind "$OBSERVER" --observer-loss "$OBS_LOSS" \
+  --gate "$GATE" --specimen "$WT" \
+  --json "$RUN/grade.json" > "$GRADEOUT" 2>&1 </dev/null
+GLINE=$(grep -m1 '^COLDSTART-GRADE:' "$GRADEOUT")
+GRADE=$(printf '%s' "$GLINE" | awk '{print $2}')
+WARMF=$(printf '%s' "$GLINE" | sed -nE 's/.*warm_first_s=([^ ]*).*/\1/p')
+CALLS=$(printf '%s' "$GLINE" | sed -nE 's/.*calls=([^ ]*).*/\1/p')
+APPA=$(printf '%s' "$GLINE" | sed -nE 's/.*apparatus=([^ ]*).*/\1/p')
+: "${GRADE:=UNVERIFIED}" "${WARMF:=unknown}" "${CALLS:=0}" "${APPA:=0%}"
+
+# DELIVERY, OBSERVED (CX-1). What was INSTALLED is one fact; whether it reached the
+# runner's effective instruction set is another, and only the second exculpates a cell.
+# The classification comes from coldstart-grade, which owns event parsing: a raw-text grep
+# over a whole transcript matched "unavailable" inside tool OUTPUT in all four pilot runs
+# --- the same over-permissive-predicate mistake as CX-7c.
+#   evidenced   the agent acted on the block (client call, port file, or a receipt line)
+#   absent      it did not
+#   unsupported absent AND the agent said the delivered instructions were not available
+# A cell whose instructions never arrived is an UNTESTED cell, not a behavior failure.
+# Scoring it FAIL would launder an apparatus defect into an agent defect.
+JQ='import json,sys; m=json.load(open(sys.argv[1]))["metrics"]; print(m.get(sys.argv[2],""))'
+DELIVERY_OBSERVED=$(python3 -c "$JQ" "$RUN/grade.json" delivery_evidence 2>/dev/null)
+UNAVAIL_CLAIM=$(python3 -c "$JQ" "$RUN/grade.json" instructions_unavailable_claim 2>/dev/null)
+: "${DELIVERY_OBSERVED:=unknown}" "${UNAVAIL_CLAIM:=False}"
+[ "$DELIVERY_OBSERVED" = absent ] && [ "$UNAVAIL_CLAIM" = True ] && DELIVERY_OBSERVED=unsupported
+DELIVERY="$DELIVERY_INSTALLED/$DELIVERY_OBSERVED"
+if [ "$DELIVERY_OBSERVED" = unsupported ] && [ "$GRADE" = FAIL ]; then
+  say "$(stamp)  DELIVERY UNSUPPORTED: the agent stated the delivered instructions were not available to it and never touched the block. This cell is UNVERIFIED(delivery), not a behavior FAIL."
+  GRADE="UNVERIFIED(delivery)"
+fi
+step GRADE $(( $(date +%s) - t )) "$GLINE delivery=$DELIVERY"
+
+# ---------------------------------------------------------------------------
+# 5. INDEPENDENT TASK CHECK — the task's own VERIFY, run COLD in the specimen.
+#    The agent's evidence is never the harness's evidence.
+# ---------------------------------------------------------------------------
+t=$(date +%s)
+VLOG=$RUN/verify.log
+( cd "$WT" && eval "$VERIFY" ) > "$VLOG" 2>&1 </dev/null
+VRC=$?
+if [ $VRC -eq 0 ] && grep -qE '[0-9]+ tests?, [0-9]+ assertions?, 0 failures' "$VLOG"; then
+  TASK_RESULT=PASS
+elif grep -qE '0 failures\.' "$VLOG" && [ $VRC -eq 0 ]; then
+  TASK_RESULT=PASS
+else
+  TASK_RESULT=FAIL
+fi
+VSUM=$(grep -oE '[0-9]+ tests?, [0-9]+ assertions?[^\n]*' "$VLOG" | tail -1)
+step TASK_CHECK $(( $(date +%s) - t )) "$TASK_RESULT rc=$VRC ${VSUM:-<no kaocha summary line>} ($VLOG)"
+
+# ---------------------------------------------------------------------------
+# 6. FREEZE + RECEIPT
+# ---------------------------------------------------------------------------
+git -C "$WT" add -A >/dev/null 2>&1 </dev/null
+git -C "$WT" diff --cached "$BASIS" -- . ':!00SERVER-LOGS.txt' > "$RUN/diff.patch" 2>/dev/null
+git -C "$WT" reset -q >/dev/null 2>&1 </dev/null
+DIFFSTAT=$(git -C "$WT" diff --stat "$BASIS" -- . ':!00SERVER-LOGS.txt' 2>/dev/null | tail -1)
+
+# kill the W JVM we started, by the exact process group we created
+if [ -n "$JVM_PID" ]; then
+  kill -TERM -- "-$JVM_PID" 2>/dev/null && say "$(stamp)  reaped condition-W JVM group $JVM_PID"
+  sleep 2; kill -KILL -- "-$JVM_PID" 2>/dev/null
+fi
+# ... and the JVM the AGENT started in condition 0. Scar, pilot run 1: the harness
+# reaped only its own W JVM, so a passing cond-0 run left a 512 MB nREPL alive in a
+# worktree nobody would look at again. The scan is /proc + cwd + argv on the exact
+# specimen path — never `pgrep -f`, never a pattern kill.
+for d in /proc/[0-9]*; do
+  pid=${d#/proc/}
+  cwd=$(readlink "$d/cwd" 2>/dev/null) || continue
+  [ "$cwd" = "$WT" ] || continue
+  args=$({ tr '\0' ' ' < "$d/cmdline"; } 2>/dev/null) || continue
+  case "$args" in
+    *nrepl*|*java*|*clojure*)
+      kill "$pid" 2>/dev/null && say "$(stamp)  reaped specimen JVM $pid (${args:0:70})" ;;
+  esac
+done
+
+TOTAL=$(( $(date +%s) - T0 ))
+say ""
+say "  $(printf '%-12s %8s  %s' PHASE 'WALL s' RESULT)"
+say "  $(printf '%.0s-' $(seq 1 100))"
+for p in "${PHASES[@]}"; do
+  say "  $(printf '%-12s %8s  %s' "${p%%|*}" "$(echo "$p" | cut -d'|' -f2)" "$(echo "$p" | cut -d'|' -f3-)")"
+done
+say "  $(printf '%-12s %8s' TOTAL "$TOTAL")"
+say ""
+LINE="COLDSTART $NAME: model=$MODEL($MODEL_OK) cond=$COND grade=$GRADE task=$TASK_RESULT delivery=$DELIVERY gate='$GATE' gate_qualified=${GATE_WALL}s warm_first=$WARMF calls=$CALLS apparatus=$APPA wall=${TOTAL}s ceiling=$CEILING observer=$OBSERVER_FIELD observer_execve_lines=$OBS_EXECS profile=${PROFILE:0:16} diff='${DIFFSTAT:-none}'"
+say "$LINE"
+printf '%s  %s\n' "$(stamp)" "$LINE" >> "$LEDGER"
+say "$(stamp)  frozen: $RUN/{transcript.*,grade.txt,grade.json,diff.patch,verify.log,prompt.md,coldstart.log,gate-qualify.log,instruction-profile.json,observer/}"
+
+[ "$GRADE" = PASS ] && [ "$TASK_RESULT" = PASS ] && exit 0
+exit 1
