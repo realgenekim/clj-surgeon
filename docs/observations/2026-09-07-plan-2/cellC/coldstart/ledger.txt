@@ -1,0 +1,10 @@
+2026-09-08T03:04:48.447  COLDSTART p1-opus-0-cc: model=opus(verified) cond=0 grade=PASS task=PASS warm_first=42.9 calls=15 apparatus=73.3% wall=118s ceiling=no diff=' 1 file changed, 8 insertions(+)'
+2026-09-08T03:09:30.148  COLDSTART p2-opus-W-cc: model=opus(verified) cond=W grade=FAIL task=PASS warm_first=32.0 calls=23 apparatus=73.9% wall=246s ceiling=no diff=' 1 file changed, 9 insertions(+)'
+2026-09-08T03:12:02.324  COLDSTART p3-sol-0-mvr: model=sol(verified) cond=0 grade=FAIL task=PASS warm_first=53.2 calls=3 apparatus=66.7% wall=93s ceiling=no diff=' 1 file changed, 6 insertions(+)'
+2026-09-08T03:15:11.538  COLDSTART p4-sol-W-mvr: model=sol(verified) cond=W grade=FAIL task=PASS warm_first=unknown calls=5 apparatus=80.0% wall=108s ceiling=no diff=' 1 file changed, 6 insertions(+)'
+
+# REGRADE 2026-09-08T03:15:55Z — all four pilot runs re-scored under the FINAL oracle (coldstart-grade after the five pilot-driven fixes). Original as-run grades are kept beside each run as grade.original-oracle.txt; nothing above this line was edited.
+# REGRADE p1-opus-0-cc: cond=0 grade=PASS required=7/7 forbidden=0 warm_first=42.9 calls=15 cold_gates=1 iterations=1 apparatus=73.3%
+# REGRADE p2-opus-W-cc: cond=W grade=FAIL required=6/7 forbidden=1 warm_first=32.0 calls=23 cold_gates=4 iterations=1 apparatus=65.2%
+# REGRADE p3-sol-0-mvr: cond=0 grade=FAIL required=2/7 forbidden=0 warm_first=None calls=3 cold_gates=1 iterations=0 apparatus=66.7%
+# REGRADE p4-sol-W-mvr: cond=W grade=FAIL required=2/7 forbidden=0 warm_first=None calls=5 cold_gates=1 iterations=0 apparatus=80.0%

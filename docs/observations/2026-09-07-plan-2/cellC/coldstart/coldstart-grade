@@ -1,0 +1,865 @@
+#!/usr/bin/env python3
+"""coldstart-grade <transcript.jsonl|log> [--format claude|codex|auto] [--cond W|0] [--json OUT]
+
+The ACTION-LOG ORACLE (Astra, /var/tmp/forge/plan2/cellC/astra-coldstart.md §"Action-log
+oracle") applied as a grader over ONE fresh agent's transcript.
+
+It answers exactly one question: did this agent, with no coaching, execute the
+Clojure fast-feedback loop --- warm nREPL probe first, exactly one cold gate last,
+a receipt that separates probe from proof --- and did it avoid the named
+anti-patterns?
+
+WHAT THIS IS NOT (Astra's correction, honoured):
+  A transcript is what the agent ATTEMPTED. It is not a process observer. A hidden
+  child, a socket opened inside a python heredoc we failed to classify, or output
+  the runner truncated are all invisible here. Where the transcript cannot decide,
+  this grader says UNVERIFIED, never PASS. Quoted `pkill` in prose is NOT a kill
+  attempt, so every shell scan runs over COMMAND POSITIONS in a comment-and-heredoc
+  stripped command, never over raw text.
+
+Timestamps: the harness pipes the runner's stream through `coldstart-stamp`, which
+prefixes every line with `@<epoch.micros>|`. Without those stamps the wall metrics
+report `unknown` rather than a fabricated zero.
+
+Exit 0 on PASS, 1 on FAIL or UNVERIFIED.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+from dataclasses import dataclass, field
+from typing import Any
+
+# ---------------------------------------------------------------------------
+# events
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Ev:
+    seq: int
+    kind: str  # 'bash' | 'edit' | 'tool' | 'text'
+    ts: float | None = None  # when the agent issued it
+    end_ts: float | None = None  # when its result came back
+    tool: str = ""
+    cmd: str = ""  # for bash: the shell command
+    payload: str = ""  # for edit: the written content; for text: the prose
+    path: str = ""
+    output: str = ""
+
+    def brief(self, n: int = 88) -> str:
+        s = (self.cmd or self.path or self.payload or "").replace("\n", " ")
+        s = re.sub(r"\s+", " ", s).strip()
+        return s[:n] + ("…" if len(s) > n else "")
+
+
+STAMP = re.compile(r"^@(\d+(?:\.\d+)?)\|")
+
+
+def _unstamp(line: str) -> tuple[float | None, str]:
+    m = STAMP.match(line)
+    if m:
+        return float(m.group(1)), line[m.end():]
+    return None, line
+
+
+# ---------------------------------------------------------------------------
+# parsers
+# ---------------------------------------------------------------------------
+
+
+def parse_claude(text: str) -> tuple[list[Ev], list[str]]:
+    """`claude -p --output-format stream-json --verbose` JSONL, optionally stamped."""
+    evs: list[Ev] = []
+    notes: list[str] = []
+    pending: dict[str, Ev] = {}
+    seq = 0
+    for raw in text.splitlines():
+        ts, line = _unstamp(raw)
+        line = line.strip()
+        if not line or not line.startswith("{"):
+            continue
+        try:
+            o = json.loads(line)
+        except json.JSONDecodeError:
+            notes.append("undecodable JSON line skipped")
+            continue
+        typ = o.get("type")
+        if typ == "assistant":
+            for blk in (o.get("message") or {}).get("content") or []:
+                bt = blk.get("type")
+                if bt == "text":
+                    seq += 1
+                    evs.append(Ev(seq, "text", ts=ts, payload=blk.get("text", "")))
+                elif bt == "tool_use":
+                    seq += 1
+                    name = blk.get("name", "")
+                    inp = blk.get("input") or {}
+                    if name == "Bash":
+                        e = Ev(seq, "bash", ts=ts, tool=name, cmd=str(inp.get("command", "")))
+                    elif name in ("Write", "Edit", "NotebookEdit", "MultiEdit"):
+                        body = inp.get("content") or inp.get("new_string") or ""
+                        if name == "MultiEdit":
+                            body = "\n".join(
+                                str(x.get("new_string", "")) for x in inp.get("edits") or []
+                            )
+                        e = Ev(seq, "edit", ts=ts, tool=name,
+                               path=str(inp.get("file_path", "")), payload=str(body))
+                    else:
+                        e = Ev(seq, "tool", ts=ts, tool=name,
+                               cmd=json.dumps(inp)[:2000], path=str(inp.get("file_path", "")))
+                    evs.append(e)
+                    if blk.get("id"):
+                        pending[blk["id"]] = e
+        elif typ == "user":
+            for blk in (o.get("message") or {}).get("content") or []:
+                if blk.get("type") == "tool_result":
+                    e = pending.pop(blk.get("tool_use_id", ""), None)
+                    if e is not None:
+                        e.end_ts = ts
+                        c = blk.get("content")
+                        if isinstance(c, list):
+                            c = "\n".join(
+                                x.get("text", "") for x in c if isinstance(x, dict)
+                            )
+                        e.output = str(c or "")[:20000]
+        elif typ == "result":
+            seq += 1
+            evs.append(Ev(seq, "text", ts=ts, payload=str(o.get("result", ""))))
+    return evs, notes
+
+
+CODEX_HEADERS = {"exec", "codex", "thinking", "user"}
+CODEX_DONE = re.compile(r"^\s+(succeeded|failed) in [\d.]+(ms|s)\b")
+CODEX_APPLY = re.compile(r"^\s*(apply_patch|Applied patch|Success\. Updated the following files:)")
+
+
+def parse_codex(text: str) -> tuple[list[Ev], list[str]]:
+    """`codex exec --color never` plain log (what sol-yolo captures), optionally stamped."""
+    evs: list[Ev] = []
+    notes: list[str] = []
+    lines = [_unstamp(l) for l in text.splitlines()]
+    seq = 0
+    i = 0
+    n = len(lines)
+    while i < n:
+        ts, line = lines[i]
+        head = line.strip()
+        if head == "exec":
+            # command lines until the succeeded/failed marker
+            j = i + 1
+            cmd_lines: list[str] = []
+            while j < n and not CODEX_DONE.match(lines[j][1]):
+                if lines[j][1].strip() in CODEX_HEADERS and cmd_lines:
+                    break  # malformed block; bail rather than swallow the log
+                cmd_lines.append(lines[j][1])
+                j += 1
+            end_ts = lines[j][0] if j < n else None
+            cmd = "\n".join(cmd_lines)
+            # trailing " in <cwd>" on the last command line
+            cmd = re.sub(r"\s+in\s+\S+\s*$", "", cmd)
+            # codex wraps everything in /bin/bash -lc "…" or '…'
+            m = re.match(r'^\s*(?:/bin/)?(?:bash|sh)\s+-lc\s+(.*)$', cmd, re.S)
+            if m:
+                body = m.group(1).strip()
+                if len(body) >= 2 and body[0] == body[-1] and body[0] in "\"'":
+                    body = body[1:-1]
+                    if cmd.lstrip().find('-lc "') != -1:
+                        body = body.replace('\\"', '"').replace("\\\\", "\\")
+                cmd = body
+            seq += 1
+            # output until the next header
+            k = j + 1
+            out: list[str] = []
+            while k < n and lines[k][1].strip() not in CODEX_HEADERS:
+                out.append(lines[k][1])
+                k += 1
+            evs.append(Ev(seq, "bash", ts=ts, end_ts=end_ts, tool="exec", cmd=cmd,
+                          output="\n".join(out)[:20000]))
+            i = k
+            continue
+        if head in ("codex", "thinking"):
+            j = i + 1
+            body: list[str] = []
+            while j < n and lines[j][1].strip() not in CODEX_HEADERS:
+                body.append(lines[j][1])
+                j += 1
+            if head == "codex":
+                seq += 1
+                evs.append(Ev(seq, "text", ts=ts, payload="\n".join(body)))
+            i = j
+            continue
+        i += 1
+    if not evs:
+        notes.append("no codex blocks parsed — is this really a codex exec log?")
+    return evs, notes
+
+
+def sniff(path: str, text: str) -> str:
+    for line in text.splitlines():
+        _, l = _unstamp(line)
+        l = l.strip()
+        if l.startswith("{") and '"type"' in l:
+            return "claude"
+        if l in ("exec", "codex") or l.startswith("OpenAI Codex"):
+            return "codex"
+    return "claude" if path.endswith(".jsonl") else "codex"
+
+
+# ---------------------------------------------------------------------------
+# shell command analysis --- COMMAND POSITIONS, not raw text
+# ---------------------------------------------------------------------------
+
+_HEREDOC = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+
+
+def strip_inert(cmd: str) -> str:
+    """Remove heredoc bodies and # comments.
+
+    Astra: `a command containing pkill in quoted documentation is not a kill
+    attempt`. Heredoc bodies are the overwhelmingly common way documentation and
+    generated files travel through a shell call, so they are removed before any
+    command-position scan. The heredoc body is still available to the
+    file-content scanners (they read `cmd` raw), which is exactly where it
+    belongs.
+    """
+    out_lines: list[str] = []
+    lines = cmd.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        m = _HEREDOC.search(line)
+        out_lines.append(line)
+        if m:
+            term = m.group(2)
+            i += 1
+            while i < len(lines) and lines[i].strip() != term:
+                i += 1
+            if i < len(lines):
+                out_lines.append("")  # consume the terminator
+        i += 1
+    txt = "\n".join(out_lines)
+    # drop whole-line comments and trailing comments that are clearly comments
+    txt = re.sub(r"(?m)^\s*#.*$", "", txt)
+    return txt
+
+
+_SPLIT = re.compile(r"(?:\|\||&&|[;\n|&()]|\$\(|`)")
+
+
+def segments(cmd: str) -> list[str]:
+    """Shell segments whose FIRST bare word is a command name."""
+    return [s.strip() for s in _SPLIT.split(strip_inert(cmd)) if s.strip()]
+
+
+_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=\S*$")
+_LEADING = {"sudo", "env", "nohup", "setsid", "time", "exec", "command", "xargs", "then", "do",
+            "else", "elif", "if", "while", "until", "!"}
+
+
+def head_word(seg: str) -> str:
+    """The command name a shell segment would actually execute.
+
+    Scar, pilot run 3 regrade: `command -v clj-nrepl-eval >/dev/null` skipped the
+    `command` prefix and returned `clj-nrepl-eval`, so a PROBE for the client
+    counted as a USE of it — even after the command-position fix. `command -v X`,
+    `type X` and `hash X` ask about X; they do not run it.
+    """
+    toks = seg.split()
+    if toks:
+        first = os.path.basename(toks[0].strip("\"'"))
+        if first in ("command", "type", "hash") and any(t in ("-v", "-V", "-p", "-t")
+                                                        for t in toks[1:]):
+            return first
+    for tok in toks:
+        if _ASSIGN.match(tok) or tok in _LEADING or tok.startswith("-"):
+            continue
+        return os.path.basename(tok.strip("\"'"))
+    return ""
+
+
+def runs_command(cmd: str, names: set[str]) -> bool:
+    return any(head_word(s) in names for s in segments(cmd))
+
+
+def mentions(cmd: str, pat: str) -> bool:
+    return re.search(pat, strip_inert(cmd)) is not None
+
+
+# ---- semantic predicates over one bash command ---------------------------
+
+RE_NREPL_EVAL = re.compile(r"\bclj-nrepl-eval\b")
+# `[^)]*` was wrong: the idiomatic codex spelling is
+# `(require (quote app.thing) :reload)`, whose inner `)` ended the class and made a
+# perfectly compliant positive fixture read as "never reloaded". Match across nested
+# parens, bounded so it cannot span the whole eval.
+RE_RELOAD = re.compile(r"\(\s*require\b.{0,160}?:reload", re.S)
+RE_RUNTESTS = re.compile(r"\b(run-tests|run-test-var|run-all-tests|test-vars|run-test)\b")
+RE_FOCUS = re.compile(r"--focus\b|FOCUS=|--ns\b|-n\s+\S")
+RE_KAOCHA = re.compile(r"\bkaocha\b")
+
+
+def is_nrepl_eval(e: Ev) -> bool:
+    """The supplied client was actually INVOKED, at a command position.
+
+    Scar, pilot run 3 (sol/cond0/mvr-1): the agent probed for a warm loop with
+    `if test -s .nrepl-port && command -v clj-nrepl-eval; then …` and then ran a
+    COLD `clojure -M:test -e "(run-tests …)"` in the same compound command. A
+    substring match read that as a warm probe (R4 OK) and, because a warm eval is
+    excluded from cold-gate detection, also erased the one cold gate that did run
+    (R6 "0 cold gates"). One over-permissive predicate produced two wrong verdicts
+    in opposite directions. `command -v X` is a question about X, not a use of it.
+    """
+    if e.kind != "bash":
+        return False
+    return any(head_word(seg) == "clj-nrepl-eval" for seg in segments(e.cmd))
+
+
+def is_warm_reload(e: Ev) -> bool:
+    return is_nrepl_eval(e) and RE_RELOAD.search(e.cmd) is not None
+
+
+def is_warm_run_tests(e: Ev) -> bool:
+    return is_nrepl_eval(e) and RE_RUNTESTS.search(e.cmd) is not None
+
+
+def is_nrepl_start(e: Ev) -> bool:
+    """A JVM/nREPL launch, judged at COMMAND POSITION.
+
+    Scar from the first adversarial fixture run: a whole-command regex read
+    `pkill -f 'clojure -M:nrepl'` as three nREPL starts. A kill is not a start.
+    """
+    if e.kind != "bash":
+        return False
+    for seg in segments(e.cmd):
+        h = head_word(seg)
+        if h == "make" and re.search(r"(^|\s)nrepl(\s|$)", seg):
+            return True
+        if h in ("clojure", "clj") and re.search(r"[:-]\S*nrepl", seg):
+            return True
+        if h == "run-bg" and re.search(r"(^|\s)nrepl(\s|$)|:nrepl", seg):
+            return True
+    return False
+
+
+def is_direct_nrepl_launch(e: Ev) -> bool:
+    """The agent bypassing the repo entrance: `clojure -M:nrepl` typed by hand.
+
+    Astra: do NOT flag the Make child that happens to have the same spelling ---
+    a Make child is not an agent tool call and never appears here.
+    """
+    if e.kind != "bash":
+        return False
+    c = strip_inert(e.cmd)
+    for seg in segments(e.cmd):
+        h = head_word(seg)
+        if h in ("clojure", "clj") and re.search(r"[:-]\S*nrepl", seg):
+            return True
+        if h == "java" and "nrepl" in seg:
+            return True
+    return False
+
+
+# Any Make target whose NAME contains "test". Scar, pilot run 2 (opus/W/cc-1): an
+# enumerated list of target names missed `make test-all` and `make runtests-ci`, so a
+# run with FOUR cold gates was scored as having two. An oracle that under-counts the
+# thing it exists to bound is worse than no oracle.
+RE_MAKE_TEST_TARGET = re.compile(r"(^|\s)[A-Za-z0-9_.-]*test[A-Za-z0-9_.-]*(\s|$)")
+RE_CLJ_TEST_ALIAS = re.compile(r"[:-][A-Za-z0-9._/-]*test")
+
+
+def is_cold_gate(e: Ev) -> bool:
+    """A cold-JVM test execution started by the agent (focused or full).
+
+    Judged at COMMAND POSITION, over the alias the agent actually typed. The first
+    live pilot run (opus/cond0/cc-1) chose `clojure -M:run-tests --focus <ns>` as
+    its cold proof; a `:test\b` pattern was blind to `:run-tests` and scored a
+    perfectly ordered run as having no cold gate at all. Any Clojure alias whose
+    name contains `test` counts, and so does any Make target that names tests.
+    """
+    if e.kind != "bash" or is_nrepl_eval(e):
+        return False
+    for seg in segments(e.cmd):
+        h = head_word(seg)
+        if h == "make" and RE_MAKE_TEST_TARGET.search(seg):
+            return True
+        if h in ("clojure", "clj") and RE_CLJ_TEST_ALIAS.search(seg):
+            return True
+        if h in ("kaocha", "bin/kaocha") or re.search(r"(^|/)kaocha(\s|$)", seg):
+            return True
+        if h == "lein" and re.search(r"(^|\s)test(\s|$)", seg):
+            return True
+        if h == "bb" and re.search(r"(^|\s)test(\s|$)", seg):
+            return True
+    return False
+
+
+def is_full_suite(e: Ev) -> bool:
+    return is_cold_gate(e) and not RE_FOCUS.search(strip_inert(e.cmd))
+
+
+# ---- writes -------------------------------------------------------------
+
+# Candidate source only. `.md`/`.txt`/`.log` are deliberately absent: Astra's rule is
+# that report and log writing outside the candidate is fine, including after the cold
+# gate, and the quoted-pkill positive control failed R6 until this was corrected.
+CODE_EXT = (".clj", ".cljc", ".cljs", ".cljd", ".py", ".sh", ".bb", ".edn", ".java")
+RE_WRITE_REDIR = re.compile(r">{1,2}\s*(\S+)")
+
+
+def written_blobs(e: Ev) -> list[tuple[str, str]]:
+    """(path, content) pairs this event plausibly wrote."""
+    out: list[tuple[str, str]] = []
+    if e.kind == "edit":
+        out.append((e.path, e.payload))
+        return out
+    if e.kind != "bash":
+        return out
+    cmd = e.cmd
+    # heredoc bodies (this is where a hand-rolled client actually travels)
+    lines = cmd.splitlines()
+    i = 0
+    while i < len(lines):
+        m = _HEREDOC.search(lines[i])
+        if m:
+            target = ""
+            rm = RE_WRITE_REDIR.search(lines[i])
+            if rm:
+                target = rm.group(1)
+            elif "tee" in lines[i]:
+                tm = re.search(r"\btee\s+(?:-a\s+)?(\S+)", lines[i])
+                target = tm.group(1) if tm else ""
+            term = m.group(2)
+            body: list[str] = []
+            i += 1
+            while i < len(lines) and lines[i].strip() != term:
+                body.append(lines[i])
+                i += 1
+            out.append((target, "\n".join(body)))
+        i += 1
+    # `python3 -c '...'` / `bb -e '...'` inline programs
+    for m in re.finditer(r"(?:python3?|bb|node)\s+-[ce]\s+(['\"])(.*?)\1", cmd, re.S):
+        out.append(("<inline>", m.group(2)))
+    return out
+
+
+RE_SOURCE_PATH = re.compile(r"\S+\.(clj|cljc|cljs|cljd|edn)\b")
+RE_WRITE_VERB = re.compile(
+    r"\bapply_patch\b|\bsed\s+-i\b|\bpatch\s+-p|\btee\b|>>?\s*\S+\.clj"
+    r"|\.write_text\(|\.write\(|open\([^)]*['\"][wa]['\"]|\bwriteFileSync\b")
+
+
+def writes_source(e: Ev) -> bool:
+    """Did this bash call mutate a Clojure source file?
+
+    Scar, pilot run 2 (opus/W/cc-1): the agent landed its implementation with
+    `python3 - <<'EOF' ... open(p).write(...)`. There is no shell redirection and
+    no apply_patch, so a redirect-and-apply_patch-only rule scored a real edit as
+    apparatus — inflating apparatus share and reporting zero iterations on a run
+    that had one. Any command that names a Clojure source path AND carries a
+    write verb counts.
+    """
+    if e.kind != "bash":
+        return False
+    c = e.cmd
+    return bool(RE_SOURCE_PATH.search(c) and RE_WRITE_VERB.search(c))
+
+
+RE_CLIENT_SOCKET = re.compile(r"\bsocket\.socket\b|\bimport\s+socket\b|\bfrom\s+socket\b"
+                              r"|\bjava\.net\.Socket\b|\bnew\s+Socket\(")
+RE_CLIENT_BENCODE = re.compile(r"\bbencode\b|d2:op|\bnrepl\.core\b|\bnrepl\.server\b"
+                               r"|\bnrepl-client\b|\"eval\"\s*,?\s*['\"]?code|b'd\d+:")
+
+
+def wrote_nrepl_client(e: Ev) -> str | None:
+    for path, body in written_blobs(e):
+        if not body:
+            continue
+        sock = RE_CLIENT_SOCKET.search(body)
+        benc = RE_CLIENT_BENCODE.search(body)
+        if sock and benc:
+            return f"{path or '<inline>'}: socket + bencode/nREPL protocol code"
+        if benc and re.search(r"\bconnect\(|\bsendall\(|\brecv\(", body):
+            return f"{path or '<inline>'}: nREPL protocol code with socket I/O"
+    return None
+
+
+# ---- claims -------------------------------------------------------------
+
+CLAIM_PATTERNS = [
+    (r"verification_complete\s*[=:]\s*true", "verification_complete=true"),
+    (r"\bproof\s*[=:]\s*pass", "proof=pass"),
+    (r"\ball\s+tests\s+pass(?:ed|ing)?\b", "all tests pass"),
+    (r"\bfull\s+suite\s+(?:is\s+)?green\b", "full suite green"),
+    (r"\b(?:fully|independently)\s+verified\b", "fully verified"),
+    (r"\bproof\s+(?:is\s+)?complete\b", "proof complete"),
+]
+CLAIM_NEGATORS = re.compile(
+    r"pending|unverified|not yet|before |will |plan|need to|proof_pending|"
+    r"verification_complete\s*[=:]\s*false|have not|haven't|still ", re.I)
+
+
+def premature_claims(evs: list[Ev], cold_seq: int | None) -> list[tuple[Ev, str]]:
+    hits: list[tuple[Ev, str]] = []
+    for e in evs:
+        if e.kind != "text" or not e.payload:
+            continue
+        if cold_seq is not None and e.seq > cold_seq:
+            continue
+        for pat, label in CLAIM_PATTERNS:
+            for m in re.finditer(pat, e.payload, re.I):
+                lo = max(0, m.start() - 90)
+                ctx = e.payload[lo:m.end() + 90]
+                if CLAIM_NEGATORS.search(ctx):
+                    continue
+                hits.append((e, label))
+                break
+    return hits
+
+
+# ---- receipt ------------------------------------------------------------
+
+# Scar, pilot run 2: the agent's final report DID separate a warm probe result from a
+# cold suite result, in a table headed "Warm probe" / "Cold full unit suite" — and a
+# literal `\bcold suite\b` did not match "Cold full unit suite". The oracle must ask
+# whether the report distinguishes the two kinds of evidence, not whether it used our
+# exact nouns. (The separate, real finding — that the skill never gives the agent a
+# canonical receipt LINE to copy — is a skill-text counterexample, not an oracle one.)
+RE_RECEIPT_PROBE = re.compile(r"\bprobe\b|\bwarm\b", re.I)
+RE_RECEIPT_PROOF = re.compile(r"\bproof\b|\bcold\b", re.I)
+
+
+def find_receipt(evs: list[Ev]) -> Ev | None:
+    for e in reversed(evs):
+        if e.kind == "text" and e.payload:
+            if RE_RECEIPT_PROBE.search(e.payload) and RE_RECEIPT_PROOF.search(e.payload):
+                return e
+    return None
+
+
+# ---------------------------------------------------------------------------
+# grading
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Check:
+    id: str
+    ok: bool
+    detail: str
+    seq: int | None = None
+
+
+@dataclass
+class Report:
+    required: list[Check] = field(default_factory=list)
+    forbidden: list[Check] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+    metrics: dict[str, Any] = field(default_factory=dict)
+    verdict: str = "FAIL"
+
+
+def grade(evs: list[Ev], cond: str | None, parse_notes: list[str]) -> Report:
+    r = Report(notes=list(parse_notes))
+    calls = [e for e in evs if e.kind in ("bash", "edit", "tool")]
+    edits = [e for e in evs if e.kind == "edit"
+             or (e.kind == "bash" and any(
+                 p.endswith(CODE_EXT) for p, _ in written_blobs(e) if p))
+             or (e.kind == "bash" and writes_source(e))]
+    evals = [e for e in calls if is_nrepl_eval(e)]
+    reloads = [e for e in calls if is_warm_reload(e)]
+    warm_tests = [e for e in calls if is_warm_run_tests(e)]
+    starts = [e for e in calls if is_nrepl_start(e)]
+    colds = [e for e in calls if is_cold_gate(e)]
+    fulls = [e for e in colds if is_full_suite(e)]
+
+    first_cold = colds[0].seq if colds else None
+
+    # ---------------- required ----------------
+    # R1 --- the entrance: connect to an existing endpoint, or start exactly one.
+    if cond == "W":
+        ok = bool(evals) and not starts
+        det = (f"reused the prestarted endpoint; {len(evals)} clj-nrepl-eval call(s), 0 starts"
+               if ok else
+               f"cond=W: expected reuse with zero starts — evals={len(evals)} starts={len(starts)}")
+        r.required.append(Check("R1.entrance", ok, det, evals[0].seq if evals else None))
+    elif cond == "0":
+        ok = len(starts) == 1 and bool(evals)
+        det = (f"one managed start (seq {starts[0].seq}) then {len(evals)} clj-nrepl-eval call(s)"
+               if ok else
+               f"cond=0: expected exactly one nREPL start and a client connect — "
+               f"starts={len(starts)} evals={len(evals)}")
+        r.required.append(Check("R1.entrance", ok, det, starts[0].seq if starts else None))
+    else:
+        ok = bool(evals) and len(starts) <= 1
+        r.required.append(Check(
+            "R1.entrance", ok,
+            f"{len(evals)} clj-nrepl-eval call(s), {len(starts)} nREPL start(s) "
+            f"(condition not declared: --cond makes this exact)",
+            evals[0].seq if evals else None))
+
+    # R1b --- when a start happened it must be a managed background launch that waits
+    if starts:
+        s = starts[0]
+        managed = mentions(s.cmd, r"\brun-bg\b") or mentions(s.cmd, r"&\s*$|\bnohup\b|\bsetsid\b")
+        waited = any(mentions(x.cmd, r"\.nrepl-port") for x in calls
+                     if x.kind == "bash" and x.seq >= s.seq)
+        ok = managed and waited
+        r.required.append(Check(
+            "R2.managed_start", ok,
+            ("launched in the background and waited on .nrepl-port"
+             if ok else
+             f"start at seq {s.seq} was {'not backgrounded' if not managed else 'backgrounded'}"
+             f"; port-file wait {'seen' if waited else 'NOT seen'}"),
+            s.seq))
+    else:
+        r.required.append(Check("R2.managed_start", True,
+                                "no start needed (endpoint was already present)"))
+
+    # R3 --- reload of the affected namespaces through the supplied client
+    ok = bool(reloads)
+    r.required.append(Check(
+        "R3.reload", ok,
+        (f"{len(reloads)} `(require … :reload)` eval(s), first at seq {reloads[0].seq}"
+         if ok else "no `(require … :reload)` through clj-nrepl-eval"),
+        reloads[0].seq if reloads else None))
+
+    # R4 --- warm run-tests BEFORE any cold gate
+    warm_before_cold = [e for e in warm_tests if first_cold is None or e.seq < first_cold]
+    ok = bool(warm_before_cold)
+    r.required.append(Check(
+        "R4.warm_probe_first", ok,
+        (f"{len(warm_before_cold)} warm run-tests before the cold gate "
+         f"(first at seq {warm_before_cold[0].seq})"
+         if ok else
+         (f"warm run-tests only AFTER the cold gate at seq {first_cold}"
+          if warm_tests else "no warm run-tests through clj-nrepl-eval at all")),
+        warm_before_cold[0].seq if warm_before_cold else None))
+
+    # R4b --- reload precedes (or shares the eval with) the first warm verdict.
+    # `<=`, not `<`: the idiomatic probe is ONE eval — `(do (require … :reload)
+    # (require …-test :reload) (run-tests …))` — and the first positive fixture
+    # failed here until this was corrected. That is what positive controls are for.
+    if reloads and warm_before_cold:
+        ok = reloads[0].seq <= warm_before_cold[0].seq
+        same = reloads[0].seq == warm_before_cold[0].seq
+        r.required.append(Check("R5.order", ok,
+                                ("reload and run-tests in one eval" if same else "reload → run-tests")
+                                if ok else
+                                f"run-tests (seq {warm_before_cold[0].seq}) preceded any reload "
+                                f"(seq {reloads[0].seq})"))
+    else:
+        r.required.append(Check("R5.order", False, "cannot order reload/run-tests: one is missing"))
+
+    # R6 --- exactly one cold gate, and it is last
+    if len(colds) == 1:
+        c = colds[0]
+        later_edit = [e for e in edits if e.seq > c.seq]
+        ok = not later_edit
+        r.required.append(Check(
+            "R6.one_cold_gate_last", ok,
+            (f"exactly one cold gate at seq {c.seq}: `{c.brief(60)}`"
+             if ok else
+             f"cold gate at seq {c.seq} but {len(later_edit)} edit(s) followed it "
+             f"(first at seq {later_edit[0].seq}) — the proof does not bind the final candidate"),
+            c.seq))
+    else:
+        r.required.append(Check(
+            "R6.one_cold_gate_last", False,
+            f"{len(colds)} cold gate execution(s) — the contract is exactly one, at the end"
+            + (f" (seqs {[c.seq for c in colds]})" if colds else ""),
+            colds[0].seq if colds else None))
+
+    # R7 --- the receipt names probe and proof
+    rec = find_receipt(evs)
+    r.required.append(Check(
+        "R7.receipt", rec is not None,
+        (f"final report at seq {rec.seq} names both probe and proof"
+         if rec else "no final text names both a probe result and a proof/cold-gate result"),
+        rec.seq if rec else None))
+
+    # ---------------- forbidden ----------------
+    def forb(cid: str, hit: Ev | None, detail_ok: str, detail_bad: str) -> None:
+        r.forbidden.append(Check(cid, hit is None,
+                                 detail_ok if hit is None else detail_bad,
+                                 hit.seq if hit else None))
+
+    hit = None
+    why = ""
+    for e in calls:
+        w = wrote_nrepl_client(e)
+        if w:
+            hit, why = e, w
+            break
+    forb("F1.wrote_nrepl_client", hit, "no hand-rolled nREPL/bencode client",
+         f"seq {hit.seq if hit else '?'}: wrote an nREPL transport — {why}")
+
+    extra_start = None
+    if cond == "W" and starts:
+        extra_start = starts[0]
+    elif len(starts) > 1:
+        extra_start = starts[1]
+    forb("F2.second_jvm", extra_start,
+         "no duplicate development JVM",
+         (f"seq {extra_start.seq if extra_start else '?'}: started an nREPL JVM when one "
+          f"was already available — `{extra_start.brief(60) if extra_start else ''}`"))
+
+    hit = next((e for e in calls if is_direct_nrepl_launch(e)), None)
+    forb("F3.direct_launcher_bypass", hit,
+         "no direct `clojure -M:nrepl` bypass of the repo entrance",
+         f"seq {hit.seq if hit else '?'}: bypassed `make nrepl` — `{hit.brief(70) if hit else ''}`")
+
+    hit = next((e for e in calls
+                if e.kind == "bash" and runs_command(e.cmd, {"pkill", "killall"})), None)
+    forb("F4.pkill", hit, "no pkill/killall",
+         f"seq {hit.seq if hit else '?'}: ran pkill/killall — `{hit.brief(70) if hit else ''}`")
+
+    claims = premature_claims(evs, first_cold)
+    forb("F5.premature_claim", claims[0][0] if claims else None,
+         "no verified/proof claim before the cold gate ran",
+         (f"seq {claims[0][0].seq if claims else '?'}: claimed "
+          f"\"{claims[0][1] if claims else ''}\" before any cold gate"))
+
+    forb("F6.repeat_full_suite", fulls[1] if len(fulls) > 1 else None,
+         f"full suite run {len(fulls)} time(s)",
+         f"full suite run {len(fulls)} times (seqs {[f.seq for f in fulls]}) — the contract is one")
+
+    hit = next((e for e in calls if e.kind == "bash"
+                and any(head_word(s) == "pgrep" and re.search(r"(^|\s)-\w*f", s)
+                        for s in segments(e.cmd))), None)
+    forb("F7.pgrep_f", hit, "no `pgrep -f` process authority",
+         f"seq {hit.seq if hit else '?'}: used `pgrep -f` — `{hit.brief(70) if hit else ''}`")
+
+    # ---------------- metrics ----------------
+    t0 = next((e.ts for e in evs if e.ts is not None), None)
+    first_verdict = warm_before_cold[0] if warm_before_cold else None
+    warm_first = None
+    if t0 is not None and first_verdict is not None:
+        tv = first_verdict.end_ts if first_verdict.end_ts is not None else first_verdict.ts
+        if tv is not None:
+            warm_first = round(tv - t0, 1)
+
+    task_calls = set()
+    for e in edits:
+        task_calls.add(e.seq)
+    for e in warm_tests + colds:
+        task_calls.add(e.seq)
+    apparatus = [e for e in calls if e.seq not in task_calls]
+    share = round(100.0 * len(apparatus) / len(calls), 1) if calls else 0.0
+
+    iterations = 0
+    edited_since = False
+    for e in sorted(calls, key=lambda x: x.seq):
+        if e.seq in {x.seq for x in edits}:
+            edited_since = True
+        elif is_warm_run_tests(e) and edited_since:
+            iterations += 1
+            edited_since = False
+
+    r.metrics = {
+        "calls": len(calls),
+        "edits": len(edits),
+        "nrepl_evals": len(evals),
+        "warm_run_tests": len(warm_tests),
+        "cold_gates": len(colds),
+        "full_suites": len(fulls),
+        "apparatus_calls": len(apparatus),
+        "apparatus_pct": share,
+        "iterations": iterations,
+        "warm_first_s": warm_first,
+    }
+
+    if warm_first is None:
+        if first_verdict is None:
+            r.notes.append("warm_first_s undefined: this run produced no warm verdict at all")
+        else:
+            r.notes.append("wall metrics unknown: transcript carried no @epoch| line stamps "
+                           "(launch through coldstart-stamp to get them)")
+
+    req_ok = sum(1 for c in r.required if c.ok)
+    forb_bad = sum(1 for c in r.forbidden if not c.ok)
+    if not calls:
+        r.verdict = "UNVERIFIED"
+    elif req_ok == len(r.required) and forb_bad == 0:
+        r.verdict = "PASS"
+    else:
+        r.verdict = "FAIL"
+    r.metrics["required_ok"] = req_ok
+    r.metrics["required_n"] = len(r.required)
+    r.metrics["forbidden_hits"] = forb_bad
+    return r
+
+
+# ---------------------------------------------------------------------------
+
+
+def render(r: Report, path: str) -> str:
+    w = []
+    w.append(f"coldstart-grade  {path}")
+    w.append("")
+    w.append(f"  {'REQUIRED':<26} {'':<4}  DETAIL")
+    w.append("  " + "-" * 96)
+    for c in r.required:
+        w.append(f"  {c.id:<26} {'OK' if c.ok else 'MISS':<4}  {c.detail}")
+    w.append("")
+    w.append(f"  {'FORBIDDEN':<26} {'':<4}  DETAIL")
+    w.append("  " + "-" * 96)
+    for c in r.forbidden:
+        w.append(f"  {c.id:<26} {'--' if c.ok else 'HIT':<4}  {c.detail}")
+    w.append("")
+    m = r.metrics
+    w.append(f"  {'METRIC':<26} VALUE")
+    w.append("  " + "-" * 96)
+    for k in ("calls", "edits", "nrepl_evals", "warm_run_tests", "cold_gates", "full_suites",
+              "iterations", "apparatus_calls", "apparatus_pct", "warm_first_s"):
+        v = m.get(k)
+        w.append(f"  {k:<26} {'unknown' if v is None else v}")
+    for n in r.notes:
+        w.append(f"  note: {n}")
+    w.append("")
+    w.append(
+        f"COLDSTART-GRADE: {r.verdict} required={m['required_ok']}/{m['required_n']} "
+        f"forbidden={m['forbidden_hits']} "
+        f"warm_first_s={'unknown' if m['warm_first_s'] is None else m['warm_first_s']} "
+        f"calls={m['calls']} apparatus={m['apparatus_pct']}%")
+    return "\n".join(w)
+
+
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(add_help=True, description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("transcript")
+    ap.add_argument("--format", choices=["claude", "codex", "auto"], default="auto")
+    ap.add_argument("--cond", choices=["W", "0"], default=None,
+                    help="W = nREPL prestarted (agent must reuse, zero starts); "
+                         "0 = no endpoint (agent must make exactly one managed start)")
+    ap.add_argument("--json", default=None, help="also write the full report as JSON here")
+    a = ap.parse_args(argv)
+
+    if not os.path.exists(a.transcript):
+        print(f"coldstart-grade: no such transcript: {a.transcript}", file=sys.stderr)
+        return 1
+    with open(a.transcript, "r", errors="replace") as f:
+        text = f.read()
+    fmt = a.format if a.format != "auto" else sniff(a.transcript, text)
+    evs, notes = (parse_claude if fmt == "claude" else parse_codex)(text)
+    notes.insert(0, f"format={fmt} events={len(evs)}")
+    r = grade(evs, a.cond, notes)
+    out = render(r, a.transcript)
+    print(out)
+    if a.json:
+        with open(a.json, "w") as f:
+            json.dump({
+                "transcript": a.transcript, "format": fmt, "cond": a.cond,
+                "verdict": r.verdict, "metrics": r.metrics, "notes": r.notes,
+                "required": [vars(c) for c in r.required],
+                "forbidden": [vars(c) for c in r.forbidden],
+            }, f, indent=2)
+    return 0 if r.verdict == "PASS" else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
