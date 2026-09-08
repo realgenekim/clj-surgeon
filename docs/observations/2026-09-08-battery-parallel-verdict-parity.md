@@ -74,21 +74,27 @@ branches were driven before the real comparison was trusted:
 
 ## The two receipt modes, so a ledger reader can tell them apart
 
-`BATTERY_PREREQS=1` **changes what is asserted** and therefore changes the
-counts above. `admit-patch-test` reads
-`target/admit-transaction-recovery-battery-receipt.edn`; with no receipt on
-disk it records a counted, named skip and asserts **4 141**; with the receipt
-present it asserts **4 143**.
+`BATTERY_PREREQS=1` decides whether the declared prerequisite stage runs before
+any lane opens. `admit-patch-test` reads
+`target/admit-transaction-recovery-battery-receipt.edn`; with no receipt on disk
+it records a counted, named skip, and with the receipt present it checks the
+precondition. **It spends the same assertions either way** -- measured
+2026-09-08, 168 tests / 4 325 assertions in BOTH modes -- so the mode moves
+`:skipped` and nothing else. That is not an accident of this tree: it is what
+MCP-OP-ADMIT-147 requires of that witness, "the SAME number of assertions in
+both states so the count itself stops being evidence of which machine ran it".
 
 | mode | ledger line | measured totals |
 |---|---|---|
 | `BATTERY_PREREQS=0` | `:skipped 1` | 743 tests / 13 756 assertions (35 ns, pre-merge tree) |
 | `BATTERY_PREREQS=1` (now the default) | `:skipped 0`, RED if not | 746 tests / 13 825 assertions (36 ns, merged tree) |
 
-**CORRECTION, measured 2026-09-08 on the fence run.** An earlier draft of this
-table predicted 13 758 for `PREREQS=1`, reading `admit-patch-test`'s own note
-that it asserts "4 141 with no battery receipt and 4 143 with one". That note is
-STALE relative to this tree: `admit-patch-test` measures **168 tests / 4 325
+**CORRECTION, measured 2026-09-08 on the fence run, kept because the wrong
+number was published.** An earlier draft of this table predicted 13 758 for
+`PREREQS=1`, reading a note inside `admit-patch-test` that it asserts "4 141
+with no battery receipt and 4 143 with one". That note is STALE relative to this
+tree (it is pre-existing on trunk and outside this branch's delta, so it is left
+untouched here and flagged for its owner): `admit-patch-test` measures **168 tests / 4 325
 assertions in BOTH modes** -- identical in the `PREREQS=0` parity receipt and in
 the `PREREQS=1` fence receipt. Satisfying the precondition moves `:skipped`
 from 1 to 0 and moves NOTHING ELSE.

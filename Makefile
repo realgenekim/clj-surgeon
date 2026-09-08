@@ -1040,10 +1040,14 @@ BATTERY_LANES ?= 8
 # TEST-ISO-013 -- whether the battery RUNS its declared prerequisite stages
 # (today: `admit-transaction-recovery-battery`, whose receipt `admit-patch-test`
 # consumes) before opening any lane. ON by default because `make test` owns
-# that prerequisite and a normal battery receipt must cover it. This changes
-# what is ASSERTED -- 4 141 assertions without the receipt, 4 143 with one;
-# pass BATTERY_PREREQS=0 only for the retained serial comparison. With it on,
-# a failing stage is named and a precondition STILL skipped afterwards is RED.
+# that prerequisite and a normal battery receipt must cover it. MEASURED
+# 2026-09-08: this does NOT change the assertion count -- admit-patch-test is
+# 168 tests / 4 325 assertions in BOTH modes -- it moves `:skipped` from 1 to 0
+# and nothing else, which is what MCP-OP-ADMIT-147 requires of that witness
+# ("shall spend the SAME number of assertions in both states so the count
+# itself stops being evidence of which machine ran it"). Pass BATTERY_PREREQS=0
+# only for the retained serial comparison. With it on, a failing stage is named
+# and a precondition STILL skipped afterwards is RED.
 BATTERY_PREREQS ?= 1
 
 test-battery:

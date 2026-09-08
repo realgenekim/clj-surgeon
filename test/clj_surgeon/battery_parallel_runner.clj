@@ -134,9 +134,14 @@
 
    RUNNING IT IS DEFAULT-ON (`BATTERY_PREREQS=1`), because the normal battery
    is evidence for `make test`, which owns this prerequisite. Satisfying it
-   changes what is asserted -- `admit-patch-test` measures 4 141 assertions
-   without the receipt and 4 143 with one -- so the serial comparison remains
-   available explicitly with `BATTERY_PREREQS=0`. With the flag on, the stage
+   does NOT change what is asserted: MEASURED 2026-09-08, `admit-patch-test` is
+   168 tests / 4 325 assertions in BOTH modes, and only `:skipped` moves, 1 to
+   0. That is the behaviour MCP-OP-ADMIT-147 demands of that witness -- it
+   shall spend the SAME number of assertions in both states, so that the count
+   itself stops being evidence of which machine ran it -- so an assertion
+   count that DID move with the mode would be the bug, not the contract. The
+   serial comparison remains available explicitly with `BATTERY_PREREQS=0`,
+   for its ORDER and its one-JVM shape rather than for its count. With the flag on, the stage
    runs before any lane, a failing stage is a named failure, and a precondition
    still skipped afterwards is RED rather than counted: having declared that
    the prerequisites are satisfied, a remaining skip is a broken declaration."
