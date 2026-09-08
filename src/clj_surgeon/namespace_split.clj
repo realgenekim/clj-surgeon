@@ -208,6 +208,8 @@
                (str/starts-with? token (str class ".")))))))
 
 ;; INTENT: NS-SPLIT-024
+;; @spec NS-SPLIT-032
+;; INTENT: NS-SPLIT-032
 (defn aligned-reference-edits
   "Add only matching continuation whitespace edits inside replaced calls.
   Positions remain relative to the captured source; nested edits compose."
@@ -232,7 +234,11 @@
                                                               (<= (:end e) end)
                                                               (not (str/includes? (:text e) "\n")))]
                                                (- (count (:text e)) (- (:end e) (:start e))))))
-                           column (dec (:col (meta arg)))]
+                           column (dec (:col (meta arg)))
+                           nested (for [child (rest (tree-seq n/inner? n/children node))
+                                        :when (and (n/inner? child)
+                                                   (> (:row (meta child)) (:row (meta head))))]
+                                    (node-span (:starts parsed) child))]
                      :when (and delta (not (zero? delta)) (= end (:end edit)))
                      row (range (inc (:row (meta head))) (inc (:end-row (meta node))))
                      :let [start (nth (:starts parsed) (dec row))
@@ -240,6 +246,9 @@
                      :when (and (<= end (count (:source parsed)))
                                 (re-matches #" *" (subs (:source parsed) start end))
                                 (not (#{\space \tab \newline \return} (get (:source parsed) end)))
+                                ;; The opener can be an outer argument, but later
+                                ;; body/closing lines belong to the nested form.
+                                (not-any? (fn [[a b]] (< a end b)) nested)
                                 (not-any? (fn [[a b]] (< a start b)) protected))]
                  {:start start :end end :delta delta :owner (:owner edit)})
         whitespace (for [[start xs] (group-by :start shifts)
@@ -326,6 +335,8 @@
 ;; INTENT: NS-SPLIT-026
 ;; @spec NS-SPLIT-028
 ;; INTENT: NS-SPLIT-028
+;; @spec NS-SPLIT-033
+;; INTENT: NS-SPLIT-033
 (defn- caller-header [parsed source-lib added]
   ;; Keep the retired entry as a group anchor until additions are placed.
   ;; Reparse only this small header; existing entries and trivia are not reprinted.

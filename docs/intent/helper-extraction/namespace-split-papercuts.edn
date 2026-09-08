@@ -121,4 +121,16 @@
  :boundaries ["moved line; added duplicate; new message; new destination; missing analyzer"]
  :tests [:oracle-baseline-attribution]
  :rationale "Round 3 oracle scored five pre-existing warnings as split damage."}
+{:id :NS-SPLIT-032 :status :active
+ :ears "When a call head changes width, continuation realignment shall leave lines inside forms opened after the head line byte-identical, while allowing the nested opener itself to move."
+ :misreadings ["Matching the old argument column proves ownership." "Protect all nesting, including same-line nested heads."]
+ :boundaries ["Sol exact string-case/unrelated-case input; nested list, fn, vector, map, set; closing delimiter; shorter alias; same-line composition"]
+ :tests [:sol-nested-continuations-respect-form-ownership]
+ :rationale "Sol NO-GO on 5b78bed2: sentinel moved from 7 to 12 spaces."}
+{:id :NS-SPLIT-033 :status :active
+ :ears "When replacing the retired views entry in the forms/polish fixture headers, the compiler shall place only the sorted new views.* block in that span and preserve all other host bytes."
+ :misreadings ["Sort the host block." "Move replacements after test-helpers."]
+ :boundaries ["Exact d9205abc forms_test.clj:13 and polish_test.clj:3 headers; reversed destination order; comments and imports"]
+ :tests [:sol-fixture-requires-replace-in-place]
+ :rationale "Sol NO-GO on 5b78bed2; retain and strengthen round-3 repair."}
 ]}

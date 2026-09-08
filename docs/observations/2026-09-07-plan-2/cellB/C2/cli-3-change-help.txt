@@ -1,0 +1,30 @@
+clj-surgeon :op change!
+
+  Apply one guarded structural change transaction and save its inverse receipt
+
+  Arguments:
+    :receipt-out     (required) Durable .edn inverse receipt; must not alias a source file
+    :spec            Inline EDN map; compatibility entrance for small specs
+    :spec-file       EDN spec path, or - to read one document from stdin (preferred)
+
+  See also: :op change
+
+  Safe workflow:
+    1. Provide exactly one of :spec or :spec-file. Prefer :spec-file - so a large plan travels as data instead of shell-escaped text, like kubectl apply -f -.
+    2. Express the complete mechanical model plan once as the same guarded :changes document accepted by :change.
+    3. Every action, exact selector, per-change count or distribution guard, and aggregate :expect value is consent to the exact materialized transaction. If the task already supplies complete files and owners, declare them without probing source only to confirm them.
+    4. The command compiles from one snapshot, parses every complete future file, rechecks hashes, commits every file, verifies read-back hashes, and publishes the receipt last.
+    5. If a handled write or receipt-publication failure occurs, the command restores transaction-owned bytes and reports whether rollback was complete. It never overwrites unknown concurrent bytes.
+    6. The console result is compact. Do not open :receipt-out; pass its path as :receipt PATH to :undo-change!.
+    7. Use :change when review is required before mutation. Use :change! when the exact guarded intent set is already the model's approved plan.
+
+  Examples:
+    clj-surgeon :op :change! :spec-file - :receipt-out /tmp/ui-change.edn <<'EDN'
+{:changes [{:id :body-class :in ["src/ui.clj"] :forms [shell reader] :find ":body" :do [:replace ":body.page"] :expect {:matches 2 :each-form 1}}] :expect {:changes 1 :edits 2 :files 1}}
+EDN
+
+clj-surgeon :op :change! :spec-file - :receipt-out /tmp/delete.edn <<'EDN'
+{:changes [{:id :obsolete :in ["src/app.clj"] :forms [old-handler old-test] :do [:delete true] :expect {:matches 2 :each-form 1}}] :expect {:changes 1 :edits 2 :files 1}}
+EDN
+
+

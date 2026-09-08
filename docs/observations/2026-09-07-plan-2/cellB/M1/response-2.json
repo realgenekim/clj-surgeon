@@ -1,0 +1,5 @@
+{"verb":"helper_extraction","status":"refused","code":"helper-extraction-retained-dependency","elapsed_ms":269.68,
+ "message":"The selected helper vevent references a public var the source retains, so the destination would have to require the source.",
+ "facts":{"committed":false,"decision":"whether public-answers belongs in the selection","helper":"vevent","mutation_attempted":false,"source_unchanged":true,"target_unchanged":true,"var":"cfp-scheduler-killer.exports/public-answers","write_authority":false},
+ "next_call":null,
+ "note":"next_call none - no mechanically composable correction, no remedy"}

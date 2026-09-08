@@ -1,0 +1,10 @@
+{:changes [{:id :ics-escape :in ["test/cfp_scheduler_killer/exports_test.clj"] :find "exports/ics-escape" :do [:replace "calendar/ics-escape"] :expect {:matches 4}}
+  {:id :fold-line :in ["test/cfp_scheduler_killer/exports_test.clj"] :find "exports/fold-line" :do [:replace "calendar/fold-line"] :expect {:matches 1}}
+  {:id :ics-uid :in ["test/cfp_scheduler_killer/comms_test.clj" "test/cfp_scheduler_killer/exports_test.clj" "test/cfp_scheduler_killer/schedule_test.clj"] :find "exports/ics-uid" :do [:replace "calendar/ics-uid"] :expect {:matches 4}}
+  {:id :ics-sequence :in ["test/cfp_scheduler_killer/exports_test.clj" "test/cfp_scheduler_killer/schedule_test.clj"] :find "exports/ics-sequence" :do [:replace "calendar/ics-sequence"] :expect {:matches 5}}
+  {:id :cancellation-for :in ["src/cfp_scheduler_killer/session_invites.clj" "test/cfp_scheduler_killer/schedule_test.clj"] :find "exports/cancellation-for" :do [:replace "calendar/cancellation-for"] :expect {:matches 3}}
+  {:id :cfp-deadline-ics :in ["src/cfp_scheduler_killer/handlers/public_cfp.clj" "test/cfp_scheduler_killer/exports_test.clj"] :find "exports/cfp-deadline-ics" :do [:replace "calendar/cfp-deadline-ics"] :expect {:matches 4}}
+  {:id :submission-ics :in ["src/cfp_scheduler_killer/inform.clj" "src/cfp_scheduler_killer/session_invites.clj" "test/cfp_scheduler_killer/comms_test.clj" "test/cfp_scheduler_killer/exports_test.clj"] :find "exports/submission-ics" :do [:replace "calendar/submission-ics"] :expect {:matches 6}}
+  {:id :calendar-ics-for :in ["src/cfp_scheduler_killer/handlers/public_widgets.clj" "test/cfp_scheduler_killer/exports_test.clj"] :find "exports/calendar-ics-for" :do [:replace "calendar/calendar-ics-for"] :expect {:matches 2}}
+  {:id :calendar-ics :in ["src/cfp_scheduler_killer/agent/commands.clj" "src/cfp_scheduler_killer/handlers/exports.clj" "test/cfp_scheduler_killer/comms_test.clj" "test/cfp_scheduler_killer/exports_test.clj" "test/cfp_scheduler_killer/schedule_test.clj"] :find "exports/calendar-ics" :do [:replace "calendar/calendar-ics"] :expect {:matches 14}}]
+ :expect {:changes 9 :edits 43 :files 9}}

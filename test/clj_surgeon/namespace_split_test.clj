@@ -488,6 +488,63 @@
                (str "[app.a :as a]\n" indent "[app.z :as z]"))
              (get-in result [:future-sources file]))))))
 
+;; @spec NS-SPLIT-032
+;; INTENT-TEST: NS-SPLIT-032
+(deftest sol-nested-continuations-respect-form-ownership
+  ;; Exact alignment-negatives input from Sol's probes.clj against 5b78bed2.
+  (let [source "(ns app.views)\n(defn x [a b] [a b])\n"
+        caller (str "(ns app.caller (:require [app.views :as v]))\n"
+                    "(def string-case\n"
+                    "  (v/x \"one\n"
+                    "       string\"\n"
+                    "       2))\n"
+                    "(def unrelated-case\n"
+                    "  (v/x 1\n"
+                    "       (do\n"
+                    "       :sentinel)))\n")
+        usages (for [[i line] (map-indexed vector (str/split-lines caller))
+                     :when (str/includes? line "(v/x")
+                     :let [row (inc i)]]
+                 {:filename "test/app/caller.clj" :row row :col 4 :end-row row :end-col 7
+                  :to 'app.views :name 'x})
+        result (paper-compile (paper-request [["longer" ["x"]]])
+                 {"src/app/views.clj" source "test/app/caller.clj" caller}
+                 {:var-usages usages})]
+    (is (:ok result))
+    (is (= (-> caller
+               (str/replace "[app.views :as v]" "[app.longer :as longer]")
+               (str/replace "v/x" "longer/x")
+               (str/replace "\n       2))" "\n            2))")
+               (str/replace "\n       (do" "\n            (do"))
+           (get-in result [:future-sources "test/app/caller.clj"]))))
+  (doseq [[open close] [["(do" ")"] ["[" "]"] ["{:key" "}"] ["#{" "}"] ["#(identity" ")"] ["(do\n       ;; nested comment" ")"]]
+          [head replacement] [["v/x" "longer/x"] ["longer/x" "v/x"]]]
+    (let [column (+ 4 (count head))
+          spaces (apply str (repeat column " "))
+          shifted (apply str (repeat (+ 4 (count replacement)) " "))
+          body (str "\n" spaces ":sentinel\n" spaces close)
+          source (str "  (" head " 1\n" spaces open body "\n" spaces "2)")
+          parsed (#'split/parse-file "literal.clj" source)
+          result (#'split/splice source
+                   (split/aligned-reference-edits parsed
+                     [{:start 3 :end (+ 3 (count head)) :text replacement}]))]
+      (is (= (str "  (" replacement " 1\n" shifted open body "\n" shifted "2)") result)))))
+
+;; @spec NS-SPLIT-033
+;; INTENT-TEST: NS-SPLIT-033
+(deftest sol-fixture-requires-replace-in-place
+  ;; Exact ns headers from d9205abc, graded by Sol at forms:13 / polish:3.
+  (doseq [[prefix caller] (edn/read-string (slurp "test-fixtures/namespace-split/sol-r3-caller-headers.edn"))]
+    (let [result (#'split/caller-header (#'split/parse-file "header.clj" caller)
+                   "cfp-scheduler-killer.views"
+                   '[[cfp-scheduler-killer.views.z :as z]
+                     [cfp-scheduler-killer.views.a :as a]])]
+      (is (= (str/replace caller "[cfp-scheduler-killer.views :as views]"
+               (str "[cfp-scheduler-killer.views.a :as a]\n"
+                    "            [cfp-scheduler-killer.views.z :as z]"))
+             result)
+          prefix))))
+
 ;; @spec NS-SPLIT-030
 ;; INTENT-TEST: NS-SPLIT-030
 (deftest warm-proof-mode-is-validated

@@ -550,6 +550,11 @@ daemon until process startup remains material after exact dependency resolution.
 
 ### Compress a coherent read mission without guessing
 
+Structural reads include reader-form bodies without expanding away their source
+identity. Cardinality refusals identify each evaluated failing request and its
+counts in both structured evidence and caller-visible text; recovery hints
+describe observed shape evidence rather than inferring arity from a zero count.
+
 The read path treats a coherent set of known questions as one immutable
 mission. The caller supplies exact selectors and, when needed, explicit
 mechanical fallback clues such as a literal contained by one owner, a

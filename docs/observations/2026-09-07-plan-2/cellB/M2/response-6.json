@@ -1,0 +1,1 @@
+{"note":"first extraction attempt (request-6.json, no caller decisions) REFUSED","verbatim":"apply_clojure_changes\n  refused · extraction-decisions-required · 724.89 ms\n  Caller candidates require an explicit change or ignore decision\n\n✓ source unchanged\n→ Fill each caller disposition in next_call and call apply_clojure_changes once."}

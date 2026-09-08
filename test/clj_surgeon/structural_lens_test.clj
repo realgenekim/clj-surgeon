@@ -358,3 +358,36 @@
     (is (nil? (:actual-form-count result)))
     (is (str/includes? (:error result) ":expect"))
     (is (nil? (:ok result)))))
+
+
+;; @spec MCP-OP-MATCH-001
+(deftest reader-form-bodies-preserve-concrete-match-evidence
+  ;; inb-f313b8, pair-1/A-T1: minimized current-submission-speakers body.
+  (doseq [[body pattern expected]
+          [["#(mapv f %)" "(mapv f _)" "#(mapv f %)"]
+           ["#(mapv current-speaker-identity %)" "(mapv current-speaker-identity _)"
+            "#(mapv current-speaker-identity %)"]
+           ["#(mapv current-speaker-identity %)" "(mapv current-speaker-identity %)"
+            "#(mapv current-speaker-identity %)"]
+           ["#(mapv current-speaker-identity %)" "current-speaker-identity"
+            "current-speaker-identity"]
+           ["#{(mapv current-speaker-identity submission)}"
+            "(mapv current-speaker-identity _)" "(mapv current-speaker-identity submission)"]
+           ["'(mapv current-speaker-identity submission)"
+            "(mapv current-speaker-identity _)" "(mapv current-speaker-identity submission)"]
+           ["`(mapv current-speaker-identity ~submission)"
+            "(mapv current-speaker-identity _)" "(mapv current-speaker-identity ~submission)"]
+           ["#(mapv current-speaker-identity %)" "#(mapv current-speaker-identity %)"
+            "#(mapv current-speaker-identity %)"]]
+          inside [nil 'current-submission-speakers]]
+    (let [source (str "(ns demo)\n(defn current-submission-speakers [submission]\n"
+                      "  (update submission :speakers " body "))\n")
+          result (lens/find-subforms source {:inside inside :match pattern})
+          site (first (:matches result))]
+      (testing (pr-str [body pattern inside])
+        (is (= 1 (:match-count result)))
+        (is (= expected (:source site)))
+        (is (= "current-submission-speakers" (:inside site)))
+        (is (= 3 (:line site)))
+        (is (integer? (get-in site [:address :preorder])))
+        (is (= (lens/source-hash source) (:source-hash result)))))))

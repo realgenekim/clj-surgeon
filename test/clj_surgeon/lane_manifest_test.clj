@@ -408,7 +408,7 @@
   "Namespaces in a lane today that round one did NOT measure, each with the
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
-  '{clj-surgeon.namespace-split-test 24 ; Round 3: exact header position, proof-mode admission, reload selection.
+  '{clj-surgeon.namespace-split-test 26 ; Round 4: structural continuation ownership and original caller headers.
     clj-surgeon.namespace-split-warm-test 2 ; Round 3: real nREPL failure/green matrix and stale/foreign discovery, integration.
     clj-surgeon.mcp-namespace-split-test 7 ; Add proof-time drift to closed schema, capture, projection and rollback.
     clj-surgeon.mcp-expect-guard-test 14 ; `expect` is a guard on both write routes, not discarded bookkeeping (dogfood-3, 2026-09-07).
@@ -523,7 +523,7 @@
       ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
       ;; Round 3 adds three pure and two warm boundary tests: 477 + 5 = 482.
       ;; Eight Cell C paper-cut witnesses: 464 + 8 = 472.
-      (is (= 482 adopted) (str "adopted tests: " adopted)))
+      (is (= 484 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -609,10 +609,14 @@
       ;; (18 -> 20). Recomputed: 992 original + 449 adopted = 1441.
       ;; Sentinel merge-gate wiring witness: source census recomputed as
       ;; 993 original + 449 adopted = 1442; lane membership is unchanged.
+      ;; Friction batch 1 adds five inspect witnesses: three contract + two tool.
+      ;; 1442 + 5 = 1447; the structural-lens witness belongs to the BB suite.
+      ;; Round-two cardinality receipt forgery: two additive inspect-tool
+      ;; witnesses; 1447 + 2 = 1449, no lane membership changes.
       ;; +5 extraction Andon witnesses: identity, handoff, continuation and real roots.
       ;; Cell C paper-cut round: eight namespace-split witnesses, no lane change.
-      ;; Round 3: 1475 + 5 = 1480, plus one integration namespace (90 -> 91).
-      (is (= 1480 total) (str "manifest declares " total " tests"))
+      ;; Round 4 merged with origin/MCP/main aa587ec3: source census = 1489.
+      (is (= 1489 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

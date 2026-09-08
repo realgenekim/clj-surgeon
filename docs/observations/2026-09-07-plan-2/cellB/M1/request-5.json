@@ -1,0 +1,236 @@
+{
+ "workspace_root": "/home/forge/src/cc-cellB-M1",
+ "require_change": {
+  "add": {
+   "lib": "cfp-scheduler-killer.exports.calendar",
+   "as": "calendar"
+  },
+  "files": [
+   {
+    "file": "src/cfp_scheduler_killer/agent/commands.clj"
+   },
+   {
+    "file": "src/cfp_scheduler_killer/handlers/exports.clj"
+   },
+   {
+    "file": "src/cfp_scheduler_killer/handlers/public_cfp.clj",
+    "remove": {
+     "lib": "cfp-scheduler-killer.exports",
+     "as": "exports"
+    }
+   },
+   {
+    "file": "src/cfp_scheduler_killer/handlers/public_widgets.clj"
+   },
+   {
+    "file": "src/cfp_scheduler_killer/session_invites.clj"
+   },
+   {
+    "file": "test/cfp_scheduler_killer/comms_test.clj"
+   },
+   {
+    "file": "test/cfp_scheduler_killer/exports_test.clj"
+   },
+   {
+    "file": "test/cfp_scheduler_killer/schedule_test.clj"
+   }
+  ]
+ },
+ "symbol_migration": {
+  "target_alias": "calendar",
+  "target_rule": "preserve-name",
+  "columns": [
+   "owner",
+   "from",
+   "matches"
+  ],
+  "files": [
+   [
+    "src/cfp_scheduler_killer/agent/commands.clj",
+    [
+     [
+      "event-export",
+      "exports/calendar-ics",
+      1
+     ]
+    ]
+   ],
+   [
+    "src/cfp_scheduler_killer/handlers/exports.clj",
+    [
+     [
+      "handle-export-ics",
+      "exports/calendar-ics",
+      1
+     ]
+    ]
+   ],
+   [
+    "src/cfp_scheduler_killer/handlers/public_cfp.clj",
+    [
+     [
+      "handle-cfp-deadline-ics",
+      "exports/cfp-deadline-ics",
+      1
+     ]
+    ]
+   ],
+   [
+    "src/cfp_scheduler_killer/handlers/public_widgets.clj",
+    [
+     [
+      "handle-my-schedule-ics",
+      "exports/calendar-ics-for",
+      1
+     ]
+    ]
+   ],
+   [
+    "src/cfp_scheduler_killer/session_invites.clj",
+    [
+     [
+      "handle-session-invite",
+      "exports/cancellation-for",
+      1
+     ],
+     [
+      "session-ics",
+      "exports/submission-ics",
+      1
+     ]
+    ]
+   ],
+   [
+    "test/cfp_scheduler_killer/comms_test.clj",
+    [
+     [
+      "ics-attachment-matches-the-feed-test",
+      "exports/calendar-ics",
+      1
+     ],
+     [
+      "ics-attachment-matches-the-feed-test",
+      "exports/ics-uid",
+      1
+     ],
+     [
+      "ics-attachment-matches-the-feed-test",
+      "exports/submission-ics",
+      1
+     ]
+    ]
+   ],
+   [
+    "test/cfp_scheduler_killer/exports_test.clj",
+    [
+     [
+      "cfp-deadline-ics-amends-and-never-duplicates-test",
+      "exports/cfp-deadline-ics",
+      3
+     ],
+     [
+      "explicit-content-readiness-gates-machine-publication-not-organizer-work",
+      "exports/calendar-ics",
+      1
+     ],
+     [
+      "ics-escaping-test",
+      "exports/fold-line",
+      1
+     ],
+     [
+      "ics-escaping-test",
+      "exports/ics-escape",
+      4
+     ],
+     [
+      "ics-test",
+      "exports/calendar-ics",
+      3
+     ],
+     [
+      "ics-test",
+      "exports/calendar-ics-for",
+      1
+     ],
+     [
+      "ics-test",
+      "exports/ics-sequence",
+      2
+     ],
+     [
+      "ics-test",
+      "exports/ics-uid",
+      1
+     ],
+     [
+      "ics-test",
+      "exports/submission-ics",
+      1
+     ],
+     [
+      "issued-invite-uid-survives-title-amendment-test",
+      "exports/submission-ics",
+      2
+     ],
+     [
+      "published-gate-test",
+      "exports/calendar-ics",
+      1
+     ],
+     [
+      "unroomed-session-calendar-uses-event-location",
+      "exports/calendar-ics",
+      1
+     ]
+    ]
+   ],
+   [
+    "test/cfp_scheduler_killer/schedule_test.clj",
+    [
+     [
+      "conflict-withheld-from-public-test",
+      "exports/calendar-ics",
+      1
+     ],
+     [
+      "exports-reflect-placement-test",
+      "exports/calendar-ics",
+      2
+     ],
+     [
+      "exports-reflect-placement-test",
+      "exports/ics-sequence",
+      2
+     ],
+     [
+      "exports-reflect-placement-test",
+      "exports/ics-uid",
+      1
+     ],
+     [
+      "published-session-removal-emits-a-snapshot-cancellation-test",
+      "exports/calendar-ics",
+      2
+     ],
+     [
+      "published-session-removal-emits-a-snapshot-cancellation-test",
+      "exports/cancellation-for",
+      2
+     ],
+     [
+      "published-session-removal-emits-a-snapshot-cancellation-test",
+      "exports/ics-sequence",
+      1
+     ],
+     [
+      "published-session-removal-emits-a-snapshot-cancellation-test",
+      "exports/ics-uid",
+      1
+     ]
+    ]
+   ]
+  ]
+ },
+ "_note": "repair attempt: inform.clj dropped from both fields (its :require block binds :refer)"
+}

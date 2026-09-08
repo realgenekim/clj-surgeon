@@ -103,3 +103,23 @@ Witness matrix: absent/stale/wrong cwd, green and failing reload/test, warm/cold
 profile mode validation, fail-fast command log, dependency ordering, unrelated
 namespace exclusion, rollback and honest incomplete receipts. New tests run in the
 owned warm development image; make test runs once at the final milestone.
+
+## Round 4 structural continuation ownership
+
+Gene authorizes the complete fail-first, repair and image-loop proof cycle for
+Sol's two blocking findings on 5b78bed2, starting at round 3 tip 38ecea11.
+NS-SPLIT-032 requires structural ownership in addition to the existing column
+match: a line inside any nested form opened after the replaced head's line is
+protected, including nested bodies, comments and closing delimiters. Its opening
+line remains an outer continuation; later outer siblings may still move. Forms
+opened on the head's line retain the existing compositional alignment behavior.
+Multiline string contents remain protected independently.
+
+NS-SPLIT-033 pins the original d9205abc forms/polish headers. Replacement entries
+are sorted only among themselves and spliced into the retired entry's span;
+unrelated host entries and trivia retain their order and bytes. Round 3 already
+implements this rule; the exact field inputs must fail against Sol's reviewed
+commit and pass at the starting tip. The registry carries requirements and direct
+witnesses. Each iteration runs warm tests, split-in-image and the current output
+oracle. Final acceptance uses the real profile, four fixture oracles, current-trunk
+manifest census, touched-file lint and one cold make test.

@@ -278,6 +278,31 @@ Plan: [sentinel gate and HLD](plans/sentinel-intent-gate-and-hld.md); receipts:
 `/var/tmp/forge/lid-batch/surgeon-b3-report.md`. No performance claim or
 mission-ledger implementation change.
 
+## Structural match recovery — 2026-09-07T21:23:46+00:00
+
+Pair-1/A-T1 (inb-f313b8), Recommendation 4 batch 1: native probes reproduce
+the missing `#()` call-body view; bare-symbol, set, quote and syntax-quote
+descent already worked. Added the unexpanded anonymous call-body view while
+retaining original reader bytes/address. Cardinality failures now identify all
+evaluated failing requests with expected/actual counts in data and text; the
+longer-pattern hint requires scoped shape evidence. Existing match-test bodies
+remain byte-identical. Linked intent: MCP-OP-MATCH-001..003 in
+[the operation-contract registry](intent/mcp-operation-contract/mcp-operation-contract-specs.md).
+Red/green receipts and required gates: `/var/tmp/forge/plan2/friction1-report.md`.
+This is a correctness and recovery repair; no battery or performance claim.
+
+## Cardinality receipt integrity — 2026-09-07T21:59:25+00:00
+
+Sol reproduced a forged receipt line through `rogue<U+2028>→ forged` at
+`7acf599b`. Round 2 routes quoted cardinality IDs/files and diagnostic notes
+through the existing bounded safe-line encoder. Structured identity and ordered
+counts remain exact; display collisions are distinguished by request index.
+Two additive witnesses reproduce the public attack and cover escaped strings,
+hostile paths/notes, truncation and complete failure membership. Red: 14
+failures; affected green: 77 tests / 803 assertions. Linked intent:
+MCP-OP-MATCH-004 and MCP-OP-EDIT-038. Reader-discard exclusion remains deferred
+as MCP-OP-MATCH-005; base matching semantics are unchanged. Gates and doubts:
+`/var/tmp/forge/plan2/friction1-r2-report.md`. No performance claim.
 - 2026-09-07, `astra/namespace-split`: Andon inb-731473 repairs anchored destination
   namespace identity and helper-classified caller handoff. Five regression witnesses;
   588 fast tests green, operation oracle green, kondo zero warnings/errors. Evidence:
@@ -331,3 +356,18 @@ tests / 7,511 assertions, zero failures/errors. After harness repair, the second
 attempt caught stale corpus pins and missing EARS @spec links; their 46-test
 warm audit passed before the final cold gate. No product behavior changed after
 the measured real fixture calls.
+
+
+### 2026-09-08T01:23:12.498218+00:00 — namespace split round 4
+
+Sol’s nested-body drift on `5b78bed2` is reproduced by faithful string/do
+inputs and list, vector, map, set, anonymous-function, comment and closing-line
+boundaries, in both alias-width directions. Structural spans now protect lines
+owned by later-opened forms while allowing their opener and outer siblings to
+align. The exact d9205abc forms/polish headers pin round 3’s in-place require
+repair. NS-SPLIT-032/033; two witnesses fail with 15 assertions on the reviewed
+compiler and pass on the repair. The image oracle is clean, but it did not
+detect the synthetic nested-body defect; those witnesses remain necessary.
+The merged manifest source census is 1,489 tests. Final gates, loop timings
+and exclusions: `/var/tmp/forge/plan2/cellC/astra-round4-report.md`.
+No native control was run; no comparative performance claim.
