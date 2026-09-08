@@ -2,6 +2,7 @@
   (:require
    [babashka.fs :as fs]
    [clj-surgeon.agent-routing :as routing]
+   [clojure.edn :as edn]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
 
@@ -79,6 +80,7 @@
       (finally
         (fs/delete-tree tmp)))))
 
+;; @spec ROUTING-PARITY-001
 (deftest install-and-check-routing-end-to-end
   (let [tmp (str (fs/create-temp-dir {:prefix "agent-routing-test"}))
         block-file (str (fs/path tmp "routing.md"))
@@ -102,8 +104,16 @@
         (is (zero? (:changed-count second-result)))
         (is (= first-codex (slurp codex-file)))
         (is (= first-claude (slurp claude-file)))
-        (is (:ok (routing/check-routing! block-file
-                                         [codex-file claude-file]))))
+        (let [checked (routing/check-routing! block-file [codex-file claude-file])]
+          (is (:ok checked))
+          (is (= (:block-hash first-result) (:block-hash checked)))
+          (is (= "3c2eb6a9" (:doctrine-commit checked)))
+          (is (= [{:path codex-file :block-hash (:block-hash checked)}
+                  {:path claude-file :block-hash (:block-hash checked)}]
+                 (:targets checked))))
+        (spit codex-file (str/replace first-codex "compact transaction" "drifted transaction"))
+        (is (= :agent-routing-drift
+               (:error-type (routing/check-routing! block-file [codex-file])))))
       (finally
         (fs/delete-tree tmp)))))
 
@@ -118,7 +128,7 @@
           #"They never prove\s+that the complete user request is finished\."
           source))))
 
-(deftest fan-out-route-section-is-required-in-every-block
+(deftest doctrine-sections-are-required-in-every-block
   (testing "the shipped plate carries every required section byte-exact"
     (let [plate (slurp "resources/clj-surgeon-agent-routing.md")]
       (is (seq routing/required-sections))
@@ -128,7 +138,7 @@
     (let [plate (slurp "resources/clj-surgeon-agent-routing.md")]
       (is (str/includes? plate "**Strictly better, or native.**"))
       (is (str/includes? plate "**Kill switch.**"))
-      (testing "one complete valid call is present for each automatic class"
+      (testing "retained capability, alias route and optional supporting read"
         (is (str/includes? plate "\"within\": {\"form\": \"add\"}"))
         (is (str/includes? plate "\"op\": \"alias_migration\", \"workspace_root\""))
         (testing "and for the optional supporting read, with expect at the ROOT"
@@ -143,7 +153,7 @@
   (testing "the plate names the doctrine commit it derives from"
     (is (re-find #"Derived from doctrine commit [0-9a-f]{8}"
                  (slurp "resources/clj-surgeon-agent-routing.md"))))
-  (testing "a canonical block missing the fan-out route is refused, nothing written"
+  (testing "a canonical block missing the doctrine is refused, nothing written"
     (let [tmp (str (fs/create-temp-dir {:prefix "agent-routing-fanout"}))
           block-file (str (fs/path tmp "routing.md"))
           claude-file (str (fs/path tmp "claude" "CLAUDE.md"))]
@@ -160,7 +170,7 @@
           (is (= routing/required-sections (:missing result)))
           (is (= "claude-original\n" (slurp claude-file))))
         (finally (fs/delete-tree tmp)))))
-  (testing "check refuses an installed block whose fan-out section drifted"
+  (testing "check refuses an installed block whose suspension drifted"
     (let [tmp (str (fs/create-temp-dir {:prefix "agent-routing-fanout"}))
           block-file (str (fs/path tmp "routing.md"))
           claude-file (str (fs/path tmp "claude" "CLAUDE.md"))
@@ -181,5 +191,80 @@
             (is (false? (:ok drifted)))
             (is (= :missing-required-routing-section (:error-type drifted)))
             (is (= :installed (:scope drifted)))
-            (is (= claude-file (:target drifted)))))
+            (is (= claude-file (:target drifted))))
+          (spit claude-file (str (slurp claude-file) (first routing/required-sections)))
+          (is (= :missing-required-routing-section
+                 (:error-type (routing/check-routing! block-file [claude-file])))
+              "doctrine outside the managed block cannot supply missing proof")
+          (is (= :installed (:scope (routing/check-routing! block-file [claude-file])))))
         (finally (fs/delete-tree tmp))))))
+
+  ;; @spec ROUTING-FANOUT-001
+(deftest informed-fanout-is-suspended
+  (let [plate (slurp "resources/clj-surgeon-agent-routing.md")]
+    (is (str/includes? plate "SUSPENDED 2026-09-08 (pair-1: tool 0.68×/0.59× native at 3 and 21 sites, equal acceptance; retest only as a whole-intent redesign)"))
+    (is (str/includes? plate "Capability example only; no automatic fan-out route."))
+    (is (not (str/includes? plate "## Fan-out route (experimental default")))
+    (is (str/includes? plate "0.68×/0.59× are native/tool wall ratios"))
+    (is (str/includes? plate "\"within\": {\"form\": \"add\"}"))))
+
+  ;; @spec ROUTING-SPLIT-001
+(deftest split-route-is-exact-contract-only
+  (let [plate (slurp "resources/clj-surgeon-agent-routing.md")]
+    (doseq [text ["### Namespace split -- EXACT witnessed contract only"
+                  "Only the frozen Cell C source shape AND manifest qualify"
+                  "141 named owners / 20 absent destinations / 87 static sites / five caller files"
+                  "`promotion_policy=promote-required`, `source_retirement=delete`"
+                  "`roots=[src,test]` and a named cold `verification.profile`"
+                  "clj-surgeon :op :split-ns! :request-file X"
+                  "MCP `namespace_split`"
+                  "`state=committed`, `verification_complete=true`, `proof_pending=[]`"
+                  "every required profile check present with `:exit 0`"
+                  "`papercuts` must pass when the profile carries that oracle"
+                  "plan-only first when the mapping is uncertain"
+                  "repair once from `next_call`, then native"
+                  "Never re-run a committed split"
+                  "wall loss vs the registered controls suspends this route"
+                  "dynamic references, open-ended decomposition, other source grammars"
+                  "A changed mapping/policy/source shape needs new admission"]]
+      (is (str/includes? plate text) text))))
+
+  ;; @spec ROUTING-PARITY-001
+(deftest plate-only-check-is-explicit-and-read-only
+  (let [read-file slurp
+        reads (atom [])
+        output (with-redefs [clojure.core/slurp
+                             (fn [path]
+                               (swap! reads conj path)
+                               (read-file path))
+                             clojure.core/spit
+                             (fn [& _] (throw (ex-info "check must not write" {})))]
+                 (with-out-str
+                   (routing/-main "check" "resources/clj-surgeon-agent-routing.md" "--plate-only")))
+        result (edn/read-string output)]
+    (is (= ["resources/clj-surgeon-agent-routing.md"] @reads))
+    (is (:ok result))
+    (is (= :plate-only (:scope result)))
+    (is (= 0 (:target-count result)))
+    (is (= "3c2eb6a9" (:doctrine-commit result)))
+    (is (re-matches #"[0-9a-f]{64}" (or (:block-hash result) "")))))
+
+  ;; @spec ROUTING-PARITY-001
+(deftest canonical-routing-refusals
+  (if-let [validate (ns-resolve 'clj-surgeon.agent-routing 'validate-routing-block)]
+    (let [plate (slurp "resources/clj-surgeon-agent-routing.md")]
+      (is (:ok (validate plate)))
+      (doseq [section routing/required-sections]
+        (is (false? (:ok (validate (str/replace plate section "")))) section))
+      (doseq [broken [(str/replace plate routing/managed-begin "")
+                      (str/replace plate routing/managed-end "")
+                      (str routing/managed-begin "\n" plate)
+                      (str "outside\n" plate)]]
+        (is (= :invalid-canonical-routing (:error-type (validate broken)))))
+      (doseq [extra [(apply str (repeat 189 "\n")) (apply str (repeat 10739 "x"))]]
+        (is (= :routing-budget-exceeded
+               (:error-type (validate (str/replace plate routing/managed-end
+                                        (str extra routing/managed-end))))))))
+    (is false "plate-only must validate canonical markers, doctrine and budget"))
+  (is (= :missing-routing-targets
+         (:error-type (routing/check-routing! "resources/clj-surgeon-agent-routing.md" [])))))

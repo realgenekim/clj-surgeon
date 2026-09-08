@@ -521,13 +521,13 @@ own only elapsed time. A coding agent may relay the terminal response verbatim
 only when that mutation completes all remaining user-requested work; otherwise
 the agent treats it as terminal evidence for that operation and continues.
 
-### Resolve the default formatter before the transaction
-
 The [agent-routing doctrine](intent/agent-routing/agent-routing-design.md) owns
 performance eligibility and canonical/installed plate agreement. Its September 8
 contract suspends informed fan-out and admits only the exact witnessed Cell C
 namespace split. Plate-only validation is branch evidence; installation agreement
 requires the existing checker over each real managed target after operator install.
+
+### Resolve the default formatter before the transaction
 
 The default formatter is a product-owned, exact-version dependency. Installation
 records its package-lock hash, package version, Node version, resolved executable,
