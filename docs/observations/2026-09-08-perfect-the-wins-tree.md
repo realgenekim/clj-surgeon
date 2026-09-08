@@ -70,3 +70,4 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 - 2026-09-08T05:09Z Astra B02 acceptance: NOT qualified; row 1 stays friction-medium; B02b (round) launched; coldstart fixes after pilot 3.
 - 2026-09-08T05:15Z Sol r7 NO-GO (verifier needles incomplete; skill parity; ledger conflict) → B03b (Astra) running. Row 1 stays medium.
 - 2026-09-08T05:18Z pilot 3: 4/4 task PASS, 1/4 grade PASS, all FAILs = observer defects → B02c. Row 9 stays friction-high; row 1 stays medium.
+- 2026-09-08T05:45Z B02c delivered; p13–p16 = 4/4 PASS 9/9 observed. Row 9: friction-medium candidate pending Astra re-acceptance. Row 1: awaiting Sol r8 GO + install + Astra lift.

@@ -4,6 +4,14 @@
 #           [--selftest-tamper delivery]   apparatus self-test only: corrupt the inlined
 #                                          block after installing it, so the delivery gate
 #                                          can be shown refusing. Refuses before launch.
+#           [--selftest-agent '<sh>']      apparatus self-test only: run <sh> in the
+#                                          specimen INSTEAD of a model, through the real
+#                                          launch/observe/wait/detach path. The fixture
+#                                          for CX-14 needs an agent that leaves a
+#                                          long-lived child behind, and only the real
+#                                          path can witness that LAUNCH still ends when
+#                                          the AGENT does. Loud in the receipt: no model
+#                                          line, selftest_agent=yes, never a cohort cell.
 #
 # ONE cold-start acceptance session, end to end, with every gotcha this seat paid for
 # baked in. Design of record: /var/tmp/forge/plan2/cellC/astra-coldstart.md (steps 5-8).
@@ -51,7 +59,7 @@ POINTER='Clojure work: load the clojure-fast-feedback skill first; cold-start co
 usage() { sed -n '2,45p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 NAME=$1; shift
-REPO="" BASE="" MODEL="" COND="" TASK="" MINUTES=20 TAMPER=none
+REPO="" BASE="" MODEL="" COND="" TASK="" MINUTES=20 TAMPER=none SELFAGENT=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO=$(readlink -f "${2:?}"); shift 2 ;;
@@ -61,6 +69,7 @@ while [ $# -gt 0 ]; do
     --task) TASK=$(readlink -f "${2:?}"); shift 2 ;;
     --minutes) MINUTES=${2:?}; shift 2 ;;
     --selftest-tamper) TAMPER=${2:?}; shift 2 ;;
+    --selftest-agent) SELFAGENT=${2:?}; shift 2 ;;
     *) echo "coldstart: unknown option $1" >&2; usage ;;
   esac
 done
@@ -105,6 +114,12 @@ VERIFY=$(sed -nE 's/^VERIFY:[[:space:]]*//p' "$TASK" | head -1)
 # contract of one; that cost was an apparatus failure paid in agent turns.
 GATE=$(sed -nE 's/^GATE:[[:space:]]*//p' "$TASK" | head -1)
 [ -n "$GATE" ] || refuse 'task file has no "GATE: <cmd>" line — the declared cold gate is not optional (CX-3)'
+# THE PRE-COMMITTED INTENDED RED [Astra 10]. A task may name one assertion that MUST be
+# seen failing before the first src edit. It is stripped from the prompt like VERIFY --- a
+# task that tells the agent which test to watch go red has coached the very behaviour the
+# cell exists to measure. Optional: a task without a RED: line simply is not graded on it,
+# because an oracle that invents an intended failure is scoring its own guess.
+RED=$(sed -nE 's/^RED:[[:space:]]*//p' "$TASK" | head -1)
 SKILL_SHA=$(cat "$SKILL/SKILL.md" | sha256sum | cut -c1-16)
 BLOCK_SHA=$(sha256sum < "$COLDBLOCK" | cut -c1-16)
 case "$TAMPER" in none|delivery) ;; *) refuse "--selftest-tamper takes 'delivery' or 'none'" ;; esac
@@ -126,6 +141,7 @@ if [ -n "$STRACE" ]; then OBSERVER=strace; else OBSERVER=proc-sampler; fi
 OBSDIR=$RUN/observer
 mkdir -p "$OBSDIR"
 OBSFILE=$OBSDIR/trace.$( [ "$OBSERVER" = strace ] && echo strace || echo sampler )
+OBSFILTER=$OBSDIR/obs-filter.sh
 
 # THE EFFECTIVE INSTRUCTION PROFILE. A PASS has to name the instructions it ran
 # under: this seat's own global prompt files are inherited by both runners (CX-8,
@@ -308,7 +324,7 @@ fi
 # ---------------------------------------------------------------------------
 t=$(date +%s)
 PROMPT=$RUN/prompt.md
-grep -vE '^(VERIFY|GATE|REPO|BASE|BASE_REF|QUALIFIED):' "$TASK" > "$PROMPT"
+grep -vE '^(VERIFY|GATE|REPO|BASE|BASE_REF|QUALIFIED|RED):' "$TASK" > "$PROMPT"
 TRANSCRIPT=$RUN/transcript.$([ "$RUNNER" = claude ] && echo jsonl || echo log)
 REPORT=$RUN/report.md
 
@@ -324,6 +340,15 @@ else
 | /home/forge/bin/coldstart-stamp > '$TRANSCRIPT'"
 fi
 
+# APPARATUS SELF-TEST ONLY. Substituting the runner is the ONLY way a fixture can
+# witness the launch/observe/wait/detach path itself rather than a copy of it, and a
+# copy is what let CX-14 ship: the wait loop was reviewed, looked right, and waited on
+# the wrong pid. Recorded everywhere a reader could mistake this for a cell.
+if [ -n "$SELFAGENT" ]; then
+  LAUNCH="cd '$WT' && { $SELFAGENT ; } 2>&1 | /home/forge/bin/coldstart-stamp > '$TRANSCRIPT'"
+  say "$(stamp)  SELFTEST AGENT: no model runs in this cell — LAUNCH is \`$SELFAGENT\`"
+fi
+
 # ---------------------------------------------------------------------------
 # THE RUN IS LAUNCHED UNDER THE OBSERVER, not beside it. `strace -f` becomes the
 # parent of the whole tree, so a child created inside a subshell whose output was
@@ -335,11 +360,38 @@ fi
 # expands the environment array of EVERY execve, multiplying the trace ~40x and copying
 # the seat's whole environment into a file we keep.
 # ---------------------------------------------------------------------------
+# THE AGENT'S OWN EXIT, WRITTEN BY THE AGENT'S OWN SHELL [CX-14]. `kill -0 $AGENT_PGID`
+# waits on the TRACER, and a tracer cannot exit while it is still tracing a child the
+# agent legitimately left running (the nREPL it started in condition Ø). In pilot 3 that
+# made two of four cells sit until the ceiling fired: p13 reported `wall=1316s
+# ceiling=yes` for a 213 s session that had already written a clean receipt. `ceiling=yes`
+# then meant nothing, because it was true of every Ø cell by construction. This sentinel
+# is written the instant the agent's own pipeline ends, and it is what LAUNCH waits on.
+AGENT_RC_FILE=$RUN/agent.rc
+rm -f "$AGENT_RC_FILE"
+LAUNCH="$LAUNCH; printf '%s' \$? > '$AGENT_RC_FILE'"
+
 SAMPLER_PGID=""
 if [ "$OBSERVER" = strace ]; then
-  out=$(/home/forge/bin/run-bg "$NAME-agent" "$STRACE" -f -qq -ttt -s 4096 \
-        -e trace=execve,execveat,chdir,fchdir,exit_group,clone,clone3,fork,vfork \
-        -o "$OBSFILE" -- bash -c "$LAUNCH" 2>&1 </dev/null)
+  # A BOUNDED FILESYSTEM CAPTURE [Astra fix 8]. F8 (/tmp writes) and F10 (a client
+  # written and then deleted) were transcript-only claims; now the trace can carry
+  # them. The bound is the filter below, not the syscall list: unfiltered `openat`
+  # over a JVM is tens of megabytes and slows the cell we are timing. `-q`, not `-qq`,
+  # because `-qq` suppresses `+++ exited with N +++` — and that line is how the
+  # declared gate's RESULT reaches the grade [Astra fix 9].
+  cat > "$OBSFILTER" <<'FILTEREOF'
+#!/bin/sh
+# generated by coldstart. $1 = trace file, $2 = specimen root.
+# Control events pass whole. Filesystem events pass ONLY for an absolute path under
+# /tmp or under this run's specimen. That bound is also a LIMIT and the grade says so:
+# a RELATIVE write inside the specimen is not captured here, and no network syscall is
+# captured at all by any flag in this observer.
+exec grep -E "(execve|execveat|chdir|fchdir|clone|clone3|vfork|fork|exit_group|exit)\(|<\.\.\.|\+\+\+ exited|(openat|openat2|open|creat|unlink|unlinkat|rename|renameat|renameat2)\((AT_FDCWD, )?\"(/tmp[/\"]|$2)" > "$1"
+FILTEREOF
+  chmod +x "$OBSFILTER"
+  out=$(/home/forge/bin/run-bg "$NAME-agent" "$STRACE" -f -q -ttt -s 4096 \
+        -e trace=execve,execveat,chdir,fchdir,exit_group,clone,clone3,fork,vfork,openat,openat2,open,creat,unlink,unlinkat,rename,renameat,renameat2 \
+        -o "|$OBSFILTER $OBSFILE $WT" -- bash -c "$LAUNCH" 2>&1 </dev/null)
 else
   # LOSSY BY CONSTRUCTION and labelled as such: a process that lives less than one
   # sampling interval is invisible to it. It counts its own misses so the receipt can
@@ -390,12 +442,27 @@ worker_pids() {  # /proc scan by argv + start time. NEVER pgrep -f.
   done | sort -n
 }
 WORKER=""
-for _ in $(seq 1 90); do WORKER=$(worker_pids | head -1); [ -n "$WORKER" ] && break; sleep 1; done
+# ...and stop hunting the moment the agent is already done. Without this a fast agent
+# (or the selftest agent) is charged 90 s of OUR discovery loop as its own wall [CX-14].
+for _ in $(seq 1 90); do
+  WORKER=$(worker_pids | head -1); [ -n "$WORKER" ] && break
+  [ -e "$AGENT_RC_FILE" ] && break
+  sleep 1
+done
 say "START RECEIPT: name=$NAME pgid=$AGENT_PGID worker=${WORKER:-<not-discovered>} runner=$RUNNER model=$MODEL transcript=$TRANSCRIPT"
 
 DEADLINE=$(( LAUNCH_EPOCH + MINUTES * 60 ))
 CEILING=no
-while kill -0 "$AGENT_PGID" 2>/dev/null; do
+AGENT_RC=unknown
+# WAIT ON THE AGENT, NOT ON THE TRACER [CX-14]. Three exits from this loop, and only
+# the second is a ceiling: the agent's own shell wrote its status; the agent overran
+# --minutes; or the observer itself died, which is an apparatus fact, not an agent one.
+while :; do
+  if [ -e "$AGENT_RC_FILE" ]; then AGENT_RC=$(cat "$AGENT_RC_FILE" 2>/dev/null); break; fi
+  if ! kill -0 "$AGENT_PGID" 2>/dev/null; then
+    say "$(stamp)  observer group $AGENT_PGID is gone and no agent.rc was written — the agent's own exit is UNKNOWN"
+    break
+  fi
   if [ "$(date +%s)" -ge "$DEADLINE" ]; then
     # exact: our OWN process group, an id we created. Never pkill, never a pattern.
     kill -TERM -- "-$AGENT_PGID" 2>/dev/null
@@ -404,9 +471,28 @@ while kill -0 "$AGENT_PGID" 2>/dev/null; do
     CEILING=yes
     break
   fi
-  sleep 5
+  sleep 1
 done
 AGENT_WALL=$(( $(date +%s) - t ))
+
+# THE TRACER OUTLIVES THE AGENT ON PURPOSE, AND MUST NOT OUTLIVE THIS PHASE [CX-14].
+# `setsid` starts a new session; it does NOT detach from ptrace, so the nREPL the agent
+# started is still a traced descendant and strace cannot exit on its own. Terminate the
+# TRACER by the exact pid run-bg gave us — never the group, which would also kill the
+# agent's nREPL that the reap sweep below owns and reports. SIGTERM makes strace detach
+# from every tracee and flush; the settle loop waits for the filter to close the file.
+if [ "$OBSERVER" = strace ] && kill -0 "$AGENT_PGID" 2>/dev/null; then
+  say "$(stamp)  agent finished (rc=$AGENT_RC) — detaching the tracer (pid $AGENT_PGID); its tracees keep running"
+  kill -TERM "$AGENT_PGID" 2>/dev/null
+  for _ in $(seq 1 40); do kill -0 "$AGENT_PGID" 2>/dev/null || break; sleep 0.5; done
+  kill -0 "$AGENT_PGID" 2>/dev/null && { kill -KILL "$AGENT_PGID" 2>/dev/null; say "$(stamp)  tracer did not detach on TERM; killed"; }
+  prev=-1
+  for _ in $(seq 1 20); do
+    cur=$(wc -c < "$OBSFILE" 2>/dev/null || echo 0)
+    [ "$cur" = "$prev" ] && break
+    prev=$cur; sleep 0.5
+  done
+fi
 
 # the model is verified from the runner's OWN log, not from the flag we passed
 if [ "$RUNNER" = claude ]; then
@@ -457,7 +543,7 @@ fi
 OBSERVER_FIELD=$OBSERVER
 [ "$OBSERVER" = proc-sampler ] && OBSERVER_FIELD="proc-sampler(loss=$OBS_LOSS)"
 say "$(stamp)  observer: $OBSERVER_FIELD lines=$OBS_LINES execve_lines=$OBS_EXECS truncated=$OBS_TRUNC file=$OBSFILE"
-step LAUNCH "$AGENT_WALL" "ceiling=$CEILING worker=${WORKER:-none} model_from_log='${LOGMODEL:-none}' ($MODEL_OK) observer=$OBSERVER_FIELD execve_lines=$OBS_EXECS"
+step LAUNCH "$AGENT_WALL" "agent_rc=$AGENT_RC ceiling=$CEILING worker=${WORKER:-none} model_from_log='${LOGMODEL:-none}' ($MODEL_OK) observer=$OBSERVER_FIELD execve_lines=$OBS_EXECS"
 
 # ---------------------------------------------------------------------------
 # 4. GRADE — the action-log oracle over what the agent actually attempted
@@ -466,7 +552,7 @@ t=$(date +%s)
 GRADEOUT=$RUN/grade.txt
 /home/forge/bin/coldstart-grade "$TRANSCRIPT" --format "$FMT" --cond "$COND" \
   --observer "$OBSFILE" --observer-kind "$OBSERVER" --observer-loss "$OBS_LOSS" \
-  --gate "$GATE" --specimen "$WT" \
+  --gate "$GATE" --specimen "$WT" ${RED:+--red-test "$RED"} \
   --json "$RUN/grade.json" > "$GRADEOUT" 2>&1 </dev/null
 GLINE=$(grep -m1 '^COLDSTART-GRADE:' "$GRADEOUT")
 GRADE=$(printf '%s' "$GLINE" | awk '{print $2}')
@@ -552,7 +638,7 @@ for p in "${PHASES[@]}"; do
 done
 say "  $(printf '%-12s %8s' TOTAL "$TOTAL")"
 say ""
-LINE="COLDSTART $NAME: model=$MODEL($MODEL_OK) cond=$COND grade=$GRADE task=$TASK_RESULT delivery=$DELIVERY gate='$GATE' gate_qualified=${GATE_WALL}s warm_first=$WARMF calls=$CALLS apparatus=$APPA wall=${TOTAL}s ceiling=$CEILING observer=$OBSERVER_FIELD observer_execve_lines=$OBS_EXECS profile=${PROFILE:0:16} diff='${DIFFSTAT:-none}'"
+LINE="COLDSTART $NAME:${SELFAGENT:+ selftest_agent=yes} model=$MODEL($MODEL_OK) cond=$COND grade=$GRADE task=$TASK_RESULT delivery=$DELIVERY gate='$GATE' gate_qualified=${GATE_WALL}s warm_first=$WARMF calls=$CALLS apparatus=$APPA agent_wall=${AGENT_WALL}s agent_rc=$AGENT_RC wall=${TOTAL}s ceiling=$CEILING observer=$OBSERVER_FIELD observer_execve_lines=$OBS_EXECS profile=${PROFILE:0:16} diff='${DIFFSTAT:-none}'"
 say "$LINE"
 printf '%s  %s\n' "$(stamp)" "$LINE" >> "$LEDGER"
 say "$(stamp)  frozen: $RUN/{transcript.*,grade.txt,grade.json,diff.patch,verify.log,prompt.md,coldstart.log,gate-qualify.log,instruction-profile.json,observer/}"
