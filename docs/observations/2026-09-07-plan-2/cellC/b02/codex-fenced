@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# codex-fenced <worktree> — list REAL codex exec processes fenced (-C) to a worktree; excludes this shell and harness snapshot shells.
+# Built 2026-09-08 after three false "busy" verdicts from a scan that matched its own cmdline. Exit 0 = none, 1 = some.
+W=${1:?worktree}; found=0
+for p in /proc/[0-9]*; do { a=$(tr "\0" " " < "$p/cmdline"); } 2>/dev/null || continue
+  case "$a" in "/bin/bash -c source"*|*shell-snapshots*|*codex-fenced*) continue;; esac
+  case "$a" in *codex*" exec "*"-C $W"*|*codex*" exec "*"-C $W/"*) echo "${p#/proc/} et=$(ps -o etimes= -p ${p#/proc/} 2>/dev/null | tr -d ' ') ${a:0:110}"; found=1;; esac
+done; [ $found = 0 ]

@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# astra-night <brief-file> — hand the night program to Astra: launch (or continue) ONE
+# Astra session in /home/forge/src/clj-surgeon-astra-consult and print its receipt.
+#
+# Gene, 2026-09-08 NIGHT ORDERS, verbatim:
+#   "Tell Astra: if you go dark or drop down opus, astra is to take over as best it can."
+#
+# This is the LAUNCHER. The decision to launch is ~/bin/astra-watch (cron */15).
+#
+# Three mechanical facts this script exists to encode:
+#
+#  * ONE session, never two. Two codex builders in one worktree collide (2026-09-08 ~00:50Z:
+#    the second paused itself and left an uncommitted merge). So we refuse when an
+#    astra-night codex is already alive. Liveness is a /proc argv scan — NEVER `pgrep -f`,
+#    which self-matches the harness's own `bash -c` and never fires
+#    ([[waiters-bind-to-pid-not-argv]]).
+#  * The codex process's cwd is NOT the worktree on a fresh launch: sol-yolo passes
+#    `-C <worktree>` and codex keeps the LAUNCHER's cwd. So argv `-C <wt>` is the primary
+#    match; cwd==worktree is a secondary one (a `codex exec resume` DOES chdir).
+#  * The wrapper pid is not the run. We launch through ~/bin/run-bg, which makes the job
+#    write its own $$ before exec and prints the REAL pid
+#    ([[sol-yolo-wrapper-pid-is-not-the-run]]).
+#
+# The session id is recorded to $NIGHT/session.id so a later invocation continues the SAME
+# thread with an EXPLICIT id. Never `--last`: "the most recent recorded session" is whatever
+# else this box did last, which is exactly the wrong-session class Astra requires us to refuse.
+set -uo pipefail
+export PATH=/home/forge/bin:/home/forge/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+WT=${ASTRA_WT:-/home/forge/src/clj-surgeon-astra-consult}
+NIGHT=${NIGHT_DIR:-/var/tmp/forge/night}
+BRIEF=${1:?usage: astra-night <brief-file>}
+
+export CODEX_BIN=${CODEX_BIN:-/home/forge/.local/bin/codex}
+export CODEX_MODEL=${CODEX_MODEL:-gpt-6-astra}
+
+mkdir -p "$NIGHT"
+SIDFILE=$NIGHT/session.id
+
+die() { echo "astra-night: $*" >&2; exit 3; }
+[ -f "$BRIEF" ] || die "no such brief: $BRIEF"
+[ -d "$WT" ] || die "no such worktree: $WT"
+[ -x "$CODEX_BIN" ] || [ -L "$CODEX_BIN" ] || die "no codex at $CODEX_BIN"
+
+# --- stored session id (a uuid, or nothing) ----------------------------------
+SID=""
+if [ -s "$SIDFILE" ]; then
+  s=$(tr -d '[:space:]' < "$SIDFILE")
+  case "$s" in [0-9a-fA-F]*-*-*-*-*) SID=$s ;; *) SID="" ;; esac
+fi
+
+# --- liveness: is an astra-night codex already running? ----------------------
+# argv authority, /proc only. Matches (a) any `codex exec` fenced to the consult
+# worktree by `-C`, (b) one whose cwd IS the worktree (the resume path chdirs),
+# (c) a resume of OUR stored session id wherever it runs.
+live_astra_pids() {
+  local dir=${WT%/} p args cwd
+  for p in /proc/[0-9]*; do
+    p=${p#/proc/}
+    args=$({ tr '\0' ' ' < "/proc/$p/cmdline"; } 2>/dev/null) || continue
+    case "$args" in *"codex exec "*) ;; *) continue ;; esac
+    # comm gate: the AUTHORITY is the codex process itself (node shim or native binary),
+    # never a shell whose argv merely CONTAINS the words. Without this, this very session's
+    # harness `bash -c ... codex exec ...` self-matches — the same class as `pgrep -f`.
+    case "$(cat "/proc/$p/comm" 2>/dev/null)" in node|codex) ;; *) continue ;; esac
+    cwd=$(readlink "/proc/$p/cwd" 2>/dev/null)
+    case "$args" in
+      *" -C $dir "*|*" -C $dir/ "*) echo "$p"; continue ;;
+    esac
+    if [ -n "$SID" ]; then
+      case "$args" in *"$SID"*) echo "$p"; continue ;; esac
+    fi
+    [ "$cwd" = "$dir" ] && echo "$p"
+  done | sort -n
+}
+
+EXISTING=$(live_astra_pids | head -1)
+if [ -n "$EXISTING" ]; then
+  echo "astra-night: REFUSED — an astra-night codex is already alive (pid $EXISTING, worktree $WT). One session, never two." >&2
+  exit 4
+fi
+
+STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+REPORT=$NIGHT/report-$STAMP.md
+NAME=astra-night-$STAMP
+
+# --- launch ------------------------------------------------------------------
+if [ -n "$SID" ]; then
+  # CONTINUE the same thread. `codex exec resume` takes NO -C and NO --color; the working
+  # root is the process cwd, so the fence is the cd. Options precede the positional id.
+  RESUME=$NIGHT/resume-$STAMP.sh
+  cat > "$RESUME" <<EOF
+#!/usr/bin/env bash
+set -uo pipefail
+cd "$WT" || exit 2
+exec "$CODEX_BIN" exec resume --skip-git-repo-check \\
+  --dangerously-bypass-approvals-and-sandbox \\
+  -m "$CODEX_MODEL" -c 'model_reasoning_effort="high"' \\
+  -o "$REPORT.last.md" "$SID" - < "$BRIEF"
+EOF
+  chmod +x "$RESUME"
+  RUN=$(/home/forge/bin/run-bg "$NAME" "$RESUME") || die "run-bg failed: $RUN"
+  MODE=resume
+else
+  RUN=$(/home/forge/bin/run-bg "$NAME" /home/forge/bin/sol-yolo "$WT" "$BRIEF" "" "$REPORT") \
+    || die "run-bg failed: $RUN"
+  MODE=fresh
+fi
+echo "$RUN"
+LOG=/var/tmp/forge/run-bg/$NAME.log
+
+# --- record the codex session id ---------------------------------------------
+# codex prints `session id: <uuid>` in its header a few seconds in. Poll ~60 s; a miss is
+# reported, never fatal — the run is already going and the log keeps the truth.
+FOUND=""
+for _ in $(seq 1 60); do
+  FOUND=$(grep -m1 -oE 'session id: *[0-9a-fA-F-]{36}' "$LOG" 2>/dev/null | grep -oE '[0-9a-fA-F-]{36}$')
+  [ -n "$FOUND" ] && break
+  sleep 1
+done
+if [ -n "$FOUND" ]; then
+  printf '%s\n' "$FOUND" > "$SIDFILE"
+  echo "astra-night: mode=$MODE session_id=$FOUND (recorded in $SIDFILE) brief=$BRIEF report=$REPORT log=$LOG"
+else
+  echo "astra-night: mode=$MODE session_id=unknown (no 'session id:' line in $LOG after 60 s; run is alive, id not yet printed) brief=$BRIEF report=$REPORT log=$LOG"
+fi
+exit 0

@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# astra-watch — the night watchdog. Cron every 15 min. If the Fable seat goes dark before
+# 5am PT, hand the program to Astra.
+#
+# Gene, 2026-09-08 NIGHT ORDERS, verbatim:
+#   "Tell Astra: if you go dark or drop down opus, astra is to take over as best it can."
+#
+# LAUNCH IFF all five hold:
+#   1. no operator kill switch      ($NIGHT/STOP absent)
+#   2. the pulse is STALE           (older than $MAX_AGE_MIN, default 45 min)
+#   3. we are still inside the night window (UTC now < 12:00Z = 5am PT; Gene is awake after)
+#   4. the pulse file is READABLE and parseable (an unreadable pulse is unknown, not dark)
+#   5. no astra-night codex is already alive (astra-night re-checks; this is the cheap gate)
+#
+# IDEMPOTENT BY CONSTRUCTION: on a launch it writes the pulse file itself, so the next tick
+# 15 min later sees a fresh pulse and does nothing. No pkill. No `pgrep -f` (an unanchored
+# argv match self-matches the harness's own `bash -c` and never fires).
+#
+# Test seams: PULSE_FILE, NIGHT_DIR, DRY_RUN=1, MAX_AGE_MIN, WINDOW_END_HHMM, ASTRA_BRIEF.
+set -uo pipefail
+export PATH=/home/forge/bin:/home/forge/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+PULSE_FILE=${PULSE_FILE:-/tmp/anvil-pulse.txt}
+NIGHT=${NIGHT_DIR:-/var/tmp/forge/night}
+BRIEF=${ASTRA_BRIEF:-/var/tmp/forge/plan2/cellC/brief-astra-night.md}
+MAX_AGE_MIN=${MAX_AGE_MIN:-45}
+WINDOW_END_HHMM=${WINDOW_END_HHMM:-1200}
+DRY_RUN=${DRY_RUN:-0}
+
+mkdir -p "$NIGHT"
+WLOG=$NIGHT/watch.log
+NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+log_and_exit() {  # log_and_exit <age-or-unknown> <action>
+  printf '%s pulse_age=%s action=%s\n' "$NOW" "$1" "$2" >> "$WLOG"
+  exit 0
+}
+
+# --- 1. operator kill switch --------------------------------------------------
+[ -e "$NIGHT/STOP" ] && log_and_exit unknown "skipped:stop"
+
+# --- 2. pulse age -------------------------------------------------------------
+# format: `pulse <UTC ISO8601> load=... lanes=... last=...`
+if [ ! -r "$PULSE_FILE" ]; then
+  # An absent/unreadable pulse is UNKNOWN, not proof the seat is dark. Refuse to act on it.
+  log_and_exit unknown "skipped:no-pulse"
+fi
+PTS=$(awk '$1=="pulse"{print $2; exit}' "$PULSE_FILE" 2>/dev/null)
+PEPOCH=$(date -u -d "$PTS" +%s 2>/dev/null)
+if [ -z "$PTS" ] || [ -z "$PEPOCH" ]; then
+  log_and_exit unknown "skipped:unparseable-pulse"
+fi
+AGE=$(( ( $(date -u +%s) - PEPOCH ) / 60 ))
+
+[ "$AGE" -le "$MAX_AGE_MIN" ] && log_and_exit "$AGE" "skipped:fresh"
+
+# --- 3. night window ----------------------------------------------------------
+# After 12:00Z Gene is awake (5am PT) and owns the decision himself.
+HHMM=$(date -u +%H%M)
+if [ "$((10#$HHMM))" -ge "$((10#$WINDOW_END_HHMM))" ]; then
+  log_and_exit "$AGE" "skipped:window-closed"
+fi
+
+# --- 4. is an astra-night codex already alive? --------------------------------
+# argv authority, /proc only. Same rule as astra-night: `-C <worktree>`, or cwd==worktree
+# (the resume path chdirs), or a resume of the recorded session id.
+WT=${ASTRA_WT:-/home/forge/src/clj-surgeon-astra-consult}
+SID=""
+if [ -s "$NIGHT/session.id" ]; then
+  s=$(tr -d '[:space:]' < "$NIGHT/session.id")
+  case "$s" in [0-9a-fA-F]*-*-*-*-*) SID=$s ;; esac
+fi
+live_astra_pids() {
+  local dir=${WT%/} p args cwd
+  for p in /proc/[0-9]*; do
+    p=${p#/proc/}
+    args=$({ tr '\0' ' ' < "/proc/$p/cmdline"; } 2>/dev/null) || continue
+    case "$args" in *"codex exec "*) ;; *) continue ;; esac
+    # comm gate: the AUTHORITY is the codex process itself (node shim or native binary),
+    # never a shell whose argv merely CONTAINS the words. Without this, this very session's
+    # harness `bash -c ... codex exec ...` self-matches — the same class as `pgrep -f`.
+    case "$(cat "/proc/$p/comm" 2>/dev/null)" in node|codex) ;; *) continue ;; esac
+    cwd=$(readlink "/proc/$p/cwd" 2>/dev/null)
+    case "$args" in *" -C $dir "*|*" -C $dir/ "*) echo "$p"; continue ;; esac
+    if [ -n "$SID" ]; then case "$args" in *"$SID"*) echo "$p"; continue ;; esac; fi
+    [ "$cwd" = "$dir" ] && echo "$p"
+  done | sort -n
+}
+ALIVE=$(live_astra_pids | head -1)
+[ -n "$ALIVE" ] && log_and_exit "$AGE" "skipped:astra-alive-pid=$ALIVE"
+
+# --- 5. the brief must exist --------------------------------------------------
+[ -f "$BRIEF" ] || log_and_exit "$AGE" "skipped:no-brief"
+
+# --- LAUNCH -------------------------------------------------------------------
+if [ "$DRY_RUN" = 1 ]; then
+  echo "astra-watch: DRY_RUN would launch: /home/forge/bin/astra-night $BRIEF"
+  log_and_exit "$AGE" "launched(dry)"
+fi
+
+OUT=$(/home/forge/bin/astra-night "$BRIEF" 2>&1); rc=$?
+printf '%s astra-night rc=%s\n%s\n' "$NOW" "$rc" "$OUT" >> "$NIGHT/launch.log"
+if [ "$rc" -ne 0 ]; then
+  log_and_exit "$AGE" "skipped:launch-failed-rc=$rc"
+fi
+
+# Idempotence: OWN the pulse from here, so the next tick sees a fresh pulse and stands down.
+# Written only after a launch actually succeeded — never on a refusal, or the watchdog would
+# silence itself without having handed anything over.
+LOAD=$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null | tr ' ' ',')
+printf 'pulse %s load=%s lanes=astra-night(takeover) last=watchdog-launch\n' \
+  "$NOW" "${LOAD:-unknown}" > "$PULSE_FILE"
+
+log_and_exit "$AGE" "launched"
