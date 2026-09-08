@@ -384,12 +384,21 @@
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
     ;; Batch 3 adds one pure status namespace and one detached process battery.
-    (is (= 54 (count (lm/namespaces-for :fast))))
+    ;; MERGE RESOLUTION, 2026-09-08 (fable/battery-parallel x MCP/main c41dee30):
+    ;; the SAME trap this file already records below. Batch 3 moved this pin
+    ;; 53 -> 54 for its pure status namespace and TEST-ISO-013 moved it 53 -> 54
+    ;; for battery-parallel-test; the numbers agreed textually and git merged
+    ;; them clean at 54, silently losing one namespace. Two different witnesses,
+    ;; two increments: 53 + 1 + 1 = 55.
+    (is (= 55 (count (lm/namespaces-for :fast))))
     (is (= 7 (count (lm/namespaces-for :integration))))
     ;; B07 enrolls its independent oracle mutation witnesses in one new battery namespace.
     ;; Sol r10 enrolls the per-verb artifact boundary battery.
+    ;; Batch 3 adds one detached process battery; TEST-ISO-013 adds no battery
+    ;; namespace (it re-runs the ones already there), so the battery count is
+    ;; trunk's. The manifest takes BOTH sides: 95 + 2 (Batch 3) + 1 (TEST-ISO-013).
     (is (= 36 (count (lm/namespaces-for :battery))))
-    (is (= 97 (count lm/manifest))
+    (is (= 98 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -454,6 +463,7 @@
     clj-surgeon.mission-forms-source-test 23 ; Strict comment text/attachment, whitespace identity and owner sentinel.
     clj-surgeon.mission-typist-executor-test 11 ; Add candidate diagnostic survival to proof/commit/undo and saved fallback forwarding.
     clj-surgeon.battery-ledger-test        14 ; TEST-ISO-009a/b: add strict archive classification and preserved failure/audit authority.
+    clj-surgeon.battery-parallel-test      24 ; TEST-ISO-013: the battery lane run as N JVM lanes -- schedule, lane-failure classifier, shard fold, prerequisite DAG.
     clj-surgeon.require-change-test 9 ; Pure standalone require intent and strict natural-layout refusal witnesses.
     clj-surgeon.require-change-boundary-test 12 ; Actual CLI/profile processes, confined publication, independent oracle and undo.
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
@@ -548,7 +558,11 @@
       ;; boundary, 1 mcp) without moving these pins, so this arithmetic was RED at
       ;; branch tip 0956951b; the delta fence for that tip adds the fifth, the
       ;; actionable unsafe-tmpdir refusal (NS-SPLIT-059). 547 + 4 + 1 = 552.
-      (is (= 552 adopted) (str "adopted tests: " adopted)))
+      ;; TEST-ISO-013 adds 21 parallel-battery witnesses plus three regressions
+      ;; the first wide run found (lane-integrity grain, the dropped :sharded
+      ;; field, home isolation through a selector): 24 more.
+      ;; MERGE, 2026-09-08: both sides grew this from 537. 537 + 15 + 24 = 576.
+      (is (= 576 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -651,7 +665,9 @@
       ;; five witnesses through the source census; the delta fence's help witness
       ;; lives in the BB lane's cli-dispatch-test and is not counted here.
       ;; 1566 + 4 + 1 = 1571.
-      (is (= 1571 total) (str "manifest declares " total " tests"))
+      ;; TEST-ISO-013, the parallel battery: 24 witnesses in one new :fast namespace.
+      ;; MERGE, 2026-09-08: both sides grew this from 1556. 1556 + 15 + 24 = 1595.
+      (is (= 1595 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

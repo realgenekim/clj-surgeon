@@ -109,6 +109,23 @@
     org.slf4j/slf4j-nop {:mvn/version "2.0.17"}}
    :main-opts ["-m" "clj-surgeon.mcp-test-runner" "battery"]}
 
+  ;; TEST-ISO-013 -- the battery lane run as N separate JVM lanes. Same
+  ;; deps as :clj-surgeon/test-battery because the COORDINATOR reads the lane
+  ;; manifest and then launches lane children that are `test-battery` in all
+  ;; but their namespace slice; `--lanes 1` is the serial semantics.
+  :clj-surgeon/test-battery-parallel
+  {:extra-paths ["test" "dev/experiments"]
+   :extra-deps
+   {babashka/fs {:mvn/version "0.5.30"}
+    babashka/process {:mvn/version "0.6.23"}
+    io.github.bhauman/clojure-mcp
+    {:git/tag "v0.2.6"
+     :git/sha "35a660b"}
+    nrepl/nrepl {:mvn/version "1.3.1"}
+    org.eclipse.jetty.ee10/jetty-ee10-servlet {:mvn/version "12.0.13"}
+    org.slf4j/slf4j-nop {:mvn/version "2.0.17"}}
+   :main-opts ["-m" "clj-surgeon.battery-parallel-runner"]}
+
   :clj-surgeon/memory-test
   {:extra-paths ["test"]
    :extra-deps {babashka/fs {:mvn/version "0.5.30"}
