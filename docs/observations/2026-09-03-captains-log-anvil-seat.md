@@ -3844,3 +3844,7 @@ Regrade from frozen traces: p21 PASS 11/11, p23 PASS, p24 PASS, p22 FAIL on R10 
 ## 2026-09-08T09:40Z — p26 (opus/W on the amended block): PASS 11/11 — red observed at seq 6 before the first edit at seq 8; {p21,p23,p24,p26} = 4/4 on the five-part criterion BUT not a valid pilot (two block shas); pilot 5 launched to close it cleanly
 
 CX-19 before/after: N=2 FAIL (p22, p25) on the old block, N=1 PASS on the amended block — a real signal, N=1 on the new side. The operator applied the pre-committed rule ("cells measured against the amendment must run after it, never mixed") and refused the mixed set; p27 opus/Ø cc, p28 sol/Ø mvr, p29 sol/W mvr launched on block 194c32d0… (~20 min). Disk 34 G remaining (95% used, shared) — watch. Row 5 native floor at run 3–4 of 6; Astra on the row-2 paper cut; stage 3 staged.
+
+## 2026-09-08T09:52Z — row-2 paper cut fixed (827a751a): every Surgeon verb keeps receipts outside the workspace; frozen hand-drive O1–O5 PASS, MINOR 0; branch server 7907 up on the fix; stage 3 (six D arms) launched; Sol r10 launched
+
+Astra also ran its own adversarial review on the change (retirement descendant symlink, compact proof-field loss, cold-job sharing — repaired with witnesses) and caught an obsolete CLI-path assertion in the combined run. Stage 3 pairs six fresh D arms with the retained stage-2 N arms under Sol's corrected gate; the untracked-path check runs per arm.
