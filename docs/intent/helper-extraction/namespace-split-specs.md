@@ -72,3 +72,7 @@ B07 preregistered requirements:
 NS-SPLIT-046 supersedes the absolute NS-SPLIT-042 check after the latter exposed
 five findings already present in byte-protected baseline code. The exact fixture
 and all ownership, behavior, architecture and protected-content gates are unchanged.
+
+- [x] **NS-SPLIT-047**: When verification.profile-file or CLI :profile-file supplies an absolute external EDN profile configuration, the split shall resolve it without adding configuration to the workspace, refusing invalid paths or data before mutation.
+- [x] **NS-SPLIT-048**: When a cold profile executes only true commands, the split shall publish incomplete verification with cold-suite pending and the executed command evidence.
+- [x] **NS-SPLIT-049**: When a selected profile has commands [], verification admission shall refuse with a specific empty-profile reason before writing.

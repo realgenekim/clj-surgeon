@@ -26,4 +26,15 @@
    :ears "When the landing gate runs, it shall execute the whole alias migration boundary namespace."
    :misreadings ["A fresh battery receipt executes the affected tests." "Running only the new row-2 witnesses is complete coverage."]
    :boundaries ["make test" "make landing-gate" "~/bin/land"]
-   :tests [:the-landing-gate-runs-both-the-merge-gate-and-the-battery-tripwire]}]}
+   :tests [:the-landing-gate-runs-both-the-merge-gate-and-the-battery-tripwire]}
+  {:id :ALIAS-MIGRATION-004 :status :active
+   :ears "When an alias migration returns, its receipt shall report measured refusal price and explicit unobserved caller outcomes."
+   :misreadings ["No observed fallback means false." "Missing counts are zero." "Verb wall is complete verified wall."]
+   :boundaries ["commit; refusal; routing failure; nil counts; clock units"]
+   :tests [:route-telemetry-records-commit-and-refusal]}
+  {:id :ALIAS-MIGRATION-005 :status :active
+   :ears "When an alias migration call returns, it shall publish one external telemetry ledger line or mark ledger publication unknown."
+   :misreadings ["Nested execute writes a second line." "Ledger failure undoes a committed operation."]
+   :boundaries ["direct/MCP; concurrency; write failure; no workspace bookkeeping"]
+   :tests [:route-telemetry-records-commit-and-refusal]}
+]}

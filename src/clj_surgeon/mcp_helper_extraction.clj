@@ -444,6 +444,7 @@
   (vec (distinct (concat (planner/refusal-types)
                          (map #(str "helper-extraction-" %)
                               ["verification-preflight-unavailable"
+                               "verification-empty-profile"
                                "invalid-request"
                                "unknown-field"
                                "invalid-source-root"

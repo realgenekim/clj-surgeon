@@ -170,3 +170,33 @@ comment cycle. Use one warm development image, split/output oracle and warm test
 per iteration, then one cold make test and intent audit. Freeze implementation,
 adapter, manifest and oracle hashes; hand off 24 sequential N/F/D runs. No timing
 comparison is performed during this build. A representational gap is FAILURE.
+
+## Rows sublime: approved Row 5 contract (2026-09-08)
+
+The operator confirms the preflight as the spec and authorizes the complete
+branch-only loop with linked-intent-testing as the substitute skill. NS-SPLIT-047
+loads an explicit absolute external EDN config before injected/workspace profiles,
+without creating configuration in the graded tree. The file contains the existing
+`:verification-profiles {name spec}` map; the request still names `profile`.
+Relative, missing, oversized, malformed and workspace-contained files refuse
+before mutation, including symlinks resolving into the workspace. CLI
+`:profile-file` overrides the request's nested path.
+
+NS-SPLIT-048 derives completion from executed command evidence: a cold profile
+whose only commands are `true` or `/bin/true` leaves `cold-suite` pending. Warm
+mode retains all skipped cold argv as pending. Other configured commands remain
+trusted operator proof; the verb cannot infer arbitrary program semantics.
+NS-SPLIT-049 refuses `:commands []` as `verification-empty-profile`, before writes,
+with `cold-suite` pending. It does not weaken shared helper extraction admission.
+
+Matrix: path source/precedence/confinement/EDN bounds; CLI help/dispatch/exit;
+true-only cold success, failed or missing command evidence, ordinary cold gate,
+warm pending; empty profile refusal and unchanged bytes. Each fix has a red
+witness, warm tests and the papercut oracle; one final cold make test and intent
+audit. Cell C proof tiers and Row 2 telemetry are separately recorded slices.
+
+The real true-process and external-profile publication witnesses run in the
+existing receipt-artifacts battery namespace. Pure/path witnesses remain fast;
+the corpus counts both without loss. Direct warm run-tests does not enforce the
+cold runner's process-spawn isolation, so the cold failure and repaired lane
+allocation are retained in the report.

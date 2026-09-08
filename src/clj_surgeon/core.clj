@@ -2154,21 +2154,26 @@
                        :desc "Compile a namespace partition or retained-source extraction; :facts-only reads shared facts"
                        :args {:request {:desc "Complete namespace_split request as an EDN map"}
                               :request-file {:desc "EDN file containing the complete namespace_split request"}
+                              :profile-file {:desc "Absolute external EDN config containing :verification-profiles; overrides verification.profile-file"}
                               :plan-only {:desc "Nonmutating analysis projection (true)"}
                               :facts-only {:desc "Read snapshot-bound facts without candidate emission (true)"}}
                        :workflow ["Start with :facts-only true (no emitter) or :plan-only true (broader candidate analysis). Both are read-only."
-                                  "Request keys: workspace_root; source {file,lib}; destinations [{file,lib,forms,alias_policy}]; promotion_policy (promote-required or authorized names); roots; verification {profile}. Names and paths are strings."
+                                  "Request keys: workspace_root; source {file,lib}; destinations [{file,lib,forms,alias_policy}]; promotion_policy (promote-required or authorized names); roots; verification {profile,profile-file?}. profile-file is an absolute external EDN config containing :verification-profiles; it takes precedence over workspace config. Names and paths are strings."
                                   "Partial extraction: source.retain=true, optional source.alias_policy, and omit source_retirement. Unmapped forms stay in source. Full partition: source_retirement is delete or retain-empty."
                                   "Optional source.comment_policy=remove-moved-invocations removes offending moved calls (and a sole print wrapper) in source comment blocks. Cycles and unauthorized promotions refuse."
                                   "The top-level :facts map contains owners, exact references, retained dependencies, promotions and graph. Review top-level :blockers and :facts :unknowns. Copy top-level :snapshot_hash into the request as :snapshot_hash to bind a later call."
                                   "Apply by omitting both read flags. The configured synchronous verification profile proves the guarded write. A nonzero exit or ok=false is a refusal/failure: read state and mutation_attempted before retrying."
                                   "Complete proof requires :state=committed, :verification_complete=true, :proof_pending=[] and successful top-level :checks. Require :exit 0 except baseline-qualified captured-reference-analysis/candidate-lint-delta; any :status=failed fails."
+                                  "A true-only cold profile commits with verification_complete=false and cold-suite pending; commands [] refuses verification-empty-profile before writing. cold-suite is a gate label: obtain the application cold test command from the target Makefile or its testing documentation, run it from workspace_root, and retain its output."
                                   "Warm-only proof: run each listed :proof_pending command from workspace_root and preserve the results; the original receipt remains incomplete. Do not replay the split."
+                                  "Close pending proof separately: retain each command, exit and output linked to :receipt_hash. Recompute current workspace file hashes before and after the gates and compare them with :read_back :read-back-hashes from :details_path (nil requires that path to remain absent), and retain the source inventory/diff to detect new callers. All pending gates must pass on that same source snapshot; the original receipt is immutable."
+                                  "Split undo/detail artifacts live outside workspace_root under /var/tmp/forge/namespace-split-receipts/. Profile commands can write logs or caches: inspect :workspace_status :unexpected_paths and :workspace_clean_except, clean generated artifacts separately, and retain final Git status. An external profile-file adds no workspace configuration."
                                   "On rolled-back with :restored=true the original files are restored. On recovery-required preserve the receipt and resolve the reported conflicting state before guarded undo; never force restoration over foreign edits."
                                   "Top-level :undo_receipt names the guarded inverse: :op :undo-extract! :receipt PATH. Never blindly repeat a committed split."]
                        :examples ["clj-surgeon :op :split-ns! :request-file split.edn :facts-only true"
                                   "clj-surgeon :op :split-ns! :request-file split.edn :plan-only true"
-                                  "clj-surgeon :op :split-ns! :request-file split.edn"]
+                                  "clj-surgeon :op :split-ns! :request-file split.edn"
+                                  "clj-surgeon :op :split-ns! :request-file split.edn :profile-file /abs/operator/profiles.edn"]
                        :category :write}
 
     :extract!         {:handler   extract/execute!

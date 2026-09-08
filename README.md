@@ -780,8 +780,22 @@ guards. Success requires committed state and complete named verification;
 is retained at `:receipt_details_path`. See the
 [contract and limits](docs/intent/require-change/require-change-design.md).
 
+Alias migration receipts carry `refusal_price` (request-to-refusal milliseconds,
+otherwise nil), `fallback: "unknown"`, and named `unknown` inputs. One telemetry
+EDN line per call is appended to `/var/tmp/forge/alias-migration-receipts/ledger.edn`
+with its ID, operation wall, outcome, files, sites and collisions. The operation
+wall excludes ledger publication and subsequent caller work; complete verified
+wall remains unknown. A ledger write failure preserves the mutation result and
+marks `telemetry_ledger` unknown.
+
 For a whole namespace partition, `namespace_split` (CLI `:split-ns!`) accepts one
-complete destination mapping and verifies one transaction. Each destination may
+complete destination mapping and verifies one transaction. To keep proof configuration
+outside the graded tree, supply `:verification {:profile "split-unit"
+:profile-file "/abs/operator/profiles.edn"}` or CLI `:profile-file /abs/operator/profiles.edn`.
+That EDN file contains `{:verification-profiles {"split-unit" {:commands [["bin/kaocha" "unit"]]}}}`
+and overrides injected/workspace configuration. The path must resolve outside the
+workspace. A true-only profile commits with incomplete verification and `cold-suite`
+pending; `:commands []` refuses as `verification-empty-profile` before writing. Each destination may
 supply a nonblank `:doc` string. Otherwise its generated doc names the source,
 form count and up to three public forms; the original monolith doc is not cloned.
 Destination requires form one sorted block with the source indentation. Imports
