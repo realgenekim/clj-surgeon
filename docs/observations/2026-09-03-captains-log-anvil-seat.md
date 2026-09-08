@@ -3848,3 +3848,14 @@ CX-19 before/after: N=2 FAIL (p22, p25) on the old block, N=1 PASS on the amende
 ## 2026-09-08T09:52Z — row-2 paper cut fixed (827a751a): every Surgeon verb keeps receipts outside the workspace; frozen hand-drive O1–O5 PASS, MINOR 0; branch server 7907 up on the fix; stage 3 (six D arms) launched; Sol r10 launched
 
 Astra also ran its own adversarial review on the change (retirement descendant symlink, compact proof-field loss, cold-job sharing — repaired with witnesses) and caught an obsolete CLI-path assertion in the combined run. Stage 3 pairs six fresh D arms with the retained stage-2 N arms under Sol's corrected gate; the untracked-path check runs per arm.
+
+## 2026-09-08T10:04Z — pilot 5 (valid package, block 194c32d0…): 3/4 again — the CX-19 fix works (opus/W PASS, red at seq 6) and the miss MOVED to opus/Ø: the agent wrote its fix while the nREPL booted (CX-20: "the boot is a barrier, not spare time"); one-line fix (61644f5, block 08c79a61…); p30 running
+
+| cell | grade | warm_first | note |
+|---|---|---|---|
+| p26 opus/W cc | PASS 11/11 | 15.6 s | first Opus cell ever to observe its red first |
+| p27 opus/Ø cc | FAIL 10/11 (R10) | 36.2 s | backgrounded make nrepl, edited during boot, then waited for the port |
+| p28 sol/Ø mvr | PASS 11/11 | 47.2 s | blocked on the port file, as the text says |
+| p29 sol/W mvr | PASS 11/11 | 43.1 s | |
+
+All four: integrity ok, final gate green, one-file diffs, red attested, profile_isolated=no (named). Package-valid pilot; row 1 stays friction-medium on part 2 alone, by one cell, for the third time — each time a different skill-text gap, each fixed with one sentence and verified N=1 on the failing cell. A clean 4/4 on one package needs one more full four-cell run on block 08c79a61… (~25 min) — queued; will not complete before 12:00Z.
