@@ -927,7 +927,9 @@
        :stale_references {:count (count stale) :sites stale :expected [] :scope scope}
        :facades {:forms facades :expected expected-facades :unexpected unexpected-facades
                  :policy "no-new-forwarders; retain existing unmapped forwarding owners"
-                 :scope {:file (get-in request [:source :file]) :expected_match [:owner :kind :arity_targets] :scan "def symbol/Var/partial/fn aliases and single/multi-arity direct defn/apply forwarders"}}
+                 :scope {:file (get-in request [:source :file]) :expected_match [:owner :kind :arity_targets]
+                         :scan "def symbol/Var/partial/fn aliases and single/multi-arity direct defn/apply forwarders"
+                         :excludes ["macro expansion" "arbitrary forwarding bodies" "dynamic resolution"]}}
        :exactly_once {:columns [:owner :destination_count :elsewhere_count] :rows counts
                       :preexisting_namesakes
                       (mapv (fn [x] (assoc x :after_hashes

@@ -842,6 +842,8 @@ The receipt also carries candidate evidence across the captured roots:
   `defn`/`apply` forwarders,
   with retention-policy expectations and scan scope. Existing unmapped forwarders
   are listed in `:expected`; new wrappers appear in `:unexpected` and refuse.
+  The scope explicitly excludes macro expansion, arbitrary forwarding bodies and
+  dynamic resolution.
 - `:exactly_once`: per-owner destination/elsewhere counts. Pre-existing
   namesakes in unrelated namespaces have separate file/hash evidence; adding
   another copy still fails.

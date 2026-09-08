@@ -476,6 +476,8 @@ only the moved owner from the source file to its assigned destination. Facade
 scans cover symbol, Var, partial and fn aliases plus single/multi-arity direct
 call/apply bodies. Retention explicitly permits existing unmapped forwarding
 owners, reports them as expected, and refuses newly introduced wrappers.
+The receipt scope explicitly excludes macro expansion, arbitrary forwarding
+bodies and dynamic resolution.
 
 The delta fence also binds permitted forwarders to canonical mapped targets and
 forwarding-kind/arity positions. Any forwarding arity is enumerated, including

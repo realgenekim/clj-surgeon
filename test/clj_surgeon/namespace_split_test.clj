@@ -937,7 +937,12 @@
                 "(def legacy (fn [x] (u/moved x)))"]]
     (let [compiled (assoc-in (negative-fixture) [:future-sources "src/app/views.clj"]
                      (str "(ns app.views (:require [app.util :as u]))\n" body "\n"))]
-      (is (= ["legacy"] (mapv :owner (get-in (split/review-facts compiled) [:facades :forms]))) body))))
+      (is (= ["legacy"] (mapv :owner (get-in (split/review-facts compiled) [:facades :forms]))) body)))
+  (let [compiled (assoc-in (negative-fixture) [:future-sources "src/app/views.clj"]
+                   "(ns app.views (:require [app.util :as u]))\n(defmacro legacy [& xs] `(u/moved ~@xs))\n")
+        fact (:facades (split/review-facts compiled))]
+    (is (= [] (:forms fact)))
+    (is (some #{"macro expansion"} (get-in fact [:scope :excludes])))))
 
 ;; @spec NS-SPLIT-062
 (deftest retention-policy-reports-existing-forwarders
