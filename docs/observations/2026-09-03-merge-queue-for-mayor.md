@@ -145,3 +145,5 @@ LANDED 2026-09-07T19:41Z: astra/lid-batch-2-perf-gate-hld 94715053 → MCP/main 
 - 2026-09-08T08:44Z Sol GO r9 (capability only) → `~/bin/land 02bbf482` launched via run-bg (pid 3121741; log /var/tmp/forge/run-bg/land-b07.log); distance 26 since receipt a4868ca9.
 
 - LANDED 2026-09-08T08:50Z: B07 partial retention + facts projection 02bbf482 → merge e6cb5e31, trunk 1ab53e0e; gates green; CLI reinstalled; 7906 rebuilt on trunk.
+
+- 2026-09-08T11:00Z Sol GO r11 on 398679fa (r10 repairs: alias batteries green + required at landing; intent contradiction resolved; per-verb red witnesses) → `~/bin/land 398679fa` launched via run-bg (pid 1909433); battery distance 49 — if battery-fresh refuses, receipt-chain-20 first.
