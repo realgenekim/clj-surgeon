@@ -494,3 +494,94 @@ trap that makes a `GO` check approve a `NO-GO`), and `check | grep -q` under `se
 inherited the checked program's nonzero exit, so it reported a false mismatch on exactly the rows
 where the program was SUPPOSED to refuse — a harness that is wrong only on the refusal rows is a
 harness that quietly stops testing refusals.
+
+## 2026-09-08T21:44:32Z — ship v3, STAGED: GO-WITH-FIX becomes a state the tool closes, and the four ratchets the night asked for
+
+Tonight's longest piece of `t` was not a gate and not a battery. It was a **routine**: Sol writes a
+fix in the fence worktree and answers GO-WITH-FIX; the operator copies the patch, applies it to the
+tip, runs the named witnesses, commits, pushes, writes a delta brief, relaunches ship, and races the
+next `git clean` to save the verdict. **Four times this evening**, on one branch that took seven
+ship runs for about twenty minutes of actual fixing. Every step of it is mechanical, and every step
+was typed. So `ship` closes it.
+
+**Nothing was installed.** A real `ship` run held the lease throughout this work, so the whole set is
+staged under `/var/tmp/forge/ship-v3/` behind an installer that refuses while a target is running
+**or while a lease names a live pid**, backs up, installs by atomic rename, and re-runs every fixture
+against the installed bytes.
+
+### What v3 does
+
+On a `GO-WITH-FIX`: archive the verdict → wait for the reviewer's **supervisor** to close (fence-run's
+END RECEIPT, not the verdict file's appearance) → capture the fence worktree's staged+unstaged diff
+against the **sealed reviewed candidate** → check it against the reviewer's own declared manifest →
+apply it to a fresh checkout of the branch tip in **ship's own** worktree → witness → lint → commit
+(**author = the seat that typed the bytes, committer = the pipeline**) → push → seal a new candidate →
+bounded delta review → prewarm → continue. `SHIP-AUTOFIX n=1 patch=<lines> witnesses=<p>/<t> new_candidate=<sha>`.
+
+Plus the three the night handed us: **fence-run archives every verdict before `git clean`** (batch 4's
+verdict was swept and survived only in Sol's log); **receipt-chain saves and verifies an orphan of a
+dirty scratch worktree before resetting** and prints `SCRATCH-RECOVERED`, never a bare git error;
+**ship stops on a dead prewarm within one poll**, by process *start identity* rather than pid existence
+(tonight it waited 25 minutes on a corpse).
+
+### The part that matters most, and it is a refusal
+
+Astra attacked the design before any of it was installed, and the attack landed. Two of its rulings
+took the shine off the feature and are the reason it is safe:
+
+- **A `GO-WITH-FIX` substring cannot trigger anything.** The auto-close requires an explicit
+  `SHIP-FIX-BLOCK` — candidate sha, finding ids, repair line, producer identity, and a patch manifest
+  whose path set and per-file +/- counts must match the bytes actually found. A reviewer that cannot
+  describe its own patch has not finished, and an unfinished reviewer is UNVERIFIED, never a GO.
+- **Sol confirming its own patch is a contributor's closure check, not independent judgment.** Only
+  *registered inert records* (`docs/observations/*.md`) may close with the same reviewer. Anything
+  executable, testable, configurable or unclassified requires an **independent** second reviewer, and
+  with none configured the path **fails closed**: `HOLD reason=independent-review-required`. A patch
+  that moves an assertion, a gate, a runner or a dependency does not even get that far —
+  `HOLD reason=oracle-changed`, because a patch cannot authorize its own reduced coverage.
+
+The witness selection lost its prose scanner in the same pass. Grepping `deftest` names out of a
+verdict is the scanner-by-names trap this seat has already been bitten by: a `test-ns-hook`-registered
+fixture is invisible to it — and the battery review two hours earlier found exactly that bypass. v3
+runs the cold fast lane plus every **changed test namespace** through its declared runner, which
+preserves fixtures and hooks by construction.
+
+The bounds: at most two fix attempts per candidate lineage (persisted in the run dir, not held in a
+process), a **cumulative** 400-line added+deleted ceiling across both attempts so two "small" fixes
+cannot walk past it one at a time, no binary/symlink/gitlink/mode changes, no path outside the repo,
+strict `git apply` with no three-way or fuzz, the committed delta compared line-for-line with the
+captured patch, and the remote branch required to still equal the captured tip before a normal push.
+A red witness HOLDs and nothing is committed, pushed or landed.
+
+### And the interlock the records lane was missing
+
+`records-push` decides whether a landing is in flight by grepping every file under
+`/var/tmp/forge/ship/.lease` for `pid=<n>`. **ship's own `pid` file held a bare number**, so
+records-push saw no live owner and pushed straight through a landing's gates tonight — the records
+writer as the adversary of the landing, exactly as Sol predicted. v3 writes
+`/var/tmp/forge/ship/.lease/owner` = `pid=<ship pid> run=<run> kind=ship tip=<t> base=<b>`, held for
+the whole run and released only on exit; and a **bare `land-auto`**, which took no lease at all, now
+writes `/var/tmp/forge/ship/.lease/land-auto-<pid>` = `pid=<pid> kind=land-auto started=<utc>` and
+removes it on exit. A stale lease (dead pid) does not block the records lane.
+
+### Evidence
+
+`run-ship-v3.sh`: **22 rows, 0 mismatches**, against a real bare origin, a real clone, a **real fence
+worktree** that the stub dirties the way a reviewer does, and the real `ship` — the capture, manifest
+check, ceiling, classification, apply, witness, commit, push and lease chain all execute. Corpus
+(`run-ship-v2` 28, `run-land-auto` 19, `run-land-publication-truth` 12): 0 mismatches against the
+staged bytes.
+
+**One oracle was changed deliberately, and it is recorded rather than relaxed quietly.** v2's row
+asserted "GO-WITH-FIX ⇒ status=HOLD". v3 makes GO-WITH-FIX a state whose refusals are a typed family,
+so that single status name is no longer the invariant. The row now asserts what it existed for — a
+GO-WITH-FIX never lands, never calls `land`, never claims a landing, and still prints its elapsed —
+and the GO-WITH-FIX semantics themselves moved to the v3 rows.
+
+Staged (sha256, first 16): ship `7355c7af204f875c` · fence-run `cc09e618af202f4b` · receipt-chain `fedf998c2bb635cd` · land-auto `edcac9bdc9725ba9` ·
+records-push `d19e1828467bc458`. Install: `bash /var/tmp/forge/ship-v3/install.sh`.
+
+**Not built, and named so nobody assumes otherwise:** the independent reviewer itself (only the hook
+and the fail-closed gate); structured verification of the runner's result (exit code plus retained
+logs today); crash/reattach resume; and the live hand-drive on a real GO-WITH-FIX — a ship was in
+flight for the whole session, so every claim above is fixture evidence, not field evidence.
