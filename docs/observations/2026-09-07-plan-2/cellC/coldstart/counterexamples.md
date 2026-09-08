@@ -1106,3 +1106,55 @@ the reason `inline` delivery exists. The agent reconciled the false pointer agai
 inlined bytes and proceeded correctly, so the flag is REPORTED, not convicting, and the cell
 is not contaminated. It is logged here only so the recurrence is on the record: **every
 codex cell still has to notice and discount an instruction the harness knows is wrong.**
+
+### pilot 6 — CX-20 APPLIED: the barrier sentence turns the R10 miss into a pass (opus, cond Ø)
+
+*Appended 2026-09-08T10:15:29Z.*
+
+CX-20 above was filed as PROPOSAL ONLY. It has since been APPLIED to step 3 of the block, in
+the barrier form rather than the step-4 form drafted above:
+
+> The boot is a BARRIER, not spare time: do not read, plan or edit while it starts — wait for
+> the port, attest, then begin.
+
+`block_sha256` moved `194c32d0ea41464f` -> `08c79a616e40dfb8` (2338 bytes, inlined verbatim
+into CLAUDE.md + AGENTS.md; `delivery=inline+P+T/evidenced` on both cells below).
+
+**Before / after, same model, same condition, same task, same runner and grader:**
+
+| cell | block | grade | R10.red_first | warm_first_s | calls | cold_gates | agent_wall |
+|---|---|---|---|---|---|---|---|
+| p27-opus-0-cc | 194c32d0 (old) | **FAIL** 10/11 | **MISS** — never red before the first src edit (seq 5) | 36.2 | 8 | 1 | 218s |
+| p30-opus-0-cc | 08c79a61 (new) | **PASS** 11/11 | **OK** — red at seq 7, before the first src edit | 24.6 | 8 | 1 | 213s |
+
+Receipt lines:
+
+```
+COLDSTART p30-opus-0-cc: model=opus(verified) cond=0 grade=PASS task=PASS gate_final_exit=0
+  gate_final_wall=86s gate_final='1022 tests, 12402 assertions, 0 failures.' integrity=ok
+  delivery=inline+P+T/evidenced warm_first=24.6 calls=8 apparatus=50.0%
+  agent_wall(launch_wall)=213s total_wall=603s profile=ba9e60764f2ca07b profile_drift=no
+  src_hash_at_verify=f0162c623ad69dd3 final_source_drift=no diff=' 1 file changed, 10 insertions(+)'
+
+COLDSTART-GRADE: PASS required=11/11 forbidden=0 warm_first_s=24.6 calls=8 cold_gates=1
+  apparatus=50.0% delivery_evidence=evidenced gate_exit=0 starts=1/1 delivery=inline+P+T/evidenced
+```
+
+**What the shape shows.** The graded sequence is exactly the one CX-20 said the priced
+instruction should buy: one managed start (seq 4), then the wait, then the RED as the first
+eval (seq 7) — `R1.entrance OK`, `R4.warm_probe_first OK (first at seq 7)`,
+`R6.one_cold_gate_last OK (seq 12)`, receipt at seq 15. Under the old block the same model
+spent the boot on reading and editing and arrived at a green that had never been preceded by
+a red.
+
+**Two things this datum does NOT establish.** (1) N=1 per arm — p27 and p30 are single cells,
+and `warm_first_s` falling 36.2 -> 24.6 is one pair, not a trend; the barrier plausibly makes
+the first eval EARLIER because nothing competes with it, but that is a hypothesis, not a
+measurement. (2) The cost CX-20 identified is unrefuted: agent_wall barely moved (218s ->
+213s), so on this task waiting was ~free — that is a property of a ~25 s boot against a 213 s
+task, and it says nothing about a repo whose JVM takes minutes. Sol (p28) already satisfied
+R10 on the OLD block, so the amendment's measured effect is on opus only.
+
+**Mixing rule, unchanged:** `block_sha256` differs, so p30 is not comparable cell-for-cell
+with p26–p29 on anything the block text touches. It is comparable to p27 precisely because
+that is the contrast being drawn, and the difference between them is the block.

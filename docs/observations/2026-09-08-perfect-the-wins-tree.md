@@ -90,3 +90,4 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 - 2026-09-08T10:04Z pilot 5: 3/4 (CX-20 opus/Ø edits during boot); fix 61644f5; p30 running. Row 1 stays medium; a clean 4/4 needs one more package run (~25 min).
 - 2026-09-08T10:11Z ROW 2 WIN: 3.98x caller work, 6/6 clean, 0 refusals → friction-high.
 - 2026-09-08T10:13Z row 5 floor done (317 s median caller work, 6/6); D/F arms running. Sol r10 NO-GO on 827a751a → Astra. p30 running.
+- 2026-09-08T10:16Z p30 PASS on block 08c79a61…; pilot 7 (p31–p33) running → row 1 friction-low if 4/4.
