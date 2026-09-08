@@ -50,13 +50,24 @@
    fixture would run once PER SHARD instead of once per namespace, which is a
    different program -- and that precondition is asserted by a witness rather
    than trusted."
-  [n vars]
-  (binding [t/*report-counters* (ref t/*initial-report-counters*)]
-    (let [ns-obj (the-ns n)]
-      (t/do-report {:type :begin-test-ns :ns ns-obj})
-      (t/test-vars vars)
-      (t/do-report {:type :end-test-ns :ns ns-obj}))
-    @t/*report-counters*))
+  ([n vars] (test-vars-of n vars (atom {})))
+  ([n vars var-walls]
+   ;; @spec TEST-ISO-014 -- time actual test-var calls, including grouped
+   ;; shards. Keep test-vars' fixture/report semantics and counters intact.
+   (let [test-var t/test-var]
+     (binding [t/*report-counters* (ref t/*initial-report-counters*)]
+       (let [ns-obj (the-ns n)]
+         (t/do-report {:type :begin-test-ns :ns ns-obj})
+         (with-redefs [t/test-var
+                       (fn [v]
+                         (let [started (System/nanoTime)]
+                           (try (test-var v)
+                                (finally
+                                  (swap! var-walls assoc (:name (meta v))
+                                         (quot (- (System/nanoTime) started) 1000000))))))]
+           (t/test-vars vars))
+         (t/do-report {:type :end-test-ns :ns ns-obj}))
+       @t/*report-counters*))))
 
 (defn run-namespace-with-snapshot
   "Runs ONE namespace -- or, when `vars` is non-empty, one SHARD of it --
@@ -72,8 +83,9 @@
   ([n repo-root] (run-namespace-with-snapshot n repo-root nil))
   ([n repo-root vars]
    (let [sharded? (seq vars)
+         var-walls (atom {})
          before (iso/probe repo-root)
-         counters (if sharded? (test-vars-of n vars) (t/test-ns n))
+         counters (if sharded? (test-vars-of n vars var-walls) (t/test-ns n))
          after (iso/probe-after repo-root)
          lane (lm/lane-of n)
          vs (iso/enforced lane
@@ -89,6 +101,7 @@
                             (vec (remove (comp #{"time budget"} :resource) vs))
                             vs)}
        sharded? (assoc :sharded true
+                       :var-walls-ms @var-walls
                        :vars (mapv #(symbol (name (symbol %))) vars))))))
 
 (defn lane-budget-violations
@@ -360,7 +373,7 @@
       (do (spit emit-edn
                 (pr-str {:namespaces (mapv :namespace runs)
                          :runs (mapv #(select-keys % [:namespace :counters :elapsed-ms
-                                                      :violations :sharded :vars])
+                                                      :violations :sharded :vars :var-walls-ms])
                                      runs)
                          :result result
                          :notes (summary-notes)

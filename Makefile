@@ -1054,6 +1054,7 @@ test-battery:
 	@# @spec TEST-ISO-001
 	@# @spec TEST-ISO-009a
 	@# @spec TEST-ISO-013
+	@# @spec TEST-ISO-014 -- independent launcher cells with measured var walls
 	@started=$$(date -u +%Y-%m-%dT%H:%M:%SZ); t0=$$(date +%s); \
 	 rm -f target/battery-parallel/skipped; \
 	 BATTERY_CHILD_JAVA_OPTS="$(MCP_JAVA_OPTS)" BATTERY_PREREQS="$(BATTERY_PREREQS)" \

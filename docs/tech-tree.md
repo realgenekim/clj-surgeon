@@ -535,3 +535,23 @@ NO-GO and repair evidence are retained. Cell C keeps 141 owners/20 destinations
 and zero papercuts; this is feasibility evidence, not a new adoption or wall claim.
 Final receipt sizes, red/green gates, scope limitations and prediction:
 `/var/tmp/forge/plan2/cellC/astra-rows-sublime-4-report.md`.
+
+### 2026-09-08T22:10:57.373419+00:00 — TEST-ISO-014 battery launcher cells
+
+The unchanged six-launch reader-eval matrix now exposes six independent deftests.
+One locked default eight-lane battery run on candidate `5cdd5dcc` passed
+752 tests / 13,828 assertions with zero failures, errors, skipped prerequisites
+or isolation violations. End-to-end wall was 172 s against the requested
+historical 216 s baseline (20.4% lower); coordinator makespan was 169.508 s.
+This is one observation against a historical baseline, not a fresh matched estimate.
+
+Measured cells are asymmetric: JVM 66.946/67.749/68.044 s; Babashka
+0.308/0.354/0.298 s (deps.edn/bb.edn/project.clj). Their sum is 203.699 s;
+six equal ~35 s cells were an incorrect expectation. The next indivisible
+floor is the path-escape witness at 136.888 s. Namespace summed-budget semantics
+and the exception remain intact. Actual test-var timings now survive grouped
+shards, and unmeasured vars use the namespace-share estimate in both packing
+stages; the final packer previously still charged 1 ms. Frozen pair coverage,
+one launch per cell, shard eligibility and grouped timing have direct witnesses.
+Report: `/var/tmp/forge/plan2/cellC/astra-battery-floor-report.md`.
+Evidence: `/var/tmp/forge/battery-floor/`.

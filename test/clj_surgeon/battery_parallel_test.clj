@@ -337,6 +337,52 @@
           (is (= 30 (get recorded 'n/c))))
         (finally (io/delete-file path true))))))
 
+;; @spec TEST-ISO-014
+(deftest launcher-matrix-cells-remain-independently-shardable
+  (let [n 'clj-surgeon.reader-eval-fence-test
+        units (bp/shard-units [n] bp/shardable {} {})]
+    (is (nil? (bp/shard-refusal n)) "no fixtures or test-ns-hook")
+    (is (every? #(= 1 (count %)) units) "each deftest is an independent unit")
+    (is (= (set (bp/test-var-names n)) (set (map first units)))
+        "the shard allowance covers the whole loaded namespace")))
+
+;; @spec TEST-ISO-014
+(deftest grouped-shards-retain-measured-per-deftest-walls
+  (testing "new cells have a namespace-share estimate before their first run"
+    (is (= 100 (bp/unit-cost
+                '{clj-surgeon.reader-eval-fence-test 1300} {}
+                '[clj-surgeon.reader-eval-fence-test/new-cell]))
+        "unmeasured cells must not pack behind measured work at a token 1 ms")
+    (is (= 37 (bp/unit-cost
+               '{clj-surgeon.reader-eval-fence-test 1300}
+               '{clj-surgeon.reader-eval-fence-test/new-cell 37}
+               '[clj-surgeon.reader-eval-fence-test/new-cell]))))
+  (let [n-sym (gensym "measured-shard-")
+        n (create-ns n-sym)
+        a (intern n (with-meta 'a {:test #(is true)}) (fn []))
+        b (intern n (with-meta 'b {:test #(is false)}) (fn []))
+        measured (atom {})
+        result (atom nil)]
+    (try
+      (binding [clojure.test/*test-out* (java.io.StringWriter.)]
+        (reset! result (runner/test-vars-of n-sym [a b] measured)))
+      (is (= {:test 2 :pass 1 :fail 1 :error 0} @result)
+          "timing a grouped shard preserves its failures and counters")
+      (is (= #{'a 'b} (set (keys @measured))))
+      (is (every? #(and (integer? %) (not (neg? %))) (vals @measured)))
+      (finally (remove-ns n-sym))))
+  (let [path (io/file (System/getProperty "java.io.tmpdir")
+                      (str "battery-cell-walls-" (System/nanoTime) ".edn"))]
+    (try
+      (bp/write-walls!
+        (.getPath path) [{:namespace 'n :elapsed-ms 999}]
+        [{:emitted {:runs [{:namespace 'n :sharded true :vars '[a b]
+                            :elapsed-ms 999 :var-walls-ms '{a 80 b 900}}]}}])
+      (is (= '{n/a 80 n/b 900}
+             (:var-walls-ms (edn/read-string (slurp path))))
+          "measured individual walls survive a grouped shard without averaging")
+      (finally (io/delete-file path true)))))
+
 (deftest the-re-derived-time-budget-is-word-for-word-the-serial-one
   ;; A shard cannot judge the namespace's ceiling, so the coordinator derives
   ;; it from the sum. If the two paths worded it differently a reader would
@@ -434,7 +480,7 @@
   (let [src (slurp (io/file "test/clj_surgeon/mcp_test_runner.clj"))
         emit (re-find #"(?s):runs \(mapv #\(select-keys % \[[^]]*\]\)" src)]
     (is (some? emit) "the lane child's result writer must be readable here")
-    (doseq [k [":namespace" ":counters" ":elapsed-ms" ":violations" ":sharded" ":vars"]]
+    (doseq [k [":namespace" ":counters" ":elapsed-ms" ":violations" ":sharded" ":vars" ":var-walls-ms"]]
       (is (str/includes? emit k)
           (str "the lane child must emit " k " -- the coordinator folds over it")))))
 

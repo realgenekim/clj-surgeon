@@ -480,8 +480,9 @@
     ;; it (19 -> 20). NS-SPLIT- is not a key, so this branch's seven ids raise
     ;; the total without touching the map -- which is exactly why the two
     ;; assertions below must be derived separately.
-    (is (= 246 (count non-mcp)))
-    (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 20
+    ;; TEST-ISO-014 adds the six-cell launcher coverage promise.
+    (is (= 247 (count non-mcp)))
+    (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 21
             "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3}
            (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"
                                   "MEASURE-" "TELEMETRY-EVENTS-" "ROUTING-"]]
