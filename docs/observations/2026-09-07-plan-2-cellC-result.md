@@ -53,3 +53,13 @@ Four concurrent (same as wave 1), pinned worktree clj-surgeon-r3 (CLI launcher) 
 | N1 / N2 native, no manifest (2026-09-07, not rerun) | | 393 / 331 s | | 4/4 | |
 
 Verb median 80 s vs native-with-manifest median 447 s → ÷ 5.6; vs plan-free native median 362 s → ÷ 4.5. Output quality: 0 paper cuts on all four vs 32 on the hand-made split. Astra's killer threshold holds on the second consecutive rerun (every treated run accepted; ≥ 30% matched median reduction; no regression). Open: Sol r3's nested-form realignment defect (not present in this fixture) — round 4 in progress.
+
+## Wave 5 (2026-09-08T03:18Z): the LANDED build (trunk 2b39bd37, installed CLI + seat MCP 7906), sequential, one run each — the record
+
+| arm | plan | split-done | total wall | in-call | correct | papercuts |
+|---|---|---|---|---|---|---|
+| D7 verb CLI, landed | 3 s | 42 s | **56 s** | 34.4 s | 4/4 | 0 |
+| M7 verb MCP, landed | 4 s | 35 s | **49 s** | 30.5 s | 4/4 | 0 |
+| N5 / N6 native + manifest (2026-09-07, not rerun) | 242 / 90 s | | 408 / 486 s | | 4/4 | 32 (N6) |
+
+Same map_hash and snapshot_hash in both, same 8 promotions, lint delta 0/0/0. Verb vs native-with-manifest median 447 s: **÷8 (D7) / ÷9 (M7)**; caller-side reporting is now outside the clock (done stamped at the last oracle), which is where the earlier 79–92 s figures carried their overhead. In-call wall is 22 s kaocha + ~6 s lint + ~3–6 s analysis and write; the warm probe tier (`:proof :warm`) is landed but was not used here — the record keeps the cold proof inside the call.

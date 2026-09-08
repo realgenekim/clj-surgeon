@@ -1,0 +1,73 @@
+papercut-oracle  root=/home/forge/src/cc-split-D7
+  destinations=20  callers=6  pre-split defs=141  host :require indent=3
+
+1. docstring-clone .......................... 0
+     (every destination ns docstring is unique)
+
+2. clj-kondo (new findings relative to HEAD)
+     baseline findings: 24 [advisory, not counted]
+       src/cfp_scheduler_killer/server.clj:56:5  namespace ring.util.response is required but never used
+       src/cfp_scheduler_killer/server.clj:2226:14  unused binding event
+       test/cfp_scheduler_killer/authz_security_test.clj:137:7  Redundant let expression.
+       test/cfp_scheduler_killer/board_test.clj:86:21  Single argument to str already is a string
+       test/cfp_scheduler_killer/board_test.clj:208:23  unused binding gene
+       test/cfp_scheduler_killer/board_test.clj:321:23  unused binding gene
+       test/cfp_scheduler_killer/board_test.clj:381:19  Unresolved namespace starfederation.datastar.clojure.api. Are you missing a require?
+       test/cfp_scheduler_killer/comms_test.clj:61:23  unused binding submission
+       test/cfp_scheduler_killer/comms_test.clj:140:13  unused binding ls
+       test/cfp_scheduler_killer/comms_test.clj:328:17  unused binding event
+       test/cfp_scheduler_killer/polish_test.clj:122:19  Unresolved namespace hiccup2.core. Are you missing a require?
+       test/cfp_scheduler_killer/replay_test.clj:19:23  Unused import LocalDate
+       test/cfp_scheduler_killer/replay_test.clj:224:23  unused binding a
+       test/cfp_scheduler_killer/replay_test.clj:254:17  unused binding event
+       test/cfp_scheduler_killer/reviews_test.clj:13:14  namespace cfp-scheduler-killer.seed is required but never used
+       test/cfp_scheduler_killer/reviews_test.clj:222:9  unused binding zero
+       test/cfp_scheduler_killer/server_test.clj:97:5  redundant do
+       test/cfp_scheduler_killer/server_test.clj:168:5  redundant do
+       test/cfp_scheduler_killer/server_test.clj:640:9  unused binding event
+       test/cfp_scheduler_killer/server_test.clj:673:9  unused binding slug
+       test/cfp_scheduler_killer/server_test.clj:674:5  redundant do
+       test/cfp_scheduler_killer/sinks_test.clj:13:14  namespace cfp-scheduler-killer.exports is required but never used
+       test/cfp_scheduler_killer/sinks_test.clj:559:9  unused binding event
+       test/cfp_scheduler_killer/store_test.clj:6:14  namespace clojure.java.io is required but never used
+     unused-import          0  (0 in split-touched files)
+     unused-namespace       0  (0 in split-touched files)
+     unused-referred-var    0  (0 in split-touched files)
+     unresolved-symbol      0  (0 in split-touched files)
+     unresolved-namespace   2   [advisory]  (2 in split-touched files)
+       src/cfp_scheduler_killer/views/dashboard.clj:44:30  Unresolved namespace cfp-scheduler-killer.store. Are you missing a require?
+       src/cfp_scheduler_killer/views/review.clj:421:18  Unresolved namespace cfp-scheduler-killer.store. Are you missing a require?
+
+3. continuation-misalignment ................ 0  (lines)
+     (no continuation line left at its pre-split column)
+
+4. require-layout
+     require-layout-dest    0  (files)
+     require-layout-caller  0  (files)
+     ns-whitespace-line     0  (lines)
+
+5. stale-prose .............................. 3   [advisory]
+     src/cfp_scheduler_killer/server.clj:442 (string)  `views/event-marquee` the page was first painted with, pushed down THIS
+     src/cfp_scheduler_killer/server.clj:1772 (string)  "Everything `views/form-builder-page` needs. `extra` carries the state of a
+     test/cfp_scheduler_killer/replay_test.clj:286 (comment)  ;; views/dev-strip) on 2026-08-09; the log page still carries it always.
+
+6. tracked-log-churn ........................ DIRTY   [advisory, not counted]
+     M 00SERVER-LOGS.txt
+
+  CHECK                         COUNT  UNIT      COUNTED
+  ------------------------------------------------------------
+  docstring-clone                   0  files     yes
+  unused-import                     0  findings  yes
+  unused-namespace                  0  findings  yes
+  unused-referred-var               0  findings  yes
+  unresolved-symbol                 0  findings  yes
+  unresolved-namespace              2  findings  advisory
+  continuation-misalignment         0  lines     yes
+  require-layout-dest               0  files     yes
+  require-layout-caller             0  files     yes
+  ns-whitespace-line                0  lines     yes
+  stale-prose                       3  hits      advisory
+  tracked-log-churn                 1  files     advisory
+  ------------------------------------------------------------
+
+PAPERCUTS: 0

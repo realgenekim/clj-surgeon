@@ -3631,3 +3631,5 @@ receipt-chain-18: 694 tests / 13,332 assertions, ONE failure — `registers-one-
 ## 2026-09-08T03:14Z — LANDED: rounds 2–5 on trunk 2b39bd37; CLI reinstalled; 7906 rebuilt; 7907 retired
 
 Verified `merge-base --is-ancestor 1f0646e9 origin/MCP/main`. Trunk now carries: destination-owned docstrings, usage-derived imports, structural continuation realignment, in-place require replacement, advisory unrequired refs, the warm probe tier (probe never claims proof), and the registry witness. Wave-4 timing on round 3 (79–92 s, 0 paper cuts, ÷5.6 native) stands as the record; a wave-5 pair on the landed build is the next meter. Cold-start pilot still building.
+
+## 2026-09-08T03:18Z — wave 5 on the landed build: 56 s (CLI) / 49 s (MCP), 0 paper cuts, 4/4 — ÷8–9 vs native; program of record complete
