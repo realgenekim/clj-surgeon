@@ -22,7 +22,7 @@ Gene, verbatim (2026-09-08): "Take each move, highest vs native first, and make 
 
 | # | move | vs native (measured) | phase | evidence | next action (one) |
 |---|---|---|---|---|---|
-| 1 | namespace_split (whole partition, plan supplied) | 8.0x / 9.1x (wave 5, landed 2b39bd37) | **friction-low** (pending pilot 2) | 2026-09-07-plan-2-cellC-result.md; paper cuts 0; Sol GO r5 | cold-start pilot 2 → admit to routed classes → measure `:proof :warm` |
+| 1 | namespace_split (whole partition, plan supplied) | 8.0x / 9.1x (wave 5, landed 2b39bd37) | **friction-medium** (LID debt: round 5's structural-alignment fix + the registry witness landed with NO intent marker — found by round's new INTENT_AUDIT replay) | 2026-09-07-plan-2-cellC-result.md; paper cuts 0; Sol GO r5 | register the round-5 promises (@spec NS-SPLIT-0xx + witnesses linked) → cold-start pilot 2 → routed class → measure `:proof :warm` |
 | 2 | alias_migration | 1.4x (42.9 vs 31.1 s, synthetic) | rough | routed class today; narrow scope | natural fixture + collision cases; oracle; native control n=4 |
 | 3 | require_change across namespaces | zero churn measured; NO ratio | rough | 2026-09-02 doctrine | matched native control first |
 | 4 | CLI :extract! (helper extraction) | 1.13x inside noise; MCP 0.77x | rough / losing | cellB-result | rebuild as an entrance beneath the split compiler; N/F/D |
@@ -38,3 +38,5 @@ Take the highest-ratio row that is not perfect; run the ladder; do not descend u
 
 ## Log
 - 2026-09-08T03:31Z opened; row 1 at friction-low pending pilot 2; rows 2–4 rough; rows 5–7 not started; Sol's independent squares answer pending, cross-attack next.
+
+- 2026-09-08T03:40Z round gained INTENT_AUDIT (audit-current-repository + marker delta; UNLINKED-CHANGE fails the round; 1 s). Replay over the branch: rounds 3–4 linked; round 5 (14c0501f..1f0646e9) UNLINKED — row 1 demoted to friction-medium until the promise is registered. Sol + Astra converged independently: suspend routed fan-out; split win = exact contract; move-forms N/F/D next; REPL tool-dev unknown.
