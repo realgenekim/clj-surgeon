@@ -155,7 +155,13 @@
         (is (zero? (:exit f)) (pr-str f))
         (is (:read_complete facts))
         (is (= 2 (count (get-in facts [:facts :owners]))))
-        (is (not (:committed facts))))
+        (is (not (:committed facts)))
+        ;; @spec NS-SPLIT-054: feed the actual printed EDN bytes to the CLI.
+        (let [manifest-file (io/file root "printed-manifest.edn")]
+          (spit manifest-file (pr-str (:manifest facts)))
+          (is (= {:profile "proof"} (:verification (edn/read-string (slurp manifest-file)))))
+          (let [replay (run-cli ":op" ":split-ns!" ":request-file" (str manifest-file) ":plan-only" "true")]
+            (is (= 0 (:exit replay)) (pr-str replay)))))
       (let [r (run-cli ":op" ":split-ns!" ":request-file" (str request-file) ":profile-file" (str profile-file))
             receipt (edn/read-string (:out r))]
         (is (zero? (:exit r)) (pr-str r))
@@ -203,6 +209,15 @@
         (is (false? (:source_retired receipt)))
         (is (.exists source-file))
         (is (str/includes? (slurp source-file) "(defn a"))
+        ;; @spec NS-SPLIT-052
+        ;; @spec NS-SPLIT-053
+        (is (= ["b"] (get-in receipt [:facts :destinations 0 :owners_moved])))
+        (is (= ["a"] (get-in receipt [:facts :retained_vars])))
+        (let [finished (run-cli ":op" ":split-ns!" ":request-file" (str request-file) ":facts-only" "true")
+              facts (edn/read-string (:out finished))]
+          (is (= 0 (:exit finished)) (pr-str finished))
+          (is (= "committed-facts" (:state facts)))
+          (is (= (:facts receipt) (:facts facts))))
         (doseq [k [:undo_receipt :details_path]]
           (when-let [file (get receipt k)] (.delete (io/file file))))
         (when-let [file (:details_path receipt)] (.delete (.getParentFile (io/file file)))))

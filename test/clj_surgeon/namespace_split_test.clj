@@ -301,12 +301,13 @@
         known (set (map (comp name :id) registry))
         active (set (map (comp name :id) (filter #(= :active (:status %)) registry)))
         tags (fn [files pattern] (set (mapcat #(map second (re-seq pattern (slurp %))) files)))
-        code (tags ["src/clj_surgeon/namespace_split.clj" "src/clj_surgeon/namespace_split_io.clj" "src/clj_surgeon/namespace_split_warm.clj"
+        code (tags ["src/clj_surgeon/split_proof_gate.clj" "src/clj_surgeon/namespace_split.clj" "src/clj_surgeon/namespace_split_io.clj" "src/clj_surgeon/namespace_split_warm.clj"
                     "src/clj_surgeon/mcp_tool.clj" "src/clj_surgeon/synchronous_verification.clj"
                     "test/oracles/namespace_split_papercut_oracle.py"
                     "test/oracles/cell_b_oracle.sh" "test/oracles/cell_b_preservation.clj"]
                    #"(?m)^(?:;;|#) INTENT: (NS-SPLIT-[0-9]+)")
-        tests (tags ["test/clj_surgeon/namespace_split_test.clj"
+        tests (tags ["test/clj_surgeon/split_proof_gate_test.clj" "test/clj_surgeon/split_proof_gate_boundary_test.clj"
+                     "test/clj_surgeon/namespace_split_test.clj"
                      "test/clj_surgeon/mcp_namespace_split_test.clj"
                      "test/clj_surgeon/receipt_artifacts_boundary_test.clj"
                      "test/clj_surgeon/admit_patch_test.clj"

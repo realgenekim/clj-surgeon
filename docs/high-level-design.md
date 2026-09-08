@@ -1379,3 +1379,8 @@ empty profiles refuse before writes. See the [split design](intent/helper-extrac
 Alias migration reports per-call wall, refusal price and explicit unknown caller
 outcomes in its receipt and an external append-only ledger. This instrumentation
 supplies route observations; it does not claim complete verified performance.
+
+Rows sublime batch 3 separates immutable split publication from detached proof
+closure. Successful receipts carry bounded finished-work facts. NS-SPLIT-050..054
+in the [partition design](intent/helper-extraction/namespace-split-design.md) own
+status, snapshot identity, committed facts and valid manifest replay.

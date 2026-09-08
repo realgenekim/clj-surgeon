@@ -3,12 +3,14 @@
   from clj-kondo; this namespace neither evaluates Clojure nor writes files."
   (:require
    [clj-surgeon.extract :as extract]
+   [clj-surgeon.mcp-operation :as operation]
    [clj-surgeon.namespace-split-warm :as warm]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.quoted-var-refs :as quoted-vars]
    [clj-surgeon.structural-lens :as lens]
    [clojure.set :as set]
    [clojure.string :as str]
+   [clojure.walk :as walk]
    [rewrite-clj.node :as n]
    [rewrite-clj.parser :as parser]
    [rewrite-clj.zip :as z]))
@@ -756,20 +758,59 @@
   [request input]
   (let [plan (prepare-split request input)
         result (if (= "facts" (:plan_only request)) plan (emit-split plan))]
-    (dissoc result :java-classes :request :input-sources :parsed :original :mapping :builds :caller-builds :retained-build :removals)))
+    (dissoc result :java-classes :input-sources :parsed :original :mapping :builds :caller-builds :retained-build :removals)))
 
 ;; @spec NS-SPLIT-011
 (defn analysis-projection [compiled] (:projection compiled))
+
+;; @spec NS-SPLIT-052
+;; INTENT: NS-SPLIT-052
+(defn review-facts
+  "Bounded review of the transaction, with caller strings encoded as receipt data.
+  Static caller counts exclude intra-source moves and removed comment invocations."
+  [compiled]
+  (let [request (:request compiled)
+        source-lib (get-in request [:source :lib])
+        source-file (get-in request [:source :file])
+        refs (get-in compiled [:projection :facts :references])
+        owners (get-in compiled [:projection :facts :owners])
+        retained (mapv :name (filter #(= source-lib (:assigned_lib %)) owners))
+        data {:destinations
+              (mapv (fn [d]
+                      {:lib (:lib d) :file (:file d)
+                       :owners_moved (mapv :name (filter #(= (:lib d) (:assigned_lib %)) owners))
+                       :static_sites_rewritten
+                       (mapv (fn [[file sites]] {:file file :sites sites})
+                             (sort-by key
+                                      (frequencies
+                                        (map :file
+                                             (filter #(and (= (:lib d) (:to %))
+                                                           (= "cross-namespace" (:disposition %))
+                                                           (or (not= source-file (:file %))
+                                                               (= source-lib (:from %)))) refs)))))
+                       :retained_vars (vec (sort (set (map :var
+                                                        (filter #(and (= (:lib d) (:from %))
+                                                                      (= source-lib (:to %))
+                                                                      (= "cross-namespace" (:disposition %))) refs)))))})
+                    (:destinations request))
+              :retained_vars retained :unexpected_paths nil}]
+    (walk/postwalk #(if (string? %) (operation/encode-caller-text %) %) data)))
 
 ;; @spec NS-SPLIT-012
 (defn receipt [compiled checks]
   (let [p (:projection compiled)]
     {:ok (:ok compiled) :operation "namespace_split"
      :state (if (:ok compiled) "planned" "refused") :committed false :mutation_attempted false
-     :source_retired false :counts (:counts p) :destination_libs (:destination_libs p)
+     :source_retired false :facts (review-facts compiled) :counts (:counts p) :destination_libs (:destination_libs p)
      :snapshot_hash (:snapshot_hash p) :map_hash (:map_hash p)
      :promotions (mapv #(-> % (dissoc :callers) (assoc :reference_count (count (:callers %)))) (:promotions p))
      :graph (:projected_ns_graph p) :coverage (:coverage p) :blockers (:blockers compiled)
      :prose_mentions (:prose_mentions p)
      :unrequired_qualified_refs (:unrequired_qualified_refs p)
      :checks checks :verification_complete false :next_call nil}))
+
+(defn publication-receipt
+  "The emitted graph summary is also the graph charged to the receipt budget."
+  [compiled checks]
+  (update (receipt compiled checks) :graph
+          #(-> % (dissoc :edges) (assoc :edge_count (count (:edges %))))))
