@@ -1,0 +1,153 @@
+{
+ "F": [
+  {
+   "run": "F1",
+   "pair": "R1",
+   "slot": "1",
+   "N": 382.1,
+   "D_auth": 97.7,
+   "D_stamped": 341.6,
+   "primary": 341.1,
+   "all_oracle": 692.0,
+   "caller_suite": 103.9,
+   "handoff": 1.6,
+   "runner_oracle": 245.5,
+   "restamps": 0,
+   "oracle": {
+    "verdict": "PASS",
+    "fails": [],
+    "exit": "0"
+   },
+   "facts_calls": null
+  },
+  {
+   "run": "F2",
+   "pair": "R2",
+   "slot": "2",
+   "N": 310.0,
+   "D_auth": 126.6,
+   "D_stamped": 126.6,
+   "primary": 268.2,
+   "all_oracle": 633.7,
+   "caller_suite": 127.5,
+   "handoff": 3.4,
+   "runner_oracle": 234.7,
+   "restamps": 0,
+   "oracle": {
+    "verdict": "PASS",
+    "fails": [],
+    "exit": "0"
+   },
+   "facts_calls": 1
+  },
+  {
+   "run": "F3",
+   "pair": "R3",
+   "slot": "3",
+   "N": 323.9,
+   "D_auth": 143.5,
+   "D_stamped": 143.5,
+   "primary": 225.2,
+   "all_oracle": 601.9,
+   "caller_suite": 133.8,
+   "handoff": 0.8,
+   "runner_oracle": 242.1,
+   "restamps": 0,
+   "oracle": {
+    "verdict": "PASS",
+    "fails": [],
+    "exit": "0"
+   },
+   "facts_calls": 0
+  },
+  {
+   "run": "F4",
+   "pair": "R4",
+   "slot": "4",
+   "N": 280.0,
+   "D_auth": 111.7,
+   "D_stamped": 111.7,
+   "primary": 224.4,
+   "all_oracle": 590.8,
+   "caller_suite": 132.0,
+   "handoff": 0.1,
+   "runner_oracle": 234.4,
+   "restamps": 0,
+   "oracle": {
+    "verdict": "PASS",
+    "fails": [],
+    "exit": "0"
+   },
+   "facts_calls": 0
+  },
+  {
+   "run": "F5",
+   "pair": "R5",
+   "slot": "5",
+   "N": 226.4,
+   "D_auth": 140.0,
+   "D_stamped": 140.0,
+   "primary": 316.7,
+   "all_oracle": 680.7,
+   "caller_suite": 210.6,
+   "handoff": 3.8,
+   "runner_oracle": 237.5,
+   "restamps": 1,
+   "oracle": {
+    "verdict": "PASS",
+    "fails": [],
+    "exit": "0"
+   },
+   "facts_calls": 0
+  },
+  {
+   "run": "F6",
+   "pair": "R6",
+   "slot": "6",
+   "N": 336.7,
+   "D_auth": 153.5,
+   "D_stamped": 153.5,
+   "primary": 234.2,
+   "all_oracle": 596.2,
+   "caller_suite": 116.3,
+   "handoff": 4.7,
+   "runner_oracle": 241.0,
+   "restamps": 0,
+   "oracle": {
+    "verdict": "PASS",
+    "fails": [],
+    "exit": "0"
+   },
+   "facts_calls": 0
+  }
+ ],
+ "readout_item_9": {
+  "n": 6,
+  "median_F_s": 251.2,
+  "median_D_authorship_s": 133.3,
+  "median_N_s": 316.95,
+  "median_paired_F_over_N": 0.83,
+  "median_paired_saved_N_minus_F_s": 48.7,
+  "median_paired_D_over_F": 0.48,
+  "median_paired_gap_F_minus_D_s": 127.15,
+  "sensitivity_as_stamped_D": {
+   "median_paired_D_over_F": 0.57,
+   "median_paired_gap_F_minus_D_s": 97.2
+  },
+  "noise_floor_2sN_s": 105.82,
+  "F_beats_N": false,
+  "branch_1_facts_service_is_mechanism": false,
+  "b1_detail": {
+   "within_10pct_of_D": false,
+   "abs_median_diff_s": 117.9,
+   "ten_pct_of_median_D_s": 13.33,
+   "paired_gap_inside_2sN": false
+  },
+  "branch_2_emission_earns_credit": true,
+  "b2_detail": {
+   "gap_gt_2sN": true,
+   "D_over_F_le_075": true
+  },
+  "BRANCH": "2 \u2014 EMISSION EARNS CREDIT; a read-only facts service does not capture the win"
+ }
+}

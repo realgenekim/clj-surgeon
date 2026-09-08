@@ -1,0 +1,162 @@
+ROW 5 STAGE 3 — MECHANISM READOUT (Astra pre-registration item 9)
+written 2026-09-08T14:39:36Z · runner: forge@anvil · nothing committed, nothing pushed
+
+READOUT:  BRANCH 2 as computed — EMISSION EARNS CREDIT over the F route as it was run.
+          But the ablated variable was never manipulated: 0 of 6 F callers used the
+          facts projection inside the clock. Read both sentences or neither.
+
+PAIRED TABLE (F vs its stage-1 NATIVE slot control, and vs its stage-2 D slot arm)
+primary caller-work clock: orient-start -> candidate-complete, before any suite
+
+  run  pair    N (s)    F (s)   F/N     N-F      D (s)   D/F     F-D    oracle  facts calls
+  F1   R1      382.1    341.1   0.893    41.0     97.7   0.286   243.4   PASS   0 (unobserved)
+  F2   R2      310.0    268.2   0.865    41.8    126.6   0.472   141.6   PASS   1 (after candidate)
+  F3   R3      323.9    225.2   0.695    98.7    143.5   0.637    81.7   PASS   0 (observed)
+  F4   R4      280.0    224.4   0.801    55.6    111.7   0.498   112.7   PASS   0 (observed)
+  F5   R5      226.4    316.7   1.399   -90.3    140.0   0.442   176.7   PASS   0 (observed)
+  F6   R6      336.7    234.2   0.696   102.5    153.5   0.655    80.7   PASS   0 (observed)
+
+  medians   N 316.95    F 251.2                  D 133.3
+  median F/N = 0.83   median saved (N-F) =  48.7 s
+  median D/F = 0.485  median gap  (F-D)  = 127.15 s
+  noise floor from the stage-1 sample: s_N = 52.91 s, 2*s_N = 105.82 s
+  D column is the stage-2 AUTHORSHIP clock (the clock its gate was computed on).
+
+ACCEPTANCE AND REFUSALS
+
+  accepted ......................... 6/6, ORACLE RESULT: PASS (all checks), first attempt
+  refusals / interface repairs ..... 0 / 0
+  native fallbacks ................. 0
+  operator interventions ........... 0
+  candidate-complete re-stamps ..... 1 (F5, disclosed below)
+  timeouts (cap 1800 s) ............ 0
+
+THE PRE-REGISTERED BRANCHES (freeze-stage3.edn, written before F1 ran)
+
+  Branch 1 — the facts service is the mechanism, emission is convenience
+    requires F within 10% of D AND the paired gap inside the noise floor
+    |251.2 - 133.3| = 117.9 s against a 13.33 s allowance ............... FAIL
+    paired gap 127.15 s against the 105.82 s floor ...................... FAIL
+    NOT SATISFIED
+
+  Branch 2 — emission earns credit
+    median paired (F - D) = 127.15 s > 2*s_N = 105.82 s ................. PASS
+    median paired D/F     = 0.485    <= 0.75 ............................ PASS
+    SATISFIED
+
+  Branch 4 — both lose / failure to transfer ........................... NOT REACHED
+    D passed every clause in stage 2. F failing against N while D beat N is not a
+    transfer failure; it is its own result, recorded below.
+
+  F against the native floor, on the same clause shape D had to clear:
+    median F/N 0.833 > 0.75 .......................... FAIL
+    median saved 48.7 s < 90 s, and < 2*s_N .......... FAIL
+    F DOES NOT CLEAR THE GATE D CLEARED.
+
+THE FINDING THAT GOVERNS HOW BRANCH 2 MAY BE READ — ADOPTION WAS ZERO
+
+  Not one F caller used the facts projection while authoring. Four declines are
+  independently observed by a runner-side process witness; one (F1) is self-reported
+  with no observer armed; one (F2) called it 23 seconds AFTER stamping candidate-complete,
+  and reported its contribution as, in its own words, "Net contribution to this
+  candidate: nil."
+
+  Five of the six wrote out their reasoning unprompted and gave the same reason: the
+  brief already supplies the 25-form list with line numbers, the 47-edge graph and the
+  retained-var table, so the only real unknown was the caller surface, and that was two
+  greps — cheaper than a 33-40 s round trip.
+
+  So branch 2 MAY be read as: the emitting route beats a capable native caller who has a
+  read-only facts service available and does not use it. That comparison is real and it
+  is the one that ran.
+
+  Branch 2 MAY NOT be read as: emission beats a facts service. The service was never
+  exercised. The arithmetic is satisfied by a cohort in which the ablated variable was
+  never manipulated, so it cannot separate "the emitter's win comes from emitting" from
+  "the emitter's win comes from the facts it computes." THAT ATTRIBUTION IS STILL OPEN,
+  and it is open because of adoption, not because of measurement.
+
+SENSITIVITY THAT MUST TRAVEL WITH THE BRANCH — IT FLIPS ON THE OTHER CLOCK
+
+  On the as-stamped D primary (no authorship adjustment at all):
+      median paired (F - D) = 97.2 s   ->  BELOW the 105.82 s floor  ->  gap clause FAILS
+      median paired D/F     = 0.567
+      branch on that clock = 3, INTERMEDIATE, not branch 2.
+
+  The cause is D1, whose as-stamped 341.6 s contains the frozen acceptance oracle running
+  inside its own tool call; against F1's 341.1 s the paired gap is -0.5 s. The readout
+  therefore depends on where the acceptance boundary is drawn, exactly as the stage-2 gate
+  did. The pre-registered clock is the authorship clock, fixed in the freeze before any F
+  number existed, so branch 2 is the result — but it is a result with one arm of margin.
+
+WHAT THE APPARATUS PROVED ABOUT ITSELF, BEFORE IT WAS TRUSTED
+
+  * Entrance delta, disclosed and then killed with a receipt. The installed trunk CLI was
+    reinstalled at 11:24Z — three minutes after stage 2 finished — moving from 1ab53e0e
+    (the build all six D arms ran) to 96819291. Rather than argue the delta was harmless,
+    the runner ran the bound request :facts-only on BOTH packages from the same pilot
+    worktree: the responses are BYTE-IDENTICAL after normalising timings only (724,095
+    bytes, normalised sha256 9b5f40d451128c1a). F received exactly the payload D's build
+    would have produced.
+
+  * The projection writes nothing. Verified three times: git status --porcelain = 0 entries
+    after each call. It needs no .clj-surgeon.edn, so stage 2's product defect — verification
+    profiles resolvable only from a file inside the graded tree — does not bind arm F.
+
+  * A witness was built mid-cohort, and proved to fire before it was believed. F1's report
+    that it never called the tool could not be corroborated: the projection leaves no trace
+    anywhere — no bytes in the tree, no receipt, no invocation log. A passive /proc observer
+    was written, and its FIRST draft was wrong: it matched argv text and counted the harness's
+    own wrapping shell as a second call, i.e. it would have reported 2 for 1. Rebound to the
+    runtime process, then proved on a throwaway worktree with exactly one known call: it
+    recorded exactly one. Only then was it armed, for F2-F6.
+
+  * Its limits are recorded, not glossed. The observer reliably witnesses whether the facts
+    were OBTAINED, because obtaining them costs 33-40 s and cannot hide in a 2 s poll. It is
+    not a census of ATTEMPTS: F2's sub-second refusal passed unseen, and is reported as
+    self-reported and unobserved rather than added to the count.
+
+  * Runner handoff stayed bounded a third time: 0.1-4.7 s for every arm.
+
+ARTEFACT-SIDE CORROBORATION OF THE ADOPTION FINDING
+
+  The six F candidate patches are SIX DISTINCT patches (1175-1180 lines, six distinct
+  hashes, none equal to each other, none equal to the D patch). Stage 2's six D candidates
+  were ONE patch six times (22848c8ceb87a902, 1202 lines). Stage 1's six N candidates were
+  six distinct patches. F looks like N in the artefact, not like D — which is what a route
+  that was native authorship in practice should look like, and it says so independently of
+  the observer and of anything the callers wrote about themselves.
+
+DISCLOSED DEVIATIONS AND HONESTY FLAGS
+
+  * F5 re-stamped candidate-complete once, as the protocol allows and as stage-1's R6 did:
+    its own lint comparison caught a NEW unused-import finding (ZoneId, left dangling in
+    exports.clj by the move) and it repaired that before its suite. The runner used the
+    later stamp — 316.7 s, not 228.8 s. F5 is the only arm slower than its native control,
+    and the re-stamp is 88.0 s of the 90.3 s difference.
+  * F ran strictly sequentially; stage-2's D3-D6 overlapped the previous arm's oracle. This
+    asymmetry flatters F in D/F, i.e. it is conservative against crediting emission. Branch 2
+    was reached anyway. Declared in the freeze in advance, not after seeing the numbers.
+  * The stage-1 N arms did not carry the runtests-once precondition that F and D carry. It
+    touches only the caller-suite segment (F median 129.8 s vs N 178.4 s), never this clock.
+  * The 25-form deviation above the rule's 16-form ceiling is inherited from B07 and was
+    repeated by every F caller as required.
+  * The conclusion is bounded by the brief. This brief hands every arm the form list with
+    line numbers, the dependency graph and the retained-var table; the projection's genuine
+    marginal content over that is the withheld caller-site table. A thinner brief might have
+    produced adoption. The zero is a zero AT THIS TASK.
+
+PRODUCT FINDINGS THE F COHORT SURFACED
+
+  1. The projection is snapshot-bound, so it can answer only BEFORE any edit. The single
+     moment a caller actually reached for it — F2, checking its finished work — is the moment
+     it refuses (25 :unknown-owner blockers plus :destination-exists). A post-edit "does my
+     tree match the intent" mode is the shape a caller reached for unprompted.
+  2. The manifest as printed is not a valid request: :verification is required and the
+     manifest has no such key. A caller who uses the supplied request file is fine; a caller
+     who builds one from the manifest pays a refusal to learn the difference.
+
+ARTEFACTS
+  freeze-stage3.edn (+ amendments 1-2)   results-stage3.edn   compute-stage3.py   stage3.json
+  facts-observer.sh   this file
+  per arm: /var/tmp/forge/row5/F{1..6}/{stopwatch.log,candidate.patch,oracle.log,facts-calls.log}

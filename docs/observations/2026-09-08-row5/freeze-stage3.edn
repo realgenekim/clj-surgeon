@@ -1,0 +1,236 @@
+;; Row 5 stage-3 freeze — written BEFORE run F1. Six F arms (facts-only ablation), matched by slot
+;; to the six stage-1 N floor controls (F1<->R1 ... F6<->R6) and to the six stage-2 D arms.
+;; Pre-registration: astra-squares-revisit.md item 9 (the mechanism readout), the one hole
+;; freeze-stage2.edn amendment 2 left open when the F cohort was skipped for time.
+;; Stage-1 floor: results-stage1.edn (primary median 316.9 s, s_N 52.91, 2*s_N 105.82).
+;; Stage-2 D:     results-stage2.edn (authorship median 126.6 s, D/N 0.43, saved 181.8 s).
+{:frozen-at-utc "2026-09-08T13:12:07Z"
+ :stage "row5 stage 3 — six F arms. Native authorship PLUS an unlimited read-only, snapshot-bound
+         facts projection from the same compiler. No new N runs, no new D runs."
+
+ :apparatus
+  {:task-F  {:path "/var/tmp/forge/row5/task-F.md" :sha256 "c04e6f5df081b05f798becd5d3dff2f1416754aa5cdef002310138a25b0c50d7"
+             :matches-freeze-stage2 true
+             :note "Byte-identical to the file frozen in freeze-stage2.edn before the F cohort was
+                    deferred. It already carries apparatus fix (a), the runtests-once precondition,
+                    in the IDENTICAL sentence D and the stage-2 N brief carry."}
+   :setup   {:path "/var/tmp/forge/row5/setup-run2.sh"  :sha256 "61ae4256fce5997febcd366322641f443d060a07710c44d632ca6a5be7fcc859" :unchanged-from-stage-2 true
+             :note "Invoked as 'setup-run2.sh <RUN> F'. Its 'case D*' branch does not fire, so NO
+                    .clj-surgeon.edn apparatus file is planted in an F worktree. Confirmed unnecessary
+                    in the runner pilot below: :facts-only never consults a verification profile."}
+   :grade   {:path "/var/tmp/forge/row5/grade-run2.sh"  :sha256 "c9bda79e67ad3dfb5c69b1c8d77f47933c81560f1e8200012c66fc0d2962839b" :unchanged-from-stage-2 true}
+   :watch   {:path "/var/tmp/forge/row5/watch-grade.sh" :sha256 "72de5090a7ce62fdce3f0187e4bbdcc28540c09863bc1fa8735daf52109c5961" :unchanged-from-stage-2 true
+             :note "Apparatus fix (b), 5 s poll on the caller's own done stamp. Held at <= 3.9 s for
+                    every stage-2 arm; applies identically here."}
+   :fixture {:repo "/var/tmp/forge/row5/fixture-repo" :commit "92a7ca14fd904e4d962df38614b9af3a7ef41a11"
+             :unchanged-from-stages-1-and-2 true :refs ["refs/heads/base"] :commit-count 1}
+   :oracle  {:entrance "bash /var/tmp/forge/plan2/cellC/b07/frozen/cell_b_oracle.sh"
+             :sha256 "9a9f7a8c75cab8aeeb5987fc9458393f187681a2d19c694bd606408807d6e1c6" :unchanged-from-stages-1-and-2 true :run-by :runner}
+   :request {:source "/var/tmp/forge/plan2/cellC/b07-D-request.edn" :sha256 "0e05416e9e42e082c19e2c004bf389cd7e18dfa3cd646a14fb537e6a91d1bfc2"
+             :per-run "/var/tmp/forge/row5/<RUN>/split-request.edn"
+             :edit "workspace_root rebound to the assigned worktree. NOTHING else; snapshot_hash preserved."}
+   :f-entrance {:cli "/home/forge/bin/clj-surgeon" :receipt "/home/forge/bin/clj-surgeon.receipt.edn"
+                :installed-source-commit "96819291dcbb3f0aca608426f8347ee60211fbbc"
+                :installed-source-hash   "1b8530b0f4cce03f28ddaf32262faff004b3bf6d40d41ab2d2f51bf70d628dcc"
+                :invocation ":op :split-ns! :request-file <bound request> :facts-only true"
+                :writes-nothing :verified-in-pilot}}
+
+ :entrance-delta-disclosure
+  {:what "The installed trunk CLI was REINSTALLED at 11:24Z, three minutes after stage 2 finished
+          grading (11:21Z), moving from 1ab53e0e (the build all six D arms ran on) to 96819291."
+   :relation "96819291 is a DESCENDANT of 1ab53e0e (git merge-base --is-ancestor: yes)."
+   :src-delta "19 source files, 711 insertions. Only TWO of them can touch namespace_split:
+               namespace_split_io.clj (6 lines) and the new receipt_artifacts.clj. Both hunks are on
+               the COMMIT path: (1) merging workspace-evidence into the committed result map, and
+               (2) relocating the receipt directory. Neither is reachable from :facts-only, which
+               returns at state \"planned\" with :committed false and :mutation_attempted false."
+   :neutralised-by-receipt-not-by-argument
+    {:test "The bound request was run :facts-only true on BOTH installed packages from the same
+            pilot worktree at the base sha, and the two EDN responses compared after normalising
+            only :elapsed_ms / :duration_ms."
+     :result :BYTE-IDENTICAL
+     :normalised-sha256 "9b5f40d451128c1a6c8d8250f408be4d78958a911b4024a30820b1be01348a60"
+     :bytes 724095
+     :conclusion "The facts payload F receives is exactly the payload it would have received on D's
+                  build. The entrance delta is neutralised for this arm; it is disclosed, not netted out."}}
+
+ :runner-pilot-before-any-arm
+  {:worktree "/home/forge/src/cc-row5-PILOT3 (created, measured, torn down before F1)"
+   :call "cd <wt> && TMPDIR=/var/tmp/forge ~/bin/clj-surgeon :op :split-ns! :request-file <req> :facts-only true"
+   :exit 0 :wall-s 39.8 :response-bytes 724095 :response-lines 17904
+   :state "planned" :ok true :committed false :mutation_attempted false :source_unchanged true
+   :verification_complete false :blockers [] :snapshot_hash-matches-request true
+   :writes "git status --porcelain = 0 entries after the call, twice. The tool wrote no byte into the
+            graded tree. NO .clj-surgeon.edn was present and none was needed: unlike the D emit path,
+            :facts-only never resolves a verification profile, so stage 2's product defect
+            (:verification-profiles resolvable ONLY from a file inside the graded tree) does not bind F."
+   :payload-shape {:counts {:destinations 1 :forms 25 :caller_files 9 :caller_sites 43 :files 11}
+                   :facts-keys [:comment_removals :blockers :owners :coverage :references :external_references
+                                :snapshot_hash :forward_reference_groups :java_class_references :graph
+                                :unknowns :retained_dependencies :acyclic :unknown_count]
+                   :contains "25 owners with exact file/line/col/visibility/arity; the caller-site
+                              references with :file :line :col :token :var :from :to :disposition; the
+                              three promotions with their exact referencing sites; the comment removal
+                              at exports.clj:1241 with byte offsets; retained dependencies; the require
+                              graph with :acyclic true"
+                   :does-not-contain "candidate bytes, emitted file text, generated require forms"}
+   :note-for-interpretation
+    "The projection hands F the two things the N brief explicitly withholds: the caller-site table
+     (43 sites, 9 files, exact coordinates) and the comment-block cycle site. It is 724 KB / 17,904
+     lines, so READING it is itself caller work, and how each F caller filters it is inside its clock."}
+
+ :meter
+  {:primary   "orient-start -> candidate-complete (caller-stamped, last stamp wins, BEFORE the caller's own suite)"
+   :secondary "orient-start -> oracle-complete (all-oracle wall; frozen oracle run by the RUNNER)"
+   :segments  "caller-suite = candidate-complete -> done; handoff = done -> oracle-start; runner-oracle = oracle-start -> oracle-complete"
+   :f-needs-no-adjustment
+    "F's primary contains authorship only, exactly like N's: the facts call emits nothing and F runs no
+     acceptance inside its clock. The D authorship adjustment (subtracting the in-call proof) has no
+     analogue here and none is applied. F is compared to N raw and to the D authorship column."
+   :stamp-tool "/var/tmp/forge/dogfood-stamp.sh"
+   :cap-seconds 1800}
+
+ :cohort
+  {:arms ["F1" "F2" "F3" "F4" "F5" "F6"] :n 6 :route "F — native authorship + unlimited read-only facts projection"
+   :model "opus, one fresh caller per arm" :order :strictly-sequential
+   :worktree "/home/forge/src/cc-row5-<RUN>, branch row5/<RUN>, cut from the fixture repo at the base"
+   :preflight-per-run "load average and df -h /; refuse below 15 G free"
+   :teardown-per-run "exact-pid JVM reap by cwd, worktree removed, branch deleted"
+   :strictly-sequential-disclosure
+    "Unlike stage 2's amendment 2, NO F caller is launched until the previous arm's runner oracle has
+     completed. This matches stage-1 N, which also ran with no overlap, so F/N is clean. It does NOT
+     match D3-D6, whose caller clocks were inflated by the previous arm's oracle running underneath
+     them. The direction of that residual asymmetry is stated in advance: it flatters F in the D/F
+     comparison, i.e. it is CONSERVATIVE AGAINST CREDITING EMISSION. Reported, never netted out."}
+
+ :pre-registered-readout   ; astra-squares-revisit.md item 9, operationalised BEFORE any F number exists
+  {:authority "b07-arms.md: 'Compare F/N and D/F without additional win fishing. F within 10% of D and
+               the noise floor favors a facts service; D must materially beat F to credit emission.
+               If both lose, record failure to transfer.'"
+   :clock "the primary caller-work clock for every arm: N as stamped, D authorship (stage-2 gate clock), F as stamped"
+   :statistics ["median paired F/N" "median paired (N - F)" "median paired D/F" "median paired (F - D)"]
+   :noise-floor "s_N = 52.91 s, 2*s_N = 105.82 s (stage-1 six-run sample SD, unchanged)"
+   :branch-1-facts-service-is-the-mechanism
+    {:when "median F is within 10% of median D  (|median F - median D| <= 0.10 * median D)
+            AND the paired gap is inside the noise floor (|median paired (F - D)| <= 2*s_N)"
+     :read "The facts projection is doing the work. Emission is convenience, not mechanism."}
+   :branch-2-emission-earns-credit
+    {:when "D materially beats F: median paired (F - D) > 2*s_N = 105.82 s AND median paired D/F <= 0.75
+            (the same shape as the pre-registered clauses (c) and (d), applied to the D-vs-F pair)"
+     :read "Emission is the mechanism; a read-only facts service does not capture the win."}
+   :branch-3-intermediate
+    {:when "neither branch 1 nor branch 2 is satisfied"
+     :read "Reported as INTERMEDIATE with both figures. No branch is declared. The pre-registered
+            rule admits a gap it does not name and it will not be papered over."}
+   :branch-4-both-lose
+    {:when "F fails against N (median F/N > 0.75 or median paired (N - F) < 90 s) AND D also failed"
+     :read "Record failure to transfer."
+     :status-at-freeze "D PASSED every clause in stage 2, so this branch can only be reached by F alone
+                        losing, which is not 'both lose'. If F loses to N while D beat N, that is
+                        recorded as its own result — emission credited over facts — not as a transfer failure."}
+   :forbidden "No additional comparison is computed to find a win. F/N and D/F, on the stated clock, and
+               the acceptance and refusal counts. Nothing else is offered as a result."}
+
+ :deviations
+  [{:what "F runs on installed trunk 96819291, not the frozen b07_split_adapter runtime b07-arms.md names,
+           and not the 1ab53e0e package D ran on."
+    :why  "Operator instruction for row 5: measure the shipped entrance. Neutralised by the
+           byte-identical facts receipt above."}
+   {:what "The caller does NOT run the frozen acceptance oracle; the runner does, after the caller finishes."
+    :why  "Unchanged from stages 1 and 2, so both paired comparisons stay valid."}
+   {:what "The six stage-1 N runs did not carry the runtests-once precondition disclosure; F does."
+    :why  "Frozen as run in stage 1. It touches only the caller-suite segment, never the primary clock
+           the readout is computed on. Direction favours F on the SECONDARY clock; reported, never netted out."}
+   {:what "Form count 25 > the rule's 16-form ceiling." :why "Inherited from the B07 pre-registration; repeated as required."}]
+
+ :not-run ["new N runs" "new D runs" "the b07 24-run block allocation" "any commit" "any push"]}
+
+;; ---------------------------------------------------------------------------
+;; AMENDMENT 1, made after F1 and BEFORE F2. Recorded here rather than by rewriting the
+;; freeze above: F1 ran without the observer and is retained, labelled, as unobserved.
+{:amendment 1
+ :at-utc "2026-09-08T13:34:49Z"
+ :applies-to ["F2" "F3" "F4" "F5" "F6"]
+ :class :apparatus-observation-only
+ :finding-that-forced-it
+  "F1 finished accepted (ORACLE RESULT: PASS) with primary 341.1 s and reported, unprompted,
+   that it NEVER CALLED THE FACTS PROJECTION AT ALL — it ran the arm purely natively, on the
+   ground that with the manifest supplied every remaining unknown was a plain grep. That
+   report is decisive for item 9: an F arm that does not use the facts service is an N arm
+   wearing an F label, and the F/N and D/F numbers mean something completely different
+   depending on whether the service was used. But the claim rested ENTIRELY on the caller's
+   own prose. A driver's self-count is not the meter."
+ :why-nothing-else-could-witness-it
+  "Verified by the runner before writing this: :facts-only writes nothing into the graded
+   tree (git status clean after each of three pilot calls), writes no receipt anywhere, and
+   the entrance keeps no invocation log. /home/forge/.local/share/clj-surgeon/ holds only the
+   installed packages and the control-plane pointer. There is no artefact of a facts call."
+ :change
+  {:what "A passive process observer is armed for each remaining arm alongside watch-grade.sh."
+   :path "/var/tmp/forge/row5/facts-observer.sh" :sha256 "5800186960134af93593627c2de48fe2bab02e80c372949fa3a30208632b14de"
+   :does "Polls /proc every 2 s and records every process that IS the clj-surgeon runtime
+          (comm = bb) with clj-surgeon.core in argv and a cwd inside that arm's worktree:
+          pid, first-seen, last-seen, full argv. Writes <RUN>/facts-calls.log and a count in
+          <RUN>/facts-calls.txt."
+   :does-not "It does not change the caller's brief, environment, worktree, entrance binary,
+              stamps or clock by one byte. The caller cannot observe it. No instruction to
+              any F caller changed; the frozen task-F.md sha256 is unchanged."
+   :also-catches "Any FORBIDDEN clj-surgeon invocation — a mutating split or a non-:facts-only
+                  verb — since every entrance path runs through the same bb runtime. So it is a
+                  compliance witness as well as a usage witness."}
+ :the-observer-was-proved-to-fire-before-it-was-trusted
+  {:why "A witness that has never gone green on a known-positive is not evidence."
+   :test "A throwaway worktree (cc-row5-OBSTEST) at the base sha, observer armed, exactly ONE
+          :facts-only call made, observer allowed to finish."
+   :result "facts-calls.txt = 1, bound to pid 893108, cwd the test worktree, argv the installed
+            96819291 package; first-seen 13:30:25.99Z, last-seen 13:31:01.18Z (~35 s, consistent
+            with the 39.8 s runner pilot). Torn down before F2."
+   :defect-found-and-fixed-during-that-test
+    "The first draft matched any process whose ARGV contained the string, and counted the
+     harness's own wrapping shell (whose argv contains the whole command text) as a second
+     call — it would have
+     reported 2 for 1. Rebound to the process (comm = bb) rather than to argv text. This is the
+     same class as a waiter that self-matches its own command line, and it is recorded because
+     the unfixed version would have inflated every F arm's usage count."}
+ :f1-retained
+  {:label "unobserved — self-report only"
+   :facts-calls :self-reported-zero
+   :independent-corroboration :none-available
+   :consistency-note "F1's primary of 341.1 s carries no ~40 s projection cost, which is
+                      consistent with zero calls but does not prove it. Recorded as unobserved."
+   :not-rerun "No mid-cohort rerun. b07-arms.md forbids selective reruns and F1 is a valid,
+               accepted arm; only the usage evidence for that one arm is weaker."}}
+
+;; ---------------------------------------------------------------------------
+;; AMENDMENT 2, made after F2 and BEFORE F3. It CORRECTS a claim amendment 1 made about
+;; the observer, at the place the claim was made, rather than leaving it to be discovered
+;; in the results file.
+{:amendment 2
+ :at-utc "2026-09-08T13:48:05Z"
+ :class :correction-to-an-apparatus-claim
+ :claim-being-narrowed
+  "Amendment 1 said 'A projection call measured 39.8 s in the runner pilot; a 2 s poll
+   cannot miss one.' That is true of a SUCCESSFUL projection call and false in general."
+ :what-f2-showed
+  "F2 self-reported TWO :facts-only invocations. The observer recorded ONE — the successful
+   33 s call on the supplied request file (pid 1211294, 13:42:00.69Z to 13:42:34.07Z). The
+   unobserved one is F2's account of an earlier call that REFUSED immediately on a missing
+   :verification field. A refusal of that class returns in well under a second of tool time
+   after ~1.5 s of runtime startup, which is inside the 2 s poll window."
+ :corrected-claim
+  "The observer is a reliable witness that a caller DID or DID NOT obtain the facts payload,
+   because obtaining it costs 33-40 s and cannot hide inside a 2 s poll. It is NOT a complete
+   census of invocation ATTEMPTS: a sub-second refusal can pass unseen. Counts are therefore
+   reported as 'observed successful-length invocations', and any caller's self-reported
+   attempt that the observer did not see is reported as self-reported and unobserved, never
+   silently added to or subtracted from the count."
+ :not-changed
+  "The observer is not modified mid-cohort. Shortening the poll to catch sub-second refusals
+   would change the apparatus between arms for no gain on the question item 9 actually asks,
+   which is whether the facts were OBTAINED and USED, not how many times a caller mistyped a
+   request. F1 remains unobserved; F2-F6 carry the observer as amendment 1 describes it."
+ :second-finding-from-f2-worth-recording-before-f3
+  "F2's one successful projection call began at 13:42:00.69Z. Its candidate-complete stamp is
+   13:41:37.46Z. The facts payload therefore arrived 23 s AFTER the candidate was finished and
+   could not have contributed a byte to the measured authorship clock. This is recorded now,
+   before F3, so it cannot look like a post-hoc reading of an inconvenient number."}

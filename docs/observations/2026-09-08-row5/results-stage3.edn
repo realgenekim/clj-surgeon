@@ -1,0 +1,244 @@
+;; Row 5 stage 3 — six F arms (facts-only ablation), paired by slot to the six stage-1 NATIVE
+;; floor controls and to the six stage-2 D arms. This is the mechanism readout Astra's
+;; pre-registration item 9 requires, and the hole freeze-stage2.edn amendment 2 left open.
+;; Freeze: /var/tmp/forge/row5/freeze-stage3.edn, including amendments 1 and 2 written mid-cohort.
+;; Nothing was committed or pushed.
+{:meter
+ {:primary   "orient-start -> candidate-complete (caller-stamped, last stamp wins, BEFORE the caller's own suite)"
+  :secondary "orient-start -> oracle-complete (all-oracle wall; frozen oracle run by the RUNNER)"
+  :segments  "caller-suite = candidate-complete -> done; handoff = done -> oracle-start; runner-oracle = oracle-start -> oracle-complete"
+  :f-carries-no-adjustment
+   "F's primary contains authorship only, exactly like N's. The facts projection emits nothing and F
+    ran no acceptance inside its clock, so the D authorship adjustment has no analogue and none was
+    applied. F is compared to N raw and to the stage-2 D authorship column."}
+
+ :arms
+ [{:id "F1" :pair "R1" :N-primary-s 382.1
+   :accepted true :oracle :PASS :oracle-exit 0
+   :primary-s 341.1 :paired-ratio-F-over-N 0.893 :paired-saved-N-minus-F-s 41.0
+   :D-authorship-s 97.7 :paired-ratio-D-over-F 0.286 :paired-gap-F-minus-D-s 243.4
+   :all-oracle-s 692.0 :caller-suite-s 103.9 :runner-handoff-s 1.6 :runner-oracle-s 245.5
+   :candidate-complete-restamps 0 :refusals 0 :interface-repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true
+   :facts-projection-calls :UNOBSERVED-SELF-REPORTED-ZERO
+   :facts-usage-note "Ran before the observer existed (freeze amendment 1). Self-reported: 'I did not
+                      call the facts projection at all... with the manifest supplied, the remaining
+                      unknowns were all plain-text greps.' No independent corroboration is available."
+   :patch "/var/tmp/forge/row5/F1/candidate.patch" :patch-sha256-16 "9ca739034a3787c2" :patch-lines 1175
+   :oracle-log "/var/tmp/forge/row5/F1/oracle.log"}
+  {:id "F2" :pair "R2" :N-primary-s 310.0
+   :accepted true :oracle :PASS :oracle-exit 0
+   :primary-s 268.2 :paired-ratio-F-over-N 0.865 :paired-saved-N-minus-F-s 41.8
+   :D-authorship-s 126.6 :paired-ratio-D-over-F 0.472 :paired-gap-F-minus-D-s 141.6
+   :all-oracle-s 633.7 :caller-suite-s 127.5 :runner-handoff-s 3.4 :runner-oracle-s 234.7
+   :candidate-complete-restamps 0 :refusals 0 :interface-repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true
+   :facts-projection-calls 1
+   :facts-usage-note "OBSERVED: one successful projection call, pid 1211294, 14:42:00.69Z-14:42:34.07Z
+                      UTC on the supplied request file. Its candidate-complete stamp is 13:41:37.46Z,
+                      so the payload arrived 23 s AFTER the candidate was finished and contributed
+                      nothing to the measured authorship clock. The caller also self-reported one
+                      earlier call that refused instantly on a missing :verification field; that
+                      attempt is below the observer's 2 s resolution and is recorded as self-reported
+                      and unobserved. The caller's own summary of the projection's contribution to
+                      its candidate: 'Net contribution to this candidate: nil.'"
+   :patch "/var/tmp/forge/row5/F2/candidate.patch" :patch-sha256-16 "c11890373435b567" :patch-lines 1177
+   :oracle-log "/var/tmp/forge/row5/F2/oracle.log"}
+  {:id "F3" :pair "R3" :N-primary-s 323.9
+   :accepted true :oracle :PASS :oracle-exit 0
+   :primary-s 225.2 :paired-ratio-F-over-N 0.695 :paired-saved-N-minus-F-s 98.7
+   :D-authorship-s 143.5 :paired-ratio-D-over-F 0.637 :paired-gap-F-minus-D-s 81.7
+   :all-oracle-s 601.9 :caller-suite-s 133.8 :runner-handoff-s 0.8 :runner-oracle-s 242.1
+   :candidate-complete-restamps 0 :refusals 0 :interface-repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true
+   :facts-projection-calls 0 :facts-calls-independently-observed true
+   :facts-usage-note "Observer recorded ZERO clj-surgeon runtime invocations, corroborating the
+                      caller's own report: 'native discovery answered every structural question in
+                      under a minute, and a second source of the same facts would have added time
+                      without adding certainty.'"
+   :patch "/var/tmp/forge/row5/F3/candidate.patch" :patch-sha256-16 "15e39773d0ccd3be" :patch-lines 1178
+   :oracle-log "/var/tmp/forge/row5/F3/oracle.log"}
+  {:id "F4" :pair "R4" :N-primary-s 280.0
+   :accepted true :oracle :PASS :oracle-exit 0
+   :primary-s 224.4 :paired-ratio-F-over-N 0.801 :paired-saved-N-minus-F-s 55.6
+   :D-authorship-s 111.7 :paired-ratio-D-over-F 0.498 :paired-gap-F-minus-D-s 112.7
+   :all-oracle-s 590.8 :caller-suite-s 132.0 :runner-handoff-s 0.1 :runner-oracle-s 234.4
+   :candidate-complete-restamps 0 :refusals 0 :interface-repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true
+   :facts-projection-calls 0 :facts-calls-independently-observed true
+   :facts-usage-note "Observer recorded ZERO. Caller: 'the brief's supplied manifest, dependency graph
+                      and line table already carried every fact the projection would have emitted, so
+                      a call would have been pure overhead.'"
+   :patch "/var/tmp/forge/row5/F4/candidate.patch" :patch-sha256-16 "747f236f7dc9b7ed" :patch-lines 1177
+   :oracle-log "/var/tmp/forge/row5/F4/oracle.log"}
+  {:id "F5" :pair "R5" :N-primary-s 226.4
+   :accepted true :oracle :PASS :oracle-exit 0
+   :primary-s 316.7 :paired-ratio-F-over-N 1.399 :paired-saved-N-minus-F-s -90.3
+   :D-authorship-s 140.0 :paired-ratio-D-over-F 0.442 :paired-gap-F-minus-D-s 176.7
+   :all-oracle-s 680.7 :caller-suite-s 210.6 :runner-handoff-s 3.8 :runner-oracle-s 237.5
+   :candidate-complete-restamps 1 :refusals 0 :interface-repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true
+   :facts-projection-calls 0 :facts-calls-independently-observed true
+   :facts-usage-note "Observer recorded ZERO."
+   :restamp-note "Re-stamped candidate-complete once, exactly as the protocol allows and exactly as
+                  stage-1's R6 did: its own clj-kondo run caught a NEW unused-import finding (ZoneId
+                  in exports.clj, left dangling by the move) and it repaired that before its suite.
+                  The runner used the later stamp, 316.7 s, not 228.8 s. This is the ONLY arm in the
+                  cohort slower than its native control, and the re-stamp is 88.0 s of that."
+   :patch "/var/tmp/forge/row5/F5/candidate.patch" :patch-sha256-16 "a487a1fbf79bfa4c" :patch-lines 1178
+   :oracle-log "/var/tmp/forge/row5/F5/oracle.log"}
+  {:id "F6" :pair "R6" :N-primary-s 336.7
+   :accepted true :oracle :PASS :oracle-exit 0
+   :primary-s 234.2 :paired-ratio-F-over-N 0.696 :paired-saved-N-minus-F-s 102.5
+   :D-authorship-s 153.5 :paired-ratio-D-over-F 0.655 :paired-gap-F-minus-D-s 80.7
+   :all-oracle-s 596.2 :caller-suite-s 116.3 :runner-handoff-s 4.7 :runner-oracle-s 241.0
+   :candidate-complete-restamps 0 :refusals 0 :interface-repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true
+   :facts-projection-calls 0 :facts-calls-independently-observed true
+   :facts-usage-note "Observer recorded ZERO. Caller: 'native discovery answered every question before
+                      a projection round-trip would have returned.'"
+   :patch "/var/tmp/forge/row5/F6/candidate.patch" :patch-sha256-16 "011d9352bb78138a" :patch-lines 1180
+   :oracle-log "/var/tmp/forge/row5/F6/oracle.log"}
+ ]
+
+ :cohort
+  {:n 6 :accepted 6 :first-attempt-acceptance 1.0
+   :refusals 0 :interface-repairs 0 :native-fallbacks 0 :operator-interventions 0 :restamps 1 :timeouts 0
+   :primary {:vals-s [341.1 268.2 225.2 224.4 316.7 234.2] :median-s 251.2 :mean-s 268.3 :sd-s 50.18
+             :min-s 224.4 :max-s 341.1}
+   :caller-suite {:vals-s [103.9 127.5 133.8 132.0 210.6 116.3] :median-s 129.75
+                  :vs-stage-1-N "N median 178.41 s. The F briefs carry apparatus fix (a), the
+                                 runtests-once precondition, which stage-1 N did not. The 48.7 s
+                                 difference on this segment is the red-herring diagnosis that fix
+                                 removed. It touches the SECONDARY clock only, never the primary."}
+   :handoff {:vals-s [1.6 3.4 0.8 0.1 3.8 4.7] :max-s 4.7
+             :note "apparatus fix (b) held for a third stage: every arm <= 4.7 s"}
+   :runner-oracle {:vals-s [245.5 234.7 242.1 234.4 237.5 241.0] :median-s 239.25
+                   :note "stage-1 N median 245.75, stage-2 D median ~239. The graded apparatus is stable across all three stages."}}
+
+ :adoption
+  {:headline "0 of 6 F arms used the facts projection within the clock the readout is computed on."
+   :breakdown {:zero-calls-independently-observed 4      ; F3 F4 F5 F6
+               :zero-calls-self-reported-unobserved 1    ; F1
+               :one-call-observed-but-after-candidate-complete 1}  ; F2
+   :in-clock-uses 0
+   :every-caller-declined-explicitly-and-gave-the-same-reason
+    "Five of six wrote out their reasoning unprompted, and it is the same reason each time: the
+     supplied manifest, the 25-form list with line numbers, the dependency graph and the retained-var
+     table already answered the structural questions, and the remaining unknown — the caller surface —
+     was two greps. The projection's marginal information over the brief was, in their judgement, zero,
+     while its cost was a 33-40 s round trip."
+   :why-this-is-the-central-result
+    "Item 9 asks whether a read-only facts service is the mechanism behind D's win. This cohort cannot
+     answer that question as posed, because the service was never exercised. What it answers instead is
+     the question one step upstream, and answers it cleanly: OFFERED FREELY TO A CAPABLE NATIVE CALLER,
+     WITH NO COST AND NO LIMIT ON USE, THE FACTS PROJECTION WAS DECLINED 6 TIMES OUT OF 6. A capability
+     that callers do not invoke cannot be the mechanism behind anything, whatever its content."}
+
+ :readout-item-9
+  {:clock "the pre-registered clock: N as stamped, D authorship (the stage-2 gate clock), F as stamped"
+   :medians {:N-s 316.95 :F-s 251.2 :D-authorship-s 133.3}
+   :F-over-N {:median-paired-ratio 0.833 :median-paired-saved-s 48.7
+              :vs-the-D-gate-clause-shape "FAILS both: ratio 0.833 > 0.75, saved 48.7 s < 90 s and < 2*s_N = 105.82 s.
+                                           F does not clear against the native floor the gate D cleared."}
+   :D-over-F {:median-paired-ratio 0.485 :median-paired-gap-s 127.15}
+   :branch-1-facts-service-is-the-mechanism
+    {:satisfied false
+     :detail "F is not within 10% of D: |251.2 - 133.3| = 117.9 s against a 13.33 s allowance. The
+              paired gap 127.15 s is also outside the 105.82 s noise floor."}
+   :branch-2-emission-earns-credit
+    {:satisfied true
+     :detail "median paired gap F - D = 127.15 s > 2*s_N = 105.82 s, AND median paired D/F = 0.485 <= 0.75."}
+   :BRANCH-AS-COMPUTED "2 — EMISSION EARNS CREDIT over the F route as it was actually run"
+   :what-that-sentence-may-and-may-not-mean
+    "MAY: the emitting route beats a capable native caller who HAS a read-only facts service available
+     and chooses not to use it. That is a real and decision-relevant comparison, and it is the one this
+     cohort actually ran.
+     MAY NOT: 'emission beats a facts service.' The facts service was not exercised in a single arm's
+     authorship window. Branch 2's arithmetic is satisfied by a cohort in which the ablated variable was
+     never manipulated, so it cannot attribute D's win to emission RATHER THAN to the facts the emitter
+     computes. That attribution remains OPEN, and the reason it remains open is adoption, not measurement."
+   :sensitivity-that-must-be-read-with-the-branch
+    {:clock "the as-stamped D primary (no authorship adjustment at all)"
+     :median-paired-gap-F-minus-D-s 97.2 :median-paired-D-over-F 0.567
+     :branch-on-this-clock "3 — INTERMEDIATE. The gap clause FAILS: 97.2 s < 2*s_N = 105.82 s."
+     :why "D1 as stamped is 341.6 s because the frozen acceptance oracle ran inside its tool call; the
+           paired gap against F1's 341.1 s is -0.5 s. The branch therefore depends on the acceptance
+           boundary, exactly as the stage-2 gate did. The pre-registered clock is the authorship clock,
+           declared in freeze-stage3.edn before any F number existed, so branch 2 stands as the result;
+           this sensitivity is disclosed beside it and is not netted out."}
+   :branch-4-both-lose {:reached false
+                        :why "D passed every clause in stage 2. F failing against N while D beat N is
+                              not 'failure to transfer'; it is recorded as its own result above."}}
+
+ :findings
+  [{:id :free-choice-adoption-of-the-facts-service-was-zero :severity :the-result
+    :what "6/6 F callers declined the projection inside their authorship window; 4 of those 6 declines
+           are independently observed, 1 is self-reported only, and 1 called it 23 s after finishing."
+    :why-it-matters "This is the third independent observation of the same class in this programme, and
+                     the first one where the capability was FREE, UNLIMITED, PROVEN AVAILABLE and named
+                     in the caller's own brief with a copy-pasteable command. Exposure is not adoption.
+                     A read-only advisory service loses to a grep the caller already trusts."
+    :ratchet-suggested "Stop measuring adoption of optional read-only services by offering them. Either
+                        route without asking (the caller's existing discovery command IS the surface), or
+                        bind the capability to something the caller cannot get otherwise — which, on this
+                        evidence, is the emission, not the facts."}
+   {:id :the-brief-itself-supplied-most-of-the-facts :severity :apparatus-limit-on-this-conclusion
+    :what "The frozen Cell B brief hands every arm the 25-form list WITH base line numbers, the 47-edge
+           dependency graph, the retained-var table with visibilities, and the named comment-block trap.
+           The projection's genuine marginal content over that is the caller-site table (43 sites, 9
+           files, exact coordinates), which the brief deliberately withholds."
+    :consequence "The measured decline is a decline of the projection GIVEN THIS BRIEF. A thinner brief
+                  might have produced adoption. This bounds the generality of the zero and is stated
+                  rather than argued away; it does not change what happened at this pre-registered task."}
+   {:id :the-projection-is-snapshot-bound-and-useless-once-editing-starts :severity :product-usability
+    :what "F2's post-candidate call refused with 25 :unknown-owner blockers plus :destination-exists —
+           correct behaviour, since the owners had moved, but it means the projection can answer only
+           BEFORE any edit. A caller who wants to check its own work against the compiler's view mid-flight
+           or at the end cannot use this verb to do it."
+    :consequence "The one moment an F-style caller actually reached for the tool is the one moment the
+                  tool cannot serve. If a facts service is meant to be adopted, a post-edit
+                  'does my tree match the intent' mode is the shape callers reached for unprompted."}
+   {:id :the-manifest-in-the-brief-is-not-a-valid-request :severity :product-usability
+    :what "F2 reported building a request from the printed manifest and being refused: :verification is a
+           required field and the manifest has no such key. The SUPPLIED request file does carry
+           :verification {:profile \"b07-cell-b\"}, so a caller who uses the supplied path is fine — but a
+           caller who reads the manifest as the request pays a refusal to learn the difference."
+    :note "Recorded as a caller-experience finding of the entrance, not as a defect in this apparatus."}
+   {:id :F-is-byte-diverse-D-is-byte-identical :severity :finding-not-in-the-readout
+    :what "The six F candidate patches are SIX DISTINCT patches (1175-1180 lines, six distinct sha256s,
+           none equal to any other and none equal to the D patch). Stage 2's six D candidates were ONE
+           patch repeated six times (22848c8ceb87a902, 1202 lines). Stage 1's six N candidates were six
+           distinct patches."
+    :why-it-matters "F reproduces N's byte-divergence exactly, which is what a route that is native
+                     authorship in practice should look like. It corroborates the adoption finding from
+                     the artefact side, independently of the observer and of the callers' prose."}
+   {:id :the-ZoneId-dangling-import-is-a-real-second-trap :severity :task-observation
+    :what "Four of six F callers independently reported that moving ics-local-datetime leaves ZoneId
+           imported but unused in exports.clj, manufacturing a NEW lint finding in an already-finished
+           file. F5 caught it only after stamping and paid an 88.0 s re-stamp for it; stage-1's R6 paid
+           the same cost the same way."
+    :why-it-matters "Only a base-vs-candidate lint COMPARISON surfaces it; an absolute 'lint is clean'
+                     check does not. It is the cheapest available example of why the oracle's A8 check is
+                     baseline-relative."}
+   {:id :native-floor-remains-saturated :severity :interpretation
+    :what "18 arms across three stages (6 N, 6 D, 6 F), 18 accepted, 0 semantic or preservation
+           regressions, 0 native fallbacks, 0 interface repairs. No route on this task can win on
+           quality, because no route makes mistakes on it."}]
+
+ :deviations-from-preregistration
+  [{:what "F ran on installed trunk 96819291, not the frozen b07_split_adapter runtime b07-arms.md names,
+           and not the 1ab53e0e package the D arms ran on."
+    :why "Operator instruction. Neutralised by receipt: the :facts-only response is BYTE-IDENTICAL on
+          both packages after normalising timings only (normalised sha256 9b5f40d451128c1a, 724,095 bytes)."}
+   {:what "The caller does not run the frozen acceptance oracle; the runner does." :why "Unchanged from stages 1 and 2."}
+   {:what "F ran strictly sequentially, with no arm overlapping another arm's runner oracle."
+    :why "Matches stage-1 N, so F/N is clean. It does NOT match stage-2's D3-D6, which overlapped.
+          The direction is stated in the freeze in advance: it flatters F in the D/F comparison, i.e.
+          it is conservative against crediting emission. Branch 2 was reached anyway."}
+   {:what "A passive process observer was armed for F2-F6 and not for F1." :why "Freeze amendment 1."}
+   {:what "The six stage-1 N runs did not carry the runtests-once precondition disclosure; F does."
+    :why "Frozen as run in stage 1. It touches only the caller-suite segment, never the readout clock."}
+   {:what "Form count 25 > the rule's 16-form ceiling." :why "Inherited from the B07 pre-registration; every F caller repeated the disclosure as required."}]
+
+ :not-run ["new N runs" "new D runs" "the b07 24-run block allocation" "any commit" "any push"]}
