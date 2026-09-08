@@ -131,3 +131,5 @@ LANDED 2026-09-07T18:58Z: astra/intent-contract-all-prefixes f61769da (+receipt 
 LANDED 2026-09-07T19:41Z: astra/lid-batch-2-perf-gate-hld 94715053 → MCP/main eb8a7686 (PERF-SENT audit in the merge gate; HLD flagship ops).
 
 - LANDED 2026-09-08T00:17Z: namespace_split (astra/namespace-split 9b205fd4 = 913020c8 + paper-cut round) → merge 10d90ffb, trunk 2ed3708c. Sol GO r1 (913020c8) + r2 (9b205fd4); conflicts composed additively (docs/tech-tree.md both sections; lane_manifest 1449+28=1477); six gates green on the merged tree (log /var/tmp/forge/land-10d90ffb.log; run_all 783/9943, mcp-test 874/7607, battery-fresh, recovery battery, operation oracle, hygiene; audit ok); docs-only trunk movement merged after gates (ratchet 2026-09-05).
+
+- 2026-09-08T03:08Z battery receipt 4c434a72 (chain 19: 694 tests green, wall 785 s → ledger appended) for astra/namespace-split tip 1f0646e9 (= 5cb03422 Sol GO r5 + the registry-witness line); `~/bin/land 4c434a72` launched via run-bg (pid 4003274, log /var/tmp/forge/run-bg/land-r5.log).
