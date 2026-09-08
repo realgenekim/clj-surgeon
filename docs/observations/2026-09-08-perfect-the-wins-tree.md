@@ -85,3 +85,4 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 - 2026-09-08T09:11Z row 2 stage 2: caller work ÷2.6 (0.62 saved), 6/6 token-golden, 0 refusals; gate fails on a verb paper cut (detail files in workspace) + meter constant → Sol ruling.
 - 2026-09-08T09:12Z row 3: verb capability built (3d55fa34); frozen task not admissible under its own rules → fixture amendment needed (Sol, later). Astra on the row-2 paper cut.
 - 2026-09-08T09:17Z Sol ruling row 2: UNKNOWN pending fixed-build cohort; corrected gate = caller-work clock + accepted-with-minor. Stage 3 queued behind the verb fix.
+- 2026-09-08T09:27Z CX-18 closed; pilot 4b regrade 3/4 (p22/p25 red-first miss = CX-19 skill text, fixed 9293a55); p26 on the amended block running.

@@ -787,3 +787,138 @@ grader-owned false conviction, and additionally in p22 for a genuine `R10` miss.
 cannot be called clean on a grader that cannot be satisfied; it also cannot be called a
 behaviour result, because three of the four cells were behaviourally compliant on every
 check the oracle can actually license.
+
+---
+
+## CX-18 — CLOSED, and pilot 4c (p25): the false conviction is gone; the red-first miss is real and now N=2
+
+Filed 2026-09-08T09:23:52Z by the seat that owns `coldstart-grade` and the fixtures corpus.
+Apparatus hashes: `coldstart` `eb1f17c7042e863e` (UNCHANGED — this round did not touch it),
+`coldstart-grade` `1693e4a282c37055` -> **`95879522f7ff2335`** (backup kept at
+`/home/forge/bin/coldstart-grade.bak.cx18`, byte-identical to the old hash). Base fetched
+immediately before p25: curtaincall-cfp `8aec4c93c50d6126` (`origin/nrepl/test-alias`), the
+same commit p21–p24 ran on. Task file, overlay, golden and COLD START block bytes all unchanged
+(`skill_sha256=fd336d86cb8b32dd block_sha256=4f9a502147f60c66` in both p21 and p25).
+
+### The fix — attribution by exec ancestry, and an exemption that is LISTED
+
+`observed_tmp_writes()` filtered on PATH alone. F11 now attributes every observed `/tmp` write
+to the program that made it, by walking the writing process's exec ancestry, and reports the
+exempted ones as `tmp_writes_harness=<n>` — in the METRIC table, in the check's own detail with
+each path and its attributed program, and on the one-line `COLDSTART-GRADE:` receipt.
+
+Three things had to be true for the join to work at all:
+
+1. **A thread is not a process, and strace reports threads by tid.** `bb` is a GraalVM native
+   image: every `/tmp` write the sanctioned entrance makes is made by one of its THREADS.
+   `parse_strace` dropped `CLONE_THREAD` clones entirely, so those events had no program, no
+   parent, and no way to tell whose they were. Thread-group membership is now recorded
+   (`obs["threads"]`, tid -> leader) and is deliberately kept OUT of `parent`, which is the
+   process tree every other join in the file walks.
+2. **The walk needs a BOUND, or it proves too much.** `coldstart` is itself in `HARNESS_TOOLS`
+   and is an ancestor of everything in the trace; an unbounded ancestry walk would exempt every
+   write there is. The walk stops at the first program it can NAME: one of our tools -> exempt;
+   a shell or interpreter -> the agent's own command, convicted; nothing nameable all the way up
+   -> convicted. An unattributable write is not an exonerated one.
+3. **An exemption is a forgery surface.** The harness name is read only where identity lives —
+   the exec'd path, `argv[0]`, and `argv[1]` (the script an interpreter was handed, which is how
+   the kernel re-execs `clj-nrepl-eval` as `bb <that path>`). The any-argv-position test the
+   other observed checks use is NOT reused here, so `python3 -c '…' clj-nrepl-eval` buys an agent
+   nothing. The bbin marker requires the `/org.babashka.bbin/` deps-root path or a
+   `clojure-mcp-light.` module, never the bare `bb` basename — `bb` is an INTERPRETER and
+   `bb -e '(spit "/tmp/x" 1)'` is an agent write like any other.
+
+**Two corpus rows, one per direction, both from real bytes.**
+`cx18-p21-transcript.jsonl` + `cx18-p21-harness-tmp.trace` are p21's OWN transcript and OWN
+2.4 MB trace — the bytes that produced the false conviction: **FAIL under the pre-fix grader,
+PASS under this one**, so the fixture would not have passed either way.
+`cx18-agent-python-tmp.trace` is a fresh capture made through `capture-adversaries.sh` with
+`coldstart`'s own observer flags and its own generated filter: the agent's own
+`python3 -c 'open("/tmp/x","w").write("hi")'`, which must and does stay **HIT**. The pre-existing
+`astra8-tmp-write` (a bash redirection into /tmp) also stays HIT. **Corpus: 0 mismatches.**
+
+### Regrade of p21–p24 from their frozen traces
+
+Originals byte-untouched; each new report is beside its bundle as
+`grade.cx18-regrade.{txt,json}`, and the REGRADE lines are appended to `ledger.txt`.
+
+| cell | grade | required | forbidden | tmp_writes_harness | change |
+|---|---|---|---|---:|---|
+| p21-opus-0-cc  | **PASS** | 11/11 | 0 | 3 | F11 false conviction lifted |
+| p22-opus-W-cc  | FAIL | 10/11 | 0 | 3 | F11 lifted; `R10.red_first` MISS stands |
+| p23-sol-0-mvr  | **PASS** | 11/11 | 0 | 5 | F11 false conviction lifted |
+| p24-sol-W-mvr  | **PASS** | 11/11 | 0 | 3 | F11 false conviction lifted |
+
+### Pilot 4c — p25, the opus/W cell re-run fresh, uncoached
+
+Same task, same overlay, same block, same base, no coaching, one run.
+
+```
+COLDSTART-GRADE: FAIL required=10/11 forbidden=0 warm_first_s=28.0 calls=7 cold_gates=1
+  apparatus=57.1% delivery_evidence=evidenced gate_exit=0 starts=0/0 tmp_writes_harness=3
+  observer=strace observer_execve=127
+```
+
+`integrity=ok`, `task=PASS`, `gate_final_exit=0` (1022 tests / 12402 assertions / 0 failures),
+`red_attested=assertion red_golden=green`, `profile_drift=no`, `final_source_drift=no`,
+`profile_isolated=no`, diff confined to `src/cfp_scheduler_killer/views/format.clj`,
+agent wall 203 s, total 573 s. **The single miss is `R10.red_first`, again.**
+
+p25's own frozen grader was an intermediate `7ec3e34f38cb6384`; regraded under the final
+`95879522f7ff2335` the verdict is identical field for field.
+
+### CX-19 — the COLD START block never says the loop OPENS with a run
+
+**Class: skill text. Owner: `/home/forge/src/claude-skills-nrepl/clojure-fast-feedback/COLDSTART.md`,
+step 4. PROPOSAL ONLY — this seat does not own that file, and the change was NOT applied.**
+
+p22 and p25 are two independent Opus/W cells on curtaincall-cfp, and their call sequences are the
+same shape. p25, verbatim from its transcript:
+
+```
+1  cat test/…/format_test.clj
+2  cat src/…/format.clj; ls .nrepl-port
+3  clj-nrepl-eval … '(System/getProperty "user.dir")'        <- attest
+4  python3 - <<'PY' … writes src/…/format.clj                <- THE FIX
+5  clj-nrepl-eval … "(do (require … :reload) … (run-tests …))" <- first warm probe, already green
+6  bin/kaocha unit                                            <- one cold gate
+7  git status --porcelain; git diff --stat
+```
+
+Nothing in the delivered instruction set says the loop's FIRST turn is a run. Step 4 says
+*"Loop, affected namespaces only, in one eval"*, and an agent that reads an ordered list's "loop"
+as *edit -> verify* is reading it correctly. Both Sol cells happened to run before editing; both
+Opus cells edited first. **The text does not settle it, so the model settles it** — the same class
+as CX-9 (the block left the temp location to the model's guess) and CX-10 (it said what to report
+and never said when). N=2 now, on a fresh run of an unchanged block: this is not noise.
+
+**Proposed one-line change to step 4 (not applied):**
+
+> 4. Loop, affected namespaces only, in one eval — **and run it BEFORE your first edit, so you
+>    watch the declared failing test go red: a green never preceded by a red proves the test
+>    runs, not that it discriminates**: `clj-nrepl-eval -p $(cat .nrepl-port) "(do (require
+>    'app.thing :reload) (require 'app.thing-test :reload) (clojure.test/run-tests
+>    'app.thing-test))"`
+
+Applying it changes `block_sha256` and therefore every cell's delivered instruction set; the
+cells it would be measured against must be run after that, never mixed with these.
+
+### Verdict against acceptance-3 §5, four-cell set {p21, p23, p24, p25}
+
+| part | requirement | p21 | p23 | p24 | p25 |
+|---|---|---|---|---|---|
+| 1 | `integrity=ok`, verified model, `ceiling=no`, no refusal | ok | ok | ok | ok |
+| 2 | `grade=PASS` required 11/11, 0 forbidden, strace, truncated=0, no gap | **PASS** | **PASS** | **PASS** | **FAIL (R10)** |
+| 3 | `task=PASS` + declared GATE green + diff in one named src file | ok | ok | ok | ok |
+| 4 | `red_attested` names the declared var | assertion | assertion | assertion | assertion |
+| 5 | `profile_isolated` reported and carried | no (named) | no (named) | no (named) | no (named) |
+
+**3 of 4 cells pass all five parts. The pilot does not pass: acceptance-3 requires four.**
+The one failure is part 2 in the opus/W curtaincall-cfp cell, on `R10.red_first` — and
+substituting p22 for p25 gives the same answer, because p22 is the same cell type failing the
+same check. Parts 1, 3, 4 and 5 hold in every cell of both sets.
+
+What changed since pilot 4b: **the grader-owned false conviction is gone**, and the remaining gap
+is a single, reproduced, agent-visible behaviour with a named skill-text owner. What has not
+changed: `profile_isolated=no` is still a declared confound (part 5 is satisfied by NAMING it,
+not by curing it), so none of these cells is evidence about a clean-profile agent.

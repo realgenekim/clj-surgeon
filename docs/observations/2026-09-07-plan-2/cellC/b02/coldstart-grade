@@ -1024,6 +1024,7 @@ def parse_strace(text: str, gate: str = "") -> dict[str, Any]:
     pending: dict[int, Exec] = {}
     pending_clone: dict[int, float] = {}
     parent: dict[int, int] = {}
+    threads: dict[int, int] = {}      # tid -> its thread-group leader [CX-18]
     execs: list[Exec] = []
     files: list[FileEv] = []
     ends: dict[int, float] = {}
@@ -1099,6 +1100,17 @@ def parse_strace(text: str, gate: str = "") -> dict[str, Any]:
             cwd_events.setdefault(pid, []).append((ts, p if p else ""))
         elif call in ("clone", "clone3", "fork", "vfork"):
             if "CLONE_THREAD" in rest:
+                # A THREAD, NOT A PROCESS --- but strace reports that thread's syscalls
+                # under its own tid, so an event made by a thread has to be attributable
+                # to the program its PROCESS is running [CX-18]. `bb` is a GraalVM native
+                # image: every /tmp write the sanctioned entrance makes is made by one of
+                # its threads, and dropping the membership left those events with no
+                # program, no parent, and no way to tell whose they were.
+                # The tid is deliberately NOT added to `parent`: that is the PROCESS tree
+                # every other join in this file walks, and a thread is not a child of it.
+                mm = re.search(r"=\s*(\d+)\s*$", rest.strip())
+                if mm and not raw.rstrip().endswith("<unfinished ...>"):
+                    threads[int(mm.group(1))] = threads.get(pid, pid)
                 continue           # a thread, not a process
             if raw.rstrip().endswith("<unfinished ...>"):
                 pending_clone[pid] = ts
@@ -1158,6 +1170,7 @@ def parse_strace(text: str, gate: str = "") -> dict[str, Any]:
         e.exit_code = exit_code.get(e.pid)
     execs.sort(key=lambda e: e.ts)
     return {"execs": execs, "parent": parent, "kids": _children(parent), "ends": ends,
+            "threads": threads,
             "exit_code": exit_code, "files": files, "fs_capture": fs_capture,
             "exit_capture": exit_capture, "truncated": truncated, "fork_ts": fork_ts,
             "net": net, "net_capture": net_capture,
@@ -1181,6 +1194,7 @@ def parse_sampler(text: str, gate: str = "") -> dict[str, Any]:
         execs.append(Exec(pid=int(m.group(2)), ts=float(m.group(1)),
                           exe=argv[0] if argv else "", argv=argv, cwd=m.group(3)))
     return {"execs": execs, "parent": {}, "kids": {}, "ends": {}, "exit_code": {},
+            "threads": {},
             "files": [], "fs_capture": False, "exit_capture": False, "truncated": 0,
             "fork_ts": {}, "net": [], "net_capture": False,
             "loss": loss, "pids": sorted({e.pid for e in execs})}
@@ -1762,6 +1776,112 @@ def observed_tmp_writes(obs: dict[str, Any]) -> list[FileEv]:
             and not RUNTIME_TMP.match(f.path)]
 
 
+# THE SANCTIONED ENTRANCE, AS IT APPEARS IN A PROCESS TRACE [CX-18].
+# `clj-nrepl-eval` is a bbin-installed babashka script. The kernel re-execs it as
+# `bb <script>`; bbin then REGENERATES its own `/tmp/bbin<n>` config file on every
+# single invocation, and `clojure-mcp-light` writes its nREPL target file under
+# `/tmp/clojure-mcp-light/…/target-<host>-<port>.edn`. R1, R3 and R4 REQUIRE the agent
+# to call that tool, so a /tmp check that cannot tell the tool's writes from the
+# agent's convicts every compliant cell and can never be satisfied — the pilot-4b
+# false conviction, 4 cells for 4. The marker is the bbin deps-root / module name, not
+# the `bb` basename: `bb` is an INTERPRETER and `bb -e '(spit "/tmp/x" 1)'` is an agent
+# write like any other.
+BBIN_ENTRANCE = re.compile(r"/org\.babashka\.bbin/|(?<![\w.-])clojure-mcp-light\.")
+
+
+def _is_harness_exec(e: Exec) -> bool:
+    """Is this exec one of OUR programs — the ones the contract makes the agent use?
+
+    AN EXEMPTION IS A FORGERY SURFACE, so it is read only where the program's IDENTITY
+    lives: the exec'd path, argv[0], and argv[1] (the script an interpreter was handed,
+    which is how the kernel re-execs `clj-nrepl-eval` as `bb <that path>`). The
+    any-argv-position test the other observed checks use is deliberately NOT reused
+    here: `python3 -c '…' clj-nrepl-eval` must not buy an agent a /tmp write.
+    """
+    names = {_base(e.exe)} | {_base(a) for a in e.argv[:2]}
+    if names & HARNESS_TOOLS:
+        return True
+    return bool(({_base(e.exe)} | {_base(a) for a in e.argv[:1]}) & {"bb", "bbin"}) \
+        and bool(BBIN_ENTRANCE.search(" ".join(e.argv)))
+
+
+def _proc_of(obs: dict[str, Any], tid: int) -> int:
+    """The PROCESS a traced tid belongs to (its thread-group leader) [CX-18]."""
+    threads = obs.get("threads") or {}
+    seen: set[int] = set()
+    p = tid
+    while p in threads and p not in seen:
+        seen.add(p)
+        p = threads[p]
+    return p
+
+
+def attribute_tmp_writes(obs: dict[str, Any]
+                         ) -> tuple[list[tuple[FileEv, str]], list[tuple[FileEv, str]]]:
+    """Split observed /tmp writes into (AGENT, HARNESS) by EXEC ANCESTRY [CX-18].
+
+    F11's prose claims "no AGENT write under /tmp observed"; the old predicate could
+    not support that claim, because it filtered on PATH only and every other observed
+    check in this file consults `HARNESS_TOOLS`. This is the join F9's gate-ownership
+    already does, applied to filesystem events.
+
+    Walking the ancestry needs a BOUND, or it proves too much: `coldstart` itself is in
+    `HARNESS_TOOLS` and is an ancestor of everything in the trace, so an unbounded walk
+    would exempt every write there is. The walk therefore stops at the FIRST program it
+    can name:
+      * one of our tools (or the bbin entrance)  -> harness, exempt and listed;
+      * a shell or interpreter                   -> the agent's own command, CONVICTED;
+      * nothing nameable, all the way up         -> CONVICTED (an unattributable write
+        is not an exonerated one; the fail-safe direction is the accusing one).
+    """
+    execs_by_proc: dict[int, list[Exec]] = {}
+    for e in obs.get("execs", ()):
+        execs_by_proc.setdefault(_proc_of(obs, e.pid), []).append(e)
+    for v in execs_by_proc.values():
+        v.sort(key=lambda x: x.ts)
+    parent = obs.get("parent") or {}
+    fork_ts = obs.get("fork_ts") or {}
+
+    def running_at(proc: int, ts: float) -> Exec | None:
+        got = None
+        for e in execs_by_proc.get(proc, ()):
+            if e.ts <= ts:
+                got = e
+            else:
+                break
+        return got
+
+    agent: list[tuple[FileEv, str]] = []
+    harness: list[tuple[FileEv, str]] = []
+    for f in observed_tmp_writes(obs):
+        proc: int | None = _proc_of(obs, f.pid)
+        cut = f.ts
+        nearest: Exec | None = None
+        verdict = ""
+        seen: set[int] = set()
+        while proc is not None and proc not in seen:
+            seen.add(proc)
+            e = running_at(proc, cut)
+            if e is not None:
+                if nearest is None:
+                    nearest = e
+                if _is_harness_exec(e):
+                    verdict = "harness"
+                    nearest = e
+                    break
+                if ({_base(e.exe)} | {_base(a) for a in e.argv[:1]}) & INTERPRETERS:
+                    verdict = "agent"
+                    nearest = e
+                    break
+            cut = fork_ts.get(proc, cut)
+            proc = parent.get(proc)
+        who = (f"{_base(nearest.exe) or nearest.pid}"
+               + (" " + " ".join(nearest.argv[1:3]) if nearest.argv[1:3] else "")
+               if nearest is not None else "unattributable (no exec ancestor in the trace)")
+        (harness if verdict == "harness" else agent).append((f, who))
+    return agent, harness
+
+
 def _write_then_unlink_paths(obs: dict[str, Any]) -> list[str]:
     created: dict[str, float] = {}
     removed: list[str] = []
@@ -2265,6 +2385,7 @@ def grade(evs: list[Ev], cond: str | None, parse_notes: list[str],
     # exec event itself. When there is no trace they say `unverified` and the
     # verdict is UNVERIFIED --- never PASS, and never a silent `--`.
     f9facts: dict[str, Any] = {}
+    tmp_writes_harness = 0          # CX-18: exempt-but-listed entrance writes
     if obs is None or not obs["execs"]:
         r.forbidden.append(Check(
             "F9.observed_second_jvm", False,
@@ -2293,16 +2414,33 @@ def grade(evs: list[Ev], cond: str | None, parse_notes: list[str],
         # a trace captured before this existed says nothing about writes, and saying
         # `--` over it would be the CX-8 mistake in a new coat.
         if obs.get("fs_capture"):
-            tw = observed_tmp_writes(obs)
+            # CX-18: attribute each write to the program that made it before convicting
+            # anyone of it. `tmp_writes_harness` is the sanctioned entrance's own
+            # bookkeeping (bbin's regenerated config, clojure-mcp-light's nREPL target
+            # file) — exempt, but LISTED, because an exemption nobody can see is
+            # indistinguishable from a blind spot.
+            tw_agent, tw_harness = attribute_tmp_writes(obs)
+            tw = [f for f, _ in tw_agent]
+            exempt = ("" if not tw_harness else
+                      f"; {len(tw_harness)} write(s) attributed to the sanctioned "
+                      "entrance and exempt (tmp_writes_harness): "
+                      + "; ".join(f"pid {f.pid} {f.op} {f.path} [{who}]"
+                                  for f, who in tw_harness[:3]))
             r.forbidden.append(Check(
                 "F11.observed_tmp_write", not tw,
                 ("no agent write under /tmp observed in the process trace "
                  "(JVM/desktop runtime paths such as /tmp/hsperfdata_* are excluded "
-                 "by name: every JVM writes one before running anyone's code)"
+                 "by name: every JVM writes one before running anyone's code; writes "
+                 "whose nearest exec ancestor is one of the harness tools the contract "
+                 "REQUIRES the agent to call are attributed to it, not to the agent)"
+                 + exempt
                  if not tw else
                  f"{len(tw)} write(s) under /tmp observed: "
-                 + "; ".join(f"pid {f.pid} {f.op} {f.path}" for f in tw[:3])),
+                 + "; ".join(f"pid {f.pid} {f.op} {f.path} [by {who}]"
+                             for f, who in tw_agent[:3])
+                 + exempt),
                 tw[0].pid if tw else None))
+            tmp_writes_harness = len(tw_harness)
             gone = observed_write_then_unlink(obs, specimen)
             if gone:
                 r.notes.append("observed write-then-unlink (the shape of a file written "
@@ -2380,6 +2518,7 @@ def grade(evs: list[Ev], cond: str | None, parse_notes: list[str],
     obs_kind_field = obs_kind if obs_kind != "proc-sampler" else f"proc-sampler(loss={obs_loss})"
     r.metrics = {
         "observer": obs_kind_field,
+        "tmp_writes_harness": tmp_writes_harness,
         "observer_fs_capture": bool(obs.get("fs_capture")) if obs else False,
         "observer_network": ("captured" if (obs and obs.get("net_capture"))
                              else ("declared-empty" if obs else "no-trace")),
@@ -2464,7 +2603,8 @@ def render(r: Report, path: str) -> str:
               "iterations", "apparatus_calls", "apparatus_pct", "warm_first_s",
               "delivery_evidence", "instructions_unavailable_claim",
               "starts_transcript", "starts_observed", "gate_exit", "gate_exit_source",
-              "gate_invocations_observed", "observer", "observer_execs", "observer_procs",
+              "gate_invocations_observed", "tmp_writes_harness",
+              "observer", "observer_execs", "observer_procs",
               "observer_truncated", "observer_fs_capture", "observer_network"):
         v = m.get(k)
         w.append(f"  {k:<26} {'unknown' if v is None else v}")
@@ -2478,6 +2618,7 @@ def render(r: Report, path: str) -> str:
         f"calls={m['calls']} cold_gates={m['cold_gates']} apparatus={m['apparatus_pct']}% "
         f"delivery_evidence={m['delivery_evidence']} gate_exit={m['gate_exit']} "
         f"starts={m['starts_transcript']}/{m['starts_observed']} "
+        f"tmp_writes_harness={m.get('tmp_writes_harness', 0)} "
         f"observer={m['observer']} observer_execve={m['observer_execs']}")
     return "\n".join(w)
 
