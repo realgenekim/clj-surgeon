@@ -42,3 +42,7 @@ As the third seat and the cold-start specimen host.
 - Decisions on Gene's desk: inb-3fa126 (the measurement box; snoozed to 2026-09-22 behind the rows), the provisioning script item, and rung 7 (instance, key, budget line).
 
 *Also filed as docs/observations/2026-09-08-two-box-plan.md; this copy is the reference location Gene asked for.*
+
+## Status 2026-09-08T22:02Z — box 1 purchased
+
+Gene bought a Hetzner **CX53** (16 shared vCPU, 32 GB, 320 GB SSD, shared cost-optimized tier, $34.99/month). Same 32 GB as Anvil, so the memory ceiling depends on the heap caps holding (every JVM now -Xmx 512 MB–1 GB; ~25–30 bounded images fit). Resizable in place if outgrown. Rule from day one: no latency number from this box. Next: hostname + the forge seat's public key on the box → the provisioning script (inb-94ba79) → the cold-start harness proves a fresh agent there before it carries a seat.
