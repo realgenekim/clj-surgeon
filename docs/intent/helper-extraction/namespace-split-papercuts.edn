@@ -57,7 +57,7 @@
  :rationale "Cell C round 2, Gene repair brief."}
 
 {:id :NS-SPLIT-024,
- :status :active,
+ :status :superseded, :superseded-by :NS-SPLIT-032,
  :ears
  "When replacing a call head changes its width, the compiler shall shift continuation indentation equal to the original first-argument column by that width delta.",
  :misreadings
@@ -122,11 +122,11 @@
  :tests [:oracle-baseline-attribution]
  :rationale "Round 3 oracle scored five pre-existing warnings as split damage."}
 {:id :NS-SPLIT-032 :status :active
- :ears "When a call head changes width, continuation realignment shall leave lines inside forms opened after the head line byte-identical, while allowing the nested opener itself to move."
- :misreadings ["Matching the old argument column proves ownership." "Protect all nesting, including same-line nested heads."]
- :boundaries ["Sol exact string-case/unrelated-case input; nested list, fn, vector, map, set; closing delimiter; shorter alias; same-line composition"]
+ :ears "When a call head changes width, continuation realignment shall shift every subsequent line in its structural span by that delta at every nesting depth, except lines inside multiline string literals."
+ :misreadings ["Matching the old argument column proves ownership." "Protect nested bodies while moving their opener." "Require a same-line first argument."]
+ :boundaries ["Sol r4 unindented literals on 14c0501f; nested list, fn, vector, map, set; closing delimiter; shorter alias; same-line composition"]
  :tests [:sol-nested-continuations-respect-form-ownership]
- :rationale "Sol NO-GO on 5b78bed2: sentinel moved from 7 to 12 spaces."}
+ :rationale "Fable ruling 2026-09-08 supersedes Sol r3/r4 nested-body protection: preserve relative layout by shifting every owned line. Original requirement retained in git at 14c0501f."}
 {:id :NS-SPLIT-033 :status :active
  :ears "When replacing the retired views entry in the forms/polish fixture headers, the compiler shall place only the sorted new views.* block in that span and preserve all other host bytes."
  :misreadings ["Sort the host block." "Move replacements after test-helpers."]

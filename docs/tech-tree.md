@@ -371,3 +371,18 @@ detect the synthetic nested-body defect; those witnesses remain necessary.
 The merged manifest source census is 1,489 tests. Final gates, loop timings
 and exclusions: `/var/tmp/forge/plan2/cellC/astra-round4-report.md`.
 No native control was run; no comparative performance claim.
+
+
+### 2026-09-08T02:11:49.709534+00:00 — namespace split round 5
+
+Fable's ruling supersedes round 4's nested-body protection and exact-column
+predicate. NS-SPLIT-032 now shifts every line structurally inside a changed call,
+at any depth, except multiline string contents. Shared lines sum each changed
+head's own width delta once. Sol's unindented growth/shrinkage literals fail in
+both the helper and compile-split on 14c0501f; the revised layout matrix records
+16 red assertions before the production change. The first green warm run passes
+33 tests / 305 assertions, with a 10.924 s split/oracle/test loop and PAPERCUTS: 0.
+The independent fixture oracle is unchanged and was also zero on the red code;
+the literal witnesses supply the missing detection. Later collection-boundary
+coverage and final gates are recorded in `/var/tmp/forge/round/r5-report.md` and
+`/var/tmp/forge/round/r5-loop.log`. No comparative performance claim.

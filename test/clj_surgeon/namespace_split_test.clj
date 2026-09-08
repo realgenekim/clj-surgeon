@@ -406,12 +406,12 @@
           result (paper-compile request sources {:var-usages [usage]})
           target (if caller? file "src/app/dest.clj")
           new-head (str alias "/x")
-          new-indent (if aligned? (+ indent (- (count new-head) (count head))) indent)]
+          new-indent (+ indent (- (count new-head) (count head)))]
       (is (:ok result))
       (is (str/includes? (get-in result [:future-sources target])
             (str "(" new-head " 1\n" (apply str (repeat new-indent " ")) "2)")))))
-  ;; Strings and neighboring calls are not continuation whitespace. A head on
-  ;; its own line has no same-line argument column to preserve.
+  ;; String contents remain byte-identical; every other owned line moves,
+  ;; including calls with the first argument on a later line.
   (doseq [body ["(v/x\n       1\n       2)" "(v/x \"one\n            string\"\n       2)"]]
     (let [source "(ns app.views)\n(defn x [a b] [a b])\n"
           caller (str "(ns app.caller (:require [app.views :as v]))\n(def y " body ")\n")
@@ -419,7 +419,9 @@
                                 {"src/app/views.clj" source "test/app/caller.clj" caller}
                                 {:var-usages [(literal-usage "test/app/caller.clj" caller "v/x" 'app.views 'x)]})]
       (is (str/includes? (get-in result [:future-sources "test/app/caller.clj"])
-            (str/replace body "v/x" "longer/x"))))))
+            (-> body
+                (str/replace "v/x" "longer/x")
+                (str/replace #"\n       (?=\S)" "\n            ")))))))
 
 ;; INTENT-TEST: NS-SPLIT-025
 (deftest destination-requires-share-source-layout
@@ -491,44 +493,79 @@
 ;; @spec NS-SPLIT-032
 ;; INTENT-TEST: NS-SPLIT-032
 (deftest sol-nested-continuations-respect-form-ownership
-  ;; Exact alignment-negatives input from Sol's probes.clj against 5b78bed2.
-  (let [source "(ns app.views)\n(defn x [a b] [a b])\n"
-        caller (str "(ns app.caller (:require [app.views :as v]))\n"
-                    "(def string-case\n"
-                    "  (v/x \"one\n"
-                    "       string\"\n"
-                    "       2))\n"
-                    "(def unrelated-case\n"
-                    "  (v/x 1\n"
-                    "       (do\n"
-                    "       :sentinel)))\n")
-        usages (for [[i line] (map-indexed vector (str/split-lines caller))
-                     :when (str/includes? line "(v/x")
-                     :let [row (inc i)]]
-                 {:filename "test/app/caller.clj" :row row :col 4 :end-row row :end-col 7
-                  :to 'app.views :name 'x})
-        result (paper-compile (paper-request [["longer" ["x"]]])
-                 {"src/app/views.clj" source "test/app/caller.clj" caller}
-                 {:var-usages usages})]
-    (is (:ok result))
-    (is (= (-> caller
-               (str/replace "[app.views :as v]" "[app.longer :as longer]")
-               (str/replace "v/x" "longer/x")
-               (str/replace "\n       2))" "\n            2))")
-               (str/replace "\n       (do" "\n            (do"))
-           (get-in result [:future-sources "test/app/caller.clj"]))))
-  (doseq [[open close] [["(do" ")"] ["[" "]"] ["{:key" "}"] ["#{" "}"] ["#(identity" ")"] ["(do\n       ;; nested comment" ")"]]
-          [head replacement] [["v/x" "longer/x"] ["longer/x" "v/x"]]]
-    (let [column (+ 4 (count head))
-          spaces (apply str (repeat column " "))
-          shifted (apply str (repeat (+ 4 (count replacement)) " "))
-          body (str "\n" spaces ":sentinel\n" spaces close)
-          source (str "  (" head " 1\n" spaces open body "\n" spaces "2)")
-          parsed (#'split/parse-file "literal.clj" source)
-          result (#'split/splice source
+  ;; Sol r4 probe literals on 14c0501f; Fable's 2026-09-08 ruling supersedes
+  ;; the r3/r4 expected bytes: all nested layout moves, string contents do not.
+  (doseq [[old new body expected]
+          [["v" "longer"
+            "(v/x 1\n       (do\n       :sentinel))"
+            "(longer/x 1\n            (do\n            :sentinel))"]
+           ["v" "longer"
+            (str "(v/x 1\n"
+                 "       (do\n"
+                 "       ;; nested comment\n"
+                 "       \"alpha\n"
+                 "       beta\"\n"
+                 "       :sentinel\n"
+                 "       )\n"
+                 "       :outer)")
+            (str "(longer/x 1\n"
+                 "            (do\n"
+                 "            ;; nested comment\n"
+                 "            \"alpha\n"
+                 "       beta\"\n"
+                 "            :sentinel\n"
+                 "            )\n"
+                 "            :outer)")]
+           ["views" "v"
+            (str "(views/x 1\n"
+                 "          (do\n"
+                 "          ;; nested comment\n"
+                 "          \"alpha\n"
+                 "          beta\"\n"
+                 "          :sentinel\n"
+                 "          )\n"
+                 "          :outer)")
+            (str "(v/x 1\n"
+                 "      (do\n"
+                 "      ;; nested comment\n"
+                 "      \"alpha\n"
+                 "          beta\"\n"
+                 "      :sentinel\n"
+                 "      )\n"
+                 "      :outer)")]]]
+    (let [head (str old "/x")
+          new-head (str new "/x")
+          parsed (#'split/parse-file "literal.clj" body)
+          actual (#'split/splice body
                    (split/aligned-reference-edits parsed
-                     [{:start 3 :end (+ 3 (count head)) :text replacement}]))]
-      (is (= (str "  (" replacement " 1\n" shifted open body "\n" shifted "2)") result)))))
+                     [{:start 1 :end (+ 1 (count head)) :text new-head}]))
+          header (str "(ns app.caller (:require [app.views :as " old "]))\n")
+          ;; Keep the call at column zero through the full compiler too.
+          caller (str header body "\n(identity :outside)\n")
+          result (paper-compile (paper-request [[new ["x"]]])
+                   {"src/app/views.clj" "(ns app.views)\n(defn x [& args] args)\n"
+                    "test/app/caller.clj" caller}
+                   {:var-usages [(literal-usage "test/app/caller.clj" caller head 'app.views 'x)]})]
+      (is (= expected actual))
+      (is (= (edn/read-string (str/replace body head new-head)) (edn/read-string actual)))
+      (is (:ok result))
+      (is (= (str "(ns app.caller (:require [app." new " :as " new "]))\n"
+                  expected "\n(identity :outside)\n")
+             (get-in result [:future-sources "test/app/caller.clj"])))))
+  ;; Retain the collection boundaries from r4, with a deeper nested body and
+  ;; unequal indentation so preserving relative layout is observable.
+  (doseq [[open close] [["(do" ")"] ["[" "]"] ["{:key" "}"] ["#{" "}"] ["#(identity" ")"]]
+          [head replacement delta] [["v/x" "longer/x" 5] ["views/x" "v/x" -4]]]
+    (let [source (str "(" head " 1\n       " open "\n         (do\n           :sentinel)\n       " close "\n        :outer)")
+          parsed (#'split/parse-file "literal.clj" source)
+          actual (#'split/splice source
+                   (split/aligned-reference-edits parsed
+                     [{:start 1 :end (inc (count head)) :text replacement}]))
+          spaces (fn [width] (apply str (repeat (+ width delta) " ")))]
+      (is (= (str "(" replacement " 1\n" (spaces 7) open
+                  "\n" (spaces 9) "(do\n" (spaces 11) ":sentinel)\n"
+                  (spaces 7) close "\n" (spaces 8) ":outer)")
+             actual)))))
 
 ;; @spec NS-SPLIT-033
 ;; INTENT-TEST: NS-SPLIT-033

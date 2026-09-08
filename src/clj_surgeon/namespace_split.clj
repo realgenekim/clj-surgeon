@@ -211,7 +211,7 @@
 ;; @spec NS-SPLIT-032
 ;; INTENT: NS-SPLIT-032
 (defn aligned-reference-edits
-  "Add only matching continuation whitespace edits inside replaced calls.
+  "Shift every owned continuation line, except multiline string contents.
   Positions remain relative to the captured source; nested edits compose."
   [parsed edits]
   (let [by-start (into {} (map (juxt :start identity)) edits)
@@ -223,33 +223,19 @@
         protected (for [node nodes :when (= :multi-line (n/tag node))]
                     (node-span (:starts parsed) node))
         shifts (for [node nodes :when (#{:list :fn} (n/tag node))
-                     :let [[head arg] (filter meaningful? (n/children node))]
-                     :when (and head arg (= (:row (meta head)) (:row (meta arg))))
+                     :let [head (first (filter meaningful? (n/children node)))]
+                     :when head
                      :let [[start end] (node-span (:starts parsed) head)
                            edit (get by-start start)
-                           line-start (nth (:starts parsed) (dec (:row (meta head))))
-                           delta (when edit
-                                   (reduce + (for [e edits
-                                                   :when (and (<= line-start (:start e) start)
-                                                              (<= (:end e) end)
-                                                              (not (str/includes? (:text e) "\n")))]
-                                               (- (count (:text e)) (- (:end e) (:start e))))))
-                           column (dec (:col (meta arg)))
-                           nested (for [child (rest (tree-seq n/inner? n/children node))
-                                        :when (and (n/inner? child)
-                                                   (> (:row (meta child)) (:row (meta head))))]
-                                    (node-span (:starts parsed) child))]
+                           delta (when (and edit (not (str/includes? (:text edit) "\n")))
+                                   (- (count (:text edit)) (- end start)))]
                      :when (and delta (not (zero? delta)) (= end (:end edit)))
                      row (range (inc (:row (meta head))) (inc (:end-row (meta node))))
                      :let [start (nth (:starts parsed) (dec row))
-                           end (+ start column)]
-                     :when (and (<= end (count (:source parsed)))
-                                (re-matches #" *" (subs (:source parsed) start end))
-                                (not (#{\space \tab \newline \return} (get (:source parsed) end)))
-                                ;; The opener can be an outer argument, but later
-                                ;; body/closing lines belong to the nested form.
-                                (not-any? (fn [[a b]] (< a end b)) nested)
-                                (not-any? (fn [[a b]] (< a start b)) protected))]
+                           line-end (get (:starts parsed) row (count (:source parsed)))
+                           indent (re-find #" *" (subs (:source parsed) start line-end))
+                           end (+ start (count indent))]
+                     :when (not-any? (fn [[a b]] (< a start b)) protected)]
                  {:start start :end end :delta delta :owner (:owner edit)})
         whitespace (for [[start xs] (group-by :start shifts)
                          :let [{:keys [end owner]} (first xs)

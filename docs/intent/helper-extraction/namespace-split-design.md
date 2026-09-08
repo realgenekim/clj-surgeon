@@ -204,10 +204,11 @@ promotions). Private-only destinations say no public forms. No clock enters the
 pure compiler. Explicit docs preserve their values as valid Clojure string literals.
 
 Imports use located kondo java-class-usages excluding declarations and fully
-qualified class tokens. A replaced call head with a same-line first argument
-shifts only continuation whitespace equal to the original argument column inside
-that call; string contents stay intact. Ordinary and anonymous #(...) calls share
-the rule, including shorter aliases and nested heads on the same line. Destination requires use one sorted block
+qualified class tokens. A replaced call head shifts every subsequent line inside its call span by the
+head's width delta, regardless of indentation or nesting depth; multiline string
+contents stay byte-identical. Ordinary and anonymous #(...) calls share the rule.
+Each changed enclosing head contributes its own delta once on shared lines.
+Destination requires use one sorted block
 at the source continuation indent (default three spaces). Caller entries retain
 existing groups and trivia; additions join the matching library-prefix group.
 The same rule applies to source and test callers.
@@ -265,12 +266,21 @@ The full cold profile and repository suite remain required final proof.
 
 Gene authorizes the complete fail-first, repair and image-loop proof cycle for
 Sol's two blocking findings on 5b78bed2, starting at round 3 tip 38ecea11.
-NS-SPLIT-032 requires structural ownership in addition to the existing column
-match: a line inside any nested form opened after the replaced head's line is
-protected, including nested bodies, comments and closing delimiters. Its opening
-line remains an outer continuation; later outer siblings may still move. Forms
-opened on the head's line retain the existing compositional alignment behavior.
-Multiline string contents remain protected independently.
+NS-SPLIT-032 follows Fable's 2026-09-08 round-5 ruling, superseding the
+round-4 column match and nested-body protection. Every line after the head line
+inside the changed call's structural span shifts by the head's width delta,
+including nested bodies, comments, standalone closing delimiters and later outer
+siblings. A multiline string's opening line may move; subsequent lines inside
+its literal never move. Lines outside the call stay byte-identical. No first-argument
+column test defines ownership; a first argument on a later line also moves.
+
+Round-5 witnesses use Sol's unindented literals from the review of 14c0501f:
+call at column zero, growth v/x to longer/x and shrinkage views/x to v/x,
+nested do, body, comment, standalone close, multiline string and outer sibling.
+Both direct alignment and compile-split must fail first on that reviewed tip.
+The warm image is retained across every split/oracle/test iteration; one final
+cold make test provides the repository proof. This is a correctness repair,
+with no comparative performance claim.
 
 NS-SPLIT-033 pins the original d9205abc forms/polish headers. Replacement entries
 are sorted only among themselves and spliced into the retired entry's span;

@@ -39,5 +39,5 @@ Round 3 registered amendments (registry: namespace-split-papercuts.edn):
 - [x] **NS-SPLIT-029**: While a live workspace nREPL is available, verification shall run the affected reload/test probe before cold commands and roll back on probe failure.
 - [x] **NS-SPLIT-030**: When a profile selects warm proof, success shall report committed-probe-only with incomplete verification and all skipped cold commands pending.
 
-- [x] **NS-SPLIT-032**: When realigning a changed call head, the compiler shall preserve lines owned by nested forms opened after the head line.
+- [x] **NS-SPLIT-032**: When a call head changes width, the compiler shall shift every subsequent line within its structural span by that delta at every nesting depth, except lines inside multiline string literals.
 - [x] **NS-SPLIT-033**: When replacing the retired views require, the compiler shall splice only the sorted new block at its exact span, preserving other host bytes.
