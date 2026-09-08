@@ -383,3 +383,114 @@ of them is a lesson with legs: under `set -o pipefail`, `check | grep -q` inheri
 program's nonzero exit and reports a false mismatch on exactly the rows where the program is
 SUPPOSED to refuse. A harness that is wrong only on the refusal rows is a harness that quietly
 stops testing refusals.
+
+### E/F. `~/bin/ship` — the review and the battery stop being serial
+
+Addendum, same day. The two long steps never needed each other's result to START: the Sol fence
+review is ~20 min of machine time, the receipt battery is minutes of machine time, and only the
+LANDING needs both. They were serial for no reason.
+
+`ship <tip> <brief-file> <verdict-basename> "<title>" <receipt-branch>` launches `fence-run`,
+and the moment its START RECEIPT prints (banner + a codex pid whose cwd is the fence worktree —
+fence-run's own ratchet, not the launcher's exit) it prewarms the receipt battery beside the
+review through `land-auto --prewarm`. It waits on the reviewer's pid, reads the FIRST line of the
+verdict file, and only on GO calls `land-auto`, which finds the already-minted receipt and lands it
+in one `land` call. It is a WRAPPER: `fence-run` is untouched, so a review launched by hand behaves
+exactly as it does today.
+
+Three refusals are worth naming:
+
+- **`GO-WITH-FIX` is not a GO** and never lands (the 2026-09-03 scar: a GO-WITH-FIX approved on a
+  fix whose own witness was still red at the tip).
+- **The verdict match order is NO-GO, then GO-WITH-FIX, then GO** — both refusals CONTAIN the
+  string `GO`, so a reader that tests for GO first reads every refusal as an approval.
+- **A reviewer that exits without a verdict file, with an empty one, or with a first line that is
+  none of the three, is `SHIP UNVERIFIED`** — never an assumed GO. A wrong `:idle` costs an hour;
+  an honest `:unverified` costs nothing.
+
+One line per run, printed and appended to `/var/tmp/forge/ship.ledger`:
+`SHIP <LANDED|NOT LANDED|NO-GO|GO-WITH-FIX|UNVERIFIED|REFUSED> tip=… landed_as=… review_wall=…
+battery_wall=… land_wall=… total=…`. The battery wall is stamped from the chain log's mtime at its
+READY line — the battery's real end, not when the waiter noticed it, so a battery that finished
+twenty minutes into a review is not billed for the rest of the review.
+
+Fixture: `/var/tmp/forge/tighten/fixtures/run-ship.sh`, **10 rows, 0 mismatches**, with
+`fence-run`, `receipt-chain`, `land` and `run-bg` stubbed but the REAL `land-auto` in the middle, so
+the prewarm hand-off is exercised rather than mocked. The reviewer is a real short-lived background
+process, so `ship` really waits on a pid. The last row is the point of the whole thing: a 6 s review
+beside a 3 s battery completes in 7 s, not 9 — the parallelism is asserted by the CLOCK, because
+every other assertion in the file passes just as well when the two steps run one after the other.
+
+### The t-plan: Astra proposed, Sol attacked, and the branch it was all built on got a NO-GO
+
+Three things happened in one afternoon, and the third is the most useful.
+
+**1. Astra reviewed the landing plan and Sol cross-attacked it.** Where they disagreed, Sol was
+ruled with. What survived, what died, and why:
+
+| Item | Astra | Ruling |
+|---|---|---|
+| Retry only on a TYPED stale receipt | build it | **built** — the first version matched the bare string `battery-fresh: REFUSED`, which would have turned a `last-run-failed` receipt into a refresh attempt: re-running a red gate until it passes |
+| Single-run ownership | one process, one mutex | **built as a renewable LEASE** — heartbeat, takeover of a cold lease, and a duplicate call ATTACHES instead of failing |
+| Sealed candidate for reviewer + battery | build it | **built** — `receipt-chain --candidate C` checks the reviewed commit out directly instead of performing its own second merge |
+| Proof OUTSIDE the candidate | build an external receipt store | **REFUSED** (Sol): "immutable" is an adjective, not a mechanism. The committed git ledger is fetched with the clone, content-addressed, ordered, corruption-checked, and records failures too. `receipt-chain` now proves the ledger DELTA instead: exactly one well-formed entry naming the tested commit, gate manifest and toolchain bound in the commit message |
+| `STALE_BASE` on any remote advance | build it | **REFUSED** (Sol): the records lane moves `MCP/main` ~20x/day, so that is a retry generator, not a policy. Refuse only a CODE advance; a records-only advance is reported and proceeds |
+| Additive clock buckets | print them | **REFUSED** (Sol): ship has no authoritative request/push event, no queue intervals, no cross-process monotonic timeline. Printing the buckets would be a second unverifiable self-report wearing the costume of arithmetic. The line now prints observed facts only, durations that OVERLAP and are never summed, and `request_to_landed=unknown` |
+
+**2. Two defects Sol found in tools nobody had re-read.**
+
+`land`'s publication tail was `git push … && git … pull …; echo "LANDED …"`. **The `;` made the
+LANDED print unconditional** — a REJECTED push still printed LANDED, and so did a failed checkout
+sync. A landing tool whose success line does not depend on the push is a tool that reports delivery
+it never made. Fixed: a rejected push exits with its own typed line, then an INDEPENDENT look at
+the remote (`fetch` + `rev-parse origin/MCP/main`) has to carry the sha before LANDED prints, and
+the local checkout sync becomes a WARNING after a confirmed landing.
+
+`receipt-chain` called `make test-battery` DIRECTLY, while `make test` creates the recovery receipt
+first. So the consumer ran without its prerequisite, and the 14:25 battery passed 743 tests while
+logging `1 preconditions skipped.` — a gate with a silent hole. Fixed: the prerequisite runs first
+on the same worktree, and `skipped=0 failed=0` is required. **The ABSENCE of the precondition
+report is also RED**: a battery that stopped reporting preconditions is not a battery that proved
+them.
+
+**3. The branch all of this was demonstrated on got a NO-GO — from the pipeline itself.**
+`ship df3f9a18 …` ran the fence on `fable/battery-fresh-code-only` and returned
+`SHIP NO-GO … review_wall=933s`, landing nothing. Sol's finding, verbatim: *"The prefix permits a
+two-commit laundering attack: renaming an input into `docs/observations/` counts once, but
+subsequent `100644` changes are exempt. This affects interpreter-run scripts, Makefiles, and
+fixtures. The repository already has an observations file consumed by the fast lane."*
+
+That is the same objection Sol raised in the cross-attack — *"`docs/observations` already contains
+gate-consumed artifacts and scripts, so 'docs-only' is not inert"* — and it is correct. Move a
+gate-consumed input into the records lane once, and every later edit to it is free. Single-commit
+rename, symlink, mode-only, empty-commit and merge attacks all failed closed; this two-commit one
+does not. Sol left four intentionally-red regressions in the fence worktree at
+`test/clj_surgeon/battery_ledger_test.clj:214`.
+
+The remedy is Sol's own line from the cross-attack, and it is not a wider prefix: **ignore only
+explicitly REGISTERED inert records; unknown paths count as relevant.** The branch stays unlanded.
+
+**The cheerful part:** the tool refused its own author's branch, on the strength of a review it
+launched itself, and printed one line saying so. The pipeline works even when the change does not.
+
+### Fixture counts, all green
+
+```
+land-auto                 19 rows   verify-bundle             11 rows
+ship (v1)                 11 rows   ship-v2 (items 1-7)       28 rows
+land publication truth
+  + receipt-chain DAG     12 rows
+```
+
+Plus a rule Gene caught mid-flight, now in every fixture and in ship's lease cleanup: **every
+`rm -rf` uses `${VAR:?}`, the value is asserted to start with `/var/tmp/forge/` BEFORE the trap is
+armed, and glob deletes name the full prefix.** The pattern is `/var/tmp/forge/?*`, so the scratch
+ROOT itself is refused — the guard cannot be talked into removing the thing it is protecting. Each
+fixture carries a row that proves an empty and an unset variable both refuse.
+
+Two fixture bugs from this batch worth keeping, because both are the same species as the defects
+they were hunting: an unanchored `grep -q 'LANDED'` matched **"NOT LANDED"** (the same substring
+trap that makes a `GO` check approve a `NO-GO`), and `check | grep -q` under `set -o pipefail`
+inherited the checked program's nonzero exit, so it reported a false mismatch on exactly the rows
+where the program was SUPPOSED to refuse — a harness that is wrong only on the refusal rows is a
+harness that quietly stops testing refusals.

@@ -383,12 +383,22 @@
 
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
-    (is (= 54 (count (lm/namespaces-for :fast))))
+    ;; Batch 3 adds one pure status namespace and one detached process battery.
+    ;; MERGE RESOLUTION, 2026-09-08 (fable/battery-parallel x MCP/main c41dee30):
+    ;; the SAME trap this file already records below. Batch 3 moved this pin
+    ;; 53 -> 54 for its pure status namespace and TEST-ISO-013 moved it 53 -> 54
+    ;; for battery-parallel-test; the numbers agreed textually and git merged
+    ;; them clean at 54, silently losing one namespace. Two different witnesses,
+    ;; two increments: 53 + 1 + 1 = 55.
+    (is (= 55 (count (lm/namespaces-for :fast))))
     (is (= 7 (count (lm/namespaces-for :integration))))
     ;; B07 enrolls its independent oracle mutation witnesses in one new battery namespace.
     ;; Sol r10 enrolls the per-verb artifact boundary battery.
-    (is (= 35 (count (lm/namespaces-for :battery))))
-    (is (= 96 (count lm/manifest))
+    ;; Batch 3 adds one detached process battery; TEST-ISO-013 adds no battery
+    ;; namespace (it re-runs the ones already there), so the battery count is
+    ;; trunk's. The manifest takes BOTH sides: 95 + 2 (Batch 3) + 1 (TEST-ISO-013).
+    (is (= 36 (count (lm/namespaces-for :battery))))
+    (is (= 98 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -420,7 +430,9 @@
   '{clj-surgeon.receipt-artifacts-boundary-test 15 ; Sol r10 + two Row 5 real-process witnesses (battery).
     clj-surgeon.namespace-split-test 35 ; B07 adds nine partial-retention, facts, bounded-analysis and preservation witnesses.
     clj-surgeon.namespace-split-warm-test 2 ; Round 3: real nREPL failure/green matrix and stale/foreign discovery, integration.
-    clj-surgeon.mcp-namespace-split-test 13 ; B07 + five Row 5 pure/path witnesses; two real-process witnesses live in receipt-artifacts-boundary-test.
+    clj-surgeon.mcp-namespace-split-test 21 ; Batch 3's six receipt/facts/budget witnesses on the previous 13, plus Sol's a9da4344 committed-facts witness and the 0956951b delta fence's actionable unsafe-tmpdir refusal.
+    clj-surgeon.split-proof-gate-test 4 ; Batch 3 pure status/state matrix, plus Sol's a9da4344 temp-root admission and receipt-ceiling witnesses.
+    clj-surgeon.split-proof-gate-boundary-test 3 ; Batch 3 detached worker and caller-exit boundaries, plus Sol's a9da4344 worker-identity boundary.
     clj-surgeon.cell-b-oracle-test 2 ; B07: shell lint mutation test and independent partial-preservation mutants; battery (Python subprocess).
     clj-surgeon.mcp-expect-guard-test 14 ; `expect` is a guard on both write routes, not discarded bookkeeping (dogfood-3, 2026-09-07).
     clj-surgeon.outline-corpus-integration-test 1 ; MOVED: full repository differential out of the bounded fast namespace.
@@ -541,10 +553,16 @@
       ;; Row 3 adds 9 pure + 12 real boundary/CLI witnesses: 496 + 21 = 517.
       ;; Sol r10 adds 13 per-verb publication witnesses: 517 + 13 = 530.
       ;; Rows sublime adds seven external-profile/proof-honesty boundary witnesses.
-      ;; TEST-ISO-013 adds 21 parallel-battery witnesses: 537 + 21 = 558, plus
-      ;; three regressions run one found (lane-integrity grain, the dropped
-      ;; :sharded field, home isolation through a selector): 558 + 3 = 561.
-      (is (= 561 adopted) (str "adopted tests: " adopted)))
+      ;; Batch 3: six receipt/facts witnesses + two pure status + two detached boundary tests.
+      ;; Sol's landing fence for a9da4344 added four JVM witnesses (2 gate, 1 gate
+      ;; boundary, 1 mcp) without moving these pins, so this arithmetic was RED at
+      ;; branch tip 0956951b; the delta fence for that tip adds the fifth, the
+      ;; actionable unsafe-tmpdir refusal (NS-SPLIT-059). 547 + 4 + 1 = 552.
+      ;; TEST-ISO-013 adds 21 parallel-battery witnesses plus three regressions
+      ;; the first wide run found (lane-integrity grain, the dropped :sharded
+      ;; field, home isolation through a selector): 24 more.
+      ;; MERGE, 2026-09-08: both sides grew this from 537. 537 + 15 + 24 = 576.
+      (is (= 576 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -642,8 +660,14 @@
       ;; Sol r10 adds 13 witnesses: 1530 + 13 = 1543.
       ;; Rows sublime: seven split boundaries plus six alias telemetry witnesses.
       ;; 1543 + 7 + 6 = 1556; no test or namespace leaves the corpus.
-      ;; TEST-ISO-013, the parallel battery: 1556 + 24 = 1580, one new :fast namespace.
-      (is (= 1580 total) (str "manifest declares " total " tests"))
+      ;; Batch 3 adds ten JVM witnesses; the encoder CLI witness stays in the BB lane.
+      ;; Sol's a9da4344 fence (+4) and the 0956951b delta fence (+1) carry the same
+      ;; five witnesses through the source census; the delta fence's help witness
+      ;; lives in the BB lane's cli-dispatch-test and is not counted here.
+      ;; 1566 + 4 + 1 = 1571.
+      ;; TEST-ISO-013, the parallel battery: 24 witnesses in one new :fast namespace.
+      ;; MERGE, 2026-09-08: both sides grew this from 1556. 1556 + 15 + 24 = 1595.
+      (is (= 1595 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

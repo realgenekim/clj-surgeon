@@ -1,0 +1,8 @@
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/var/tmp/forge
+GUARDRAILS IS ENABLED. RUNTIME PERFORMANCE WILL BE AFFECTED.
+Mode: :runtime  config: {:throw? true}
+Guardrails was enabled because the guardrails.enabled property is set to a (any) value.
+Killed
+TEST-RECEIPT-NONE next: the run printed no RUN-RECEIPT marker — it did not complete, or :kaocha.plugin/run-receipt is not enabled in tests.edn
+GATE exit=137 wall_s=5
+make: *** [Makefile:42: test-gate] Error 137

@@ -825,6 +825,31 @@ pass the returned `snapshot_hash` to refuse stale work. Facts-only needs no live
 verification profile; publication still requires one. Existing boolean plan-only
 retains its broader compiler projection.
 
+Successful full and retained-source receipts carry `:facts`: per-destination
+`:owners_moved`, `:static_sites_rewritten` by caller file, `:retained_vars`, and
+workspace `:unexpected_paths`. Caller strings use the receipt encoder; raw
+captured facts stay in `:details_path`. The receipt is capped at 65,536 bytes.
+After commit, the matching facts-only request reads these committed facts;
+source drift refuses `committed-facts-stale` and names `:closure_receipt`.
+Pre-commit facts also print a complete `:manifest`, including `:verification`,
+which can be passed directly to plan-only.
+
+For independent pending proof, configure the named profile with `:proof :warm`
+and `:gate :background`. The verb returns a `committed-probe-only` receipt with
+`:background_gate` pid/argv, immutable `:receipt_path`, and `:closure_receipt`.
+The detached worker uses the existing command runner, preserves profile order,
+and hashes the source inventory before and after each command. It requires
+Babashka and `setsid` on the operator PATH. Query:
+
+```sh
+clj-surgeon :op :proof-status :receipt /absolute/path/from/receipt_path.edn
+```
+
+Status is `complete`, `pending`, `failed` (named command), or `stale`. The original
+receipt remains incomplete forever. Failed or stale background proof does not
+roll back later caller edits. Work that changes captured sources must wait for
+closure; read-only and out-of-scope work can continue while the gate runs.
+
 See the [request, proof and undo contract](docs/intent/helper-extraction/namespace-split-design.md).
 
 ```sh

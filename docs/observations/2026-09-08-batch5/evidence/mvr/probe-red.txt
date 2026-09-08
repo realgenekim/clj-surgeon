@@ -1,0 +1,8 @@
+PROBE-DETAIL: FAIL in marvin-voice-remote.echo-guard-test/acknowledged-playback-evidence-is-bounded (echo_guard_test.clj:28)
+PROBE-DETAIL: Expected:
+PROBE-DETAIL:   ["r2" "r3"]
+PROBE-DETAIL: Actual:
+PROBE-DETAIL:   [+"r1" "r2" -"r3"]
+PROBE marvin-voice-remote.reducer.echo-guard,marvin-voice-remote.echo-guard-test tests=6 pass=12 fail=1 error=0 wall_ms=214 image=45461
+TEST-RECEIPT /var/tmp/forge/batch5-fx/mvr/target/kaocha-runs/2026-09-08T17-28-00-411001285Z-f8af125b-e208-4828-b9c6-d5cabf4fa5e8.edn
+make: *** [Makefile:39: test-probe] Error 1
