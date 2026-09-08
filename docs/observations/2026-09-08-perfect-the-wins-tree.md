@@ -83,3 +83,4 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 - 2026-09-08T08:50Z row 5 verb (partial retention) LANDED on trunk 1ab53e0e; CLI + 7906 on it.
 - 2026-09-08T09:02Z pilot 4b: 4/4 ran observed, task PASS ×4; grade blocked by CX-18 (grader) + 1 genuine miss → fix/regrade/p25.
 - 2026-09-08T09:11Z row 2 stage 2: caller work ÷2.6 (0.62 saved), 6/6 token-golden, 0 refusals; gate fails on a verb paper cut (detail files in workspace) + meter constant → Sol ruling.
+- 2026-09-08T09:12Z row 3: verb capability built (3d55fa34); frozen task not admissible under its own rules → fixture amendment needed (Sol, later). Astra on the row-2 paper cut.
