@@ -80,3 +80,4 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 - 2026-09-08T08:06Z row 2: floor n=6 done (198 s median); design amended (candidate-complete primary, alias-neutral O2); stage 2 (D arm) running.
 - 2026-09-08T08:07Z acceptance 4: cohorts LIFTED (caveats C1–C3). Pilot 4 refused (seed load-reds) → 4b running. Row 1 to LOW = pilot 4b PASS ×4.
 - 2026-09-08T08:10Z row 5: B07 feasibility PASS (02bbf482); native floor n=6 running; Sol r9 running. Row 2 stage 2 running. Pilot 4b running.
+- 2026-09-08T08:50Z row 5 verb (partial retention) LANDED on trunk 1ab53e0e; CLI + 7906 on it.
