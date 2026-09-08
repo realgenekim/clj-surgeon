@@ -237,3 +237,36 @@ Sol's landing fence adds NS-SPLIT-055..058: closure pid-reuse/replay identity,
 mandatory `/var/tmp` worker temp admission, independent EDN/escaped-JSON receipt
 bounds, and snapshot-bound printed-manifest tamper refusal. Each failed probe earns
 a focused witness before its repair; no full-suite rerun is part of this fence.
+
+## Comment identity diff repair (2026-09-08)
+
+The authorized branch-only repair strengthens NS-SPLIT-060. Row5-adopt-2
+(e1de51d1) observes positional pairing in retained exports.clj (Cell B): the
+comment originally at 1822 survives at 1465, yet the receipt calls it deleted.
+Full Cell C is the independent whole-partition acceptance fixture.
+
+Before comparing replacement hunks, match exact comment content within its
+original file and named owning form, mapping moved owners to their assigned
+destination. File-local unowned comment lines use surviving content anchors.
+A location shift alone is omitted. A comment carried to another file by its
+owner is a moved fact. Only unmatched lines within the same anchored hunk can
+be changed facts; additions and removals remain explicit. A removed duplicate
+occurrence with surviving content must say so, never claim content deletion.
+
+The grouped :comment_edits vector carries :file, :after_file and :edits.
+Each edit group names :owner and its :changes. Unchanged moved occurrences share
+:moved {:from [original-lines] :to [candidate-lines]}, retaining every location
+without echoing text. Consecutive locations may use inclusive [start end]
+ranges. :changed {:before texts :after texts} carries corresponding text vectors
+:line/:after_line, or :moved locations when relocated. Indentation-only after text may
+use [:indent N] under the declared lossless encoding; a before-text [N text]
+expands to N spaces followed by text. The projection has independent roundtrip
+witnesses, including range cardinality and both receipt encodings. :deleted carries
+:line, :added carries :after_line, and :removed_occurrence carries :line.
+Existing :comment_policy and lossless string encoding apply. No meter is added.
+
+Matrix: identical and line-shifted files; exact 1822/1465 survivor with prior
+removal; moved owner; policy rewrite; insertion/deletion separated by surviving
+anchors; repeated text; namesakes; reordered comments; hostile string encoding;
+full Cell C receipt under both 65,536-byte ceilings. Pure tests precede code;
+then affected warm tests, Cell C papercut oracle, one affected cold gate.

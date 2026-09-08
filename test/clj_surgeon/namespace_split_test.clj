@@ -795,19 +795,122 @@
                "test/app/quiet_test.clj" "(ns app.quiet-test)\n(def unrelated 42)\n"}
      :analysis {} :source-paths ["src" "test"]}))
 
+(defn comment-entries [facts]
+  (vec (for [file (:comment_edits facts) owner (:edits file) change (:changes owner)]
+         (assoc change :owner (:owner owner)))))
+
 ;; @spec NS-SPLIT-060
 ;; INTENT-TEST: NS-SPLIT-060
 (deftest comment-facts-record-policy-and-lines
   (let [{:keys [request input]} (partial-fixture)
         facts (:facts (split/receipt (split/compile-split request input) []))]
     (is (= "remove-moved-invocations" (:comment_policy facts)))
-    (is (= 1 (count (:comment_edits facts))))
+    (is (= 2 (count (:comment_edits facts))))
     (is (= "src/app/views.clj" (get-in facts [:comment_edits 0 :file])))
-    (is (str/includes? (get-in facts [:comment_edits 0 :lines 0 2] "") "(print (moved))"))
-    (is (not (str/includes? (get-in facts [:comment_edits 0 :lines 0 3] "") "(print"))))
+    (is (str/includes? (get-in facts [:comment_edits 1 :edits 0 :changes 0 :changed :before 0] "") "(print (moved))"))
+    (is (not (str/includes? (get-in facts [:comment_edits 1 :edits 0 :changes 0 :changed :after 0] "") "(print"))))
   (let [facts (:facts (split/receipt (negative-fixture) []))]
     (is (= "preserve" (:comment_policy facts)))
     (is (= [] (:comment_edits facts)))))
+
+(defn comment-fixture-facts [before after]
+  (split/review-facts
+    (-> (negative-fixture)
+        (assoc-in [:guard-sources "test/app/quiet_test.clj"] before)
+        (assoc-in [:future-sources "test/app/quiet_test.clj"] after))))
+
+;; @spec NS-SPLIT-060
+;; INTENT-TEST: NS-SPLIT-060
+(deftest comment-identity-diff-regressions
+  ;; Row5-adopt-2 X1..X6, e1de51d1: exports.clj 1822 -> 1465.
+  ;; Preserve the actual owner and its two comment lines; padding recreates
+  ;; the original coordinates without retaining unrelated application code.
+  (let [owner "(defn- stored-key-matches? [key-row token]\n  (if (contains? key-row :key-hash)\n    :hashed\n    ;; Historical facts stored plaintext material. Keep that read arm until\n    ;; every live legacy key has been rotated; new facts never take it.\n    (= (:key key-row) token)))\n"
+        before (str "(ns app.quiet-test)\n(comment\n  (println :remove)\n  :keep)\n" (apply str (repeat 1813 "\n")) owner)
+        after (str "(ns app.quiet-test)\n(comment\n  :keep)\n" (apply str (repeat 1457 "\n")) owner)
+        facts (comment-fixture-facts before after)
+        edits (comment-entries facts)]
+    (is (= "    ;; every live legacy key has been rotated; new facts never take it."
+           (nth (str/split-lines before) 1821)))
+    (is (= (nth (str/split-lines before) 1821) (nth (str/split-lines after) 1464)))
+    (is (= [{:owner nil :line 3 :deleted "  (println :remove)"}] (vec edits))))
+  ;; Exhaust the ordinal-shift family: preceding deletions and inserted lines
+  ;; must not change the two surviving comments' identities.
+  (doseq [padding (range 5) removed (range 1 5)]
+    (let [before (str "(ns app.quiet-test)\n(comment\n"
+                      (apply str (repeat removed "  :drop\n")) "  :keep)\n;; survivor\n(def retained 1)\n")
+          after (str "(ns app.quiet-test)\n" (apply str (repeat padding "\n"))
+                     "(comment\n  :keep)\n;; survivor\n(def retained 1)\n")
+          edits (comment-entries (comment-fixture-facts before after))]
+      (is (= removed (count edits)))
+      (is (every? #(= "  :drop" (:deleted %)) edits))))
+  (doseq [prefix ["" "\n\n\n"]]
+    (is (= [] (:comment_edits (comment-fixture-facts
+                                "(ns app.quiet-test)\n;; same\n(def retained 1)\n"
+                                (str "(ns app.quiet-test)\n" prefix ";; same\n(def retained 1)\n"))))))
+  (let [before "(ns app.quiet-test)\n(def retained\n  ;; old\n  ;; anchor\n  1)\n"
+        after "(ns app.quiet-test)\n(def retained\n  ;; new\n  ;; anchor\n  1)\n"]
+    (is (= [{:owner "retained" :line [3] :after_line [3]
+             :changed {:before ["  ;; old"] :after ["  ;; new"]}}]
+           (vec (comment-entries (comment-fixture-facts before after))))))
+  (let [before "(ns app.quiet-test)\n;; drop\n;; anchor\n(def retained 1)\n"
+        after "(ns app.quiet-test)\n;; anchor\n;; add\n(def retained 1)\n"
+        edits (vec (comment-entries (comment-fixture-facts before after)))]
+    (is (= [{:owner "retained" :line 2 :deleted ";; drop"}
+            {:owner "retained" :after_line 3 :added ";; add"}] edits)))
+  (let [before "(ns app.quiet-test)\n;; same\n;; same\n(def retained 1)\n"
+        after "(ns app.quiet-test)\n;; same\n(def retained 1)\n"
+        edits (vec (comment-entries (comment-fixture-facts before after)))]
+    (is (= [{:owner "retained" :line 3 :removed_occurrence ";; same"}] edits)))
+  ;; All permutations preserve content identity; reordered survivors are moves,
+  ;; never replacements. Duplicate loss is an occurrence fact even when the
+  ;; survivor belongs to another owner/file.
+  (doseq [[order moved-count] [[["a" "b" "c"] 0] [["a" "c" "b"] 1] [["b" "a" "c"] 1]
+                               [["b" "c" "a"] 1] [["c" "a" "b"] 1] [["c" "b" "a"] 2]]]
+    (let [lines (fn [texts] (mapv (fn [i text] {:file "a.clj" :owner "f" :line (inc i) :text text}) (range) texts))
+          edits (split/diff-comment-lines (lines ["a" "b" "c"]) (lines order) (set order))]
+      (is (every? :moved edits))
+      (is (= moved-count (count edits)))))
+  (is (= [{:file "a.clj" :after_file nil :owner "f" :line 1 :removed_occurrence ";; shared"}]
+         (split/diff-comment-lines [{:file "a.clj" :owner "f" :line 1 :text ";; shared"}] [] #{";; shared"})))
+  ;; Projection is reversible, including consecutive line compression and
+  ;; indentation-only replacements. These literals are the decoding oracle.
+  (let [expand-lines (fn [xs] (vec (mapcat #(if (vector? %) (range (first %) (inc (second %))) [%]) xs)))
+        rows (mapv (fn [line] {:owner "moved" :file "a.clj" :after_file "b.clj"
+                               :content (str ";; " (apply str (repeat 200 "x")))
+                               :moved {:from line :to (+ line 20)}}) (range 1 401))
+        compact (split/compact-comment-edits rows)
+        movement (get-in compact [0 :changes 0 :moved])]
+    (is (= (vec (range 1 401)) (expand-lines (:from movement))))
+    (is (= (vec (range 21 421)) (expand-lines (:to movement))))
+    (is (< (max (alength (.getBytes (pr-str {:other (apply str (repeat 35000 "x")) :edits compact}) "UTF-8"))
+                (alength (.getBytes (json/generate-string {:other (apply str (repeat 35000 "x")) :edits compact}
+                                      {:escape-non-ascii true}) "UTF-8"))) 57344)))
+  (doseq [indent [0 2 8 20 80] suffix [";; ordinary" ";; quote \"x\" \\ and \u2028"]]
+    (let [before (str (apply str (repeat indent " ")) suffix)
+          after (str (apply str (repeat (+ indent 5) " ")) suffix)
+          result (split/compact-comment-edits [{:owner "f" :file "a.clj" :after_file "b.clj"
+                                                :line 8 :after_line 12 :moved {:from 8 :to 12}
+                                                :changed {:before before :after after}}])
+          change (get-in result [0 :changes 0])
+          encoded (get-in change [:changed :before 0])
+          decoded (if (vector? encoded) (str (apply str (repeat (first encoded) " ")) (second encoded)) encoded)
+          after-code (get-in change [:changed :after 0])]
+      (is (= {:from [8] :to [12]} (:moved change)))
+      (is (= before decoded))
+      (is (= after (str (apply str (repeat (second after-code) " ")) (str/triml decoded))))))
+  (let [compiled (split/compile-split
+                   (paper-request [["util" ["moved"]]])
+                   {:sources {"src/app/views.clj" "(ns app.views)\n;; travels\n(defn moved [] 1)\n"}
+                    :analysis {} :source-paths ["src"]})
+        groups (:comment_edits (split/review-facts compiled))]
+    (is (= 1 (count groups)))
+    (is (= "src/app/views.clj" (:file (first groups))))
+    (is (= "src/app/util.clj" (:after_file (first groups))))
+    (is (= "moved" (get-in groups [0 :edits 0 :owner])))
+    (is (= 1 (count (get-in groups [0 :edits 0 :changes]))))
+    (is (= [2] (get-in groups [0 :edits 0 :changes 0 :moved :from])))
+    (is (every? pos-int? (get-in groups [0 :edits 0 :changes 0 :moved :to])))))
 
 ;; @spec NS-SPLIT-061
 ;; INTENT-TEST: NS-SPLIT-061
@@ -884,10 +987,10 @@
                      (assoc-in [:guard-sources "test/app/quiet_test.clj"] before)
                      (assoc-in [:future-sources "test/app/quiet_test.clj"] after))
         facts (split/review-facts compiled)
-        row (get-in facts [:comment_edits 0 :lines 0])
+        row (get-in facts [:comment_edits 0 :edits 0 :changes 0 :changed])
         decode #(json/parse-string (str "\"" % "\""))]
-    (is (= ";;   quote \"x\" \\ newline\u2028forge\u202E" (decode (nth row 2))))
-    (is (= ";;    quote \"x\" \\ newline\u2028forge\u202E" (decode (nth row 3))))
+    (is (= ";;   quote \"x\" \\ newline\u2028forge\u202E" (decode (first (:before row)))))
+    (is (= ";;    quote \"x\" \\ newline\u2028forge\u202E" (decode (first (:after row)))))
     (is (not (re-find #"[\u2028\u202E]" (pr-str facts))))))
 
 ;; @spec NS-SPLIT-064
@@ -917,8 +1020,8 @@
         swapped (-> compiled
                     (update-in [:future-sources "src/app/util.clj"] str/replace ";; comment A" ";; comment B")
                     (assoc-in [:future-sources "src/app/v.clj"] (str/replace namesake ";; comment B" ";; comment A")))]
-    (is (= [] (:comment_edits (split/review-facts compiled))))
-    (is (= 2 (reduce + (map (comp count :lines) (:comment_edits (split/review-facts swapped)))))))
+    (is (= [2] (get-in (split/review-facts compiled) [:comment_edits 0 :edits 0 :changes 0 :moved :from])))
+    (is (= 2 (count (comment-entries (split/review-facts swapped))))))
   (let [caller "(ns app.quiet-test (:require [app.views :as old]))\n(defn moved [x] (old/moved x))\n"
         compiled (split/compile-split
                    (assoc (paper-request [["util" ["moved"]]]) :roots ["src" "test"])
