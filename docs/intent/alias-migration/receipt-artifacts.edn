@@ -1,0 +1,29 @@
+{:intents
+ [{:id :ALIAS-MIGRATION-001 :status :active
+   :ears "When a verb publishes bookkeeping, it shall use its external verb receipt directory."
+   :misreadings ["Gitignoring workspace artifacts is sufficient." "Only alias detail documents count." "Explicit server configuration may put undo in source."]
+   :boundaries ["library retirement" "detail retention" "undo" "symlink containment"]
+   :tests [:row2-migration-leaves-only-rewritten-files
+           :helper-extraction-publishes-external-detail-and-inverse
+           :compact-edit-publishes-external-inverse
+           :general-change-publishes-external-inverse
+           :prepared-apply-publishes-external-inverse
+           :legacy-extraction-publishes-external-inverse
+           :typist-publishes-external-inverse-after-real-proof
+           :standalone-require-change-publishes-external-detail-and-inverse
+           :namespace-split-publishes-external-detail-and-inverse
+           :cli-change-publishes-external-inverse
+           :advisory-lock-creates-only-an-external-lock-file
+           :cold-proof-publication-is-external-and-workspace-isolated
+           :admit-focused-runner-publishes-an-external-report
+           :default-transaction-publishes-external-journal-and-preimage]}
+  {:id :ALIAS-MIGRATION-002 :status :active
+   :ears "When a write commits, the receipt shall substantiate workspace cleanliness with post-write Git status."
+   :misreadings ["Copy planned paths without running Git." "A non-Git tree is clean." "Pre-existing untracked files can be silently omitted."]
+   :boundaries ["untracked files" "unrelated tracked changes" "non-Git" "renames" "unusual file names"]
+   :tests [:row2-migration-leaves-only-rewritten-files]}
+  {:id :ALIAS-MIGRATION-003 :status :active
+   :ears "When the landing gate runs, it shall execute the whole alias migration boundary namespace."
+   :misreadings ["A fresh battery receipt executes the affected tests." "Running only the new row-2 witnesses is complete coverage."]
+   :boundaries ["make test" "make landing-gate" "~/bin/land"]
+   :tests [:the-landing-gate-runs-both-the-merge-gate-and-the-battery-tripwire]}]}

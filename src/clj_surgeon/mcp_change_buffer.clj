@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-change-buffer
   "Proof-carrying semantic selection followed by one addressed transaction."
   (:require
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.diagnostic-delta :as diagnostic-delta]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.verification-process :as verification-process]
@@ -8,7 +9,6 @@
    [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-hot-verify :as hot-verify]
    [clj-surgeon.mcp-paths :as mcp-paths]
-   [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.edn :as edn]
@@ -1574,7 +1574,7 @@
     path))
 
 (defn apply-basis!
-  [{:keys [project-root receipt-dir verification-profiles verify! read-source write-source!
+  [{:keys [project-root verification-profiles verify! read-source write-source!
            prepare-compiled!]}
    {:keys [basis decisions verify]}]
   (prune-bases!)
@@ -1676,8 +1676,7 @@
                                :rollback rollback
                                :hot-rollback hot-rollback})
                             (let [receipt-file (publish-receipt!
-                                                 (or receipt-dir
-                                                     (workspace/receipt-dir project-root))
+                                                 (artifacts/directory "apply-clojure-changes" project-root)
                                                  receipt)
                                   cold (:cold-verification verification)
                                   _ (cold-verify/attach-undo-from-verification!
@@ -1686,6 +1685,7 @@
                                   verification-complete? (not= :running (:status cold))]
                               (swap! basis-store dissoc basis)
                               (merge committed
+                                     (artifacts/workspace-evidence project-root files)
                                      {:ok true
                                       :operation "apply-basis"
                                       :basis basis

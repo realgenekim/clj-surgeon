@@ -37,7 +37,7 @@
 (defn- job-directory
   [project-root]
   (let [receipt-directory (io/file (workspace/receipt-dir project-root))]
-    (io/file (.getParentFile receipt-directory) "verification-jobs")))
+    (io/file receipt-directory "verification-jobs")))
 
 (defn- receipt-file
   [project-root job]

@@ -41,8 +41,9 @@
                 anything else that costs a cold runtime; or measures the
                 machine (wall-clock deadlines); or reaches the NETWORK.
                 Minutes-scale. Deliberately OUT of the merge-gate lane
-                (`make mcp-test` = fast + integration); `make test` runs it
-                after.
+                (`make mcp-test` = fast + integration). The landing gate
+                runs the complete alias/artifact batteries and checks freshness
+                for the remaining battery; `make test-battery` runs it all.
 
    NETWORK IS A BATTERY PROPERTY, EXPLICITLY. Round one's runtime sampler
    caught `mcp-prepared-wire-test` spawning `clojure -X:clj-surgeon/mcp`,
@@ -119,6 +120,8 @@
    'clj-surgeon.mcp-extraction-test                     :fast
    'clj-surgeon.cell-b-oracle-test                      :battery ; B07 invokes Python to mutation-test the shell oracle.
    'clj-surgeon.namespace-split-test                    :fast
+   'clj-surgeon.require-change-test                     :fast
+   'clj-surgeon.require-change-boundary-test             :battery
    'clj-surgeon.namespace-split-warm-test               :integration
    'clj-surgeon.mcp-namespace-split-test                 :fast
    'clj-surgeon.mcp-formatter-test                      :fast
@@ -177,6 +180,7 @@
    'clj-surgeon.mission-typist-executor-test            :battery
    'clj-surgeon.admit-patch-test                        :battery
    'clj-surgeon.core-discovery-test                     :battery
+   'clj-surgeon.receipt-artifacts-boundary-test :battery
    'clj-surgeon.mcp-alias-migration-test                :battery
    'clj-surgeon.mcp-cold-verify-test                    :battery
    'clj-surgeon.mcp-feature-thread-sed-test             :battery

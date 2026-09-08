@@ -11,6 +11,7 @@
   transaction commit path; everything it confines goes through the existing
   path guards."
   (:require
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [cheshire.core :as json]
    [clj-surgeon.diagnostic-delta :as diagnostic-delta]
    [clj-surgeon.form-identity :as form-identity]
@@ -878,7 +879,8 @@
        :profile-source profile-source :namespaces (vec namespaces)}
 
       :else
-      (let [report (io/file snapshot-root report-file-name)
+      (let [report (io/file (artifacts/target "admit-clojure-patch" snapshot-root report-file-name))
+            _ (.mkdirs (.getParentFile report))
             _ (.delete report)
             started (System/currentTimeMillis)
             expanded (vec (mapcat (fn [item]
@@ -1960,6 +1962,7 @@
                                                 workspace-root)
                                               receipt
                                               (cond-> (merge base verification
+                                                             (artifacts/workspace-evidence workspace-root (map :file (:files base)))
                                                              {:operation :admit-patch!
                                                               :committed true
                                                               :mutation_attempted true

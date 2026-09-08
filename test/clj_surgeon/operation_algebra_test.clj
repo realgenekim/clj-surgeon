@@ -169,7 +169,7 @@
               :lifecycle :preview
               :category :write}
              preview-entry))
-      (is (= {:handler transaction/execute-change!
+      (is (= {:handler core/execute-change-with-receipt!
               :canonical-operation :change
               :lifecycle :commit
               :category :write}
@@ -590,7 +590,7 @@
     (is (= transaction/plan-change (get-in registry [:change :handler])))
     (is (= :change (get-in registry [:change :canonical-operation])))
     (is (= :preview (get-in registry [:change :lifecycle])))
-    (is (= transaction/execute-change! (get-in registry [:change! :handler])))
+    (is (= core/execute-change-with-receipt! (get-in registry [:change! :handler])))
     (is (= :change (get-in registry [:change! :canonical-operation])))
     (is (= :commit (get-in registry [:change! :lifecycle])))
     (is (= :write (get-in registry [:change :category])))

@@ -6,7 +6,7 @@ it has not earned a production or end-to-end performance claim.
 
 ```sh
 bin/mission propose --spec-file - < owner-forms.edn
-bin/mission apply M-1 --workspace /absolute/project --receipt-dir /absolute/project/.clj-surgeon/typist
+bin/mission apply M-1 --workspace /absolute/project --receipt-dir /var/tmp/forge/typist-receipts
 bin/mission undo M-1 --workspace /absolute/project
 ```
 
@@ -19,7 +19,7 @@ ready; the suggested directory is not created until an explicit execution.
 `run` also retains its newly saved ready id when this preflight refuses. Explicit
 destinations keep their existing behavior; helper extraction is unaffected.
 
-For a fully decided mission, `bin/mission run --spec-file owner-forms.edn --receipt-dir /absolute/project/.clj-surgeon/typist`
+For a fully decided mission, `bin/mission run --spec-file owner-forms.edn --receipt-dir /var/tmp/forge/typist-receipts`
 saves and immediately applies the plan in one JVM. This is an explicit write
 command, restricted to `owner_forms` and no existing mission id. Use `propose`
 then `apply` when an intervening authority review matters. Proposal is an
@@ -129,7 +129,7 @@ After supplying genuine facts and reviewing the template:
 bin/mission propose --spec-file - < owner-forms.edn
 bin/mission show M-1 --workspace /absolute/project
 # M-1 is illustrative: use the id actually returned, and inspect refusals.
-bin/mission apply M-1 --workspace /absolute/project --receipt-dir /absolute/project/.clj-surgeon/typist
+bin/mission apply M-1 --workspace /absolute/project --receipt-dir /var/tmp/forge/typist-receipts
 ```
 
 A candidate is a JSON array of objects with exactly `file`, `owner`, and `form`

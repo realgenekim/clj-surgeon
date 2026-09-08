@@ -8,6 +8,7 @@
      bb -m ns-surgeon.core :op :mv :file src/my/ns.clj :form my-fn :before other-fn
      bb -m ns-surgeon.core :op :mv :file src/my/ns.clj :form my-fn :before other-fn :dry-run true"
   (:require
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [babashka.fs :as fs]
    [babashka.process]
    [clj-surgeon.analyze :as analyze]
@@ -2041,6 +2042,20 @@
 ;; Ops registry — single source of truth for dispatch + help
 ;; ============================================================
 
+;; @spec ALIAS-MIGRATION-001
+;; @spec ALIAS-MIGRATION-002
+(defn execute-change-with-receipt!
+  "CLI receipt placement; transaction authority remains in the shared kernel."
+  [opts]
+  (let [root (System/getProperty "user.dir")
+        directory (artifacts/directory "change" root)
+        _ (.mkdirs (java.io.File. directory))
+        path (str directory "/" (java.util.UUID/randomUUID) ".edn")
+        result (intent-transaction/execute-change! (assoc opts :receipt-out path))]
+    (if (:committed result)
+      (merge result (artifacts/workspace-evidence root (keys (get-in result [:verified :read-back-hashes]))))
+      result)))
+
 (def ops-registry
   ;; @spec OP-ALG-CLI-001, OP-ALG-DECODE-001, OP-ALG-IDENTITY-001
   "Single source of truth for all operations.
@@ -2112,6 +2127,27 @@
                        :category  :write
                        :pair      :extract!}
 
+    ;; @spec REQUIRE-CHANGE-001
+    :require-change! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.require-change-io/cli!) opts))
+                      :desc "Apply one require-only intent across explicit files with ordered aliases and proof"
+                      :args {:request {:desc "Complete standalone require_change EDN map"}
+                             :request-file {:desc "EDN file containing the complete request"}
+                             :plan-only {:desc "Preview the same compiler decisions without writing (true)"}}
+                      :workflow ["Preview with :plan-only true. Required request keys: workspace_root, add {lib,alias_policy}, files [{file,source_hash?,remove?:{lib,as}}], expect {files,adds,removes}, verification {profile}. Names are strings; files and alias_policy are ordered nonempty vectors."
+                                 "workspace_root is absolute; each file is a unique workspace-relative .clj path. Reuse an existing policy alias bound to the target; otherwise choose the first policy alias not bound to another library. An existing target outside policy refuses."
+                                 "Insertion preserves all inherited bytes, comment attachment, indentation and closing-parenthesis placement: one line before the first greater library and its attached comments. Unsupported conditional/refer/prefix or unrepresentable whole-line layouts refuse. Explicit removals require standalone lines without comments or shared closers."
+                                 "Review counts versus expected, per-file alias/reason/collisions and hashes. Counts mean actual touched files, added and removed libspecs. Existing target bindings are reused; a satisfied no-op needs zero touched files/adds."
+                                 "To bind apply to preview, copy each :decisions item's :source_hash (SHA-256 of UTF-8 source bytes) into its matching :files item's :source_hash. :result_hash describes the planned result, not the apply guard. Follow :receipt_details_path if decisions are elided."
+                                 "Apply by omitting :plan-only. The profile comes from workspace .clj-surgeon.edn :verification-profiles and must contain synchronous argv commands. No symbol edits are accepted or synthesized."
+                                 "Read :state and :mutation_attempted first on nonzero exit or :ok=false. Alias exhaustion needs a revised authorized policy; source-hash-mismatch needs fresh evidence. Refusals never guess a repair."
+                                 "Success requires :state committed, :verification_complete true, :proof_pending [] and every named :checks exit 0. :receipt_details_path holds any bounded-out detail, including checks. A write alone proves no application behavior."
+                                 "Checks are maps with :name (rendered argv), :profile, :exit and :status; process checks include :duration_ms. The complete required command vector is in the named workspace profile; raw process evidence is retained at :details_path. This synchronous verb has no committed-but-pending mode or resume command."
+                                 "Rolled-back with :restored true restores originals. Recovery-required preserves conflicting foreign bytes: inspect retained recovery evidence before guarded undo. Never repeat a committed mutation."
+                                 "Undo with :op :undo-extract! :receipt PATH from :undo_receipt; the inverse refuses drift."]
+                      :examples ["clj-surgeon :op :require-change! :request-file requires.edn :plan-only true"
+                                 "clj-surgeon :op :require-change! :request-file requires.edn"]
+                      :category :write}
+
     ;; @spec NS-SPLIT-014
     ;; @spec NS-SPLIT-041
     :split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))
@@ -2141,12 +2177,12 @@
                                    :forms          {:required true :desc "EDN vector of form names"}
                                    :to             {:required true :desc "New target file; existing files refuse"}
                                    :require-policy {:desc ":minimal (default) proves exact requires; :copy-all preserves the complete source ns header as a conservative starting point"}
-                                   :receipt-out    {:desc "Optional new .edn path for a guarded inverse receipt"}}
+                                   :receipt-out    {:desc "Request a guarded inverse; the returned receipt-file names its external path"}}
                        :workflow  ["Run :extract first. Review target-requires, omitted-target-requires, remaining-source-callers, callers-to-review, and authority-labeled quoted-var-references. Unsupported require shapes refuse instead of copying or dropping unproved dependencies."
                                    "Application compiles both complete files from one source snapshot, parses them, hash-fences the source, writes atomically, and verifies read-back."
                                    "Existing targets, stale source, invalid candidates, receipt aliases, and handled write failures refuse or roll back without leaving a partial extraction."
-                                   "Use :receipt-out when the extraction must be reversible. Pass that path to :undo-extract!; do not edit the receipt."]
-                       :examples  ["clj-surgeon :op :extract! :file src/state.clj :forms '[distill refine]' :to src/distillery.clj :receipt-out /tmp/distillery-extract.edn"]
+                                   "Use :receipt-out when the extraction must be reversible. Pass the returned receipt-file path to :undo-extract!; do not edit the receipt."]
+                       :examples  ["clj-surgeon :op :extract! :file src/state.clj :forms '[distill refine]' :to src/distillery.clj :receipt-out /var/tmp/forge/extract-receipts/request.edn"]
                        :category  :write
                        :pair      :extract}
 
@@ -2156,7 +2192,7 @@
                        :workflow  ["Supply the unchanged receipt emitted by :extract!."
                                    "The command refuses before writing when either extraction result has changed or disappeared."
                                    "Success restores the original source and removes only the exact target created by that extraction."]
-                       :examples  ["clj-surgeon :op :undo-extract! :receipt /tmp/distillery-extract.edn"]
+                       :examples  ["clj-surgeon :op :undo-extract! :receipt /var/tmp/forge/extract-receipts/request.edn"]
                        :category  :write}
 
     ;; @spec MCP-OP-POS-AUTH-005
@@ -2217,21 +2253,21 @@
                        :category  :write
                        :pair      :change!}
 
-    :change!          {:handler   intent-transaction/execute-change!
+    :change!          {:handler   execute-change-with-receipt!
                        :canonical-operation :change
                        :lifecycle :commit
                        :desc      "Apply one guarded structural change transaction and save its inverse receipt"
                        :args      {:spec        {:desc "Inline EDN map; compatibility entrance for small specs"}
                                    :spec-file   {:desc "EDN spec path, or - to read one document from stdin (preferred)"}
-                                   :receipt-out {:required true :desc "Durable .edn inverse receipt; must not alias a source file"}}
+                                   :receipt-out {:required true :desc "Request a durable inverse; the returned receipt-file names its external path"}}
                        :workflow  ["Provide exactly one of :spec or :spec-file. Prefer :spec-file - so a large plan travels as data instead of shell-escaped text, like kubectl apply -f -."
                                    "Express the complete mechanical model plan once as the same guarded :changes document accepted by :change."
                                    "Every action, exact selector, per-change count or distribution guard, and aggregate :expect value is consent to the exact materialized transaction. If the task already supplies complete files and owners, declare them without probing source only to confirm them."
                                    "The command compiles from one snapshot, parses every complete future file, rechecks hashes, commits every file, verifies read-back hashes, and publishes the receipt last."
                                    "If a handled write or receipt-publication failure occurs, the command restores transaction-owned bytes and reports whether rollback was complete. It never overwrites unknown concurrent bytes."
-                                   "The console result is compact. Do not open :receipt-out; pass its path as :receipt PATH to :undo-change!."
+                                   "The console result is compact. Do not open :receipt-out; pass the returned receipt-file as :receipt PATH to :undo-change!."
                                    "Use :change when review is required before mutation. Use :change! when the exact guarded intent set is already the model's approved plan."]
-                       :examples  ["clj-surgeon :op :change! :spec-file - :receipt-out /tmp/ui-change.edn <<'EDN'\n{:changes [{:id :body-class :in [\"src/ui.clj\"] :forms [shell reader] :find \":body\" :do [:replace \":body.page\"] :expect {:matches 2 :each-form 1}}] :expect {:changes 1 :edits 2 :files 1}}\nEDN\n\nclj-surgeon :op :change! :spec-file - :receipt-out /tmp/delete.edn <<'EDN'\n{:changes [{:id :obsolete :in [\"src/app.clj\"] :forms [old-handler old-test] :do [:delete true] :expect {:matches 2 :each-form 1}}] :expect {:changes 1 :edits 2 :files 1}}\nEDN"]
+                       :examples  ["clj-surgeon :op :change! :spec-file - :receipt-out /var/tmp/forge/change-receipts/request.edn <<'EDN'\n{:changes [{:id :body-class :in [\"src/ui.clj\"] :forms [shell reader] :find \":body\" :do [:replace \":body.page\"] :expect {:matches 2 :each-form 1}}] :expect {:changes 1 :edits 2 :files 1}}\nEDN\n\nclj-surgeon :op :change! :spec-file - :receipt-out /var/tmp/forge/change-receipts/delete-request.edn <<'EDN'\n{:changes [{:id :obsolete :in [\"src/app.clj\"] :forms [old-handler old-test] :do [:delete true] :expect {:matches 2 :each-form 1}}] :expect {:changes 1 :edits 2 :files 1}}\nEDN"]
                        :category  :write
                        :pair      :change}
 
@@ -2242,7 +2278,7 @@
                                    "The command refuses the entire inverse before writing when any current file differs from the recorded forward result hash."
                                    "Every reconstructed original file must parse and match its recorded original hash before commit."
                                    "A successful receipt verifies every restored file's read-back hash. A second undo refuses because the forward result hashes no longer match."]
-                       :examples  ["clj-surgeon :op :undo-change! :receipt /tmp/api-change.edn"]
+                       :examples  ["clj-surgeon :op :undo-change! :receipt /var/tmp/forge/change-receipts/RETURNED-PATH.edn"]
                        :category  :write}
 
     :fix-declares     {:handler   (fn [opts] (fix-declares/plan (:file opts)))

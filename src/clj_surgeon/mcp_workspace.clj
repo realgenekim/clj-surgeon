@@ -1,5 +1,6 @@
 (ns clj-surgeon.mcp-workspace
   (:require
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clojure.java.io :as io]
    [clojure.string :as str])
   (:import
@@ -91,7 +92,7 @@
 (defn receipt-dir
   "Return the deterministic local-state receipt directory for one workspace."
   [workspace-root]
-  (str (io/file (state-dir workspace-root) "receipts")))
+  (artifacts/directory "edit-clojure" workspace-root))
 
 (defn transactions-dir
   "Return the deterministic local-state transaction directory for one workspace.
@@ -101,7 +102,9 @@
    a mutation never writes bookkeeping into the tree it is mutating."
   ([workspace-root] (transactions-dir workspace-root nil))
   ([workspace-root state-home]
-   (str (io/file (state-dir workspace-root state-home) "transactions"))))
+   (if state-home
+     (str (io/file (state-dir workspace-root state-home) "transactions"))
+     (artifacts/directory "transaction" workspace-root))))
 
 (defn router
   "Create one shared, lazy, canonical-root context router."

@@ -36,6 +36,7 @@
   and reports `rollback-failed` when the inverse does not verify; this namespace
   never restores a byte itself."
   (:require
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.synchronous-verification :as synchronous]
    [clj-surgeon.extract :as extract]
@@ -44,7 +45,6 @@
    [clj-surgeon.mcp-extraction :as extraction]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-schema :as mcp-schema]
-   [clj-surgeon.mcp-workspace :as workspace]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -924,6 +924,7 @@
       (contains? kernel :recovery_required)
       (assoc :recovery_required (:recovery_required kernel))
       (contains? kernel :details_path) (assoc :details_path (:details_path kernel))
+      (contains? kernel :workspace_status) (merge (select-keys kernel [:workspace_status :workspace_clean_except]))
       ;; @spec MCP-OP-HELPER-009
       ;; an absent detail artifact is STATED. A receipt whose bounded evidence
       ;; points at an external document must say when that document is not
@@ -1020,7 +1021,7 @@
   spelling."
   [config project-root]
   (let [configured (:receipt-dir config)
-        default (workspace/receipt-dir project-root)
+        default (artifacts/directory "helper-extraction" project-root)
         real (fn [path]
                (try (.toRealPath (.toPath (io/file (str path)))
                                  (into-array LinkOption []))
@@ -1051,7 +1052,7 @@
                     :staged false
                     :decision (str "where this workspace's undo receipts and"
                                    " per-caller detail are published")})
-          {:ok true :dir (str configured)})))))
+          {:ok true :dir (str default)})))))
 
 (defn- restoration-read-back
   "What is on disk after a rollback, read back rather than assumed.
@@ -1288,11 +1289,12 @@
                                   (if (:ok proof)
                                     (terminal-receipt
                                       {:kernel (merge detail
-                                                {:status :committed
-                                                :destination_created true
-                                                :undo_receipt receipt-file
-                                                :receipt_hash (:receipt-hash result)
-                                                :elapsed_ms (elapsed)})
+                                                 (artifacts/workspace-evidence project-root (concat (keys originals) created))
+                                                 {:status :committed
+                                                  :destination_created true
+                                                  :undo_receipt receipt-file
+                                                  :receipt_hash (:receipt-hash result)
+                                                  :elapsed_ms (elapsed)})
                                        :verification proof
                                        :plan (:plan planned)})
                                     (finish-failure! (if (:timed_out proof)

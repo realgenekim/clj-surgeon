@@ -13,6 +13,7 @@
 
    ALL PLANNING IS PURE. Only execute! writes files."
   (:require
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.analyze :as analyze]
    [clj-surgeon.cljc.require-ops :as require-ops]
    [clj-surgeon.extract-header :as extract-header]
@@ -518,7 +519,10 @@
    The source write is hash-fenced; a failed commit restores the original
    source and removes the newly-created target."
   [{:keys [file to receipt-out] :as opts}]
-  (let [p (plan opts)]
+  (let [receipt-out (when receipt-out
+                      (str (io/file (artifacts/directory "extract" (or (:workspace_root opts) (System/getProperty "user.dir")))
+                                    (str (java.util.UUID/randomUUID) ".edn"))))
+        p (plan opts)]
     (if (:error p)
       p
       (let [original-source (:_source p)

@@ -751,6 +751,35 @@ receipt available. Running and terminal status carry the same `undo_receipt`
 and `receipt_hash`, so recovery needs no archaeology. Do not replay the edit or
 reread its source while the job is running.
 
+For require-only work, the standalone `require_change` MCP tool and CLI
+`:require-change!` accept one library, ordered alias policy and explicit files.
+No symbol migration is needed:
+
+```clojure
+{:workspace_root "/work/project"
+ :add {:lib "app.json" :alias_policy ["json" "mjson"]}
+ :files [{:file "src/app/client.clj"}]
+ :expect {:files 1 :adds 1 :removes 0}
+ :verification {:profile "require-checks"}}
+```
+
+Save this as `requires.edn`. Preview with
+`clj-surgeon :op :require-change! :request-file requires.edn :plan-only true`,
+then apply with `clj-surgeon :op :require-change! :request-file requires.edn`.
+The workspace's `.clj-surgeon.edn` must configure `"require-checks"` under
+`:verification-profiles` with synchronous `:commands` argv vectors.
+Each file reuses a policy alias already bound to the target, or chooses the
+first free preference; exhausted aliases refuse with their bindings.
+Existing entries/comments remain byte-identical; insertion follows stable
+library order without reordering inherited entries. Explicit per-file
+`:remove {:lib "old.lib" :as "old"}` removes only a standalone libspec line.
+Unsupported reader forms and layouts that cannot preserve whole lines refuse.
+Preview `:decisions` provide `:source_hash` values for optional per-file apply
+guards. Success requires committed state and complete named verification;
+`:undo_receipt` works with `:op :undo-extract! :receipt PATH`. Large evidence
+is retained at `:receipt_details_path`. See the
+[contract and limits](docs/intent/require-change/require-change-design.md).
+
 For a whole namespace partition, `namespace_split` (CLI `:split-ns!`) accepts one
 complete destination mapping and verifies one transaction. Each destination may
 supply a nonblank `:doc` string. Otherwise its generated doc names the source,
@@ -2182,10 +2211,12 @@ records.
 make test
 ```
 
-The complete gate keeps two runtimes explicit: Babashka runs the fast pure
-structural/core suite; the JVM MCP suite runs the real formatter, nREPL,
-HTTP, process, and hot-reload boundaries. `make test` runs both plus smoke and
-benchmark self-tests. JVM-only MCP namespaces are not duplicated inside the
+The landing gate keeps two runtimes explicit: Babashka runs the structural/core
+suite; the JVM MCP suite runs the fast and integration namespaces. `make test`
+also runs the complete alias-migration and receipt-artifact boundary batteries,
+the transaction recovery battery, battery freshness, operation oracles and
+repository hygiene. `make test-full` adds the remaining cold batteries, smoke
+and benchmark self-tests. JVM-only MCP namespaces are not duplicated inside the
 Babashka runner, so adding a real JVM boundary cannot silently break the fast
 suite or remove the boundary proof.
 

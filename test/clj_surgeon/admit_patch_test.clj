@@ -584,7 +584,7 @@
     (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
             "transform_clojure" "relation_census" "alias_migration"
             "helper_extraction" "namespace_split" "admit_clojure_patch"
-            "feature_thread"]
+            "feature_thread" "require_change"]
            names)))
   (let [registered (into {} (map (juxt :name identity))
                          (server/public-tool-registry))]
@@ -2253,7 +2253,7 @@
             (is (= expected (:lock_scope result))
                 "the guarantee a commit actually had is on the receipt")
             (if state-dir?
-              (is (str/ends-with? (:lock_path result) "/.clj-surgeon/write.lock"))
+              (is (str/starts-with? (:lock_path result) "/var/tmp/forge/workspace-lock-receipts/"))
               (is (nil? (:lock_path result))
                   "no cross-process lock means no lock path to name")))
           (finally (delete-tree! root))))))
@@ -2274,7 +2274,8 @@
     (let [root (temp-dir)]
       (try
         (write-sources! root base-sources)
-        (.mkdirs (io/file root ".clj-surgeon" "write.lock"))
+        (.mkdirs (io/file root ".clj-surgeon"))
+        (.mkdirs (workspace-lock/advisory-lock-file (str root)))
         (let [result (admit/execute-request!
                        (stub-config root)
                        {:patch clean-multi-file-patch
@@ -2289,7 +2290,8 @@
         (finally (delete-tree! root)))))
   (testing "the state directory is not writable"
     (let [root (temp-dir)
-          directory (io/file root ".clj-surgeon")]
+          _ (.mkdirs (io/file root ".clj-surgeon"))
+          directory (.getParentFile (workspace-lock/advisory-lock-file (str root)))]
       (try
         (write-sources! root base-sources)
         (.mkdirs directory)

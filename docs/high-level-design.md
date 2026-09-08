@@ -1217,6 +1217,13 @@ Any of these conditions falsifies the design:
 
 ## Alias migration: one intent across requiring namespaces
 
+The separately admitted [standalone require change](intent/require-change/require-change-design.md)
+adds one library under an ordered alias policy across explicit files, without
+symbol migration. A pure token-splice compiler owns comment attachment and
+stable insertion; the shared transaction and synchronous proof own publication,
+rollback and durable undo. This row-3 schema experiment carries no routing or
+performance claim.
+
 `alias_migration` is an automatically routed mutation class for a known old/new
 library and Var, an ordered alias policy, and a bounded path scope with an
 expected file count; its 67-row [specification](intent/alias-migration/alias-migration-specs.md)
@@ -1354,3 +1361,13 @@ before emission, allowing native callers to reuse reference facts independently
 of the writer. The owning leaf is
 [namespace-split-design](intent/helper-extraction/namespace-split-design.md).
 B07 is a feasibility experiment, with no routing or performance admission.
+
+Receipt and undo bookkeeping is external to the workspace under verb-specific
+`/var/tmp/forge/<verb>-receipts/` directories. Committed Git workspace receipts
+measure their dirty-path exception set after publication; unavailable or failed
+cleanliness proof stays explicit. See [artifact intent](intent/alias-migration/receipt-artifacts-specs.md).
+
+The alias-migration artifact contract is landing-critical: the complete alias
+boundary namespace executes on every landing gate, alongside the default lanes.
+[ALIAS-MIGRATION-003](intent/alias-migration/receipt-artifacts-specs.md) prevents a
+fresh historical battery receipt from concealing an unexecuted affected suite.

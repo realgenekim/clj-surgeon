@@ -1,6 +1,7 @@
 (ns clj-surgeon.namespace-split-io
   "Confined snapshot, baseline-relative lint, shared extraction publish/proof/inverse."
   (:require
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.extract :as extract]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.mcp-extraction :as kernel]
@@ -274,7 +275,7 @@
                                {:projection (:projection compiled) :verification verification
                                 :read_back (:verified committed)})]
             (if (and (:ok verification) snapshot-current?)
-              (assoc base :ok true :committed true :mutation_attempted true
+              (assoc (merge base (artifacts/workspace-evidence (str root) (concat (keys (:future-sources compiled)) (:deleted-files compiled)))) :ok true :committed true :mutation_attempted true
                      :source_retired (boolean (seq (:deleted-files compiled)))
                      :verification_complete (not probe-only?)
                      :state (if probe-only? "committed-probe-only" "committed")
@@ -365,8 +366,7 @@
                                         (assoc (proof/profile-capability (get profiles profile-name))
                                                :proof mode :warm-live live
                                                :pending-commands (:commands (proof/profile-capability (get raw-profiles profile-name))))
-                                        (or (:receipt-dir config)
-                                            (str (System/getProperty "java.io.tmpdir") "/namespace-split-receipts"))
+                                        (artifacts/directory "namespace-split" (str root))
                                         checks))))]
              (assoc result :elapsed_ms (elapsed)))))
        (catch Throwable error

@@ -10,6 +10,12 @@ is cut.
 
 ### Added
 
+- Standalone `require_change` and CLI `:require-change!`: explicit files,
+  ordered collision-aware aliases, exact add/remove counts, comment-preserving
+  sorted line splices, synchronous verification and guarded durable undo.
+  The existing paired compact relation is unchanged. Row-3 performance and
+  automatic routing remain uncalibrated.
+
 - Experimental namespace-split partial retention: supplied owners move while
   unmapped source owners stay in place; required cross-boundary aliases, authorized
   promotions, mixed callers and narrow comment-call removal share one transaction

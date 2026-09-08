@@ -221,6 +221,13 @@
       (is (contains? closure "mcp-test")
           (str "`make landing-gate` must run the merge gate; its closure is "
                (pr-str (sort closure))))
+      ;; @spec ALIAS-MIGRATION-003
+      ;; Sol r10: a fresh historical battery receipt hid a red alias battery.
+      (doseq [target ["make test" "make landing-gate"]
+              namespace '[clj-surgeon.mcp-alias-migration-test
+                          clj-surgeon.receipt-artifacts-boundary-test]]
+        (is (contains? (:namespaces (rm/resolve-runner target (rm/repo-context))) namespace)
+            (str target " must execute " namespace)))
       (is (str/includes? makefile-text ".PHONY: repository-hygiene")
           "sanity: the .PHONY line was found")
       (is (re-find #"(?m)^\.PHONY:.*\blanding-gate\b" makefile-text)
@@ -376,11 +383,12 @@
 
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
-    (is (= 52 (count (lm/namespaces-for :fast))))
+    (is (= 53 (count (lm/namespaces-for :fast))))
     (is (= 7 (count (lm/namespaces-for :integration))))
     ;; B07 enrolls its independent oracle mutation witnesses in one new battery namespace.
-    (is (= 33 (count (lm/namespaces-for :battery))))
-    (is (= 92 (count lm/manifest))
+    ;; Sol r10 enrolls the per-verb artifact boundary battery.
+    (is (= 35 (count (lm/namespaces-for :battery))))
+    (is (= 95 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -409,7 +417,8 @@
   "Namespaces in a lane today that round one did NOT measure, each with the
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
-  '{clj-surgeon.namespace-split-test 35 ; B07 adds nine partial-retention, facts, bounded-analysis and preservation witnesses.
+  '{clj-surgeon.receipt-artifacts-boundary-test 13 ; Sol r10 per-verb publication witnesses.
+    clj-surgeon.namespace-split-test 35 ; B07 adds nine partial-retention, facts, bounded-analysis and preservation witnesses.
     clj-surgeon.namespace-split-warm-test 2 ; Round 3: real nREPL failure/green matrix and stale/foreign discovery, integration.
     clj-surgeon.mcp-namespace-split-test 8 ; B07 adds effect-free facts boundary to schema, capture, projection and rollback.
     clj-surgeon.cell-b-oracle-test 2 ; B07: shell lint mutation test and independent partial-preservation mutants; battery (Python subprocess).
@@ -442,6 +451,8 @@
     clj-surgeon.mission-forms-source-test 23 ; Strict comment text/attachment, whitespace identity and owner sentinel.
     clj-surgeon.mission-typist-executor-test 11 ; Add candidate diagnostic survival to proof/commit/undo and saved fallback forwarding.
     clj-surgeon.battery-ledger-test        14 ; TEST-ISO-009a/b: add strict archive classification and preserved failure/audit authority.
+    clj-surgeon.require-change-test 9 ; Pure standalone require intent and strict natural-layout refusal witnesses.
+    clj-surgeon.require-change-boundary-test 12 ; Actual CLI/profile processes, confined publication, independent oracle and undo.
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
     clj-surgeon.lane-manifest-test         25 ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses
     clj-surgeon.mcp-formatter-test         3  ; the adopted orphan (round three)
@@ -526,7 +537,9 @@
       ;; Round 3 adds three pure and two warm boundary tests: 477 + 5 = 482.
       ;; Eight Cell C paper-cut witnesses: 464 + 8 = 472.
       ;; B07 adds 9 compiler + 1 boundary + 2 oracle tests: 484 + 12 = 496.
-      (is (= 496 adopted) (str "adopted tests: " adopted)))
+      ;; Row 3 adds 9 pure + 12 real boundary/CLI witnesses: 496 + 21 = 517.
+      ;; Sol r10 adds 13 per-verb publication witnesses: 517 + 13 = 530.
+      (is (= 530 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -620,7 +633,9 @@
       ;; Cell C paper-cut round: eight namespace-split witnesses, no lane change.
       ;; Round 4 merged with origin/MCP/main aa587ec3: source census = 1489.
       ;; B07 adds 12 JVM witnesses; one new CLI test runs separately in the BB suite.
-      (is (= 1501 total) (str "manifest declares " total " tests"))
+      ;; Standalone require intent: 1501 + 21 = 1522, with boundary processes in battery.
+      ;; Sol r10 adds 13 witnesses: 1530 + 13 = 1543.
+      (is (= 1543 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
@@ -764,7 +779,7 @@
    "test/clj_surgeon/scope_stream_test.clj"
    {105 "bounded poll -- System/gc then re-check reachability, succeeds immediately, fails at gc-deadline-ms (round three's fix for the two fixed `Thread/sleep 100` assertions)"}
    "test/clj_surgeon/mcp_tool_test.clj"
-   {1394 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count (1380 -> 1381 on 2026-09-06: the `cheshire.core` require the next_call REPLAY witnesses need moved the whole namespace down one line -- the pin costing one number is the point; 1381 -> 1394 on 2026-09-07 when the expect-guard witness was inserted above it)"}
+   {1395 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count (1380 -> 1381 on 2026-09-06: the `cheshire.core` require the next_call REPLAY witnesses need moved the whole namespace down one line -- the pin costing one number is the point; 1381 -> 1394 on 2026-09-07 when the expect-guard witness was inserted above it)"}
    "test/clj_surgeon/mcp_hot_verify_test.clj"
    {244 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
 
