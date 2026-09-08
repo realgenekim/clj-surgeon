@@ -94,3 +94,4 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 - 2026-09-08T10:5xZ ROW 1 → friction-low (pilot 7 clean 4/4). Loop rule: descend → row 5 (in progress), row 2 at friction-high pending r10 fix + landing.
 - 2026-09-08T11:3xZ ROW 5 WIN (÷2.3 caller work, 6/6) → friction-high. Three rows now hold measured wins vs native (1: ÷8–9.7; 2: ÷3.98 caller work; 5: ÷2.3 caller work).
 - 2026-09-08T11:5xZ row-2 fix LANDED (trunk ccb33ef4+) → row 2 friction-medium.
+- 2026-09-08T13:03Z block tighten-1 opened (deadline 2026-09-08T16:48Z): skill tighten-the-loop (Astra) + daily one-shots (Opus) + first tighten day here; then Sol review + land. NEXT block staged: squares reassessment 2 (brief cellC/brief-squares-reassess-2.md; Sol + Astra independently, cross-attack).
