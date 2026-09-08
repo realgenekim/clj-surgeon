@@ -21,3 +21,6 @@ Rules of this file: one entry per hour (UTC), quote receipts verbatim, DELTA per
 
 ## 2026-09-08T08:06Z
 - DELTA: row 2 stage 2 launched (six N/D pairs under the amended gate). B07 (Astra) ~95 min. Acceptance 4 → pilot 4 still running. Row 3 queued behind B07. Trunk unchanged. Watchdog ticking.
+
+## 2026-09-08T08:07Z
+- DELTA: cohorts refusal LIFTED (acceptance 4). Pilot 4 refused on seed load-reds → fix + pilot 4b running. Row 2 stage 2 running. B07 (Astra) ~110 min, in its box. Disk 41 G remaining. Load 2.8.

@@ -593,3 +593,90 @@ comparable to the skill's ~50% threshold, and the seat's own global instructions
 declared confound (now at least recorded — every pilot-3 receipt carries
 `profile=6cf3b731e5cdcd5e` for curtaincall-cfp and `profile=c4b09a4ad5c122da` for
 marvin-voice-remote).
+
+
+---
+
+## pilot 4 (p17-p20) - all four cells REFUSED before launch: the row-1 seeds ship COMPILE-TIME reds
+
+Filed 2026-09-08T08:06:02Z by the acceptance-4 operator (independent Opus). Apparatus hashes:
+coldstart `feb8d59aa1b1b21f`, coldstart-grade `1693e4a282c37055`, round `a3bb40098501f5e7`,
+round-resume `24688df75c2b211a`. Bases: curtaincall-cfp `8aec4c93c50d6126`
+(origin/nrepl/test-alias), marvin-voice-remote `94393708b6312c4d` (origin/nrepl/test-alias),
+both fetched immediately before the run.
+
+| Cell | rc | Where it stopped | Wall |
+|---|---|---|---|
+| p17-opus-0-cc | 3 | READINESS, `red-wrong-reason/parse-or-load-error` | GATE_QUALIFY 84 s, refused at +106 s |
+| p18-opus-W-cc | 3 | READINESS, same | GATE_QUALIFY 87 s, refused at +109 s |
+| p19-sol-0-mvr | 3 | READINESS, same | GATE_QUALIFY 18 s, refused at +25 s |
+| p20-sol-W-mvr | 3 | READINESS, same | GATE_QUALIFY 18 s, refused at +24 s |
+
+**No cell reached LAUNCH. No model ran. No receipt, no grade and no task check exists for
+pilot 4**, so there is nothing to grade PASS or UNVERIFIED, and no COLDSTART or
+COLDSTART-GRADE line to paste. Each bundle holds its refusal, its gate-qualify log and its
+red-qualify log, and nothing else.
+
+### The counterexample, and its owner
+
+**Owner: THE SEED** - `/var/tmp/forge/coldstart/tasks/cc-1.md` with `cc-1.overlay/`, and
+`/var/tmp/forge/coldstart/tasks/mvr-1.md` with `mvr-1.overlay/`. NOT `coldstart`, NOT
+`coldstart-grade`. The apparatus behaved exactly as B02e item 5 requires and as
+acceptance-3 fix 5 demanded; it refused a red it could not attribute.
+
+Both overlays are a test namespace that CANNOT COMPILE, because the var the test calls does
+not exist yet:
+
+```
+CC  (p17/p18 red-qualify.log)
+  ERROR in unit (ns.clj:9)  Failed loading tests:
+  Exception: clojure.lang.Compiler$CompilerException: Syntax error compiling at
+    (cfp_scheduler_killer/views/format_test.clj:8:17).
+  Caused by: java.lang.RuntimeException: No such var: fmt/fmt-percent
+  1 tests, 1 assertions, 1 errors, 0 failures.
+
+MVR (p19/p20 red-qualify.log)
+  Caused by: java.lang.RuntimeException: No such var: echo-guard/coverage-percent
+```
+
+The declared RED var - `fmt-percent-renders-whole-percents` and
+`coverage-percent-renders-whole-percents` - appears ZERO times in either red-qualify log
+(`grep -c` returns 0). The namespace dies at compile-syntax-check, so the assertion is
+never reached, never run, and never red. Kaocha reports `1 errors, 0 failures`: a LOAD
+error, not an assertion failure.
+
+**This is not a new discovery; it is acceptance-3 section 5 executing.** Acceptance-3 wrote
+that both row-1 seeds' declared reds are compile-time reds (`no such var: fmt/fmt-percent`,
+`no such var: echo-guard/coverage-percent`) and that their red-to-green golden proof exists
+only as a hand-typed `QUALIFIED:` line in the seed, not as a harness receipt. B02e item 5
+turned the old advisory NOTE into a refusal, and the refusal fired on the first real seed
+it met. The apparatus is right and the seeds are not ready.
+
+### What the seeds need before pilot 5
+
+1. **An assertion-red, not a load-red.** The overlay must COMPILE against the base and fail
+   AT the assertion, so the gate's output names the declared var at a failure site. Two
+   shapes that work: resolve the missing var at run time inside the test body, or ship a
+   stub of the target var that returns a wrong value so the `is` assertion fails and kaocha
+   prints `FAIL in (...-renders-whole-percents)`. Acceptance criterion:
+   `red_attested=assertion` in the READINESS line, which is what the harness already prints
+   for a well-formed seed.
+2. **A `<task>.golden/` directory.** Neither seed has one, so `red_golden=none`: the
+   red-to-green proof is still only the hand-typed `QUALIFIED:` lines. With a golden dir the
+   harness proves red-to-green in the same run (`red_golden=green`). That path is already
+   implemented and corpus-covered by `b02e-red-golden-green` and `b02e-red-golden-not-green`.
+3. **Re-qualify both seeds against the CURRENT tips** before the next attempt. A gate
+   invocation costs about 85 s on curtaincall-cfp and about 18 s on marvin-voice-remote, so
+   a full seed round trip for both is roughly four minutes - far less than one cell of model
+   spend.
+
+### Two operator-side apparatus notes recorded with this attempt
+
+- **`coldstart` never re-runs the declared GATE after the agent.** TASK_CHECK runs only
+  VERIFY. Pilot pass criterion 3 - the declared VERIFY focus green AND the declared GATE
+  green - is therefore not measured by the apparatus, and needs either an explicit operator
+  step or an amendment to the criterion.
+- **`profile=` is computed once at SPECIMEN and never re-verified**, and nothing binds the
+  proof to the tree that is frozen. These are acceptance-4 rows `PILOT-profile-drift` and
+  `PILOT-final-source-after-proof`, both FAIL. Any cell that does run must carry operator
+  controls C1-C3 from `opus-B02-acceptance-4.md` section 5.
