@@ -384,12 +384,21 @@
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
     ;; Batch 3 adds one pure status namespace and one detached process battery.
-    (is (= 54 (count (lm/namespaces-for :fast))))
+    ;; MERGE RESOLUTION, 2026-09-08 (fable/battery-parallel x MCP/main c41dee30):
+    ;; the SAME trap this file already records below. Batch 3 moved this pin
+    ;; 53 -> 54 for its pure status namespace and TEST-ISO-013 moved it 53 -> 54
+    ;; for battery-parallel-test; the numbers agreed textually and git merged
+    ;; them clean at 54, silently losing one namespace. Two different witnesses,
+    ;; two increments: 53 + 1 + 1 = 55.
+    (is (= 55 (count (lm/namespaces-for :fast))))
     (is (= 7 (count (lm/namespaces-for :integration))))
     ;; B07 enrolls its independent oracle mutation witnesses in one new battery namespace.
     ;; Sol r10 enrolls the per-verb artifact boundary battery.
+    ;; Batch 3 adds one detached process battery; TEST-ISO-013 adds no battery
+    ;; namespace (it re-runs the ones already there), so the battery count is
+    ;; trunk's. The manifest takes BOTH sides: 95 + 2 (Batch 3) + 1 (TEST-ISO-013).
     (is (= 36 (count (lm/namespaces-for :battery))))
-    (is (= 97 (count lm/manifest))
+    (is (= 98 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -454,6 +463,7 @@
     clj-surgeon.mission-forms-source-test 23 ; Strict comment text/attachment, whitespace identity and owner sentinel.
     clj-surgeon.mission-typist-executor-test 11 ; Add candidate diagnostic survival to proof/commit/undo and saved fallback forwarding.
     clj-surgeon.battery-ledger-test        14 ; TEST-ISO-009a/b: add strict archive classification and preserved failure/audit authority.
+    clj-surgeon.battery-parallel-test      24 ; TEST-ISO-013: the battery lane run as N JVM lanes -- schedule, lane-failure classifier, shard fold, prerequisite DAG.
     clj-surgeon.require-change-test 9 ; Pure standalone require intent and strict natural-layout refusal witnesses.
     clj-surgeon.require-change-boundary-test 12 ; Actual CLI/profile processes, confined publication, independent oracle and undo.
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
@@ -548,8 +558,23 @@
       ;; boundary, 1 mcp) without moving these pins, so this arithmetic was RED at
       ;; branch tip 0956951b; the delta fence for that tip adds the fifth, the
       ;; actionable unsafe-tmpdir refusal (NS-SPLIT-059). 547 + 4 + 1 = 552.
-      ;; Rows sublime batch 4: source-derived pins from the manifest census, twelve pure and three boundary witnesses, including the Sol fence counterexamples.
-      (is (= 567 adopted) (str "adopted tests: " adopted)))
+      ;; Rows sublime batch 4: source-derived pins from the manifest census,
+      ;; twelve pure and three boundary witnesses, including the Sol fence
+      ;; counterexamples -- namespace-split-test 35 -> 47 (+12) and
+      ;; mcp-namespace-split-test 21 -> 24 (+3). Both are ADOPTED namespaces,
+      ;; so all 15 land here and none of them touch r1.
+      ;; TEST-ISO-013 adds 21 parallel-battery witnesses plus three regressions
+      ;; the first wide run found (lane-integrity grain, the dropped :sharded
+      ;; field, home isolation through a selector): 24 more, in the ONE new
+      ;; adopted namespace battery-parallel-test.
+      ;; MERGE, 2026-09-08 (astra/namespace-split x MCP/main 7d62849a): the
+      ;; MERGE-BASE pin was 552 and BOTH sides moved it for different
+      ;; witnesses -- this branch to 567 (+15), trunk to 576 (+24). Neither
+      ;; number is right for the merged tree; the pin is base + both deltas,
+      ;; 552 + 15 + 24 = 591, RECOMPUTED off the merged tree by the same
+      ;; source census this test runs (`deftest-count` over
+      ;; `adopted-since-round-one`), not by trusting either side.
+      (is (= 591 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -652,8 +677,15 @@
       ;; five witnesses through the source census; the delta fence's help witness
       ;; lives in the BB lane's cli-dispatch-test and is not counted here.
       ;; 1566 + 4 + 1 = 1571.
-      ;; Batch 4 source census: 1019 original + 567 adopted = 1586.
-      (is (= 1586 total) (str "manifest declares " total " tests"))
+      ;; Batch 4 source census: +15 adopted witnesses (namespace-split-test +12,
+      ;; mcp-namespace-split-test +3), no namespace added.
+      ;; TEST-ISO-013, the parallel battery: 24 witnesses in one new :fast
+      ;; namespace, battery-parallel-test.
+      ;; MERGE, 2026-09-08 (astra/namespace-split x MCP/main 7d62849a): the
+      ;; merge-base pin was 1571; this branch moved it to 1586 (+15) and trunk
+      ;; to 1595 (+24), for DISJOINT witnesses. 1571 + 15 + 24 = 1610, and the
+      ;; merged tree's own census confirms it: 1019 original + 591 adopted.
+      (is (= 1610 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

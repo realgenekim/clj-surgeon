@@ -125,6 +125,15 @@
           {:namespaces #{} :unresolved [(str "lane runner named unknown lane(s) " (pr-str unknown))]}
           {:namespaces (into #{} (mapcat lm/namespaces-for) lanes) :unresolved []}))
 
+      ;; @spec TEST-ISO-013 -- the parallel battery coordinator selects the
+      ;; BATTERY LANE from the same manifest and launches lane children over a
+      ;; partition of it. Following the manifest here rather than reading the
+      ;; coordinator's source is the same choice as the lane runner above: the
+      ;; runner's selection is the fact, and restating it in a second place is
+      ;; how the two drift.
+      (= "clj-surgeon.battery-parallel-runner" (nth opts (inc i) nil))
+      {:namespaces (set (lm/namespaces-for :battery)) :unresolved []}
+
       :else
       (let [runner-ns (nth opts (inc i) nil)
             src (read-if-present (ns->source-file (symbol runner-ns)))]

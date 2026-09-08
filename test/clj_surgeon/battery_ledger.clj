@@ -62,8 +62,14 @@
 
 (defn entry-line
   "One ledger entry as the single line it is appended as."
-  [{:keys [sha started wall_s verdict host]}]
-  (pr-str {:sha sha :started started :wall_s wall_s :verdict verdict :host host}))
+  [{:keys [sha started wall_s verdict host lanes skipped]}]
+  ;; @spec TEST-ISO-013 -- `:lanes` is appended only when the run declared one,
+  ;; so every line written before the lane split still reads byte-identically
+  ;; and the tripwire's arithmetic is untouched. A receipt that does not say
+  ;; how wide it ran is a receipt whose wall cannot be compared to another's.
+  (pr-str (cond-> {:sha sha :started started :wall_s wall_s :verdict verdict :host host}
+            lanes (assoc :lanes lanes)
+            skipped (assoc :skipped skipped))))
 
 (defn parse-ledger
   "Every entry in ledger `text`, in file order. A line that does not read is
@@ -261,7 +267,13 @@
                    :started (get opts "--started")
                    :wall_s (parse-long (str (get opts "--wall-s" "0")))
                    :verdict (keyword (str (get opts "--verdict" "unknown")))
-                   :host (get opts "--host" (str/trim (:out (sh "hostname"))))}]
+                   :host (get opts "--host" (str/trim (:out (sh "hostname"))))
+                   :lanes (some-> (get opts "--lanes") str parse-long)
+                   ;; @spec TEST-ISO-013 -- how many preconditions the run could
+                   ;; not check. A PASS beside a non-zero skip is a gate that
+                   ;; covered less than the reader thinks, so the number belongs
+                   ;; in the receipt rather than only in the scrollback.
+                   :skipped (some-> (get opts "--skipped") str parse-long)}]
         (append-entry! ledger-path entry)
         (println "battery-ledger: appended" (entry-line entry)))
 
@@ -283,7 +295,7 @@
               (println (:remedy r))
               (System/exit 1))))
 
-      (do (println "usage: battery_ledger.clj append --sha S --started T --wall-s N --verdict pass|fail")
+      (do (println "usage: battery_ledger.clj append --sha S --started T --wall-s N --verdict pass|fail [--lanes N] [--skipped N]")
           (println "       battery_ledger.clj check")
           (System/exit 2)))))
 
