@@ -296,3 +296,148 @@ that is item 5's blind-reader work. The grader changes are proven against fixtur
 19-cell regrade, not against a fresh agent. And nothing here re-establishes the six
 defect fixes in `kaocha-sublime` itself; it establishes that the two consumers see them
 at their own entrances.
+
+## Moving the consumers to kaocha-sublime 70fac788 (item 4c)
+
+*forge-anvil, 2026-09-08. 75-minute timebox; the work below took about 30 minutes of
+wall from first read to pushed branches and appended records.*
+
+`docs/agent-v1.md` at kaocha-sublime master `70fac7882e92877fcc3d52cec659cc649770a5b1`
+(Astra: `/var/tmp/forge/plan2/cellC/astra-kaocha-defects-2-report.md`) fixed the three
+defects item 4b reported and named, verbatim, the consumer work still owed:
+`coldstart-grade` had to register the new `scope`/`closure_basis`/`skipped_by_focus`
+group before either specimen could repin, because at inspection
+`RUNDONE_OPTIONAL_KEYS` carried only `parent_outcome` and every one of the three new
+fields was an unknown key. This item does that update first, proves it against the
+fixture corpus, and only then moves both specimens onto the new pin.
+
+## What shipped
+
+| Repo | Branch | Commit | Was on |
+|---|---|---|---|
+| marvin-voice-remote | `nrepl/test-alias` | `8a97a5f` | `56a4984` |
+| curtaincall-cfp | `nrepl/test-alias` | `f37b3fe8` | `f821c3bb` |
+| `~/bin/coldstart-grade` | not a repo | 4000 → 4090 lines, sha256 `3bd3f9b1…` (was `430723cf…`, backed up to `/var/tmp/forge/coldstart-grade.bak.20260908T215621Z`) | — |
+| `/var/tmp/forge/coldstart/fixtures/agentv1-run-done.sh` | not a repo | 45 → 53 agentv1 rows | — |
+
+Both specimens now pin `io.github.marvin-openclaw777/kaocha-sublime` to
+`70fac7882e92877fcc3d52cec659cc649770a5b1` — the same two aliases in
+marvin-voice-remote (`:run-tests` and `:nrepl`) and the one shared `:run-tests` pin in
+curtaincall-cfp, unchanged in shape from item 4b.
+
+## coldstart-grade: the new group, all-or-none, and one new refusal
+
+Three additions, in `RUNDONE_OPTIONAL_KEYS`/`_validate_run_done`/`agent_v1_binding`:
+
+1. **`scope`, `closure_basis`, `skipped_by_focus` are now known keys, validated
+   together.** A record carrying one or two of the three (never all three, never none)
+   is neither a legacy record nor a valid modern one — malformed, so `protocol-error`,
+   never a silent two-thirds read. `scope` must be
+   `{"kind":(full|namespaces|probe),"requested":[…strings…]}`, `kind=full` requires
+   `requested=[]`, `closure_basis` must be a basis this reader knows
+   (`discovered-namespaces-v1`, the only one that exists yet — `V1_CLOSURE_BASES` is a
+   set so a future addition is one line), and `skipped_by_focus` must be a uint.
+2. **`scope.kind=full` is now required for a declared-gate pass**, alongside the
+   existing mode/identity/coverage/closure checks. Before a record could state its own
+   scope, `mode=gate` plus a full closure were the only corroboration this reader had;
+   a record that says `mode=gate` and `scope.kind=probe` (or `namespaces`) is a focused
+   run wearing the gate's mode, and is refused as `scope-not-full` — F14-class, same
+   shape as `partial-closure` beside it. "A green probe with a 1/1 denominator is never
+   full-gate evidence" is now enforced through the record, not merely asserted.
+3. **`STATUS reason=load-error` needed no new code** — no code path in this reader
+   validated a STATUS record's `reason` before today, so nothing could have rejected
+   it. `V1_STATUS_REASONS` registers the full enum (including `load-error`) so that
+   fact is asserted rather than accidental; the `refused-run` branch already reads any
+   refusal by its `state`, so `load-error` was already never `recovered-receipt` and
+   never `protocol-error`. Verified by fixture row `load-error-refusal` below.
+
+Fixture proof, `agentv1-run-done.sh` (45 rows before this item, 53 after, 0
+mismatches — the new rows are numbered 40–47 in the script's own comments):
+
+```text
+scope-full-accepted        0     PASS      PASS      ok/bound R13=OK/F14=--/F15=--
+scope-probe-as-gate        0     FAIL      FAIL      miss/scope-not-full R13=MISS/F14=HIT/F15=--
+scope-namespaces-as-gate   0     FAIL      FAIL      miss/scope-not-full R13=MISS/F14=HIT/F15=--
+scope-group-partial        0     FAIL      FAIL      protocol-error/protocol-error R13=MISS/F14=--/F15=--
+scope-bad-basis            0     FAIL      FAIL      protocol-error/protocol-error R13=MISS/F14=--/F15=--
+scope-bad-skipped-focus    0     FAIL      FAIL      protocol-error/protocol-error R13=MISS/F14=--/F15=--
+scope-full-nonempty        0     FAIL      FAIL      protocol-error/protocol-error R13=MISS/F14=--/F15=--
+load-error-refusal         0     FAIL      FAIL      miss/refused-run R13=MISS/F14=--/F15=--
+agentv1 rows: 53, mismatches: 0
+```
+
+Full corpus (`run-fixtures.sh`, everything including the rows above, r12, worker-status,
+b02e/b02f, pilot-3): **fixture mismatches: 0**.
+
+**Regrade, old vs. new grader, unchanged.** `python3 /var/tmp/forge/item4b-fx/regrade.py
+/var/tmp/forge/coldstart-grade.bak.20260908T215621Z` (the pre-item-4c binary) against
+every `p3*`/`p4*`/`b5-*` cell:
+
+```text
+cells regraded: 19, grade lines changed: 0
+```
+
+None of those frozen cells carry the new fields (most predate the agent reporter
+entirely, per R13's own `unavailable` finding), so this result was expected rather than
+surprising — it is the check that the new all-or-none group and the `scope-not-full`
+refusal cannot retroactively convict a corpus that never had an opinion about `scope` in
+the first place.
+
+## Repin witness, both repos, real bytes
+
+Both worktrees: fresh detached checkouts at the frozen tip
+(`/var/tmp/forge/item4c-fx/{mvr,cc}`), `deps.edn`'s two/one pin(s) moved to
+`70fac7882e92877fcc3d52cec659cc649770a5b1`, nothing else changed. Per repo: `make nrepl`
+(marvin-voice-remote: `clojure -M:nrepl`, 1 GiB heap; curtaincall-cfp: `make nrepl` =
+`clojure -J-Xmx512m -M:run-tests:test:nrepl`, 512 MiB), an ephemeral witness test
+(`item4c_scope_witness_test.clj`, created red, probed, fixed, probed, deleted — never
+committed) for the red→green half, then the four required checks in order on the live
+image, then the cold gate, then both owned JVMs stopped by exact PID.
+
+**marvin-voice-remote**, probe green (after a genuine red→green on the same witness
+test, both real):
+
+```text
+RUN-DONE {"receipt":"/var/tmp/forge/item4c-fx/mvr/target/kaocha-runs/2026-09-08T22-02-50-522621272Z-d3d269bf-1a0f-44af-8df4-cc7c8998dc7e.edn","omitted":0,"v":1,"parent":null,"candidate":"dd4175914be64b4b7d072ef90c99bc03858b7dea9d9b02d6e51770b4e5b55318","tests":1,"pending":0,"auto_followup":false,"skipped_by_focus":579,"wall_ms":94,"mode":"probe","coverage":"complete","outcome":"pass","shown":0,"scope":{"kind":"probe","requested":["marvin-voice-remote.item4c-scope-witness-test"]},"skipped":0,"fail":0,"id":"2026-09-08T22-02-50-522621272Z-d3d269bf-1a0f-44af-8df4-cc7c8998dc7e","closure_basis":"discovered-namespaces-v1","error":0,"sha256":"456d1b4391d1d136651f1c374bdc4f6f8f261a1ceab507f6b80a3db900fa391b","pass":1,"assertions":1,"closure":{"selected":1,"total":55}}
+```
+
+marvin-voice-remote, mistyped namespace (`marvin-voice-remote.no-such-namespace`) on
+the same warm image — `FAIL kind=load` then `STATUS refused/reason=load-error`, exit 2,
+then the *next* probe on that image completed cleanly (exit 0, lease not leaked):
+
+```text
+STATUS {"receipt":null,"identity":"unknown","elapsed_ms":null,"v":1,"phase":"unknown","state":"refused","token":null,"reason":"load-error","active":"/var/tmp/forge/item4c-fx/mvr/target/kaocha-runs/2026-09-08T22-02-53-190400056Z-c63a7fb5-9a9d-473d-b833-b322ba08e3de.edn.tmp","id":"2026-09-08T22-02-53-190400056Z-c63a7fb5-9a9d-473d-b833-b322ba08e3de"}
+```
+
+marvin-voice-remote, cold gate — `scope.kind=full`, `coverage:"complete"`, closure
+54/54, exit 0:
+
+```text
+RUN-DONE {"receipt":"/var/tmp/forge/item4c-fx/mvr/target/kaocha-runs/gate-20260908T220311-405710-fa235f62f68e.edn","omitted":0,"v":1,"parent":null,"candidate":"3d85442954b0562cbb0c95e89dfcc5bd3317a698a713b6a560cffad09216857e","tests":579,"pending":0,"auto_followup":false,"skipped_by_focus":0,"wall_ms":13728,"mode":"gate","coverage":"complete","outcome":"pass","shown":0,"scope":{"kind":"full","requested":[]},"skipped":0,"fail":0,"id":"gate-20260908T220311-405710-fa235f62f68e","closure_basis":"discovered-namespaces-v1","error":0,"sha256":"920a006135fa7181dab98c2d4664479bab3fa2e6f8ea8d411b5af4172f945d37","pass":7833,"assertions":7833,"closure":{"selected":54,"total":54}}
+```
+
+**curtaincall-cfp**, same sequence — probe red→green on
+`cfp-scheduler-killer.item4c-scope-witness-test`, then a mistyped namespace
+(`cfp-scheduler-killer.no-such-namespace`) closing `FAIL kind=load` /
+`STATUS refused/reason=load-error` (exit 2), then the next probe clean (exit 0). Cold
+gate — the repo's own declared `bin/kaocha unit`, `scope.kind=full`, closure 376/376,
+exit 0:
+
+```text
+RUN-DONE {"receipt":"/var/tmp/forge/item4c-fx/cc/target/kaocha-runs/gate-20260908T220523-458088-750f6f1aadfd.edn","omitted":0,"v":1,"parent":null,"candidate":"8ec5255c0f768eef5ffd8ab3342ca98d3805814c9cb2f3fd850dfc8c8a870fd1","tests":1021,"pending":0,"auto_followup":false,"skipped_by_focus":0,"wall_ms":82790,"mode":"gate","coverage":"complete","outcome":"pass","shown":0,"scope":{"kind":"full","requested":[]},"skipped":1,"fail":0,"id":"gate-20260908T220523-458088-750f6f1aadfd","closure_basis":"discovered-namespaces-v1","error":0,"sha256":"4dd39d963212e35b6f3bcd2bab431773d7bd92ba94bc2a3510a819e60b26ad92","pass":12393,"assertions":12393,"closure":{"selected":376,"total":376}}
+```
+
+1021 tests / 12393 assertions / `skipped:1` (the same one declared skip item 4b's rows
+13a/16/39 established) matches item 4b's own `CCGREEN` fixture totals exactly, on the
+new pin, live.
+
+## What this does not claim
+
+The witness test files were ephemeral (created, probed red, fixed, probed green,
+deleted) and were never committed — the two pushed commits touch only `deps.edn`. This
+item did not re-run item 4b's watch witness, its probe-wall timing, or its blind-reader
+protocol; it re-verifies only what 70fac788 changed (scope/closure_basis/skipped_by_focus,
+load-error) at both entrances, against real bytes, and leaves the rest of item 4b's
+findings as they stood. `coldstart-grade` and `agentv1-run-done.sh` are files, not
+repos, and are not pushed anywhere by this item — only the two `deps.edn` commits and
+this records section are.
