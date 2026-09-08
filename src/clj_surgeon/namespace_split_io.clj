@@ -4,11 +4,14 @@
    [clj-surgeon.extract :as extract]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.mcp-extraction :as kernel]
+   [clj-surgeon.mcp-operation :as operation]
    [clj-surgeon.mcp-paths :as paths]
    [clj-surgeon.mcp-process :as process]
    [clj-surgeon.namespace-split :as split]
    [clj-surgeon.namespace-split-warm :as warm]
    [clj-surgeon.receipt-artifacts :as artifacts]
+   [clj-surgeon.split-proof-gate :as gate]
+   [clj-surgeon.structural-lens :as lens]
    [clj-surgeon.synchronous-verification :as proof]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -224,7 +227,8 @@
                                                        (assoc argv 0 (str (.resolve root exe))) argv)))
                                              (:commands capability))}
                           (:timeout-ms capability) (assoc :timeout-ms (:timeout-ms capability))
-                          (contains? spec :proof) (assoc :proof (:proof spec)))
+                          (contains? spec :proof) (assoc :proof (:proof spec))
+                          (contains? spec :gate) (assoc :gate (:gate spec)))
                         spec)])))
 
 (def max-profile-bytes (* 1024 1024))
@@ -284,6 +288,68 @@
        (capture! root (get-in compiled [:projection :coverage :roots])))
     (catch Exception _ false)))
 
+(defn- request-key [request]
+  ;; Read flags, verification transport and reviewed-snapshot guards do not
+  ;; change the operation identity. Mapping and policy changes do.
+  (lens/source-hash (pr-str (walk/postwalk #(if (map? %) (into (sorted-map) %) %)
+                              (select-keys request [:workspace_root :source :destinations
+                                                    :promotion_policy :source_retirement
+                                                    :roots :constraints :expect])))))
+
+(defn- index-path [root request]
+  (artifacts/target "namespace-split" (str root) (str (request-key request) "-committed.edn")))
+
+(defn- source-index-path [root request]
+  (artifacts/target "namespace-split" (str root)
+                    (str (lens/source-hash (get-in request [:source :file])) "-source-committed.edn")))
+
+(defn- persist-index! [root request result]
+  (let [entry {:receipt_path (:receipt_path result) :request_key (request-key request)
+               :destinations (mapv :file (:destinations request))
+               :original_hash (lens/source-hash (gate/read-text! (:receipt_path result) gate/max-receipt-bytes))}]
+    (doseq [path [(index-path root request) (source-index-path root request)]]
+      (file-ops/atomic-write! path (pr-str entry))))
+  result)
+
+;; @spec NS-SPLIT-053
+;; INTENT: NS-SPLIT-053
+(defn committed-facts!
+  "Resolve a known committed intent without re-compiling a deleted source."
+  [root request]
+  (let [exact (index-path root request)
+        fallback (source-index-path root request)
+        entry (cond (.isFile (io/file exact)) (gate/read-edn! exact gate/max-receipt-bytes)
+                    (.isFile (io/file fallback))
+                    (let [entry (gate/read-edn! fallback gate/max-receipt-bytes)]
+                      (when (or (not (.isFile (io/file (str root) (get-in request [:source :file]))))
+                                (some (set (:destinations entry)) (map :file (:destinations request)))) entry)))]
+    (when entry
+      (let [receipt (gate/read-edn! (:receipt_path entry) gate/max-receipt-bytes)
+            sources (try (capture! root (:roots request)) (catch Exception _ nil))
+            current (when sources (gate/snapshot-hash sources))
+            snapshot (when sources (split/snapshot-hash sources))
+            same-request? (or (= (:request_key entry) (request-key request))
+                              (and (nil? (:request_key entry)) (.isFile (io/file exact))))
+            same? (and same-request?
+                       (= (:original_hash entry) (lens/source-hash (gate/read-text! (:receipt_path entry) gate/max-receipt-bytes)))
+                       (= (:candidate_hash receipt) current)
+                       (or (nil? (:snapshot_hash request))
+                           (contains? (set [(:snapshot_hash receipt) current snapshot]) (:snapshot_hash request))))]
+        (if same?
+          (assoc (select-keys receipt [:receipt_id :receipt_path :closure_receipt :candidate_hash
+                                       :facts :counts :map_hash :verification_complete :proof_pending :checks])
+                 :ok true :state "committed-facts" :operation "namespace_split"
+                 :snapshot_hash snapshot :input_snapshot_hash (:snapshot_hash receipt)
+                 :facts_basis "committed-transaction" :verification_basis "original-receipt"
+                 :read_complete true :source_unchanged true :committed true :mutation_attempted false)
+          {:ok false :state "refused" :operation "namespace_split"
+           :error_type (if same-request? "committed-facts-stale" "committed-facts-request-mismatch")
+           :error (if same-request?
+                    "Committed facts no longer match this source inventory; inspect the named closure receipt."
+                    "This request differs from the committed split; inspect the named original and closure receipts.")
+           :closure_receipt (:closure_receipt receipt) :receipt_path (:receipt_path receipt)
+           :verification_complete false :mutation_attempted false :source_unchanged true})))))
+
 ;; @spec NS-SPLIT-010
 ;; @spec NS-SPLIT-012
 ;; INTENT: NS-SPLIT-021
@@ -292,9 +358,12 @@
   [root compiled profile-name capability receipt-dir checks]
   (when-not (= (:guard-sources compiled) (capture! root (get-in compiled [:projection :coverage :roots])))
     (refuse! :snapshot-drift "The captured source inventory changed before publication" {}))
-  (let [candidate (canonical-compiled root compiled)
+  (let [base (split/publication-receipt compiled checks)
+        base-size (gate/receipt-size base)
+        _ (when (> base-size (- gate/max-receipt-bytes 16384))
+            (refuse! :receipt-size-bound "Split review facts exceed the receipt budget" {:receipt_bytes base-size}))
+        candidate (canonical-compiled root compiled)
         committed (kernel/commit! candidate)
-        base (split/receipt compiled checks)
         retired? #(boolean (and (seq (:deleted-files candidate))
                                 (every? (fn [file] (not (.exists (io/file file)))) (:deleted-files candidate))))]
     (if-not (:ok committed)
@@ -323,15 +392,28 @@
                                {:projection (:projection compiled) :verification verification
                                 :read_back (:verified committed)})]
             (if (and (:ok verification) snapshot-current?)
-              (assoc (merge base (artifacts/workspace-evidence (str root) (concat (keys (:future-sources compiled)) (:deleted-files compiled)))) :ok true :committed true :mutation_attempted true
-                     :source_retired (boolean (seq (:deleted-files compiled)))
-                     :verification_complete (:verification_complete (proof-completion capability verification))
-                     :state (if probe-only? "committed-probe-only" "committed")
-                     :proof_pending (:proof_pending (proof-completion capability verification))
-                     :checks checks :undo_receipt inverse :details_path details
-                     :undo_command ["clj-surgeon" ":op" ":undo-extract!" ":receipt" inverse]
-                     :receipt_hash (:receipt-hash committed)
-                     :graph (-> (:graph base) (dissoc :edges) (assoc :edge_count (count (get-in base [:graph :edges])))))
+              (let [result (assoc (merge base (artifacts/workspace-evidence (str root) (concat (keys (:future-sources compiled)) (:deleted-files compiled)))) :ok true :committed true :mutation_attempted true
+                             :source_retired (boolean (seq (:deleted-files compiled)))
+                             :verification_complete (:verification_complete (proof-completion capability verification))
+                             :state (if probe-only? "committed-probe-only" "committed")
+                             :proof_pending (:proof_pending (proof-completion capability verification))
+                             :checks checks :undo_receipt inverse :details_path details
+                             :undo_command ["clj-surgeon" ":op" ":undo-extract!" ":receipt" inverse]
+                             :receipt_hash (:receipt-hash committed))
+                    result (assoc-in result [:facts :unexpected_paths]
+                                     (mapv operation/encode-caller-text (get-in result [:workspace_status :unexpected_paths])))
+                    result (if (nil? (get-in result [:workspace_status :unexpected_paths]))
+                             (assoc-in result [:facts :unexpected_paths] nil) result)
+                    result (assoc result :receipt_id id :workspace_root (str root)
+                                  :receipt_path (str (io/file receipt-dir (str id "-receipt.edn")))
+                                  :closure_receipt (str (io/file receipt-dir (str id "-closure.edn")))
+                                  :candidate_hash (gate/snapshot-hash
+                                                    (into (sorted-map) (remove (comp nil? val))
+                                                          (merge (:guard-sources compiled) (:future-sources compiled)))))]
+                (persist-index! root (:request compiled)
+                  (if (= :background (:gate capability))
+                    (gate/launch! result receipt-dir (assoc capability :profile profile-name))
+                    (do (save! receipt-dir (str id "-receipt.edn") (gate/bounded-receipt! result)) result))))
               (let [undo (kernel/undo! (:receipt committed))]
                 (assoc base :ok false :state (if (:ok undo) "rolled-back" "recovery-required")
                        :error (if snapshot-current? "Required verification failed" "The verified snapshot changed during proof")
@@ -348,6 +430,10 @@
 
 ;; @spec NS-SPLIT-011
 ;; @spec NS-SPLIT-012
+;; @spec NS-SPLIT-054
+;; @spec NS-SPLIT-058
+;; INTENT: NS-SPLIT-054
+;; INTENT: NS-SPLIT-058
 (defn execute!
   ([request] (execute! {} request))
   ([config request]
@@ -359,76 +445,91 @@
          (when (seq invalid) (refuse! :invalid-request "Invalid namespace_split request" {:blockers invalid}))
          (let [root (paths/real-root (:workspace_root request))
                request (assoc request :workspace_root (str root))
-               config-file (io/file (str root) ".clj-surgeon.edn")
-               raw-profiles (if-let [file (get-in request [:verification :profile-file])]
-                              (external-profiles! root file)
-                              (or (:verification-profiles config)
-                                  (when (.isFile config-file)
-                                    (:verification-profiles (edn/read-string (slurp config-file))))))
-               profiles (anchored-profiles root raw-profiles)
-               profile-name (get-in request [:verification :profile])
-               mode (get-in profiles [profile-name :proof] :cold)
-               _ (when-not (#{:cold :warm} mode)
-                   (refuse! :invalid-proof-mode "Profile :proof must be :cold or :warm" {}))
-               live (when-not (:plan_only request) (warm/discover! root))
-               _ (when (and (not (:plan_only request)) (= :warm mode) (nil? live))
-                   (refuse! :warm-probe-unavailable "Warm proof requires a live workspace nREPL" {}))
-               preflight (when-not (:plan_only request) (proof/verification-preflight profiles profile-name true))]
-           (when preflight
-             (refuse! (if (= "helper-extraction-verification-empty-profile" (:error_type preflight))
-                        :verification-empty-profile :verification-unavailable)
-                      (:error preflight) (cond-> {:preflight preflight}
-                                           (:proof_pending preflight) (assoc :proof_pending (:proof_pending preflight)))))
-           (let [sources (capture! root (:roots request))
-                 _ (doseq [d (:destinations request)]
-                     (when-not (some #(.startsWith (.normalize (.toPath (io/file (:file d))))
-                                                   (.toPath (io/file %))) (:roots request))
-                       (refuse! :destination-outside-roots "Destination must be inside an authorized root" {:file (:file d)})))
-                 _ (when-not (contains? sources (get-in request [:source :file]))
-                     (refuse! :missing-source "The source file is not within the captured roots" {:file (get-in request [:source :file])}))
-                 analyzed (analyze! sources)
-                 compiled (split/compile-split request {:sources sources :analysis (:analysis analyzed)
-                                                        :source-paths (extract/workspace-source-paths root)})
-                 expected-errors (for [[k v] (:expect request) :when (not= v (get-in compiled [:projection :counts k]))]
-                                   {:type :expect-mismatch :field k :expected v :actual (get-in compiled [:projection :counts k])})
-                 compiled (if (seq expected-errors) (-> compiled (assoc :ok false) (update :blockers into expected-errors)) compiled)
-                 checks [(:check analyzed)]
-                 result (cond
-                          (:plan_only request) (cond-> (assoc (split/receipt compiled checks)
-                                                         :read_complete true :source_unchanged true)
-                                                 (= "facts" (:plan_only request)) (assoc :facts (get-in compiled [:projection :facts]))
-                                                 (not= "facts" (:plan_only request)) (assoc :analysis (split/analysis-projection compiled))
-                                                 (not (:ok compiled)) (assoc :error "Split analysis contains blockers" :error_type "split-refused"))
-                          (not (:ok compiled)) (assoc (split/receipt compiled checks) :error "Split decisions or static proof are incomplete"
-                                                 :error_type "split-refused" :source_unchanged true
-                                                 :next_call (assoc request :plan_only true))
-                          :else
-                          (let [parse-start (System/nanoTime)
-                                _ (doseq [[_ s] (:future-sources compiled) :when s] (parser/parse-string-all s))
-                                parse-ms (/ (double (- (System/nanoTime) parse-start)) 1000000.0)
-                                candidate-sources (into (sorted-map) (remove (comp nil? val))
-                                                        (merge sources (:future-sources compiled)))
-                                candidate-analysis (analyze! candidate-sources)
-                                delta (lint-comparison analyzed candidate-analysis)
-                                checks (conj checks {:name "future-source-parse" :exit 0 :duration_ms parse-ms :status "passed"} delta)]
-                            (if (= "failed" (:status delta))
-                              (assoc (split/receipt compiled checks) :ok false :state "refused"
-                                     :error "Candidate introduces error findings relative to baseline lint"
-                                     :error_type "lint-regression" :source_unchanged true
-                                     :blockers [{:type :lint-regression :introduced_errors (:introduced_errors delta)}])
-                              (publish! root compiled profile-name
-                                        (assoc (proof/profile-capability (get profiles profile-name))
-                                               :proof mode :warm-live live
-                                               :pending-commands (:commands (proof/profile-capability (get raw-profiles profile-name))))
-                                        (artifacts/directory "namespace-split" (str root))
-                                        checks))))]
-             (assoc result :elapsed_ms (elapsed)))))
+               committed-facts (when (= "facts" (:plan_only request)) (committed-facts! root request))]
+           (if committed-facts
+             (assoc committed-facts :elapsed_ms (elapsed))
+             (let [config-file (io/file (str root) ".clj-surgeon.edn")
+                   raw-profiles (if-let [file (get-in request [:verification :profile-file])]
+                                  (external-profiles! root file)
+                                  (or (:verification-profiles config)
+                                      (when (.isFile config-file)
+                                        (:verification-profiles (edn/read-string (slurp config-file))))))
+                   profiles (anchored-profiles root raw-profiles)
+                   profile-name (get-in request [:verification :profile])
+                   mode (get-in profiles [profile-name :proof] :cold)
+                   gate-mode (get-in profiles [profile-name :gate])
+                   _ (when (and gate-mode (not (and (= :background gate-mode) (= :warm mode))))
+                       (refuse! :invalid-gate-mode "Background gate requires :proof :warm and :gate :background" {}))
+                   _ (when-not (#{:cold :warm} mode)
+                       (refuse! :invalid-proof-mode "Profile :proof must be :cold or :warm" {}))
+                   live (when-not (:plan_only request) (warm/discover! root))
+                   _ (when (and (not (:plan_only request)) (= :warm mode) (nil? live))
+                       (refuse! :warm-probe-unavailable "Warm proof requires a live workspace nREPL" {}))
+                   runner (when (and (= :background gate-mode) (not (:plan_only request)))
+                            (gate/runner-commands!))
+                   preflight (when-not (:plan_only request) (proof/verification-preflight profiles profile-name true))]
+               (when preflight
+                 (refuse! (if (= "helper-extraction-verification-empty-profile" (:error_type preflight))
+                            :verification-empty-profile :verification-unavailable)
+                          (:error preflight) (cond-> {:preflight preflight}
+                                               (:proof_pending preflight) (assoc :proof_pending (:proof_pending preflight)))))
+               (let [sources (capture! root (:roots request))
+                     _ (doseq [d (:destinations request)]
+                         (when-not (some #(.startsWith (.normalize (.toPath (io/file (:file d))))
+                                                       (.toPath (io/file %))) (:roots request))
+                           (refuse! :destination-outside-roots "Destination must be inside an authorized root" {:file (:file d)})))
+                     _ (when-not (contains? sources (get-in request [:source :file]))
+                         (refuse! :missing-source "The source file is not within the captured roots" {:file (get-in request [:source :file])}))
+                     analyzed (analyze! sources)
+                     compiled (split/compile-split request {:sources sources :analysis (:analysis analyzed)
+                                                            :source-paths (extract/workspace-source-paths root)})
+                     expected-errors (for [[k v] (:expect request) :when (not= v (get-in compiled [:projection :counts k]))]
+                                       {:type :expect-mismatch :field k :expected v :actual (get-in compiled [:projection :counts k])})
+                     compiled (if (seq expected-errors) (-> compiled (assoc :ok false) (update :blockers into expected-errors)) compiled)
+                     checks [(:check analyzed)]
+                     result (cond
+                              (:plan_only request) (cond-> (assoc (split/receipt compiled checks)
+                                                             :read_complete true :source_unchanged true)
+                                                     (= "facts" (:plan_only request)) (assoc :facts (get-in compiled [:projection :facts])
+                                                                                        :manifest (assoc request :plan_only true
+                                                                                                         :snapshot_hash (get-in compiled [:projection :snapshot_hash])))
+                                                     (not= "facts" (:plan_only request)) (assoc :analysis (split/analysis-projection compiled))
+                                                     (not (:ok compiled)) (assoc :error "Split analysis contains blockers" :error_type "split-refused"))
+                              (not (:ok compiled)) (assoc (split/receipt compiled checks) :error "Split decisions or static proof are incomplete"
+                                                     :error_type "split-refused" :source_unchanged true
+                                                     :next_call (assoc request :plan_only true))
+                              :else
+                              (let [parse-start (System/nanoTime)
+                                    _ (doseq [[_ s] (:future-sources compiled) :when s] (parser/parse-string-all s))
+                                    parse-ms (/ (double (- (System/nanoTime) parse-start)) 1000000.0)
+                                    candidate-sources (into (sorted-map) (remove (comp nil? val))
+                                                            (merge sources (:future-sources compiled)))
+                                    candidate-analysis (analyze! candidate-sources)
+                                    delta (lint-comparison analyzed candidate-analysis)
+                                    checks (conj checks {:name "future-source-parse" :exit 0 :duration_ms parse-ms :status "passed"} delta)]
+                                (if (= "failed" (:status delta))
+                                  (assoc (split/receipt compiled checks) :ok false :state "refused"
+                                         :error "Candidate introduces error findings relative to baseline lint"
+                                         :error_type "lint-regression" :source_unchanged true
+                                         :blockers [{:type :lint-regression :introduced_errors (:introduced_errors delta)}])
+                                  (publish! root compiled profile-name
+                                            (assoc (proof/profile-capability (get profiles profile-name))
+                                                   :proof mode :gate gate-mode :runner runner :warm-live live
+                                                   :pending-commands (:commands (proof/profile-capability (get profiles profile-name))))
+                                            (artifacts/directory "namespace-split" (str root))
+                                            checks))))]
+                 (assoc result :elapsed_ms (elapsed)))))))
+       ;; @spec NS-SPLIT-059
+       ;; INTENT: NS-SPLIT-059
+       ;; A typed refusal that names no repair is a dead end: preserve the
+       ;; refusing boundary's own next_call all the way to the public receipt.
        (catch Throwable error
          {:ok false :operation "namespace_split" :state "refused" :committed false
           :mutation_attempted false :source_unchanged true :verification_complete false
           :error_type (name (or (:error-type (ex-data error)) :split-failed))
-          :error (.getMessage error) :evidence (dissoc (ex-data error) :error-type)
-          :next_call nil :proof_pending (or (:proof_pending (ex-data error)) []) :elapsed_ms (elapsed)})))))
+          :error (.getMessage error) :evidence (dissoc (ex-data error) :error-type :next_call)
+          :next_call (:next_call (ex-data error))
+          :proof_pending (or (:proof_pending (ex-data error)) []) :elapsed_ms (elapsed)})))))
 
 ;; @spec NS-SPLIT-014
 (defn cli! [opts]

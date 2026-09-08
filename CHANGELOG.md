@@ -10,6 +10,12 @@ is cut.
 
 ### Added
 
+- Namespace split warm profiles can select `:gate :background`. A detached worker
+  writes a separate snapshot-checked closure; CLI `:proof-status` joins it with
+  the immutable original receipt. Full and retained-source receipts now include
+  bounded review facts. Post-commit facts reads use the committed snapshot, and
+  printed pre-commit manifests include verification for plan-only replay.
+
 - Alias migration emits per-call refusal price, explicit caller-outcome unknowns
   and a serialized external telemetry ledger, including MCP routing refusals.
 
