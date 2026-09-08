@@ -72,3 +72,4 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 - 2026-09-08T05:18Z pilot 3: 4/4 task PASS, 1/4 grade PASS, all FAILs = observer defects → B02c. Row 9 stays friction-high; row 1 stays medium.
 - 2026-09-08T05:45Z B02c delivered; p13–p16 = 4/4 PASS 9/9 observed. Row 9: friction-medium candidate pending Astra re-acceptance. Row 1: awaiting Sol r8 GO + install + Astra lift.
 - 2026-09-08T06:01Z Astra re-acceptance 2: not qualified (10 items) → B02d. Row 1 medium; row 9 friction-high.
+- 2026-09-08T06:02Z plate landed + installed (hash 67e45724…); row 1 remaining to LOW = Astra lift + qualified observed pilot. Rows 2–7 untouched (descend-at-low ruling).
