@@ -1,0 +1,117 @@
+;; Row 2 cohort freeze manifest — written BEFORE run F1.
+;; Design: /var/tmp/forge/plan2/cellC/sol-row2-design.md
+;; Stage 1 scope: seed build + oracle qualification + six fresh native (N) floor controls.
+;; No D (tool) arm is run in this stage.
+{:frozen-at-utc "2026-09-08T07:36Z"
+
+ :design
+ {:path        "/var/tmp/forge/plan2/cellC/sol-row2-design.md"
+  :sha256      "8b85fac0ac4c51e26e994d58b9adf3e9b066315e8b436cff746cd84c79d4816a"}
+
+ ;; ---- provenance: every value below was RE-DERIVED here and matched the design's frozen table ----
+ :provenance
+ {:repository                  "realgenekim/marvin-voice-remote"
+  :golden-commit               "5a4b4bcff5606769629147aeb9a346ae047db762"
+  :golden-tree                 "f94b6b52a5063ceba7c40f51e6b5e227c9fd6759"
+  :base-commit                 "9f9cf61441a7f2a984b55226d5d1ca6cbeb6706f"
+  :base-tree                   "430875629dbdce501eb94218d60600d2ecee5d16"
+  :base-json-clj-sha256        "a5c270597b159c47ca4aa082b0c26ff08aeb0348c8b15bc0671108de2d1ca720"
+  :seeded-json-clj-sha256      "5e2b4151ff2823586bdb55d0b795d4f71d744b95571ce966eb685d4b89fec410"
+  :helper-patch-sha256         "fc3a7948b0bd2b7fc14cb76d94d9f41f3c626a93534e6a16d7170ad48788e9fa"
+  :caller-only-patch-sha256    "0649dd0bad24821981c73355fb6299a8b959922830dd016d332bf78faedfec1b"
+  :all-four-hashes-match-design true}
+
+ ;; ---- the seed fixture (history-isolated: no remote, single ref, no historical commits) ----
+ :seed
+ {:repo                "/var/tmp/forge/row2/seed-repo"
+  :commit              "6dcdbc9db67a91179b5940a16c16b760583f2603"
+  :tree                "9caa46725924c0bb00d766c08e59c98cc8373935"
+  :branch              "seed"
+  :remotes             :none
+  :refs                ["refs/heads/seed"]
+  :verified
+  {:non-helper-paths-identical-to-base-tree true
+   :json-clj-sha256-matches                 true
+   :only-difference                         "the design's exact 5-line (defn write ...) hunk"
+   :worktree-clean                          true}}
+
+ :task
+ {:path   "/var/tmp/forge/row2/task.md"
+  :sha256 "6b3cc46e20e1fa6c12ce4af7243f13f3f9846a099dce520507551fc22c08073c"
+  :verified-byte-identical-to-design-block true}
+
+ ;; ---- oracle apparatus, hashed after qualification fixes ----
+ :oracle
+ {"o1_load_suite.sh"        "a02a7bd292d4706635e2652dd3aabfe74de3f3db8670b672d787f3c6fa65a4c1"
+  "o2_structural_golden.sh" "920d9b384c9d129f4bd0e7196a07e10dfc35bdf1934a01dcb4bafbd375b6329f"
+  "o3_kondo_delta.sh"       "5498c19812e907fe33f73d1b2254137a5350328e00f0acce78653a4e6cb5fb65"
+  "o4_prose_collision.sh"   "321eb362ccf42b1b5489938ca17d15b5d3c7799fefd71dab4b08756bee1e93b7"
+  "o5_papercut.sh"          "b242f136b108a5770df8b4a9cade6cea2d86493c15f21c78bf5b82fbc5e1de79"
+  "run_oracles.sh"          "57bac8d0da0559207794d9ff29ab2dd43aebfa90cd5ee79915f5bc2a304e68a0"
+  "kondo_seed_baseline.json" "9270d17e03d4ff0fab6a1d5907eee1f503aab9bebddcb6c6ea42eb598ce97f17"}
+
+ :fixture-facts-verified
+ {:caller-files                9
+  :live-sites                  21
+  :protected-prose-occurrences 1        ; the cmd-attrs docstring in bridge3_new.clj
+  :golden-alias                "mjson"  ; all nine files
+  :reuse-files                 ["bridge3_new" "channel" "codex_app_server"
+                                "director_control" "director_outbox" "reducer_session"]
+  :collision-files             ["app_route" "server" "tts"]
+  :collisions-resolved         3
+  :seed-suite                  "579 tests, 7833 assertions, 0 failures"
+  :seed-kondo-baseline         {:errors 37 :warnings 99 :infos 23
+                                :tracked-category-findings 14}}
+
+ :meter
+ {:primary-endpoint "orient-start -> oracle-complete"
+  :stamp-tool       "/var/tmp/forge/dogfood-stamp.sh"
+  :log-per-arm      "/var/tmp/forge/row2/<ARM>/stopwatch.log"}
+
+ :stage-1-cohort
+ {:arms      ["F1" "F2" "F3" "F4" "F5" "F6"]
+  :route     "N — native fastest-safe, unrestricted native rg/shell/patch"
+  :forbidden ["clj-surgeon" "cclsp" "clojure-lsp" "reading another checkout" "historical refs"]
+  :model     "opus, fresh Agent session per run"
+  :order     :sequential}
+
+ ;; ---- documented deviations from the literal design/dispatch text, with justification ----
+ :deviations
+ [{:what   "Worktrees are cut from the history-isolated fixture repo, not from the shared
+             /home/forge/src/marvin-voice-remote checkout."
+   :why    "The design makes history isolation a pre-arm gate: 'the fixture repository has only its
+             seed ref and no remote, so an arm cannot discover or cherry-pick the historical answer.'
+             A worktree of the real repo would let any arm run `git show 5a4b4bcf` and paste the
+             complete answer, destroying the N floor. ~/bin/worktree-add is still the creation route
+             (so folder trust is registered atomically); only its <repo> argument changed."}
+  {:what   "O2.d alpha-normalization is implemented as: detect the target alias, and when it equals
+             the golden's alias ('mjson') compare bytes directly; any other alias fails with
+             NORMALIZATION-REQUIRED rather than being normalized."
+   :why    "On this fixture the frozen policy provably forces 'mjson' in all nine files (six reuse an
+             existing mjson binding; in the other three 'json' is occupied by clojure.data.json so
+             mjson is the first free policy entry). Normalization is therefore the identity map for
+             any candidate that can pass O4. The reduction can only reject, never wrongly accept."}
+  {:what   "Grading oracles O2-O5 are executed by the runner immediately on caller return, not by
+             the caller; the caller runs the load/suite itself as the task text requires."
+   :why    "The design already classes staging/hashing/diffing/linting/grading as 'oracle apparatus,
+             not caller work'. Handing the caller the grader would also hand it the historical golden
+             bytes. The clock is continuous across the handoff, so orient-start -> oracle-complete is
+             still the complete wall, and the constant is identical for every arm."}
+  {:what   "00SERVER-LOGS.txt is excluded from the O5 stray-artifact check."
+   :why    "It is the application's own timbre spit-appender output (core.clj:11), produced by
+             running O1 itself. It is apparatus fallout, not arm work; it is gitignored upstream."}]
+
+ :oracle-qualification
+ {:on-historical-golden {:O1 :PASS :O2 :PASS :O3 :PASS :O4 :PASS :O5 :PASS :accepted true}
+  :on-untouched-seed    {:O1 :PASS :O2 :FAIL :O3 :PASS :O4 :FAIL :O5 :PASS :accepted false
+                         :note "O1/O3 are environmental and correctly green on an unmodified tree;
+                                the migration-specific gates O2 and O4 are correctly red."}}
+
+ :registered-gate-stage-2
+ {:primary-conjunctive
+  ["all six D accepted, no repair / second call / intervention / fallback"
+   "median(D_i / N_i) <= 0.75"
+   "median(N_i - D_i) >= 90 s"
+   "median(N_i - D_i) > 2 * s_N"]
+  :stricter-secondary "median(D_i / N_i) <= 0.70"
+  :note "s_N comes from F1..F6 in this stage. The floor controls are NOT pooled into the paired effect."}}

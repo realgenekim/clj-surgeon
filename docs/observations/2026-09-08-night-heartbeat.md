@@ -15,3 +15,6 @@ Rules of this file: one entry per hour (UTC), quote receipts verbatim, DELTA per
 
 ## 2026-09-08T07:52Z
 - B07 (row 5 feasibility, Astra) alive at 60 min of its 4-h box; interim report present. Row-2 native floor (stage 1) running. Acceptance 4 → pilot 4 running. Row 3 pre-registered; schema prerequisite queued for Astra. No landing since 06:2xZ. Watchdog ticking (fresh pulse). Disk 42 G remaining.
+
+## 2026-09-08T07:59Z
+- DELTA: row 2 stage 1 done (N median 198 s; gate clause 3 unsatisfiable; oracle ambiguity + golden confound) → Sol revision running. B07 (Astra) at ~75 min. Acceptance 4 → pilot 4 running.

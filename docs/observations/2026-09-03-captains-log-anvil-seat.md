@@ -3786,3 +3786,16 @@ Root causes closed: the gate exemption read the SPECIMEN's own bin/kaocha at gra
 ## 2026-09-08T07:48Z — row 3 pre-registered (Sol, 629 lines → 2026-09-08-row3-require-preregistration.md): a real MVR migration; the verb's schema cannot express it yet
 
 Fixture: commit 9f9cf614 (parent d170f3d5) — the require-only last step of the JSON-read policy migration: add `[marvin-voice-remote.json :as mjson]` to exactly eight namespaces whose call sites are already migrated; collision + trailing-comment cases in the seed. Survey verdict: today's require_change schema cannot express the natural task → schema admission is a prerequisite block for Astra (queued after B07); the cohort must not be spent as D1 until then. Row 3 stays "uncalibrated" in the tree with a pre-registered path to a number.
+
+## 2026-09-08T07:59Z — row 2 stage 1: six native controls done — the gate's absolute-seconds clause is UNSATISFIABLE, and the oracle has an ambiguity and a confound
+
+| arm | wall | accepted | why rejected |
+|---|---|---|---|
+| F1 | 209.0 s | no | O2/O5 (alias spelling/whitespace) |
+| F2 | 212.7 s | no | took `json` (freed by retiring the old lib first) |
+| F3 | 162.6 s | no | same |
+| F4 | 195.2 s | no | same |
+| F5 | 201.1 s | no | same |
+| F6 | 159.4 s | YES | `mjson`, byte-golden |
+
+N floor median 198.1 s, s_N 23.3 s; all six functionally correct (21 sites, 0 live old sites, kondo delta 0, suite 579/7833 green). Finding 1: fixed apparatus ≈ 90.5 s (caller suite + handoff + grading) sits in BOTH arms' walls and cancels; removable caller work median 94.5 s; clause 3 (≥ 90 s saved) leaves D 4.5 s — unsatisfiable by any tool. Finding 2: the task never says when alias occupancy is evaluated (4/6 rejections are that ambiguity); finding 3: the golden is the tool's own historical alias_migration output — O2 byte-identity rewards the tool's convention. Runner deviations recorded (history-isolated fixture repo; runner-side grading; log file excluded). Sent back to Sol for amendments (gate relative to removable caller work or a candidate-complete primary endpoint; the one disambiguating sentence; alias-neutral O2; whether the apparatus is excluded from the primary clock by construction — a meter decision for every row). Stage 2 (D arm) waits for the revision. Same lesson as Cell C's manifest: the pre-registration is a hypothesis about the meter until six controls have run.

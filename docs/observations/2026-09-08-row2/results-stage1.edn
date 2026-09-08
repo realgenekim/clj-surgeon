@@ -1,0 +1,49 @@
+;; Row 2 stage 1 — six fresh native (N) floor controls. No D arm was run.
+{:arms
+ [{:id "F1" :wall-s 209.0 :accepted false :O1 :PASS :O2 :FAIL :O3 :PASS :O4 :PASS :O5 :FAIL
+   :alias-for-colliders "mjson" :sites 21 :live-old-left 0 :suite "579/7833/0"
+   :why-rejected "O2: 4 files differ from golden — 2 continuation lines re-aligned after the
+                  shorter head, and the new libspec placed at a different position in server/tts.
+                  O5: patch +23/-29 vs golden +21/-27."}
+  {:id "F2" :wall-s 212.7 :accepted false :O1 :PASS :O2 :FAIL :O3 :PASS :O4 :FAIL :O5 :FAIL
+   :alias-for-colliders "json" :sites 21 :live-old-left 0 :suite "579/7833/0"
+   :why-rejected "alias-timing reading: retired clojure.data.json first, then took the freed
+                  preference-1 alias `json`. Also re-aligned 2 continuation lines."}
+  {:id "F3" :wall-s 162.6 :accepted false :O1 :PASS :O2 :FAIL :O3 :PASS :O4 :FAIL :O5 :PASS
+   :alias-for-colliders "json" :sites 21 :live-old-left 0 :suite "579/7833/0"
+   :why-rejected "alias-timing reading only; patch size identical to golden (+21/-27)."}
+  {:id "F4" :wall-s 195.2 :accepted false :O1 :PASS :O2 :FAIL :O3 :PASS :O4 :FAIL :O5 :FAIL
+   :alias-for-colliders "json" :sites 21 :live-old-left 0 :suite "579/7833/0"
+   :why-rejected "alias-timing reading + 2 re-aligned continuation lines."}
+  {:id "F5" :wall-s 201.1 :accepted false :O1 :PASS :O2 :FAIL :O3 :PASS :O4 :FAIL :O5 :PASS
+   :alias-for-colliders "json" :sites 21 :live-old-left 0 :suite "579/7833/0"
+   :why-rejected "alias-timing reading only; patch size identical to golden."}
+  {:id "F6" :wall-s 159.4 :accepted true  :O1 :PASS :O2 :PASS :O3 :PASS :O4 :PASS :O5 :PASS
+   :alias-for-colliders "mjson" :sites 21 :live-old-left 0 :suite "579/7833/0"
+   :why-accepted "byte-identical to the historical caller-only golden in all nine files."}]
+
+ :floor
+ {:walls-s [209.0 212.7 162.6 195.2 201.1 159.4]
+  :median-s 198.1 :mean-s 190.0 :s_N-s 23.3 :min-s 159.4 :max-s 212.7
+  :accepted 1 :n 6 :first-attempt-acceptance 0.167
+  :refusals 0 :fallbacks 0 :operator-interventions 0}
+
+ :decomposition-median-s
+ {:orientation 79.7 :mutation 15.0 :caller-suite 27.8 :handoff 34.7 :runner-grading 28.0
+  :caller-work 94.5   ; orientation + mutation — the ONLY part a tool can remove
+  :fixed-apparatus 90.5}  ; paid identically by N and D, cancels in N-D
+
+ :correctness-common-to-all-six
+ {:sites-migrated 21 :live-old-sites-remaining 0 :protected-docstring-intact true
+  :kondo-delta-unresolved-ns 0 :kondo-delta-unused-ns 0 :suite "579 tests, 7833 assertions, 0 failures"}
+
+ :gate-feasibility-from-this-floor
+ {:clause-2 {:req "median(D/N) <= 0.75" :implies-D-wall-s 148.6 :implies-D-caller-work-s 58.2 :feasible true}
+  :clause-3 {:req "median(N-D) >= 90 s" :implies-D-caller-work-s 4.5 :feasible false
+             :note "max achievable median(N-D) is 94.5 s — the whole median native caller work —
+                    so clause 3 leaves 4.5 s of headroom and demands the tool remove ~95% of it."}
+  :clause-4 {:req "median(N-D) > 2*s_N = 46.6 s" :implies-D-caller-work-s 48.0 :feasible true}
+  :secondary {:req "median(D/N) <= 0.70" :implies-D-wall-s 138.7}
+  :verdict "The conjunctive gate is computable but clause 3 is effectively unsatisfiable on this
+            fixture. Fixed apparatus cancels in the difference, so clause 3 is bounded above by the
+            median native caller work (94.5 s), only 4.5 s above the 90 s requirement."}}
