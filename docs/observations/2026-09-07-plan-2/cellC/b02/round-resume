@@ -57,27 +57,70 @@ MODEL=${CODEX_MODEL:-gpt-5.6-sol}
 refuse() { echo "round-resume: REFUSED $*" >&2; exit 3; }
 
 [ -s "$RSTATE/session.json" ] || refuse "resume-no-metadata: $RSTATE/session.json does not exist, so nothing is known about session $SID for root '$WTC' — not its root, not its model, not its settings, not how it ended. A continuation with no history is a fresh session wearing a session id."
-_meta=$(python3 - "$RSTATE/session.json" <<'PY' 2>/dev/null
-import json, shlex, sys
+# THE EFFECTIVE SETTINGS OF *THIS* INVOCATION — computed from the very flags the
+# exec below passes, so the comparison is against what will actually run, not against
+# a remembered intention. B02d item 3: "nonempty settings are not matching settings".
+EFF_PROVIDER=${CODEX_PROVIDER:-openai}
+EFF_APPROVAL=never                 # --dangerously-bypass-approvals-and-sandbox
+EFF_SANDBOX=danger-full-access     # --dangerously-bypass-approvals-and-sandbox
+EFF_REASONING=high                 # -c model_reasoning_effort="high"
+# The EFFECTIVE INSTRUCTION PROFILE: the seat-global prompt files both runners inherit
+# plus the repo's own, hashed in a fixed order. A continuation into a changed prompt is
+# an unmeasured environment change, which is the same class as a changed model.
+EFF_PROFILE=$(cat "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md" \
+  "$WT/AGENTS.md" "$WT/CLAUDE.md" 2>/dev/null | sha256sum | cut -d' ' -f1)
+
+_meta=$(EFF_PROVIDER="$EFF_PROVIDER" EFF_APPROVAL="$EFF_APPROVAL" EFF_SANDBOX="$EFF_SANDBOX" \
+        EFF_REASONING="$EFF_REASONING" EFF_PROFILE="$EFF_PROFILE" \
+        python3 - "$RSTATE/session.json" <<'PY' 2>/dev/null
+import json, os, shlex, sys
 try:
     r = json.load(open(sys.argv[1]))
 except Exception as ex:
     print("META_OK=0"); print("META_ERR=" + shlex.quote(str(ex))); raise SystemExit
 if not isinstance(r, dict):
     print("META_OK=0"); print("META_ERR=" + shlex.quote("session.json is not a JSON object")); raise SystemExit
+env = os.environ
 s = r.get("settings")
 s = s if isinstance(s, dict) else {}
+# key -> the value THIS invocation will run under.  Equality, key by key.
+WANT = {"provider": env["EFF_PROVIDER"], "approval": env["EFF_APPROVAL"],
+        "sandbox": env["EFF_SANDBOX"], "reasoning effort": env["EFF_REASONING"]}
+missing, differ = [], []
+for k, want in sorted(WANT.items()):
+    got = s.get(k)
+    if got is None or str(got).strip() == "":
+        missing.append(k)
+    elif str(got).strip() != want:
+        differ.append(f"{k}: recorded {got!r}, this invocation runs {want!r}")
+# the effective instruction profile is part of the environment being continued
+prof = r.get("instruction_profile_sha256")
+if not prof:
+    missing.append("instruction_profile_sha256")
+elif str(prof) != env["EFF_PROFILE"]:
+    differ.append(f"instruction profile: recorded {str(prof)[:16]}…, "
+                  f"this invocation runs {env['EFF_PROFILE'][:16]}…")
+# a terminal label is only a RESULT if this apparatus collected a wait status for it
+basis = str(r.get("terminal_status_basis") or "")
+verified = basis.startswith("wait(2)")
 print("META_OK=1")
 for k, v in (("PREV_ROOT", r.get("root")), ("PREV_MODEL", r.get("model")),
              ("PREV_MODEL_REQ", r.get("model_requested")),
              ("PREV_STATUS", r.get("terminal_status")), ("PREV_SID", r.get("session_id")),
+             ("PREV_BASIS", basis or "none recorded"),
+             ("PREV_STATUS_LABEL", (str(r.get("terminal_status") or "unknown") + "(wait2)")
+              if verified else ("carried(unverified)")),
+             ("SET_MISSING", ", ".join(missing)),
+             ("SET_DIFFER", "; ".join(differ)),
              ("PREV_SETTINGS", ";".join(f"{k2}={v2}" for k2, v2 in sorted(s.items()) if v2))):
     print(f"{k}=" + shlex.quote("" if v is None else str(v)))
 PY
 )
 eval "$_meta"
 : "${META_OK:=0}" "${META_ERR:=unreadable}" "${PREV_ROOT:=}" "${PREV_MODEL:=}" \
-  "${PREV_MODEL_REQ:=}" "${PREV_STATUS:=}" "${PREV_SID:=}" "${PREV_SETTINGS:=}"
+  "${PREV_MODEL_REQ:=}" "${PREV_STATUS:=}" "${PREV_SID:=}" "${PREV_SETTINGS:=}" \
+  "${SET_MISSING:=}" "${SET_DIFFER:=}" "${PREV_BASIS:=none recorded}" \
+  "${PREV_STATUS_LABEL:=carried(unverified)}"
 [ "$META_OK" = 1 ] || refuse "resume-bad-metadata: $RSTATE/session.json could not be read as a session record ($META_ERR)"
 [ -n "$PREV_ROOT" ] || refuse "resume-missing-root: $RSTATE/session.json records no root for session $SID. An unknown previous root cannot be compared with '$WTC'."
 [ "$PREV_ROOT" = "$WTC" ] || refuse "resume-root-mismatch: session $SID was recorded against root '$PREV_ROOT'; this invocation asks to continue it in '$WTC'. A scope change gets a deliberate fresh session, never a resume."
@@ -85,10 +128,19 @@ eval "$_meta"
 PM=${PREV_MODEL:-$PREV_MODEL_REQ}
 [ "${PM%% *}" = "$MODEL" ] || refuse "resume-model-mismatch: session $SID ran on '$PM'; this invocation asks for '$MODEL'."
 [ -n "$PREV_SETTINGS" ] || refuse "resume-missing-settings: $RSTATE/session.json records no provider/approval/sandbox/reasoning settings for session $SID. Unrecorded settings are unverified settings."
+# B02d item 3 — EQUALITY, not non-emptiness. A recorded setting that differs from the
+# setting this invocation will actually run under is an environment change wearing a
+# session id, and it is refused BEFORE any model is executed.
+# ONE refusal naming EVERY discrepancy [B02d item 3]. Reporting the first one
+# found would hide a settings mismatch behind an unrecorded field, and the
+# mismatch is the finding.
+if [ -n "$SET_MISSING$SET_DIFFER" ]; then
+  refuse "resume-settings-mismatch: session $SID does not match the effective settings of this invocation.${SET_DIFFER:+ DIFFERENT: $SET_DIFFER.}${SET_MISSING:+ UNRECORDED (an effective setting that was never written down cannot be compared, and absence is never permission): $SET_MISSING.} Continuing a session into a different effective environment measures neither the old one nor the new one."
+fi
 [ -n "$PREV_SID" ] || refuse "resume-missing-session-id: $RSTATE/session.json records no session_id to compare '$SID' against"
 [ "$PREV_SID" = "$SID" ] || refuse "resume-state-inconsistent: asked to continue '$SID' but $RSTATE/session.json records session '$PREV_SID' for this root"
 [ -n "$PREV_STATUS" ] || PREV_STATUS=unknown
-echo "round-resume: ADMITTED session=$SID root='$PREV_ROOT' model='$PM' settings='$PREV_SETTINGS' previous_terminal_status=$PREV_STATUS (recorded by the round that ran it; not independently re-verified here)" >&2
+echo "round-resume: ADMITTED session=$SID root='$PREV_ROOT' model='$PM' settings='$PREV_SETTINGS'==effective(provider=$EFF_PROVIDER;approval=$EFF_APPROVAL;sandbox=$EFF_SANDBOX;reasoning effort=$EFF_REASONING) instruction_profile=${EFF_PROFILE:0:16} previous_terminal_status=$PREV_STATUS_LABEL (stored label '$PREV_STATUS', basis: $PREV_BASIS)" >&2
 
 # ---------------------------------------------------------------------------
 # Same MCP fence as sol-yolo: a repo-declared server may point at a port this seat must

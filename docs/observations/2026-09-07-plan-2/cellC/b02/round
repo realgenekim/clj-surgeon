@@ -611,27 +611,62 @@ EOF
       *) refuse "resume-bad-session: '$SID' is not a codex session uuid" ;;
     esac
     [ -s "$RSTATE/session.json" ] || refuse "resume-no-metadata: $RSTATE/session.json does not exist, so nothing is known about session $SID — not its root, not its model, not its settings, not how it ended. A continuation with no history is a fresh session wearing a session id. Run a fresh round."
-    _meta=$(python3 - "$RSTATE/session.json" <<'PY' 2>/dev/null
-import json, shlex, sys
+    # B02d item 3 — the EFFECTIVE settings of the continuation this round will run,
+    # computed from round-resume's own flags, so the comparison is against what will
+    # actually execute.  Non-emptiness is not equality.
+    EFF_PROVIDER=${CODEX_PROVIDER:-openai}
+    EFF_APPROVAL=never                 # --dangerously-bypass-approvals-and-sandbox
+    EFF_SANDBOX=danger-full-access     # --dangerously-bypass-approvals-and-sandbox
+    EFF_REASONING=high                 # -c model_reasoning_effort="high"
+    EFF_PROFILE=$(cat "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md" \
+      "$WT/AGENTS.md" "$WT/CLAUDE.md" 2>/dev/null | sha256sum | cut -d' ' -f1)
+    _meta=$(EFF_PROVIDER="$EFF_PROVIDER" EFF_APPROVAL="$EFF_APPROVAL" EFF_SANDBOX="$EFF_SANDBOX" \
+            EFF_REASONING="$EFF_REASONING" EFF_PROFILE="$EFF_PROFILE" \
+            python3 - "$RSTATE/session.json" <<'PY' 2>/dev/null
+import json, os, shlex, sys
 try:
     r = json.load(open(sys.argv[1]))
 except Exception as ex:
     print("META_OK=0"); print("META_ERR=" + shlex.quote(str(ex))); raise SystemExit
 if not isinstance(r, dict):
     print("META_OK=0"); print("META_ERR=" + shlex.quote("session.json is not a JSON object")); raise SystemExit
+env = os.environ
 s = r.get("settings")
 s = s if isinstance(s, dict) else {}
+WANT = {"provider": env["EFF_PROVIDER"], "approval": env["EFF_APPROVAL"],
+        "sandbox": env["EFF_SANDBOX"], "reasoning effort": env["EFF_REASONING"]}
+missing, differ = [], []
+for k, want in sorted(WANT.items()):
+    got = s.get(k)
+    if got is None or str(got).strip() == "":
+        missing.append(k)
+    elif str(got).strip() != want:
+        differ.append(f"{k}: recorded {got!r}, this round runs {want!r}")
+prof = r.get("instruction_profile_sha256")
+if not prof:
+    missing.append("instruction_profile_sha256")
+elif str(prof) != env["EFF_PROFILE"]:
+    differ.append(f"instruction profile: recorded {str(prof)[:16]}…, "
+                  f"this round runs {env['EFF_PROFILE'][:16]}…")
+basis = str(r.get("terminal_status_basis") or "")
+verified = basis.startswith("wait(2)")
 print("META_OK=1")
 for k, v in (("PREV_ROOT", r.get("root")), ("PREV_MODEL", r.get("model")),
              ("PREV_MODEL_REQ", r.get("model_requested")),
              ("PREV_STATUS", r.get("terminal_status")), ("PREV_SID", r.get("session_id")),
+             ("PREV_BASIS", basis or "none recorded"),
+             ("PREV_STATUS_LABEL", (str(r.get("terminal_status") or "unknown") + "(wait2)")
+              if verified else "carried(unverified)"),
+             ("SET_MISSING", ", ".join(missing)), ("SET_DIFFER", "; ".join(differ)),
              ("PREV_SETTINGS", ";".join(f"{k2}={v2}" for k2, v2 in sorted(s.items()) if v2))):
     print(f"{k}=" + shlex.quote("" if v is None else str(v)))
 PY
 )
     eval "$_meta"
     : "${META_OK:=0}" "${META_ERR:=unreadable}" "${PREV_ROOT:=}" "${PREV_MODEL:=}" \
-      "${PREV_MODEL_REQ:=}" "${PREV_STATUS:=}" "${PREV_SID:=}" "${PREV_SETTINGS:=}"
+      "${PREV_MODEL_REQ:=}" "${PREV_STATUS:=}" "${PREV_SID:=}" "${PREV_SETTINGS:=}" \
+      "${SET_MISSING:=}" "${SET_DIFFER:=}" "${PREV_BASIS:=none recorded}" \
+      "${PREV_STATUS_LABEL:=carried(unverified)}"
     [ "$META_OK" = 1 ] || refuse "resume-bad-metadata: $RSTATE/session.json could not be read as a session record ($META_ERR)"
     [ -n "$PREV_ROOT" ] || refuse "resume-missing-root: $RSTATE/session.json records no root for session $SID. An unknown previous root cannot be compared with '$WT', and an unverifiable scope is not a verified scope."
     [ "$PREV_ROOT" = "$WT" ] || \
@@ -641,7 +676,12 @@ PY
     [ "${_pm%% *}" = "$MODEL" ] || \
       refuse "resume-model-mismatch: session $SID ran on '$_pm'; this round asks for '$MODEL'. An environment change gets a deliberate fresh session, never a resume."
     [ -n "$PREV_SETTINGS" ] || refuse "resume-missing-settings: $RSTATE/session.json records no provider/approval/sandbox/reasoning settings for session $SID. The settings a session ran under are part of what is being continued; unrecorded settings are unverified settings."
-    # the explicit-ID override narrows the session; it never waives the comparison.
+    # ONE refusal naming EVERY discrepancy [B02d item 3]. Reporting the first one found
+    # would hide a settings mismatch behind an unrecorded field, and the mismatch is
+    # the finding.
+    if [ -n "$SET_MISSING$SET_DIFFER" ]; then
+      refuse "resume-settings-mismatch: session $SID does not match the effective settings of this round.${SET_DIFFER:+ DIFFERENT: $SET_DIFFER.}${SET_MISSING:+ UNRECORDED (an effective setting that was never written down cannot be compared, and absence is never permission): $SET_MISSING.} Continuing a session into a different effective environment measures neither the old one nor the new one."
+    fi
     [ -n "$PREV_SID" ] || refuse "resume-missing-session-id: $RSTATE/session.json records no session_id to compare '$SID' against"
     [ "$PREV_SID" = "$SID" ] || \
       refuse "resume-state-inconsistent: asked to continue '$SID' but $RSTATE/session.json records session '$PREV_SID'$([ -n "$SESSION" ] && echo " (an explicit --session narrows which session is continued; it does not authorize continuing a session this worktree has no record of)")"
@@ -650,8 +690,9 @@ PY
     # records a previous terminal label, not a verified previous exit." That is now
     # said out loud in the receipt instead of being implied by a bare word, and it is
     # kept SEPARATE from this run's own status so the two can never be confused.
-    PREV_TERMINAL_VERIFIED="recorded by the round that ran it (a carried label, not an exit re-verified here)"
-    say "$(stamp)  RESUME ADMISSION: session=$SID root='$PREV_ROOT'==\$WT model='$_pm'==$MODEL settings='$PREV_SETTINGS' previous_terminal_status=$PREV_STATUS (recorded, not re-verified) instruction_digest=${INSTR_DIGEST:0:16}"
+    PREV_TERMINAL_VERIFIED="$PREV_BASIS"
+    PREV_STATUS="$PREV_STATUS_LABEL"
+    say "$(stamp)  RESUME ADMISSION: session=$SID root='$PREV_ROOT'==\$WT model='$_pm'==$MODEL settings='$PREV_SETTINGS'==effective(provider=$EFF_PROVIDER;approval=$EFF_APPROVAL;sandbox=$EFF_SANDBOX;reasoning effort=$EFF_REASONING) instruction_profile=${EFF_PROFILE:0:16} previous_terminal_status=$PREV_STATUS_LABEL (stored label '$PREV_STATUS', basis: $PREV_BASIS) instruction_digest=${INSTR_DIGEST:0:16}"
   fi
 
   LAUNCH_EPOCH=$(date +%s)
@@ -750,6 +791,8 @@ PY
   write_session() {
     SESSION_ID="$SESSION_ID" WT="$WT" LOGROOT="$LOGROOT" LOGMODEL="$LOGMODEL" MODEL="$MODEL" \
     INSTR_DIGEST="$INSTR_DIGEST" BRIEF="$BRIEF" NAME="$NAME" STATUS="$1" PREV_STATUS="$PREV_STATUS" \
+    STATUS_BASIS="${2:-carried label (no wait status collected by this apparatus)}" \
+    INSTR_PROFILE="$(cat "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md" "$WT/AGENTS.md" "$WT/CLAUDE.md" 2>/dev/null | sha256sum | cut -d' ' -f1)" \
     BLOG="$BLOG" RESUME="$RESUME" BUILDER_PID="$BUILDER_PID" \
     python3 - "$RSTATE" <<'PY'
 import json, os, subprocess, sys, time
@@ -777,6 +820,12 @@ rec = {
     "codex_version": hdr("OpenAI Codex v") or subprocess.run(
         ["/home/forge/.local/bin/codex", "--version"], capture_output=True, text=True).stdout.strip(),
     "instruction_digest_sha256": e["INSTR_DIGEST"],
+    # B02d item 3: the EFFECTIVE instruction profile (seat-global prompt files + the
+    # worktree's own), so a later continuation can compare environments and not just
+    # this round's brief.
+    "instruction_profile_sha256": e["INSTR_PROFILE"],
+    # A terminal label is only a RESULT when this apparatus collected a wait status.
+    "terminal_status_basis": e["STATUS_BASIS"],
     "instruction_file": e["BRIEF"],
     "terminal_status": e["STATUS"],
     "previous_terminal_status": e["PREV_STATUS"],
@@ -793,7 +842,7 @@ with open(os.path.join(state, "session.json"), "w") as f:
 PY
   }
   if [ -n "$SESSION_ID" ]; then
-    write_session running
+    write_session running "carried label (the session is still running; no wait status exists yet)"
     say "$(stamp)  SESSION RECEIPT: session_id=$SESSION_ID root='${LOGROOT:-<not-logged>}' model='${LOGMODEL:-<not-logged>}' instruction_digest=${INSTR_DIGEST:0:16} previous_terminal_status=$PREV_STATUS persisted=$RSTATE/session.id"
   else
     say "$(stamp)  WARNING: no session id in $BLOG — this round cannot be resumed (continuation state UNVERIFIED)"
@@ -878,7 +927,15 @@ PY
   BW=$(( $(now_ms) - t ))
   trap - INT TERM
 
-  [ -n "$SESSION_ID" ] && write_session "$BUILD"
+  # B02d item 3 — the BASIS travels with the label. Only a status this apparatus
+  # actually collected with wait(2) may later be reported as a verified previous
+  # termination; everything else is a carried label and says so in the record.
+  case "$TERMINATION" in
+    collected|nonzero-exit) _sb="wait(2) collected by round '$NAME' on wrapper pid $WRAPPER (boot_id $BOOT_ID, starttime ${WRAPPER_START:-none})" ;;
+    ceiling-kill)           _sb="ceiling kill by round '$NAME' — the status is this apparatus's, not the builder's own completion" ;;
+    *)                      _sb="carried label (termination=$TERMINATION; no wait status was collected by this apparatus)" ;;
+  esac
+  [ -n "$SESSION_ID" ] && write_session "$BUILD" "$_sb"
   step BUILD "$BW" "$BUILD (termination=$TERMINATION wrapper_exit=$WRAPPER_RC pid=${BUILDER_PID:-none} model='${LOGMODEL:-none}' session=${SESSION_ID:-none} mode=$([ "$RESUME" = 1 ] && echo resume || echo fresh))"
 fi
 
@@ -1055,10 +1112,12 @@ PROFILE_RC=$?
 [ "$PROFILE_RC" = 0 ] || refuse "unreadable-verification-profile: could not parse $FX_CONFIG ($RUNDIR/verification-profile.err). The gate's required check set is DERIVED from that file; a gate that cannot read its own contract must not certify anything."
 
 RVARS=$RUNDIR/receipt-vars.sh
-python3 - "$RJSON" "$EDN_RC" "$CALL_RC" "$PROFILE_JSON" > "$RVARS" <<'PY'
-import json, shlex, sys
+python3 - "$RJSON" "$EDN_RC" "$CALL_RC" "$PROFILE_JSON" "$FIXTURE" "${SPLIT_RECEIPT:-}" > "$RVARS" <<'PY'
+import json, os, shlex, sys
 
 path, edn_rc, call_rc, profile_path = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), sys.argv[4]
+fixture = sys.argv[5] if len(sys.argv) > 5 else ""
+supplied = sys.argv[6] if len(sys.argv) > 6 else ""
 def emit(k, v): print(f"{k}={shlex.quote(str(v))}")
 
 # The two checks whose non-zero exit is legitimately pre-existing lint baseline.
@@ -1068,6 +1127,12 @@ FIXED_REQUIRED = ["captured-reference-analysis", "future-source-parse",
                   "candidate-lint-delta", "verified-snapshot-guard"]
 VALID_STATUS = {"passed", "baseline"}
 ANALYSIS_PHASE = {"captured-reference-analysis", "future-source-parse", "candidate-lint-delta"}
+SYSTEM_BIN = ("/usr/bin/", "/bin/", "/usr/local/bin/", "/usr/sbin/", "/sbin/")
+
+
+def _int(x):
+    return x if isinstance(x, int) and not isinstance(x, bool) else None
+
 
 r = None
 if edn_rc == 0:
@@ -1093,23 +1158,44 @@ try:
 except Exception:
     required_cmds = []
 
+
 def cmd_matches(want, got):
-    """A profile command is satisfied by a receipt command that runs the SAME
-    program with the SAME arguments. The receipt resolves programs to absolute
-    paths (`bin/kaocha` -> `/abs/cc/bin/kaocha`, `python3` -> `/usr/bin/python3`),
-    so each token matches exactly, or by path-suffix, or by basename."""
+    """EXACT ARGV, not a bag of basenames [B02d item 2].
+
+    Astra replaced every token of every required command with
+    `/unrelated-subject/<basename>` — a program that was never executed, in a
+    directory that has nothing to do with the subject — and the receipt was still
+    accepted, because the old rule let ANY token match by basename. A basename is
+    not a program and it is certainly not an argument: `--fail-fast` and
+    `/unrelated-subject/--fail-fast` are different commands.
+
+    So: ARGUMENTS must be equal, character for character. Only argv[0] may be
+    resolved, and only in the two ways this apparatus actually resolves it —
+      * a repo-relative program (`bin/kaocha`) resolved against the SUBJECT fixture
+        (`<fixture>/bin/kaocha`), which also BINDS the command to this subject;
+      * a bare program name (`python3`) resolved by PATH to a system bin directory.
+    Nothing else. A program resolved to somewhere else is a different program.
+    """
     if not isinstance(got, list) or len(got) != len(want):
         return False
-    for w, g in zip(want, got):
-        g = str(g)
-        if g == w:
-            continue
-        if g.endswith("/" + w.lstrip("./")):
-            continue
-        if g.rsplit("/", 1)[-1] == w.rsplit("/", 1)[-1]:
-            continue
+    g0, w0 = str(got[0]), want[0]
+    ok0 = False
+    if g0 == w0:
+        ok0 = True
+    elif "/" in w0:
+        # relative to the subject fixture, or an absolute spelling of the same file
+        if fixture and g0 == os.path.join(fixture, w0.lstrip("./")):
+            ok0 = True
+        elif os.path.isabs(w0) and g0 == w0:
+            ok0 = True
+    else:
+        # a bare name may only resolve into a SYSTEM bin dir, keeping its own name
+        if g0.startswith(SYSTEM_BIN) and os.path.basename(g0) == w0:
+            ok0 = True
+    if not ok0:
         return False
-    return True
+    return [str(x) for x in got[1:]] == [str(x) for x in want[1:]]
+
 
 state = r.get("state") or f"no-state(call_rc={call_rc})"
 emit("STATE", state)
@@ -1122,6 +1208,8 @@ bad = []
 okn = 0
 seen_names = set()
 analysis_ms = 0.0
+excused_baselines = {}     # name -> the baseline map that excused it
+comparisons = []           # names of checks that carry a COMPLETE, consistent delta
 
 for n, c in enumerate(checks):
     if not isinstance(c, dict):
@@ -1146,7 +1234,7 @@ for n, c in enumerate(checks):
         okn += 1
         continue
 
-    # rule 5 — the baseline exception, scoped and evidenced.
+    # rule 5 — the baseline exception, scoped and EVIDENCED [B02d item 1].
     if name not in ANALYSIS_EXCUSABLE:
         bad.append(f"check '{name}' :exit {ex!r} :status {st!r} — only "
                    f"{'/'.join(sorted(ANALYSIS_EXCUSABLE))} may carry a baseline exception; "
@@ -1157,18 +1245,62 @@ for n, c in enumerate(checks):
         bad.append(f"check '{name}' :exit {ex!r} :status {st!r} with :baseline {base!r} — "
                    f"the exception requires a baseline MAP of evidence, not the presence of the key")
         continue
+    if not base:
+        bad.append(f"check '{name}' :exit {ex!r} :status {st!r} carries an EMPTY :baseline {{}} — "
+                   f"an empty map records no pre-mutation state, so nothing in this receipt "
+                   f"says the non-zero exit was pre-existing rather than introduced")
+        continue
+    if _int(base.get("error")) is None:
+        bad.append(f"check '{name}' :baseline {base!r} carries no integer :error count — a "
+                   f"baseline without the PRE-MUTATION error count is not a measurement and "
+                   f"cannot be compared with anything")
+        continue
+    excused_baselines[name] = base
     introduced = c.get("introduced_errors")
-    if introduced not in (None, 0):
-        bad.append(f"check '{name}' introduced {introduced!r} errors over its baseline")
-        continue
     delta = c.get("delta")
-    if isinstance(delta, dict) and (delta.get("error") or 0) != 0:
-        bad.append(f"check '{name}' :delta reports {delta.get('error')!r} new error(s) over its baseline")
-        continue
+    post = c.get("post")
+    if introduced is not None or delta is not None or post is not None:
+        # this check claims to BE the comparison; then it must be a complete one
+        problems = []
+        if _int(introduced) is None:
+            problems.append(f":introduced_errors is {introduced!r}, not an integer")
+        elif introduced != 0:
+            problems.append(f"it introduced {introduced!r} error(s) over its baseline")
+        if not isinstance(delta, dict) or _int(delta.get("error")) is None:
+            problems.append(f":delta is {delta!r}, not a map carrying an integer :error count")
+        elif delta.get("error") != 0:
+            problems.append(f":delta reports {delta.get('error')!r} new error(s)")
+        if not isinstance(post, dict) or _int(post.get("error")) is None:
+            problems.append(f":post is {post!r}, not a map carrying the POST-mutation :error count")
+        if not problems:
+            arith = post["error"] - base["error"]
+            if arith != delta["error"] or arith != introduced:
+                problems.append(
+                    f"the comparison does not add up: post {post['error']} - baseline "
+                    f"{base['error']} = {arith}, but :delta says {delta['error']} and "
+                    f":introduced_errors says {introduced}")
+        if problems:
+            bad.append(f"check '{name}' claims a baseline comparison but " + "; ".join(problems))
+            continue
+        comparisons.append(name)
     okn += 1
 
 if not checks:
     bad.append("the receipt carries NO :checks — nothing was verified")
+
+# rule 5b — a baseline exception is only evidence WITH a comparison somewhere in the
+# receipt. `{}` proved nothing; so does a baseline nobody ever measured against.
+if excused_baselines and not comparisons:
+    bad.append("check(s) " + ", ".join(sorted(excused_baselines))
+               + " carry a baseline exception, but NO check in this receipt compares the "
+                 "post-mutation analysis with that baseline (:delta/:introduced_errors/:post "
+                 "absent everywhere) — an unexplained non-zero exit with no comparison is not "
+                 "evidence that the errors were pre-existing")
+_berrs = {n: b.get("error") for n, b in excused_baselines.items()}
+if len(set(_berrs.values())) > 1:
+    bad.append("the excused checks disagree about the PRE-MUTATION error count "
+               + ", ".join(f"{n}={v}" for n, v in sorted(_berrs.items()))
+               + " — two different baselines cannot both be this candidate's")
 
 # rule 3 — the complete registered set.
 missing_fixed = [n for n in FIXED_REQUIRED if n not in seen_names]
@@ -1180,11 +1312,35 @@ for want in required_cmds:
     if not any(cmd_matches(want, got) for got in receipt_cmds):
         missing_cmds.append(" ".join(want))
 if missing_cmds:
-    bad.append("verification-profile command(s) with no check in the receipt: "
-               + "; ".join(missing_cmds))
+    bad.append("verification-profile command(s) with no EXACT matching check in the receipt "
+               "(argv[0] resolved against the subject fixture or a system bin dir, every "
+               "argument equal): " + "; ".join(missing_cmds))
 if not required_cmds:
     bad.append("the fixture's verification profile declares NO commands — "
                "a profile that requires nothing cannot certify anything")
+
+# rule 6 — THE SUBJECT [B02d item 2]. A receipt that never names a path inside the
+# fixture this round is grading cannot be shown to be about this candidate. Astra
+# borrowed a receipt produced against `…/fixture` and had it accepted at
+# `…/proof/fixture`: the two roots share only their last path component.
+if fixture:
+    subject_hits = []
+    foreign = []
+    for got in receipt_cmds:
+        if not isinstance(got, list):
+            continue
+        for tok in got:
+            tok = str(tok)
+            if tok.startswith(fixture.rstrip("/") + "/") or tok == fixture:
+                subject_hits.append(tok)
+    if not subject_hits:
+        seen_abs = sorted({str(t) for g in receipt_cmds if isinstance(g, list)
+                           for t in g if str(t).startswith("/")})[:4]
+        bad.append(f"subject-mismatch: no check command in this receipt names any path under "
+                   f"the fixture being graded ({fixture}) — the receipt cannot be shown to be "
+                   f"about this candidate"
+                   + (f"; the absolute paths it does name are {', '.join(seen_abs)}"
+                      if seen_abs else ""))
 
 # rules 1 and 2 — the producer's own completeness statement.
 vc = r.get("verification_complete")
@@ -1218,19 +1374,34 @@ if call_rc != 0:
 
 emit("CHECKS_N", len(checks)); emit("CHECKS_OKN", okn)
 emit("ANALYSIS_MS", int(round(analysis_ms)))
-emit("RECEIPT_VERDICT", "ok" if not bad else "FAILED")
-emit("RECEIPT_REASON", "; ".join(bad) if bad else
-     f"{okn}/{len(checks)} checks passed (2 analysis checks may carry evidenced baselines), "
-     f"verification_complete=true, proof_pending=[], all {len(FIXED_REQUIRED)} fixed checks "
-     f"and all {len(required_cmds)} profile command(s) present, :ok/:committed true, no blockers")
+emit("RECEIPT_COMPARISONS", ",".join(comparisons))
+# A SUPPLIED receipt can never be better than DIAGNOSTIC: this round did not observe
+# the producer, its exit, its cwd or its configuration [B02d item 2].
+if supplied:
+    emit("RECEIPT_VERDICT", "DIAGNOSTIC" if not bad else "FAILED")
+    emit("RECEIPT_REASON",
+         ("schema ok, but this receipt was SUPPLIED (--split-receipt " + supplied + "): the "
+          "producer's exit, cwd and configuration were not observed by this round, so the "
+          "strongest honest label is DIAGNOSTIC, never certification"
+          if not bad else "; ".join(bad)))
+else:
+    emit("RECEIPT_VERDICT", "ok" if not bad else "FAILED")
+    emit("RECEIPT_REASON", "; ".join(bad) if bad else
+         f"{okn}/{len(checks)} checks passed (2 analysis checks may carry evidenced baselines, "
+         f"compared by {', '.join(comparisons) or 'no check'}), verification_complete=true, "
+         f"proof_pending=[], all {len(FIXED_REQUIRED)} fixed checks and all "
+         f"{len(required_cmds)} profile command(s) present with exact argv, every command "
+         f"bound to the subject fixture, :ok/:committed true, no blockers")
 PY
 . "$RVARS"
 : "${STATE:=unknown}" "${IN_CALL:=0}" "${CHECKS_N:=0}" "${CHECKS_OKN:=0}" "${ANALYSIS_MS:=0}" "${RECEIPT_VERDICT:=FAILED}" "${RECEIPT_REASON:=unset}"
 say "$(stamp)  split call: rc=$CALL_RC($CALL_RC_SRC) state=$STATE in_call_ms=$IN_CALL receipt=$RECEIPT parsed=$RJSON"
 say "$(stamp)  receipt schema: $RECEIPT_VERDICT  checks=$CHECKS_OKN/$CHECKS_N  :: $RECEIPT_REASON"
-if [ "$RECEIPT_VERDICT" != ok ]; then
-  say "$(stamp)  RECEIPT CHECK FAILED — \`:state \"$STATE\"\` does NOT make this round green: $RECEIPT_REASON"
-fi
+case "$RECEIPT_VERDICT" in
+  ok) : ;;
+  DIAGNOSTIC) say "$(stamp)  RECEIPT DIAGNOSTIC — the schema holds, but a supplied receipt is a replay: this round never observed the producer, so it cannot certify. $RECEIPT_REASON" ;;
+  *) say "$(stamp)  RECEIPT CHECK FAILED — \`:state \"$STATE\"\` does NOT make this round green: $RECEIPT_REASON" ;;
+esac
 step RECEIPT_SCHEMA $(( $(now_ms) - tp )) "$RECEIPT_VERDICT ($CHECKS_OKN/$CHECKS_N; profile=$PROFILE_JSON)"
 
 # papercut oracle
@@ -1405,6 +1576,10 @@ case "$TERMINATION" in
   *)            add_bad "builder=${WRAPPER_RC:-unknown}($TERMINATION)" ;;
 esac
 [ "$CALL_RC" = 0 ] || add_bad "split_call=$CALL_RC"
+# B02d item 2 — a SUPPLIED receipt is a diagnostic replay, and a diagnostic replay is
+# never a certification. The producer's exit was not observed, so `rc=0 source=supplied`
+# is an assertion by this round about a command this round did not run.
+[ -z "$SPLIT_RECEIPT" ] || add_bad "split_call=diagnostic-replay(producer exit NOT observed)"
 [ "$WRC" = 0 ] || add_bad "witnesses=$WRC"
 [ "$AUDIT_RC" = 0 ] || add_bad "intent_audit=$AUDIT_RC"
 [ "$PAPERCUT_RC" = 0 ] || add_bad "papercut_oracle=$PAPERCUT_RC"
@@ -1443,6 +1618,15 @@ case "$STATE" in committed*) : ;; *) RC=1 ;; esac
 [ "$RECEIPT_VERDICT" = ok ] || RC=1
 [ "$EXITS" = ok ] || RC=1
 VERDICT=GREEN; [ "$RC" = 0 ] || VERDICT=RED
+# THE DIAGNOSTIC CAP. A replay may be perfectly clean and still prove nothing about a
+# producer nobody watched: it exits 2 (non-zero — never certification) and says so by
+# name in the ledger line, the receipt and the exit status [B02d item 2].
+if [ -n "$SPLIT_RECEIPT" ]; then
+  # RED still outranks DIAGNOSTIC: a replay that fails its own schema is a failure we
+  # observed, and calling it "diagnostic" would soften a result we are entitled to.
+  if [ "$RC" = 0 ]; then VERDICT=DIAGNOSTIC; RC=2; fi
+  say "$(stamp)  DIAGNOSTIC: this round graded a SUPPLIED receipt ($SPLIT_RECEIPT). Whatever the schema says, the producer's exit, cwd and effective configuration were not observed here, so this run is a replay for diagnosis and NEVER a certification. exit=$RC"
+fi
 
 LINE="ROUND $NAME: tip ${OLD_TIP:0:8}→${NEW_TIP:0:8} build=$BUILD builder_exit=${WRAPPER_RC:-n/a} termination=$TERMINATION commit=$COMMIT state=$STATE in_call=${IN_CALL}ms PAPERCUTS=$PAPERCUTS oracles=$ORACLES/4 witnesses=${WT_TESTS}/${WT_ASSERTS}/${WT_FAILS} intents=$INTENTS new_intent_markers=$MARKERS new_spec_markers=$NEW_SPEC total=${TOTAL}s(${TOTAL_MS}ms) receipt_checks=$RECEIPT_VERDICT($CHECKS_OKN/$CHECKS_N) exits=$EXITS session=${SESSION_ID:-none} lease=$LOCKF runner_sha256=${RUNNER_SHA:0:16} verdict=$VERDICT receipt_json=$RECEIPT_JSON"
 say "$LINE"
@@ -1454,7 +1638,11 @@ case "$TERMINATION" in
   ceiling-kill) say "$(stamp)  RED because the builder hit the $MINUTES-minute ceiling and was killed" ;;
 esac
 [ "$COMMIT" = ok ] || [ "$COMMIT" = skipped ] || say "$(stamp)  RED because the builder left no clean commit: commit=$COMMIT"
-[ "$RECEIPT_VERDICT" = ok ] || say "$(stamp)  RED because the split receipt did not survive its own schema gate: $RECEIPT_REASON"
+case "$RECEIPT_VERDICT" in
+  ok) : ;;
+  DIAGNOSTIC) say "$(stamp)  NOT GREEN because the receipt was SUPPLIED, not produced here: $RECEIPT_REASON" ;;
+  *) say "$(stamp)  RED because the split receipt did not survive its own schema gate: $RECEIPT_REASON" ;;
+esac
 [ "$EXITS" = ok ] || say "$(stamp)  RED because a command this verdict rests on exited non-zero: $EXITS"
 
 # ---------------------------------------------------------------------------

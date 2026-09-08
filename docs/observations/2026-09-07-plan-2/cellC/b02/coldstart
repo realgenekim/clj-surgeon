@@ -59,6 +59,10 @@ POINTER='Clojure work: load the clojure-fast-feedback skill first; cold-start co
 usage() { sed -n '2,45p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 NAME=$1; shift
+# the ORIGINAL argv, kept before any shift: this script re-execs a FROZEN copy of
+# itself with exactly the arguments it was called with [B02d item 10].
+COLD_ARGV=("$@")
+case "$NAME" in -*|*/*) echo "coldstart: REFUSED bad-run-name '$NAME' — the run name is a directory under $ROOT, so it may not start with '-' or contain '/'" >&2; exit 2 ;; esac
 REPO="" BASE="" MODEL="" COND="" TASK="" MINUTES=20 TAMPER=none SELFAGENT=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -77,10 +81,50 @@ done
 RUN=$ROOT/$NAME
 WT=$RUN/wt
 LOG=$RUN/coldstart.log
-mkdir -p "$RUN"
-: > "$LOG"
+FROZEN=$RUN/coldstart.frozen
+FROZEN_GRADE=$RUN/coldstart-grade.frozen
+
+# ---------------------------------------------------------------------------
+# RESERVE THE BUNDLE BEFORE ANY WRITE, THEN RUN FROZEN BYTES [B02d item 10].
+#
+# `mkdir -p "$RUN"; : > "$LOG"` truncated an existing run's log and only THEN refused
+# the duplicate name — Astra's live-duplicate-hashes.json shows exactly that one file
+# changing on a REFUSED/3. The reservation IS the `mkdir`: atomic, so two runs cannot
+# share a name and a second run can never destroy the first one's evidence. Round has
+# had this rule since B02b; this is the same rule, here.
+#
+# Then: this runner and its grader are mutable files in ~/bin, and a run that reads
+# them at each step measures whatever they happened to be at that moment. Both are
+# copied into the reserved bundle, both sha256s go in the receipt, and the run EXECS
+# its own copy — so an edit to ~/bin/coldstart mid-run cannot change the behaviour
+# being measured.
+# ---------------------------------------------------------------------------
+if [ "${COLDSTART_FROZEN:-}" != 1 ]; then
+  mkdir -p "$ROOT"
+  if ! mkdir "$RUN" 2>/dev/null; then
+    echo "coldstart: REFUSED run-exists: $RUN already exists. A run bundle is reserved by name, atomically, BEFORE any byte is written, so a second run can never truncate the first one's log or overwrite its evidence [B02d item 10]. Choose another name, or move the old bundle aside deliberately." >&2
+    exit 3
+  fi
+  : > "$LOG"
+  cp /home/forge/bin/coldstart "$FROZEN" && chmod +x "$FROZEN" || {
+    echo "coldstart: REFUSED cannot freeze the runner into $FROZEN" >&2; exit 3; }
+  cp /home/forge/bin/coldstart-grade "$FROZEN_GRADE" && chmod +x "$FROZEN_GRADE" || {
+    echo "coldstart: REFUSED cannot freeze the grader into $FROZEN_GRADE" >&2; exit 3; }
+  export COLDSTART_FROZEN=1 COLDSTART_RUNNER_SRC=/home/forge/bin/coldstart
+  exec "$FROZEN" "$NAME" ${COLD_ARGV[@]+"${COLD_ARGV[@]}"}
+fi
+[ -f "$FROZEN" ] && [ -f "$FROZEN_GRADE" ] || {
+  echo "coldstart: REFUSED frozen bytes missing in $RUN" >&2; exit 3; }
+RUNNER_SHA=$(sha256sum < "$FROZEN" | cut -d' ' -f1)
+GRADER_SHA=$(sha256sum < "$FROZEN_GRADE" | cut -d' ' -f1)
+GRADER=$FROZEN_GRADE
+RUNNER_SRC=${COLDSTART_RUNNER_SRC:-/home/forge/bin/coldstart}
 stamp() { date -u +%FT%T.%N | cut -c1-23; }
+# B02d item 10 — durations come from /proc/uptime (CLOCK_BOOTTIME, monotonic).
+# `date(1)` is a LABEL source; a wall-clock step is not a duration.
+now_ms() { local u r; read -r u r < /proc/uptime; echo $(( ${u%.*} * 1000 + 10#${u#*.} * 10 )); }
 T0=$(date +%s)
+T0_MS=$(now_ms)
 say() { printf '%s\n' "$*" | tee -a "$LOG"; }
 PHASES=()
 step() { PHASES+=("$1|$2|$3"); say "$(stamp)  [+$(( $(date +%s) - T0 ))s]  $1 ${2}s :: $3"; }
@@ -101,7 +145,7 @@ case "$MODEL" in opus|sonnet) RUNNER=claude ;; sol) RUNNER=codex; CMODEL=gpt-5.6
   astra) RUNNER=codex; CMODEL=gpt-6-astra ;; *) refuse "--model must be opus|sonnet|sol|astra" ;; esac
 [ -d "$SKILL" ] || refuse "skill not installed at $SKILL"
 [ -f "$COLDBLOCK" ] || refuse "cold-start block missing: $COLDBLOCK (CX-1 — a pointer is not delivery)"
-[ -x /home/forge/bin/coldstart-grade ] || refuse "coldstart-grade missing"
+[ -x "$GRADER" ] || refuse "frozen coldstart-grade missing at $GRADER"
 [ -x /home/forge/bin/coldstart-stamp ] || refuse "coldstart-stamp missing"
 [ -x /home/forge/bin/run-bg ] || refuse "run-bg missing"
 [ -e "$WT" ] && refuse "specimen already exists: $WT (a run dir is never reused)"
@@ -120,6 +164,16 @@ GATE=$(sed -nE 's/^GATE:[[:space:]]*//p' "$TASK" | head -1)
 # cell exists to measure. Optional: a task without a RED: line simply is not graded on it,
 # because an oracle that invents an intended failure is scoring its own guess.
 RED=$(sed -nE 's/^RED:[[:space:]]*//p' "$TASK" | head -1)
+# B02d item 9 — MANDATORY, not opt-in. Astra: `astra10-no-red.log` PASSes when RED is
+# omitted, and the old seeds asked the caller to CREATE the test namespace, so nothing
+# was ever pre-committed to fail. A readiness cell that cannot be graded on red-first
+# is not a readiness cell, so the refusal is here, before the specimen exists.
+[ -n "$RED" ] || refuse 'task file has no "RED: <ns>/<var>" line — the pre-committed intended failure is REQUIRED (B02d item 9). An oracle that invents which test should have been red is scoring its own guess, and a green that was never preceded by a red proves the test runs, not that it discriminates.'
+# ...and the failing test has to EXIST before the agent does. The seed carries it in an
+# `overlay/` directory beside the task file; the harness copies it into the specimen and
+# then asserts the named test really is red on the untouched base.
+OVERLAY=${TASK%.md}.overlay
+[ -d "$OVERLAY" ] || refuse "task '$TASK' declares RED: $RED but has no $OVERLAY directory beside it. The pre-committed failing test must be a FILE this harness installs before launch — a RED: line naming a test the agent is expected to write first is a coaching instruction, not a readiness control (B02d item 9)."
 SKILL_SHA=$(cat "$SKILL/SKILL.md" | sha256sum | cut -c1-16)
 BLOCK_SHA=$(sha256sum < "$COLDBLOCK" | cut -c1-16)
 case "$TAMPER" in none|delivery) ;; *) refuse "--selftest-tamper takes 'delivery' or 'none'" ;; esac
@@ -261,7 +315,14 @@ json.dump({"profile_sha256": digest, "order": paths, "components": comps},
 print(digest)
 PY
 )
-say "$(stamp)  instruction profile: sha256=$PROFILE  (components: $PROFILE_JSON)"
+# B02d item 9 — the INHERITED half of the profile is recorded on its own. This seat's
+# global CLAUDE.md/AGENTS.md reach both runners and this apparatus does not isolate
+# them, so a cell's instructions are the block PLUS a prompt nobody registered. That is
+# a confound; it is named `profile_isolated=no` rather than implied by a single digest.
+INHERITED=$(cat "$SEAT_CLAUDE" "$SEAT_AGENTS" 2>/dev/null | sha256sum | cut -d' ' -f1)
+SPECIMEN_PROFILE=$(cat "$WT/CLAUDE.md" "$WT/AGENTS.md" 2>/dev/null | sha256sum | cut -d' ' -f1)
+PROFILE_ISOLATED=no
+say "$(stamp)  instruction profile: sha256=$PROFILE inherited_global=${INHERITED:0:16} specimen=${SPECIMEN_PROFILE:0:16} profile_isolated=$PROFILE_ISOLATED  (components: $PROFILE_JSON)"
 step SPECIMEN $(( $(date +%s) - t )) "basis=${BASIS:0:12} delivery=$DELIVERY_INSTALLED (block bytes verbatim in CLAUDE.md+AGENTS.md, gate='$GATE'), profile=${PROFILE:0:16}, tree clean"
 
 # ---------------------------------------------------------------------------
@@ -290,6 +351,49 @@ git -C "$WT" clean -fdq -e .claude 2>/dev/null
 dirty=$(git -C "$WT" status --porcelain --untracked-files=no -- . ':!00SERVER-LOGS.txt' 2>/dev/null)
 [ -z "$dirty" ] || refuse "the qualified gate left the specimen dirty and it could not be restored"
 step GATE_QUALIFY "$GATE_WALL" "ok: \`$GATE\` exits 0 on the untouched base ${BASIS:0:12} in ${GATE_WALL}s (log: $GQLOG)"
+
+# ---------------------------------------------------------------------------
+# 1c. READINESS — the PRE-COMMITTED INTENDED RED, installed and ATTESTED [B02d item 9]
+#
+# The old seeds told the agent to create the test namespace itself, so nothing was
+# pre-committed and R10 could only ever grade a test the agent wrote to its own taste.
+# Astra: "old missing-Var/caller-created-test seeds cannot establish intended
+# assertion-red". The failing test now ships in the seed's own `<task>.overlay/`, it is
+# installed here — AFTER the gate was qualified green on the untouched base, so the two
+# facts stay separable — and the declared gate is run again to prove that this overlay,
+# and nothing else, is what makes it red. A red we did not watch turn red is a claim.
+# ---------------------------------------------------------------------------
+t=$(date +%s)
+OVERLAY_FILES=$( (cd "$OVERLAY" && find . -type f | sed 's|^\./||') | tr '\n' ' ')
+(cd "$OVERLAY" && tar cf - .) | (cd "$WT" && tar xf -) \
+  || refuse "could not install the readiness overlay from $OVERLAY"
+RQLOG=$RUN/red-qualify.log
+( cd "$WT" && eval "$GATE" ) > "$RQLOG" 2>&1 </dev/null
+RED_RC=$?
+RED_WALL=$(( $(date +%s) - t ))
+if [ $RED_RC -eq 0 ]; then
+  say "$(stamp)  red-qualify output (tail):"; tail -20 "$RQLOG" | tee -a "$LOG"
+  refuse "red-not-qualified: with the readiness overlay ($OVERLAY_FILES) installed, the declared gate \`$GATE\` still exits 0. The declared RED \`$RED\` is not failing on this base, so nothing this cell later calls a red-first observation could be that assertion going red (B02d item 9)."
+fi
+grep -qF "${RED%%/*}" "$RQLOG" \
+  || say "$(stamp)  NOTE: the red-qualify output does not name '${RED%%/*}'; the gate is red, but this harness cannot show that THIS namespace is why"
+# Restore whatever the red gate wrote, then RE-INSTALL the overlay: `git clean` cannot
+# be trusted to spare the overlay's own untracked files (they are not always under
+# test/ — the harness's own selftest seed drops a marker at the repo root), and
+# re-extracting is idempotent.
+git -C "$WT" checkout -q -- . 2>/dev/null
+git -C "$WT" clean -fdq -e .claude 2>/dev/null
+(cd "$OVERLAY" && tar cf - .) | (cd "$WT" && tar xf -) \
+  || refuse "could not re-install the readiness overlay after the red gate ran"
+git -C "$WT" add -A >>"$LOG" 2>&1 </dev/null
+GIT_AUTHOR_NAME=forge-anvil GIT_AUTHOR_EMAIL=forge-anvil@anvil \
+GIT_COMMITTER_NAME=forge-anvil GIT_COMMITTER_EMAIL=forge-anvil@anvil \
+  git -C "$WT" commit -q -m "coldstart readiness overlay $NAME: the pre-committed intended red ($RED)" \
+  >>"$LOG" 2>&1 </dev/null || refuse "could not commit the readiness overlay"
+BASIS=$(git -C "$WT" rev-parse HEAD)
+dirty=$(git -C "$WT" status --porcelain --untracked-files=no -- . ':!00SERVER-LOGS.txt' 2>/dev/null)
+[ -z "$dirty" ] || refuse "the specimen is dirty after the readiness overlay was committed"
+step READINESS "$RED_WALL" "intended red ATTESTED: \`$GATE\` exits $RED_RC with the overlay installed ($OVERLAY_FILES) at basis ${BASIS:0:12}; declared RED=$RED (log: $RQLOG)"
 
 # ---------------------------------------------------------------------------
 # 2. CONDITION
@@ -322,7 +426,7 @@ fi
 #    The VERIFY command is the harness's independent check; showing it to the
 #    agent would be coaching (Astra: the task contains no verification hints).
 # ---------------------------------------------------------------------------
-t=$(date +%s)
+t=$(date +%s); t_ms=$(now_ms)
 PROMPT=$RUN/prompt.md
 grep -vE '^(VERIFY|GATE|REPO|BASE|BASE_REF|QUALIFIED|RED):' "$TASK" > "$PROMPT"
 TRANSCRIPT=$RUN/transcript.$([ "$RUNNER" = claude ] && echo jsonl || echo log)
@@ -330,14 +434,14 @@ REPORT=$RUN/report.md
 
 if [ "$RUNNER" = claude ]; then
   FMT=claude
-  LAUNCH="cd '$WT' && claude -p --model '$MODEL' --output-format stream-json --verbose \
---dangerously-skip-permissions --add-dir '$WT' < '$PROMPT' 2>&1 \
-| /home/forge/bin/coldstart-stamp > '$TRANSCRIPT'"
+  LAUNCH_PRE="cd '$WT' && "
+  LAUNCH_CMD="claude -p --model '$MODEL' --output-format stream-json --verbose \
+--dangerously-skip-permissions --add-dir '$WT' < '$PROMPT'"
 else
   FMT=codex
-  LAUNCH="CODEX_BIN=/home/forge/.local/bin/codex CODEX_MODEL='$CMODEL' \
-/home/forge/bin/sol-yolo '$WT' '$PROMPT' '' '$REPORT' 2>&1 \
-| /home/forge/bin/coldstart-stamp > '$TRANSCRIPT'"
+  LAUNCH_PRE=""
+  LAUNCH_CMD="CODEX_BIN=/home/forge/.local/bin/codex CODEX_MODEL='$CMODEL' \
+/home/forge/bin/sol-yolo '$WT' '$PROMPT' '' '$REPORT'"
 fi
 
 # APPARATUS SELF-TEST ONLY. Substituting the runner is the ONLY way a fixture can
@@ -345,9 +449,11 @@ fi
 # copy is what let CX-14 ship: the wait loop was reviewed, looked right, and waited on
 # the wrong pid. Recorded everywhere a reader could mistake this for a cell.
 if [ -n "$SELFAGENT" ]; then
-  LAUNCH="cd '$WT' && { $SELFAGENT ; } 2>&1 | /home/forge/bin/coldstart-stamp > '$TRANSCRIPT'"
+  LAUNCH_PRE="cd '$WT' && "
+  LAUNCH_CMD="$SELFAGENT"
   say "$(stamp)  SELFTEST AGENT: no model runs in this cell — LAUNCH is \`$SELFAGENT\`"
 fi
+LAUNCH=""
 
 # ---------------------------------------------------------------------------
 # THE RUN IS LAUNCHED UNDER THE OBSERVER, not beside it. `strace -f` becomes the
@@ -355,8 +461,10 @@ fi
 # redirected to /dev/null still produces an execve line with its pid, argv and time.
 # clone/chdir are traced too: without them a pid cannot be joined to its parent and
 # a cwd cannot be inherited, and "which JVM was this" stops being answerable.
-# `-s 4096` because a truncated argv is exactly the argv we care about (a long inline
-# `python3 -c` is the hidden-client shape). `abbrev=none` is deliberately NOT set: it
+# `-s 65536`, raised from 4096 in B02d: a truncated argv is exactly the argv we care
+# about (a long inline `python3 -c` is the hidden-client shape), and since item 4 makes
+# truncation CAP the verdict at UNVERIFIED, a `-classpath` long enough to be cut would
+# otherwise disqualify every real JVM cell. p16's frozen trace carries four such lines. `abbrev=none` is deliberately NOT set: it
 # expands the environment array of EVERY execve, multiplying the trace ~40x and copying
 # the seat's whole environment into a file we keep.
 # ---------------------------------------------------------------------------
@@ -368,8 +476,17 @@ fi
 # then meant nothing, because it was true of every Ø cell by construction. This sentinel
 # is written the instant the agent's own pipeline ends, and it is what LAUNCH waits on.
 AGENT_RC_FILE=$RUN/agent.rc
-rm -f "$AGENT_RC_FILE"
-LAUNCH="$LAUNCH; printf '%s' \$? > '$AGENT_RC_FILE'"
+WORKER_RC_FILE=$RUN/worker.rc
+WORKER_PID_FILE=$RUN/worker.pid
+rm -f "$AGENT_RC_FILE" "$WORKER_RC_FILE" "$WORKER_PID_FILE"
+# `$?` AFTER A PIPELINE IS THE LOGGER'S STATUS [B02d item 8]. The launch is
+# `<worker> | coldstart-stamp > transcript`, and without pipefail `$?` is
+# coldstart-stamp's — which is 0 essentially always. Astra's worker exited 17 in the
+# trace and this file said 0; the run graded PASS and the runner exited 0.
+# The repair is not a flag, it is a subject: the worker is BACKGROUNDED inside the
+# launch shell, its pid is written down, `wait` collects THAT pid's status, and
+# agent.rc carries the worker's status or the literal word `unknown`.
+LAUNCH="$LAUNCH_PRE{ { $LAUNCH_CMD ; } 2>&1 & __w=\$!; printf '%s' \$__w > '$WORKER_PID_FILE'; wait \$__w; printf '%s' \$? > '$WORKER_RC_FILE'; } | /home/forge/bin/coldstart-stamp > '$TRANSCRIPT'; printf '%s' \"\$(cat '$WORKER_RC_FILE' 2>/dev/null || echo unknown)\" > '$AGENT_RC_FILE'"
 
 SAMPLER_PGID=""
 if [ "$OBSERVER" = strace ]; then
@@ -384,13 +501,14 @@ if [ "$OBSERVER" = strace ]; then
 # generated by coldstart. $1 = trace file, $2 = specimen root.
 # Control events pass whole. Filesystem events pass ONLY for an absolute path under
 # /tmp or under this run's specimen. That bound is also a LIMIT and the grade says so:
-# a RELATIVE write inside the specimen is not captured here, and no network syscall is
-# captured at all by any flag in this observer.
-exec grep -E "(execve|execveat|chdir|fchdir|clone|clone3|vfork|fork|exit_group|exit)\(|<\.\.\.|\+\+\+ exited|(openat|openat2|open|creat|unlink|unlinkat|rename|renameat|renameat2)\((AT_FDCWD, )?\"(/tmp[/\"]|$2)" > "$1"
+# a RELATIVE write inside the specimen is not captured here. NETWORK syscalls ARE
+# captured as of B02d item 4 (socket/connect are control events and pass whole), so a
+# hand-rolled client that deletes itself still leaves the act on the record.
+exec grep -E "(execve|execveat|chdir|fchdir|clone|clone3|vfork|fork|exit_group|exit|socket|connect)\(|<\.\.\.|\+\+\+ exited|(openat|openat2|open|creat|unlink|unlinkat|rename|renameat|renameat2)\((AT_FDCWD, )?\"(/tmp[/\"]|$2)" > "$1"
 FILTEREOF
   chmod +x "$OBSFILTER"
-  out=$(/home/forge/bin/run-bg "$NAME-agent" "$STRACE" -f -q -ttt -s 4096 \
-        -e trace=execve,execveat,chdir,fchdir,exit_group,clone,clone3,fork,vfork,openat,openat2,open,creat,unlink,unlinkat,rename,renameat,renameat2 \
+  out=$(/home/forge/bin/run-bg "$NAME-agent" "$STRACE" -f -q -ttt -s 65536 \
+        -e trace=execve,execveat,chdir,fchdir,exit_group,clone,clone3,fork,vfork,openat,openat2,open,creat,unlink,unlinkat,rename,renameat,renameat2,socket,connect \
         -o "|$OBSFILTER $OBSFILE $WT" -- bash -c "$LAUNCH" 2>&1 </dev/null)
 else
   # LOSSY BY CONSTRUCTION and labelled as such: a process that lives less than one
@@ -474,6 +592,7 @@ while :; do
   sleep 1
 done
 AGENT_WALL=$(( $(date +%s) - t ))
+LAUNCH_WALL_MS=$(( $(now_ms) - t_ms ))
 
 # THE TRACER OUTLIVES THE AGENT ON PURPOSE, AND MUST NOT OUTLIVE THIS PHASE [CX-14].
 # `setsid` starts a new session; it does NOT detach from ptrace, so the nREPL the agent
@@ -543,14 +662,21 @@ fi
 OBSERVER_FIELD=$OBSERVER
 [ "$OBSERVER" = proc-sampler ] && OBSERVER_FIELD="proc-sampler(loss=$OBS_LOSS)"
 say "$(stamp)  observer: $OBSERVER_FIELD lines=$OBS_LINES execve_lines=$OBS_EXECS truncated=$OBS_TRUNC file=$OBSFILE"
-step LAUNCH "$AGENT_WALL" "agent_rc=$AGENT_RC ceiling=$CEILING worker=${WORKER:-none} model_from_log='${LOGMODEL:-none}' ($MODEL_OK) observer=$OBSERVER_FIELD execve_lines=$OBS_EXECS"
+# THE WORKER'S OWN PID AND STATUS, as the launch shell collected them [B02d item 8].
+WORKER_SHELL_PID=$(cat "$WORKER_PID_FILE" 2>/dev/null)
+WORKER_RC=$(cat "$WORKER_RC_FILE" 2>/dev/null)
+: "${WORKER_SHELL_PID:=none}" "${WORKER_RC:=unknown}"
+AGENT_RC_SOURCE="wait(2) on worker pid $WORKER_SHELL_PID inside the launch shell"
+[ "$WORKER_RC" = unknown ] && AGENT_RC_SOURCE="NOT COLLECTED (the launch shell wrote no worker status)"
+say "$(stamp)  WORKER TERMINAL RECEIPT: pid=$WORKER_SHELL_PID exit=$WORKER_RC source=$AGENT_RC_SOURCE (never the logger pipeline's status)"
+step LAUNCH "$AGENT_WALL" "agent_rc=$AGENT_RC (worker pid $WORKER_SHELL_PID, $AGENT_RC_SOURCE) ceiling=$CEILING worker=${WORKER:-none} model_from_log='${LOGMODEL:-none}' ($MODEL_OK) observer=$OBSERVER_FIELD execve_lines=$OBS_EXECS launch_wall_ms=$LAUNCH_WALL_MS"
 
 # ---------------------------------------------------------------------------
 # 4. GRADE — the action-log oracle over what the agent actually attempted
 # ---------------------------------------------------------------------------
 t=$(date +%s)
 GRADEOUT=$RUN/grade.txt
-/home/forge/bin/coldstart-grade "$TRANSCRIPT" --format "$FMT" --cond "$COND" \
+"$GRADER" "$TRANSCRIPT" --format "$FMT" --cond "$COND" \
   --observer "$OBSFILE" --observer-kind "$OBSERVER" --observer-loss "$OBS_LOSS" \
   --gate "$GATE" --specimen "$WT" ${RED:+--red-test "$RED"} \
   --json "$RUN/grade.json" > "$GRADEOUT" 2>&1 </dev/null
@@ -630,6 +756,26 @@ for d in /proc/[0-9]*; do
 done
 
 TOTAL=$(( $(date +%s) - T0 ))
+TOTAL_MS=$(( $(now_ms) - T0_MS ))
+# ---------------------------------------------------------------------------
+# THE INTEGRITY GATE [B02d item 8]. A grade and a task check say what the agent's
+# WORK looks like. They say nothing about whether the run that produced it was the
+# run we asked for. Astra's worker exited 17 in the trace while this script recorded
+# agent.rc=0, graded PASS/PASS and exited 0 — because the final predicate never asked.
+# It asks now, and it fails closed on every unknown.
+# ---------------------------------------------------------------------------
+INTEG=""
+add_i() { INTEG="$INTEG${INTEG:+,}$1"; }
+case "$AGENT_RC" in
+  0) : ;;
+  ""|unknown) add_i "worker_exit=unknown" ;;
+  *) add_i "worker_exit=$AGENT_RC" ;;
+esac
+[ "$CEILING" = no ] || add_i "ceiling=yes"
+if [ -z "$SELFAGENT" ]; then
+  [ "$MODEL_OK" = verified ] || add_i "model=$MODEL_OK"
+fi
+INTEGRITY=${INTEG:-ok}
 say ""
 say "  $(printf '%-12s %8s  %s' PHASE 'WALL s' RESULT)"
 say "  $(printf '%.0s-' $(seq 1 100))"
@@ -638,10 +784,17 @@ for p in "${PHASES[@]}"; do
 done
 say "  $(printf '%-12s %8s' TOTAL "$TOTAL")"
 say ""
-LINE="COLDSTART $NAME:${SELFAGENT:+ selftest_agent=yes} model=$MODEL($MODEL_OK) cond=$COND grade=$GRADE task=$TASK_RESULT delivery=$DELIVERY gate='$GATE' gate_qualified=${GATE_WALL}s warm_first=$WARMF calls=$CALLS apparatus=$APPA agent_wall=${AGENT_WALL}s agent_rc=$AGENT_RC wall=${TOTAL}s ceiling=$CEILING observer=$OBSERVER_FIELD observer_execve_lines=$OBS_EXECS profile=${PROFILE:0:16} diff='${DIFFSTAT:-none}'"
+# B02d item 10 — every time field names a COMPLETE endpoint, and the durations come
+# from /proc/uptime (CLOCK_BOOTTIME, monotonic). `launch_wall` is the agent's own
+# launch→terminal-status span and is NESTED inside `total`; neither is a continuation
+# economics measurement and neither is row-1 timing qualification.
+LINE="COLDSTART $NAME:${SELFAGENT:+ selftest_agent=yes} model=$MODEL($MODEL_OK) cond=$COND grade=$GRADE task=$TASK_RESULT integrity=$INTEGRITY delivery=$DELIVERY gate='$GATE' gate_qualify_wall=${GATE_WALL}s red_qualify_wall=${RED_WALL}s red='$RED' overlay='${OVERLAY_FILES:-none}' warm_first=$WARMF calls=$CALLS apparatus=$APPA agent_wall(launch_wall)=${AGENT_WALL}s(${LAUNCH_WALL_MS}ms) agent_rc=$AGENT_RC agent_rc_source='$AGENT_RC_SOURCE' worker_pid=$WORKER_SHELL_PID total_wall=${TOTAL}s(${TOTAL_MS}ms) duration_source=/proc/uptime ceiling=$CEILING observer=$OBSERVER_FIELD observer_execve_lines=$OBS_EXECS profile=${PROFILE:0:16} profile_isolated=$PROFILE_ISOLATED inherited_global=${INHERITED:0:16} runner_sha256=${RUNNER_SHA:0:16} grader_sha256=${GRADER_SHA:0:16} diff='${DIFFSTAT:-none}'"
 say "$LINE"
 printf '%s  %s\n' "$(stamp)" "$LINE" >> "$LEDGER"
 say "$(stamp)  frozen: $RUN/{transcript.*,grade.txt,grade.json,diff.patch,verify.log,prompt.md,coldstart.log,gate-qualify.log,instruction-profile.json,observer/}"
 
-[ "$GRADE" = PASS ] && [ "$TASK_RESULT" = PASS ] && exit 0
+if [ "$INTEGRITY" != ok ]; then
+  say "$(stamp)  NOT CERTIFIED: run integrity is $INTEGRITY. Whatever the grade and the task check say, this run was not the run that was asked for — an uncollected or non-zero worker status, a ceiling kill, or an unverified model each mean the evidence belongs to something other than the declared cell [B02d item 8]."
+fi
+[ "$GRADE" = PASS ] && [ "$TASK_RESULT" = PASS ] && [ "$INTEGRITY" = ok ] && exit 0
 exit 1
