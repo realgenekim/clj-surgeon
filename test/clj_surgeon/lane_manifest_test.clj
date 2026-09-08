@@ -428,9 +428,9 @@
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
   '{clj-surgeon.receipt-artifacts-boundary-test 15 ; Sol r10 + two Row 5 real-process witnesses (battery).
-    clj-surgeon.namespace-split-test 35 ; B07 adds nine partial-retention, facts, bounded-analysis and preservation witnesses.
+    clj-surgeon.namespace-split-test 47 ; B07 adds nine partial-retention, facts, bounded-analysis and preservation witnesses.
     clj-surgeon.namespace-split-warm-test 2 ; Round 3: real nREPL failure/green matrix and stale/foreign discovery, integration.
-    clj-surgeon.mcp-namespace-split-test 21 ; Batch 3's six receipt/facts/budget witnesses on the previous 13, plus Sol's a9da4344 committed-facts witness and the 0956951b delta fence's actionable unsafe-tmpdir refusal.
+    clj-surgeon.mcp-namespace-split-test 24 ; Batch 3's six receipt/facts/budget witnesses on the previous 13, plus Sol's a9da4344 committed-facts witness and the 0956951b delta fence's actionable unsafe-tmpdir refusal.
     clj-surgeon.split-proof-gate-test 4 ; Batch 3 pure status/state matrix, plus Sol's a9da4344 temp-root admission and receipt-ceiling witnesses.
     clj-surgeon.split-proof-gate-boundary-test 3 ; Batch 3 detached worker and caller-exit boundaries, plus Sol's a9da4344 worker-identity boundary.
     clj-surgeon.cell-b-oracle-test 2 ; B07: shell lint mutation test and independent partial-preservation mutants; battery (Python subprocess).
@@ -558,11 +558,23 @@
       ;; boundary, 1 mcp) without moving these pins, so this arithmetic was RED at
       ;; branch tip 0956951b; the delta fence for that tip adds the fifth, the
       ;; actionable unsafe-tmpdir refusal (NS-SPLIT-059). 547 + 4 + 1 = 552.
+      ;; Rows sublime batch 4: source-derived pins from the manifest census,
+      ;; twelve pure and three boundary witnesses, including the Sol fence
+      ;; counterexamples -- namespace-split-test 35 -> 47 (+12) and
+      ;; mcp-namespace-split-test 21 -> 24 (+3). Both are ADOPTED namespaces,
+      ;; so all 15 land here and none of them touch r1.
       ;; TEST-ISO-013 adds 21 parallel-battery witnesses plus three regressions
       ;; the first wide run found (lane-integrity grain, the dropped :sharded
-      ;; field, home isolation through a selector): 24 more.
-      ;; MERGE, 2026-09-08: both sides grew this from 537. 537 + 15 + 24 = 576.
-      (is (= 576 adopted) (str "adopted tests: " adopted)))
+      ;; field, home isolation through a selector): 24 more, in the ONE new
+      ;; adopted namespace battery-parallel-test.
+      ;; MERGE, 2026-09-08 (astra/namespace-split x MCP/main 7d62849a): the
+      ;; MERGE-BASE pin was 552 and BOTH sides moved it for different
+      ;; witnesses -- this branch to 567 (+15), trunk to 576 (+24). Neither
+      ;; number is right for the merged tree; the pin is base + both deltas,
+      ;; 552 + 15 + 24 = 591, RECOMPUTED off the merged tree by the same
+      ;; source census this test runs (`deftest-count` over
+      ;; `adopted-since-round-one`), not by trusting either side.
+      (is (= 591 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -665,9 +677,15 @@
       ;; five witnesses through the source census; the delta fence's help witness
       ;; lives in the BB lane's cli-dispatch-test and is not counted here.
       ;; 1566 + 4 + 1 = 1571.
-      ;; TEST-ISO-013, the parallel battery: 24 witnesses in one new :fast namespace.
-      ;; MERGE, 2026-09-08: both sides grew this from 1556. 1556 + 15 + 24 = 1595.
-      (is (= 1595 total) (str "manifest declares " total " tests"))
+      ;; Batch 4 source census: +15 adopted witnesses (namespace-split-test +12,
+      ;; mcp-namespace-split-test +3), no namespace added.
+      ;; TEST-ISO-013, the parallel battery: 24 witnesses in one new :fast
+      ;; namespace, battery-parallel-test.
+      ;; MERGE, 2026-09-08 (astra/namespace-split x MCP/main 7d62849a): the
+      ;; merge-base pin was 1571; this branch moved it to 1586 (+15) and trunk
+      ;; to 1595 (+24), for DISJOINT witnesses. 1571 + 15 + 24 = 1610, and the
+      ;; merged tree's own census confirms it: 1019 original + 591 adopted.
+      (is (= 1610 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

@@ -468,12 +468,19 @@
     ;; Rows sublime batch 3 adds NS-SPLIT-050..054.
     ;; Sol's landing fence for a9da4344 adds NS-SPLIT-055..058.
     ;; Sol's delta fence for 0956951b, ruling (a), adds NS-SPLIT-059.
-    ;; TEST-ISO-013 registers the battery lane run as N JVM lanes.
-    ;; MERGE, 2026-09-08: both sides grew this from 228 -- ten NS-SPLIT ids on
-    ;; trunk and one TEST-ISO id here. 228 + 10 + 1 = 239. Only the TEST-ISO-
-    ;; bucket moves in the per-prefix map; NS-SPLIT- is not one of its keys,
-    ;; which is why the total and the map move by different amounts.
-    (is (= 239 (count non-mcp)))
+    ;; Batch 4 registers NS-SPLIT-060..066 (seven ids).
+    ;; TEST-ISO-013 registers the battery lane run as N JVM lanes (one id).
+    ;; MERGE, 2026-09-08 (astra/namespace-split x MCP/main 7d62849a): the
+    ;; merge-base ledger was 238 and both sides moved it -- this branch to 245
+    ;; (+7 NS-SPLIT) and trunk to 239 (+1 TEST-ISO). The ids are DISJOINT, so
+    ;; the merged ledger is 238 + 7 + 1 = 246, recounted off the merged
+    ;; docs/intent tree by `spec-ids` over `spec-doc-paths`, not reconciled
+    ;; between the two sides.
+    ;; The per-prefix map moves by ONE, not eight: only TEST-ISO- is a key of
+    ;; it (19 -> 20). NS-SPLIT- is not a key, so this branch's seven ids raise
+    ;; the total without touching the map -- which is exactly why the two
+    ;; assertions below must be derived separately.
+    (is (= 246 (count non-mcp)))
     (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 20
             "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3}
            (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"

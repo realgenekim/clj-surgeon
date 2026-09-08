@@ -92,3 +92,13 @@ and all ownership, behavior, architecture and protected-content gates are unchan
 ## Sol delta fence for 0956951b, ruling (a)
 
 - [x] **NS-SPLIT-059**: When a background proof refuses an unsafe `java.io.tmpdir`, the public receipt shall carry an executable `next_call` naming the `/var/tmp` repair before any mutation, and `:split-ns!` help shall state both the Babashka `TMPDIR=` and the JVM/MCP `-Djava.io.tmpdir=` form.
+
+## Rows sublime batch 4: candidate negative evidence
+
+- [x] **NS-SPLIT-060**: When a split receipt describes candidate comment changes, it shall enumerate every changed comment line with before/after location and content evidence and the applied policy.
+- [x] **NS-SPLIT-061**: When a split publishes stale-reference facts, it shall scan every captured candidate file across the declared roots for retired qualified symbols and aliases with explicit exclusions.
+- [x] **NS-SPLIT-062**: When a split publishes facade facts, it shall enumerate retained source forwarding definitions with explicit retention-policy expectations.
+- [x] **NS-SPLIT-063**: When a split publishes exactly-once facts, it shall count each moved owner in its assigned destination and elsewhere across candidate roots.
+- [x] **NS-SPLIT-064**: When a split publishes body preservation facts, it shall compare each original owner after authorized reference, alignment and promotion replay with actual destination bytes using SHA-256 evidence while reporting raw byte equality separately.
+- [x] **NS-SPLIT-065**: When candidate negative evidence contradicts the split contract, publication shall refuse before any mutation with the violating facts.
+- [x] **NS-SPLIT-066**: When a committed split has incomplete verification, its receipt shall explain proof tier and pending status with a proof-status next_call without changing verification_complete.

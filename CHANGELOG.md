@@ -8,6 +8,13 @@ is cut.
 
 ## [Unreleased]
 
+- Namespace-split receipts now carry candidate comment edits, scoped stale-reference
+  and facade scans, actual per-owner definition counts, and body hashes separating
+  raw equality from authorized replay. Contradictory evidence refuses before write.
+  Facade scope explicitly names macro/dynamic exclusions.
+  Committed incomplete receipts explain proof tier/status and name `:proof-status`
+  as the next read; `verification_complete` retains its existing meaning.
+
 ### Added
 
 - Namespace split warm profiles can select `:gate :background`. A detached worker
