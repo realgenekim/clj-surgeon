@@ -383,3 +383,40 @@ of them is a lesson with legs: under `set -o pipefail`, `check | grep -q` inheri
 program's nonzero exit and reports a false mismatch on exactly the rows where the program is
 SUPPOSED to refuse. A harness that is wrong only on the refusal rows is a harness that quietly
 stops testing refusals.
+
+### E/F. `~/bin/ship` — the review and the battery stop being serial
+
+Addendum, same day. The two long steps never needed each other's result to START: the Sol fence
+review is ~20 min of machine time, the receipt battery is minutes of machine time, and only the
+LANDING needs both. They were serial for no reason.
+
+`ship <tip> <brief-file> <verdict-basename> "<title>" <receipt-branch>` launches `fence-run`,
+and the moment its START RECEIPT prints (banner + a codex pid whose cwd is the fence worktree —
+fence-run's own ratchet, not the launcher's exit) it prewarms the receipt battery beside the
+review through `land-auto --prewarm`. It waits on the reviewer's pid, reads the FIRST line of the
+verdict file, and only on GO calls `land-auto`, which finds the already-minted receipt and lands it
+in one `land` call. It is a WRAPPER: `fence-run` is untouched, so a review launched by hand behaves
+exactly as it does today.
+
+Three refusals are worth naming:
+
+- **`GO-WITH-FIX` is not a GO** and never lands (the 2026-09-03 scar: a GO-WITH-FIX approved on a
+  fix whose own witness was still red at the tip).
+- **The verdict match order is NO-GO, then GO-WITH-FIX, then GO** — both refusals CONTAIN the
+  string `GO`, so a reader that tests for GO first reads every refusal as an approval.
+- **A reviewer that exits without a verdict file, with an empty one, or with a first line that is
+  none of the three, is `SHIP UNVERIFIED`** — never an assumed GO. A wrong `:idle` costs an hour;
+  an honest `:unverified` costs nothing.
+
+One line per run, printed and appended to `/var/tmp/forge/ship.ledger`:
+`SHIP <LANDED|NOT LANDED|NO-GO|GO-WITH-FIX|UNVERIFIED|REFUSED> tip=… landed_as=… review_wall=…
+battery_wall=… land_wall=… total=…`. The battery wall is stamped from the chain log's mtime at its
+READY line — the battery's real end, not when the waiter noticed it, so a battery that finished
+twenty minutes into a review is not billed for the rest of the review.
+
+Fixture: `/var/tmp/forge/tighten/fixtures/run-ship.sh`, **10 rows, 0 mismatches**, with
+`fence-run`, `receipt-chain`, `land` and `run-bg` stubbed but the REAL `land-auto` in the middle, so
+the prewarm hand-off is exercised rather than mocked. The reviewer is a real short-lived background
+process, so `ship` really waits on a pid. The last row is the point of the whole thing: a 6 s review
+beside a 3 s battery completes in 7 s, not 9 — the parallelism is asserted by the CLOCK, because
+every other assertion in the file passes just as well when the two steps run one after the other.
