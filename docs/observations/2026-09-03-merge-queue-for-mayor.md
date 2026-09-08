@@ -157,3 +157,4 @@ LANDED 2026-09-07T19:41Z: astra/lid-batch-2-perf-gate-hld 94715053 → MCP/main 
 - LANDED 2026-09-08T18:29Z: c5c89be5 (astra/namespace-split 6e8891e6 — rows batch 3, NS-SPLIT-050..059) via ship v2; Sol GO.
 - LANDED 2026-09-08T20:28Z: 2929428b (fable/battery-parallel cbef534b — TEST-ISO-013 parallel battery, 839 s → 218 s; 8 lanes + prereqs default) via ship v2; Sol GO.
 - LANDED 2026-09-08T21:35Z: 3dcf0491 (+ docs re-merge d3d6e8a5) — astra/namespace-split 8b1dd01d, rows batch 4 (NS-SPLIT-060..066); Sol GO-WITH-FIX applied, delta GO.
+- LANDED 2026-09-08T23:04Z: 36730c11 (astra/namespace-split 2ba9c950 — TEST-ISO-014 battery floor, 216 → 172 s) via ship v3; Sol GO ×2.
