@@ -67,3 +67,4 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 - 2026-09-08T04:23Z registration landed (a90055b4); row 1 LID debt 0 → friction-medium gates: audit ok, reviewer GO, landed; remaining to LOW: plate (B03, drafting), observed pilot (pilot 3, running), two frozen reruns (wave 5 done, wave 6 running), Astra acceptance of B02.
 - 2026-09-08T04:23Z wave 6 = second consecutive frozen-build rerun (56/46 s, hashes byte-equal to wave 5): the two-rerun gate for row 1 friction-low is MET. Remaining: plate (B03), observed pilot (pilot 3), Astra acceptance of B02.
 - 2026-09-08T04:54Z B03 prep on branch d31c3af7 (Sol r7 running). Row 1 to LOW needs: r7 GO + land + install/verify; pilot 3 observed PASS; Astra B02 acceptance lifting the cohort refusal.
+- 2026-09-08T05:09Z Astra B02 acceptance: NOT qualified; row 1 stays friction-medium; B02b (round) launched; coldstart fixes after pilot 3.
