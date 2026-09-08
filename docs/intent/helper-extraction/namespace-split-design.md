@@ -430,3 +430,10 @@ forged caller newlines and bidi; ceiling overflow; exact printed manifest replay
 The owned image runs affected tests and the papercut oracle after each step; one
 final cold make test, serialized lint, intent audit, and one split/base2 background
 timing run finish the build. Single-run wall is mechanism evidence, not superiority.
+
+Fence amendments NS-SPLIT-055..058 make the closure identity include the worker's
+start identity and launched argv as well as its pid and original receipt hash. The
+background entrance admits only an existing absolute `java.io.tmpdir` below
+`/var/tmp`. Receipt publication takes the maximum of UTF-8 EDN and escaped-JSON
+bytes, and replay manifests carry the captured snapshot hash so tampering fails as
+typed snapshot drift.

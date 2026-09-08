@@ -84,3 +84,7 @@ and all ownership, behavior, architecture and protected-content gates are unchan
 - [x] **NS-SPLIT-052**: When a split commits, its receipt shall contain bounded encoded review facts for every destination and retained owner.
 - [x] **NS-SPLIT-053**: When facts-only targets a committed request, it shall answer from the committed snapshot or name its closure receipt in a typed refusal.
 - [x] **NS-SPLIT-054**: When facts print a manifest, those bytes shall be a valid plan-only request including verification.
+- [x] **NS-SPLIT-055**: When proof status reads a closure, it shall accept it only when the original receipt hash, worker pid, worker start identity, and launched worker argv all match.
+- [x] **NS-SPLIT-056**: When a background proof worker is admitted, its `java.io.tmpdir` shall be an existing absolute descendant of `/var/tmp`; `/tmp`, relative, missing, and root-only paths shall refuse before publication.
+- [x] **NS-SPLIT-057**: When a receipt is bounded, both its UTF-8 EDN bytes and escaped-JSON transport bytes shall fit the ceiling; hostile newline and bidi filename text shall remain encoded.
+- [x] **NS-SPLIT-058**: When facts print a replay manifest, it shall bind the captured snapshot hash so a one-byte hash change returns the typed snapshot-drift refusal.

@@ -466,7 +466,8 @@
     ;; Sol r10 adds ALIAS-MIGRATION-003, the mandatory affected-battery gate.
     ;; Rows sublime adds NS-SPLIT-047..049 and ALIAS-MIGRATION-004..005.
     ;; Rows sublime batch 3 adds NS-SPLIT-050..054.
-    (is (= 233 (count non-mcp)))
+    ;; Sol's landing fence for a9da4344 adds NS-SPLIT-055..058.
+    (is (= 237 (count non-mcp)))
     (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 19
             "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3}
            (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"

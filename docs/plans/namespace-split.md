@@ -232,3 +232,8 @@ forged caller newlines and bidi; ceiling overflow; exact printed manifest replay
 The owned image runs affected tests and the papercut oracle after each step; one
 final cold make test, serialized lint, intent audit, and one split/base2 background
 timing run finish the build. Single-run wall is mechanism evidence, not superiority.
+
+Sol's landing fence adds NS-SPLIT-055..058: closure pid-reuse/replay identity,
+mandatory `/var/tmp` worker temp admission, independent EDN/escaped-JSON receipt
+bounds, and snapshot-bound printed-manifest tamper refusal. Each failed probe earns
+a focused witness before its repair; no full-suite rerun is part of this fence.

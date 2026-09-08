@@ -431,7 +431,9 @@
 ;; @spec NS-SPLIT-011
 ;; @spec NS-SPLIT-012
 ;; @spec NS-SPLIT-054
+;; @spec NS-SPLIT-058
 ;; INTENT: NS-SPLIT-054
+;; INTENT: NS-SPLIT-058
 (defn execute!
   ([request] (execute! {} request))
   ([config request]
@@ -489,7 +491,8 @@
                               (:plan_only request) (cond-> (assoc (split/receipt compiled checks)
                                                              :read_complete true :source_unchanged true)
                                                      (= "facts" (:plan_only request)) (assoc :facts (get-in compiled [:projection :facts])
-                                                                                        :manifest (assoc request :plan_only true))
+                                                                                        :manifest (assoc request :plan_only true
+                                                                                                         :snapshot_hash (get-in compiled [:projection :snapshot_hash])))
                                                      (not= "facts" (:plan_only request)) (assoc :analysis (split/analysis-projection compiled))
                                                      (not (:ok compiled)) (assoc :error "Split analysis contains blockers" :error_type "split-refused"))
                               (not (:ok compiled)) (assoc (split/receipt compiled checks) :error "Split decisions or static proof are incomplete"

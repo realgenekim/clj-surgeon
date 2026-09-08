@@ -6,6 +6,8 @@
    [clj-surgeon.namespace-split-warm :as warm]
    [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.spawn-ledger :as spawn]
+   [clj-surgeon.split-proof-gate :as gate]
+   [clj-surgeon.structural-lens :as lens]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.java.shell :as shell]
@@ -96,4 +98,42 @@
                                "-m" "clj-surgeon.core" ":op" ":proof-status" ":receipt" (:receipt_path r))]
                   (is (pos? (:exit result)))
                   (is (= "stale" (:state (edn/read-string (:out result)))))))))
+          (finally (doseq [f (reverse (file-seq dir))] (.delete f))))))))
+
+;; @spec NS-SPLIT-051
+(deftest proof-status-cli-exits-nonzero-for-failed-stale-and-dead-worker
+  (fixture/with-workspace
+    (fn [root _request]
+      (let [dir (.toFile (java.nio.file.Files/createTempDirectory "split-status-cli-" (make-array java.nio.file.attribute.FileAttribute 0)))
+            current (gate/current-hash root ["src" "test"])
+            argv ["/usr/bin/setsid" "/usr/bin/bb" "-m" "clj-surgeon.split-proof-gate"]
+            started "2026-09-08T00:00:00Z"
+            cli #(shell/sh "bb" "--classpath" (str (.getAbsoluteFile (io/file "src")))
+                   "-m" "clj-surgeon.core" ":op" ":proof-status" ":receipt" (str %))]
+        (try
+          (doseq [[kind candidate closure? expected-state expected-error]
+                  [["failed" current true "failed" "proof-gate-failed"]
+                   ["stale" "not-the-current-snapshot" false "stale" "proof-snapshot-stale"]
+                   ["dead" current false "failed" "proof-worker-exited"]]]
+            (let [receipt (io/file dir (str kind "-receipt.edn"))
+                  closure (io/file dir (str kind "-closure.edn"))
+                  original {:ok true :committed true :state "committed-probe-only"
+                            :receipt_id kind :receipt_path (str receipt) :closure_receipt (str closure)
+                            :workspace_root root :coverage {:roots ["src" "test"]}
+                            :candidate_hash candidate :verification_complete false
+                            :proof_pending ["suite"]
+                            :background_gate {:pid 999999999 :argv argv :worker_started started
+                                              :commands [["suite"]]}}]
+              (spit receipt (pr-str original))
+              (when closure?
+                (spit closure
+                  (pr-str {:receipt_id kind :pid 999999999 :worker_argv argv :worker_started started
+                           :original_hash (lens/source-hash (slurp receipt)) :candidate_hash candidate
+                           :state "failed" :checks [{:command ["suite"] :exit 1 :finished? true
+                                                     :before_hash candidate :after_hash candidate}]})))
+              (let [result (cli receipt)
+                    body (edn/read-string (:out result))]
+                (is (pos? (:exit result)) (pr-str [kind result]))
+                (is (= expected-state (:state body)) (pr-str body))
+                (is (= expected-error (:error_type body)) (pr-str body)))))
           (finally (doseq [f (reverse (file-seq dir))] (.delete f))))))))

@@ -26,6 +26,34 @@
 (defn proved [& _]
   {:ok true :process_evidence [{:command ["fixture-proof"] :exit 0 :elapsed_ms 1 :finished? true}]})
 
+(defn delete-fixture-source-files! [root]
+  (let [tmpdir (System/getProperty "java.io.tmpdir")]
+    (when-not (and (some? root) (some? tmpdir) (.isAbsolute (io/file root)))
+      (throw (ex-info "Fixture cleanup requires an explicit workspace root"
+                      {:error-type :unsafe-test-workspace})))
+    (let [workspace (.getCanonicalFile (io/file root))
+          temp-root (.getCanonicalFile (io/file tmpdir))]
+      (when-not (and (.isAbsolute workspace)
+                     (.startsWith (.toPath workspace) (.toPath temp-root))
+                     (not= workspace temp-root))
+        (throw (ex-info "Fixture cleanup root must be below java.io.tmpdir"
+                        {:error-type :unsafe-test-workspace :root (str workspace)})))
+      (doseq [folder ["src" "test"]
+              file (reverse (file-seq (io/file workspace folder)))
+              :when (.isFile file)]
+        (.delete file)))))
+
+;; @spec TEST-ISO-003
+(deftest destructive-fixture-setup-refuses-an-unsafe-root
+  (let [repository-source (io/file "src/clj_surgeon/core.clj")
+        before (.length repository-source)
+        refusal (try (delete-fixture-source-files! nil) nil
+                     (catch Throwable error error))]
+    (is (some? refusal))
+    (is (= :unsafe-test-workspace (:error-type (ex-data refusal))))
+    (is (.isFile repository-source))
+    (is (= before (.length repository-source)))))
+
 ;; @spec NS-SPLIT-013
 (deftest closed-schema-and-complete-text-face
   (is (= false (:additionalProperties boundary/schema)))
@@ -300,7 +328,9 @@
               (is (= (:closure_receipt r) (:closure_receipt stale))))))))))
 
 ;; @spec NS-SPLIT-054
+;; @spec NS-SPLIT-058
 ;; INTENT-TEST: NS-SPLIT-054
+;; INTENT-TEST: NS-SPLIT-058
 (deftest printed-manifest-roundtrips
   (with-workspace
     (fn [_ request]
@@ -309,9 +339,15 @@
               printed (pr-str (:manifest facts))
               manifest (edn/read-string printed)]
           (is (= {:profile "unit"} (:verification manifest)))
+          (is (string? (:snapshot_hash manifest)))
           (is (empty? (boundary/validate-request manifest)))
           (when manifest
-            (is (:ok (boundary/cli! {:request manifest :plan-only true})))))))))
+            (is (:ok (boundary/cli! {:request manifest :plan-only true})))
+            (when-let [snapshot (:snapshot_hash manifest)]
+              (let [changed (str (if (= \a (first snapshot)) "b" "a") (subs snapshot 1))
+                    refusal (boundary/cli! {:request (assoc manifest :snapshot_hash changed) :plan-only true})]
+                (is (= "split-refused" (:error_type refusal)))
+                (is (some #{:snapshot-drift} (map :type (:blockers refusal))))))))))))
 
 ;; @spec NS-SPLIT-052
 (deftest review-facts-encode-caller-strings
@@ -330,7 +366,7 @@
 (deftest oversized-review-facts-refuse-before-publication
   (with-workspace
     (fn [root request]
-      (doseq [folder ["src" "test"] file (reverse (file-seq (io/file root folder))) :when (.isFile file)] (.delete file))
+      (delete-fixture-source-files! root)
       (let [names (mapv #(str "owner-with-a-long-but-valid-name-" %) (range 1800))
             source (str "(ns app.views)\n" (apply str (map #(str "(def " % " 1)\n") names)))
             request (assoc request :destinations [{:lib "app.util" :file "src/app/util.clj"
