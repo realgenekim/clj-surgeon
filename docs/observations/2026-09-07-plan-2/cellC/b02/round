@@ -1,0 +1,1092 @@
+#!/usr/bin/env bash
+# round <worktree> <findings.md> <name> [options] — ONE command that runs a complete
+# namespace-split builder round and grades it. Gene, 2026-09-08: "It should have taken
+# only 4m -- why is this taking so long! We must make this routine perfect".
+#
+# The routine, end to end, with every gotcha this seat paid for baked in:
+#   LOCK -> PREFLIGHT -> BUILD (sol-yolo/codex, bound to the CHILD pid) -> COMMIT CHECK
+#   -> GRADE (fresh fixture, branch build, papercut-oracle + 4 fixture oracles)
+#   -> WITNESSES (focused cold test namespaces) -> RECEIPT (table + one ledger line).
+#
+# Options:
+#   --minutes N     builder wall ceiling, default 25
+#   --fixture PATH  reuse an existing fixture worktree instead of creating one
+#   --request EDN   split request, default D1-request.edn repointed at the fixture
+#   --model NAME    codex model, default gpt-6-astra (verified against the builder log)
+#   --no-build      skip the builder; grade whatever tip the worktree already has
+#   --adopt PID     do NOT launch; wait on an already-running builder pid, then grade.
+#                   For the exact case that burned us: discovery failed, the round exited,
+#                   and a perfectly healthy builder was left with nobody watching it.
+#   --resume        continue the codex session THIS worktree last ran, feeding the new
+#                   findings file as the follow-up prompt. Explicit persisted session id
+#                   only; `codex exec resume --last` is never used by this apparatus.
+#   --session ID    the session uuid to record/resume (overrides the persisted one).
+#   --split-receipt PATH
+#                   grade an ALREADY-PRODUCED split receipt instead of invoking the split.
+#                   For re-grading and for apparatus self-tests of the receipt schema.
+#
+# STATE lives OUTSIDE the worktree, keyed by canonical worktree path:
+#   /var/tmp/forge/round/state/<sha256(worktree)>/{root,lease,adopt.lease,adopted,
+#                                                  session.id,session.json}
+# A lock file inside the candidate is a file the builder's own `git status` and
+# `git clean` can see; three of them used to be left there every round.
+#
+# RATCHETS BAKED IN (each one is a scar, not a preference):
+#  * [[sol-yolo-wrapper-pid-is-not-the-run]] the sol-yolo WRAPPER exits while the codex
+#    CHILD keeps working. We find the child by scanning /proc for cwd==worktree and
+#    "codex exec" in argv, print a START RECEIPT naming it, and wait on THAT pid.
+#  * [[waiters-bind-to-pid-not-argv]] no `pgrep -f` anywhere — an unanchored argv match
+#    self-matches this script's own bash -c. Every scan is /proc + cwd + argv.
+#  * never `pkill`; the only kill is `kill <exact child pid>`.
+#  * never wrap the builder in an outer `timeout` — timeout kills your WAIT, not the
+#    child, and an unsupervised codex keeps editing the worktree.
+#  * a per-worktree flock, so two rounds can never collide in one tree (the collision
+#    that cost round 4: two Astra runs, one paused itself, uncommitted merge left behind).
+#  * `</dev/null` on every subprocess (a codex/bb/clojure that inherits a tty stdin hangs).
+#  * temp under /var/tmp/forge, never /tmp (RAM tmpfs, filled twice).
+#  * `date` here is uutils: no %3N. We take %N and cut to milliseconds.
+#  * the fixture's suite APPENDS to the tracked 00SERVER-LOGS.txt — excluded from every
+#    clean check, in the fixture only.
+#  * JAVA_TOOL_OPTIONS prints "Picked up ..." on stderr; never treated as failure.
+#  * the model is verified from the builder log's `model:` line, not from the flag we
+#    passed — a flag is a request, the log is the receipt.
+set -uo pipefail
+
+# ---------------------------------------------------------------------------
+# args
+# ---------------------------------------------------------------------------
+usage() {
+  sed -n '2,44p' "$0" >&2
+  exit 2
+}
+[ $# -ge 3 ] || usage
+WT=$(readlink -f "${1:?worktree}"); FINDINGS=${2:?findings.md}; NAME=${3:?name}
+shift 3
+MINUTES=25 FIXTURE="" REQUEST="" MODEL=gpt-6-astra NOBUILD=0 ADOPT=""
+RESUME=0 SESSION="" SPLIT_RECEIPT=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --minutes) MINUTES=${2:?}; shift 2 ;;
+    --adopt)   ADOPT=${2:?}; shift 2 ;;
+    --fixture) FIXTURE=$(readlink -f "${2:?}"); shift 2 ;;
+    --request) REQUEST=$(readlink -f "${2:?}"); shift 2 ;;
+    --model)   MODEL=${2:?}; shift 2 ;;
+    --no-build) NOBUILD=1; shift ;;
+    --resume)  RESUME=1; shift ;;
+    --session) SESSION=${2:?}; shift 2 ;;
+    --split-receipt) SPLIT_RECEIPT=$(readlink -f "${2:?}"); shift 2 ;;
+    *) echo "round: unknown option $1" >&2; usage ;;
+  esac
+done
+
+CC_SRC=/home/forge/src/curtaincall-cfp
+CC_SHA=d9205abcc9b9f31d93bd4a76537b74fccd583ca6
+CELLC=/var/tmp/forge/plan2/cellC
+GUARD_TEST=/var/tmp/forge/plan2/split/view_architecture_test.clj
+PAPERCUT=$CELLC/papercut-oracle.py
+CC_ORACLE=$CELLC/cc-oracle.py
+BASE_REQUEST=$CELLC/D1-request.edn
+OUT=/var/tmp/forge/round
+mkdir -p "$OUT"
+LOG=$OUT/$NAME.log
+LEDGER=$OUT/ledger.txt
+# The round's own machine receipt. IMMUTABLE: a name is used once, so a re-run can
+# never quietly overwrite the evidence of the run it is being compared against
+# (Astra: "immutable unique output paths; no reused `smoke` overwrite").
+RECEIPT_JSON=$OUT/$NAME-receipt.json
+
+# ---------------------------------------------------------------------------
+# ledger / timing.  `date` on this box is uutils: %3N is NOT supported, %N is.
+# ---------------------------------------------------------------------------
+stamp() { date -u +%FT%T.%N | cut -c1-23; }
+T0=$(date +%s)
+PHASES=()          # "phase|wall|result"
+phase_t0() { date +%s; }
+say() { printf '%s\n' "$*" | tee -a "$LOG"; }
+step() {   # step <phase> <wall-seconds> <result>
+  PHASES+=("$1|$2|$3")
+  say "$(stamp)  [+$(( $(date +%s) - T0 ))s]  $1 ${2}s :: $3"
+}
+refuse() { say "$(stamp)  REFUSED: $*"; exit 3; }
+: > "$LOG"
+say "$(stamp)  ROUND $NAME start  worktree=$WT findings=$FINDINGS model=$MODEL minutes=$MINUTES no_build=$NOBUILD"
+
+# ---------------------------------------------------------------------------
+# /proc scan for a live codex bound to a given WORKTREE.  NEVER pgrep -f: an
+# unanchored argv match self-matches the harness's own `bash -c` and never fires.
+#
+# DEFECT 1, first live round (2026-09-08): the codex process's cwd is NOT the
+# worktree.  sol-yolo passes `-C <worktree>` and codex keeps the LAUNCHER's cwd —
+# observed cwd=/home/forge/src/marvin-voice-remote/channel-connector while argv
+# read `codex exec ... -C /home/forge/src/clj-surgeon-split ...`.  A cwd-only scan
+# is blind to every real builder.  So the AUTHORITY is argv: "codex exec" AND
+# `-C <worktree>` (exact, trailing slash accepted).  cwd==worktree is kept as a
+# SECONDARY match — it costs nothing and would catch a launcher that does chdir.
+# ---------------------------------------------------------------------------
+codex_pids_in() {  # codex_pids_in <worktree> [min-start-epoch]  -> pids, numerically sorted
+  local dir=${1%/} minstart=${2:-0} p cwd args
+  for p in /proc/[0-9]*; do
+    p=${p#/proc/}
+    # a process can exit between the glob and the read; that is a race, not an error,
+    # so the whole read is stderr-silenced (redirecting only `tr` still lets bash
+    # print "No such file or directory" for the failed input redirection).
+    args=$({ tr '\0' ' ' < "/proc/$p/cmdline"; } 2>/dev/null) || continue
+    case "$args" in *"codex exec "*) ;; *) continue ;; esac
+    cwd=$(readlink "/proc/$p/cwd" 2>/dev/null)
+    case "$args" in
+      *" -C $dir "*|*" -C $dir/ "*) ;;                 # primary: the -C fence
+      *)  [ "$cwd" = "$dir" ] || continue ;;           # secondary: an actual chdir
+    esac
+    if [ "$minstart" != 0 ]; then
+      [ "$(proc_start "$p")" -ge "$minstart" ] 2>/dev/null || continue
+    fi
+    echo "$p"
+  done | sort -n
+}
+
+# One launch shows up as TWO matches: the `node .../codex` shim and the native
+# `codex-linux-x64/.../codex` binary it execs as its child. Wait on the PARENT —
+# it outlives nothing and dies when the run ends. `sort -n | head -1` picks it
+# deterministically; the /proc glob's own order is LEXICOGRAPHIC and would pick
+# the wrong one the moment pid width changes (1000001 sorts before 999999).
+codex_leader_in() { codex_pids_in "$@" | head -1; }
+
+proc_start() {  # epoch seconds at which <pid> started (the /proc dir's mtime)
+  stat -c %Y "/proc/$1" 2>/dev/null || echo 0
+}
+
+# is_ours <pid> — true when <pid> belongs to THIS round: same process group, or a
+# PPid chain that walks up to us. Used only to keep our own children out of
+# diagnostics; never to decide what to reap.
+is_ours() {
+  local pid=$1 g n=0
+  g=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ')
+  [ -n "$MYPGID" ] && [ "$g" = "$MYPGID" ] && return 0
+  while [ "$pid" != 1 ] && [ -n "$pid" ] && [ "$n" -lt 24 ]; do
+    [ "$pid" = "$$" ] && return 0
+    pid=$(awk '/^PPid:/{print $2}' "/proc/$pid/status" 2>/dev/null)
+    n=$((n+1))
+  done
+  return 1
+}
+
+# ===========================================================================
+# 1. LOCK
+# ===========================================================================
+t=$(phase_t0)
+[ -d "$WT" ] || refuse "no such worktree: $WT"
+
+# ---------------------------------------------------------------------------
+# ONE LEASE, KEYED BY CANONICAL WORKTREE IDENTITY, OUTSIDE THE WORKTREE.
+#
+# Before B02 the three lock files lived IN the candidate: .round.lock,
+# .round.adopt.lock, .round.lock.adopted. Every one of them is visible to the
+# builder's own `git status` and removable by its own `git clean -fdq` — an
+# apparatus artefact inside the thing under measurement, and a lock whose holder
+# the subject can delete is not a lock. They now live under
+#   $OUT/state/<sha256(canonical worktree path)>/
+# which is (a) outside every candidate, (b) stable across two spellings of the
+# same path, and (c) the same directory that carries the persisted session id, so
+# "who owns this tree" and "which conversation is this tree's" are one record.
+# ---------------------------------------------------------------------------
+ROOT_DIGEST=$(printf '%s' "$WT" | sha256sum | cut -d' ' -f1)
+RSTATE=$OUT/state/$ROOT_DIGEST
+mkdir -p "$RSTATE" || refuse "cannot create state dir $RSTATE"
+printf '%s\n' "$WT" > "$RSTATE/root"     # the digest's preimage, for a human
+LOCKF=$RSTATE/lease
+ADOPT_LOCKF=$RSTATE/adopt.lease
+ADOPTED_MARK=$RSTATE/adopted
+MYPGID=$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ')
+
+# Legacy in-tree locks from rounds built before B02: remove them, but ONLY when
+# nothing holds them — an old round still running is still entitled to its lock.
+for _legacy in "$WT/.round.lock" "$WT/.round.adopt.lock" "$WT/.round.lock.adopted"; do
+  [ -e "$_legacy" ] || continue
+  if [ -z "$(fuser "$_legacy" 2>/dev/null | tr -d ' ')" ]; then
+    rm -f "$_legacy" && say "$(stamp)  removed legacy in-tree lock $_legacy (unheld)"
+  else
+    say "$(stamp)  WARNING: legacy in-tree lock $_legacy is HELD by another process — left alone"
+  fi
+done
+
+# The round receipt is immutable: refuse BEFORE any work, not after producing it.
+[ -e "$RECEIPT_JSON" ] && refuse "receipt-exists: $RECEIPT_JSON already exists — a round receipt is immutable evidence; choose a new <name> (or move the old receipt aside deliberately)"
+
+# ---------------------------------------------------------------------------
+# THE ROOT CAUSE, first --adopt attempt (2026-09-08): `exec 9>$LOCKF` puts the
+# lock on a descriptor that EVERY child inherits across fork+exec. sol-yolo, its
+# bash wrapper, and codex all carried fd 9, so the flock outlived the round that
+# took it and was "held" by the very builder we were trying to adopt:
+#     REFUSED: round already running (pid 2655184 2655203 2829462 2829483 2829485)
+# — 2655184 being the wrapper of the FAILED round, and 2829462+ this round's own
+# short-lived children, all of them mere INHERITORS of one fd.
+#
+# Two fixes, both needed:
+#  (a) the builder is launched with `9>&-` (and `8>&-`), so no child ever inherits
+#      the lock again — see the BUILD phase. That is the actual repair.
+#  (b) --adopt does not contend for $LOCKF at all. It cannot: by construction the
+#      holder is inside the tree it is adopting. It takes a SEPARATE lock
+#      ($ADOPT_LOCKF, so two adopters still cannot collide) and drops a marker
+#      naming itself, removed on exit.
+# ---------------------------------------------------------------------------
+if [ -n "$ADOPT" ]; then
+  exec 8>"$ADOPT_LOCKF" || refuse "cannot open adopt lock $ADOPT_LOCKF"
+  flock -n 8 || refuse "another --adopt round is already watching $WT ($ADOPT_LOCKF)"
+  printf 'round_pid=%s adopted_pid=%s started=%s\n' "$$" "$ADOPT" "$(stamp)" > "$ADOPTED_MARK"
+  trap 'rm -f "$ADOPTED_MARK"' EXIT
+  LOCKMODE="adopt: no exclusive lock (holder is inside the adopted tree); marker=$ADOPTED_MARK"
+else
+  exec 9>"$LOCKF" || refuse "cannot open lock $LOCKF"
+  if ! flock -n 9; then
+    # A held lock is now genuinely ambiguous no longer — but an OLD leaked fd may
+    # still be out there, so name the adoptable builder instead of dead-ending.
+    # fuser reports every INHERITOR, our own transient children included — which is
+    # what made the last refusal unreadable. Drop anything in our own process group.
+    holder=""
+    for _h in $(fuser "$LOCKF" 2>/dev/null | tr -s ' '); do
+      case "$_h" in ''|*[!0-9]*) continue ;; esac
+      # a holder that is already gone was one of fuser's own transient siblings —
+      # it raced us and cannot be pgid-checked, so it is ours by elimination.
+      kill -0 "$_h" 2>/dev/null || continue
+      is_ours "$_h" && continue
+      holder="$holder $_h"
+    done
+    [ -n "${holder// /}" ] || holder=" (all holders are our own children — a stale leaked fd)"
+    leader=$(codex_leader_in "$WT")
+    if [ -n "$leader" ]; then
+      refuse "lease-held: another round owns $WT — lease=$LOCKF holder_pid(s):$holder; its builder is pid $leader. Re-attach with:  round $WT $FINDINGS $NAME --adopt $leader"
+    fi
+    refuse "lease-held: another round owns $WT — lease=$LOCKF holder_pid(s):$holder; no codex builder is fenced to the tree (a --no-build or grade-only round). Wait for it to finish, or re-attach to its builder when one appears with:  round $WT $FINDINGS $NAME --adopt <builder-pid>"
+  fi
+  LOCKMODE="flock held on $LOCKF"
+fi
+
+# A codex fenced to this worktree means a round is already building here — UNLESS we
+# were asked to adopt it, which is the whole point of --adopt.
+#
+# ONE launch presents as TWO pids: the `node .../codex` shim and the native codex
+# binary it execs. Exempting only $ADOPT would refuse on its own sibling, so an
+# --adopt whose pid IS in the discovered set adopts the whole fenced set.
+#
+# Our OWN process group is excluded here: nothing we have spawned at this point can
+# legitimately be a builder, and a stray match on our own children is exactly the
+# noise that made the last refusal unreadable. The exclusion is deliberately scoped
+# to this pre-launch scan only — post-launch discovery and reaping must NOT filter
+# by pgid, or a builder whose `setsid` failed would become both undiscoverable and
+# unreapable.
+found=""
+for _p in $(codex_pids_in "$WT"); do
+  _g=$(ps -o pgid= -p "$_p" 2>/dev/null | tr -d ' ')
+  [ -n "$MYPGID" ] && [ "$_g" = "$MYPGID" ] && continue
+  found="$found $_p"
+done
+found=${found# }
+existing=$found
+if [ -n "$ADOPT" ]; then
+  case " $found " in *" $ADOPT "*) existing="" ;; esac
+fi
+if [ -n "${existing// /}" ]; then
+  refuse "a codex process already lives in $WT (pid $existing) — use --adopt $(echo "$existing" | awk '{print $1}') to wait on it"
+fi
+step LOCK $(( $(date +%s) - t )) "ok ($LOCKMODE; state=$RSTATE; no lock files in the worktree; no unowned codex fenced to tree${ADOPT:+; adopting $ADOPT})"
+
+# ===========================================================================
+# 2. PREFLIGHT
+# ===========================================================================
+t=$(phase_t0)
+git -C "$WT" rev-parse --git-dir >/dev/null 2>&1 || refuse "$WT is not a git worktree"
+# A clean tree is a precondition for LAUNCHING a round — it is NOT a precondition for
+# ADOPTING one: the builder we are adopting is editing the tree at this very moment,
+# and refusing it as "dirty" would make --adopt structurally impossible. The check is
+# not dropped, it is MOVED to COMMIT_CHECK, where it is asked after the builder exits
+# and where the honest question ("did it leave the tree clean?") actually lives.
+if [ -n "$ADOPT" ]; then
+  dirty=$(git -C "$WT" status --porcelain --untracked-files=no 2>/dev/null | wc -l)
+  say "$(stamp)  adopt: skipping the pre-clean check — builder $ADOPT is mid-flight ($dirty tracked file(s) currently modified); enforced at COMMIT_CHECK instead"
+else
+  dirty=$(git -C "$WT" status --porcelain --untracked-files=no 2>/dev/null)
+  [ -z "$dirty" ] || { say "$dirty"; refuse "dirty: $WT has uncommitted tracked changes"; }
+fi
+OLD_TIP=$(git -C "$WT" rev-parse HEAD)
+BRANCH=$(git -C "$WT" rev-parse --abbrev-ref HEAD)
+command -v bb >/dev/null || refuse "bb not on PATH"
+[ -x /home/forge/bin/clj-kondo ] || refuse "~/bin/clj-kondo missing or not executable"
+[ -f "$PAPERCUT" ] || refuse "papercut oracle missing: $PAPERCUT"
+[ -f "$CC_ORACLE" ] || refuse "cc oracle missing: $CC_ORACLE"
+[ -f "$GUARD_TEST" ] || refuse "guard test missing: $GUARD_TEST"
+if [ -n "$ADOPT" ]; then PRE="adopt mode (pre-clean check deferred), "; else PRE="clean, "; fi
+step PREFLIGHT $(( $(date +%s) - t )) "${PRE}branch=$BRANCH tip=${OLD_TIP:0:8}, bb+clj-kondo+oracles present"
+
+# ===========================================================================
+# 3. BUILD
+# ===========================================================================
+BUILD=ok
+BUILDER_PID=""
+LAUNCH_EPOCH=0
+WRAPPER=""
+SESSION_ID=""
+INSTR_DIGEST=""
+PREV_STATUS=none
+
+# DEFECT 2, first live round (2026-09-08): discovery failed after 30 s, the script
+# printed REFUSED and exited — releasing the lock and ORPHANING the builder it had
+# just spawned.  A failure after launch owns what it launched.  This reaps the
+# wrapper and every codex bearing our `-C <worktree>` that started after we did,
+# says so in the receipt, and exits non-zero.
+reap_launched() {
+  local victims p
+  [ -n "$WRAPPER" ] && kill "$WRAPPER" 2>/dev/null && say "$(stamp)  reaped wrapper $WRAPPER"
+  victims=$(codex_pids_in "$WT" "$LAUNCH_EPOCH")
+  for p in $victims; do
+    kill "$p" 2>/dev/null && say "$(stamp)  reaped codex $p (launched by this round)"
+  done
+  [ -z "$victims" ] && say "$(stamp)  reaped: no codex process of ours was running"
+  return 0
+}
+refuse_after_launch() {   # never leave a builder nobody is watching
+  say "$(stamp)  post-launch failure — reaping what this round launched"
+  reap_launched
+  refuse "$*"
+}
+
+if [ "$NOBUILD" = 1 ]; then
+  [ "$RESUME" = 1 ] && refuse "resume-no-build: --resume asks to continue a session and --no-build asks to launch nothing; pick one"
+  step BUILD 0 "skipped (--no-build)"
+elif [ -n "$ADOPT" ]; then
+  [ "$RESUME" = 1 ] && refuse "resume-adopt-conflict: --resume launches a continuation, --adopt waits on a builder already running; pick one"
+  t=$(phase_t0)
+  BUILDER_PID=$ADOPT
+  kill -0 "$BUILDER_PID" 2>/dev/null || refuse "--adopt $ADOPT: no such live process"
+  argv=$(tr '\0' ' ' < "/proc/$BUILDER_PID/cmdline" 2>/dev/null)
+  case "$argv" in
+    *"codex exec "*" -C ${WT%/} "*|*"codex exec "*" -C ${WT%/}/ "*) ;;
+    *) refuse "--adopt $ADOPT: argv is not a codex exec fenced to $WT: $argv" ;;
+  esac
+  BLOG=$(printf '%s' "$argv" | sed -nE 's#.* -o ([^ ]*)\.last\.md.*#\1#p')
+  say "START RECEIPT (adopted): builder_pid=$BUILDER_PID started=$(date -u -d @"$(proc_start "$BUILDER_PID")" +%FT%T 2>/dev/null) argv=$argv"
+  trap 'say "$(stamp)  interrupted while watching adopted builder $BUILDER_PID — it is STILL RUNNING and now unwatched."; say "        re-attach with:  round $WT $FINDINGS $NAME --adopt $BUILDER_PID"; exit 130' INT TERM
+  deadline=$(( $(date +%s) + MINUTES * 60 ))
+  while kill -0 "$BUILDER_PID" 2>/dev/null; do
+    if [ "$(date +%s)" -ge "$deadline" ]; then kill "$BUILDER_PID" 2>/dev/null; BUILD=timeout; break; fi
+    sleep 10
+  done
+  trap - INT TERM
+  step BUILD $(( $(date +%s) - t )) "$BUILD (adopted pid=$BUILDER_PID)"
+else
+  t=$(phase_t0)
+  [ -f "$FINDINGS" ] || refuse "no such findings file: $FINDINGS"
+  BRIEF=$OUT/$NAME-brief.md
+  REPORT=$OUT/$NAME-report.md
+  BLOG=$OUT/$NAME-builder.log
+  rm -f "$REPORT" "$REPORT.last.md"
+  if [ "$RESUME" = 1 ]; then
+    cat > "$BRIEF" <<EOF
+FOLLOW-UP ROUND on $WT — this is a CONTINUATION of the session you are already in.
+Everything you established last round still holds: the warm image, the method, the
+branch, the commit trailer. Do not re-derive them.
+
+Same method as before: split-in-image, $PAPERCUT <fixture>, warm run-tests on the
+affected namespaces, ONE cold \`make test\` at the end, a FAIL-FIRST witness with a
+linked-intent id for every fix, commit on $BRANCH as forge-anvil with trailer
+\`Co-Authored-By: Gene Kim <genek@itrevolution.com>\`, DO NOT PUSH. Report to $REPORT.
+
+NEW FINDINGS TO ACT ON (verbatim, below this line):
+--------------------------------------------------------------------------
+EOF
+  else
+    cat > "$BRIEF" <<EOF
+You have EXCLUSIVE ownership of $WT.
+
+METHOD — the in-image loop (this is the method, not a suggestion):
+  * warm image: one nREPL for the worktree, kept for the whole round; never kill a JVM
+    you did not start.
+  * after EVERY change: split-in-image, then $PAPERCUT <fixture>. Seconds, not minutes.
+  * per iteration: warm \`clojure.test/run-tests\` on the AFFECTED namespaces in that
+    image. Never a cold kaocha per iteration.
+  * ONE cold \`make test\` at the very end, as the final proof.
+  * every fix gets a FAIL-FIRST witness with a linked-intent id (NS-SPLIT-0xx,
+    linked-intent-testing markers); write the witness from the oracle's example, not
+    from prose.
+  * commit on the branch $BRANCH as forge-anvil with trailer
+    \`Co-Authored-By: Gene Kim <genek@itrevolution.com>\`. DO NOT PUSH.
+  * write your report to $REPORT and print your PID on its first line.
+  * log iterations to $OUT/$NAME-loop.log — one line per iteration: wall seconds,
+    warm-test wall, oracle total.
+
+FINDINGS TO ACT ON (verbatim, below this line):
+--------------------------------------------------------------------------
+EOF
+  fi
+  cat "$FINDINGS" >> "$BRIEF"
+  INSTR_DIGEST=$(sha256sum < "$BRIEF" | cut -d' ' -f1)
+
+  # -------------------------------------------------------------------------
+  # RESUME — an EXPLICIT PERSISTED session id, never `--last`.
+  #
+  # Astra's contract, item 1: "use explicit persisted session ID, never --last;
+  # record model/settings, root, instruction digest and previous terminal status
+  # ... verify root/model from events before authorizing work. Wrong/stale sessions
+  # refuse; deliberately restart on incompatible scope/environment change."
+  #
+  # `--last` means "whatever this box most recently recorded", which on a seat that
+  # runs reviews, probes and three worktrees is a coin flip. Every refusal below is
+  # typed: the message names the class, not just the failure.
+  # -------------------------------------------------------------------------
+  PREV_STATUS=none
+  if [ "$RESUME" = 1 ]; then
+    SID=$SESSION
+    if [ -z "$SID" ]; then
+      [ -s "$RSTATE/session.id" ] || refuse "resume-no-session: no codex session is persisted for $WT (looked in $RSTATE/session.id). A first round records one; there is nothing to continue. Run a fresh round, or pass --session <uuid> explicitly. This apparatus never falls back to \`codex exec resume --last\` — the most recent session on this box is not evidence that it is THIS worktree's session."
+      SID=$(tr -d ' \n\r' < "$RSTATE/session.id")
+    fi
+    case "$SID" in
+      [0-9a-fA-F][0-9a-fA-F]*-*-*-*-*) ;;
+      *) refuse "resume-bad-session: '$SID' is not a codex session uuid" ;;
+    esac
+    if [ -s "$RSTATE/session.json" ]; then
+      PREV_ROOT=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("root",""))' "$RSTATE/session.json" 2>/dev/null)
+      PREV_MODEL=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("model",""))' "$RSTATE/session.json" 2>/dev/null)
+      PREV_STATUS=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("terminal_status",""))' "$RSTATE/session.json" 2>/dev/null)
+      PREV_SID=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("session_id",""))' "$RSTATE/session.json" 2>/dev/null)
+      : "${PREV_ROOT:=}" "${PREV_MODEL:=}" "${PREV_STATUS:=unknown}" "${PREV_SID:=}"
+      [ -z "$PREV_ROOT" ] || [ "$PREV_ROOT" = "$WT" ] || \
+        refuse "resume-root-mismatch: session $SID was recorded against root '$PREV_ROOT'; this round owns '$WT'. A scope change gets a deliberate fresh session, never a resume."
+      if [ -n "$PREV_MODEL" ] && [ "${PREV_MODEL%% *}" != "$MODEL" ]; then
+        refuse "resume-model-mismatch: session $SID ran on '$PREV_MODEL'; this round asks for '$MODEL'. An environment change gets a deliberate fresh session, never a resume."
+      fi
+      [ -z "$PREV_SID" ] || [ -n "$SESSION" ] || [ "$PREV_SID" = "$SID" ] || \
+        refuse "resume-state-inconsistent: $RSTATE/session.id says '$SID' but $RSTATE/session.json says '$PREV_SID'"
+    fi
+    say "$(stamp)  RESUME: session=$SID root=$WT model=$MODEL previous_terminal_status=$PREV_STATUS instruction_digest=${INSTR_DIGEST:0:16}"
+  fi
+
+  LAUNCH_EPOCH=$(date +%s)
+  # `9>&- 8>&- 7>&-` IS THE REPAIR for the leaked-lock defect: the builder outlives this
+  # round by design, so if it inherits a lease descriptor the lease outlives the round
+  # too and every later attempt — including --adopt — is refused by its own subject.
+  # Closing them here is what makes the lease mean "a round is running" again instead of
+  # "a round once started here". fd 7 is the FIXTURE lease, taken later in GRADE; closing
+  # a descriptor that is not open is not an error, so this is correct in every mode.
+  if [ "$RESUME" = 1 ]; then
+    CODEX_BIN=/home/forge/.local/bin/codex CODEX_MODEL="$MODEL" \
+      nohup setsid /home/forge/bin/round-resume "$WT" "$SID" "$BRIEF" "$REPORT" \
+      > "$BLOG" 2>&1 </dev/null 9>&- 8>&- 7>&- &
+  else
+    CODEX_BIN=/home/forge/.local/bin/codex CODEX_MODEL="$MODEL" \
+      nohup setsid /home/forge/bin/sol-yolo "$WT" "$BRIEF" "" "$REPORT" \
+      > "$BLOG" 2>&1 </dev/null 9>&- 8>&- 7>&- &
+  fi
+  WRAPPER=$!
+
+  # THE RECEIPT: the wrapper pid is NOT the run. Find the codex CHILD by its `-C`
+  # fence, or — for a resumed session, which takes no `-C` — by its cwd (round-resume
+  # chdirs into the worktree, which is the only fence `codex exec resume` accepts).
+  # 90 s, not 30: a cold codex start behind a slow network has been seen past 30 s,
+  # and the cost of giving up early is an orphan.
+  for _ in $(seq 1 90); do
+    BUILDER_PID=$(codex_leader_in "$WT" "$LAUNCH_EPOCH")
+    [ -n "$BUILDER_PID" ] && break
+    sleep 1
+  done
+  if [ -z "$BUILDER_PID" ]; then
+    say "$(stamp)  builder log head:"; head -c 600 "$BLOG" | tee -a "$LOG"
+    refuse_after_launch "no codex child fenced to $WT after 90 s (wrapper=$WRAPPER, log=$BLOG)"
+  fi
+
+  # -------------------------------------------------------------------------
+  # THE SESSION RECEIPT — read from the run's OWN header, not from what we asked
+  # for. codex 0.153.3 prints `workdir:`, `model:` and `session id:` before the
+  # first turn; `--json` prints `{"type":"thread.started","thread_id":...}` instead,
+  # and both spellings are read here so the capture does not depend on the format.
+  # -------------------------------------------------------------------------
+  hdr_field() {  # hdr_field <label>
+    grep -m1 -E "^[[:space:]]*$1:" "$BLOG" 2>/dev/null | sed -E "s/.*$1:[[:space:]]*//" | tr -d '\r'
+  }
+  SESSION_ID=""
+  for _ in $(seq 1 60); do
+    SESSION_ID=$(hdr_field 'session id')
+    [ -n "$SESSION_ID" ] || SESSION_ID=$(grep -m1 -o '"thread_id":"[^"]*"' "$BLOG" 2>/dev/null | sed -E 's/.*:"([^"]*)"/\1/')
+    [ -n "$SESSION_ID" ] && break
+    kill -0 "$BUILDER_PID" 2>/dev/null || break
+    sleep 1
+  done
+  LOGMODEL=$(hdr_field 'model')
+  LOGROOT=$(hdr_field 'workdir')
+
+  # verify root/model FROM THE EVENTS before authorizing work (Astra). A resumed
+  # session that came back on the wrong root or the wrong model is reaped, not graded.
+  if [ "$RESUME" = 1 ]; then
+    [ -z "$SESSION_ID" ] || [ "$SESSION_ID" = "$SID" ] || \
+      refuse_after_launch "resume-wrong-session: asked to continue $SID, the run reports session $SESSION_ID"
+    [ -z "$LOGROOT" ] || [ "${LOGROOT%/}" = "${WT%/}" ] || \
+      refuse_after_launch "resume-wrong-root: the resumed run reports workdir '$LOGROOT', this round owns '$WT'"
+    case "${LOGMODEL:-}" in
+      ""|"$MODEL"*) : ;;
+      *) refuse_after_launch "resume-wrong-model: asked $MODEL, the resumed run reports '$LOGMODEL'" ;;
+    esac
+  fi
+
+  # write_session <terminal-status> — the persisted continuation record.
+  write_session() {
+    SESSION_ID="$SESSION_ID" WT="$WT" LOGROOT="$LOGROOT" LOGMODEL="$LOGMODEL" MODEL="$MODEL" \
+    INSTR_DIGEST="$INSTR_DIGEST" BRIEF="$BRIEF" NAME="$NAME" STATUS="$1" PREV_STATUS="$PREV_STATUS" \
+    BLOG="$BLOG" RESUME="$RESUME" BUILDER_PID="$BUILDER_PID" \
+    python3 - "$RSTATE" <<'PY'
+import json, os, subprocess, sys, time
+state = sys.argv[1]
+e = os.environ
+def hdr(label):
+    try:
+        for line in open(e["BLOG"], errors="replace"):
+            t = line.strip()
+            if t.lower().startswith(label + ":"):
+                return t.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return ""
+sid = e.get("SESSION_ID", "")
+rec = {
+    "session_id": sid,
+    "worktree": e["WT"],
+    "root": e.get("LOGROOT") or e["WT"],
+    "root_source": "builder log workdir:" if e.get("LOGROOT") else "requested worktree (log carried no workdir:)",
+    "model": e.get("LOGMODEL") or "",
+    "model_requested": e["MODEL"],
+    "model_source": "builder log model:" if e.get("LOGMODEL") else "unverified",
+    "settings": {k: hdr(k) for k in ("provider", "approval", "sandbox", "reasoning effort")},
+    "codex_version": hdr("OpenAI Codex v") or subprocess.run(
+        ["/home/forge/.local/bin/codex", "--version"], capture_output=True, text=True).stdout.strip(),
+    "instruction_digest_sha256": e["INSTR_DIGEST"],
+    "instruction_file": e["BRIEF"],
+    "terminal_status": e["STATUS"],
+    "previous_terminal_status": e["PREV_STATUS"],
+    "resumed": e["RESUME"] == "1",
+    "round": e["NAME"],
+    "builder_pid": e["BUILDER_PID"],
+    "recorded_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+}
+if sid:
+    with open(os.path.join(state, "session.id"), "w") as f:
+        f.write(sid + "\n")
+with open(os.path.join(state, "session.json"), "w") as f:
+    json.dump(rec, f, indent=2, sort_keys=True)
+PY
+  }
+  if [ -n "$SESSION_ID" ]; then
+    write_session running
+    say "$(stamp)  SESSION RECEIPT: session_id=$SESSION_ID root='${LOGROOT:-<not-logged>}' model='${LOGMODEL:-<not-logged>}' instruction_digest=${INSTR_DIGEST:0:16} previous_terminal_status=$PREV_STATUS persisted=$RSTATE/session.id"
+  else
+    say "$(stamp)  WARNING: no session id in $BLOG — this round cannot be resumed (continuation state UNVERIFIED)"
+  fi
+
+  say "START RECEIPT: builder_pid=$BUILDER_PID wrapper=$WRAPPER mode=$([ "$RESUME" = 1 ] && echo resume || echo fresh) session=${SESSION_ID:-none} model=${LOGMODEL:-<not-yet-logged>} log=$BLOG brief=$BRIEF report=$REPORT started=$(stamp)"
+
+  # An interrupt while we wait must NOT silently orphan the builder. It also must not
+  # DESTROY it — the builder is the expensive thing in this routine. So we hand over
+  # the handle instead: print the exact re-attach command and leave the run alone.
+  trap 'say "$(stamp)  interrupted while waiting on builder $BUILDER_PID — it is STILL RUNNING and now unwatched."; say "        re-attach with:  round $WT $FINDINGS $NAME --adopt $BUILDER_PID"; exit 130' INT TERM
+
+  # wait on the CHILD, never on the wrapper, never under an outer `timeout`.
+  deadline=$(( $(date +%s) + MINUTES * 60 ))
+  while kill -0 "$BUILDER_PID" 2>/dev/null; do
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      # the exact pid, never pkill, never an outer `timeout`; then the wrapper, so
+      # a ceiling leaves nothing of ours running.
+      kill "$BUILDER_PID" 2>/dev/null
+      kill "$WRAPPER" 2>/dev/null
+      BUILD=timeout
+      break
+    fi
+    sleep 10
+  done
+  trap - INT TERM
+  BW=$(( $(date +%s) - t ))
+
+  # the model line only appears once codex has started; re-read it now that it has run.
+  LOGMODEL=$(hdr_field 'model')
+  [ -n "$SESSION_ID" ] || SESSION_ID=$(hdr_field 'session id')
+  case "$LOGMODEL" in
+    "$MODEL"*) : ;;
+    "") say "$(stamp)  FAIL: builder log has no 'model:' line ($BLOG)"; BUILD=wrong-model ;;
+    *)  say "$(stamp)  FAIL: wrong model — asked $MODEL, log says '$LOGMODEL'"; BUILD=wrong-model ;;
+  esac
+  [ -n "$SESSION_ID" ] && write_session "$BUILD"
+  step BUILD "$BW" "$BUILD (pid=$BUILDER_PID model='${LOGMODEL:-none}' session=${SESSION_ID:-none} mode=$([ "$RESUME" = 1 ] && echo resume || echo fresh))"
+fi
+
+# ===========================================================================
+# 4. COMMIT CHECK
+# ===========================================================================
+t=$(phase_t0)
+NEW_TIP=$(git -C "$WT" rev-parse HEAD)
+dirty=$(git -C "$WT" status --porcelain --untracked-files=no 2>&1)
+if [ "$NOBUILD" = 1 ]; then
+  step COMMIT_CHECK $(( $(date +%s) - t )) "skipped (--no-build); grading tip ${NEW_TIP:0:8}"
+else
+  if [ "$NEW_TIP" = "$OLD_TIP" ]; then
+    BUILD=nocommit
+    :
+    step COMMIT_CHECK $(( $(date +%s) - t )) "NO COMMIT — tip unchanged at ${OLD_TIP:0:8}"
+  elif [ -n "$dirty" ]; then
+    BUILD=nocommit
+    say "$dirty"
+    step COMMIT_CHECK $(( $(date +%s) - t )) "NO COMMIT — tip moved but tree is dirty"
+  else
+    step COMMIT_CHECK $(( $(date +%s) - t )) "ok ${OLD_TIP:0:8} -> ${NEW_TIP:0:8}, tree clean"
+  fi
+fi
+
+# ===========================================================================
+# 5. GRADE
+# ===========================================================================
+t=$(phase_t0)
+FIXTURE_OWNED=0
+if [ -z "$FIXTURE" ]; then
+  FIXTURE=/var/tmp/forge/plan2/build/round-$NAME-fx
+  FIXTURE_OWNED=1
+fi
+
+# ---------------------------------------------------------------------------
+# THE FIXTURE GETS ITS OWN LEASE, KEYED THE SAME WAY, AND IT IS TAKEN BEFORE THE
+# FIRST MUTATION. The reset two lines below is `git checkout -- . && git clean -fdq
+# src test`: run inside a fixture another round is mid-grade in, it destroys that
+# round's evidence and both rounds report nonsense. Astra: "lock the fixture too …
+# test refusal before resetting a non-owned fixture."
+# ---------------------------------------------------------------------------
+FX_DIGEST=$(printf '%s' "$FIXTURE" | sha256sum | cut -d' ' -f1)
+FXSTATE=$OUT/state/$FX_DIGEST
+mkdir -p "$FXSTATE" || refuse "cannot create fixture state dir $FXSTATE"
+printf '%s\n' "$FIXTURE" > "$FXSTATE/root"
+exec 7>"$FXSTATE/lease" || refuse "cannot open fixture lease $FXSTATE/lease"
+if ! flock -n 7; then
+  fxholder=$(fuser "$FXSTATE/lease" 2>/dev/null | tr -s ' ')
+  refuse "fixture-lease-held: $FIXTURE is owned by another round — lease=$FXSTATE/lease holder_pid(s):${fxholder:- unknown}. NOTHING in the fixture has been reset."
+fi
+if [ "$FIXTURE_OWNED" = 1 ] && [ ! -d "$FIXTURE/.git" ] && [ ! -f "$FIXTURE/.git" ]; then
+  git -C "$CC_SRC" worktree add --detach "$FIXTURE" "$CC_SHA" >>"$LOG" 2>&1 </dev/null \
+    || refuse "cannot create fixture worktree $FIXTURE"
+fi
+[ -d "$FIXTURE" ] || refuse "no such fixture: $FIXTURE"
+
+# reset: tracked back to HEAD, untracked split output removed.  The guard test and
+# .clj-surgeon.edn are untracked, so they are re-laid AFTER the clean, every time.
+git -C "$FIXTURE" checkout -q -- . </dev/null
+git -C "$FIXTURE" clean -fdq src test </dev/null
+cp "$GUARD_TEST" "$FIXTURE/test/cfp_scheduler_killer/view_architecture_test.clj"
+cat > "$FIXTURE/.clj-surgeon.edn" <<EOF
+{:verification-profiles {"split-unit" {:commands [["bin/kaocha" "unit" "--fail-fast"]
+                                                  ["python3" "$CC_ORACLE" "$FIXTURE"]]}}}
+EOF
+
+if [ -z "$REQUEST" ]; then
+  REQUEST=$OUT/$NAME-request.edn
+  sed -E "s#:workspace_root \"[^\"]*\"#:workspace_root \"$FIXTURE\"#" "$BASE_REQUEST" > "$REQUEST"
+fi
+
+FIXTURE_SHA=$(git -C "$FIXTURE" rev-parse HEAD 2>/dev/null)
+REQUEST_SHA=$(sha256sum < "$REQUEST" | cut -d' ' -f1)
+ORACLE_SHA=$(sha256sum < "$CC_ORACLE" | cut -d' ' -f1)
+PAPERCUT_SHA=$(sha256sum < "$PAPERCUT" | cut -d' ' -f1)
+ROUND_SHA=$(sha256sum < "$0" | cut -d' ' -f1)
+GUARD_SHA=$(sha256sum < "$GUARD_TEST" | cut -d' ' -f1)
+
+RECEIPT=$OUT/$NAME-receipt.edn
+if [ -n "$SPLIT_RECEIPT" ]; then
+  [ -f "$SPLIT_RECEIPT" ] || refuse "no such split receipt: $SPLIT_RECEIPT"
+  cp "$SPLIT_RECEIPT" "$RECEIPT"
+  CALL_RC=0
+  CALL_RC_SRC="supplied"
+  say "$(stamp)  split call: NOT RUN — grading the supplied receipt $SPLIT_RECEIPT (--split-receipt)"
+else
+  ( cd "$FIXTURE" && bb --classpath "$WT/src" -m clj-surgeon.core \
+      :op :split-ns! :request-file "$REQUEST" ) > "$RECEIPT" 2>"$OUT/$NAME-receipt.err" </dev/null 9>&- 8>&- 7>&-
+  CALL_RC=$?
+  CALL_RC_SRC="exit"
+fi
+
+# ---------------------------------------------------------------------------
+# THE RECEIPT SCHEMA GATE.  Until B02 this was `grep -o ':state "[^"]*"'` and the
+# round called itself green whenever that word was "committed".
+#
+# `:state "committed"` is a statement about the WRITE. It is not a statement about
+# the checks: the receipt carries a `:checks` vector, and a check in it can hold a
+# non-zero `:exit` while the receipt as a whole still says committed. A grep can
+# never see that, so the gate is now a structural parse (bb + clojure.edn, the
+# receipt's own reader) plus explicit rules:
+#
+#   * `:ok` true, `:committed` true, `:state "committed"`, `:blockers` empty
+#   * `:checks` non-empty, every check `:name` non-empty
+#   * every check `:exit` 0 — with ONE principled exception. Two real checks in this
+#     repo (captured-reference-analysis, candidate-lint-delta) exit 3 because
+#     clj-kondo exits 3 on a repository that already has 108 baseline errors. Those
+#     checks carry their evidence: a `:baseline` map, and for the delta check
+#     `:introduced_errors 0`. So a non-zero exit is accepted ONLY when the receipt
+#     itself supplies `:baseline` AND introduces no errors. A check that merely
+#     SAYS `:status "passed"` over a non-zero exit is a failure, named.
+# ---------------------------------------------------------------------------
+RJSON=$OUT/$NAME-split-receipt.json
+bb -e '(require (quote [cheshire.core :as j])) (println (j/generate-string (clojure.edn/read-string (slurp (first *command-line-args*)))))' \
+   "$RECEIPT" > "$RJSON" 2>"$OUT/$NAME-split-receipt.err" </dev/null 9>&- 8>&- 7>&-
+EDN_RC=$?
+RVARS=$OUT/$NAME-receipt-vars.sh
+python3 - "$RJSON" "$EDN_RC" "$CALL_RC" > "$RVARS" <<'PY'
+import json, shlex, sys
+path, edn_rc, call_rc = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+def emit(k, v): print(f"{k}={shlex.quote(str(v))}")
+r = None
+if edn_rc == 0:
+    try:
+        r = json.load(open(path))
+    except Exception:
+        r = None
+if not isinstance(r, dict):
+    emit("STATE", f"unparseable-receipt(edn_rc={edn_rc},call_rc={call_rc})")
+    emit("IN_CALL", 0); emit("CHECKS_N", 0); emit("CHECKS_OKN", 0)
+    emit("RECEIPT_VERDICT", "FAILED")
+    emit("RECEIPT_REASON", "the split receipt is not readable EDN — a round cannot be graded from a receipt it cannot parse")
+    raise SystemExit
+state = r.get("state") or f"no-state(call_rc={call_rc})"
+emit("STATE", state)
+emit("IN_CALL", int(round(float(r.get("elapsed_ms") or 0))))
+checks = r.get("checks")
+if not isinstance(checks, list):
+    checks = []
+bad = []
+okn = 0
+for n, c in enumerate(checks):
+    if not isinstance(c, dict):
+        bad.append(f"check[{n}] is not a map"); continue
+    name = (c.get("name") or "").strip()
+    if not name:
+        bad.append(f"check[{n}] has no :name"); continue
+    ex = c.get("exit")
+    st = c.get("status")
+    if ex == 0:
+        okn += 1; continue
+    excused = ("baseline" in c) and (c.get("introduced_errors") in (None, 0)) \
+        and (isinstance(c.get("delta"), dict) is False or (c.get("delta") or {}).get("error", 0) == 0)
+    if excused:
+        okn += 1
+        continue
+    bad.append(f"check '{name}' :exit {ex!r} :status {st!r} (no :baseline evidence excusing a non-zero exit)")
+if not checks:
+    bad.append("the receipt carries NO :checks — nothing was verified")
+for key, want in (("ok", True), ("committed", True)):
+    if r.get(key) is not True:
+        bad.append(f":{key} is {r.get(key)!r}, not true")
+if state != "committed":
+    bad.append(f':state is "{state}", not "committed"')
+bl = r.get("blockers")
+if isinstance(bl, list) and bl:
+    bad.append(f":blockers is non-empty ({len(bl)})")
+if call_rc != 0:
+    bad.append(f"the split call itself exited {call_rc}")
+emit("CHECKS_N", len(checks)); emit("CHECKS_OKN", okn)
+emit("RECEIPT_VERDICT", "ok" if not bad else "FAILED")
+emit("RECEIPT_REASON", "; ".join(bad) if bad else
+     f"{okn}/{len(checks)} checks exited 0 (or carry baseline evidence), :ok/:committed true, no blockers")
+PY
+. "$RVARS"
+: "${STATE:=unknown}" "${IN_CALL:=0}" "${CHECKS_N:=0}" "${CHECKS_OKN:=0}" "${RECEIPT_VERDICT:=FAILED}" "${RECEIPT_REASON:=unset}"
+say "$(stamp)  split call: rc=$CALL_RC($CALL_RC_SRC) state=$STATE in_call_ms=$IN_CALL receipt=$RECEIPT parsed=$RJSON"
+say "$(stamp)  receipt schema: $RECEIPT_VERDICT  checks=$CHECKS_OKN/$CHECKS_N  :: $RECEIPT_REASON"
+if [ "$RECEIPT_VERDICT" != ok ]; then
+  say "$(stamp)  RECEIPT CHECK FAILED — \`:state \"$STATE\"\` does NOT make this round green: $RECEIPT_REASON"
+fi
+
+# papercut oracle
+POUT=$OUT/$NAME-papercuts.log
+python3 "$PAPERCUT" "$FIXTURE" > "$POUT" 2>&1 </dev/null 9>&- 8>&- 7>&-
+PAPERCUT_RC=$?
+PAPERCUTS=$(grep -m1 '^PAPERCUTS:' "$POUT" | awk '{print $2}')
+[ -n "$PAPERCUTS" ] || PAPERCUTS=ERR
+say "$(stamp)  PAPERCUTS: $PAPERCUTS (rc=$PAPERCUT_RC)   (full report: $POUT)"
+# the non-advisory rows with count > 0, from the oracle's own table
+awk '$NF=="yes" && $(NF-2)+0 > 0 {printf "        papercut row: %s = %s %s\n", $1, $(NF-2), $(NF-1)}' "$POUT" | tee -a "$LOG"
+
+# the four fixture oracles — each one's EXIT is now recorded, not just its verdict
+O1=fail O2=fail O3=fail O4=fail
+[ ! -e "$FIXTURE/src/cfp_scheduler_killer/views.clj" ] && O1=pass
+python3 "$CC_ORACLE" "$FIXTURE" > "$OUT/$NAME-cc-oracle.log" 2>&1 </dev/null 9>&- 8>&- 7>&-
+CC_ORACLE_RC=$?
+grep -q '^PASS:' "$OUT/$NAME-cc-oracle.log" && O2=pass
+# the unit suite ran INSIDE the call. `committed` alone is NOT the evidence for that
+# any more — the receipt schema gate above is, and O3 is now bound to it.
+case "$STATE" in committed*) [ "$RECEIPT_VERDICT" = ok ] && O3=pass ;; esac
+( cd "$FIXTURE" && bin/kaocha unit --focus cfp-scheduler-killer.view-architecture-test ) \
+  > "$OUT/$NAME-guard.log" 2>&1 </dev/null 9>&- 8>&- 7>&-
+GUARD_RC=$?
+grep -qE '7 assertions, 0 failures' "$OUT/$NAME-guard.log" && O4=pass
+ORACLES=0
+for o in "$O1" "$O2" "$O3" "$O4"; do [ "$o" = pass ] && ORACLES=$((ORACLES+1)); done
+say "$(stamp)  oracles: views.clj-gone=$O1 cc-oracle=$O2(rc=$CC_ORACLE_RC) unit-suite-in-call=$O3 arch-guard-7/7=$O4(rc=$GUARD_RC)  => $ORACLES/4"
+say "$(stamp)  candidate binding: tip=${NEW_TIP:0:12} fixture=${FIXTURE_SHA:0:12} request_sha256=${REQUEST_SHA:0:16} cc_oracle_sha256=${ORACLE_SHA:0:16} papercut_sha256=${PAPERCUT_SHA:0:16} guard_sha256=${GUARD_SHA:0:16} round_sha256=${ROUND_SHA:0:16}"
+step GRADE $(( $(date +%s) - t )) "state=$STATE in_call=${IN_CALL}ms PAPERCUTS=$PAPERCUTS oracles=$ORACLES/4 receipt_checks=$RECEIPT_VERDICT($CHECKS_OKN/$CHECKS_N)"
+
+# ===========================================================================
+# 6. WITNESSES — the namespace-split test namespaces, cold but FOCUSED.
+# The lane aliases concatenate their :main-opts, so `--ns` must go through
+# :clj-surgeon/test-deps, which carries the deps and names no entry point.
+# Measured cheapest correct invocation: ~8 s for all three namespaces.
+# ===========================================================================
+t=$(phase_t0)
+WLOG=$OUT/$NAME-witnesses.log
+( cd "$WT" && clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-deps \
+    -m clj-surgeon.mcp-test-runner --ns \
+    clj-surgeon.namespace-split-test \
+    clj-surgeon.mcp-namespace-split-test \
+    clj-surgeon.namespace-split-warm-test ) > "$WLOG" 2>&1 </dev/null 9>&- 8>&- 7>&-
+WRC=$?
+WLINE=$(grep -m1 -E '^Ran [0-9]+ tests' "$WLOG")
+WT_TESTS=$(echo "$WLINE" | awk '{print $2}'); WT_ASSERTS=$(echo "$WLINE" | awk '{print $5}')
+WFAIL=$(grep -m1 -E '^[0-9]+ failures, [0-9]+ errors' "$WLOG")
+WT_FAILS=$(echo "$WFAIL" | awk '{print $1}'); WT_ERRS=$(echo "$WFAIL" | awk '{print $3}')
+: "${WT_TESTS:=?}" "${WT_ASSERTS:=?}" "${WT_FAILS:=?}" "${WT_ERRS:=?}"
+step WITNESSES $(( $(date +%s) - t )) "rc=$WRC ${WT_TESTS}t/${WT_ASSERTS}a/${WT_FAILS}f/${WT_ERRS}e ($WLOG)"
+
+# ===========================================================================
+# 7. INTENT_AUDIT — the linked-intent ratchet (Gene: "use LID skill to help
+# ensure integrity").  Two independent questions, because they fail differently:
+#
+#   (a) IS THE REPOSITORY'S INTENT CONTRACT INTACT?  Exactly the audit ~/bin/land
+#       runs before it will push, so a round cannot bless a tip that the landing
+#       gate would then refuse.  A red audit is a hard stop.
+#
+#   (b) DID THIS ROUND'S OWN COMMITS REGISTER A PROMISE?  A source change that
+#       adds no INTENT:/INTENT-TEST: marker is a fix with nothing holding it in
+#       place — the exact way a load-bearing promise evaporates in the next
+#       refactor.  `intents=UNLINKED-CHANGE` and a non-zero exit.  This can only
+#       be asked when a builder actually committed, so --no-build and NO COMMIT
+#       report n/a rather than inventing a verdict.
+# ===========================================================================
+t=$(phase_t0)
+ALOG=$OUT/$NAME-intent-audit.log
+( cd "$WT" && clojure -M -e "(require 'clj-surgeon.mcp-intent-contract)(prn (select-keys (clj-surgeon.mcp-intent-contract/audit-current-repository) [:ok :violations]))" ) \
+  > "$ALOG" 2>&1 </dev/null 9>&- 8>&- 7>&-
+AUDIT_RC=$?
+if grep -q ':ok true' "$ALOG"; then AUDIT_OK=true; elif grep -q ':ok false' "$ALOG"; then AUDIT_OK=false; else AUDIT_OK=unknown; fi
+# `:violations` is an EDN VECTOR of maps, so the count is the number of maps at
+# depth 1 inside it — not a `{`-count over the whole line, which nested maps would
+# inflate. An unparseable audit reports `?`, never a comforting 0.
+VIOLATIONS=$(python3 - "$ALOG" <<'EOF'
+import re,sys
+t=open(sys.argv[1]).read()
+i=t.find(':violations')
+if i<0: print('?'); raise SystemExit
+j=t.find('[',i)
+if j<0: print('?'); raise SystemExit
+d=0;n=0;k=j
+while k<len(t):
+    c=t[k]
+    if c=='[':
+        d+=1
+    elif c==']':
+        d-=1
+        if d==0: break
+    elif c=='{' and d==1:
+        n+=1; b=1; k+=1
+        while k<len(t) and b:
+            if t[k]=='{': b+=1
+            elif t[k]=='}': b-=1
+            k+=1
+        continue
+    k+=1
+print(n)
+EOF
+)
+[ -n "$VIOLATIONS" ] || VIOLATIONS='?'
+say "$(stamp)  intent audit: $(tail -1 "$ALOG" | cut -c1-300)"
+
+# (b) markers added by THIS round's commits.
+#
+# COUNT EVERY SPELLING, NOT ONE. `INTENT:`/`INTENT-TEST:` are real in this repo
+# (17 src / 22 test occurrences) but they are NOT what the contract enforces:
+# mcp_intent_contract.clj scans for `@spec <ID>` — 1520 in src, 1868 in test — and
+# the builder brief tells rounds to link with `NS-SPLIT-0xx`, which lands as @spec.
+# A rule keyed on one spelling would fail a properly-linked round and teach everyone
+# to ignore it. So all three are counted, and UNLINKED-CHANGE requires ZERO of ALL.
+# (A source-scanning check still cannot see a link expressed some other way — the
+# audit above is the behavioural authority; this is the cheap adjunct.)
+SPEC_RE='^\+.*@spec[[:space:]]+(MCP-OP-[A-Z0-9-]+|[A-Z][A-Z0-9-]*-[0-9]{3}[a-z]?)'
+NEW_INTENT=n/a; NEW_INTENT_TEST=n/a; NEW_SPEC=n/a; MARKERS=n/a; UNLINKED=no
+if [ "$NOBUILD" != 1 ] && [ "$NEW_TIP" != "$OLD_TIP" ]; then
+  DIFF=$(git -C "$WT" diff "$OLD_TIP".."$NEW_TIP" 2>/dev/null)
+  NEW_INTENT=$(printf '%s\n' "$DIFF" | grep -cE '^\+.*INTENT:')
+  NEW_INTENT_TEST=$(printf '%s\n' "$DIFF" | grep -cE '^\+.*INTENT-TEST:')
+  NEW_SPEC=$(printf '%s\n' "$DIFF" | grep -cE "$SPEC_RE")
+  MARKERS="$NEW_INTENT/$NEW_INTENT_TEST"
+  if ! git -C "$WT" diff --quiet "$OLD_TIP".."$NEW_TIP" -- src 2>/dev/null; then
+    if [ "$NEW_INTENT" = 0 ] && [ "$NEW_INTENT_TEST" = 0 ] && [ "$NEW_SPEC" = 0 ]; then
+      UNLINKED=yes
+      say "$(stamp)  UNLINKED-CHANGE: src changed between ${OLD_TIP:0:8} and ${NEW_TIP:0:8} but the commits register NO promise — 0 INTENT:, 0 INTENT-TEST:, 0 @spec <ID>. A fix without a linked intent is not done."
+    fi
+  fi
+fi
+say "$(stamp)  new_intent_markers=$MARKERS  new_spec_markers=$NEW_SPEC  (lines added by this round)"
+
+if [ "$UNLINKED" = yes ]; then INTENTS=UNLINKED-CHANGE
+elif [ "$AUDIT_OK" = true ]; then INTENTS=ok
+else INTENTS=$VIOLATIONS
+fi
+step INTENT_AUDIT $(( $(date +%s) - t )) "ok=$AUDIT_OK violations=$VIOLATIONS rc=$AUDIT_RC new_intent_markers=$MARKERS new_spec_markers=$NEW_SPEC ($ALOG)"
+say "INTENT_AUDIT $(( $(date +%s) - t ))s :: ok=$AUDIT_OK violations=$VIOLATIONS"
+
+# ===========================================================================
+# 8. RECEIPT
+# ===========================================================================
+TOTAL=$(( $(date +%s) - T0 ))
+
+# ---------------------------------------------------------------------------
+# EXITS — every command whose success this round's verdict depends on, named with
+# its own status. Astra: "required successful command exits including builder /
+# CALL_RC / WRC / oracles". Before B02 only WRC and CALL_RC were captured and
+# NEITHER could fail the round: a witness runner that died before its first
+# assertion left `witnesses=?/?/?` and the round still asked only whether
+# PAPERCUTS was 0.
+# ---------------------------------------------------------------------------
+: "${CALL_RC:=?}" "${CALL_RC_SRC:=none}" "${WRC:=?}" "${AUDIT_RC:=?}" \
+  "${PAPERCUT_RC:=?}" "${CC_ORACLE_RC:=?}" "${GUARD_RC:=?}" \
+  "${RECEIPT_VERDICT:=FAILED}" "${RECEIPT_REASON:=no receipt was parsed}" \
+  "${CHECKS_N:=0}" "${CHECKS_OKN:=0}" "${SESSION_ID:=}" "${INSTR_DIGEST:=}" \
+  "${FIXTURE_SHA:=}" "${REQUEST_SHA:=}" "${ORACLE_SHA:=}" "${PAPERCUT_SHA:=}" \
+  "${GUARD_SHA:=}" "${ROUND_SHA:=}" "${FXSTATE:=}" "${STATE:=unknown}" \
+  "${RJSON:=}" "${LOGMODEL:=}" "${O1:=?}" "${O2:=?}" "${O3:=?}" "${O4:=?}"
+EXITS_BAD=""
+add_bad() { EXITS_BAD="$EXITS_BAD${EXITS_BAD:+,}$1"; }
+[ "$CALL_RC" = 0 ] || add_bad "split_call=$CALL_RC"
+[ "$WRC" = 0 ] || add_bad "witnesses=$WRC"
+[ "$AUDIT_RC" = 0 ] || add_bad "intent_audit=$AUDIT_RC"
+[ "$PAPERCUT_RC" = 0 ] || add_bad "papercut_oracle=$PAPERCUT_RC"
+[ "$CC_ORACLE_RC" = 0 ] || add_bad "cc_oracle=$CC_ORACLE_RC"
+[ "$GUARD_RC" = 0 ] || add_bad "arch_guard=$GUARD_RC"
+EXITS=${EXITS_BAD:-ok}
+
+say ""
+say "  $(printf '%-14s %8s  %s' PHASE 'WALL s' RESULT)"
+say "  ------------------------------------------------------------------"
+for p in "${PHASES[@]}"; do
+  say "  $(printf '%-14s %8s  %s' "${p%%|*}" "$(echo "$p" | cut -d'|' -f2)" "$(echo "$p" | cut -d'|' -f3-)")"
+done
+say "  ------------------------------------------------------------------"
+say "  $(printf '%-14s %8s' TOTAL "$TOTAL")"
+say ""
+
+RC=0
+case "$BUILD" in ok) : ;; *) RC=1 ;; esac
+case "$STATE" in committed*) : ;; *) RC=1 ;; esac
+[ "$PAPERCUTS" = 0 ] || RC=1
+[ "$ORACLES" = 4 ] || RC=1
+[ "$WT_FAILS" = 0 ] && [ "$WT_ERRS" = 0 ] || RC=1
+# a red intent contract, or a source change with no registered promise, is a
+# failed round — a fix without a linked intent is not done.
+[ "$AUDIT_OK" = true ] || RC=1
+[ "$UNLINKED" = no ] || RC=1
+# `:state "committed"` NEVER implies green on its own: the receipt's own checks and
+# every command exit this verdict rests on have to be clean too.
+[ "$RECEIPT_VERDICT" = ok ] || RC=1
+[ "$EXITS" = ok ] || RC=1
+VERDICT=GREEN; [ "$RC" = 0 ] || VERDICT=RED
+
+LINE="ROUND $NAME: tip ${OLD_TIP:0:8}→${NEW_TIP:0:8} build=$BUILD state=$STATE in_call=${IN_CALL}ms PAPERCUTS=$PAPERCUTS oracles=$ORACLES/4 witnesses=${WT_TESTS}/${WT_ASSERTS}/${WT_FAILS} intents=$INTENTS new_intent_markers=$MARKERS new_spec_markers=$NEW_SPEC total=${TOTAL}s receipt_checks=$RECEIPT_VERDICT($CHECKS_OKN/$CHECKS_N) exits=$EXITS session=${SESSION_ID:-none} lease=$LOCKF verdict=$VERDICT receipt_json=$RECEIPT_JSON"
+say "$LINE"
+printf '%s  %s\n' "$(stamp)" "$LINE" >> "$LEDGER"
+[ "$RECEIPT_VERDICT" = ok ] || say "$(stamp)  RED because the split receipt did not survive its own schema gate: $RECEIPT_REASON"
+[ "$EXITS" = ok ] || say "$(stamp)  RED because a command this verdict rests on exited non-zero: $EXITS"
+
+# ---------------------------------------------------------------------------
+# THE MACHINE RECEIPT — one JSON per round, written ONCE (O_EXCL), bound to the
+# exact candidate it graded: tip sha, fixture sha, request sha256, oracle script
+# sha256, round-script sha256. The ledger line is for a human; this is the record
+# a later comparison can be held to. Refusing to overwrite is the point: two runs
+# called `smoke` must never silently become one.
+# ---------------------------------------------------------------------------
+if [ -e "$RECEIPT_JSON" ]; then
+  say "$(stamp)  REFUSING to overwrite $RECEIPT_JSON — a round receipt is immutable; this round's record is in $LOG only"
+else
+  NAME="$NAME" WT="$WT" BRANCH="$BRANCH" OLD_TIP="$OLD_TIP" NEW_TIP="$NEW_TIP" \
+  FIXTURE="$FIXTURE" FIXTURE_SHA="$FIXTURE_SHA" REQUEST="${REQUEST:-}" REQUEST_SHA="$REQUEST_SHA" \
+  ORACLE_SHA="$ORACLE_SHA" PAPERCUT_SHA="$PAPERCUT_SHA" GUARD_SHA="$GUARD_SHA" ROUND_SHA="$ROUND_SHA" \
+  MODEL="$MODEL" LOGMODEL="$LOGMODEL" BUILD="$BUILD" SPLIT_STATE="$STATE" IN_CALL="$IN_CALL" \
+  PAPERCUTS="$PAPERCUTS" ORACLES="$ORACLES" O1="$O1" O2="$O2" O3="$O3" O4="$O4" \
+  WT_TESTS="$WT_TESTS" WT_ASSERTS="$WT_ASSERTS" WT_FAILS="$WT_FAILS" WT_ERRS="$WT_ERRS" \
+  INTENTS="$INTENTS" AUDIT_OK="$AUDIT_OK" VIOLATIONS="$VIOLATIONS" UNLINKED="$UNLINKED" \
+  MARKERS="$MARKERS" NEW_SPEC="$NEW_SPEC" TOTAL="$TOTAL" RC="$RC" VERDICT="$VERDICT" \
+  CALL_RC="$CALL_RC" CALL_RC_SRC="$CALL_RC_SRC" WRC="$WRC" AUDIT_RC="$AUDIT_RC" \
+  PAPERCUT_RC="$PAPERCUT_RC" CC_ORACLE_RC="$CC_ORACLE_RC" GUARD_RC="$GUARD_RC" EXITS="$EXITS" \
+  RECEIPT_VERDICT="$RECEIPT_VERDICT" RECEIPT_REASON="$RECEIPT_REASON" \
+  CHECKS_N="$CHECKS_N" CHECKS_OKN="$CHECKS_OKN" SESSION_ID="$SESSION_ID" \
+  INSTR_DIGEST="$INSTR_DIGEST" PREV_STATUS="$PREV_STATUS" RESUME="$RESUME" \
+  LOCKF="$LOCKF" RSTATE="$RSTATE" FXSTATE="$FXSTATE" LOGFILE="$LOG" \
+  SPLIT_RECEIPT_EDN="${RECEIPT:-}" SPLIT_RECEIPT_JSON="$RJSON" \
+  PHASES_STR="$(printf '%s\n' "${PHASES[@]}")" \
+  python3 - "$RECEIPT_JSON" <<'PY'
+import json, os, sys, time
+e = os.environ
+def num(k):
+    try: return int(e.get(k, ""))
+    except Exception: return e.get(k, "")
+phases = []
+for row in e["PHASES_STR"].splitlines():
+    if not row.strip():
+        continue
+    parts = row.split("|", 2)
+    if len(parts) == 3:
+        wall = int(parts[1]) if parts[1].lstrip("-").isdigit() else parts[1]
+        phases.append({"phase": parts[0], "wall_s": wall, "result": parts[2]})
+rec = {
+  "schema": "round-receipt/1",
+  "round": e["NAME"],
+  "written_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+  "verdict": e["VERDICT"],
+  "exit_code": num("RC"),
+  "candidate": {
+    "worktree": e["WT"], "branch": e["BRANCH"],
+    "tip_before": e["OLD_TIP"], "tip_after": e["NEW_TIP"],
+    "fixture": e["FIXTURE"], "fixture_sha": e["FIXTURE_SHA"],
+    "request_file": e["REQUEST"], "request_sha256": e["REQUEST_SHA"],
+    "cc_oracle_sha256": e["ORACLE_SHA"], "papercut_oracle_sha256": e["PAPERCUT_SHA"],
+    "arch_guard_sha256": e["GUARD_SHA"], "round_script_sha256": e["ROUND_SHA"],
+    "split_receipt_edn": e["SPLIT_RECEIPT_EDN"], "split_receipt_json": e["SPLIT_RECEIPT_JSON"],
+  },
+  "builder": {
+    "model_requested": e["MODEL"], "model_from_log": e["LOGMODEL"] or None,
+    "status": e["BUILD"], "session_id": e["SESSION_ID"] or None,
+    "resumed": e["RESUME"] == "1", "previous_terminal_status": e["PREV_STATUS"],
+    "instruction_digest_sha256": e["INSTR_DIGEST"] or None,
+  },
+  "lease": {"worktree_lease": e["LOCKF"], "state_dir": e["RSTATE"],
+            "fixture_state_dir": e["FXSTATE"], "inside_worktree": False},
+  "receipt_schema": {
+    "verdict": e["RECEIPT_VERDICT"], "reason": e["RECEIPT_REASON"],
+    "checks_total": num("CHECKS_N"), "checks_green": num("CHECKS_OKN"),
+    "split_state": e["SPLIT_STATE"], "in_call_ms": num("IN_CALL"),
+  },
+  "exits": {
+    "aggregate": e["EXITS"],
+    "split_call": {"rc": e["CALL_RC"], "source": e["CALL_RC_SRC"]},
+    "witness_runner": e["WRC"], "intent_audit": e["AUDIT_RC"],
+    "papercut_oracle": e["PAPERCUT_RC"], "cc_oracle": e["CC_ORACLE_RC"],
+    "arch_guard": e["GUARD_RC"],
+  },
+  "oracles": {"count": num("ORACLES"), "views_clj_gone": e["O1"], "cc_oracle": e["O2"],
+              "unit_suite_in_call": e["O3"], "arch_guard_7_of_7": e["O4"],
+              "papercuts": e["PAPERCUTS"]},
+  "witnesses": {"tests": e["WT_TESTS"], "assertions": e["WT_ASSERTS"],
+                "failures": e["WT_FAILS"], "errors": e["WT_ERRS"]},
+  "intents": {"verdict": e["INTENTS"], "audit_ok": e["AUDIT_OK"],
+              "violations": e["VIOLATIONS"], "unlinked_change": e["UNLINKED"],
+              "new_intent_markers": e["MARKERS"], "new_spec_markers": e["NEW_SPEC"]},
+  "phases": phases,
+  "total_wall_s": num("TOTAL"),
+  "log": e["LOGFILE"],
+}
+path = sys.argv[1]
+fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)   # immutable by construction
+with os.fdopen(fd, "w") as f:
+    json.dump(rec, f, indent=2, sort_keys=True)
+PY
+  say "$(stamp)  receipt: $RECEIPT_JSON"
+fi
+
+say "$(stamp)  exit $RC   (log: $LOG, ledger: $LEDGER, receipt: $RECEIPT_JSON)"
+exit $RC
