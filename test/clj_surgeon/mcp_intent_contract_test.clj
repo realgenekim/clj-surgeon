@@ -385,6 +385,7 @@
    in the WITNESS, never in the production registry, which is what the ratchet was for."
   ["docs/intent/2026-08-29-ratification/measurement-evidence-specs.md"
    "docs/intent/2026-08-30-prepared-request-ratification/prepared-request-specs.md"
+   "docs/intent/agent-routing/agent-routing-specs.md"
    "docs/intent/alias-migration/alias-migration-specs.md"
    "docs/intent/feature-thread/feature-thread-specs.md"
    "docs/intent/helper-extraction/helper-extraction-specs.md"
@@ -456,9 +457,10 @@
     ;; Audit ledger: 165 original non-MCP rows, plus the repaired telemetry row.
     ;; NS-SPLIT-028..030 and 032..033 add five reachable EARS promises with direct witnesses.
     ;; B01 registers NS-SPLIT-034..036; historical IDs remain in the census.
-    (is (= 193 (count non-mcp)))
+    ;; B03 adds the suspension, exact split admission and plate parity promises.
+    (is (= 196 (count non-mcp)))
     (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 19
-            "MEASURE-" 4 "TELEMETRY-EVENTS-" 1}
+            "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3}
            (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"
-                                  "MEASURE-" "TELEMETRY-EVENTS-"]]
+                                  "MEASURE-" "TELEMETRY-EVENTS-" "ROUTING-"]]
                       [prefix (count (filter #(str/starts-with? % prefix) non-mcp))]))))))
