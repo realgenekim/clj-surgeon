@@ -3,17 +3,18 @@
 Gene, verbatim (2026-09-08): "Take each move, highest vs native first, and make it perfect -- replicate fast clojure feedback loops, replicate amazing way you've hardened the 10x win. Write this into a todo file or tech tree or something, so you can use it to keep track: phases: rough, friction-[high/medium/low], perfect. loop until all the winning rows are perfect."
 
 ## Phase gates (a row moves up only when every gate is met, with a receipt)
+**Integrity spine (Gene, 2026-09-08: "use LID skill to help ensure integrity"):** at every phase from friction-high up, each fix registers a linked intent (stable id, EARS text) with an `INTENT:`/`INTENT-TEST:` marker pair and a fail-first witness; the repo's intent audit (`clj-surgeon.mcp-intent-contract/audit-current`, the same check `~/bin/land` runs) is green in every round receipt; the unlinked-spec debt ledger only shrinks. A row cannot pass friction-medium with an unregistered fix, and cannot be perfect with any open debt for its verb.
 - **rough** — one witnessed win vs a native control, n ≤ 2; no oracle.
-- **friction-high** — paper-cut oracle exists for the output; friction ledger (inbox items with receipts + triggers) open items > 5; rounds run through `~/bin/round`.
-- **friction-medium** — oracle 0 on the fixture; reviewer GO; landed on trunk; open items < 5; in-call wall decomposed (analysis / write / probe / proof).
+- **friction-high** — paper-cut oracle exists for the output; every fix carries a linked intent + witness; friction ledger (inbox items with receipts + triggers) open items > 5; rounds run through `~/bin/round`.
+- **friction-medium** — oracle 0 on the fixture; intent audit green; reviewer GO; landed on trunk; open items < 5; in-call wall decomposed (analysis / write / probe / proof).
 - **friction-low** — routed class under "strictly better, or native" (witnessed contract, complete receipt path, kill switch); second consecutive rerun clears the killer threshold; cold-start pilot (4 cells) passes.
-- **perfect** — two consecutive complete cold-start cohorts pass (Astra's criterion, zero forbidden events, zero operator intervention); apparatus share of the caller's actions < 50%; no hand step anywhere in fix → grade → review → land; doctrine + prompt plate installed and verified on every seat; a month of dogfood without a regression.
+- **perfect** — intent debt for the verb = 0; two consecutive complete cold-start cohorts pass (Astra's criterion, zero forbidden events, zero operator intervention); apparatus share of the caller's actions < 50%; no hand step anywhere in fix → grade → review → land; doctrine + prompt plate installed and verified on every seat; a month of dogfood without a regression.
 
 ## The ladder every row climbs (the method that hardened the split)
 1. Native control measured first (matched fixture, process stamps, four oracles) — the meter.
 2. Whole-intent verb: the plan as data, one call, proof inside the call, undo receipt.
 3. Paper-cut oracle over the output (seconds); reviewer probes become red witnesses in the repo.
-4. Rounds via `~/bin/round`: builder in the warm image → grade → witnesses → one receipt; LLM review + landing once per batch.
+4. Rounds via `~/bin/round`: builder in the warm image → grade → witnesses (incl. the intent audit) → one receipt; LLM review + landing once per batch.
 5. Timing rerun on the clean tip (never wait on review); land via `~/bin/land` after battery receipt.
 6. Cold-start pilot with the skill (fresh agents, W/Ø), counterexamples by owner, fix, repeat.
 
