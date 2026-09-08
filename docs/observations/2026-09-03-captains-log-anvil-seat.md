@@ -3573,3 +3573,5 @@ The wrapper exited at ~4 min with no report; the codex child was alive and worki
 ## 2026-09-08T01:22Z — Gene: "How can it take this long???" — answer, and the change
 
 Machine time per loop iteration is 11 s; the clock went to the SERIAL chain (each Astra run ~5 min re-orientation before its first iteration; each Sol review 15–20 min of probes + cold suite; build → review → build → review), plus my wrapper-pid error (one aborted run, ~15 min). Change: (1) the timing cohort no longer waits on round 4 — round 3 (38ecea11) scores PAPERCUTS 0 on this fixture and Sol's open defect (nested form at the old column) is a case this fixture does not contain, so wave 4 (D5/D6 CLI, M5/M6 MCP on a pinned worktree clj-surgeon-r3 + its own 7907) launched 2026-09-08T01:22Z against the OLD native controls, no native rerun; (2) Sol's negatives become oracle witnesses inside the loop so the review stops discovering them afterwards.
+
+## 2026-09-08T01:24Z — wave 4: round-3 verb 79–92 s (median 80 s), 0 paper cuts, 4/4 correct, vs old native 408/486 s (÷5.6) — second consecutive rerun clears Astra's killer threshold

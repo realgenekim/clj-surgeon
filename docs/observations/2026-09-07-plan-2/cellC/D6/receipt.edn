@@ -1,0 +1,161 @@
+{:state "committed",
+ :blockers [],
+ :checks
+ [{:name "captured-reference-analysis",
+   :exit 3,
+   :duration_ms 4096.712704,
+   :status "baseline",
+   :baseline {:error 108, :warning 195, :info 5},
+   :note
+   "Non-zero exit is pre-mutation baseline lint, not split damage; candidate delta is checked separately."}
+  {:name "future-source-parse",
+   :exit 0,
+   :duration_ms 33.339616,
+   :status "passed"}
+  {:baseline {:error 108, :warning 195, :info 5},
+   :exit 3,
+   :duration_ms 4158.711266,
+   :name "candidate-lint-delta",
+   :note
+   "Non-zero exit is baseline lint, not split damage; no new error findings.",
+   :status "passed",
+   :introduced_errors 0,
+   :delta {:error 0, :warning 0, :info 0},
+   :post {:error 108, :warning 195, :info 5}}
+  {:name "kaocha unit",
+   :profile "split-unit",
+   :command
+   ["/home/forge/src/cc-split-D6/bin/kaocha" "unit" "--fail-fast"],
+   :exit 0,
+   :duration_ms 24407.06421,
+   :status "passed"}
+  {:name "cc-oracle.py",
+   :profile "split-unit",
+   :command
+   ["/usr/bin/python3"
+    "/var/tmp/forge/plan2/cellC/cc-oracle.py"
+    "/home/forge/src/cc-split-D6"],
+   :exit 0,
+   :duration_ms 40.578833,
+   :status "passed"}
+  {:name "verified-snapshot-guard",
+   :exit 0,
+   :duration_ms 11.984616,
+   :status "passed"}],
+ :committed true,
+ :counts
+ {:destinations 20,
+  :forms 141,
+  :caller_files 5,
+  :caller_sites 87,
+  :files 26},
+ :coverage
+ {:roots ["src" "test"],
+  :reference_authority
+  "clj-kondo captured snapshot plus structural quoted-Var supplement",
+  :dynamic_references "not claimed"},
+ :destination_libs
+ ["cfp-scheduler-killer.views.auth"
+  "cfp-scheduler-killer.views.avatar"
+  "cfp-scheduler-killer.views.committee"
+  "cfp-scheduler-killer.views.communications"
+  "cfp-scheduler-killer.views.dashboard"
+  "cfp-scheduler-killer.views.event-setup"
+  "cfp-scheduler-killer.views.form-builder"
+  "cfp-scheduler-killer.views.form-controls"
+  "cfp-scheduler-killer.views.format"
+  "cfp-scheduler-killer.views.integrations"
+  "cfp-scheduler-killer.views.live-drafts"
+  "cfp-scheduler-killer.views.log"
+  "cfp-scheduler-killer.views.organizer-layout"
+  "cfp-scheduler-killer.views.people"
+  "cfp-scheduler-killer.views.portal"
+  "cfp-scheduler-killer.views.public-cfp"
+  "cfp-scheduler-killer.views.replay"
+  "cfp-scheduler-killer.views.review"
+  "cfp-scheduler-killer.views.schedule"
+  "cfp-scheduler-killer.views.shell"],
+ :details_path
+ "/var/tmp/forge/namespace-split-receipts/4785d0ac-2c90-40ca-8ef1-26d7ae33c618-details.edn",
+ :elapsed_ms 38153.398584,
+ :graph {:acyclic true, :unknown_count 0, :edge_count 540},
+ :map_hash
+ "b3ac9adc5a060e6c080db9e4b8cb1d21fde589f9dbcc06036c97b3eea588b818",
+ :mutation_attempted true,
+ :next_call nil,
+ :ok true,
+ :operation "namespace_split",
+ :promotions
+ [{:form "answer-input",
+   :lib "cfp-scheduler-killer.views.form-controls",
+   :reason "referenced across destination boundary",
+   :reference_count 6}
+  {:form "datastar-script",
+   :lib "cfp-scheduler-killer.views.shell",
+   :reason "referenced across destination boundary",
+   :reference_count 2}
+  {:form "field-error",
+   :lib "cfp-scheduler-killer.views.form-controls",
+   :reason "referenced across destination boundary",
+   :reference_count 7}
+  {:form "field-errors",
+   :lib "cfp-scheduler-killer.views.form-controls",
+   :reason "referenced across destination boundary",
+   :reference_count 15}
+  {:form "header",
+   :lib "cfp-scheduler-killer.views.organizer-layout",
+   :reason "referenced across destination boundary",
+   :reference_count 17}
+  {:form "initials",
+   :lib "cfp-scheduler-killer.views.avatar",
+   :reason "referenced across destination boundary",
+   :reference_count 1}
+  {:form "not-blank",
+   :lib "cfp-scheduler-killer.views.format",
+   :reason "referenced across destination boundary",
+   :reference_count 41}
+  {:form "req-mark",
+   :lib "cfp-scheduler-killer.views.form-controls",
+   :reason "referenced across destination boundary",
+   :reference_count 6}],
+ :proof_pending [],
+ :prose_mentions
+ [{:file "src/cfp_scheduler_killer/server.clj",
+   :line 442,
+   :text
+   "   `views/event-marquee` the page was first painted with, pushed down THIS"}
+  {:file "src/cfp_scheduler_killer/server.clj",
+   :line 1772,
+   :text
+   "  \"Everything `views/form-builder-page` needs. `extra` carries the state of a"}
+  {:file "test/cfp_scheduler_killer/replay_test.clj",
+   :line 286,
+   :text
+   "    ;; views/dev-strip) on 2026-08-09; the log page still carries it always."}],
+ :receipt_hash
+ "4de3d815adf00695fa2ba25cc051cf24211a121c87e204a5286634622b3b7f0c",
+ :snapshot_hash
+ "43b15c857ebcc69b0a4bb8c051d13a319b6eed823a6330a382191e1bb762f938",
+ :source_retired true,
+ :undo_command
+ ["clj-surgeon"
+  ":op"
+  ":undo-extract!"
+  ":receipt"
+  "/var/tmp/forge/namespace-split-receipts/4785d0ac-2c90-40ca-8ef1-26d7ae33c618-undo.edn"],
+ :undo_receipt
+ "/var/tmp/forge/namespace-split-receipts/4785d0ac-2c90-40ca-8ef1-26d7ae33c618-undo.edn",
+ :unrequired_qualified_refs
+ [{:file "src/cfp_scheduler_killer/views/dashboard.clj",
+   :line 44,
+   :token "cfp-scheduler-killer.store/now-inst",
+   :lib "cfp-scheduler-killer.store"}
+  {:file "src/cfp_scheduler_killer/views/public_cfp.clj",
+   :line 119,
+   :token "markdown.core/md-to-html-string",
+   :lib "markdown.core"}
+  {:file "src/cfp_scheduler_killer/views/review.clj",
+   :line 421,
+   :token "cfp-scheduler-killer.store/now-inst",
+   :lib "cfp-scheduler-killer.store"}],
+ :verification_complete true}

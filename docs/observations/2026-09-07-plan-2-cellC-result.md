@@ -38,3 +38,18 @@ Conditions: R5/R6 on split/base2 (4f6283aa = d9205abc + `make nrepl` composing :
 Verb medians: wave 1 78 s → wave 3 102 s (six-concurrent, +5 s lint-delta check, caller reporting inside the clock on D3). Still ÷4.4 native. REPL with a warm JVM: 513/554 vs native 408/486 — the JVM start was NOT what held the REPL arms back; planning (254/279 s) and emission are. Paper cuts confirmed fixed by D3: requires merged in sorted position with the host's 3-space indent, 3 prose-mention advisory rows emitted, lint-delta baseline-relative (introduced_errors 0, +4 warnings), kondo capture row labelled baseline. New wart (D3): all 20 destinations carry a verbatim copy of the monolith's docstring ("this file"), correct-by-construction but misleading on format/avatar/shell.
 
 Review: Sol GO for 913020c8 (r1 verdict, 2 JUDGMENT rows: unknown_count scope honest-narrow; dry merge shows two additive conflicts vs origin/MCP/main 8a64a092). Delta review r2 of 9b205fd4 launched 23:44Z (pid 3948537).
+
+## Wave 4 (2026-09-08T01:24Z): the round-3 build (38ecea11, PAPERCUTS 0) vs the OLD native controls — Gene: "timings of round 3 with all paper cuts fixed; vs old native timings (don't rerun)"
+
+Four concurrent (same as wave 1), pinned worktree clj-surgeon-r3 (CLI launcher) + its own MCP server on 7907; fixture d9205abc; stamps process-written; `done` stamped before caller reporting this time.
+
+| arm | split-done | total wall | in-call | correct | papercut-oracle |
+|---|---|---|---|---|---|
+| D5 verb CLI, round 3 | 59 s | **81 s** | 37.2 s | 4/4 | 0 |
+| D6 verb CLI, round 3 | 58 s | **79 s** | 38.2 s | 4/4 | 0 |
+| M5 verb MCP, round 3 | 74 s | **92 s** | 34.5 s | 4/4 | 0 |
+| M6 verb MCP, round 3 | 56 s | **79 s** | 34.4 s | 4/4 | 0 |
+| N5 / N6 native + manifest (2026-09-07, not rerun) | | 408 / 486 s | | 4/4 | 32 (N6) |
+| N1 / N2 native, no manifest (2026-09-07, not rerun) | | 393 / 331 s | | 4/4 | |
+
+Verb median 80 s vs native-with-manifest median 447 s → ÷ 5.6; vs plan-free native median 362 s → ÷ 4.5. Output quality: 0 paper cuts on all four vs 32 on the hand-made split. Astra's killer threshold holds on the second consecutive rerun (every treated run accepted; ≥ 30% matched median reduction; no regression). Open: Sol r3's nested-form realignment defect (not present in this fixture) — round 4 in progress.
