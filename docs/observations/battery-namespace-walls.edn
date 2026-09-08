@@ -1,0 +1,44 @@
+;; TEST-ISO-013 -- measured walls of the battery lane.
+;; REWRITTEN by `make test-battery` on every complete run; it is the
+;; current estimate the next run's bin-packing reads, not an event log.
+;; A stale or absent entry costs makespan, never correctness.
+;; SEEDED 2026-09-08 from the serial baseline (`make test-battery-serial`,
+;; sha 23417eb0, anvil-server, 839 s wall / 816 257 ms of namespace walls).
+{:walls-ms {
+clj-surgeon.admit-patch-test 8960
+            clj-surgeon.cell-b-oracle-test 1190
+            clj-surgeon.core-discovery-test 4032
+            clj-surgeon.mcp-alias-migration-test 68165
+            clj-surgeon.mcp-cold-verify-test 700
+            clj-surgeon.mcp-feature-thread-sed-test 639
+            clj-surgeon.mcp-helper-extraction-test 1920
+            clj-surgeon.mcp-inspect-cold-job-test 119
+            clj-surgeon.mcp-prepared-wire-test 22573
+            clj-surgeon.mcp-process-test 14587
+            clj-surgeon.mcp-relation-census-launcher-test 65483
+            clj-surgeon.mcp-relation-census-test 39755
+            clj-surgeon.mission-commit-cli-test 19613
+            clj-surgeon.mission-display-test 6582
+            clj-surgeon.mission-events-test 5566
+            clj-surgeon.mission-fallback-test 527
+            clj-surgeon.mission-git-boundary-test 476
+            clj-surgeon.mission-git-fence-test 511
+            clj-surgeon.mission-git-identity-test 541
+            clj-surgeon.mission-git-ledger-test 912
+            clj-surgeon.mission-git-process-test 359
+            clj-surgeon.mission-git-submodule-test 303
+            clj-surgeon.mission-phase-events-test 110
+            clj-surgeon.mission-provider-fallback-events-test 135
+            clj-surgeon.mission-publication-test 22208
+            clj-surgeon.mission-run-test 42225
+            clj-surgeon.mission-test 769
+            clj-surgeon.mission-typist-executor-admission-test 113
+            clj-surgeon.mission-typist-executor-test 3286
+            clj-surgeon.mission-usage-executor-test 100
+            clj-surgeon.reader-eval-fence-test 461790
+            clj-surgeon.receipt-artifacts-boundary-test 2419
+            clj-surgeon.repository-hygiene-test 161
+            clj-surgeon.require-change-boundary-test 1255
+            clj-surgeon.txn-journal-test 18173
+            },
+ :var-walls-ms {}}
