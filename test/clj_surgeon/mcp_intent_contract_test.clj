@@ -464,8 +464,8 @@
     ;; B07 registers NS-SPLIT-037..046 (ten retained-source/facts/oracle promises).
     ;; Row 3 registers fourteen standalone require-change promises.
     ;; Sol r10 adds ALIAS-MIGRATION-003, the mandatory affected-battery gate.
-    ;; Rows sublime adds NS-SPLIT-047..049.
-    (is (= 226 (count non-mcp)))
+    ;; Rows sublime adds NS-SPLIT-047..049 and ALIAS-MIGRATION-004..005.
+    (is (= 228 (count non-mcp)))
     (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 19
             "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3}
            (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"

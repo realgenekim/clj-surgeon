@@ -489,6 +489,13 @@ was red before the fix; a fresh Cell C in-image loop passes 52 tests / 530
 assertions with PAPERCUTS=0. Configuration adds no workspace file; the CLI
 external profile path is exercised through its actual Babashka entrance.
 
+ALIAS-MIGRATION-004/005 record refusal price and unknown caller outcomes, plus
+one external ledger line per call. The full alias boundary passes 143 tests /
+3,331 assertions. A fresh frozen nine-file / 21-site replay has three resolved
+collisions, no workspace artifact pollution, and all five Row 2 oracles PASS.
+Missing counts, fallback, first-attempt and complete verified wall are not
+manufactured. Ledger failure preserves the operation result.
+
 Single hand-driven Cell C observation on split/base2 4f6283aa (d9205abc source
 plus the authorized nREPL test alias and architecture test): warm 19.736 s,
 cold 43.305 s, then the hand-run pending cold gate on the warm candidate

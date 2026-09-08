@@ -1375,3 +1375,7 @@ fresh historical battery receipt from concealing an unexecuted affected suite.
 Row 5 proof configuration may live outside the graded workspace. Split receipts
 separate successful publication from completion of substantive cold verification;
 empty profiles refuse before writes. See the [split design](intent/helper-extraction/namespace-split-design.md).
+
+Alias migration reports per-call wall, refusal price and explicit unknown caller
+outcomes in its receipt and an external append-only ledger. This instrumentation
+supplies route observations; it does not claim complete verified performance.

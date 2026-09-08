@@ -636,9 +636,9 @@
       ;; B07 adds 12 JVM witnesses; one new CLI test runs separately in the BB suite.
       ;; Standalone require intent: 1501 + 21 = 1522, with boundary processes in battery.
       ;; Sol r10 adds 13 witnesses: 1530 + 13 = 1543.
-      ;; Rows sublime: seven split boundary witnesses.
-      ;; 1543 + 7 = 1550; no test or namespace leaves the corpus.
-      (is (= 1550 total) (str "manifest declares " total " tests"))
+      ;; Rows sublime: seven split boundaries plus six alias telemetry witnesses.
+      ;; 1543 + 7 + 6 = 1556; no test or namespace leaves the corpus.
+      (is (= 1556 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

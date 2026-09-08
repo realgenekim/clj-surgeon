@@ -64,3 +64,25 @@ The installed /home/forge/bin/land was found to hardcode the old gate list, cont
 to the Makefile's stated contract. Its local gate list is repaired to `make test`,
 which reaches landing-gate and both affected batteries. Its diff is retained with
 the report; it is not invoked, and no push or actual merge is authorized here.
+
+## Rows sublime: per-call route telemetry
+
+The operator authorizes ALIAS-MIGRATION-004/005 through branch commit. Measure
+from entry to the returned operation result with a monotonic clock. Receipt
+`refusal_price` is that wall in milliseconds for a refused operation, nil on
+success; fallback is `unknown` because the caller acts after this response.
+`unknown` also names first-attempt and complete caller verification wall, plus
+counts absent from a refusal. No missing count is converted to zero.
+
+Each call appends one `:type :telemetry` EDN line under the external alias receipt
+root's ledger.edn (production /var/tmp/forge/alias-migration-receipts/ledger.edn):
+id, wall_ms, outcome, files, sites, collisions, refusal_price, fallback, unknown.
+The MCP entrance wraps routing as well as execution; nesting suppresses a second
+line. File locking serializes writers. A ledger failure preserves the mutation
+receipt and marks ledger unknown, rather than replaying or claiming rollback.
+Walls stop before ledger publication and exclude transport/caller follow-up;
+complete verified wall remains unknown until an external observer closes it.
+
+Witnesses: direct commit and refusal, exact independent ledger values, missing
+counts, nested entry once, routing refusal, write failure preserving commit.
+Use warm alias tests and split/papercut loop; one final cold make test and audit.

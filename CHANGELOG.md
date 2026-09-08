@@ -10,6 +10,9 @@ is cut.
 
 ### Added
 
+- Alias migration emits per-call refusal price, explicit caller-outcome unknowns
+  and a serialized external telemetry ledger, including MCP routing refusals.
+
 - Namespace split accepts external `verification.profile-file` / CLI `:profile-file`
   configuration. True-only profiles leave `cold-suite` pending; empty command
   profiles refuse with `verification-empty-profile` before mutation.
