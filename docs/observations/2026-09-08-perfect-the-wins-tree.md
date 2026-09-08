@@ -77,3 +77,4 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 - 2026-09-08T07:06Z acceptance 3: certified rounds LIFTED (row 8 → low candidate); cohorts stand (11 defects → B02e). B07 (row 5) building.
 - 2026-09-08T07:24Z row 2 pre-registered (real MVR migration 5a4b4bcf; N floor n=6 running). Row 8 certified rounds lifted.
 - 2026-09-08T07:48Z row 3 pre-registered (real MVR migration 9f9cf614); verb schema admission needed first (Astra, after B07).
+- 2026-09-08T08:06Z row 2: floor n=6 done (198 s median); design amended (candidate-complete primary, alias-neutral O2); stage 2 (D arm) running.

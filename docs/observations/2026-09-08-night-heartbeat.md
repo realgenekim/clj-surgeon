@@ -18,3 +18,6 @@ Rules of this file: one entry per hour (UTC), quote receipts verbatim, DELTA per
 
 ## 2026-09-08T07:59Z
 - DELTA: row 2 stage 1 done (N median 198 s; gate clause 3 unsatisfiable; oracle ambiguity + golden confound) → Sol revision running. B07 (Astra) at ~75 min. Acceptance 4 → pilot 4 running.
+
+## 2026-09-08T08:06Z
+- DELTA: row 2 stage 2 launched (six N/D pairs under the amended gate). B07 (Astra) ~95 min. Acceptance 4 → pilot 4 still running. Row 3 queued behind B07. Trunk unchanged. Watchdog ticking.
