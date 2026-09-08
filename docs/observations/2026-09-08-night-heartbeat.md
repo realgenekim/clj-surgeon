@@ -45,3 +45,6 @@ Rules of this file: one entry per hour (UTC), quote receipts verbatim, DELTA per
 
 ## 2026-09-08T10:43Z
 - DELTA: row 1 friction-low (pilot 7). Row 5: D1 proof-inclusive 341 s (asymmetry) → D2–D6 with runner-side proof running; F skipped for time. Astra r10 fix running. Disk 30 G remaining.
+
+## 2026-09-08T11:01Z
+- DELTA: Sol r11 GO on the row-2 fix; landing refused by battery-fresh (52 behind) → receipt-chain-20 running (~13 min), then land. Row 5 D2–D6 running with runner-side proof. Row 1 friction-low. Gene report amendment at 11:40Z. Disk ~30 G.

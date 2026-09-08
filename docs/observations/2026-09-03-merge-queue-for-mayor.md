@@ -147,3 +147,5 @@ LANDED 2026-09-07T19:41Z: astra/lid-batch-2-perf-gate-hld 94715053 → MCP/main 
 - LANDED 2026-09-08T08:50Z: B07 partial retention + facts projection 02bbf482 → merge e6cb5e31, trunk 1ab53e0e; gates green; CLI reinstalled; 7906 rebuilt on trunk.
 
 - 2026-09-08T11:00Z Sol GO r11 on 398679fa (r10 repairs: alias batteries green + required at landing; intent contradiction resolved; per-verb red witnesses) → `~/bin/land 398679fa` launched via run-bg (pid 1909433); battery distance 49 — if battery-fresh refuses, receipt-chain-20 first.
+
+- 2026-09-08T11:01Z land 398679fa refused by battery-fresh (52 commits behind the newest receipt 0b8a2921) — receipt-chain-20 running (pid 1930074); land the receipt commit after.
