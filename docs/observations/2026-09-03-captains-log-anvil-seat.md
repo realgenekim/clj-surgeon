@@ -4137,3 +4137,7 @@ Frame 8. What happens after.
 Each outcome goes in the paper.
 
 The VM in one line: clean timing, root for toolchains, and a recorder the workers cannot fake. Anvil gives none of the three.
+
+## 2026-09-08T16:35Z — Gene DECIDES: "My feeling; let's get it so we can generate Clojure Frame 7 stats, but only after we're done with all the table rows, and all the things reliably sublime."
+
+Order of record: (1) every winning row to the tree's perfect phase (1, 2, 5; 3 once calibrated); (2) reliably sublime = canary apparatus share under the alarm on consecutive days + seat receipt on_loop daily + the tighten conditions this box can meet stay met; (3) THEN Clojure Frame 7 — native arm vs prepared arm on the specimen repos, 6 floors + 6 pairs, through the cold-start harness with the recorder (needs one small addition: an N arm with no boot block). The cross-stack pilot and the Hetzner box are PARKED behind that gate (inb-3fa126 snoozed 14 d). Frame 7 for Clojure is the exit test of the whole program: if P does not beat N on our own repos with our own agents, no other stack matters.

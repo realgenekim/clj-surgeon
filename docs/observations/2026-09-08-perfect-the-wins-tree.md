@@ -99,3 +99,5 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 - 2026-09-08T14:48Z row 5: F arms 6/6 accepted, F/N 0.83, D/F 0.485 → EMISSION EARNS CREDIT but 0/6 used facts inside the clock (attribution open on adoption); verb paper cuts (047/048/049) LANDED f27a87d4; stays friction-high until apparatus share < 50 % and the facts fold into the verb receipt.
 - 2026-09-08T14:48Z row 2: refusal_price + unknowns + entrance ledger LANDED f27a87d4; friction-medium; next = cold-start pilot of the alias route on a fresh seat.
 - 2026-09-08T14:48Z row 1: proof tiers measured once — warm 19.7 s (probe-only) vs cold 43.3 s; warm + hand gate = cold, so the warm tier pays only with a background pending gate; friction-low; next = background gate design + apparatus share on the canary.
+
+- 2026-09-08T16:35Z GATE OF RECORD (Gene): Clojure Frame 7 (N vs P, request→accepted + apparatus share) runs only after all winning rows are perfect and the daily meters read sublime for consecutive days; cross-stack pilot parked behind it.

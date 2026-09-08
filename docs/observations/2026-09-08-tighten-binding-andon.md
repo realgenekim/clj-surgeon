@@ -243,3 +243,143 @@ Sources: `/var/tmp/forge/plan2/cellC/sol-tighten-review.md` §4–5 and edit 7;
 `/home/forge/opt/claude-skills/_doctrine/house-rules.md`, "The Andon cord" and delivery invariants
 17–20; `tighten-the-loop/{SKILL.md,SEAT-RECEIPT.md,CHANGE-RULE.md}`;
 `docs/observations/2026-09-08-tighten-one-shots.md`.
+
+---
+
+## Two routine landings became one-shots, and the battery budget stopped charging for paperwork (2026-09-08, forge@anvil)
+
+Four pieces, all from the same day's landing: two friction items paid by hand, one dead-time
+optimisation, and one false alarm that had been expiring green batteries.
+
+### A. `~/bin/land-auto` — the retry that is allowed, and the eight that are not
+
+Today's landing was paid by hand twice: `land` refused with `battery-fresh: REFUSED`, a
+`receipt-chain` was run by hand, its sha was copied by hand into a second `land`. That is a routine,
+and a routine the seat repeats is one command.
+
+`land-auto <tip> "<title>" <receipt-branch>` runs `land`; on a stale-battery refusal ONLY it runs
+`receipt-chain`, parses `RECEIPT READY: land <sha>`, and lands that sha with the same title plus
+` ; battery receipt via land-auto`. Everything else stops with land's own line: a red gate, a
+CONFLICT, an unknown tip, a dirty tree, an already-ancestor tip. `LAND_EXTRA_TRAILERS` must be set
+or it refuses before running anything (land's own provenance ratchet, checked one layer earlier).
+Every run prints and appends one line:
+`LAND-AUTO <LANDED|NOT LANDED|REFUSED> tip=… landed_as=… receipt=… attempts=<n> wall=<s>`.
+
+**A defect in `land` found while building it, and the ratchet it forced.** `land` writes every gate
+line to `/var/tmp/forge/land-<tip>.log`, but its red-gate stdout filter is
+`^===|^Ran |failures|RC=|:ok` — which does not match a `battery-fresh: REFUSED …` line. So on the
+real `land`, the one tell this one-shot exists for can be in the log and NOT on stdout. `land-auto`
+therefore reads both, and consults the log only when its mtime is at or after this run's start: a
+log left by an earlier land of the same tip is stale evidence, and stale evidence must never
+authorize a retry. Both paths are fixture rows.
+
+### B. `tighten verify-bundle` — the delivery copies, not just the bound ones
+
+`tighten verify-binding` answers "does this seat still run the bytes it bound?". Nothing answered
+"is what OTHER seats would install still the thing this seat runs?" — and the bundle under
+`claude-skills-nrepl/tighten-the-loop/bin/` is what another seat installs.
+
+`tighten verify-bundle` hashes every MANIFEST row against BOTH the installed path and the bundled
+copy, and keeps two failures apart because they point in opposite directions: `BUNDLE-STALE`
+(installed moved on — the manifest is old, repackage) versus `BUNDLE-CORRUPT` (the packaged copy is
+not the byte anybody hashed — a seat installing it gets something unverified). Plus `BUNDLE-MISSING`,
+a `BUNDLE-VERIFIED` summary carrying the manifest's own as-of epoch, exit 2 on any non-OK row, and
+the summary line now appears in `tighten status` under `-- binding`. Commented reference rows are
+ignored by construction: the row parser requires a 64-hex FIRST field, and a comment's is `#`.
+
+Real run, immediately after the edit:
+
+```
+BUNDLE-STALE tighten manifest=6b5c7ead installed=9c55d253 bundle=6b5c7ead
+BUNDLE-OK seat-receipt
+BUNDLE-OK canary-cell
+BUNDLE-OK verb-sentinel
+BUNDLE-OK ledger-to-findings
+BUNDLE-OK andon-pull
+BUNDLE-OK andon-lift
+BUNDLE-VERIFIED epoch=2026-09-08T14:06:24Z ok=6 stale=1 corrupt=0 missing=0
+```
+
+The one stale row is `tighten` itself, stale because this change edited it — the expected shape, and
+the manifest's own header says staleness usually means the manifest is old rather than a copy bad.
+Nothing corrupt, nothing missing.
+
+### C. `land-auto --prewarm` — battery on GO
+
+The battery is minutes; the review-to-land gap is dead time; they do not have to be serial.
+`land-auto --prewarm <tip> <receipt-branch>` starts `receipt-chain` detached through `~/bin/run-bg`
+the moment a GO is printed, records the REAL pid, and returns. The later
+`land-auto <tip> "<title>" <branch>` finds that run and: READY in the log → lands that sha with ONE
+land call and no second battery; still running → waits, bounded, polling the recorded pid; BATTERY
+RED → NOT LANDED with NO land call at all. A second `--prewarm` for a tip already running is
+refused, and a prewarm log that does not NAME its tip is ignored rather than trusted (invariant 20:
+a receipt must name its subject; being adjacent in a state file does not make it ours).
+
+**A `run-bg` property found here, worth knowing before it costs an hour:** `run-bg` waits for the
+pidfile and then `kill -0`s the pid, so a job that FINISHES before that check is reported as
+`FAILED to start`. Correct-ish for a supervisor, indistinguishable from a real failure for a caller.
+
+### D. `battery-fresh` stops charging for the records lane
+
+`make battery-fresh` refuses when the receipt is more than 30 commits behind HEAD. The records lane
+pushes captain's logs and receipts to trunk all day, so a green battery kept expiring on paperwork —
+a FALSE refusal, which is the kind that teaches a seat to stop reading refusals.
+
+Trunk already had an exemption, and it was the wrong shape: a closed set of THREE literal paths,
+modifications only, whose comment read "Never a docs glob". A closed set must be hand-edited every
+time the records lane writes a NEW file — and writing a new file is what the records lane does. It
+exempted the commits nobody makes and charged for the ones made constantly.
+
+Branch `fable/battery-fresh-code-only` widens it to a prefix, bounded on purpose:
+regular non-executable **add / modify / delete** under `docs/observations/`, with the LEDGER
+excluded by name (a receipt may never exempt its own commit), executables, symlinks, submodules,
+type and mode changes, mixed commits and everything outside that prefix (including the rest of
+`docs/`) still counted. Ancestry, age, newest-failure authority, the 30 budget, the per-parent proof
+and the >1000-commit raw fallback are untouched.
+
+**This contradicts a registered intent, so the intent is amended in the same commit** —
+TEST-ISO-009b in `test-isolation-specs.md` and the archival paragraph in `test-isolation-design.md`,
+with the superseded rule retained verbatim and the reason recorded. It also widens a path fence,
+so it goes to a fence review before it lands; nothing was merged from this seat.
+
+Witnesses, red before green: a fast pure witness for the classifier
+(`only-regular-records-lane-content-is-exempt`, rewritten) and the numbers the exemption exists for
+(`records-lane-churn-cannot-expire-a-battery-but-code-still-can`), plus a new end-to-end shell
+witness over a REAL git history, `make battery-fresh-records-lane-test`, invoked by `test-full`.
+The end-to-end run:
+
+```
+  ok receipt-alone-is-fresh                        -> {:commits-behind 1, :raw 1, :ignored 0}
+  ok forty-records-commits-still-fresh             -> {:commits-behind 1, :raw 41, :ignored 40}
+  ok forty-records-plus-thirty-one-code-refuse     -> {:commits-behind 32, :raw 72, :ignored 40}
+  ok twenty-nine-code-plus-receipt-is-thirty-and-passes
+  ok one-more-code-commit-refuses-at-thirty-one
+  ok executable-under-observations-counts
+  ok mixed-commit-counts
+  ok records-delete-is-exempt
+  ok docs-intent-counts
+battery-fresh records-lane witness: 12 rows, mismatches: 0
+```
+
+The same witness on the OLD classifier: **3 mismatches**. The `+1` in every count is real and not an
+artefact — `make test-battery` records the sha it TESTED and the seat commits the ledger afterwards,
+so the receipt's own commit is always one ahead of the sha it names, and the ledger is deliberately
+never exempt.
+
+### Fixtures
+
+Both one-shots are covered by fixtures using stubs on a prepended PATH, so every retry decision is
+exercised without a merge, a battery, a network call or a push. The assertions are on CALL COUNTS,
+not only on the printed verdict — the failure worth catching is a second `land` after a red gate,
+and that prints the same verdict either way.
+
+```
+land-auto fixtures: 18 rows, mismatches: 0        /var/tmp/forge/tighten/fixtures/run-land-auto.sh
+verify-bundle fixtures: 10 rows, mismatches: 0    /var/tmp/forge/tighten/fixtures/run-verify-bundle.sh
+```
+
+Three of the first fixture run's four failures were fixture-harness bugs, not one-shot bugs, and one
+of them is a lesson with legs: under `set -o pipefail`, `check | grep -q` inherits the checked
+program's nonzero exit and reports a false mismatch on exactly the rows where the program is
+SUPPOSED to refuse. A harness that is wrong only on the refusal rows is a harness that quietly
+stops testing refusals.
