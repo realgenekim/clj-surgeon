@@ -1,6 +1,7 @@
 (ns clj-surgeon.mission-typist-executor-test
   {:lane :battery}
   (:require
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [cheshire.core :as json]
    [clj-surgeon.mission :as mission]
    [clj-surgeon.mission-cli :as cli]
@@ -8,6 +9,7 @@
    [clj-surgeon.mission-typist-test :as facts]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is]]))
 
 (def source "(ns fixture.core)\n\n(defn old-name [] 1)\n")
@@ -39,6 +41,7 @@
                                                               :format-sensitive? false}}
                       :budget {:max-files 1 :max-changed-chars 1000}))})
 
+;; @spec ALIAS-MIGRATION-001
 (deftest real-proof-commit-and-undo
   (with-fixture
     (fn [root file]
@@ -49,6 +52,7 @@
         (with-redefs [executor/request-candidates! (fn [_] [{:usable true :content (json/generate-string replacements)}])]
           (let [result (executor/execute! request {:plan plan :receipt-dir (str (io/file root "receipts"))})]
             (is (:committed result) (pr-str result))
+            (is (str/starts-with? (:undo_receipt result) "/var/tmp/forge/typist-receipts/"))
             (is (= 1 (:match-count result)))
             (is (= :complete (get-in result [:format :status])))
             (is (number? (get-in result [:format :elapsed_ms])))
@@ -230,7 +234,7 @@
             (is (= false (:ok result)))
             (is (= "typist-receipt-dir-required" (:error_type result)))
             (is (= ["bin/mission" "apply" (:id opened) "--workspace" root
-                    "--state-home" home "--receipt-dir" (str (io/file root ".clj-surgeon/typist"))]
+                    "--state-home" home "--receipt-dir" (artifacts/directory "typist" root)]
                    argv))
             (is (= before (mission/read-mission state-dir (:id opened)))))
           (let [result (cli/run! {:verb "owner_forms" :request (request root)

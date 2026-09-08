@@ -3,7 +3,7 @@
 
   This namespace owns the filesystem half — scope expansion, project-root
   confinement, the frozen read, the transaction spec, the durable per-file
-  detail file, and the O(1) receipt. It knows nothing about the rewrite itself,
+  detail file, and the summary receipt. It knows nothing about the rewrite itself,
   which lives in the pure `clj-surgeon.alias-migration` planner, and nothing
   about tool registration, which lives in `clj-surgeon.mcp-tool`."
   (:require
@@ -12,13 +12,13 @@
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-paths :as mcp-paths]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.set :as set]
    [clojure.string :as str])
   (:import
-   (java.nio.file FileSystems FileVisitOption FileVisitResult Files
-                  LinkOption Path PathMatcher SimpleFileVisitor)
+   (java.nio.file FileSystems FileVisitOption FileVisitResult Files LinkOption Path PathMatcher SimpleFileVisitor)
    (java.nio.file.attribute FileAttribute)
    (java.util EnumSet UUID)))
 
@@ -1477,7 +1477,7 @@
   "How many alias_migration detail documents one workspace keeps.
 
   Every call writes one per-file detail document under
-  `.clj-surgeon/alias-migration/`. They are diagnostic, not transactional — the
+  `/var/tmp/forge/alias-migration-receipts/`. They are diagnostic, not transactional — the
   undo receipt is the durable artefact — so the writer retains the most recent
   twenty OF ITS OWN, the run's own document always among them, and deletes the
   rest. The bound counts only documents this writer can prove it wrote; a
@@ -1639,7 +1639,7 @@
 (defn detail-directory
   "The directory `alias_migration` publishes its per-run detail documents in."
   ^java.io.File [project-root]
-  (io/file (io/file (str project-root)) ".clj-surgeon" "alias-migration"))
+  (io/file (artifacts/directory "alias-migration" project-root)))
 
 ;; @spec MCP-OP-ALIAS-054
 (defn- resolved-path
@@ -2044,9 +2044,9 @@
 ;; @spec MCP-OP-ALIAS-020
 ;; @spec MCP-OP-ALIAS-045
 (defn write-details!
-  "Write per-file detail outside the receipt and return its relative path."
+  "Write per-file detail outside the workspace and return its absolute path."
   [^Path root plan]
-  (let [directory (io/file (.toFile root) ".clj-surgeon" "alias-migration")
+  (let [directory (detail-directory (str root))
         file-name (str detail-document-prefix (UUID/randomUUID) ".edn")
         target (io/file directory file-name)]
     (.mkdirs directory)
@@ -2070,7 +2070,7 @@
                 (:lib-rename plan)
                 (assoc :lib-rename (dissoc (:lib-rename plan) :content)))))
     (prune-details! directory file-name)
-    (str ".clj-surgeon/alias-migration/" file-name)))
+    (str target)))
 
 ;; ---------------------------------------------------------------------------
 ;; the receipt
@@ -2113,14 +2113,14 @@
 (def max-string-mention-sites
   "How many `file:line` string-mention sites one receipt names.
 
-  The count is exact and the list is bounded: the receipt is constant in N or
-  it is not a receipt, and a caller with twenty sites already has a day's work
-  they can find the rest of by searching for the name the count reports."
+  The count is exact and this diagnostic list is bounded. A caller with
+  twenty sites can find the rest by searching for the name the count reports.
+  The separate measured Git exception list may grow with the changed file set."
   20)
 
 ;; @spec MCP-OP-ALIAS-042
 (defn receipt
-  "Render one receipt whose length is constant in the number of namespaces.
+  "Render the migration summary; execute! adds measured Git exception paths.
 
   `:ok` and `:committed` are the kernel's own computed `:committed`, never a
   literal: the tool tells agents its receipt is terminal evidence and not to
@@ -2296,12 +2296,12 @@
 (defn retire-relative-path
   "Where the superseded defining file is kept, as a project-relative path."
   [relative]
-  (str ".clj-surgeon/alias-migration/retired/" relative))
+  (str "retired/" relative))
 
 (defn retire-path
   "Where the superseded defining file is kept so the move stays reversible."
   [project-root relative]
-  (str (io/file project-root (retire-relative-path relative))))
+  (artifacts/target "alias-migration" project-root (retire-relative-path relative)))
 
 ;; @spec MCP-OP-ALIAS-041
 (defn resolve-retire-source
@@ -2339,9 +2339,8 @@
     (Files/move (.toPath (io/file real-source)) (.toPath target)
                 (into-array java.nio.file.CopyOption
                             [java.nio.file.StandardCopyOption/REPLACE_EXISTING]))
-    ;; the receipt publishes this, so it is project-relative: an absolute server
-    ;; path is not something the caller can act on and leaks the host layout
-    (retire-relative-path relative)))
+    ;; Publish the absolute external backup path for recovery.
+    (str target)))
 
 ;; @spec MCP-OP-ALIAS-041
 (defn- restore-retired!
@@ -2686,7 +2685,7 @@
 ;; @spec MCP-OP-ALIAS-018
 ;; @spec MCP-OP-ALIAS-019
 (defn- execute-migration!
-  "Plan, commit, and publish one O(1) alias_migration receipt.
+  "Plan, commit, and publish one alias_migration summary with workspace evidence.
 
   `attempted` is handed to `commit!`, which sets it at the transaction kernel's
   own entrance — the first write — so the heap-exhaustion guard around this
@@ -2695,7 +2694,8 @@
   resolving the retire source or capturing a verification baseline, none of
   which write a byte."
   [config params attempted]
-  (let [validated (validate-request params)]
+  (let [config (assoc config :receipt-dir (artifacts/directory "alias-migration" (:project-root config)))
+        validated (validate-request params)]
     (if-not (:ok validated)
       validated
       (let [request (:request validated)
@@ -2710,34 +2710,37 @@
                     :configured_profiles (vec (sort (keys (:verification-profiles config))))
                     :remedy "Name a profile this workspace configures, or omit verify."})
           (let [planned (plan! project-root request)]
-        (if-not (:ok planned)
-          planned
-          (let [{:keys [plan root paths destination]} planned
-                spec (plan->spec plan paths destination)
-                files (mapv #(get paths (:file %)) (:files plan))
-                verify (:verify request)
-                commit (commit! (assoc config :verify verify
-                                        :attempted attempted)
-                                (.toString root) spec files
-                                (get-in plan [:lib-rename :file]))]
-            ;; @spec MCP-OP-ALIAS-042
-            (if (or (:error commit) (not (:committed commit)))
-              ;; @spec MCP-OP-ALIAS-056
-              ;; the kernel's own write boundary, not a literal: the same
-              ;; volatile ALIAS-047's heap guard reads
-              (cond-> (commit-refusal plan commit @attempted)
-                ;; @spec MCP-OP-ALIAS-028
-                ;; a baseline failure has exactly one executable correction,
-                ;; and it is composed here because this is where the REQUEST
-                ;; is: the same call without the profile that could not be read
-                (and (:verification commit) verify)
-                (assoc :next_call (planner/unverified-call request)))
-              (receipt plan
-                       (-> commit
-                           (assoc :undo_receipt (:receipt-file commit)
-                                  :receipt_hash (:receipt-hash commit)
-                                  :verify-requested (boolean verify)))
-                       (write-details! root plan)))))))))))
+            (if-not (:ok planned)
+              planned
+              (let [{:keys [plan root paths destination]} planned
+                    spec (plan->spec plan paths destination)
+                    files (mapv #(get paths (:file %)) (:files plan))
+                    verify (:verify request)
+                    commit (commit! (assoc config :verify verify
+                                      :attempted attempted)
+                                    (.toString root) spec files
+                                    (get-in plan [:lib-rename :file]))]
+                ;; @spec MCP-OP-ALIAS-042
+                (if (or (:error commit) (not (:committed commit)))
+                  ;; @spec MCP-OP-ALIAS-056
+                  ;; the kernel's own write boundary, not a literal: the same
+                  ;; volatile ALIAS-047's heap guard reads
+                  (cond-> (commit-refusal plan commit @attempted)
+                    ;; @spec MCP-OP-ALIAS-028
+                    ;; a baseline failure has exactly one executable correction,
+                    ;; and it is composed here because this is where the REQUEST
+                    ;; is: the same call without the profile that could not be read
+                    (and (:verification commit) verify)
+                    (assoc :next_call (planner/unverified-call request)))
+                  (merge (receipt plan
+                           (-> commit
+                               (assoc :undo_receipt (:receipt-file commit)
+                                      :receipt_hash (:receipt-hash commit)
+                                      :verify-requested (boolean verify)))
+                           (write-details! root plan))
+                         (artifacts/workspace-evidence (str root)
+                           (concat (map :file (:files plan))
+                                   (when-let [rename (:lib-rename plan)] [(:file rename) (:new-file rename)])))))))))))))
 
 ;; @spec MCP-OP-ALIAS-047
 (defn execute!

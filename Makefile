@@ -65,13 +65,13 @@ WORKSPACE ?=
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
 	@echo ""
-	@echo "  make test                      LANDING GATE (default): battery-fresh receipt + mcp-test + test-bb + hygiene"
+	@echo "  make test                      LANDING GATE (default): battery-fresh receipt + alias-migration-test + mcp-test + test-bb + hygiene"
 	@echo "  make test-full                 Run all tests: analyzer, recovery battery, mcp-test, test-battery, smoke, memory battery, bench tail (CI/nightly)"
 	@echo "  make test-fast                 JVM FAST lane (no child process, no port, no network)"
 	@echo "  make test-integration          JVM INTEGRATION lane (ephemeral ports, in-process servers)"
 	@echo "  make test-battery              JVM BATTERY lane (cold child JVMs; minutes-scale)"
 	@echo "  make battery-fresh             refuse if the newest battery receipt is stale"
-	@echo "  make landing-gate              THE landing gate ~/bin/land runs (battery-fresh + mcp-test + test-bb + hygiene)"
+	@echo "  make landing-gate              THE landing gate ~/bin/land runs (battery-fresh + alias-migration-test + mcp-test + test-bb + hygiene)"
 	@echo "  make test-bb                   babashka lane (was: make test-fast, renamed 2026-09-04)"
 	@echo "  make anvil-arms-self-test      PF-5 smoke for the E3/E6 arm apparatus (fake driver)"
 	@echo "  make analyzer-contract-test    Run the serialized real-analyzer contracts"
@@ -216,6 +216,8 @@ runtests: mcp-test
 mcp-test: mcp-operation-oracle performance-regression-sentinel-intent-test
 	@# NS-SPLIT-031: oracle attribution regression; no JVM and no workspace mutation.
 	python3 -B -m unittest discover -s test/oracles -p test_namespace_split_papercut_oracle.py
+	# @spec REQUIRE-CHANGE-014
+	python3 -B -m unittest discover -s test/oracles -p test_require_change_oracle.py
 	@# @spec NS-SPLIT-046
 	@# @spec NS-SPLIT-043
 	python3 -B -m unittest discover -s test/oracles -p test_cell_b_oracle.py
@@ -1072,10 +1074,18 @@ test-bb:
 # `~/bin/land` must run exactly this target. It is the single name to change
 # when the landing gate's contents change, so the seat tool never drifts from
 # what the repository considers a landing.
+.PHONY: alias-migration-test
+
+# @spec ALIAS-MIGRATION-003
+# This affected battery runs at every landing; historical freshness is insufficient.
+alias-migration-test:
+	clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/test-deps -m clj-surgeon.mcp-test-runner --ns clj-surgeon.mcp-alias-migration-test clj-surgeon.receipt-artifacts-boundary-test
+
 landing-gate:
 	@# @spec TEST-ISO-009b
 	@# @spec TEST-ISO-001
 	$(MAKE) --no-print-directory battery-fresh
+	$(MAKE) --no-print-directory alias-migration-test
 	$(MAKE) --no-print-directory mcp-test
 	$(MAKE) --no-print-directory test-bb
 	$(MAKE) --no-print-directory repository-hygiene
@@ -1143,7 +1153,7 @@ test:
 	@# @spec TEST-ISO-001
 	@# The default is the landing gate (Gene 2026-09-05: "Tests need to be faster. Integrate
 	@# the 2.5m changes immediately"). REAL COVERAGE of the default: battery-fresh (reads the
-	@# battery-ledger receipt; it does NOT rerun the battery), mcp-test, test-bb, repository-hygiene.
+	@# battery-ledger receipt; it does NOT rerun the whole battery), alias-migration-test, mcp-test, test-bb, repository-hygiene.
 	@# It OMITS analyzer-contract-test, the admit recovery battery, mcp-smoke, the memory battery and
 	@# the bench self-test tail. Those run in `test-full` (CI/nightly). A stale battery receipt fails here.
 	@# @spec MCP-OP-ADMIT-150

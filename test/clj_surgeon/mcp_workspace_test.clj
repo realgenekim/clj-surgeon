@@ -118,7 +118,7 @@
             b (workspace/receipt-dir (.getPath root-b))]
         (is (= a1 a2) "one canonical workspace has one receipt directory")
         (is (not= a1 b) "different workspaces cannot share default receipts")
-        (is (.endsWith a1 (str java.io.File/separator "receipts"))))
+        (is (.startsWith a1 "/var/tmp/forge/edit-clojure-receipts/")))
       (finally
         (delete-tree! root-a)
         (delete-tree! root-b)))))

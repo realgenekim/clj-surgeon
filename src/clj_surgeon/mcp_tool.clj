@@ -1,5 +1,6 @@
 (ns clj-surgeon.mcp-tool
   (:require
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [cheshire.core :as json]
    [clj-surgeon.extract :as extract]
    [clj-surgeon.file-ops :as file-ops]
@@ -17,6 +18,7 @@
    [clj-surgeon.mcp-formatter :as formatter]
    [clj-surgeon.mcp-helper-extraction :as helper-extraction]
    [clj-surgeon.mcp-namespace-split :as namespace-split]
+   [clj-surgeon.mcp-require-change :as require-change]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-paths :as mcp-paths]
@@ -796,7 +798,7 @@
 
 (defn- execute-request-in-context!
   "Validate, confine, and execute one typed request through the loaded kernel."
-  [{:keys [project-root receipt-dir telemetry] :as config} params
+  [{:keys [project-root telemetry] :as config} params
    public-operation]
   (let [normalized-params (json/parse-string (json/generate-string params) true)
         editor-gesture? (some #(contains? normalized-params %)
@@ -908,7 +910,7 @@
                               total-start
                               {:validation_ms validation-ms
                                :confinement_ms confinement-ms})
-              (let [directory (str (or receipt-dir (default-receipt-dir project-root)))
+              (let [directory (artifacts/directory (if extraction? "extract" "edit-clojure") project-root)
                     directory-file (io/file directory)
                     existed? (.exists directory-file)
                     _ (.mkdirs directory-file)
@@ -946,7 +948,10 @@
                                         "create-files-present"))]
                 (when-not (:ok classified)
                   (delete-empty-dir! directory (not existed?)))
-                (record-result! telemetry params classified total-start
+                (record-result! telemetry params
+                                (if (:committed classified)
+                                  (merge classified (artifacts/workspace-evidence project-root (keys (:read_back_hashes classified))))
+                                  classified) total-start
                                 {:validation_ms validation-ms
                                  :confinement_ms confinement-ms
                                  :kernel_ms kernel-ms}))))
@@ -2555,7 +2560,11 @@
            (helper-extraction/tool)
            namespace-split/tool
            admit-tool/admit-clojure-patch-tool
-           feature-thread/feature-thread-tool]
+           feature-thread/feature-thread-tool
+           (assoc require-change/tool :tool-fn
+                  (fn [exchange params callback]
+                    (require-change/handle (select-keys @runtime-config [:verification-profiles :receipt-dir])
+                                           exchange params callback)))]
     :edit [edit-clojure-tool]
     (throw (ex-info "Unsupported MCP tool profile"
                     {:profile profile

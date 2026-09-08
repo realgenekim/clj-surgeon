@@ -1,5 +1,6 @@
 (ns ^{:lane :integration} clj-surgeon.mcp-tool-test
   (:require
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.extract :as extract]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
@@ -1826,7 +1827,7 @@
         (is (:ok result))
         (is (= (.getPath (.getCanonicalFile requested-root))
                (:workspace_root result)))
-        (is (= (.getCanonicalPath routed-receipts)
+        (is (= (artifacts/directory "edit-clojure" requested-root)
                (.getCanonicalPath (.getParentFile (io/file (:undo_receipt result))))))
         (is (= "(ns demo)\n(def marker :default)\n" (slurp default-file)))
         (is (= "(ns demo)\n(def marker :changed)\n" (slurp requested-file))))

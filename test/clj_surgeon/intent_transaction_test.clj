@@ -2162,6 +2162,7 @@
         app-file (str (fs/path temp-dir "app_shell.clj"))
         reader-file (str (fs/path temp-dir "source_reader.clj"))
         receipt-file (str (fs/path temp-dir "receipt.edn"))
+        published-receipt (atom nil)
         original-app (slurp "test/fixtures/intent_transaction/app_shell.clj")
         original-reader
         (slurp "test/fixtures/intent_transaction/source_reader.clj")
@@ -2185,6 +2186,8 @@
                            {:in (pr-str change-spec)
                             :out :string :err :string})
             result (edn/read-string out)
+            _ (reset! published-receipt (:receipt-file result))
+            receipt-file (:receipt-file result)
             changed-app (slurp app-file)
             changed-reader (slurp reader-file)
             saved (edn/read-string (slurp receipt-file))]
@@ -2212,7 +2215,7 @@
       (let [{:keys [exit out err]}
             @(proc/process ["bb" "-m" "clj-surgeon.core"
                             ":op" ":undo-change!"
-                            ":receipt" receipt-file]
+                            ":receipt" @published-receipt]
                            {:out :string :err :string})
             result (edn/read-string out)]
         (is (= 0 exit))
@@ -2225,7 +2228,7 @@
       (let [{:keys [exit out err]}
             @(proc/process ["bb" "-m" "clj-surgeon.core"
                             ":op" ":undo-change!"
-                            ":receipt" receipt-file]
+                            ":receipt" @published-receipt]
                            {:out :string :err :string})
             result (edn/read-string out)]
         (is (= 1 exit))
@@ -2234,6 +2237,7 @@
         (is (= original-app (slurp app-file)))
         (is (= original-reader (slurp reader-file))))
       (finally
+        (when @published-receipt (fs/delete-if-exists @published-receipt))
         (fs/delete-tree temp-dir)))))
 
 (deftest scoped-change-cli-applies-owner-guarded-edits-and-undoes-once
@@ -2241,6 +2245,7 @@
         app-file (str (fs/path temp-dir "app_shell.clj"))
         reader-file (str (fs/path temp-dir "source_reader.clj"))
         receipt-file (str (fs/path temp-dir "receipt.edn"))
+        published-receipt (atom nil)
         original-app (slurp "test/fixtures/intent_transaction/app_shell.clj")
         original-reader
         (slurp "test/fixtures/intent_transaction/source_reader.clj")
@@ -2270,7 +2275,8 @@
                             ":receipt-out" receipt-file]
                            {:in (pr-str scoped-spec)
                             :out :string :err :string})
-            result (edn/read-string out)]
+            result (edn/read-string out)
+            _ (reset! published-receipt (:receipt-file result))]
         (is (= 0 exit))
         (is (= "" err))
         (is (:ok result))
@@ -2288,7 +2294,7 @@
       (let [{:keys [exit out err]}
             @(proc/process ["bb" "-m" "clj-surgeon.core"
                             ":op" ":undo-change!"
-                            ":receipt" receipt-file]
+                            ":receipt" @published-receipt]
                            {:out :string :err :string})
             result (edn/read-string out)]
         (is (= 0 exit))
@@ -2297,6 +2303,7 @@
         (is (= original-app (slurp app-file)))
         (is (= original-reader (slurp reader-file))))
       (finally
+        (when @published-receipt (fs/delete-if-exists @published-receipt))
         (fs/delete-tree temp-dir)))))
 
 (deftest scoped-change-cli-refuses-wrong-owner-distribution-without-writing

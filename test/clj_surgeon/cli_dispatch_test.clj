@@ -641,3 +641,24 @@
       (is (pos? exit))
       (is (= :unknown-door-symbol (:error-type result)))
       (is (= "nowhere-door" (:door result))))))
+
+;; @spec ALIAS-MIGRATION-001
+;; @spec ALIAS-MIGRATION-002
+(deftest change-cli-receipt-is-external-and-named
+  (let [root (.toFile (java.nio.file.Files/createTempDirectory "change-receipt-" (make-array java.nio.file.attribute.FileAttribute 0)))
+        source (io/file root "a.clj")]
+    (try
+      (spit source "(ns a)\n(defn f [] :old)\n")
+      (let [result ((get-in core/ops-registry [:change! :handler])
+                    {:receipt-out (str (io/file root "undo.edn"))
+                     :spec {:changes [{:id :f :in [(str source)] :forms '[f]
+                                       :find ":old" :do [:replace ":new"] :expect {:matches 1}}]
+                            :expect {:changes 1 :edits 1 :files 1}}})]
+        (is (:committed result) (pr-str result))
+        (is (str/starts-with? (:receipt-file result) "/var/tmp/forge/change-receipts/"))
+        (is (.isFile (io/file (:receipt-file result))))
+        (is (not (.exists (io/file root "undo.edn"))))
+        (is (str/includes? (slurp source) ":new"))
+        (.delete (io/file (:receipt-file result))))
+      (finally
+        (doseq [file (reverse (file-seq root))] (.delete file))))))

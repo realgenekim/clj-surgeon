@@ -38,7 +38,8 @@
   ;;
   ;; :clj-surgeon/mcp-test is the MERGE GATE: fast + integration. The eleven
   ;; battery namespaces (674 s of round one's 716 s) are deliberately not in
-  ;; it; `make test` runs `make test-battery` after.
+  ;; it. The landing gate runs the affected alias/artifact batteries and
+  ;; checks freshness for the rest; `make test-battery` runs the complete lane.
   ;; Paths + deps with NO :main-opts, so a caller can name its own entry
   ;; point: `clojure -M:clj-surgeon/test-deps -m clj-surgeon.mcp-test-runner
   ;; --ns clj-surgeon.foo-test`. The lane aliases below concatenate their

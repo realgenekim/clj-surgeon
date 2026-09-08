@@ -16,10 +16,10 @@ namespaces and it *adds* a counting obligation instead of removing a read.
 For a fan-out var migration the whole cost the tool must delete is the
 **reads**: the model has to open every namespace to learn its alias, its
 bindings, and its call sites. A verb that removes those reads must do the
-discovery itself and must return a receipt whose length does not grow with `N`.
+discovery itself and return a summary without per-file edit payloads.
 
 `alias_migration` is that verb. One call carries the intent; the server
-discovers, decides, splices, and commits; the receipt is `O(1)`.
+discovers, decides, splices, and commits; the receipt carries measured Git exception paths, which may grow with `N`.
 
 ## The observable contract
 
@@ -36,7 +36,7 @@ discovers, decides, splices, and commits; the receipt is `O(1)`.
 Every field is constant in `N` except `expect.files`, which is one integer.
 There is no per-file, per-owner, or per-site table anywhere in the request.
 
-### Success receipt (`O(1)` in `N`)
+### Success receipt (summary plus measured Git exception paths)
 
 ```json
 {"ok": true, "operation": "alias_migration", "committed": true,
@@ -46,15 +46,14 @@ There is no per-file, per-owner, or per-site table anywhere in the request.
  "lib_renamed": null,
  "kondo_delta": {"status": "...", "introduced": 0, "removed": 0, "blocking_introduced": 0},
  "focused_test": {"status": "...", "ok": true},
- "details_path": ".clj-surgeon/alias-migration/<id>.edn",
+ "details_path": "/var/tmp/forge/alias-migration-receipts/<workspace>/detail-<id>.edn",
  "undo_receipt": "...", "receipt_hash": "...",
  "elapsed_ms": 12.34}
 ```
 
-The receipt **never** contains a per-file list. Per-file detail (the file set,
+The receipt contains the measured `workspace_clean_except` file list. Per-file detail (the file set,
 each file's chosen alias, its collided policy entries, its site count and its
-require mode) is written to `details_path` inside the workspace's
-`.clj-surgeon` directory and is read only when a human wants it.
+require mode) is written to the absolute external `details_path` and is read only when a human wants it.
 
 ### Typed refusals
 
@@ -85,7 +84,7 @@ clj-surgeon.mcp-alias-migration      I/O boundary, no transaction knowledge
   expand-scope                       glob -> confined relative source paths
   plan!                              read + confine + call the pure planner
   plan->changes                      plan -> one `changes` transaction spec
-  receipt                            transaction result + plan -> O(1) receipt
+  receipt                            transaction result + plan -> summary receipt
 
 clj-surgeon.mcp-tool                 registration + kernel routing only
   handle-alias-migration             plan! -> execute-request! -> receipt
@@ -377,7 +376,7 @@ the new namespace and every rewritten caller land or refuse together, and the
 kernel's undo receipt removes the created file.
 
 The superseded file is then **retired, not deleted**: it is moved to
-`.clj-surgeon/alias-migration/retired/<its path>` and the receipt names that
+`/var/tmp/forge/alias-migration-receipts/<workspace>/retired/<its path>` and the receipt names that
 location. Deleting it is not something the kernel's inverse receipt can undo, so
 the honest design keeps the bytes and says where they are. If retiring fails, or
 if verification fails afterwards, the file is moved back before the transaction is
@@ -429,3 +428,16 @@ Metadata wrappers on a refer vector or rename map do not change its import meani
 Supported let-family initializers see incoming scope; each local shadows only after its initializer, in later initializers and the body. Reader discards occupy no runtime child position and introduce no names. Binding metadata survives while identity comes from the wrapped value. Vector/map destructuring follows declarations rather than all descendant tokens, including :keys/:syms/:strs/:as and excluding :or expressions. letfn shares function names, not all parameter names.
 
 When the form contains a potential selected reference, the bounded walker refuses :or destructuring defaults and metadata-wrapped parameter/binding vectors for qualified and referred migrations alike. Reader discards do not establish potential-reference authority. An unrelated default-only bystander remains outside the plan. For live referred-name migration it also refuses if-let/if-some, as->, for/doseq, multiple function arities, a selected named fn (including metadata-wrapped names), or letfn parameter shadowing of selected names. The result is alias-migration-indirect-reference, reason unsupported-binding-scope, file/form evidence, source_unchanged=true, mutation_attempted=false, no planned files, no executable next_call, and a remedy that does not change migration scope. These are explicit unsupported capabilities, not successful migrations. General macro expansion and a complete binding compiler remain outside scope. Existing qualified and ordinary refer controls remain required. See docs/plans/alias-migration-binding-scope-repair.md for evidence and pending gates.
+
+## Row 2 artifact isolation amendment
+
+[ALIAS-MIGRATION-001/002](receipt-artifacts-specs.md) supersede workspace-local
+detail/retirement placement and the O(1) receipt claim for the required Git exception
+list. Server receipt-directory overrides no longer control verb bookkeeping.
+Post-write porcelain includes all untracked paths; failed or unavailable status
+evidence never produces a false cleanliness assertion. Source layout is unchanged.
+
+The complete alias boundary battery runs through `make alias-migration-test` on
+every `make test` and `make landing-gate` (`~/bin/land`). A freshness receipt
+for the other battery namespaces does not substitute for this affected suite.
+ALIAS-MIGRATION-003 owns the permanent lane membership witness.

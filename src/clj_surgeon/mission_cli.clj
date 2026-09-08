@@ -23,6 +23,7 @@
   verb-aware function, and it takes a plan map rather than a plan function."
   (:refer-clojure :exclude [run!])
   (:require
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.mcp-extraction :as extraction]
    [clj-surgeon.mcp-helper-extraction :as helper]
    [clj-surgeon.mcp-workspace :as workspace]
@@ -477,7 +478,7 @@
                (display/command
                  (into (cond-> ["bin/mission" "apply" id "--workspace" workspace]
                          state-home (conj "--state-home" state-home))
-                       ["--receipt-dir" (str (io/file workspace ".clj-surgeon/typist"))]))})
+                       ["--receipt-dir" (artifacts/directory "typist" workspace)]))})
             ;; @stale-resume: nothing is staged, nothing is written, and the refusal
             ;; names the files that moved.
             (stale? m)

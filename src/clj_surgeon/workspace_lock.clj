@@ -14,6 +14,7 @@
   advisory file lock under an existing `.clj-surgeon` directory serialises
   separate server processes on the same tree."
   (:require
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clojure.java.io :as io])
   (:import
    (java.nio.channels FileChannel OverlappingFileLockException)
@@ -21,22 +22,6 @@
 
 (def lock-directory-name ".clj-surgeon")
 (def lock-file-name "write.lock")
-
-(def control-ignore-lines
-  "What a workspace should never see as a change the gate made.
-
-  The lock is the gate's own bookkeeping, not the caller's work. A commit that
-  leaves it behind as an untracked file makes `git status` report a change
-  nobody asked for, and the next reader has to decide whether it is theirs."
-  ["# Written by clj-surgeon. These are the gate's own control files."
-   ;; The ignore file ignores itself: a directory holding only ignored
-   ;; entries disappears from `git status` entirely, which is the point.
-   ;; `focused-test.edn` is deliberately absent -- that one is the
-   ;; repository's own declaration and belongs in its history.
-   ".gitignore"
-   "write.lock"
-   "*.lock"
-   "focused-test-report*"])
 
 (defonce ^:private monitors (atom {}))
 
@@ -51,6 +36,8 @@
                     (assoc current key (Object.)))))
          key)))
 
+;; @spec MCP-OP-ADMIT-094
+;; @spec ALIAS-MIGRATION-001
 (defn advisory-lock-file
   "The cross-process lock file, or nil when the workspace has no state dir.
 
@@ -61,7 +48,7 @@
   [root]
   (let [directory (io/file (str root) lock-directory-name)]
     (when (.isDirectory directory)
-      (io/file directory lock-file-name))))
+      (io/file (artifacts/target "workspace-lock" root lock-file-name)))))
 
 ;; @spec MCP-OP-ADMIT-088
 (defn- open-lock-channel
@@ -73,35 +60,17 @@
   surfacing an IOException as an unexplained tool failure."
   [^java.io.File file]
   (try
+    (.mkdirs (.getParentFile file))
     (FileChannel/open (.toPath file)
-                      (into-array OpenOption
-                                  [StandardOpenOption/CREATE
-                                   StandardOpenOption/WRITE]))
+        (into-array OpenOption
+                    [StandardOpenOption/CREATE
+                     StandardOpenOption/WRITE]))
     (catch Exception error
       (throw (ex-info (str "Cannot take the workspace write lock at "
                            (.getPath file) ": " (.getMessage error))
                       {:error-type :workspace-lock-unavailable
                        :lock-path (.getPath file)
                        :cause-error-type (.getName (class error))})))))
-
-;; @spec MCP-OP-ADMIT-094
-(defn- ensure-ignored!
-  "Keep the gate's control files out of the workspace's version control.
-
-  Only the state directory is touched, and only additively: an existing
-  ignore file keeps every line it had and gains the ones it lacked."
-  [^java.io.File directory]
-  (try
-    (let [file (io/file directory ".gitignore")
-          existing (if (.isFile file)
-                     (vec (clojure.string/split-lines (slurp file)))
-                     [])
-          present (set (map clojure.string/trim existing))
-          missing (remove #(contains? present %) control-ignore-lines)]
-      (when (seq missing)
-        (spit file (str (clojure.string/join "\n" (concat existing missing))
-                        "\n"))))
-    (catch Exception _ nil)))
 
 (defn- with-advisory-lock
   [^java.io.File file thunk]
@@ -136,8 +105,7 @@
   [root thunk]
   (locking (monitor-for root)
     (if-let [file (advisory-lock-file root)]
-      (do (ensure-ignored! (.getParentFile file))
-          (with-advisory-lock file thunk))
+      (with-advisory-lock file thunk)
       (thunk))))
 
 (defmacro with-workspace-write-lock
