@@ -419,9 +419,9 @@
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
   '{clj-surgeon.receipt-artifacts-boundary-test 15 ; Sol r10 + two Row 5 real-process witnesses (battery).
-    clj-surgeon.namespace-split-test 35 ; B07 adds nine partial-retention, facts, bounded-analysis and preservation witnesses.
+    clj-surgeon.namespace-split-test 47 ; B07 adds nine partial-retention, facts, bounded-analysis and preservation witnesses.
     clj-surgeon.namespace-split-warm-test 2 ; Round 3: real nREPL failure/green matrix and stale/foreign discovery, integration.
-    clj-surgeon.mcp-namespace-split-test 21 ; Batch 3's six receipt/facts/budget witnesses on the previous 13, plus Sol's a9da4344 committed-facts witness and the 0956951b delta fence's actionable unsafe-tmpdir refusal.
+    clj-surgeon.mcp-namespace-split-test 24 ; Batch 3's six receipt/facts/budget witnesses on the previous 13, plus Sol's a9da4344 committed-facts witness and the 0956951b delta fence's actionable unsafe-tmpdir refusal.
     clj-surgeon.split-proof-gate-test 4 ; Batch 3 pure status/state matrix, plus Sol's a9da4344 temp-root admission and receipt-ceiling witnesses.
     clj-surgeon.split-proof-gate-boundary-test 3 ; Batch 3 detached worker and caller-exit boundaries, plus Sol's a9da4344 worker-identity boundary.
     clj-surgeon.cell-b-oracle-test 2 ; B07: shell lint mutation test and independent partial-preservation mutants; battery (Python subprocess).
@@ -548,7 +548,8 @@
       ;; boundary, 1 mcp) without moving these pins, so this arithmetic was RED at
       ;; branch tip 0956951b; the delta fence for that tip adds the fifth, the
       ;; actionable unsafe-tmpdir refusal (NS-SPLIT-059). 547 + 4 + 1 = 552.
-      (is (= 552 adopted) (str "adopted tests: " adopted)))
+      ;; Rows sublime batch 4: source-derived pins from the manifest census, twelve pure and three boundary witnesses, including the Sol fence counterexamples.
+      (is (= 567 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -651,7 +652,8 @@
       ;; five witnesses through the source census; the delta fence's help witness
       ;; lives in the BB lane's cli-dispatch-test and is not counted here.
       ;; 1566 + 4 + 1 = 1571.
-      (is (= 1571 total) (str "manifest declares " total " tests"))
+      ;; Batch 4 source census: 1019 original + 567 adopted = 1586.
+      (is (= 1586 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

@@ -1,6 +1,7 @@
 (ns clj-surgeon.namespace-split-test
   {:lane :fast}
   (:require
+   [cheshire.core :as json]
    [clj-surgeon.mcp-extraction :as kernel]
    [clj-surgeon.mcp-extraction-test :as memory]
    [clj-surgeon.mcp-process :as analyzer-process]
@@ -786,3 +787,189 @@
         r (split/compile-split request input)]
     (is (false? (:ok r)))
     (is (some #{:retained-declaration-of-moved-owner} (map :type (:blockers r))))))
+
+(defn negative-fixture []
+  (split/compile-split
+    (assoc (paper-request [["util" ["moved"]]]) :roots ["src" "test"])
+    {:sources {"src/app/views.clj" "(ns app.views)\n(defn moved [x] (+ x 1))\n"
+               "test/app/quiet_test.clj" "(ns app.quiet-test)\n(def unrelated 42)\n"}
+     :analysis {} :source-paths ["src" "test"]}))
+
+;; @spec NS-SPLIT-060
+;; INTENT-TEST: NS-SPLIT-060
+(deftest comment-facts-record-policy-and-lines
+  (let [{:keys [request input]} (partial-fixture)
+        facts (:facts (split/receipt (split/compile-split request input) []))]
+    (is (= "remove-moved-invocations" (:comment_policy facts)))
+    (is (= 1 (count (:comment_edits facts))))
+    (is (= "src/app/views.clj" (get-in facts [:comment_edits 0 :file])))
+    (is (str/includes? (get-in facts [:comment_edits 0 :lines 0 2] "") "(print (moved))"))
+    (is (not (str/includes? (get-in facts [:comment_edits 0 :lines 0 3] "") "(print"))))
+  (let [facts (:facts (split/receipt (negative-fixture) []))]
+    (is (= "preserve" (:comment_policy facts)))
+    (is (= [] (:comment_edits facts)))))
+
+;; @spec NS-SPLIT-061
+;; INTENT-TEST: NS-SPLIT-061
+(deftest negative-facts-detect-stale-test-reference
+  (let [compiled (negative-fixture)
+        good (split/review-facts compiled)
+        bad (split/review-facts
+              (assoc-in compiled [:future-sources "test/app/quiet_test.clj"]
+                        "(ns app.quiet-test (:require [app.views :as old]))\n(def answer (old/moved 1))\n"))]
+    (is (= [] (get-in good [:stale_references :sites])))
+    (is (= ["src" "test"] (get-in good [:stale_references :scope :roots])))
+    (is (pos? (get-in bad [:stale_references :count] 0)))
+    (is (some #(= "old/moved" (:token %)) (get-in bad [:stale_references :sites])))
+    (is (every? #(= "test/app/quiet_test.clj" (:file %)) (get-in bad [:stale_references :sites])))))
+
+;; @spec NS-SPLIT-062
+;; INTENT-TEST: NS-SPLIT-062
+(deftest negative-facts-detect-retained-facade
+  (let [compiled (negative-fixture)
+        bad (assoc-in compiled [:future-sources "src/app/views.clj"]
+                      "(ns app.views (:require [app.util :as u]))\n(defn moved [x] (u/moved x))\n")]
+    (is (= [] (get-in (split/review-facts compiled) [:facades :forms])))
+    (is (= ["moved"] (mapv :owner (get-in (split/review-facts bad) [:facades :forms]))))))
+
+;; @spec NS-SPLIT-063
+;; INTENT-TEST: NS-SPLIT-063
+(deftest negative-facts-detect-duplicate-owner
+  (let [compiled (negative-fixture)
+        bad (update-in compiled [:future-sources "test/app/quiet_test.clj"]
+                       (fn [_] "(ns app.quiet-test)\n(defn moved [x] (+ x 1))\n"))]
+    (is (= [["moved" 1 0]] (get-in (split/review-facts compiled) [:exactly_once :rows])))
+    (is (= [["moved" 1 1]] (get-in (split/review-facts bad) [:exactly_once :rows])))
+    (is (false? (get-in (split/review-facts bad) [:exactly_once :passed])))))
+
+;; @spec NS-SPLIT-064
+;; INTENT-TEST: NS-SPLIT-064
+(deftest negative-facts-detect-body-change
+  (let [compiled (negative-fixture)
+        good (get (split/review-facts compiled) :bodies_preserved)
+        bad (get (split/review-facts
+                   (update-in compiled [:future-sources "src/app/util.clj"] str/replace "(+ x 1)" "(+ x 2)"))
+                 :bodies_preserved)]
+    (is (= [1 0] ((juxt :equal :unequal) good)))
+    (is (= [0 1] ((juxt :equal :unequal) bad)))
+    (is (= [1 0] ((juxt :raw_equal :raw_unequal) good)))
+    (is (= "moved" (ffirst (:rows good))))
+    (is (= 64 (count (second (first (:rows good))))))
+    (is (not= (second (first (:rows bad))) (nth (first (:rows bad)) 2 nil)))))
+
+;; @spec NS-SPLIT-061
+;; @spec NS-SPLIT-063
+(deftest negative-facts-scan-unchanged-files-and-distinguish-namesakes
+  (let [compiled (negative-fixture)
+        old "(ns app.quiet-test)\n(defn moved [x] :independent)\n"
+        compiled (assoc-in compiled [:guard-sources "test/app/quiet_test.clj"] old)
+        good (split/review-facts compiled)
+        duplicate (assoc-in compiled [:future-sources "test/app/quiet_test.clj"]
+                            (str old "(defn moved [x] :independent)\n"))]
+    (is (= [["moved" 1 0]] (get-in good [:exactly_once :rows])))
+    (is (= 1 (count (get-in good [:exactly_once :preexisting_namesakes]))))
+    (is (= [["moved" 1 1]] (get-in (split/review-facts duplicate) [:exactly_once :rows]))))
+  (doseq [text ["(ns app.quiet-test)\n(def answer (app.views/moved 1))"
+                "(ns app.quiet-test (:require [app.views :refer [moved]]))\n(def answer (moved 1))"]]
+    (let [compiled (assoc-in (negative-fixture) [:guard-sources "test/app/quiet_test.clj"] text)]
+      (is (pos? (get-in (split/review-facts compiled) [:stale_references :count] 0))))))
+
+;; @spec NS-SPLIT-060
+;; @spec NS-SPLIT-057
+(deftest negative-comment-evidence-is-lossless-and-safe
+  (let [compiled (negative-fixture)
+        before "(ns app.quiet-test)\n;;   quote \"x\" \\ newline\u2028forge\u202E\n(def unrelated 42)\n"
+        after (str/replace before ";;   quote" ";;    quote")
+        compiled (-> compiled
+                     (assoc-in [:guard-sources "test/app/quiet_test.clj"] before)
+                     (assoc-in [:future-sources "test/app/quiet_test.clj"] after))
+        facts (split/review-facts compiled)
+        row (get-in facts [:comment_edits 0 :lines 0])
+        decode #(json/parse-string (str "\"" % "\""))]
+    (is (= ";;   quote \"x\" \\ newline\u2028forge\u202E" (decode (nth row 2))))
+    (is (= ";;    quote \"x\" \\ newline\u2028forge\u202E" (decode (nth row 3))))
+    (is (not (re-find #"[\u2028\u202E]" (pr-str facts))))))
+
+;; @spec NS-SPLIT-064
+(deftest body-facts-separate-raw-bytes-from-authorized-replay
+  (let [{:keys [request input]} (partial-fixture)
+        compiled (split/compile-split request input)
+        good (:bodies_preserved (split/review-facts compiled))]
+    (is (= [1 0 0 1] ((juxt :equal :unequal :raw_equal :raw_unequal) good)))
+    (is (= :same (nth (first (:rows good)) 2)))
+    (is (= 64 (count (nth (first (:rows good)) 3 ""))))
+    (is (not= (second (first (:rows good))) (nth (first (:rows good)) 3 nil)))
+    (doseq [[from to] [["(v/helper)" "(v/helper )"] ["(v/helper)" "(inc (v/helper))"]]]
+      (is (= 1 (get-in (split/review-facts
+                         (update-in compiled [:future-sources "src/app/calendar.clj"] str/replace from to))
+                       [:bodies_preserved :unequal]))))))
+
+;; @spec NS-SPLIT-060
+;; @spec NS-SPLIT-063
+(deftest sol-namesake-identity-does-not-hide-comments-or-invent-duplicates
+  ;; Sol batch-4 fence: source order views/v becomes destination util/v.
+  (let [source "(ns app.views)\n;; comment A\n(defn moved [x] (+ x 1))\n"
+        namesake "(ns app.v)\n;; comment B\n(defn moved [x] :independent)\n"
+        compiled (split/compile-split
+                   (assoc (paper-request [["util" ["moved"]]]) :roots ["src" "test"])
+                   {:sources {"src/app/views.clj" source "src/app/v.clj" namesake}
+                    :analysis {} :source-paths ["src" "test"]})
+        swapped (-> compiled
+                    (update-in [:future-sources "src/app/util.clj"] str/replace ";; comment A" ";; comment B")
+                    (assoc-in [:future-sources "src/app/v.clj"] (str/replace namesake ";; comment B" ";; comment A")))]
+    (is (= [] (:comment_edits (split/review-facts compiled))))
+    (is (= 2 (reduce + (map (comp count :lines) (:comment_edits (split/review-facts swapped)))))))
+  (let [caller "(ns app.quiet-test (:require [app.views :as old]))\n(defn moved [x] (old/moved x))\n"
+        compiled (split/compile-split
+                   (assoc (paper-request [["util" ["moved"]]]) :roots ["src" "test"])
+                   {:sources {"src/app/views.clj" "(ns app.views)\n(defn moved [x] (+ x 1))\n"
+                              "test/app/quiet_test.clj" caller}
+                    :analysis {:var-usages [(literal-usage "test/app/quiet_test.clj" caller "old/moved" 'app.views 'moved)]}
+                    :source-paths ["src" "test"]})]
+    (is (str/includes? (get-in compiled [:future-sources "test/app/quiet_test.clj"]) "util/moved"))
+    (is (= [["moved" 1 0]] (get-in (split/review-facts compiled) [:exactly_once :rows])))))
+
+;; @spec NS-SPLIT-062
+(deftest sol-facade-alias-and-arity-matrix
+  (doseq [body ["(defn legacy ([x] (u/moved x)))"
+                "(defn legacy ([x] (u/moved x)) ([x y] (u/moved x y)))"
+                "(def legacy #'u/moved)" "(def legacy (partial u/moved 1))"
+                "(def legacy (fn [x] (u/moved x)))"]]
+    (let [compiled (assoc-in (negative-fixture) [:future-sources "src/app/views.clj"]
+                     (str "(ns app.views (:require [app.util :as u]))\n" body "\n"))]
+      (is (= ["legacy"] (mapv :owner (get-in (split/review-facts compiled) [:facades :forms]))) body))))
+
+;; @spec NS-SPLIT-062
+(deftest retention-policy-reports-existing-forwarders
+  (let [source "(ns app.views)\n(defn moved [x] (+ x 1))\n(defn stay [x] (moved x))\n"
+        request (-> (paper-request [["util" ["moved"]]])
+                    (dissoc :source_retirement)
+                    (assoc :source {:file "src/app/views.clj" :lib "app.views" :retain true}))
+        usage (literal-usage "src/app/views.clj" source "(moved x)" 'app.views 'moved)
+        usage (-> usage (update :col inc) (update :end-col - 3))
+        compiled (split/compile-split request {:sources {"src/app/views.clj" source}
+                                               :analysis {:var-usages [usage]} :source-paths ["src" "test"]})
+        fact (:facades (split/review-facts compiled))]
+    (is (:ok compiled) (pr-str (:blockers compiled)))
+    (is (= ["stay"] (mapv :owner (:forms fact))))
+    (is (= ["stay"] (mapv :owner (:expected fact))))
+    (is (= [] (:unexpected fact)))))
+
+;; @spec NS-SPLIT-062
+(deftest sol-facade-expectations-bind-arity-and-target
+  (let [compiled (assoc-in (negative-fixture) [:future-sources "src/app/views.clj"]
+                   "(ns app.views (:require [app.util :as u]))\n(defn legacy ([] :other) ([x] (u/moved x)))\n")]
+    (is (= ["legacy"] (mapv :owner (get-in (split/review-facts compiled) [:facades :unexpected])))))
+  (let [source "(ns app.views)\n(defn moved [x] x)\n(defn other [x] (inc x))\n(defn legacy [x] (app.views/moved x))\n"
+        request (-> (paper-request [["util" ["moved" "other"]]])
+                    (dissoc :source_retirement)
+                    (assoc :source {:file "src/app/views.clj" :lib "app.views" :retain true}))
+        compiled (split/compile-split request
+                   {:sources {"src/app/views.clj" source} :source-paths ["src" "test"]
+                    :analysis {:var-usages [(literal-usage "src/app/views.clj" source "app.views/moved" 'app.views 'moved)]}})
+        changed (update-in compiled [:future-sources "src/app/views.clj"] str/replace "util/moved" "util/other")]
+    (is (= [] (get-in (split/review-facts compiled) [:facades :unexpected])))
+    (is (= ["legacy"] (mapv :owner (get-in (split/review-facts changed) [:facades :unexpected]))))
+    (let [changed-arity (update-in compiled [:future-sources "src/app/views.clj"]
+                                   str/replace "[x] (util/moved x)" "[x y] (util/moved x y)")]
+      (is (= ["legacy"] (mapv :owner (get-in (split/review-facts changed-arity) [:facades :unexpected])))))))

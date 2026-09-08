@@ -468,7 +468,8 @@
     ;; Rows sublime batch 3 adds NS-SPLIT-050..054.
     ;; Sol's landing fence for a9da4344 adds NS-SPLIT-055..058.
     ;; Sol's delta fence for 0956951b, ruling (a), adds NS-SPLIT-059.
-    (is (= 238 (count non-mcp)))
+    ;; Batch 4 registers NS-SPLIT-060..066; derived from current spec-doc-paths.
+    (is (= 245 (count non-mcp)))
     (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 19
             "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3}
            (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"
