@@ -4330,3 +4330,14 @@ Shipped: `RUN-START {json}` / `FAIL {json}` / `RUN-DONE {json}` / `STATUS {json}
 ## 2026-09-08T19:38Z — battery docs corrected → 6f49289d; ship #5d launched. The builder's finding on itself: the "4 141 / 4 143" claim was not merely stale but wrong in principle — MCP-OP-ADMIT-147 REQUIRES that witness to spend the same assertions in both states so the count cannot reveal which machine ran it; the tree's own intent said so the whole time. The pre-existing note in admit_patch_test.clj:5641 is outside the delta, flagged to its owner.
 
 ## 2026-09-08T19:41Z — ship #5d: Sol GO-WITH-FIX with a comment-only fix it applied itself (the prerequisite narrative under the new default), 195-s review; I applied its 19-line patch to the branch tip → cbef534b (kondo clean) and launched ship #5e (4-min delta). t-ledger honesty: this one branch has now been through FIVE ship runs (conflict → GO-WITH-FIX → NO-GO on docs → GO-WITH-FIX comment → confirm), ~35 min of review wall for ~20 min of fixes; the mechanism worked every time (never landed unverified) but the shape is the new longest piece of t. Ratchet to draft: a "docs and comments" review class that Sol fixes in place and lands with GO in one round.
+
+## 2026-09-08T19:44Z — Row-5 ADOPTION cohort (Opus, 72 min, preregistered; records 2026-09-08-row5-adopt.md 21d57ffd): facts in the receipt solved ADOPTION completely and moved INSPECTION not at all
+
+| arm | wall median | postcommit inspection actions | read `:facts` | accepted |
+|---|---:|---:|---:|---:|
+| E (facts inside the receipt, trunk c5c89be5) | **121.5 s** | **9.0** | **6/6** | 6/6 |
+| D (retained, stage 2) | 133.3 s | 12.0 | 0/6 used the separate projection | 6/6 |
+| paired E/D | 0.98 | **0.98** | | |
+| paired E/N | **0.42** | | | |
+
+Gate: NOT MET on inspection (≤ 6.0 required, 9.0 observed); acceptance and wall met. Learning, from all six arms unprompted: `:facts` records what the transaction WROTE; every remaining check is a NEGATIVE or an ABSENCE — the task's comment-policy trap has no fact, and nothing asserts no-stale-reference, no-facade, exactly-once-repo-wide, bodies-byte-preserved; callers inspect to FALSIFY, not to discover; four arms proposed `:facts :comment_edits`. NS-SPLIT-053/054 (committed facts-only, executable manifest) work and were called ZERO times on the happy path — measure them on recovery paths. All six E patches byte-identical to each other and to D's (same route, no hand repair). `verification_complete false` is a foot-gun (6/6). Deviation disclosed: E ran Opus to match the Opus D control (the brief said Sol); arithmetic slip in the retained stage-2 median (126.6 → 133.3, verdict unaffected). Rows batch 4 launched (Astra): the negatives as proven facts (`:comment_edits`, `:stale_references`, `:facades`, `:exactly_once`, `:bodies_preserved`) and a `:proof {:tier :status :next_call}` beside the honest field.
