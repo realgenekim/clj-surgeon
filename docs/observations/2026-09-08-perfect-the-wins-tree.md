@@ -107,3 +107,4 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 - 2026-09-08T20:28Z t ledger: battery on trunk 839 s → 218–233 s (8 lanes default); landing GO→LANDED ≈ 11 min when nothing refuses.
 - 2026-09-08T20:59Z row 2 → friction-low: fresh-seat pilot gate PASS (3/4 routed unprompted, 4/4 accepted); cold routed/native 1.36× (directed 3.98× stands as its own condition); next = pre-loaded schema cell + a routing-without-asking form (non-consideration is the failure mode).
 - 2026-09-08T21:35Z row 5: negatives-as-facts LANDED (3dcf0491); replication cohort vs the 0.55 prediction next; friction-medium → friction-low if inspection ≤ 0.5.
+- 2026-09-08T22:38Z row 2: entrance landed in both specimens; route 4/4; caller work unchanged (orientation + post-receipt verification = 86–89 %); same residual as row 5 → the receipt is the lever for both rows; friction-low holds.
