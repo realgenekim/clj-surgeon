@@ -1,0 +1,6 @@
+t0	1788877919.871236221
+t1_process_exit	1788877936.884469823
+t_verdict_line	1788877936.458266
+verdict	579 tests, 7833 assertions, 0 failures.
+wall_to_verdict_s	16.587
+wall_process_s	17.013

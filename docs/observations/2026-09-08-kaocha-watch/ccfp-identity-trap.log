@@ -1,0 +1,8 @@
+== 0. wait for watcher to settle green ==
+== 1. ADD A FIELD to deftype ReviewWriteProof (single in-place save) ==
+-- watcher output after the field addition:
+1788880319.456744	[watch] Reloading #{cfp-scheduler-killer.speaker-portal-task-error-values-contract-test cfp-scheduler-killer.review-authorization cfp-scheduler-killer.review-assignments-test cfp-sch
+1788880389.040375	1021 tests, 12393 assertions, 0 failures.
+== 2. REVERT ==
+1788880394.132599	[watch] Reloading #{cfp-scheduler-killer.speaker-portal-task-error-values-contract-test cfp-scheduler-killer.review-authorization cfp-scheduler-killer.review-assignments-test cfp-sch
+1788880463.583785	1021 tests, 12393 assertions, 0 failures.

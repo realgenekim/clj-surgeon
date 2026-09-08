@@ -1,0 +1,10 @@
+trial1	A_rename_save_sed-i	NOFIRE
+trial1	B_inplace_append_after_rename	1788879331.062173	579 tests, 7833 assertions, 1 failures.
+trial1	C_inplace_revert	1788879331.142816	1 tests, 3 assertions, 0 failures.
+trial2	A_rename_save_sed-i	NOFIRE
+trial2	B_inplace_append_after_rename	1788879386.222066	579 tests, 7833 assertions, 1 failures.
+trial2	C_inplace_revert	1788879386.323843	1 tests, 3 assertions, 0 failures.
+trial3	A_rename_save_sed-i	1788879393.257792	579 tests, 7833 assertions, 13 failures.
+trial3	B_inplace_append_after_rename	1788879400.328314	579 tests, 7833 assertions, 1 failures.
+trial3	C_inplace_revert	1788879400.473776	1 tests, 3 assertions, 0 failures.
+control	D_inplace_red	1788879414.325543	579 tests, 7833 assertions, 1 failures.

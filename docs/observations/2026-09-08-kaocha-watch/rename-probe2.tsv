@@ -1,0 +1,6 @@
+trial1	A_rename_sed-i_idlegated	1788879466.872006	579 tests, 7833 assertions, 1 failures.
+trial1	B_inplace_append	1788879466.959757	1 tests, 3 assertions, 1 failures.
+trial2	A_rename_sed-i_idlegated	1788879473.701014	579 tests, 7833 assertions, 0 failures.
+trial2	B_inplace_append	1788879480.432418	579 tests, 7833 assertions, 1 failures.
+trial3	A_rename_sed-i_idlegated	1788879487.318938	579 tests, 7833 assertions, 0 failures.
+trial3	B_inplace_append	1788879494.077341	579 tests, 7833 assertions, 1 failures.

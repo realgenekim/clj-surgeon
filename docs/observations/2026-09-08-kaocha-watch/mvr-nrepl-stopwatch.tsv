@@ -1,0 +1,21 @@
+1	red	0.587	464.617531	2 tests, 4 assertions, 1 failures.
+1	green	0.150	37.669418	2 tests, 4 assertions, 0 failures.
+2	red	0.139	34.638533	2 tests, 4 assertions, 1 failures.
+2	green	0.149	39.239074	2 tests, 4 assertions, 0 failures.
+3	red	0.149	39.491302	2 tests, 4 assertions, 1 failures.
+3	green	0.143	30.872383	2 tests, 4 assertions, 0 failures.
+4	red	0.138	31.023319	2 tests, 4 assertions, 1 failures.
+4	green	0.142	33.58968	2 tests, 4 assertions, 0 failures.
+5	red	0.144	36.886775	2 tests, 4 assertions, 1 failures.
+5	green	0.146	35.403629	2 tests, 4 assertions, 0 failures.
+6	red	0.141	33.90325	2 tests, 4 assertions, 1 failures.
+6	green	0.144	30.106934	2 tests, 4 assertions, 0 failures.
+7	red	0.145	36.199844	2 tests, 4 assertions, 1 failures.
+7	green	0.144	31.573323	2 tests, 4 assertions, 0 failures.
+8	red	0.139	30.793193	2 tests, 4 assertions, 1 failures.
+8	green	0.140	29.989067	2 tests, 4 assertions, 0 failures.
+9	red	0.145	35.579063	2 tests, 4 assertions, 1 failures.
+9	green	0.141	27.666574	2 tests, 4 assertions, 0 failures.
+10	red	0.139	29.522047	2 tests, 4 assertions, 1 failures.
+10	green	0.155	32.295416	2 tests, 4 assertions, 0 failures.
+VmRSS:	  631068 kB
