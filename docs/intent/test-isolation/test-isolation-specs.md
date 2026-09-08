@@ -1,7 +1,7 @@
 ---
 parent: test-isolation-design
 prefix: TEST-ISO
-status: "round four implemented 2026-09-04 (002/003/004/005/007/010 runtime witnesses); spike docs/observations/2026-09-04-suite-spike-spec.md, record -round4.md"
+status: "round four implemented 2026-09-04 (002/003/004/005/007/010 runtime witnesses); round six 2026-09-08 adds 013, the battery lane run wide; spike docs/observations/2026-09-04-suite-spike-spec.md, record -round4.md"
 ---
 
 # JVM Test-Suite Isolation Specifications
@@ -259,6 +259,66 @@ correct behaviour is one somebody deletes.
 - [ ] **TEST-ISO-012**: No two fast-lane namespaces share a mutable resource
   -- a relational oracle, KEPT ONLY if it finds a counterexample the native
   witnesses missed.
+
+## Round six -- the battery lane, run wide
+
+Gene, 2026-09-08, elevating it: *"reducing t is supremely important."* The
+battery measured **809 s serial** on a 16-core box (ledger receipt sha
+afde6652, 35 namespaces, 743 tests / 13 756 assertions, one skipped recovery
+precondition under an overall PASS), and it is `battery-fresh`'s ONLY
+evidence -- so every landing pays it in full.
+
+- [x] **TEST-ISO-013**: The battery lane shall be runnable as N SEPARATE JVM
+  LANES over a partition of its namespaces, with **identical verdict
+  semantics** to the one-JVM run, and the width shall be one number
+  (`BATTERY_LANES`) whose value `1` is exactly the serial shape.
+
+  Precisely, and each clause is a separate way this could go quietly wrong:
+
+  1. **The inventory is the gate's own membership.** The namespaces to run
+     shall be read from `clj-surgeon.lane-manifest`'s `:battery` lane, never
+     from a list typed into the scheduler -- a hard-coded inventory is how a
+     namespace added to the manifest silently stops being run.
+  2. **Every namespace runs exactly once, and a lane that ran less FAILS.**
+     A lane that dies, times out, writes no result, writes an unreadable one,
+     or returns a namespace set different from the one it was asked for is a
+     NAMED failure with its log path -- never a lane contributing zero tests
+     to a green total.
+  3. **The probe emits facts; the coordinator emits every verdict.** A lane
+     child holds one slice, so it renders neither the `Ran N tests` summary
+     nor the TEST-ISO-007 LANE budget: both are statements about the union.
+     The lane budget shall be folded over the SUM of the namespaces' walls --
+     the number a serial run would have paid -- and the parallel makespan
+     reported separately, never substituted for it.
+  4. **Named summary lines survive the process boundary.** A counter merges
+     by addition; the MESSAGES a namespace prints beside its counter live in
+     an atom that does not cross a process boundary. Today's receipt carries
+     `1 preconditions skipped` under a PASS; the parallel summary shall print
+     the same named skip. A skip a reader cannot see is a gate that got
+     faster by covering less.
+  5. **A namespace with a cross-namespace prerequisite shall be DECLARED, not
+     discovered.** `serial-groups` names each group and the prerequisite that
+     binds it, and the packer shall never split one across lanes.
+  6. **A bad cost table costs wall, never correctness.** The measured walls
+     only choose which lane a namespace lands in; an unmeasured namespace is
+     scheduled FIRST at the largest estimate.
+  7. **The floor shall be reported.** No partition of whole units can finish
+     before its largest unit; the run prints that unit and its cost, so
+     `why is it not faster` is answered on the screen.
+
+  *Witness:* `clj-surgeon.battery-parallel-test/the-inventory-is-the-lane-manifests-battery-lane`,
+  `.../every-namespace-is-scheduled-exactly-once-across-the-lanes`,
+  `.../a-serial-group-is-never-split-across-lanes`,
+  `.../one-lane-is-the-serial-shape`,
+  `.../a-lane-that-ran-less-than-it-was-asked-for-is-a-named-failure`,
+  `.../a-lane-that-timed-out-or-wrote-nothing-is-a-named-failure`,
+  `.../the-lane-budget-is-folded-over-the-union-not-per-lane`,
+  `.../a-named-precondition-skip-survives-the-lane-split`,
+  `.../the-note-vars-the-summary-reprints-still-exist`,
+  `.../an-unmeasured-namespace-is-scheduled-first-and-still-runs`,
+  `.../the-floor-is-the-largest-unit`,
+  `clj-surgeon.lane-manifest-test/the-lane-runner-resolves-to-exactly-the-lane-it-names`
+  (pins `make test-battery` to the battery lane through the new coordinator).
 
 ### TEST-ISO-009b archival distance
 

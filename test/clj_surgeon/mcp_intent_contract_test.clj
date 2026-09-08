@@ -465,8 +465,9 @@
     ;; Row 3 registers fourteen standalone require-change promises.
     ;; Sol r10 adds ALIAS-MIGRATION-003, the mandatory affected-battery gate.
     ;; Rows sublime adds NS-SPLIT-047..049 and ALIAS-MIGRATION-004..005.
-    (is (= 228 (count non-mcp)))
-    (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 19
+    ;; TEST-ISO-013 registers the battery lane run as N JVM lanes.
+    (is (= 229 (count non-mcp)))
+    (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 20
             "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3}
            (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"
                                   "MEASURE-" "TELEMETRY-EVENTS-" "ROUTING-"]]

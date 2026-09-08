@@ -103,6 +103,7 @@
    'clj-surgeon.mission-forms-source-test :fast
    'clj-surgeon.mission-plain-forms-test :fast
    'clj-surgeon.battery-ledger-test                     :fast
+   'clj-surgeon.battery-parallel-test                   :fast
    'clj-surgeon.census-pool-test                        :fast
    'clj-surgeon.fast-lane-isolation-test                :fast
    'clj-surgeon.helper-extraction-test                  :fast
