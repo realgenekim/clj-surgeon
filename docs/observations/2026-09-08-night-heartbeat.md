@@ -24,3 +24,6 @@ Rules of this file: one entry per hour (UTC), quote receipts verbatim, DELTA per
 
 ## 2026-09-08T08:07Z
 - DELTA: cohorts refusal LIFTED (acceptance 4). Pilot 4 refused on seed load-reds → fix + pilot 4b running. Row 2 stage 2 running. B07 (Astra) ~110 min, in its box. Disk 41 G remaining. Load 2.8.
+
+## 2026-09-08T08:11Z
+- Five lanes: row-2 stage 2 (six N/D pairs), pilot 4b (seed + harness fixes then p21–p24), row-5 stage 1 (six native controls on the B07 apparatus), Sol r9 (review of the partial-retention commit 02bbf482), Astra row-3 schema admission (standalone require_change). Trunk unchanged since the plate landing. Disk ~41 G remaining. Load 1.97.
