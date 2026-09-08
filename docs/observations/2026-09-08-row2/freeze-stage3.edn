@@ -1,0 +1,124 @@
+;; Row 2 STAGE 3 freeze manifest — written BEFORE arm P1-D3.
+;; Amends freeze-stage2.edn. Everything not restated below stays frozen from stage 2.
+;; Purpose: re-run the six D arms on the FIXED build (Artifact A repaired); the six N arms
+;; of stage 2 are RETAINED unchanged and are the paired controls.
+{:frozen-at-utc "2026-09-08T09:55:54Z"
+
+ :ruling
+ {:path "/var/tmp/forge/plan2/cellC/sol-row2-verdict.md"
+  :sha256 "dba14247a588d1f3084010950959989a08d0f31a109da5f78bad6d87236f0bbc"
+  :operator-brief {:path "/var/tmp/forge/plan2/cellC/brief-row2-stage3.md"
+                   :sha256 "168d73cb39008f9082559abb8df47c0b8e228e925c30959c5c71ee0d48f7008b"}}
+
+ :mcp-server
+ {:port 7907 :pid 477544
+  :worktree "/home/forge/src/clj-surgeon-split"
+  :head "827a751add48fbb8da364fbbf74544e1cf485d99"
+  :subject "827a751a  Keep Surgeon receipt artifacts outside migrated workspaces"
+  :dirty false
+  :started-by "operator, via ~/bin/run-bg srv7907-row2 (already up before this stage began)"
+  :tools-list "/var/tmp/forge/row2/artifacts/tools-list-7907.json"
+  :tools-count 11
+  :alias-migration-contract-sha256 "e3417606a276ea7bc0af507892258dad91e37b413a32d53beb04e876b81499b6"
+  :alias-migration-INPUTschema-sha256 "3423f351ae3a743a6f923dc6b0049ebbc53e05fa8f8bcf6b15489e695cf5453d"
+  :contract-delta-vs-7906
+  "inputSchema BYTE-IDENTICAL to the stage-2 server (3423f351...), so the frozen D request is
+   admitted unchanged. Only the OUTPUT schema differs: the fix adds two receipt fields,
+   :workspace_status and :workspace_clean_except. Whole-descriptor hash therefore differs
+   (e89c8043... -> e3417606...); the request envelope does not."
+  :call-route "~/bin/surgeon-call alias_migration <args.json> 7907"}
+
+ :arm-envelopes
+ {"brief-D-stage3.tmpl.md" "9d1a1747c6c3b242e8e80730ecd532ac0888a65d83ae42130858eb246a368361"
+  :delta-vs-stage-2-D-brief "exactly two lines: the stage label in the title, and 7906 -> 7907 in the
+                             frozen surgeon-call. All route rules, prohibitions and clock protocol identical."
+  :N-brief :not-rerun
+  :setup "setup-arm3.sh bdd2d20e20d82ba42e3e34a4e20ab560450ebac6163ea096b9bad6aa620c627b"}
+
+ :d-request
+ {:template "/var/tmp/forge/row2/request.tmpl.json"
+  :sha256   "462a7a6a9ccb54e82bcc7c9fd54117b6ba45f3d3e4b6e204c9b0a62b63d5cab8"
+  :unchanged-from-stage-2 true :no-verify-field true}
+
+ :task {:path "/var/tmp/forge/row2/task-stage2.md"
+        :sha256 "ec4c2a9e24fad8fbc4f0733454f773df2d1b20c61129f2de0ff402d9b9c331a2"
+        :unchanged-from-stage-2 true}
+
+ :oracles {:runner "/var/tmp/forge/row2/oracle2/run_oracles_v2.sh"
+           :sha256 "0bc09aec2c9b9fa1606fc2db62467bfd45082f86df621355c88c702f6241733c"
+           :unchanged-from-stage-2 true
+           :note "the oracles themselves are NOT weakened. The acceptance CLASSIFIER on top of them
+                  is what the ruling amends (see :acceptance-classifier)."}
+
+ :new-check
+ {:what "the fix's own claim, verified prospectively in every arm worktree BEFORE any runner staging"
+  :cmd "git status --porcelain --untracked-files=all"
+  :requirement "the listing names EXACTLY the nine rewritten caller files and nothing else"
+  :tool "/var/tmp/forge/row2/check-untracked.sh"
+  :sha256 "944e2a5cdcac015595987a1f8084af1b087f525c26baa6059bc76f81bcd22703"
+  :ordering "run after the arm reports and before grade-arm.sh (which stages with git add -A)"}
+
+ :meter {:caller-work-endpoint "orient-start -> candidate-complete (LAST stamp)   [GATED]"
+         :all-oracle-endpoint  "orient-start -> oracle-complete                    [REPORTED BESIDE, NOT GATED]"
+         :tool "/var/tmp/forge/row2/wall2.sh"
+         :tool-sha256 "d8b8b82d0ad087d95a270f6863d5fc6b74acec5d2b3dd719e46ba3291f74697b"
+         :stamp-tool "/var/tmp/forge/dogfood-stamp.sh"}
+
+ ;; ---- ruling section 3: acceptance classifier ----
+ :acceptance-classifier
+ {:accepted            "O1 O2 O3 O4 O5 all PASS"
+  :accepted-with-minor "O1-O4 substantive correctness PASS, and every remaining finding is MINOR:
+                        (a) O5.1 patch larger than golden solely by whitespace / continuation-line
+                            re-indentation, or (b) an O2.d difference whose sole cause is a valid
+                            insertion POSITION of the new target libspec inside the require block."
+  :rejected            "any critical or major finding: wrong resolution or behaviour, damaged protected
+                        material, wrong or missing migration tokens, unrelated require edits (O5.3),
+                        stray artifacts left in the workspace (O5.2), O1/O3/O4 failure."
+  :symmetry "applied identically to N and D."
+  :retained-N-classification "6/6 accepted-with-minor (ruling section 3, on the frozen stage-2 outputs)"}
+
+ :registered-gate-stage-3-corrected
+ {:primary-conjunctive
+  ["1. 6/6 D accepted or accepted-with-minor, with no request repair, second call, operator
+       intervention or native fallback"
+   "2. median_i(D_i^C / N_i^C) <= 0.75        (CALLER WORK — ruling section 2)"
+   "3. median_i(1 - D_i^C / N_i^C) >= 0.50"
+   "4. median_i(N_i^C - D_i^C) > 2 * s_N^C = 46.346 s"]
+  :reported-secondary "median_i(D_i^C / N_i^C) <= 0.70"
+  :reported-beside-ungated "median_i(D_i^A / N_i^A)  — raw all-oracle ratio, apparatus-contaminated"
+  :retired "the all-oracle 0.75 / 0.70 PASS/FAIL labels (ruling section 2)"}
+
+ :retained-stage-1
+ {:caller-work-s [121.531 122.959 71.243 79.909 109.266 79.556]
+  :s_N^C-s 23.173 :2s_N^C-s 46.346 :unchanged true}
+
+ :retained-stage-2-N-arms
+ {:ids ["P1-N" "P2-N" "P3-N" "P4-N" "P5-N" "P6-N"]
+  :caller-work-s [132.756 106.844 153.005 89.080 141.045 93.861]
+  :all-oracle-s  [300.583 269.860 309.622 240.355 301.474 249.154]
+  :source "/var/tmp/forge/row2/results-stage2.edn (frozen); stamps in <ARM>/stopwatch.log"
+  :not-rerun true}
+
+ :stage-3-cohort
+ {:d-arms ["P1-D3" "P2-D3" "P3-D3" "P4-D3" "P5-D3" "P6-D3"]
+  :pairing "P<i>-D3 pairs with the retained P<i>-N; the stage-2 within-pair order
+            (P1 N->D, P2 D->N, P3 N->D, P4 D->N, P5 N->D, P6 D->N) is inherited and recorded,
+            but is no longer randomised at run time because the N arms are not rerun.
+            This is a known, declared limitation of a treatment-only re-run."
+  :model "opus, fresh Agent session per arm, no context carry-over"
+  :order :sequential :overlap :none
+  :seed "6dcdbc9db67a91179b5940a16c16b760583f2603"
+  :worktree-pattern "/home/forge/src/mvr-row2-<ARM>"
+  :stage-2-D-arms-preserved "P1-D..P6-D directories and worktrees are untouched"}
+
+ :declared-deviations
+ [{:what "post-candidate apparatus"
+   :detail "stage 3 grades each arm as soon as its Agent session returns, rather than through the
+            stage-2 idle-based (>=75 s) completion detector. This changes only the segment AFTER
+            candidate-complete. It cancels exactly in clauses 2, 3 and 4 (all on the caller-work
+            endpoint) and it makes the ungated all-oracle ratio D_A/N_A cross-stage and therefore
+            NOT interpretable as a route effect. Reported, never gated."}
+  {:what "N arms retained, not rerun"
+   :detail "per the ruling (section 1: only the treatment was defective) and the operator brief."}]
+
+ :stopping-conditions-unchanged-from-design true}

@@ -88,3 +88,4 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 - 2026-09-08T09:27Z CX-18 closed; pilot 4b regrade 3/4 (p22/p25 red-first miss = CX-19 skill text, fixed 9293a55); p26 on the amended block running.
 - 2026-09-08T09:40Z p26 PASS on the amended block; pilot 5 (p27–p29) running → row 1 friction-low if 4/4.
 - 2026-09-08T10:04Z pilot 5: 3/4 (CX-20 opus/Ø edits during boot); fix 61644f5; p30 running. Row 1 stays medium; a clean 4/4 needs one more package run (~25 min).
+- 2026-09-08T10:11Z ROW 2 WIN: 3.98x caller work, 6/6 clean, 0 refusals → friction-high.

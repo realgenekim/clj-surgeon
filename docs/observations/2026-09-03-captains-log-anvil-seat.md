@@ -3859,3 +3859,16 @@ Astra also ran its own adversarial review on the change (retirement descendant s
 | p29 sol/W mvr | PASS 11/11 | 43.1 s | |
 
 All four: integrity ok, final gate green, one-file diffs, red attested, profile_isolated=no (named). Package-valid pilot; row 1 stays friction-medium on part 2 alone, by one cell, for the third time — each time a different skill-text gap, each fixed with one sentence and verified N=1 on the failing cell. A clean 4/4 on one package needs one more full four-cell run on block 08c79a61… (~25 min) — queued; will not complete before 12:00Z.
+
+## 2026-09-08T10:11Z — ROW 2 WINS on the fixed build: alias_migration cuts caller work 3.98× (median D/N 0.25, 96.7 s saved > 2·s_N), 6/6 clean accepts, zero refusals, corrected gate PASS on all four clauses + the 30% secondary
+
+| pair | N caller work | D caller work | D/N | saved |
+|---|---|---|---|---|
+| P1 | 132.8 s | 19.5 s | 0.15 | 113 s |
+| P2 | 106.8 | 26.7 | 0.25 | 80 |
+| P3 | 153.0 | 38.6 | 0.25 | 114 |
+| P4 | 89.1 | 27.4 | 0.31 | 62 |
+| P5 | 141.0 | 27.0 | 0.19 | 114 |
+| P6 | 93.9 | 43.6 | 0.47 | 50 |
+
+All-oracle ratio 0.40 reported beside, not gated (apparatus differs across stages). Every arm: nine files, 21 sites, three collisions resolved, suite 579/7833 green, workspace clean except the nine callers (tool receipt `clean_except_proven true`, verified runner-side). Sensitivity: the corrected clauses also pass on stage 2's slower D callers (0.38 / 0.62 / 74.5 s), so the verdict does not rest on stage 3's faster callers; the classifier still rejects stage 2's polluted D arms, so the amendment did not weaken the gate. Natural fixture from real history with collisions — the widening Astra and Sol both required. Row 2 → friction-high now (win at n=6 pairs, oracle exists, ledger items: N-arm layout rejections, apparatus-constant); friction-medium after Sol r10 GO + landing of 827a751a.

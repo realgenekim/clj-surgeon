@@ -1,0 +1,149 @@
+;; Row 2 STAGE 3 — the six D arms re-run on the FIXED build (827a751a, port 7907),
+;; paired with the six RETAINED stage-2 native arms. Gate as corrected by
+;; /var/tmp/forge/plan2/cellC/sol-row2-verdict.md. Freeze: freeze-stage3.edn.
+;; Nothing committed, nothing pushed.
+{:arms
+ [{:id "P1-D3" :pair "P1" :stage2-order "N->D" :route :D
+   :caller-work-s 19.462 :all-oracle-s 112.437 :candidate-complete-stamps 1
+   :O1 :PASS :O2 :PASS :O3 :PASS :O4 :PASS :O5 :PASS :class :accepted
+   :untracked-check :PASS
+   :receipt {:ok true :committed true :files 9 :sites 21
+             :aliases {"mjson" 9} :collisions-resolved 3
+             :refer-sites 0 :string-mentions 0
+             :elapsed-ms 4579.08 :next-action "none" :is-error false
+             :workspace-status {:checked true :exit 0
+                                :clean-except-proven true
+                                :unexpected-paths []}
+             :workspace-clean-except-count 9
+             :receipt-hash "24f653c876e0ef66fe9202b14597a450055cbadcd7f8e640fca643dd28ce72d1"}}
+  {:id "P2-D3" :pair "P2" :stage2-order "D->N" :route :D
+   :caller-work-s 26.691 :all-oracle-s 112.086 :candidate-complete-stamps 1
+   :O1 :PASS :O2 :PASS :O3 :PASS :O4 :PASS :O5 :PASS :class :accepted
+   :untracked-check :PASS
+   :receipt {:ok true :committed true :files 9 :sites 21
+             :aliases {"mjson" 9} :collisions-resolved 3
+             :refer-sites 0 :string-mentions 0
+             :elapsed-ms 4199.01 :next-action "none" :is-error false
+             :workspace-status {:checked true :exit 0
+                                :clean-except-proven true
+                                :unexpected-paths []}
+             :workspace-clean-except-count 9
+             :receipt-hash "ad99c1bb774856a4612b317788967fa7d8eb218f5b2d0350a66d36ef16f69b7c"}}
+  {:id "P3-D3" :pair "P3" :stage2-order "N->D" :route :D
+   :caller-work-s 38.597 :all-oracle-s 118.650 :candidate-complete-stamps 1
+   :O1 :PASS :O2 :PASS :O3 :PASS :O4 :PASS :O5 :PASS :class :accepted
+   :untracked-check :PASS
+   :receipt {:ok true :committed true :files 9 :sites 21
+             :aliases {"mjson" 9} :collisions-resolved 3
+             :refer-sites 0 :string-mentions 0
+             :elapsed-ms 4068.92 :next-action "none" :is-error false
+             :workspace-status {:checked true :exit 0
+                                :clean-except-proven true
+                                :unexpected-paths []}
+             :workspace-clean-except-count 9
+             :receipt-hash "9ae42cdcc32ee6f566a4b11173c1b96bf6ff4a2b192b8937e12ba7a471f9a9a2"}}
+  {:id "P4-D3" :pair "P4" :stage2-order "D->N" :route :D
+   :caller-work-s 27.389 :all-oracle-s 110.244 :candidate-complete-stamps 1
+   :O1 :PASS :O2 :PASS :O3 :PASS :O4 :PASS :O5 :PASS :class :accepted
+   :untracked-check :PASS
+   :receipt {:ok true :committed true :files 9 :sites 21
+             :aliases {"mjson" 9} :collisions-resolved 3
+             :refer-sites 0 :string-mentions 0
+             :elapsed-ms 4161.73 :next-action "none" :is-error false
+             :workspace-status {:checked true :exit 0
+                                :clean-except-proven true
+                                :unexpected-paths []}
+             :workspace-clean-except-count 9
+             :receipt-hash "f38771edc57d8c45dd45d8ebd6c9a8b20de9f7463956ff9e9bcf89db23ca5e68"}}
+  {:id "P5-D3" :pair "P5" :stage2-order "N->D" :route :D
+   :caller-work-s 27.008 :all-oracle-s 110.553 :candidate-complete-stamps 1
+   :O1 :PASS :O2 :PASS :O3 :PASS :O4 :PASS :O5 :PASS :class :accepted
+   :untracked-check :PASS
+   :receipt {:ok true :committed true :files 9 :sites 21
+             :aliases {"mjson" 9} :collisions-resolved 3
+             :refer-sites 0 :string-mentions 0
+             :elapsed-ms 4024.91 :next-action "none" :is-error false
+             :workspace-status {:checked true :exit 0
+                                :clean-except-proven true
+                                :unexpected-paths []}
+             :workspace-clean-except-count 9
+             :receipt-hash "1b05f7bbfedb06f7fb71315524203dbd6e9cd3a8beec2e3f1096d59f74b65ff2"}}
+  {:id "P6-D3" :pair "P6" :stage2-order "D->N" :route :D
+   :caller-work-s 43.636 :all-oracle-s 126.042 :candidate-complete-stamps 1
+   :O1 :PASS :O2 :PASS :O3 :PASS :O4 :PASS :O5 :PASS :class :accepted
+   :untracked-check :PASS
+   :receipt {:ok true :committed true :files 9 :sites 21
+             :aliases {"mjson" 9} :collisions-resolved 3
+             :refer-sites 0 :string-mentions 0
+             :elapsed-ms 3531.27 :next-action "none" :is-error false
+             :workspace-status {:checked true :exit 0
+                                :clean-except-proven true
+                                :unexpected-paths []}
+             :workspace-clean-except-count 9
+             :receipt-hash "a476066ddb32b54716cde231bd1afc263dd1376809efe44f825aa878c16ac6b7"}}
+]
+
+ :retained-stage-2-N-arms
+ [{:id "P1-N" :route :N :caller-work-s 132.756 :all-oracle-s 300.583
+   :class :accepted-with-minor :minors "O5.1 patch larger than golden while the canonical token stream is IDENTICAL to golden"}
+  {:id "P2-N" :route :N :caller-work-s 106.844 :all-oracle-s 269.860
+   :class :accepted-with-minor :minors "O5.1 patch larger than golden while the canonical token stream is IDENTICAL to golden"}
+  {:id "P3-N" :route :N :caller-work-s 153.005 :all-oracle-s 309.622
+   :class :accepted-with-minor :minors "O2.d app_route: libspec ORDER differs only (same prefix, same suffix, same 6 libspecs); O2.d server: libspec ORDER differs only (same prefix, same suffix, same 21 libspecs); O2.d tts: libspec ORDER differs only (same prefix, same suffix, same 4 libspecs); O5.1 patch larger than golden"}
+  {:id "P4-N" :route :N :caller-work-s 89.080 :all-oracle-s 240.355
+   :class :accepted-with-minor :minors "O5.1 patch larger than golden while the canonical token stream is IDENTICAL to golden"}
+  {:id "P5-N" :route :N :caller-work-s 141.045 :all-oracle-s 301.474
+   :class :accepted-with-minor :minors "O2.d app_route: libspec ORDER differs only (same prefix, same suffix, same 6 libspecs); O2.d server: libspec ORDER differs only (same prefix, same suffix, same 21 libspecs); O2.d tts: libspec ORDER differs only (same prefix, same suffix, same 4 libspecs); O5.1 patch larger than golden"}
+  {:id "P6-N" :route :N :caller-work-s 93.861 :all-oracle-s 249.154
+   :class :accepted-with-minor :minors "O5.1 patch larger than golden while the canonical token stream is IDENTICAL to golden"}
+]
+
+ :correctness-common-to-all-six-D
+ {:sites-migrated 21 :caller-files 9 :live-old-sites-remaining 0 :protected-docstring-intact true
+  :alias "mjson in all nine, in every arm" :collisions-resolved 3
+  :kondo-delta-tracked-categories 0 :suite "579 tests, 7833 assertions, 0 failures"
+  :refusals 0 :second-calls 0 :request-repairs 0 :native-fallbacks 0 :operator-interventions 0
+  :rework 0 :candidate-complete-stamps-per-arm 1
+  :workspace-pollution 0 "the stage-2 Artifact A (.clj-surgeon/ detail dir in the staged change set) is GONE"}
+
+ :gate
+ {:clause-1 {:req "6/6 D accepted or accepted-with-minor, no repair/2nd call/intervention/fallback"
+             :observed "6/6 (all six are CLEAN accepts, zero minors)" :verdict :PASS}
+  :clause-2 {:req "median(D_C/N_C) <= 0.75  [caller work, gated]" :observed 0.2510 :verdict :PASS}
+  :clause-3 {:req "median(1 - D_C/N_C) >= 0.50" :observed 0.7490 :verdict :PASS}
+  :clause-4 {:req "median(N_C - D_C) > 2*s_N^C = 46.346 s" :observed 96.724 :verdict :PASS}
+  :secondary {:req "median(D_C/N_C) <= 0.70" :observed 0.2510 :verdict :PASS}
+  :reported-beside-ungated
+  {:median-all-oracle-ratio 0.3993
+    :caveat "CROSS-STAGE. The stage-3 post-candidate apparatus is shorter than stage 2's
+             (prompt grading instead of the >=75 s idle detector), so this number mixes an
+             apparatus change with the route. It is reported, never gated (ruling section 2)."}
+  :overall :PASS}
+
+ :headline
+ {:canonical "3.98x less caller-work time (74.90% saved)"
+  :basis "reciprocal of the registered paired statistic median(D_C/N_C) = 0.2510"
+  :median-of-individual-N/D-ratios "3.98x"}
+
+ :sensitivity
+ {:what "the same corrected clauses computed on the STAGE-2 D caller work, whose migrations were
+         byte-identical; only those callers were slower around the same single tool call"
+  :median-D_C/N_C 0.3832 :median-saved 0.6168 :median-N_C-D_C 74.531
+  :verdict "clauses 2-4 PASS on BOTH treatment cohorts; the gate does not depend on stage 3's
+            faster callers"
+  :stage-3-D-caller-work-s [19.462, 26.691, 38.597, 27.389, 27.008, 43.636]
+  :stage-2-D-caller-work-s [44.376, 46.161, 48.571, 46.207, 41.939, 49.775]
+  :note "unexplained. The fixed build's receipt now carries workspace_status/clean_except_proven,
+         which plausibly shortened each caller's post-call inspection, but that is a hypothesis,
+         not a measured cause."}
+
+ :declared-limitations
+ [{:what "treatment-only re-run" :detail "the six N arms are the frozen stage-2 arms, not fresh.
+           Within-pair order is inherited, not re-randomised. Any drift in machine state between
+           09:19 (stage 2 end) and 10:07 (stage 3 end) is not controlled for."}
+  {:what "post-candidate apparatus differs from stage 2" :detail "cancels in clauses 2-4; makes the
+           all-oracle ratio non-comparable. Declared in freeze-stage3.edn before the first arm."}
+  {:what "acceptance classifier is new" :detail "classify3.py implements the ruling's
+           accepted-with-minor. It was validated by re-running it on the frozen stage-2 arms: it
+           reproduces N 6/6 accepted-with-minor AND still REJECTS all six stage-2 D arms for the
+           .clj-surgeon/ pollution. The oracles themselves are unchanged."}]}

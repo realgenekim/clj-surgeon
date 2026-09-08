@@ -1,0 +1,52 @@
+pair  order(s2)  |       N_C       N_A |       D_C       D_A |   D/N C  1-D/N C     N-D C   D/N A |             N class             D class
+-------------------------------------------------------------------------------------------------------------------------------------------
+P1    N->D       |   132.756   300.583 |    19.462   112.437 |   0.147    0.853   113.294   0.374 | accepted-with-minor            accepted
+P2    D->N       |   106.844   269.860 |    26.691   112.086 |   0.250    0.750    80.153   0.415 | accepted-with-minor            accepted
+P3    N->D       |   153.005   309.622 |    38.597   118.650 |   0.252    0.748   114.408   0.383 | accepted-with-minor            accepted
+P4    D->N       |    89.080   240.355 |    27.389   110.244 |   0.307    0.693    61.691   0.459 | accepted-with-minor            accepted
+P5    N->D       |   141.045   301.474 |    27.008   110.553 |   0.191    0.809   114.037   0.367 | accepted-with-minor            accepted
+P6    D->N       |    93.861   249.154 |    43.636   126.042 |   0.465    0.535    50.225   0.506 | accepted-with-minor            accepted
+
+s_N^C (retained stage-1 native caller work) = 23.173 s ; 2*s_N^C = 46.346 s
+clause 1  D accepted or accepted-with-minor, no repair/2nd call/intervention/fallback : 6/6   (6/6 clean accepts)   PASS
+clause 2  median(D_C/N_C)      = 0.2510   <= 0.75 ? PASS   [CALLER WORK, gated]
+clause 3  median(1-D_C/N_C)    = 0.7490   >= 0.50 ? PASS
+clause 4  median(N_C-D_C)      = 96.724 s > 46.346 s ? PASS
+secondary median(D_C/N_C)      = 0.2510   <= 0.70 ? PASS
+beside    median(D_A/N_A)      = 0.3993   REPORTED, NOT GATED (cross-stage apparatus; not a route effect)
+
+GATE (conjunctive clauses 1-4): PASS
+headline: caller work 3.98x less  (74.90% saved)
+
+--- integrity ---
+candidate-complete stamps per stage-3 D arm: {'P1': 1, 'P2': 1, 'P3': 1, 'P4': 1, 'P5': 1, 'P6': 1} (1 each = no rework)
+stage-3 D caller work s : [19.462, 26.691, 38.597, 27.389, 27.008, 43.636]
+stage-2 D caller work s : [44.376, 46.161, 48.571, 46.207, 41.939, 49.775]
+retained N caller work s: [132.756, 106.844, 153.005, 89.08, 141.045, 93.861]
+
+--- sensitivity: the same corrected clauses on the STAGE-2 D caller work ---
+(the stage-2 D arms produced byte-identical migrations; only their callers were slower)
+  median(D_C/N_C) using stage-2 D = 0.3832  <= 0.75 ? PASS   (ruling's registered 0.3832)
+  median(1-D_C/N_C)              = 0.6168  >= 0.50 ? PASS
+  median(N_C-D_C)                = 74.531 s > 46.346 s ? PASS
+  => the gate's timing clauses pass on BOTH the stage-2 and the stage-3 treatment cohorts.
+
+per-pair N_C/D_C (stage 3): [6.82, 4.0, 3.96, 3.25, 5.22, 2.15]  median 3.98x
+canonical headline (reciprocal of the registered paired median D_C/N_C) = 3.98x less caller work, 74.90% saved
+
+--- untracked-path check (the fix's own claim, verified runner-side per arm, BEFORE staging) ---
+P1-D3: VERDICT: PASS (9 paths, all nine callers, nothing else)
+P2-D3: VERDICT: PASS (9 paths, all nine callers, nothing else)
+P3-D3: VERDICT: PASS (9 paths, all nine callers, nothing else)
+P4-D3: VERDICT: PASS (9 paths, all nine callers, nothing else)
+P5-D3: VERDICT: PASS (9 paths, all nine callers, nothing else)
+P6-D3: VERDICT: PASS (9 paths, all nine callers, nothing else)
+
+--- classifier control (run on the FROZEN stage-2 arms) ---
+P1-N: O1=PASS O2=PASS O3=PASS O4=PASS O5=FAIL   CLASS: accepted-with-minor 
+P3-N: O1=PASS O2=FAIL O3=PASS O4=PASS O5=FAIL   CLASS: accepted-with-minor 
+P1-D: O1=PASS O2=FAIL O3=PASS O4=PASS O5=FAIL   CLASS: rejected 
+P3-D: O1=PASS O2=FAIL O3=PASS O4=PASS O5=FAIL   CLASS: rejected 
+
+VERDICT: row 2 corrected gate PASSES 6/6 on the fixed build (827a751a). Clause 1 6/6 CLEAN accepts.
+Server: port 7907 pid 477544 LEFT RUNNING (operator owns it). Nothing committed, nothing pushed.
