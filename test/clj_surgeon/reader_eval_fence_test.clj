@@ -93,30 +93,77 @@
                (concat (launcher-argv runtime) args))]
     {:out out :err err :exit exit}))
 
-;; @spec MCP-OP-SHELL-ARGV-004
-(deftest no-real-launcher-evaluates-a-build-file-it-discovers
-  (doseq [runtime [:jvm :bb]
-          build-file ["deps.edn" "bb.edn" "project.clj"]]
-    (testing (str runtime " / " build-file)
-      (let [root (.toFile (java.nio.file.Files/createTempDirectory
-                            "reader-eval-fence"
-                            (make-array java.nio.file.attribute.FileAttribute 0)))
-            marker (io/file root "PWNED-LSTREE.txt")]
-        (try
-          (plant-hostile-tree! root build-file marker)
-          (let [{:keys [out err exit]}
-                (run-launcher runtime [":op" ":ls-tree" ":dir" (.getPath root)])]
-            (is (not (.exists marker))
-                (str "the " (name runtime) " launcher EVALUATED " build-file
-                     " while listing the tree the caller named"
-                     " — exit " exit
-                     ", stdout " (pr-str (subs out 0 (min 200 (count out))))
-                     ", stderr " (pr-str (subs err 0 (min 200 (count err))))))
-            ;; And the refusal-free path still works: an unevaluated build file
-            ;; is DATA the op reads, so the op still finds the source.
-            (is (or (str/includes? out "a.clj") (str/includes? out "total"))
-                "the op must still list the tree once the reader is inert"))
-          (finally (fs/delete-tree root)))))))
+;; @spec MCP-OP-SHELL-ARGV-004 @spec TEST-ISO-014
+(defn- no-real-launcher-evaluates-a-build-file-it-discovers
+  [runtime build-file]
+  (testing (str runtime " / " build-file)
+    (let [root (.toFile (java.nio.file.Files/createTempDirectory
+                          "reader-eval-fence"
+                          (make-array java.nio.file.attribute.FileAttribute 0)))
+          marker (io/file root "PWNED-LSTREE.txt")]
+      (try
+        (plant-hostile-tree! root build-file marker)
+        (let [{:keys [out err exit]}
+              (run-launcher runtime [":op" ":ls-tree" ":dir" (.getPath root)])]
+          (is (not (.exists marker))
+              (str "the " (name runtime) " launcher EVALUATED " build-file
+                   " while listing the tree the caller named"
+                   " — exit " exit
+                   ", stdout " (pr-str (subs out 0 (min 200 (count out))))
+                   ", stderr " (pr-str (subs err 0 (min 200 (count err))))))
+          ;; And the refusal-free path still works: an unevaluated build file
+          ;; is DATA the op reads, so the op still finds the source.
+          (is (or (str/includes? out "a.clj") (str/includes? out "total"))
+              "the op must still list the tree once the reader is inert"))
+        (finally (fs/delete-tree root))))))
+
+;; @spec MCP-OP-SHELL-ARGV-004 @spec TEST-ISO-014
+(deftest no-real-launcher-evaluates-discovered-jvm-deps-edn
+  (no-real-launcher-evaluates-a-build-file-it-discovers :jvm "deps.edn"))
+
+;; @spec MCP-OP-SHELL-ARGV-004 @spec TEST-ISO-014
+(deftest no-real-launcher-evaluates-discovered-jvm-bb-edn
+  (no-real-launcher-evaluates-a-build-file-it-discovers :jvm "bb.edn"))
+
+;; @spec MCP-OP-SHELL-ARGV-004 @spec TEST-ISO-014
+(deftest no-real-launcher-evaluates-discovered-jvm-project-clj
+  (no-real-launcher-evaluates-a-build-file-it-discovers :jvm "project.clj"))
+
+;; @spec MCP-OP-SHELL-ARGV-004 @spec TEST-ISO-014
+(deftest no-real-launcher-evaluates-discovered-bb-deps-edn
+  (no-real-launcher-evaluates-a-build-file-it-discovers :bb "deps.edn"))
+
+;; @spec MCP-OP-SHELL-ARGV-004 @spec TEST-ISO-014
+(deftest no-real-launcher-evaluates-discovered-bb-bb-edn
+  (no-real-launcher-evaluates-a-build-file-it-discovers :bb "bb.edn"))
+
+;; @spec MCP-OP-SHELL-ARGV-004 @spec TEST-ISO-014
+(deftest no-real-launcher-evaluates-discovered-bb-project-clj
+  (no-real-launcher-evaluates-a-build-file-it-discovers :bb "project.clj"))
+
+;; @spec TEST-ISO-014
+(deftest build-file-matrix-covers-the-frozen-launcher-pairs
+  (let [pairs (atom [])
+        launch-counts (atom [])
+        cells (->> (ns-interns 'clj-surgeon.reader-eval-fence-test)
+                   vals
+                   (filter #(and (:test (meta %))
+                                 (str/starts-with? (name (:name (meta %)))
+                                                   "no-real-launcher-evaluates-discovered-"))))]
+    ;; Execute the actual cell bodies, recording their launch arguments. Names
+    ;; or a second hand-maintained matrix cannot prove what the cells run.
+    (with-redefs [no-real-launcher-evaluates-a-build-file-it-discovers
+                  (fn [runtime build-file] (swap! pairs conj [runtime build-file]))]
+      (doseq [cell cells]
+        (let [before (count @pairs)]
+          ((:test (meta cell)))
+          (swap! launch-counts conj (- (count @pairs) before)))))
+    (is (= 6 (count cells) (count @pairs)) "one launch per independent cell")
+    (is (= [1 1 1 1 1 1] @launch-counts)
+        "six labels around one serial loop are not independent cells")
+    (is (= #{[:jvm "deps.edn"] [:jvm "bb.edn"] [:jvm "project.clj"]
+             [:bb "deps.edn"] [:bb "bb.edn"] [:bb "project.clj"]}
+           (set @pairs)) "the frozen pre-split runtime × build-file matrix")))
 
 ;; ---------------------------------------------------------------------------
 ;; The CONFIGURATION half of the same vector: the build file's :paths

@@ -231,7 +231,7 @@
    816.3 s lane -- 57% of the work in ONE unit. Split by namespace alone the
    battery cannot finish under 7.7 minutes no matter how many JVMs it is
    given, which is a target that was never reachable rather than one that was
-   missed. Splitting that namespace's seven `deftest`s across lanes is the only
+   missed. Splitting that namespace's independent `deftest`s across lanes is the only
    move that lowers the floor.
 
    THE PRECONDITION, ASSERTED RATHER THAN ASSUMED. A namespace may be sharded
@@ -249,10 +249,13 @@
    `test-ns` runs `(vals (ns-interns ns))`, which is hash order; shards select
    by sorted name, which is at least reproducible."
   {'clj-surgeon.reader-eval-fence-test
-   {:shards 7
+   ;; @spec TEST-ISO-014 -- seven original witnesses become twelve when the
+   ;; six-pair loop is split; the pair-coverage witness is the thirteenth.
+   {:shards 13
     :reason (str "461.8 s of an 816.3 s lane in ONE namespace (2026-09-08, "
                  "anvil-server) -- about twenty cold launcher drives, each a "
-                 "real child JVM or bb. No fixtures; seven independent "
+                 "real child JVM or bb. TEST-ISO-014 splits the 206 s loop "
+                 "into six cells; no fixtures, thirteen independent "
                  "deftests, so the split is safe and it is the only split "
                  "that lowers the lane's floor.")}})
 
@@ -375,7 +378,12 @@
   "The cost of a unit that may be whole namespaces, var shards, or both."
   [walls var-walls unit]
   (reduce + (map #(if (namespace %)
-                    (get var-walls % 1)
+                    ;; @spec TEST-ISO-014 -- the final lane packer must use
+                    ;; the same unmeasured namespace share as shard-vars.
+                    (get var-walls %
+                         (let [n (symbol (namespace %))]
+                           (quot (get walls n fallback-wall-ms)
+                                 (max 1 (get-in shardable [n :shards] 1)))))
                     (get walls % fallback-wall-ms))
                  unit)))
 
@@ -545,17 +553,17 @@
         (try (or (:var-walls-ms (edn/read-string (slurp path))) {})
              (catch Exception _ {}))
         shard-runs (for [l lanes r (:runs (:emitted l)) :when (:sharded r)] r)
-        ;; Only an isolated var has a measured var wall. A lane that grouped
-        ;; several vars observed their aggregate, so attributing that wall
-        ;; evenly would overwrite fine samples with invented uniform costs.
-        ;; Preserve the last fine sample until that var is isolated again.
+        ;; @spec TEST-ISO-014 -- prefer actual test-var measurements, even
+        ;; from grouped shards. Older receipts only measured isolated vars;
+        ;; retain that fallback, never divide an aggregate into guessed walls.
         var-walls (into (sorted-map)
                         (into previous-var-walls
                               (for [r shard-runs
-                                    :when (= 1 (count (:vars r)))
-                                    v (:vars r)]
+                                    [v wall] (or (:var-walls-ms r)
+                                                 (when (= 1 (count (:vars r)))
+                                                   {(first (:vars r)) (:elapsed-ms r)}))]
                                 [(symbol (str (:namespace r)) (str v))
-                                 (:elapsed-ms r)])))]
+                                 wall])))]
     (spit path
           (with-out-str
             (println ";; TEST-ISO-013 -- measured walls of the battery lane.")

@@ -30,6 +30,15 @@ obvious reading:
 
 ## The partition
 
+TEST-ISO-014 removes the 204–206 s serial loop inside the discovered-build-file
+reader-eval witness. Six named deftests call the unchanged single-pair launch
+body. A coverage witness observes the arguments from the loaded test bodies
+with that body replaced by a recorder, then checks the frozen six-pair set and
+cardinality. The shard allowance covers every deftest in the namespace.
+Individual test-var timing crosses the lane receipt boundary, including when
+several cells land in the same lane. The existing summed namespace budget is
+preserved: changing placement does not remove the cold launches' total cost.
+
 | lane | rule | wall |
 |---|---|---|
 | `:fast` | No child process, no bind, no network, no read of the real `$HOME` or outside the run's own tmpdir subtree, no write into the working tree. | ~30 s cold |
