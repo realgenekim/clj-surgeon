@@ -101,3 +101,4 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 - 2026-09-08T14:48Z row 1: proof tiers measured once — warm 19.7 s (probe-only) vs cold 43.3 s; warm + hand gate = cold, so the warm tier pays only with a background pending gate; friction-low; next = background gate design + apparatus share on the canary.
 
 - 2026-09-08T16:35Z GATE OF RECORD (Gene): Clojure Frame 7 (N vs P, request→accepted + apparatus share) runs only after all winning rows are perfect and the daily meters read sublime for consecutive days; cross-stack pilot parked behind it.
+- 2026-09-08T17:53Z row 1: caller-overlap cohort NO ADMISSION (W/C 0.911 sensitivity, gate ≤ 0.75); background gate = capability, not a routed win; row stays friction-low; next = apparatus share on the canary with the new boot block (batch 5).
