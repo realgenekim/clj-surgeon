@@ -133,3 +133,14 @@ commit and pass at the starting tip. The registry carries requirements and direc
 witnesses. Each iteration runs warm tests, split-in-image and the current output
 oracle. Final acceptance uses the real profile, four fixture oracles, current-trunk
 manifest census, touched-file lint and one cold make test.
+
+## B01 authorization: register round-5 debt
+
+Register the existing structural ruling, exact in-place require witness and
+full-profile registry promise as NS-SPLIT-034..036. The design and append-only
+registry carry the current ruling; keep the earlier IDs and link existing code
+and tests with both @spec and INTENT markers. No semantic implementation change
+or fresh performance claim is part of this block. Acceptance: the current
+repository audit, existing witnesses, touched lint, and
+`~/bin/round /home/forge/src/clj-surgeon-split /dev/null b01 --no-build` with
+`intents=ok`. Record the exact ROUND line and direct audit map in the B01 report.

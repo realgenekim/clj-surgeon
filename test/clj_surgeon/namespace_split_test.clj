@@ -302,9 +302,11 @@
         active (set (map (comp name :id) (filter #(= :active (:status %)) registry)))
         tags (fn [files pattern] (set (mapcat #(map second (re-seq pattern (slurp %))) files)))
         code (tags ["src/clj_surgeon/namespace_split.clj" "src/clj_surgeon/namespace_split_io.clj" "src/clj_surgeon/namespace_split_warm.clj"
+                    "src/clj_surgeon/mcp_tool.clj"
                     "test/oracles/namespace_split_papercut_oracle.py"]
                    #"(?m)^(?:;;|#) INTENT: (NS-SPLIT-[0-9]+)")
         tests (tags ["test/clj_surgeon/namespace_split_test.clj"
+                     "test/clj_surgeon/admit_patch_test.clj"
                      "test/clj_surgeon/namespace_split_warm_test.clj"
                      "test/oracles/test_namespace_split_papercut_oracle.py"]
                     #"(?m)^(?:;;|#) INTENT-TEST: (NS-SPLIT-[0-9]+)")]
@@ -377,6 +379,8 @@
           "(:import java.time.Instant)"))))
 
 ;; INTENT-TEST: NS-SPLIT-024
+;; @spec NS-SPLIT-034
+;; INTENT-TEST: NS-SPLIT-034
 (deftest qualified-call-continuations-track-head-width
   (let [caller (str "(ns app.caller (:require [app.views :as views]))\n"
                     "(def z (views/x (views/x 1\n                         2)\n                3))\n")
@@ -492,6 +496,8 @@
 
 ;; @spec NS-SPLIT-032
 ;; INTENT-TEST: NS-SPLIT-032
+;; @spec NS-SPLIT-034
+;; INTENT-TEST: NS-SPLIT-034
 (deftest sol-nested-continuations-respect-form-ownership
   ;; Sol r4 probe literals on 14c0501f; Fable's 2026-09-08 ruling supersedes
   ;; the r3/r4 expected bytes: all nested layout moves, string contents do not.
@@ -569,6 +575,8 @@
 
 ;; @spec NS-SPLIT-033
 ;; INTENT-TEST: NS-SPLIT-033
+;; @spec NS-SPLIT-035
+;; INTENT-TEST: NS-SPLIT-035
 (deftest sol-fixture-requires-replace-in-place
   ;; Exact ns headers from d9205abc, graded by Sol at forms:13 / polish:3.
   (doseq [[prefix caller] (edn/read-string (slurp "test-fixtures/namespace-split/sol-r3-caller-headers.edn"))]

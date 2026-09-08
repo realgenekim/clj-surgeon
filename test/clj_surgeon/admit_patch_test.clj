@@ -576,6 +576,8 @@
 ;; ---------------------------------------------------------------------------
 
 ;; @spec MCP-OP-ADMIT-001
+;; @spec NS-SPLIT-036
+;; INTENT-TEST: NS-SPLIT-036
 (deftest registers-one-admit-tool-in-the-full-profile
   (let [names (mapv :name (tool/tools-for-profile :full))]
     (is (= 1 (count (filter #{"admit_clojure_patch"} names))))

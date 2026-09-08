@@ -41,3 +41,14 @@ Round 3 registered amendments (registry: namespace-split-papercuts.edn):
 
 - [x] **NS-SPLIT-032**: When a call head changes width, the compiler shall shift every subsequent line within its structural span by that delta at every nesting depth, except lines inside multiline string literals.
 - [x] **NS-SPLIT-033**: When replacing the retired views require, the compiler shall splice only the sorted new block at its exact span, preserving other host bytes.
+
+## B01: round-5 debt registration
+
+These append-only promises register the behavior and existing witnesses in
+14c0501f..1f0646e9. Earlier identifiers remain resolvable; 034 and 035 are the
+current registry rulings for 032 and 033. This registration changes no compiler
+behavior and does not claim a new fail-first experiment.
+
+- [x] **NS-SPLIT-034**: When a changed call head has a width delta, the compiler shall shift every subsequent line owned by that call form by the head delta, with ownership determined by paren structure at every nesting depth and multiline string contents never moved.
+- [x] **NS-SPLIT-035**: When replacing the retired views require in the pinned d9205abc forms/polish headers, the compiler shall replace only that span with the sorted destination block, preserving every other host byte.
+- [x] **NS-SPLIT-036**: When the full MCP profile lists its public tools, it shall include namespace_split exactly once between helper_extraction and admit_clojure_patch.

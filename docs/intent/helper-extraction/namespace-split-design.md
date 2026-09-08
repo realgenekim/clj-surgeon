@@ -290,3 +290,28 @@ commit and pass at the starting tip. The registry carries requirements and direc
 witnesses. Each iteration runs warm tests, split-in-image and the current output
 oracle. Final acceptance uses the real profile, four fixture oracles, current-trunk
 manifest census, touched-file lint and one cold make test.
+
+## B01: round-5 promises remain traceable
+
+Gene's B01 authorization registers existing behavior, without another compiler
+change. NS-SPLIT-034 makes the structural-realignment ruling explicit: every
+line owned by the changed call form shifts by the head delta; ownership follows
+paren structure, including nested bodies, comments and closing delimiters, not
+indentation. Multiline string contents never move. The head line is rewritten
+at its token; subsequent owned lines accumulate each enclosing changed head's
+delta once. The literal's opening-line indentation may move without changing
+the string value. Outside-call bytes are protected.
+
+NS-SPLIT-035 retains the exact d9205abc forms/polish in-place require pin.
+NS-SPLIT-036 links the existing full-profile registry list to its public catalog
+implementation and battery witness. The append-only registry supersedes 032/033
+with 034/035; original IDs and witnesses remain resolvable. The repository census
+grows from 190 to 193 non-MCP IDs. The paper-cut contract scans the catalog and
+its existing admit-test witness so registration cannot fall outside that guard.
+
+This is retrospective traceability, not a claim that B01 wrote new behavioral
+tests or repeated round 5's red phase. Provenance: 5cb03422 (alignment and
+16 recorded red assertions), the retained require witness, and 1f0646e9 (registry
+list repair). B01 acceptance is the current audit, existing witnesses, touched
+lint and the explicitly requested no-build round; apparatus certification
+remains a separate B02 obligation.
