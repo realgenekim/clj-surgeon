@@ -1,0 +1,209 @@
+{
+  "builder": {
+    "boot_id": "e5f1df7e-bdc2-44b1-8312-50751b793d6c",
+    "builder_pid": null,
+    "builder_starttime_jiffies": null,
+    "instruction_digest_sha256": null,
+    "launcher": null,
+    "model_from_log": null,
+    "model_requested": "gpt-6-astra",
+    "previous_terminal_status": "none",
+    "previous_terminal_status_basis": "n/a",
+    "resumed": false,
+    "session_id": null,
+    "status": "ok",
+    "termination": "not-launched",
+    "wrapper_exit": null,
+    "wrapper_exit_source": "not collected",
+    "wrapper_pid": null,
+    "wrapper_starttime_jiffies": null
+  },
+  "bundle": {
+    "dir": "/var/tmp/forge/round/runs/b02b-smoke",
+    "frozen_runner": "/var/tmp/forge/round/runs/b02b-smoke/round.frozen",
+    "frozen_runner_sha256": "7b1dc8db086cd6fcf0bbf9699df00cde273a151173a5af16f35fb8a0ac94fa0f",
+    "reserved_atomically": true,
+    "runner_source": "/home/forge/bin/round"
+  },
+  "candidate": {
+    "arch_guard_sha256": "4cc53bb54b59dc09294bcd8fb9b62f3f274e2ee5a8e768c1a0825ee06b50255a",
+    "branch": "b02b-smoke",
+    "candidate_deps_sha256": "0790845af9839e18bc7e935d9bd5bf13ec5eef1abca2da3cf29483b506ed293d",
+    "cc_oracle_sha256": "3f37ed778ed6658f60254706edac2db8ee8d82dc7e3fcfbb4e2c4774383a3607",
+    "commit_status": "skipped",
+    "dirty_definition": "tracked modifications anywhere + untracked under src/ test/ resources/ deps.edn .clj-surgeon.edn",
+    "fixture": "/var/tmp/forge/plan2/build/round-b02b-smoke-fx",
+    "fixture_config_file": "/var/tmp/forge/plan2/build/round-b02b-smoke-fx/.clj-surgeon.edn",
+    "fixture_config_sha256": "57530ff82453d495b25df0011d8d114e6f40cd516a6800da4a2265e84bf71c1f",
+    "fixture_deps_sha256": "55bb04adbf170dd4f250d7607b3938d5d3d39d8edb6a6cfc90ed27b7be6c783c",
+    "fixture_sha": "d9205abcc9b9f31d93bd4a76537b74fccd583ca6",
+    "papercut_oracle_sha256": "501ba2ce75fb9d670c09c500cff1c1b25053cc80b9fe0a83577d78ebe777813c",
+    "request_file": "/var/tmp/forge/round/runs/b02b-smoke/request.edn",
+    "request_sha256": "74204bcf78e3f6d55b142a57a66db915bff79e8a4cb22a9bb6bccc30ed6d3449",
+    "round_script_sha256": "7b1dc8db086cd6fcf0bbf9699df00cde273a151173a5af16f35fb8a0ac94fa0f",
+    "split_receipt_edn": "/var/tmp/forge/round/runs/b02b-smoke/split-receipt.edn",
+    "split_receipt_json": "/var/tmp/forge/round/runs/b02b-smoke/split-receipt.json",
+    "split_receipt_provenance": "produced by this round",
+    "split_receipt_supplied": null,
+    "tip_after": "675bbd18c3c8fc9eea3a37a910b28d53a8f0d488",
+    "tip_before": "675bbd18c3c8fc9eea3a37a910b28d53a8f0d488",
+    "worktree": "/var/tmp/forge/round/scratch/b02b-20260908/cand"
+  },
+  "duration_source": "/proc/uptime (CLOCK_BOOTTIME, monotonic)",
+  "durations_ms": {
+    "admission": 1700,
+    "analysis": 6573,
+    "audit": 1660,
+    "build": 0,
+    "commit": 10,
+    "grade": 47050,
+    "probe": 11240,
+    "proof": 60,
+    "setup": 820,
+    "total": 60000,
+    "witness": 9490,
+    "write": 34890
+  },
+  "exit_code": 0,
+  "exits": {
+    "aggregate": "ok",
+    "arch_guard": "0",
+    "builder": {
+      "rc": null,
+      "source": "wait(2)",
+      "termination": "not-launched"
+    },
+    "cc_oracle": "0",
+    "intent_audit": "0",
+    "papercut_oracle": "0",
+    "split_call": {
+      "rc": "0",
+      "source": "exit"
+    },
+    "witness_runner": "0"
+  },
+  "intents": {
+    "audit_ok": "true",
+    "new_intent_markers": "n/a",
+    "new_spec_markers": "n/a",
+    "unlinked_change": "no",
+    "verdict": "ok",
+    "violations": "0"
+  },
+  "lease": {
+    "adopt_disabled_reason": "adopt-disabled: pending ownership transfer",
+    "adopt_enabled": false,
+    "fixture_state_dir": "/var/tmp/forge/round/state/7932e62b309d0ee8c6c90ed1bf8f5d346f2d8a9acab47a17dfc7971e94b4cffb",
+    "inside_worktree": false,
+    "state_dir": "/var/tmp/forge/round/state/2cb5794b4b3df347c07acf1d56010820f3fac34668048688ddf626e7a330b4fe",
+    "worktree_lease": "/var/tmp/forge/round/state/2cb5794b4b3df347c07acf1d56010820f3fac34668048688ddf626e7a330b4fe/lease"
+  },
+  "log": "/var/tmp/forge/round/runs/b02b-smoke/round.log",
+  "oracles": {
+    "arch_guard_7_of_7": "pass",
+    "cc_oracle": "pass",
+    "count": 4,
+    "papercuts": "0",
+    "unit_suite_in_call": "pass",
+    "views_clj_gone": "pass"
+  },
+  "phases": [
+    {
+      "class": "admission",
+      "phase": "LOCK",
+      "result": "ok (flock held on /var/tmp/forge/round/state/2cb5794b4b3df347c07acf1d56010820f3fac34668048688ddf626e7a330b4fe/lease (canonical, the only lease); state=/var/tmp/forge/round/state/2cb5794b4b3df347c07acf1d56010820f3fac34668048688ddf626e7a330b4fe; no lock files in the worktree; no unowned codex fenced to tree)",
+      "wall_ms": 1650,
+      "wall_s": 2
+    },
+    {
+      "class": "admission",
+      "phase": "PREFLIGHT",
+      "result": "clean (tracked + relevant untracked), branch=b02b-smoke tip=675bbd18, bb+clj-kondo+oracles+launcher present",
+      "wall_ms": 50,
+      "wall_s": 0
+    },
+    {
+      "class": "build",
+      "phase": "BUILD",
+      "result": "skipped (--no-build)",
+      "wall_ms": 0,
+      "wall_s": 0
+    },
+    {
+      "class": "commit",
+      "phase": "COMMIT_CHECK",
+      "result": "skipped (--no-build); grading tip 675bbd18",
+      "wall_ms": 10,
+      "wall_s": 0
+    },
+    {
+      "class": "setup",
+      "phase": "FIXTURE_SETUP",
+      "result": "fixture=/var/tmp/forge/plan2/build/round-b02b-smoke-fx sha=d9205abc lease=/var/tmp/forge/round/state/7932e62b309d0ee8c6c90ed1bf8f5d346f2d8a9acab47a17dfc7971e94b4cffb/lease config=57530ff82453d495",
+      "wall_ms": 820,
+      "wall_s": 1
+    },
+    {
+      "class": "write",
+      "phase": "SPLIT_CALL",
+      "result": "rc=0 source=exit receipt=/var/tmp/forge/round/runs/b02b-smoke/split-receipt.edn",
+      "wall_ms": 34890,
+      "wall_s": 35
+    },
+    {
+      "class": "proof",
+      "phase": "RECEIPT_SCHEMA",
+      "result": "ok (6/6; profile=/var/tmp/forge/round/runs/b02b-smoke/verification-profile.json)",
+      "wall_ms": 60,
+      "wall_s": 0
+    },
+    {
+      "class": "probe",
+      "phase": "ORACLES",
+      "result": "PAPERCUTS=0 oracles=4/4 (papercut_rc=0 cc_oracle_rc=0 guard_rc=0)",
+      "wall_ms": 11240,
+      "wall_s": 11
+    },
+    {
+      "class": "grade",
+      "phase": "GRADE",
+      "result": "state=committed in_call=34542ms PAPERCUTS=0 oracles=4/4 receipt_checks=ok(6/6)",
+      "wall_ms": 47050,
+      "wall_s": 47
+    },
+    {
+      "class": "witness",
+      "phase": "WITNESSES",
+      "result": "rc=0 35t/428a/0f/0e (/var/tmp/forge/round/runs/b02b-smoke/witnesses.log)",
+      "wall_ms": 9490,
+      "wall_s": 9
+    },
+    {
+      "class": "audit",
+      "phase": "INTENT_AUDIT",
+      "result": "ok=true violations=0 rc=0 new_intent_markers=n/a new_spec_markers=n/a (/var/tmp/forge/round/runs/b02b-smoke/intent-audit.log)",
+      "wall_ms": 1660,
+      "wall_s": 2
+    }
+  ],
+  "receipt_schema": {
+    "checks_green": 6,
+    "checks_total": 6,
+    "in_call_ms": 34542,
+    "reason": "6/6 checks passed (2 analysis checks may carry evidenced baselines), verification_complete=true, proof_pending=[], all 4 fixed checks and all 2 profile command(s) present, :ok/:committed true, no blockers",
+    "split_state": "committed",
+    "verdict": "ok"
+  },
+  "round": "b02b-smoke",
+  "schema": "round-receipt/2",
+  "total_wall_ms": 60000,
+  "total_wall_s": 60,
+  "verdict": "GREEN",
+  "witnesses": {
+    "assertions": "428",
+    "errors": "0",
+    "failures": "0",
+    "tests": "35"
+  },
+  "written_utc": "2026-09-08T05:25:16Z"
+}

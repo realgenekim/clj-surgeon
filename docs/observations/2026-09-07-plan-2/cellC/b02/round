@@ -14,9 +14,15 @@
 #   --request EDN   split request, default D1-request.edn repointed at the fixture
 #   --model NAME    codex model, default gpt-6-astra (verified against the builder log)
 #   --no-build      skip the builder; grade whatever tip the worktree already has
-#   --adopt PID     do NOT launch; wait on an already-running builder pid, then grade.
-#                   For the exact case that burned us: discovery failed, the round exited,
-#                   and a perfectly healthy builder was left with nobody watching it.
+#   --launcher PATH the wrapper this round SUPERVISES (default ~/bin/sol-yolo). It is a
+#                   real option, not a test seam: the supervision code below is identical
+#                   whatever it names, which is exactly what makes a stub builder a valid
+#                   witness for the terminal-status contract.
+#   --adopt PID     DISABLED (B02b). Refuses `adopt-disabled: pending ownership transfer`.
+#                   Adopt took a SEPARATE lease ($ADOPT_LOCKF), so an adopting round could
+#                   enter BUILD while another holder still owned the canonical worktree
+#                   lease — demonstrated by Astra 2026-09-08. It stays refused until adopt
+#                   acquires the canonical lease through an explicit ownership transfer.
 #   --resume        continue the codex session THIS worktree last ran, feeding the new
 #                   findings file as the follow-up prompt. Explicit persisted session id
 #                   only; `codex exec resume --last` is never used by this apparatus.
@@ -26,10 +32,17 @@
 #                   For re-grading and for apparatus self-tests of the receipt schema.
 #
 # STATE lives OUTSIDE the worktree, keyed by canonical worktree path:
-#   /var/tmp/forge/round/state/<sha256(worktree)>/{root,lease,adopt.lease,adopted,
-#                                                  session.id,session.json}
+#   /var/tmp/forge/round/state/<sha256(worktree)>/{root,lease,session.id,session.json}
 # A lock file inside the candidate is a file the builder's own `git status` and
 # `git clean` can see; three of them used to be left there every round.
+#
+# OUTPUT is an IMMUTABLE BUNDLE reserved by name before any work happens:
+#   /var/tmp/forge/round/runs/<name>/{round.log,round.frozen,receipt.json,brief.md,...}
+# The reservation IS the `mkdir` — atomic, so two rounds cannot share a name and a
+# second run can never truncate the first one's log (Astra: the positive `.log` was
+# overwritten before `receipt-exists` ever ran). The round then copies itself into the
+# bundle and `exec`s THAT copy, so an edit to ~/bin/round mid-run cannot change the
+# behaviour being measured.
 #
 # RATCHETS BAKED IN (each one is a scar, not a preference):
 #  * [[sol-yolo-wrapper-pid-is-not-the-run]] the sol-yolo WRAPPER exits while the codex
@@ -56,14 +69,18 @@ set -uo pipefail
 # args
 # ---------------------------------------------------------------------------
 usage() {
-  sed -n '2,44p' "$0" >&2
+  awk 'NR>1 && /^#/ {sub(/^# ?/,""); print; next} NR>1 {exit}' "$0" >&2
   exit 2
 }
+# The ORIGINAL argv, kept before any shift, because this script re-`exec`s a frozen
+# copy of itself with exactly the arguments it was called with (item 11).
+ROUND_ARGV=("$@")
 [ $# -ge 3 ] || usage
 WT=$(readlink -f "${1:?worktree}"); FINDINGS=${2:?findings.md}; NAME=${3:?name}
 shift 3
 MINUTES=25 FIXTURE="" REQUEST="" MODEL=gpt-6-astra NOBUILD=0 ADOPT=""
-RESUME=0 SESSION="" SPLIT_RECEIPT=""
+RESUME=0 SESSION="" SPLIT_RECEIPT="" LAUNCHER=/home/forge/bin/sol-yolo
+RESUME_LAUNCHER=/home/forge/bin/round-resume
 while [ $# -gt 0 ]; do
   case "$1" in
     --minutes) MINUTES=${2:?}; shift 2 ;;
@@ -74,10 +91,28 @@ while [ $# -gt 0 ]; do
     --no-build) NOBUILD=1; shift ;;
     --resume)  RESUME=1; shift ;;
     --session) SESSION=${2:?}; shift 2 ;;
+    --launcher) LAUNCHER=$(readlink -f "${2:?}"); shift 2 ;;
     --split-receipt) SPLIT_RECEIPT=$(readlink -f "${2:?}"); shift 2 ;;
     *) echo "round: unknown option $1" >&2; usage ;;
   esac
 done
+
+# --------------------------------------------------------------------------
+# ADOPT IS DISABLED — item 2. This refusal is BEFORE the reservation, before the
+# lease, before any file is touched, because an adopting round's first observable
+# act must be the refusal itself.
+#
+# Why: `--adopt` took $RSTATE/adopt.lease and deliberately did NOT contend for the
+# canonical $RSTATE/lease (the fd-inheritance repair made that seem safe). Astra
+# held the canonical lease with an independent descriptor, ran `round --adopt`, and
+# it entered BUILD and printed a START RECEIPT anyway. Two ownership protocols is
+# no ownership protocol. Re-enabling requires adopt to acquire the CANONICAL lease
+# via an explicit transfer from the holder, not a second lock beside it.
+# --------------------------------------------------------------------------
+if [ -n "$ADOPT" ]; then
+  echo "round: REFUSED adopt-disabled: pending ownership transfer — --adopt used a second lease (adopt.lease) beside the canonical worktree lease, so an adopting round could enter BUILD while another round still owned the tree (Astra, 2026-09-08). It will return when adopt acquires the canonical lease through an explicit ownership transfer from its holder. Until then: wait for the holding round, or run a fresh round once the tree is free." >&2
+  exit 3
+fi
 
 CC_SRC=/home/forge/src/curtaincall-cfp
 CC_SHA=d9205abcc9b9f31d93bd4a76537b74fccd583ca6
@@ -87,29 +122,94 @@ PAPERCUT=$CELLC/papercut-oracle.py
 CC_ORACLE=$CELLC/cc-oracle.py
 BASE_REQUEST=$CELLC/D1-request.edn
 OUT=/var/tmp/forge/round
-mkdir -p "$OUT"
-LOG=$OUT/$NAME.log
 LEDGER=$OUT/ledger.txt
+
+# ===========================================================================
+# 0. RESERVE THE OUTPUT BUNDLE, THEN FREEZE AND RE-EXEC THE RUNNER
+#
+# Item 5 (immutable output bundle). Astra's finding: the JSON receipt was
+# O_EXCL and correctly refused reuse, but `: > "$LOG"` had ALREADY truncated the
+# log the earlier receipt pointed at — the referenced evidence was destroyed
+# before the immutability check ran. Refusing late is not refusing.
+#
+# So the FIRST act of a round is `mkdir /var/tmp/forge/round/runs/<name>`, which
+# is atomic on every filesystem we use: exactly one round can create it, and a
+# duplicate name is refused before a single byte of any prior artefact is opened
+# for writing. EVERY artefact of the run — log, brief, builder log, request,
+# split receipt, oracle logs, JSON receipt — lives inside that directory.
+#
+# Item 11 (frozen runner identity). Astra: a mid-run edit to ~/bin/round changes
+# the behaviour being measured and nothing records it. The reserving process
+# copies itself into the bundle, hashes it, and `exec`s THAT copy with the same
+# argv. From here on the executing bytes are read-only, hashed, and retained
+# next to the receipt that cites them.
+# ===========================================================================
+bail() { echo "round: REFUSED $*" >&2; exit 3; }
+mkdir -p "$OUT/runs" || bail "cannot create $OUT/runs"
+RUNDIR=$OUT/runs/$NAME
+FROZEN=$RUNDIR/round.frozen
+if [ -z "${ROUND_FROZEN:-}" ]; then
+  mkdir "$RUNDIR" 2>/dev/null \
+    || bail "run-exists: $RUNDIR already exists — a round's output bundle is reserved by name and immutable, and this refusal happens BEFORE any log, receipt or request of the earlier run is opened. Choose a new <name>, or move the old bundle aside deliberately."
+  cp "$0" "$FROZEN" || bail "cannot freeze the runner into $FROZEN"
+  chmod 0555 "$FROZEN" || bail "cannot make $FROZEN read-only"
+  _rsha=$(sha256sum < "$FROZEN" | cut -d' ' -f1)
+  printf '%s  %s  (frozen from %s at %s)\n' "$_rsha" "$FROZEN" "$0" "$(date -u +%FT%TZ)" > "$RUNDIR/round.frozen.sha256"
+  export ROUND_FROZEN="$RUNDIR" ROUND_RUNNER_SHA="$_rsha" ROUND_RUNNER_SRC="$0"
+  exec "$FROZEN" "${ROUND_ARGV[@]}"
+fi
+RUNNER_SHA=${ROUND_RUNNER_SHA:-$(sha256sum < "$0" | cut -d' ' -f1)}
+RUNNER_SRC=${ROUND_RUNNER_SRC:-$0}
+
+LOG=$RUNDIR/round.log
 # The round's own machine receipt. IMMUTABLE: a name is used once, so a re-run can
 # never quietly overwrite the evidence of the run it is being compared against
 # (Astra: "immutable unique output paths; no reused `smoke` overwrite").
-RECEIPT_JSON=$OUT/$NAME-receipt.json
+RECEIPT_JSON=$RUNDIR/receipt.json
 
 # ---------------------------------------------------------------------------
 # ledger / timing.  `date` on this box is uutils: %3N is NOT supported, %N is.
+#
+# Item 11 (measurement): wall clock is NOT a duration source. `date +%s` is
+# settable and NTP-steppable, and every phase number in this apparatus is meant
+# to be compared against a native floor. Elapsed time comes from /proc/uptime,
+# which is CLOCK_BOOTTIME in centiseconds and cannot go backwards. `date` is kept
+# for human timestamps only, where an absolute UTC label is what is wanted.
 # ---------------------------------------------------------------------------
 stamp() { date -u +%FT%T.%N | cut -c1-23; }
+now_ms() { local u r; read -r u r < /proc/uptime; echo $(( ${u%.*} * 1000 + 10#${u#*.} * 10 )); }
+T0MS=$(now_ms)
 T0=$(date +%s)
-PHASES=()          # "phase|wall|result"
-phase_t0() { date +%s; }
+PHASES=()          # "phase|wall_s|result|wall_ms|class"
+phase_t0() { now_ms; }
+# Astra's §3 phase vocabulary, so a receipt's durations decompose the same way a
+# native floor's do. Every `step` carries its class; the receipt sums them.
+phase_class() {
+  case "$1" in
+    LOCK|PREFLIGHT)   echo admission ;;
+    BUILD)            echo build ;;
+    COMMIT_CHECK)     echo commit ;;
+    FIXTURE_SETUP)    echo setup ;;
+    SPLIT_CALL)       echo write ;;
+    RECEIPT_SCHEMA)   echo proof ;;
+    ORACLES)          echo probe ;;
+    GRADE)            echo grade ;;
+    WITNESSES)        echo witness ;;
+    INTENT_AUDIT)     echo audit ;;
+    *)                echo other ;;
+  esac
+}
 say() { printf '%s\n' "$*" | tee -a "$LOG"; }
-step() {   # step <phase> <wall-seconds> <result>
-  PHASES+=("$1|$2|$3")
-  say "$(stamp)  [+$(( $(date +%s) - T0 ))s]  $1 ${2}s :: $3"
+step() {   # step <phase> <wall-ms> <result>
+  local ms=$2 s
+  s=$(( (ms + 500) / 1000 ))
+  PHASES+=("$1|$s|$3|$ms|$(phase_class "$1")")
+  say "$(stamp)  [+$(( ($(now_ms) - T0MS) / 1000 ))s]  $1 ${s}s (${ms}ms) :: $3"
 }
 refuse() { say "$(stamp)  REFUSED: $*"; exit 3; }
 : > "$LOG"
 say "$(stamp)  ROUND $NAME start  worktree=$WT findings=$FINDINGS model=$MODEL minutes=$MINUTES no_build=$NOBUILD"
+say "$(stamp)  bundle=$RUNDIR  runner=$FROZEN (frozen from $RUNNER_SRC) sha256=$RUNNER_SHA"
 
 # ---------------------------------------------------------------------------
 # /proc scan for a live codex bound to a given WORKTREE.  NEVER pgrep -f: an
@@ -155,6 +255,38 @@ proc_start() {  # epoch seconds at which <pid> started (the /proc dir's mtime)
   stat -c %Y "/proc/$1" 2>/dev/null || echo 0
 }
 
+# ---------------------------------------------------------------------------
+# ATTESTED PROCESS-START IDENTITY (item 1).  Astra: "Both paths still use PID
+# ordering or /proc directory mtime rather than an attested process-start
+# identity."  /proc/<pid> mtime is a second-granularity directory timestamp; two
+# processes started in the same second are indistinguishable and a recycled pid
+# is invisible.  `starttime` (/proc/<pid>/stat field 22) is the kernel's own
+# CLOCK_BOOTTIME jiffy count at exec — unique per (boot_id, pid, starttime), and
+# the ONLY thing that makes "is pid N still the process I launched?" answerable.
+#
+# Parsing: field 2 is `(comm)` and comm may contain spaces AND parentheses, so
+# the only correct split is "everything after the LAST ')'".  After that split,
+# field 3 (state) is positional 1, so field 22 is positional 20.
+# ---------------------------------------------------------------------------
+BOOT_ID=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || echo unknown)
+proc_starttime() {  # jiffies-since-boot at which <pid> started; empty if gone
+  local s
+  s=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
+  s=${s##*) }
+  # shellcheck disable=SC2086
+  set -- $s
+  printf '%s' "${20:-}"
+}
+# alive_as <pid> <starttime> — true only when <pid> is BOTH live and still the
+# same process we identified. A bare `kill -0` says "some process has this pid".
+alive_as() {
+  local pid=$1 want=${2:-} have
+  kill -0 "$pid" 2>/dev/null || return 1
+  [ -n "$want" ] || return 0
+  have=$(proc_starttime "$pid") || return 1
+  [ "$have" = "$want" ]
+}
+
 # is_ours <pid> — true when <pid> belongs to THIS round: same process group, or a
 # PPid chain that walks up to us. Used only to keep our own children out of
 # diagnostics; never to decide what to reap.
@@ -194,8 +326,6 @@ RSTATE=$OUT/state/$ROOT_DIGEST
 mkdir -p "$RSTATE" || refuse "cannot create state dir $RSTATE"
 printf '%s\n' "$WT" > "$RSTATE/root"     # the digest's preimage, for a human
 LOCKF=$RSTATE/lease
-ADOPT_LOCKF=$RSTATE/adopt.lease
-ADOPTED_MARK=$RSTATE/adopted
 MYPGID=$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ')
 
 # Legacy in-tree locks from rounds built before B02: remove them, but ONLY when
@@ -213,6 +343,8 @@ done
 [ -e "$RECEIPT_JSON" ] && refuse "receipt-exists: $RECEIPT_JSON already exists — a round receipt is immutable evidence; choose a new <name> (or move the old receipt aside deliberately)"
 
 # ---------------------------------------------------------------------------
+# ONE LEASE. THE CANONICAL ONE. NO SECOND PROTOCOL.
+#
 # THE ROOT CAUSE, first --adopt attempt (2026-09-08): `exec 9>$LOCKF` puts the
 # lock on a descriptor that EVERY child inherits across fork+exec. sol-yolo, its
 # bash wrapper, and codex all carried fd 9, so the flock outlived the round that
@@ -221,52 +353,43 @@ done
 # — 2655184 being the wrapper of the FAILED round, and 2829462+ this round's own
 # short-lived children, all of them mere INHERITORS of one fd.
 #
-# Two fixes, both needed:
-#  (a) the builder is launched with `9>&-` (and `8>&-`), so no child ever inherits
-#      the lock again — see the BUILD phase. That is the actual repair.
-#  (b) --adopt does not contend for $LOCKF at all. It cannot: by construction the
-#      holder is inside the tree it is adopting. It takes a SEPARATE lock
-#      ($ADOPT_LOCKF, so two adopters still cannot collide) and drops a marker
-#      naming itself, removed on exit.
-# ---------------------------------------------------------------------------
-if [ -n "$ADOPT" ]; then
-  exec 8>"$ADOPT_LOCKF" || refuse "cannot open adopt lock $ADOPT_LOCKF"
-  flock -n 8 || refuse "another --adopt round is already watching $WT ($ADOPT_LOCKF)"
-  printf 'round_pid=%s adopted_pid=%s started=%s\n' "$$" "$ADOPT" "$(stamp)" > "$ADOPTED_MARK"
-  trap 'rm -f "$ADOPTED_MARK"' EXIT
-  LOCKMODE="adopt: no exclusive lock (holder is inside the adopted tree); marker=$ADOPTED_MARK"
-else
-  exec 9>"$LOCKF" || refuse "cannot open lock $LOCKF"
-  if ! flock -n 9; then
-    # A held lock is now genuinely ambiguous no longer — but an OLD leaked fd may
-    # still be out there, so name the adoptable builder instead of dead-ending.
-    # fuser reports every INHERITOR, our own transient children included — which is
-    # what made the last refusal unreadable. Drop anything in our own process group.
-    holder=""
-    for _h in $(fuser "$LOCKF" 2>/dev/null | tr -s ' '); do
-      case "$_h" in ''|*[!0-9]*) continue ;; esac
-      # a holder that is already gone was one of fuser's own transient siblings —
-      # it raced us and cannot be pgid-checked, so it is ours by elimination.
-      kill -0 "$_h" 2>/dev/null || continue
-      is_ours "$_h" && continue
-      holder="$holder $_h"
-    done
-    [ -n "${holder// /}" ] || holder=" (all holders are our own children — a stale leaked fd)"
-    leader=$(codex_leader_in "$WT")
-    if [ -n "$leader" ]; then
-      refuse "lease-held: another round owns $WT — lease=$LOCKF holder_pid(s):$holder; its builder is pid $leader. Re-attach with:  round $WT $FINDINGS $NAME --adopt $leader"
-    fi
-    refuse "lease-held: another round owns $WT — lease=$LOCKF holder_pid(s):$holder; no codex builder is fenced to the tree (a --no-build or grade-only round). Wait for it to finish, or re-attach to its builder when one appears with:  round $WT $FINDINGS $NAME --adopt <builder-pid>"
-  fi
-  LOCKMODE="flock held on $LOCKF"
-fi
-
-# A codex fenced to this worktree means a round is already building here — UNLESS we
-# were asked to adopt it, which is the whole point of --adopt.
+# The REPAIR is (a) alone: the builder is launched with `9>&-` (and `8>&-`, `7>&-`),
+# so no child ever inherits the lease again — see the BUILD phase.
 #
-# ONE launch presents as TWO pids: the `node .../codex` shim and the native codex
-# binary it execs. Exempting only $ADOPT would refuse on its own sibling, so an
-# --adopt whose pid IS in the discovered set adopts the whole fenced set.
+# The old fix (b) — "--adopt takes a SEPARATE lock ($ADOPT_LOCKF)" — was WRONG, and
+# Astra proved it: she held this canonical lease with an independent descriptor,
+# started `round --adopt`, and it sailed past into BUILD because it never asked for
+# this lock at all. A second lease is not a weaker lease, it is a bypass. --adopt
+# is refused at argv (item 2) and $ADOPT_LOCKF no longer exists; EVERY round takes
+# the canonical lease here or is refused here.
+# ---------------------------------------------------------------------------
+exec 9>"$LOCKF" || refuse "cannot open lock $LOCKF"
+if ! flock -n 9; then
+  # A held lock is now genuinely ambiguous no longer — but an OLD leaked fd may
+  # still be out there, so name the builder instead of dead-ending.
+  # fuser reports every INHERITOR, our own transient children included — which is
+  # what made the last refusal unreadable. Drop anything in our own process group.
+  holder=""
+  for _h in $(fuser "$LOCKF" 2>/dev/null | tr -s ' '); do
+    case "$_h" in ''|*[!0-9]*) continue ;; esac
+    # a holder that is already gone was one of fuser's own transient siblings —
+    # it raced us and cannot be pgid-checked, so it is ours by elimination.
+    kill -0 "$_h" 2>/dev/null || continue
+    is_ours "$_h" && continue
+    holder="$holder $_h"
+  done
+  [ -n "${holder// /}" ] || holder=" (all holders are our own children — a stale leaked fd)"
+  leader=$(codex_leader_in "$WT")
+  if [ -n "$leader" ]; then
+    refuse "lease-held: another round owns $WT — lease=$LOCKF holder_pid(s):$holder; its builder is pid $leader. Wait for the holding round to finish; --adopt is disabled pending ownership transfer."
+  fi
+  refuse "lease-held: another round owns $WT — lease=$LOCKF holder_pid(s):$holder; no codex builder is fenced to the tree (a --no-build or grade-only round). Wait for it to finish."
+fi
+LOCKMODE="flock held on $LOCKF (canonical, the only lease)"
+
+# A codex fenced to this worktree means a round is already building here. With
+# --adopt disabled there is no exemption: an unowned builder in the tree is a
+# refusal, full stop.
 #
 # Our OWN process group is excluded here: nothing we have spawned at this point can
 # legitimately be a builder, and a stray match on our own children is exactly the
@@ -282,31 +405,46 @@ for _p in $(codex_pids_in "$WT"); do
 done
 found=${found# }
 existing=$found
-if [ -n "$ADOPT" ]; then
-  case " $found " in *" $ADOPT "*) existing="" ;; esac
-fi
 if [ -n "${existing// /}" ]; then
-  refuse "a codex process already lives in $WT (pid $existing) — use --adopt $(echo "$existing" | awk '{print $1}') to wait on it"
+  refuse "unowned-builder: a codex process already lives in $WT (pid $existing) but this round does not own it. --adopt is disabled pending ownership transfer, so there is nothing safe to do but wait for its round to finish."
 fi
-step LOCK $(( $(date +%s) - t )) "ok ($LOCKMODE; state=$RSTATE; no lock files in the worktree; no unowned codex fenced to tree${ADOPT:+; adopting $ADOPT})"
+step LOCK $(( $(now_ms) - t )) "ok ($LOCKMODE; state=$RSTATE; no lock files in the worktree; no unowned codex fenced to tree)"
 
 # ===========================================================================
 # 2. PREFLIGHT
 # ===========================================================================
 t=$(phase_t0)
 git -C "$WT" rev-parse --git-dir >/dev/null 2>&1 || refuse "$WT is not a git worktree"
-# A clean tree is a precondition for LAUNCHING a round — it is NOT a precondition for
-# ADOPTING one: the builder we are adopting is editing the tree at this very moment,
-# and refusing it as "dirty" would make --adopt structurally impossible. The check is
-# not dropped, it is MOVED to COMMIT_CHECK, where it is asked after the builder exits
-# and where the honest question ("did it leave the tree clean?") actually lives.
-if [ -n "$ADOPT" ]; then
-  dirty=$(git -C "$WT" status --porcelain --untracked-files=no 2>/dev/null | wc -l)
-  say "$(stamp)  adopt: skipping the pre-clean check — builder $ADOPT is mid-flight ($dirty tracked file(s) currently modified); enforced at COMMIT_CHECK instead"
-else
-  dirty=$(git -C "$WT" status --porcelain --untracked-files=no 2>/dev/null)
-  [ -z "$dirty" ] || { say "$dirty"; refuse "dirty: $WT has uncommitted tracked changes"; }
-fi
+
+# ---------------------------------------------------------------------------
+# WHAT "DIRTY" MEANS (item 4).  Until B02b both the preflight and the commit check
+# ran `git status --porcelain --untracked-files=no`, so an UNTRACKED source file was
+# invisible to both. Astra planted `src/astra_acceptance_untracked.clj` in the
+# candidate and the round announced a clean preflight over it.
+#
+# That is not a cosmetic gap. `git diff OLD..NEW` — the basis for every claim this
+# round makes about what the builder changed, including the linked-intent check — is
+# blind to a file that was never added. A namespace that exists on disk, is on the
+# classpath, is loaded by the suite, and is in NO commit is precisely the shape of
+# evidence that makes a green round unreproducible.
+#
+# So the tree is dirty when EITHER a tracked file is modified (any path) OR an
+# untracked file appears in a path that can change behaviour: src/, test/,
+# resources/, deps.edn, .clj-surgeon.edn. Untracked scratch elsewhere (notes, logs,
+# a stray tarball) is still ignored — the filter is what keeps this a real gate
+# instead of a nuisance everybody learns to suppress.
+# ---------------------------------------------------------------------------
+RELEVANT_UNTRACKED_RE='^(src|test|resources)/|^deps[.]edn$|^[.]clj-surgeon[.]edn$'
+relevant_dirty() {  # relevant_dirty <repo> -> porcelain lines that count as dirty
+  git -C "$1" status --porcelain --untracked-files=all 2>/dev/null | awk -v re="$RELEVANT_UNTRACKED_RE" '
+    {
+      code = substr($0, 1, 2); path = substr($0, 4)
+      if (code == "??") { if (path ~ re) print $0 }
+      else print $0
+    }'
+}
+dirty=$(relevant_dirty "$WT")
+[ -z "$dirty" ] || { say "$dirty"; refuse "dirty: $WT has uncommitted tracked changes or untracked files under src/test/resources/deps.edn/.clj-surgeon.edn — a round's verdict is only meaningful against a basis that git can name. Commit them, or remove them."; }
 OLD_TIP=$(git -C "$WT" rev-parse HEAD)
 BRANCH=$(git -C "$WT" rev-parse --abbrev-ref HEAD)
 command -v bb >/dev/null || refuse "bb not on PATH"
@@ -314,19 +452,54 @@ command -v bb >/dev/null || refuse "bb not on PATH"
 [ -f "$PAPERCUT" ] || refuse "papercut oracle missing: $PAPERCUT"
 [ -f "$CC_ORACLE" ] || refuse "cc oracle missing: $CC_ORACLE"
 [ -f "$GUARD_TEST" ] || refuse "guard test missing: $GUARD_TEST"
-if [ -n "$ADOPT" ]; then PRE="adopt mode (pre-clean check deferred), "; else PRE="clean, "; fi
-step PREFLIGHT $(( $(date +%s) - t )) "${PRE}branch=$BRANCH tip=${OLD_TIP:0:8}, bb+clj-kondo+oracles present"
+[ "$NOBUILD" = 1 ] || [ -x "$LAUNCHER" ] || refuse "launcher missing or not executable: $LAUNCHER"
+# the candidate's own dependency basis, hashed into the receipt (item 4)
+CAND_DEPS_SHA=$( [ -f "$WT/deps.edn" ] && sha256sum < "$WT/deps.edn" | cut -d' ' -f1 || echo "")
+step PREFLIGHT $(( $(now_ms) - t )) "clean (tracked + relevant untracked), branch=$BRANCH tip=${OLD_TIP:0:8}, bb+clj-kondo+oracles+launcher present"
 
 # ===========================================================================
 # 3. BUILD
 # ===========================================================================
 BUILD=ok
 BUILDER_PID=""
+BUILDER_START=""
 LAUNCH_EPOCH=0
 WRAPPER=""
+WRAPPER_START=""
+WRAPPER_RC=""
+TERMINATION=not-launched
 SESSION_ID=""
 INSTR_DIGEST=""
 PREV_STATUS=none
+
+# ---------------------------------------------------------------------------
+# TERMINAL SUPERVISION (item 1) — the defect Astra demonstrated as a false GREEN.
+#
+# The old code launched the wrapper with `nohup setsid ... &`, then found the codex
+# CHILD by /proc and polled `kill -0` until the pid disappeared. Disappearance is
+# not a status. A builder that printed "PASS committed" and exited **17** produced
+# `builder.status=ok, exits.aggregate=ok, GREEN/0`, because nothing in the round had
+# ever asked the kernel what the process's exit code was.
+#
+# The repair, in three parts:
+#
+#  1. The wrapper is a SUPERVISED CHILD of this round and its status is collected
+#     with `wait`, not inferred. `setsid --wait` keeps the detachment that made the
+#     builder survive a hung terminal AND forwards the child's exit status verbatim,
+#     so we lose nothing by supervising. (`--wait` is util-linux; checked present.)
+#  2. The codex child is identified by an ATTESTED START IDENTITY — boot_id plus
+#     /proc/<pid>/stat starttime — so "still running" cannot be answered by a
+#     recycled pid, and `/proc` directory mtime (1-second granularity) is not the
+#     authority any more.
+#  3. FAIL CLOSED. Any termination this round cannot account for — the wrapper gone
+#     with a codex child of ours still alive, a wrapper that never produced a child,
+#     a non-zero wrapper status, a ceiling kill — is a NAMED build status other than
+#     `ok`, and any status other than `ok` is RED regardless of how green every later
+#     grade, oracle, witness and audit comes back.
+#
+# `--launcher` exists so this contract is witnessable: a stub that prints
+# "PASS committed" and exits 17 runs through the identical supervision code.
+# ---------------------------------------------------------------------------
 
 # DEFECT 2, first live round (2026-09-08): discovery failed after 30 s, the script
 # printed REFUSED and exited — releasing the lock and ORPHANING the builder it had
@@ -351,33 +524,14 @@ refuse_after_launch() {   # never leave a builder nobody is watching
 
 if [ "$NOBUILD" = 1 ]; then
   [ "$RESUME" = 1 ] && refuse "resume-no-build: --resume asks to continue a session and --no-build asks to launch nothing; pick one"
+  TERMINATION=not-launched
   step BUILD 0 "skipped (--no-build)"
-elif [ -n "$ADOPT" ]; then
-  [ "$RESUME" = 1 ] && refuse "resume-adopt-conflict: --resume launches a continuation, --adopt waits on a builder already running; pick one"
-  t=$(phase_t0)
-  BUILDER_PID=$ADOPT
-  kill -0 "$BUILDER_PID" 2>/dev/null || refuse "--adopt $ADOPT: no such live process"
-  argv=$(tr '\0' ' ' < "/proc/$BUILDER_PID/cmdline" 2>/dev/null)
-  case "$argv" in
-    *"codex exec "*" -C ${WT%/} "*|*"codex exec "*" -C ${WT%/}/ "*) ;;
-    *) refuse "--adopt $ADOPT: argv is not a codex exec fenced to $WT: $argv" ;;
-  esac
-  BLOG=$(printf '%s' "$argv" | sed -nE 's#.* -o ([^ ]*)\.last\.md.*#\1#p')
-  say "START RECEIPT (adopted): builder_pid=$BUILDER_PID started=$(date -u -d @"$(proc_start "$BUILDER_PID")" +%FT%T 2>/dev/null) argv=$argv"
-  trap 'say "$(stamp)  interrupted while watching adopted builder $BUILDER_PID — it is STILL RUNNING and now unwatched."; say "        re-attach with:  round $WT $FINDINGS $NAME --adopt $BUILDER_PID"; exit 130' INT TERM
-  deadline=$(( $(date +%s) + MINUTES * 60 ))
-  while kill -0 "$BUILDER_PID" 2>/dev/null; do
-    if [ "$(date +%s)" -ge "$deadline" ]; then kill "$BUILDER_PID" 2>/dev/null; BUILD=timeout; break; fi
-    sleep 10
-  done
-  trap - INT TERM
-  step BUILD $(( $(date +%s) - t )) "$BUILD (adopted pid=$BUILDER_PID)"
 else
   t=$(phase_t0)
   [ -f "$FINDINGS" ] || refuse "no such findings file: $FINDINGS"
-  BRIEF=$OUT/$NAME-brief.md
-  REPORT=$OUT/$NAME-report.md
-  BLOG=$OUT/$NAME-builder.log
+  BRIEF=$RUNDIR/brief.md
+  REPORT=$RUNDIR/report.md
+  BLOG=$RUNDIR/builder.log
   rm -f "$REPORT" "$REPORT.last.md"
   if [ "$RESUME" = 1 ]; then
     cat > "$BRIEF" <<EOF
@@ -410,7 +564,7 @@ METHOD — the in-image loop (this is the method, not a suggestion):
   * commit on the branch $BRANCH as forge-anvil with trailer
     \`Co-Authored-By: Gene Kim <genek@itrevolution.com>\`. DO NOT PUSH.
   * write your report to $REPORT and print your PID on its first line.
-  * log iterations to $OUT/$NAME-loop.log — one line per iteration: wall seconds,
+  * log iterations to $RUNDIR/loop.log — one line per iteration: wall seconds,
     warm-test wall, oracle total.
 
 FINDINGS TO ACT ON (verbatim, below this line):
@@ -432,7 +586,20 @@ EOF
   # runs reviews, probes and three worktrees is a coin flip. Every refusal below is
   # typed: the message names the class, not just the failure.
   # -------------------------------------------------------------------------
+  # CONTINUATION ADMISSION IS FAIL-CLOSED (item 6). Astra: "the outer round's
+  # historical metadata checks are CONDITIONAL on session.json existing, TOLERATE
+  # missing fields, and the explicit-ID override BYPASSES the stored-ID consistency
+  # comparison." Every one of those is now a typed refusal BEFORE the launch, because
+  # a check that runs after `codex exec resume` has started cannot un-authorize work
+  # the agent has already been handed.
+  #
+  # Absence is not permission. A resume with no recorded root is a resume onto an
+  # unknown root; a resume with no recorded model is a resume onto an unknown
+  # environment. Both refuse. `--session <uuid>` narrows WHICH session, it does not
+  # waive the history: an explicit id that disagrees with the persisted one is a
+  # refusal naming both, and an explicit id with no metadata at all is a refusal.
   PREV_STATUS=none
+  PREV_TERMINAL_VERIFIED="n/a (fresh session, no prior terminal status to carry)"
   if [ "$RESUME" = 1 ]; then
     SID=$SESSION
     if [ -z "$SID" ]; then
@@ -443,21 +610,48 @@ EOF
       [0-9a-fA-F][0-9a-fA-F]*-*-*-*-*) ;;
       *) refuse "resume-bad-session: '$SID' is not a codex session uuid" ;;
     esac
-    if [ -s "$RSTATE/session.json" ]; then
-      PREV_ROOT=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("root",""))' "$RSTATE/session.json" 2>/dev/null)
-      PREV_MODEL=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("model",""))' "$RSTATE/session.json" 2>/dev/null)
-      PREV_STATUS=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("terminal_status",""))' "$RSTATE/session.json" 2>/dev/null)
-      PREV_SID=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("session_id",""))' "$RSTATE/session.json" 2>/dev/null)
-      : "${PREV_ROOT:=}" "${PREV_MODEL:=}" "${PREV_STATUS:=unknown}" "${PREV_SID:=}"
-      [ -z "$PREV_ROOT" ] || [ "$PREV_ROOT" = "$WT" ] || \
-        refuse "resume-root-mismatch: session $SID was recorded against root '$PREV_ROOT'; this round owns '$WT'. A scope change gets a deliberate fresh session, never a resume."
-      if [ -n "$PREV_MODEL" ] && [ "${PREV_MODEL%% *}" != "$MODEL" ]; then
-        refuse "resume-model-mismatch: session $SID ran on '$PREV_MODEL'; this round asks for '$MODEL'. An environment change gets a deliberate fresh session, never a resume."
-      fi
-      [ -z "$PREV_SID" ] || [ -n "$SESSION" ] || [ "$PREV_SID" = "$SID" ] || \
-        refuse "resume-state-inconsistent: $RSTATE/session.id says '$SID' but $RSTATE/session.json says '$PREV_SID'"
-    fi
-    say "$(stamp)  RESUME: session=$SID root=$WT model=$MODEL previous_terminal_status=$PREV_STATUS instruction_digest=${INSTR_DIGEST:0:16}"
+    [ -s "$RSTATE/session.json" ] || refuse "resume-no-metadata: $RSTATE/session.json does not exist, so nothing is known about session $SID — not its root, not its model, not its settings, not how it ended. A continuation with no history is a fresh session wearing a session id. Run a fresh round."
+    _meta=$(python3 - "$RSTATE/session.json" <<'PY' 2>/dev/null
+import json, shlex, sys
+try:
+    r = json.load(open(sys.argv[1]))
+except Exception as ex:
+    print("META_OK=0"); print("META_ERR=" + shlex.quote(str(ex))); raise SystemExit
+if not isinstance(r, dict):
+    print("META_OK=0"); print("META_ERR=" + shlex.quote("session.json is not a JSON object")); raise SystemExit
+s = r.get("settings")
+s = s if isinstance(s, dict) else {}
+print("META_OK=1")
+for k, v in (("PREV_ROOT", r.get("root")), ("PREV_MODEL", r.get("model")),
+             ("PREV_MODEL_REQ", r.get("model_requested")),
+             ("PREV_STATUS", r.get("terminal_status")), ("PREV_SID", r.get("session_id")),
+             ("PREV_SETTINGS", ";".join(f"{k2}={v2}" for k2, v2 in sorted(s.items()) if v2))):
+    print(f"{k}=" + shlex.quote("" if v is None else str(v)))
+PY
+)
+    eval "$_meta"
+    : "${META_OK:=0}" "${META_ERR:=unreadable}" "${PREV_ROOT:=}" "${PREV_MODEL:=}" \
+      "${PREV_MODEL_REQ:=}" "${PREV_STATUS:=}" "${PREV_SID:=}" "${PREV_SETTINGS:=}"
+    [ "$META_OK" = 1 ] || refuse "resume-bad-metadata: $RSTATE/session.json could not be read as a session record ($META_ERR)"
+    [ -n "$PREV_ROOT" ] || refuse "resume-missing-root: $RSTATE/session.json records no root for session $SID. An unknown previous root cannot be compared with '$WT', and an unverifiable scope is not a verified scope."
+    [ "$PREV_ROOT" = "$WT" ] || \
+      refuse "resume-root-mismatch: session $SID was recorded against root '$PREV_ROOT'; this round owns '$WT'. A scope change gets a deliberate fresh session, never a resume."
+    [ -n "$PREV_MODEL$PREV_MODEL_REQ" ] || refuse "resume-missing-model: $RSTATE/session.json records no model for session $SID (neither an observed \`model:\` line nor the model that was requested). Resuming into an unknown model is an unmeasured environment change."
+    _pm=${PREV_MODEL:-$PREV_MODEL_REQ}
+    [ "${_pm%% *}" = "$MODEL" ] || \
+      refuse "resume-model-mismatch: session $SID ran on '$_pm'; this round asks for '$MODEL'. An environment change gets a deliberate fresh session, never a resume."
+    [ -n "$PREV_SETTINGS" ] || refuse "resume-missing-settings: $RSTATE/session.json records no provider/approval/sandbox/reasoning settings for session $SID. The settings a session ran under are part of what is being continued; unrecorded settings are unverified settings."
+    # the explicit-ID override narrows the session; it never waives the comparison.
+    [ -n "$PREV_SID" ] || refuse "resume-missing-session-id: $RSTATE/session.json records no session_id to compare '$SID' against"
+    [ "$PREV_SID" = "$SID" ] || \
+      refuse "resume-state-inconsistent: asked to continue '$SID' but $RSTATE/session.json records session '$PREV_SID'$([ -n "$SESSION" ] && echo " (an explicit --session narrows which session is continued; it does not authorize continuing a session this worktree has no record of)")"
+    [ -n "$PREV_STATUS" ] || PREV_STATUS=unknown
+    # The previous run's terminal status is CARRIED, never re-derived. Astra: "It
+    # records a previous terminal label, not a verified previous exit." That is now
+    # said out loud in the receipt instead of being implied by a bare word, and it is
+    # kept SEPARATE from this run's own status so the two can never be confused.
+    PREV_TERMINAL_VERIFIED="recorded by the round that ran it (a carried label, not an exit re-verified here)"
+    say "$(stamp)  RESUME ADMISSION: session=$SID root='$PREV_ROOT'==\$WT model='$_pm'==$MODEL settings='$PREV_SETTINGS' previous_terminal_status=$PREV_STATUS (recorded, not re-verified) instruction_digest=${INSTR_DIGEST:0:16}"
   fi
 
   LAUNCH_EPOCH=$(date +%s)
@@ -467,30 +661,55 @@ EOF
   # Closing them here is what makes the lease mean "a round is running" again instead of
   # "a round once started here". fd 7 is the FIXTURE lease, taken later in GRADE; closing
   # a descriptor that is not open is not an error, so this is correct in every mode.
+  #
+  # `setsid --wait` (util-linux) is the whole supervision repair in one flag: the
+  # wrapper still gets its own session — so a dead terminal cannot HUP the builder,
+  # which is why setsid was here in the first place — and setsid then WAITS on it and
+  # exits with the same status. So $! is a child we can `wait` on, and its status is
+  # the builder's status. Plain `setsid` (no --wait) returns immediately and throws the
+  # exit code away; that is the false GREEN.
+  BUILDER_LAUNCHER=$LAUNCHER
   if [ "$RESUME" = 1 ]; then
+    BUILDER_LAUNCHER=$RESUME_LAUNCHER
     CODEX_BIN=/home/forge/.local/bin/codex CODEX_MODEL="$MODEL" \
-      nohup setsid /home/forge/bin/round-resume "$WT" "$SID" "$BRIEF" "$REPORT" \
+      nohup setsid --wait "$RESUME_LAUNCHER" "$WT" "$SID" "$BRIEF" "$REPORT" \
       > "$BLOG" 2>&1 </dev/null 9>&- 8>&- 7>&- &
   else
     CODEX_BIN=/home/forge/.local/bin/codex CODEX_MODEL="$MODEL" \
-      nohup setsid /home/forge/bin/sol-yolo "$WT" "$BRIEF" "" "$REPORT" \
+      nohup setsid --wait "$LAUNCHER" "$WT" "$BRIEF" "" "$REPORT" \
       > "$BLOG" 2>&1 </dev/null 9>&- 8>&- 7>&- &
   fi
   WRAPPER=$!
+  WRAPPER_START=$(proc_starttime "$WRAPPER")
+  say "$(stamp)  supervising wrapper pid=$WRAPPER launcher=$BUILDER_LAUNCHER boot_id=$BOOT_ID starttime=${WRAPPER_START:-<already-exited>}"
 
   # THE RECEIPT: the wrapper pid is NOT the run. Find the codex CHILD by its `-C`
   # fence, or — for a resumed session, which takes no `-C` — by its cwd (round-resume
   # chdirs into the worktree, which is the only fence `codex exec resume` accepts).
   # 90 s, not 30: a cold codex start behind a slow network has been seen past 30 s,
   # and the cost of giving up early is an orphan.
+  #
+  # DISCOVERY FAILURE IS NO LONGER A REFUSAL WHEN THE WRAPPER HAS ALREADY DIED.
+  # Astra's witness list names "instant exit" and "wrapper-first exit". A builder that
+  # exits 17 in under a second never appears in a 1-Hz /proc scan, and the old code
+  # answered that with `refuse_after_launch` — exit 3, no receipt, and the exit code
+  # nobody ever collected. Now: if the wrapper is gone, we COLLECT it, and the round
+  # continues to a RED receipt that names the status. A refusal that discards the
+  # evidence is not fail-closed, it is fail-silent.
   for _ in $(seq 1 90); do
     BUILDER_PID=$(codex_leader_in "$WT" "$LAUNCH_EPOCH")
     [ -n "$BUILDER_PID" ] && break
+    kill -0 "$WRAPPER" 2>/dev/null || break
     sleep 1
   done
-  if [ -z "$BUILDER_PID" ]; then
+  if [ -z "$BUILDER_PID" ] && kill -0 "$WRAPPER" 2>/dev/null; then
     say "$(stamp)  builder log head:"; head -c 600 "$BLOG" | tee -a "$LOG"
-    refuse_after_launch "no codex child fenced to $WT after 90 s (wrapper=$WRAPPER, log=$BLOG)"
+    refuse_after_launch "no codex child fenced to $WT after 90 s, and the wrapper is still alive (wrapper=$WRAPPER, log=$BLOG) — this round cannot supervise what it cannot identify"
+  fi
+  if [ -n "$BUILDER_PID" ]; then
+    BUILDER_START=$(proc_starttime "$BUILDER_PID")
+  else
+    say "$(stamp)  no codex child was ever discovered and the wrapper has already exited — collecting its terminal status"
   fi
 
   # -------------------------------------------------------------------------
@@ -507,7 +726,8 @@ EOF
     SESSION_ID=$(hdr_field 'session id')
     [ -n "$SESSION_ID" ] || SESSION_ID=$(grep -m1 -o '"thread_id":"[^"]*"' "$BLOG" 2>/dev/null | sed -E 's/.*:"([^"]*)"/\1/')
     [ -n "$SESSION_ID" ] && break
-    kill -0 "$BUILDER_PID" 2>/dev/null || break
+    [ -n "$BUILDER_PID" ] || break
+    alive_as "$BUILDER_PID" "$BUILDER_START" || break
     sleep 1
   done
   LOGMODEL=$(hdr_field 'model')
@@ -579,39 +799,87 @@ PY
     say "$(stamp)  WARNING: no session id in $BLOG — this round cannot be resumed (continuation state UNVERIFIED)"
   fi
 
-  say "START RECEIPT: builder_pid=$BUILDER_PID wrapper=$WRAPPER mode=$([ "$RESUME" = 1 ] && echo resume || echo fresh) session=${SESSION_ID:-none} model=${LOGMODEL:-<not-yet-logged>} log=$BLOG brief=$BRIEF report=$REPORT started=$(stamp)"
+  say "START RECEIPT: builder_pid=${BUILDER_PID:-none} builder_starttime=${BUILDER_START:-none} wrapper=$WRAPPER wrapper_starttime=${WRAPPER_START:-none} boot_id=$BOOT_ID launcher=$BUILDER_LAUNCHER mode=$([ "$RESUME" = 1 ] && echo resume || echo fresh) session=${SESSION_ID:-none} model=${LOGMODEL:-<not-yet-logged>} log=$BLOG brief=$BRIEF report=$REPORT started=$(stamp)"
 
-  # An interrupt while we wait must NOT silently orphan the builder. It also must not
-  # DESTROY it — the builder is the expensive thing in this routine. So we hand over
-  # the handle instead: print the exact re-attach command and leave the run alone.
-  trap 'say "$(stamp)  interrupted while waiting on builder $BUILDER_PID — it is STILL RUNNING and now unwatched."; say "        re-attach with:  round $WT $FINDINGS $NAME --adopt $BUILDER_PID"; exit 130' INT TERM
+  # An interrupt while we wait is recorded, not swallowed. The builder is in its own
+  # session (setsid), so a SIGINT to this round does not reach it; the handover line
+  # is printed so the human knows exactly what is still running and where its log is.
+  # --adopt is disabled, so the honest instruction is "kill it or wait", not a
+  # re-attach that would bypass the canonical lease.
+  trap 'say "$(stamp)  interrupted while supervising builder ${BUILDER_PID:-?} (wrapper $WRAPPER) — setsid put it in its own session, so it is STILL RUNNING and now unwatched. Its log is $BLOG."; say "        --adopt is disabled pending ownership transfer, so there is no re-attach: let it finish and grade the tip with --no-build under a NEW name, or stop it with  kill ${BUILDER_PID:-<pid>}"; exit 130' INT TERM
 
-  # wait on the CHILD, never on the wrapper, never under an outer `timeout`.
-  deadline=$(( $(date +%s) + MINUTES * 60 ))
-  while kill -0 "$BUILDER_PID" 2>/dev/null; do
-    if [ "$(date +%s)" -ge "$deadline" ]; then
-      # the exact pid, never pkill, never an outer `timeout`; then the wrapper, so
-      # a ceiling leaves nothing of ours running.
-      kill "$BUILDER_PID" 2>/dev/null
+  # -------------------------------------------------------------------------
+  # THE WAIT. Two things must both end, and only one of them has a collectable
+  # status: the WRAPPER (our child, `wait`-able) and the codex CHILD (identified,
+  # not ours). Poll until the wrapper is gone or the ceiling is reached, `wait` for
+  # the real status, then give the codex child a bounded grace period to follow it.
+  # A codex still fenced to the tree after the wrapper has gone is an ORPHAN whose
+  # exit nobody will ever see — `unknown-termination`, which is RED.
+  # -------------------------------------------------------------------------
+  DEADLINE_MS=$(( t + MINUTES * 60 * 1000 ))
+  while alive_as "$WRAPPER" "$WRAPPER_START"; do
+    if [ "$(now_ms)" -ge "$DEADLINE_MS" ]; then
+      # the exact pid, never pkill, never an outer `timeout`; the builder first, then
+      # the wrapper, so a ceiling leaves nothing of ours running.
+      [ -n "$BUILDER_PID" ] && kill "$BUILDER_PID" 2>/dev/null
       kill "$WRAPPER" 2>/dev/null
-      BUILD=timeout
+      TERMINATION=ceiling-kill
+      say "$(stamp)  CEILING: $MINUTES minute(s) reached — killed builder ${BUILDER_PID:-none} and wrapper $WRAPPER"
       break
     fi
-    sleep 10
+    sleep 5
   done
-  trap - INT TERM
-  BW=$(( $(date +%s) - t ))
+  wait "$WRAPPER" 2>/dev/null; WRAPPER_RC=$?
+  say "$(stamp)  TERMINAL RECEIPT: wrapper=$WRAPPER exit=$WRAPPER_RC (collected with wait(2), not inferred from disappearance) boot_id=$BOOT_ID starttime=${WRAPPER_START:-none}"
 
-  # the model line only appears once codex has started; re-read it now that it has run.
+  # the codex child gets a bounded grace to exit behind its wrapper; if it outlives
+  # it, its status is unknowable and this round says so.
+  ORPHAN=""
+  if [ -n "$BUILDER_PID" ]; then
+    for _ in 1 2 3 4 5 6; do
+      alive_as "$BUILDER_PID" "$BUILDER_START" || break
+      sleep 1
+    done
+    if alive_as "$BUILDER_PID" "$BUILDER_START"; then
+      ORPHAN=$BUILDER_PID
+      say "$(stamp)  ORPHAN: codex $BUILDER_PID (starttime $BUILDER_START) is STILL RUNNING after its wrapper exited — its termination status can never be collected"
+    fi
+  fi
+
+  # -------------------------------------------------------------------------
+  # CLASSIFY, IN ASCENDING PRECEDENCE. The last assignment wins, so a collected
+  # non-zero exit outranks a missing `model:` line: if the builder died 17, the
+  # reason the log is short is that it died 17.
+  # -------------------------------------------------------------------------
   LOGMODEL=$(hdr_field 'model')
   [ -n "$SESSION_ID" ] || SESSION_ID=$(hdr_field 'session id')
   case "$LOGMODEL" in
-    "$MODEL"*) : ;;
-    "") say "$(stamp)  FAIL: builder log has no 'model:' line ($BLOG)"; BUILD=wrong-model ;;
-    *)  say "$(stamp)  FAIL: wrong model — asked $MODEL, log says '$LOGMODEL'"; BUILD=wrong-model ;;
+    "$MODEL"*) TERMINATION=collected ;;
+    "") say "$(stamp)  FAIL: builder log has no 'model:' line ($BLOG)"; BUILD=wrong-model; TERMINATION=collected ;;
+    *)  say "$(stamp)  FAIL: wrong model — asked $MODEL, log says '$LOGMODEL'"; BUILD=wrong-model; TERMINATION=collected ;;
   esac
+  if [ -z "$BUILDER_PID" ]; then
+    BUILD=no-builder
+    TERMINATION=no-child
+    say "$(stamp)  FAIL: the wrapper ran and exited but NO codex child fenced to $WT was ever observed — there is no builder whose work this round could be grading"
+  fi
+  if [ -n "$ORPHAN" ]; then
+    BUILD=unknown-termination
+    TERMINATION=orphan
+  fi
+  if [ "$WRAPPER_RC" != 0 ]; then
+    BUILD="builder-exit-$WRAPPER_RC"
+    TERMINATION=nonzero-exit
+    say "$(stamp)  FAIL: the builder exited $WRAPPER_RC. A non-zero terminal status is RED no matter what the builder PRINTED and no matter how green every later check comes back — 'PASS committed' on stdout is a claim, wait(2) is the receipt."
+  fi
+  if [ "$TERMINATION" = ceiling-kill ]; then
+    BUILD=timeout
+  fi
+  BW=$(( $(now_ms) - t ))
+  trap - INT TERM
+
   [ -n "$SESSION_ID" ] && write_session "$BUILD"
-  step BUILD "$BW" "$BUILD (pid=$BUILDER_PID model='${LOGMODEL:-none}' session=${SESSION_ID:-none} mode=$([ "$RESUME" = 1 ] && echo resume || echo fresh))"
+  step BUILD "$BW" "$BUILD (termination=$TERMINATION wrapper_exit=$WRAPPER_RC pid=${BUILDER_PID:-none} model='${LOGMODEL:-none}' session=${SESSION_ID:-none} mode=$([ "$RESUME" = 1 ] && echo resume || echo fresh))"
 fi
 
 # ===========================================================================
@@ -619,20 +887,27 @@ fi
 # ===========================================================================
 t=$(phase_t0)
 NEW_TIP=$(git -C "$WT" rev-parse HEAD)
-dirty=$(git -C "$WT" status --porcelain --untracked-files=no 2>&1)
+# same definition of dirty as the preflight: tracked modifications anywhere, plus
+# untracked files under src/test/resources/deps.edn/.clj-surgeon.edn (item 4).
+dirty=$(relevant_dirty "$WT")
+# COMMIT is its OWN axis, not an overwrite of BUILD. Before B02b, `BUILD=nocommit`
+# here erased a terminal status the supervision phase had just established: a builder
+# that exited 17 without committing reported `build=nocommit` and the exit code
+# vanished from the receipt. Two questions, two answers, both in the ledger line.
+COMMIT=ok
 if [ "$NOBUILD" = 1 ]; then
-  step COMMIT_CHECK $(( $(date +%s) - t )) "skipped (--no-build); grading tip ${NEW_TIP:0:8}"
+  COMMIT=skipped
+  step COMMIT_CHECK $(( $(now_ms) - t )) "skipped (--no-build); grading tip ${NEW_TIP:0:8}"
 else
   if [ "$NEW_TIP" = "$OLD_TIP" ]; then
-    BUILD=nocommit
-    :
-    step COMMIT_CHECK $(( $(date +%s) - t )) "NO COMMIT — tip unchanged at ${OLD_TIP:0:8}"
+    COMMIT=nocommit
+    step COMMIT_CHECK $(( $(now_ms) - t )) "NO COMMIT — tip unchanged at ${OLD_TIP:0:8}"
   elif [ -n "$dirty" ]; then
-    BUILD=nocommit
+    COMMIT=dirty
     say "$dirty"
-    step COMMIT_CHECK $(( $(date +%s) - t )) "NO COMMIT — tip moved but tree is dirty"
+    step COMMIT_CHECK $(( $(now_ms) - t )) "NO COMMIT — tip moved but tree is dirty (tracked changes, or untracked files under src/test/resources/deps.edn/.clj-surgeon.edn)"
   else
-    step COMMIT_CHECK $(( $(date +%s) - t )) "ok ${OLD_TIP:0:8} -> ${NEW_TIP:0:8}, tree clean"
+    step COMMIT_CHECK $(( $(now_ms) - t )) "ok ${OLD_TIP:0:8} -> ${NEW_TIP:0:8}, tree clean"
   fi
 fi
 
@@ -679,60 +954,121 @@ cat > "$FIXTURE/.clj-surgeon.edn" <<EOF
 EOF
 
 if [ -z "$REQUEST" ]; then
-  REQUEST=$OUT/$NAME-request.edn
+  REQUEST=$RUNDIR/request.edn
   sed -E "s#:workspace_root \"[^\"]*\"#:workspace_root \"$FIXTURE\"#" "$BASE_REQUEST" > "$REQUEST"
 fi
 
+# ---------------------------------------------------------------------------
+# THE BASIS, HASHED (item 4). Astra: "The receipt carries Git tips, not a full
+# effective source/environment/configuration inventory." Git tips name the source;
+# they say nothing about the two files that decide what "verified" MEANS in this
+# grade — the fixture's `.clj-surgeon.edn` (which verification profile runs, and
+# which commands are in it) and its `deps.edn` (what the suite loads). Both are
+# written or laid down by this round and neither is tracked by the fixture's git,
+# so without their digests a receipt cannot be replayed and cannot be compared.
+# The candidate's own deps.edn is hashed too, at preflight.
+# ---------------------------------------------------------------------------
 FIXTURE_SHA=$(git -C "$FIXTURE" rev-parse HEAD 2>/dev/null)
 REQUEST_SHA=$(sha256sum < "$REQUEST" | cut -d' ' -f1)
 ORACLE_SHA=$(sha256sum < "$CC_ORACLE" | cut -d' ' -f1)
 PAPERCUT_SHA=$(sha256sum < "$PAPERCUT" | cut -d' ' -f1)
 ROUND_SHA=$(sha256sum < "$0" | cut -d' ' -f1)
 GUARD_SHA=$(sha256sum < "$GUARD_TEST" | cut -d' ' -f1)
+FX_CONFIG=$FIXTURE/.clj-surgeon.edn
+FX_CONFIG_SHA=$(sha256sum < "$FX_CONFIG" | cut -d' ' -f1)
+FX_DEPS_SHA=$( [ -f "$FIXTURE/deps.edn" ] && sha256sum < "$FIXTURE/deps.edn" | cut -d' ' -f1 || echo "")
+say "$(stamp)  basis: fixture_config_sha256=${FX_CONFIG_SHA:0:16} fixture_deps_sha256=${FX_DEPS_SHA:0:16} candidate_deps_sha256=${CAND_DEPS_SHA:0:16} request_sha256=${REQUEST_SHA:0:16}"
+step FIXTURE_SETUP $(( $(now_ms) - t )) "fixture=$FIXTURE sha=${FIXTURE_SHA:0:8} lease=$FXSTATE/lease config=${FX_CONFIG_SHA:0:16}"
 
-RECEIPT=$OUT/$NAME-receipt.edn
+tw=$(phase_t0)
+RECEIPT=$RUNDIR/split-receipt.edn
 if [ -n "$SPLIT_RECEIPT" ]; then
   [ -f "$SPLIT_RECEIPT" ] || refuse "no such split receipt: $SPLIT_RECEIPT"
   cp "$SPLIT_RECEIPT" "$RECEIPT"
   CALL_RC=0
   CALL_RC_SRC="supplied"
-  say "$(stamp)  split call: NOT RUN — grading the supplied receipt $SPLIT_RECEIPT (--split-receipt)"
+  say "$(stamp)  split call: NOT RUN — grading the supplied receipt $SPLIT_RECEIPT (--split-receipt). This is a DIAGNOSTIC replay: the producer's own exit status was not observed by this round."
 else
   ( cd "$FIXTURE" && bb --classpath "$WT/src" -m clj-surgeon.core \
-      :op :split-ns! :request-file "$REQUEST" ) > "$RECEIPT" 2>"$OUT/$NAME-receipt.err" </dev/null 9>&- 8>&- 7>&-
+      :op :split-ns! :request-file "$REQUEST" ) > "$RECEIPT" 2>"$RUNDIR/split-receipt.err" </dev/null 9>&- 8>&- 7>&-
   CALL_RC=$?
   CALL_RC_SRC="exit"
 fi
+step SPLIT_CALL $(( $(now_ms) - tw )) "rc=$CALL_RC source=$CALL_RC_SRC receipt=$RECEIPT"
 
 # ---------------------------------------------------------------------------
 # THE RECEIPT SCHEMA GATE.  Until B02 this was `grep -o ':state "[^"]*"'` and the
-# round called itself green whenever that word was "committed".
+# round called itself green whenever that word was "committed". B02 made it a
+# structural parse. B02b makes it a CONTRACT, because Astra walked two receipts
+# straight through the B02 version:
 #
-# `:state "committed"` is a statement about the WRITE. It is not a statement about
-# the checks: the receipt carries a `:checks` vector, and a check in it can hold a
-# non-zero `:exit` while the receipt as a whole still says committed. A grep can
-# never see that, so the gate is now a structural parse (bb + clojure.edn, the
-# receipt's own reader) plus explicit rules:
+#   {:ok true :committed true :state "committed"
+#    :verification_complete false :proof_pending ["cold-suite"]
+#    :checks [{:name "warm-only" :exit 0 :status "passed"}]}      -> GREEN/0
 #
-#   * `:ok` true, `:committed` true, `:state "committed"`, `:blockers` empty
-#   * `:checks` non-empty, every check `:name` non-empty
-#   * every check `:exit` 0 — with ONE principled exception. Two real checks in this
-#     repo (captured-reference-analysis, candidate-lint-delta) exit 3 because
-#     clj-kondo exits 3 on a repository that already has 108 baseline errors. Those
-#     checks carry their evidence: a `:baseline` map, and for the delta check
-#     `:introduced_errors 0`. So a non-zero exit is accepted ONLY when the receipt
-#     itself supplies `:baseline` AND introduces no errors. A check that merely
-#     SAYS `:status "passed"` over a non-zero exit is a failure, named.
+# The receipt SAID its proof was incomplete and named what was missing, and the
+# gate did not read those keys at all. And:
+#
+#   {:name "failed-cold-suite" :exit 17 :status "failed" :baseline nil}  -> GREEN/0
+#
+# because the excuse tested `"baseline" in c` — KEY PRESENCE — so a null baseline
+# excused an exit-17 "failed" check. An exception that tests for the NAME of the
+# evidence rather than the evidence is not an exception, it is a keyword to type.
+#
+# The five rules now enforced:
+#
+#  1. `:verification_complete` must be exactly true. Absent, false, or any other
+#     value is a refusal. The producer's own statement that it did not finish
+#     proving outranks every green thing in the rest of the map.
+#  2. `:proof_pending` must be PRESENT and a correctly typed EMPTY list. A missing
+#     key is not an empty one — a producer that never populated it is not a
+#     producer that had nothing outstanding.
+#  3. THE REGISTERED COMPLETE CHECK SET must all be present:
+#       * the four fixed checks — captured-reference-analysis, future-source-parse,
+#         candidate-lint-delta, verified-snapshot-guard;
+#       * one check per COMMAND in the verification profile, read out of the
+#         fixture's own `.clj-surgeon.edn` (this round writes that file, and the
+#         gate parses it back rather than trusting its own memory of it). A receipt
+#         that ran only a warm subset is missing checks and is named for it.
+#  4. Every `:status` must be "passed" or "baseline". "failed", "skipped",
+#     "pending", nil, or anything else is a refusal by name.
+#  5. A non-zero `:exit` or a "baseline" status is excused ONLY for
+#     captured-reference-analysis and candidate-lint-delta (the two clj-kondo
+#     analyses that exit 3 against this repo's 108-error baseline), and only when
+#     the check carries a `:baseline` MAP with introduced_errors in (absent, 0)
+#     and no positive `:delta` error count. `:baseline nil` excuses nothing.
 # ---------------------------------------------------------------------------
-RJSON=$OUT/$NAME-split-receipt.json
+tp=$(phase_t0)
+RJSON=$RUNDIR/split-receipt.json
 bb -e '(require (quote [cheshire.core :as j])) (println (j/generate-string (clojure.edn/read-string (slurp (first *command-line-args*)))))' \
-   "$RECEIPT" > "$RJSON" 2>"$OUT/$NAME-split-receipt.err" </dev/null 9>&- 8>&- 7>&-
+   "$RECEIPT" > "$RJSON" 2>"$RUNDIR/split-receipt-json.err" </dev/null 9>&- 8>&- 7>&-
 EDN_RC=$?
-RVARS=$OUT/$NAME-receipt-vars.sh
-python3 - "$RJSON" "$EDN_RC" "$CALL_RC" > "$RVARS" <<'PY'
+
+# The REGISTERED command set, read back out of the fixture config this round wrote.
+PROFILE_JSON=$RUNDIR/verification-profile.json
+bb -e '(require (quote [cheshire.core :as j]))
+       (let [cfg (clojure.edn/read-string (slurp (first *command-line-args*)))
+             profs (:verification-profiles cfg)]
+         (println (j/generate-string {:profiles (into {} (for [[k v] profs] [k (:commands v)]))})))' \
+   "$FX_CONFIG" > "$PROFILE_JSON" 2>"$RUNDIR/verification-profile.err" </dev/null 9>&- 8>&- 7>&-
+PROFILE_RC=$?
+[ "$PROFILE_RC" = 0 ] || refuse "unreadable-verification-profile: could not parse $FX_CONFIG ($RUNDIR/verification-profile.err). The gate's required check set is DERIVED from that file; a gate that cannot read its own contract must not certify anything."
+
+RVARS=$RUNDIR/receipt-vars.sh
+python3 - "$RJSON" "$EDN_RC" "$CALL_RC" "$PROFILE_JSON" > "$RVARS" <<'PY'
 import json, shlex, sys
-path, edn_rc, call_rc = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+
+path, edn_rc, call_rc, profile_path = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), sys.argv[4]
 def emit(k, v): print(f"{k}={shlex.quote(str(v))}")
+
+# The two checks whose non-zero exit is legitimately pre-existing lint baseline.
+# Nothing else may ever be "baseline", and these two only with real evidence.
+ANALYSIS_EXCUSABLE = {"captured-reference-analysis", "candidate-lint-delta"}
+FIXED_REQUIRED = ["captured-reference-analysis", "future-source-parse",
+                  "candidate-lint-delta", "verified-snapshot-guard"]
+VALID_STATUS = {"passed", "baseline"}
+ANALYSIS_PHASE = {"captured-reference-analysis", "future-source-parse", "candidate-lint-delta"}
+
 r = None
 if edn_rc == 0:
     try:
@@ -741,61 +1077,165 @@ if edn_rc == 0:
         r = None
 if not isinstance(r, dict):
     emit("STATE", f"unparseable-receipt(edn_rc={edn_rc},call_rc={call_rc})")
-    emit("IN_CALL", 0); emit("CHECKS_N", 0); emit("CHECKS_OKN", 0)
+    emit("IN_CALL", 0); emit("CHECKS_N", 0); emit("CHECKS_OKN", 0); emit("ANALYSIS_MS", 0)
     emit("RECEIPT_VERDICT", "FAILED")
     emit("RECEIPT_REASON", "the split receipt is not readable EDN — a round cannot be graded from a receipt it cannot parse")
     raise SystemExit
+
+# --- the registered command set -------------------------------------------
+required_cmds = []
+try:
+    profs = (json.load(open(profile_path)) or {}).get("profiles") or {}
+    for _pname, cmds in sorted(profs.items()):
+        for cmd in (cmds or []):
+            if isinstance(cmd, list) and cmd:
+                required_cmds.append([str(x) for x in cmd])
+except Exception:
+    required_cmds = []
+
+def cmd_matches(want, got):
+    """A profile command is satisfied by a receipt command that runs the SAME
+    program with the SAME arguments. The receipt resolves programs to absolute
+    paths (`bin/kaocha` -> `/abs/cc/bin/kaocha`, `python3` -> `/usr/bin/python3`),
+    so each token matches exactly, or by path-suffix, or by basename."""
+    if not isinstance(got, list) or len(got) != len(want):
+        return False
+    for w, g in zip(want, got):
+        g = str(g)
+        if g == w:
+            continue
+        if g.endswith("/" + w.lstrip("./")):
+            continue
+        if g.rsplit("/", 1)[-1] == w.rsplit("/", 1)[-1]:
+            continue
+        return False
+    return True
+
 state = r.get("state") or f"no-state(call_rc={call_rc})"
 emit("STATE", state)
 emit("IN_CALL", int(round(float(r.get("elapsed_ms") or 0))))
+
 checks = r.get("checks")
 if not isinstance(checks, list):
     checks = []
 bad = []
 okn = 0
+seen_names = set()
+analysis_ms = 0.0
+
 for n, c in enumerate(checks):
     if not isinstance(c, dict):
         bad.append(f"check[{n}] is not a map"); continue
     name = (c.get("name") or "").strip()
     if not name:
         bad.append(f"check[{n}] has no :name"); continue
+    seen_names.add(name)
+    if name in ANALYSIS_PHASE:
+        try: analysis_ms += float(c.get("duration_ms") or 0)
+        except Exception: pass
     ex = c.get("exit")
     st = c.get("status")
-    if ex == 0:
-        okn += 1; continue
-    excused = ("baseline" in c) and (c.get("introduced_errors") in (None, 0)) \
-        and (isinstance(c.get("delta"), dict) is False or (c.get("delta") or {}).get("error", 0) == 0)
-    if excused:
+
+    # rule 4 — the status vocabulary is closed.
+    if st not in VALID_STATUS:
+        bad.append(f"check '{name}' :status {st!r} is not one of passed/baseline")
+        continue
+
+    clean = (ex == 0) and (st == "passed")
+    if clean:
         okn += 1
         continue
-    bad.append(f"check '{name}' :exit {ex!r} :status {st!r} (no :baseline evidence excusing a non-zero exit)")
+
+    # rule 5 — the baseline exception, scoped and evidenced.
+    if name not in ANALYSIS_EXCUSABLE:
+        bad.append(f"check '{name}' :exit {ex!r} :status {st!r} — only "
+                   f"{'/'.join(sorted(ANALYSIS_EXCUSABLE))} may carry a baseline exception; "
+                   f"an arbitrary check cannot inherit it")
+        continue
+    base = c.get("baseline")
+    if not isinstance(base, dict):
+        bad.append(f"check '{name}' :exit {ex!r} :status {st!r} with :baseline {base!r} — "
+                   f"the exception requires a baseline MAP of evidence, not the presence of the key")
+        continue
+    introduced = c.get("introduced_errors")
+    if introduced not in (None, 0):
+        bad.append(f"check '{name}' introduced {introduced!r} errors over its baseline")
+        continue
+    delta = c.get("delta")
+    if isinstance(delta, dict) and (delta.get("error") or 0) != 0:
+        bad.append(f"check '{name}' :delta reports {delta.get('error')!r} new error(s) over its baseline")
+        continue
+    okn += 1
+
 if not checks:
     bad.append("the receipt carries NO :checks — nothing was verified")
-for key, want in (("ok", True), ("committed", True)):
+
+# rule 3 — the complete registered set.
+missing_fixed = [n for n in FIXED_REQUIRED if n not in seen_names]
+if missing_fixed:
+    bad.append("required check(s) absent from the receipt: " + ", ".join(missing_fixed))
+receipt_cmds = [c.get("command") for c in checks if isinstance(c, dict)]
+missing_cmds = []
+for want in required_cmds:
+    if not any(cmd_matches(want, got) for got in receipt_cmds):
+        missing_cmds.append(" ".join(want))
+if missing_cmds:
+    bad.append("verification-profile command(s) with no check in the receipt: "
+               + "; ".join(missing_cmds))
+if not required_cmds:
+    bad.append("the fixture's verification profile declares NO commands — "
+               "a profile that requires nothing cannot certify anything")
+
+# rules 1 and 2 — the producer's own completeness statement.
+vc = r.get("verification_complete")
+if vc is not True:
+    bad.append(f":verification_complete is {vc!r}, not true — the producer says its own "
+               f"verification did not complete, and no later green check can retroactively "
+               f"complete it")
+pp = r.get("proof_pending")
+if "proof_pending" not in r:
+    bad.append(":proof_pending is absent — a receipt that never populated it is not a "
+               "receipt with nothing outstanding")
+elif not isinstance(pp, list):
+    bad.append(f":proof_pending is {pp!r}, not an (empty) vector")
+elif pp:
+    bad.append(f":proof_pending is non-empty ({len(pp)}): {', '.join(map(str, pp))}")
+
+for key in ("ok", "committed"):
     if r.get(key) is not True:
         bad.append(f":{key} is {r.get(key)!r}, not true")
 if state != "committed":
     bad.append(f':state is "{state}", not "committed"')
 bl = r.get("blockers")
-if isinstance(bl, list) and bl:
+if bl is None:
+    bad.append(":blockers is absent")
+elif not isinstance(bl, list):
+    bad.append(f":blockers is {bl!r}, not a vector")
+elif bl:
     bad.append(f":blockers is non-empty ({len(bl)})")
 if call_rc != 0:
     bad.append(f"the split call itself exited {call_rc}")
+
 emit("CHECKS_N", len(checks)); emit("CHECKS_OKN", okn)
+emit("ANALYSIS_MS", int(round(analysis_ms)))
 emit("RECEIPT_VERDICT", "ok" if not bad else "FAILED")
 emit("RECEIPT_REASON", "; ".join(bad) if bad else
-     f"{okn}/{len(checks)} checks exited 0 (or carry baseline evidence), :ok/:committed true, no blockers")
+     f"{okn}/{len(checks)} checks passed (2 analysis checks may carry evidenced baselines), "
+     f"verification_complete=true, proof_pending=[], all {len(FIXED_REQUIRED)} fixed checks "
+     f"and all {len(required_cmds)} profile command(s) present, :ok/:committed true, no blockers")
 PY
 . "$RVARS"
-: "${STATE:=unknown}" "${IN_CALL:=0}" "${CHECKS_N:=0}" "${CHECKS_OKN:=0}" "${RECEIPT_VERDICT:=FAILED}" "${RECEIPT_REASON:=unset}"
+: "${STATE:=unknown}" "${IN_CALL:=0}" "${CHECKS_N:=0}" "${CHECKS_OKN:=0}" "${ANALYSIS_MS:=0}" "${RECEIPT_VERDICT:=FAILED}" "${RECEIPT_REASON:=unset}"
 say "$(stamp)  split call: rc=$CALL_RC($CALL_RC_SRC) state=$STATE in_call_ms=$IN_CALL receipt=$RECEIPT parsed=$RJSON"
 say "$(stamp)  receipt schema: $RECEIPT_VERDICT  checks=$CHECKS_OKN/$CHECKS_N  :: $RECEIPT_REASON"
 if [ "$RECEIPT_VERDICT" != ok ]; then
   say "$(stamp)  RECEIPT CHECK FAILED — \`:state \"$STATE\"\` does NOT make this round green: $RECEIPT_REASON"
 fi
+step RECEIPT_SCHEMA $(( $(now_ms) - tp )) "$RECEIPT_VERDICT ($CHECKS_OKN/$CHECKS_N; profile=$PROFILE_JSON)"
 
 # papercut oracle
-POUT=$OUT/$NAME-papercuts.log
+tb=$(phase_t0)
+POUT=$RUNDIR/papercuts.log
 python3 "$PAPERCUT" "$FIXTURE" > "$POUT" 2>&1 </dev/null 9>&- 8>&- 7>&-
 PAPERCUT_RC=$?
 PAPERCUTS=$(grep -m1 '^PAPERCUTS:' "$POUT" | awk '{print $2}')
@@ -807,21 +1247,22 @@ awk '$NF=="yes" && $(NF-2)+0 > 0 {printf "        papercut row: %s = %s %s\n", $
 # the four fixture oracles — each one's EXIT is now recorded, not just its verdict
 O1=fail O2=fail O3=fail O4=fail
 [ ! -e "$FIXTURE/src/cfp_scheduler_killer/views.clj" ] && O1=pass
-python3 "$CC_ORACLE" "$FIXTURE" > "$OUT/$NAME-cc-oracle.log" 2>&1 </dev/null 9>&- 8>&- 7>&-
+python3 "$CC_ORACLE" "$FIXTURE" > "$RUNDIR/cc-oracle.log" 2>&1 </dev/null 9>&- 8>&- 7>&-
 CC_ORACLE_RC=$?
-grep -q '^PASS:' "$OUT/$NAME-cc-oracle.log" && O2=pass
+grep -q '^PASS:' "$RUNDIR/cc-oracle.log" && O2=pass
 # the unit suite ran INSIDE the call. `committed` alone is NOT the evidence for that
 # any more — the receipt schema gate above is, and O3 is now bound to it.
 case "$STATE" in committed*) [ "$RECEIPT_VERDICT" = ok ] && O3=pass ;; esac
 ( cd "$FIXTURE" && bin/kaocha unit --focus cfp-scheduler-killer.view-architecture-test ) \
-  > "$OUT/$NAME-guard.log" 2>&1 </dev/null 9>&- 8>&- 7>&-
+  > "$RUNDIR/guard.log" 2>&1 </dev/null 9>&- 8>&- 7>&-
 GUARD_RC=$?
-grep -qE '7 assertions, 0 failures' "$OUT/$NAME-guard.log" && O4=pass
+grep -qE '7 assertions, 0 failures' "$RUNDIR/guard.log" && O4=pass
 ORACLES=0
 for o in "$O1" "$O2" "$O3" "$O4"; do [ "$o" = pass ] && ORACLES=$((ORACLES+1)); done
 say "$(stamp)  oracles: views.clj-gone=$O1 cc-oracle=$O2(rc=$CC_ORACLE_RC) unit-suite-in-call=$O3 arch-guard-7/7=$O4(rc=$GUARD_RC)  => $ORACLES/4"
-say "$(stamp)  candidate binding: tip=${NEW_TIP:0:12} fixture=${FIXTURE_SHA:0:12} request_sha256=${REQUEST_SHA:0:16} cc_oracle_sha256=${ORACLE_SHA:0:16} papercut_sha256=${PAPERCUT_SHA:0:16} guard_sha256=${GUARD_SHA:0:16} round_sha256=${ROUND_SHA:0:16}"
-step GRADE $(( $(date +%s) - t )) "state=$STATE in_call=${IN_CALL}ms PAPERCUTS=$PAPERCUTS oracles=$ORACLES/4 receipt_checks=$RECEIPT_VERDICT($CHECKS_OKN/$CHECKS_N)"
+say "$(stamp)  candidate binding: tip=${NEW_TIP:0:12} fixture=${FIXTURE_SHA:0:12} request_sha256=${REQUEST_SHA:0:16} cc_oracle_sha256=${ORACLE_SHA:0:16} papercut_sha256=${PAPERCUT_SHA:0:16} guard_sha256=${GUARD_SHA:0:16} round_sha256=${ROUND_SHA:0:16} fixture_config_sha256=${FX_CONFIG_SHA:0:16} fixture_deps_sha256=${FX_DEPS_SHA:0:16} candidate_deps_sha256=${CAND_DEPS_SHA:0:16}"
+step ORACLES $(( $(now_ms) - tb )) "PAPERCUTS=$PAPERCUTS oracles=$ORACLES/4 (papercut_rc=$PAPERCUT_RC cc_oracle_rc=$CC_ORACLE_RC guard_rc=$GUARD_RC)"
+step GRADE $(( $(now_ms) - t )) "state=$STATE in_call=${IN_CALL}ms PAPERCUTS=$PAPERCUTS oracles=$ORACLES/4 receipt_checks=$RECEIPT_VERDICT($CHECKS_OKN/$CHECKS_N)"
 
 # ===========================================================================
 # 6. WITNESSES — the namespace-split test namespaces, cold but FOCUSED.
@@ -830,7 +1271,7 @@ step GRADE $(( $(date +%s) - t )) "state=$STATE in_call=${IN_CALL}ms PAPERCUTS=$
 # Measured cheapest correct invocation: ~8 s for all three namespaces.
 # ===========================================================================
 t=$(phase_t0)
-WLOG=$OUT/$NAME-witnesses.log
+WLOG=$RUNDIR/witnesses.log
 ( cd "$WT" && clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-deps \
     -m clj-surgeon.mcp-test-runner --ns \
     clj-surgeon.namespace-split-test \
@@ -842,7 +1283,7 @@ WT_TESTS=$(echo "$WLINE" | awk '{print $2}'); WT_ASSERTS=$(echo "$WLINE" | awk '
 WFAIL=$(grep -m1 -E '^[0-9]+ failures, [0-9]+ errors' "$WLOG")
 WT_FAILS=$(echo "$WFAIL" | awk '{print $1}'); WT_ERRS=$(echo "$WFAIL" | awk '{print $3}')
 : "${WT_TESTS:=?}" "${WT_ASSERTS:=?}" "${WT_FAILS:=?}" "${WT_ERRS:=?}"
-step WITNESSES $(( $(date +%s) - t )) "rc=$WRC ${WT_TESTS}t/${WT_ASSERTS}a/${WT_FAILS}f/${WT_ERRS}e ($WLOG)"
+step WITNESSES $(( $(now_ms) - t )) "rc=$WRC ${WT_TESTS}t/${WT_ASSERTS}a/${WT_FAILS}f/${WT_ERRS}e ($WLOG)"
 
 # ===========================================================================
 # 7. INTENT_AUDIT — the linked-intent ratchet (Gene: "use LID skill to help
@@ -860,7 +1301,7 @@ step WITNESSES $(( $(date +%s) - t )) "rc=$WRC ${WT_TESTS}t/${WT_ASSERTS}a/${WT_
 #       report n/a rather than inventing a verdict.
 # ===========================================================================
 t=$(phase_t0)
-ALOG=$OUT/$NAME-intent-audit.log
+ALOG=$RUNDIR/intent-audit.log
 ( cd "$WT" && clojure -M -e "(require 'clj-surgeon.mcp-intent-contract)(prn (select-keys (clj-surgeon.mcp-intent-contract/audit-current-repository) [:ok :violations]))" ) \
   > "$ALOG" 2>&1 </dev/null 9>&- 8>&- 7>&-
 AUDIT_RC=$?
@@ -928,13 +1369,13 @@ if [ "$UNLINKED" = yes ]; then INTENTS=UNLINKED-CHANGE
 elif [ "$AUDIT_OK" = true ]; then INTENTS=ok
 else INTENTS=$VIOLATIONS
 fi
-step INTENT_AUDIT $(( $(date +%s) - t )) "ok=$AUDIT_OK violations=$VIOLATIONS rc=$AUDIT_RC new_intent_markers=$MARKERS new_spec_markers=$NEW_SPEC ($ALOG)"
-say "INTENT_AUDIT $(( $(date +%s) - t ))s :: ok=$AUDIT_OK violations=$VIOLATIONS"
+step INTENT_AUDIT $(( $(now_ms) - t )) "ok=$AUDIT_OK violations=$VIOLATIONS rc=$AUDIT_RC new_intent_markers=$MARKERS new_spec_markers=$NEW_SPEC ($ALOG)"
 
 # ===========================================================================
 # 8. RECEIPT
 # ===========================================================================
-TOTAL=$(( $(date +%s) - T0 ))
+TOTAL_MS=$(( $(now_ms) - T0MS ))
+TOTAL=$(( (TOTAL_MS + 500) / 1000 ))
 
 # ---------------------------------------------------------------------------
 # EXITS — every command whose success this round's verdict depends on, named with
@@ -947,12 +1388,22 @@ TOTAL=$(( $(date +%s) - T0 ))
 : "${CALL_RC:=?}" "${CALL_RC_SRC:=none}" "${WRC:=?}" "${AUDIT_RC:=?}" \
   "${PAPERCUT_RC:=?}" "${CC_ORACLE_RC:=?}" "${GUARD_RC:=?}" \
   "${RECEIPT_VERDICT:=FAILED}" "${RECEIPT_REASON:=no receipt was parsed}" \
-  "${CHECKS_N:=0}" "${CHECKS_OKN:=0}" "${SESSION_ID:=}" "${INSTR_DIGEST:=}" \
+  "${CHECKS_N:=0}" "${CHECKS_OKN:=0}" "${ANALYSIS_MS:=0}" "${SESSION_ID:=}" "${INSTR_DIGEST:=}" \
   "${FIXTURE_SHA:=}" "${REQUEST_SHA:=}" "${ORACLE_SHA:=}" "${PAPERCUT_SHA:=}" \
   "${GUARD_SHA:=}" "${ROUND_SHA:=}" "${FXSTATE:=}" "${STATE:=unknown}" \
-  "${RJSON:=}" "${LOGMODEL:=}" "${O1:=?}" "${O2:=?}" "${O3:=?}" "${O4:=?}"
+  "${RJSON:=}" "${LOGMODEL:=}" "${O1:=?}" "${O2:=?}" "${O3:=?}" "${O4:=?}" \
+  "${FX_CONFIG_SHA:=}" "${FX_DEPS_SHA:=}" "${CAND_DEPS_SHA:=}" "${COMMIT:=skipped}" \
+  "${WRAPPER_RC:=}" "${WRAPPER:=}" "${WRAPPER_START:=}" "${BUILDER_START:=}" \
+  "${TERMINATION:=not-launched}" "${BUILDER_LAUNCHER:=}" "${PREV_TERMINAL_VERIFIED:=n/a}"
 EXITS_BAD=""
 add_bad() { EXITS_BAD="$EXITS_BAD${EXITS_BAD:+,}$1"; }
+# The builder's own collected terminal status is an EXIT like any other, and the
+# first one listed: it is the exit Astra's false-GREEN witness proved was missing.
+case "$TERMINATION" in
+  not-launched) : ;;
+  collected)    [ "$WRAPPER_RC" = 0 ] || add_bad "builder=$WRAPPER_RC" ;;
+  *)            add_bad "builder=${WRAPPER_RC:-unknown}($TERMINATION)" ;;
+esac
 [ "$CALL_RC" = 0 ] || add_bad "split_call=$CALL_RC"
 [ "$WRC" = 0 ] || add_bad "witnesses=$WRC"
 [ "$AUDIT_RC" = 0 ] || add_bad "intent_audit=$AUDIT_RC"
@@ -962,17 +1413,23 @@ add_bad() { EXITS_BAD="$EXITS_BAD${EXITS_BAD:+,}$1"; }
 EXITS=${EXITS_BAD:-ok}
 
 say ""
-say "  $(printf '%-14s %8s  %s' PHASE 'WALL s' RESULT)"
-say "  ------------------------------------------------------------------"
+say "  $(printf '%-14s %8s %10s  %-9s %s' PHASE 'WALL s' 'WALL ms' CLASS RESULT)"
+say "  --------------------------------------------------------------------------------"
 for p in "${PHASES[@]}"; do
-  say "  $(printf '%-14s %8s  %s' "${p%%|*}" "$(echo "$p" | cut -d'|' -f2)" "$(echo "$p" | cut -d'|' -f3-)")"
+  _ph=${p%%|*}; _rest=${p#*|}
+  _s=${_rest%%|*}; _rest=${_rest#*|}
+  _res=${_rest%|*|*}; _rest=${_rest#*|}
+  _ms=${_rest%%|*}; _cls=${_rest#*|}
+  say "  $(printf '%-14s %8s %10s  %-9s %s' "$_ph" "$_s" "$_ms" "$_cls" "$_res")"
 done
-say "  ------------------------------------------------------------------"
-say "  $(printf '%-14s %8s' TOTAL "$TOTAL")"
+say "  --------------------------------------------------------------------------------"
+say "  $(printf '%-14s %8s %10s' TOTAL "$TOTAL" "$TOTAL_MS")"
+say '  (durations from /proc/uptime — CLOCK_BOOTTIME, monotonic; date(1) is used for labels only)'
 say ""
 
 RC=0
 case "$BUILD" in ok) : ;; *) RC=1 ;; esac
+case "$COMMIT" in ok|skipped) : ;; *) RC=1 ;; esac
 case "$STATE" in committed*) : ;; *) RC=1 ;; esac
 [ "$PAPERCUTS" = 0 ] || RC=1
 [ "$ORACLES" = 4 ] || RC=1
@@ -987,9 +1444,16 @@ case "$STATE" in committed*) : ;; *) RC=1 ;; esac
 [ "$EXITS" = ok ] || RC=1
 VERDICT=GREEN; [ "$RC" = 0 ] || VERDICT=RED
 
-LINE="ROUND $NAME: tip ${OLD_TIP:0:8}→${NEW_TIP:0:8} build=$BUILD state=$STATE in_call=${IN_CALL}ms PAPERCUTS=$PAPERCUTS oracles=$ORACLES/4 witnesses=${WT_TESTS}/${WT_ASSERTS}/${WT_FAILS} intents=$INTENTS new_intent_markers=$MARKERS new_spec_markers=$NEW_SPEC total=${TOTAL}s receipt_checks=$RECEIPT_VERDICT($CHECKS_OKN/$CHECKS_N) exits=$EXITS session=${SESSION_ID:-none} lease=$LOCKF verdict=$VERDICT receipt_json=$RECEIPT_JSON"
+LINE="ROUND $NAME: tip ${OLD_TIP:0:8}→${NEW_TIP:0:8} build=$BUILD builder_exit=${WRAPPER_RC:-n/a} termination=$TERMINATION commit=$COMMIT state=$STATE in_call=${IN_CALL}ms PAPERCUTS=$PAPERCUTS oracles=$ORACLES/4 witnesses=${WT_TESTS}/${WT_ASSERTS}/${WT_FAILS} intents=$INTENTS new_intent_markers=$MARKERS new_spec_markers=$NEW_SPEC total=${TOTAL}s(${TOTAL_MS}ms) receipt_checks=$RECEIPT_VERDICT($CHECKS_OKN/$CHECKS_N) exits=$EXITS session=${SESSION_ID:-none} lease=$LOCKF runner_sha256=${RUNNER_SHA:0:16} verdict=$VERDICT receipt_json=$RECEIPT_JSON"
 say "$LINE"
 printf '%s  %s\n' "$(stamp)" "$LINE" >> "$LEDGER"
+case "$TERMINATION" in
+  collected) [ "$WRAPPER_RC" = 0 ] || say "$(stamp)  RED because the builder's collected terminal status is exit $WRAPPER_RC — 'PASS committed' on stdout is a claim, wait(2) is the receipt" ;;
+  orphan)    say "$(stamp)  RED because the builder's termination status is UNKNOWN: codex $BUILDER_PID outlived its wrapper and nobody will ever collect its exit" ;;
+  no-child)  say "$(stamp)  RED because no builder was ever observed in $WT — there is nothing whose work this round could be grading" ;;
+  ceiling-kill) say "$(stamp)  RED because the builder hit the $MINUTES-minute ceiling and was killed" ;;
+esac
+[ "$COMMIT" = ok ] || [ "$COMMIT" = skipped ] || say "$(stamp)  RED because the builder left no clean commit: commit=$COMMIT"
 [ "$RECEIPT_VERDICT" = ok ] || say "$(stamp)  RED because the split receipt did not survive its own schema gate: $RECEIPT_REASON"
 [ "$EXITS" = ok ] || say "$(stamp)  RED because a command this verdict rests on exited non-zero: $EXITS"
 
@@ -1010,7 +1474,14 @@ else
   PAPERCUTS="$PAPERCUTS" ORACLES="$ORACLES" O1="$O1" O2="$O2" O3="$O3" O4="$O4" \
   WT_TESTS="$WT_TESTS" WT_ASSERTS="$WT_ASSERTS" WT_FAILS="$WT_FAILS" WT_ERRS="$WT_ERRS" \
   INTENTS="$INTENTS" AUDIT_OK="$AUDIT_OK" VIOLATIONS="$VIOLATIONS" UNLINKED="$UNLINKED" \
-  MARKERS="$MARKERS" NEW_SPEC="$NEW_SPEC" TOTAL="$TOTAL" RC="$RC" VERDICT="$VERDICT" \
+  MARKERS="$MARKERS" NEW_SPEC="$NEW_SPEC" TOTAL="$TOTAL" TOTAL_MS="$TOTAL_MS" RC="$RC" VERDICT="$VERDICT" \
+  COMMIT="$COMMIT" TERMINATION="$TERMINATION" WRAPPER="$WRAPPER" WRAPPER_RC="$WRAPPER_RC" \
+  WRAPPER_START="$WRAPPER_START" BUILDER_PID="$BUILDER_PID" BUILDER_START="$BUILDER_START" \
+  BOOT_ID="$BOOT_ID" BUILDER_LAUNCHER="$BUILDER_LAUNCHER" ANALYSIS_MS="$ANALYSIS_MS" \
+  FX_CONFIG="$FX_CONFIG" FX_CONFIG_SHA="$FX_CONFIG_SHA" FX_DEPS_SHA="$FX_DEPS_SHA" \
+  CAND_DEPS_SHA="$CAND_DEPS_SHA" RUNDIR="$RUNDIR" FROZEN="$FROZEN" RUNNER_SHA="$RUNNER_SHA" \
+  RUNNER_SRC="$RUNNER_SRC" PREV_TERMINAL_VERIFIED="$PREV_TERMINAL_VERIFIED" \
+  SPLIT_RECEIPT_SUPPLIED="${SPLIT_RECEIPT:-}" \
   CALL_RC="$CALL_RC" CALL_RC_SRC="$CALL_RC_SRC" WRC="$WRC" AUDIT_RC="$AUDIT_RC" \
   PAPERCUT_RC="$PAPERCUT_RC" CC_ORACLE_RC="$CC_ORACLE_RC" GUARD_RC="$GUARD_RC" EXITS="$EXITS" \
   RECEIPT_VERDICT="$RECEIPT_VERDICT" RECEIPT_REASON="$RECEIPT_REASON" \
@@ -1025,37 +1496,91 @@ e = os.environ
 def num(k):
     try: return int(e.get(k, ""))
     except Exception: return e.get(k, "")
+# "phase|wall_s|result|wall_ms|class" — the result field is written second so a
+# human reading the log sees it early; it is parsed from BOTH ends so a result
+# containing a "|" cannot shift the numeric fields.
 phases = []
+durations_ms = {}
 for row in e["PHASES_STR"].splitlines():
     if not row.strip():
         continue
-    parts = row.split("|", 2)
-    if len(parts) == 3:
-        wall = int(parts[1]) if parts[1].lstrip("-").isdigit() else parts[1]
-        phases.append({"phase": parts[0], "wall_s": wall, "result": parts[2]})
+    head, sep, tail = row.partition("|")
+    if not sep:
+        continue
+    body, _, klass = tail.rpartition("|")
+    body, _, ms = body.rpartition("|")
+    wall_s, _, result = body.partition("|")
+    def _i(x):
+        try: return int(x)
+        except Exception: return x
+    phases.append({"phase": head, "wall_s": _i(wall_s), "wall_ms": _i(ms),
+                   "class": klass, "result": result})
+    if isinstance(_i(ms), int):
+        durations_ms[klass] = durations_ms.get(klass, 0) + _i(ms)
+# `analysis` is the in-call clj-kondo/parse work, summed from the split receipt's own
+# per-check duration_ms — this round never runs it directly, so it has no phase of its
+# own and would otherwise be missing from the decomposition entirely.
+try:
+    durations_ms["analysis"] = int(e.get("ANALYSIS_MS") or 0)
+except Exception:
+    pass
+durations_ms["total"] = int(e.get("TOTAL_MS") or 0)
 rec = {
-  "schema": "round-receipt/1",
+  "schema": "round-receipt/2",
   "round": e["NAME"],
   "written_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
   "verdict": e["VERDICT"],
   "exit_code": num("RC"),
+  "bundle": {
+    "dir": e["RUNDIR"],
+    "reserved_atomically": True,
+    "frozen_runner": e["FROZEN"],
+    "frozen_runner_sha256": e["RUNNER_SHA"],
+    "runner_source": e["RUNNER_SRC"],
+  },
   "candidate": {
     "worktree": e["WT"], "branch": e["BRANCH"],
     "tip_before": e["OLD_TIP"], "tip_after": e["NEW_TIP"],
+    "commit_status": e["COMMIT"],
     "fixture": e["FIXTURE"], "fixture_sha": e["FIXTURE_SHA"],
     "request_file": e["REQUEST"], "request_sha256": e["REQUEST_SHA"],
     "cc_oracle_sha256": e["ORACLE_SHA"], "papercut_oracle_sha256": e["PAPERCUT_SHA"],
     "arch_guard_sha256": e["GUARD_SHA"], "round_script_sha256": e["ROUND_SHA"],
     "split_receipt_edn": e["SPLIT_RECEIPT_EDN"], "split_receipt_json": e["SPLIT_RECEIPT_JSON"],
+    # item 4 — the effective configuration basis, not just the git tips
+    "fixture_config_file": e["FX_CONFIG"],
+    "fixture_config_sha256": e["FX_CONFIG_SHA"] or None,
+    "fixture_deps_sha256": e["FX_DEPS_SHA"] or None,
+    "candidate_deps_sha256": e["CAND_DEPS_SHA"] or None,
+    "dirty_definition": "tracked modifications anywhere + untracked under src/ test/ resources/ deps.edn .clj-surgeon.edn",
+    # a supplied receipt is a DIAGNOSTIC replay: this round did not observe its
+    # producer's exit, so it is labelled rather than silently treated as first-hand.
+    "split_receipt_supplied": e["SPLIT_RECEIPT_SUPPLIED"] or None,
+    "split_receipt_provenance": ("supplied-replay (producer exit NOT observed by this round)"
+                                 if e["SPLIT_RECEIPT_SUPPLIED"] else "produced by this round"),
   },
   "builder": {
     "model_requested": e["MODEL"], "model_from_log": e["LOGMODEL"] or None,
     "status": e["BUILD"], "session_id": e["SESSION_ID"] or None,
     "resumed": e["RESUME"] == "1", "previous_terminal_status": e["PREV_STATUS"],
+    "previous_terminal_status_basis": e["PREV_TERMINAL_VERIFIED"],
     "instruction_digest_sha256": e["INSTR_DIGEST"] or None,
+    "launcher": e["BUILDER_LAUNCHER"] or None,
+    # item 1 — the terminal receipt: a COLLECTED status plus the start identity it
+    # was collected for. `termination` is the authority; `ok` requires "collected".
+    "termination": e["TERMINATION"],
+    "wrapper_pid": e["WRAPPER"] or None,
+    "wrapper_exit": num("WRAPPER_RC") if e["WRAPPER_RC"] != "" else None,
+    "wrapper_exit_source": "wait(2)" if e["WRAPPER_RC"] != "" else "not collected",
+    "wrapper_starttime_jiffies": e["WRAPPER_START"] or None,
+    "builder_pid": e["BUILDER_PID"] or None,
+    "builder_starttime_jiffies": e["BUILDER_START"] or None,
+    "boot_id": e["BOOT_ID"],
   },
   "lease": {"worktree_lease": e["LOCKF"], "state_dir": e["RSTATE"],
-            "fixture_state_dir": e["FXSTATE"], "inside_worktree": False},
+            "fixture_state_dir": e["FXSTATE"], "inside_worktree": False,
+            "adopt_enabled": False,
+            "adopt_disabled_reason": "adopt-disabled: pending ownership transfer"},
   "receipt_schema": {
     "verdict": e["RECEIPT_VERDICT"], "reason": e["RECEIPT_REASON"],
     "checks_total": num("CHECKS_N"), "checks_green": num("CHECKS_OKN"),
@@ -1063,6 +1588,8 @@ rec = {
   },
   "exits": {
     "aggregate": e["EXITS"],
+    "builder": {"rc": (num("WRAPPER_RC") if e["WRAPPER_RC"] != "" else None),
+                "source": "wait(2)", "termination": e["TERMINATION"]},
     "split_call": {"rc": e["CALL_RC"], "source": e["CALL_RC_SRC"]},
     "witness_runner": e["WRC"], "intent_audit": e["AUDIT_RC"],
     "papercut_oracle": e["PAPERCUT_RC"], "cc_oracle": e["CC_ORACLE_RC"],
@@ -1077,7 +1604,10 @@ rec = {
               "violations": e["VIOLATIONS"], "unlinked_change": e["UNLINKED"],
               "new_intent_markers": e["MARKERS"], "new_spec_markers": e["NEW_SPEC"]},
   "phases": phases,
+  "durations_ms": durations_ms,
+  "duration_source": "/proc/uptime (CLOCK_BOOTTIME, monotonic)",
   "total_wall_s": num("TOTAL"),
+  "total_wall_ms": num("TOTAL_MS"),
   "log": e["LOGFILE"],
 }
 path = sys.argv[1]

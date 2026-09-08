@@ -15,8 +15,28 @@
 #
 # NEVER `--last`: "the most recent recorded session" is whatever else this box did
 # last, which is exactly the wrong-session class Astra requires us to refuse.
+#
+# ---------------------------------------------------------------------------
+# B02b, item 6 — CONTINUATION ADMISSION LIVES HERE TOO.
+#
+# Astra's finding: "Direct installed `round-resume` resumed that same session from
+# **resume-b**, returned the remembered token, and exited 0 ... It checks no prior
+# root."  `round` validated the history and then handed the work to a wrapper that
+# validated nothing, so the gate could be walked around by calling the wrapper —
+# which is a public, documented entrance, not a private implementation detail.
+#
+# A check that exists in only one of two entrances is not a control. This script
+# now performs the SAME fail-closed admission against the SAME state directory that
+# `round` uses (keyed by sha256 of the canonical worktree path), BEFORE codex is
+# executed. Missing metadata refuses. Root mismatch refuses. Model mismatch refuses.
+# Absence is never permission.
+#
+# Also item 6: the repo `.codex/config.toml` neutralisation is RESTORED on exit,
+# error and signal. Renaming a repository file and leaving it renamed because the
+# run failed is a mutation of the subject by the apparatus.
+# ---------------------------------------------------------------------------
 . "$HOME/bin/seat-tmp-guard.sh"   # temp on /var/tmp/forge, never tmpfs
-set -euo pipefail
+set -uo pipefail
 WT=${1:?worktree}; SID=${2:?session-id}; PF=${3:?prompt-file}; OUT=${4:-$WT/../sol-report.md}
 [ -d "$WT" ] || { echo "round-resume: no such worktree: $WT" >&2; exit 2; }
 [ -f "$PF" ] || { echo "round-resume: no such prompt file: $PF" >&2; exit 2; }
@@ -28,20 +48,81 @@ case "$SID" in
   *) echo "round-resume: refusing '$SID' — not a session uuid" >&2; exit 3 ;;
 esac
 
+# ---------------------------------------------------------------------------
+# HISTORICAL ADMISSION — the same state dir, the same rules, before any launch.
+# ---------------------------------------------------------------------------
+WTC=$(readlink -f "$WT")
+RSTATE=/var/tmp/forge/round/state/$(printf '%s' "$WTC" | sha256sum | cut -d' ' -f1)
+MODEL=${CODEX_MODEL:-gpt-5.6-sol}
+refuse() { echo "round-resume: REFUSED $*" >&2; exit 3; }
+
+[ -s "$RSTATE/session.json" ] || refuse "resume-no-metadata: $RSTATE/session.json does not exist, so nothing is known about session $SID for root '$WTC' — not its root, not its model, not its settings, not how it ended. A continuation with no history is a fresh session wearing a session id."
+_meta=$(python3 - "$RSTATE/session.json" <<'PY' 2>/dev/null
+import json, shlex, sys
+try:
+    r = json.load(open(sys.argv[1]))
+except Exception as ex:
+    print("META_OK=0"); print("META_ERR=" + shlex.quote(str(ex))); raise SystemExit
+if not isinstance(r, dict):
+    print("META_OK=0"); print("META_ERR=" + shlex.quote("session.json is not a JSON object")); raise SystemExit
+s = r.get("settings")
+s = s if isinstance(s, dict) else {}
+print("META_OK=1")
+for k, v in (("PREV_ROOT", r.get("root")), ("PREV_MODEL", r.get("model")),
+             ("PREV_MODEL_REQ", r.get("model_requested")),
+             ("PREV_STATUS", r.get("terminal_status")), ("PREV_SID", r.get("session_id")),
+             ("PREV_SETTINGS", ";".join(f"{k2}={v2}" for k2, v2 in sorted(s.items()) if v2))):
+    print(f"{k}=" + shlex.quote("" if v is None else str(v)))
+PY
+)
+eval "$_meta"
+: "${META_OK:=0}" "${META_ERR:=unreadable}" "${PREV_ROOT:=}" "${PREV_MODEL:=}" \
+  "${PREV_MODEL_REQ:=}" "${PREV_STATUS:=}" "${PREV_SID:=}" "${PREV_SETTINGS:=}"
+[ "$META_OK" = 1 ] || refuse "resume-bad-metadata: $RSTATE/session.json could not be read as a session record ($META_ERR)"
+[ -n "$PREV_ROOT" ] || refuse "resume-missing-root: $RSTATE/session.json records no root for session $SID. An unknown previous root cannot be compared with '$WTC'."
+[ "$PREV_ROOT" = "$WTC" ] || refuse "resume-root-mismatch: session $SID was recorded against root '$PREV_ROOT'; this invocation asks to continue it in '$WTC'. A scope change gets a deliberate fresh session, never a resume."
+[ -n "$PREV_MODEL$PREV_MODEL_REQ" ] || refuse "resume-missing-model: $RSTATE/session.json records no model for session $SID (neither an observed model: line nor the model that was requested). Resuming into an unknown model is an unmeasured environment change."
+PM=${PREV_MODEL:-$PREV_MODEL_REQ}
+[ "${PM%% *}" = "$MODEL" ] || refuse "resume-model-mismatch: session $SID ran on '$PM'; this invocation asks for '$MODEL'."
+[ -n "$PREV_SETTINGS" ] || refuse "resume-missing-settings: $RSTATE/session.json records no provider/approval/sandbox/reasoning settings for session $SID. Unrecorded settings are unverified settings."
+[ -n "$PREV_SID" ] || refuse "resume-missing-session-id: $RSTATE/session.json records no session_id to compare '$SID' against"
+[ "$PREV_SID" = "$SID" ] || refuse "resume-state-inconsistent: asked to continue '$SID' but $RSTATE/session.json records session '$PREV_SID' for this root"
+[ -n "$PREV_STATUS" ] || PREV_STATUS=unknown
+echo "round-resume: ADMITTED session=$SID root='$PREV_ROOT' model='$PM' settings='$PREV_SETTINGS' previous_terminal_status=$PREV_STATUS (recorded by the round that ran it; not independently re-verified here)" >&2
+
+# ---------------------------------------------------------------------------
 # Same MCP fence as sol-yolo: a repo-declared server may point at a port this seat must
 # never contact (curtain-call declares clj-surgeon on 7888 = another seat's production).
+# RESTORED on every exit path — success, failure, or signal.
+# ---------------------------------------------------------------------------
+MOVED=""
+restore_config() {
+  [ -n "$MOVED" ] || return 0
+  if [ -f "$MOVED" ]; then
+    mv "$MOVED" "$WT/.codex/config.toml" \
+      && echo "round-resume: restored $WT/.codex/config.toml" >&2 \
+      || echo "round-resume: WARNING could not restore $WT/.codex/config.toml from $MOVED" >&2
+  fi
+  MOVED=""
+}
+trap 'restore_config' EXIT
+trap 'restore_config; exit 130' INT
+trap 'restore_config; exit 143' TERM
+
 if [ -f "$WT/.codex/config.toml" ]; then
   for n in $(grep -oE '^\[mcp_servers\.[^]]+\]' "$WT/.codex/config.toml" | sed -E 's/\[mcp_servers\.([^]]+)\]/\1/'); do
     echo "round-resume: neutralising repo-declared MCP server '$n'" >&2
   done
-  mv "$WT/.codex/config.toml" "$WT/.codex/config.toml.disabled-by-round-resume"
+  MOVED=$WT/.codex/config.toml.disabled-by-round-resume
+  mv "$WT/.codex/config.toml" "$MOVED"
 fi
 
-cd "$WT"
+cd "$WT" || refuse "cannot chdir to $WT"
 "${CODEX_BIN:-/usr/bin/codex}" exec resume \
   --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox \
-  -m "${CODEX_MODEL:-gpt-5.6-sol}" -c 'model_reasoning_effort="high"' \
+  -m "$MODEL" -c 'model_reasoning_effort="high"' \
   -o "$OUT.last.md" "$SID" - < "$PF"
 rc=$?
 if [ ! -s "$OUT" ] && [ -s "$OUT.last.md" ]; then cp "$OUT.last.md" "$OUT"; fi
+restore_config
 exit $rc
