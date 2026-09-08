@@ -17,3 +17,11 @@ drift band is the registered 2*s_N = 46.346 s.
 - CORRECTION 2026-09-08T13:2xZ: the first publication of this row compared 4.310 s against the 27 s AGENT-caller median and printed "IN". That comparison was not like for like. The band now runs against the previous sentinel and reads no-baseline on the first run; the program was corrected in the same edit (~/bin/verb-sentinel).
 - evidence: `/var/tmp/forge/row2/sentinel-20260908T131651Z` (attestation.txt, candidate.patch, oracle-run.txt, wall.txt, stopwatch.log) ; job log `/var/tmp/forge/tighten/sentinel-alias-20260908T131651Z.log`
 
+## 2026-09-08T13:21:36Z  arm=sentinel-20260908T132004Z port=7888
+
+- oracles: ACCEPTED=NO (FAIL), call rc=3
+- caller=0.049s ; primary=29.996s ; previous sentinel caller=4.310s
+- drift band vs the PREVIOUS SENTINEL, 2*s_N=46.346 s -> IN
+- context only, NOT like for like (those are agent-caller arms; this is a runner-issued call): registered tool caller 27 s, registered native caller 121 s
+- evidence: `/var/tmp/forge/row2/sentinel-20260908T132004Z` (attestation.txt, candidate.patch, oracle-run.txt, wall.txt, stopwatch.log) ; job log `/var/tmp/forge/tighten/sentinel-alias-20260908T132004Z.log`
+
