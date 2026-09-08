@@ -1,0 +1,100 @@
+;; Row 2 STAGE 2 freeze manifest — written BEFORE arm P1-N.
+;; Amends /var/tmp/forge/row2/freeze.edn (stage 1). Everything not restated below stays frozen.
+{:frozen-at-utc "2026-09-08T08:13:23Z"
+
+ :design
+ {:original {:path "/var/tmp/forge/plan2/cellC/sol-row2-design.md"
+             :sha256 "8b85fac0ac4c51e26e994d58b9adf3e9b066315e8b436cff746cd84c79d4816a"
+             :matches-stage-1-freeze true}
+  :amendment {:path "/var/tmp/forge/plan2/cellC/sol-row2-revision.md"
+              :sha256 "421140e68c3089654e459220af92266589d85c2e08ef14730b38ee1567ff610a"}}
+
+ :task
+ {:stage-1 {:path "/var/tmp/forge/row2/task.md"        :sha256 "6b3cc46e20e1fa6c12ce4af7243f13f3f9846a099dce520507551fc22c08073c"}
+  :stage-2 {:path "/var/tmp/forge/row2/task-stage2.md" :sha256 "ec4c2a9e24fad8fbc4f0733454f773df2d1b20c61129f2de0ff402d9b9c331a2"
+            :verified-byte-identical-to-amended-block true
+            :delta-vs-stage-1 "exactly the four added lines of revision change 2 (the
+                               planning-time alias-occupancy sentence plus its blank line)"}}
+
+ :arm-envelopes
+ {"brief-N-stage2.tmpl.md" "4519f48e71a1f1a39c8a2829b5cec5dd3620b9721971d44b910a4b7af463b2bc"
+  "brief-D-stage2.tmpl.md" "87633ad4e26fe8c1944951d3fe65d3aac420868966b7428493a3e83d83ba0d4b"
+  :note "__ARM__ / __WT__ / __LOG__ / __ARMDIR__ are the only substitutions; per-arm rendered
+         copies are retained at /var/tmp/forge/row2/<ARM>/brief.md"}
+
+ :d-request
+ {:template "/var/tmp/forge/row2/request.tmpl.json"
+  :sha256   "462a7a6a9ccb54e82bcc7c9fd54117b6ba45f3d3e4b6e204c9b0a62b63d5cab8"
+  :source   "the design's frozen request block, verbatim, with $WORKTREE substituted per arm"
+  :no-verify-field true}
+
+ :mcp-server
+ {:port 7906 :pid 4122989
+  :worktree "/home/forge/src/clj-surgeon-srv7906"
+  :head "2b39bd3795d31e8f76f29d8b657783c0ad8d0fe4" :dirty false
+  :tools-list "/var/tmp/forge/row2/artifacts/tools-list-7906.json"
+  :alias-migration-contract-sha256 "e89c804375c315888fe302d24777b4aa722241245a83dfa299bc60ba4828b0e6"
+  :schema-admits-frozen-request true
+  :call-route "~/bin/surgeon-call alias_migration <args.json> 7906"}
+
+ ;; ---- revision change 4: the prospective candidate-complete boundary ----
+ :meter
+ {:primary-endpoint "orient-start -> oracle-complete   (complete verified wall)"
+  :caller-work-endpoint "orient-start -> candidate-complete   (removable caller work)"
+  :rule "the LAST candidate-complete stamp is authoritative; any allowed rework must re-stamp it,
+         so the stamp always names bytes never mutated afterwards. Never inferred by subtracting
+         separately aggregated phase medians."
+  :tool "/var/tmp/forge/row2/wall2.sh"  :tool-sha256 "d8b8b82d0ad087d95a270f6863d5fc6b74acec5d2b3dd719e46ba3291f74697b"
+  :stamp-tool "/var/tmp/forge/dogfood-stamp.sh"}
+
+ ;; ---- revision change 3: alias-convention-neutral O2 ----
+ :oracle-stage-2
+ {"oracle2/clj_tokens.py"                "996c0abe99579f6bffe8487a0d1f2859b191a33a18ac261248707e57ee39340b"
+  "oracle2/o2_tokens.py"                 "ae89779a3d7f7657a89eef528e4a9b038c580d5c68d3c4557c4e96470e1a8984"
+  "oracle2/o2_structural_golden_v2.sh"   "fc147b1eb8704c9931e6e3b5711e46b0fae8b48da90fff8d3827b1e074ebd42e"
+  "oracle2/run_oracles_v2.sh"            "0bc09aec2c9b9fa1606fc2db62467bfd45082f86df621355c88c702f6241733c"
+  :unchanged-from-stage-1 ["o1_load_suite.sh" "o3_kondo_delta.sh" "o4_prose_collision.sh"
+                           "o5_papercut.sh" "kondo_seed_baseline.json"]
+  :o2-v2-contract
+  ["O2.a changed path set is exactly the nine caller files"
+   "O2.b seeded helper json.clj byte-identical"
+   "O2.c token-level census: zero live */write-str ATOMS, exactly 21 live <alias>/write atoms.
+     The protected docstring occurrence lives inside a STRING token, so it is excluded by
+     construction rather than by the stage-1 'minus one' subtraction."
+   "O2.d exactly one target libspec per file; its :as alias must be inside the frozen four-entry
+     policy set; after canonicalizing ONLY that alias token and its qualified symbols, the
+     candidate token stream must equal the golden's — every non-alias token byte-identical and
+     in the same order. Whitespace and commas are trivia and are dropped."
+   "O4 alone rules on WHICH policy alias is correct and on planning-time occupancy."]
+  :behaviour-change-vs-stage-1
+  "layout-only churn (re-aligned continuation lines) no longer fails O2; it is still counted by
+   O5's patch-size rule. Position of the new libspec inside the require block is token ORDER and
+   still fails O2."}
+
+ :stage-2-cohort
+ {:pairs [{:id "P1" :order ["P1-N" "P1-D"]} {:id "P2" :order ["P2-D" "P2-N"]}
+          {:id "P3" :order ["P3-N" "P3-D"]} {:id "P4" :order ["P4-D" "P4-N"]}
+          {:id "P5" :order ["P5-N" "P5-D"]} {:id "P6" :order ["P6-D" "P6-N"]}]
+  :model "opus, fresh Agent session per arm, no context carry-over"
+  :order :sequential :overlap :none
+  :seed "6dcdbc9db67a91179b5940a16c16b760583f2603"
+  :worktree-pattern "/home/forge/src/mvr-row2-<ARM>"}
+
+ :retained-stage-1
+ {:floor-walls-s [209.0 212.7 162.6 195.2 201.1 159.4]
+  :caller-work-s [121.531 122.959 71.243 79.909 109.266 79.556]
+  :median-caller-work-s 94.588 :s_N^C-s 23.173 :2s_N^C-s 46.346
+  :note "orient-start -> mutation-end is the retained caller-work observation because mutation-end
+         froze the submitted candidate in F1-F6. Not rerun (revision change 2)."}
+
+ :registered-gate-stage-2-amended
+ {:primary-conjunctive
+  ["1. all six D accepted by O1-O5, with no request repair, second call, operator intervention or native fallback"
+   "2. median_i(D_i^A / N_i^A) <= 0.75          (complete verified wall, PRIMARY)"
+   "3. median_i(1 - D_i^C / N_i^C) >= 0.50      (removable caller work)"
+   "4. median_i(N_i^C - D_i^C) > 2 * s_N^C = 46.346 s"]
+  :reported-secondary "median_i(D_i^A / N_i^A) <= 0.70"
+  :note "both endpoints are always reported together; the floor controls are not pooled into the
+         paired effect."}
+
+ :stopping-conditions-unchanged-from-design true}

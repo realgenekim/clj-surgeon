@@ -1,0 +1,15 @@
+pair  order  |       N C     N all |       D C     D all |  D/N all  1-D/N C    N-D C |  N acc  D acc
+----------------------------------------------------------------------------------------------------------------------
+P1    N->D   |   132.756   300.583 |    44.376   246.973 |    0.822    0.666   88.380 |     NO     NO
+P2    D->N   |   106.844   269.860 |    46.161   210.151 |    0.779    0.568   60.683 |     NO     NO
+P3    N->D   |   153.005   309.622 |    48.571   210.751 |    0.681    0.683  104.434 |     NO     NO
+P4    D->N   |    89.080   240.355 |    46.207   210.395 |    0.875    0.481   42.873 |     NO     NO
+P5    N->D   |   141.045   301.474 |    41.939   200.168 |    0.664    0.703   99.106 |     NO     NO
+P6    D->N   |    93.861   249.154 |    49.775   209.570 |    0.841    0.470   44.086 |     NO     NO
+
+s_N^C (retained stage-1 native caller work) = 23.173 s ; 2*s_N^C = 46.346 s
+clause 1  all six D accepted, no repair/2nd call/intervention/fallback : 0/6
+clause 2  median(D_A/N_A)      = 0.8002   <= 0.75 ? FAIL
+clause 3  median(1-D_C/N_C)    = 0.6168   >= 0.50 ? PASS
+clause 4  median(N_C-D_C)      = 74.531 s > 46.346 s ? PASS
+secondary median(D_A/N_A)      = 0.8002   <= 0.70 ? FAIL  (reported diagnostic)

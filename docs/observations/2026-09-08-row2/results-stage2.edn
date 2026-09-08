@@ -1,0 +1,85 @@
+;; Row 2 STAGE 2 — six counterbalanced matched N/D pairs under the amended preregistration
+;; (/var/tmp/forge/plan2/cellC/sol-row2-revision.md on top of sol-row2-design.md).
+;; Freeze: /var/tmp/forge/row2/freeze-stage2.edn. Nothing committed or pushed.
+{:arms
+ [{:id "P1-N" :order "N->D" :route :N :wall-all-s 300.583 :caller-work-s 132.756
+   :O1 :PASS :O2 :PASS :O3 :PASS :O4 :PASS :O5 :FAIL :accepted false
+   :patch "+23/-29" :alias "mjson x9"
+   :why-rejected "O5: patch larger than golden — 2 continuation lines re-indented."}
+  {:id "P1-D" :order "N->D" :route :D :wall-all-s 246.973 :caller-work-s 44.376
+   :O1 :PASS :O2 :FAIL :O3 :PASS :O4 :PASS :O5 :FAIL :accepted false
+   :patch "+21/-27 (golden shape)" :alias "mjson x9"
+   :receipt {:ok true :committed true :files 9 :sites 21 :aliases {"mjson" 9}
+             :collisions-resolved 3 :refer-sites 0 :string-mentions 0 :elapsed-ms 3869.68}
+   :why-rejected "O2.a + O5: the tool's own untracked .clj-surgeon/ detail directory is left in
+                  the workspace and enters the staged change set. All nine caller files are
+                  token-identical to the historical golden."}
+  {:id "P2-D" :order "D->N" :route :D :wall-all-s 210.151 :caller-work-s 46.161
+   :O1 :PASS :O2 :FAIL :O3 :PASS :O4 :PASS :O5 :FAIL :accepted false :patch "+21/-27"
+   :receipt {:ok true :committed true :files 9 :sites 21 :aliases {"mjson" 9}
+             :collisions-resolved 3 :elapsed-ms 3123.44} :why-rejected "same .clj-surgeon/ artifact"}
+  {:id "P2-N" :order "D->N" :route :N :wall-all-s 269.860 :caller-work-s 106.844
+   :O1 :PASS :O2 :PASS :O3 :PASS :O4 :PASS :O5 :FAIL :accepted false :patch "+23/-29"
+   :why-rejected "O5 patch size (2 re-indented continuation lines)"}
+  {:id "P3-N" :order "N->D" :route :N :wall-all-s 309.622 :caller-work-s 153.005
+   :O1 :PASS :O2 :FAIL :O3 :PASS :O4 :PASS :O5 :FAIL :accepted false :patch "+23/-29"
+   :why-rejected "O2.d: new libspec placed in alphabetical position (token ORDER differs from
+                  golden) in the three collider files; plus O5 patch size."}
+  {:id "P3-D" :order "N->D" :route :D :wall-all-s 210.751 :caller-work-s 48.571
+   :O1 :PASS :O2 :FAIL :O3 :PASS :O4 :PASS :O5 :FAIL :accepted false :patch "+21/-27"
+   :receipt {:ok true :committed true :files 9 :sites 21 :aliases {"mjson" 9}
+             :collisions-resolved 3 :elapsed-ms 3202.76} :why-rejected "same .clj-surgeon/ artifact"}
+  {:id "P4-D" :order "D->N" :route :D :wall-all-s 210.395 :caller-work-s 46.207
+   :O1 :PASS :O2 :FAIL :O3 :PASS :O4 :PASS :O5 :FAIL :accepted false :patch "+21/-27"
+   :receipt {:ok true :committed true :files 9 :sites 21 :aliases {"mjson" 9}
+             :collisions-resolved 3 :elapsed-ms 3127.02} :why-rejected "same .clj-surgeon/ artifact"}
+  {:id "P4-N" :order "D->N" :route :N :wall-all-s 240.355 :caller-work-s 89.080
+   :O1 :PASS :O2 :PASS :O3 :PASS :O4 :PASS :O5 :FAIL :accepted false :patch "+23/-29"
+   :why-rejected "O5 patch size"}
+  {:id "P5-N" :order "N->D" :route :N :wall-all-s 301.474 :caller-work-s 141.045
+   :O1 :PASS :O2 :FAIL :O3 :PASS :O4 :PASS :O5 :FAIL :accepted false :patch "+23/-29"
+   :why-rejected "O2.d alphabetical libspec placement + O5 patch size"}
+  {:id "P5-D" :order "N->D" :route :D :wall-all-s 200.168 :caller-work-s 41.939
+   :O1 :PASS :O2 :FAIL :O3 :PASS :O4 :PASS :O5 :FAIL :accepted false :patch "+21/-27"
+   :receipt {:ok true :committed true :files 9 :sites 21 :aliases {"mjson" 9}
+             :collisions-resolved 3 :elapsed-ms 4755.47} :why-rejected "same .clj-surgeon/ artifact"}
+  {:id "P6-D" :order "D->N" :route :D :wall-all-s 209.570 :caller-work-s 49.775
+   :O1 :PASS :O2 :FAIL :O3 :PASS :O4 :PASS :O5 :FAIL :accepted false :patch "+21/-27"
+   :receipt {:ok true :committed true :files 9 :sites 21 :aliases {"mjson" 9}
+             :collisions-resolved 3 :elapsed-ms 4598.58} :why-rejected "same .clj-surgeon/ artifact"}
+  {:id "P6-N" :order "D->N" :route :N :wall-all-s 249.154 :caller-work-s 93.861
+   :O1 :PASS :O2 :PASS :O3 :PASS :O4 :PASS :O5 :FAIL :accepted false :patch "+23/-29"
+   :why-rejected "O5 patch size"}]
+
+ :correctness-common-to-all-twelve
+ {:sites-migrated 21 :caller-files 9 :live-old-sites-remaining 0 :protected-docstring-intact true
+  :alias "mjson in all nine, in every arm" :collisions-resolved 3 :reuse 6
+  :kondo-delta-tracked-categories 0 :suite "579 tests, 7833 assertions, 0 failures"
+  :refusals 0 :second-calls 0 :request-repairs 0 :native-fallbacks 0 :operator-interventions 0}
+
+ :gate
+ {:clause-1 {:req "6/6 D accepted" :observed "0/6" :verdict :FAIL
+             :sole-cause "untracked .clj-surgeon/ detail directory (O2.a + O5)"}
+  :clause-2 {:req "median(D_A/N_A) <= 0.75" :observed 0.8002 :verdict :FAIL}
+  :clause-3 {:req "median(1 - D_C/N_C) >= 0.50" :observed 0.6168 :verdict :PASS}
+  :clause-4 {:req "median(N_C - D_C) > 2*s_N^C = 46.346 s" :observed 74.531 :verdict :PASS}
+  :secondary {:req "median(D_A/N_A) <= 0.70" :observed 0.8002 :verdict :FAIL}
+  :overall :FAIL "conjunctive gate not met: clauses 1 and 2 fail; clauses 3 and 4 pass"}
+
+ :apparatus
+ {:post-candidate-seconds {:N-median 158.5 :D-median 163.1 :pooled-median 161.3 :pooled-sd 13.0
+                           :components "caller's own load+suite, runner handoff (idle-based
+                                        completion detector, >=75 s), runner O1-O5 grading"}
+  :deviation-vs-stage-1 "stage 1 measured ~90.5 s of fixed post-mutation apparatus; stage 2's
+                         idle-based completion detector raised it to ~161 s. Constant protocol
+                         across all twelve arms. It cancels exactly in clauses 3 and 4 (which use
+                         the caller-work endpoint) and biases clause 2's RATIO conservatively
+                         toward 1, i.e. against D."
+  :sensitivity-diagnostic {:k-pooled-161.3 0.7366 :k-stage-1-90.5 0.6483
+                           :status "diagnostic only; never substituted for the primary result"}}
+
+ :diagnostic-excluding-tool-bookkeeping
+ {:what "frozen O2 and O5 re-run with .clj-surgeon/ moved out, the way stage 1 classed
+         00SERVER-LOGS.txt as apparatus fallout"
+  :result "all six D arms: O2 PASS, O5 PASS, papercut MINOR count 0, patch +21/-27"
+  :status "DIAGNOSTIC ONLY — the primary verdict above stands unchanged"}}

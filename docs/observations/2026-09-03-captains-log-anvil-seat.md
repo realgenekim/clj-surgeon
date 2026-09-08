@@ -3815,3 +3815,16 @@ Astra: 1.29 engineering hours; retained-source split (25 of 112 owners of export
 ## 2026-09-08T09:02Z — pilot 4b: all four cells RAN under the observer; 4/4 task PASS, final-tree gate 0, integrity ok; grade FAIL on one grader false positive (CX-18) plus one genuine agent miss
 
 Seeds now assertion-red with goldens (`red_attested=assertion`, `red_golden=green` through the production path); coldstart gained GATE_FINAL (declared gate cold on the final tree), C1 profile recompute, C2 tree hash at verify vs freeze; corpus 0 mismatches. Cells: p21 opus/Ø 11/11 required, p22 opus/W 10/11, p23 sol/Ø 11/11, p24 sol/W 11/11 — every one convicted by F11 on `/tmp/bbin…` and the nrepl target file written by clj-nrepl-eval ITSELF (bbin regenerates config in /tmp) — the tool the required checks mandate; same class as FP1/FP2/G1 (harness ancestry not consulted). Genuine finding: p22 (opus/W) wrote the fix at its 4th call and ran its first warm reload afterwards — never saw the declared red (R10 miss); correct work, wrong method. Agent walls 118–221 s; totals 202–610 s. Fix + regrade + one fresh opus/W cell launched. Row 1 → friction-low needs {p21,p23,p24,p25} 4/4 on the five-part criterion.
+
+## 2026-09-08T09:11Z — row 2 stage 2: six N/D pairs — the verb cuts CALLER WORK 2.6× (median 1−D/N = 0.62, 74.5 s saved > 2·s_N), zero refusals, all six candidates token-identical to the golden; the pre-registered gate still FAILS on two artifacts
+
+| pair | N caller work / all-oracle | D caller work / all-oracle | D/N all | 1−D/N caller |
+|---|---|---|---|---|
+| P1 | 132.8 / 300.6 s | 44.4 / 247.0 s | 0.82 | 0.67 |
+| P2 | 106.8 / 269.9 | 46.2 / 210.2 | 0.78 | 0.57 |
+| P3 | 153.0 / 309.6 | 48.6 / 210.8 | 0.68 | 0.68 |
+| P4 | 89.1 / 240.4 | 46.2 / 210.4 | 0.88 | 0.48 |
+| P5 | 141.0 / 301.5 | 41.9 / 200.2 | 0.66 | 0.70 |
+| P6 | 93.9 / 249.2 | 49.8 / 209.6 | 0.84 | 0.47 |
+
+Clauses 3 and 4 (caller-work) PASS; clause 2 (all-oracle ratio 0.80 ≤ 0.75) FAILS because ~161 s of constant apparatus sits in both arms (with stage-1's 90 s it would be 0.65); clause 1 (6/6 accepted) FAILS because the verb leaves `.clj-surgeon/alias-migration/detail-*.edn` INSIDE the workspace — untracked, not gitignored here — which the oracle counts as scratch in the diff (a real paper cut: receipts belong under /var/tmp/forge); with that directory moved out all six D arms pass every oracle with zero minors. N went 0/6 on layout trivia (two re-indented lines; two arms inserted the libspec alphabetically). Tool-side wall 3.1–4.8 s per call. Ruling requested from Sol (design owner): artifact A = verb paper cut → fix + re-evaluate; artifact B = meter (clause 2 on caller work or apparatus-excluded wall); the "accepted-with-minor" category; the row-2 verdict and phase. Same pattern as Cell C: the verb wins on the work, the apparatus and the paper cut decide the receipt.
