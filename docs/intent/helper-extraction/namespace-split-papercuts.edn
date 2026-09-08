@@ -211,4 +211,23 @@
  :boundaries ["exact baseline archive; file/severity/message multiset; coordinates move; case; duplicate increase; changed identity; missing/failed analyzer"]
  :tests [:cell-b-lint-case-witness]
  :rationale "B07 absolute A8 failed on five pre-existing findings, four in protected files; independent exact-base archive and candidate have identical multisets. This is an oracle correction, with the failed run preserved, not a fixture change."}
+
+{:id :NS-SPLIT-047 :status :active
+ :ears "When an external profile file is supplied, the split shall resolve it without adding workspace configuration."
+ :misreadings ["A relative path is external." "A symlink into the workspace is external." "Copy the file into the workspace."]
+ :boundaries ["CLI/MCP; precedence; absent; malformed; oversized; canonical containment"]
+ :tests [:external-profile-is-read-without-workspace-artifacts :external-profile-invalid-paths-refuse :cli-external-profile-option]
+ :rationale "Row 5 D1 required trusted proof configuration inside the graded tree."}
+{:id :NS-SPLIT-048 :status :active
+ :ears "When only true commands execute in a cold profile, the receipt shall leave cold-suite pending."
+ :misreadings ["Exit zero proves application behavior." "Cold mode alone establishes completion."]
+ :boundaries ["D2-D6 true-only receipt; failed command; missing evidence; warm; substantive gate"]
+ :tests [:row5-trivial-profile-receipt-is-honest]
+ :rationale "Row 5 D2-D6 b07-cell-b true profile falsely published complete verification."}
+{:id :NS-SPLIT-049 :status :active
+ :ears "When commands is an empty vector, admission shall refuse with a specific empty-profile reason."
+ :misreadings ["Configured means admitted." "Report only generic unavailability."]
+ :boundaries ["empty vector; absent commands; malformed commands; no mutation"]
+ :tests [:empty-profile-refuses-with-a-specific-reason]
+ :rationale "Row 5 D1 reported configured but not admitted without explaining the empty command list."}
 ]}

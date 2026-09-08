@@ -139,6 +139,8 @@
                        [profile-name capability]))))
            (or profiles {})))))
 
+;; @spec NS-SPLIT-049
+;; INTENT: NS-SPLIT-049
 (defn verification-preflight
   "nil when `profile-name` may prove this write now, or the typed refusal.
 
@@ -165,6 +167,12 @@
         unrunnable (when (and capability check-runnable? (not commandless?))
                      (first (remove runnable-command? (:commands capability))))]
     (cond
+      (= [] (:commands (get profiles profile-name)))
+      (refusal "verification-empty-profile"
+               "The selected profile has commands []; configure a substantive cold verification command."
+               {:profile profile-name :reason "empty-commands" :staged false
+                :proof_pending ["cold-suite"]})
+
       (nil? capability)
       (refusal "verification-preflight-unavailable"
                (str "The verification profile " (pr-str profile-name)

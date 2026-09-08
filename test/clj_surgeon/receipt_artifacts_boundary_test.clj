@@ -10,6 +10,7 @@
    [clj-surgeon.mcp-admit-tool :as admit]
    [clj-surgeon.mcp-cold-verify]
    [clj-surgeon.mcp-extraction :as kernel]
+   [clj-surgeon.mcp-namespace-split-test :as split-boundary-fixture]
    [clj-surgeon.namespace-split-io :as split]
    [clj-surgeon.namespace-split-test :as split-fixture]
    [clj-surgeon.require-change-boundary-test :as require-fixture]
@@ -232,3 +233,40 @@
                         (file-seq (io/file (:objects-dir txn)))))
               (is (= "(ns a) (def x :new)\n" (slurp source))))
             (finally (remove-tree! (:transactions-dir txn)))))))))
+
+;; @spec NS-SPLIT-047
+;; INTENT-TEST: NS-SPLIT-047
+(deftest external-profile-is-read-without-workspace-artifacts
+  (split-boundary-fixture/with-workspace
+    (fn [root request]
+      (let [external (java.io.File/createTempFile "split-external-" ".edn")]
+        (try
+          (spit external (pr-str {:verification-profiles {"unit" {:commands [["/bin/true"]]}}}))
+          (with-redefs [split/analyze! split-boundary-fixture/analysis]
+            (let [r (split/execute! {:verification-profiles {"unit" {:commands [["/bin/false"]]}}}
+                                       (assoc-in request [:verification :profile-file] (str external)))
+                  after (set (for [f (file-seq (io/file root)) :when (.isFile f)]
+                               (str (.relativize (.toPath (io/file root)) (.toPath f)))))]
+              (is (:ok r) (pr-str r))
+              (is (= "committed" (:state r)))
+              (is (= #{"deps.edn" "src/app/util.clj" "src/app/portal.clj" "src/app/other.clj" "test/app/caller.clj"} after))
+              (is (= "{:paths [\"src\" \"test\"]}" (slurp (io/file root "deps.edn"))))
+              (is (not (.exists (io/file root ".clj-surgeon.edn"))))))
+          (finally (.delete external)))))))
+
+;; @spec NS-SPLIT-048
+;; INTENT-TEST: NS-SPLIT-048
+(deftest row5-trivial-profile-receipt-is-honest
+  ;; Exact D2-D6 profile and public receipt fields; a real /bin/true process.
+  (split-boundary-fixture/with-workspace
+    (fn [_ request]
+      (with-redefs [split/analyze! split-boundary-fixture/analysis]
+        (let [r (split/execute! {:verification-profiles {"b07-cell-b" {:commands [["/bin/true"]]}}}
+                                   (assoc request :verification {:profile "b07-cell-b"}))
+              check (first (filter :command (:checks r)))]
+          (is (= {:state "committed" :committed true :ok true :mutation_attempted true
+                  :verification_complete false :proof_pending ["cold-suite"]}
+                 (select-keys r [:state :committed :ok :mutation_attempted :verification_complete :proof_pending])))
+          (is (= {:name "true" :profile "b07-cell-b" :command ["/bin/true"] :exit 0 :status "passed"}
+                 (dissoc check :duration_ms)))
+          (is (number? (:duration_ms check))))))))

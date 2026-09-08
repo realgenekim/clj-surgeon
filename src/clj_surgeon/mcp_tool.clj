@@ -2320,40 +2320,41 @@
   "Stable callback that plans, commits, and publishes one O(1) receipt."
   [_exchange params callback]
   (mcp-operation/invoke!
-     ;; @spec MCP-OP-EDIT-037
-     ;; @spec MCP-OP-EDIT-038
-     ;; Canonicalized HERE, at this verb's receipt construction exit --
-     ;; the last point inside the verb where the receipt is built -- so the
-     ;; shared finalizer receives an already-canonical map and changes only
-     ;; `elapsed_ms` (MCP-OP-RESULT-003). Sol fence r7 (2026-09-06) proved
-     ;; the previous placement inside `finalize-result` broke that.
+    ;; @spec MCP-OP-EDIT-037
+    ;; @spec MCP-OP-EDIT-038
+    ;; Canonicalized HERE, at this verb's receipt construction exit --
+    ;; the last point inside the verb where the receipt is built -- so the
+    ;; shared finalizer receives an already-canonical map and changes only
+    ;; `elapsed_ms` (MCP-OP-RESULT-003). Sol fence r7 (2026-09-06) proved
+    ;; the previous placement inside `finalize-result` broke that.
     {:execute
      (comp mcp-operation/canonicalize-receipt-text
-     (fn []
-       (let [normalized (json/parse-string (json/generate-string params) true)]
-         (if-not @runtime-config
-           {:ok false
-            :operation "alias_migration"
-            :error_type "server-not-initialized"
-            :error "alias_migration server is not initialized"
-            :source_unchanged true
-            :remedy "Restart the configured clj-surgeon MCP server."}
-           (let [workspace-router (or (:workspace-router @runtime-config)
-                                      (workspace/router @runtime-config))
-                 routed (workspace/resolve-request workspace-router normalized)]
-             (if-not (:ok routed)
-               (assoc routed :operation "alias_migration")
-               ;; the same receipt-directory derivation the direct dispatch
-               ;; uses: the routed project root names the workspace's own
-               ;; durable receipt directory
-               (let [routed-config (resolve-verification-config (:config routed))
-                     receipt-dir (str (or (:receipt-dir routed-config)
-                                          (default-receipt-dir
-                                            (:project-root routed-config))))]
-                 (assoc (alias-migration/execute!
-                          (assoc routed-config :receipt-dir receipt-dir)
-                          (:params routed))
-                        :workspace_root (:workspace-root routed)))))))))
+       (fn [] (alias-migration/measured-call!
+                (fn []
+                  (let [normalized (json/parse-string (json/generate-string params) true)]
+                    (if-not @runtime-config
+                      {:ok false
+                       :operation "alias_migration"
+                       :error_type "server-not-initialized"
+                       :error "alias_migration server is not initialized"
+                       :source_unchanged true
+                       :remedy "Restart the configured clj-surgeon MCP server."}
+                      (let [workspace-router (or (:workspace-router @runtime-config)
+                                                 (workspace/router @runtime-config))
+                            routed (workspace/resolve-request workspace-router normalized)]
+                        (if-not (:ok routed)
+                          (assoc routed :operation "alias_migration")
+                          ;; the same receipt-directory derivation the direct dispatch
+                          ;; uses: the routed project root names the workspace's own
+                          ;; durable receipt directory
+                          (let [routed-config (resolve-verification-config (:config routed))
+                                receipt-dir (str (or (:receipt-dir routed-config)
+                                                     (default-receipt-dir
+                                                       (:project-root routed-config))))]
+                            (assoc (alias-migration/execute!
+                                     (assoc routed-config :receipt-dir receipt-dir)
+                                     (:params routed))
+                                   :workspace_root (:workspace-root routed)))))))))))
      :summarize alias-migration-summary
      :callback callback}))
 

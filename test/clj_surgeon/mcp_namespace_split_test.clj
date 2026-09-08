@@ -170,3 +170,86 @@
             (is (nil? (:analysis r)))
             (is (.exists (io/file root "src/app/views.clj")))
             (is (not (.exists (io/file root "src/app/util.clj"))))))))))
+
+
+;; @spec NS-SPLIT-047
+;; INTENT-TEST: NS-SPLIT-047
+(deftest external-profile-invalid-paths-refuse
+  (with-workspace
+    (fn [root request]
+      (let [inside (io/file root "profile.edn")]
+        (spit inside "{:verification-profiles {}}")
+        (doseq [path ["profile.edn" (str inside) "/var/tmp/forge/rows-sublime/no-such-profile.edn"]]
+          (let [r (boundary/execute! (assoc-in request [:verification :profile-file] path))]
+            (is (= "invalid-profile-file" (:error_type r)) (pr-str r))
+            (is (false? (:mutation_attempted r)))
+            (is (= fixture/sources (boundary/capture! (.toPath (io/file root)) ["src" "test"])))))))))
+
+;; @spec NS-SPLIT-047
+;; INTENT-TEST: NS-SPLIT-047
+(deftest cli-external-profile-option
+  (let [seen (atom nil)]
+    (with-redefs [boundary/execute! (fn [request] (reset! seen request) {:state "refused"})]
+      (boundary/cli! {:op :split-ns! :request fixture/request :profile-file "/var/tmp/proof.edn"})
+      (is (= "/var/tmp/proof.edn" (get-in @seen [:verification :profile-file])))
+      (is (not (contains? @seen :profile-file))))))
+
+
+;; @spec NS-SPLIT-049
+;; INTENT-TEST: NS-SPLIT-049
+(deftest empty-profile-refuses-with-a-specific-reason
+  (is (contains? (set ((requiring-resolve 'clj-surgeon.mcp-helper-extraction/refusal-types)))
+                 "helper-extraction-verification-empty-profile"))
+  (let [p (proof/verification-preflight {"empty" {:commands []}} "empty" true)]
+    (is (= "helper-extraction-verification-empty-profile" (:error_type p)))
+    (is (= ["cold-suite"] (:proof_pending p))))
+  (with-workspace
+    (fn [root request]
+      (let [r (boundary/execute! {:verification-profiles {"unit" {:commands []}}} request)]
+        (is (= "verification-empty-profile" (:error_type r)))
+        (is (false? (:verification_complete r)))
+        (is (= ["cold-suite"] (:proof_pending r)))
+        (is (false? (:mutation_attempted r)))
+        (is (= fixture/sources (boundary/capture! (.toPath (io/file root)) ["src" "test"])))))))
+
+;; @spec NS-SPLIT-047
+;; INTENT-TEST: NS-SPLIT-047
+(deftest external-profile-data-and-symlinks-fail-closed
+  (with-workspace
+    (fn [root request]
+      (let [external (java.io.File/createTempFile "split-profile-data-" ".edn")
+            inside (io/file root "inside.edn")
+            link (io/file (.getParentFile external) (str (.getName external) "-link"))]
+        (try
+          (doseq [data ["#=(System/exit 99)" "{:verification-profiles" "[]"
+                        "{:verification-profiles {42 {:commands []}}}"
+                        (apply str (repeat (inc boundary/max-profile-bytes) "x"))]]
+            (spit external data)
+            (let [r (boundary/execute! (assoc-in request [:verification :profile-file] (str external)))]
+              (is (= "invalid-profile-file" (:error_type r)))
+              (is (false? (:mutation_attempted r)))))
+          (spit inside "{:verification-profiles {}}")
+          (java.nio.file.Files/createSymbolicLink (.toPath link) (.toPath inside)
+            (make-array java.nio.file.attribute.FileAttribute 0))
+          (let [r (boundary/execute! (assoc-in request [:verification :profile-file] (str link)))]
+            (is (= "invalid-profile-file" (:error_type r)))
+            (is (= fixture/sources (boundary/capture! (.toPath (io/file root)) ["src" "test"]))))
+          (finally (.delete link) (.delete external)))))))
+
+;; @spec NS-SPLIT-048
+;; INTENT-TEST: NS-SPLIT-048
+(deftest proof-completion-requires-executed-cold-evidence
+  (doseq [[capability verification expected]
+          [[{:proof :cold} {:ok true :process_evidence []}
+            {:verification_complete false :proof_pending ["cold-suite"]}]
+           [{:proof :cold} {:ok true :process_evidence [{:command ["true"] :exit 0 :finished? true}]}
+            {:verification_complete false :proof_pending ["cold-suite"]}]
+           [{:proof :cold} {:ok false :process_evidence [{:command ["bin/kaocha" "unit"] :exit 1 :finished? true}]}
+            {:verification_complete false :proof_pending ["cold-suite"]}]
+           [{:proof :cold} {:ok true :process_evidence [{:command ["bin/kaocha" "unit"] :exit 0 :finished? true}]}
+            {:verification_complete true :proof_pending []}]
+           [{:proof :warm :pending-commands [["bin/kaocha" "unit"]]} {:ok true}
+            {:verification_complete false :proof_pending ["bin/kaocha unit"]}]
+           [{:proof :warm :pending-commands []} {:ok true}
+            {:verification_complete false :proof_pending ["cold-suite"]}]]]
+    (is (= expected (boundary/proof-completion capability verification)))))
