@@ -1,0 +1,304 @@
+#!/usr/bin/env bash
+# coldstart <name> --repo <path> --base <sha> --model <opus|sonnet|sol|astra>
+#           --cond <W|0> --task <task.md> [--minutes 20]
+#
+# ONE cold-start acceptance session, end to end, with every gotcha this seat paid for
+# baked in. Design of record: /var/tmp/forge/plan2/cellC/astra-coldstart.md (steps 5-8).
+#
+#   SPECIMEN  own worktree + skill installed + boot pointer, committed clean
+#   CONDITION W = one attested prestarted nREPL / 0 = assert no endpoint exists
+#   LAUNCH    a FRESH agent whose entire prompt is the task file (VERIFY line stripped)
+#   OBSERVE   every runner line stamped with a real receive time by coldstart-stamp
+#   GRADE     coldstart-grade — the action-log oracle
+#   CHECK     the task's own VERIFY command, run COLD in the specimen, independently
+#   RECEIPT   one ledger line; transcript, diff, grade and receipt frozen under the run dir
+#
+# RATCHETS BAKED IN (each one is a scar, not a preference):
+#  * [[waiters-bind-to-pid-not-argv]] no `pgrep -f` anywhere; every scan is /proc + argv.
+#  * never `pkill`. The ceiling kills the run's OWN process group (run-bg setsids, so the
+#    printed pid IS the pgid) — an id we created, never a pattern.
+#  * never wrap the runner in an outer `timeout`: timeout kills your WAIT, not the child.
+#  * `</dev/null` on every subprocess; a codex/clojure that inherits a tty stdin hangs.
+#  * temp under /var/tmp/forge, never /tmp (RAM tmpfs, filled twice).
+#  * `date` here is uutils: no %3N. Take %N and cut.
+#  * the CC suite APPENDS to the tracked 00SERVER-LOGS.txt — excluded from dirt checks.
+#  * worktree-add, never `git worktree add`: create and TRUST are one step, or a folder
+#    trust dialog reaches Gene's phone.
+#  * the model is verified from the runner's OWN log, never from the flag we passed.
+#    A flag is a request; the log is the receipt.
+set -uo pipefail
+. "$HOME/bin/seat-tmp-guard.sh" 2>/dev/null || true
+
+ROOT=/var/tmp/forge/coldstart
+SKILL=/home/forge/src/claude-skills-nrepl/clojure-fast-feedback
+LEDGER=$ROOT/ledger.txt
+POINTER='Clojure work: load the clojure-fast-feedback skill first; cold-start commands are at its top.'
+
+usage() { sed -n '2,30p' "$0" >&2; exit 2; }
+[ $# -ge 1 ] || usage
+NAME=$1; shift
+REPO="" BASE="" MODEL="" COND="" TASK="" MINUTES=20
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --repo) REPO=$(readlink -f "${2:?}"); shift 2 ;;
+    --base) BASE=${2:?}; shift 2 ;;
+    --model) MODEL=${2:?}; shift 2 ;;
+    --cond) COND=${2:?}; shift 2 ;;
+    --task) TASK=$(readlink -f "${2:?}"); shift 2 ;;
+    --minutes) MINUTES=${2:?}; shift 2 ;;
+    *) echo "coldstart: unknown option $1" >&2; usage ;;
+  esac
+done
+
+RUN=$ROOT/$NAME
+WT=$RUN/wt
+LOG=$RUN/coldstart.log
+mkdir -p "$RUN"
+: > "$LOG"
+stamp() { date -u +%FT%T.%N | cut -c1-23; }
+T0=$(date +%s)
+say() { printf '%s\n' "$*" | tee -a "$LOG"; }
+PHASES=()
+step() { PHASES+=("$1|$2|$3"); say "$(stamp)  [+$(( $(date +%s) - T0 ))s]  $1 ${2}s :: $3"; }
+refuse() { say "$(stamp)  REFUSED: $*"; exit 3; }
+
+say "$(stamp)  COLDSTART $NAME  repo=$REPO base=${BASE:0:12} model=$MODEL cond=$COND task=$TASK minutes=$MINUTES"
+
+# ---------------------------------------------------------------------------
+# 0. PREFLIGHT — refuse placeholders and moving refs before anything is created
+# ---------------------------------------------------------------------------
+t=$(date +%s)
+[ -n "$REPO" ] && [ -d "$REPO/.git" ] || refuse "--repo must be a git repository"
+[ -n "$BASE" ] || refuse "--base <sha> is required (a moving ref is not a base)"
+git -C "$REPO" rev-parse --verify -q "$BASE^{commit}" >/dev/null || refuse "base $BASE is not a commit in $REPO"
+[ -f "$TASK" ] || refuse "--task file not found: $TASK"
+case "$COND" in W|0) ;; *) refuse "--cond must be W or 0" ;; esac
+case "$MODEL" in opus|sonnet) RUNNER=claude ;; sol) RUNNER=codex; CMODEL=gpt-5.6-sol ;;
+  astra) RUNNER=codex; CMODEL=gpt-6-astra ;; *) refuse "--model must be opus|sonnet|sol|astra" ;; esac
+[ -d "$SKILL" ] || refuse "skill not installed at $SKILL"
+[ -x /home/forge/bin/coldstart-grade ] || refuse "coldstart-grade missing"
+[ -x /home/forge/bin/coldstart-stamp ] || refuse "coldstart-stamp missing"
+[ -x /home/forge/bin/run-bg ] || refuse "run-bg missing"
+[ -e "$WT" ] && refuse "specimen already exists: $WT (a run dir is never reused)"
+VERIFY=$(sed -nE 's/^VERIFY:[[:space:]]*//p' "$TASK" | head -1)
+# NOTE the single quotes: backticks inside a double-quoted string are command
+# substitution, and this seat has already shipped prose that executed itself once.
+[ -n "$VERIFY" ] || refuse 'task file has no "VERIFY: <cmd>" line — there would be no independent check'
+SKILL_SHA=$(cat "$SKILL/SKILL.md" | sha256sum | cut -c1-16)
+step PREFLIGHT $(( $(date +%s) - t )) "runner=$RUNNER verify='$VERIFY' skill_sha256=$SKILL_SHA"
+
+# ---------------------------------------------------------------------------
+# 1. SPECIMEN — own worktree, skill installed, boot pointer, committed clean
+# ---------------------------------------------------------------------------
+t=$(date +%s)
+/home/forge/bin/worktree-add "$REPO" "$WT" "coldstart/$NAME" "$BASE" >>"$LOG" 2>&1 </dev/null \
+  || refuse "worktree-add failed (see $LOG)"
+HEAD0=$(git -C "$WT" rev-parse HEAD)
+[ "$HEAD0" = "$(git -C "$REPO" rev-parse "$BASE^{commit}")" ] || refuse "specimen HEAD != requested base"
+
+mkdir -p "$WT/.claude/skills"
+ln -sfn "$SKILL" "$WT/.claude/skills/clojure-fast-feedback"
+for f in CLAUDE.md AGENTS.md; do
+  [ -f "$WT/$f" ] || : > "$WT/$f"
+  printf '\n%s\n' "$POINTER" >> "$WT/$f"
+done
+git -C "$WT" add -A CLAUDE.md AGENTS.md >>"$LOG" 2>&1 </dev/null
+GIT_AUTHOR_NAME=forge-anvil GIT_AUTHOR_EMAIL=forge-anvil@anvil \
+GIT_COMMITTER_NAME=forge-anvil GIT_COMMITTER_EMAIL=forge-anvil@anvil \
+  git -C "$WT" commit -q -m "coldstart specimen $NAME: fast-feedback skill + boot pointer" \
+  >>"$LOG" 2>&1 </dev/null || refuse "could not commit the specimen basis"
+BASIS=$(git -C "$WT" rev-parse HEAD)
+dirty=$(git -C "$WT" status --porcelain --untracked-files=no -- . ':!00SERVER-LOGS.txt' 2>/dev/null)
+[ -z "$dirty" ] || refuse "specimen is dirty before the agent ever ran"
+step SPECIMEN $(( $(date +%s) - t )) "basis=${BASIS:0:12} skill symlinked, pointer in CLAUDE.md+AGENTS.md, tree clean"
+
+# ---------------------------------------------------------------------------
+# 2. CONDITION
+# ---------------------------------------------------------------------------
+t=$(date +%s)
+JVM_PID=""
+if [ "$COND" = W ]; then
+  rm -f "$WT/.nrepl-port"
+  out=$(cd "$WT" && /home/forge/bin/run-bg "$NAME-jvm" make nrepl 2>&1 </dev/null)
+  say "  $out"
+  JVM_PID=$(printf '%s' "$out" | sed -nE 's/.*pid=([0-9]+).*/\1/p')
+  [ -n "$JVM_PID" ] || refuse "condition W: run-bg did not print a pid"
+  for _ in $(seq 1 180); do [ -s "$WT/.nrepl-port" ] && break; sleep 1; done
+  [ -s "$WT/.nrepl-port" ] || refuse "condition W: no .nrepl-port after 180 s"
+  PORT=$(cat "$WT/.nrepl-port")
+  # attest: the endpoint answers AND its root is THIS worktree. A port file is a
+  # handshake, not an identity — prestarting an endpoint we never attested would
+  # hand the agent someone else's JVM and call that the experiment's condition.
+  ATT=$(clj-nrepl-eval --port "$PORT" '(vector (+ 1 2) (System/getProperty "user.dir"))' \
+        2>&1 </dev/null | tr -d '\n')
+  case "$ATT" in *"3"*"$WT"*) ;; *) refuse "condition W: attestation failed — got: $ATT" ;; esac
+  step CONDITION $(( $(date +%s) - t )) "W: nREPL prestarted port=$PORT jvm_pid_group=$JVM_PID attested root=$WT"
+else
+  [ -e "$WT/.nrepl-port" ] && refuse "condition 0: a .nrepl-port already exists in a fresh worktree"
+  step CONDITION $(( $(date +%s) - t )) "0: no endpoint present (asserted absent)"
+fi
+
+# ---------------------------------------------------------------------------
+# 3. LAUNCH — the agent's ENTIRE prompt is the task, VERIFY line stripped.
+#    The VERIFY command is the harness's independent check; showing it to the
+#    agent would be coaching (Astra: the task contains no verification hints).
+# ---------------------------------------------------------------------------
+t=$(date +%s)
+PROMPT=$RUN/prompt.md
+grep -vE '^(VERIFY|REPO|BASE|BASE_REF|QUALIFIED):' "$TASK" > "$PROMPT"
+TRANSCRIPT=$RUN/transcript.$([ "$RUNNER" = claude ] && echo jsonl || echo log)
+REPORT=$RUN/report.md
+
+if [ "$RUNNER" = claude ]; then
+  FMT=claude
+  LAUNCH="cd '$WT' && claude -p --model '$MODEL' --output-format stream-json --verbose \
+--dangerously-skip-permissions --add-dir '$WT' < '$PROMPT' 2>&1 \
+| /home/forge/bin/coldstart-stamp > '$TRANSCRIPT'"
+else
+  FMT=codex
+  LAUNCH="CODEX_BIN=/home/forge/.local/bin/codex CODEX_MODEL='$CMODEL' \
+/home/forge/bin/sol-yolo '$WT' '$PROMPT' '' '$REPORT' 2>&1 \
+| /home/forge/bin/coldstart-stamp > '$TRANSCRIPT'"
+fi
+
+out=$(/home/forge/bin/run-bg "$NAME-agent" bash -c "$LAUNCH" 2>&1 </dev/null)
+say "  $out"
+AGENT_PGID=$(printf '%s' "$out" | sed -nE 's/.*pid=([0-9]+).*/\1/p')
+[ -n "$AGENT_PGID" ] || refuse "run-bg did not print a pid for the agent launch"
+LAUNCH_EPOCH=$(date +%s)
+
+# The real worker is a CHILD of that shell. run-bg setsids, so the printed pid is
+# the process-group leader and killing the GROUP is exact. We still name the worker
+# in the start receipt: a receipt that cannot name its subject is not a receipt.
+worker_pids() {  # /proc scan by argv + start time. NEVER pgrep -f.
+  local p args
+  for p in /proc/[0-9]*; do
+    p=${p#/proc/}
+    args=$({ tr '\0' ' ' < "/proc/$p/cmdline"; } 2>/dev/null) || continue
+    case "$args" in
+      *"codex exec "*" -C ${WT} "*|*"codex exec "*" -C ${WT}/ "*) echo "$p" ;;
+      *"claude"*" -p "*"--add-dir ${WT}"*) echo "$p" ;;
+    esac
+  done | sort -n
+}
+WORKER=""
+for _ in $(seq 1 90); do WORKER=$(worker_pids | head -1); [ -n "$WORKER" ] && break; sleep 1; done
+say "START RECEIPT: name=$NAME pgid=$AGENT_PGID worker=${WORKER:-<not-discovered>} runner=$RUNNER model=$MODEL transcript=$TRANSCRIPT"
+
+DEADLINE=$(( LAUNCH_EPOCH + MINUTES * 60 ))
+CEILING=no
+while kill -0 "$AGENT_PGID" 2>/dev/null; do
+  if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+    # exact: our OWN process group, an id we created. Never pkill, never a pattern.
+    kill -TERM -- "-$AGENT_PGID" 2>/dev/null
+    sleep 5
+    kill -KILL -- "-$AGENT_PGID" 2>/dev/null
+    CEILING=yes
+    break
+  fi
+  sleep 5
+done
+AGENT_WALL=$(( $(date +%s) - t ))
+
+# the model is verified from the runner's OWN log, not from the flag we passed
+if [ "$RUNNER" = claude ]; then
+  LOGMODEL=$(python3 - "$TRANSCRIPT" <<'PY' 2>/dev/null
+import json,re,sys
+for line in open(sys.argv[1],errors="replace"):
+    line=re.sub(r'^@[\d.]+\|','',line).strip()
+    if not line.startswith('{'): continue
+    try: o=json.loads(line)
+    except Exception: continue
+    if o.get('type')=='system' and o.get('model'):
+        print(o['model']); break
+PY
+)
+else
+  LOGMODEL=$(sed -E 's/^@[0-9.]+\|//' "$TRANSCRIPT" 2>/dev/null | grep -m1 -E '^[[:space:]]*model:' \
+             | sed -E 's/.*model:[[:space:]]*//' | tr -d '\r')
+fi
+MODEL_OK=unknown
+case "$LOGMODEL" in
+  "") MODEL_OK=no-model-line ;;
+  *"$MODEL"*|*"${CMODEL:-@@}"*) MODEL_OK=verified ;;
+  *) MODEL_OK="MISMATCH(asked=$MODEL got=$LOGMODEL)" ;;
+esac
+step LAUNCH "$AGENT_WALL" "ceiling=$CEILING worker=${WORKER:-none} model_from_log='${LOGMODEL:-none}' ($MODEL_OK)"
+
+# ---------------------------------------------------------------------------
+# 4. GRADE — the action-log oracle over what the agent actually attempted
+# ---------------------------------------------------------------------------
+t=$(date +%s)
+GRADEOUT=$RUN/grade.txt
+/home/forge/bin/coldstart-grade "$TRANSCRIPT" --format "$FMT" --cond "$COND" \
+  --json "$RUN/grade.json" > "$GRADEOUT" 2>&1 </dev/null
+GLINE=$(grep -m1 '^COLDSTART-GRADE:' "$GRADEOUT")
+GRADE=$(printf '%s' "$GLINE" | awk '{print $2}')
+WARMF=$(printf '%s' "$GLINE" | sed -nE 's/.*warm_first_s=([^ ]*).*/\1/p')
+CALLS=$(printf '%s' "$GLINE" | sed -nE 's/.*calls=([^ ]*).*/\1/p')
+APPA=$(printf '%s' "$GLINE" | sed -nE 's/.*apparatus=([^ ]*).*/\1/p')
+: "${GRADE:=UNVERIFIED}" "${WARMF:=unknown}" "${CALLS:=0}" "${APPA:=0%}"
+step GRADE $(( $(date +%s) - t )) "$GLINE"
+
+# ---------------------------------------------------------------------------
+# 5. INDEPENDENT TASK CHECK — the task's own VERIFY, run COLD in the specimen.
+#    The agent's evidence is never the harness's evidence.
+# ---------------------------------------------------------------------------
+t=$(date +%s)
+VLOG=$RUN/verify.log
+( cd "$WT" && eval "$VERIFY" ) > "$VLOG" 2>&1 </dev/null
+VRC=$?
+if [ $VRC -eq 0 ] && grep -qE '[0-9]+ tests?, [0-9]+ assertions?, 0 failures' "$VLOG"; then
+  TASK_RESULT=PASS
+elif grep -qE '0 failures\.' "$VLOG" && [ $VRC -eq 0 ]; then
+  TASK_RESULT=PASS
+else
+  TASK_RESULT=FAIL
+fi
+VSUM=$(grep -oE '[0-9]+ tests?, [0-9]+ assertions?[^\n]*' "$VLOG" | tail -1)
+step TASK_CHECK $(( $(date +%s) - t )) "$TASK_RESULT rc=$VRC ${VSUM:-<no kaocha summary line>} ($VLOG)"
+
+# ---------------------------------------------------------------------------
+# 6. FREEZE + RECEIPT
+# ---------------------------------------------------------------------------
+git -C "$WT" add -A >/dev/null 2>&1 </dev/null
+git -C "$WT" diff --cached "$BASIS" -- . ':!00SERVER-LOGS.txt' > "$RUN/diff.patch" 2>/dev/null
+git -C "$WT" reset -q >/dev/null 2>&1 </dev/null
+DIFFSTAT=$(git -C "$WT" diff --stat "$BASIS" -- . ':!00SERVER-LOGS.txt' 2>/dev/null | tail -1)
+
+# kill the W JVM we started, by the exact process group we created
+if [ -n "$JVM_PID" ]; then
+  kill -TERM -- "-$JVM_PID" 2>/dev/null && say "$(stamp)  reaped condition-W JVM group $JVM_PID"
+  sleep 2; kill -KILL -- "-$JVM_PID" 2>/dev/null
+fi
+# ... and the JVM the AGENT started in condition 0. Scar, pilot run 1: the harness
+# reaped only its own W JVM, so a passing cond-0 run left a 512 MB nREPL alive in a
+# worktree nobody would look at again. The scan is /proc + cwd + argv on the exact
+# specimen path — never `pgrep -f`, never a pattern kill.
+for d in /proc/[0-9]*; do
+  pid=${d#/proc/}
+  cwd=$(readlink "$d/cwd" 2>/dev/null) || continue
+  [ "$cwd" = "$WT" ] || continue
+  args=$({ tr '\0' ' ' < "$d/cmdline"; } 2>/dev/null) || continue
+  case "$args" in
+    *nrepl*|*java*|*clojure*)
+      kill "$pid" 2>/dev/null && say "$(stamp)  reaped specimen JVM $pid (${args:0:70})" ;;
+  esac
+done
+
+TOTAL=$(( $(date +%s) - T0 ))
+say ""
+say "  $(printf '%-12s %8s  %s' PHASE 'WALL s' RESULT)"
+say "  $(printf '%.0s-' $(seq 1 100))"
+for p in "${PHASES[@]}"; do
+  say "  $(printf '%-12s %8s  %s' "${p%%|*}" "$(echo "$p" | cut -d'|' -f2)" "$(echo "$p" | cut -d'|' -f3-)")"
+done
+say "  $(printf '%-12s %8s' TOTAL "$TOTAL")"
+say ""
+LINE="COLDSTART $NAME: model=$MODEL($MODEL_OK) cond=$COND grade=$GRADE task=$TASK_RESULT warm_first=$WARMF calls=$CALLS apparatus=$APPA wall=${TOTAL}s ceiling=$CEILING diff='${DIFFSTAT:-none}'"
+say "$LINE"
+printf '%s  %s\n' "$(stamp)" "$LINE" >> "$LEDGER"
+say "$(stamp)  frozen: $RUN/{transcript.*,grade.txt,grade.json,diff.patch,verify.log,prompt.md,coldstart.log}"
+
+[ "$GRADE" = PASS ] && [ "$TASK_RESULT" = PASS ] && exit 0
+exit 1

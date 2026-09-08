@@ -1,0 +1,119 @@
+{
+  "builder": {
+    "instruction_digest_sha256": null,
+    "model_from_log": null,
+    "model_requested": "gpt-6-astra",
+    "previous_terminal_status": "none",
+    "resumed": false,
+    "session_id": null,
+    "status": "ok"
+  },
+  "candidate": {
+    "arch_guard_sha256": "4cc53bb54b59dc09294bcd8fb9b62f3f274e2ee5a8e768c1a0825ee06b50255a",
+    "branch": "HEAD",
+    "cc_oracle_sha256": "3f37ed778ed6658f60254706edac2db8ee8d82dc7e3fcfbb4e2c4774383a3607",
+    "fixture": "/var/tmp/forge/plan2/build/round-b02smoke-fx",
+    "fixture_sha": "d9205abcc9b9f31d93bd4a76537b74fccd583ca6",
+    "papercut_oracle_sha256": "501ba2ce75fb9d670c09c500cff1c1b25053cc80b9fe0a83577d78ebe777813c",
+    "request_file": "/var/tmp/forge/round/b02smoke-request.edn",
+    "request_sha256": "c58932a455cbea821cec0d72981195de6f7fc2cf0d74f4e133c180f5ba3b5486",
+    "round_script_sha256": "4b91b43785a411a09e9f9412a22d68dd326784be44d39902d4a2a23f46934ade",
+    "split_receipt_edn": "/var/tmp/forge/round/b02smoke-receipt.edn",
+    "split_receipt_json": "/var/tmp/forge/round/b02smoke-split-receipt.json",
+    "tip_after": "48b006bbaa382d6e58f63e7a4af0461a5f085615",
+    "tip_before": "48b006bbaa382d6e58f63e7a4af0461a5f085615",
+    "worktree": "/var/tmp/forge/round/scratch/surgeon"
+  },
+  "exit_code": 0,
+  "exits": {
+    "aggregate": "ok",
+    "arch_guard": "0",
+    "cc_oracle": "0",
+    "intent_audit": "0",
+    "papercut_oracle": "0",
+    "split_call": {
+      "rc": "0",
+      "source": "exit"
+    },
+    "witness_runner": "0"
+  },
+  "intents": {
+    "audit_ok": "true",
+    "new_intent_markers": "n/a",
+    "new_spec_markers": "n/a",
+    "unlinked_change": "no",
+    "verdict": "ok",
+    "violations": "0"
+  },
+  "lease": {
+    "fixture_state_dir": "/var/tmp/forge/round/state/6440284e6ff8b817ce6f023d86761fb75b094289091c01243afed81ff822e8b8",
+    "inside_worktree": false,
+    "state_dir": "/var/tmp/forge/round/state/00eb8efc0c35774b11b353280b54564fbfff0d794864c2f96a628f634d7fc11b",
+    "worktree_lease": "/var/tmp/forge/round/state/00eb8efc0c35774b11b353280b54564fbfff0d794864c2f96a628f634d7fc11b/lease"
+  },
+  "log": "/var/tmp/forge/round/b02smoke.log",
+  "oracles": {
+    "arch_guard_7_of_7": "pass",
+    "cc_oracle": "pass",
+    "count": 4,
+    "papercuts": "0",
+    "unit_suite_in_call": "pass",
+    "views_clj_gone": "pass"
+  },
+  "phases": [
+    {
+      "phase": "LOCK",
+      "result": "ok (flock held on /var/tmp/forge/round/state/00eb8efc0c35774b11b353280b54564fbfff0d794864c2f96a628f634d7fc11b/lease; state=/var/tmp/forge/round/state/00eb8efc0c35774b11b353280b54564fbfff0d794864c2f96a628f634d7fc11b; no lock files in the worktree; no unowned codex fenced to tree)",
+      "wall_s": 2
+    },
+    {
+      "phase": "PREFLIGHT",
+      "result": "clean, branch=HEAD tip=48b006bb, bb+clj-kondo+oracles present",
+      "wall_s": 0
+    },
+    {
+      "phase": "BUILD",
+      "result": "skipped (--no-build)",
+      "wall_s": 0
+    },
+    {
+      "phase": "COMMIT_CHECK",
+      "result": "skipped (--no-build); grading tip 48b006bb",
+      "wall_s": 0
+    },
+    {
+      "phase": "GRADE",
+      "result": "state=committed in_call=34167ms PAPERCUTS=0 oracles=4/4 receipt_checks=ok(6/6)",
+      "wall_s": 47
+    },
+    {
+      "phase": "WITNESSES",
+      "result": "rc=0 35t/428a/0f/0e (/var/tmp/forge/round/b02smoke-witnesses.log)",
+      "wall_s": 9
+    },
+    {
+      "phase": "INTENT_AUDIT",
+      "result": "ok=true violations=0 rc=0 new_intent_markers=n/a new_spec_markers=n/a (/var/tmp/forge/round/b02smoke-intent-audit.log)",
+      "wall_s": 2
+    }
+  ],
+  "receipt_schema": {
+    "checks_green": 6,
+    "checks_total": 6,
+    "in_call_ms": 34167,
+    "reason": "6/6 checks exited 0 (or carry baseline evidence), :ok/:committed true, no blockers",
+    "split_state": "committed",
+    "verdict": "ok"
+  },
+  "round": "b02smoke",
+  "schema": "round-receipt/1",
+  "total_wall_s": 60,
+  "verdict": "GREEN",
+  "witnesses": {
+    "assertions": "428",
+    "errors": "0",
+    "failures": "0",
+    "tests": "35"
+  },
+  "written_utc": "2026-09-08T04:18:12Z"
+}

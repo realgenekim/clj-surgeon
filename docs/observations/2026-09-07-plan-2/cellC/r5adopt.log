@@ -1,0 +1,28 @@
+2026-09-08T02:18:34.505  ROUND r5adopt start  worktree=/home/forge/src/clj-surgeon-split findings=/var/tmp/forge/round/r5-findings.md model=gpt-6-astra minutes=40 no_build=0
+2026-09-08T02:18:36.346  [+2s]  LOCK 2s :: ok (adopt: no exclusive lock (holder is inside the adopted tree); marker=/home/forge/src/clj-surgeon-split/.round.lock.adopted; no unowned codex fenced to tree; adopting 2655203)
+2026-09-08T02:18:36.370  adopt: skipping the pre-clean check — builder 2655203 is mid-flight (7 tracked file(s) currently modified); enforced at COMMIT_CHECK instead
+2026-09-08T02:18:36.386  [+2s]  PREFLIGHT 0s :: adopt mode (pre-clean check deferred), branch=astra/namespace-split tip=14c0501f, bb+clj-kondo+oracles present
+START RECEIPT (adopted): builder_pid=2655203 started=2026-09-08T02:06:06 argv=node /home/forge/.local/bin/codex exec --color never --skip-git-repo-check -C /home/forge/src/clj-surgeon-split --dangerously-bypass-approvals-and-sandbox -m gpt-6-astra -c model_reasoning_effort="high" -o /var/tmp/forge/round/r5-report.md.last.md - 
+2026-09-08T02:21:06.552  [+152s]  BUILD 150s :: ok (adopted pid=2655203)
+2026-09-08T02:21:06.584  [+152s]  COMMIT_CHECK 0s :: ok 14c0501f -> 5cb03422, tree clean
+Preparing worktree (detached HEAD d9205abc)
+HEAD is now at d9205abc experiment base: pre-split 5ef17667 + today's datastar-helpers git dep, vendored datastar_kit dropped (the historical tree needed a sibling checkout to compile); suite 230/2251 green
+2026-09-08T02:21:42.180  split call: rc=0 state=committed in_call_ms=34443 receipt=/var/tmp/forge/round/r5adopt-receipt.edn
+2026-09-08T02:21:43.971  PAPERCUTS: 0   (full report: /var/tmp/forge/round/r5adopt-papercuts.log)
+2026-09-08T02:21:53.725  oracles: views.clj-gone=pass cc-oracle=pass unit-suite-in-call=pass arch-guard-7/7=pass  => 4/4
+2026-09-08T02:21:53.739  [+199s]  GRADE 47s :: state=committed in_call=34443ms PAPERCUTS=0 oracles=4/4
+2026-09-08T02:22:02.129  [+208s]  WITNESSES 9s :: rc=0 35t/428a/0f/0e (/var/tmp/forge/round/r5adopt-witnesses.log)
+
+  PHASE            WALL s  RESULT
+  ------------------------------------------------------------------
+  LOCK                  2  ok (adopt: no exclusive lock (holder is inside the adopted tree); marker=/home/forge/src/clj-surgeon-split/.round.lock.adopted; no unowned codex fenced to tree; adopting 2655203)
+  PREFLIGHT             0  adopt mode (pre-clean check deferred), branch=astra/namespace-split tip=14c0501f, bb+clj-kondo+oracles present
+  BUILD               150  ok (adopted pid=2655203)
+  COMMIT_CHECK          0  ok 14c0501f -> 5cb03422, tree clean
+  GRADE                47  state=committed in_call=34443ms PAPERCUTS=0 oracles=4/4
+  WITNESSES             9  rc=0 35t/428a/0f/0e (/var/tmp/forge/round/r5adopt-witnesses.log)
+  ------------------------------------------------------------------
+  TOTAL               208
+
+ROUND r5adopt: tip 14c0501f→5cb03422 build=ok state=committed in_call=34443ms PAPERCUTS=0 oracles=4/4 witnesses=35/428/0 total=208s
+2026-09-08T02:22:02.249  exit 0   (log: /var/tmp/forge/round/r5adopt.log, ledger: /var/tmp/forge/round/ledger.txt)

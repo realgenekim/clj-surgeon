@@ -1,0 +1,7 @@
+00-red-tip split=9.015s warm-tests=0.978s wall=12.167s PAPERCUTS=0 failures=12 errors=0 state=committed
+00-reviewed-red split=8.767s warm-tests=0.607s wall=11.386s PAPERCUTS=2 failures=64 errors=6 state=committed
+01-resume-green split=8.802s warm-tests=0.807s wall=11.894s PAPERCUTS=0 failures=2 errors=0 state=committed
+02-final-green split=8.545s warm-tests=0.639s wall=11.286s PAPERCUTS=0 failures=0 errors=0 state=committed
+03-outer-sibling-green split=24.968s warm-tests=0.619s wall=27.814s PAPERCUTS=0 failures=0 errors=0 state=committed
+# Resume red proof: final two witnesses on byte-identical 5b78bed2 compiler: 15 failures, 1 pass, 0 errors. Historical incompatible runs above are not acceptance evidence.
+# Gate repairs: merge-ancestry preflight required the merge commit; non-MCP intent census recomputed 188 -> 190; warm audit 46 tests / 596 assertions passed. No product changes after final image proof.
