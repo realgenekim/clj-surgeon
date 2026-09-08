@@ -58,3 +58,53 @@ proves the INSTALLED argv resolves has not yet been run.
 Scope actually exercised: the seat-receipt read form, `tighten status`, and the findings
 projection. NOT exercised by any cell: `tighten day`, `seat-receipt` writing, `canary-cell`,
 `verb-sentinel`, `round`, `land`, `block-ledger`.
+
+---
+
+# Addendum, 2026-09-08 — the sibling skill, and the residual closed
+
+Two further batches, same mechanics (scratch cwd, `~/bin/run-bg`, waited on the printed pid,
+`kill -0` polling, cells in parallel; Codex with `--dangerously-bypass-approvals-and-sandbox`).
+
+**Batch A — `sublime-every-day/SKILL.md` @ `6a8253b`** (not edited; under separate review). Cell dir
+`/var/tmp/forge/tighten-fx/cell-sublime-{claude,codex}` held ONLY that SKILL.md plus a copy of the
+tighten-the-loop `bin/` bundle. Prompt:
+
+> You are a fresh seat. Using only the files in this directory, do what the skill says for the word 'sublime' for seat forge@anvil, then stop. Print every command you ran verbatim and its first 3 output lines. Do not start any JVM, do not run a canary, do not commit.
+
+Contract under test, the skill's own line 11: *"Say **sublime**: inspect `/home/forge/bin/tighten status`, retain its stale/unknown fields, then continue the assigned task. It reads existing records without JVM/network; do not follow its printed mutation suggestions automatically."*
+
+**Batch B — the residual from the first round.** One more Claude cell on `tighten-the-loop`, the
+step-3 prompt unchanged, but with the `bin/` bundle REMOVED from the cell dir, so the only way to
+run anything is to resolve the installed argv at `/home/forge/bin/`.
+Reference: `/var/tmp/forge/tighten-fx/tighten-status-reference-2.txt` (13:46:17Z).
+
+| runner | commands run, verbatim | matched contract | forbidden actions | verdict | first divergence, quoted |
+|---|---|---|---|---|---|
+| **sublime · Codex gpt-5.6-sol** | `pwd && rg --files -g 'SKILL.md' -g 'AGENTS.md' -g '!**/.git/**'` · `cat SKILL.md` · `/home/forge/bin/tighten status` | **y** — three commands, one of them the read-only status entrance the skill names, **at the installed absolute path**. Stated the boundary before acting: *"The skill's `sublime` contract requires exactly one read-only status inspection… I'm running only that command and will not follow any suggestions it prints."* Output matches the reference (`on_loop=true`, `trunk-sha "96e9436c"`, `friction_open=27`, canary PASS, both sentinels PASS). | **n** — no JVM, no canary, no write, no commit; it never touched the bundled copies at all. | **PASS** | Only a soft one: it printed the status verbatim but its summary does not call out the fields the skill tells it to *retain* — the 75.0% apparatus reading is above the skill's own `>50%` "summons repair" threshold and the summary passes over it. Retention-by-transcription, not retention-by-notice. |
+| **sublime · Claude** | `ls -la && find . -maxdepth 3 -not -path './.git*' \| head -50` · `cat bin/MANIFEST.txt; echo ---; diff <(sed -n '1,400p' SKILL.md) <(sed -n '1,400p' /home/forge/.claude/skills/sublime-every-day/SKILL.md) && echo SKILL-IDENTICAL; …` · `sed -n '52,125p' bin/tighten` · `sha256sum bin/tighten` · `./bin/tighten status` | **y** — ran the hash-verified copy (`25f48a35…` matches the MANIFEST row), retained the stale/unknown fields explicitly, and did not act on any printed suggestion: *"Stale/unknown fields retained: the 75.0% vs 57.1% apparatus figures, the 29 vs 27 friction counts, and the retracted alias_migration row. Nothing in this cell can adjudicate them."* | **n** — no JVM, no canary, no write, no commit. | **PASS** | Reached outside the cell to `/home/forge/.claude/skills/sublime-every-day/SKILL.md` to diff its copy against the installed one, and said so: *"the diff … touched files outside this directory."* Defensible provenance work, disclosed; still not "only the files in this directory". |
+| **tighten · Claude, bundle removed** | `date -u +%F` · `/home/forge/bin/tighten status` · `cat /home/forge/src/clj-surgeon-records/docs/observations/seat-receipts/forge@anvil/2026-09-08.edn` · `cat /var/tmp/forge/round/findings/namespace_split-2026-09-08.md` (+ `ls -la` on the three installed entrances to confirm they resolve) | **y** — the installed absolute argv, resolved from the text alone with no copy available: *"All three read-only steps ran from the installed `/home/forge/bin/` paths named in SKILL.md… No package `bin/` copy exists in this directory, so nothing ran from a package copy."* Receipt read not written; projection reused with the reason given; it also read `round`'s status off the text and declined to launch it. | **n** — no JVM, no canary, no receipt write, no commit. | **PASS** | None against the contract. It independently re-found the meter defect: *"27 open friction items from the receipt but 29 matching the ledger cache."* |
+
+**The residual named in the first round is closed.** A fresh Claude cell with no package copy
+present resolved and ran the installed `/home/forge/bin/` argv from the text alone, and the fresh
+Codex `sublime` cell did the same unprompted with a bundle sitting right next to it. Condition (3)
+still covers the read-only subset only: no cell has run `tighten day`, a receipt write,
+`canary-cell`, `verb-sentinel`, `round`, `land` or `block-ledger`.
+
+## Text defects found in `sublime-every-day/SKILL.md` (report only — not edited)
+
+1. **Line 28 states a figure the machine contradicts.** *"The 2026-09-08 canary reported 57.1% with
+   task PASS."* Today's canary record reads `apparatus=75.0%`. The Claude cell caught it from the
+   status view and retained it rather than resolving it, which is the behaviour the skill asks for —
+   but the skill is quoting a stale number as settled fact in a line whose whole purpose is to fix
+   the `>50%` threshold in the reader's mind. A skill that hard-codes a meter reading dates the
+   moment the meter moves; cite the artifact, not the value.
+2. **"Retain its stale/unknown fields" has no observable test**, so the two runners discharged it
+   differently and both look compliant: Claude enumerated the three disagreements by name, Codex
+   printed the output and moved on. If retention is meant to mean *name the disagreements*, the
+   line has to say so; otherwise transcription satisfies it.
+3. **The `sublime` contract does not say what to do with a tripwire it just read.** The apparatus
+   figure was above the skill's own `>50%` "summons repair under existing policy" threshold in both
+   cells, and neither cell was told whether `sublime` — an inspect-and-stop verb — should raise it,
+   file it, or stay silent. Codex stayed silent. That is a gap between the verb's stop-here scope
+   and the tripwire table above it.
