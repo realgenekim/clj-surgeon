@@ -4191,3 +4191,28 @@ Red is now the affected closure, not the suite: **215× / 800×**. Fallback to t
 **Opus — parallel battery, in progress** (branch fable/battery-parallel: a5bd41d6, e8a0093c, 042d80f5; TEST-ISO-013 with 21 witnesses): serial control 839 s / 743 tests / 13,756 assertions / 1 precondition skipped / 35 namespaces; coordinator behind `BATTERY_LANES` (default 1 = serial), `test-battery-serial` control, ledger `:lanes`/`:skipped`; first parallel run producing per-deftest costs for the steady-state schedule; 3-run median and fault injection pending.
 
 ## 2026-09-08T17:22Z — COLDSTART.md new epoch (skills branch 8d910d1, sha d1cefa2d…, 12 lines; previous epoch 08c79a61 backed up): step 0 "an IMAGE READY line supersedes steps 1–3", `make test-probe`/`make test-gate` are the entrances when the repo has them, probe FIRST and watch it go red (p40's wording). Batch 5 launched (Opus): enable `kaocha.plugin/affected` + `run-receipt` in both specimens (local/root coordinates), `TEST-RECEIPT <path>` from the result map in test-probe/test-gate, and the four fresh cells (mvr×Sol, cc×Opus × W/H) on the new bytes, graded beside p30–p40. Change-rule note: this is an instrument change; the old-epoch cells stay comparable only within their epoch; a fresh pair is the witness.
+
+## 2026-09-08T17:23Z — Gene: "wow!!! wow!!! captain log! explain to me, use ascii art story boards; and really prove how amazing it is"
+
+The proof as given (all numbers from /home/forge/src/kaocha-sublime/evidence/before-after.md, ten iterations each, same specimens 94393708 / 8aec4c93, same in-place+fsync save helper, same watchbench.sh stopwatch, nothing trimmed):
+
+```
+  save one line ──► kaocha watch ──► ran EVERYTHING ──► red
+  mvr 579 tests   12.5 s        ccfp 1021 tests   127.7 s
+
+  changed file ──► kaocha's own dependency graph ──► the closure ──► run only that
+  blob_test.clj ──► [blob-test] 1/54     version.clj ──► 202/1021     deps.edn ──► unknown ──► FULL, said aloud
+
+                  before        after        ratio
+  mvr   red      12.465 s      0.058 s      215x      (p95 13.28 → 0.56)
+  ccfp  red     127.680 s      0.159 s      800x      (p95 130.45 → 0.24)
+  green          unchanged (kaocha already focused green)
+
+  deftype field change: kaocha reload set 149 = plugin closure 149, identical SET (148 dependents + itself)
+  CSS resource: "unknown input" → full 579 in 7.7 s    deps.edn: "full suite" → 1021 green
+  run-receipt: tmp+rename; SIGKILL → 1 .tmp 0 .edn; two JVMs one dir → two ids; forced same id → one refusal;
+               warm kaocha.repl/run result carries :kaocha.plugin.run-receipt/path; last line RUN-RECEIPT <path>
+  fork: none. hooks: kaocha's own. time: < 1 h, plan before code. 13 tests / 44 assertions. SHA256SUMS + offline verifier.
+```
+
+Why it matters: the watcher's red was the last layer of the loop where time scaled with the REPO instead of the CHANGE; now every layer scales with the change, and the human's watch loop has the same shape as the agent's probe — a quarter second regardless of suite size — with the safety property checked set-against-set and the fallback loud.
