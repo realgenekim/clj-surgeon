@@ -1,0 +1,3 @@
+2026-09-08T01:56:49.461  ROUND smoke: tip 14c0501f→14c0501f build=ok state=committed in_call=35008ms PAPERCUTS=0 oracles=4/4 witnesses=35/420/0 total=57s
+2026-09-08T01:58:09.872  ROUND smoke: tip 14c0501f→14c0501f build=ok state=committed in_call=33520ms PAPERCUTS=0 oracles=4/4 witnesses=35/420/0 total=55s
+2026-09-08T02:22:02.244  ROUND r5adopt: tip 14c0501f→5cb03422 build=ok state=committed in_call=34443ms PAPERCUTS=0 oracles=4/4 witnesses=35/428/0 total=208s
