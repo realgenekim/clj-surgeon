@@ -768,26 +768,137 @@
     (mapv (fn [row] {:file (:file parsed) :line row :text (get lines (dec row) "")
                      :owner (:name (first (filter #(<= (- (:start %) (count (:prefix %))) (nth (:starts parsed) (dec row)) (:end %)) (:owners parsed))))}) rows)))
 
+(defn- comment-gaps [lines anchors]
+  ;; A hunk is bounded by surviving identities, never by physical line numbers.
+  (loop [remaining lines previous nil result {}]
+    (if-let [line (first remaining)]
+      (if-let [anchor (get anchors (:index line))]
+        (recur (rest remaining) anchor result)
+        (let [[gap tail] (split-with #(not (contains? anchors (:index %))) remaining)
+              following (get anchors (:index (first tail)))]
+          (recur tail previous (assoc result [previous following] (vec gap)))))
+      result)))
+
+(defn- stationary-comments [indices]
+  ;; Longest increasing subsequence of surviving candidate identities: moving
+  ;; one comment past its neighbours does not make all the neighbours moves.
+  (let [xs (vec indices)]
+    (loop [i 0 tails [] previous []]
+      (if (= i (count xs))
+        (loop [at (peek tails) kept #{}]
+          (if (nil? at) kept (recur (get previous at) (conj kept (get xs at)))))
+        (let [slot (loop [lo 0 hi (count tails)]
+                     (if (= lo hi) lo
+                       (let [mid (quot (+ lo hi) 2)]
+                         (if (< (get xs (get tails mid)) (get xs i))
+                           (recur (inc mid) hi) (recur lo mid)))))]
+          (recur (inc i) (assoc tails slot i)
+                 (conj previous (when (pos? slot) (get tails (dec slot))))))))))
+
+;; @spec NS-SPLIT-060
+;; INTENT: NS-SPLIT-060
+(defn diff-comment-lines
+  "Diff one owning form's comment occurrences by exact content. Lines locate
+  evidence only. surviving-texts covers the complete candidate inventory."
+  [before after surviving-texts]
+  (let [xs (mapv #(assoc %2 :index %1) (range) before)
+        ys (mapv #(assoc %2 :index %1) (range) after)
+        pairs (:pairs
+                (reduce (fn [{:keys [available] :as state} x]
+                          (if-let [y (first (get available (:text x)))]
+                            (-> state (update :pairs conj [x y])
+                                (update-in [:available (:text x)] rest)) state))
+                        {:available (group-by :text ys) :pairs []} xs))
+        x-anchors (into {} (map (fn [[x y]] [(:index x) (:index y)]) pairs))
+        y-anchors (into {} (map (fn [[_ y]] [(:index y) (:index y)]) pairs))
+        stationary (stationary-comments (map (comp :index second) pairs))
+        a (comment-gaps xs x-anchors) b (comment-gaps ys y-anchors)
+        evidence (fn [x y]
+                   {:file (or (:file x) (:file y)) :after_file (:file y)
+                    :owner (or (:owner x) (:owner y))})
+        movement (fn [x y] {:from (:line x) :to (:line y)})
+        moved (keep
+                (fn [[x y]]
+                  (when (or (not= (:file x) (:file y))
+                            (not (stationary (:index y))))
+                    (assoc (evidence x y) :moved (movement x y) :content (:text x)))) pairs)
+        edits (mapcat
+                (fn [k]
+                  (let [old (get a k) new (get b k)]
+                    (for [i (range (max (count old) (count new)))
+                          :let [x (get old i) y (get new i)]]
+                      (cond
+                        (and x y)
+                        (cond-> (assoc (evidence x y) :line (:line x) :after_line (:line y)
+                                       :changed {:before (:text x) :after (:text y)})
+                          (not= (:file x) (:file y)) (assoc :moved (movement x y)))
+                        x (assoc (evidence x nil) :line (:line x)
+                                 (if (surviving-texts (:text x)) :removed_occurrence :deleted) (:text x))
+                        :else (assoc (evidence nil y) :after_line (:line y) :added (:text y))))))
+                (set/union (set (keys a)) (set (keys b))))]
+    (vec (sort-by #(or (:line %) (get-in % [:moved :from]) (:after_line %)) (concat moved edits)))))
+
+(defn- compact-lines [lines]
+  (vec (mapcat (fn [run]
+                 (let [xs (mapv second run)]
+                   (if (> (count xs) 2) [[(first xs) (last xs)]] xs)))
+               (partition-by (fn [[i line]] (- line i)) (map-indexed vector lines)))))
+
+(defn- compact-before [text]
+  (let [indent (- (count text) (count (str/triml text)))
+        value [indent (subs text indent)]]
+    (if (and (re-matches #" *" (subs text 0 indent))
+             (< (count (pr-str value)) (count (pr-str text)))) value text)))
+
+(defn- compact-after [before after]
+  (let [indent (- (count after) (count (str/triml after)))]
+    (if (and (= (str/triml before) (str/triml after))
+             (re-matches #" *" (subs after 0 indent))) [:indent indent] after)))
+
+;; @spec NS-SPLIT-060
+;; INTENT: NS-SPLIT-060
+(defn compact-comment-edits
+  "Lossless projection of an already computed diff. Shares owner and change
+  kind, compresses consecutive locations, and never omits a changed occurrence."
+  [edits]
+  (mapv
+    (fn [[owner rows]]
+      (let [moves (filter #(and (:moved %) (not (:changed %))) rows)
+            changes (filter :changed rows)
+            others (remove #(or (:changed %) (:moved %)) rows)]
+        {:owner owner
+         :changes
+         (vec (concat
+                (when (seq moves)
+                  [{:moved {:from (compact-lines (map #(get-in % [:moved :from]) moves))
+                            :to (compact-lines (map #(get-in % [:moved :to]) moves))}}])
+                (for [[moved? cs] (sort-by key (group-by (comp boolean :moved) changes))]
+                  (merge
+                    {:changed {:before (mapv #(compact-before (get-in % [:changed :before])) cs)
+                               :after (mapv #(compact-after (get-in % [:changed :before])
+                                                            (get-in % [:changed :after])) cs)}}
+                    (if moved?
+                      {:moved {:from (compact-lines (map :line cs)) :to (compact-lines (map :after_line cs))}}
+                      {:line (compact-lines (map :line cs)) :after_line (compact-lines (map :after_line cs))})))
+                (map #(dissoc % :owner :file :after_file) others)))}))
+    (sort-by key (group-by :owner edits))))
+
 (defn- comment-change-facts [before after request baselines]
-  ;; A moved owner's identity includes its original file. Other namespaces
-  ;; may own the same short name; their comments must never share this group.
+  ;; Original file + owning form survives relocation, but excludes namesakes.
   (let [source-file (get-in request [:source :file])
-        groups (fn [parsed original?]
+        groups (fn [lines original?]
                  (group-by (fn [line]
-                             (let [destination (get-in baselines [(:owner line) :file])]
-                               (if (and destination (= (:file line) (if original? source-file destination)))
-                                 [:moved (:owner line)] [:file (:file line)])))
-                           (mapcat comment-lines (vals parsed))))
-        a (groups before true) b (groups after false)]
-    (vec (mapcat
-           (fn [k]
-             (let [xs (get a k) ys (get b k)]
-               (for [i (range (max (count xs) (count ys)))
-                     :let [x (nth xs i nil) y (nth ys i nil)]
-                     :when (not= (:text x) (:text y))]
-                 {:file (or (:file x) (:file y)) :line (:line x)
-                  :before (:text x) :after_file (:file y) :after_line (:line y) :after (:text y)})))
-           (sort (set/union (set (keys a)) (set (keys b))))))))
+                             (let [destination (get-in baselines [(:owner line) :file])
+                                   origin (if (and destination
+                                                   (= (:file line) (if original? source-file destination)))
+                                            source-file (:file line))]
+                               [origin (:owner line)])) lines))
+        xs (mapcat comment-lines (vals before))
+        ys (mapcat comment-lines (vals after))
+        surviving (set (map :text ys))
+        a (groups xs true) b (groups ys false)]
+    (vec (mapcat #(diff-comment-lines (get a %) (get b %) surviving)
+                 (sort (set/union (set (keys a)) (set (keys b))))))))
 
 ;; @spec NS-SPLIT-061
 ;; INTENT: NS-SPLIT-061
@@ -913,17 +1024,15 @@
           equal (count (filter #(= (:before_hash %) (:after_hash %)) bodies))]
       {:comment_policy (get-in request [:source :comment_policy] "preserve")
        :text_encoding "JSON string content; decode by wrapping in double quotes"
-       :comment_after_encoding "[:indent N] reuses before text after replacing its leading whitespace with N spaces"
+       :comment_after_encoding "[:indent N] replaces before leading whitespace with N spaces"
+       :comment_before_encoding "[N text] is N spaces followed by text; changed before/after are text vectors"
+       :comment_moved_encoding "locations are vectors of lines or inclusive [start end] ranges; from/to correspond; unchanged unless changed"
        :comment_edits
        (mapv (fn [[[file after-file] changes]]
-               {:file file :after_file after-file :columns [:line :after_line :before :after]
-                :lines (mapv (fn [c] [(:line c) (:after_line c)
-                                      (:before c)
-                                      (let [x (:before c) y (:after c)]
-                                        (if (and x y (= (str/triml x) (str/triml y))
-                                                 (re-matches #" *" (subs y 0 (- (count y) (count (str/triml y))))))
-                                          [:indent (- (count y) (count (str/triml y)))] y))]) changes)})
-             (sort-by key (group-by (juxt :file :after_file) (comment-change-facts before after request (:body-baselines compiled)))))
+               {:file file :after_file after-file
+                :edits (compact-comment-edits changes)})
+             (sort-by key (group-by (juxt :file :after_file)
+                            (comment-change-facts before after request (:body-baselines compiled)))))
        :stale_references {:count (count stale) :sites stale :expected [] :scope scope}
        :facades {:forms facades :expected expected-facades :unexpected unexpected-facades
                  :policy "no-new-forwarders; retain existing unmapped forwarding owners"

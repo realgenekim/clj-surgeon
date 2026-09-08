@@ -484,3 +484,21 @@ forwarding-kind/arity positions. Any forwarding arity is enumerated, including
 forms that also have ordinary arities; changing a permitted target becomes an
 unexpected facade. This is an architectural inventory, not a semantic equivalence
 claim about arbitrary argument expressions in retained bodies.
+
+### Comment identity diff (NS-SPLIT-060 amendment)
+
+Comment evidence is an identity diff, not an ordinal zip. Original file plus
+owning form identifies the subject across the split mapping; exact content
+identifies surviving occurrences before any replacement pairing. Matched
+comments shifted only by preceding edits are absent. Owner relocation produces
+:moved {:from :to}; anchored replacement hunks produce :changed {:before :after}.
+Only content absent from the candidate can be :deleted; a removed duplicate
+occurrence is labeled :removed_occurrence. Unmatched candidate lines are :added.
+File groups share :owner across each :changes vector. Unchanged movements
+share corresponding :from/:to line vectors; consecutive lines may use inclusive
+[start end] ranges. Changed movements carry their own location vectors and
+:changed before/after text vectors. A before-text [N text] expands to N spaces
+followed by text. Indentation-only after text uses the declared [:indent N]
+encoding. All occurrences remain present within the receipt ceiling. All
+variants carry source/candidate locations through file groups and line fields, and the receipt names the applied :comment_policy. No timing meter
+belongs to this evidence. Existing lossless encoding and receipt bounds apply.

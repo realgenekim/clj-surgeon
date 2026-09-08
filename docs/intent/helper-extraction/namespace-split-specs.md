@@ -95,7 +95,7 @@ and all ownership, behavior, architecture and protected-content gates are unchan
 
 ## Rows sublime batch 4: candidate negative evidence
 
-- [x] **NS-SPLIT-060**: When a split receipt describes candidate comment changes, it shall enumerate every changed comment line with before/after location and content evidence and the applied policy.
+- [x] **NS-SPLIT-060**: When a split receipt describes candidate comment changes, it shall publish an owner-and-content identity diff with explicit moved, changed, added and deleted evidence and the applied policy; line shifts alone shall be omitted, and content surviving anywhere in the candidate shall never be labeled deleted.
 - [x] **NS-SPLIT-061**: When a split publishes stale-reference facts, it shall scan every captured candidate file across the declared roots for retired qualified symbols and aliases with explicit exclusions.
 - [x] **NS-SPLIT-062**: When a split publishes facade facts, it shall enumerate retained source forwarding definitions with explicit retention-policy expectations.
 - [x] **NS-SPLIT-063**: When a split publishes exactly-once facts, it shall count each moved owner in its assigned destination and elsewhere across candidate roots.
