@@ -231,3 +231,157 @@ first.
    self-awarded.
 5. **CX-8 first bullet** — the process observer. Until it exists, every PASS is
    "compliant as far as the transcript can show", and should be written that way.
+
+---
+
+# Cold-start counterexamples — PILOT 2 (2026-09-08, after the CX-1/3/4/5/8 repairs)
+
+Same goal under test. What changed before this pilot:
+
+* **CX-1** — the cold-start block is now its own file, `clojure-fast-feedback/COLDSTART.md`,
+  and `coldstart` **inlines its bytes** into the specimen's `AGENTS.md` and `CLAUDE.md`
+  (verified by grep at the place it takes effect, before the run). The `.claude/skills`
+  symlink and the pointer line remain as the Claude-only extras. Delivery is recorded per
+  run as `installed/observed` — `inline+P+T` for Claude, `inline+P` for Codex — and a cell
+  whose instructions demonstrably never arrived is `UNVERIFIED(delivery)`, never a
+  behavior FAIL.
+* **CX-3** — the block names the repo's DECLARED cold gate, and the harness publishes the
+  repo's actual gate into the inlined block from the task file's new `GATE:` line
+  (both repos: `bin/kaocha unit`; CC's `make runtests-once` is not acceptable — its
+  `new-mission-worktree-test` prerequisite dies in any fresh worktree, CX-2).
+* **CX-4** — the block prints the literal `COLDSTART-RECEIPT …` line; `coldstart-grade`
+  requires it (R7) and cross-checks the claimed `cold_gates` against the transcript (R8).
+* **CX-5** — the block states the standalone-JVM rule; Ø requires exactly one managed
+  start and forbids a second.
+* **CX-8 second bullet** — F8 forbids any write under `/tmp/`.
+
+## The eight runs
+
+Four cells, run once against the post-CX-1/3/4/5/8 block (p5–p8), then the two failing
+cells repaired and **all four re-run against the final block** (p9–p12).
+
+| run | model (from log) | repo | cond | delivery | grade | task | receipt line | cold gates |
+|---|---|---|---|---|---|---|---|---:|
+| p5-opus-0-cc  | claude-opus-5 | curtaincall-cfp | Ø | inline+P+T/evidenced | FAIL 8/8 req, **1 forbidden** | PASS | yes, exact | 1 |
+| p6-opus-W-cc  | claude-opus-5 | curtaincall-cfp | W | inline+P+T/evidenced | FAIL 6/8 | PASS | **absent** | 1 |
+| p7-sol-0-mvr  | gpt-5.6-sol   | marvin-voice-remote | Ø | inline+P/evidenced | **PASS 8/8** (after CX-11) | PASS | yes, exact | 1 |
+| p8-sol-W-mvr  | gpt-5.6-sol   | marvin-voice-remote | W | inline+P/evidenced | **PASS 8/8** | PASS | yes, exact | 1 |
+| p9-opus-0-cc  | claude-opus-5 | curtaincall-cfp | Ø | inline+P+T/evidenced | **PASS 8/8** (after CX-12) | PASS | yes, exact | 1 |
+| p10-opus-W-cc | claude-opus-5 | curtaincall-cfp | W | inline+P+T/evidenced | **PASS 8/8** | PASS | yes, exact | 1 |
+| p11-sol-0-mvr | gpt-5.6-sol   | marvin-voice-remote | Ø | inline+P/evidenced | **PASS 8/8** (after CX-13) | PASS | yes, exact | 1 |
+| p12-sol-W-mvr | gpt-5.6-sol   | marvin-voice-remote | W | inline+P/evidenced | **PASS 8/8** | PASS | yes, exact | 1 |
+
+**Pilot 1: 1/4 executed the intended workflow. Pilot 2: 4/4 on the final block.** The
+single largest change is CX-1: both Sol cells went from `required=2/7` to `8/8`, and Sol's
+pilot-1 opening line — "the required `clojure-fast-feedback` skill is not available in this
+session" — does not appear anywhere in pilot 2. Inlining is the whole difference; the
+pointer never was delivery.
+
+Note what the pilot-1 regrade now says under the final oracle: `p4-sol-W-mvr` scores
+`delivery_evidence=absent` with an unavailability claim, which is exactly the
+`UNVERIFIED(delivery)` state — the pilot-1 Codex FAILs were an apparatus defect being
+charged to the agent, as CX-1 argued before the mechanism existed to prove it.
+
+---
+
+## CX-9 — the block's own example left the temp location to the model's guess
+
+**Class: skill text. FIXED (`03b3df7`), re-run green as p9/p10.**
+
+`p5-opus-0-cc`, 8/8 required checks clean and one forbidden hit:
+
+```
+seq 4: wrote under /tmp: /tmp/nrepl-boot.log
+CMD: setsid make nrepl >/tmp/nrepl-boot.log 2>&1 & echo started
+```
+
+The block's step-3 example redirected to `/dev/null`; the agent wanted the boot log and
+had to invent a path. Nothing in the delivered instruction set said where a temp file
+belongs, and on this seat `/tmp` is a RAM tmpfs that has been filled twice
+(`[[anvil-tmp-is-shared-tmpfs]]`). **An instruction that leaves a required choice unstated
+is not silent — it delegates the choice to whatever the model guesses.**
+
+F8, added in the same round, caught it on its first live run. That is the ratchet working;
+the block not causing it is the repair. Step 3 now writes the boot log to
+`/var/tmp/forge/nrepl-boot.log` and states the rule in the same breath.
+
+## CX-10 — the block said what to report and never said when
+
+**Class: skill text. FIXED (`1cca58f`), re-run green as p9/p10.**
+
+`p6-opus-W-cc` did everything else right — attested reuse of the prestarted endpoint, zero
+starts, reload before run-tests, exactly one cold gate, no forbidden events — and ended
+the session with, verbatim:
+
+> "Warm probe is green (8/8). The cold gate `bin/kaocha unit` is still running — I'll
+> report the full receipt when it lands."
+
+It had launched the gate in the background, polled its output file twice, and finished the
+turn. R7 and R8 both MISS, correctly: **a promise of a receipt is not a receipt**, and the
+session is over, so the promise can never be kept.
+
+The block required the line and never said *when*. Step 5 now requires the gate in the
+foreground and waited for; step 6 makes the receipt terminal and names
+`proof=pending:<gate cmd>:0/0/0` as the legal way to report an unfinished gate. Same class
+as the house rule that storage is not delivery.
+
+## CX-11 — the codex parser could not see a block that FAILED
+
+**Class: oracle/observer. FIXED, fixture `pos-codex-exited.log`, all prior runs regraded.**
+
+`p7-sol-0-mvr` scored `R1.entrance MISS — starts=0` on a transcript containing, verbatim:
+
+```
+/bin/bash -lc 'setsid make nrepl >/dev/null 2>&1 & until [ -s .nrepl-port ]; do sleep 1; done'
+```
+
+`CODEX_DONE` matched only `succeeded|failed in <t>`. A codex block that fails is terminated
+by **`exited <code> in <t>`** — and in condition Ø the very first command is
+`ls .nrepl-port`, which legitimately exits 2. The terminator never matched, the parser
+swallowed the output and **every following block** into one event, and a run that did the
+right thing scored 7/8. One unmatched terminator blinded the oracle to a whole session.
+p7 is `PASS 8/8` under the corrected oracle; the as-run grade is kept beside it.
+
+## CX-12 — reading the gate script scored as running it
+
+**Class: oracle/observer. FIXED, positive control added to `pos-claude.jsonl`.**
+
+`p9-opus-0-cc` scored `2 cold gate execution(s)` and a consequent
+`receipt_cold_gates_mismatch`, on this command:
+
+```
+grep -n "^nrepl:\|^test:\|^runtests" -A3 Makefile | head -40; echo "=== bin/kaocha ==="; cat bin/kaocha
+```
+
+`is_cold_gate` fell back to a whole-segment `(^|/)kaocha(\s|$)`, so `cat bin/kaocha` — the
+agent orienting itself on what the declared gate actually does — read as a second gate,
+which then made the agent's **honest** `cold_gates=1` a mismatch. Two wrong verdicts from
+one over-permissive predicate, the same shape as CX-7c. **Orientation is not execution**:
+the match is now command-position only, and `head_word` already returns the basename, so
+`bin/kaocha` and `./bin/kaocha` are still covered.
+
+## CX-13 — `head_word` tested the leading word before stripping its quote
+
+**Class: oracle/observer. FIXED, fixture `pos-codex-quoted.log` (red under the pre-fix oracle).**
+
+`p11-sol-0-mvr` scored `starts=0` on a correct single managed start. Codex displayed the
+command as `/bin/bash -lc 'setsid make nrepl … ' "'(System/getProperty …)'"` — the opening
+`'` and closing `"` differ, so the `-lc` unwrap left a stray leading quote. The token was
+then `'setsid`, which is not equal to `setsid`, so the leading-word skip never fired and
+`head_word` returned `setsid` instead of `make`.
+
+The fix normalises the token **before** the `_LEADING`/assignment test rather than after.
+The fixture is verified to score `starts=0` under the pre-fix oracle and `starts=1` under
+the fixed one — a fixture that would pass either way proves nothing.
+
+---
+
+## Standing limits, unchanged from pilot 1
+
+CX-2 (curtaincall-cfp's `runtests-once` cannot run in a fresh worktree) is **routed
+around, not fixed**: the declared gate is now `bin/kaocha unit`, the Clojure-only gate.
+The typed refusal in `bin/test-new-mission-worktree` is still owed to that repo.
+
+CX-8's other bullets stand: no process observer (every PASS is "compliant as far as the
+transcript can show"), no red-first check, `apparatus_pct` not yet comparable to the
+skill's ~50% threshold, and the seat's own global instructions are a declared confound.

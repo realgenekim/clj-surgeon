@@ -8,3 +8,24 @@
 # REGRADE p2-opus-W-cc: cond=W grade=FAIL required=6/7 forbidden=1 warm_first=32.0 calls=23 cold_gates=4 iterations=1 apparatus=65.2%
 # REGRADE p3-sol-0-mvr: cond=0 grade=FAIL required=2/7 forbidden=0 warm_first=None calls=3 cold_gates=1 iterations=0 apparatus=66.7%
 # REGRADE p4-sol-W-mvr: cond=W grade=FAIL required=2/7 forbidden=0 warm_first=None calls=5 cold_gates=1 iterations=0 apparatus=80.0%
+2026-09-08T03:31:35.113  COLDSTART p5-opus-0-cc: model=opus(verified) cond=0 grade=FAIL task=PASS delivery=inline+P+T/evidenced gate='bin/kaocha unit' warm_first=29.8 calls=9 apparatus=66.7% wall=165s ceiling=no diff=' 1 file changed, 8 insertions(+)'
+2026-09-08T03:33:43.149  COLDSTART p6-opus-W-cc: model=opus(verified) cond=W grade=FAIL task=PASS delivery=inline+P+T/evidenced gate='bin/kaocha unit' warm_first=26.2 calls=11 apparatus=63.6% wall=100s ceiling=no diff=' 1 file changed, 9 insertions(+)'
+2026-09-08T03:36:37.087  COLDSTART p7-sol-0-mvr: model=sol(verified) cond=0 grade=FAIL task=PASS delivery=inline+P/evidenced gate='bin/kaocha unit' warm_first=69.2 calls=10 apparatus=80.0% wall=152s ceiling=no diff=' 1 file changed, 7 insertions(+)'
+2026-09-08T03:40:09.672  COLDSTART p8-sol-W-mvr: model=sol(verified) cond=W grade=PASS task=PASS delivery=inline+P/evidenced gate='bin/kaocha unit' warm_first=48.8 calls=6 apparatus=66.7% wall=137s ceiling=no diff=' 1 file changed, 7 insertions(+)'
+
+# REGRADE 2026-09-08T03:40:25Z — pilot-2 oracle fix (codex block terminator `exited <code> in <t>`, found by p7). Original as-run grade kept as p7-sol-0-mvr/grade.original-oracle.txt; nothing above was edited.
+# REGRADE p7-sol-0-mvr: cond=0 grade=PASS required=8/8 forbidden=0 warm_first=69.2 calls=11 cold_gates=1 apparatus=81.8% delivery=inline+P/evidenced
+# REGRADE (pilot-1, new oracle) p3-sol-0-mvr: COLDSTART-GRADE: FAIL required=2/8 forbidden=0 warm_first_s=unknown calls=4 cold_gates=1 apparatus=75.0% delivery_evidence=evidenced
+# REGRADE (pilot-1, new oracle) p4-sol-W-mvr: COLDSTART-GRADE: FAIL required=2/8 forbidden=0 warm_first_s=unknown calls=5 cold_gates=1 apparatus=80.0% delivery_evidence=absent
+2026-09-08T03:43:54.220  COLDSTART p9-opus-0-cc: model=opus(verified) cond=0 grade=FAIL task=PASS delivery=inline+P+T/evidenced gate='bin/kaocha unit' warm_first=unknown calls=11 apparatus=54.5% wall=170s ceiling=no diff=' 1 file changed, 9 insertions(+)'
+2026-09-08T03:47:12.232  COLDSTART p10-opus-W-cc: model=opus(verified) cond=W grade=PASS task=PASS delivery=inline+P+T/evidenced gate='bin/kaocha unit' warm_first=31.9 calls=8 apparatus=50.0% wall=165s ceiling=no diff=' 1 file changed, 9 insertions(+)'
+2026-09-08T03:49:47.976  COLDSTART p11-sol-0-mvr: model=sol(verified) cond=0 grade=FAIL task=PASS delivery=inline+P/evidenced gate='bin/kaocha unit' warm_first=71.4 calls=10 apparatus=80.0% wall=146s ceiling=no diff=' 1 file changed, 6 insertions(+)'
+2026-09-08T03:53:48.719  COLDSTART p12-sol-W-mvr: model=sol(verified) cond=W grade=PASS task=PASS delivery=inline+P/evidenced gate='bin/kaocha unit' warm_first=87.6 calls=6 apparatus=66.7% wall=167s ceiling=no diff=' 1 file changed, 6 insertions(+)'
+# REGRADE 2026-09-08T03:54:06Z — pilot-2b oracle fixes (cat-the-gate at command position, found by p9; head_word quote normalisation, found by p11). Originals kept as <run>/grade.original-oracle.txt.
+# REGRADE p5-opus-0-cc: COLDSTART-GRADE: FAIL required=8/8 forbidden=1 warm_first_s=29.8 calls=9 cold_gates=1 apparatus=66.7% delivery_evidence=evidenced
+# REGRADE p6-opus-W-cc: COLDSTART-GRADE: FAIL required=6/8 forbidden=0 warm_first_s=26.2 calls=11 cold_gates=1 apparatus=63.6% delivery_evidence=evidenced
+# REGRADE p8-sol-W-mvr: COLDSTART-GRADE: PASS required=8/8 forbidden=0 warm_first_s=48.8 calls=6 cold_gates=1 apparatus=66.7% delivery_evidence=evidenced
+# REGRADE p9-opus-0-cc: COLDSTART-GRADE: PASS required=8/8 forbidden=0 warm_first_s=37.0 calls=11 cold_gates=1 apparatus=63.6% delivery_evidence=evidenced
+# REGRADE p10-opus-W-cc: COLDSTART-GRADE: PASS required=8/8 forbidden=0 warm_first_s=31.9 calls=8 cold_gates=1 apparatus=50.0% delivery_evidence=evidenced
+# REGRADE p11-sol-0-mvr: COLDSTART-GRADE: PASS required=8/8 forbidden=0 warm_first_s=71.4 calls=10 cold_gates=1 apparatus=80.0% delivery_evidence=evidenced
+# REGRADE p12-sol-W-mvr: COLDSTART-GRADE: PASS required=8/8 forbidden=0 warm_first_s=87.6 calls=6 cold_gates=1 apparatus=66.7% delivery_evidence=evidenced
