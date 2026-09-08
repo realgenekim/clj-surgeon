@@ -6,13 +6,13 @@ Gene's orders (verbatim): "Take each move, highest vs native first, and make it 
 
 | row | move | native | tool | vs native | n | correct | phase (tree) |
 |---|---|---|---|---|---|---|---|
-| 1 | namespace_split, whole partition (views.clj, 141 forms → 20 ns) | 408 / 486 s (with manifest); 447 s median | **56 s CLI / 46–49 s MCP** on the landed build, two frozen reruns hash-identical | **÷8–9.7** | 2+2 verb, 2 native | 4/4 every run, 0 paper cuts | friction-medium (one gate short of low, see §2) |
+| 1 | namespace_split, whole partition (views.clj, 141 forms → 20 ns) | 408 / 486 s (with manifest); 447 s median | **56 s CLI / 46–49 s MCP** on the landed build, two frozen reruns hash-identical | **÷8–9.7** | 2+2 verb, 2 native | 4/4 every run, 0 paper cuts | **friction-low** (pilot 7: 4/4 on one frozen package; plate installed; LID debt 0) |
 | 2 | alias_migration, natural MVR migration with collisions (21 sites, 9 files) | caller work median 121 s (six matched N arms); floor 198 s median n=6 | **caller work median 27 s** (six D arms on the fixed build) | **3.98× less caller work** (median D/N 0.25; 96.7 s saved > 2·s_N); all-oracle ratio 0.40 reported beside | 6 N + 6 D pairs | 6/6 clean, 0 refusals | friction-high (won tonight) |
-| 5 | move-forms-with-deps (partial retention, exports.clj 25/112 owners) | caller work 226–382 s, all-oracle 453–568 s (six fresh native controls, stamps in) | verb hand-driven once outside timing: in-call 279 s of which 229 s is the Cell B oracle; facts projection 26 s | **not yet measured** (the D/F arms are the next cohort) | 6 N | native acceptance pending in the operator's report | rough → the verb is landed on trunk |
+| 5 | move-forms-with-deps (partial retention, exports.clj 25/112 owners) | caller work median **316.9 s** (six fresh native controls, 6/6 accepted, SD 52.9) | caller work **98 / 127 / 144 / 112 / 140 / 154 s** (proof by the runner for both arms; D1 proof-inclusive 341 s labelled) — median D/N **0.43** | **÷2.3 on caller work**; 182 s saved > 2·s_N = 106 s; gate PASS on every clause | 6 N + 6 D | **6/6 accepted** by the frozen Cell B oracle; 0 refusals; all six D patches byte-identical | **friction-high** (F arms pending → emission not yet credited) |
 | 3 | require_change across 8 namespaces (natural MVR migration) | — | verb built (3d55fa34) | **uncalibrated**: Sol's frozen task is not admissible under its own byte/layout rules | — | — | uncalibrated (honest) |
 | cold start | fresh agent one-shots the skill's loop | pilot 1: 1/4 | pilots 5/6 on the amended block: **3/4 twice**, each miss a different one-sentence skill gap, each fix verified N=1 on the failing cell | — | 4 cells × 4 pilots + 2 singles | 4/4 correct patches every pilot | friction-high |
 
-Plainly: rows 1 and 2 are measured wins against native; row 5's tool number is not measured yet; row 3 has no number.
+Plainly: rows 1, 2 and 5 are measured wins against native on the caller-work clock; row 3 has no number.
 
 ## 2. Top wins AND losses
 
@@ -36,6 +36,9 @@ Losses
 - **A pointer is not delivery** → inline bytes; **a pid comes from a receipt** → run-bg/codex-fenced; **a probe is not proof** → receipts carry verification_complete/proof_pending; **the graded party may not define the grader** → gate frozen before the agent runs; **acceptance by adversary is unbounded** → frozen suites by claim, ≤15-min reviews; **the second hand-written brief is the stop signal** → ~/bin/round.
 - **Every verb keeps its receipts outside the workspace** (witnessed, all verbs).
 - **Model-specific cost-pricing of instructions**: two Opus cells priced "wait for the JVM" as latency to overlap; Sol blocked. Text that leaves a required choice open delegates it to whatever the model guesses.
+
+## Amendment 2026-09-08T11:16Z
+- Row 1 reached friction-low (pilot 7 clean 4/4 on block 08c79a61…). Row 5's six D arms ran: median caller work 140 s vs native 317 s (÷2.3) with the proof moved to the runner for both arms after D1 exposed the in-call-oracle asymmetry (341 s); F arms not run (time). Row 2's fix landed or landing (battery receipt 5495aa93; Sol GO r11). Ratchet from tonight's meter work: candidate-complete means the same thing for a verb that proves in-call and a caller that proves after — the runner proves, for both.
 
 ## 4. What's next (in order)
 1. Row 1 → friction-low: one clean four-cell run on block 08c79a61… (p30 opus/Ø result pending at write time); then the routed-class telemetry check.
