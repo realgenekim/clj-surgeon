@@ -64,3 +64,4 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 
 - 2026-09-08T04:0xZ pilot 2 = 4/4 PASS (row 9 moves rough → friction-high: oracle + fixtures exist, observer missing, ledger items: observer, CC gate prerequisite, apparatus classifier); B01 delivered (round-5 promises registered, tree corrected, row-1 ledger frozen); B02 apparatus build in progress; Sol r6 (registration review) running.
 - 2026-09-08T04:1xZ ruling recorded: descend at friction-low. Row 1 remaining to low = B02 instruments (building), B03 plate (drafting), two frozen-build reruns, Astra acceptance. Registration commit 4856f5aa landing (Sol GO r6).
+- 2026-09-08T04:23Z registration landed (a90055b4); row 1 LID debt 0 → friction-medium gates: audit ok, reviewer GO, landed; remaining to LOW: plate (B03, drafting), observed pilot (pilot 3, running), two frozen reruns (wave 5 done, wave 6 running), Astra acceptance of B02.
