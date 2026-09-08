@@ -57,6 +57,22 @@ the registered **27 s agent-caller** median and printed "IN". Not like for like.
 against the PREVIOUS SENTINEL, measured the same way, and reads `no-baseline` on a first run; the
 registered 27 s / 121 s travel as context. The published row carries the correction.
 
+Two more, found by running the jobs rather than reading them:
+
+5. **Backticks in an unquoted heredoc executed as commands.** The receipt's own schema comment
+   contained `` `tighten-seat-receipt/v1` ``; the EDN heredoc must stay unquoted so variables
+   expand, so bash tried to run it and the receipt printed a shell error where the contract name
+   belonged. The known rule ([[quoted-heredocs-for-prose]]) applies to prose *inside* an expanding
+   heredoc too. Fixed to straight quotes.
+6. **The seat boundary was three phases too far downstream.** A careless `verb-sentinel
+   --port 7888` test reached `surgeon-call`, which refused correctly (exit 3) — but only after a
+   fixture had been built and graded, and the job published a `SUSPEND` row that meant nothing.
+   Two ratchets: 7888/7890/7894/7895/83xx are now refused at ARGV before anything is spent; and a
+   call that does not complete yields `verdict=UNVERIFIED`, never `SUSPEND`, because an
+   unavailable or refused capability is unknown performance, not a recorded correctness loss.
+   The bad row is retracted in its own heading (`## [RETRACTED] …`) so `tighten status` cannot
+   show it as the standing result, and its inbox item is closed with the explanation.
+
 ## Declared divergence from the skill's draft contract
 
 `~/.claude/skills/tighten-the-loop/SEAT-RECEIPT.md` specifies `tighten-seat-receipt/v1`: an
