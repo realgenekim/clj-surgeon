@@ -3895,3 +3895,5 @@ Caveats carried, not cured: profile_isolated=no in all four (the seat's global i
 ## 2026-09-08T10:43Z — row 5 D1: candidate-complete 341 s vs native floor 317 s — the apparatus asymmetry Astra forecast: the verb's in-call verification (the ~229 s Cell B oracle) is counted as the D caller's work while N callers stamp before their own suite
 
 Fix for D2–D6 (disclosed in the freeze): run D with the in-call profile replaced by a no-op so the call returns at emission (receipt honestly says proof pending) and the RUNNER grades both arms with the same frozen oracle; D1 kept as a labelled proof-inclusive diagnostic. F arms skipped for time; D-only verdict by ~11:25Z. Meter lesson for the tree: "candidate-complete" must mean the same thing for a verb that proves inside the call and a caller that proves after — proof by the runner, for both, on the primary clock.
+
+## 2026-09-08T10:45Z — Astra r10 fix delivered (398679fa: alias artifact batteries repaired AND required at landing); Sol r11 (bounded) launched; on GO → land → row 2 friction-medium
