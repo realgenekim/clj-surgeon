@@ -315,3 +315,65 @@ tests or repeated round 5's red phase. Provenance: 5cb03422 (alignment and
 list repair). B01 acceptance is the current audit, existing witnesses, touched
 lint and the explicitly requested no-build round; apparatus certification
 remains a separate B02 obligation.
+
+## B07: retained source and read-only facts
+
+The B07 build brief authorizes this leaf's full design-to-verification cascade.
+`:source {:file ... :lib ... :retain true}` selects partial retention; omit
+`:source_retirement` in this mode. Conflicting retirement instructions refuse.
+Optional source `:alias_policy` defaults to the final library segment followed by
+`source`; the same collision rules apply. Unmapped owners stay in their original
+byte positions. The destination manifest remains the sole owner assignment input.
+`:promotion_policy` authorizes required promotions in either retained or moved
+owners; unrelated private definitions stay private. Mixed callers keep their
+source require and retained references. Load-only source dependencies stay put.
+
+Optional source `:comment_policy "remove-moved-invocations"` authorizes removal
+of moved call expressions inside top-level comment forms, retaining surrounding
+comment contents. A print/println/prn wrapper containing only the offending call
+is removed with it. Other top-level source forms remain unsupported. Comment
+references without this authorization participate in the graph and can refuse
+for cycles. No arbitrary source text or caller-site table is accepted.
+
+The compiler first prepares source owners, located references, assignments,
+required aliases/imports, promotions and the final graph without generating
+candidate bytes. Full execution emits from that prepared plan. CLI `:facts-only
+true` and MCP `:plan_only "facts"` return the same plan's public `:facts` map.
+The map includes snapshot hash, owners (original and assigned libs, exact spans),
+references (file/line/col and disposition), retained dependency names, promotions,
+namespace graph and unknown coverage. It contains no generated requires, candidate
+source, replacement text or emitter. The full run persists identical facts in its
+details receipt. Existing boolean plan-only retains its broader projection.
+
+NS-SPLIT-037..043 register this matrix before implementation. The Cell B oracle
+is copied without weakening its acceptance checks, and A8 is repaired to match
+uppercase/lowercase unresolved diagnostics. Its failing witness and three
+negative mutations are preserved with the build receipts. The supplied fixture
+manifest and architecture are immutable; a failed gate records its exact gap.
+
+NS-SPLIT-044 separates the 16 MiB captured source cap from a finite 64 MiB
+analyzer-output cap. Cell B's 472-file evidence exceeds source byte size. The
+boundary still refuses truncation before reading EDN; the captured universe is
+unchanged. Unused keyword analysis is not requested.
+
+NS-SPLIT-045 removes only header dependencies made unused by this extraction:
+a caller's old source alias when it has moved usages and no retained usage, and
+a source short-class import used by moved owners but no retained owner/comment.
+Mixed and explicit load-only source dependencies remain. Facts also expose
+located external Var and class usages consumed by destination header planning;
+these are captured identities, never generated libspecs or replacement bytes.
+
+Partial mode refuses an existing `declare` of a moved owner with
+`:retained-declaration-of-moved-owner`; it never silently leaves a stale source
+intern. Retained declarations of unmoved owners remain unchanged. The Cell B
+source has no declarations, so this conservative boundary does not alter it.
+
+NS-SPLIT-046 supersedes absolute A8 (042): a fresh archive of the frozen base is
+linted with the same analyzer and project configuration as the candidate.
+Compare file/severity/exact-message multisets, ignoring only source coordinates.
+Any new identity or increased multiplicity fails, in all letter cases. Both
+analyzers must finish with recognized statuses and nonempty output. Baseline
+findings remain explicit, not silently waived. The original case-corrected
+absolute failure and successful rollback remain in the B07 engineering receipt.
+This completes the authorized oracle repair without changing the exact fixture
+or its protected footprint. All arms receive the same oracle before timing.

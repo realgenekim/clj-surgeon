@@ -117,6 +117,7 @@
    'clj-surgeon.mcp-expect-guard-test                   :fast
    'clj-surgeon.mcp-extraction-plan-test                :fast
    'clj-surgeon.mcp-extraction-test                     :fast
+   'clj-surgeon.cell-b-oracle-test                      :battery ; B07 invokes Python to mutation-test the shell oracle.
    'clj-surgeon.namespace-split-test                    :fast
    'clj-surgeon.namespace-split-warm-test               :integration
    'clj-surgeon.mcp-namespace-split-test                 :fast

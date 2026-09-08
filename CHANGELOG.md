@@ -8,6 +8,15 @@ is cut.
 
 ## [Unreleased]
 
+### Added
+
+- Experimental namespace-split partial retention: supplied owners move while
+  unmapped source owners stay in place; required cross-boundary aliases, authorized
+  promotions, mixed callers and narrow comment-call removal share one transaction
+  and undo receipt. CLI `:facts-only true` and MCP `plan_only: "facts"` expose the
+  same snapshot-bound facts without candidate emission. Cell B remains an
+  experimental feasibility fixture, not an admitted performance route.
+
 ### Fixed
 
 - Namespace split caller requires replace the retired entry at its exact position,

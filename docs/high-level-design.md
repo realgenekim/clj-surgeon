@@ -1343,3 +1343,14 @@ the shrinking [per-ID debt ledger](intent/unlinked-spec-ids.edn).
 - [Shell argv safety](intent/shell-argv-safety/shell-argv-safety-design.md)
 - [Read request normalization](intent/read-request-normalization/read-request-normalization-design.md)
 - [Hot verification](intent/hot-verification/hot-verification-design.md)
+
+### Partial extraction and facts for native callers (B07)
+
+The shared namespace split compiler also supports an explicitly retained source.
+A supplied subset moves; the compiler derives both directions of references,
+required visibility changes and the acyclic final graph. Unmapped owners remain
+in place. A read-only facts entrance exposes the same snapshot-bound decisions
+before emission, allowing native callers to reuse reference facts independently
+of the writer. The owning leaf is
+[namespace-split-design](intent/helper-extraction/namespace-split-design.md).
+B07 is a feasibility experiment, with no routing or performance admission.

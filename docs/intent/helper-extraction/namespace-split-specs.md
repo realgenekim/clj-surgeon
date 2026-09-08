@@ -52,3 +52,23 @@ behavior and does not claim a new fail-first experiment.
 - [x] **NS-SPLIT-034**: When a changed call head has a width delta, the compiler shall shift every subsequent line owned by that call form by the head delta, with ownership determined by paren structure at every nesting depth and multiline string contents never moved.
 - [x] **NS-SPLIT-035**: When replacing the retired views require in the pinned d9205abc forms/polish headers, the compiler shall replace only that span with the sorted destination block, preserving every other host byte.
 - [x] **NS-SPLIT-036**: When the full MCP profile lists its public tools, it shall include namespace_split exactly once between helper_extraction and admit_clojure_patch.
+
+B07 preregistered requirements:
+
+- [x] **NS-SPLIT-037**: When source.retain is true, the compiler shall leave unmapped owners in the source and include that file in the guarded inverse.
+- [x] **NS-SPLIT-038**: When a reference crosses a retained or moved seam, the compiler shall qualify it through a required alias and promote only authorized necessary private owners.
+- [x] **NS-SPLIT-039**: When removal of moved invocations in source comment forms is authorized, the compiler shall remove only the offending invocation and its sole print wrapper.
+- [x] **NS-SPLIT-040**: When facts are requested, the compiler shall return snapshot-bound pre-emission facts identical to those consumed by full execution.
+- [x] **NS-SPLIT-041**: When CLI facts-only or MCP plan_only facts is requested, the shared boundary shall return a read-only facts receipt through the closed request grammar.
+- [D] **NS-SPLIT-042**: When the Cell B oracle encounters an unresolved diagnostic in any letter case, A8 shall fail.
+- [x] **NS-SPLIT-043**: When Cell B partial-extraction preservation is checked, the oracle shall reject missing retained qualification, redirected retained callers and the source comment cycle.
+
+- [x] **NS-SPLIT-044**: When captured analysis exceeds source-byte size, the boundary shall apply a separate finite 64 MiB analysis-output cap and refuse truncation before parsing.
+
+- [x] **NS-SPLIT-045**: When partial extraction retires the last use of a source alias or short imported class, the compiler shall remove that newly unused header entry while preserving mixed and load-only dependencies.
+
+- [x] **NS-SPLIT-046**: When A8 compares a candidate with an independently analyzed archive of the exact frozen base, the oracle shall reject every new or increased unresolved finding in any letter case while retaining matching baseline findings as explicit evidence.
+
+NS-SPLIT-046 supersedes the absolute NS-SPLIT-042 check after the latter exposed
+five findings already present in byte-protected baseline code. The exact fixture
+and all ownership, behavior, architecture and protected-content gates are unchanged.

@@ -2113,12 +2113,25 @@
                        :pair      :extract!}
 
     ;; @spec NS-SPLIT-014
+    ;; @spec NS-SPLIT-041
     :split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))
-                       :desc "Compile and publish a whole namespace partition; :plan-only projects the same compiler"
+                       :desc "Compile a namespace partition or retained-source extraction; :facts-only reads shared facts"
                        :args {:request {:desc "Complete namespace_split request as an EDN map"}
                               :request-file {:desc "EDN file containing the complete namespace_split request"}
-                              :plan-only {:desc "Nonmutating analysis projection (true)"}}
-                       :examples ["clj-surgeon :op :split-ns! :request-file split.edn :plan-only true"
+                              :plan-only {:desc "Nonmutating analysis projection (true)"}
+                              :facts-only {:desc "Read snapshot-bound facts without candidate emission (true)"}}
+                       :workflow ["Start with :facts-only true (no emitter) or :plan-only true (broader candidate analysis). Both are read-only."
+                                  "Request keys: workspace_root; source {file,lib}; destinations [{file,lib,forms,alias_policy}]; promotion_policy (promote-required or authorized names); roots; verification {profile}. Names and paths are strings."
+                                  "Partial extraction: source.retain=true, optional source.alias_policy, and omit source_retirement. Unmapped forms stay in source. Full partition: source_retirement is delete or retain-empty."
+                                  "Optional source.comment_policy=remove-moved-invocations removes offending moved calls (and a sole print wrapper) in source comment blocks. Cycles and unauthorized promotions refuse."
+                                  "The top-level :facts map contains owners, exact references, retained dependencies, promotions and graph. Review top-level :blockers and :facts :unknowns. Copy top-level :snapshot_hash into the request as :snapshot_hash to bind a later call."
+                                  "Apply by omitting both read flags. The configured synchronous verification profile proves the guarded write. A nonzero exit or ok=false is a refusal/failure: read state and mutation_attempted before retrying."
+                                  "Complete proof requires :state=committed, :verification_complete=true, :proof_pending=[] and successful top-level :checks. Require :exit 0 except baseline-qualified captured-reference-analysis/candidate-lint-delta; any :status=failed fails."
+                                  "Warm-only proof: run each listed :proof_pending command from workspace_root and preserve the results; the original receipt remains incomplete. Do not replay the split."
+                                  "On rolled-back with :restored=true the original files are restored. On recovery-required preserve the receipt and resolve the reported conflicting state before guarded undo; never force restoration over foreign edits."
+                                  "Top-level :undo_receipt names the guarded inverse: :op :undo-extract! :receipt PATH. Never blindly repeat a committed split."]
+                       :examples ["clj-surgeon :op :split-ns! :request-file split.edn :facts-only true"
+                                  "clj-surgeon :op :split-ns! :request-file split.edn :plan-only true"
                                   "clj-surgeon :op :split-ns! :request-file split.edn"]
                        :category :write}
 

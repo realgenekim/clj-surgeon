@@ -458,7 +458,8 @@
     ;; NS-SPLIT-028..030 and 032..033 add five reachable EARS promises with direct witnesses.
     ;; B01 registers NS-SPLIT-034..036; historical IDs remain in the census.
     ;; B03 adds the suspension, exact split admission and plate parity promises.
-    (is (= 196 (count non-mcp)))
+    ;; B07 registers NS-SPLIT-037..046 (ten retained-source/facts/oracle promises).
+    (is (= 206 (count non-mcp)))
     (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 19
             "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3}
            (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"
