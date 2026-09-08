@@ -320,6 +320,32 @@ evidence -- so every landing pays it in full.
   `clj-surgeon.lane-manifest-test/the-lane-runner-resolves-to-exactly-the-lane-it-names`
   (pins `make test-battery` to the battery lane through the new coordinator).
 
+### TEST-ISO-014 — independently scheduled launcher matrix
+
+- [x] **TEST-ISO-014**: When the battery schedules the discovered-build-file
+  reader-eval witness, it shall expose exactly one independent deftest for each
+  of the frozen pairs `[:jvm "deps.edn"]`, `[:jvm "bb.edn"]`,
+  `[:jvm "project.clj"]`, `[:bb "deps.edn"]`, `[:bb "bb.edn"]`,
+  `[:bb "project.clj"]`.
+
+  Each cell retains the original real launch, both assertions, and `finally`
+  cleanup. Stable test names identify the cells. The loaded test bodies supply
+  the observed pairs; a witness compares their set and count to the frozen six.
+  TEST-ISO-013's fixture/hook refusal and summed namespace budgets still apply.
+  Per-deftest walls are measured even when a lane holds several cells; no
+  aggregate wall may be divided into invented per-cell measurements.
+  Before that first measurement, both shard and lane packing use the declared
+  namespace-share estimate for a new cell, never a token 1 ms cost.
+
+  Misreadings: replacing cold launches with a warm runtime; deleting the slow
+  JVM half; retaining six labels around one serial loop; accepting duplicate
+  pairs; assigning every cell one sixth of the old wall; retiring the summed
+  namespace budget exception merely because the makespan fell.
+
+  *Witness:* `clj-surgeon.reader-eval-fence-test/build-file-matrix-covers-the-frozen-launcher-pairs`,
+  `clj-surgeon.battery-parallel-test/launcher-matrix-cells-remain-independently-shardable`,
+  `clj-surgeon.battery-parallel-test/grouped-shards-retain-measured-per-deftest-walls`.
+
 ### TEST-ISO-009b archival distance
 
 Only modifications of existing regular non-executable files at these exact

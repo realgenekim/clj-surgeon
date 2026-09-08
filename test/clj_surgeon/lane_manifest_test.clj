@@ -463,7 +463,7 @@
     clj-surgeon.mission-forms-source-test 23 ; Strict comment text/attachment, whitespace identity and owner sentinel.
     clj-surgeon.mission-typist-executor-test 11 ; Add candidate diagnostic survival to proof/commit/undo and saved fallback forwarding.
     clj-surgeon.battery-ledger-test        14 ; TEST-ISO-009a/b: add strict archive classification and preserved failure/audit authority.
-    clj-surgeon.battery-parallel-test      24 ; TEST-ISO-013: the battery lane run as N JVM lanes -- schedule, lane-failure classifier, shard fold, prerequisite DAG.
+    clj-surgeon.battery-parallel-test      26 ; TEST-ISO-013: the battery lane run as N JVM lanes -- schedule, lane-failure classifier, shard fold, prerequisite DAG. TEST-ISO-014 (5cdd5dcc) adds two: launcher-matrix-cells-remain-independently-shardable and grouped-shards-retain-measured-per-deftest-walls.
     clj-surgeon.require-change-test 9 ; Pure standalone require intent and strict natural-layout refusal witnesses.
     clj-surgeon.require-change-boundary-test 12 ; Actual CLI/profile processes, confined publication, independent oracle and undo.
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
@@ -574,7 +574,14 @@
       ;; 552 + 15 + 24 = 591, RECOMPUTED off the merged tree by the same
       ;; source census this test runs (`deftest-count` over
       ;; `adopted-since-round-one`), not by trusting either side.
-      (is (= 591 adopted) (str "adopted tests: " adopted)))
+      ;;
+      ;; TEST-ISO-014, 2026-09-08 (5cdd5dcc, splitting the battery reader-fence
+      ;; loop into six independent launcher cells): battery-parallel-test is
+      ;; the one ADOPTED namespace this commit touched -- it gains the two
+      ;; grouping/shard witnesses named at its pin above, 24 -> 26. (The
+      ;; reader-eval-fence-test split itself, 7 -> 13 deftests, lands in a
+      ;; ROUND-ONE namespace, so it moves r1, not adopted.) 591 + 2 = 593.
+      (is (= 593 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -685,7 +692,15 @@
       ;; merge-base pin was 1571; this branch moved it to 1586 (+15) and trunk
       ;; to 1595 (+24), for DISJOINT witnesses. 1571 + 15 + 24 = 1610, and the
       ;; merged tree's own census confirms it: 1019 original + 591 adopted.
-      (is (= 1610 total) (str "manifest declares " total " tests"))
+      ;;
+      ;; TEST-ISO-014, 2026-09-08 (5cdd5dcc): +6 in reader-eval-fence-test
+      ;; (round-one, 7 -> 13: the fence loop's one deftest split into six
+      ;; per-launcher-pair cells, net -1 +7 including the new
+      ;; build-file-matrix-covers-the-frozen-launcher-pairs witness) lands in
+      ;; r1; +2 in battery-parallel-test (adopted, 24 -> 26, named at its pin
+      ;; above) lands in adopted. 1610 + 6 + 2 = 1618, and the merged tree's
+      ;; own census confirms it: 1025 original + 593 adopted.
+      (is (= 1618 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
