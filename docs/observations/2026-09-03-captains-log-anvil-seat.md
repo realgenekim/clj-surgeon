@@ -3832,3 +3832,7 @@ Clauses 3 and 4 (caller-work) PASS; clause 2 (all-oracle ratio 0.80 ≤ 0.75) FA
 ## 2026-09-08T09:12Z — row 3: the standalone require_change capability is built (3d55fa34) but Sol's frozen eight-file task is NOT ADMISSIBLE under its own byte/layout rules — no F1; row 3 stays uncalibrated with a built verb and a fixture that needs amendment
 
 Astra implemented the strict standalone require intent with witnesses and recorded the admission blockers (the selected task's frozen byte-identity and layout rules cannot be satisfied by any arm as written). Honest stop; fixture amendment is Sol's; deferred past the deadline window. Astra now on the row-2 verb paper cut (detail receipts written inside the workspace → /var/tmp/forge/<verb>-receipts + a workspace-clean witness, applied to every verb).
+
+## 2026-09-08T09:17Z — Sol's row-2 ruling: UNKNOWN pending one fresh fixed-build cohort; the gate is corrected (clause 2 on the prospective caller-work endpoint; all-oracle ratio reported beside it, never gated; accepted-with-minor counts for clause 1); Artifact A is a treatment defect to remove before clause 1 can be earned
+
+Gene should read: **2.61× less caller-work time** (the reciprocal of 1−0.617), all-oracle ratio 0.80 beside it; diagnostic D outputs 6/6 clean accepts once the in-repo receipts are excluded. Row 2 receives no phase change until the fixed-build cohort. Stage 3 = the six D arms re-run on the fixed build (N arms retained), launching when Astra's paper-cut fix lands.
