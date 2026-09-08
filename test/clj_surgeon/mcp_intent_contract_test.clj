@@ -387,9 +387,9 @@
    "docs/intent/2026-08-30-prepared-request-ratification/prepared-request-specs.md"
    "docs/intent/alias-migration/alias-migration-specs.md"
    "docs/intent/feature-thread/feature-thread-specs.md"
-    "docs/intent/helper-extraction/helper-extraction-specs.md"
-    "docs/intent/helper-extraction/namespace-split-specs.md"
-    "docs/intent/helper-extraction/split-repair-specs.md"
+   "docs/intent/helper-extraction/helper-extraction-specs.md"
+   "docs/intent/helper-extraction/namespace-split-specs.md"
+   "docs/intent/helper-extraction/split-repair-specs.md"
    "docs/intent/hot-verification/hot-verification-specs.md"
    "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md"
    "docs/intent/mcp-operation-contract/admit-clojure-patch-specs.md"
@@ -454,7 +454,8 @@
   (let [ids (spec-ids "." (spec-doc-paths "."))
         non-mcp (set (remove #(str/starts-with? % "MCP-OP-") ids))]
     ;; Audit ledger: 165 original non-MCP rows, plus the repaired telemetry row.
-    (is (= 185 (count non-mcp))) ; Four Andon and fifteen whole-split promises.
+    ;; NS-SPLIT-028..030 and 032..033 add five reachable EARS promises with direct witnesses.
+    (is (= 190 (count non-mcp))) ; Four Andon and fifteen whole-split promises.
     (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 19
             "MEASURE-" 4 "TELEMETRY-EVENTS-" 1}
            (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"

@@ -10,6 +10,18 @@ is cut.
 
 ### Fixed
 
+- Namespace split caller requires replace the retired entry at its exact position,
+  including unsorted host groups. A live workspace nREPL now runs affected reloads
+  and tests before cold verification, rolling back immediately on probe failure.
+  Profiles may select `:proof :warm`; these commits explicitly retain pending
+  cold proof and never report complete verification.
+
+- Namespace split destinations accept their own `:doc` or receive a form-based
+  summary instead of cloned monolith prose. Imports follow short class usages;
+  destination requires are sorted at the source indentation, caller require
+  groups stay in place, and aligned call continuations follow renamed heads.
+  Receipts include advisory unrequired qualified references with file/line rows.
+
 - Receipt and refusal wording no longer contradicts its own numbers: a
   one-arm multimethod says "1 defmethod arm shares", a basis whose pattern
   matched nothing says so instead of claiming "all 0 matched sites

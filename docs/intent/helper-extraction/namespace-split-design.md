@@ -31,7 +31,8 @@ object is closed (`additionalProperties: false`). Both transports accept:
 {:workspace_root "/work/project"
  :source {:file "src/app/views.clj" :lib "app.views"}
  :destinations [{:lib "app.format" :file "src/app/format.clj"
-                 :forms ["fmt-date"] :alias_policy ["fmt" "vfmt"]}
+                 :forms ["fmt-date"] :alias_policy ["fmt" "vfmt"]
+                 :doc "Date formatting helpers."}
                 {:lib "app.page" :file "src/app/page.clj"
                  :forms ["page"] :alias_policy ["page" "vpage"]}]
  :promotion_policy "promote-required" ; alternatively ["fmt-date"]
@@ -75,7 +76,7 @@ Symlink source roots/files and destination traversal refuse.
    promotions, external requires and imports, destination dependencies, aliases,
    and forward declarations. Alias choices follow supplied order against existing
    external bindings. Preserve body text and attached comments, changing only
-   reference tokens and necessary private metadata. Generated namespace headers
+   reference tokens, necessary private metadata, and matching call-continuation alignment. Generated namespace headers
    are deliberately owned text; caller headers preserve unrelated original nodes.
 4. Rewrite all bounded callers, including test roots, in the same future map.
    A caller whose only relation is loading the old namespace loads the partition.
@@ -175,8 +176,9 @@ field failures motivating this amendment, not evidence of universal speedup.
 Caller requires are inserted at their lexical library position using the block's
 existing indentation. Only retired libspec spans/lines and new insertion spans
 are owned; existing entries and comments are never reordered or reprinted.
-An already unsorted block remains otherwise unchanged. Destination ns docstrings
-reuse the original string token, including literal newlines and escapes.
+An already unsorted block remains otherwise unchanged. The round-1 doc-token
+cloning policy is superseded by NS-SPLIT-022 below; original source prose is no
+longer assigned to destinations.
 
 The receipt's `:prose_mentions [{:file :line :text}]` names surviving candidate
 lines in strings and comments. It recognizes the retired library, original local
@@ -191,3 +193,100 @@ profile explicitly places its read-only owner oracle before kaocha; arbitrary
 profiles are not reordered. Candidate parse/lint run before publication, and a
 post-publication oracle failure invokes the existing guarded inverse. Success
 still requires all configured checks plus the final snapshot guard.
+
+## Round 2 destination ownership and layout
+
+Gene authorizes the complete repair/proof cycle in this leaf. NS-SPLIT-022..027
+supersede NS-SPLIT-019: the original docstring goes into none of the destinations.
+Optional destination :doc is a nonblank string; absent it, a deterministic summary
+names the source, form count and first three public names in source order (including
+promotions). Private-only destinations say no public forms. No clock enters the
+pure compiler. Explicit docs preserve their values as valid Clojure string literals.
+
+Imports use located kondo java-class-usages excluding declarations and fully
+qualified class tokens. A replaced call head shifts every subsequent line inside its call span by the
+head's width delta, regardless of indentation or nesting depth; multiline string
+contents stay byte-identical. Ordinary and anonymous #(...) calls share the rule.
+Each changed enclosing head contributes its own delta once on shared lines.
+Destination requires use one sorted block
+at the source continuation indent (default three spaces). Caller entries retain
+existing groups and trivia; additions join the matching library-prefix group.
+The same rule applies to source and test callers.
+
+The receipt's :unrequired_qualified_refs rows contain candidate :file, :line,
+:token and :lib. Java classes, aliases, required namespaces and prose are excluded.
+These rows neither add requires nor block writes. Captured facts are reused with
+no extra analyzer or suite invocation. The registry records the behavioral matrix
+before code. Fresh d9205abc before/after fixtures use the supplied request and same
+profile. Gates: all four oracles, baseline-relative view lint, make test and touched
+file lint. Single replay timing does not establish a new native crossover.
+
+## Round 3: exact caller position and optional warm probe
+
+NS-SPLIT-028 supersedes the lexical-position portion of NS-SPLIT-017/026 when
+there is a retired require: its exact span is replaced with the sorted destination
+block. Existing neighboring libspecs and trivia stay byte-identical. Without a
+retired entry, additions use the existing lexical/group insertion policy.
+
+Before verification, the boundary probes a confined `.nrepl-port` with a 300 ms
+cwd evaluation. Missing, malformed, stale and foreign-workspace ports are ignored
+for cold profiles. Discovery never starts a JVM. A discovered JVM receives only
+explicit `require :reload` for destinations, rewritten callers and affected test
+namespaces, ordered through the final dependency graph. Test selection includes
+captured `_test.clj` namespaces depending transitively on touched code and existing
+conventional `-test` peers. It runs `clojure.test/run-tests` for that set. Untouched
+intermediate dependencies influence order but are not explicitly reloaded.
+
+The profile in `.clj-surgeon.edn` selects `:proof :cold` (default) or `:proof :warm`:
+
+```clojure
+{:verification-profiles
+ {"split-unit" {:proof :cold
+                :commands [["bin/kaocha" "unit" "--fail-fast"]]}
+  "split-probe" {:proof :warm
+                 :commands [["bin/kaocha" "unit" "--fail-fast"]]}}}
+```
+
+A failed warm reload/test or bounded evaluation rolls back disk immediately and
+runs no cold commands. The `warm-probe` check carries `duration_ms`, failures,
+errors, summary and explicit reload/test names. Cold mode then executes the named
+profile exactly as before; individual cold command walls are separate check rows.
+Warm mode requires a live successful probe, skips that profile's cold command list,
+and returns `state "committed-probe-only"`, `verification_complete false` and
+`proof_pending` listing every skipped command. An unavailable probe refuses warm
+mode before publication; invalid proof modes refuse. Snapshot guards still apply.
+
+A probe cannot clear stale Vars, cached state, macro expansion, classpath/startup
+or dynamic callers. It is deliberately incomplete evidence. No `remove-ns`,
+`ns-unmap`, `reload-all`, runtime restart or unrelated explicit reload is performed.
+Rollback restores disk; effects of evaluation in the caller's JVM are not reversible.
+The full cold profile and repository suite remain required final proof.
+
+## Round 4 structural continuation ownership
+
+Gene authorizes the complete fail-first, repair and image-loop proof cycle for
+Sol's two blocking findings on 5b78bed2, starting at round 3 tip 38ecea11.
+NS-SPLIT-032 follows Fable's 2026-09-08 round-5 ruling, superseding the
+round-4 column match and nested-body protection. Every line after the head line
+inside the changed call's structural span shifts by the head's width delta,
+including nested bodies, comments, standalone closing delimiters and later outer
+siblings. A multiline string's opening line may move; subsequent lines inside
+its literal never move. Lines outside the call stay byte-identical. No first-argument
+column test defines ownership; a first argument on a later line also moves.
+
+Round-5 witnesses use Sol's unindented literals from the review of 14c0501f:
+call at column zero, growth v/x to longer/x and shrinkage views/x to v/x,
+nested do, body, comment, standalone close, multiline string and outer sibling.
+Both direct alignment and compile-split must fail first on that reviewed tip.
+The warm image is retained across every split/oracle/test iteration; one final
+cold make test provides the repository proof. This is a correctness repair,
+with no comparative performance claim.
+
+NS-SPLIT-033 pins the original d9205abc forms/polish headers. Replacement entries
+are sorted only among themselves and spliced into the retired entry's span;
+unrelated host entries and trivia retain their order and bytes. Round 3 already
+implements this rule; the exact field inputs must fail against Sol's reviewed
+commit and pass at the starting tip. The registry carries requirements and direct
+witnesses. Each iteration runs warm tests, split-in-image and the current output
+oracle. Final acceptance uses the real profile, four fixture oracles, current-trunk
+manifest census, touched-file lint and one cold make test.

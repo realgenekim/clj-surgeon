@@ -327,3 +327,62 @@ as MCP-OP-MATCH-005; base matching semantics are unchanged. Gates and doubts:
   D1/D2 30.666/30.382 s; added candidate lint costs 3.375 s, no verification cut.
   One functional replay, not a replicated crossover claim.
   [Proof, red/green witnesses and retained warning delta](observations/2026-09-07-namespace-split-papercuts.md).
+
+- 2026-09-08T00:15:34.529206+00:00, `astra/namespace-split`: round-2
+  NS-SPLIT-022..027 replace cloned docs with explicit/generated role summaries,
+  prune FQ-only imports, preserve grouped caller and sorted host-indented destination
+  requires, align ordinary/anonymous/nested call heads, and report unrequired
+  qualified references as advisory. Fresh d9205abc split passes four oracles,
+  isolated whole-snapshot lint delta 0/0; direct view lint has no new warning
+  identities, but repeats one pre-existing store warning per destination (14 → 15
+  raw rows). In-call before 35.393 s, after 33.391 s, with suite variation explaining
+  the difference; no new native crossover claim.
+  [Witnesses, raw warning caveat, source diff and proof](observations/2026-09-08-namespace-split-papercuts-round2.md).
+
+
+### 2026-09-08T00:59:47.250939+00:00 — namespace split round 3
+
+Branch `astra/namespace-split`, based on `5b78bed2`: exact retired-require position
+now passes the independent paper-cut oracle (zero new findings). The optional
+existing-workspace nREPL probe rolls back before cold verification on failure.
+Cold proof: 42.579 s including 11.609 s warm + 22.222 s kaocha; warm-only: 19.359 s,
+explicitly incomplete proof. Eight logged loops cost 95.121 s in aggregate; the
+<5 s reset/split target was not met (two analyzer calls alone ~5.53 s). No native
+control was run, so no new comparative speed claim. The first cold gate found
+test-lane and nested-reporting defects invisible to the focused warm tests.
+Receipt: [round 3](observations/2026-09-08-namespace-split-papercuts-round3.md).
+The third final make attempt passed: 786 JVM tests / 9,983 assertions and 873 BB
+tests / 7,511 assertions, zero failures/errors. After harness repair, the second
+attempt caught stale corpus pins and missing EARS @spec links; their 46-test
+warm audit passed before the final cold gate. No product behavior changed after
+the measured real fixture calls.
+
+
+### 2026-09-08T01:23:12.498218+00:00 — namespace split round 4
+
+Sol’s nested-body drift on `5b78bed2` is reproduced by faithful string/do
+inputs and list, vector, map, set, anonymous-function, comment and closing-line
+boundaries, in both alias-width directions. Structural spans now protect lines
+owned by later-opened forms while allowing their opener and outer siblings to
+align. The exact d9205abc forms/polish headers pin round 3’s in-place require
+repair. NS-SPLIT-032/033; two witnesses fail with 15 assertions on the reviewed
+compiler and pass on the repair. The image oracle is clean, but it did not
+detect the synthetic nested-body defect; those witnesses remain necessary.
+The merged manifest source census is 1,489 tests. Final gates, loop timings
+and exclusions: `/var/tmp/forge/plan2/cellC/astra-round4-report.md`.
+No native control was run; no comparative performance claim.
+
+
+### 2026-09-08T02:11:49.709534+00:00 — namespace split round 5
+
+Fable's ruling supersedes round 4's nested-body protection and exact-column
+predicate. NS-SPLIT-032 now shifts every line structurally inside a changed call,
+at any depth, except multiline string contents. Shared lines sum each changed
+head's own width delta once. Sol's unindented growth/shrinkage literals fail in
+both the helper and compile-split on 14c0501f; the revised layout matrix records
+16 red assertions before the production change. The first green warm run passes
+33 tests / 305 assertions, with a 10.924 s split/oracle/test loop and PAPERCUTS: 0.
+The independent fixture oracle is unchanged and was also zero on the red code;
+the literal witnesses supply the missing detection. Later collection-boundary
+coverage and final gates are recorded in `/var/tmp/forge/round/r5-report.md` and
+`/var/tmp/forge/round/r5-loop.log`. No comparative performance claim.
