@@ -1,0 +1,8 @@
+00-baseline split=9.237s warm-tests=0.700s wall=11.131s PAPERCUTS=7 failures=0 errors=0 state=committed
+01-layout split=8.722s warm-tests=0.410s wall=10.329s PAPERCUTS=5 failures=0 errors=0 state=committed
+02-baseline-oracle split=8.611s warm-tests=0.330s wall=10.943s PAPERCUTS=0 failures=0 errors=0 state=committed
+03-warm-tier split=9.137s warm-tests=0.306s wall=11.443s PAPERCUTS=0 failures=1 errors=0 state=committed
+04-warm-witnesses split=9.416s warm-tests=1.911s wall=13.500s PAPERCUTS=0 failures=2 errors=0 state=committed
+05-reload-order split=8.630s warm-tests=1.937s wall=12.863s PAPERCUTS=0 failures=0 errors=0 state=committed
+06-final-oracle-witness split=8.766s warm-tests=2.057s wall=13.419s PAPERCUTS=0 failures=0 errors=0 state=committed
+07-suite-harness split=8.963s warm-tests=0.542s wall=11.493s PAPERCUTS=0 failures=0 errors=0 state=committed

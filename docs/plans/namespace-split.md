@@ -39,7 +39,8 @@ Gene's 2026-09-07 brief authorizes this leaf's repair and fresh-fixture proof.
 The append-only `namespace-split-papercuts.edn` registry fixes NS-SPLIT-016..021
 with misreadings and boundary cases before implementation. Add failing witnesses
 first, then repair the pure compiler and confined boundary. Caller headers use
-source splices; destination docstrings retain string-node bytes. Prose is scanned
+source splices. The original destination doc-token preservation policy is
+superseded by NS-SPLIT-022 below. Prose is scanned
 structurally in candidate strings/comments using the original namespace aliases.
 Lint compares the same isolated analyzer configuration on captured and candidate
 bytes; a multiset of error type/message identities ignores moved coordinates but
@@ -51,3 +52,84 @@ all configured commands, and a failing early command exercises the guarded inver
 Acceptance: fresh d9205abc worktree, exact supplied manifest, all four oracles,
 server require diff, branch suite and touched-file lint. Retain red/green and wall
 receipts; this repair run does not establish a new comparative speed claim.
+
+## Round 2 destination ownership and layout
+
+Gene authorizes the complete repair/proof cycle in this leaf. NS-SPLIT-022..027
+supersede NS-SPLIT-019: the original docstring goes into none of the destinations.
+Optional destination :doc is a nonblank string; absent it, a deterministic summary
+names the source, form count and first three public names in source order (including
+promotions). Private-only destinations say no public forms. No clock enters the
+pure compiler. Explicit docs preserve their values as valid Clojure string literals.
+
+Imports use located kondo java-class-usages excluding declarations and fully
+qualified class tokens. A replaced call head shifts every subsequent line inside its call span by the
+head's width delta, regardless of indentation or nesting depth; multiline string
+contents stay byte-identical. Ordinary and anonymous #(...) calls share the rule.
+Each changed enclosing head contributes its own delta once on shared lines.
+Destination requires use one sorted block
+at the source continuation indent (default three spaces). Caller entries retain
+existing groups and trivia; additions join the matching library-prefix group.
+The same rule applies to source and test callers.
+
+The receipt's :unrequired_qualified_refs rows contain candidate :file, :line,
+:token and :lib. Java classes, aliases, required namespaces and prose are excluded.
+These rows neither add requires nor block writes. Captured facts are reused with
+no extra analyzer or suite invocation. The registry records the behavioral matrix
+before code. Fresh d9205abc before/after fixtures use the supplied request and same
+profile. Gates: all four oracles, baseline-relative view lint, make test and touched
+file lint. Single replay timing does not establish a new native crossover.
+
+## Round 3 warm feedback (authorized 2026-09-08)
+
+NS-SPLIT-028 refines caller layout: replace the retired entry in place with the
+sorted new block, even in an unsorted host group. NS-SPLIT-029 adds an optional
+warm probe before cold verification. Discovery reads only the confined workspace
+.nrepl-port and evaluates its cwd with a short timeout; absent/stale/wrong-workspace
+ports are unavailable. Never start a JVM. Reload destinations and rewritten callers
+in dependency order, then test namespaces in the captured tree that require them
+(transitively), plus conventional -test peers. Only these namespaces are explicitly
+reloaded. No reload-all, remove-ns, ns-unmap or mutation of unrelated runtime state.
+Failed reload/tests roll back disk immediately and skip cold commands. JVM side
+effects and stale Vars cannot be undone or proved absent by a probe.
+
+NS-SPLIT-030: profile :proof defaults to :cold; :warm requires a successful live
+probe, skips configured cold commands and returns committed-probe-only,
+verification_complete false, and proof_pending naming every skipped command.
+No live probe with :warm refuses before publication. Unknown proof modes refuse.
+Checks report warm-probe wall, test/fail/error counts and cold command walls
+separately. Real cold proof and the candidate snapshot guard remain authoritative.
+
+Witness matrix: absent/stale/wrong cwd, green and failing reload/test, warm/cold,
+profile mode validation, fail-fast command log, dependency ordering, unrelated
+namespace exclusion, rollback and honest incomplete receipts. New tests run in the
+owned warm development image; make test runs once at the final milestone.
+
+## Round 4 structural continuation ownership
+
+Gene authorizes the complete fail-first, repair and image-loop proof cycle for
+Sol's two blocking findings on 5b78bed2, starting at round 3 tip 38ecea11.
+NS-SPLIT-032 follows Fable's 2026-09-08 round-5 ruling, superseding the
+round-4 column match and nested-body protection. Every line after the head line
+inside the changed call's structural span shifts by the head's width delta,
+including nested bodies, comments, standalone closing delimiters and later outer
+siblings. A multiline string's opening line may move; subsequent lines inside
+its literal never move. Lines outside the call stay byte-identical. No first-argument
+column test defines ownership; a first argument on a later line also moves.
+
+Round-5 witnesses use Sol's unindented literals from the review of 14c0501f:
+call at column zero, growth v/x to longer/x and shrinkage views/x to v/x,
+nested do, body, comment, standalone close, multiline string and outer sibling.
+Both direct alignment and compile-split must fail first on that reviewed tip.
+The warm image is retained across every split/oracle/test iteration; one final
+cold make test provides the repository proof. This is a correctness repair,
+with no comparative performance claim.
+
+NS-SPLIT-033 pins the original d9205abc forms/polish headers. Replacement entries
+are sorted only among themselves and spliced into the retired entry's span;
+unrelated host entries and trivia retain their order and bytes. Round 3 already
+implements this rule; the exact field inputs must fail against Sol's reviewed
+commit and pass at the starting tip. The registry carries requirements and direct
+witnesses. Each iteration runs warm tests, split-in-image and the current output
+oracle. Final acceptance uses the real profile, four fixture oracles, current-trunk
+manifest census, touched-file lint and one cold make test.

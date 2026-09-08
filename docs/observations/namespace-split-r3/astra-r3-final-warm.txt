@@ -1,0 +1,5 @@
+"Elapsed time: 19359.439308 msecs"
+{:ok true, :state "committed-probe-only", :verification_complete false, :proof_pending ["bin/kaocha unit --fail-fast" "python3 /var/tmp/forge/plan2/cellC/cc-oracle.py /var/tmp/forge/plan2/build/cc-r3"], :elapsed_ms 19359.430075}
+[{:name "captured-reference-analysis", :duration_ms 2637.69606, :status "baseline"} {:name "future-source-parse", :duration_ms 92.61796, :status "passed"} {:name "candidate-lint-delta", :duration_ms 2699.429892, :status "passed"} {:name "warm-probe", :duration_ms 10697.595541, :status "passed", :summary {:test 168, :pass 1767, :fail 0, :error 0, :type :summary}, :failures 0, :errors 0} {:name "verified-snapshot-guard", :duration_ms 11.129025, :status "passed"}]
+=> nil
+*======== user | clj ========*
