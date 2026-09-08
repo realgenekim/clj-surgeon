@@ -506,3 +506,18 @@ or variance qualification, and carries no routing-performance claim.
 
 Final commit, red/green logs, intent audit and cold repository gate are recorded
 in `/var/tmp/forge/plan2/cellC/astra-rows-sublime-report.md`.
+
+### Rows sublime batch 3 — detached closure and embedded facts (2026-09-08)
+
+NS-SPLIT-050..054 add detached background proof for warm profiles, immutable
+original receipts, snapshot-checked closure/status, and bounded finished-work
+facts for full and retained-source splits. One split/base2 observation returned
+in 19.830 s and closed a 24.436 s background gate, leaving 24.509 s available
+after return. Complete wall remains 44.339 s; this is overlap evidence, not a
+matched speed claim. Cell C facts grew the receipt from 6,983 to 13,788 bytes.
+Cell B retained-source acceptance passed with 25 moved owners, 43 sites, eight
+retained dependencies and a 22,015-byte receipt. The graph budget must charge the
+emitted summary, not the full planning graph; the real-fixture refusal is retained.
+Raw evidence: `/var/tmp/forge/rows-sublime-3/`. Build report:
+`/var/tmp/forge/plan2/cellC/astra-rows-sublime-3-report.md`. Routing admission and
+free-choice adoption remain unchanged; Sol's fence precedes any landing.

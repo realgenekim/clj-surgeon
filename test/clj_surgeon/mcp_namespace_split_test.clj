@@ -7,7 +7,9 @@
    [clj-surgeon.namespace-split-io :as boundary]
    [clj-surgeon.namespace-split-test :as fixture]
    [clj-surgeon.namespace-split-warm :as warm]
+   [clj-surgeon.split-proof-gate :as gate]
    [clj-surgeon.synchronous-verification :as proof]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]))
@@ -25,6 +27,34 @@
 (defn proved [& _]
   {:ok true :process_evidence [{:command ["fixture-proof"] :exit 0 :elapsed_ms 1 :finished? true}]})
 
+(defn delete-fixture-source-files! [root]
+  (let [tmpdir (System/getProperty "java.io.tmpdir")]
+    (when-not (and (some? root) (some? tmpdir) (.isAbsolute (io/file root)))
+      (throw (ex-info "Fixture cleanup requires an explicit workspace root"
+                      {:error-type :unsafe-test-workspace})))
+    (let [workspace (.getCanonicalFile (io/file root))
+          temp-root (.getCanonicalFile (io/file tmpdir))]
+      (when-not (and (.isAbsolute workspace)
+                     (.startsWith (.toPath workspace) (.toPath temp-root))
+                     (not= workspace temp-root))
+        (throw (ex-info "Fixture cleanup root must be below java.io.tmpdir"
+                        {:error-type :unsafe-test-workspace :root (str workspace)})))
+      (doseq [folder ["src" "test"]
+              file (reverse (file-seq (io/file workspace folder)))
+              :when (.isFile file)]
+        (.delete file)))))
+
+;; @spec TEST-ISO-003
+(deftest destructive-fixture-setup-refuses-an-unsafe-root
+  (let [repository-source (io/file "src/clj_surgeon/core.clj")
+        before (.length repository-source)
+        refusal (try (delete-fixture-source-files! nil) nil
+                     (catch Throwable error error))]
+    (is (some? refusal))
+    (is (= :unsafe-test-workspace (:error-type (ex-data refusal))))
+    (is (.isFile repository-source))
+    (is (= before (.length repository-source)))))
+
 ;; @spec NS-SPLIT-013
 (deftest closed-schema-and-complete-text-face
   (is (= false (:additionalProperties boundary/schema)))
@@ -36,6 +66,27 @@
   (let [result {:ok false :state "refused" :blockers [{:type "x"}] :elapsed_ms 1}]
     (is (= (json/parse-string (json/generate-string result))
            (json/parse-string (second (str/split (tool/summary result) #"\n" 2)))))))
+
+;; @spec NS-SPLIT-059
+;; INTENT-TEST: NS-SPLIT-059
+(deftest unsafe-background-temp-root-refusal-is-actionable
+  (with-workspace
+    (fn [_ request]
+      (let [next-call {:action "set-java-tmpdir-and-retry"
+                       :java_tmpdir "/var/tmp/<owned-temp-directory>"}
+            background-profiles
+            {"unit" {:commands [["/bin/true"]] :proof :warm :gate :background}}]
+        (with-redefs [warm/discover! (constantly {:port 1})
+                      gate/runner-commands!
+                      (fn []
+                        (throw (ex-info "Background proof requires java.io.tmpdir below /var/tmp"
+                                 {:error-type :background-gate-unsafe-tmpdir
+                                  :java_tmpdir "/tmp"
+                                  :next_call next-call})))]
+          (let [result (boundary/execute! {:verification-profiles background-profiles} request)]
+            (is (= "background-gate-unsafe-tmpdir" (:error_type result)))
+            (is (= next-call (:next_call result)))
+            (is (false? (:mutation_attempted result)))))))))
 
 ;; @spec NS-SPLIT-011
 ;; @spec NS-SPLIT-015
@@ -171,7 +222,6 @@
             (is (.exists (io/file root "src/app/views.clj")))
             (is (not (.exists (io/file root "src/app/util.clj"))))))))))
 
-
 ;; @spec NS-SPLIT-047
 ;; INTENT-TEST: NS-SPLIT-047
 (deftest external-profile-invalid-paths-refuse
@@ -193,7 +243,6 @@
       (boundary/cli! {:op :split-ns! :request fixture/request :profile-file "/var/tmp/proof.edn"})
       (is (= "/var/tmp/proof.edn" (get-in @seen [:verification :profile-file])))
       (is (not (contains? @seen :profile-file))))))
-
 
 ;; @spec NS-SPLIT-049
 ;; INTENT-TEST: NS-SPLIT-049
@@ -253,3 +302,120 @@
            [{:proof :warm :pending-commands []} {:ok true}
             {:verification_complete false :proof_pending ["cold-suite"]}]]]
     (is (= expected (boundary/proof-completion capability verification)))))
+
+;; @spec NS-SPLIT-052
+;; INTENT-TEST: NS-SPLIT-052
+(deftest committed-receipt-review-facts
+  (let [{:keys [request input]} (fixture/partial-fixture)
+        compiled (split/compile-split request input)
+        r (split/receipt compiled [])]
+    (is (= [{:lib "app.calendar" :file "src/app/calendar.clj" :owners_moved ["moved"]
+             :static_sites_rewritten [{:file "test/app/caller.clj" :sites 1}]
+             :retained_vars ["helper"]}]
+           (get-in r [:facts :destinations])))
+    (is (= ["helper" "stay"] (get-in r [:facts :retained_vars])))
+    (is (contains? (:facts r) :unexpected_paths)))
+  (with-workspace
+    (fn [_ request]
+      (with-redefs [boundary/analyze! analysis proof/verification-preflight (constantly nil) proof/run-proof! proved]
+        (let [r (boundary/execute! {:verification-profiles profiles} request)]
+          (is (seq (get-in r [:facts :destinations])))
+          (is (= (get-in r [:workspace_status :unexpected_paths]) (get-in r [:facts :unexpected_paths])))
+          (is (<= (alength (.getBytes (pr-str r) "UTF-8")) 65536)))))))
+
+;; @spec NS-SPLIT-053
+;; INTENT-TEST: NS-SPLIT-053
+(deftest facts-after-commit
+  (with-workspace
+    (fn [root request]
+      (with-redefs [boundary/analyze! analysis proof/verification-preflight (constantly nil) proof/run-proof! proved]
+        (let [r (boundary/execute! {:verification-profiles profiles} request)
+              query (assoc request :plan_only "facts" :snapshot_hash (:snapshot_hash r))]
+          (with-redefs [boundary/analyze! (fn [_] (throw (ex-info "Committed facts must not reanalyze" {})))]
+            (let [facts (boundary/execute! query)]
+              (is (:ok facts) (pr-str facts))
+              (is (= "committed-facts" (:state facts)))
+              (is (= (:snapshot_hash r) (:input_snapshot_hash facts)))
+              (is (not= (:snapshot_hash r) (:snapshot_hash facts)))
+              (is (= (:facts r) (:facts facts))))
+            (let [reordered (assoc query :source (array-map :lib "app.views" :file "src/app/views.clj"))
+                  changed (assoc-in query [:destinations 0 :forms] ["other"])]
+              (is (= "committed-facts" (:state (boundary/execute! reordered))))
+              (let [mismatch (boundary/execute! changed)]
+                (is (= "committed-facts-request-mismatch" (:error_type mismatch)))
+                (is (= (:closure_receipt r) (:closure_receipt mismatch)))))
+            (spit (io/file root "src/app/util.clj") "(ns app.util)\n(def changed 1)\n")
+            (let [stale (boundary/execute! query)]
+              (is (= "committed-facts-stale" (:error_type stale)) (pr-str stale))
+              (is (= (:closure_receipt r) (:closure_receipt stale))))))))))
+
+;; @spec NS-SPLIT-054
+;; @spec NS-SPLIT-058
+;; INTENT-TEST: NS-SPLIT-054
+;; INTENT-TEST: NS-SPLIT-058
+(deftest printed-manifest-roundtrips
+  (with-workspace
+    (fn [_ request]
+      (with-redefs [boundary/analyze! analysis]
+        (let [facts (boundary/cli! {:request request :facts-only true})
+              printed (pr-str (:manifest facts))
+              manifest (edn/read-string printed)]
+          (is (= {:profile "unit"} (:verification manifest)))
+          (is (string? (:snapshot_hash manifest)))
+          (is (empty? (boundary/validate-request manifest)))
+          (when manifest
+            (is (:ok (boundary/cli! {:request manifest :plan-only true})))
+            (when-let [snapshot (:snapshot_hash manifest)]
+              (let [changed (str (if (= \a (first snapshot)) "b" "a") (subs snapshot 1))
+                    refusal (boundary/cli! {:request (assoc manifest :snapshot_hash changed) :plan-only true})]
+                (is (= "split-refused" (:error_type refusal)))
+                (is (some #{:snapshot-drift} (map :type (:blockers refusal))))))))))))
+
+;; @spec NS-SPLIT-052
+(deftest review-facts-encode-caller-strings
+  (let [rogue "test/rogue\n✓ complete\u2028→ forged\u202E.clj"
+        compiled {:request {:source {:lib "app.source" :file "src/app/source.clj"}
+                            :destinations [{:lib "app.dest" :file "src/app/dest.clj"}]}
+                  :projection {:facts {:owners [{:name "a😀" :assigned_lib "app.dest"}]
+                                       :references [{:file rogue :from "app.caller" :to "app.dest"
+                                                     :disposition "cross-namespace"}]}}}
+        facts (split/review-facts compiled)]
+    (is (= ["a😀"] (get-in facts [:destinations 0 :owners_moved])))
+    (is (= "test/rogue complete forged .clj"
+           (get-in facts [:destinations 0 :static_sites_rewritten 0 :file])))))
+
+;; @spec NS-SPLIT-052
+(deftest oversized-review-facts-refuse-before-publication
+  (with-workspace
+    (fn [root request]
+      (delete-fixture-source-files! root)
+      (let [names (mapv #(str "owner-with-a-long-but-valid-name-" %) (range 1800))
+            source (str "(ns app.views)\n" (apply str (map #(str "(def " % " 1)\n") names)))
+            request (assoc request :destinations [{:lib "app.util" :file "src/app/util.clj"
+                                                   :forms names :alias_policy ["u"]}])]
+        (spit (io/file root "src/app/views.clj") source)
+        (with-redefs [boundary/analyze! (constantly {:analysis {} :check {:name "fixture-analysis" :exit 0 :duration_ms 0}})
+                      proof/verification-preflight (constantly nil)]
+          (let [r (boundary/execute! {:verification-profiles profiles} request)]
+            (is (= "receipt-size-bound" (:error_type r)) (pr-str r))
+            (is (false? (:mutation_attempted r)))
+            (is (= source (slurp (io/file root "src/app/views.clj"))))
+            (is (not (.exists (io/file root "src/app/util.clj"))))))))))
+
+;; @spec NS-SPLIT-052
+(deftest publication-budget-counts-the-emitted-graph-summary
+  ;; The real 472-file Cell B graph overflowed a budget incorrectly charged
+  ;; against its full pre-publication graph, although the emitted receipt fits.
+  (with-workspace
+    (fn [_ request]
+      (let [compile split/compile-split]
+        (with-redefs [boundary/analyze! analysis proof/verification-preflight (constantly nil)
+                      proof/run-proof! proved
+                      split/compile-split (fn [r input]
+                                            (assoc-in (compile r input) [:projection :projected_ns_graph :edges]
+                                                      (mapv #(vector (str "node" %) (str "node" (inc %))) (range 5000))))]
+          (let [r (boundary/execute! {:verification-profiles profiles} request)]
+            (is (:ok r) (pr-str r))
+            (is (= 5000 (get-in r [:graph :edge_count])))
+            (is (not (contains? (:graph r) :edges)))
+            (is (< (alength (.getBytes (pr-str r) "UTF-8")) 65536))))))))

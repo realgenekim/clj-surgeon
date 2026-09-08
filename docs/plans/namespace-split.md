@@ -200,3 +200,40 @@ existing receipt-artifacts battery namespace. Pure/path witnesses remain fast;
 the corpus counts both without loss. Direct warm run-tests does not enforce the
 cold runner's process-spawn isolation, so the cold failure and repaired lane
 allocation are retained in the report.
+
+## Rows sublime batch 3: independently closed proof and finished-work facts
+
+Gene authorizes this complete red-first branch build with linked-intent-testing.
+NS-SPLIT-050..054 preserve the original pending receipt forever. The verb starts
+a detached Babashka worker with fixed argv and file redirects, anchored to its own
+classpath, then seals a job after recording the worker pid in the original receipt.
+This uses the existing confined capture and synchronous argv runner, avoiding a
+second snapshot or subprocess implementation. A separate process survives caller
+exit; no background JVM thread or shared service owns completion.
+
+The worker runs pending commands in order, stops on failure, hashes the committed
+source inventory before and after each command, and atomically writes id-closure.edn.
+It records command argv, exit, elapsed wall, real timestamps, candidate hashes and
+the original receipt hash. Drift refuses closure as stale. No late rollback touches
+caller edits. CLI :op :proof-status :receipt ORIGINAL reads both receipts and
+current inventory: pending, complete, failed (named command), or stale.
+
+Successful full and retained-source receipts include destination owners and counts
+of rewritten static sites per caller, retained vars and unexpected workspace paths.
+Review facts are encoded at the receipt boundary, with a finite receipt ceiling;
+overflow refuses before publication instead of silently dropping owners. Full raw
+facts stay in details. A committed-request index resolves facts-only against that
+immutable snapshot; drift names the closure path in a typed refusal. A printed
+manifest includes verification and roundtrips through plan-only on the input tree.
+
+Witness matrix: all-zero / exit-one / launch failure / timeout / missing closure /
+new or edited caller / receipt tamper / immutable original; full and partial facts;
+forged caller newlines and bidi; ceiling overflow; exact printed manifest replay.
+The owned image runs affected tests and the papercut oracle after each step; one
+final cold make test, serialized lint, intent audit, and one split/base2 background
+timing run finish the build. Single-run wall is mechanism evidence, not superiority.
+
+Sol's landing fence adds NS-SPLIT-055..058: closure pid-reuse/replay identity,
+mandatory `/var/tmp` worker temp admission, independent EDN/escaped-JSON receipt
+bounds, and snapshot-bound printed-manifest tamper refusal. Each failed probe earns
+a focused witness before its repair; no full-suite rerun is part of this fence.

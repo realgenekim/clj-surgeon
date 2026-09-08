@@ -230,4 +230,64 @@
  :boundaries ["empty vector; absent commands; malformed commands; no mutation"]
  :tests [:empty-profile-refuses-with-a-specific-reason]
  :rationale "Row 5 D1 reported configured but not admitted without explaining the empty command list."}
+{:id :NS-SPLIT-050 :status :active
+ :ears "When warm proof selects a background gate, the verb shall return an immutable pending receipt bound to a detached worker pid."
+ :misreadings ["Run cold commands before returning; update the original receipt to complete."]
+ :boundaries ["success; failure; stale inventory; immutable evidence; CLI and retained source"]
+ :tests [:background-gate-closes-immutable-receipt]
+ :rationale "Gene rows sublime batch 3: warm plus manual gate saves no time; row-5 facts are unavailable after commit."}
+{:id :NS-SPLIT-051 :status :active
+ :ears "When background proof closes, status shall report complete only for all successful commands over the unchanged committed snapshot."
+ :misreadings ["Ignore one failed command; accept a new caller or stale closure; rerun the mutation."]
+ :boundaries ["success; failure; stale inventory; immutable evidence; CLI and retained source"]
+ :tests [:background-status-state-space]
+ :rationale "Gene rows sublime batch 3: warm plus manual gate saves no time; row-5 facts are unavailable after commit."}
+{:id :NS-SPLIT-052 :status :active
+ :ears "When a split commits, its receipt shall contain bounded encoded review facts for every destination and retained owner."
+ :misreadings ["Require a facts-only followup; embed unescaped caller text; silently omit destinations."]
+ :boundaries ["success; failure; stale inventory; immutable evidence; CLI and retained source"]
+ :tests [:committed-receipt-review-facts]
+ :rationale "Gene rows sublime batch 3: warm plus manual gate saves no time; row-5 facts are unavailable after commit."}
+{:id :NS-SPLIT-053 :status :active
+ :ears "When facts-only targets a committed request, it shall answer from the committed snapshot or name its closure receipt in a typed refusal."
+ :misreadings ["Recompile the deleted source; return generic snapshot mismatch."]
+ :boundaries ["success; failure; stale inventory; immutable evidence; CLI and retained source"]
+ :tests [:facts-after-commit]
+ :rationale "Gene rows sublime batch 3: warm plus manual gate saves no time; row-5 facts are unavailable after commit."}
+{:id :NS-SPLIT-054 :status :active
+ :ears "When facts print a manifest, those bytes shall be a valid plan-only request including verification."
+ :misreadings ["Print an illustrative map that cannot be submitted."]
+ :boundaries ["success; failure; stale inventory; immutable evidence; CLI and retained source"]
+ :tests [:printed-manifest-roundtrips]
+ :rationale "Gene rows sublime batch 3: warm plus manual gate saves no time; row-5 facts are unavailable after commit."}
+{:id :NS-SPLIT-055 :status :active
+ :ears "When proof status reads a closure, it shall accept it only when the original receipt hash, worker pid, worker start identity and launched worker argv all match."
+ :misreadings ["A live process with a reused pid is the launched worker." "Receipt id and candidate hash alone authenticate a replayed closure."]
+ :boundaries ["second worker; pid reuse; changed original; missing or changed argv; immutable closure"]
+ :tests [:background-status-state-space :background-gate-closes-immutable-receipt]
+ :rationale "Sol landing fence found that a closure did not bind the launched argv or process-start identity."}
+{:id :NS-SPLIT-056 :status :active
+ :ears "When a background worker is admitted, its java.io.tmpdir shall be an existing absolute descendant of /var/tmp."
+ :misreadings ["Inheriting /tmp is acceptable." "A relative path below a directory named var/tmp is confined."]
+ :boundaries ["/tmp; /var/tmp itself; relative; missing; symlink; admitted seat directory"]
+ :tests [:background-temp-root-refuses-tmpfs-and-relative-paths :background-gate-closes-immutable-receipt]
+ :rationale "The first detached smoke used /tmp; Sol requires refusal before another publication can do so."}
+{:id :NS-SPLIT-057 :status :active
+ :ears "When a receipt is bounded, both its UTF-8 EDN bytes and escaped-JSON transport bytes shall fit the ceiling."
+ :misreadings ["The EDN representation bounds escaped JSON." "Hostile newlines or bidi controls may pass through receipt facts."]
+ :boundaries ["EDN smaller than JSON; JSON smaller than EDN; U+2028; U+202E; newline; astral Unicode"]
+ :tests [:receipt-ceiling-bounds-edn-and-escaped-json-independently :review-facts-encode-caller-strings]
+ :rationale "Sol landing fence requires the 65,536-byte promise at both publication representations."}
+{:id :NS-SPLIT-058 :status :active
+ :ears "When facts print a replay manifest, it shall bind the captured snapshot so a changed hash returns typed snapshot drift."
+ :misreadings ["Syntactic validity makes a modified replay the reviewed plan." "Verification alone binds the input bytes."]
+ :boundaries ["byte-identical replay; one-byte snapshot hash change; deleted source; plan-only typed refusal"]
+ :tests [:printed-manifest-roundtrips]
+ :rationale "Sol landing fence found the printed manifest omitted the computed snapshot hash."}
+{:id :NS-SPLIT-059 :status :active
+ :ears "When a background proof refuses an unsafe java.io.tmpdir, the public receipt shall carry an executable next_call naming the /var/tmp repair before any mutation."
+ :misreadings ["A typed error_type is actionable on its own." "The caller can read the required temp root out of the gate's exception message." "The public boundary may drop a refusing boundary's next_call because the top-level default is nil."]
+ :boundaries ["gate ex-data; public namespace_split receipt; mutation_attempted=false; CLI help naming TMPDIR= and -Djava.io.tmpdir="]
+ :tests [:background-temp-root-refuses-tmpfs-and-relative-paths :unsafe-background-temp-root-refusal-is-actionable :background-proof-help-names-temp-root-requirement]
+ :rationale "Sol delta fence for 0956951b ruling (a): /var/tmp stays this repository's convention, so the refusal has to tell the caller how to satisfy it."}
 ]}
