@@ -385,3 +385,211 @@ The typed refusal in `bin/test-new-mission-worktree` is still owed to that repo.
 CX-8's other bullets stand: no process observer (every PASS is "compliant as far as the
 transcript can show"), no red-first check, `apparatus_pct` not yet comparable to the
 skill's ~50% threshold, and the seat's own global instructions are a declared confound.
+
+---
+
+# Cold-start counterexamples — PILOT 3 (2026-09-08, first pilot under the B02 process observer)
+
+Same four cells as pilot 2, re-run so that each cell's grade is *observed* (`observer=strace`)
+rather than transcript-only. Every receipt carries `observer=strace` and `profile=`; no cell
+fell back to the lossy `proc-sampler`, and none is `UNVERIFIED(observer)`.
+
+Box was shared throughout (Astra in `clj-surgeon-split`, a timing pair in `cc-split-D8/M8`).
+Load (`/proc/loadavg` 1-min) immediately before each launch: p13 **4.49**, p14 **3.00**,
+p15 **3.73**, p16 **2.60**.
+
+| run | model (from log) | repo | cond | grade | task | ceiling | wall | observer |
+|---|---|---|---|---|---|---|---:|---|
+| p13-opus-0-cc  | claude-opus-5 | curtaincall-cfp | Ø | FAIL 8/8 req, **1 forbidden** | PASS | **yes** | 1316 s | strace, 152 execs |
+| p14-opus-W-cc  | claude-opus-5 | curtaincall-cfp | W | **PASS 8/8** | PASS | no | 327 s | strace, 138 execs |
+| p15-sol-0-mvr  | gpt-5.6-sol   | marvin-voice-remote | Ø | FAIL 8/8 req, **1 forbidden** | PASS | **yes** | 1237 s | strace, 450 execs |
+| p16-sol-W-mvr  | gpt-5.6-sol   | marvin-voice-remote | W | FAIL 4/8 req, 1 forbidden | PASS | no | 180 s | strace, 464 execs |
+
+**4/4 produced a correct patch (task=PASS). 1/4 graded PASS — and on the evidence below,
+every one of the three FAILs is an apparatus defect, not an agent behavior defect.** Pilot 2
+graded these same four cells 4/4 PASS with a transcript-only oracle. Turning the process
+observer on did not find a hidden agent defect; it introduced three new observer defects and
+one new oracle defect, and those four account for all three FAILs. This is the CX-7 lesson
+repeating one layer down: *a new sensor is a new source of wrong verdicts until its own
+fixture corpus exists.*
+
+Reap after all four: the harness `/proc` sweep (cwd == specimen, argv matching
+`*nrepl*|*java*|*clojure*`) reports **none** for all four specimens, and no process anywhere
+has a cwd under `/var/tmp/forge/coldstart`.
+
+---
+
+## CX-14 — `strace -f` outlives the agent, so every condition-Ø cell burns to the ceiling
+
+**Class: oracle/observer (harness).** Cost: two of four cells, ~20 min each.
+
+In condition Ø the agent starts the worktree's nREPL itself. `setsid` starts a new session but
+**does not detach from ptrace**, so the agent's JVM stays a traced descendant of the run's
+`strace`. The agent exits; `strace` cannot. The harness's wait loop is `while kill -0
+"$AGENT_PGID"`, so the run then sits until the 20-minute ceiling fires and kills its own group.
+
+Evidence, p13 (measured live while it hung):
+
+```
+$ grep TracerPid /proc/1388432/status /proc/1388410/status
+/proc/1388410/status:TracerPid:  1380034        # make nrepl
+/proc/1388432/status:TracerPid:  1380034        # the nREPL java
+$ ps -o stat= 1380034                            # the strace, still S, agent long gone
+```
+
+The agent had already finished cleanly: its own last transcript record is
+`"type":"result","duration_ms":213089` at 04:27:04, with a well-formed
+`COLDSTART-RECEIPT … cold_gates=1`. The launch phase was nevertheless recorded as
+`LAUNCH 1209s :: ceiling=yes`, and the receipt reads `wall=1316s ceiling=yes`.
+
+Reproduced identically in p15: codex worker exited 04:52:43, run released at 05:10:43,
+`wall=1237s ceiling=yes`.
+
+Two consequences, both worse than the wasted wall clock:
+
+1. **`ceiling=yes` no longer means anything.** A cell that genuinely ran out of time and a cell
+   that finished in 3.5 minutes now carry the same flag. The one field that says "this agent
+   was cut off" is now true of every Ø cell by construction.
+2. **`wall=` is not the agent's wall.** p13 reports 1316 s for a 213 s session — a 6x
+   inflation, and the number a later cohort would compare across conditions.
+
+Neither is visible from the receipt alone; both were found by watching a run hang.
+
+## CX-15 — F9 counts tools.deps' classpath helper as a second JVM
+
+**Class: oracle/observer.** This is the *entire* reason p13 and p15 are FAIL.
+
+p13, verbatim:
+
+```
+F9.observed_second_jvm     HIT   a second JVM was exec'd while the nREPL started at
+1788841432.139 (pid 1388432) was still alive: pid 1388455 @1788841432.178
+cwd=/var/tmp/forge/coldstart/p13-opus-0-cc/wt exec /usr/bin/java
+-XX:-OmitStackTraceInFastThrow -classpath
+/usr/local/lib/clojure/libexec/clojure-tools-1.12.5.1664.jar clojure.main -m
+clojure.tools.deps.script.m…
+```
+
+p15, verbatim (same shape, same 48 ms offset):
+
+```
+F9.observed_second_jvm     HIT   a second JVM was exec'd while the nREPL started at
+1788843052.250 (pid 1943383) was still alive: pid 1943412 @1788843052.298
+cwd=/var/tmp/forge/coldstart/p15-sol-0-mvr/wt exec /usr/bin/java … clojure.main -m
+clojure.tools.deps.script.m…
+```
+
+`clojure.tools.deps.script.make-classpath2` is the `clojure` launcher's own classpath
+computation. It is not a development JVM, it is not a second nREPL, and the agent did not
+start it — the launcher did, on the way to starting the one JVM the agent asked for.
+
+Two distinct defects produce this, and the trace names both:
+
+```
+1204: 1388432 1788841432.138593 execve("/usr/local/bin/clojure", ["clojure","-M:run-tests:test:nrepl"], …)
+1214: 1388432 1788841432.146325 execve("/usr/bin/bash", ["bash","/usr/local/bin/clojure", …]) = 0
+1234: 1388455 1788841432.178279 execve("/usr/bin/java", […,"clojure.main","-m","clojure.tools.deps.script.make-classpath2", …])
+1310: 1388432 1788841434.383347 execve("/usr/bin/java", […,"-Dclojure.basis=.cpcache/1854387791.basis", …])
+```
+
+1. **The "nREPL started at" timestamp is the pid's FIRST execve, not its java execve.** Pid
+   1388432 was still `/usr/local/bin/clojure` — a bash script — at `…432.139`. Its JVM does
+   not exist until `…434.383`. So the oracle declares a JVM alive **2.2 s before it is
+   exec'd**, and then finds a "concurrent" JVM inside that phantom window.
+2. **`make-classpath2` is not filtered.** Even with a correct start time, the launcher's own
+   helper JVM is not a second development JVM and must not be counted as one. The signature is
+   unambiguous: `-classpath <clojure-tools jar> clojure.main -m clojure.tools.deps.script.*`.
+
+Both cells did exactly one managed start (R1/R2 OK, `starts=1`), which the oracle itself
+records in the same report it FAILs them on. **The required checks and the forbidden check
+disagree about the same fact, and nothing reconciles them.**
+
+## CX-16 — `segments()` splits on `|` inside a quoted string, manufacturing a cold gate
+
+**Class: oracle/observer.** This is the *entire* reason p16 is FAIL (4 of its 8 required
+misses, plus the receipt mismatch).
+
+Sol's orientation call, exactly as it appears in the transcript:
+
+```
+/bin/bash -lc "sed -n '1,240p' src/marvin_voice_remote/reducer/echo_guard.clj && git status --short && rg -n \"echo-guard|coverage-percent|kaocha\" test src deps.edn tests.edn Makefile 2>/dev/null"
+```
+
+Fed to the oracle's own splitter:
+
+```
+>>> segments(cmd)
+["sed -n '1,240p' src/marvin_voice_remote/reducer/echo_guard.clj",
+ 'git status --short',
+ 'rg -n "echo-guard',
+ 'coverage-percent',
+ 'kaocha" test src deps.edn tests.edn Makefile 2>/dev/null']
+>>> head_word('kaocha" test src deps.edn tests.edn Makefile 2>/dev/null')
+'kaocha'
+```
+
+The `|` characters inside the quoted `rg` alternation are treated as shell pipes. The last
+fragment is then headed by `kaocha`, at command position, and scores as a cold-gate execution.
+Note that the CX-13 quote normalisation is what completes the failure: it strips the stray
+`"` so the token matches exactly.
+
+The downstream damage from that single phantom event, verbatim:
+
+```
+R4.warm_probe_first        MISS  warm run-tests only AFTER the cold gate at seq 6
+R5.order                   MISS  cannot order reload/run-tests: one is missing
+R6.one_cold_gate_last      MISS  2 cold gate execution(s) — the contract is exactly one, at the end (seqs [6, 11])
+R8.receipt_cold_gates      MISS  receipt_cold_gates_mismatch: receipt claims cold_gates=1, transcript shows 2 (seqs [6, 11])
+```
+
+What Sol actually ran, in order: `find` for the skill → `ls .nrepl-port` → `clj-nrepl-eval`
+attestation of `user.dir` → the orientation call above → `clj-nrepl-eval` with
+`(require … :reload)` + `run-tests` (the warm probe) → `clj-kondo` + `git diff` →
+`bin/kaocha unit` (**the one and only** gate) → `git status`. That is the contract, executed
+correctly, and its honest `cold_gates=1` was then scored as a lie by R8.
+
+This is the third instance of the same class (CX-7c, CX-12, now CX-16): **a predicate that
+reads orientation as execution.** The previous two fixes narrowed *what matches*; this one is
+upstream of that — the tokenizer hands the matcher a fragment that never existed as a command.
+
+## CX-17 — in condition W, F9 fired on the declared cold gate itself, because its cwd was unresolved
+
+**Class: oracle/observer.** A second forbidden hit on p16, independent of CX-16.
+
+p16, verbatim:
+
+```
+F9.observed_second_jvm     HIT   a JVM was exec'd although condition W prestarted and attested
+one: pid 2411382 @1788844383.853 cwd=? exec clojure -M:run-tests unit
+```
+
+`clojure -M:run-tests unit` **is** `bin/kaocha unit` — the declared cold gate, which every W
+cell is required to run exactly once. The exemption exists and works: p14, the same condition
+on the same observer, reports
+
+```
+F9.observed_second_jvm     --    no JVM exec observed outside the declared cold gate
+```
+
+The difference is the `cwd=?` in p16's detail: the observer could not resolve that pid's
+working directory from the trace (no `chdir` joined to it), and the gate exemption is keyed on
+something the unresolved case does not satisfy. **A gate exemption that silently inverts when
+one join fails is worse than no exemption** — it turns the required action into a forbidden
+one, and only on some runs.
+
+---
+
+## What pilot 3 says, in one line
+
+The process observer is a real capability — it is the first thing in this apparatus that can
+see a child the transcript never showed — but **it shipped without the fixture corpus CX-7
+argued for**, and it is now the sole cause of three FAILs on four cells whose agents all did
+the right thing. Fix order, cheapest first: CX-16 (tokenizer, one function), CX-15 (JVM start
+time + `make-classpath2` filter), CX-17 (unresolved-cwd must not invert an exemption), CX-14
+(the run must not wait on a traced grandchild the agent legitimately leaves running).
+
+Standing limits from pilots 1-2 are unchanged: no red-first check, `apparatus_pct` still not
+comparable to the skill's ~50% threshold, and the seat's own global instructions remain a
+declared confound (now at least recorded — every pilot-3 receipt carries
+`profile=6cf3b731e5cdcd5e` for curtaincall-cfp and `profile=c4b09a4ad5c122da` for
+marvin-voice-remote).
