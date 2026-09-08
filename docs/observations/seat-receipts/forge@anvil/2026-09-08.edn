@@ -2,7 +2,7 @@
 ;; Astra's rule: a field whose source could not decide is `unknown`, never a fabricated zero.
 ;;
 ;; SCHEMA DIVERGENCE, DECLARED (house rules: doctrine cannot silently disagree with the prompt).
-;; The skill tighten-the-loop ships a DRAFT field contract 
+;; The skill tighten-the-loop ships a DRAFT field contract "tighten-seat-receipt/v1"
 ;; (~/.claude/skills/tighten-the-loop/SEAT-RECEIPT.md). This file implements a strict SUBSET of
 ;; it — the fields the seat can actually source today — and says so rather than presenting a
 ;; subset as the contract. Known gaps, each awaiting a published seat binding, NOT a fabrication:
@@ -19,9 +19,9 @@
  :contract-ref "~/.claude/skills/tighten-the-loop/SEAT-RECEIPT.md (draft v1)"
  :recorder "self-built by the subject seat — v1 requires an independent recorder; none is named yet"
  :seat "forge@anvil"
- :utc "2026-09-08T13:18:44Z"
+ :utc "2026-09-08T13:26:15Z"
  :date "2026-09-08"
- :generator {:program "/home/forge/bin/seat-receipt" :sha256 "17e62f91abcf38a8"}
+ :generator {:program "/home/forge/bin/seat-receipt" :sha256 "3689c69d9fa59eda"}
  :packages {:routing-block-hash "67e457240c69a1c4"
             :routing-installed-matches-source true
             :doctrine-commit "3c2eb6a9"
@@ -33,14 +33,14 @@
             :clj-kondo-sha256 "a8f59b7239c17422"
             :clj-nrepl-eval "fbee42cffcfdcc12@/home/forge/.local/bin/clj-nrepl-eval"}
  :routing-plate-source {:worktree "/home/forge/src/clj-surgeon-land" :sha "96819291" :matches-trunk true}
- :trunk-sha "1293d91b"
- :corpora {:coldstart {:rows 52 :mismatches "0" :wall-s 157
+ :trunk-sha "96e9436c"
+ :corpora {:coldstart {:rows 52 :mismatches "0" :wall-s 154
                        :runner "/var/tmp/forge/coldstart/fixtures/run-fixtures.sh"}
            :round     {:rows 28 :mismatches "0" :wall-s 1
                        :runner "/var/tmp/forge/round/fixtures/run-fixtures.sh"}}
  :headroom {:disk-remaining-g 28 :disk-floor-g 15 :inodes-remaining-pct 83}
- :load 7.92
- :last-pulse-age-min 9
+ :load 5.43
+ :last-pulse-age-min 17
  :last-landing {:sha "96819291" :time "2026-09-08T11:23:48Z"}
  :open-friction-items 27
  :on-loop true
