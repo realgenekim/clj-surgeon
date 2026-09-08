@@ -2211,10 +2211,12 @@ records.
 make test
 ```
 
-The complete gate keeps two runtimes explicit: Babashka runs the fast pure
-structural/core suite; the JVM MCP suite runs the real formatter, nREPL,
-HTTP, process, and hot-reload boundaries. `make test` runs both plus smoke and
-benchmark self-tests. JVM-only MCP namespaces are not duplicated inside the
+The landing gate keeps two runtimes explicit: Babashka runs the structural/core
+suite; the JVM MCP suite runs the fast and integration namespaces. `make test`
+also runs the complete alias-migration and receipt-artifact boundary batteries,
+the transaction recovery battery, battery freshness, operation oracles and
+repository hygiene. `make test-full` adds the remaining cold batteries, smoke
+and benchmark self-tests. JVM-only MCP namespaces are not duplicated inside the
 Babashka runner, so adding a real JVM boundary cannot silently break the fast
 suite or remove the boundary proof.
 

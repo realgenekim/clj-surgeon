@@ -1,4 +1,5 @@
-(ns ^{:lane :battery} clj-surgeon.mcp-alias-migration-test
+(ns clj-surgeon.mcp-alias-migration-test
+  {:lane :battery}
   (:require
    [cheshire.core :as json]
    [clj-surgeon.alias-migration :as planner]
@@ -10,6 +11,7 @@
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-server]
    [clj-surgeon.mcp-tool :as mcp-tool]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.java.shell :as shell]
@@ -61,9 +63,11 @@
 
 (defn- delete-tree!
   [file]
-  (when (.exists (io/file file))
-    (doseq [child (reverse (file-seq (io/file file)))]
-      (Files/deleteIfExists (.toPath child)))))
+  (let [artifacts (io/file (artifacts/directory "alias-migration" (str file)))]
+    (doseq [root [artifacts (io/file file)]]
+      (when (.exists root)
+        (doseq [child (reverse (file-seq root))]
+          (Files/deleteIfExists (.toPath child)))))))
 
 (defn- live-qualifiers
   "Namespace qualifiers of every token that is live code, excluding #_ discards."
@@ -126,11 +130,26 @@
                                       config-overrides)
                                (request workspace overrides)))))
 
+(defn- commit-boundary-execute!
+  "Exercise the retained commit! path/race guards with an explicit directory.
+  Sol r10: the public entrance overrides receipt-dir with external storage.
+  These probes inject at commit! so they still test the lower boundary's
+  defenses; public artifact-policy witnesses use alias-migration/execute!."
+  [config params]
+  (let [commit alias-migration/commit!]
+    (with-redefs [alias-migration/commit!
+                  (fn [effective & args]
+                    (apply commit (assoc effective :receipt-dir (:receipt-dir config)) args))]
+      (alias-migration/execute! config params))))
+
+(defn- detail-directory [workspace]
+  (io/file (artifacts/directory "alias-migration" (str workspace))))
+
 (defn- owned-detail!
   "One detail document written by the production writer, stamped `stamp`."
   [workspace stamp]
-  (let [relative (alias-migration/write-details! (.toPath workspace) {:files []})
-        file (io/file workspace relative)]
+  (let [path (alias-migration/write-details! (.toPath workspace) {:files []})
+        file (io/file path)]
     (.setLastModified file stamp)
     file))
 
@@ -151,7 +170,7 @@
 ;; @spec MCP-OP-ALIAS-016
 ;; @spec MCP-OP-ALIAS-019
 ;; @spec MCP-OP-ALIAS-020
-(deftest one-call-migrates-the-whole-fan-out-and-returns-one-constant-receipt
+(deftest one-call-migrates-the-whole-fan-out-and-returns-one-summary-receipt
   (let [workspace (workspace!)]
     (try
       (let [captured (atom nil)
@@ -163,7 +182,7 @@
                   (reset! captured {:content content :error? error?
                                     :result structured})))
             {:keys [content error? result]} @captured]
-        (testing "the receipt is one committed O(1) object"
+        (testing "the receipt is one committed summary object"
           (is (false? error?) (pr-str result))
           (is (:ok result) (pr-str result))
           (is (= "alias_migration" (:operation result)))
@@ -180,20 +199,20 @@
           (is (= {:status "not-requested"} (:kondo_delta result))
               "verification is opt-in, exactly as it is for the other write tools")
           (is (= {:status "not-requested"} (:focused_test result)))
-;; @spec MCP-OP-ALIAS-034
+          ;; @spec MCP-OP-ALIAS-034
           (is (= 0 (:string_mentions result))
               "the synthetic corpus names the old lib in no string literal")
           (is (string? (:details_path result)))
           (is (number? (:elapsed_ms result))))
 
-        (testing "the receipt is constant in N: it carries no per-file list"
+        (testing "the non-Git receipt contains no per-file edit payload"
           (let [encoded (json/generate-string result)]
             (doseq [file (get-in corpus [:manifest :targets])]
               (is (not (str/includes? encoded file))
                   (str "the receipt names " file)))
             (is (not (str/includes? encoded "\"edits\":[")))
-            (is (< (count encoded) 1200)
-                "the whole receipt stays well under a kilobyte at N=12")))
+            (is (< (count (.getBytes encoded "UTF-8")) 4096)
+                "the N=12 summary fits the documented 4 KB budget")))
 
         (testing "the visible summary is also constant in N"
           (is (= 1 (count content)))
@@ -205,7 +224,7 @@
 
         (testing "per-file detail lives behind details_path, not in the receipt"
           (let [details (edn/read-string
-                          (slurp (io/file workspace (:details_path result))))]
+                          (slurp (io/file (:details_path result))))]
             (is (= 12 (count (:files details))))
             (is (= #{:file :alias :collided :sites :refer-sites :require-mode}
                    (set (keys (first (:files details))))))))
@@ -3414,7 +3433,7 @@
   (let [workspace (workspace!)]
     (try
       (let [result (execute-lib! workspace)]
-        (testing "one O(1) receipt covers fourteen namespaces and the rename"
+        (testing "one summary receipt covers fourteen namespaces and the rename"
           (is (:ok result) (pr-str result))
           (is (= 14 (:files result)))
           (is (= 43 (:sites result)))
@@ -3424,20 +3443,18 @@
           (is (= {:from "acid.fanout.store"
                   :to "acid.fanout.event-store"
                   :file "src/acid/fanout/store.clj"
-                  :new_file "src/acid/fanout/event_store.clj"
-                  :retired_to (str ".clj-surgeon/alias-migration/retired/"
-                                   "src/acid/fanout/store.clj")}
-                 (:lib_renamed result)))
-          (testing "retired_to names a project-relative path, not a server path"
-            (is (not (str/starts-with? (:retired_to (:lib_renamed result)) "/")))
-            (is (.exists (io/file workspace
-                                  (:retired_to (:lib_renamed result)))))))
+                  :new_file "src/acid/fanout/event_store.clj"}
+                 (dissoc (:lib_renamed result) :retired_to)))
+          (testing "retired_to names an absolute external artifact"
+            (is (str/starts-with? (:retired_to (:lib_renamed result))
+                  "/var/tmp/forge/alias-migration-receipts/"))
+            (is (.exists (io/file (:retired_to (:lib_renamed result)))))))
 
-        (testing "the receipt is still constant in N"
+        (testing "the non-Git receipt still excludes per-file edit payloads"
           (let [encoded (json/generate-string result)]
             (doseq [file (:targets lib-manifest)]
               (is (not (str/includes? encoded file)) (str "receipt names " file)))
-            (is (< (count encoded) 1500))))
+            (is (< (count (.getBytes encoded "UTF-8")) 4096))))
 
         (testing "the defining namespace moved and was renamed"
           (is (not (.exists (io/file workspace (:defining-file lib-manifest)))))
@@ -3448,8 +3465,7 @@
 
         (testing "the superseded file is retired, not destroyed"
           (is (= (get (:pre corpus) (:defining-file lib-manifest))
-                 (slurp (io/file workspace
-                                 (:retired_to (:lib_renamed result)))))))
+                 (slurp (io/file (:retired_to (:lib_renamed result)))))))
 
         (testing "every var of the old lib moved, under every spelling"
           (is (str/includes? (slurp (io/file workspace "src/acid/fanout/t03.clj"))
@@ -3637,7 +3653,7 @@
 (deftest per-run-detail-files-are-retained-to-a-documented-bound
   (let [workspace (workspace!)
         receipt-dir (io/file workspace "receipts")
-        details (io/file workspace ".clj-surgeon" "alias-migration")]
+        details (detail-directory workspace)]
     (.mkdirs receipt-dir)
     (.mkdirs details)
     (try
@@ -3654,7 +3670,8 @@
             manifest-name @(ns-resolve 'clj-surgeon.mcp-alias-migration
                                        'detail-manifest-name)
             remaining (->> (.listFiles details)
-                           (filter #(str/ends-with? (.getName %) ".edn"))
+                           (filter #(and (str/starts-with? (.getName %) "detail-")
+                                         (str/ends-with? (.getName %) ".edn")))
                            (remove #(= manifest-name (.getName %)))
                            (mapv #(.getName %)))]
         (is (:ok result) (pr-str result))
@@ -3664,8 +3681,7 @@
           (is (contains? (set remaining)
                          (.getName (io/file (:details_path result)))))
           (is (= (:file (first (:files (edn/read-string
-                                         (slurp (io/file workspace
-                                                         (:details_path result)))))))
+                                         (slurp (io/file (:details_path result)))))))
                  "src/acid/fanout/t01.clj")))
         (testing "the oldest runs are the ones dropped"
           (is (not (contains? (set remaining) (.getName ^java.io.File (first old)))))
@@ -3677,7 +3693,7 @@
 (deftest detail-retention-is-published-as-best-effort-because-peers-are-pruned
   (let [workspace (workspace!)
         receipt-dir (io/file workspace "receipts")
-        _details (io/file workspace ".clj-surgeon" "alias-migration")
+        _details (detail-directory workspace)
         ;; twenty peers, each holding a details_path its own receipt published
         ;; a moment ago and its own caller may not have read yet. They are real
         ;; runs of this writer, recorded in the manifest every run shares, so a
@@ -3699,21 +3715,19 @@
           (is (some #(not (.exists ^java.io.File %)) peers)
               "no peer was pruned, so the claim would be untestable here"))
         (testing "and the run's own detail document is still readable"
-          (is (.exists (io/file workspace (:details_path result))))))
+          (is (.exists (io/file (:details_path result))))))
       (finally
         (delete-tree! workspace)))))
 
 ;; @spec MCP-OP-ALIAS-045
 (deftest detail-pruning-never-deletes-a-document-this-writer-does-not-own
-  ;; `.clj-surgeon/alias-migration/` is a legal receipt directory: it is inside
-  ;; the workspace, it is pruned from every scope walk, and nothing in the
-  ;; request forbids it. When the detail writer claims every `.edn` in its
+  ;; The external detail directory also contains inverse receipts. Ownership
+  ;; must distinguish detail documents from undo and caller documents. When the detail writer claims every `.edn` in its
   ;; directory, a run configured that way prunes its OWN undo receipt while
   ;; publishing ok=true committed=true — a receipt naming an inverse that no
   ;; longer exists, which is the worst shape a write tool can return.
   (let [workspace (workspace!)
-        details (.getCanonicalFile (io/file workspace ".clj-surgeon"
-                                            "alias-migration"))]
+        details (.getCanonicalFile (detail-directory workspace))]
     (.mkdirs details)
     (try
       ;; twenty documents this writer did not write, stamped newer than the run
@@ -3747,7 +3761,7 @@
         detail-name? (ns-resolve 'clj-surgeon.mcp-alias-migration
                                  'detail-document-name?)
         workspace (temp-dir)
-        details (io/file workspace ".clj-surgeon" "alias-migration")
+        details (detail-directory workspace)
         receipts (io/file workspace "receipts")]
     (try
       (is (some? detail-name?)
@@ -3779,7 +3793,7 @@
   ;; somebody else's file.
   (let [workspace (workspace!)
         receipt-dir (io/file workspace "receipts")
-        details (io/file workspace ".clj-surgeon" "alias-migration")
+        details (detail-directory workspace)
         base (- (System/currentTimeMillis) 600000)]
     (.mkdirs receipt-dir)
     (.mkdirs details)
@@ -3795,7 +3809,7 @@
             ;; reaches the bound and has one of its OWN to prune
             mine (mapv (fn [index] (owned-detail! workspace (+ base 100000 index)))
                        (range 20))
-            result (alias-migration/execute! (config workspace receipt-dir)
+            result (commit-boundary-execute! (config workspace receipt-dir)
                                              (request workspace))
             gone (remove (fn [^java.io.File file] (.exists file)) callers)]
         (is (:ok result) (pr-str result))
@@ -3806,7 +3820,7 @@
                    (mapv (fn [^java.io.File file] (.getName file)) gone))))
         (testing "and its own twenty-first is what it pruned instead"
           (is (= 19 (count (filter (fn [^java.io.File file] (.exists file)) mine))))
-          (is (.exists (io/file workspace (:details_path result))))))
+          (is (.exists (io/file (:details_path result))))))
       (finally
         (delete-tree! workspace)))))
 
@@ -3816,7 +3830,7 @@
   ;; name this writer once used is the caller's file now, so retention skips it
   ;; and takes the next document it can still prove it wrote.
   (let [workspace (workspace!)
-        details (io/file workspace ".clj-surgeon" "alias-migration")
+        details (detail-directory workspace)
         base (- (System/currentTimeMillis) 600000)]
     (try
       (let [mine (mapv (fn [index] (owned-detail! workspace (+ base (* 1000 index))))
@@ -3850,11 +3864,11 @@
   ;; A refusal that first mkdirs the very directory it is refusing to write in
   ;; has mutated the tree it reports untouched.
   (let [workspace (workspace!)
-        details (io/file workspace ".clj-surgeon" "alias-migration")]
+        details (detail-directory workspace)]
     (try
       (is (not (.exists details)) "the fixture already created the directory")
       (with-redefs [alias-migration/new-receipt-name (fn [] "detail-0dd1.edn")]
-        (let [result (alias-migration/execute! (config workspace details)
+        (let [result (commit-boundary-execute! (config workspace details)
                                                (request workspace))]
           (is (false? (:ok result)) (pr-str result))
           (is (= "alias-migration-receipt-detail-collision" (:error_type result)))
@@ -3870,7 +3884,7 @@
   ;; the directory it points at are one directory, and a guard written on
   ;; strings misses exactly the aliasing it exists to catch.
   (let [workspace (workspace!)
-        details (io/file workspace ".clj-surgeon" "alias-migration")
+        details (detail-directory workspace)
         twin (io/file workspace "receipts-link")
         guard (ns-resolve 'clj-surgeon.mcp-alias-migration
                           'receipt-detail-collision?)]
@@ -3883,7 +3897,7 @@
                           "detail-0dd1.edn"))))
       (testing "and the verb that stands on it"
         (with-redefs [alias-migration/new-receipt-name (fn [] "detail-0dd1.edn")]
-          (let [result (alias-migration/execute! (config workspace twin)
+          (let [result (commit-boundary-execute! (config workspace twin)
                                                  (request workspace))]
             (is (false? (:ok result)) (pr-str result))
             (is (= "alias-migration-receipt-detail-collision"
@@ -3900,15 +3914,15 @@
   ;; to it — so the receipt is published in the directory the guard exists to
   ;; keep it out of, under a name the detail writer's retention owns.
   (let [workspace (workspace!)
-        details (io/file workspace ".clj-surgeon" "alias-migration")
-        sneaky (io/file workspace "missing" ".." ".clj-surgeon" "alias-migration")]
+        details (detail-directory workspace)
+        sneaky (io/file details "missing" "..")]
     (try
       (testing "the predicate"
         (is (true? (alias-migration/receipt-detail-collision?
                      (.getPath workspace) (.getPath sneaky) "detail-0dd1.edn"))))
       (testing "and the verb that stands on it"
         (with-redefs [alias-migration/new-receipt-name (fn [] "detail-0dd1.edn")]
-          (let [result (alias-migration/execute! (config workspace sneaky)
+          (let [result (commit-boundary-execute! (config workspace sneaky)
                                                  (request workspace))]
             (is (false? (:ok result)) (pr-str result))
             (is (= "alias-migration-receipt-detail-collision"
@@ -3929,7 +3943,7 @@
         outside (io/file (.getParentFile workspace) outside-name)
         escaping (io/file workspace "missing" ".." ".." outside-name)]
     (try
-      (let [result (alias-migration/execute! (config workspace escaping)
+      (let [result (commit-boundary-execute! (config workspace escaping)
                                              (request workspace))]
         (is (false? (:ok result)) (pr-str result))
         (is (= "alias-migration-receipt-dir-escapes" (:error_type result)))
@@ -3949,7 +3963,7 @@
   ;; the one place its own retention may delete it. Identity has to be re-proved
   ;; on the directory that was CREATED, not on the one that was checked.
   (let [workspace (workspace!)
-        details (io/file workspace ".clj-surgeon" "alias-migration")
+        details (detail-directory workspace)
         receipts (io/file workspace "receipts")
         guard alias-migration/receipt-detail-collision?]
     (.mkdirs details)
@@ -3965,7 +3979,7 @@
                                                     (.toPath details)
                                                     (make-array FileAttribute 0)))
                         answer))]
-        (let [result (alias-migration/execute! (config workspace receipts)
+        (let [result (commit-boundary-execute! (config workspace receipts)
                                                (request workspace))]
           (is (false? (:ok result)) (pr-str result))
           (is (= "alias-migration-receipt-detail-collision"
@@ -4020,7 +4034,7 @@
     (try
       (with-redefs [transaction/execute-mcp-change!
                     (fn [& _] (throw (OutOfMemoryError. "Java heap space")))]
-        (let [result (alias-migration/execute! (config workspace receipt-dir)
+        (let [result (commit-boundary-execute! (config workspace receipt-dir)
                                                (request workspace))]
           (is (false? (:ok result)) (pr-str result))
           (is (= "alias-migration-resource-exhausted" (:error_type result)))
@@ -4044,13 +4058,13 @@
         receipt-dir (io/file workspace "receipts")
         ;; the retire destination's parent directory is occupied by a file, so
         ;; the move throws after the kernel has already committed
-        blocker (io/file workspace ".clj-surgeon" "alias-migration" "retired"
+        blocker (io/file (detail-directory workspace) "retired"
                          "src" "acid" "fanout")]
     (.mkdirs receipt-dir)
     (.mkdirs (.getParentFile blocker))
     (spit blocker "not a directory\n")
     (try
-      (let [result (alias-migration/execute! (config workspace receipt-dir)
+      (let [result (commit-boundary-execute! (config workspace receipt-dir)
                                              (lib-request workspace))
             receipts (filter #(str/ends-with? (.getName %) ".edn")
                              (.listFiles receipt-dir))]
@@ -4141,7 +4155,7 @@
       (Files/move (.toPath defining) (.toPath real)
                   (make-array java.nio.file.CopyOption 0))
       (symlink! defining real)
-      (let [result (alias-migration/execute! (config workspace receipt-dir)
+      (let [result (commit-boundary-execute! (config workspace receipt-dir)
                                              (lib-request workspace))]
         (is (false? (:ok result)) (pr-str result))
         (is (= "alias-migration-retire-symlink-refused" (:error_type result)))
@@ -4167,7 +4181,7 @@
     (try
       (testing "a workspace with a configured profile is NOT verified unless asked"
         (let [runs (atom 0)
-              result (alias-migration/execute!
+              result (commit-boundary-execute!
                        (assoc (config workspace receipt-dir)
                               :verification-profiles
                               {"fast" {:commands [["false"]]}
@@ -4183,7 +4197,7 @@
       (.mkdirs receipt-dir)
       (try
         (testing "asking for a profile the workspace does not configure refuses"
-          (let [result (alias-migration/execute!
+          (let [result (commit-boundary-execute!
                          (assoc (config workspace receipt-dir)
                                 :verification-profiles {"fast" {:commands []}})
                          (request workspace {:verify "nonexistent"}))]
@@ -4208,7 +4222,7 @@
   ;; place its own retention may delete. The OS leaves that window open; what
   ;; must never happen is a SUCCESS reported over it.
   (let [workspace (workspace!)
-        details (io/file workspace ".clj-surgeon" "alias-migration")
+        details (detail-directory workspace)
         receipts (io/file workspace "receipts")
         guard alias-migration/receipt-detail-collision?
         calls (atom 0)]
@@ -4225,7 +4239,7 @@
                                                     (.toPath details)
                                                     (make-array FileAttribute 0)))
                         answer))]
-        (let [result (alias-migration/execute! (config workspace receipts)
+        (let [result (commit-boundary-execute! (config workspace receipts)
                                                (request workspace))
               ;; a receipt, not a detail document: the detail writer's own
               ;; files legitimately live here
@@ -4287,7 +4301,7 @@
                                                   (make-array FileAttribute 0)))
                       answer))
                   transaction/execute-undo! (or undo real-undo)]
-      (alias-migration/execute! (config workspace receipts)
+      (commit-boundary-execute! (config workspace receipts)
                                 (request workspace)))))
 
 (defn- still-migrated
@@ -4309,7 +4323,7 @@
   ;; `(not (:committed commit))` over a map that carries no `:committed` key,
   ;; so it was a constant no failing rollback could move.
   (let [workspace (workspace!)
-        details (io/file workspace ".clj-surgeon" "alias-migration")
+        details (detail-directory workspace)
         receipts (io/file workspace "receipts")]
     (.mkdirs details)
     (try
@@ -4342,7 +4356,7 @@
 ;; @spec MCP-OP-ALIAS-056
 (deftest a-post-write-refusal-whose-rollback-succeeded-reports-a-restored-tree
   (let [workspace (workspace!)
-        details (io/file workspace ".clj-surgeon" "alias-migration")
+        details (detail-directory workspace)
         receipts (io/file workspace "receipts")]
     (.mkdirs details)
     (try
@@ -4375,7 +4389,7 @@
     (try
       (let [result (with-redefs [alias-migration/new-receipt-name
                                  (fn [] "pinned.edn")]
-                     (alias-migration/execute! (config workspace receipts)
+                     (commit-boundary-execute! (config workspace receipts)
                                                (request workspace)))]
         (is (false? (:ok result))
             (str "a receipt published under a name execute-undo! refuses was "
@@ -4405,9 +4419,9 @@
         gitdir (io/file main ".git" "worktrees" "wt" "refs" "heads")]
     (.mkdirs gitdir)
     (try
-      (let [outside (alias-migration/execute!
+      (let [outside (commit-boundary-execute!
                       (config linked gitdir) (request linked))
-            inside (alias-migration/execute!
+            inside (commit-boundary-execute!
                      {:project-root (.getPath rooted)
                       :receipt-dir ".git/refs/heads"}
                      (request rooted))]
@@ -4493,7 +4507,7 @@
                 "-m" "root" :dir path)
       (is (zero? (:exit (shell/sh "git" "show-ref" :dir path)))
           "the fixture repository has no ref to break")
-      (let [result (alias-migration/execute! (config workspace heads)
+      (let [result (commit-boundary-execute! (config workspace heads)
                                              (request workspace))]
         (is (false? (:ok result)) (pr-str result))
         (is (= "alias-migration-receipt-dir-in-control-directory"
@@ -4526,7 +4540,7 @@
     (try
       (Files/createSymbolicLink (.toPath link) (.toPath outside)
                                 (make-array FileAttribute 0))
-      (let [result (alias-migration/execute!
+      (let [result (commit-boundary-execute!
                      {:project-root (.getPath workspace)
                       :receipt-dir relative}
                      (request workspace))]
@@ -4550,7 +4564,7 @@
         receipts (io/file outside "receipts")]
     (.mkdirs receipts)
     (try
-      (let [result (alias-migration/execute! (config workspace receipts)
+      (let [result (commit-boundary-execute! (config workspace receipts)
                                              (request workspace))]
         (is (:ok result) (pr-str result))
         (is (true? (:committed result)))
@@ -4575,7 +4589,7 @@
   ;; a caller that gates its retry on `mutation_attempted` was told to retry
   ;; over a mid-migration workspace.
   (let [workspace (workspace!)
-        details (io/file workspace ".clj-surgeon" "alias-migration")
+        details (detail-directory workspace)
         receipts (io/file workspace "receipts")]
     (.mkdirs details)
     (try
@@ -4592,7 +4606,7 @@
       (finally
         (delete-tree! workspace)))
     (let [workspace (workspace!)
-          details (io/file workspace ".clj-surgeon" "alias-migration")
+          details (detail-directory workspace)
           receipts (io/file workspace "receipts")]
       (.mkdirs details)
       (try
@@ -4621,7 +4635,7 @@
         heads (io/file workspace ".git" "refs" "heads")]
     (.mkdirs heads)
     (try
-      (let [result (alias-migration/execute! (config workspace heads)
+      (let [result (commit-boundary-execute! (config workspace heads)
                                              (request workspace))]
         (is (false? (:ok result)) (pr-str result))
         (is (= "alias-migration-receipt-dir-in-control-directory"
@@ -4643,7 +4657,7 @@
   ;; already published by the heap guard (ALIAS-047) and by a committed
   ;; transaction whose receipt did not land.
   (let [workspace (workspace!)
-        details (io/file workspace ".clj-surgeon" "alias-migration")
+        details (detail-directory workspace)
         receipts (io/file workspace "receipts")]
     (.mkdirs details)
     (try
@@ -4659,7 +4673,7 @@
       (finally
         (delete-tree! workspace)))
     (let [workspace (workspace!)
-          details (io/file workspace ".clj-surgeon" "alias-migration")
+          details (detail-directory workspace)
           receipts (io/file workspace "receipts")]
       (.mkdirs details)
       (try
@@ -4695,7 +4709,7 @@
   ;; recovery could not put it back) leaves pre-migration bytes on disk. The
   ;; injection below matches the tree to the map it returns.
   (let [workspace (workspace!)
-        details (io/file workspace ".clj-surgeon" "alias-migration")
+        details (detail-directory workspace)
         receipts (io/file workspace "receipts")]
     (.mkdirs details)
     (try
@@ -4745,7 +4759,7 @@
   ;; counted as still migrated: over-stating the work a human has left to do
   ;; costs a wasted look, under-stating it loses a file.
   (let [workspace (workspace!)
-        details (io/file workspace ".clj-surgeon" "alias-migration")
+        details (detail-directory workspace)
         receipts (io/file workspace "receipts")]
     (.mkdirs details)
     (try
@@ -4778,7 +4792,7 @@
         receipts (io/file workspace "receipts")]
     (.mkdirs receipts)
     (try
-      (let [committed (alias-migration/execute! (config workspace receipts)
+      (let [committed (commit-boundary-execute! (config workspace receipts)
                                                 (request workspace))
             _ (is (:ok committed) (pr-str committed))
             _ (is (= 12 (count (still-migrated workspace)))
@@ -4820,7 +4834,7 @@
   ;; publish `rolled_back true`, `files_still_migrated 0` and
   ;; `source_unchanged true` over twelve migrated files.
   (let [workspace (workspace!)
-        details (io/file workspace ".clj-surgeon" "alias-migration")
+        details (detail-directory workspace)
         receipts (io/file workspace "receipts")]
     (.mkdirs details)
     (try
@@ -4863,7 +4877,7 @@
         gitdir (io/file main ".git" "worktrees" "wt" "refs" "heads")]
     (.mkdirs gitdir)
     (try
-      (let [result (alias-migration/execute! (config workspace gitdir)
+      (let [result (commit-boundary-execute! (config workspace gitdir)
                                              (request workspace))
             message (str (:error result))]
         (is (false? (:ok result)) (pr-str result))
@@ -5870,8 +5884,7 @@
   the count or the set, so it changed in silence and was found by a reviewer
   reading the enumeration by hand. A kind added here on purpose is one line of
   diff with a reason; a kind that appears here by accident is a failing test."
-  #{
-    ;; re-pinned at the MCP/main landing (2026-09-04): four kinds the trunk publishes (the admit-gate
+  #{;; re-pinned at the MCP/main landing (2026-09-04): four kinds the trunk publishes (the admit-gate
     ;; and parser-admission landings) that the branch never saw — 139 → 143
     "expect-matched-invalid-pattern" "expect-matched-stale" "expect-matched-unreadable-source" "parser-admission-refused"
     "alias-migration-alias-policy-exhausted"
@@ -5960,7 +5973,9 @@
     ;; value and was minted as a kind. It is hoisted to a `closed?` binding in
     ;; the source rather than pinned here — a tag that never reaches a caller
     ;; is not a refusal kind.
-    "hot-verification-timeout" "hot-verification-transport-closed"})
+    "hot-verification-timeout" "hot-verification-transport-closed"
+    ;; Row-2 external artifact containment adds these reachable typed refusals.
+    "receipt-dir-escapes" "receipt-dir-inside-workspace"})
 
 ;; @spec MCP-OP-ALIAS-059
 (deftest the-refusal-enumeration-is-pinned-in-count-and-in-membership
@@ -5969,7 +5984,7 @@
   ;; could see. Both directions are asserted — a kind that appears and a kind
   ;; that vanishes are each a change to what a text-reading client is promised.
   (let [kinds (set (refusal-kinds-in-source))]
-    (is (= 147 (count kinds))
+    (is (= 149 (count kinds))
         (str "the entrance's refusal enumeration changed size: "
              (count kinds) " kinds"))
     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))

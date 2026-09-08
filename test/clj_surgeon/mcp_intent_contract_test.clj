@@ -463,7 +463,8 @@
     ;; B03 adds the suspension, exact split admission and plate parity promises.
     ;; B07 registers NS-SPLIT-037..046 (ten retained-source/facts/oracle promises).
     ;; Row 3 registers fourteen standalone require-change promises.
-    (is (= 222 (count non-mcp)))
+    ;; Sol r10 adds ALIAS-MIGRATION-003, the mandatory affected-battery gate.
+    (is (= 223 (count non-mcp)))
     (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 19
             "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3}
            (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"

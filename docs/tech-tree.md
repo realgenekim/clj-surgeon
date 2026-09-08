@@ -453,3 +453,29 @@ witnesses and the helper/typist boundary suites pass; no N-arm layout change or
 comparative performance claim. ALIAS-MIGRATION-001/002 own the linked contract.
 Final gates, review findings and the initial handler setup refusal are retained in
 `/var/tmp/forge/plan2/cellC/astra-row2-papercut-report.md`.
+
+
+### 2026-09-08T10:36:46.731434+00:00 — Sol r10 alias artifact landing repair
+
+The complete alias boundary namespace at 827a751a reproduced 137 tests / 3,164
+assertions with 135 failures and nine errors. Its absolute-path, retention,
+configured-path guard fixtures and refusal census are repaired; the full warm
+namespace passes 137 tests / 3,237 assertions. The default landing gate now runs
+both this namespace and a new 13-witness publication battery. An explicit
+membership witness was red before the Makefile wiring. The installed Anvil
+`~/bin/land` also bypassed that gate; its local gate list now calls `make test`.
+
+Active MCP-OP-ALIAS-019/020/026/044/045 are amended for external artifacts and
+measured Git exception paths. ALIAS-MIGRATION-003 owns the mandatory execution
+contract. Identical publication witnesses on 3d55fa34 produce 22 failures and
+zero errors across all 13 publishers; the repaired run passes 19 tests / 156
+assertions, including six reused behavior/proof/undo fixtures. This supplies
+behavioral evidence beyond the earlier static census. No new performance or
+row-3 admission claim. Full gates, installed launcher diff, final commit and dry
+merge evidence: `/var/tmp/forge/plan2/cellC/astra-r10fix-report.md`.
+
+Final r10 landing gate passes: 156 affected-battery tests / 3,393 assertions,
+814 JVM tests / 10,377 assertions and 888 Babashka tests / 7,858 assertions,
+zero failures/errors. Intent audit is clean; serialized changed-files lint has
+zero errors/warnings. The first cold gate's five count/catalog failures and their
+repairs remain in the report.

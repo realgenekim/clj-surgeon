@@ -221,6 +221,13 @@
       (is (contains? closure "mcp-test")
           (str "`make landing-gate` must run the merge gate; its closure is "
                (pr-str (sort closure))))
+      ;; @spec ALIAS-MIGRATION-003
+      ;; Sol r10: a fresh historical battery receipt hid a red alias battery.
+      (doseq [target ["make test" "make landing-gate"]
+              namespace '[clj-surgeon.mcp-alias-migration-test
+                          clj-surgeon.receipt-artifacts-boundary-test]]
+        (is (contains? (:namespaces (rm/resolve-runner target (rm/repo-context))) namespace)
+            (str target " must execute " namespace)))
       (is (str/includes? makefile-text ".PHONY: repository-hygiene")
           "sanity: the .PHONY line was found")
       (is (re-find #"(?m)^\.PHONY:.*\blanding-gate\b" makefile-text)
@@ -379,8 +386,9 @@
     (is (= 53 (count (lm/namespaces-for :fast))))
     (is (= 7 (count (lm/namespaces-for :integration))))
     ;; B07 enrolls its independent oracle mutation witnesses in one new battery namespace.
-    (is (= 34 (count (lm/namespaces-for :battery))))
-    (is (= 94 (count lm/manifest))
+    ;; Sol r10 enrolls the per-verb artifact boundary battery.
+    (is (= 35 (count (lm/namespaces-for :battery))))
+    (is (= 95 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -409,7 +417,8 @@
   "Namespaces in a lane today that round one did NOT measure, each with the
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
-  '{clj-surgeon.namespace-split-test 35 ; B07 adds nine partial-retention, facts, bounded-analysis and preservation witnesses.
+  '{clj-surgeon.receipt-artifacts-boundary-test 13 ; Sol r10 per-verb publication witnesses.
+    clj-surgeon.namespace-split-test 35 ; B07 adds nine partial-retention, facts, bounded-analysis and preservation witnesses.
     clj-surgeon.namespace-split-warm-test 2 ; Round 3: real nREPL failure/green matrix and stale/foreign discovery, integration.
     clj-surgeon.mcp-namespace-split-test 8 ; B07 adds effect-free facts boundary to schema, capture, projection and rollback.
     clj-surgeon.cell-b-oracle-test 2 ; B07: shell lint mutation test and independent partial-preservation mutants; battery (Python subprocess).
@@ -529,7 +538,8 @@
       ;; Eight Cell C paper-cut witnesses: 464 + 8 = 472.
       ;; B07 adds 9 compiler + 1 boundary + 2 oracle tests: 484 + 12 = 496.
       ;; Row 3 adds 9 pure + 12 real boundary/CLI witnesses: 496 + 21 = 517.
-      (is (= 517 adopted) (str "adopted tests: " adopted)))
+      ;; Sol r10 adds 13 per-verb publication witnesses: 517 + 13 = 530.
+      (is (= 530 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -624,7 +634,8 @@
       ;; Round 4 merged with origin/MCP/main aa587ec3: source census = 1489.
       ;; B07 adds 12 JVM witnesses; one new CLI test runs separately in the BB suite.
       ;; Standalone require intent: 1501 + 21 = 1522, with boundary processes in battery.
-      (is (= 1530 total) (str "manifest declares " total " tests"))
+      ;; Sol r10 adds 13 witnesses: 1530 + 13 = 1543.
+      (is (= 1543 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

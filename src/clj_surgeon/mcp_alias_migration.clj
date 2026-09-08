@@ -3,23 +3,22 @@
 
   This namespace owns the filesystem half — scope expansion, project-root
   confinement, the frozen read, the transaction spec, the durable per-file
-  detail file, and the O(1) receipt. It knows nothing about the rewrite itself,
+  detail file, and the summary receipt. It knows nothing about the rewrite itself,
   which lives in the pure `clj-surgeon.alias-migration` planner, and nothing
   about tool registration, which lives in `clj-surgeon.mcp-tool`."
   (:require
-   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.alias-migration :as planner]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-paths :as mcp-paths]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.set :as set]
    [clojure.string :as str])
   (:import
-   (java.nio.file FileSystems FileVisitOption FileVisitResult Files
-                  LinkOption Path PathMatcher SimpleFileVisitor)
+   (java.nio.file FileSystems FileVisitOption FileVisitResult Files LinkOption Path PathMatcher SimpleFileVisitor)
    (java.nio.file.attribute FileAttribute)
    (java.util EnumSet UUID)))
 
@@ -2114,14 +2113,14 @@
 (def max-string-mention-sites
   "How many `file:line` string-mention sites one receipt names.
 
-  The count is exact and the list is bounded: the receipt is constant in N or
-  it is not a receipt, and a caller with twenty sites already has a day's work
-  they can find the rest of by searching for the name the count reports."
+  The count is exact and this diagnostic list is bounded. A caller with
+  twenty sites can find the rest by searching for the name the count reports.
+  The separate measured Git exception list may grow with the changed file set."
   20)
 
 ;; @spec MCP-OP-ALIAS-042
 (defn receipt
-  "Render one receipt whose length is constant in the number of namespaces.
+  "Render the migration summary; execute! adds measured Git exception paths.
 
   `:ok` and `:committed` are the kernel's own computed `:committed`, never a
   literal: the tool tells agents its receipt is terminal evidence and not to
@@ -2686,7 +2685,7 @@
 ;; @spec MCP-OP-ALIAS-018
 ;; @spec MCP-OP-ALIAS-019
 (defn- execute-migration!
-  "Plan, commit, and publish one O(1) alias_migration receipt.
+  "Plan, commit, and publish one alias_migration summary with workspace evidence.
 
   `attempted` is handed to `commit!`, which sets it at the transaction kernel's
   own entrance — the first write — so the heap-exhaustion guard around this

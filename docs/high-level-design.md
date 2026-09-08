@@ -1366,3 +1366,8 @@ Receipt and undo bookkeeping is external to the workspace under verb-specific
 `/var/tmp/forge/<verb>-receipts/` directories. Committed Git workspace receipts
 measure their dirty-path exception set after publication; unavailable or failed
 cleanliness proof stays explicit. See [artifact intent](intent/alias-migration/receipt-artifacts-specs.md).
+
+The alias-migration artifact contract is landing-critical: the complete alias
+boundary namespace executes on every landing gate, alongside the default lanes.
+[ALIAS-MIGRATION-003](intent/alias-migration/receipt-artifacts-specs.md) prevents a
+fresh historical battery receipt from concealing an unexecuted affected suite.

@@ -16,10 +16,10 @@ namespaces and it *adds* a counting obligation instead of removing a read.
 For a fan-out var migration the whole cost the tool must delete is the
 **reads**: the model has to open every namespace to learn its alias, its
 bindings, and its call sites. A verb that removes those reads must do the
-discovery itself and must return a receipt whose length does not grow with `N`.
+discovery itself and return a summary without per-file edit payloads.
 
 `alias_migration` is that verb. One call carries the intent; the server
-discovers, decides, splices, and commits; the receipt is `O(1)`.
+discovers, decides, splices, and commits; the receipt carries measured Git exception paths, which may grow with `N`.
 
 ## The observable contract
 
@@ -36,7 +36,7 @@ discovers, decides, splices, and commits; the receipt is `O(1)`.
 Every field is constant in `N` except `expect.files`, which is one integer.
 There is no per-file, per-owner, or per-site table anywhere in the request.
 
-### Success receipt (`O(1)` in `N`)
+### Success receipt (summary plus measured Git exception paths)
 
 ```json
 {"ok": true, "operation": "alias_migration", "committed": true,
@@ -84,7 +84,7 @@ clj-surgeon.mcp-alias-migration      I/O boundary, no transaction knowledge
   expand-scope                       glob -> confined relative source paths
   plan!                              read + confine + call the pure planner
   plan->changes                      plan -> one `changes` transaction spec
-  receipt                            transaction result + plan -> O(1) receipt
+  receipt                            transaction result + plan -> summary receipt
 
 clj-surgeon.mcp-tool                 registration + kernel routing only
   handle-alias-migration             plan! -> execute-request! -> receipt
@@ -376,7 +376,7 @@ the new namespace and every rewritten caller land or refuse together, and the
 kernel's undo receipt removes the created file.
 
 The superseded file is then **retired, not deleted**: it is moved to
-`.clj-surgeon/alias-migration/retired/<its path>` and the receipt names that
+`/var/tmp/forge/alias-migration-receipts/<workspace>/retired/<its path>` and the receipt names that
 location. Deleting it is not something the kernel's inverse receipt can undo, so
 the honest design keeps the bytes and says where they are. If retiring fails, or
 if verification fails afterwards, the file is moved back before the transaction is
@@ -436,3 +436,8 @@ detail/retirement placement and the O(1) receipt claim for the required Git exce
 list. Server receipt-directory overrides no longer control verb bookkeeping.
 Post-write porcelain includes all untracked paths; failed or unavailable status
 evidence never produces a false cleanliness assertion. Source layout is unchanged.
+
+The complete alias boundary battery runs through `make alias-migration-test` on
+every `make test` and `make landing-gate` (`~/bin/land`). A freshness receipt
+for the other battery namespaces does not substitute for this affected suite.
+ALIAS-MIGRATION-003 owns the permanent lane membership witness.

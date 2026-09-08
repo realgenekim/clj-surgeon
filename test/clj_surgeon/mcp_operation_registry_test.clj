@@ -31,7 +31,7 @@
     'clj-surgeon.mcp-tool-test/refuses-before-write-and-publishes-no-receipt}
    "alias_migration"
    {:committed
-    'clj-surgeon.mcp-alias-migration-test/one-call-migrates-the-whole-fan-out-and-returns-one-constant-receipt
+    'clj-surgeon.mcp-alias-migration-test/one-call-migrates-the-whole-fan-out-and-returns-one-summary-receipt
     :typed-refusal
     'clj-surgeon.mcp-alias-migration-test/expect-mismatch-refuses-closed-with-an-executable-next-call}
    "transform_clojure"
