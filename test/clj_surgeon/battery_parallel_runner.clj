@@ -124,10 +124,12 @@
    `admit-transaction-recovery-battery` and THEN `landing-gate`; the battery
    consumes that target's receipt at
    `target/admit-transaction-recovery-battery-receipt.edn`. `make test-battery`
-   has NO such prerequisite edge -- so a caller that invokes the battery
-   directly (the receipt chain does) reaches `admit-patch-test` with no receipt
-   on disk, and the run records `1 preconditions skipped` under an overall
-   PASS. That is the entire DAG for this lane:
+   has no Make prerequisite edge. Instead, with the now-default
+   `BATTERY_PREREQS=1`, this coordinator runs a missing declared stage before
+   opening any lane. With `BATTERY_PREREQS=0` -- or when the fast suite is run
+   alone -- `admit-patch-test` can reach the check with no receipt on disk and
+   records `1 preconditions skipped` under an overall PASS. That is the entire
+   DAG for this lane:
 
      admit-transaction-recovery-battery  ->  clj-surgeon.admit-patch-test
      (everything else)                       independent, any lane, any order
@@ -141,10 +143,11 @@
    itself stops being evidence of which machine ran it -- so an assertion
    count that DID move with the mode would be the bug, not the contract. The
    serial comparison remains available explicitly with `BATTERY_PREREQS=0`,
-   for its ORDER and its one-JVM shape rather than for its count. With the flag on, the stage
-   runs before any lane, a failing stage is a named failure, and a precondition
-   still skipped afterwards is RED rather than counted: having declared that
-   the prerequisites are satisfied, a remaining skip is a broken declaration."
+   for its ORDER and its one-JVM shape rather than for its count. With the flag
+   on, the stage runs before any lane, a failing stage is a named failure, and a
+   precondition still skipped afterwards is RED rather than counted: having
+   declared that the prerequisites are satisfied, a remaining skip is a broken
+   declaration."
   [{:make-target "admit-transaction-recovery-battery"
     :produces "target/admit-transaction-recovery-battery-receipt.edn"
     :consumers '[clj-surgeon.admit-patch-test]
