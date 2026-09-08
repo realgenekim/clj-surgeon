@@ -98,10 +98,24 @@ while believing it is asserting something about the code.**
 
 ### Archival changes and battery distance
 
-TEST-ISO-009b excludes only existing 100644 content modifications in its three
-literal output journals, after inspecting each parent diff without rename or
-submodule suppression. These are observational outputs, not proof inputs.
-The ledger, executable fixtures, live operational briefs and unknown documents
-remain counted. Failed or malformed diff inspection cannot grant an exemption.
-The CLI reports raw, counted and excluded distances; very long histories fall
-back to raw distance rather than granting uninspected exemptions.
+TEST-ISO-009b excludes regular non-executable adds, modifications and deletions
+under `docs/observations/` -- the records lane -- after inspecting each parent
+diff without rename or submodule suppression. These are observational outputs,
+not proof inputs: nothing under that prefix is loaded, compiled or executed by
+any lane, so a tree that differs from the battery's tree only there is the same
+tree as far as the battery's claim goes.
+
+This replaced a closed three-path set on 2026-09-08. The closed set was the
+safer shape and the wrong one: it had to be edited by hand for every new
+captain's log, so it exempted the commits nobody makes and charged the budget
+for the ones made all day, and a green battery expired on its own paperwork.
+The widening is bounded on purpose -- the ledger is excluded by name (a receipt
+may not exempt its own commit), executable fixtures still count, and everything
+outside `docs/observations/`, including the rest of `docs/`, still counts.
+Live operational briefs are the deliberate loss: if one lives under
+`docs/observations/`, it no longer counts, and a brief that must count belongs
+somewhere else in the tree.
+
+Failed or malformed diff inspection cannot grant an exemption. The CLI reports
+raw, counted and excluded distances; very long histories fall back to raw
+distance rather than granting uninspected exemptions.

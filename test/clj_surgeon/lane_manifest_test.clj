@@ -450,7 +450,7 @@
     clj-surgeon.mission-forms-test 5 ; Owner identity, protected syntax and lost-comment refusal.
     clj-surgeon.mission-forms-source-test 23 ; Strict comment text/attachment, whitespace identity and owner sentinel.
     clj-surgeon.mission-typist-executor-test 11 ; Add candidate diagnostic survival to proof/commit/undo and saved fallback forwarding.
-    clj-surgeon.battery-ledger-test        14 ; TEST-ISO-009a/b: add strict archive classification and preserved failure/audit authority.
+    clj-surgeon.battery-ledger-test        15 ; TEST-ISO-009a/b: strict classification, preserved failure/audit authority, and the records-lane distance witness (2026-09-08).
     clj-surgeon.require-change-test 9 ; Pure standalone require intent and strict natural-layout refusal witnesses.
     clj-surgeon.require-change-boundary-test 12 ; Actual CLI/profile processes, confined publication, independent oracle and undo.
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
@@ -540,7 +540,9 @@
       ;; Row 3 adds 9 pure + 12 real boundary/CLI witnesses: 496 + 21 = 517.
       ;; Sol r10 adds 13 per-verb publication witnesses: 517 + 13 = 530.
       ;; Rows sublime adds seven external-profile/proof-honesty boundary witnesses.
-      (is (= 537 adopted) (str "adopted tests: " adopted)))
+      ;; TEST-ISO-009b records-lane distance (2026-09-08): ONE additive witness in
+      ;; battery-ledger-test, an adopted namespace, so 537 + 1 = 538.
+      (is (= 538 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -638,7 +640,10 @@
       ;; Sol r10 adds 13 witnesses: 1530 + 13 = 1543.
       ;; Rows sublime: seven split boundaries plus six alias telemetry witnesses.
       ;; 1543 + 7 + 6 = 1556; no test or namespace leaves the corpus.
-      (is (= 1556 total) (str "manifest declares " total " tests"))
+      ;; TEST-ISO-009b records-lane distance (2026-09-08): ONE additive witness in
+      ;; battery-ledger-test (14 -> 15), the 40-records/31-code numbers the exemption
+      ;; exists for. 1556 + 1 = 1557; no namespace and no lane membership changed.
+      (is (= 1557 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

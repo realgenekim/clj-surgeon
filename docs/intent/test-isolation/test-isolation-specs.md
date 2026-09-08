@@ -260,19 +260,42 @@ correct behaviour is one somebody deletes.
   -- a relational oracle, KEPT ONLY if it finds a counterexample the native
   witnesses missed.
 
-### TEST-ISO-009b archival distance
+### TEST-ISO-009b records-lane distance
 
-Only modifications of existing regular non-executable files at these exact
-paths may be excluded from commit distance:
+*(2026-09-08: this supersedes the closed three-path archival set below. The
+superseded rule said "Never a docs glob" and this is one, so the reason is
+recorded rather than quietly dropped: the closed set had to be hand-edited
+whenever the records lane wrote a NEW file, and writing a new file is what the
+records lane does all day. The exemption therefore covered the commits nobody
+makes and missed the ones made constantly, and a green battery kept expiring on
+its own paperwork. A refusal that is false is worse than no refusal, because it
+is the one that teaches a seat to stop reading refusals. The superseded rule is
+kept verbatim at the end of this section.)*
 
-- `docs/observations/2026-09-03-captains-log-anvil-seat.md`
-- `docs/observations/2026-09-05-captains-log-astra-four-hour-comparison.md`
-- `docs/observations/2026-09-06-live-astra-typist-commentary.md`
+Only regular non-executable files under `docs/observations/`, excluding
+`docs/observations/battery-ledger.edn`, may be excluded from commit distance.
 
-Every changed entry against every parent must be status M, mode 100644 before
-and after, and one of these paths. Empty commits, additions, deletion, rename,
-mode/type changes, mixed commits, unknown paths and unreadable diffs count.
-The complete DAG remains authoritative; raw distance and excluded archive count
-must accompany counted distance. Above 1000 raw commits, count all commits
-without archival exemptions to bound per-commit inspection. Ancestry, age,
+Every changed entry against every parent must be status A, M or D with the mode
+pair that status implies (`000000 100644` for A, `100644 100644` for M,
+`100644 000000` for D) and a path in that set. The ledger itself is excluded BY
+NAME: a receipt may never exempt its own commit. Empty commits, renames,
+mode/type changes, executable files, symlinks, submodules, mixed commits, paths
+outside `docs/observations/` (including the rest of `docs/`) and unreadable
+diffs count. The complete DAG remains authoritative; raw distance and excluded
+count must accompany counted distance. Above 1000 raw commits, count all commits
+without exemptions to bound per-commit inspection. Ancestry, age,
 newest-failure authority and the 30-commit budget remain unchanged.
+
+*Witness:* `clj-surgeon.battery-ledger-test/only-regular-records-lane-content-is-exempt`
+and `.../records-lane-churn-cannot-expire-a-battery-but-code-still-can` (fast,
+pure), plus `make battery-fresh-records-lane-test`, which drives the real CLI
+over a real `git` history: 40 records-only commits stay fresh, 31 code commits
+refuse, and 40 records + 31 code still refuse on the 31.
+
+SUPERSEDED 2026-09-08 (retained so the change is legible, not enforced): "Only
+modifications of existing regular non-executable files at these exact paths may
+be excluded from commit distance: `docs/observations/2026-09-03-captains-log-anvil-seat.md`,
+`docs/observations/2026-09-05-captains-log-astra-four-hour-comparison.md`,
+`docs/observations/2026-09-06-live-astra-typist-commentary.md`. Every changed
+entry against every parent must be status M, mode 100644 before and after, and
+one of these paths. ... additions, deletion ... count."

@@ -203,23 +203,65 @@
         out (slurp (.getInputStream p))]
     {:exit (.waitFor p) :out out}))
 
-(def archival-paths
-  "Closed output-journal set, audited in TEST-ISO-009b. Never a docs glob."
-  #{"docs/observations/2026-09-03-captains-log-anvil-seat.md"
-    "docs/observations/2026-09-05-captains-log-astra-four-hour-comparison.md"
-    "docs/observations/2026-09-06-live-astra-typist-commentary.md"})
+(def records-lane-prefix
+  "The RECORDS LANE. Commits whose every changed path is a regular
+   non-executable file under this prefix are observational OUTPUT: captain's
+   logs, receipts, reports. Nothing under it is loaded, compiled, or executed
+   by any lane, so a tree that differs from the battery's tree only here is
+   the SAME TREE as far as the battery's claim goes.
+
+   THIS WIDENS TEST-ISO-009b FROM A CLOSED THREE-PATH SET TO A PREFIX, and the
+   superseded rule said in as many words `Never a docs glob`. The reason it is
+   widened rather than extended: the closed set had to be edited by hand every
+   time the records lane wrote a NEW file, and a new file is the records lane's
+   normal act -- so the exemption covered exactly the commits nobody makes and
+   missed the ones made all day. A budget consumed by its own paperwork expires
+   a green battery for a reason that has nothing to do with the code, and the
+   refusal that follows is a false alarm, which is the failure mode that
+   teaches a seat to stop reading refusals.
+
+   WHAT IS DELIBERATELY *NOT* EXEMPT, so the widening stays a records-lane
+   exemption and not a docs-shaped hole:
+     - the LEDGER itself (`ledger-path`). The receipt file may never be the
+       thing that excuses a commit from the receipt's own distance.
+     - anything outside this prefix. `docs/intent/`, `docs/plans/`, `src/`,
+       `test/`, `Makefile`, `deps.edn`: all counted, as before.
+     - EXECUTABLE files (mode 100755) anywhere, including under this prefix --
+       the executable fixtures the design named stay counted.
+     - symlinks, submodules, type changes, renames, mode changes, mixed
+       commits, empty commits, and any diff that does not read.
+   Every merge parent must still prove it independently, and a history over
+   1000 commits still falls back to raw distance rather than inspecting."
+  "docs/observations/")
+
+(defn records-lane-path?
+  "True for a path the records lane owns. The ledger is excluded BY NAME: a
+   receipt that could exempt its own commit is a receipt that audits itself."
+  [path]
+  (let [p (str path)]
+    (and (str/starts-with? p records-lane-prefix)
+         (not= ledger-path p))))
+
+(def ^:private records-diff-header
+  "The only three raw-diff headers that may appear in an exempt commit:
+   modify, add, delete -- of a REGULAR NON-EXECUTABLE file. Anchored, and the
+   mode pair must agree with the status, so `100644 100755 M` (a doc made
+   executable) and `120000 120000 M` (a symlink) fail here, not later."
+  #":(?:100644 100644 [0-9a-f]{40} [0-9a-f]{40} M|000000 100644 0{40} [0-9a-f]{40} A|100644 000000 [0-9a-f]{40} 0{40} D)")
 
 ;; @spec TEST-ISO-009b -- malformed or non-content changes cannot exempt a commit.
 (defn archive-only-diff?
-  "Strict NUL-delimited --raw -z --no-renames diff; false on missing evidence."
+  "Strict NUL-delimited --raw -z --no-renames diff; false on missing evidence.
+   True only when EVERY record is a regular-file add/modify/delete inside the
+   records lane. An empty diff is false: absence of evidence never exempts."
   [raw]
   (let [parts (str/split (or raw "") #"\u0000" -1)
         records (butlast parts)]
     (boolean
       (and (= "" (last parts)) (seq records) (even? (count records))
            (every? (fn [[header path]]
-                     (and (re-matches #":100644 100644 [0-9a-f]{40} [0-9a-f]{40} M" header)
-                          (contains? archival-paths path)))
+                     (and (re-matches records-diff-header header)
+                          (records-lane-path? path)))
                    (partition 2 records))))))
 
 (defn- archive-only-commit? [line]
@@ -234,8 +276,9 @@
                  parents))))
 
 (defn- commits-behind-head
-  "All-DAG distance, excluding only proven archival content commits.
-   Histories over 1000 commits conservatively use raw distance."
+  "All-DAG distance, excluding only commits PROVEN to be records-lane content
+   (see `records-lane-prefix`). Histories over 1000 commits conservatively use
+   raw distance rather than granting uninspected exemptions."
   [sha]
   (when (and sha (re-matches #"[0-9a-f]{7,40}" (str sha)))
     (when (zero? (:exit (sh "git" "merge-base" "--is-ancestor" (str sha) "HEAD")))

@@ -153,34 +153,93 @@
            only cannot distinguish a broken gate from an absent one"))
     (testing "battery-fresh is a target of its own"
       (is (re-find #"(?m)^battery-fresh:" makefile))
-      (is (str/includes? makefile "battery_ledger.clj check")))))
+      (is (str/includes? makefile "battery_ledger.clj check")))
+    (testing "the records-lane exemption has an END-TO-END witness with a real
+              `git` history, and something actually invokes it -- the fast
+              witness above proves the CLASSIFIER, not the git plumbing that
+              feeds it, and a self-test no target runs is a diary entry"
+      (is (re-find #"(?m)^battery-fresh-records-lane-test:" makefile))
+      (is (str/includes? makefile "test/battery_fresh_records_lane_test.sh"))
+      (is (re-find #"(?m)^\t\$\(MAKE\) --no-print-directory battery-fresh-records-lane-test$"
+                   makefile)
+          "it must be invoked by a lane, not merely defined"))))
 
-;; @spec TEST-ISO-009b -- closed archival classification; no Git in fast lane.
-(deftest only-existing-regular-archive-content-is-exempt
-  (let [path "docs/observations/2026-09-06-live-astra-typist-commentary.md"
-        raw (fn [status old new p]
-              (str ":" old " " new " " (apply str (repeat 40 "a")) " "
-                   (apply str (repeat 40 "b")) " " status "\u0000" p "\u0000"))
-        good (raw "M" "100644" "100644" path)]
-    (is (ledger/archive-only-diff? good))
-    (testing "every merge parent must independently prove archive-only content"
-      (doseq [[second-out exit expected] [[good 0 true] ["" 0 false]
-                                         [good 1 false]
-                                         [(raw "M" "100644" "100644" "src/x.clj") 0 false]]]
-        (with-redefs-fn {#'ledger/sh (fn [& args]
-                                     (if (= "p2" (nth args (- (count args) 3)))
-                                       {:exit exit :out second-out}
-                                       {:exit 0 :out good}))}
-          #(is (= expected (#'ledger/archive-only-commit? "commit p1 p2"))))))
-    (doseq [bad ["" "garbage" (subs good 0 (dec (count good)))
-                 (raw "A" "000000" "100644" path)
-                 (raw "D" "100644" "000000" path)
-                 (raw "M" "100644" "100755" path)
-                 (raw "M" "120000" "120000" path)
-                 (raw "M" "160000" "160000" path)
-                 (raw "M" "100644" "100644" "docs/observations/battery-ledger.edn")
-                 (str good (raw "M" "100644" "100644" "src/x.clj"))]]
-      (is (not (ledger/archive-only-diff? bad)) (pr-str bad)))))
+;; @spec TEST-ISO-009b -- records-lane classification; no Git in fast lane.
+(deftest only-regular-records-lane-content-is-exempt
+  (testing "the records lane is a PREFIX now, not a closed three-path set --
+            because writing a NEW file is the records lane's normal act, and a
+            closed set covered only the commits nobody makes"
+    (let [z (apply str (repeat 40 "0"))
+          a (apply str (repeat 40 "a"))
+          b (apply str (repeat 40 "b"))
+          raw (fn [status old new osha nsha p]
+                (str ":" old " " new " " osha " " nsha " " status "\u0000" p "\u0000"))
+          modify (fn [p] (raw "M" "100644" "100644" a b p))
+          add    (fn [p] (raw "A" "000000" "100644" z b p))
+          delete (fn [p] (raw "D" "100644" "000000" a z p))
+          journal "docs/observations/2026-09-06-live-astra-typist-commentary.md"
+          brand-new "docs/observations/2026-09-08-a-log-written-today.md"
+          good (modify journal)]
+      (testing "modify, ADD and DELETE of any regular file in the lane"
+        (doseq [d [(modify journal) (add brand-new) (delete brand-new)
+                   (str (add brand-new) (modify journal))]]
+          (is (ledger/archive-only-diff? d) (pr-str d))))
+      (testing "every merge parent must independently prove records-lane content"
+        (doseq [[second-out exit expected] [[good 0 true] ["" 0 false]
+                                            [good 1 false]
+                                            [(modify "src/x.clj") 0 false]]]
+          (with-redefs-fn {#'ledger/sh (fn [& args]
+                                       (if (= "p2" (nth args (- (count args) 3)))
+                                         {:exit exit :out second-out}
+                                         {:exit 0 :out good}))}
+            #(is (= expected (#'ledger/archive-only-commit? "commit p1 p2"))))))
+      (testing "what the widening must NOT reach"
+        (doseq [bad ["" "garbage" (subs good 0 (dec (count good)))
+                     ;; the ledger may never exempt its own commit
+                     (modify "docs/observations/battery-ledger.edn")
+                     (add "docs/observations/battery-ledger.edn")
+                     ;; outside the lane, including the rest of docs/
+                     (modify "docs/intent/test-isolation/test-isolation-specs.md")
+                     (modify "docs/plans/battery-archival-distance.md")
+                     (modify "src/x.clj")
+                     (add "test/y_test.clj")
+                     ;; executables, symlinks, submodules, type and mode changes
+                     (raw "M" "100644" "100755" a b journal)
+                     (raw "A" "000000" "100755" z b brand-new)
+                     (raw "M" "120000" "120000" a b journal)
+                     (raw "M" "160000" "160000" a b journal)
+                     ;; a mixed commit is a CODE commit, whatever else it touched
+                     (str good (modify "src/x.clj"))]]
+          (is (not (ledger/archive-only-diff? bad)) (pr-str bad)))))))
+
+;; @spec TEST-ISO-009b -- the defect this exemption exists for, at its numbers.
+(deftest records-lane-churn-cannot-expire-a-battery-but-code-still-can
+  (let [distance (fn [raw ignored]
+                   (constantly {:commits-behind (- raw ignored)
+                                :raw-commits-behind raw
+                                :ignored-archive-commits ignored}))
+        fresh (ledger-text (entry :hours 1))]
+    (testing "40 records-only commits since the receipt: STILL FRESH. Before
+              this, one busy records day expired a green battery and the seat
+              paid a seven-minute rerun for paperwork it had just written"
+      (let [r (check fresh (distance 40 40))]
+        (is (:ok r) (str "expected fresh, got " (pr-str r)))
+        (is (= 0 (:commits-behind r)))
+        (is (= 40 (:raw-commits-behind r)) "the RAW distance is still reported")
+        (is (= 40 (:ignored-archive-commits r)))))
+    (testing "31 CODE commits still refuse -- the 30 budget is untouched"
+      (let [r (check fresh (distance 31 0))]
+        (is (false? (:ok r)))
+        (is (= :too-far-behind (:reason r)))
+        (is (str/includes? (:message r) "31 commits behind"))))
+    (testing "records commits cannot BUY slack for code: 40 records + 31 code
+              is still a refusal, because only the 31 are counted"
+      (let [r (check fresh (distance 71 40))]
+        (is (false? (:ok r)))
+        (is (= :too-far-behind (:reason r)))
+        (is (str/includes? (:message r) "31 commits behind"))))
+    (testing "and exactly 30 code commits under a mountain of records passes"
+      (is (:ok (check fresh (distance 970 940)))))))
 
 (deftest archive-distance-keeps-the-raw-audit-and-failure-authority
   (let [distance (constantly {:commits-behind 22 :raw-commits-behind 55
