@@ -73,3 +73,4 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 - 2026-09-08T05:45Z B02c delivered; p13–p16 = 4/4 PASS 9/9 observed. Row 9: friction-medium candidate pending Astra re-acceptance. Row 1: awaiting Sol r8 GO + install + Astra lift.
 - 2026-09-08T06:01Z Astra re-acceptance 2: not qualified (10 items) → B02d. Row 1 medium; row 9 friction-high.
 - 2026-09-08T06:02Z plate landed + installed (hash 67e45724…); row 1 remaining to LOW = Astra lift + qualified observed pilot. Rows 2–7 untouched (descend-at-low ruling).
+- 2026-09-08T06:51Z Astra cadence adopted (frozen suites by claim; ≤15-min reviews; two lanes). B07 (row 5 feasibility) launched in parallel. Night brief + watchdog for takeover.
