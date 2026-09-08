@@ -42,3 +42,6 @@ Rules of this file: one entry per hour (UTC), quote receipts verbatim, DELTA per
 
 ## 2026-09-08T10:38Z
 - DELTA: ROW 1 → friction-low (pilot 7: 4/4 on one frozen package). Row 5 D/F arms running. Astra r10 fix running (row 2 landing). Disk 30 G remaining. Load ~4–8 (cells).
+
+## 2026-09-08T10:43Z
+- DELTA: row 1 friction-low (pilot 7). Row 5: D1 proof-inclusive 341 s (asymmetry) → D2–D6 with runner-side proof running; F skipped for time. Astra r10 fix running. Disk 30 G remaining.
