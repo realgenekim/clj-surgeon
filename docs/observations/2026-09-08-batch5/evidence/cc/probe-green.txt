@@ -1,0 +1,2 @@
+PROBE cfp-scheduler-killer.views.avatar,cfp-scheduler-killer.views.avatar-test tests=3 pass=11 fail=0 error=0 wall_ms=286 image=38673
+TEST-RECEIPT /var/tmp/forge/batch5-fx/cc/target/kaocha-runs/2026-09-08T17-34-09-639257258Z-2a1f4821-f0c9-438f-b2ff-c05d53f6671b.edn

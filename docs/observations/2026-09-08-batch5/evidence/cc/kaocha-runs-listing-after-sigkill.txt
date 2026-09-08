@@ -1,0 +1,20 @@
+total 4208
+-rw-r--r-- 1 forge forge    1333 Sep  8 17:30 2026-09-08T17-30-24-121554589Z-4ce28730-cbd6-4266-b133-b415b06ae9f1.edn
+-rw-r--r-- 1 forge forge    1330 Sep  8 17:30 2026-09-08T17-30-38-682332820Z-8e85db28-fd43-4c92-9ca6-8695e57b542b.edn
+-rw-r--r-- 1 forge forge    1331 Sep  8 17:30 2026-09-08T17-30-39-144045094Z-2e5f5042-1da8-48e1-beab-68102dfb8ba6.edn
+-rw-r--r-- 1 forge forge    1331 Sep  8 17:30 2026-09-08T17-30-39-563277320Z-5dd12b4d-e8f6-43d3-802b-25c6cec24478.edn
+-rw-r--r-- 1 forge forge    1331 Sep  8 17:30 2026-09-08T17-30-39-976550526Z-4eabc01b-1b39-4775-a4d3-faa3130ecf33.edn
+-rw-r--r-- 1 forge forge    1331 Sep  8 17:30 2026-09-08T17-30-40-364405149Z-22438fa6-9dd4-4f28-b052-e1f92e87090c.edn
+-rw-r--r-- 1 forge forge     845 Sep  8 17:32 2026-09-08T17-32-14-689248173Z-20567c38-ef34-41fc-92c8-c2af4f6fddf2.edn
+-rw-r--r-- 1 forge forge     846 Sep  8 17:32 2026-09-08T17-32-14-986470221Z-3b4a7e7f-31bb-46bb-90fc-b1e9f61c3380.edn
+-rw-r--r-- 1 forge forge     846 Sep  8 17:32 2026-09-08T17-32-15-293644519Z-628da452-e467-46db-bf58-b77703046d65.edn
+-rw-r--r-- 1 forge forge     846 Sep  8 17:32 2026-09-08T17-32-15-601648292Z-23f9fe62-e9b0-4f74-aaac-f36e834295e9.edn
+-rw-r--r-- 1 forge forge     845 Sep  8 17:32 2026-09-08T17-32-15-944715846Z-ae45f26d-075e-40ad-85c0-9a784f4b660a.edn
+-rw-r--r-- 1 forge forge     846 Sep  8 17:32 2026-09-08T17-32-16-280349909Z-177512a3-77ac-4635-b3c3-2da8cc2596c1.edn
+-rw-r--r-- 1 forge forge     848 Sep  8 17:34 2026-09-08T17-33-47-888978301Z-755630d8-fa3c-4982-a0db-250c326b29e5.edn
+-rw-r--r-- 1 forge forge    1502 Sep  8 17:34 2026-09-08T17-34-09-267328447Z-c7c75791-6ece-4c20-b4e0-2ed0bd3c1f8a.edn
+-rw-r--r-- 1 forge forge     846 Sep  8 17:34 2026-09-08T17-34-09-639257258Z-2a1f4821-f0c9-438f-b2ff-c05d53f6671b.edn
+-rw-r--r-- 1 forge forge 2112312 Sep  8 17:35 2026-09-08T17-34-20-556634617Z-e7835c22-cb94-451d-a4bc-cd370a47e55a.edn
+-rw-r--r-- 1 forge forge 2123021 Sep  8 17:37 2026-09-08T17-36-02-029867403Z-9f175354-3d23-4e9e-aa45-df1a1480548a.edn
+-rw-r--r-- 1 forge forge     302 Sep  8 17:37 2026-09-08T17-37-39-928219860Z-de75d841-7ef3-4869-ac23-48b1e435a98b.edn.tmp
+-rw-r--r-- 1 forge forge     252 Sep  8 17:37 LATEST

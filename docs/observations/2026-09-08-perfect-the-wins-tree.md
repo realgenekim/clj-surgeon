@@ -102,3 +102,4 @@ Begin the month-long evidence accumulation after each eligible deployment; row 5
 
 - 2026-09-08T16:35Z GATE OF RECORD (Gene): Clojure Frame 7 (N vs P, request→accepted + apparatus share) runs only after all winning rows are perfect and the daily meters read sublime for consecutive days; cross-stack pilot parked behind it.
 - 2026-09-08T17:53Z row 1: caller-overlap cohort NO ADMISSION (W/C 0.911 sensitivity, gate ≤ 0.75); background gate = capability, not a routed win; row stays friction-low; next = apparatus share on the canary with the new boot block (batch 5).
+- 2026-09-08T18:33Z RED meter: apparatus share at the plugin tip 20 % (Opus/ccfp, 1 action, 6.9 s warm-first) and 42.9–55.6 % (Sol/mvr); six of six PASS; the entrances in the repo are the lever; Sol's residue is orientation. Next: pin kaocha-sublime by git sha; the agent reporter (fewer bytes → fewer reads); then re-canary daily.

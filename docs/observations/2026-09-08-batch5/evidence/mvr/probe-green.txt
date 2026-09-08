@@ -1,0 +1,2 @@
+PROBE marvin-voice-remote.reducer.echo-guard,marvin-voice-remote.echo-guard-test tests=6 pass=13 fail=0 error=0 wall_ms=214 image=45461
+TEST-RECEIPT /var/tmp/forge/batch5-fx/mvr/target/kaocha-runs/2026-09-08T17-28-00-666103977Z-94f56725-766a-4b0f-8c53-8121e71050e5.edn
