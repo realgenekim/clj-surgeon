@@ -1,7 +1,6 @@
 (ns clj-surgeon.namespace-split-io
   "Confined snapshot, baseline-relative lint, shared extraction publish/proof/inverse."
   (:require
-   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.extract :as extract]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.mcp-extraction :as kernel]
@@ -9,6 +8,7 @@
    [clj-surgeon.mcp-process :as process]
    [clj-surgeon.namespace-split :as split]
    [clj-surgeon.namespace-split-warm :as warm]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.synchronous-verification :as proof]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -46,7 +46,7 @@
      "source_retirement" {:type "string" :enum ["delete" "retain-empty"]}
      "roots" (assoc strings-schema :minItems 1 :maxItems 32)
      "constraints" (object-schema {"forbidden_edges" {:type "array" :items {:type "array" :items string-schema :minItems 2 :maxItems 2}}} [])
-     "verification" (object-schema {"profile" string-schema} ["profile"])
+     "verification" (object-schema {"profile" string-schema "profile-file" string-schema} ["profile"])
      "expect" (object-schema (into {} (for [k ["files" "forms" "destinations" "caller_files" "caller_sites"]]
                                         [k {:type "integer" :minimum 0}])) [])
      "snapshot_hash" string-schema
@@ -227,6 +227,54 @@
                           (contains? spec :proof) (assoc :proof (:proof spec)))
                         spec)])))
 
+(def max-profile-bytes (* 1024 1024))
+
+;; @spec NS-SPLIT-047
+;; INTENT: NS-SPLIT-047
+(defn external-profiles!
+  "Read operator-owned profile configuration without touching the workspace."
+  [root filename]
+  (try
+    (let [file (io/file filename)
+          path (.toPath file)
+          real (.toRealPath path (make-array LinkOption 0))]
+      (when-not (and (.isAbsolute file) (not (.startsWith real root))
+                     (Files/isRegularFile real (make-array LinkOption 0))
+                     (<= (Files/size real) max-profile-bytes))
+        (refuse! :invalid-profile-file "Profile file must be an absolute external regular EDN file of at most 1 MiB" {}))
+      ;; Bound the actual read as well as the stat, in case the file grows.
+      (let [bytes (with-open [in (Files/newInputStream real (make-array java.nio.file.OpenOption 0))]
+                    (.readNBytes in (inc max-profile-bytes)))
+            _ (when (> (alength bytes) max-profile-bytes)
+                (refuse! :invalid-profile-file "Profile file exceeds 1 MiB" {}))
+            config (edn/read-string (String. bytes java.nio.charset.StandardCharsets/UTF_8))]
+        (when-not (and (map? config) (map? (:verification-profiles config))
+                       (every? string? (keys (:verification-profiles config))))
+          (refuse! :invalid-profile-file "Profile file must contain :verification-profiles with string names" {}))
+        (:verification-profiles config)))
+    (catch Exception e
+      (refuse! :invalid-profile-file "Cannot read external verification profile file"
+               {:profile_file filename :reason (.getMessage e)}))))
+
+;; @spec NS-SPLIT-048
+;; INTENT: NS-SPLIT-048
+(defn proof-completion
+  "Completion needs executed substantive cold evidence, not merely cold mode.
+  Operator-configured commands are trusted; true itself proves no cold gate."
+  [capability verification]
+  (let [warm? (= :warm (:proof capability))
+        substantive? (some (fn [check]
+                             (and (:finished? check) (= 0 (:exit check))
+                                  (seq (:command check))
+                                  (not= "true" (.getName (io/file (first (:command check)))))))
+                           (:process_evidence verification))
+        pending (if warm?
+                  (mapv #(str/join " " %) (:pending-commands capability))
+                  (if (and (:ok verification) substantive?) [] ["cold-suite"]))
+        pending (if (and warm? (empty? pending)) ["cold-suite"] pending)]
+    {:verification_complete (and (not warm?) (true? (:ok verification)) (empty? pending))
+     :proof_pending pending}))
+
 (defn- result-snapshot-current? [root compiled]
   (try
     (= (into (sorted-map) (remove (comp nil? val))
@@ -277,10 +325,9 @@
             (if (and (:ok verification) snapshot-current?)
               (assoc (merge base (artifacts/workspace-evidence (str root) (concat (keys (:future-sources compiled)) (:deleted-files compiled)))) :ok true :committed true :mutation_attempted true
                      :source_retired (boolean (seq (:deleted-files compiled)))
-                     :verification_complete (not probe-only?)
+                     :verification_complete (:verification_complete (proof-completion capability verification))
                      :state (if probe-only? "committed-probe-only" "committed")
-                     :proof_pending (if probe-only?
-                                      (mapv #(str/join " " %) (:pending-commands capability)) [])
+                     :proof_pending (:proof_pending (proof-completion capability verification))
                      :checks checks :undo_receipt inverse :details_path details
                      :undo_command ["clj-surgeon" ":op" ":undo-extract!" ":receipt" inverse]
                      :receipt_hash (:receipt-hash committed)
@@ -313,8 +360,11 @@
          (let [root (paths/real-root (:workspace_root request))
                request (assoc request :workspace_root (str root))
                config-file (io/file (str root) ".clj-surgeon.edn")
-               project-config (when (.isFile config-file) (edn/read-string (slurp config-file)))
-               raw-profiles (or (:verification-profiles config) (:verification-profiles project-config))
+               raw-profiles (if-let [file (get-in request [:verification :profile-file])]
+                              (external-profiles! root file)
+                              (or (:verification-profiles config)
+                                  (when (.isFile config-file)
+                                    (:verification-profiles (edn/read-string (slurp config-file))))))
                profiles (anchored-profiles root raw-profiles)
                profile-name (get-in request [:verification :profile])
                mode (get-in profiles [profile-name :proof] :cold)
@@ -324,7 +374,11 @@
                _ (when (and (not (:plan_only request)) (= :warm mode) (nil? live))
                    (refuse! :warm-probe-unavailable "Warm proof requires a live workspace nREPL" {}))
                preflight (when-not (:plan_only request) (proof/verification-preflight profiles profile-name true))]
-           (when preflight (refuse! :verification-unavailable "Verification profile cannot run synchronously" {:preflight preflight}))
+           (when preflight
+             (refuse! (if (= "helper-extraction-verification-empty-profile" (:error_type preflight))
+                        :verification-empty-profile :verification-unavailable)
+                      (:error preflight) (cond-> {:preflight preflight}
+                                           (:proof_pending preflight) (assoc :proof_pending (:proof_pending preflight)))))
            (let [sources (capture! root (:roots request))
                  _ (doseq [d (:destinations request)]
                      (when-not (some #(.startsWith (.normalize (.toPath (io/file (:file d))))
@@ -374,7 +428,7 @@
           :mutation_attempted false :source_unchanged true :verification_complete false
           :error_type (name (or (:error-type (ex-data error)) :split-failed))
           :error (.getMessage error) :evidence (dissoc (ex-data error) :error-type)
-          :next_call nil :elapsed_ms (elapsed)})))))
+          :next_call nil :proof_pending (or (:proof_pending (ex-data error)) []) :elapsed_ms (elapsed)})))))
 
 ;; @spec NS-SPLIT-014
 (defn cli! [opts]
@@ -385,9 +439,10 @@
       (System/setProperty "java.io.tmpdir" tmpdir)))
   (let [request (or (:request opts)
                     (when-let [file (:request-file opts)] (edn/read-string (slurp file)))
-                    (dissoc opts :op :plan-only :facts-only))
+                    (dissoc opts :op :plan-only :facts-only :profile-file))
         request (cond-> request (:plan-only opts) (assoc :plan_only true)
-                  (:facts-only opts) (assoc :plan_only "facts"))]
+                  (:facts-only opts) (assoc :plan_only "facts")
+                  (:profile-file opts) (assoc-in [:verification :profile-file] (:profile-file opts)))]
     ;; EDN remains machine-readable while its first field answers what happened.
     (into (sorted-map-by (fn [a b] (compare [(if (= :state a) 0 1) (name a)]
                                      [(if (= :state b) 0 1) (name b)])))

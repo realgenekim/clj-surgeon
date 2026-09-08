@@ -10,6 +10,10 @@ is cut.
 
 ### Added
 
+- Namespace split accepts external `verification.profile-file` / CLI `:profile-file`
+  configuration. True-only profiles leave `cold-suite` pending; empty command
+  profiles refuse with `verification-empty-profile` before mutation.
+
 - Standalone `require_change` and CLI `:require-change!`: explicit files,
   ordered collision-aware aliases, exact add/remove counts, comment-preserving
   sorted line splices, synchronous verification and guarded durable undo.

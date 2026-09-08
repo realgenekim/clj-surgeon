@@ -377,3 +377,24 @@ findings remain explicit, not silently waived. The original case-corrected
 absolute failure and successful rollback remain in the B07 engineering receipt.
 This completes the authorized oracle repair without changing the exact fixture
 or its protected footprint. All arms receive the same oracle before timing.
+
+## External proof and truthful completion
+
+An explicit `verification.profile-file` is an absolute path outside the canonical
+workspace to a bounded EDN configuration containing `:verification-profiles`.
+It overrides injected/workspace configuration; it is read without adding any
+workspace file. `verification.profile` still selects the named profile. CLI
+`:profile-file` sets the same nested field. Invalid paths or data refuse typed.
+Executed commands remain named in checks. A successful cold true-only profile
+commits with `verification_complete=false`, `proof_pending=["cold-suite"]`.
+Empty commands refuse `verification-empty-profile` without mutation. Warm mode
+continues to list skipped cold commands. This does not certify the semantics of
+arbitrary operator-configured executables; those remain trusted proof inputs.
+
+A help-only caller review requires explicit artifact and pending-proof guidance:
+receipts live externally, but verification commands may write workspace logs.
+Inspect workspace_status unexpected paths and retain cleanup status separately.
+For cold-suite, the target Makefile/testing documentation supplies the command;
+for warm mode, use every listed pending command. Keep each argv/exit/output with
+receipt_hash and verify the same source hashes/inventory around those gates.
+External closure is separate evidence; the original receipt remains immutable.

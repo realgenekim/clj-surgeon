@@ -1371,3 +1371,7 @@ The alias-migration artifact contract is landing-critical: the complete alias
 boundary namespace executes on every landing gate, alongside the default lanes.
 [ALIAS-MIGRATION-003](intent/alias-migration/receipt-artifacts-specs.md) prevents a
 fresh historical battery receipt from concealing an unexecuted affected suite.
+
+Row 5 proof configuration may live outside the graded workspace. Split receipts
+separate successful publication from completion of substantive cold verification;
+empty profiles refuse before writes. See the [split design](intent/helper-extraction/namespace-split-design.md).

@@ -123,7 +123,11 @@
          "bb" "-cp" project-src "-m" "clj-surgeon.core" args))
 
 ;; @spec NS-SPLIT-014
+;; @spec NS-SPLIT-047
 (deftest cli-whole-split-plan-commit-and-refusal
+  (let [help (core/format-op-help :split-ns! (get core/ops-registry :split-ns!))]
+    (doseq [phrase ["workspace_status" "unexpected_paths" "Makefile" "receipt_hash"]]
+      (is (str/includes? help phrase) phrase)))
   (let [root (.toFile (java.nio.file.Files/createTempDirectory "split-cli-" (make-array java.nio.file.attribute.FileAttribute 0)))
         source-file (io/file root "src/sample/core.clj")
         request {:workspace_root (str root) :source {:file "src/sample/core.clj" :lib "sample.core"}
@@ -131,12 +135,13 @@
                                 {:lib "sample.b" :file "src/sample/b.clj" :forms ["b"] :alias_policy ["b"]}]
                  :promotion_policy "promote-required" :source_retirement "delete" :roots ["src"]
                  :verification {:profile "proof"}}
-        request-file (io/file root "request.edn")]
+        request-file (io/file root "request.edn")
+        profile-file (java.io.File/createTempFile "cli-proof-" ".edn")]
     (try
       (.mkdirs (.getParentFile source-file))
       (spit source-file "(ns sample.core)\n(defn a [] 1)\n(defn b [] (a))\n")
       (spit (io/file root "deps.edn") "{:paths [\"src\"]}")
-      (spit (io/file root ".clj-surgeon.edn")
+      (spit profile-file
             (pr-str {:verification-profiles {"proof" {:commands [["bb" "-cp" "src" "-e"
                                                                   "(require 'sample.b) (assert (= 1 (sample.b/b)))"]]}}}))
       (spit request-file (pr-str request))
@@ -151,11 +156,12 @@
         (is (:read_complete facts))
         (is (= 2 (count (get-in facts [:facts :owners]))))
         (is (not (:committed facts))))
-      (let [r (run-cli ":op" ":split-ns!" ":request-file" (str request-file))
+      (let [r (run-cli ":op" ":split-ns!" ":request-file" (str request-file) ":profile-file" (str profile-file))
             receipt (edn/read-string (:out r))]
         (is (zero? (:exit r)) (pr-str r))
         (is (= "committed" (:state receipt)))
         (is (:verification_complete receipt))
+        (is (not (.exists (io/file root ".clj-surgeon.edn"))))
         (is (not (.exists source-file)))
         ;; The receipt directory belongs to this temporary test as well.
         (when-let [file (:undo_receipt receipt)] (.delete (io/file file)))
@@ -165,7 +171,7 @@
       (let [bad (run-cli ":op" ":split-ns!" ":request" "{:unknown true}")]
         (is (pos? (:exit bad)))
         (is (= "invalid-request" (:error_type (edn/read-string (:out bad))))))
-      (finally (doseq [file (reverse (file-seq root))] (.delete file))))))
+      (finally (.delete profile-file) (doseq [file (reverse (file-seq root))] (.delete file))))))
 
 ;; @spec NS-SPLIT-041
 (deftest cli-partial-retention-facts-and-publication
