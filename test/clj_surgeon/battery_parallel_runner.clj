@@ -77,10 +77,9 @@
 
 (def default-lanes
   "Lanes when the caller names none. Measured on anvil-server (16 cores,
-   shared with other seats): beyond this the lanes contend for the box with
-   the cold children they each spawn, and the makespan stops improving while
-   peak load keeps climbing."
-  6)
+   shared with other seats): eight lanes produced the retained 218 s median
+   while preserving the serial verdicts namespace by namespace."
+  8)
 
 ;; ---------------------------------------------------------------------------
 ;; the summary -- the same shape a serial run prints
@@ -133,14 +132,14 @@
      admit-transaction-recovery-battery  ->  clj-surgeon.admit-patch-test
      (everything else)                       independent, any lane, any order
 
-   RUNNING IT IS OPT-IN (`BATTERY_PREREQS=1`), because satisfying the
-   precondition CHANGES WHAT IS ASSERTED -- `admit-patch-test`'s own note
-   measures 4 141 assertions on a clone with no receipt and 4 143 with one --
-   and this change's contract is that the default path's verdict semantics are
-   IDENTICAL to the serial lane's. With the flag on, the stage runs before any
-   lane, a failing stage is a named failure, and a precondition still skipped
-   afterwards is RED rather than counted: having declared that the
-   prerequisites are satisfied, a remaining skip is a broken declaration."
+   RUNNING IT IS DEFAULT-ON (`BATTERY_PREREQS=1`), because the normal battery
+   is evidence for `make test`, which owns this prerequisite. Satisfying it
+   changes what is asserted -- `admit-patch-test` measures 4 141 assertions
+   without the receipt and 4 143 with one -- so the serial comparison remains
+   available explicitly with `BATTERY_PREREQS=0`. With the flag on, the stage
+   runs before any lane, a failing stage is a named failure, and a precondition
+   still skipped afterwards is RED rather than counted: having declared that
+   the prerequisites are satisfied, a remaining skip is a broken declaration."
   [{:make-target "admit-transaction-recovery-battery"
     :produces "target/admit-transaction-recovery-battery-receipt.edn"
     :consumers '[clj-surgeon.admit-patch-test]
@@ -272,7 +271,13 @@
   "Why `n` may not be sharded, or nil. Fixtures are the whole question."
   [n]
   (if-let [nso (find-ns n)]
-    (fixture-refusal n (meta nso))
+    (or (fixture-refusal n (meta nso))
+        ;; `clojure.test/test-ns` dispatches to this hook instead of its normal
+        ;; `test-vars` path. It is therefore a namespace-level fixture even
+        ;; though `use-fixtures` did not register it in namespace metadata.
+        (when (ns-resolve nso 'test-ns-hook)
+          (format (str "%s declares test-ns-hook; sharding would bypass the "
+                       "namespace's custom test-ns program") n)))
     (format "%s is not loaded, so its deftests cannot be read" n)))
 
 (defn shard-vars
@@ -528,16 +533,21 @@
    the next run's schedule."
   [path runs lanes]
   (io/make-parents (io/file path))
-  (let [shard-runs (for [l lanes r (:runs (:emitted l)) :when (:sharded r)] r)
-        ;; A shard's wall is attributed EVENLY across the vars it ran. It is a
-        ;; coarse estimate and it is honest about being one: a finer number
-        ;; would need a probe per var, and the only thing this feeds is which
-        ;; lane a deftest lands in.
+  (let [previous-var-walls
+        (try (or (:var-walls-ms (edn/read-string (slurp path))) {})
+             (catch Exception _ {}))
+        shard-runs (for [l lanes r (:runs (:emitted l)) :when (:sharded r)] r)
+        ;; Only an isolated var has a measured var wall. A lane that grouped
+        ;; several vars observed their aggregate, so attributing that wall
+        ;; evenly would overwrite fine samples with invented uniform costs.
+        ;; Preserve the last fine sample until that var is isolated again.
         var-walls (into (sorted-map)
-                        (for [r shard-runs
-                              v (:vars r)]
-                          [(symbol (str (:namespace r)) (str v))
-                           (quot (:elapsed-ms r) (max 1 (count (:vars r))))]))]
+                        (into previous-var-walls
+                              (for [r shard-runs
+                                    :when (= 1 (count (:vars r)))
+                                    v (:vars r)]
+                                [(symbol (str (:namespace r)) (str v))
+                                 (:elapsed-ms r)])))]
     (spit path
           (with-out-str
             (println ";; TEST-ISO-013 -- measured walls of the battery lane.")
@@ -564,7 +574,7 @@
         ;; run without anyone remembering to edit this file.
         prereqs? (contains? #{"1" "true" "yes"}
                             (or (get opts "--prereqs")
-                                (System/getenv "BATTERY_PREREQS") "0"))
+                                (System/getenv "BATTERY_PREREQS") "1"))
         battery-namespaces (lm/namespaces-for :battery)
         walls-file (let [f (io/file walls-path)]
                      (if (.exists f)

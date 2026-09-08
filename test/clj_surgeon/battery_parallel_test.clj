@@ -10,6 +10,7 @@
    [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.mcp-test-runner :as runner]
    [clj-surgeon.ns-isolation :as iso]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
@@ -61,10 +62,14 @@
         (is (= (count scheduled) (count (set scheduled)))
             "no namespace is scheduled twice"))))
   (testing "the real battery lane, at the real default width"
-    (let [nss (lm/namespaces-for :battery)
+    (let [makefile (slurp (io/file "Makefile"))
+          nss (lm/namespaces-for :battery)
           plan (bp/partition-lanes (bp/apply-serial-groups nss bp/serial-groups)
                                    (bp/read-walls bp/walls-path)
                                    bp/default-lanes)]
+      (is (= 8 bp/default-lanes))
+      (is (str/includes? makefile "BATTERY_LANES ?= 8")
+          "the reviewed parallel width is the Makefile default")
       (is (= (sort nss) (sort (mapcat identity plan)))))))
 
 (deftest one-lane-is-the-serial-shape
@@ -280,7 +285,23 @@
       (is (str/includes? why "once PER SHARD"))))
   (testing "an unloaded namespace is refused rather than guessed at"
     (is (str/includes? (bp/shard-refusal 'clj-surgeon.no-such-namespace-at-all)
-                       "is not loaded"))))
+                       "is not loaded")))
+  (testing "test-ns-hook is a fixture path that namespace metadata does not name"
+    (let [n-sym 'clj-surgeon.battery-parallel-hook-probe
+          n (create-ns n-sym)
+          calls (atom [])]
+      (try
+        (let [v (intern n (with-meta 'sample {:test #(swap! calls conj :test)}) nil)]
+          (intern n 'test-ns-hook (fn [] (swap! calls conj :hook)))
+          (is (nil? (bp/fixture-refusal n-sym (meta n)))
+              "the metadata-only guard would let this namespace slip")
+          (is (str/includes? (bp/shard-refusal n-sym) "test-ns-hook"))
+          (clojure.test/test-ns n-sym)
+          (is (= [:hook] @calls) "the serial path runs the namespace hook")
+          (reset! calls [])
+          (runner/test-vars-of n-sym [v])
+          (is (= [:test] @calls) "the shard path bypasses it and runs the var"))
+        (finally (remove-ns n-sym))))))
 
 (deftest a-sharded-namespace-is-folded-back-into-one-run-before-any-fold
   (let [n 'clj-surgeon.reader-eval-fence-test
@@ -298,7 +319,23 @@
         "460 s is inside this namespace's declared 1 000 000 ms override"))
   (testing "one shard is returned untouched"
     (let [r {:namespace 'x :elapsed-ms 1 :counters {} :violations []}]
-      (is (= r (bp/merge-shard-runs 'x [r]))))))
+      (is (= r (bp/merge-shard-runs 'x [r])))))
+  (testing "an aggregate shard never flattens prior isolated-var measurements"
+    (let [path (io/file (System/getProperty "java.io.tmpdir")
+                        (str "battery-var-walls-" (System/nanoTime) ".edn"))]
+      (try
+        (spit path (pr-str {:var-walls-ms '{n/a 100 n/b 200}}))
+        (bp/write-walls!
+          (.getPath path) [{:namespace 'n :elapsed-ms 999}]
+          [{:emitted {:runs [{:namespace 'n :sharded true :vars '[a b]
+                              :elapsed-ms 999}
+                             {:namespace 'n :sharded true :vars '[c]
+                              :elapsed-ms 30}]}}])
+        (let [recorded (:var-walls-ms (edn/read-string (slurp path)))]
+          (is (= 100 (get recorded 'n/a)))
+          (is (= 200 (get recorded 'n/b)))
+          (is (= 30 (get recorded 'n/c))))
+        (finally (io/delete-file path true))))))
 
 (deftest the-re-derived-time-budget-is-word-for-word-the-serial-one
   ;; A shard cannot judge the namespace's ceiling, so the coordinator derives
@@ -340,6 +377,8 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest the-prerequisite-dag-names-its-target-its-product-and-its-consumers
+  (is (str/includes? (slurp (io/file "Makefile")) "BATTERY_PREREQS ?= 1")
+      "make test-battery satisfies the prerequisite by default")
   (doseq [{:keys [make-target produces consumers why]} bp/prerequisite-stages]
     (is (re-find (re-pattern (str "(?m)^" make-target ":")) (slurp (io/file "Makefile")))
         (str "`make " make-target "` must be a real target"))

@@ -1030,22 +1030,21 @@ test-integration:
 # So every run appends a receipt to docs/observations/battery-ledger.edn --
 # pass or fail, one line, append-only. The RUNNER writes the file; the SEAT
 # commits it. `make battery-fresh` is the tripwire that reads it back.
-# TEST-ISO-013 -- HOW WIDE THE BATTERY RUNS. `1` is SERIAL SEMANTICS: one lane
-# child holding every battery namespace, in manifest order, in one JVM -- the
-# same shape `test-battery-serial` runs. It is the DEFAULT on purpose: the
-# scheduler lands switched off, so the landing gate does not change until the
-# fence review has read the witness that says the verdicts are identical.
-# Flip it here (or `make test-battery BATTERY_LANES=6`) to run it wide.
-BATTERY_LANES ?= 1
+# TEST-ISO-013 -- HOW WIDE THE BATTERY RUNS. `1` is the serial PROCESS SHAPE:
+# one lane child holding every battery namespace in LPT order, in one JVM.
+# `test-battery-serial` retains the original manifest-order control. Three green
+# wide runs establish namespace-by-namespace verdict parity, so the reviewed
+# eight-lane schedule is now the default; pass BATTERY_LANES=1 for its control.
+BATTERY_LANES ?= 8
 
 # TEST-ISO-013 -- whether the battery RUNS its declared prerequisite stages
 # (today: `admit-transaction-recovery-battery`, whose receipt `admit-patch-test`
-# consumes) before opening any lane. OFF by default because satisfying that
-# precondition changes what is ASSERTED -- 4 141 assertions on a tree with no
-# receipt, 4 143 with one -- and the default path's verdict semantics must stay
-# identical to `test-battery-serial`. With it on, a failing stage is a named
-# failure and a precondition STILL skipped afterwards is RED.
-BATTERY_PREREQS ?= 0
+# consumes) before opening any lane. ON by default because `make test` owns
+# that prerequisite and a normal battery receipt must cover it. This changes
+# what is ASSERTED -- 4 141 assertions without the receipt, 4 143 with one;
+# pass BATTERY_PREREQS=0 only for the retained serial comparison. With it on,
+# a failing stage is named and a precondition STILL skipped afterwards is RED.
+BATTERY_PREREQS ?= 1
 
 test-battery:
 	@# @spec TEST-ISO-001

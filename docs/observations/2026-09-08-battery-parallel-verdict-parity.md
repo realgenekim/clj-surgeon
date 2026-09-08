@@ -80,14 +80,28 @@ counts above. `admit-patch-test` reads
 disk it records a counted, named skip and asserts **4 141**; with the receipt
 present it asserts **4 143**.
 
-| mode | ledger line | expected totals |
+| mode | ledger line | measured totals |
 |---|---|---|
-| `BATTERY_PREREQS=0` (Makefile default) | `:skipped 1` | 743 tests / 13 756 assertions |
-| `BATTERY_PREREQS=1` (receipt-chain) | `:skipped 0`, RED if not | 743 tests / 13 758 assertions |
+| `BATTERY_PREREQS=0` | `:skipped 1` | 743 tests / 13 756 assertions (35 ns, pre-merge tree) |
+| `BATTERY_PREREQS=1` (now the default) | `:skipped 0`, RED if not | 746 tests / 13 825 assertions (36 ns, merged tree) |
 
-So `:skipped` in the receipt is not merely a note: it tells the reader **which
-of two assertion counts the run was entitled to produce**. A `:skipped 1` line
-under `BATTERY_PREREQS=1` is RED by construction.
+**CORRECTION, measured 2026-09-08 on the fence run.** An earlier draft of this
+table predicted 13 758 for `PREREQS=1`, reading `admit-patch-test`'s own note
+that it asserts "4 141 with no battery receipt and 4 143 with one". That note is
+STALE relative to this tree: `admit-patch-test` measures **168 tests / 4 325
+assertions in BOTH modes** -- identical in the `PREREQS=0` parity receipt and in
+the `PREREQS=1` fence receipt. Satisfying the precondition moves `:skipped`
+from 1 to 0 and moves NOTHING ELSE.
+
+The whole 746 / 13 825 - 743 / 13 756 difference is the MERGE, not the mode:
+trunk's Batch 3 added one battery namespace, `split-proof-gate-boundary-test`,
+measured here at 3 tests / 69 assertions. 743 + 3 = 746; 13 756 + 69 = 13 825;
+35 + 1 = 36 namespaces.
+
+So `:skipped` is the ONLY receipt field that distinguishes the two modes on this
+tree -- which is a cleaner contract than the one this doc first claimed, and the
+reason to keep the field. A `:skipped 1` line under `BATTERY_PREREQS=1` is RED
+by construction.
 
 ## What this control does and does NOT close
 
