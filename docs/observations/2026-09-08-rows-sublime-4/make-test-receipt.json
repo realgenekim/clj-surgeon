@@ -1,0 +1,17 @@
+{
+  "command": [
+    "make",
+    "test"
+  ],
+  "cwd": "/home/forge/src/clj-surgeon-split",
+  "head": "21d57ffd252f94ba96ebff25ae158566af7da482",
+  "candidate_patch_sha256": "a4b2b85e91ffb948bd204ab5ad3aa2463f2423c29403de0d5ccc0c62ed1c2a08",
+  "started": "2026-09-08T20:28:03.445151+00:00",
+  "finished": "2026-09-08T20:36:21.434643+00:00",
+  "wall_s": 497.989480339922,
+  "exit": 0,
+  "source_manifest_before": "c9bf36fccac68b297e2adc4ab3a75bee49ed45aead8980c745d568326ae26ced",
+  "source_manifest_after": "c9bf36fccac68b297e2adc4ab3a75bee49ed45aead8980c745d568326ae26ced",
+  "sources_unchanged": true,
+  "tmpdir": "/var/tmp/forge/rows-sublime-4/cold-tmp"
+}
