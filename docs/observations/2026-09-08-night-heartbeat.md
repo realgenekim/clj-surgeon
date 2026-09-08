@@ -36,3 +36,6 @@ Rules of this file: one entry per hour (UTC), quote receipts verbatim, DELTA per
 
 ## 2026-09-08T09:40Z
 - DELTA: CX-18 closed, CX-19 fixed in the skill (9293a55), p26 PASS; pilot 5 (p27–p29) running for the clean four-cell claim. Row 2: verdict UNKNOWN pending fixed-build cohort (Astra fixing the verb; stage 3 staged). Row 5: native floor run 3–4/6. Row 3: verb built, task not admissible. Trunk 1ab53e0e. Disk 34 G remaining.
+
+## 2026-09-08T10:13Z
+- DELTA: row 2 WIN on the fixed build (3.98× caller work) → friction-high; Sol r10 NO-GO on that fix (battery lane gap) → Astra fixing. Row 5 floor 6/6 (317 s median caller work) → D/F arms running. Pilot 5 3/4 (CX-20 fixed) → p30 running. Gene report pushed 10:12Z (amend at 11:40Z). Disk ~31 G remaining. Load 4.46.

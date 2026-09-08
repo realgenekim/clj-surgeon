@@ -1,0 +1,160 @@
+;; Row 5 stage 1 — six fresh NATIVE (N) floor controls on the B07-frozen apparatus.
+;; Freeze: /var/tmp/forge/row5/freeze-stage1.edn  (sha256 8faebcf4b1c8757d...)
+;; No F arm and no D arm was run. Nothing was committed or pushed.
+{:meter
+ {:primary   "orient-start -> candidate-complete (caller-stamped; last stamp wins; candidate bytes frozen before the caller's own suite)"
+  :secondary "orient-start -> oracle-complete (all-oracle wall; the frozen oracle is run by the RUNNER)"
+  :segments  "caller-suite = candidate-complete -> done; handoff = done -> oracle-start; runner-oracle = oracle-start -> oracle-complete"}
+
+ :arms
+ [{:id "R1" :accepted true :oracle :PASS :oracle-exit 0
+   :candidate-work-s 382.1 :all-oracle-s 1156.0
+   :caller-suite-s 186.1 :runner-handoff-s 337.0 :runner-oracle-s 250.7
+   :candidate-complete-restamps 0 :refusals 0 :repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true   ; accepted on the first and only runner oracle run
+   :patch "/var/tmp/forge/row5/R1/candidate.patch" :patch-sha256-16 "156b585180bae3aa"
+   :oracle-log "/var/tmp/forge/row5/R1/oracle.log"
+   :note "rg census + sed/python cuts; removed the now-dead ZoneId import; 43 sites + the comment-block site."}
+  {:id "R2" :accepted true :oracle :PASS :oracle-exit 0
+   :candidate-work-s 310.0 :all-oracle-s 704.9
+   :caller-suite-s 145.4 :runner-handoff-s 11.7 :runner-oracle-s 237.8
+   :candidate-complete-restamps 0 :refusals 0 :repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true   ; accepted on the first and only runner oracle run
+   :patch "/var/tmp/forge/row5/R2/candidate.patch" :patch-sha256-16 "678ef93d29a5af7c"
+   :oracle-log "/var/tmp/forge/row5/R2/oracle.log"
+   :note "rg + sed line-range excision + perl symbol rewrite; negative-lookahead regex protected exports/calendar.ics URL strings."}
+  {:id "R3" :accepted true :oracle :PASS :oracle-exit 0
+   :candidate-work-s 323.9 :all-oracle-s 758.2
+   :caller-suite-s 170.7 :runner-handoff-s 13.8 :runner-oracle-s 249.8
+   :candidate-complete-restamps 0 :refusals 0 :repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true   ; accepted on the first and only runner oracle run
+   :patch "/var/tmp/forge/row5/R3/candidate.patch" :patch-sha256-16 "e6f2f43a8aeb3482"
+   :oracle-log "/var/tmp/forge/row5/R3/oracle.log"
+   :note "one rg pass for the caller surface, sed line ranges, one python rewrite pass; 34/34 Prolog oracles run."}
+  {:id "R4" :accepted true :oracle :PASS :oracle-exit 0
+   :candidate-work-s 280.0 :all-oracle-s 761.9
+   :caller-suite-s 221.5 :runner-handoff-s 14.4 :runner-oracle-s 245.9
+   :candidate-complete-restamps 0 :refusals 0 :repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true   ; accepted on the first and only runner oracle run
+   :patch "/var/tmp/forge/row5/R4/candidate.patch" :patch-sha256-16 "97ea95572e6a5f56"
+   :oracle-log "/var/tmp/forge/row5/R4/oracle.log"
+   :note "sed excision + byte-copy; also removed the orphaned ';; --- calendar.ics ---' banner (judgment call, inside footprint)."}
+  {:id "R5" :accepted true :oracle :PASS :oracle-exit 0
+   :candidate-work-s 226.4 :all-oracle-s 704.2
+   :caller-suite-s 227.4 :runner-handoff-s 12.1 :runner-oracle-s 238.4
+   :candidate-complete-restamps 0 :refusals 0 :repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true   ; accepted on the first and only runner oracle run
+   :patch "/var/tmp/forge/row5/R5/candidate.patch" :patch-sha256-16 "a6a5ed2dd5bcfdd2"
+   :oracle-log "/var/tmp/forge/row5/R5/oracle.log"
+   :note "rg/awk/sed + two python passes; explicitly guarded the exports/calendar.ics URL-string decoys."}
+  {:id "R6" :accepted true :oracle :PASS :oracle-exit 0
+   :candidate-work-s 336.7 :all-oracle-s 757.6
+   :caller-suite-s 162.5 :runner-handoff-s 12.8 :runner-oracle-s 245.6
+   :candidate-complete-restamps 1 :refusals 0 :repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true   ; accepted on the first and only runner oracle run
+   :patch "/var/tmp/forge/row5/R6/candidate.patch" :patch-sha256-16 "c727aa5830b2495f"
+   :oracle-log "/var/tmp/forge/row5/R6/oracle.log"
+   :note "re-stamped candidate-complete once: its own base-vs-candidate lint diff caught a NEW unused-import finding (ZoneId) and it fixed it before the suite."}
+ ]
+
+ :floor
+  {:n 6 :accepted 6 :first-attempt-acceptance 1.0
+   :refusals 0 :repairs 0 :native-fallbacks 0 :operator-interventions 0 :timeouts 0 :cap-s 1800
+   :primary-candidate-work
+    {:vals-s [382.1, 310.0, 323.9, 280.0, 226.4, 336.7] :median-s 316.9 :mean-s 309.84 :sd-s 52.91 :min-s 226.4 :max-s 382.1}
+   :secondary-all-oracle-raw
+    {:vals-s [1156.0, 704.9, 758.2, 761.9, 704.2, 757.6] :median-s 757.9 :mean-s 807.13 :sd-s 172.99 :min-s 704.2 :max-s 1156.0
+     :caveat "R1's 337.0 s runner handoff is a RUNNER POLLING artifact (300 s poll interval on the first run, 10 s
+              thereafter). It contributes essentially all of this SD. Do not use s_N=173.0 s as a native noise floor."}
+   :secondary-all-oracle-less-handoff   ; diagnostic: orient-start -> done PLUS runner-oracle
+    {:vals-s [818.9, 693.2, 744.4, 747.5, 692.1, 744.8] :median-s 744.59 :mean-s 740.16 :sd-s 46.5 :min-s 692.1 :max-s 818.9}
+   :caller-suite {:median-s 178.41 :mean-s 185.61 :sd-s 32.88 :min-s 145.4 :max-s 227.4}
+   :runner-handoff {:median-s 13.3 :mean-s 66.97 :sd-s 132.3 :min-s 11.7 :max-s 337.0}
+   :runner-oracle {:median-s 245.75 :mean-s 244.71 :sd-s 5.51 :min-s 237.8 :max-s 250.7}
+   }
+
+ :implied-D-thresholds
+  ;; Astra's gate (astra-squares-revisit.md item 8; b07-arms.md "Operator allocation"): D wins ONLY if
+  ;;   (a) all six D runs accepted with no semantic/preservation regression;
+  ;;   (b) >= 5/6 finish with no interface repair and no native fallback;
+  ;;   (c) median paired D/N <= 0.75;
+  ;;   (d) median paired (N - D) >= 90 s AND > 2 * s_N.
+  ;; Clauses (c) and (d) are pairwise in stage 2; the figures below are the calibration a stage-2 D
+  ;; would have to beat AT THIS FLOOR'S MEDIANS. Median components are not additive; stage 2 must
+  ;; recompute every clause from each pair's own stamps.
+  {:on-primary-candidate-work
+    {:median-N-s 316.90 :s_N-s 52.91 :2s_N-s 105.82
+     :ratio-clause-implies-D-s 237.67
+     :saved-90s-clause-implies-D-s 226.90  :saved-90s-clause-satisfiable true
+     :saved-2sd-clause-implies-D-s 211.08  :saved-2sd-clause-satisfiable true
+     :binding-clause :saved-2sd :binding-D-s 211.08
+     :note "UNLIKE ROW 2, the 90 s clause is comfortably satisfiable here: it asks the tool to remove
+            28.4% of the 316.9 s median native caller work, not ~95%. The binding clause is the
+            two-standard-deviation clause, which asks for 33.4%."}
+   :on-all-oracle-raw
+    {:median-N-s 757.90 :s_N-s 172.99 :2s_N-s 345.98
+     :ratio-clause-implies-D-s 568.42
+     :saved-90s-clause-implies-D-s 667.90
+     :saved-2sd-clause-implies-D-s 411.92
+     :binding-clause :saved-2sd :binding-D-s 411.92
+     :note "DO NOT USE AS PUBLISHED. s_N here is an artifact: R1's 337 s runner handoff (300 s runner
+            poll interval on the first run) supplies nearly all of it, so the 2-SD clause is inflated
+            into a threshold stricter than the mechanism could plausibly clear. Fix the meter in
+            stage 2 (bounded, equal handoff for every arm), do not fit the gate to this SD."}
+   :on-all-oracle-less-handoff
+    {:median-N-s 744.59 :s_N-s 46.50 :2s_N-s 93.00
+     :ratio-clause-implies-D-s 558.44
+     :saved-90s-clause-implies-D-s 654.59
+     :saved-2sd-clause-implies-D-s 651.59
+     :binding-clause :ratio :binding-D-s 558.44
+     :note "Diagnostic only (orient-start -> done, plus the runner oracle). ~424 s of the 745 s median
+            is post-candidate apparatus that both arms pay and that cancels in the paired difference;
+            the ratio clause is correspondingly easier on this clock than on the caller-work clock."}}
+
+ :apparatus-findings
+  [{:id :runtests-once-precondition :severity :must-fix-before-stage-2
+    :what "ALL SIX callers ran `make runtests-once` (task rule 6) and ALL SIX hit the same failure:
+           `new-mission-worktree-test` -> bin/test-new-mission-worktree -> `fatal: ambiguous argument
+           'main'`, exit 128. Every caller independently reproduced it on a pristine extract of the
+           base and correctly reported it as environmental."
+    :cause "This box has `git config --global init.defaultBranch` UNSET. The frozen oracle knows and
+            pins it (GIT_CONFIG_KEY_0=init.defaultBranch VALUE_0=main) for that gate only; the caller
+            brief does not disclose it. Under the pin the target is green: `D make runtests-once green
+            - 1021 tests, 12397 assertions, 0 failures` in the untouched-base qualification AND in all
+            six candidate runs."
+    :impact "None on acceptance and NONE ON THE PRIMARY ENDPOINT — every caller stamped
+             candidate-complete before running any suite. It inflates the caller-suite segment
+             (median 178.4 s) with diagnosis of a red herring."
+    :fix "Stage 2: add the oracle's own precondition sentence to the frozen task text, identically for
+          N, F and D, or have the runner export the pin into every arm's environment. Do NOT amend
+          mid-cohort: R1-R6 are frozen as run."}
+   {:id :runner-handoff-not-bounded :severity :must-fix-before-stage-2
+    :what "R1 handoff 337.0 s vs 11.7-14.4 s for R2-R6, because the runner polled the first run on a
+           300 s interval and the rest on 10 s."
+    :impact "Adds 337 s to R1's all-oracle wall and inflates the all-oracle SD from ~46 s to ~173 s.
+             The primary caller-work endpoint is untouched."
+    :fix "Stage 2: poll on a fixed short interval for every arm and record handoff per run; or stamp
+          oracle-start from the caller's own `done` transition."}
+   {:id :history-isolation-was-required :severity :resolved-in-this-freeze
+    :what "The shared checkout /home/forge/src/curtaincall-cfp reaches the historical answer
+           (a76f5ac6, the hand-driven Cell B extraction) via `git log --all`, and carries cellB/{N1-N4,
+           M1,M2,C1,C2} and split/b07 sitting on the base."
+    :fix "Cut every worktree from a shallow single-branch clone that preserves the exact base sha
+          92a7ca14 and contains exactly one commit and one ref. No oracle check was rebound."}
+   {:id :native-floor-is-saturated :severity :interpretation
+    :what "All six candidates are DISTINCT byte-wise (six distinct patch hashes, 1176-1184 lines, none
+           equal to the golden) yet semantically convergent: 25 forms moved, 43 external sites plus the
+           comment-block site rewritten, exactly 10 retained-var qualifications inside the moved bodies,
+           the dead ZoneId import retired, and the `exports` require REPLACED (not supplemented) in the
+           two callers that use only moved vars. A8 new/increased = 0 and PAPERCUTS = 0 in all six."
+    :impact "The native arm is not making correctness mistakes on this task, so a D arm cannot win on
+             quality here; it can only win on the 316.9 s of caller work, and only against a control
+             that already reaches 100% first-attempt acceptance."}
+   {:id :caller-work-clock-is-clean :severity :confirmed
+    :what "No caller mutated source after its final candidate-complete. R6 re-stamped once, exactly as
+           the protocol allows: its own base-vs-candidate lint diff caught a genuine NEW finding (the
+           unused ZoneId import) and it repaired that before its suite. The runner used R6's later
+           stamp (336.7 s, not 245.7 s)."}]
+
+ :not-run ["F arm" "D arm" "matched N/F/D blocks (b07 runs 7-24)" "any commit" "any push"]
+}

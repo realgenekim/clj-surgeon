@@ -1,0 +1,100 @@
+;; Row 5 stage-1 freeze — written BEFORE run R1. Six fresh NATIVE (N) floor controls.
+;; Pre-registration: clj-surgeon-records docs/observations/2026-09-07-plan-2/cellC/astra-squares-revisit.md
+;;                   "One next experiment", items 1-9.  Apparatus: B07 freeze (feasibility PASS).
+;; Meter amendment applied: docs/observations/2026-09-08-row2/revision-after-stage1.md, change 1.
+{:frozen-at-utc "2026-09-08T08:23:19Z"
+ :stage "row5 stage 1 — N floor only. No F arm, no D arm is run in this stage."
+
+ :apparatus
+  {:b07-freeze          "/var/tmp/forge/plan2/cellC/b07-freeze.edn"
+   :b07-freeze-sha256   "bddc5302b4c52f079e8e98464933d87cfa9b49642c6a486fc69213c3b706f783"
+   :b07-arms            "/var/tmp/forge/plan2/cellC/b07-arms.md"
+   :b07-arms-sha256     "d221133696c2c942c9d3c9495dca28584bee3c9a8f23e1800ca798b751b3b152"
+   :b07-arms-sha256-matches-freeze true   ; freeze :arms_sha256 d221133696c2c942c9d3c9495dca28584bee3c9a8f23e1800ca798b751b3b152
+   :implementation-sha256-unverified-here "1ecda56273dd1ea524eab6b4fccd22ab2bc97fc684b655095c66facb8c3ad008 (D/F only; not exercised in stage 1)"}
+
+ :fixture
+  {:repo             "/var/tmp/forge/row5/fixture-repo"
+   :kind             "history-isolated shallow clone of /home/forge/src/curtaincall-cfp"
+   :commit           "92a7ca14fd904e4d962df38614b9af3a7ef41a11"
+   :tree             "0c7222cb52c0db0048a72ce5b2ac3363d1d2a5eb"
+   :base-tree-in-shared-repo "0c7222cb52c0db0048a72ce5b2ac3363d1d2a5eb"
+   :tree-identical-to-base true
+   :commit-count     1
+   :refs             ["refs/heads/base"]
+   :remotes          :none
+   :shallow-graft    "92a7ca14fd904e4d962df38614b9af3a7ef41a11"
+   :why "The shared checkout leaks the answer: `git log --all` reaches a76f5ac672e10536e05d1080fde473b59d16a310
+         (\"cellB: hand-driven reference extraction of the calendar/ICS closure\"), and branches cellB/{N1..N4,M1,M2,C1,C2}
+         and split/b07 sit on the base. A shallow single-branch clone keeps the EXACT base sha 92a7ca14, so the frozen
+         oracle runs with its own default ORACLE_BASE and no check is rebound or weakened."}
+
+ :task
+  {:path        "/var/tmp/forge/row5/task-N.md"
+   :sha256      "826f8a862cd95c6f5ec5730e1d4d94f3fcfa2fe9a34422bf8fbce2411ab4c4f6"
+   :bytes       17931
+   :templated   ["RUN_ID" "WORKTREE_PATH"]   ; the ONLY per-run substitutions
+   :composition "row5 header (stamp protocol + arm-N route + fixed decisions + inlined manifest + acceptance summary)
+                 followed by the b07-arms.md \"Original Cell B task (unchanged reference text)\" section verbatim,
+                 with exactly two rows of its Base table rewritten (see :deviations)."
+   :manifest    "/var/tmp/forge/row5/b07-manifest.edn"
+   :manifest-sha256 "bf056ff7f83144bc2db8ff477bd004497828716996863e126ffea78bdd8697bf"
+   :manifest-sha256-matches-b07-freeze true}
+
+ :oracle
+  {:entrance "bash /var/tmp/forge/plan2/cellC/b07/frozen/cell_b_oracle.sh   (run by the RUNNER from the worktree root)"
+   :files
+    [{:name "cell_b_oracle.sh" :sha256 "9a9f7a8c75cab8aeeb5987fc9458393f187681a2d19c694bd606408807d6e1c6"}
+     {:name "cell_b_lint.py" :sha256 "8041e3f2bbce1389259677f99e6fc15cefa09c1e39399638fa208ccad45cf698"}
+     {:name "cell_b_preservation.clj" :sha256 "4ce21bca8769f59b73da1a86c158bd25eb4b18ea65fdd48c694079601ae703c7"}]
+   :sha256-match-b07-freeze true
+   :amendment "NS-SPLIT-046 A8 baseline correction (independent exact-base unresolved multiset), as disclosed in astra-B07-report.md"
+   :analyzer "/home/forge/bin/clj-kondo" :analyzer-sha256 "a8f59b7239c174224f3a51d0e97662836e93ca1ac16ea266e6f156f4d0c85e8f"
+   :babashka "/usr/local/bin/bb" :babashka-sha256 "da8731ca93065423dd96e60f7227b264a5093d9afa502816f1cd18efff947145"}
+
+ :oracle-qualification
+  {:golden
+    {:source-commit "a76f5ac672e10536e05d1080fde473b59d16a310"
+     :patch "/var/tmp/forge/row5/golden/golden.patch" :patch-sha256 "3eb3f2ffdd61b500693593a1218ecb75d57da6c7e302dc77b8552bbfd10cdbe6"
+     :worktree "/var/tmp/forge/row5/qual-golden"
+     :log "/var/tmp/forge/row5/golden/qual-golden-oracle.log"
+     :result :PASS :exit 0 :must "accept"}
+   :untouched-base
+    {:worktree "/var/tmp/forge/row5/qual-base"
+     :log "/var/tmp/forge/row5/golden/qual-base-oracle.log"
+     :result :FAIL :exit 1 :must "be red on the migration-specific checks"
+     :red    [:A1 :A2 :A3b :A4 :A5 :B07-preservation :B-load-destination-first :B-load-source-first]
+     :green-as-expected [:A3 :A6 :A7 :A8 :C-focused :C-integration :D-runtests-once :D-kaocha-unit :E]}}
+
+ :meter
+  {:primary   "orient-start -> candidate-complete (caller-stamped, candidate bytes frozen, BEFORE the caller's own suite)"
+   :secondary "orient-start -> oracle-complete   (all-oracle wall; the frozen oracle is run by the RUNNER)"
+   :authority "row-2 stage-1 revision, numbered change 1 + change 4 (two prospective endpoints, always reported together)."
+   :note      "Row 5 stage 1 reports the caller-work endpoint FIRST per the operator instruction for this row;
+               the complete verified wall is reported beside it and is never dropped."
+   :stamp-tool "/var/tmp/forge/dogfood-stamp.sh"
+   :log-per-arm "/var/tmp/forge/row5/<RUN>/stopwatch.log"
+   :cap-seconds 1800}
+
+ :cohort
+  {:arms ["R1" "R2" "R3" "R4" "R5" "R6"] :n 6 :route "N — unrestricted native" :model "opus, fresh agent session per run"
+   :order :sequential :worktree-per-run "/home/forge/src/cc-row5-<RUN>, branch row5/<RUN>, cut from the fixture repo at the base"
+   :forbidden ["clj-surgeon (MCP/CLI)" "cclsp" "clojure-lsp" "any other checkout" "any git history/ref/stash beyond the single base commit"
+               "any other caller's work" "committing/pushing/branching"]}
+
+ :deviations
+  [{:what "Worktrees are cut from a history-isolated fixture repo, not from /home/forge/src/curtaincall-cfp."
+    :why  "The shared checkout reaches the historical answer and the earlier arms' branches. The base sha, tree and
+           every oracle check are unchanged."}
+   {:what "Two rows of the original Cell B Base table were rewritten in the caller text: the repo row now names the
+           assigned worktree, and the oracle row says the runner runs it."
+    :why  "Both original values are live paths to other arms' materials (/home/forge/src/curtaincall-cfp and
+           /var/tmp/forge/plan2/cellB/, which holds N1-N4/M1/M2/C1/C2 briefs and outputs). No task content changed."}
+   {:what "The caller does NOT run the frozen acceptance oracle; the runner runs it after the caller finishes."
+    :why  "Operator instruction for row 5 stage 1, consistent with the row-2 amendment: the caller-work endpoint ends
+           at candidate-complete and the post-candidate apparatus is runner-owned and identical across arms.
+           This changes b07-arms.md, which had the arm run the oracle inside its own clock. Stage 2 must treat D
+           identically or the paired comparison is void."}
+   {:what "Run ids are R1..R6, not the b07 allocation table's 1-6." :why "Naming only."}]
+
+ :not-run ["F arm" "D arm" "matched N/F/D blocks 7-24" "any commit or push"]}
