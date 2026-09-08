@@ -1,5 +1,6 @@
 (ns ^{:lane :integration} clj-surgeon.mcp-http-server-test
   (:require
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [cheshire.core :as json]
    [clj-surgeon.alias-migration-fixture :as fixture]
    [clj-surgeon.mcp-contract :as contract]
@@ -8,7 +9,6 @@
    [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-tool :as tool]
-   [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -501,7 +501,7 @@
         (is (str/starts-with? (get-in apply-result [:content 0 :text]) "apply_clojure_changes\n"))
         (is (= "(ns demo)\n(defn shell []\n  [:body.page])\n"
                (slurp source-file)))
-        (is (= 1 (count (filter #(.isFile %) (file-seq receipt-dir))))))
+        (is (= 0 (count (filter #(.isFile %) (file-seq receipt-dir))))))
       (finally
         (http-server/stop-http-server! running)
         (delete-tree! project)))))
@@ -564,7 +564,7 @@
                          "apply_clojure_changes\n"))
         (is (= "(ns demo)\n\n(defn shell []\n  [:body.page])\n"
                (slurp source-file)))
-        (is (= 1 (count (filter #(.isFile %) (file-seq receipt-dir)))))
+        (is (= 0 (count (filter #(.isFile %) (file-seq receipt-dir)))))
         (with-open [connection (nrepl/connect :port (-> running :nrepl :port))]
           ;; The full suite can keep the shared JVM busy for longer than five
           ;; seconds. Wait for the terminal nREPL reply so that a timed-out eval
@@ -719,7 +719,7 @@
         (testing "the receipt directory was derived from the ROUTED workspace"
           (is (str/starts-with?
                 (:undo_receipt receipt)
-                (workspace/receipt-dir (.getCanonicalPath workspace)))
+                (artifacts/directory "alias-migration" (.getCanonicalPath workspace)))
               "not the server's project dir, and not a zero-arity crash"))
 
         (testing "the visible summary crosses the wire too"

@@ -1,6 +1,7 @@
 (ns clj-surgeon.mission-typist-executor
   "Flagged owner-forms executor. Frozen plan authority, staged proof, guarded commit."
   (:require
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [cheshire.core :as json]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.mcp-change-buffer :as buffer]
@@ -286,7 +287,7 @@
     result))
 
 (defn make-artifacts! [config]
-  (let [parent (io/file (:receipt-dir config))]
+  (let [parent (io/file (artifacts/directory "typist" (get-in config [:plan :typist :root])))]
     (.mkdirs parent)
     (str (Files/createTempDirectory (.toPath parent) "mission-" (make-array FileAttribute 0)))))
 
@@ -353,7 +354,7 @@
       (when-let [persist! (:persist-recovery! config)]
         (persist! {:receipt receipt-file :receipt_hash (:receipt-hash inverse) :artifacts artifacts}))
       (let [result (extraction/commit! compiled)]
-        (assoc (dissoc result :receipt) :undo_receipt receipt-file :receipt_hash (:receipt-hash inverse)
+        (assoc (merge (dissoc result :receipt) (artifacts/workspace-evidence (:root authority) (keys (:future-sources compiled)))) :undo_receipt receipt-file :receipt_hash (:receipt-hash inverse)
                :mutation-attempted true)))))
 
 (defn candidate-refusal! [artifacts index compiled]

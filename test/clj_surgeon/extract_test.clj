@@ -447,8 +447,9 @@
       (let [result (extract/execute! {:file (.getPath source)
                                       :forms '[distill refine]
                                       :to (.getPath target)
-                                      :receipt-out (.getPath receipt)})]
-        (is (= (.getCanonicalPath receipt) (:receipt-file result)))
+                                      :receipt-out (.getPath receipt)})
+            receipt (io/file (:receipt-file result))]
+        (is (str/starts-with? (:receipt-file result) "/var/tmp/forge/extract-receipts/"))
         (is (.exists target))
         (is (.exists receipt))
         (let [undo (extract/undo! {:receipt (.getPath receipt)})]
@@ -467,18 +468,19 @@
         target (io/file root "src" "my" "distillery.clj")
         receipt (io/file root "extract.edn")]
     (try
-      (extract/execute! {:file (.getPath source)
-                         :forms '[distill refine]
-                         :to (.getPath target)
-                         :receipt-out (.getPath receipt)})
-      (let [extracted-source (slurp source)
-            changed-target (str (slurp target) "\n;; user change\n")]
-        (spit target changed-target)
-        (let [undo (extract/undo! {:receipt (.getPath receipt)})]
-          (is (= :stale-extraction-result (:error-type undo)))
-          (is (true? (:source-unchanged undo)))
-          (is (= extracted-source (slurp source)))
-          (is (= changed-target (slurp target)))))
+      (let [result (extract/execute! {:file (.getPath source)
+                                      :forms '[distill refine]
+                                      :to (.getPath target)
+                                      :receipt-out (.getPath receipt)})
+            receipt (io/file (:receipt-file result))
+            extracted-source (slurp source)
+              changed-target (str (slurp target) "\n;; user change\n")]
+          (spit target changed-target)
+          (let [undo (extract/undo! {:receipt (.getPath receipt)})]
+            (is (= :stale-extraction-result (:error-type undo)))
+            (is (true? (:source-unchanged undo)))
+            (is (= extracted-source (slurp source)))
+            (is (= changed-target (slurp target)))))
       (finally (delete-recursive! root)))))
 
 (deftest test-execute-refuses-a-source-that-changed-after-planning
@@ -517,6 +519,7 @@
                                       :forms forms
                                       :to (.getPath target)
                                       :receipt-out (.getPath receipt)})
+            receipt (io/file (:receipt-file result))
             future-source (slurp source)
             future-target (slurp target)]
         (is (= 15 (get-in result [:summary :forms-extracted])))
@@ -617,7 +620,8 @@
         (let [result (extract/execute! {:file (.getPath source)
                                         :forms '[day-tab agenda-page]
                                         :to (.getPath target)
-                                        :receipt-out (.getPath receipt)})]
+                                        :receipt-out (.getPath receipt)})
+              receipt (io/file (:receipt-file result))]
           (testing "both generated namespaces load"
             (is (= 2 (get-in result [:summary :forms-extracted])))
             (let [runtime (cold-require-result root
@@ -647,7 +651,8 @@
       (let [result (extract/execute! {:file (.getPath source)
                                       :forms '[moved]
                                       :to (.getPath target)
-                                      :receipt-out (.getPath receipt)})]
+                                      :receipt-out (.getPath receipt)})
+            receipt (io/file (:receipt-file result))]
         (is (= [{:owner "caller" :moved-vars ["moved"]}]
                (:remaining-source-callers result)))
         (is (= ["moved"] (:source-referred-forms result)))

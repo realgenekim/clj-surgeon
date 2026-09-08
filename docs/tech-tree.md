@@ -441,3 +441,15 @@ libspecs share require opener lines, and one sorted append requires moving an
 inherited closer that O4 protects. One untimed original-seed handler call refuses
 before write; no cohort or routing claim.
 [Contradictions and retained evidence](observations/2026-09-08-row3-schema-admission.md).
+
+
+### 2026-09-08T09:41:33.993231+00:00 — row-2 receipt artifact isolation
+
+The six D-arm scratch failures reproduce in a fail-first Git witness. Verb receipt,
+detail and inverse storage now uses external per-verb receipt directories, with
+post-write Git exception evidence. The frozen nine-file/21-site alias request on
+a fresh history-isolated seed worktree passes O1–O5 with MINOR 0. Eight new row-2
+witnesses and the helper/typist boundary suites pass; no N-arm layout change or
+comparative performance claim. ALIAS-MIGRATION-001/002 own the linked contract.
+Final gates, review findings and the initial handler setup refusal are retained in
+`/var/tmp/forge/plan2/cellC/astra-row2-papercut-report.md`.

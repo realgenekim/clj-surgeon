@@ -698,7 +698,9 @@
                 "lib_renamed" {:type ["object" "null"]}
                 "details_path" {:type "string"}
                 "details_retention" {:type "string"}
-                "details_retained" {:type "integer" :minimum 0}}
+                "details_retained" {:type "integer" :minimum 0}
+                "workspace_clean_except" {:type "array" :items {:type "string"}}
+                "workspace_status" {:type "object"}}
    :required ["ok" "elapsed_ms"]})
 
 ;; @spec MCP-OP-HELPER-001

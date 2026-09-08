@@ -37,6 +37,7 @@
     profile's capability is a fact about the registry, not about a request"
   {:lane :battery}
   (:require
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.helper-extraction-fixture :as fixture]
    [clj-surgeon.mcp-helper-extraction :as mcp-helper]
    [clj-surgeon.mcp-tool :as mcp-tool]
@@ -582,7 +583,8 @@
       (try
         (.mkdirs locked)
         (.setWritable locked false false)
-        (let [outcome (with-materialized-happy-tree
+        (let [outcome (binding [artifacts/*artifact-root* (str locked)]
+                        (with-materialized-happy-tree
                         "receipt-fails"
                         (fn [root]
                           (mcp-helper/execute!
@@ -590,7 +592,7 @@
                             :receipt-dir (str (io/file locked "receipts"))}
                            (fixture/request
                             {:workspace_root root
-                             :verification {:profile "noop-proof"}}))))
+                             :verification {:profile "noop-proof"}})))))
               receipt (:result outcome)]
           (assert-restored! outcome)
           (is (not (true? (:committed receipt))) "never committed")
@@ -636,7 +638,7 @@
         (is (string? details)
             (str "the boundary publishes a details_path: " (pr-str receipt)))
         (when (string? details)
-          (is (str/starts-with? details (str receipt-dir))
+          (is (str/starts-with? details "/var/tmp/forge/helper-extraction-receipts/")
               "under the kernel receipt directory it was configured with")
           (is (not (str/includes? details "/acid/"))
               "and never inside the workspace tree it just mutated"))
@@ -1293,7 +1295,7 @@
                 (let [details-path (:details_path result)
                       details (read-details details-path)]
                   (is (string? details-path))
-                  (is (str/starts-with? (str details-path) (str receipt-dir))
+                  (is (str/starts-with? (str details-path) "/var/tmp/forge/helper-extraction-receipts/")
                       "under the local-state receipt directory")
                   (is (not (str/starts-with? (str details-path) (str root)))
                       "and never inside the workspace it mutated")

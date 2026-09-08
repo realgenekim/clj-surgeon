@@ -24,6 +24,36 @@
 
 (def corpus (fixture/corpus))
 
+;; @spec ALIAS-MIGRATION-001
+;; @spec ALIAS-MIGRATION-002
+(deftest row2-migration-leaves-only-rewritten-files
+  ;; Faithful boundary from row2/P1-D: a clean Git repo without a Surgeon ignore.
+  (let [root (.toFile (Files/createTempDirectory "row2-artifacts-" (make-array FileAttribute 0)))
+        source (io/file root "src/app.clj")]
+    (try
+      (.mkdirs (.getParentFile source))
+      (spit source "(ns app (:require [old.lib :as old]))\n(defn f [] (old/write 1))\n")
+      (doseq [args [["init" "-q"] ["add" "-A"]
+                    ["-c" "user.name=fixture" "-c" "user.email=fixture@example.test" "commit" "-qm" "seed"]]]
+        (is (zero? (:exit (apply shell/sh (concat ["git" "-C" (str root)] args))))))
+      (let [result (alias-migration/execute!
+                     {:project-root (str root) :receipt-dir (str root "/receipts")}
+                     {:op "alias_migration" :workspace_root (str root)
+                      :from {:lib "old.lib" :var "write"}
+                      :to {:lib "new.lib" :var "encode" :alias_policy ["new"]}
+                      :scope {:paths ["src"]} :expect {:files 1}})
+            status (shell/sh "git" "-C" (str root) "status" "--porcelain" "--untracked-files=all")]
+        (is (:committed result) (pr-str result))
+        (is (= " M src/app.clj\n" (:out status)))
+        (is (= ["src/app.clj"] (:workspace_clean_except result)))
+        (doseq [k [:details_path :undo_receipt]]
+          (is (str/starts-with? (get result k "") "/var/tmp/forge/alias-migration-receipts/") (pr-str result))
+          (when-let [path (get result k)]
+            (when (.isAbsolute (io/file path))
+              (Files/deleteIfExists (.toPath (io/file path)))))))
+      (finally
+        (doseq [f (reverse (file-seq root))] (Files/deleteIfExists (.toPath f)))))))
+
 (defn- temp-dir
   []
   (.toFile (Files/createTempDirectory "clj-surgeon-alias-migration"
@@ -7010,3 +7040,148 @@
     (is (= 1 (count (re-seq (re-pattern (str "\\[" (str/replace fixture/to-lib "." "\\.")))
                             after)))
         after)))
+
+;; @spec ALIAS-MIGRATION-001
+;; @spec ALIAS-MIGRATION-002
+(deftest row2-library-retirement-stays-outside-git
+  (let [root (temp-dir)]
+    (try
+      (write-tree! root {"src/old/lib.clj" "(ns old.lib)\n(defn f [] 1)\n"
+                         "src/app.clj" "(ns app (:require [old.lib :as old]))\n(defn run [] (old/f))\n"})
+      (doseq [args [["init" "-q"] ["add" "-A"] ["-c" "user.name=fixture" "-c" "user.email=f@x.test" "commit" "-qm" "seed"]]]
+        (is (zero? (:exit (apply shell/sh (concat ["git" "-C" (str root)] args))))))
+      (let [r (alias-migration/execute! {:project-root (str root)}
+                {:op "alias_migration" :workspace_root (str root)
+                 :from {:lib "old.lib"} :to {:lib "new.lib" :alias_policy ["new"]}
+                 :scope {:paths ["src"]} :expect {:files 1}})]
+        (is (:committed r) (pr-str r))
+        (is (= ["src/app.clj" "src/new/lib.clj" "src/old/lib.clj"] (:workspace_clean_except r)))
+        (is (str/starts-with? (get-in r [:lib_renamed :retired_to] "") "/var/tmp/forge/alias-migration-receipts/"))
+        (is (not (.exists (io/file root ".clj-surgeon")))))
+      (finally (delete-tree! root)))))
+
+;; @spec ALIAS-MIGRATION-001
+;; @spec ALIAS-MIGRATION-002
+(deftest row2-other-verbs-publish-external-artifacts
+  (require 'clj-surgeon.require-change-boundary-test 'clj-surgeon.namespace-split-test
+           'clj-surgeon.receipt-artifacts)
+  ((resolve 'clj-surgeon.require-change-boundary-test/with-workspace)
+   (fn [root request config]
+     (let [r ((resolve 'clj-surgeon.require-change-io/execute!) config request)]
+       (is (= "committed" (:state r)) (pr-str r))
+       (doseq [key [:undo_receipt :details_path]]
+         (is (str/starts-with? (get r key "") "/var/tmp/forge/require-change-receipts/")))
+       (is (not (.exists (io/file root "receipts")))))))
+  ((resolve 'clj-surgeon.namespace-split-test/with-paper-workspace)
+   (fn [root request]
+     (with-redefs-fn {(resolve 'clj-surgeon.namespace-split-io/analyze!)
+                      (fn [_] {:analysis @(resolve 'clj-surgeon.namespace-split-test/analysis)
+                               :findings [] :check {:exit 0 :duration_ms 0}})}
+       (fn []
+         (let [r ((resolve 'clj-surgeon.namespace-split-io/execute!)
+                  {:receipt-dir (str root "/receipts")
+                   :verification-profiles {"unit" {:commands [["/bin/true"]]}}} request)]
+           (is (= "committed" (:state r)) (pr-str r))
+           (doseq [key [:undo_receipt :details_path]]
+             (is (str/starts-with? (get r key "") "/var/tmp/forge/namespace-split-receipts/")))
+           (is (not (.exists (io/file root "receipts"))))))))))
+
+;; @spec ALIAS-MIGRATION-002
+(deftest row2-cleanliness-is-measured-not-assumed
+  (require 'clj-surgeon.receipt-artifacts)
+  (let [root (temp-dir)
+        evidence (resolve 'clj-surgeon.receipt-artifacts/workspace-evidence)]
+    (try
+      (is (nil? (:workspace_clean_except (evidence (str root) ["a.clj"]))))
+      (is (zero? (:exit (shell/sh "git" "-C" (str root) "init" "-q"))))
+      (spit (io/file root "a.clj") "(ns a)")
+      (is (= ["a.clj"] (:workspace_clean_except (evidence (str root) ["a.clj"]))))
+      (spit (io/file root "foreign scratch.txt") "foreign")
+      (let [r (evidence (str root) ["a.clj"])]
+        (is (nil? (:workspace_clean_except r)))
+        (is (= ["foreign scratch.txt"] (get-in r [:workspace_status :unexpected_paths]))))
+      (finally (delete-tree! root)))))
+
+;; @spec ALIAS-MIGRATION-001
+(deftest row2-retirement-refuses-descendant-symlink-before-write
+  ;; Adversarial row2 review: validating only the receipt base missed retired/.
+  (require 'clj-surgeon.receipt-artifacts)
+  (let [root (temp-dir)
+        workspace (io/file root "workspace")
+        external (io/file root "external")
+        link (atom nil)]
+    (try
+      (write-tree! workspace {"src/old/lib.clj" "(ns old.lib)\n(defn f [] 1)\n"})
+      (with-bindings {(resolve 'clj-surgeon.receipt-artifacts/*artifact-root*) (str external)}
+        (let [base (alias-migration/detail-directory (str workspace))
+              source (io/file workspace "src/old/lib.clj")
+              before (slurp source)
+              retired (io/file base "retired")]
+          (.mkdirs base)
+          (reset! link retired)
+          (Files/createSymbolicLink (.toPath retired) (.toPath workspace)
+                                    (make-array FileAttribute 0))
+          (let [failure (try
+                          ((resolve 'clj-surgeon.mcp-alias-migration/retire-file!)
+                           (str workspace) "src/old/lib.clj" (str source))
+                          nil
+                          (catch clojure.lang.ExceptionInfo error (ex-data error)))]
+            (is (= :receipt-dir-escapes (:error-type failure)))
+            (is (= before (slurp source)))
+            (is (Files/isSymbolicLink (.toPath retired))))))
+      (finally
+        (when @link (Files/deleteIfExists (.toPath @link)))
+        (delete-tree! root)))))
+
+;; @spec ALIAS-MIGRATION-001
+;; @spec ALIAS-MIGRATION-002
+(deftest row2-compacted-require-change-keeps-workspace-proof
+  (require 'clj-surgeon.require-change-io)
+  (let [root (temp-dir)
+        evidence {:workspace_clean_except ["src/a.clj"]
+                  :workspace_status {:checked true :exit 0
+                                     :clean_except_proven true :unexpected_paths []}}
+        receipt (merge evidence {:ok true :state "committed" :committed true
+                                 :details_path "/var/tmp/forge/require-change-receipts/detail.edn"
+                                 :checks [(apply str (repeat 5000 "x"))]})]
+    (try
+      (let [compacted ((resolve 'clj-surgeon.require-change-io/bound-receipt!) (str root) receipt)]
+        (is (= evidence (select-keys compacted (keys evidence))))
+        (is (= "committed" (:state compacted)))
+        (is (= (:details_path receipt) (:details_path compacted)))
+        (is (:details_elided compacted))
+        (is (= receipt (edn/read-string (slurp (:receipt_details_path compacted))))))
+      (finally (delete-tree! root)))))
+
+;; @spec ALIAS-MIGRATION-001
+(deftest row2-cold-proof-files-remain-isolated-by-workspace
+  (require 'clj-surgeon.mcp-cold-verify 'clj-surgeon.receipt-artifacts)
+  (let [root (temp-dir)]
+    (try
+      (let [first-root (io/file root "first")
+            second-root (io/file root "second")]
+        (.mkdirs first-root)
+        (.mkdirs second-root)
+        (with-bindings {(resolve 'clj-surgeon.receipt-artifacts/*artifact-root*)
+                        (str (io/file root "external"))}
+          (let [receipt-file (resolve 'clj-surgeon.mcp-cold-verify/receipt-file)
+                first-path (receipt-file (str first-root) "verify/same-id")
+                second-path (receipt-file (str second-root) "verify/same-id")]
+            (is (not= (.getCanonicalPath first-path) (.getCanonicalPath second-path)))
+            (.mkdirs (.getParentFile first-path))
+            (.mkdirs (.getParentFile second-path))
+            (spit first-path "{:workspace :first}")
+            (spit second-path "{:workspace :second}")
+            (is (= {:workspace :first} (edn/read-string (slurp first-path))))
+            (is (= {:workspace :second} (edn/read-string (slurp second-path)))))))
+      (finally (delete-tree! root)))))
+
+;; @spec ALIAS-MIGRATION-002
+(deftest row2-porcelain-preserves-renames-unicode-and-newlines
+  (require 'clj-surgeon.receipt-artifacts)
+  (let [paths (resolve 'clj-surgeon.receipt-artifacts/porcelain-paths)]
+    (is (= #{"src/新名.clj" "src/旧名.clj" "space name\nλ.clj"}
+           (paths "R  src/新名.clj\u0000src/旧名.clj\u0000?? space name\nλ.clj\u0000")))
+    (is (= #{"copy.clj" "source.clj" "changed.clj"}
+           (paths " C copy.clj\u0000source.clj\u0000 M changed.clj\u0000")))
+    (is (= #{} (paths "")))))

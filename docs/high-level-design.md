@@ -1361,3 +1361,8 @@ before emission, allowing native callers to reuse reference facts independently
 of the writer. The owning leaf is
 [namespace-split-design](intent/helper-extraction/namespace-split-design.md).
 B07 is a feasibility experiment, with no routing or performance admission.
+
+Receipt and undo bookkeeping is external to the workspace under verb-specific
+`/var/tmp/forge/<verb>-receipts/` directories. Committed Git workspace receipts
+measure their dirty-path exception set after publication; unavailable or failed
+cleanliness proof stays explicit. See [artifact intent](intent/alias-migration/receipt-artifacts-specs.md).

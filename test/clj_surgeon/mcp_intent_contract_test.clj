@@ -387,6 +387,7 @@
    "docs/intent/2026-08-30-prepared-request-ratification/prepared-request-specs.md"
    "docs/intent/agent-routing/agent-routing-specs.md"
    "docs/intent/alias-migration/alias-migration-specs.md"
+   "docs/intent/alias-migration/receipt-artifacts-specs.md"
    "docs/intent/feature-thread/feature-thread-specs.md"
    "docs/intent/helper-extraction/helper-extraction-specs.md"
    "docs/intent/helper-extraction/namespace-split-specs.md"
@@ -428,6 +429,7 @@
   "Intent leaves merged onto the integration branch after the registry was derived.
    Each one used to mean a line in the shared production vector; now it means a file."
   ["docs/intent/alias-migration/alias-migration-specs.md"
+   "docs/intent/alias-migration/receipt-artifacts-specs.md"
    "docs/intent/memory-boundedness/memory-boundedness-specs.md"
    "docs/intent/memory/memory-transaction-specs.md"
    "docs/intent/read-path-memory/read-path-memory-specs.md"
@@ -461,7 +463,7 @@
     ;; B03 adds the suspension, exact split admission and plate parity promises.
     ;; B07 registers NS-SPLIT-037..046 (ten retained-source/facts/oracle promises).
     ;; Row 3 registers fourteen standalone require-change promises.
-    (is (= 220 (count non-mcp)))
+    (is (= 222 (count non-mcp)))
     (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 19
             "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3}
            (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"

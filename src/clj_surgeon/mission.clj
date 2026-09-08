@@ -890,8 +890,8 @@
          (get verb-help "run")
          "\n\nUse the owner_forms spec documented in docs/mission-typist.md.\n"
          "The helper_extraction example in global help is not a run spec.\n"
-         "  bin/mission run --spec-file owner-forms.edn --state-home H --receipt-dir /absolute/project/.clj-surgeon/typist\n"
-         "Structured stdin: bin/mission run --spec-file - --receipt-dir /absolute/project/.clj-surgeon/typist < owner-forms.edn\n"
+         "  bin/mission run --spec-file owner-forms.edn --state-home H --receipt-dir /var/tmp/forge/typist-receipts\n"
+         "Structured stdin: bin/mission run --spec-file - --receipt-dir /var/tmp/forge/typist-receipts < owner-forms.edn\n"
          "A blocked run returns :error_type \"mission-not-ready\" and its id.\n"
          "Use show <id> --workspace R to inspect it; apply failures exit nonzero.\n")
     (contains? #{"commit" "fallback"} verb)
@@ -919,7 +919,7 @@
       "\nWorkflow after configuring real behavioral proof:\n"
       "  bin/mission open  --spec-file spec.edn --state-home $H\n"
       "  bin/mission ready --workspace $WS --state-home $H\n"
-      "  bin/mission apply M-1 --workspace $WS --state-home $H --receipt-dir $WS/.clj-surgeon/typist\n"
+      "  bin/mission apply M-1 --workspace $WS --state-home $H --receipt-dir /var/tmp/forge/typist-receipts\n"
       "  bin/mission show  M-1 --workspace $WS --state-home $H\n")))
 
 ;; ---------------------------------------------------------------------------

@@ -1,0 +1,11 @@
+{:intents
+ [{:id :ALIAS-MIGRATION-001 :status :active
+   :ears "When a verb publishes bookkeeping, it shall use its external verb receipt directory."
+   :misreadings ["Gitignoring workspace artifacts is sufficient." "Only alias detail documents count." "Explicit server configuration may put undo in source."]
+   :boundaries ["library retirement" "detail retention" "undo" "symlink containment"]
+   :tests [:row2-migration-leaves-only-rewritten-files]}
+  {:id :ALIAS-MIGRATION-002 :status :active
+   :ears "When a write commits, the receipt shall substantiate workspace cleanliness with post-write Git status."
+   :misreadings ["Copy planned paths without running Git." "A non-Git tree is clean." "Pre-existing untracked files can be silently omitted."]
+   :boundaries ["untracked files" "unrelated tracked changes" "non-Git" "renames" "unusual file names"]
+   :tests [:row2-migration-leaves-only-rewritten-files]}]}

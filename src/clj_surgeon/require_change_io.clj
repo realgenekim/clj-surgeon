@@ -1,6 +1,7 @@
 (ns clj-surgeon.require-change-io
   "Explicit-file capture and shared failure-atomic publication/proof/inverse."
   (:require
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.mcp-extraction :as kernel]
    [clj-surgeon.mcp-paths :as paths]
@@ -123,7 +124,7 @@
                               (= (count (:commands capability)) (count (:process_evidence verification)))
                               (every? #(= "passed" (:status %)) checks))]
             (if complete
-              (assoc base :state "committed" :committed true :mutation_attempted true :source_unchanged (empty? (:future-sources compiled))
+              (assoc (merge base (artifacts/workspace-evidence (str root) (keys (:future-sources compiled)))) :state "committed" :committed true :mutation_attempted true :source_unchanged (empty? (:future-sources compiled))
                      :verification_complete true :checks checks :undo_receipt @inverse-path :details_path details
                      :receipt_hash (:receipt-hash committed)
                      :undo_command ["clj-surgeon" ":op" ":undo-extract!" ":receipt" @inverse-path])
@@ -145,6 +146,7 @@
           (select-keys [:ok :operation :state :committed :mutation_attempted
                         :source_unchanged :restored :verification_complete :counts
                         :expected :counts_match :protected_bytes :symbol_edits
+                        :workspace_status :workspace_clean_except :details_path
                         :elapsed_ms :undo_receipt :receipt_hash :proof_pending :error_type :collisions_resolved])
           (cond-> (<= (count (pr-str (:alias_histogram result))) 512)
             (assoc :alias_histogram (:alias_histogram result)))
@@ -159,7 +161,7 @@
   ([request] (execute! {} request))
   ([config request]
    (let [started (System/nanoTime)
-         receipt-dir (or (:receipt-dir config) (str (System/getProperty "java.io.tmpdir") "/require-change-receipts"))
+         receipt-dir (artifacts/directory "require-change" (:workspace_root (walk/keywordize-keys request)))
          result
          (try
            (let [r (walk/keywordize-keys request)

@@ -624,7 +624,7 @@
       ;; Round 4 merged with origin/MCP/main aa587ec3: source census = 1489.
       ;; B07 adds 12 JVM witnesses; one new CLI test runs separately in the BB suite.
       ;; Standalone require intent: 1501 + 21 = 1522, with boundary processes in battery.
-      (is (= 1522 total) (str "manifest declares " total " tests"))
+      (is (= 1530 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))
@@ -768,7 +768,7 @@
    "test/clj_surgeon/scope_stream_test.clj"
    {105 "bounded poll -- System/gc then re-check reachability, succeeds immediately, fails at gc-deadline-ms (round three's fix for the two fixed `Thread/sleep 100` assertions)"}
    "test/clj_surgeon/mcp_tool_test.clj"
-   {1394 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count (1380 -> 1381 on 2026-09-06: the `cheshire.core` require the next_call REPLAY witnesses need moved the whole namespace down one line -- the pin costing one number is the point; 1381 -> 1394 on 2026-09-07 when the expect-guard witness was inserted above it)"}
+   {1395 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count (1380 -> 1381 on 2026-09-06: the `cheshire.core` require the next_call REPLAY witnesses need moved the whole namespace down one line -- the pin costing one number is the point; 1381 -> 1394 on 2026-09-07 when the expect-guard witness was inserted above it)"}
    "test/clj_surgeon/mcp_hot_verify_test.clj"
    {244 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
 
