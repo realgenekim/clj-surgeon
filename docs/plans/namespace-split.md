@@ -144,3 +144,29 @@ or fresh performance claim is part of this block. Acceptance: the current
 repository audit, existing witnesses, touched lint, and
 `~/bin/round /home/forge/src/clj-surgeon-split /dev/null b01 --no-build` with
 `intents=ok`. Record the exact ROUND line and direct audit map in the B01 report.
+
+## B07 partial retention and facts (authorized 2026-09-08)
+
+Gene authorizes this complete linked-intent, fail-first build and proof cycle on
+astra/namespace-split, without push. Four-hour gate: 2026-09-08T06:51:44Z through
+10:51:44Z. Subject: exact Cell B 92a7ca14fd904e4d962df38614b9af3a7ef41a11,
+25 of 112 owners, eight retained dependencies, three retained-private promotions,
+and removal of only the offending calendar invocation in the comment block.
+No caller table, generated requires, caller-authored splitter or fixture weakening.
+
+Derive a factual plan before candidate emission. Assign unmapped owners to the
+retained source; share references, alias allocation, promotions and graph proof
+with full retirement. Publish all files through the existing guarded inverse.
+Facts mode exposes owners, exact anchors, retained dependencies, promotions and
+graph facts without candidate bytes or an emitter. Retain plan-only compatibility.
+
+Matrix: full-retirement compatibility; subset/singleton/empty mapping; both
+reference directions; mixed and load-only callers; alias collisions; authorized
+and unauthorized promotions; narrow comment removal and unauthorized shapes;
+cycles; stale snapshot; fact parity/emitter exclusion; atomic undo; CLI/MCP schema.
+First mutation-test the oracle's uppercase unresolved defect. Negative witnesses
+cover omitted retained qualification, wrongly redirected retained caller and
+comment cycle. Use one warm development image, split/output oracle and warm tests
+per iteration, then one cold make test and intent audit. Freeze implementation,
+adapter, manifest and oracle hashes; hand off 24 sequential N/F/D runs. No timing
+comparison is performed during this build. A representational gap is FAILURE.

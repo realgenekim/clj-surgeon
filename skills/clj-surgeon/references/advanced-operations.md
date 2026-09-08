@@ -103,3 +103,15 @@ clj-surgeon :op :cljc-add-require :file src/foo.cljc \
 
 Inspect with `:cljc-analyze` before reconciling divergent forms or requires.
 Let the tool preserve reader conditionals and reject alias collisions.
+
+## Experimental partial split and facts
+
+Use `:op :split-ns! :request-file X :facts-only true` to inspect shared,
+snapshot-bound owners, located references, retained dependencies, promotions and
+graph facts. MCP uses `plan_only: "facts"`. Neither entrance invokes the emitter.
+For a retained source, X includes `:source {:file F :lib L :retain true}` and a
+subset destination manifest; omit `:source_retirement`. Full execution uses the
+same facts and existing guarded inverse. It requires a configured verification
+profile. See the repository namespace-split design for the closed policy grammar.
+This B07 capability is explicitly experimental; automatic routing admission stays
+limited to the previously witnessed full Cell C contract.

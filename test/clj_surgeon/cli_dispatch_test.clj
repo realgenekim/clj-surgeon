@@ -138,12 +138,19 @@
       (spit (io/file root "deps.edn") "{:paths [\"src\"]}")
       (spit (io/file root ".clj-surgeon.edn")
             (pr-str {:verification-profiles {"proof" {:commands [["bb" "-cp" "src" "-e"
-                                                                   "(require 'sample.b) (assert (= 1 (sample.b/b)))"]]}}}))
+                                                                  "(require 'sample.b) (assert (= 1 (sample.b/b)))"]]}}}))
       (spit request-file (pr-str request))
       (let [p (run-cli ":op" ":split-ns!" ":request-file" (str request-file) ":plan-only" "true")]
         (is (zero? (:exit p)) (:err p))
         (is (:read_complete (edn/read-string (:out p))))
         (is (.exists source-file)))
+      ;; @spec NS-SPLIT-041
+      (let [f (run-cli ":op" ":split-ns!" ":request-file" (str request-file) ":facts-only" "true")
+            facts (edn/read-string (:out f))]
+        (is (zero? (:exit f)) (pr-str f))
+        (is (:read_complete facts))
+        (is (= 2 (count (get-in facts [:facts :owners]))))
+        (is (not (:committed facts))))
       (let [r (run-cli ":op" ":split-ns!" ":request-file" (str request-file))
             receipt (edn/read-string (:out r))]
         (is (zero? (:exit r)) (pr-str r))
@@ -158,6 +165,41 @@
       (let [bad (run-cli ":op" ":split-ns!" ":request" "{:unknown true}")]
         (is (pos? (:exit bad)))
         (is (= "invalid-request" (:error_type (edn/read-string (:out bad))))))
+      (finally (doseq [file (reverse (file-seq root))] (.delete file))))))
+
+;; @spec NS-SPLIT-041
+(deftest cli-partial-retention-facts-and-publication
+  (let [root (.toFile (java.nio.file.Files/createTempDirectory "partial-cli-" (make-array java.nio.file.attribute.FileAttribute 0)))
+        source-file (io/file root "src/sample/core.clj")
+        request {:workspace_root (str root) :source {:file "src/sample/core.clj" :lib "sample.core" :retain true}
+                 :destinations [{:lib "sample.calendar" :file "src/sample/calendar.clj" :forms ["b"] :alias_policy ["calendar"]}]
+                 :promotion_policy ["a"] :roots ["src"] :verification {:profile "proof"}}
+        request-file (io/file root "request.edn")]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file "(ns sample.core)\n(defn- a [] 1)\n(defn b [] (a))\n")
+      (spit (io/file root "deps.edn") "{:paths [\"src\"]}")
+      (spit (io/file root ".clj-surgeon.edn")
+            (pr-str {:verification-profiles {"proof" {:commands [["bb" "-cp" "src" "-e"
+                                                                  "(require 'sample.calendar) (assert (= 1 (sample.calendar/b)))"]]}}}))
+      (spit request-file (pr-str request))
+      (let [facts (run-cli ":op" ":split-ns!" ":request-file" (str request-file) ":facts-only" "true")
+            receipt (edn/read-string (:out facts))]
+        (is (zero? (:exit facts)) (pr-str facts))
+        (is (= ["a"] (get-in receipt [:facts :retained_dependencies])))
+        (is (= ["a"] (mapv :form (get-in receipt [:facts :promotions]))))
+        (spit request-file (pr-str (assoc request :snapshot_hash (:snapshot_hash receipt)))))
+      (let [result (run-cli ":op" ":split-ns!" ":request-file" (str request-file))
+            receipt (edn/read-string (:out result))]
+        (is (zero? (:exit result)) (pr-str result))
+        (is (= "committed" (:state receipt)))
+        (is (true? (:verification_complete receipt)))
+        (is (false? (:source_retired receipt)))
+        (is (.exists source-file))
+        (is (str/includes? (slurp source-file) "(defn a"))
+        (doseq [k [:undo_receipt :details_path]]
+          (when-let [file (get receipt k)] (.delete (io/file file))))
+        (when-let [file (:details_path receipt)] (.delete (.getParentFile (io/file file)))))
       (finally (doseq [file (reverse (file-seq root))] (.delete file))))))
 
 (defn- run-outline-without-semantic-enrichment [operation]

@@ -767,9 +767,25 @@ default to `:proof :cold`; `:proof :warm` requires that live probe and skips the
 cold command list, reporting `committed-probe-only`, `verification_complete false`
 and every skipped command in `proof_pending`. Warm results cannot prove absence
 of stale Vars or replace final cold acceptance.
+For partial extraction, set `:source {:file ... :lib ... :retain true}` and
+omit `:source_retirement`. Supply only the moved owner names; unmapped forms stay
+in place. The compiler qualifies cross-boundary references, preserves mixed
+callers and promotes only necessary authorized private Vars. The optional source
+`:alias_policy` chooses its incoming alias; `:comment_policy
+"remove-moved-invocations"` authorizes narrowly removing moved calls (and their
+sole print wrapper) in source comment blocks. Cycles still refuse.
+
+CLI `:facts-only true` or MCP `plan_only: "facts"` returns `:facts` with owners,
+exact reference anchors, retained dependencies, promotions, graph and snapshot
+hash. No candidate bytes or emitter runs. The full split uses those same facts;
+pass the returned `snapshot_hash` to refuse stale work. Facts-only needs no live
+verification profile; publication still requires one. Existing boolean plan-only
+retains its broader compiler projection.
+
 See the [request, proof and undo contract](docs/intent/helper-extraction/namespace-split-design.md).
 
 ```sh
+clj-surgeon :op :split-ns! :request-file split.edn :facts-only true
 clj-surgeon :op :split-ns! :request-file split.edn :plan-only true
 clj-surgeon :op :split-ns! :request-file split.edn
 ```

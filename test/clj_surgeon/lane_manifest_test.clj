@@ -378,8 +378,9 @@
   (testing "counts are pinned so a silent re-partition is loud"
     (is (= 52 (count (lm/namespaces-for :fast))))
     (is (= 7 (count (lm/namespaces-for :integration))))
-    (is (= 32 (count (lm/namespaces-for :battery))))
-    (is (= 91 (count lm/manifest))
+    ;; B07 enrolls its independent oracle mutation witnesses in one new battery namespace.
+    (is (= 33 (count (lm/namespaces-for :battery))))
+    (is (= 92 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -408,9 +409,10 @@
   "Namespaces in a lane today that round one did NOT measure, each with the
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
-  '{clj-surgeon.namespace-split-test 26 ; Round 4: structural continuation ownership and original caller headers.
+  '{clj-surgeon.namespace-split-test 35 ; B07 adds nine partial-retention, facts, bounded-analysis and preservation witnesses.
     clj-surgeon.namespace-split-warm-test 2 ; Round 3: real nREPL failure/green matrix and stale/foreign discovery, integration.
-    clj-surgeon.mcp-namespace-split-test 7 ; Add proof-time drift to closed schema, capture, projection and rollback.
+    clj-surgeon.mcp-namespace-split-test 8 ; B07 adds effect-free facts boundary to schema, capture, projection and rollback.
+    clj-surgeon.cell-b-oracle-test 2 ; B07: shell lint mutation test and independent partial-preservation mutants; battery (Python subprocess).
     clj-surgeon.mcp-expect-guard-test 14 ; `expect` is a guard on both write routes, not discarded bookkeeping (dogfood-3, 2026-09-07).
     clj-surgeon.outline-corpus-integration-test 1 ; MOVED: full repository differential out of the bounded fast namespace.
     clj-surgeon.mission-candidate-race-test 5 ; Completion-order delivery, bounded cancellation and retained results.
@@ -523,7 +525,8 @@
       ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
       ;; Round 3 adds three pure and two warm boundary tests: 477 + 5 = 482.
       ;; Eight Cell C paper-cut witnesses: 464 + 8 = 472.
-      (is (= 484 adopted) (str "adopted tests: " adopted)))
+      ;; B07 adds 9 compiler + 1 boundary + 2 oracle tests: 484 + 12 = 496.
+      (is (= 496 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -616,7 +619,8 @@
       ;; +5 extraction Andon witnesses: identity, handoff, continuation and real roots.
       ;; Cell C paper-cut round: eight namespace-split witnesses, no lane change.
       ;; Round 4 merged with origin/MCP/main aa587ec3: source census = 1489.
-      (is (= 1489 total) (str "manifest declares " total " tests"))
+      ;; B07 adds 12 JVM witnesses; one new CLI test runs separately in the BB suite.
+      (is (= 1501 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

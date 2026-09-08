@@ -151,4 +151,64 @@
  :boundaries ["Exact full-profile names and order; duplicate or missing split entry; edit-only catalog unchanged"]
  :tests [:registers-one-admit-tool-in-the-full-profile]
  :rationale "B01 links the existing exact-list witness corrected by 1f0646e9 after receipt-chain-18 found it red on trunk."}
+{:id :NS-SPLIT-037 :status :active
+ :ears "When source.retain is true, the compiler shall leave unmapped owners in the source and include that file in the guarded inverse."
+ :misreadings ["Treat a subset as missing owners." "Delete or regenerate the retained source."]
+ :boundaries ["empty/subset/full; comments; atomic failure; undo"]
+ :tests [:partial-retention-preserves-source-and-undo]
+ :rationale "B07 feasibility gate, Gene authorization 2026-09-08; exact Cell B retained-source task."}
+{:id :NS-SPLIT-038 :status :active
+ :ears "When a reference crosses a retained or moved seam, the compiler shall qualify it through a required alias and promote only authorized necessary private owners."
+ :misreadings ["Redirect every reference in a mixed caller." "Promote every moved private owner."]
+ :boundaries ["both directions; mixed/load-only callers; collisions; cycles; authorization"]
+ :tests [:partial-reference-directions-and-promotions]
+ :rationale "B07 feasibility gate, Gene authorization 2026-09-08; exact Cell B retained-source task."}
+{:id :NS-SPLIT-039 :status :active
+ :ears "When removal of moved invocations in source comment forms is authorized, the compiler shall remove only the offending invocation and its sole print wrapper."
+ :misreadings ["Drop the complete comment block." "Ignore every comment reference."]
+ :boundaries ["authorized/absent policy; print wrapper; retained neighboring calls; cycle"]
+ :tests [:partial-comment-removal-is-narrow]
+ :rationale "B07 feasibility gate, Gene authorization 2026-09-08; exact Cell B retained-source task."}
+{:id :NS-SPLIT-040 :status :active
+ :ears "When facts are requested, the compiler shall return snapshot-bound pre-emission facts identical to those consumed by full execution."
+ :misreadings ["Generate candidates and strip bytes afterward." "Expose replacement text or generated requires to F."]
+ :boundaries ["owners; exact anchors; dependencies; promotions; graph; stale snapshot; emitter exclusion"]
+ :tests [:facts-only-shares-the-plan-without-emission]
+ :rationale "B07 feasibility gate, Gene authorization 2026-09-08; exact Cell B retained-source task."}
+{:id :NS-SPLIT-041 :status :active
+ :ears "When CLI facts-only or MCP plan_only facts is requested, the shared boundary shall return a read-only facts receipt through the closed request grammar."
+ :misreadings ["Require a verification process for a read." "Accept contradictory retain/delete policies."]
+ :boundaries ["CLI parsing/help/exit; MCP schema; unavailable profile; no write"]
+ :tests [:partial-and-facts-request-contract]
+ :rationale "B07 feasibility gate, Gene authorization 2026-09-08; exact Cell B retained-source task."}
+{:id :NS-SPLIT-042 :status :superseded :superseded-by :NS-SPLIT-046
+ :ears "When the Cell B oracle encounters an unresolved diagnostic in any letter case, A8 shall fail."
+ :misreadings ["Only lowercase unresolved is an error." "Missing analyzer output is clean."]
+ :boundaries ["uppercase/lowercase var/namespace/symbol; clean; analyzer failure"]
+ :tests [:cell-b-lint-case-witness]
+ :rationale "B07 feasibility gate, Gene authorization 2026-09-08; exact Cell B retained-source task."}
+{:id :NS-SPLIT-043 :status :active
+ :ears "When Cell B partial-extraction preservation is checked, the oracle shall reject missing retained qualification, redirected retained callers and the source comment cycle."
+ :misreadings ["Forty-three moved sites alone prove acceptance." "Ignore retained behavior or comment architecture."]
+ :boundaries ["three negative mutations; exact baseline owners; visibility; protected bytes"]
+ :tests [:cell-b-partial-negative-witnesses]
+ :rationale "B07 feasibility gate, Gene authorization 2026-09-08; exact Cell B retained-source task."}
+{:id :NS-SPLIT-044 :status :active
+ :ears "When captured analysis exceeds source-byte size, the boundary shall apply a separate finite 64 MiB analysis-output cap and refuse truncation before parsing."
+ :misreadings ["Shrink the fixture roots until output fits." "Treat truncated EDN as complete." "Unbound the subprocess output."]
+ :boundaries ["Cell B 472 files; source cap stays 16 MiB; analysis cap 64 MiB; truncated/refused analyzer"]
+ :tests [:analysis-output-has-a-separate-finite-budget]
+ :rationale "B07 baseline capture returned exit 3, finished true, truncated true at the old 16 MiB output limit."}
+{:id :NS-SPLIT-045 :status :active
+ :ears "When partial extraction retires the last use of a source alias or short imported class, the compiler shall remove that newly unused header entry while preserving mixed and load-only dependencies."
+ :misreadings ["Retained source means every old caller alias must remain." "Delete a shared import." "Remove baseline-unused dependencies outside the move."]
+ :boundaries ["Cell B ZoneId; inform and public-cfp; mixed callers; load-only source requires; shared class import"]
+ :tests [:partial-headers-retire-only-newly-unused-dependencies]
+ :rationale "B07 hand-drive introduced three lint warnings despite correct behavior; baseline comparison identified the exact cause."}
+{:id :NS-SPLIT-046 :status :active
+ :ears "When A8 compares a candidate with an independently analyzed archive of the exact frozen base, the oracle shall reject every new or increased unresolved finding in any letter case while retaining matching baseline findings as explicit evidence."
+ :misreadings ["Ignore uppercase diagnostics." "One removed error can cancel a different new error." "A changed file inherits a blanket baseline exemption." "An unavailable baseline is clean."]
+ :boundaries ["exact baseline archive; file/severity/message multiset; coordinates move; case; duplicate increase; changed identity; missing/failed analyzer"]
+ :tests [:cell-b-lint-case-witness]
+ :rationale "B07 absolute A8 failed on five pre-existing findings, four in protected files; independent exact-base archive and candidate have identical multisets. This is an oracle correction, with the failed run preserved, not a fixture change."}
 ]}

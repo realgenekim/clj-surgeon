@@ -20,6 +20,7 @@
 
 (def max-files 4000)
 (def max-bytes (* 16 1024 1024))
+(def max-analysis-bytes (* 64 1024 1024))
 (def max-file-bytes (* 2 1024 1024))
 (def string-schema {:type "string" :minLength 1})
 (def strings-schema {:type "array" :items string-schema :uniqueItems true})
@@ -30,7 +31,10 @@
 (def schema
   (object-schema
     {"workspace_root" string-schema
-     "source" (object-schema {"file" string-schema "lib" string-schema} ["file" "lib"])
+     "source" (object-schema {"file" string-schema "lib" string-schema
+                              "retain" {:type "boolean"}
+                              "alias_policy" (assoc strings-schema :minItems 1)
+                              "comment_policy" {:type "string" :enum ["remove-moved-invocations"]}} ["file" "lib"])
      "destinations" {:type "array" :minItems 1 :maxItems 1000
                      :items (object-schema {"lib" string-schema "file" string-schema
                                             "doc" string-schema
@@ -45,8 +49,8 @@
      "expect" (object-schema (into {} (for [k ["files" "forms" "destinations" "caller_files" "caller_sites"]]
                                         [k {:type "integer" :minimum 0}])) [])
      "snapshot_hash" string-schema
-     "plan_only" {:type "boolean"}}
-    ["workspace_root" "source" "destinations" "promotion_policy" "source_retirement" "roots" "verification"]))
+     "plan_only" {:oneOf [{:type "boolean"} {:type "string" :enum ["facts"]}]}}
+    ["workspace_root" "source" "destinations" "promotion_policy" "roots" "verification"]))
 
 (defn- schema-errors [s x path]
   (if-let [alternatives (:oneOf s)]
@@ -68,15 +72,24 @@
                  "string" (when (str/blank? x) [{:path path :reason :blank-string}])
                  "integer" (when (and (:minimum s) (< x (:minimum s))) [{:path path :reason :below-minimum}]) nil)))))))
 
+;; @spec NS-SPLIT-041
+;; INTENT: NS-SPLIT-041
 (defn validate-request [request]
   (let [errors (schema-errors schema request [])
-        bad-aliases (for [d (:destinations request) a (:alias_policy d)
+        bad-aliases (for [d (cons (:source request) (:destinations request)) a (:alias_policy d)
                           :when (not (and (string? a) (re-matches #"[A-Za-z][A-Za-z0-9_-]*" a)))]
                       {:path ["destinations" (:lib d) "alias_policy"] :reason :invalid-alias})
         bad-libs (for [lib (cons (get-in request [:source :lib]) (map :lib (:destinations request)))
                        :when (not (and (string? lib) (re-matches #"[A-Za-z_][A-Za-z0-9_!?*+\-]*(?:\.[A-Za-z_][A-Za-z0-9_!?*+\-]*)*" lib)))]
                    {:path ["lib"] :reason :invalid-library :lib lib})]
-    (vec (concat errors bad-aliases bad-libs))))
+    (vec (concat errors bad-aliases bad-libs
+                 (when (if (true? (get-in request [:source :retain]))
+                         (contains? request :source_retirement)
+                         (not (contains? request :source_retirement)))
+                   [{:path ["source_retirement"] :reason :retention-policy-conflict}])
+                 (when (and (not (true? (get-in request [:source :retain])))
+                            (get-in request [:source :comment_policy]))
+                   [{:path ["source" "comment_policy"] :reason :requires-retained-source}])))))
 
 (defn- refuse! [type message data]
   (throw (ex-info message (assoc data :error-type type))))
@@ -118,6 +131,8 @@
     (into (sorted-map) (map (fn [p] [(str (.relativize root p)) (slurp (str p))])) files)))
 
 ;; @spec NS-SPLIT-015
+;; @spec NS-SPLIT-044
+;; INTENT: NS-SPLIT-044
 (defn analyze!
   "One serialized clj-kondo run over exact captured bytes in an isolated mirror."
   [sources]
@@ -130,8 +145,8 @@
                      {:command [(str (System/getProperty "user.home") "/bin/clj-kondo") "--lint" (str temp)
                                 "--cache" "false" "--config"
                                 (pr-str {:output {:format :edn :analysis {:var-definitions true :var-usages true
-                                                                          :namespace-usages true :java-class-usages true :keywords true}}})]
-                      :cwd (str temp) :timeout-ms 120000 :visible-byte-limit max-bytes})
+                                                                          :namespace-usages true :java-class-usages true}}})]
+                      :cwd (str temp) :timeout-ms 120000 :visible-byte-limit max-analysis-bytes})
             data (when (and (:finished? result) (not (:out-truncated result)))
                    (edn/read-string (:out result)))]
         (when-not (and (= :admitted (get-in result [:admission :status]))
@@ -324,8 +339,10 @@
                  compiled (if (seq expected-errors) (-> compiled (assoc :ok false) (update :blockers into expected-errors)) compiled)
                  checks [(:check analyzed)]
                  result (cond
-                          (:plan_only request) (cond-> (assoc (split/receipt compiled checks) :analysis (split/analysis-projection compiled)
+                          (:plan_only request) (cond-> (assoc (split/receipt compiled checks)
                                                          :read_complete true :source_unchanged true)
+                                                 (= "facts" (:plan_only request)) (assoc :facts (get-in compiled [:projection :facts]))
+                                                 (not= "facts" (:plan_only request)) (assoc :analysis (split/analysis-projection compiled))
                                                  (not (:ok compiled)) (assoc :error "Split analysis contains blockers" :error_type "split-refused"))
                           (not (:ok compiled)) (assoc (split/receipt compiled checks) :error "Split decisions or static proof are incomplete"
                                                  :error_type "split-refused" :source_unchanged true
@@ -368,8 +385,9 @@
       (System/setProperty "java.io.tmpdir" tmpdir)))
   (let [request (or (:request opts)
                     (when-let [file (:request-file opts)] (edn/read-string (slurp file)))
-                    (dissoc opts :op :plan-only))
-        request (cond-> request (:plan-only opts) (assoc :plan_only true))]
+                    (dissoc opts :op :plan-only :facts-only))
+        request (cond-> request (:plan-only opts) (assoc :plan_only true)
+                  (:facts-only opts) (assoc :plan_only "facts"))]
     ;; EDN remains machine-readable while its first field answers what happened.
     (into (sorted-map-by (fn [a b] (compare [(if (= :state a) 0 1) (name a)]
                                      [(if (= :state b) 0 1) (name b)])))

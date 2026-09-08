@@ -414,3 +414,19 @@ limits nonzero exits to the two baseline-attributed analysis checks, and the
 Both trunk battery rows and the branch row are preserved in receipt order.
 No routing performance claim, installation or push; verification and merge
 receipts are in `/var/tmp/forge/plan2/cellC/astra-B03b-report.md`.
+
+### 2026-09-08 — B07 partial-retention feasibility gate
+
+The shared namespace split compiler now prepares snapshot-bound facts before
+emission, supports a supplied subset with the source retained, qualifies both
+reference directions, and applies required authorized promotions. The read-only
+CLI/MCP facts path never invokes the emitter. NS-SPLIT-037..046 own the
+retention, facts, oracle, analysis-cap and header-cleanup witnesses. The exact
+Cell B fixture supplies 25 owners, 43 external sites, eight retained dependencies
+and three promotions; the original Cell C full split still has zero papercuts.
+A8's case repair exposed five unchanged baseline diagnostics, so the frozen
+repair independently analyzes the exact base and rejects every new or increased
+unresolved identity. The absolute-check failure and rollback remain evidence.
+Build, cold gates, hand-drive receipts and the frozen sequential 24-run operator
+protocol: `/var/tmp/forge/plan2/cellC/astra-B07-report.md`. This is a feasibility
+experiment, with no automatic routing admission or comparative performance claim.

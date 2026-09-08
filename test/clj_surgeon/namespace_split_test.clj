@@ -303,12 +303,15 @@
         tags (fn [files pattern] (set (mapcat #(map second (re-seq pattern (slurp %))) files)))
         code (tags ["src/clj_surgeon/namespace_split.clj" "src/clj_surgeon/namespace_split_io.clj" "src/clj_surgeon/namespace_split_warm.clj"
                     "src/clj_surgeon/mcp_tool.clj"
-                    "test/oracles/namespace_split_papercut_oracle.py"]
+                    "test/oracles/namespace_split_papercut_oracle.py"
+                    "test/oracles/cell_b_oracle.sh" "test/oracles/cell_b_preservation.clj"]
                    #"(?m)^(?:;;|#) INTENT: (NS-SPLIT-[0-9]+)")
         tests (tags ["test/clj_surgeon/namespace_split_test.clj"
                      "test/clj_surgeon/admit_patch_test.clj"
+                     "test/clj_surgeon/cell_b_oracle_test.clj"
                      "test/clj_surgeon/namespace_split_warm_test.clj"
-                     "test/oracles/test_namespace_split_papercut_oracle.py"]
+                     "test/oracles/test_namespace_split_papercut_oracle.py"
+                     "test/oracles/test_cell_b_oracle.py"]
                     #"(?m)^(?:;;|#) INTENT-TEST: (NS-SPLIT-[0-9]+)")]
     (is (every? code active))
     (is (every? tests active))
@@ -614,3 +617,169 @@
   (is (= {:reload ["app.new" "app.deep-test"] :tests ["app.deep-test"]}
          (warm/selection ["app.new"] ["app.deep-test"]
                          [["app.intermediate" "app.new"] ["app.deep-test" "app.intermediate"]]))))
+
+;; Cell B 92a7ca14: minimal faithful retained dependency + mixed caller + comment trap.
+(defn partial-fixture
+  ([] (partial-fixture false true))
+  ([reverse? comment?]
+   (let [source (str "(ns app.views \"keep source doc\")\n;; retained helper\n(defn- helper [] 1)\n"
+                     ";; moved prose\n(defn moved [] (helper))\n"
+                     "(defn stay [] " (if reverse? "(moved)" ":kept") ")\n"
+                     (when comment? "(comment (stay) (let [e 1] (print (moved))))\n"))
+         caller "(ns app.caller (:require [app.views :as v]))\n(def answer [(v/moved) (v/stay)])\n"
+         uses (concat [(literal-usage "src/app/views.clj" source "helper))" 'app.views 'helper)
+                       (literal-usage "test/app/caller.clj" caller "v/moved" 'app.views 'moved)
+                       (literal-usage "test/app/caller.clj" caller "v/stay" 'app.views 'stay)]
+                      (when (or reverse? comment?)
+                        [(literal-usage "src/app/views.clj" source "moved)" 'app.views 'moved)]))
+         ;; literal-usage includes suffix only to distinguish the declaration token.
+         uses (mapv #(if (= 'helper (:name %)) (update % :end-col - 2)
+                         (if (and (= 'moved (:name %)) (= "src/app/views.clj" (:filename %)))
+                           (update % :end-col dec) %)) uses)]
+     {:request (-> (paper-request [["calendar" ["moved"]]])
+                   (dissoc :source_retirement)
+                   (assoc :source {:file "src/app/views.clj" :lib "app.views" :retain true
+                                   :alias_policy ["v"] :comment_policy "remove-moved-invocations"}
+                          :promotion_policy ["helper"]))
+      :input {:sources {"src/app/views.clj" source "test/app/caller.clj" caller}
+              :source-paths ["src" "test"]
+              :analysis {:var-usages uses :var-definitions [{:ns 'app.views :name 'helper :private true}]}}})))
+
+;; @spec NS-SPLIT-037
+;; INTENT-TEST: NS-SPLIT-037
+(deftest partial-retention-preserves-source-and-undo
+  (let [{:keys [request input]} (partial-fixture)
+        result (split/compile-split request input)
+        src (get-in result [:future-sources "src/app/views.clj"] "")]
+    (is (:ok result) (pr-str (:blockers result)))
+    (is (str/includes? (or src "") "(ns app.views \"keep source doc\")"))
+    (is (str/includes? (or src "") "(defn stay [] :kept)"))
+    (is (not (str/includes? (or src "") "(defn moved")))
+    (is (= [] (:deleted-files result)))
+    (is (= 1 (get-in result [:projection :counts :forms])))
+    (when (:ok result)
+      (let [io (memory/memory-io (:sources input) nil)
+            committed (kernel/commit! result io)]
+        (is (:ok committed))
+        (is (contains? @(:state io) "src/app/views.clj"))
+        (is (:ok (kernel/undo! (:receipt committed) io)))
+        (is (= (:sources input) @(:state io)))))))
+
+;; @spec NS-SPLIT-038
+;; INTENT-TEST: NS-SPLIT-038
+(deftest partial-reference-directions-and-promotions
+  (let [{:keys [request input]} (partial-fixture)
+        r (split/compile-split request input)
+        dst (get-in r [:future-sources "src/app/calendar.clj"] "")
+        caller (get-in r [:future-sources "test/app/caller.clj"] "")]
+    (is (:ok r) (pr-str (:blockers r)))
+    (is (= ["helper"] (mapv :form (get-in r [:projection :promotions]))))
+    (is (str/includes? dst "[app.views :as v]"))
+    (is (str/includes? dst "(v/helper)"))
+    (is (str/includes? caller "[app.views :as v]"))
+    (is (str/includes? caller "(calendar/moved) (v/stay)"))
+    (is (str/includes? (or (get-in r [:future-sources "src/app/views.clj"]) "") "(defn helper"))
+    (is (some #{:undecided-promotion}
+              (map :type (:blockers (split/compile-split (assoc request :promotion_policy []) input))))))
+  (let [{:keys [request input]} (partial-fixture true false)
+        r (split/compile-split request input)]
+    (is (some #{:cycle} (map :type (:blockers r)))))
+  ;; Retained -> moved alone is valid and requires the destination in the source.
+  (let [{:keys [request input]} (partial-fixture true false)
+        input (update-in input [:analysis :var-usages] #(filterv (fn [u] (not= 'helper (:name u))) %))
+        input (update-in input [:sources "src/app/views.clj"] str/replace "(helper)" "(inc 1)")
+        ;; Changed token width moves stay's reference by one column only on its own row: unchanged.
+        r (split/compile-split request input)]
+    (is (:ok r) (pr-str (:blockers r)))
+    (is (str/includes? (or (get-in r [:future-sources "src/app/views.clj"]) "") "(defn stay [] (calendar/moved))"))))
+
+;; @spec NS-SPLIT-039
+;; INTENT-TEST: NS-SPLIT-039
+(deftest partial-comment-removal-is-narrow
+  (let [{:keys [request input]} (partial-fixture)
+        r (split/compile-split request input)
+        src (or (get-in r [:future-sources "src/app/views.clj"]) "")]
+    (is (str/includes? src "(comment (stay) (let [e 1]"))
+    (is (not (str/includes? src "(print")))
+    (is (= 1 (count (get-in r [:projection :facts :comment_removals]))))
+    (is (some #{:cycle}
+              (map :type (:blockers (split/compile-split (update request :source dissoc :comment_policy) input)))))))
+
+;; @spec NS-SPLIT-040
+;; INTENT-TEST: NS-SPLIT-040
+(deftest facts-only-shares-the-plan-without-emission
+  (let [{:keys [request input]} (partial-fixture)
+        full (split/compile-split request input)
+        facts (with-redefs-fn {#'split/aligned-reference-edits (fn [& _] (throw (ex-info "emitter invoked" {})))}
+                #(split/compile-split (assoc request :plan_only "facts") input))]
+    (is (:ok facts) (pr-str (:blockers facts)))
+    (is (= (get-in full [:projection :facts]) (get-in facts [:projection :facts]))))
+  (let [{:keys [request input]} (partial-fixture)
+        r (split/compile-split (assoc request :plan_only "facts") input)
+        facts (get-in r [:projection :facts])]
+    (is (nil? (:future-sources r)))
+    (is (= ["helper"] (:retained_dependencies facts)))
+    (is (= 3 (count (:owners facts))))
+    (is (every? #(every? (fn [k] (contains? % k)) [:file :line :col]) (:references facts)))
+    (is (= (split/snapshot-hash (:sources input)) (:snapshot_hash facts)))
+    (is (not-any? #{:source :text :future-sources :external_requires :entries}
+                  (mapcat keys (filter map? (tree-seq coll? seq facts)))))))
+
+;; @spec NS-SPLIT-041
+;; INTENT-TEST: NS-SPLIT-041
+(deftest partial-and-facts-request-contract
+  (let [{:keys [request]} (partial-fixture)]
+    (is (empty? (boundary/validate-request request)))
+    (is (empty? (boundary/validate-request (assoc request :plan_only "facts"))))
+    (is (seq (boundary/validate-request (assoc request :source_retirement "delete"))))
+    (is (seq (boundary/validate-request (assoc-in request [:source :retain] "true"))))))
+
+;; @spec NS-SPLIT-044
+;; INTENT-TEST: NS-SPLIT-044
+(deftest analysis-output-has-a-separate-finite-budget
+  (let [called (atom nil)]
+    (with-redefs [analyzer-process/run-bounded!
+                  (fn [opts] (reset! called opts)
+                    {:admission {:status :admitted} :finished? true :exit 0
+                     :out "{:analysis {} :findings [] :summary {}}"})]
+      (boundary/analyze! {})
+      (is (= (* 64 1024 1024) (:visible-byte-limit @called)))
+      (is (= (* 16 1024 1024) boundary/max-bytes)))))
+
+;; @spec NS-SPLIT-045
+;; INTENT-TEST: NS-SPLIT-045
+(deftest partial-headers-retire-only-newly-unused-dependencies
+  (let [src "(ns app.views (:import (java.time ZoneId LocalDate)))\n(defn moved [] (ZoneId/of \"UTC\"))\n(defn stay [] LocalDate)\n"
+        caller "(ns app.caller (:require [app.views :as v]))\n(def answer (v/moved))\n"
+        {:keys [request]} (partial-fixture)
+        input {:sources {"src/app/views.clj" src "test/app/caller.clj" caller}
+               :source-paths ["src" "test"]
+               :analysis {:var-usages [(literal-usage "test/app/caller.clj" caller "v/moved" 'app.views 'moved)]
+                          :java-class-usages [(assoc (literal-usage "src/app/views.clj" src "ZoneId/of" nil nil) :class 'java.time.ZoneId)
+                                              {:filename "src/app/views.clj" :row 3 :col 17 :end-row 3 :end-col 26 :class 'java.time.LocalDate}]}}
+        r (split/compile-split request input)]
+    (is (:ok r) (pr-str (:blockers r)))
+    (is (not (str/includes? (get-in r [:future-sources "test/app/caller.clj"]) "app.views")))
+    (is (str/includes? (get-in r [:future-sources "src/app/views.clj"]) "(java.time LocalDate)"))
+    (is (str/includes? (get-in r [:future-sources "src/app/calendar.clj"]) "ZoneId"))
+    (is (= ["java.time.ZoneId"] (mapv :class (get-in r [:projection :facts :java_class_references]))))))
+
+;; @spec NS-SPLIT-040
+(deftest facts-include-located-external-dependencies-without-libspecs
+  (let [{:keys [request input]} (partial-fixture false false)
+        source "(ns app.views (:require [clojure.string :as str]))\n(defn- helper [] 1)\n(defn moved [] (str/upper-case \"hello\"))\n(defn stay [] :kept)\n"
+        input (-> input (assoc-in [:sources "src/app/views.clj"] source)
+                  (assoc-in [:analysis :var-usages]
+                            [(literal-usage "src/app/views.clj" source "str/upper-case" 'clojure.string 'upper-case)]))
+        r (split/compile-split (assoc request :plan_only "facts") input)]
+    (is (= [{:file "src/app/views.clj" :line 3 :col 17 :owner "moved"
+             :var "upper-case" :to-lib "clojure.string" :token "str/upper-case"}]
+           (get-in r [:projection :facts :external_references])))))
+
+;; @spec NS-SPLIT-037
+(deftest partial-retention-refuses-a-moved-declaration-stub
+  (let [{:keys [request input]} (partial-fixture false false)
+        input (update-in input [:sources "src/app/views.clj"] str "\n(declare moved)\n")
+        r (split/compile-split request input)]
+    (is (false? (:ok r)))
+    (is (some #{:retained-declaration-of-moved-owner} (map :type (:blockers r))))))

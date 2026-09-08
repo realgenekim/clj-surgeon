@@ -1,13 +1,16 @@
 (ns clj-surgeon.mcp-namespace-split-test
   {:lane :fast}
-  (:require [cheshire.core :as json]
-            [clj-surgeon.namespace-split-io :as boundary]
-            [clj-surgeon.namespace-split-test :as fixture]
-            [clj-surgeon.synchronous-verification :as proof]
-            [clj-surgeon.mcp-namespace-split :as tool]
-            [clojure.java.io :as io]
-            [clojure.string :as str]
-            [clojure.test :refer [deftest is]]))
+  (:require
+   [cheshire.core :as json]
+   [clj-surgeon.mcp-namespace-split :as tool]
+   [clj-surgeon.namespace-split :as split]
+   [clj-surgeon.namespace-split-io :as boundary]
+   [clj-surgeon.namespace-split-test :as fixture]
+   [clj-surgeon.namespace-split-warm :as warm]
+   [clj-surgeon.synchronous-verification :as proof]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is]]))
 
 (defn with-workspace [f]
   (let [root (.toFile (java.nio.file.Files/createTempDirectory "split-boundary-" (make-array java.nio.file.attribute.FileAttribute 0)))]
@@ -76,7 +79,7 @@
   (with-workspace
     (fn [root request]
       (java.nio.file.Files/setPosixFilePermissions (.toPath (io/file root "src/app/views.clj"))
-                                                  (java.nio.file.attribute.PosixFilePermissions/fromString "rw-r-----"))
+        (java.nio.file.attribute.PosixFilePermissions/fromString "rw-r-----"))
       (with-redefs [boundary/analyze! analysis proof/verification-preflight (constantly nil)
                     proof/run-proof! (fn [& _] {:ok false :process_evidence [{:command ["fixture-fail"] :exit 1 :elapsed_ms 1 :finished? true}]})]
         (let [r (boundary/execute! {:verification-profiles profiles :receipt-dir (str root "/receipts")} request)]
@@ -86,7 +89,7 @@
           (doseq [[file source] fixture/sources] (is (= source (slurp (io/file root file)))))
           (is (= "rw-r-----" (java.nio.file.attribute.PosixFilePermissions/toString
                                (java.nio.file.Files/getPosixFilePermissions (.toPath (io/file root "src/app/views.clj"))
-                                                                          (make-array java.nio.file.LinkOption 0)))))
+                                 (make-array java.nio.file.LinkOption 0)))))
           (is (not (.exists (io/file root "src/app/util.clj")))))))))
 
 ;; @spec NS-SPLIT-008
@@ -145,3 +148,25 @@
           (is (= "snapshot-drift" (:error_type r)))
           (is (false? (:verification_complete r)))
           (is (= "(ns app.util)\n(def foreign 1)\n" (slurp (io/file root "src/app/util.clj")))))))))
+
+;; @spec NS-SPLIT-040
+;; @spec NS-SPLIT-041
+(deftest facts-boundary-does-not-emit-discover-or-publish
+  (with-workspace
+    (fn [root request]
+      (let [calls (atom 0) forbidden (fn [& _] (throw (ex-info "facts crossed the effect boundary" {})))]
+        (with-redefs [boundary/analyze! (fn [s] (swap! calls inc) (analysis s))
+                      split/emit-split forbidden
+                      warm/discover! forbidden
+                      boundary/publish! forbidden proof/verification-preflight forbidden]
+          (let [r (boundary/cli! {:op :split-ns! :request request :facts-only true})]
+            (is (:ok r) (pr-str r))
+            (is (= 1 @calls))
+            (is (true? (:read_complete r)))
+            (is (false? (:mutation_attempted r)))
+            (is (false? (:committed r)))
+            (is (= (:snapshot_hash r) (get-in r [:facts :snapshot_hash])))
+            (is (= 4 (count (get-in r [:facts :owners]))))
+            (is (nil? (:analysis r)))
+            (is (.exists (io/file root "src/app/views.clj")))
+            (is (not (.exists (io/file root "src/app/util.clj"))))))))))
