@@ -106,8 +106,10 @@
     ;; :battery default of 300 s landed (TEST-ISO-007) after the last passing
     ;; battery receipt, and every measured run of this namespace since is over it,
     ;; so this is a declared measured-baseline exception: ceiling ~2x the largest
-    ;; measurement, the same rule as the entry above. OWED: split the launcher
-    ;; drives into matrix cells (the spec's own plan) and retire this line.
+    ;; measurement, the same rule as the entry above. TEST-ISO-014 splits the
+    ;; 206 s build-file loop into six independent matrix cells. This exception
+    ;; remains: TEST-ISO-013 judges the SUM of shard walls, not the makespan,
+    ;; and splitting the launches does not reduce their total namespace cost.
     clj-surgeon.reader-eval-fence-test 1000000})
 
 (def mutable-global-allowlist
