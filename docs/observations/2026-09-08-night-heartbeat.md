@@ -51,3 +51,6 @@ Rules of this file: one entry per hour (UTC), quote receipts verbatim, DELTA per
 
 ## 2026-09-08T11:16Z
 - DELTA: row 5 D2–D6 caller work 112–154 s (median 140) vs native 317 → ÷2.3 on the primary clock; acceptance lines pending. Row-2 fix landing (receipt 5495aa93). Gene report amended. Disk ~30 G.
+
+## 2026-09-08T11:23Z — closing heartbeat before 12:00Z
+- Three rows hold measured wins vs native: row 1 ÷8–9.7 (friction-low), row 2 ÷3.98 caller work (friction-high; fix landing on receipt 5495aa93, pid 2226428), row 5 ÷2.3 caller work (friction-high; F arms pending). Row 3 uncalibrated (verb built, task inadmissible). Cold start: clean 4/4 on one package. Apparatus: certified rounds + cohorts lifted; continuation stands. Gene report: docs/observations/2026-09-08-gene-report-night.md (amended). Open inbox: inb-708b29 (mayor merges), inb-94ba79 (provisioning), inb-6b185b (row-5 verb paper cuts), inb-45b82d, inb-b4ca2c. Watchdog window closes at 12:00Z by design; the seat is alive.
