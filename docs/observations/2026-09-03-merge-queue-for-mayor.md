@@ -135,3 +135,5 @@ LANDED 2026-09-07T19:41Z: astra/lid-batch-2-perf-gate-hld 94715053 → MCP/main 
 - 2026-09-08T03:08Z battery receipt 4c434a72 (chain 19: 694 tests green, wall 785 s → ledger appended) for astra/namespace-split tip 1f0646e9 (= 5cb03422 Sol GO r5 + the registry-witness line); `~/bin/land 4c434a72` launched via run-bg (pid 4003274, log /var/tmp/forge/run-bg/land-r5.log).
 
 - LANDED 2026-09-08T03:14Z: namespace_split rounds 2–5 (astra/namespace-split 1f0646e9 via battery receipt 4c434a72) → merge cb445e04, trunk 2b39bd37; six gates green (/var/tmp/forge/land-4c434a72.log); Sol GO r5; make install done (block-hash 043e607a… unchanged); 7906 rebuilt on trunk (pid 4122989, run-bg), pinned 7907 stopped.
+
+- 2026-09-08T04:18Z Sol GO r6 (registration only, no behavioural src change) → `~/bin/land 4856f5aa` launched via run-bg (pid 1265564, log /var/tmp/forge/run-bg/land-b01.log); battery distance 23 ≤ 30.
