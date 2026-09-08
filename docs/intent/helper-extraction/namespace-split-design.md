@@ -437,3 +437,50 @@ background entrance admits only an existing absolute `java.io.tmpdir` below
 `/var/tmp`. Receipt publication takes the maximum of UTF-8 EDN and escaped-JSON
 bytes, and replay manifests carry the captured snapshot hash so tampering fails as
 typed snapshot drift.
+
+## Rows sublime batch 4: candidate negatives and proof interpretation
+
+NS-SPLIT-060..066 respond to the complete row5 adoption evidence at 21d57ffd.
+The transaction captures all files under roots before publication; facts inspect
+the merged candidate inventory, including unchanged tests, and the existing
+snapshot guard binds that evidence to committed bytes. Every assertion names its
+scope. Qualified retired Var/alias tokens, source forwarding definitions, and
+per-owner definition multiplicities are checked independently of write counts.
+Unqualified dynamic lookup, generated definitions and non-Clojure files remain
+outside this static claim. Unsupported dialects are explicitly unasserted.
+
+Body evidence compares exact owner bytes after the authorized reference-token,
+continuation-alignment and promotion replay against the actual destination owner.
+Raw before/after equality is separate: a reference rewrite can preserve the
+contract while changing body bytes. Hash tables retain every owner; equal hashes
+may share a column value with an explicit encoding legend. Comments report changed
+lines (including top-level comment forms), their original and candidate locations,
+and the policy. Byte-identical moved comments are relocations, not content edits.
+
+A contradicting candidate refuses before publication with facts; no silent
+truncation earns a negative. Existing input bounds, caller encoding and both EDN
+and escaped-JSON receipt ceilings apply. Pre-emission facts remain pre-emission;
+the printed manifest still replays. No new automatic routing admission is claimed.
+
+Committed receipts add proof tier/status/next_call. False still means proof is
+incomplete. The named next operation is proof-status, never split-ns!. A manual
+gate remains manual; a pending status does not invent a detached worker. The MCP
+text retains all structured fields and names the pending next operation.
+
+Sol's batch-4 fence supplies three counterexamples: unrelated same-name Vars
+caused comment swaps to disappear, legitimate namesake caller rewrites looked
+like duplicates, and multi-arity/Var/partial forwarders escaped the initial scan.
+Owner identity now includes original file and namespace with definition
+multiplicity; hashes remain byte evidence rather than Var identity. Comments map
+only the moved owner from the source file to its assigned destination. Facade
+scans cover symbol, Var, partial and fn aliases plus single/multi-arity direct
+call/apply bodies. Retention explicitly permits existing unmapped forwarding
+owners, reports them as expected, and refuses newly introduced wrappers.
+The receipt scope explicitly excludes macro expansion, arbitrary forwarding
+bodies and dynamic resolution.
+
+The delta fence also binds permitted forwarders to canonical mapped targets and
+forwarding-kind/arity positions. Any forwarding arity is enumerated, including
+forms that also have ordinary arities; changing a permitted target becomes an
+unexpected facade. This is an architectural inventory, not a semantic equivalence
+claim about arbitrary argument expressions in retained bodies.

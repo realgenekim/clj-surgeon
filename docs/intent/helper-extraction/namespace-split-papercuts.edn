@@ -290,4 +290,46 @@
  :boundaries ["gate ex-data; public namespace_split receipt; mutation_attempted=false; CLI help naming TMPDIR= and -Djava.io.tmpdir="]
  :tests [:background-temp-root-refuses-tmpfs-and-relative-paths :unsafe-background-temp-root-refusal-is-actionable :background-proof-help-names-temp-root-requirement]
  :rationale "Sol delta fence for 0956951b ruling (a): /var/tmp stays this repository's convention, so the refusal has to tell the caller how to satisfy it."}
+{:id :NS-SPLIT-060 :status :active
+ :ears "When a split receipt describes candidate comment changes, it shall enumerate every changed comment line with before/after location and content evidence and the applied policy."
+ :misreadings ["Relocation alone is an edit; echoing policy proves removal; semicolon comments are the only comments."]
+ :boundaries ["full and retained source; unchanged test files; literal bytes; bounded encoded evidence; no dynamic-resolution claim"]
+ :tests [:comment-facts-record-policy-and-lines :negative-comment-evidence-is-lossless-and-safe :sol-namesake-identity-does-not-hide-comments-or-invent-duplicates]
+ :rationale "2026-09-08 row5-adopt, 21d57ffd: six callers inspect to falsify; verification_complete false is misread as failure."}
+{:id :NS-SPLIT-061 :status :active
+ :ears "When a split publishes stale-reference facts, it shall scan every captured candidate file across the declared roots for retired qualified symbols and aliases with explicit exclusions."
+ :misreadings ["Only rewritten callers need scanning; a removed require proves no stale aliases; retained Vars are retired too."]
+ :boundaries ["full and retained source; unchanged test files; literal bytes; bounded encoded evidence; no dynamic-resolution claim"]
+ :tests [:negative-facts-detect-stale-test-reference]
+ :rationale "2026-09-08 row5-adopt, 21d57ffd: six callers inspect to falsify; verification_complete false is misread as failure."}
+{:id :NS-SPLIT-062 :status :active
+ :ears "When a split publishes facade facts, it shall enumerate retained source forwarding definitions with explicit retention-policy expectations."
+ :misreadings ["Source retirement intent proves no facade; forwarding Vars with a different name may be ignored."]
+ :boundaries ["full and retained source; unchanged test files; literal bytes; bounded encoded evidence; no dynamic-resolution claim"]
+ :tests [:negative-facts-detect-retained-facade :sol-facade-alias-and-arity-matrix :retention-policy-reports-existing-forwarders :sol-facade-expectations-bind-arity-and-target]
+ :rationale "2026-09-08 row5-adopt, 21d57ffd: six callers inspect to falsify; verification_complete false is misread as failure."}
+{:id :NS-SPLIT-063 :status :active
+ :ears "When a split publishes exactly-once facts, it shall count each moved owner in its assigned destination and elsewhere across candidate roots."
+ :misreadings ["Count manifest assignments instead of actual definitions; ignore unchanged tests; declarations are definitions."]
+ :boundaries ["full and retained source; unchanged test files; literal bytes; bounded encoded evidence; no dynamic-resolution claim"]
+ :tests [:negative-facts-detect-duplicate-owner :negative-facts-scan-unchanged-files-and-distinguish-namesakes :sol-namesake-identity-does-not-hide-comments-or-invent-duplicates]
+ :rationale "2026-09-08 row5-adopt, 21d57ffd: six callers inspect to falsify; verification_complete false is misread as failure."}
+{:id :NS-SPLIT-064 :status :active
+ :ears "When a split publishes body preservation facts, it shall compare each original owner after authorized reference, alignment and promotion replay with actual destination bytes using SHA-256 evidence while reporting raw byte equality separately."
+ :misreadings ["Hash expected output twice; raw bodies are equal despite reference edits; normalize arbitrary whitespace or strings."]
+ :boundaries ["full and retained source; unchanged test files; literal bytes; bounded encoded evidence; no dynamic-resolution claim"]
+ :tests [:negative-facts-detect-body-change :body-facts-separate-raw-bytes-from-authorized-replay]
+ :rationale "2026-09-08 row5-adopt, 21d57ffd: six callers inspect to falsify; verification_complete false is misread as failure."}
+{:id :NS-SPLIT-065 :status :active
+ :ears "When candidate negative evidence contradicts the split contract, publication shall refuse before any mutation with the violating facts."
+ :misreadings ["Facts are advisory even when a duplicate or stale reference is proven; missing evidence means absence."]
+ :boundaries ["full and retained source; unchanged test files; literal bytes; bounded encoded evidence; no dynamic-resolution claim"]
+ :tests [:negative-facts-refuse-before-publication :each-negative-violation-refuses-with-unchanged-bytes]
+ :rationale "2026-09-08 row5-adopt, 21d57ffd: six callers inspect to falsify; verification_complete false is misread as failure."}
+{:id :NS-SPLIT-066 :status :active
+ :ears "When a committed split has incomplete verification, its receipt shall explain proof tier and pending status with a proof-status next_call without changing verification_complete."
+ :misreadings ["False means split failed; repeat the mutation; pending means a worker is necessarily running."]
+ :boundaries ["full and retained source; unchanged test files; literal bytes; bounded encoded evidence; no dynamic-resolution claim"]
+ :tests [:committed-proof-is-pending-not-failed]
+ :rationale "2026-09-08 row5-adopt, 21d57ffd: six callers inspect to falsify; verification_complete false is misread as failure."}
 ]}

@@ -521,3 +521,17 @@ emitted summary, not the full planning graph; the real-fixture refusal is retain
 Raw evidence: `/var/tmp/forge/rows-sublime-3/`. Build report:
 `/var/tmp/forge/plan2/cellC/astra-rows-sublime-3-report.md`. Routing admission and
 free-choice adoption remain unchanged; Sol's fence precedes any landing.
+
+### 2026-09-08T20:13:21.485706+00:00 — row 5 candidate negatives
+
+Branch-only NS-SPLIT-060..066 adds scoped candidate absence scans, comment-line
+evidence, actual owner multiplicities, and body hashes separating raw equality
+from authorized reference/alignment/promotion replay. Committed receipts explain
+proof tier/status and name proof-status without changing verification_complete.
+The fresh receipt-only Codex reader distinguished committed work from pending
+proof. Sol's executable fence found and earned witnesses for namesake comment
+swaps, caller-rewritten namesake identity, and broader facade shapes. The initial
+NO-GO and repair evidence are retained. Cell C keeps 141 owners/20 destinations
+and zero papercuts; this is feasibility evidence, not a new adoption or wall claim.
+Final receipt sizes, red/green gates, scope limitations and prediction:
+`/var/tmp/forge/plan2/cellC/astra-rows-sublime-4-report.md`.

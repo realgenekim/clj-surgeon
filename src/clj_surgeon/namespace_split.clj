@@ -2,6 +2,7 @@
   "Pure single-snapshot namespace partition compiler. Reference identities come
   from clj-kondo; this namespace neither evaluates Clojure nor writes files."
   (:require
+   [cheshire.core :as json]
    [clj-surgeon.extract :as extract]
    [clj-surgeon.mcp-operation :as operation]
    [clj-surgeon.namespace-split-warm :as warm]
@@ -735,6 +736,219 @@
      :guard-sources sources :created-files (mapv :file dests)
      :deleted-files (if (and (not retain?) (= "delete" (:source_retirement request))) [source-file] []) :created-directories []}))
 
+;; @spec NS-SPLIT-064
+;; INTENT: NS-SPLIT-064
+(defn- preservation-baselines [plan]
+  (let [original (:original plan)
+        promotions (set (map :form (get-in plan [:projection :promotions])))]
+    (into (sorted-map)
+          (for [d (:builds plan)
+                :let [edits (aligned-reference-edits original
+                              (reference-edits (:local-sites d) (:mapping plan) (:lib d) (:chosen d)))]
+                owner (:selected d)
+                :let [before (subs (:source original) (:start owner) (:end owner))
+                      expected (splice before (for [e edits :when (= (:owner e) (:name owner))]
+                                                (-> e (update :start - (:start owner)) (update :end - (:start owner)))))
+                      expected (if (promotions (:name owner)) (promote-source expected) expected)]]
+            [(:name owner) {:file (:file d) :before before :expected expected}]))))
+
+(defn- token-nodes [parsed]
+  (for [top (n/children (:root parsed)) :when (not (identical? top (:ns-node parsed)))
+        node (tree-seq n/inner? n/children top)
+        :when (= :token (n/tag node))] node))
+
+;; @spec NS-SPLIT-060
+;; INTENT: NS-SPLIT-060
+(defn- comment-lines [parsed]
+  (let [lines (str/split-lines (:source parsed))
+        nodes (tree-seq n/inner? n/children (:root parsed))
+        rows (sort (set (mapcat (fn [node]
+                                  (when (or (n/comment? node) (comment-form? node))
+                                    (range (:row (meta node)) (+ (:end-row (meta node)) (if (= 1 (:end-col (meta node))) 0 1))))) nodes)))]
+    (mapv (fn [row] {:file (:file parsed) :line row :text (get lines (dec row) "")
+                     :owner (:name (first (filter #(<= (- (:start %) (count (:prefix %))) (nth (:starts parsed) (dec row)) (:end %)) (:owners parsed))))}) rows)))
+
+(defn- comment-change-facts [before after request baselines]
+  ;; A moved owner's identity includes its original file. Other namespaces
+  ;; may own the same short name; their comments must never share this group.
+  (let [source-file (get-in request [:source :file])
+        groups (fn [parsed original?]
+                 (group-by (fn [line]
+                             (let [destination (get-in baselines [(:owner line) :file])]
+                               (if (and destination (= (:file line) (if original? source-file destination)))
+                                 [:moved (:owner line)] [:file (:file line)])))
+                           (mapcat comment-lines (vals parsed))))
+        a (groups before true) b (groups after false)]
+    (vec (mapcat
+           (fn [k]
+             (let [xs (get a k) ys (get b k)]
+               (for [i (range (max (count xs) (count ys)))
+                     :let [x (nth xs i nil) y (nth ys i nil)]
+                     :when (not= (:text x) (:text y))]
+                 {:file (or (:file x) (:file y)) :line (:line x)
+                  :before (:text x) :after_file (:file y) :after_line (:line y) :after (:text y)})))
+           (sort (set/union (set (keys a)) (set (keys b))))))))
+
+;; @spec NS-SPLIT-061
+;; INTENT: NS-SPLIT-061
+(defn- stale-sites [request before after moved]
+  (let [lib (get-in request [:source :lib])
+        retired? (not (true? (get-in request [:source :retain])))]
+    (vec
+      (mapcat
+        (fn [[file p]]
+          (let [old-bound (aliases (libspecs (get before file)))
+                bound (aliases (libspecs p))
+                retired-aliases (set (for [[a l] (merge old-bound bound) :when (= lib l)] a))
+                qualifier? #(or (= lib %) (retired-aliases %))]
+            (concat
+              (for [entry (libspecs p) :when (and retired? (= lib (lib-of entry)))]
+                {:file file :line (:row (meta (:ns-node p))) :token (pr-str entry) :kind :retired-require})
+              (for [node (token-nodes p)
+                    :let [value (sexpr node) q (when (symbol? value) (namespace value))]
+                    :when (and q (qualifier? q) (or retired? (moved (name value))))]
+                {:file file :line (:row (meta node)) :col (:col (meta node))
+                 :token (n/string node) :kind :retired-symbol})
+              (for [entry (libspecs p) :when (= lib (lib-of entry))
+                    name (let [refer (:refer (options entry))] (when (sequential? refer) refer)) :when (moved (str name))]
+                {:file file :line (:row (meta (:ns-node p))) :token (str name) :kind :retired-refer}))))
+        (sort-by key after)))))
+
+(defn- forwarding-call [target? body]
+  (when (sequential? body)
+    (cond (target? (first body)) (first body)
+          (and (#{'apply 'clojure.core/apply} (first body)) (target? (second body))) (second body))))
+
+(defn- forwarding-function [target? tail]
+  (let [clauses (if (vector? (first tail)) [tail] tail)
+        targets (mapv (fn [clause]
+                        (when (and (sequential? clause) (vector? (first clause)))
+                          (let [args (first clause) amp (.indexOf ^java.util.List args '&)]
+                            {:fixed (if (neg? amp) (count args) amp) :variadic (not (neg? amp))
+                             :target (when (= 2 (count clause)) (forwarding-call target? (second clause)))}))) clauses)]
+    (when (some :target targets) targets)))
+
+;; @spec NS-SPLIT-062
+;; INTENT: NS-SPLIT-062
+(defn- facade-forms
+  ([request parsed] (facade-forms request parsed false))
+  ([request parsed original?]
+   (let [p (get parsed (get-in request [:source :file]))
+         bound (aliases (libspecs p))
+         destinations (set (map :lib (:destinations request)))
+         moved (set (mapcat :forms (:destinations request)))
+         mapped (into {} (for [d (:destinations request) owner (:forms d)] [owner (:lib d)]))
+         canonical-target (fn [s]
+                            (when s (str (if original? (get mapped (name s))
+                                           (get bound (namespace s) (namespace s))) "/" (name s))))
+         target? (fn [s]
+                   (and (symbol? s)
+                        (if original?
+                          (and (moved (name s))
+                               (or (nil? (namespace s))
+                                   (= (:lib p) (get bound (namespace s) (namespace s)))))
+                          (destinations (get bound (namespace s) (namespace s))))))]
+     (vec (for [o (:owners p)
+                :let [[head _ & tail] (sexpr (:node o))
+                      tail (drop-while #(or (string? %) (map? %)) tail)
+                      init (first tail)
+                      targets (cond
+                                (#{'defn 'defn-} head) (forwarding-function target? tail)
+                                (and (= 'def head) (= 1 (count tail)))
+                                (cond (target? init) [{:target init}]
+                                      (and (sequential? init)
+                                           (#{'var 'partial 'clojure.core/partial} (first init))
+                                           (target? (second init))) [{:target (second init)}]
+                                      (and (sequential? init) (#{'fn 'fn*} (first init)))
+                                      (forwarding-function target? (cond-> (rest init) (symbol? (second init)) rest))))]
+                :when (seq targets)]
+            {:file (:file p) :owner (:name o) :line (:line o)
+             :kind (if (#{'defn 'defn-} head) :defn (if (sequential? init) (str (first init)) :alias))
+             :target (str (first (keep :target targets)))
+             :arity_targets (mapv #(when % (update % :target canonical-target)) targets)})))))
+
+;; @spec NS-SPLIT-063
+;; INTENT: NS-SPLIT-063
+;; @spec NS-SPLIT-064
+;; INTENT: NS-SPLIT-064
+(defn transaction-negatives
+  "Candidate evidence over the complete captured roots, including unchanged files.
+  Hash comparison replays only authorized owner edits, never normalizes bodies."
+  [compiled]
+  (when (and (:future-sources compiled) (:body-baselines compiled))
+    (let [request (:request compiled)
+          sources (into (sorted-map) (remove (comp nil? val))
+                        (merge (:guard-sources compiled) (:future-sources compiled)))
+          parse-sources #(into (sorted-map) (map (fn [[f s]] [f (parse-file f s)])) %)
+          before (parse-sources (:guard-sources compiled))
+          after (parse-sources sources)
+          moved (set (keys (:body-baselines compiled)))
+          scope {:roots (:roots request) :files (count sources) :snapshot_hash (snapshot-hash sources)
+                 :scan "structural-qualified-symbols-and-requires; all captured Clojure files"
+                 :excludes ["strings" "semicolon prose" "dynamic resolution" "unqualified unresolved symbols"]}
+          stale (stale-sites request before after moved)
+          facades (facade-forms request after)
+          expected-facades (if (true? (get-in request [:source :retain]))
+                             (filterv #(not (moved (:owner %))) (facade-forms request before true)) [])
+          facade-key #(select-keys % [:owner :kind :arity_targets])
+          unexpected-facades (filterv #(not ((set (map facade-key expected-facades)) (facade-key %))) facades)
+          definitions (group-by :name (for [[file p] after o (:owners p)] (assoc o :file file :lib (:lib p))))
+          namesakes (vec (for [[file p] before :when (not= file (get-in request [:source :file]))
+                               o (:owners p) :when (moved (:name o))]
+                           {:file file :lib (:lib p) :owner (:name o) :hash (lens/source-hash (n/string (:node o)))}))
+          counts (mapv (fn [[owner {:keys [file]}]]
+                         (let [xs (get definitions owner)
+                               elsewhere (remove #(= file (:file %)) xs)
+                               old (frequencies (for [x namesakes :when (= owner (:owner x))] [(:file x) (:lib x)]))
+                               now (frequencies (map #(vector (:file %) (:lib %)) elsewhere))]
+                           [owner (count (filter #(= file (:file %)) xs))
+                            (reduce + 0 (for [[k n] now] (max 0 (- n (get old k 0)))))]))
+                       (:body-baselines compiled))
+          bodies (mapv (fn [[owner {:keys [file before expected]}]]
+                         (let [xs (filter #(= file (:file %)) (get definitions owner))
+                               actual (when (= 1 (count xs)) (n/string (:node (first xs))))]
+                           {:owner owner :before_hash (lens/source-hash expected)
+                            :after_hash (when actual (lens/source-hash actual))
+                            :raw_before_hash (lens/source-hash before) :raw_equal (= before actual)})) (:body-baselines compiled))
+          equal (count (filter #(= (:before_hash %) (:after_hash %)) bodies))]
+      {:comment_policy (get-in request [:source :comment_policy] "preserve")
+       :text_encoding "JSON string content; decode by wrapping in double quotes"
+       :comment_after_encoding "[:indent N] reuses before text after replacing its leading whitespace with N spaces"
+       :comment_edits
+       (mapv (fn [[[file after-file] changes]]
+               {:file file :after_file after-file :columns [:line :after_line :before :after]
+                :lines (mapv (fn [c] [(:line c) (:after_line c)
+                                      (:before c)
+                                      (let [x (:before c) y (:after c)]
+                                        (if (and x y (= (str/triml x) (str/triml y))
+                                                 (re-matches #" *" (subs y 0 (- (count y) (count (str/triml y))))))
+                                          [:indent (- (count y) (count (str/triml y)))] y))]) changes)})
+             (sort-by key (group-by (juxt :file :after_file) (comment-change-facts before after request (:body-baselines compiled)))))
+       :stale_references {:count (count stale) :sites stale :expected [] :scope scope}
+       :facades {:forms facades :expected expected-facades :unexpected unexpected-facades
+                 :policy "no-new-forwarders; retain existing unmapped forwarding owners"
+                 :scope {:file (get-in request [:source :file]) :expected_match [:owner :kind :arity_targets]
+                         :scan "def symbol/Var/partial/fn aliases and single/multi-arity direct defn/apply forwarders"
+                         :excludes ["macro expansion" "arbitrary forwarding bodies" "dynamic resolution"]}}
+       :exactly_once {:columns [:owner :destination_count :elsewhere_count] :rows counts
+                      :preexisting_namesakes
+                      (mapv (fn [x] (assoc x :after_hashes
+                                           (mapv #(lens/source-hash (n/string (:node %)))
+                                                 (filter #(and (= (:file x) (:file %)) (= (:lib x) (:lib %)))
+                                                         (get definitions (:owner x)))))) namesakes)
+                      :passed (every? #(= [1 0] (subvec % 1)) counts)
+                      :scope {:roots (:roots request) :files (count sources) :definitions "top-level named owners; declarations excluded"
+                              :namesake_rule "pre-existing file/lib/name identity and multiplicity excluded; caller rewrites may change its body"}}
+       :bodies_preserved {:basis "original owner bytes after authorized reference/alignment/promotion replay"
+                          :algorithm "SHA-256" :columns [:owner :before_hash :after_hash :raw_before_hash]
+                          :hash_encoding {:same "this hash equals before_hash exactly"}
+                          :rows (mapv (fn [b] [(:owner b) (:before_hash b)
+                                               (if (= (:before_hash b) (:after_hash b)) :same (:after_hash b))
+                                               (if (= (:before_hash b) (:raw_before_hash b)) :same (:raw_before_hash b))]) bodies)
+                          :equal equal :unequal (- (count bodies) equal)
+                          :raw_equal (count (filter :raw_equal bodies))
+                          :raw_unequal (count (remove :raw_equal bodies))}})))
+
 (defn emit-split
   "Emit only from the shared prepared plan; facts-only never calls this function."
   [{:keys [request original mapping projection builds caller-builds retained-build removals parsed input-sources] :as plan}]
@@ -746,7 +960,7 @@
                      (= "retain-empty" (:source_retirement request)) (str "(ns " source-lib ")\n"))
         futures (into (sorted-map source-file source) (map (juxt :file :source)) (concat builds callers))]
     (-> plan
-        (assoc :future-sources futures)
+        (assoc :future-sources futures :body-baselines (preservation-baselines plan))
         (assoc-in [:projection :unrequired_qualified_refs]
                   (unrequired-qualified-refs builds (:java-classes plan)))
         (assoc-in [:projection :prose_mentions]
@@ -793,8 +1007,13 @@
                                                                       (= source-lib (:to %))
                                                                       (= "cross-namespace" (:disposition %))) refs)))))})
                     (:destinations request))
-              :retained_vars retained :unexpected_paths nil}]
-    (walk/postwalk #(if (string? %) (operation/encode-caller-text %) %) data)))
+              :retained_vars retained :unexpected_paths nil}
+        negatives (transaction-negatives compiled)
+        encode (fn [x] (if (string? x)
+                         (let [quoted (json/generate-string x {:escape-non-ascii true})]
+                           (subs quoted 1 (dec (count quoted)))) x))]
+    (merge (walk/postwalk #(if (string? %) (operation/encode-caller-text %) %) data)
+           (walk/postwalk encode negatives))))
 
 ;; @spec NS-SPLIT-012
 (defn receipt [compiled checks]

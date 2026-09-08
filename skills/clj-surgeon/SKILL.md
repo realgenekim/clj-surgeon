@@ -47,7 +47,7 @@ A commit proves the write only; finish outstanding user checks and review.
 Plan-only if mapping is uncertain; never repeat a committed split. Warm-only is pending.
 
 Profiles may select `:proof :warm :gate :background`: a detached pid closes a separate receipt; use `:op :proof-status :receipt ORIGINAL`. The original stays pending forever. Failed/stale closure never rolls back caller work.
-Committed receipts embed bounded facts; committed facts-only reads reuse them or name the closure in a typed refusal. The printed manifest includes verification for direct plan-only replay.
+Committed receipts embed bounded candidate negatives (comment edits, stale references, facades, definition counts, body hashes with raw/replayed equality) and explicit proof tier/status; committed facts-only reads reuse them or name the closure in a typed refusal. The printed manifest includes verification for direct plan-only replay.
 
 ## Meter and kill switch
 

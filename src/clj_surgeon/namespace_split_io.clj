@@ -337,7 +337,7 @@
                            (contains? (set [(:snapshot_hash receipt) current snapshot]) (:snapshot_hash request))))]
         (if same?
           (assoc (select-keys receipt [:receipt_id :receipt_path :closure_receipt :candidate_hash
-                                       :facts :counts :map_hash :verification_complete :proof_pending :checks])
+                                       :facts :counts :map_hash :verification_complete :proof_pending :proof :next_call :checks])
                  :ok true :state "committed-facts" :operation "namespace_split"
                  :snapshot_hash snapshot :input_snapshot_hash (:snapshot_hash receipt)
                  :facts_basis "committed-transaction" :verification_basis "original-receipt"
@@ -350,6 +350,22 @@
            :closure_receipt (:closure_receipt receipt) :receipt_path (:receipt_path receipt)
            :verification_complete false :mutation_attempted false :source_unchanged true})))))
 
+;; @spec NS-SPLIT-066
+;; INTENT: NS-SPLIT-066
+(defn proof-context
+  "Explain a committed receipt's proof without changing its completion boolean."
+  [result capability]
+  (let [pending? (not (true? (:verification_complete result)))
+        next-call (when pending? {:op :proof-status :receipt (:receipt_path result)})]
+    (assoc result :next_call next-call
+           :proof {:tier (get capability :proof :cold)
+                   :status (if pending? :pending :complete)
+                   :execution (cond (= :background (:gate capability)) :background
+                                    pending? :manual :else :synchronous)
+                   :next_call next-call})))
+
+;; @spec NS-SPLIT-065
+;; INTENT: NS-SPLIT-065
 ;; @spec NS-SPLIT-010
 ;; @spec NS-SPLIT-012
 ;; INTENT: NS-SPLIT-021
@@ -360,8 +376,15 @@
     (refuse! :snapshot-drift "The captured source inventory changed before publication" {}))
   (let [base (split/publication-receipt compiled checks)
         base-size (gate/receipt-size base)
-        _ (when (> base-size (- gate/max-receipt-bytes 16384))
+        _ (when (> base-size (- gate/max-receipt-bytes 8192))
             (refuse! :receipt-size-bound "Split review facts exceed the receipt budget" {:receipt_bytes base-size}))
+        facts (:facts base)
+        _ (when (or (pos? (get-in facts [:stale_references :count] 0))
+                    (seq (get-in facts [:facades :unexpected]))
+                    (false? (get-in facts [:exactly_once :passed]))
+                    (pos? (get-in facts [:bodies_preserved :unequal] 0)))
+            (refuse! :negative-facts-violation "Candidate contradicts the split invariants"
+                     {:facts facts}))
         candidate (canonical-compiled root compiled)
         committed (kernel/commit! candidate)
         retired? #(boolean (and (seq (:deleted-files candidate))
@@ -409,7 +432,8 @@
                                   :closure_receipt (str (io/file receipt-dir (str id "-closure.edn")))
                                   :candidate_hash (gate/snapshot-hash
                                                     (into (sorted-map) (remove (comp nil? val))
-                                                          (merge (:guard-sources compiled) (:future-sources compiled)))))]
+                                                          (merge (:guard-sources compiled) (:future-sources compiled)))))
+                    result (proof-context result capability)]
                 (persist-index! root (:request compiled)
                   (if (= :background (:gate capability))
                     (gate/launch! result receipt-dir (assoc capability :profile profile-name))
