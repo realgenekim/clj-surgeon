@@ -122,6 +122,44 @@
   (apply proc/shell {:out :string :err :string :continue true}
          "bb" "-cp" project-src "-m" "clj-surgeon.core" args))
 
+;; @spec NS-SPLIT-014
+(deftest cli-whole-split-plan-commit-and-refusal
+  (let [root (.toFile (java.nio.file.Files/createTempDirectory "split-cli-" (make-array java.nio.file.attribute.FileAttribute 0)))
+        source-file (io/file root "src/sample/core.clj")
+        request {:workspace_root (str root) :source {:file "src/sample/core.clj" :lib "sample.core"}
+                 :destinations [{:lib "sample.a" :file "src/sample/a.clj" :forms ["a"] :alias_policy ["a"]}
+                                {:lib "sample.b" :file "src/sample/b.clj" :forms ["b"] :alias_policy ["b"]}]
+                 :promotion_policy "promote-required" :source_retirement "delete" :roots ["src"]
+                 :verification {:profile "proof"}}
+        request-file (io/file root "request.edn")]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file "(ns sample.core)\n(defn a [] 1)\n(defn b [] (a))\n")
+      (spit (io/file root "deps.edn") "{:paths [\"src\"]}")
+      (spit (io/file root ".clj-surgeon.edn")
+            (pr-str {:verification-profiles {"proof" {:commands [["bb" "-cp" "src" "-e"
+                                                                   "(require 'sample.b) (assert (= 1 (sample.b/b)))"]]}}}))
+      (spit request-file (pr-str request))
+      (let [p (run-cli ":op" ":split-ns!" ":request-file" (str request-file) ":plan-only" "true")]
+        (is (zero? (:exit p)) (:err p))
+        (is (:read_complete (edn/read-string (:out p))))
+        (is (.exists source-file)))
+      (let [r (run-cli ":op" ":split-ns!" ":request-file" (str request-file))
+            receipt (edn/read-string (:out r))]
+        (is (zero? (:exit r)) (pr-str r))
+        (is (= "committed" (:state receipt)))
+        (is (:verification_complete receipt))
+        (is (not (.exists source-file)))
+        ;; The receipt directory belongs to this temporary test as well.
+        (when-let [file (:undo_receipt receipt)] (.delete (io/file file)))
+        (when-let [file (:details_path receipt)]
+          (.delete (io/file file))
+          (.delete (.getParentFile (io/file file)))))
+      (let [bad (run-cli ":op" ":split-ns!" ":request" "{:unknown true}")]
+        (is (pos? (:exit bad)))
+        (is (= "invalid-request" (:error_type (edn/read-string (:out bad))))))
+      (finally (doseq [file (reverse (file-seq root))] (.delete file))))))
+
 (defn- run-outline-without-semantic-enrichment [operation]
   (let [fixture (java.io.File/createTempFile "clj-surgeon-cli-dispatch" ".clj")]
     (try

@@ -192,7 +192,15 @@
   (let [public-forms-supplied? (contains? request :public-forms)
         request (normalize-mechanical-fields request)
         {:keys [expect caller-changes ignored-caller-files]} request
-        validation (validate-request request)]
+        ;; @spec SPLIT-REPAIR-002
+        derived-ns (when (:workspace-root request)
+                     (extract/file-path->ns-name to (:source-paths request)
+                                                (:workspace-root request)))
+        validation (if (and (:workspace-root request) (not= target-ns derived-ns))
+                     (refusal :destination-lib-path-mismatch
+                              "Destination library disagrees with source-root-relative path"
+                              {:lib target-ns :path-lib derived-ns :file to})
+                     (validate-request request))]
     (if-not (:ok validation)
       validation
       (if (and source-hash
@@ -210,6 +218,7 @@
                           :to to
                           :target-ns target-ns
                           :workspace-sources workspace-sources
+                          :caller-candidates (:caller-candidates request)
                           :require-policy require-policy}
               plan (extract/compile-plan plan-input)]
           (cond
@@ -283,10 +292,20 @@
                       :extraction-decisions-required
                       "Caller candidates require an explicit change or ignore decision"
                       {:files (vec (sort omitted))
+                       ;; @spec SPLIT-REPAIR-004
+                       :next-call (let [root (:workspace-root request)
+                                        relative (fn [path]
+                                                   (if (and root (.isAbsolute (io/file path)))
+                                                     (str (.relativize (.toPath (io/file root)) (.toPath (io/file path))))
+                                                     path))]
+                                    (cond-> {:mode "plan-extraction"
+                                             :file (relative file) :to (relative to) :forms forms
+                                             :require_policy (name require-policy)}
+                                      root (assoc :workspace_root root)))
                        :mutation-attempted false
                        :write-authority false
                        :remedy
-                       "Fill each caller disposition in next_call and call apply_clojure_changes once."
+                       "Call inspect_clojure with next_call, then fill the returned caller dispositions and apply once."
                        :genuine-unknowns unknowns
                        :completed-plan
                        {:file file
@@ -362,7 +381,7 @@
 
 (defn- source-hash
   [source]
-  (structural-lens/source-hash source))
+  (when (some? source) (structural-lens/source-hash source)))
 
 (defn build-receipt
   [compiled]
@@ -375,11 +394,14 @@
          (mapv
            (fn [[file future]]
              (if-let [original (get (:original-sources compiled) file)]
-               {:file file
+               (cond-> {:file file
                 :source-hash (source-hash original)
                 :result-hash (source-hash future)
                 :original-source original
                 :result-source future}
+                 (nil? future) (assoc :absent-after true)
+                 (get-in compiled [:original-permissions file])
+                 (assoc :original-permissions (get-in compiled [:original-permissions file])))
                {:file file
                 :absent-before true
                 :result-hash (source-hash future)
@@ -392,6 +414,17 @@
   [{:keys [read-source exists?]} file]
   (when (exists? file)
     (read-source file)))
+
+(defn- read-permissions [file]
+  (try (set (map str (java.nio.file.Files/getPosixFilePermissions
+                      (.toPath (io/file file)) (make-array java.nio.file.LinkOption 0))))
+       (catch UnsupportedOperationException _ nil)))
+
+(defn- restore-permissions! [file permissions]
+  (when permissions
+    (java.nio.file.Files/setPosixFilePermissions
+      (.toPath (io/file file))
+      (set (map #(java.nio.file.attribute.PosixFilePermission/valueOf %) permissions)))))
 
 (defn- rollback-file!
   [{:keys [read-source write-source! delete-file! exists?] :as io}
@@ -412,6 +445,8 @@
 
       (= current future)
       (do (write-source! file (get originals file))
+          (when-let [restore! (:restore-permissions! io)]
+            (restore! file (get-in io [:original-permissions file])))
           {:file file
            :recovered (= (get originals file) (read-source file))
            :state :restored})
@@ -437,30 +472,41 @@
              :cause-error (.getMessage error)}))))
     (reverse directories)))
 
+;; @spec NS-SPLIT-009
 (defn commit!
   "Commit one compiled mixed create/update file set through injected I/O."
   ([compiled]
    (commit! compiled
             {:read-source slurp
-             :write-source! file-ops/atomic-write!
+            :write-source! file-ops/atomic-write!
+             :read-permissions read-permissions
+             :restore-permissions! restore-permissions!
              :exists? #(.exists (io/file %))
              :create-directory!
              #(java.nio.file.Files/createDirectory
                 (.toPath (io/file %))
                 (make-array java.nio.file.attribute.FileAttribute 0))
              :delete-file! #(java.nio.file.Files/delete (.toPath (io/file %)))}))
-  ([compiled {:keys [read-source write-source! exists? create-directory!] :as io}]
+  ([compiled {:keys [read-source write-source! exists? create-directory! delete-file!] :as io}]
    (try
      (let [created-files (set (:created-files compiled))
            planned-directories (vec (:created-directories compiled))
            created-directories (atom [])
            originals (:original-sources compiled)
+           original-permissions (when-let [read! (:read-permissions io)]
+                                  (into {} (for [file (:deleted-files compiled)
+                                                 :when (exists? file)] [file (read! file)])))
+           io (assoc io :original-permissions original-permissions)
            futures (:future-sources compiled)
            ordered-files (vec (concat (keys originals) created-files))]
        (when-not (:ok compiled)
          (throw (ex-info "Commit requires a successful compiled extraction"
                          {:error-type :invalid-compiled-extraction})))
-       (doseq [[file original] originals]
+       (when-not (= (set (:deleted-files compiled))
+                    (set (keep (fn [[file future]] (when (nil? future) file)) futures)))
+         (throw (ex-info "Absent future sources must match the explicit deletion set"
+                         {:error-type :invalid-deleted-file-set})))
+       (doseq [[file original] (merge (:guard-sources compiled) originals)]
          (when-not (and (exists? file) (= original (read-source file)))
            (throw (ex-info "Extraction source changed before commit"
                            {:error-type :source-hash-mismatch :file file}))))
@@ -493,12 +539,16 @@
              (when-not (= (get originals file) (read-source file))
                (throw (ex-info "Extraction source changed during commit"
                                {:error-type :source-hash-mismatch :file file}))))
-           (write-source! file (get futures file))
-           (when-not (= (get futures file) (read-source file))
+           (if (and (contains? (set (:deleted-files compiled)) file)
+                    (nil? (get futures file)))
+             (delete-file! file)
+             (write-source! file (get futures file)))
+           (when-not (= (get futures file) (file-state io file))
              (throw (ex-info "Extraction read-back verification failed"
                              {:error-type :read-back-hash-mismatch :file file}))))
          (let [receipt (build-receipt
                          (assoc compiled
+                                :original-permissions original-permissions
                                 :created-directories @created-directories))]
            {:ok true
             :operation :compiled-extraction
@@ -545,12 +595,14 @@
         :error-type :extraction-write-exception
         :error (.getMessage error)}))))
 
+;; @spec NS-SPLIT-010
 (defn undo!
   "Undo a compiled extraction receipt through the same guarded file-set rules."
   ([receipt]
    (undo! receipt
           {:read-source slurp
            :write-source! file-ops/atomic-write!
+           :restore-permissions! restore-permissions!
            :exists? #(.exists (io/file %))
            :create-directory!
            #(java.nio.file.Files/createDirectory
@@ -562,18 +614,23 @@
    (try
      (when-not (and (= receipt-version (:receipt-version receipt))
                     (= :compiled-extraction (:operation receipt))
+                    (= (:receipt-hash receipt)
+                       (source-hash (pr-str (dissoc receipt :receipt-hash))))
                     (vector? (:files receipt)))
        (throw (ex-info "Invalid compiled extraction receipt"
                        {:error-type :invalid-extraction-receipt})))
-     (doseq [{:keys [file result-source]} (:files receipt)]
-       (when-not (and (exists? file) (= result-source (read-source file)))
+     (doseq [{:keys [file result-source absent-after]} (:files receipt)]
+       (when-not (if absent-after (not (exists? file))
+                     (and (exists? file) (= result-source (read-source file))))
          (throw (ex-info "Extraction result changed before undo"
                          {:error-type :stale-extraction-result :file file}))))
      (try
-       (doseq [{:keys [file absent-before original-source]} (:files receipt)]
+       (doseq [{:keys [file absent-before original-source original-permissions]} (:files receipt)]
          (if absent-before
            (delete-file! file)
-           (write-source! file original-source)))
+           (do (write-source! file original-source)
+               (when-let [restore! (:restore-permissions! io)]
+                 (restore! file original-permissions)))))
        (let [directory-recovery
              (rollback-created-directories!
                io (:created-directories receipt))
@@ -623,9 +680,11 @@
                            (= current (:original-source
                                         (first (filter #(= file (:file %))
                                                        (:files receipt))))))
-                       (do (write-source! file result-source)
+                       (do (if (nil? result-source)
+                             (when (exists? file) (delete-file! file))
+                             (write-source! file result-source))
                            {:file file
-                            :recovered (= result-source (read-source file))
+                            :recovered (= result-source (file-state io file))
                             :state :restored-result})
 
                        :else

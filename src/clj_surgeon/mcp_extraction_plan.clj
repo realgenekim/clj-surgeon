@@ -153,7 +153,7 @@
                :source (get sources source-path)
                :forms (:forms params)
                :target-ns (extract/file-path->ns-name
-                            target-path ["src" "test" "dev"])
+                            target-path (extract/workspace-source-paths root) root)
                :workspace-sources sources
                :relative-paths (workspace-sources/relative-paths root sources)
                :require-policy (keyword (:require_policy params))})))))))

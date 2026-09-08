@@ -60,6 +60,11 @@
     'clj-surgeon.mcp-helper-extraction-test/a-handled-failure-reports-the-restoration-the-kernel-actually-did
     :typed-refusal
     'clj-surgeon.helper-extraction-test/every-declared-refusal-type-is-produced-by-exactly-one-fixture}
+   "namespace_split"
+   {:committed 'clj-surgeon.mcp-namespace-split-test/boundary-commits-one-split-and-reports-executed-checks
+    :verification-failed 'clj-surgeon.mcp-namespace-split-test/failing-proof-restores-the-entire-file-set
+    :typed-refusal 'clj-surgeon.mcp-namespace-split-test/refused-callback-is-actionable-and-preserves-bytes
+    :read 'clj-surgeon.mcp-namespace-split-test/plan-only-captures-once-and-never-publishes}
    "feature_thread"
    {:receipt
     'clj-surgeon.mcp-feature-thread-test/t1-smw-thread-returns-six-legs-with-bodies

@@ -2112,6 +2112,16 @@
                        :category  :write
                        :pair      :extract!}
 
+    ;; @spec NS-SPLIT-014
+    :split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))
+                       :desc "Compile and publish a whole namespace partition; :plan-only projects the same compiler"
+                       :args {:request {:desc "Complete namespace_split request as an EDN map"}
+                              :request-file {:desc "EDN file containing the complete namespace_split request"}
+                              :plan-only {:desc "Nonmutating analysis projection (true)"}}
+                       :examples ["clj-surgeon :op :split-ns! :request-file split.edn :plan-only true"
+                                  "clj-surgeon :op :split-ns! :request-file split.edn"]
+                       :category :write}
+
     :extract!         {:handler   extract/execute!
                        :desc      "Execute one failure-atomic form extraction to a new namespace"
                        :args      {:file           {:required true :desc "Source file"}

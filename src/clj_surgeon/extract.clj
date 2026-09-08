@@ -58,6 +58,15 @@
           (concat (:paths deps)
                   (mapcat :extra-paths (vals (:aliases deps)))))))))
 
+(defn workspace-source-paths
+  "Read source roots anchored at the requested workspace, never the server cwd."
+  [workspace-root]
+  (let [file (io/file (str workspace-root) "deps.edn")]
+    (if (.exists file)
+      (or (:paths (edn/read-string (slurp file))) ["src"])
+      ["src" "test" "dev"])))
+
+;; @spec SPLIT-REPAIR-001
 (defn file-path->ns-name
   "Derive namespace name from a file path.
    src/writer/state/distillery.clj → writer.state.distillery
@@ -101,7 +110,20 @@
      (-> relative
          (str/replace #"\.clj[sc]?$" "")
          (str/replace "/" ".")
-         (str/replace "_" "-")))))
+         (str/replace "_" "-"))))
+  ([path source-paths workspace-root]
+   (let [root (-> (io/file (str workspace-root)) .toPath .toAbsolutePath .normalize)
+         target (.normalize (.resolve root (str path)))
+         relative (->> source-paths
+                       (map #(.normalize (.resolve root (str %))))
+                       (filter #(.startsWith target ^java.nio.file.Path %))
+                       (sort-by #(.getNameCount ^java.nio.file.Path %) >)
+                       first)]
+     (when relative
+       (-> (str (.relativize ^java.nio.file.Path relative target))
+           (str/replace #"\.clj[sc]?$" "")
+           (str/replace "/" ".")
+           (str/replace "_" "-"))))))
 
 (defn- project-root-for-source
   [file source-paths]
@@ -254,7 +276,7 @@
   "Purely compile an extraction plan from one source snapshot and a captured
   workspace source map. No file, process, clock, or registry access occurs."
   [{:keys [file source forms to target-ns workspace-sources require-policy
-           public-forms derive-required-public-forms]
+           public-forms derive-required-public-forms caller-candidates]
     :or {workspace-sources {} require-policy :minimal public-forms []
          derive-required-public-forms false}}]
   (let [lines (vec (str/split-lines source))
@@ -372,15 +394,18 @@
                                   (map :text publicized-texts)))
                 "\n"))
             captured-sources (assoc workspace-sources (str file) source)
+            ;; @spec SPLIT-REPAIR-003
             other-files
-            (->> captured-sources
+            (if (some? caller-candidates)
+              (vec (sort caller-candidates))
+              (->> captured-sources
                  (remove #(= (str file) (str (key %))))
                  (filter (fn [[_ content]]
                            (some #(str/includes? content (str %))
                                  extracted-names)))
                  (map (comp str key))
                  sort
-                 vec)
+                 vec))
             subjects (mapv #(str source-ns "/" %) (sort extracted-names))
             quoted-proof (quoted-var-refs/scan-sources
                            captured-sources subjects)]
@@ -447,12 +472,17 @@
 (defn plan
   "Capture one workspace snapshot and delegate extraction decisions to
   compile-plan. This is the filesystem shell, not the pure planner."
-  [{:keys [file forms to source-paths require-policy]
+  [{:keys [file forms to source-paths require-policy workspace-root target-ns]
     :or {require-policy :minimal}}]
   (try
     (let [source (slurp file)
-          target-ns (file-path->ns-name to source-paths)
-          project-root (project-root-for-source file source-paths)
+          project-root (or workspace-root (project-root-for-source file source-paths))
+          source-paths (or source-paths (workspace-source-paths project-root))
+          derived-ns (file-path->ns-name to source-paths project-root)
+          _ (when (and target-ns (not= target-ns derived-ns))
+              (throw (ex-info "Destination library disagrees with source-root-relative path"
+                              {:error-type :destination-lib-path-mismatch})))
+          target-ns (or target-ns derived-ns)
           source-canonical-path (.getCanonicalPath (io/file file))
           workspace-sources
           (->> (file-seq (io/file project-root))

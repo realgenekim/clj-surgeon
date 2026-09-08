@@ -117,6 +117,8 @@
    'clj-surgeon.mcp-expect-guard-test                   :fast
    'clj-surgeon.mcp-extraction-plan-test                :fast
    'clj-surgeon.mcp-extraction-test                     :fast
+   'clj-surgeon.namespace-split-test                    :fast
+   'clj-surgeon.mcp-namespace-split-test                 :fast
    'clj-surgeon.mcp-formatter-test                      :fast
    'clj-surgeon.mcp-inspect-contract-test               :fast
    'clj-surgeon.mcp-inspect-tool-test                   :fast

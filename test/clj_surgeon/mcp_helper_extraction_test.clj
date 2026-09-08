@@ -1081,7 +1081,16 @@
                    (pr-str (:process_evidence proof)))))))))
 
 ;; @spec MCP-OP-HELPER-010
+;; @spec SPLIT-REPAIR-004
 (deftest finding-10-the-public-uninitialized-refusal-carries-next-call-nil
+  (let [continuation {:workspace_root "/project" :mode "plan-extraction"
+                      :file "src/app/core.clj" :to "src/app/helper.clj"
+                      :forms ["versioned"] :require_policy "minimal"}
+        r (mcp-helper/normalize-refusal {:error-type :extraction-decisions-required
+                                         :files ["src/app/caller.clj"] :next-call continuation})]
+    (is (= continuation (:next_call r)))
+    (is (= "extraction-decisions-required" (:error_type r)))
+    (is (= ["src/app/caller.clj"] (:files r))))
   (testing "the reviewer's structural probe of `handle-helper-extraction` found
             the server-not-initialized map has no :next_call at all. Every
             refusal the PUBLIC handler emits goes through the closed envelope,

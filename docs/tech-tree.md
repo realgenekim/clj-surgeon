@@ -303,3 +303,27 @@ failures; affected green: 77 tests / 803 assertions. Linked intent:
 MCP-OP-MATCH-004 and MCP-OP-EDIT-038. Reader-discard exclusion remains deferred
 as MCP-OP-MATCH-005; base matching semantics are unchanged. Gates and doubts:
 `/var/tmp/forge/plan2/friction1-r2-report.md`. No performance claim.
+- 2026-09-07, `astra/namespace-split`: Andon inb-731473 repairs anchored destination
+  namespace identity and helper-classified caller handoff. Five regression witnesses;
+  588 fast tests green, operation oracle green, kondo zero warnings/errors. Evidence:
+  `/var/tmp/forge/plan2/split-build-report.md`. Correctness repair, no wall claim.
+
+- 2026-09-07, `astra/namespace-split`: whole namespace partition compiler, one
+  captured reference analysis and final graph, shared extraction transaction/proof/
+  inverse, MCP `namespace_split` and CLI `:split-ns!` with the same plan-only
+  projection. The d9205abc views copy passes all four acceptance oracles: 141
+  owners, 20 destinations, five callers and 87 sites. Final ready-mapping CLI wall
+  is 30.33 s including those checks; mapping/profile setup is excluded. This is a
+  feasibility result, not a matched fresh-caller native crossover or routing claim.
+  [Design](intent/helper-extraction/namespace-split-design.md); full receipts and
+  caveats: `/var/tmp/forge/plan2/split-build-report.md`.
+
+- 2026-09-07T23:35:46.950536+00:00, `astra/namespace-split`: Cell C paper cuts
+  repaired with NS-SPLIT-016..021 and eight new witnesses. Candidate lint is
+  baseline-relative and blocks new error findings before publication; caller
+  requires preserve indentation/order/trivia, ns docstrings preserve raw tokens,
+  prose mentions are advisory, and checks name their commands and wall. Fresh
+  d9205abc split passes all four oracles. Observed in-call 33.866 s versus original
+  D1/D2 30.666/30.382 s; added candidate lint costs 3.375 s, no verification cut.
+  One functional replay, not a replicated crossover claim.
+  [Proof, red/green witnesses and retained warning delta](observations/2026-09-07-namespace-split-papercuts.md).

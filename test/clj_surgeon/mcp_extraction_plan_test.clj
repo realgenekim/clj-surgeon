@@ -44,6 +44,27 @@
     (doseq [child (reverse (file-seq file))]
       (.delete child))))
 
+;; @spec SPLIT-REPAIR-001
+(deftest plan-uses-workspace-deps-roots-beneath-a-src-ancestor
+  (let [base (.toFile (java.nio.file.Files/createTempDirectory
+                       (java.nio.file.Paths/get (System/getProperty "java.io.tmpdir")
+                                                (make-array String 0))
+                       "split-root" (make-array java.nio.file.attribute.FileAttribute 0)))
+        root (io/file base "src/work")
+        file (io/file root "src/clj/sample/core.clj")]
+    (try
+      (.mkdirs (.getParentFile file))
+      (spit (io/file root "deps.edn") "{:paths [\"src/clj\"]}")
+      (spit file source)
+      (let [result (extraction-plan/plan!
+                     {:project-root (str root)}
+                     {:mode "plan-extraction" :file "src/clj/sample/core.clj"
+                      :to "src/clj/sample/moved.clj" :forms ["moved"]
+                      :require_policy "minimal"})]
+        (is (:ok result) (pr-str result))
+        (is (= "sample.moved" (get-in result [:plan :target-ns]))))
+      (finally (delete-tree! base)))))
+
 ;; @spec MCP-OP-PLAN-001
 ;; @spec MCP-OP-PLAN-002
 ;; @spec MCP-OP-PLAN-003
