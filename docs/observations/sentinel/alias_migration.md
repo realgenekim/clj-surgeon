@@ -25,3 +25,14 @@ drift band is the registered 2*s_N = 46.346 s.
 - context only, NOT like for like (those are agent-caller arms; this is a runner-issued call): registered tool caller 27 s, registered native caller 121 s
 - evidence: `/var/tmp/forge/row2/sentinel-20260908T132004Z` (attestation.txt, candidate.patch, oracle-run.txt, wall.txt, stopwatch.log) ; job log `/var/tmp/forge/tighten/sentinel-alias-20260908T132004Z.log`
 
+> **RETRACTED — the row above (arm `sentinel-20260908T132004Z`, `verdict=SUSPEND`) is an artifact of
+> a careless apparatus test, not a drift signal.** The job was run with `--port 7888`, which belongs
+> to another seat. `surgeon-call` refused it (exit 3), the tool call never executed, and the oracles
+> then graded an unmutated tree as `ACCEPTED NO`. Two ratchets landed in `~/bin/verb-sentinel` in
+> the same edit: (1) 7888/7890/7894/7895/83xx are refused at ARGV, before a fixture is built —
+> the seat boundary belongs there, not three phases downstream; (2) a call that does not complete
+> (`call_rc != 0`) now yields `verdict=UNVERIFIED`, never `SUSPEND` — an unavailable or refused
+> capability is unknown performance, not a recorded correctness loss. The inbox item this row filed
+> (`inb-f13aa7`) is closed with this explanation. The standing sentinel result for alias_migration
+> is the `13:17:26Z` row above: ACCEPTED YES, call 4.310 s.
+
