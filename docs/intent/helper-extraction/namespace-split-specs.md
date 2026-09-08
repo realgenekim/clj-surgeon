@@ -76,3 +76,11 @@ and all ownership, behavior, architecture and protected-content gates are unchan
 - [x] **NS-SPLIT-047**: When verification.profile-file or CLI :profile-file supplies an absolute external EDN profile configuration, the split shall resolve it without adding configuration to the workspace, refusing invalid paths or data before mutation.
 - [x] **NS-SPLIT-048**: When a cold profile executes only true commands, the split shall publish incomplete verification with cold-suite pending and the executed command evidence.
 - [x] **NS-SPLIT-049**: When a selected profile has commands [], verification admission shall refuse with a specific empty-profile reason before writing.
+
+## Rows sublime batch 3
+
+- [x] **NS-SPLIT-050**: When warm proof selects a background gate, the verb shall return an immutable pending receipt bound to a detached worker pid.
+- [x] **NS-SPLIT-051**: When background proof closes, status shall report complete only for all successful commands over the unchanged committed snapshot.
+- [x] **NS-SPLIT-052**: When a split commits, its receipt shall contain bounded encoded review facts for every destination and retained owner.
+- [x] **NS-SPLIT-053**: When facts-only targets a committed request, it shall answer from the committed snapshot or name its closure receipt in a typed refusal.
+- [x] **NS-SPLIT-054**: When facts print a manifest, those bytes shall be a valid plan-only request including verification.

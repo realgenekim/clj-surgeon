@@ -155,7 +155,13 @@
         (is (zero? (:exit f)) (pr-str f))
         (is (:read_complete facts))
         (is (= 2 (count (get-in facts [:facts :owners]))))
-        (is (not (:committed facts))))
+        (is (not (:committed facts)))
+        ;; @spec NS-SPLIT-054: feed the actual printed EDN bytes to the CLI.
+        (let [manifest-file (io/file root "printed-manifest.edn")]
+          (spit manifest-file (pr-str (:manifest facts)))
+          (is (= {:profile "proof"} (:verification (edn/read-string (slurp manifest-file)))))
+          (let [replay (run-cli ":op" ":split-ns!" ":request-file" (str manifest-file) ":plan-only" "true")]
+            (is (= 0 (:exit replay)) (pr-str replay)))))
       (let [r (run-cli ":op" ":split-ns!" ":request-file" (str request-file) ":profile-file" (str profile-file))
             receipt (edn/read-string (:out r))]
         (is (zero? (:exit r)) (pr-str r))
@@ -203,6 +209,15 @@
         (is (false? (:source_retired receipt)))
         (is (.exists source-file))
         (is (str/includes? (slurp source-file) "(defn a"))
+        ;; @spec NS-SPLIT-052
+        ;; @spec NS-SPLIT-053
+        (is (= ["b"] (get-in receipt [:facts :destinations 0 :owners_moved])))
+        (is (= ["a"] (get-in receipt [:facts :retained_vars])))
+        (let [finished (run-cli ":op" ":split-ns!" ":request-file" (str request-file) ":facts-only" "true")
+              facts (edn/read-string (:out finished))]
+          (is (= 0 (:exit finished)) (pr-str finished))
+          (is (= "committed-facts" (:state facts)))
+          (is (= (:facts receipt) (:facts facts))))
         (doseq [k [:undo_receipt :details_path]]
           (when-let [file (get receipt k)] (.delete (io/file file))))
         (when-let [file (:details_path receipt)] (.delete (.getParentFile (io/file file)))))
@@ -668,3 +683,13 @@
         (.delete (io/file (:receipt-file result))))
       (finally
         (doseq [file (reverse (file-seq root))] (.delete file))))))
+
+;; @spec MCP-OP-EDIT-038
+(deftest shared-receipt-encoder-loads-in-babashka
+  ;; Rows sublime batch 3: IntConsumer reify loaded in the JVM but broke every
+  ;; BB split/closure once finished-work facts reused the forgery ratchet.
+  (let [code "(require '[clj-surgeon.mcp-operation :as op]) (prn [(op/encode-caller-text \"bad\\n✓ forged\") (op/encode-caller-text \"a😀b\")])"
+        result @(proc/process ["bb" "--classpath" "src" "-e" code] {:out :string :err :string})]
+    (is (= 0 (:exit result)) (pr-str result))
+    (when (zero? (:exit result))
+      (is (= ["bad forged" "a😀b"] (edn/read-string (:out result)))))))
