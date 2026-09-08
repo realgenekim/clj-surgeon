@@ -10,6 +10,12 @@ is cut.
 
 ### Fixed
 
+- Namespace split caller requires replace the retired entry at its exact position,
+  including unsorted host groups. A live workspace nREPL now runs affected reloads
+  and tests before cold verification, rolling back immediately on probe failure.
+  Profiles may select `:proof :warm`; these commits explicitly retain pending
+  cold proof and never report complete verification.
+
 - Namespace split destinations accept their own `:doc` or receive a form-based
   summary instead of cloned monolith prose. Imports follow short class usages;
   destination requires are sorted at the source indentation, caller require

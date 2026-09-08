@@ -78,3 +78,28 @@ no extra analyzer or suite invocation. The registry records the behavioral matri
 before code. Fresh d9205abc before/after fixtures use the supplied request and same
 profile. Gates: all four oracles, baseline-relative view lint, make test and touched
 file lint. Single replay timing does not establish a new native crossover.
+
+## Round 3 warm feedback (authorized 2026-09-08)
+
+NS-SPLIT-028 refines caller layout: replace the retired entry in place with the
+sorted new block, even in an unsorted host group. NS-SPLIT-029 adds an optional
+warm probe before cold verification. Discovery reads only the confined workspace
+.nrepl-port and evaluates its cwd with a short timeout; absent/stale/wrong-workspace
+ports are unavailable. Never start a JVM. Reload destinations and rewritten callers
+in dependency order, then test namespaces in the captured tree that require them
+(transitively), plus conventional -test peers. Only these namespaces are explicitly
+reloaded. No reload-all, remove-ns, ns-unmap or mutation of unrelated runtime state.
+Failed reload/tests roll back disk immediately and skip cold commands. JVM side
+effects and stale Vars cannot be undone or proved absent by a probe.
+
+NS-SPLIT-030: profile :proof defaults to :cold; :warm requires a successful live
+probe, skips configured cold commands and returns committed-probe-only,
+verification_complete false, and proof_pending naming every skipped command.
+No live probe with :warm refuses before publication. Unknown proof modes refuse.
+Checks report warm-probe wall, test/fail/error counts and cold command walls
+separately. Real cold proof and the candidate snapshot guard remain authoritative.
+
+Witness matrix: absent/stale/wrong cwd, green and failing reload/test, warm/cold,
+profile mode validation, fail-fast command log, dependency ordering, unrelated
+namespace exclusion, rollback and honest incomplete receipts. New tests run in the
+owned warm development image; make test runs once at the final milestone.

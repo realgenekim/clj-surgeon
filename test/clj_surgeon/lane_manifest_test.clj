@@ -377,9 +377,9 @@
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
     (is (= 52 (count (lm/namespaces-for :fast))))
-    (is (= 6 (count (lm/namespaces-for :integration))))
+    (is (= 7 (count (lm/namespaces-for :integration))))
     (is (= 32 (count (lm/namespaces-for :battery))))
-    (is (= 90 (count lm/manifest))
+    (is (= 91 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -408,7 +408,8 @@
   "Namespaces in a lane today that round one did NOT measure, each with the
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
-  '{clj-surgeon.namespace-split-test 21 ; Round 2: six regressions replace the superseded doc-cloning witness.
+  '{clj-surgeon.namespace-split-test 24 ; Round 3: exact header position, proof-mode admission, reload selection.
+    clj-surgeon.namespace-split-warm-test 2 ; Round 3: real nREPL failure/green matrix and stale/foreign discovery, integration.
     clj-surgeon.mcp-namespace-split-test 7 ; Add proof-time drift to closed schema, capture, projection and rollback.
     clj-surgeon.mcp-expect-guard-test 14 ; `expect` is a guard on both write routes, not discarded bookkeeping (dogfood-3, 2026-09-07).
     clj-surgeon.outline-corpus-integration-test 1 ; MOVED: full repository differential out of the bounded fast namespace.
@@ -520,8 +521,9 @@
       ;; helper request-shape refusals (48 -> 51), plus two battery archival-distance witnesses;
       ;; closed telemetry remains 17, not trunk
       ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
+      ;; Round 3 adds three pure and two warm boundary tests: 477 + 5 = 482.
       ;; Eight Cell C paper-cut witnesses: 464 + 8 = 472.
-      (is (= 477 adopted) (str "adopted tests: " adopted)))
+      (is (= 482 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -609,7 +611,8 @@
       ;; 993 original + 449 adopted = 1442; lane membership is unchanged.
       ;; +5 extraction Andon witnesses: identity, handoff, continuation and real roots.
       ;; Cell C paper-cut round: eight namespace-split witnesses, no lane change.
-      (is (= 1475 total) (str "manifest declares " total " tests"))
+      ;; Round 3: 1475 + 5 = 1480, plus one integration namespace (90 -> 91).
+      (is (= 1480 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

@@ -313,3 +313,21 @@ mission-ledger implementation change.
   raw rows). In-call before 35.393 s, after 33.391 s, with suite variation explaining
   the difference; no new native crossover claim.
   [Witnesses, raw warning caveat, source diff and proof](observations/2026-09-08-namespace-split-papercuts-round2.md).
+
+
+### 2026-09-08T00:59:47.250939+00:00 — namespace split round 3
+
+Branch `astra/namespace-split`, based on `5b78bed2`: exact retired-require position
+now passes the independent paper-cut oracle (zero new findings). The optional
+existing-workspace nREPL probe rolls back before cold verification on failure.
+Cold proof: 42.579 s including 11.609 s warm + 22.222 s kaocha; warm-only: 19.359 s,
+explicitly incomplete proof. Eight logged loops cost 95.121 s in aggregate; the
+<5 s reset/split target was not met (two analyzer calls alone ~5.53 s). No native
+control was run, so no new comparative speed claim. The first cold gate found
+test-lane and nested-reporting defects invisible to the focused warm tests.
+Receipt: [round 3](observations/2026-09-08-namespace-split-papercuts-round3.md).
+The third final make attempt passed: 786 JVM tests / 9,983 assertions and 873 BB
+tests / 7,511 assertions, zero failures/errors. After harness repair, the second
+attempt caught stale corpus pins and missing EARS @spec links; their 46-test
+warm audit passed before the final cold gate. No product behavior changed after
+the measured real fixture calls.

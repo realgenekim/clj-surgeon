@@ -3,6 +3,7 @@
   from clj-kondo; this namespace neither evaluates Clojure nor writes files."
   (:require
    [clj-surgeon.extract :as extract]
+   [clj-surgeon.namespace-split-warm :as warm]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.quoted-var-refs :as quoted-vars]
    [clj-surgeon.structural-lens :as lens]
@@ -323,6 +324,8 @@
 
 ;; INTENT: NS-SPLIT-017
 ;; INTENT: NS-SPLIT-026
+;; @spec NS-SPLIT-028
+;; INTENT: NS-SPLIT-028
 (defn- caller-header [parsed source-lib added]
   ;; Keep the retired entry as a group anchor until additions are placed.
   ;; Reparse only this small header; existing entries and trivia are not reprinted.
@@ -335,6 +338,7 @@
         group-key #(first (str/split % #"\."))
         libs (map #(lib-of (sexpr %)) original-entries)
         sorted? (= libs (sort libs))
+        retired (first (filter #(= source-lib (lib-of (sexpr %))) original-entries))
         inserted (reduce
                    (fn [source entry]
                      (let [p (parse-file "header.clj" source)
@@ -372,9 +376,13 @@
                            (splice source [{:start end :end end :text (str "\n  (:require " printed ")")}])))))
                    source (sort-by lib-of added))
         p (parse-file "header.clj" inserted)]
-    (splice inserted (for [node (mapcat require-entries (require-clauses p))
-                           :when (= source-lib (lib-of (sexpr node)))]
-                       (remove-libspec inserted (:starts p) node)))))
+    (if (and retired (seq added))
+      (let [[start end] (node-span (:starts parsed) retired)]
+        (splice source [{:start start :end end
+                         :text (str/join (str "\n" indent) (map pr-str (sort-by lib-of added)))}]))
+      (splice inserted (for [node (mapcat require-entries (require-clauses p))
+                             :when (= source-lib (lib-of (sexpr node)))]
+                         (remove-libspec inserted (:starts p) node))))))
 
 ;; INTENT: NS-SPLIT-018
 (defn prose-mentions
@@ -577,6 +585,10 @@
                     :coverage {:roots (:roots request) :reference_authority "clj-kondo captured snapshot plus structural quoted-Var supplement"
                                :dynamic_references "not claimed"}}]
     {:ok (empty? blockers) :operation :compiled-extraction :blockers blockers :projection projection
+     :warm-selection (when (empty? blockers)
+                       (warm/selection (concat (map :lib dests) (map :lib caller-builds))
+                                       (for [[file p] parsed :when (str/ends-with? file "_test.clj")] (:lib p))
+                                       graph-edges))
      :form-count (count owners) :caller-edit-count (:caller_sites counts)
      :original-sources (select-keys sources (cons source-file (map :file caller-builds)))
      :guard-sources sources :future-sources futures :created-files (mapv :file dests)

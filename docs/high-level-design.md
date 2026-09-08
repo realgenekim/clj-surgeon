@@ -1319,6 +1319,8 @@ the shrinking [per-ID debt ledger](intent/unlinked-spec-ids.edn).
 - [Whole namespace partition](intent/helper-extraction/namespace-split-design.md):
   a complete mapping closes over one snapshot into one final graph and one guarded
   file set; MCP and CLI share its nonmutating projection, proof and inverse.
+  An optional existing workspace nREPL supplies an early affected-test probe;
+  probe-only commits explicitly retain pending cold proof (NS-SPLIT-029/030).
 - [Embedded elaborator](intent/embedded-elaborator/embedded-elaborator-design.md) — frozen pre-product intent, excluded from the current witness audit.
 - [Substantiation telemetry](intent/substantiation-telemetry/substantiation-telemetry-design.md) — advance ratification, excluded from the current witness audit.
 - [Test isolation and lane cadence](intent/test-isolation/test-isolation-design.md)

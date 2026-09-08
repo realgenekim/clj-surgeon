@@ -757,9 +757,16 @@ supply a nonblank `:doc` string. Otherwise its generated doc names the source,
 form count and up to three public forms; the original monolith doc is not cloned.
 Destination requires form one sorted block with the source indentation. Imports
 are retained for short class names, and aligned multiline calls follow alias-width
-changes. Caller require groups and unrelated source text remain in place.
+changes. The sorted destination require block replaces the retired caller entry
+at its exact position, preserving surrounding source text.
 The receipt's `:unrequired_qualified_refs` lists advisory destination file/line
 references to namespaces without a require; it never adds requires on that basis.
+A live workspace `.nrepl-port` enables an affected namespace reload/test probe
+before the profile's cold commands. Probe failure rolls back immediately. Profiles
+default to `:proof :cold`; `:proof :warm` requires that live probe and skips the
+cold command list, reporting `committed-probe-only`, `verification_complete false`
+and every skipped command in `proof_pending`. Warm results cannot prove absence
+of stale Vars or replace final cold acceptance.
 See the [request, proof and undo contract](docs/intent/helper-extraction/namespace-split-design.md).
 
 ```sh

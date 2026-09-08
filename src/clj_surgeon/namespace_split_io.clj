@@ -7,6 +7,7 @@
    [clj-surgeon.mcp-paths :as paths]
    [clj-surgeon.mcp-process :as process]
    [clj-surgeon.namespace-split :as split]
+   [clj-surgeon.namespace-split-warm :as warm]
    [clj-surgeon.synchronous-verification :as proof]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -196,6 +197,8 @@
   (.mkdirs (io/file dir))
   (let [file (str (io/file dir name))] (file-ops/atomic-write! file (pr-str data)) file))
 
+;; @spec NS-SPLIT-030
+;; INTENT: NS-SPLIT-030
 (defn- anchored-profiles [root profiles]
   (into {} (for [[profile spec] profiles]
              [profile (if-let [capability (proof/profile-capability spec)]
@@ -204,7 +207,8 @@
                                                      (if (and (str/includes? exe "/") (not (.isAbsolute (io/file exe))))
                                                        (assoc argv 0 (str (.resolve root exe))) argv)))
                                              (:commands capability))}
-                          (:timeout-ms capability) (assoc :timeout-ms (:timeout-ms capability)))
+                          (:timeout-ms capability) (assoc :timeout-ms (:timeout-ms capability))
+                          (contains? spec :proof) (assoc :proof (:proof spec)))
                         spec)])))
 
 (defn- result-snapshot-current? [root compiled]
@@ -237,9 +241,16 @@
       (let [id (str (UUID/randomUUID))]
         (try
           (let [inverse (save! receipt-dir (str id "-undo.edn") (:receipt committed))
-                verification (proof/run-proof! (str root) profile-name capability)
+                warm-check (when-let [live (:warm-live capability)]
+                             (warm/probe! live (:warm-selection compiled)))
+                probe-only? (= :warm (:proof capability))
+                verification (cond
+                               (and warm-check (not (:ok warm-check))) {:ok false}
+                               probe-only? {:ok (true? (:ok warm-check))}
+                               :else (proof/run-proof! (str root) profile-name capability))
                 guard-start (System/nanoTime)
                 snapshot-current? (result-snapshot-current? root compiled)
+                checks (cond-> checks warm-check (conj warm-check))
                 checks (into checks (map (partial proof-check profile-name) (:process_evidence verification)))
                 checks (conj checks {:name "verified-snapshot-guard" :exit (if snapshot-current? 0 1)
                                      :duration_ms (/ (double (- (System/nanoTime) guard-start)) 1000000.0)
@@ -248,9 +259,13 @@
                                {:projection (:projection compiled) :verification verification
                                 :read_back (:verified committed)})]
             (if (and (:ok verification) snapshot-current?)
-              (assoc base :ok true :state "committed" :committed true :mutation_attempted true
+              (assoc base :ok true :committed true :mutation_attempted true
                      :source_retired (boolean (seq (:deleted-files compiled)))
-                     :verification_complete true :checks checks :undo_receipt inverse :details_path details
+                     :verification_complete (not probe-only?)
+                     :state (if probe-only? "committed-probe-only" "committed")
+                     :proof_pending (if probe-only?
+                                      (mapv #(str/join " " %) (:pending-commands capability)) [])
+                     :checks checks :undo_receipt inverse :details_path details
                      :undo_command ["clj-surgeon" ":op" ":undo-extract!" ":receipt" inverse]
                      :receipt_hash (:receipt-hash committed)
                      :graph (-> (:graph base) (dissoc :edges) (assoc :edge_count (count (get-in base [:graph :edges])))))
@@ -283,8 +298,15 @@
                request (assoc request :workspace_root (str root))
                config-file (io/file (str root) ".clj-surgeon.edn")
                project-config (when (.isFile config-file) (edn/read-string (slurp config-file)))
-               profiles (anchored-profiles root (or (:verification-profiles config) (:verification-profiles project-config)))
+               raw-profiles (or (:verification-profiles config) (:verification-profiles project-config))
+               profiles (anchored-profiles root raw-profiles)
                profile-name (get-in request [:verification :profile])
+               mode (get-in profiles [profile-name :proof] :cold)
+               _ (when-not (#{:cold :warm} mode)
+                   (refuse! :invalid-proof-mode "Profile :proof must be :cold or :warm" {}))
+               live (when-not (:plan_only request) (warm/discover! root))
+               _ (when (and (not (:plan_only request)) (= :warm mode) (nil? live))
+                   (refuse! :warm-probe-unavailable "Warm proof requires a live workspace nREPL" {}))
                preflight (when-not (:plan_only request) (proof/verification-preflight profiles profile-name true))]
            (when preflight (refuse! :verification-unavailable "Verification profile cannot run synchronously" {:preflight preflight}))
            (let [sources (capture! root (:roots request))
@@ -322,7 +344,10 @@
                                      :error "Candidate introduces error findings relative to baseline lint"
                                      :error_type "lint-regression" :source_unchanged true
                                      :blockers [{:type :lint-regression :introduced_errors (:introduced_errors delta)}])
-                              (publish! root compiled profile-name (proof/profile-capability (get profiles profile-name))
+                              (publish! root compiled profile-name
+                                        (assoc (proof/profile-capability (get profiles profile-name))
+                                               :proof mode :warm-live live
+                                               :pending-commands (:commands (proof/profile-capability (get raw-profiles profile-name))))
                                         (or (:receipt-dir config)
                                             (str (System/getProperty "java.io.tmpdir") "/namespace-split-receipts"))
                                         checks))))]

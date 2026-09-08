@@ -187,7 +187,10 @@
         in an allowlisted namespace still fails by name.
      3. A LIVE child is refused regardless -- this map only ever excuses a
         child that was launched and reaped inside the same namespace."
-  '{clj-surgeon.mcp-change-buffer-test
+  '{clj-surgeon.namespace-split-warm-test
+    [["/usr/bin/true" "NS-SPLIT-029/030: the actual cold-profile command, logged at invocation to witness suppression after a failed warm nREPL probe"]]
+
+    clj-surgeon.mcp-change-buffer-test
     [["/usr/bin/printf" "the verify-command runner's own boundary: a passing profile whose output exceeds the visible byte limit, proving truncation and the sha256 of the full stream"]
      ["/usr/bin/false" "the ordinary-nonzero outcome of the same runner"]
      ["/bin/sleep" "the timeout outcome of the same runner, at :timeout-ms 1"]]

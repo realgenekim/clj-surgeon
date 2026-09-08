@@ -78,7 +78,7 @@
  :rationale "Cell C round 2, Gene repair brief."}
 
 {:id :NS-SPLIT-026,
- :status :active,
+ :status :superseded, :superseded-by :NS-SPLIT-028,
  :ears
  "When inserting caller requires into a grouped block, the compiler shall insert lexically within the matching library group while preserving existing entries.",
  :misreadings
@@ -97,4 +97,28 @@
  ["pre-existing store/now-inst; required namespace; Java classes; prose exclusions"],
  :tests [:unrequired-qualified-refs-are-advisory],
  :rationale "Cell C round 2, Gene repair brief."}
+{:id :NS-SPLIT-028 :status :active
+ :ears "When replacing a retired caller require, the compiler shall splice the sorted destination block at that entry's exact position."
+ :misreadings ["Lexical insertion may cross later host entries in an unsorted group."]
+ :boundaries ["forms/polish test headers; multiple destinations; inline entry; host trivia"]
+ :tests [:retired-require-is-replaced-at-its-exact-position]
+ :rationale "Round 3 oracle found not-in-place at forms_test:13 and polish_test:3; refines NS-SPLIT-017/026 position policy."}
+{:id :NS-SPLIT-029 :status :active
+ :ears "While a live workspace nREPL is available, verification shall run the affected reload/test probe before any cold command and roll back immediately on failure."
+ :misreadings ["A port file alone proves a live workspace JVM." "Reload-all or remove-ns is allowed." "Run cold after a failed warm test."]
+ :boundaries ["stale port; wrong cwd; no port; dependency order; affected test closure; reload exception; failing test; timeout"]
+ :tests [:warm-probe-precedes-cold-and-rolls-back :warm-selection-is-bounded]
+ :rationale "Gene round 3: fastest feedback in the caller's existing JVM."}
+{:id :NS-SPLIT-030 :status :active
+ :ears "When a profile selects warm proof, a successful probe shall commit with incomplete verification and explicit pending cold commands."
+ :misreadings ["Warm green proves a fresh program." "No live JVM permits a no-op success." "Discard profile proof mode while anchoring commands."]
+ :boundaries ["default cold; explicit cold; warm; invalid mode; absent/stale probe; separate walls"]
+ :tests [:warm-probe-precedes-cold-and-rolls-back :warm-proof-mode-is-validated]
+ :rationale "Gene round 3: probe-only receipts must never claim full proof."}
+{:id :NS-SPLIT-031 :status :active
+ :ears "When grading split lint, the oracle shall exclude only matching HEAD file/type/message multiplicities and fail closed when analysis is unavailable."
+ :misreadings ["Exclude an entire file with any baseline warning." "An analyzer failure is a clean grade."]
+ :boundaries ["moved line; added duplicate; new message; new destination; missing analyzer"]
+ :tests [:oracle-baseline-attribution]
+ :rationale "Round 3 oracle scored five pre-existing warnings as split damage."}
 ]}

@@ -219,3 +219,44 @@ no extra analyzer or suite invocation. The registry records the behavioral matri
 before code. Fresh d9205abc before/after fixtures use the supplied request and same
 profile. Gates: all four oracles, baseline-relative view lint, make test and touched
 file lint. Single replay timing does not establish a new native crossover.
+
+## Round 3: exact caller position and optional warm probe
+
+NS-SPLIT-028 supersedes the lexical-position portion of NS-SPLIT-017/026 when
+there is a retired require: its exact span is replaced with the sorted destination
+block. Existing neighboring libspecs and trivia stay byte-identical. Without a
+retired entry, additions use the existing lexical/group insertion policy.
+
+Before verification, the boundary probes a confined `.nrepl-port` with a 300 ms
+cwd evaluation. Missing, malformed, stale and foreign-workspace ports are ignored
+for cold profiles. Discovery never starts a JVM. A discovered JVM receives only
+explicit `require :reload` for destinations, rewritten callers and affected test
+namespaces, ordered through the final dependency graph. Test selection includes
+captured `_test.clj` namespaces depending transitively on touched code and existing
+conventional `-test` peers. It runs `clojure.test/run-tests` for that set. Untouched
+intermediate dependencies influence order but are not explicitly reloaded.
+
+The profile in `.clj-surgeon.edn` selects `:proof :cold` (default) or `:proof :warm`:
+
+```clojure
+{:verification-profiles
+ {"split-unit" {:proof :cold
+                :commands [["bin/kaocha" "unit" "--fail-fast"]]}
+  "split-probe" {:proof :warm
+                 :commands [["bin/kaocha" "unit" "--fail-fast"]]}}}
+```
+
+A failed warm reload/test or bounded evaluation rolls back disk immediately and
+runs no cold commands. The `warm-probe` check carries `duration_ms`, failures,
+errors, summary and explicit reload/test names. Cold mode then executes the named
+profile exactly as before; individual cold command walls are separate check rows.
+Warm mode requires a live successful probe, skips that profile's cold command list,
+and returns `state "committed-probe-only"`, `verification_complete false` and
+`proof_pending` listing every skipped command. An unavailable probe refuses warm
+mode before publication; invalid proof modes refuse. Snapshot guards still apply.
+
+A probe cannot clear stale Vars, cached state, macro expansion, classpath/startup
+or dynamic callers. It is deliberately incomplete evidence. No `remove-ns`,
+`ns-unmap`, `reload-all`, runtime restart or unrelated explicit reload is performed.
+Rollback restores disk; effects of evaluation in the caller's JVM are not reversible.
+The full cold profile and repository suite remain required final proof.

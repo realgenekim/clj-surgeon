@@ -6,6 +6,7 @@
    [clj-surgeon.mcp-process :as analyzer-process]
    [clj-surgeon.namespace-split :as split]
    [clj-surgeon.namespace-split-io :as boundary]
+   [clj-surgeon.namespace-split-warm :as warm]
    [clj-surgeon.synchronous-verification :as proof]
    [clj-surgeon.verification-process :as process]
    [clojure.edn :as edn]
@@ -178,7 +179,7 @@
                        (str/join "\n" (map (partial str indent) %)) "))\n;; untouched\n(def keep 7)\n")
           r (paper-split "(ns app.views)\n(def x 1)\n" (header lines))]
       (is (:ok r))
-      (is (= (header ["[app.alpha :as a]" "[app.new :as fresh]" "[clojure.string :as str]"])
+      (is (= (header (assoc lines old-position "[app.new :as fresh]"))
              (get-in r [:future-sources "test/app/caller.clj"])))))
   (let [r (paper-split "(ns app.views)\n(def x 1)\n"
                        "(ns app.caller (:require [app.views :as views]))\n(def untouched 1)\n")]
@@ -300,9 +301,13 @@
         known (set (map (comp name :id) registry))
         active (set (map (comp name :id) (filter #(= :active (:status %)) registry)))
         tags (fn [files pattern] (set (mapcat #(map second (re-seq pattern (slurp %))) files)))
-        code (tags ["src/clj_surgeon/namespace_split.clj" "src/clj_surgeon/namespace_split_io.clj"]
-                   #"(?m)^;; INTENT: (NS-SPLIT-[0-9]+)")
-        tests (tags ["test/clj_surgeon/namespace_split_test.clj"] #"(?m)^;; INTENT-TEST: (NS-SPLIT-[0-9]+)")]
+        code (tags ["src/clj_surgeon/namespace_split.clj" "src/clj_surgeon/namespace_split_io.clj" "src/clj_surgeon/namespace_split_warm.clj"
+                    "test/oracles/namespace_split_papercut_oracle.py"]
+                   #"(?m)^(?:;;|#) INTENT: (NS-SPLIT-[0-9]+)")
+        tests (tags ["test/clj_surgeon/namespace_split_test.clj"
+                     "test/clj_surgeon/namespace_split_warm_test.clj"
+                     "test/oracles/test_namespace_split_papercut_oracle.py"]
+                    #"(?m)^(?:;;|#) INTENT-TEST: (NS-SPLIT-[0-9]+)")]
     (is (every? code active))
     (is (every? tests active))
     (is (every? known code))
@@ -461,3 +466,49 @@
     (is (not (str/includes? text "[app.store")))
     (doseq [{:keys [line token]} rows]
       (is (str/includes? (nth (str/split-lines text) (dec line)) token)))))
+
+;; @spec NS-SPLIT-028
+;; INTENT-TEST: NS-SPLIT-028
+;; Oracle examples: d9205abc forms_test.clj:13 and polish_test.clj:3 have
+;; test-helpers AFTER views, inside an otherwise grouped project block.
+(deftest retired-require-is-replaced-at-its-exact-position
+  (doseq [prefix ["forms" "polish"]
+          indent ["            " "   "]]
+    (let [caller (str "(ns app." prefix "-test\n"
+                      "  (:require [clojure.test :refer [is]]\n"
+                      indent "[app.store :as store]\n"
+                      indent "[app.views :as views]\n"
+                      indent "[app.test-helpers :refer [with-temp-store]]))\n")
+          file (str "test/app/" prefix "_test.clj")
+          result (paper-compile (paper-request [["z" ["y"]] ["a" ["x"]]])
+                                {"src/app/views.clj" "(ns app.views)\n(def x 1)\n(def y 2)\n"
+                                 file caller} {})]
+      (is (:ok result))
+      (is (= (str/replace caller "[app.views :as views]"
+               (str "[app.a :as a]\n" indent "[app.z :as z]"))
+             (get-in result [:future-sources file]))))))
+
+;; @spec NS-SPLIT-030
+;; INTENT-TEST: NS-SPLIT-030
+(deftest warm-proof-mode-is-validated
+  (with-paper-workspace
+    (fn [root request]
+      (doseq [mode [:warm :bogus]]
+        (let [r (boundary/execute!
+                  {:verification-profiles {"unit" {:proof mode :commands [["/bin/true"]]}}
+                   :receipt-dir (str root "/receipts")} request)]
+          (is (= "refused" (:state r)))
+          (is (= (if (= :warm mode) "warm-probe-unavailable" "invalid-proof-mode") (:error_type r)))
+          (is (false? (:mutation_attempted r))))))))
+
+;; @spec NS-SPLIT-029
+;; INTENT-TEST: NS-SPLIT-029
+(deftest warm-selection-is-bounded
+  (is (= {:reload ["app.new" "app.caller" "app.caller-test" "app.new-test"]
+          :tests ["app.caller-test" "app.new-test"]}
+         (warm/selection ["app.new" "app.caller"]
+                         ["app.new-test" "app.caller-test" "unrelated-test"]
+                         [["app.caller" "app.new"] ["app.caller-test" "app.caller"]])))
+  (is (= {:reload ["app.new" "app.deep-test"] :tests ["app.deep-test"]}
+         (warm/selection ["app.new"] ["app.deep-test"]
+                         [["app.intermediate" "app.new"] ["app.deep-test" "app.intermediate"]]))))

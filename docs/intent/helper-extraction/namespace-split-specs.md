@@ -31,3 +31,10 @@ duplicate owners, cycles through callers, source-root mismatch, drift at publica
 proof failures and guarded undo. Unsupported reader/macro/dynamic cases are bounded
 unknowns and refuse rather than imply universal static closure. State-space witnesses
 exercise mapping and rollback alternatives; no retained second logical runtime.
+
+
+Round 3 registered amendments (registry: namespace-split-papercuts.edn):
+
+- [x] **NS-SPLIT-028**: When retiring a caller require, the compiler shall replace its exact position with the sorted destination block.
+- [x] **NS-SPLIT-029**: While a live workspace nREPL is available, verification shall run the affected reload/test probe before cold commands and roll back on probe failure.
+- [x] **NS-SPLIT-030**: When a profile selects warm proof, success shall report committed-probe-only with incomplete verification and all skipped cold commands pending.

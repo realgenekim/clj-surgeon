@@ -454,7 +454,8 @@
   (let [ids (spec-ids "." (spec-doc-paths "."))
         non-mcp (set (remove #(str/starts-with? % "MCP-OP-") ids))]
     ;; Audit ledger: 165 original non-MCP rows, plus the repaired telemetry row.
-    (is (= 185 (count non-mcp))) ; Four Andon and fifteen whole-split promises.
+    ;; NS-SPLIT-028..030 add three reachable EARS promises with direct witnesses.
+    (is (= 188 (count non-mcp))) ; Four Andon and fifteen whole-split promises.
     (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 19
             "MEASURE-" 4 "TELEMETRY-EVENTS-" 1}
            (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"
