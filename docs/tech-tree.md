@@ -430,3 +430,14 @@ unresolved identity. The absolute-check failure and rollback remain evidence.
 Build, cold gates, hand-drive receipts and the frozen sequential 24-run operator
 protocol: `/var/tmp/forge/plan2/cellC/astra-B07-report.md`. This is a feasibility
 experiment, with no automatic routing admission or comparative performance claim.
+
+
+### 2026-09-08T08:56:05.125982+00:00 — row 3 standalone require schema
+
+Standalone require-only MCP/CLI compilation, ordered aliases, exact counts,
+comment-preserving line splices and shared proof/undo are implemented on the
+branch. The frozen natural eight-file admission is **blocked**: two target
+libspecs share require opener lines, and one sorted append requires moving an
+inherited closer that O4 protects. One untimed original-seed handler call refuses
+before write; no cohort or routing claim.
+[Contradictions and retained evidence](observations/2026-09-08-row3-schema-admission.md).

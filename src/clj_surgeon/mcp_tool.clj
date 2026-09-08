@@ -17,6 +17,7 @@
    [clj-surgeon.mcp-formatter :as formatter]
    [clj-surgeon.mcp-helper-extraction :as helper-extraction]
    [clj-surgeon.mcp-namespace-split :as namespace-split]
+   [clj-surgeon.mcp-require-change :as require-change]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-paths :as mcp-paths]
@@ -2555,7 +2556,11 @@
            (helper-extraction/tool)
            namespace-split/tool
            admit-tool/admit-clojure-patch-tool
-           feature-thread/feature-thread-tool]
+           feature-thread/feature-thread-tool
+           (assoc require-change/tool :tool-fn
+                  (fn [exchange params callback]
+                    (require-change/handle (select-keys @runtime-config [:verification-profiles :receipt-dir])
+                                           exchange params callback)))]
     :edit [edit-clojure-tool]
     (throw (ex-info "Unsupported MCP tool profile"
                     {:profile profile

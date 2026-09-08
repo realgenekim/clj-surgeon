@@ -1217,6 +1217,13 @@ Any of these conditions falsifies the design:
 
 ## Alias migration: one intent across requiring namespaces
 
+The separately admitted [standalone require change](intent/require-change/require-change-design.md)
+adds one library under an ordered alias policy across explicit files, without
+symbol migration. A pure token-splice compiler owns comment attachment and
+stable insertion; the shared transaction and synchronous proof own publication,
+rollback and durable undo. This row-3 schema experiment carries no routing or
+performance claim.
+
 `alias_migration` is an automatically routed mutation class for a known old/new
 library and Var, an ordered alias policy, and a bounded path scope with an
 expected file count; its 67-row [specification](intent/alias-migration/alias-migration-specs.md)

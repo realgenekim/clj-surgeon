@@ -376,11 +376,11 @@
 
 (deftest the-partition-matches-round-ones-measurement
   (testing "counts are pinned so a silent re-partition is loud"
-    (is (= 52 (count (lm/namespaces-for :fast))))
+    (is (= 53 (count (lm/namespaces-for :fast))))
     (is (= 7 (count (lm/namespaces-for :integration))))
     ;; B07 enrolls its independent oracle mutation witnesses in one new battery namespace.
-    (is (= 33 (count (lm/namespaces-for :battery))))
-    (is (= 92 (count lm/manifest))
+    (is (= 34 (count (lm/namespaces-for :battery))))
+    (is (= 94 (count lm/manifest))
         (str "round one's 49 measured namespaces, plus the two round-two "
              "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
              "round three's adopted orphan (mcp-formatter-test) and its "
@@ -442,6 +442,8 @@
     clj-surgeon.mission-forms-source-test 23 ; Strict comment text/attachment, whitespace identity and owner sentinel.
     clj-surgeon.mission-typist-executor-test 11 ; Add candidate diagnostic survival to proof/commit/undo and saved fallback forwarding.
     clj-surgeon.battery-ledger-test        14 ; TEST-ISO-009a/b: add strict archive classification and preserved failure/audit authority.
+    clj-surgeon.require-change-test 9 ; Pure standalone require intent and strict natural-layout refusal witnesses.
+    clj-surgeon.require-change-boundary-test 12 ; Actual CLI/profile processes, confined publication, independent oracle and undo.
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
     clj-surgeon.lane-manifest-test         25 ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses
     clj-surgeon.mcp-formatter-test         3  ; the adopted orphan (round three)
@@ -526,7 +528,8 @@
       ;; Round 3 adds three pure and two warm boundary tests: 477 + 5 = 482.
       ;; Eight Cell C paper-cut witnesses: 464 + 8 = 472.
       ;; B07 adds 9 compiler + 1 boundary + 2 oracle tests: 484 + 12 = 496.
-      (is (= 496 adopted) (str "adopted tests: " adopted)))
+      ;; Row 3 adds 9 pure + 12 real boundary/CLI witnesses: 496 + 21 = 517.
+      (is (= 517 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -620,7 +623,8 @@
       ;; Cell C paper-cut round: eight namespace-split witnesses, no lane change.
       ;; Round 4 merged with origin/MCP/main aa587ec3: source census = 1489.
       ;; B07 adds 12 JVM witnesses; one new CLI test runs separately in the BB suite.
-      (is (= 1501 total) (str "manifest declares " total " tests"))
+      ;; Standalone require intent: 1501 + 21 = 1522, with boundary processes in battery.
+      (is (= 1522 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

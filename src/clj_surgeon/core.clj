@@ -2112,6 +2112,27 @@
                        :category  :write
                        :pair      :extract!}
 
+    ;; @spec REQUIRE-CHANGE-001
+    :require-change! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.require-change-io/cli!) opts))
+                      :desc "Apply one require-only intent across explicit files with ordered aliases and proof"
+                      :args {:request {:desc "Complete standalone require_change EDN map"}
+                             :request-file {:desc "EDN file containing the complete request"}
+                             :plan-only {:desc "Preview the same compiler decisions without writing (true)"}}
+                      :workflow ["Preview with :plan-only true. Required request keys: workspace_root, add {lib,alias_policy}, files [{file,source_hash?,remove?:{lib,as}}], expect {files,adds,removes}, verification {profile}. Names are strings; files and alias_policy are ordered nonempty vectors."
+                                 "workspace_root is absolute; each file is a unique workspace-relative .clj path. Reuse an existing policy alias bound to the target; otherwise choose the first policy alias not bound to another library. An existing target outside policy refuses."
+                                 "Insertion preserves all inherited bytes, comment attachment, indentation and closing-parenthesis placement: one line before the first greater library and its attached comments. Unsupported conditional/refer/prefix or unrepresentable whole-line layouts refuse. Explicit removals require standalone lines without comments or shared closers."
+                                 "Review counts versus expected, per-file alias/reason/collisions and hashes. Counts mean actual touched files, added and removed libspecs. Existing target bindings are reused; a satisfied no-op needs zero touched files/adds."
+                                 "To bind apply to preview, copy each :decisions item's :source_hash (SHA-256 of UTF-8 source bytes) into its matching :files item's :source_hash. :result_hash describes the planned result, not the apply guard. Follow :receipt_details_path if decisions are elided."
+                                 "Apply by omitting :plan-only. The profile comes from workspace .clj-surgeon.edn :verification-profiles and must contain synchronous argv commands. No symbol edits are accepted or synthesized."
+                                 "Read :state and :mutation_attempted first on nonzero exit or :ok=false. Alias exhaustion needs a revised authorized policy; source-hash-mismatch needs fresh evidence. Refusals never guess a repair."
+                                 "Success requires :state committed, :verification_complete true, :proof_pending [] and every named :checks exit 0. :receipt_details_path holds any bounded-out detail, including checks. A write alone proves no application behavior."
+                                 "Checks are maps with :name (rendered argv), :profile, :exit and :status; process checks include :duration_ms. The complete required command vector is in the named workspace profile; raw process evidence is retained at :details_path. This synchronous verb has no committed-but-pending mode or resume command."
+                                 "Rolled-back with :restored true restores originals. Recovery-required preserves conflicting foreign bytes: inspect retained recovery evidence before guarded undo. Never repeat a committed mutation."
+                                 "Undo with :op :undo-extract! :receipt PATH from :undo_receipt; the inverse refuses drift."]
+                      :examples ["clj-surgeon :op :require-change! :request-file requires.edn :plan-only true"
+                                 "clj-surgeon :op :require-change! :request-file requires.edn"]
+                      :category :write}
+
     ;; @spec NS-SPLIT-014
     ;; @spec NS-SPLIT-041
     :split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))

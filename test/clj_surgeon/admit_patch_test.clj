@@ -584,7 +584,7 @@
     (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
             "transform_clojure" "relation_census" "alias_migration"
             "helper_extraction" "namespace_split" "admit_clojure_patch"
-            "feature_thread"]
+            "feature_thread" "require_change"]
            names)))
   (let [registered (into {} (map (juxt :name identity))
                          (server/public-tool-registry))]

@@ -216,6 +216,8 @@ runtests: mcp-test
 mcp-test: mcp-operation-oracle performance-regression-sentinel-intent-test
 	@# NS-SPLIT-031: oracle attribution regression; no JVM and no workspace mutation.
 	python3 -B -m unittest discover -s test/oracles -p test_namespace_split_papercut_oracle.py
+	# @spec REQUIRE-CHANGE-014
+	python3 -B -m unittest discover -s test/oracles -p test_require_change_oracle.py
 	@# @spec NS-SPLIT-046
 	@# @spec NS-SPLIT-043
 	python3 -B -m unittest discover -s test/oracles -p test_cell_b_oracle.py

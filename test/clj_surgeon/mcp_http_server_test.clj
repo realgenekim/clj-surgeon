@@ -279,7 +279,7 @@
         (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
                 "transform_clojure" "relation_census"
                 "alias_migration" "helper_extraction" "namespace_split" "admit_clojure_patch"
-                "feature_thread"]
+                "feature_thread" "require_change"]
                (mapv :name tools)))
         (is (= true (get-in tools [0 :annotations :readOnlyHint])))
         (is (= false (get-in tools [0 :annotations :destructiveHint])))
@@ -371,7 +371,7 @@
                 :status :synchronized
                 :removed []
                 :upserted ["inspect_clojure" "temporary_probe"]
-                :tool-count 11
+                :tool-count 12
                 :server-restart-required false
                 :agent-session-restart :client-dependent}
                (select-keys
@@ -392,6 +392,7 @@
                  "namespace_split"
                  "admit_clojure_patch"
                  "feature_thread"
+                 "require_change"
                  "temporary_probe"}
                (set (map :name added-tools))))
         (is (= "HOT_SCHEMA_DESCRIPTION"
@@ -400,7 +401,7 @@
                 :status :synchronized
                 :removed ["temporary_probe"]
                 :upserted ["inspect_clojure"]
-                :tool-count 10
+                :tool-count 11
                 :server-restart-required false
                 :agent-session-restart :client-dependent}
                (select-keys
@@ -414,7 +415,7 @@
         (is (= #{"inspect_clojure" "apply_clojure_changes" "edit_clojure"
                  "transform_clojure" "relation_census"
                  "alias_migration" "helper_extraction" "namespace_split" "admit_clojure_patch"
-                 "feature_thread"}
+                 "feature_thread" "require_change"}
                (set (map :name restored-tools))))
         (is (= inspect-tool/tool-description
                (get-in restored-by-name ["inspect_clojure" :description]))))

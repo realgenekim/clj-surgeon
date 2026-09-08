@@ -404,6 +404,7 @@
    "docs/intent/read-path-memory/read-path-memory-specs.md"
    "docs/intent/read-request-normalization/read-request-normalization-specs.md"
    "docs/intent/relation-census/relation-census-specs.md"
+   "docs/intent/require-change/require-change-specs.md"
    "docs/intent/shell-argv-safety/shell-argv-safety-specs.md"
    "docs/intent/sibling-pair-edit/sibling-pair-edit-specs.md"
    "docs/intent/telemetry-events/telemetry-events-specs.md"
@@ -459,7 +460,8 @@
     ;; B01 registers NS-SPLIT-034..036; historical IDs remain in the census.
     ;; B03 adds the suspension, exact split admission and plate parity promises.
     ;; B07 registers NS-SPLIT-037..046 (ten retained-source/facts/oracle promises).
-    (is (= 206 (count non-mcp)))
+    ;; Row 3 registers fourteen standalone require-change promises.
+    (is (= 220 (count non-mcp)))
     (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 19
             "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3}
            (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"

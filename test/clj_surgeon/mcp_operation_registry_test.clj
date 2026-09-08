@@ -65,6 +65,11 @@
     :verification-failed 'clj-surgeon.mcp-namespace-split-test/failing-proof-restores-the-entire-file-set
     :typed-refusal 'clj-surgeon.mcp-namespace-split-test/refused-callback-is-actionable-and-preserves-bytes
     :read 'clj-surgeon.mcp-namespace-split-test/plan-only-captures-once-and-never-publishes}
+   "require_change"
+   {:committed 'clj-surgeon.require-change-boundary-test/standalone-mcp-commits-and-retains-undo
+    :verification-failed 'clj-surgeon.require-change-boundary-test/failing-proof-rolls-back-all-files
+    :typed-refusal 'clj-surgeon.require-change-boundary-test/atomic-prewrite-refusals
+    :read 'clj-surgeon.require-change-boundary-test/preview-does-not-publish-or-prove}
    "feature_thread"
    {:receipt
     'clj-surgeon.mcp-feature-thread-test/t1-smw-thread-returns-six-legs-with-bodies
