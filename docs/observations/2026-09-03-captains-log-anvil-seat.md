@@ -4277,3 +4277,15 @@ coldstart-grade: `receipt=<path>` must be confined to `<specimen>/target/kaocha-
 | injected failure | 223 s | fail, named (mission_git_submodule_test.clj:42) | 744 / 13,757 | 1 | 0 / 35 ns |
 
 Phase table first: 97.3 % of the serial wall is the 35 namespaces (816 s); JVM start + deps ~21 s; isolation checks + ledger < 1 s — never on the critical path. ONE namespace was 56.6 % of the lane (`reader-eval-fence-test` 461.8 s) → a hard 7.7-min floor for any whole-namespace split, so it is sharded across its seven deftests; the new floor is one deftest at 206 s (six cold launches in a doseq — the next cut, owed in ns-isolation's own comment). Three defects in the first wide run, all pinned (selector-vs-namespace integrity check; select-keys dropped :sharded/:vars; home isolation read the selector's lane). Risks named exactly: per-namespace counts not yet compared against a SERIAL control (one more 14-min run — ordered now); within-namespace order never defined (TEST-ISO-008 gap); fixture check by metadata only; serial-equivalent work +10–16 % under 8 lanes. Rulings: default stays OFF on the branch (Sol's call at the fence); receipt-chain passes BATTERY_LANES=8 + BATTERY_PREREQS=1 (make test's semantics; skipped>0 RED per Sol; asserted count 4,141→4,143 documented in the receipt). Ship of this branch queues behind ship #4 (one fence worktree).
+
+## 2026-09-08T18:19Z — Gene: "captain log -- amazing!!!" — the day's t ledger so far, one line each (all measured today)
+
+| serial step in a fix's life | this morning | now | how |
+|---|---:|---:|---|
+| watch-mode red, save→verdict | 12.5 s / 127.7 s | 0.058 s / 0.159 s | kaocha `affected` plugin, no fork |
+| "is my run done / mine / green?" | tail the log, guess | one typed line, 24 ms | `kaocha-status` over an atomic LATEST + per-run receipt |
+| the agent's claimed totals | trusted | checked against the receipt's bytes | grader R12 + `receipt=` in the boot block |
+| landing battery | 839 s | 218 s median | 8 lanes, one namespace sharded by deftest, verdicts identical |
+| landing routine | hand steps + 50 min | one `ship` command, HOLD on GO-WITH-FIX, observed-facts SHIP line | ship v2 with Sol's corrections, first three real runs behaved |
+| a fresh agent's first action | four setup commands | the edit (step 0 + named entrances) | COLDSTART epoch f7477585; batch 5 cells 42–50 % apparatus and counting |
+Still open on t: the Sol review itself (~14 min per round; GO-WITH-FIX round trips are the new longest piece), the records-lane ref split (inb-19e57b, Gene), the 206-s deftest floor in the battery.
