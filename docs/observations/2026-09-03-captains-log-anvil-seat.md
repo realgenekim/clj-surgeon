@@ -3897,3 +3897,16 @@ Caveats carried, not cured: profile_isolated=no in all four (the seat's global i
 Fix for D2–D6 (disclosed in the freeze): run D with the in-call profile replaced by a no-op so the call returns at emission (receipt honestly says proof pending) and the RUNNER grades both arms with the same frozen oracle; D1 kept as a labelled proof-inclusive diagnostic. F arms skipped for time; D-only verdict by ~11:25Z. Meter lesson for the tree: "candidate-complete" must mean the same thing for a verb that proves inside the call and a caller that proves after — proof by the runner, for both, on the primary clock.
 
 ## 2026-09-08T10:45Z — Astra r10 fix delivered (398679fa: alias artifact batteries repaired AND required at landing); Sol r11 (bounded) launched; on GO → land → row 2 friction-medium
+
+## 2026-09-08T11:22Z — ROW 5 WINS on the pre-registered gate: six D arms 6/6 accepted by the frozen Cell B oracle, median D/N 0.43 on caller work, 182 s saved (> 2·s_N 106 s), zero refusals/repairs/fallbacks; F arms pending, so emission is NOT credited
+
+| pair | N | D | D/N | saved |
+|---|---|---|---|---|
+| R1/D1 | 382 s | 98 s (proof-inclusive 341 s labelled) | 0.26 | 284 s |
+| R2/D2 | 310 | 127 | 0.41 | 183 |
+| R3/D3 | 324 | 144 | 0.44 | 180 |
+| R4/D4 | 280 | 112 | 0.40 | 168 |
+| R5/D5 | 226 | 140 | 0.62 | 86 (below the 90 s clause on its own) |
+| R6/D6 | 337 | 154 | 0.46 | 183 |
+
+All six D patches byte-identical (one diff to review; determinism ≠ correctness). Two verb paper cuts found by the pilot: verification profiles resolve ONLY from `.clj-surgeon.edn` at the workspace root and the verb has no external config path — so configuring the trusted proof adds a file the proof forbids, and the tool rolled back its own correct candidate on that one line; `{:commands []}` reported configured but not admitted (the admitted no-op is `[["/bin/true"]]`). Honesty gap: under the no-op profile the receipt says verification_complete true / proof_pending [] while the executed proof was /bin/true — every D caller flagged it unprompted; the receipt must NAME the profile's commands and a trivial profile must not yield verification_complete. Row 5 → friction-high (won at n=6; oracle exists; ledger: F arms, external profile path, no-op honesty, D5 margin). Mechanism readout (facts vs emission) is the row's largest hole.

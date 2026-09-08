@@ -1,0 +1,102 @@
+ROW 5 STAGE 2 — GATE VERDICT
+written 2026-09-08T11:20:57Z · runner: forge@anvil · nothing committed, nothing pushed
+
+VERDICT:  D WINS on Astra's pre-registered gate — on BOTH reported clocks.
+          The mechanism question (item 9) is NOT answered: no F arm was run.
+
+PAIRED TABLE (D vs its stage-1 NATIVE slot control; authorship clock = the N-matched clock)
+
+  run  pair    N (s)    D (s)   D/N     saved (s)   oracle   suite   handoff
+  D1   R1      382.1     97.7   0.256      284.4     PASS     93.8      2.1
+  D2   R2      310.0    126.6   0.408      183.4     PASS    112.6      0.5
+  D3   R3      323.9    143.5   0.443      180.4     PASS    115.8      0.1
+  D4   R4      280.0    111.7   0.399      168.3     PASS    113.0      3.2
+  D5   R5      226.4    140.0   0.618       86.4     PASS    119.7      3.1
+  D6   R6      336.7    153.5   0.456      183.2     PASS    115.2      3.9
+
+  median D/N = 0.43   median saved = 181.8 s   (native median 316.9 s, s_N 52.9, 2*s_N 105.8)
+
+CLAUSES (astra-squares-revisit.md item 8 / b07-arms.md "Operator allocation")
+
+  (a) all six D accepted, no semantic/preservation regression ....... PASS  6/6 ORACLE RESULT: PASS
+  (b) >= 5/6 with no interface repair and no native fallback ........ PASS  6/6 clean; 0 refusals,
+                                                                            0 repairs, 0 fallbacks,
+                                                                            0 re-stamps, 0 interventions
+  (c) median paired D/N <= 0.75 .................................... PASS  0.43
+  (d) median paired saved >= 90 s AND > 2*s_N (105.8 s) ............. PASS  181.8 s
+
+  Same gate on the AS-STAMPED primary (no adjustment at all):
+    median D/N = 0.45, median saved = 174.35 s -> also PASS on every clause.
+  The two clocks agree because five of six arms carried a no-op profile; only D1 differs
+  (as-stamped 0.894 vs authorship 0.256), and D1 is the labelled proof-inclusive arm.
+
+  NOTE ON CLAUSE (d), the one that nearly bit: D5 saved only 86.4 s, BELOW the 90 s
+  threshold, against the fastest native run in the floor (226.4 s). One more arm like D5
+  and the median clause would be in play. This is the pre-registered gate's real margin,
+  and it is thinner than the headline 2.3x suggests.
+
+MECHANISM READOUT (item 9) — PENDING, NOT ESTIMATED
+
+  F/N : PENDING (no F arm run)
+  D/F : PENDING (no F arm run)
+
+  Consequence, stated plainly: this row shows the EMITTING route beats the native floor.
+  It does NOT show that EMISSION is why. Item 9's rule — "F within 10% of D and the noise
+  floor favours a facts service; D must materially beat F to credit emission" — cannot be
+  applied, so EMISSION IS NOT CREDITED. An F arm handed the same snapshot-bound facts
+  (25 owners, 9 caller files, 43 sites, the promotions and the graph) might close most of
+  the 181.8 s. Until F runs, row 5 is D-vs-N evidence only.
+
+FINDING THE GATE DOES NOT MEASURE — D IS BYTE-DETERMINISTIC, NATIVE IS NOT
+
+  All six D candidate patches are BYTE-IDENTICAL (sha256 22848c8ceb87a902..., 1202 lines,
+  six times). Stage 1's six native candidates were six DISTINCT patches — all accepted,
+  semantically convergent, byte-divergent. The residual spread in the D column
+  (97.7-153.5 s) is caller orientation and reporting around a call whose own elapsed time
+  was 51.4-52.7 s in every no-op arm. Reviewing a fleet of D changes is one diff, not N.
+  Not a pre-registered clause, not counted toward the gate. Determinism is not correctness:
+  a wrong request would be wrong identically six times.
+
+APPARATUS FIXES APPLIED BEFORE ANY RUN (both disclosed identically in every stage-2 brief)
+
+  (a) runtests-once precondition now stated, with the exact pin the oracle uses
+      (GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=init.defaultBranch GIT_CONFIG_VALUE_0=main)
+      and the base-green figures. Stage-1 N ran without it; that touches only the
+      caller-suite segment, never this gate's clock. Direction favours D/F on the
+      secondary clock; reported, never netted out.
+  (b) runner handoff bounded by a 5 s poll on the caller's own done stamp.
+      RESULT: every arm 0.1-3.9 s, against stage-1's 337.0 s first-run artifact.
+
+MID-COHORT AMENDMENTS (both recorded in freeze-stage2.edn before the arms they govern)
+
+  1. D2-D6 ran a NO-OP verification profile so the call returns at emission and the RUNNER
+     grades with the same frozen oracle it runs for N. Forced by D1: 243.9 s of its 341.6 s
+     was the acceptance oracle running INSIDE the tool call, work no N caller ever pays
+     inside its clock. D1 retained as the proof-inclusive diagnostic.
+  2. F skipped for time; D3-D6 callers overlapped the previous arm's runner oracle
+     (conservative against D — it inflates D's clock, never N's).
+
+HONESTY FLAGS
+
+  * Under the no-op profile the receipt says verification_complete=true, proof_pending=[]
+    while the proof that ran was /bin/true. That field is VACUOUS for D2-D6 and is not
+    evidence about any candidate. Every D2-D6 caller flagged this unprompted and rested its
+    claim on its own inspection plus the repository gate.
+  * b07-arms.md's pre-registered D success criterion (verification_complete=true over the
+    TRUSTED profile) is therefore met by D1 ALONE. D2-D6 are accepted the way N is: by the
+    runner's independent frozen oracle.
+  * The 25-form deviation above the rule's 16-form ceiling is inherited from B07 and repeated.
+
+PRODUCT FINDING THE PILOT CAUGHT (would have failed all six arms on apparatus)
+
+  The installed trunk entrance resolves :verification-profiles ONLY from
+  .clj-surgeon.edn at workspace_root, and the verb takes no --config. On a repo graded for
+  byte-identity outside an authorised footprint, the only way to configure the trusted proof
+  adds a file that same proof forbids. In the pilot the tool produced a candidate that passed
+  every semantic check and then ROLLED IT BACK on "ADDED .clj-surgeon.edn". Also: a
+  {:commands []} profile is reported as configured but is NOT admitted; the admitted no-op
+  shape is [["/bin/true"]].
+
+ARTEFACTS
+  freeze-stage2.edn (+ amendments 1-2)   results-stage2.edn   this file
+  per arm: /var/tmp/forge/row5/D{1..6}/{stopwatch.log,d-receipt.edn,candidate.patch,oracle.log}

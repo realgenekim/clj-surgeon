@@ -1,0 +1,163 @@
+;; Row 5 stage-2 freeze — written BEFORE run D1. Six D arms then six F arms, matched by slot
+;; to the six stage-1 N floor controls (D1/F1 <-> R1 ... D6/F6 <-> R6).
+;; Pre-registration: clj-surgeon-records docs/observations/2026-09-07-plan-2/cellC/astra-squares-revisit.md
+;;                   "One next experiment", items 4-9.
+;; Stage-1 floor: /var/tmp/forge/row5/results-stage1.edn (primary median 316.9 s, s_N 52.9, 2*s_N 105.8).
+{:frozen-at-utc "2026-09-08T10:32:33Z"
+ :stage "row5 stage 2 — six D arms (one trunk-CLI split-ns! call each) then six F arms
+         (native authorship plus the read-only facts projection). No new N runs."
+
+ :apparatus-fixes-applied-before-any-run
+  [{:id :runtests-once-precondition :addresses "results-stage1.edn :apparatus-findings :runtests-once-precondition"
+    :what "The caller brief now states the make runtests-once precondition and gives callers the EXACT
+           pin the frozen oracle uses (GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=init.defaultBranch
+           GIT_CONFIG_VALUE_0=main), with the base-green figures (1021 tests, 12397 assertions, 0 failures)."
+    :where ["task-N-stage2.md" "task-D.md" "task-F.md"]
+    :disclosure "IDENTICAL sentence in all three, inserted as its own section immediately before ## Acceptance."
+    :asymmetry-disclosed
+     "The six stage-1 N runs were run WITHOUT this disclosure and are frozen as run. The stage-1 finding
+      records that every N caller stamped candidate-complete BEFORE running any suite, so the omission
+      touched only the caller-suite segment (median 178.4 s), never the PRIMARY endpoint the gate is
+      computed on. On the SECONDARY all-oracle clock N therefore carries a red-herring diagnosis cost
+      that D and F do not. That direction favours D/F on the secondary and is reported, never netted out."}
+   {:id :bounded-runner-handoff :addresses "results-stage1.edn :apparatus-findings :runner-handoff-not-bounded"
+    :what "watch-grade.sh polls each run's stopwatch log every 5 s for the caller's done stamp and grades
+           immediately, so done -> oracle-start is <= 5 s for every stage-2 arm."
+    :sha256 "72de5090a7ce62fdce3f0187e4bbdcc28540c09863bc1fa8735daf52109c5961"}]
+
+ :apparatus
+  {:task-N-stage2 {:path "/var/tmp/forge/row5/task-N-stage2.md" :sha256 "505b4d02cd370bfc3c1495b4d640b4463be946992bb5836c4b86a6ba797daae9"
+                   :note "The stage-1 N brief plus the precondition section. Not run in stage 2; frozen for the record and for any future N."}
+   :task-D        {:path "/var/tmp/forge/row5/task-D.md" :sha256 "ca11e6956570590d41357a0229f94ece24e7725cd6c669ff796739bccba820f2"}
+   :task-F        {:path "/var/tmp/forge/row5/task-F.md" :sha256 "c04e6f5df081b05f798becd5d3dff2f1416754aa5cdef002310138a25b0c50d7"}
+   :task-N-stage1-unmodified {:path "/var/tmp/forge/row5/task-N.md" :sha256 "826f8a862cd95c6f5ec5730e1d4d94f3fcfa2fe9a34422bf8fbce2411ab4c4f6"
+                              :note "Byte-identical to the stage-1 freeze. Stage-1 evidence is not rewritten."}
+   :setup  {:path "/var/tmp/forge/row5/setup-run2.sh"  :sha256 "d5f50b85be2d8fabdbc5da09ae1ed35ef8756e7ed8a1f772537ffc81c36ef7a9"}
+   :grade  {:path "/var/tmp/forge/row5/grade-run2.sh"  :sha256 "c9bda79e67ad3dfb5c69b1c8d77f47933c81560f1e8200012c66fc0d2962839b"}
+   :watch  {:path "/var/tmp/forge/row5/watch-grade.sh" :sha256 "72de5090a7ce62fdce3f0187e4bbdcc28540c09863bc1fa8735daf52109c5961"}
+   :fixture {:repo "/var/tmp/forge/row5/fixture-repo" :commit "92a7ca14fd904e4d962df38614b9af3a7ef41a11"
+             :unchanged-from-stage-1 true :refs ["refs/heads/base"] :commit-count 1}
+   :oracle  {:entrance "bash /var/tmp/forge/plan2/cellC/b07/frozen/cell_b_oracle.sh"
+             :sha256 "9a9f7a8c75cab8aeeb5987fc9458393f187681a2d19c694bd606408807d6e1c6"
+             :unchanged-from-stage-1 true :run-by :runner}
+   :d-entrance {:cli "/home/forge/bin/clj-surgeon" :receipt "/home/forge/bin/clj-surgeon.receipt.edn"
+                :source-commit "1ab53e0e5da01c79b364b7e5175356721e99fdef"
+                :source-hash "6a8aa75b69f8be693e6090c3c359a79acda3e98541a12db7c73e48ef52c42bfe"
+                :verified-at-setup true}
+   :request {:source "/var/tmp/forge/plan2/cellC/b07-D-request.edn"
+             :per-run "/var/tmp/forge/row5/<RUN>/split-request.edn"
+             :edit "workspace_root rebound to the assigned worktree. NOTHING else, snapshot_hash preserved."}}
+
+ :deviation-from-b07-arms
+  [{:what "D runs through the INSTALLED TRUNK CLI (~/bin/clj-surgeon :op :split-ns! :request-file ...),
+           not the frozen b07_split_adapter.clj that b07-arms.md names."
+    :why  "Operator instruction for row 5 stage 2: measure the shipped entrance. Trunk 1ab53e0e carries B07."
+    :consequence-found-in-pilot
+     "The adapter injected the trusted b07-cell-b profile IN MEMORY and put receipts outside the fixture.
+      The trunk entrance has no such seam: namespace_split_io/execute! resolves :verification-profiles
+      ONLY from (io/file workspace_root \".clj-surgeon.edn\"), and there is no --config option on the verb.
+      So the ONLY way to configure the trusted proof puts a new file inside the graded tree, and the frozen
+      oracle's check E counts any file added outside the authorised footprint as a violation. In the runner
+      pilot the tool emitted a candidate that passed EVERY other check (A1-A8, all eight B07 preservation
+      checks, both fresh-process load orders, focused + integration tests, make runtests-once and kaocha
+      green) and was then ROLLED BACK by its own proof, solely on ADDED .clj-surgeon.edn."}
+   {:what "A runner-owned proof shim is the profile command for arm D."
+    :path "/var/tmp/forge/row5/b07-proof-shim.sh" :sha256 "189cb681ae8a82c4fbeb43a20d8e5726880b4d495b819af1565d734e32d4329e"
+    :config "/var/tmp/forge/row5/clj-surgeon-D.edn" :config-sha256 "49a55392e035477461a324e071e46921d570f47fbad85a88761ebd51c558eb8d"
+    :does "Moves the runner-planted .clj-surgeon.edn out of the graded tree, runs the frozen oracle
+           BYTE-IDENTICAL and unmodified, restores it, and propagates its exit code exactly."
+    :does-not "It changes no oracle check, removes nothing the caller wrote, and hides no candidate byte.
+               The caller is instructed to delete the apparatus file before stamping candidate-complete;
+               grade-run2.sh reclaims it if the caller did not and records that it had to."}
+   {:what "The caller does NOT run the frozen acceptance oracle; the runner does, after the caller finishes."
+    :why  "Unchanged from stage 1, so the paired comparison stays valid."}]
+
+ :meter
+  {:primary-as-stamped "orient-start -> candidate-complete (caller-stamped; last stamp wins)"
+   :secondary          "orient-start -> oracle-complete (all-oracle wall; frozen oracle run by the runner)"
+   :d-adjustment
+    {:field :d-authorship-s
+     :definition "primary-as-stamped MINUS the tool-reported duration_ms of the b07-cell-b profile command
+                  in the D receipt's :checks (the frozen oracle the tool runs as its own synchronous proof)."
+     :why "Astra's clauses (c) and (d) are PAIRED against the stage-1 N primary, which contains authorship
+           ONLY: N's own suite is a separate segment and N's acceptance oracle is runner-side and free.
+           The trunk D call runs the SAME frozen acceptance oracle inside itself, so the as-stamped D
+           primary contains post-candidate acceptance apparatus that the N primary does not. Comparing
+           them directly charges D for verification N gets for free. freeze-stage1.edn required stage 2
+           to 'treat D identically or the paired comparison is void'; subtracting the tool's own run of
+           the runner-side oracle is what treating it identically means on this clock. Pilot figures:
+           295.3 s call, of which 242.2 s was the frozen oracle."
+     :honesty-caveat "D's cheaper clock is only meaningful BECAUSE the proof passed: on a failing proof the
+                      tool rolls the candidate back, so for D the proof is load-bearing in a way it is not
+                      for N. Both clocks are reported for every arm and the gate is computed on both."}
+   :gate-computed-on [:d-authorship-s :primary-as-stamped]
+   :cap-seconds 1800
+   :stamp-tool "/var/tmp/forge/dogfood-stamp.sh"}
+
+ :gate
+  {:authority "astra-squares-revisit.md item 8 / b07-arms.md 'Operator allocation'"
+   :clauses [[:a "all six D accepted, no semantic/preservation regression"]
+             [:b ">= 5/6 with no interface repair and no native fallback"]
+             [:c "median paired D/N <= 0.75"]
+             [:d "median paired (N - D) >= 90 s AND > 2*s_N = 105.8 s"]]
+   :pairing "by slot: D1<->R1 ... D6<->R6, F1<->R1 ... F6<->R6"
+   :mechanism-readout "item 9: F/N and D/F, no additional win fishing. F within 10% of D and the noise floor
+                       favours a facts service; D must materially beat F to credit emission."}
+
+ :cohort
+  {:order ["D1" "D2" "D3" "D4" "D5" "D6" "F1" "F2" "F3" "F4" "F5" "F6"]
+   :sequential true :model "opus, one fresh caller per arm"
+   :worktree "/home/forge/src/cc-row5-<RUN>, branch row5/<RUN>, cut from the fixture repo at the base"
+   :preflight-per-run "load average and df -h /; refuse below 15 G free"
+   :teardown-per-run "exact-pid JVM reap by cwd, worktree removed, branch deleted"}
+
+ :not-run ["new N runs" "the b07 24-run block allocation" "any commit" "any push"]}
+
+;; ---------------------------------------------------------------------------
+;; AMENDMENT 1, made after D1 and BEFORE D2, on the coordinator's instruction.
+;; Recorded here rather than by rewriting the freeze above: D1 ran under the original
+;; configuration and is retained, labelled, as the proof-inclusive diagnostic arm.
+{:amendment 1
+ :at-utc "2026-09-08T10:48:08Z"
+ :applies-to ["D2" "D3" "D4" "D5" "D6"]
+ :finding-that-forced-it
+  "D1 measured candidate-work = 341.6 s, of which 243.95 s was the frozen acceptance oracle running
+   INSIDE the tool call as its b07-cell-b synchronous proof. N callers stamp candidate-complete
+   BEFORE any suite and never pay acceptance inside their clock, so the as-stamped D primary and the
+   N primary do not contain the same work and the paired comparison freeze-stage1.edn required is void."
+ :change
+  {:what "For D2-D6 the workspace verification profile is a NO-OP, so the call returns at emission and
+          the RUNNER grades the candidate with the same frozen oracle it runs for N."
+   :profile-file \"/var/tmp/forge/row5/clj-surgeon-D-noop.edn\"
+   :profile-sha256 \"da8779726a6a15896f456a611d5718e9fff4435809e6e9503a333a2aa646e658\"
+   :profile-value \"{:verification-profiles {\\"b07-cell-b\\" {:commands [[\\"/bin/true\\"]]}}}\"
+   :brief \"/var/tmp/forge/row5/task-D-noop.md\" :brief-sha256 \"d50ddfa278fcf70510fdf6d1c194616ef40172afeae6c24010fa3fc8128b9d03\"
+   :brief-delta \"Three sentences only: the profile is named a no-op with the runner grading; the call
+                  takes about a minute rather than several; and verification_complete is flagged as
+                  reporting the no-op, not the candidate. No task content changed.\"}
+ :shape-finding
+  "{:commands []} is CONFIGURED but NOT ADMITTED — profile-capability returns nil for it and the verb
+   refuses with admitted_profiles []. The admitted no-op shape is a vector of one argv VECTOR,
+   [[\"/bin/true\"]]. Measured on a scratch worktree before D2: call returns in 53.1 s, state committed,
+   verification_complete true, proof_pending []."
+ :honesty-flag
+  "verification_complete=true on D2-D6 is VACUOUS — the proof executed was /bin/true. It is NOT evidence
+   about the candidate. The only acceptance evidence for D2-D6 is the runner's frozen oracle, exactly as
+   for N. b07-arms.md's pre-registered D success criterion (verification_complete=true over the trusted
+   profile) is therefore NOT met by construction for D2-D6; D1 is the only arm that met it."
+ :d1-retained
+  {:label "proof-inclusive diagnostic"
+   :profile \"/var/tmp/forge/row5/clj-surgeon-D.edn\" :shim \"/var/tmp/forge/row5/b07-proof-shim.sh\"
+   :brief \"/var/tmp/forge/row5/task-D.md\"
+   :report-both true}}
+
+;; AMENDMENT 2, same moment: schedule.
+{:amendment 2
+ :at-utc "2026-09-08T10:48:08Z"
+ :change "The F cohort is SKIPPED for time (coordinator instruction, 11:25Z deadline). Item 9's F/N and
+          D/F mechanism readout is therefore reported as PENDING, not estimated."
+ :overlap-disclosure
+  "To fit five more D arms before the deadline, each arm's caller may be launched as soon as the previous
+   arm's caller stamps done, so the previous arm's RUNNER ORACLE can still be executing during the next
+   arm's caller work. Stage-1 N callers never ran under that load. The direction is conservative against
+   D: it inflates D caller clocks, never N's. Recorded per arm."}

@@ -1,0 +1,187 @@
+;; Row 5 stage 2 — six D arms (one installed-trunk-CLI :split-ns! call each), paired by slot to the
+;; six stage-1 NATIVE floor controls. NO F ARM WAS RUN (skipped for time, coordinator instruction).
+;; Freeze: /var/tmp/forge/row5/freeze-stage2.edn, including amendments 1 and 2 written mid-cohort.
+;; Nothing was committed or pushed.
+{:meter
+ {:primary-as-stamped "orient-start -> candidate-complete (caller-stamped, last stamp wins)"
+  :primary-gate-clock "D authorship = primary-as-stamped MINUS the tool-reported duration of the
+                       b07-cell-b profile command, so it contains the SAME work as the stage-1 N
+                       primary (authorship only; acceptance apparatus excluded and runner-owned)."
+  :secondary "orient-start -> oracle-complete (all-oracle wall; frozen oracle run by the RUNNER)"
+  :note "D2-D6 ran a NO-OP profile (~30 ms), so their two primaries are equal to within a rounding
+         step. Only D1 carried the real in-call oracle (243.9 s of its 341.6 s)."}
+
+ :arms
+ [{:id "D1" :pair "R1" :N-primary-s 382.1
+   :accepted true :oracle :PASS :oracle-exit 0
+   :primary-as-stamped-s 341.6 :in-call-proof-s 243.9 :authorship-s 97.7
+   :paired-ratio-authorship 0.256 :paired-saved-authorship-s 284.4
+   :paired-ratio-as-stamped 0.894 :paired-saved-as-stamped-s 40.5
+   :all-oracle-s 673.4 :caller-suite-s 93.8 :runner-handoff-s 2.1 :runner-oracle-s 235.9
+   :tool-call-elapsed-ms 296989.189461 :state "committed" :committed true
+   :verification-complete true :proof-pending []
+   :proof-command-name "b07-proof-shim.sh" :proof-exit 0 :proof-status "passed"
+   :candidate-complete-restamps 0 :refusals 0 :interface-repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true :config-left-behind false
+   :patch "/var/tmp/forge/row5/D1/candidate.patch" :oracle-log "/var/tmp/forge/row5/D1/oracle.log"}
+  {:id "D2" :pair "R2" :N-primary-s 310.0
+   :accepted true :oracle :PASS :oracle-exit 0
+   :primary-as-stamped-s 126.6 :in-call-proof-s 0.0 :authorship-s 126.6
+   :paired-ratio-authorship 0.408 :paired-saved-authorship-s 183.4
+   :paired-ratio-as-stamped 0.408 :paired-saved-as-stamped-s 183.4
+   :all-oracle-s 479.7 :caller-suite-s 112.6 :runner-handoff-s 0.5 :runner-oracle-s 240.0
+   :tool-call-elapsed-ms 51518.037738 :state "committed" :committed true
+   :verification-complete true :proof-pending []
+   :proof-command-name "true" :proof-exit 0 :proof-status "passed"
+   :candidate-complete-restamps 0 :refusals 0 :interface-repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true :config-left-behind false
+   :patch "/var/tmp/forge/row5/D2/candidate.patch" :oracle-log "/var/tmp/forge/row5/D2/oracle.log"}
+  {:id "D3" :pair "R3" :N-primary-s 323.9
+   :accepted true :oracle :PASS :oracle-exit 0
+   :primary-as-stamped-s 143.5 :in-call-proof-s 0.0 :authorship-s 143.5
+   :paired-ratio-authorship 0.443 :paired-saved-authorship-s 180.4
+   :paired-ratio-as-stamped 0.443 :paired-saved-as-stamped-s 180.4
+   :all-oracle-s 496.3 :caller-suite-s 115.8 :runner-handoff-s 0.1 :runner-oracle-s 236.9
+   :tool-call-elapsed-ms 52150.195836 :state "committed" :committed true
+   :verification-complete true :proof-pending []
+   :proof-command-name "true" :proof-exit 0 :proof-status "passed"
+   :candidate-complete-restamps 0 :refusals 0 :interface-repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true :config-left-behind false
+   :patch "/var/tmp/forge/row5/D3/candidate.patch" :oracle-log "/var/tmp/forge/row5/D3/oracle.log"}
+  {:id "D4" :pair "R4" :N-primary-s 280.0
+   :accepted true :oracle :PASS :oracle-exit 0
+   :primary-as-stamped-s 111.7 :in-call-proof-s 0.0 :authorship-s 111.7
+   :paired-ratio-authorship 0.399 :paired-saved-authorship-s 168.3
+   :paired-ratio-as-stamped 0.399 :paired-saved-as-stamped-s 168.3
+   :all-oracle-s 471.4 :caller-suite-s 113.0 :runner-handoff-s 3.2 :runner-oracle-s 243.6
+   :tool-call-elapsed-ms 52664.833184 :state "committed" :committed true
+   :verification-complete true :proof-pending []
+   :proof-command-name "true" :proof-exit 0 :proof-status "passed"
+   :candidate-complete-restamps 0 :refusals 0 :interface-repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true :config-left-behind false
+   :patch "/var/tmp/forge/row5/D4/candidate.patch" :oracle-log "/var/tmp/forge/row5/D4/oracle.log"}
+  {:id "D5" :pair "R5" :N-primary-s 226.4
+   :accepted true :oracle :PASS :oracle-exit 0
+   :primary-as-stamped-s 140.0 :in-call-proof-s 0.0 :authorship-s 140.0
+   :paired-ratio-authorship 0.618 :paired-saved-authorship-s 86.4
+   :paired-ratio-as-stamped 0.618 :paired-saved-as-stamped-s 86.4
+   :all-oracle-s 504.5 :caller-suite-s 119.7 :runner-handoff-s 3.1 :runner-oracle-s 241.7
+   :tool-call-elapsed-ms 52177.694616 :state "committed" :committed true
+   :verification-complete true :proof-pending []
+   :proof-command-name "true" :proof-exit 0 :proof-status "passed"
+   :candidate-complete-restamps 0 :refusals 0 :interface-repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true :config-left-behind false
+   :patch "/var/tmp/forge/row5/D5/candidate.patch" :oracle-log "/var/tmp/forge/row5/D5/oracle.log"}
+  {:id "D6" :pair "R6" :N-primary-s 336.7
+   :accepted true :oracle :PASS :oracle-exit 0
+   :primary-as-stamped-s 153.5 :in-call-proof-s 0.0 :authorship-s 153.5
+   :paired-ratio-authorship 0.456 :paired-saved-authorship-s 183.2
+   :paired-ratio-as-stamped 0.456 :paired-saved-as-stamped-s 183.2
+   :all-oracle-s 510.9 :caller-suite-s 115.2 :runner-handoff-s 3.9 :runner-oracle-s 238.2
+   :tool-call-elapsed-ms 51379.98174 :state "committed" :committed true
+   :verification-complete true :proof-pending []
+   :proof-command-name "true" :proof-exit 0 :proof-status "passed"
+   :candidate-complete-restamps 0 :refusals 0 :interface-repairs 0 :native-fallbacks 0 :operator-interventions 0
+   :first-attempt-acceptance true :config-left-behind false
+   :patch "/var/tmp/forge/row5/D6/candidate.patch" :oracle-log "/var/tmp/forge/row5/D6/oracle.log"}
+ ]
+
+ :cohort
+  {:n 6 :accepted 6 :first-attempt-acceptance 1.0
+   :refusals 0 :interface-repairs 0 :native-fallbacks 0 :operator-interventions 0 :restamps 0 :timeouts 0
+   :every-arm "one :split-ns! call, committed, no repair, no fallback, no second call"
+   :authorship {:vals-s [97.7, 126.6, 143.5, 111.7, 140.0, 153.5] :median-s 126.6}
+   :handoff {:vals-s [2.1, 0.5, 0.1, 3.2, 3.1, 3.9] :max-s 3.9
+              :note "apparatus fix (b) held: every arm <= 3.9 s, against stage-1's 337.0 s first-run artifact"}}
+
+ :gate
+  {:authority "astra-squares-revisit.md item 8 / b07-arms.md Operator allocation"
+   :on-authorship-clock
+    {:a-all-six-accepted true :accepted "6/6"
+     :b-five-of-six-clean true :actual "6/6 with no interface repair and no native fallback"
+     :c-median-ratio 0.43 :c-threshold 0.75 :c-pass true
+     :d-median-saved-s 181.8 :d-threshold-90 90 :d-threshold-2sN 105.82
+     :d-pass-90 true :d-pass-2sN true
+     :VERDICT :D-WINS}
+   :on-as-stamped-clock
+    {:c-median-ratio 0.45 :c-pass true
+     :d-median-saved-s 174.35 :d-pass-90 true :d-pass-2sN true
+     :VERDICT :D-WINS
+     :note "Reported because it is the complete honest wall of the D route as the caller experienced it.
+            It agrees with the gate clock because five of six arms carried a no-op profile."}
+   :both-clocks-agree true}
+
+ :mechanism-readout-item-9
+  {:F-over-N :PENDING :D-over-F :PENDING
+   :why "The F cohort was skipped for time on the coordinator's instruction. No F number is estimated.
+         Item 9's rule — F within 10% of D and the noise floor favours a facts service; D must materially
+         beat F to credit emission — CANNOT be evaluated, so emission is NOT yet credited over a
+         read-only facts projection. That is the single largest hole in this row."
+   :what-D-alone-establishes
+    "The emitting route beats the native floor by a median 2.3x on the matched authorship clock with 6/6
+     acceptance. It does NOT establish that EMISSION is the reason: an F arm given the same snapshot-bound
+     facts might close most of the gap. Row 5 is therefore D-vs-N evidence, not a mechanism attribution."}
+
+ :findings
+  [{:id :trunk-entrance-forces-its-proof-config-into-the-graded-tree :severity :product-defect-class
+    :what "namespace_split_io/execute! resolves :verification-profiles ONLY from (io/file workspace_root
+           \".clj-surgeon.edn\"). The verb has no --config option. On a repository graded for byte-identity
+           outside an authorised footprint, the only way to configure the trusted proof is to add a file the
+           proof itself forbids."
+    :evidence "Runner pilot before the cohort: the tool emitted a candidate that passed A1-A8, all eight B07
+               preservation checks, both fresh-process load orders, focused + integration tests, full
+               make runtests-once and kaocha — and was ROLLED BACK by its own proof on the single line
+               'ADDED .clj-surgeon.edn'. Second pilot with the config moved out of the tree: committed,
+               verification_complete true, proof_pending []."
+    :cost-if-unfixed "Six arms would have failed on apparatus, not merit."
+    :suggested-ratchet "Accept an explicit config path on the verb (mission/config-sources already models an
+                        explicit-config source; execute! does not consult it), or resolve profiles from a
+                        location outside workspace_root."}
+   {:id :empty-commands-profile-is-configured-but-not-admitted :severity :usability
+    :what "{:commands []} is reported in :configured_profiles but not in :admitted_profiles, and the verb
+           refuses with 'not a synchronous, rollback-capable profile this workspace configures'. The
+           admitted no-op shape is a vector of ONE ARGV VECTOR, [[\"/bin/true\"]]."
+    :note "synchronous_verification/verification-preflight has an explicit commandless? branch, but it is
+           unreachable because profile-capability returns nil for that spec first."}
+   {:id :vacuous-verification-complete :severity :honesty
+    :what "Under the no-op profile the receipt reports :verification_complete true and :proof_pending [] while
+           the proof executed was /bin/true. Every D2-D6 caller independently flagged this in its own report
+           and refused to treat the field as behavioural evidence — the brief warned them, and they complied."
+    :consequence "b07-arms.md's pre-registered D success criterion (verification_complete true over the TRUSTED
+                  profile) is met by D1 ONLY. D2-D6 are accepted on the runner's frozen oracle, exactly as N is."}
+   {:id :in-call-acceptance-is-the-meter-hazard :severity :apparatus
+    :what "D1 measured 341.6 s of candidate work, 243.9 s of which was the frozen acceptance oracle running
+           inside the tool call. N never pays acceptance inside its clock. Left uncorrected this reads as
+           D/N = 0.894 instead of 0.256 — the same arm, a 3.5x difference, decided entirely by where the
+           acceptance boundary is drawn."
+    :fix-applied "Amendment 1: no-op profile for D2-D6 so the call returns at emission and the runner grades
+                  both arms with the same oracle. D1 retained as the labelled proof-inclusive diagnostic."}
+   {:id :D-is-byte-deterministic-N-is-not :severity :finding-not-in-the-gate
+    :what "All SIX D candidate patches are BYTE-IDENTICAL: sha256
+           22848c8ceb87a902becd1e4f3e8f6b935da6f50b86d14e8fbcb7c095e35a038c, 1202 lines, six times.
+           Stage 1's six NATIVE candidates were six DISTINCT patches (six distinct hashes, all accepted,
+           semantically convergent but byte-divergent)."
+    :why-it-matters "The D route removes caller-to-caller variance in the artefact entirely; the residual
+                     spread in the D column (97.7-153.5 s) is orientation and reporting around a call whose
+                     own elapsed time was 51.4-52.7 s in every no-op arm. Review cost of a fleet of D
+                     changes is one diff, not N diffs. This was not a pre-registered clause and is not
+                     counted toward the gate; it is recorded because it is the most decision-relevant thing
+                     the cohort produced that the gate does not measure."
+    :caveat "Determinism is not correctness. It is the same artefact each time BECAUSE the request pins the
+             owners; a wrong request would be wrong identically six times."}
+   {:id :native-floor-remains-saturated :severity :interpretation
+    :what "All six D candidates were accepted, as were all six N candidates in stage 1. Neither arm makes
+           correctness mistakes on this task, so D cannot win on quality here — only on wall."}]
+
+ :deviations-from-preregistration
+  [{:what "D ran through the installed trunk CLI, not the frozen b07_split_adapter.clj." :why "Operator instruction."}
+   {:what "A runner-owned proof shim was the profile command for D1." :why "See the first finding."}
+   {:what "D2-D6 ran a no-op verification profile." :why "Amendment 1; the meter hazard above."}
+   {:what "D3-D6 callers overlapped the previous arm's runner oracle."
+     :why "Amendment 2, schedule. Conservative against D: it inflates D caller clocks, never N's."}
+   {:what "The six stage-1 N runs did not carry the runtests-once precondition disclosure."
+     :why "They are frozen as run. It touches only the caller-suite segment, never the gate clock."}
+   {:what "F cohort not run." :why "Amendment 2, time."}
+   {:what "Form count 25 > the rule's 16-form ceiling." :why "Inherited from the B07 pre-registration; repeated as required."}]
+
+ :not-run ["F1-F6" "any new N runs" "any commit" "any push"]}
