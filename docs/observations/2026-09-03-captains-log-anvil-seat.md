@@ -4441,3 +4441,15 @@ Two arms were already at the floor of 5 and could not fall; X4 went 10 → 18 be
 ## 2026-09-08T23:40Z — **LANDED**: the `:comment_edits` identity diff on MCP/main as 571170cc via ship v3 (`review_elapsed=480s battery_elapsed=164s ship_elapsed=983s attempts=1 fix_attempts=0 auto_closes=0` — Sol GO clean; three plain GOs in a row since v3 installed, so the auto-close is built, fixtured, and still unexercised in the field). 7906 rebuilt on 571170cc (srv7906h), CLI reinstalled. Five landings today through ship: rows batch 3, rows batch 4, the parallel battery, the battery floor, the comment diff; the last three each ≈ 12–16 min ship-start → landed with no hand in them.
 
 ## 2026-09-08T23:40Z — row-5 arm E3 launched (Opus) on trunk 571170cc with the fixed comment diff and the SPLIT METER E2 asked for: answerable inspections (the receipt held the answer) vs corroborations (kept, not penalized), one classifier rule applied retroactively to E2's retained transcripts; gate: answerable E3/E2 ≤ 0.5 and git-diff fallback for comments ≤ 1/6 (E2: 6/6). The vitest specimen continues at lowest priority.
+
+## 2026-09-08T23:41Z — vitest specimen MEASURED (Opus, 35 min; records 2026-09-08-vitest-specimen.md e676de8b; remeda 09afe155, 174 files / 2,235 tests, vitest 4.1.11, node 22): the vitest cell of the axes table is a number now
+
+| runner | watch RED save→verdict | GREEN | covers |
+|---|---:|---:|---|
+| vitest, test-file edit | **0.222 s** (p95 0.232) | 0.213 s | 1 file / 6 tests |
+| vitest, source-file edit | 3.12 s | 3.06 s | 8 files / 84 tests |
+| kaocha --watch (mvr, this afternoon) | 12.5 s | **0.040 s** | red = full suite |
+| kaocha + `affected` plugin (mvr) | **0.058 s** | 0.060 s | the closure |
+| warm nREPL probe (mvr) | 0.142 s | 0.144 s | the named tests |
+
+Reading: vitest's red is 56× faster than stock kaocha's watch and 1.6× slower than our warm probe; its green is 5× slower than kaocha's focused green; it is FLAT in both directions. With the `affected` plugin, kaocha now beats vitest's red by ~4× and its green by ~3.5× on comparable shapes — the vitest high-water mark on this axis is passed, measured, with the caveats (different repo 4× larger, pure logic, no plugins on the vitest side, shared box). Other cells: no on-demand probe exists in vitest (the watcher IS the probe; cold `vitest run <file>` 0.97 s = 6.8× slower than our warm probe); **`sed -i` FIRES 10/10 on vitest** → the sed blindness is a kaocha/Beholder property, not inherent to watchers — fixable (bead for Astra); one failing test prints 936 bytes with file:line at byte 424, inside our 2 KB FAIL bound, but bytes scale with failure COUNT (~650 B each) so a cap must truncate by count. Method ratchets: a NOFIRE from a non-running watcher is indistinguishable from blindness — assert liveness before recording NOFIRE (`npx vitest` without a TTY does not watch); vitest's "Failed Tests" banner matches a naive summary regex early. Boundary disclosure by the agent: one `pkill -P` on its own subtree, then exact pids. **Disk: /var/tmp at 99 %, 7.8 G remaining on 601 G** — sizing now; cleanup before anything else fills it.
