@@ -4055,3 +4055,85 @@ Still in flight: Astra rows batch 3 (row-1 background gate, row-5 facts in the r
 ## 2026-09-08T16:22Z — Gene: "explain cross-stack experiment; use gene decision style; would it be worthwhile to spin up extra VM for this on hetzner?"
 
 Decision offered: fund a THREE-stack pilot (Clojure calibration, TypeScript+vitest, Rust) on one specimen (the event reducer), ready stratum, 6 floors + 6 pairs per stack ≈ 36 attempts + 30-rep machine latency per cell, ~12 worker-hours, 2 days — not the full 7-stack 126-attempt run (prep cost 2–3 days, Pharo/Elixir outliers, Opus budget). Flywheel edge: CHRONICLE/TEACH (keynote + Forum paper: "is sublime portable"), not a Clojure-program shortcut. Hetzner: YES and the pilot should not run elsewhere — Anvil has no sudo (user-local toolchains become apparatus actions that pollute the meter), latency arms need a quiet box (Anvil at load 4–6 with four lanes), the boot-layer rule wants the toolchains + recorder in an image; dedicated-vCPU 8c/32 GB hourly ≈ €10–15/week, destroyed when done. Rung 7 (instance + key + budget line) is Gene's; provisioning script (inb-94ba79 lineage) is the seat's. Awaiting Gene.
+
+## 2026-09-08T16:32Z — Gene: "ideal shape of vm? # cores, memory?" → "create maven task for me to investigate" (inb-3fa126) → "what does this mean exactly; use ste100 and ascii art storyboards" → "write all this to captain log"
+
+### VM shape (recommended): CCX33 — 8 DEDICATED vCPU, 32 GB, 240 GB NVMe, x86, Ubuntu, hourly (≈ €10–15/week); CCX43 (16/64) only if the full seven-stack run follows
+- Memory is set by warm images: JVM 0.6–2.1 GB each (measured 2026-09-08), rust-analyzer 2–4 GB, Node worker pool ~1 GB; 3 workers + images + two CLIs ≈ 15 GB working set → 32 GB never swaps (a swap corrupts the latency arm).
+- Cores are set by builds: cargo and the JVM saturate every core; 8 = one build at full speed + responsive probes, builds serialized per Astra's design.
+- Dedicated vCPUs: p95 latency cannot tolerate steal. 240 GB: target dirs, node_modules, m2/gitlibs, stopwatch logs. x86: Codex/Claude binaries, the strace observer, later the Pharo VM are proven on x86.
+- One image, one provisioning script; destroy when the pilot reports. Rung 7 (instance + key + budget line) is Gene's.
+
+### The pilot, in STE100 with storyboards (as given to Gene)
+
+What we test. We have one way of working in Clojure. It is fast. We do not know if it is fast in other languages. The pilot measures that.
+
+Frame 1. The box.
+```
++--------------------------------------------------+
+|  Hetzner VM  (8 cores, 32 GB, 240 GB)            |
+|  [ Clojure ]  [ TypeScript ]  [ Rust ]  toolchains|
+|  [ recorder: private key, sealed task list ]     |
+|  nobody else runs here                           |
++--------------------------------------------------+
+```
+The box is empty of other work. Timing is clean. The recorder holds a key the workers cannot read.
+
+Frame 2. One task, three languages.
+```
+  event reducer task
+  input: events, some duplicated, some out of order
+  bug: the state is wrong after one sequence
+  goal: fix it, tests green
+  Clojure version | TypeScript version | Rust version — same input bytes, same expected output
+```
+The inputs are frozen bytes. The expected output is written by a different agent, not the worker.
+
+Frame 3. Two ways to work.
+```
+  ARM N (native)                   ARM P (prepared)
+  fresh agent                      fresh agent
+  normal tools for that language   12-line boot block in the repo
+  agent finds its own way          warm test runner already running
+  agent runs tests how it wants    one probe command, one gate command; forbidden shortcuts listed
+```
+Same task. Same time limit. Twenty minutes.
+
+Frame 4. One attempt, from the outside.
+```
+  t=0    task given to a fresh agent; recorder writes start, task hash, prompt hash
+  |      agent reads, edits, runs probe, edits, runs probe ...
+  |      observer counts: useful actions | apparatus actions
+  t=end  agent stops; recorder writes stop; a different agent checks the result against the golden
+         verdict: accepted | rejected | timed out
+```
+Apparatus actions are steps about our machinery. Useful actions are steps about the task.
+
+Frame 5. The machine loop, without an agent.
+```
+  edit one line -> save -> runner answers   |<---- time ---->|
+  repeat 30 times per language, per arm; report the median and the slowest 5 percent
+```
+
+Frame 6. The count.
+```
+  per language: 6 native floor runs + 6 pairs (N then P, order randomized)
+  3 languages x 12 = 36 attempts, 20 minutes each = 12 hours of agent time
+```
+
+Frame 7. The two numbers Gene reads.
+```
+  1. request -> accepted, minutes, N vs P:   Clojure N ####### 14  P ### 6 | TypeScript ? | Rust ?
+  2. apparatus share (machinery / all actions): Clojure today 57 % and 75 %, alarm 50 % | TypeScript ? | Rust ?
+```
+Number one says if our method makes a fresh agent finish sooner. Number two says if our tools get out of the way. The question marks are why we run the pilot. (The Clojure bars are illustrative shape, not measured minutes.)
+
+Frame 8. What happens after.
+```
+  P wins in all three        -> run all seven languages, one month
+  P wins in Clojure only     -> the method is Clojure-specific; write that
+  P loses somewhere          -> find the apparatus action that costs it
+```
+Each outcome goes in the paper.
+
+The VM in one line: clean timing, root for toolchains, and a recorder the workers cannot fake. Anvil gives none of the three.
