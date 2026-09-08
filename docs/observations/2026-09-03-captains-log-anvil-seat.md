@@ -3757,3 +3757,12 @@ Root causes worth keeping: an empty `:baseline {}` excused an exit-17 check (now
 ## 2026-09-08T06:41Z — Astra's third acceptance killed by its provider's content filter ("flagged for possible cybersecurity risk") while executing the hidden-JVM / hidden-socket adversaries; acceptance re-routed to an Opus acceptor
 
 Known class ([[sol-live-on-anvil-seat]]: the filter refuses symlink/confinement fixtures → Opus for those). 94k tokens spent before the kill; no report written. Independent Opus acceptor launched with Astra's brief, Astra's own round-2 fixtures, and six new adversary classes. Gene's cadence question → Astra riff running in a second consult worktree (brief cellC/brief-astra-cadence.md). Disk: 41 G remaining after the Cell B worktree removal; coldstart p1–p8 specimen trees (pilots 1–2, superseded; transcripts/receipts kept) removed next.
+
+## 2026-09-08T06:48Z — NIGHT ORDERS (Gene, verbatim, 2026-09-08 ~06:50Z; deadline 5am PT = 12:00Z)
+
+> "Riff with Astra on recommendations. Goal: 4-8x tempo. I'm going to sleep
+> You have until 5am PT tomorrow. Show what you can do!!!!
+> Tell Astra: if you go dark or drop down opus, astra is to take over as best it can.
+> Godspeed. Achieve peak sublime! Be the sociotechnical maestro making the wiring and management system sing!!!"
+
+Standing for the night: (1) the tree (2026-09-08-perfect-the-wins-tree.md) is the program; descend at friction-low, never medium; (2) Astra builds, Opus/Sonnet for apparatus and cohorts, Fable specs/verifies/gates; (3) reviews once per batch; measurement never waits on review (labelled unqualified); (4) launch only via ~/bin/run-bg; never edit a running script; (5) every state change → this log + the resume note; (6) TAKEOVER: if this seat goes dark (pulse /tmp/anvil-pulse.txt stale > 45 min) or drops to Opus, Astra takes over as best it can — mechanism: ~/bin/astra-watch (cron */15) launches an Astra session with the night brief cellC/brief-astra-night.md when the pulse is stale; Astra's hourly heartbeat goes to docs/observations/2026-09-08-night-heartbeat.md. Hard boundaries unchanged (no 7888/7890/7894/7895/83xx, no ~/acid GO/lock, no sudo, no force push, main frozen, trunk MCP/main via ~/bin/land only).
