@@ -829,6 +829,33 @@ Successful full and retained-source receipts carry `:facts`: per-destination
 `:owners_moved`, `:static_sites_rewritten` by caller file, `:retained_vars`, and
 workspace `:unexpected_paths`. Caller strings use the receipt encoder; raw
 captured facts stay in `:details_path`. The receipt is capped at 65,536 bytes.
+The receipt also carries candidate evidence across the captured roots:
+
+- `:comment_edits`: changed comment lines grouped by original/candidate file,
+  with `[:line :after_line :before :after]` rows and the applied `:comment_policy`.
+  An `[:indent N]` after-value preserves the before line's suffix with N leading
+  spaces. Identical moved comment lines are relocations, not content edits.
+- `:stale_references`: count, located token list, expected empty list and scan
+  scope. This is a static qualified-symbol/require scan, including unchanged
+  test files; strings, semicolon prose and dynamic resolution are excluded.
+- `:facades`: retained source `def` symbol/Var/partial/fn aliases and single/multi-arity
+  `defn`/`apply` forwarders,
+  with retention-policy expectations and scan scope. Existing unmapped forwarders
+  are listed in `:expected`; new wrappers appear in `:unexpected` and refuse.
+- `:exactly_once`: per-owner destination/elsewhere counts. Pre-existing
+  namesakes in unrelated namespaces have separate file/hash evidence; adding
+  another copy still fails.
+- `:bodies_preserved`: SHA-256 rows for the original owner after authorized
+  reference/alignment/promotion replay, actual destination bytes and raw original
+  bytes. `:same` explicitly shares the replayed-before hash. `:equal`/`:unequal`
+  count replay equality; `:raw_equal`/`:raw_unequal` report literal byte equality.
+  Reference edits can preserve the contract while changing raw body bytes.
+
+New fact string values use lossless JSON string-content encoding (wrap in double
+quotes and JSON-decode); this preserves comment whitespace and escapes control
+characters. The receipt states this encoding. Evidence never silently drops owners
+or sites to fit the ceiling. Contradictory candidate evidence refuses before write.
+
 After commit, the matching facts-only request reads these committed facts;
 source drift refuses `committed-facts-stale` and names `:closure_receipt`.
 Pre-commit facts also print a complete `:manifest`, including `:verification`,
@@ -844,6 +871,14 @@ Babashka and `setsid` on the operator PATH. Query:
 ```sh
 clj-surgeon :op :proof-status :receipt /absolute/path/from/receipt_path.edn
 ```
+
+A committed receipt explains the proof boolean beside it, for example
+`{:proof {:tier :warm :status :pending :execution :background
+          :next_call {:op :proof-status :receipt "..."}}}`.
+`verification_complete=false` means proof is pending, while `:committed true`
+means the split was written. Use the named `:proof-status` read; do not replay
+that split. `:execution :manual` means no background worker was launched and the
+listed gates still need external execution. A status read alone runs no tests.
 
 Status is `complete`, `pending`, `failed` (named command), or `stale`. The original
 receipt remains incomplete forever. Failed or stale background proof does not

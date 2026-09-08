@@ -419,3 +419,59 @@
             (is (= 5000 (get-in r [:graph :edge_count])))
             (is (not (contains? (:graph r) :edges)))
             (is (< (alength (.getBytes (pr-str r) "UTF-8")) 65536))))))))
+
+;; @spec NS-SPLIT-065
+;; INTENT-TEST: NS-SPLIT-065
+(deftest negative-facts-refuse-before-publication
+  (with-workspace
+    (fn [root request]
+      (let [compile split/compile-split
+            before (boundary/capture! (.toRealPath (.toPath (io/file root)) (make-array java.nio.file.LinkOption 0)) ["src" "test"])]
+        (with-redefs [boundary/analyze! analysis
+                      split/compile-split (fn [request input]
+                                            (update-in (compile request input)
+                                                       [:future-sources "src/app/util.clj"] str "\n(defn helper [] :duplicate)\n"))]
+          (let [result (boundary/execute! {:verification-profiles profiles} request)]
+            (is (= "negative-facts-violation" (:error_type result)))
+            (is (false? (:mutation_attempted result)))
+            (is (= before (boundary/capture! (.toRealPath (.toPath (io/file root)) (make-array java.nio.file.LinkOption 0)) ["src" "test"])))))))))
+
+;; @spec NS-SPLIT-066
+;; INTENT-TEST: NS-SPLIT-066
+(deftest committed-proof-is-pending-not-failed
+  (with-workspace
+    (fn [_ request]
+      (with-redefs [boundary/analyze! analysis
+                    warm/discover! (constantly {:port 1})
+                    warm/probe! (constantly {:ok true :name "warm-probe" :exit 0 :duration_ms 0})]
+        (let [result (boundary/execute! {:verification-profiles {"unit" {:proof :warm :commands [["/usr/bin/printf" "cold"]]}}} request)
+              next-call {:op :proof-status :receipt (:receipt_path result)}]
+          (is (true? (:committed result)))
+          (is (false? (:verification_complete result)))
+          (is (= {:tier :warm :status :pending :execution :manual :next_call next-call}
+                 (:proof result)))
+          (is (= next-call (:next_call result)))
+          (is (str/includes? (first (str/split-lines (tool/summary result))) "proof pending"))
+          (is (str/includes? (first (str/split-lines (tool/summary result))) ":proof-status"))
+          (is (= (json/parse-string (json/generate-string result))
+                 (json/parse-string (second (str/split (tool/summary result) #"\n" 2)))))
+          (is (= "pending" (:state (gate/status! (:receipt_path result)))))
+          (is (= (:proof result) (:proof (boundary/execute! (assoc request :plan_only "facts"))))))))))
+
+;; @spec NS-SPLIT-065
+(deftest each-negative-violation-refuses-with-unchanged-bytes
+  (doseq [[kind corrupt]
+          [[:stale #(update-in % [:future-sources "test/app/caller.clj"] str "\n(def leftover app.views/helper)\n")]
+           [:facade #(assoc-in % [:future-sources "src/app/views.clj"] "(ns app.views (:require [app.util :as u]))\n(def legacy #'u/helper)\n")]
+           [:body #(update-in % [:future-sources "src/app/util.clj"] str/replace "(portal/trim x)" "(portal/trim :changed)")]]]
+    (with-workspace
+      (fn [root request]
+        (let [compile split/compile-split
+              root-path (.toRealPath (.toPath (io/file root)) (make-array java.nio.file.LinkOption 0))
+              before (boundary/capture! root-path ["src" "test"])]
+          (with-redefs [boundary/analyze! analysis
+                        split/compile-split (fn [request input] (corrupt (compile request input)))]
+            (let [result (boundary/execute! {:verification-profiles profiles} request)]
+              (is (= "negative-facts-violation" (:error_type result)) (pr-str [kind result]))
+              (is (false? (:mutation_attempted result)))
+              (is (= before (boundary/capture! root-path ["src" "test"]))))))))))
