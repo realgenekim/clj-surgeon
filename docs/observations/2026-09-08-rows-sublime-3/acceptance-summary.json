@@ -1,0 +1,24 @@
+{
+  "head": "a9da43441234f0f815ab9c9393ae03dda7fa82f4",
+  "branch": "astra/namespace-split",
+  "finished": "2026-09-08T16:48:37.579343+00:00",
+  "clean_worktree": true,
+  "pushed": false,
+  "final_sources_match_resumed_gate": true,
+  "stage_completion": "passed-after-repair",
+  "make_test_invocations": 1,
+  "original_make_test_exit": 2,
+  "original_receipt": "make-test-receipt.json",
+  "first_resume_receipt": "make-test-resume-receipt.json",
+  "final_resume_receipt": "make-test-final-resume-receipt.json",
+  "final_reviewed_patch_sha256": "df5a1913708e16143bc8f2d80a7473d27ac52c97a6d1fce0c95017b9e99555db",
+  "receipt_note": "Final resume source manifest covers current code/tests. Its candidate_patch_sha256 points to the pre-documentation-repair patch; final-reviewed-candidate.patch and final-committed-files.json bind the repaired documentation. Original receipts are unchanged.",
+  "stages": {
+    "admit-recovery": "passed original",
+    "battery-fresh": "passed original; freshness only",
+    "alias-artifact": "164 tests / 3495 assertions passed original",
+    "mcp": "827 tests / 10461 assertions passed first resume",
+    "bb": "889 tests / 7881 assertions passed final resume",
+    "repository-hygiene": "passed final resume"
+  }
+}

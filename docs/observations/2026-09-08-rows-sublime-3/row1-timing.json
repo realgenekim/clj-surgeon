@@ -1,0 +1,13 @@
+{
+  "request_to_return_ms": 19830.0752,
+  "background_gate_ms": 24435.666161,
+  "caller_free_window_ms": 24509.196,
+  "request_to_closure_ms": 44339.284999999996,
+  "original_unchanged": true,
+  "closure_state": "complete",
+  "command_exits": [
+    0,
+    0,
+    0
+  ]
+}
