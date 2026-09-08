@@ -1,0 +1,28 @@
+;; DAILY SEAT RECEIPT — machine-built by ~/bin/seat-receipt. Do not hand-edit.
+;; Astra's rule: a field whose source could not decide is `unknown`, never a fabricated zero.
+{:seat "forge@anvil"
+ :utc "2026-09-08T13:07:11Z"
+ :date "2026-09-08"
+ :generator {:program "/home/forge/bin/seat-receipt" :sha256 "89e716e8ecbfd7c1"}
+ :packages {:routing-block-hash "67e457240c69a1c4"
+            :routing-installed-matches-source true
+            :doctrine-commit "3c2eb6a9"
+            :coldstart-md-sha256 "08c79a616e40dfb8"
+            :round-sha256 "a3bb40098501f5e7"
+            :coldstart-sha256 "eb1f17c7042e863e"
+            :coldstart-grade-sha256 "95879522f7ff2335"
+            :run-bg-sha256 "fccf55ebdaa366d7"
+            :clj-kondo-sha256 "a8f59b7239c17422"
+            :clj-nrepl-eval "retired-2026-09-08"}
+ :trunk-sha "5acda6d4"
+ :corpora {:coldstart {:rows 52 :mismatches "0" :wall-s 155
+                       :runner "/var/tmp/forge/coldstart/fixtures/run-fixtures.sh"}
+           :round     {:rows 28 :mismatches "0" :wall-s 1
+                       :runner "/var/tmp/forge/round/fixtures/run-fixtures.sh"}}
+ :headroom {:disk-remaining-g 29 :disk-floor-g 15 :inodes-remaining-pct 0}
+ :load 3.46
+ :last-pulse-age-min 2
+ :last-landing {:sha "96819291" :time "2026-09-08T11:23:48Z"}
+ :open-friction-items 28
+ :on-loop true
+ :reasons []}
