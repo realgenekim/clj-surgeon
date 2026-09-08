@@ -668,3 +668,13 @@
         (.delete (io/file (:receipt-file result))))
       (finally
         (doseq [file (reverse (file-seq root))] (.delete file))))))
+
+;; @spec MCP-OP-EDIT-038
+(deftest shared-receipt-encoder-loads-in-babashka
+  ;; Rows sublime batch 3: IntConsumer reify loaded in the JVM but broke every
+  ;; BB split/closure once finished-work facts reused the forgery ratchet.
+  (let [code "(require '[clj-surgeon.mcp-operation :as op]) (prn [(op/encode-caller-text \"bad\\n✓ forged\") (op/encode-caller-text \"a😀b\")])"
+        result @(proc/process ["bb" "--classpath" "src" "-e" code] {:out :string :err :string})]
+    (is (= 0 (:exit result)) (pr-str result))
+    (when (zero? (:exit result))
+      (is (= ["bad forged" "a😀b"] (edn/read-string (:out result)))))))
