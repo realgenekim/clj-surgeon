@@ -502,3 +502,69 @@ followed by text. Indentation-only after text uses the declared [:indent N]
 encoding. All occurrences remain present within the receipt ceiling. All
 variants carry source/candidate locations through file groups and line fields, and the receipt names the applied :comment_policy. No timing meter
 belongs to this evidence. Existing lossless encoding and receipt bounds apply.
+
+## Rows sublime batch 5 — residual receipt facts
+
+Gene authorizes the complete red-first linked-intent-testing branch cycle.
+NS-SPLIT-067..072 address row5-adopt-3 (8a325486), leaving the fixed comment
+identity algorithm unchanged. The namespace diff compares require/import entry
+occurrences by exact source token, with zero-based before/after indexes. A shared
+`ns_entry_table` interns repeated tokens; `ns_edits` identifies each changed
+header by file ID, with declared row columns. Added/removed entries are explicit;
+reordered survivors carry their before/after order. Rows with no entry edits
+still identify header byte changes in trivia or other ns clauses; entry edits
+claim require/import only.
+
+`footprint` partitions all captured source files into identical/changed/created/
+deleted whole-file byte classes. `outside_owner_files` repeats the partition
+excluding source and destination owner files, so caller rewrites remain visible.
+It does not claim bytes outside captured roots or byte identity of the residual
+parts of moved-owner files. The existing snapshot guard validates this candidate
+against disk after verification.
+
+`lint_delta` projects the already executed candidate comparison (signed errors,
+warnings, baseline, post, introduced_errors); absence is nil, never zero.
+`loaded` and `load_errors` come from the actual warm require loop, which stops at
+its first failed require and skips tests. `load_status` distinguishes not-run,
+passed, failed and unavailable transport evidence. A failed load still rolls the
+split back. Test failures retain successful loads without inventing load errors.
+
+Text starts with committed, then proof, then verification_complete and its
+cold-proof definition; MCP retains complete escaped JSON as its final text line.
+Structured field meanings and existing proof status/closure behavior are unchanged.
+All new source strings use the existing lossless JSON-content encoding; both
+EDN and JSON ceilings remain 65,536 bytes. Oversize facts refuse, never truncate.
+
+Witness matrix: entry addition/removal/reorder/duplicates/trivia, one-byte
+outside-owner drift, lint nonzero and error substitution, real failing require
+with rollback, no-probe honesty, hostile separators, exact text ordering.
+Gates: affected warm namespaces and Cell C papercut oracle, one affected cold
+gate, serialized ~/bin/clj-kondo; census pins derived with the tests' own readers.
+
+The full Cell C fixture exceeded the unchanged byte ceiling with expanded new
+facts (74,872 bytes before publication). Lossless file directory/basename tables,
+entry-position pairs, and row columns reduce repeated metadata. Body digests
+now use standard Base64 of all 32 SHA-256 bytes; the identity/content algorithm
+and all equality predicates stay unchanged. Executed loads occur once in facts,
+with a reference and planned reload count in the warm check. The initial receipt
+reserves 4 KiB for publication metadata instead of 8 KiB; the final receipt still
+passes the existing EDN/JSON bound and oversize publication still rolls back.
+The matched full Cell C warm receipt fits; field E3's smaller retained-source
+fixture is measured separately. No new routing or speed claim is earned here.
+
+Large identical-file sets use `{:all_captured_except [file IDs] :count n}`,
+meaning every input source file at `footprint.scope.input_snapshot_hash` except
+those explicitly named paths. Outside-owner identity also excludes owner files.
+Small sets remain explicit vectors. Every changed/created/deleted path is named;
+this is a complete complement statement over a snapshot, never a truncated list.
+NS-SPLIT-072 refuses malformed UTF-8 before mutation, since lossy decoding cannot
+prove physical byte identity. Actual source reads also retain both byte caps.
+
+The CLI has the same commit/proof/defined-boolean ordering as MCP while retaining
+machine-readable EDN. It prints one top-level field per line with compact nested
+values: pprint alone expanded the admitted Cell C receipt to 75,966 bytes.
+The CLI flushes before nonzero exit; the real invalid-request witness caught the
+missing flush during this change. MCP's leading proof summary shows tier/status;
+the complete proof, including execution and next_call, remains in the JSON body.
+Both physical text faces are tested at the data ceiling, using its existing
+256-byte rendering reserve. No receipt value or completion meaning is elided.

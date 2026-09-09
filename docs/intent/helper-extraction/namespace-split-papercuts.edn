@@ -276,7 +276,7 @@
  :ears "When a receipt is bounded, both its UTF-8 EDN bytes and escaped-JSON transport bytes shall fit the ceiling."
  :misreadings ["The EDN representation bounds escaped JSON." "Hostile newlines or bidi controls may pass through receipt facts."]
  :boundaries ["EDN smaller than JSON; JSON smaller than EDN; U+2028; U+202E; newline; astral Unicode"]
- :tests [:receipt-ceiling-bounds-edn-and-escaped-json-independently :review-facts-encode-caller-strings]
+ :tests [:receipt-ceiling-bounds-edn-and-escaped-json-independently :review-facts-encode-caller-strings :cli-physical-text-keeps-the-receipt-bound-and-edn-values :proof-text-orders-commit-proof-and-defined-boolean]
  :rationale "Sol landing fence requires the 65,536-byte promise at both publication representations."}
 {:id :NS-SPLIT-058 :status :active
  :ears "When facts print a replay manifest, it shall bind the captured snapshot so a changed hash returns typed snapshot drift."
@@ -332,4 +332,40 @@
  :boundaries ["full and retained source; unchanged test files; literal bytes; bounded encoded evidence; no dynamic-resolution claim"]
  :tests [:committed-proof-is-pending-not-failed]
  :rationale "2026-09-08 row5-adopt, 21d57ffd; replication e1de51d1: six callers found positional comment pairing and a false deletion at exports.clj 1822 -> 1465. This amendment binds identity and lossless diff evidence."}
+{:id :NS-SPLIT-067 :status :active
+ :ears "When candidate namespace headers differ, the receipt shall publish exact require/import entry occurrence edits with original and candidate order."
+ :misreadings ["An unchanged entry shifted by insertion is a reorder; duplicate libspecs can be deduplicated."]
+ :boundaries ["encoded caller text; unchanged receipt ceiling; planned versus executed; full and retained source"]
+ :tests [:namespace-entry-facts-exact-diff]
+ :rationale "2026-09-09 row5-adopt-3, 8a325486: unanimous namespace/footprint/proof gaps; lint and load evidence requested by five/four callers."}
+{:id :NS-SPLIT-068 :status :active
+ :ears "When a candidate footprint is reported, the receipt shall classify whole-file byte identity across the captured roots, including files outside moved owner files."
+ :misreadings ["Touched paths alone prove untouched bytes; all workspace files were captured."]
+ :boundaries ["encoded caller text; unchanged receipt ceiling; planned versus executed; full and retained source"]
+ :tests [:footprint-detects-one-byte-outside-owner-change]
+ :rationale "2026-09-09 row5-adopt-3, 8a325486: unanimous namespace/footprint/proof gaps; lint and load evidence requested by five/four callers."}
+{:id :NS-SPLIT-069 :status :active
+ :ears "When candidate lint has executed, receipt facts shall expose signed error/warning deltas with baseline counts and introduced error count."
+ :misreadings ["Zero net errors proves no introduced error; a missing lint check means zero."]
+ :boundaries ["encoded caller text; unchanged receipt ceiling; planned versus executed; full and retained source"]
+ :tests [:lint-facts-report-executed-delta]
+ :rationale "2026-09-09 row5-adopt-3, 8a325486: unanimous namespace/footprint/proof gaps; lint and load evidence requested by five/four callers."}
+{:id :NS-SPLIT-070 :status :active
+ :ears "When a warm probe executes, receipt facts shall name successfully loaded namespaces and the namespace whose require failed."
+ :misreadings ["A reload selection is an executed load; a test failure is a load error; no probe means loads passed."]
+ :boundaries ["encoded caller text; unchanged receipt ceiling; planned versus executed; full and retained source"]
+ :tests [:warm-load-facts-name-failed-destination]
+ :rationale "2026-09-09 row5-adopt-3, 8a325486: unanimous namespace/footprint/proof gaps; lint and load evidence requested by five/four callers."}
+{:id :NS-SPLIT-071 :status :active
+ :ears "When a split text receipt is rendered, committed shall precede proof and its defined verification_complete boolean."
+ :misreadings ["Move the boolean without its definition; turn false to true on warm success."]
+ :boundaries ["encoded caller text; unchanged receipt ceiling; planned versus executed; full and retained source"]
+ :tests [:proof-text-orders-commit-proof-and-defined-boolean]
+ :rationale "2026-09-09 row5-adopt-3, 8a325486: unanimous namespace/footprint/proof gaps; lint and load evidence requested by five/four callers."}
+{:id :NS-SPLIT-072 :status :active
+ :ears "When byte-identity facts capture source files, the boundary shall refuse malformed UTF-8 before mutation."
+ :misreadings ["Two replacement characters prove the original byte sequences were identical."]
+ :boundaries ["invalid comment byte; unchanged binary input; bounded actual read before decoding"]
+ :tests [:byte-identity-refuses-lossy-source-decoding]
+ :rationale "Batch 5 byte-identity claim exposed the old slurp decoder silently replacing malformed source bytes."}
 ]}

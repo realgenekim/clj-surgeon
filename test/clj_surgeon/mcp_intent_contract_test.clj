@@ -481,7 +481,8 @@
     ;; the total without touching the map -- which is exactly why the two
     ;; assertions below must be derived separately.
     ;; TEST-ISO-014 adds the six-cell launcher coverage promise.
-    (is (= 247 (count non-mcp)))
+    ;; Batch 5: spec-ids over spec-doc-paths derives 253, including NS-SPLIT-067..072.
+    (is (= 253 (count non-mcp)))
     (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 21
             "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3}
            (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"

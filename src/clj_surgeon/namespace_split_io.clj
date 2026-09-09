@@ -102,6 +102,8 @@
   (doseq [f (reverse (file-seq (io/file root)))] (Files/deleteIfExists (.toPath f))))
 
 ;; @spec NS-SPLIT-015
+;; @spec NS-SPLIT-072
+;; INTENT: NS-SPLIT-072
 (defn capture!
   "Capture bounded, non-symlink source roots. No discovery outside this universe."
   [root roots]
@@ -132,7 +134,24 @@
       (refuse! :file-byte-bound "One source exceeds the per-file byte bound" {:max_file_bytes max-file-bytes}))
     (when (> (reduce + 0 (map #(Files/size %) files)) max-bytes)
       (refuse! :byte-bound "Source byte bound exceeded" {:max_bytes max-bytes}))
-    (into (sorted-map) (map (fn [p] [(str (.relativize root p)) (slurp (str p))])) files)))
+    ;; Exact UTF-8 roundtripping is required before String equality can prove
+    ;; physical byte identity. Bound the actual read too, not just the stat.
+    (let [actual-bytes (volatile! 0)]
+      (into (sorted-map)
+            (map (fn [p]
+                   (let [file (str (.relativize root p))
+                         bytes (with-open [in (Files/newInputStream p (make-array java.nio.file.OpenOption 0))]
+                                 (.readNBytes in (inc max-file-bytes)))]
+                     (when (> (alength bytes) max-file-bytes)
+                       (refuse! :file-byte-bound "Source grew beyond the per-file byte bound" {:file file}))
+                     (when (> (vswap! actual-bytes + (alength bytes)) max-bytes)
+                       (refuse! :byte-bound "Source grew beyond the total byte bound" {:max_bytes max-bytes}))
+                     [file (try
+                             (str (.decode (.newDecoder java.nio.charset.StandardCharsets/UTF_8)
+                                           (java.nio.ByteBuffer/wrap bytes)))
+                             (catch java.nio.charset.CharacterCodingException _
+                               (refuse! :invalid-source-encoding "Byte-identity facts require valid UTF-8 source" {:file file})))])))
+            files))))
 
 ;; @spec NS-SPLIT-015
 ;; @spec NS-SPLIT-044
@@ -376,7 +395,7 @@
     (refuse! :snapshot-drift "The captured source inventory changed before publication" {}))
   (let [base (split/publication-receipt compiled checks)
         base-size (gate/receipt-size base)
-        _ (when (> base-size (- gate/max-receipt-bytes 8192))
+        _ (when (> base-size (- gate/max-receipt-bytes 4096))
             (refuse! :receipt-size-bound "Split review facts exceed the receipt budget" {:receipt_bytes base-size}))
         facts (:facts base)
         _ (when (or (pos? (get-in facts [:stale_references :count] 0))
@@ -411,6 +430,13 @@
                 checks (conj checks {:name "verified-snapshot-guard" :exit (if snapshot-current? 0 1)
                                      :duration_ms (/ (double (- (System/nanoTime) guard-start)) 1000000.0)
                                      :status (if snapshot-current? "passed" "failed")})
+                base (update base :facts merge (split/check-facts checks))
+                ;; Executed load membership lives in facts once. Preserve the
+                ;; planned count, test selection and test summary in the check.
+                checks (mapv #(if (= "warm-probe" (:name %))
+                                (-> % (assoc :reload_count (count (:reload %))
+                                             :load_facts "facts.loaded / facts.load_errors / facts.load_status")
+                                    (dissoc :reload :loaded :load_errors)) %) checks)
                 details (save! receipt-dir (str id "-details.edn")
                                {:projection (:projection compiled) :verification verification
                                 :read_back (:verified committed)})]
@@ -555,6 +581,29 @@
           :next_call (:next_call (ex-data error))
           :proof_pending (or (:proof_pending (ex-data error)) []) :elapsed_ms (elapsed)})))))
 
+(def verification-definition
+  "all required substantive cold checks passed over the committed snapshot")
+
+;; @spec NS-SPLIT-071
+;; INTENT: NS-SPLIT-071
+(defn receipt-view
+  "Machine-readable CLI EDN with commit/proof/completion adjacent and defined."
+  [result]
+  (let [ranks {:committed 0 :proof 1 :verification_complete 2 :verification_complete_definition 3 :state 4}
+        order (fn [k] [(get ranks k 5) (str k)])]
+    (into (sorted-map-by #(compare (order %1) (order %2)))
+          (assoc (merge {:committed false :proof nil :verification_complete false} result)
+                 :verification_complete_definition verification-definition))))
+
+;; @spec NS-SPLIT-057
+;; @spec NS-SPLIT-071
+(defn receipt-text
+  "One field per line keeps the CLI's physical EDN near its bounded data size.
+  Nested values remain complete EDN; pprint's repeated indentation is omitted."
+  [result]
+  (str "{" (str/join ",\n " (map (fn [[k v]] (str (pr-str k) " " (pr-str v)))
+                              (receipt-view result))) "}\n"))
+
 ;; @spec NS-SPLIT-014
 (defn cli! [opts]
   ;; Babashka does not read JAVA_TOOL_OPTIONS. Its process-owned CLI entrance
@@ -568,7 +617,4 @@
         request (cond-> request (:plan-only opts) (assoc :plan_only true)
                   (:facts-only opts) (assoc :plan_only "facts")
                   (:profile-file opts) (assoc-in [:verification :profile-file] (:profile-file opts)))]
-    ;; EDN remains machine-readable while its first field answers what happened.
-    (into (sorted-map-by (fn [a b] (compare [(if (= :state a) 0 1) (name a)]
-                                     [(if (= :state b) 0 1) (name b)])))
-          (execute! request))))
+    (receipt-view (execute! request))))
