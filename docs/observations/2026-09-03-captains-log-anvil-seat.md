@@ -4474,3 +4474,5 @@ Reconciled gene-report-night.md against retained gates, preserving its prior ver
 | accepted | 6/6 | 6/6 |
 
 Two arms rose against pairs already at 2–3 reads — the paired ratio is measuring arms with no floor left. What the six read now is what `:facts` does not cover, unanimously: an `:ns_edits` fact for the require/import blind spot (6/6), a footprint byte-identity statement (6/6), `verification_complete false` still reading as failure beside a committed split (6/6 — rename or co-locate), a lint-delta claim (5/6), an executed "it loads" claim (4/6). Caveat (the agent's own): its comment-fallback rule fires on praise as well as complaint, so the 6/6 fallback figure is reported failed as written and read as 0/6 post hoc. Batch 5 launched (Astra, branch astra/receipt-facts-2 from trunk): exactly those facts, with `:committed true` first and `:proof` above the boolean in the text block.
+
+## 2026-09-09T01:30Z — Gene: "gene report and sublime report" → docs/observations/2026-09-09-gene-report-night.md (pasted in chat in full); window score 7.5/10.
