@@ -17,18 +17,36 @@
    [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.mcp-test-runner :as runner]
    [clj-surgeon.runner-membership :as rm]
+   [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]))
+   [clojure.test :refer [deftest is testing use-fixtures]]))
+
+;; RATCHET (2026-09-04, inb-9483a4): every fixture directory this namespace
+;; creates is tracked and swept, on failure as well as on success.
+(def ^:private temp-roots (atom []))
+(use-fixtures :each (tmp-leak/tracking-temp-dir-fixture temp-roots))
+
+(defn- temp-dir
+  [prefix]
+  (str (tmp-leak/track!
+         temp-roots
+         (java.nio.file.Files/createTempDirectory
+           prefix (into-array java.nio.file.attribute.FileAttribute [])))))
 
 (def ^:private test-root (io/file "test"))
 
 (defn- test-source-files
-  []
-  (->> (file-seq test-root)
-       (filter #(.isFile ^java.io.File %))
-       (filter #(re-find #"_test\.cljc?$" (.getName ^java.io.File %)))
-       sort))
+  "Every `*_test.clj[c]` source file under `root`. Parameterised so the census
+   witnesses below can drive the SAME discovery over a fixture tree in a temp
+   directory -- a witness that can only run against the live tree cannot be
+   made to go red on demand."
+  ([] (test-source-files test-root))
+  ([root]
+   (->> (file-seq (io/file root))
+        (filter #(.isFile ^java.io.File %))
+        (filter #(re-find #"_test\.cljc?$" (.getName ^java.io.File %)))
+        sort)))
 
 (defn- first-form
   [^java.io.File f]
@@ -47,15 +65,21 @@
   (->> (cons (meta (second form)) form)
        (some (fn [x] (when (and (map? x) (contains? x :lane)) (:lane x))))))
 
+(defn- scan-on-disk
+  "ns symbol -> {:file f :lane <declared or nil>} for every test source file
+   under `root`. THE TREE'S OWN ANSWER to what exists and what lane it claims,
+   read at test time from the files themselves."
+  [root]
+  (into {}
+        (keep (fn [f]
+                (let [form (first-form f)]
+                  (when-let [s (ns-sym-of form)]
+                    [s {:file (.getPath ^java.io.File f) :lane (declared-lane form)}]))))
+        (test-source-files root)))
+
 (def ^:private on-disk
   "ns symbol -> {:file f :lane <declared or nil>} for every test source file."
-  (delay
-    (into {}
-          (keep (fn [f]
-                  (let [form (first-form f)]
-                    (when-let [s (ns-sym-of form)]
-                      [s {:file (.getPath ^java.io.File f) :lane (declared-lane form)}])))
-                (test-source-files)))))
+  (delay (scan-on-disk test-root)))
 
 (def ^:private bb-lane
   "The babashka lane's namespaces, read out of `test/run_all.clj` rather than
@@ -65,6 +89,64 @@
     (set (map symbol
               (re-seq #"clj-surgeon\.[a-z0-9.\-]+-test"
                       (slurp (io/file "test" "run_all.clj")))))))
+
+
+;; ---------------------------------------------------------------------------
+;; @spec TEST-ISO-015
+;; INTENT: TEST-ISO-015
+;;
+;; THE CENSUS IS DERIVED FROM THE TREE; A COUNT IS ONLY A FLOOR.
+;;
+;; Until 2026-09-09 the lane census below was four pinned integers
+;; (`(is (= 55 (count (lm/namespaces-for :fast))))` and three siblings). Every
+;; branch that added a test namespace had to bump a number that says nothing
+;; about WHICH namespace, and on 2026-09-08 the failure mode that shape
+;; guarantees arrived: two branches each moved the fast pin 53 -> 54 for a
+;; DIFFERENT namespace, the two literals were textually equal, git merged them
+;; without a conflict, and the merged census was a namespace short while the
+;; number still read as agreement. A count cannot distinguish "the same 54" from
+;; "a different 54"; a set can, and the tree already knows the answer.
+;;
+;; So the expectation is DERIVED at test time from the same three sources the
+;; manifest claims to describe -- the `*_test.clj` files on disk, each file's own
+;; `{:lane ...}` ns metadata, and the manifest itself -- and compared as SETS in
+;; both directions, naming the members on each side. The only surviving number is
+;; a floor (`>=`), whose whole job is to make an EMPTY or collapsed discovery
+;; fail loudly rather than pass vacuously; a floor never needs bumping to add.
+;; ---------------------------------------------------------------------------
+
+(defn- namespaces-declaring
+  "The namespaces in `scanned` whose OWN ns metadata declares `lane`."
+  [scanned lane]
+  (set (for [[s info] scanned :when (= lane (:lane info))] s)))
+
+(defn- census-diff
+  "Set difference in BOTH directions between a set DERIVED from the tree and the
+   set a census DECLARES. nil when they agree -- otherwise `:missing` (in the
+   tree, absent from the census) and `:extra` (declared by the census, absent
+   from the tree). Both directions, because absence must be as loud as presence:
+   a namespace deleted from a census simply stops running and the suite goes
+   green with less in it."
+  [derived declared]
+  (let [derived (set derived)
+        declared (set declared)
+        missing (vec (sort (remove declared derived)))
+        extra (vec (sort (remove derived declared)))]
+    (when (or (seq missing) (seq extra))
+      {:missing missing :extra extra})))
+
+(defn- census-diff-message
+  "The failure text for a `census-diff`: names the subject, both differences and
+   the remedy. Safe on nil, because `clojure.test` evaluates an `is` message
+   whether or not the assertion failed."
+  [subject diff]
+  (str subject ": the census and the tree disagree. "
+       "In the tree but MISSING from the census (" (count (:missing diff)) "): "
+       (if (seq (:missing diff)) (str/join ", " (:missing diff)) "none")
+       ". Declared by the census but ABSENT from the tree ("
+       (count (:extra diff)) "): "
+       (if (seq (:extra diff)) (str/join ", " (:extra diff)) "none")
+       ". Add or remove the NAMED member -- never re-pin a count."))
 
 ;; ---------------------------------------------------------------------------
 ;; @spec TEST-ISO-001
@@ -381,36 +463,79 @@
         (str (count dropped) " namespace(s) that round one MEASURED are in no "
              "lane -- partitioning must never drop: " (str/join ", " dropped)))))
 
+(def ^:private manifest-floor
+  "The size the manifest had when this witness stopped pinning counts
+   (2026-09-08, 98 namespaces). A FLOOR, not a pin: it exists so an empty or
+   collapsed discovery fails loudly instead of passing vacuously, and adding a
+   namespace never moves it. Namespaces LEAVING the corpus is the loud case."
+  98)
+
+;; @spec TEST-ISO-001
+;; @spec TEST-ISO-015
 (deftest the-partition-matches-round-ones-measurement
-  (testing "counts are pinned so a silent re-partition is loud"
-    ;; Batch 3 adds one pure status namespace and one detached process battery.
-    ;; MERGE RESOLUTION, 2026-09-08 (fable/battery-parallel x MCP/main c41dee30):
-    ;; the SAME trap this file already records below. Batch 3 moved this pin
-    ;; 53 -> 54 for its pure status namespace and TEST-ISO-013 moved it 53 -> 54
-    ;; for battery-parallel-test; the numbers agreed textually and git merged
-    ;; them clean at 54, silently losing one namespace. Two different witnesses,
-    ;; two increments: 53 + 1 + 1 = 55.
-    (is (= 55 (count (lm/namespaces-for :fast))))
-    (is (= 7 (count (lm/namespaces-for :integration))))
-    ;; B07 enrolls its independent oracle mutation witnesses in one new battery namespace.
-    ;; Sol r10 enrolls the per-verb artifact boundary battery.
-    ;; Batch 3 adds one detached process battery; TEST-ISO-013 adds no battery
-    ;; namespace (it re-runs the ones already there), so the battery count is
-    ;; trunk's. The manifest takes BOTH sides: 95 + 2 (Batch 3) + 1 (TEST-ISO-013).
-    (is (= 36 (count (lm/namespaces-for :battery))))
-    (is (= 98 (count lm/manifest))
-        (str "round one's 49 measured namespaces, plus the two round-two "
-             "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
-             "round three's adopted orphan (mcp-formatter-test) and its "
-             "battery-ledger witness, plus round four's six runtime purity "
-             "witnesses in ns-isolation-test, plus round five's "
-             "mcp-inspect-cold-job-test -- the one inspect-tool test that "
-             "spawns a child, moved out of a :fast namespace into :battery; "
-             "and the trunk's mcp-feature-thread-test, adopted at this merge "
-             "with its own `sed` cross-check split into "
-             "mcp-feature-thread-sed-test (:battery) for the same reason; "
-             "and mission-forms-source-test, the comment-preserving source "
-             "lowering that replaced the blanket comment refusal"))))
+  (testing "each lane's membership is DERIVED from the tree, member by member"
+    (doseq [lane lm/lanes]
+      (let [diff (census-diff (namespaces-declaring @on-disk lane)
+                              (lm/namespaces-for lane))]
+        (is (nil? diff) (census-diff-message (str "lane " lane) diff)))))
+  (testing "the manifest as a whole equals every lane the tree declares"
+    (let [diff (census-diff (set (keep (fn [[s info]] (when (:lane info) s)) @on-disk))
+                            (keys lm/manifest))]
+      (is (nil? diff) (census-diff-message "manifest" diff))))
+  (testing "the only number is a floor, so an empty discovery fails loud"
+    (is (>= (count lm/manifest) manifest-floor)
+        (str "the manifest declares " (count lm/manifest) " namespaces, fewer "
+             "than the " manifest-floor " it carried when this witness was "
+             "derived -- namespaces were removed, and the set differences above "
+             "name which"))
+    (is (>= (count @on-disk) manifest-floor)
+        (str "discovery found only " (count @on-disk) " test source files under "
+             test-root " -- a scan that stops working must never read as a "
+             "smaller, agreeing corpus"))
+    (doseq [lane lm/lanes]
+      (is (seq (lm/namespaces-for lane))
+          (str "lane " lane " is empty; a lane that runs nothing is a silent "
+               "hole, not a partition")))))
+
+;; @spec TEST-ISO-015
+;; INTENT-TEST: TEST-ISO-015
+(deftest a-namespace-in-the-tree-but-absent-from-the-census-is-named
+  ;; RED ON DEMAND, in a FIXTURE tree under java.io.tmpdir -- never the live
+  ;; one. The live assertions above can only be observed green; this drives the
+  ;; same discovery and the same comparator over a tree we control, so the
+  ;; failure they exist to catch is exhibited rather than asserted about.
+  (let [root (temp-dir "surgeon-lane-census")
+        pkg (io/file root "test" "clj_surgeon")]
+    (.mkdirs pkg)
+    (spit (io/file pkg "enrolled_test.clj")
+          "(ns clj-surgeon.fixture-enrolled-test {:lane :fast})\n")
+    (spit (io/file pkg "newcomer_test.clj")
+          "(ns clj-surgeon.fixture-newcomer-test {:lane :fast})\n")
+    (let [scanned (scan-on-disk (io/file root "test"))
+          derived (namespaces-declaring scanned :fast)
+          census '#{clj-surgeon.fixture-enrolled-test}
+          diff (census-diff derived census)]
+      (testing "the fixture discovery sees the tree the same way the live one does"
+        (is (= 2 (count scanned)))
+        (is (= '#{clj-surgeon.fixture-enrolled-test clj-surgeon.fixture-newcomer-test}
+               derived)))
+      (testing "a namespace the tree declares and the census omits is named"
+        (is (= '[clj-surgeon.fixture-newcomer-test] (:missing diff)))
+        (is (empty? (:extra diff)))
+        (is (str/includes? (census-diff-message "lane :fast" diff)
+                           "clj-surgeon.fixture-newcomer-test")))
+      (testing "and a COUNT cannot see the defect a set does"
+        ;; The 2026-09-08 merge in one fixture: same size, different members.
+        ;; Equal counts is exactly the evidence git had when it merged two
+        ;; different 54s into one.
+        (let [swapped '#{clj-surgeon.fixture-enrolled-test clj-surgeon.fixture-ghost-test}
+              swap-diff (census-diff derived swapped)]
+          (is (= (count derived) (count swapped))
+              "the counts agree -- which is why a count pin passes here")
+          (is (= {:missing '[clj-surgeon.fixture-newcomer-test]
+                  :extra '[clj-surgeon.fixture-ghost-test]}
+                 swap-diff)
+              "...while the derived witness names both sides of the swap"))))))
 
 (defn- deftest-count
   "How many `deftest` forms a namespace's source file declares. A SOURCE
@@ -467,7 +592,7 @@
     clj-surgeon.require-change-test 9 ; Pure standalone require intent and strict natural-layout refusal witnesses.
     clj-surgeon.require-change-boundary-test 12 ; Actual CLI/profile processes, confined publication, independent oracle and undo.
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
-    clj-surgeon.lane-manifest-test         25 ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses
+    clj-surgeon.lane-manifest-test         26 ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses + TEST-ISO-015's fixture-tree census witness (2026-09-09), a-namespace-in-the-tree-but-absent-from-the-census-is-named
     clj-surgeon.mcp-formatter-test         3  ; the adopted orphan (round three)
     clj-surgeon.mcp-feature-thread-test    69 ; the trunk's `feature_thread` verb, adopted at round five's MCP/main merge
     clj-surgeon.mcp-feature-thread-sed-test 1 ; MOVED, not new (round five): its one `sed` cross-check, out of :fast into :battery
@@ -582,7 +707,13 @@
       ;; reader-eval-fence-test split itself, 7 -> 13 deftests, lands in a
       ;; ROUND-ONE namespace, so it moves r1, not adopted.) 591 + 2 = 593.
       ;; Batch 5: tests' own deftest-count reader derives 604 adopted / 1629 total.
-      (is (= 604 adopted) (str "adopted tests: " adopted)))
+      ;; TEST-ISO-015, 2026-09-09: the lane census stops pinning namespace COUNTS
+      ;; and derives them from the tree; its one fixture-tree witness lands in
+      ;; lane-manifest-test (adopted, 25 -> 26). 604 + 1 = 605. This pin is a
+      ;; DIFFERENT census -- deftests, not namespaces -- and keeps its equality
+      ;; deliberately: it is the nothing-was-deleted ledger against round one's
+      ;; measurement, and every line above is a reason a test moved.
+      (is (= 605 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -701,7 +832,11 @@
       ;; r1; +2 in battery-parallel-test (adopted, 24 -> 26, named at its pin
       ;; above) lands in adopted. 1610 + 6 + 2 = 1618, and the merged tree's
       ;; own census confirms it: 1025 original + 593 adopted.
-      (is (= 1629 total) (str "manifest declares " total " tests"))
+      ;; TEST-ISO-015, 2026-09-09: +1 in lane-manifest-test (ADOPTED, named at
+      ;; its pin above, the fixture-tree census witness) and +1 in
+      ;; mcp-intent-contract-test (ROUND-ONE, the fixture-tree ledger witness,
+      ;; so it lands in r1 and not in `adopted`). 1629 + 1 + 1 = 1631.
+      (is (= 1631 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

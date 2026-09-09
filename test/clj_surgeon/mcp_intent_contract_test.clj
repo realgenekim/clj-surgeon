@@ -453,38 +453,153 @@
       (is (= (set (filter #(str/starts-with? % "MCP-OP-") registered))
              (set (filter #(str/starts-with? % "MCP-OP-") derived)))))))
 
+;; ---------------------------------------------------------------------------
+;; @spec TEST-ISO-015
+;; INTENT: TEST-ISO-015
+;;
+;; THE LEDGER IS DERIVED FROM docs/intent, NEVER PINNED AS A COUNT.
+;;
+;; Until 2026-09-09 the assertion below was `(is (= 253 (count non-mcp)))` plus a
+;; frozen per-prefix map. Every branch that registered an intent had to bump a
+;; number that names no intent, and the comment block this replaces records the
+;; consequence twice over: on 2026-09-08 the merge-base ledger was 238, one side
+;; moved it to 245 and the other to 239 for DISJOINT ids, and the only way anyone
+;; could resolve it was to recount the tree by hand -- exactly the derivation the
+;; witness should have been doing in the first place. A count is also blind to a
+;; SWAP: an id that vanishes while another is registered leaves the total intact.
+;;
+;; So the expectation is derived twice, INDEPENDENTLY, and compared as sets:
+;;   production -- `clj-surgeon.mcp-intent-contract/spec-doc-paths`, the registry
+;;                 the audit itself walks (two-level `docs/intent/<leaf>/`);
+;;   witness    -- a recursive walk written here, with its own spelling of the
+;;                 `*-specs.md` rule and its own id regex.
+;; Two derivations that must agree catch what one cannot: a spec document the
+;; production scan cannot reach (nested a directory deeper, say) is invisible to
+;; the audit while looking perfectly registered to a reader. The only surviving
+;; numbers are FLOORS, so an emptied tree fails loudly instead of agreeing with
+;; itself.
+;; ---------------------------------------------------------------------------
+
+(defn- witness-side-spec-docs
+  "The `*-specs.md` documents under `<root>/docs/intent`, discovered by a
+   RECURSIVE walk written independently of `spec-doc-paths` (which lists exactly
+   two levels). Repo-relative, sorted, `excluded` removed."
+  [root excluded]
+  (let [base (io/file root "docs" "intent")
+        prefix (str (.getPath base) java.io.File/separator)]
+    (->> (file-seq base)
+         (filter #(.isFile ^java.io.File %))
+         (filter #(re-matches #".+-specs\.md" (.getName ^java.io.File %)))
+         (map (fn [^java.io.File f]
+                (str "docs/intent/" (subs (.getPath f) (count prefix)))))
+         (remove (set (keys excluded)))
+         sort
+         vec)))
+
+(defn- witness-side-ids
+  "The intent ids `paths` register, parsed by this witness's own spelling of the
+   ledger row rule rather than by the production parser."
+  [root paths]
+  (set (for [path paths
+             [_ id] (re-seq #"(?m)^- \[[ xD]\] \*\*([A-Z][A-Z0-9-]*-[0-9]{3}[a-z]?)\*\*:"
+                            (slurp (io/file root path)))]
+         id)))
+
+(defn- ledger-diff
+  "Set difference in BOTH directions between two derivations of the ledger. nil
+   when they agree; otherwise `:missing` (the witness sees it, the audit does
+   not -- a registered intent the audit is blind to) and `:extra` (the audit
+   sees it, the witness does not)."
+  [witness production]
+  (let [witness (set witness)
+        production (set production)
+        missing (vec (sort (remove production witness)))
+        extra (vec (sort (remove witness production)))]
+    (when (or (seq missing) (seq extra))
+      {:missing missing :extra extra})))
+
+(defn- ledger-diff-message
+  [subject diff]
+  (str subject ": the two independent derivations of the intent ledger disagree. "
+       "Registered in docs/intent but INVISIBLE to the audit ("
+       (count (:missing diff)) "): "
+       (if (seq (:missing diff)) (str/join ", " (:missing diff)) "none")
+       ". Seen by the audit but not by this witness's own walk ("
+       (count (:extra diff)) "): "
+       (if (seq (:extra diff)) (str/join ", " (:extra diff)) "none")
+       ". Name the row -- never re-pin a count."))
+
+(def ^:private ledger-floor
+  "The non-MCP ledger size when this witness stopped pinning counts (253 rows,
+   2026-09-08). A FLOOR: registering an intent never moves it, and an emptied or
+   unreadable docs/intent fails here instead of agreeing with itself."
+  253)
+
+(def ^:private prefix-floors
+  "Per-prefix floors, same rule as `ledger-floor`. Retiring a whole prefix must
+   be loud; adding to one must be free."
+  {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 21
+   "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3})
+
 ;; @spec MCP-OP-TRACE-005
+;; @spec TEST-ISO-015
 (deftest the-derived-audit-includes-every-previously-invisible-row
-  (let [ids (spec-ids "." (spec-doc-paths "."))
-        non-mcp (set (remove #(str/starts-with? % "MCP-OP-") ids))]
-    ;; Audit ledger: 165 original non-MCP rows, plus the repaired telemetry row.
-    ;; NS-SPLIT-028..030 and 032..033 add five reachable EARS promises with direct witnesses.
-    ;; B01 registers NS-SPLIT-034..036; historical IDs remain in the census.
-    ;; B03 adds the suspension, exact split admission and plate parity promises.
-    ;; B07 registers NS-SPLIT-037..046 (ten retained-source/facts/oracle promises).
-    ;; Row 3 registers fourteen standalone require-change promises.
-    ;; Sol r10 adds ALIAS-MIGRATION-003, the mandatory affected-battery gate.
-    ;; Rows sublime adds NS-SPLIT-047..049 and ALIAS-MIGRATION-004..005.
-    ;; Rows sublime batch 3 adds NS-SPLIT-050..054.
-    ;; Sol's landing fence for a9da4344 adds NS-SPLIT-055..058.
-    ;; Sol's delta fence for 0956951b, ruling (a), adds NS-SPLIT-059.
-    ;; Batch 4 registers NS-SPLIT-060..066 (seven ids).
-    ;; TEST-ISO-013 registers the battery lane run as N JVM lanes (one id).
-    ;; MERGE, 2026-09-08 (astra/namespace-split x MCP/main 7d62849a): the
-    ;; merge-base ledger was 238 and both sides moved it -- this branch to 245
-    ;; (+7 NS-SPLIT) and trunk to 239 (+1 TEST-ISO). The ids are DISJOINT, so
-    ;; the merged ledger is 238 + 7 + 1 = 246, recounted off the merged
-    ;; docs/intent tree by `spec-ids` over `spec-doc-paths`, not reconciled
-    ;; between the two sides.
-    ;; The per-prefix map moves by ONE, not eight: only TEST-ISO- is a key of
-    ;; it (19 -> 20). NS-SPLIT- is not a key, so this branch's seven ids raise
-    ;; the total without touching the map -- which is exactly why the two
-    ;; assertions below must be derived separately.
-    ;; TEST-ISO-014 adds the six-cell launcher coverage promise.
-    ;; Batch 5: spec-ids over spec-doc-paths derives 253, including NS-SPLIT-067..072.
-    (is (= 253 (count non-mcp)))
-    (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 21
-            "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3}
-           (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"
-                                  "MEASURE-" "TELEMETRY-EVENTS-" "ROUTING-"]]
-                      [prefix (count (filter #(str/starts-with? % prefix) non-mcp))]))))))
+  (let [production-paths (spec-doc-paths ".")
+        witness-paths (witness-side-spec-docs "." (excluded-spec-docs))
+        ids (spec-ids "." production-paths)
+        non-mcp (set (remove #(str/starts-with? % "MCP-OP-") ids))
+        witness-ids (witness-side-ids "." witness-paths)
+        witness-non-mcp (set (remove #(str/starts-with? % "MCP-OP-") witness-ids))]
+    (testing "the registry the audit walks equals an independent walk of the tree"
+      (let [diff (ledger-diff witness-paths production-paths)]
+        (is (nil? diff) (ledger-diff-message "spec documents" diff))))
+    (testing "every row registered in the tree is a row the audit derives"
+      (let [diff (ledger-diff witness-non-mcp non-mcp)]
+        (is (nil? diff) (ledger-diff-message "non-MCP intent rows" diff))))
+    (testing "the only numbers are floors, so an empty ledger fails loud"
+      (is (>= (count non-mcp) ledger-floor)
+          (str "the derived ledger holds " (count non-mcp) " non-MCP rows, fewer "
+               "than the " ledger-floor " it carried when this witness was "
+               "derived -- rows were retired, and the differences above name them"))
+      (doseq [[prefix floor] prefix-floors]
+        (let [n (count (filter #(str/starts-with? % prefix) non-mcp))]
+          (is (>= n floor)
+              (str "prefix " prefix " derives " n " rows, below its floor of "
+                   floor " -- a prefix that shrinks is a promise being retired")))))))
+
+;; @spec TEST-ISO-015
+;; INTENT-TEST: TEST-ISO-015
+(deftest an-intent-the-registry-cannot-reach-is-named-not-silently-dropped
+  ;; RED ON DEMAND, in a FIXTURE tree under java.io.tmpdir -- never the live one.
+  ;; The defect: a lane registers intents in a spec document the production scan
+  ;; cannot reach (here, nested one directory deeper than its two-level walk).
+  ;; The document reads as registered, the audit never sees the ids, and a COUNT
+  ;; pin agrees with itself while the promises go unwitnessed.
+  (let [root (temp-dir "surgeon-intent-census")
+        leaf (io/file root "docs" "intent" "reachable-lane")
+        nested (io/file root "docs" "intent" "nested-lane" "deeper")]
+    (.mkdirs leaf)
+    (.mkdirs nested)
+    (spit (io/file leaf "reachable-lane-specs.md") (spec-line "x" "FIXTURE-001"))
+    (spit (io/file nested "nested-lane-specs.md") (spec-line "x" "FIXTURE-002"))
+    (let [production-paths (spec-doc-paths root {})
+          witness-paths (witness-side-spec-docs root {})
+          production-ids (spec-ids root production-paths)
+          witness-ids (witness-side-ids root witness-paths)
+          diff (ledger-diff witness-ids production-ids)]
+      (testing "the production registry reaches only the two-level document"
+        (is (= ["docs/intent/reachable-lane/reachable-lane-specs.md"] production-paths))
+        (is (= #{"FIXTURE-001"} production-ids)))
+      (testing "the independent walk reaches both, and the diff NAMES the gap"
+        (is (= ["docs/intent/nested-lane/deeper/nested-lane-specs.md"
+                "docs/intent/reachable-lane/reachable-lane-specs.md"]
+               witness-paths))
+        (is (= {:missing ["FIXTURE-002"] :extra []} diff))
+        (is (str/includes? (ledger-diff-message "non-MCP intent rows" diff)
+                           "FIXTURE-002")))
+      (testing "and a count pin cannot see it"
+        ;; One row registered, one row audited: the totals a count would compare
+        ;; are both 1 -- the very agreement that hid the 2026-09-08 merge.
+        (is (= 1 (count production-ids)))
+        (is (= 2 (count witness-ids))
+            "the tree registers two rows; only a SET comparison says which one is lost")))))
