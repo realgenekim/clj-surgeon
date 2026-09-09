@@ -1049,7 +1049,9 @@
     receipt))
 
 (defn run-gate-pool! [opts run-id capacity work-dir]
-  (let [contexts (mapv #(prepare-suite! (assoc opts "--suite" % ::run-id run-id ::capacity capacity))
+  (let [contexts (mapv #(prepare-suite! (assoc opts "--suite" %
+                                          "--work-dir" (str (io/file work-dir %))
+                                          ::run-id run-id ::capacity capacity))
                        (keep :suite gate-stage-manifest))
         ;; The fast snapshots observe this checkout. The original shell checks,
         ;; alias battery and BB workers join integration only after they drain.

@@ -210,6 +210,7 @@
   clj-surgeon.battery-parallel-test/launcher-matrix-cells-remain-independently-shardable
   clj-surgeon.battery-parallel-test/one-lane-is-the-serial-shape
   clj-surgeon.battery-parallel-test/prewarm-membership-and-authority-are-explicit
+  clj-surgeon.battery-parallel-test/prewarm-pool-stores-evidence-under-the-parent-run
   clj-surgeon.battery-parallel-test/serial-cannot-authorize-a-landing
   clj-surgeon.battery-parallel-test/the-declared-shard-target-is-the-namespace-that-owns-the-floor
   clj-surgeon.battery-parallel-test/the-floor-is-the-largest-unit

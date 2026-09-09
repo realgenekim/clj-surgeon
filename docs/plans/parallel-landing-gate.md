@@ -16,7 +16,9 @@ acquire a slot. A coordinator never holds a slot while waiting on its pool.
 One ordered stage manifest drives execution and `make print-gate-stages`.
 `make landing-gate-prewarm` executes that manifest minus battery-fresh, writes
 `target/landing-gate-prewarm.edn` with `:landing? false :prewarm? true`, and
-retains the complete per-run receipt. Both modes expose flat `:stages`, each
+retains the complete per-run receipt. The parent passes each suite its explicit
+child evidence directory; prewarm must not fall back to the landing directory.
+Both modes expose flat `:stages`, each
 entry carrying `:target` and `:exit`; pool details remain separate. Land must
 compare prewarm targets plus battery-fresh with the merged tree's printed set,
 and rerun on `stage-set-mismatch`. Installed ship/land are outside this change.

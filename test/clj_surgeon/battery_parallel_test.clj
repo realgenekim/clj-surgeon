@@ -567,6 +567,17 @@
         (is (.endsWith ^String (nth wrapped 2) "/test/gate_slot.py"))
         (is (= (into ["--"] argv) (subvec wrapped 3)))))))
 
+;; @spec TEST-ISO-015 -- round-three prewarm parent/child evidence path regression.
+(deftest prewarm-pool-stores-evidence-under-the-parent-run
+  (let [seen (atom nil)]
+    (with-redefs [bp/prepare-suite! (fn [opts]
+                                      (reset! seen opts)
+                                      (throw (ex-info "captured preparation" {})))]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"captured preparation"
+            (bp/run-gate-pool! {"--prewarm" "true"} "run-id" {:lanes 8}
+              "target/gate-prewarm/run-id"))))
+    (is (= "target/gate-prewarm/run-id/alias" (get @seen "--work-dir")))))
+
 ;; @spec TEST-ISO-015
 (deftest gate-refuses-malformed-and-lost-child-facts
   (let [facts (complete-emission '[a b])
