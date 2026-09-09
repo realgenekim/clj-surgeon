@@ -399,7 +399,8 @@ order = ["clean","wrong-binding","silent-promotion","dropped-comment",
          "local-shadow","symlink-escape","external-macro",
          "are-binding","uppercase-alias","kind-collision","referred-testing",
          "refer-all-shadow","use-shadow","refer-all-external","shapes","meta-owner",
-         "cljc-unanalysed","cljc-analysed"]
+         "cljc-unanalysed","cljc-analysed",
+         "spliced-require-reorder","spliced-require-control"]
 rows = []
 for k in order:
     j = json.load(open(d / f"{k}.json"))

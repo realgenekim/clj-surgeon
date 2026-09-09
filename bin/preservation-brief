@@ -255,6 +255,13 @@
                           (assoc-in m [path :failed?] true)
                           m)))
                     idx (:findings analysis))
+        idx (reduce (fn [m u]
+                      (update-in m [(norm (:filename u)) :nsu] (fnil conj [])
+                                 {:to (str (:to u)) :alias (some-> (:alias u) str)
+                                  :refer (when (:refer u) (mapv str (:refer u)))
+                                  :lang (some-> (:lang u) name)
+                                  :row (:row u) :col (:col u)}))
+                    idx (:namespace-usages a))
         defs (into {} (for [d (:var-definitions a)]
                         [[(str (:ns d)) (str (:name d))] (boolean (:macro d))]))
         by-file (reduce (fn [m d]
@@ -276,7 +283,19 @@
 ;; inventory now.** The scanner only locates the byte span of the top-level form
 ;; that contains each definition, so the reader-metadata prefix is part of the body
 ;; it extracts. Either direction of mismatch makes the file uncertifiable.
-(defn index-file [rel text kdefs]
+(defn kondo-requires
+  "Ordered require specs from the resolver, per analysed platform:
+   {lang [{:lib :as :refer}]}."
+  [ki]
+  (->> (get ki :nsu [])
+       (sort-by (juxt #(or (:lang %) "") :row :col))
+       (group-by #(or (:lang %) ":clj"))
+       (reduce-kv (fn [m lang us]
+                    (assoc m lang (mapv (fn [u] {:lib (:to u) :as (:alias u)
+                                                 :refer (:refer u)}) us)))
+                  {})))
+
+(defn index-file [rel text kdefs kfacts]
   (let [{:keys [forms comments]} (sc/scan text)
         lidx (sc/line-index text)
         off-of (fn [r c] (when (and r c (<= (long r) (count lidx)))
@@ -339,6 +358,21 @@
                            {:name (str/trim d) :start (:start f)}))
      :declares (mapv #(str (:ns %) "/" (:name %)) declares)
      :no-var-forms (mapv #(str (:kind %) " " (:id %)) no-var-forms)
+     :kondo-requires (kondo-requires kfacts)
+     :require-mismatch
+     (let [priv (into #{} (map :lib) (sc/requires-of (sc/ns-form forms)))
+           kond (into #{} (mapcat #(map :lib %)) (vals (kondo-requires kfacts)))
+           ;; a require spliced by `#?@` is one synthetic "lib" to the private
+           ;; parser and N real ones to the resolver — exactly PB-FENCE-013
+           only-priv (vec (sort (remove #(or (str/starts-with? % "#?") (kond %)) priv)))
+           ;; When the `ns` form itself carries a reader conditional, the resolver
+           ;; legitimately reports MORE libs than the parser can see — that splice
+           ;; is the whole reason the resolver is authoritative here. The parser
+           ;; seeing something the resolver did not is still a failure.
+           ns-cond? (boolean (some-> (:text (sc/ns-form forms)) (str/includes? "#?")))
+           only-kondo (if ns-cond? [] (vec (sort (remove priv kond))))]
+       {:only-parser only-priv :only-resolver only-kondo
+        :ok? (and (empty? only-priv) (empty? only-kondo))})
      :reader-conditionals (count conds)
      :unanalysed-features unanalysed
      :reconcile {:unlocated (mapv #(str (:ns %) "/" (:name %)) unlocated)
@@ -357,9 +391,9 @@
                      :start (:start f) :end (:end f) :line (:line f)
                      :text (:text f)}))}))
 
-(defn index-tree [blobs paths kbf]
+(defn index-tree [blobs paths kbf kfiles]
   (into {} (keep (fn [r] (when-let [t (get blobs r)]
-                           [r (index-file r t (get kbf r []))])) paths)))
+                           [r (index-file r t (get kbf r []) (get kfiles r {}))])) paths)))
 
 (defn all-owners [idx] (for [[_ f] idx o (:owners f)] o))
 
@@ -945,6 +979,32 @@
 
 ;; --------------------------------------------------------------- derivations
 
+;; PB-FENCE-013. The private `ns` parser never saw a require spliced in by `#?@`,
+;; so a reversal inside an analysed branch produced no reorder signal. clj-kondo's
+;; :namespace-usages ARE the require inventory now — per tree, per analysed
+;; platform, in positional order. The private parser only supplies the `ns`-form
+;; span and the reconciliation's other side.
+(defn require-diff-lang
+  "Added / removed / reordered / alias-changed for ONE platform's require list."
+  [br cr]
+  (let [bl (mapv :lib br) cl (mapv :lib cr)
+        bs (set bl) cs (set cl)
+        by-lib-b (into {} (map (juxt :lib identity)) br)]
+    {:added (vec (remove bs cl))
+     :removed (vec (remove cs bl))
+     :order-base (vec (filter cs bl))
+     :order-cand (vec (filter bs cl))
+     :reordered? (not= (vec (filter cs bl)) (vec (filter bs cl)))
+     :base-sorted? (= bl (vec (sort bl)))
+     :cand-sorted? (= cl (vec (sort cl)))
+     :full-base bl :full-cand cl
+     :alias-changed (vec (for [r cr :let [o (get by-lib-b (:lib r))]
+                               :when (and o (not= (:as o) (:as r)))]
+                           {:lib (:lib r) :from (:as o) :to (:as r)}))
+     :refer-changed (vec (for [r cr :let [o (get by-lib-b (:lib r))]
+                               :when (and o (not= (:refer o) (:refer r)))]
+                           {:lib (:lib r) :from (:refer o) :to (:refer r)}))}))
+
 (defn require-diff [bf cf]
   (let [br (or (:requires bf) []) cr (or (:requires cf) [])
         bl (mapv :lib br) cl (mapv :lib cr)
@@ -1100,8 +1160,8 @@
 
 
 
-(def idx0-base (index-tree raw-base changed-paths (:defs-by-file base-kondo)))
-(def idx0-cand (index-tree raw-cand changed-paths (:defs-by-file cand-kondo)))
+(def idx0-base (index-tree raw-base changed-paths (:defs-by-file base-kondo) (:files base-kondo)))
+(def idx0-cand (index-tree raw-cand changed-paths (:defs-by-file cand-kondo) (:files cand-kondo)))
 (def m0 (match-owners idx0-base idx0-cand))
 (def names-of-interest
   (into #{} (concat (map (comp :id :base) (:moved m0))
@@ -1119,8 +1179,8 @@
                            (for [[p t] (concat raw-base raw-cand)
                                  :when (and (not (ch p)) (re-find mention-re t))] p)))))))
 (def scope-paths (vec (sort (distinct (concat changed-paths extra-paths)))))
-(def base-idx (merge idx0-base (index-tree raw-base extra-paths (:defs-by-file base-kondo))))
-(def cand-idx (merge idx0-cand (index-tree raw-cand extra-paths (:defs-by-file cand-kondo))))
+(def base-idx (merge idx0-base (index-tree raw-base extra-paths (:defs-by-file base-kondo) (:files base-kondo))))
+(def cand-idx (merge idx0-cand (index-tree raw-cand extra-paths (:defs-by-file cand-kondo) (:files cand-kondo))))
 
 (defn line-idx-of [idx path] (sc/line-index (:text (get idx path))))
 
@@ -1311,10 +1371,35 @@
              o (:owners f) :when (= [(:family o) (:id o)] [(:family r) (:id r)])]
          {:owner (:id r) :file (:from-file r)})))
 
+(defn ns-edit-for
+  "The ns-edit record for one file, computed from the RESOLVER's require inventory,
+   per analysed platform. A file whose requires are spliced by `#?@` has a
+   different list per platform, and a reorder in any one of them is a reorder."
+  [p bf cf]
+  (let [bl (:kondo-requires bf) cl (:kondo-requires cf)
+        langs (vec (sort (distinct (concat (keys bl) (keys cl)))))
+        per (into {} (for [l langs] [l (require-diff-lang (get bl l []) (get cl l []))]))
+        any (fn [k] (boolean (some #(get % k) (vals per))))
+        cat (fn [k] (vec (distinct (mapcat #(get % k) (vals per)))))
+        first-lang (first langs)]
+    (merge (get per first-lang (require-diff bf cf))
+           {:path p :ns (:ns cf)
+            :langs langs
+            :per-lang per
+            :added (cat :added) :removed (cat :removed)
+            :alias-changed (cat :alias-changed)
+            :refer-changed (cat :refer-changed)
+            :reordered? (any :reordered?)
+            :base-sorted? (every? #(get % :base-sorted?) (vals per))
+            :cand-sorted? (every? #(get % :cand-sorted?) (vals per))
+            :imports-added (vec (remove (set (:imports bf)) (:imports cf)))
+            :imports-removed (vec (remove (set (:imports cf)) (:imports bf)))})))
+
 (def ns-edits
   (vec (for [p touched :let [bf (get base-idx p) cf (get cand-idx p)]
-             :when (and bf cf (not= (:ns-form bf) (:ns-form cf)))]
-         (assoc (require-diff bf cf) :path p :ns (:ns cf)))))
+             :when (and bf cf (or (not= (:ns-form bf) (:ns-form cf))
+                                  (not= (:kondo-requires bf) (:kondo-requires cf))))]
+         (ns-edit-for p bf cf))))
 (def ns-added
   (vec (for [p (:added path-sets) :let [cf (get cand-idx p)] :when cf]
          {:path p :ns (:ns cf) :requires (mapv :lib (:requires cf))})))
@@ -1463,11 +1548,12 @@
 (def reconcile-failures
   (vec (for [[which idx] [["base" base-idx] ["candidate" cand-idx]]
              [path f] idx
-             :let [r (:reconcile f)]
-             :when (not (:ok? r))]
+             :let [r (:reconcile f) rm (:require-mismatch f)]
+             :when (or (not (:ok? r)) (not (:ok? rm)))]
          {:tree which :path path
           :unlocated (:unlocated r) :unreported (:unreported r)
-          :unanalysed-features (:unanalysed-features r) :cond-gap (:cond-gap r)})))
+          :unanalysed-features (:unanalysed-features r) :cond-gap (:cond-gap r)
+          :only-parser (:only-parser rm) :only-resolver (:only-resolver rm)})))
 
 (def declared-names
   (vec (sort (distinct (mapcat :declares (concat (vals base-idx) (vals cand-idx)))))))
@@ -2017,13 +2103,16 @@
         (println "inventory; the scanner only locates each definition's top-level span. Where the two do not")
         (println "agree, nothing in that file is certifiable:")
         (println)
-        (println (tbl* ["tree" "file" "definition not placed" "owner not reported" "unanalysed platform" "unreported branch defs"]
+        (println (tbl* ["tree" "file" "definition not placed" "owner not reported" "unanalysed platform" "unreported branch defs" "require seen only by the parser / only by the resolver"]
                        (for [r reconcile-failures]
                          [(:tree r) (:path r)
                           (if (seq (:unlocated r)) (str/join ", " (:unlocated r)) "—")
                           (if (seq (:unreported r)) (str/join ", " (:unreported r)) "—")
                           (if (seq (:unanalysed-features r)) (str/join " " (:unanalysed-features r)) "—")
-                          (if (pos? (long (or (:cond-gap r) 0))) (str (:cond-gap r)) "—")]))))
+                          (if (pos? (long (or (:cond-gap r) 0))) (str (:cond-gap r)) "—")
+                          (str (if (seq (:only-parser r)) (str/join " " (:only-parser r)) "—")
+                               " / "
+                               (if (seq (:only-resolver r)) (str/join " " (:only-resolver r)) "—"))]))))
       (when (seq refused-entries)
         (println)
         (println "**Tree entries this checker refused to read.** A symlink is reported by its entry, never followed;")
@@ -2087,7 +2176,7 @@
                "custody. This brief proves nothing about who ran what, or that any claimed execution occurred. It is a re-derivation, not an attestation."
                "anything outside the scanned roots, and any file whose extension is not .clj/.cljc/.cljs."
                "trailing whitespace inside a string literal, which the `:identical-modulo-whitespace` tier normalises away."
-               "local bindings. The requalification tier canonicalises a bare name that matches an owner even when it is actually a local; B3 lists the cases where that could hide a broken reference."]]
+               "anything the external resolver cannot see. A local is never canonicalised — the resolver decides what is a local — but a Var reached only at runtime, or a file it could not analyse, is refused rather than compared."]]
       (println (str "- " l)))
     (println)
     (println (format "_Resolver: clj-kondo via `~/bin/clj-kondo`, %.1f ms for both trees. Checker wall: %.1f ms. Generated by `bin/preservation-brief`, which reads only the two git trees._"

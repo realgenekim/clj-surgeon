@@ -139,7 +139,8 @@
   ["local-shadow" "symlink-escape" "external-macro"
    "are-binding" "kind-collision" "uppercase-alias" "referred-testing"
    "refer-all-shadow" "use-shadow" "refer-all-external"
-   "meta-owner" "shapes" "cljc-unanalysed" "cljc-analysed"])
+   "meta-owner" "shapes" "cljc-unanalysed" "cljc-analysed"
+   "spliced-require-reorder" "spliced-require-control"])
 
 ;; ------------------------------------------------------------------- harness
 
