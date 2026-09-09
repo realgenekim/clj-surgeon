@@ -409,6 +409,7 @@
            only-kondo (if ns-cond? [] (vec (sort (remove priv kond))))]
        {:only-parser only-priv :only-resolver only-kondo
         :ok? (and (empty? only-priv) (empty? only-kondo))})
+     :analyzer-failed? (boolean (:failed? kfacts))
      :reader-conditionals (count conds)
      :unanalysed-features unanalysed
      :reconcile {:unlocated (mapv #(str (:ns %) "/" (:name %)) unlocated)
@@ -1218,8 +1219,58 @@
                            (for [[p t] (concat raw-base raw-cand)
                                  :when (and (not (ch p)) (re-find mention-re t))] p)))))))
 (def scope-paths (vec (sort (distinct (concat changed-paths extra-paths)))))
-(def base-idx (merge idx0-base (index-tree raw-base extra-paths (:defs-by-file base-kondo) (:files base-kondo))))
-(def cand-idx (merge idx0-cand (index-tree raw-cand extra-paths (:defs-by-file cand-kondo) (:files cand-kondo))))
+(def base-idx-all (merge idx0-base (index-tree raw-base extra-paths (:defs-by-file base-kondo) (:files base-kondo))))
+(def cand-idx-all (merge idx0-cand (index-tree raw-cand extra-paths (:defs-by-file cand-kondo) (:files cand-kondo))))
+
+;; PB-FENCE-017, second half. **A refused file is refused WHOLE.** It contributes
+;; exactly one line to the reconciliation table and one to the hard stop, and
+;; nothing to any other inventory, counter or explanation. Publishing a semantic
+;; account derived from a span the resolver contradicts — "these requires are a
+;; comment or a runtime call", "these aliases are undefined" — is worse than
+;; silence: the hard stop says every listed signal needs a human, so a false signal
+;; there costs a reviewer real time.
+(defn file-refusal
+  "The one reason this file is refused, or nil."
+  [f]
+  (let [r (:reconcile f) rm (:require-mismatch f)]
+    (cond
+      (:analyzer-failed? f)
+      {:kind "unparsable" :detail "the analyzer could not parse this file"}
+      (not= 1 (:ns-count r))
+      {:kind "ns-count" :detail (str (:ns-count r) " namespace definitions in one file")}
+      (seq (:unanalysed-features r))
+      {:kind "unelaborated-platform"
+       :detail (str "reader-conditional platform(s) the analyzer does not elaborate: "
+                    (str/join " " (:unanalysed-features r)))}
+      (not (:ns-span-agrees? r))
+      {:kind "ns-span" :detail "the parsed `ns` span does not contain the resolver's namespace definition"}
+      (seq (:unlocated r))
+      {:kind "unplaced-definition"
+       :detail (str "definition(s) the scanner could not place: " (str/join " " (:unlocated r)))}
+      (seq (:unreported r))
+      {:kind "unreported-owner"
+       :detail (str "owner(s) the resolver never reported: " (str/join " " (:unreported r)))}
+      (pos? (long (or (:cond-gap r) 0)))
+      {:kind "unreported-branch-def"
+       :detail (str (:cond-gap r) " definition(s) in an analysed branch the resolver did not report")}
+      (not (:ok? rm))
+      {:kind "require-mismatch"
+       :detail (str "require(s) seen only by the parser: " (str/join " " (:only-parser rm)))}
+      :else nil)))
+
+(def refused-files
+  (vec (sort-by (juxt :tree :path)
+                (for [[tree idx] [["base" base-idx-all] ["candidate" cand-idx-all]]
+                      [path f] idx
+                      :let [r (file-refusal f)]
+                      :when r]
+                  (assoc r :tree tree :path path)))))
+
+(def refused-paths (into #{} (map :path) refused-files))
+
+;; Every downstream inventory reads these, and they contain no refused file.
+(def base-idx (apply dissoc base-idx-all refused-paths))
+(def cand-idx (apply dissoc cand-idx-all refused-paths))
 
 (defn line-idx-of [idx path] (sc/line-index (:text (get idx path))))
 
@@ -1584,16 +1635,7 @@
 (def unmodelled-macros
   (vec (sort (into #{} (mapcat #(get-in % [:scope :macros])) (concat moved-rows same-rows)))))
 
-(def reconcile-failures
-  (vec (for [[which idx] [["base" base-idx] ["candidate" cand-idx]]
-             [path f] idx
-             :let [r (:reconcile f) rm (:require-mismatch f)]
-             :when (or (not (:ok? r)) (not (:ok? rm)))]
-         {:tree which :path path
-          :unlocated (:unlocated r) :unreported (:unreported r)
-          :unanalysed-features (:unanalysed-features r) :cond-gap (:cond-gap r)
-          :ns-count (:ns-count r) :ns-span-agrees? (:ns-span-agrees? r)
-          :only-parser (:only-parser rm) :only-resolver (:only-resolver rm)})))
+(def reconcile-failures refused-files)
 
 (def dynamic-requires
   (vec (sort (distinct (for [[which idx] [["base" base-idx] ["candidate" cand-idx]]
@@ -2160,21 +2202,14 @@
         (println "inventory; the scanner only locates each definition's top-level span. Where the two do not")
         (println "agree, nothing in that file is certifiable:")
         (println)
-        (println (tbl* ["tree" "file" "definition not placed" "owner not reported" "unanalysed platform" "unreported branch defs" "require seen only by the parser / only by the resolver" "ns forms"]
-                       (for [r reconcile-failures]
-                         [(:tree r) (:path r)
-                          (if (seq (:unlocated r)) (str/join ", " (:unlocated r)) "—")
-                          (if (seq (:unreported r)) (str/join ", " (:unreported r)) "—")
-                          (if (seq (:unanalysed-features r)) (str/join " " (:unanalysed-features r)) "—")
-                          (if (pos? (long (or (:cond-gap r) 0))) (str (:cond-gap r)) "—")
-                          (str (if (seq (:only-parser r)) (str/join " " (:only-parser r)) "—")
-                               " / "
-                               (if (seq (:only-resolver r)) (str/join " " (:only-resolver r)) "—"))
-                          (cond (not= 1 (:ns-count r))
-                                (str "**" (:ns-count r) " namespace definitions — refused whole**")
-                                (not (:ns-span-agrees? r))
-                                "**the parsed `ns` span does not contain the resolver's namespace definition**"
-                                :else "1")]))))
+        (println (tbl* ["tree" "file" "refusal" "why"]
+                       (for [r reconcile-failures] [(:tree r) (:path r) (:kind r) (:detail r)])))
+        (println)
+        (println (str "**Nothing else in this brief speaks about " (count (distinct (map :path reconcile-failures)))
+                      " refused file(s).** They contribute these rows and the hard-stop line above, and no"
+                      " owner, body, require, alias, comment or site anywhere else. A semantic account"
+                      " derived from a span the resolver contradicts would be a false signal in a section"
+                      " whose header says every entry needs a human.")))
       (when (seq refused-entries)
         (println)
         (println "**Tree entries this checker refused to read.** A symlink is reported by its entry, never followed;")
@@ -2304,9 +2339,14 @@
             :declares (count declared-names)
             :no_var_forms (count no-var-forms)
             :reconcile_unlocated (reduce + 0 (map #(count (:unlocated %)) reconcile-failures))
-            :ns_count_failures (count (filter #(not= 1 (:ns-count %)) reconcile-failures))
+            :ns_count_failures (count (filter #(= "ns-count" (:kind %)) reconcile-failures))
+            :refused_files (count (distinct (map :path refused-files)))
+            :refusal_kinds (vec (sort (distinct (map :kind refused-files))))
             :reconcile_unreported (reduce + 0 (map #(count (:unreported %)) reconcile-failures))
-            :unanalysed_platforms (vec (sort (distinct (mapcat :unanalysed-features reconcile-failures))))
+            :unanalysed_platforms (vec (sort (distinct (for [r refused-files
+                                                             :when (= "unelaborated-platform" (:kind r))
+                                                             f (str/split (str/replace (:detail r) #"^[^:]*: " "") #" ")]
+                                                         f))))
             :analysed_features (vec (sort analysed-features))
             :dynamic_requires (count dynamic-requires)
             :reader_conditionals (reduce + 0 (map #(or (:reader-conditionals %) 0)

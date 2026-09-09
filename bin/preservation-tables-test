@@ -32,6 +32,7 @@
             [clojure.edn :as edn]
             [clojure.set :as set]
             [babashka.process :as p]
+            [cheshire.core :as json]
             [clojure.test :as t]))
 
 (def here (fs/parent (fs/real-path *file*)))
@@ -338,6 +339,69 @@
   (doseq [f (sort unused)]
     (check! false "R7 stale allowlist entry"
             (str "`sc/" f "` is on the allowlist but nothing calls it — remove the entry"))))
+
+;; R8 -----------------------------------------------------------------------
+;; PB-FENCE-017, second half. A refused file is refused WHOLE: it contributes one
+;; reconciliation row and one hard-stop line, and NOTHING to any other inventory,
+;; counter or explanation. One generated specimen per refusal kind asserts it,
+;; because a false signal under a header that says "every entry needs a human"
+;; costs a reviewer real time.
+(def refusal-specimens
+  {"ns-count"
+   ["(ns first.ns\n  (:require [clojure.string :as str]))\n\n(ns second.ns\n  (:require [clojure.edn :as edn]\n            [clojure.set :as set]))\n\n(defn f [] (set/union #{(edn/read-string \"1\")} #{2}))\n"
+    "(ns first.ns\n  (:require [clojure.string :as str]))\n\n(ns second.ns\n  (:require [clojure.set :as set]\n            [clojure.edn :as edn]))\n\n(defn f [] (set/union #{(edn/read-string \"1\")} #{2}))\n"]
+   "unelaborated-platform"
+   ["(ns p)\n\n#?(:bb ^:probe (def hidden 1))\n\n(defn visible [] :v)\n"
+    "(ns p)\n\n(defn visible [] :v)\n"]
+   "unparsable"
+   ["(ns p)\n\n(defn f [] :a)\n"
+    "(ns p)\n\n(defn f [] :a\n"]})
+
+(println "R8  refusal specimens:" (count refusal-specimens))
+(doseq [[kind [base-src cand-src]] (sort refusal-specimens)]
+  (let [dir (str "/var/tmp/forge/item3/r8-" kind)
+        env {"GIT_AUTHOR_NAME" "t" "GIT_AUTHOR_EMAIL" "t@t"
+             "GIT_COMMITTER_NAME" "t" "GIT_COMMITTER_EMAIL" "t@t"}
+        ;; a reader conditional is only valid in .cljc
+        rel (if (= kind "unelaborated-platform") "src/refused.cljc" "src/refused.clj")]
+    (fs/delete-tree dir) (fs/create-dirs (str dir "/src"))
+    (spit (str dir "/" rel) base-src)
+    (p/sh {:dir dir} "git" "init" "-q" "-b" "main")
+    (p/sh {:dir dir} "git" "add" "-A")
+    (p/sh {:dir dir :extra-env env} "git" "commit" "-qm" "base")
+    (spit (str dir "/" rel) cand-src)
+    (p/sh {:dir dir} "git" "add" "-A")
+    (p/sh {:dir dir :extra-env env} "git" "commit" "-qm" "cand")
+    (let [sha (fn [r] (str/trim (:out (p/sh {:dir dir :out :string} "git" "rev-parse" r))))
+          jf (str dir "/out.json")
+          md (:out (p/sh {:out :string :err :string} brief (sha "main") (sha "main~1")
+                         "--repo" dir "--roots" "src" "--json" jf))
+          j (try (json/parse-string (slurp jf) true) (catch Exception _ {}))]
+      (check! (pos? (or (:refused_files j) 0)) "R8 specimen was not refused"
+              (str kind ": the brief did not refuse `" rel "`"))
+      (check! (some #{kind} (:refusal_kinds j)) "R8 wrong refusal kind"
+              (str kind ": got " (pr-str (:refusal_kinds j))))
+      ;; every counter that would describe the refused file must be zero
+      (doseq [c [:dynamic_requires :undefined_alias_sites :unresolved_sites :require_reorders
+                 :require_sort_broken :moved :preserved_bodies :omitted :new_owners
+                 :comments_lost :declares :no_var_forms :base_owners :cand_owners
+                 :new_forward_refs :retargeted :rewritten_sites]]
+        (check! (zero? (or (get j c) 0)) "R8 refused file still counted"
+                (str kind ": " (name c) " = " (get j c) " for a tree whose only file is refused")))
+      ;; and its name must appear nowhere but the refusal rows and the hard stop
+      (let [lines (str/split-lines md)
+            in-recon? (atom false)
+            leaked (for [l lines]
+                     (cond
+                       (str/includes? l "Owner-inventory reconciliation failures") (do (reset! in-recon? true) nil)
+                       (and @in-recon? (str/starts-with? l "**Tree entries")) (do (reset! in-recon? false) nil)
+                       (str/starts-with? l ">") nil
+                       (and (not @in-recon?) (str/includes? l rel)) l
+                       :else nil))]
+        (doseq [l (remove nil? leaked)]
+          (check! false "R8 refused file leaked into another section"
+                  (str kind ": `" rel "` appears outside the refusal rows and the hard stop: "
+                       (str/trim (subs l 0 (min 120 (count l)))))))))))
 
 ;; R4 -----------------------------------------------------------------------
 (println "R4  required replay rows:" (count required-replay-rows))
