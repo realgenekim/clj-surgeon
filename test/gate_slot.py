@@ -1,41 +1,47 @@
 #!/usr/bin/env python3
 """TEST-ISO-015: box-wide worker admission, inherited across exec.
 
-Only lock ownership denotes occupancy. Never unlink slot files: doing so would
-create two separately lockable inodes for the same slot. No environment width
-override or cached startup memory can enlarge the live admission budget.
+Only ownership of a slot denotes occupancy, and a slot is a name in the Linux
+ABSTRACT Unix-domain socket namespace -- `\\0clj-surgeon-gate-slot-<i>`. Binding
+it is acquiring it, EADDRINUSE is "taken", and the kernel frees it when the last
+descriptor closes, including on SIGKILL. No environment width override and no
+cached startup memory can enlarge the live admission budget.
 
-Sol GATE-LANES-FENCE-001-R2: POSIX flock names an inode, not a path, so a
-removed or replaced slot root used to split the semaphore in two -- the holder
-kept locking the unlinked inode while the next caller recreated the directory
-and locked a brand new one. The root is therefore the coordinator's: it is
-created exactly once by `open_root` at run start, the coordinator holds that
-directory fd for the whole run so the kernel cannot reuse the inode number, and
-`try_acquire` never creates anything above a slot file. Every open here is
-relative to one directory fd, and both the admission lock and the taken slot
-are re-identified by (device, inode) while held. A missing root is
-`gate-refused: slot root missing`; a root that is no longer the coordinator's
-inode is `gate-refused: slot root replaced`. Neither is ever repaired by
-recreating the root underneath a live holder.
+WHY NOT A FILE. Sol GATE-LANES-FENCE-001-R2 and -R3: flock names an inode, not a
+path, and every path-based repair leaks the same way. Remove the slot directory
+under a live holder and the holder keeps locking the unlinked inode while the
+next actor creates a fresh directory and a fresh lock beside it -- two live
+semaphores, one bound. R2 closed that for a worker under the original
+coordinator by refusing a replaced root; R3 walked straight through it with an
+INDEPENDENT coordinator, which has nothing inherited to compare against and
+recreates the root itself (`different_roots True, bound_violated True`).
+
+There is no repair for that at the pathname layer, so this module does not use
+one. The abstract namespace has no directory entry, no inode, no path: nothing
+to unlink, nothing to recreate, and no root for two coordinators to disagree
+about. The bad state is unrepresentable rather than detected -- an independent
+coordinator on this box binds the same kernel names as every other one, with no
+shared file, environment variable or inherited descriptor between them.
 """
 
-import fcntl
-import json
+import errno
 import os
 from pathlib import Path
 import re
+import socket
 import sys
 import time
 
-SLOT_ROOT = Path('/var/tmp/forge/gate-slots')
+# The box-wide namespace. It is a constant on purpose: two coordinators that
+# share nothing at all must still contend for the same names.
+SLOT_NAMESPACE = 'clj-surgeon-gate'
 
-# The coordinator publishes `<absolute root path>|<device>:<inode>` here; every
-# worker it starts inherits it and refuses any other inode AT THAT PATH. The
-# path is half the value on purpose: a worker running this module's own tests
-# against its own temporary root must not be judged against the box root.
-ROOT_ID_ENV = 'GATE_SLOT_ROOT_ID'
+# Slots above the live width are still counted as occupied, so probe past it.
+MAX_SLOTS = 64
 
-SLOT_NAME = re.compile(r'^slot-(\d+)\.lock$')
+# Admission is held only across sample + count + acquire. A holder that dies
+# releases it in the kernel, so this deadline only bounds a live pathology.
+ADMISSION_TIMEOUT_S = 60.0
 
 
 def derived_width(cpus, memory_mib):
@@ -57,160 +63,89 @@ def capacity():
             'width': derived_width(cpus, memory)}
 
 
-def _identity(status):
-    """The kernel's name for a file: a path is not an identity, this is."""
-    return '%d:%d' % (status.st_dev, status.st_ino)
+def slot_name(namespace, suffix):
+    """The kernel's name for a slot. The leading NUL is the abstract namespace:
+    it is not a filesystem path and never touches a directory."""
+    return b'\0' + ('%s-%s' % (namespace, suffix)).encode('utf-8')
 
 
-def root_identity(dir_fd):
-    return _identity(os.fstat(dir_fd))
+def claim(name):
+    """Bind the name, or None when another live holder owns it.
 
-
-def published_identity(root, dir_fd):
-    """What the coordinator hands its workers: the path AND the inode."""
-    return '%s|%s' % (os.path.abspath(root), root_identity(dir_fd))
-
-
-def _expected_from_env(root):
-    """The published identity, but only for the root it was published for."""
-    published = os.environ.get(ROOT_ID_ENV) or ''
-    path, separator, identity = published.partition('|')
-    if not separator or path != os.path.abspath(root):
-        return None
-    return identity or None
-
-
-def open_root(root):
-    """Coordinator only: create the slot root exactly once and pin its inode.
-
-    Hold the returned fd for the run. While it is open the kernel cannot reuse
-    that inode number, so a worker comparing identities cannot be fooled by a
-    root that was removed and recreated at the same path.
+    Ownership is the bound socket itself. Closing it -- deliberately, on exit,
+    or because the kernel reaped the process -- releases the name at once.
     """
-    root.mkdir(parents=True, exist_ok=True)
-    return os.open(root, os.O_RDONLY | os.O_DIRECTORY)
-
-
-def _open_at(dir_fd, name, flags):
-    """Open strictly inside the coordinator's directory inode (openat)."""
-    fd = os.open(name, flags, 0o600, dir_fd=dir_fd)
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
-        return os.fdopen(fd, 'r+')
-    except BaseException:
-        os.close(fd)
+        sock.bind(name)
+    except OSError as error:
+        sock.close()
+        if error.errno == errno.EADDRINUSE:
+            return None
         raise
+    return sock
 
 
-def _same_inode(handle, name, dir_fd):
-    try:
-        return (_identity(os.fstat(handle.fileno()))
-                == _identity(os.stat(name, dir_fd=dir_fd)))
-    except OSError:
-        return False
+def hold_admission(namespace, timeout_s=ADMISSION_TIMEOUT_S):
+    """Serialize sample/count/reservation across every process on the box."""
+    name = slot_name(namespace, 'admission')
+    deadline = time.monotonic() + timeout_s
+    while True:
+        sock = claim(name)
+        if sock is not None:
+            return sock
+        if time.monotonic() >= deadline:
+            raise RuntimeError('gate-refused: admission is held too long')
+        time.sleep(0.002)
 
 
-def _root_intact(dir_fd, root, expected):
-    """The directory we hold open is still the one this path names, and it is
-    still the coordinator's."""
-    try:
-        if _identity(os.fstat(dir_fd)) != _identity(os.stat(root)):
-            return False
-    except OSError:
-        return False
-    return expected is None or root_identity(dir_fd) == expected
-
-
-def try_acquire(root, read_capacity=capacity, expected=None):
+def try_acquire(namespace=None, read_capacity=capacity):
     """Serialize sample/count/reservation; include holders above a shrunken width.
 
-    Refuses -- never recreates -- when the slot root is missing or is not the
-    coordinator's inode, so a deleted root can never produce a second live
-    semaphore beside the first.
+    Returns the bound socket that IS the slot, or None when the live width is
+    already spent. The caller owns it: hold it for the work's lifetime.
     """
-    if expected is None:
-        expected = _expected_from_env(root)
+    namespace = namespace or SLOT_NAMESPACE
+    admission = hold_admission(namespace)
     try:
-        dir_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
-    except OSError:
-        raise RuntimeError('gate-refused: slot root missing') from None
-    try:
-        if not _root_intact(dir_fd, root, expected):
-            raise RuntimeError('gate-refused: slot root replaced')
-        with _open_at(dir_fd, 'admission.lock', os.O_RDWR | os.O_CREAT) as admission:
-            fcntl.flock(admission, fcntl.LOCK_EX)
-            if not (_same_inode(admission, 'admission.lock', dir_fd)
-                    and _root_intact(dir_fd, root, expected)):
-                raise RuntimeError('gate-refused: slot root replaced')
-            current = read_capacity()
-            width = current['width']
-            for index in range(width):
-                _open_at(dir_fd, 'slot-%d.lock' % index,
-                         os.O_RDWR | os.O_CREAT).close()
-            free = []
-            occupied = 0
-            try:
-                for name in sorted(n for n in os.listdir(dir_fd) if SLOT_NAME.match(n)):
-                    handle = _open_at(dir_fd, name, os.O_RDWR)
-                    try:
-                        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    except BlockingIOError:
-                        occupied += 1
-                        handle.close()
-                    else:
-                        free.append((int(SLOT_NAME.match(name)[1]), name, handle))
-                eligible = next((entry for entry in free if entry[0] < width), None)
-                if occupied >= width or eligible is None:
-                    return None
-                _, name, handle = eligible
-                if not (_same_inode(handle, name, dir_fd)
-                        and os.fstat(handle.fileno()).st_dev == os.fstat(dir_fd).st_dev
-                        and _root_intact(dir_fd, root, expected)):
-                    raise RuntimeError('gate-refused: slot root replaced')
-                handle.seek(0)
-                handle.truncate()
-                json.dump({**current, 'pid': os.getpid(), 'admitted-at': time.time(),
-                           'occupied-after': occupied + 1}, handle)
-                handle.flush()
-                os.set_inheritable(handle.fileno(), True)
-                free.remove(eligible)
-                return handle
-            finally:
-                for _, _, handle in free:
-                    handle.close()
+        current = read_capacity()
+        width = current['width']
+        if width < 1:
+            raise RuntimeError('gate-refused: insufficient memory for a bounded lane')
+        free = []
+        occupied = 0
+        try:
+            for index in range(max(width, MAX_SLOTS)):
+                sock = claim(slot_name(namespace, 'slot-%d' % index))
+                if sock is None:
+                    occupied += 1
+                else:
+                    free.append((index, sock))
+            eligible = next((entry for entry in free if entry[0] < width), None)
+            if occupied >= width or eligible is None:
+                return None
+            free.remove(eligible)
+            # The worker itself owns the open descriptor from here: it must
+            # survive exec, and only its closure frees the slot.
+            os.set_inheritable(eligible[1].fileno(), True)
+            return eligible[1]
+        finally:
+            for _, sock in free:
+                sock.close()
     finally:
-        os.close(dir_fd)
-
-
-def hold_root(root, expected=None):
-    """The coordinator entrance: create the root once, publish its identity on
-    stdout, and hold its fd until stdin closes -- the coordinator's lifetime.
-
-    A nested coordinator inherits the outer coordinator's published identity and
-    refuses here rather than coordinating over a second inode."""
-    if expected is None:
-        expected = _expected_from_env(root)
-    dir_fd = open_root(root)
-    try:
-        if expected is not None and root_identity(dir_fd) != expected:
-            raise RuntimeError('gate-refused: slot root replaced')
-        print(published_identity(root, dir_fd), flush=True)
-        sys.stdin.read()
-    finally:
-        os.close(dir_fd)
+        admission.close()
 
 
 def main(argv):
-    if argv and argv[0] == '--hold-root':
-        return hold_root(SLOT_ROOT)
     if len(argv) < 2 or argv[0] != '--':
-        raise RuntimeError('usage: gate_slot.py [--hold-root] | -- COMMAND [ARG ...]')
+        raise RuntimeError('usage: gate_slot.py -- COMMAND [ARG ...]')
     while True:
-        slot = try_acquire(SLOT_ROOT)
+        slot = try_acquire()
         if slot is not None:
             break
         time.sleep(0.05)
-    # The worker itself owns the open file description. SIGKILL and exec
-    # failure release it without a coordinator cleanup callback.
+    # The worker itself owns the bound socket. SIGKILL and exec failure release
+    # it without a coordinator cleanup callback.
     try:
         os.execvp(argv[1], argv[1:])
     finally:

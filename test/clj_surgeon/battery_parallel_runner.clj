@@ -440,35 +440,6 @@
 (defn slot-command [argv]
   (into ["python3" "-B" (.getCanonicalPath (io/file "test/gate_slot.py")) "--"] argv))
 
-;; @spec TEST-ISO-015 -- one root inode, named by the coordinator, for the run.
-;; Sol GATE-LANES-FENCE-001-R2: flock names an inode, so a removed and
-;; recreated slot root would give the next worker a second live semaphore. The
-;; root is created exactly once here, its (device, inode) identity is published
-;; to every worker, and the holder process keeps that directory fd open for the
-;; whole run so the kernel cannot reuse the inode number behind our back.
-(defonce ^:private slot-root-id (atom nil))
-
-(defn slot-env []
-  (if-let [id @slot-root-id] {"GATE_SLOT_ROOT_ID" id} {}))
-
-(defn hold-slot-root!
-  "Create the box slot root once and hold its inode for this coordinator's
-   lifetime. Returns the holder process; closing its stdin releases the fd."
-  []
-  (let [p (proc/process {:err :inherit}
-                        "python3" "-B" (.getCanonicalPath (io/file "test/gate_slot.py"))
-                        "--hold-root")
-        id (some-> (:out p) io/reader .readLine str/trim)]
-    (when (str/blank? id)
-      (proc/destroy p)
-      (throw (ex-info "gate-refused: slot root could not be held" {})))
-    (reset! slot-root-id id)
-    p))
-
-(defn release-slot-root! [p]
-  (reset! slot-root-id nil)
-  (when p (proc/destroy p)))
-
 (defn- run-lane!
   [{:keys [index namespaces java-opts work-dir runtime phase suite target checkout-root]}]
   (let [out-path (io/file work-dir (format "lane-%d.edn" index))
@@ -480,7 +451,6 @@
     (let [p (apply proc/process
                    {:out :write :out-file log-path
                     :err :write :err-file err-path
-                    :extra-env (slot-env)
                     :dir (or checkout-root (System/getProperty "user.dir"))}
                    (slot-command (cond target ["make" "--no-print-directory" target]
                                    (= :bb runtime)
@@ -536,8 +506,7 @@
     (let [started (System/nanoTime)
           result @(apply proc/process
                     {:out :string :err :inherit
-                     :extra-env (merge (slot-env)
-                                       {"JAVA_TOOL_OPTIONS" (str (System/getenv "JAVA_TOOL_OPTIONS") " -Xmx512m")})}
+                     :extra-env {"JAVA_TOOL_OPTIONS" (str (System/getenv "JAVA_TOOL_OPTIONS") " -Xmx512m")}}
                     (slot-command command))
           receipt {:command command :exit (:exit result)
                    :wall-ms (quot (- (System/nanoTime) started) 1000000)}]
@@ -714,9 +683,8 @@
         _ (flush)
         rc (:exit @(apply proc/process
                      {:out :inherit :err :inherit
-                      :extra-env (merge (slot-env)
-                                        {"JAVA_TOOL_OPTIONS" (str (System/getenv "JAVA_TOOL_OPTIONS") " -Xmx512m")
-                                         "CLJ_SURGEON_GATE_RUN_ID" run-id})}
+                      :extra-env {"JAVA_TOOL_OPTIONS" (str (System/getenv "JAVA_TOOL_OPTIONS") " -Xmx512m")
+                                  "CLJ_SURGEON_GATE_RUN_ID" run-id}}
                      (slot-command ["make" "--no-print-directory" target])))]
     {:target target :exit rc :wall-ms (quot (- (System/nanoTime) start) 1000000)}))
 
@@ -758,8 +726,7 @@
                     (if (= :suite kind)
                       (let [start (System/nanoTime)
                             rc (:exit @(proc/process {:out :inherit :err :inherit
-                                                      :extra-env (merge (slot-env)
-                                                                        {"CLJ_SURGEON_GATE_RUN_ID" run-id})}
+                                                      :extra-env {"CLJ_SURGEON_GATE_RUN_ID" run-id}}
                                          "make" "--no-print-directory" target))]
                         {:target target :exit rc :wall-ms (quot (- (System/nanoTime) start) 1000000)})
                       (run-gate-stage! run-id target)))]
@@ -1117,12 +1084,10 @@
 (defn -main [& args]
   (try
     (let [opts (apply hash-map (map str args))]
-      (if (= "true" (get opts "--print-gate-stages"))
-        (doseq [target (gate-targets false)] (println target))
-        ;; @spec TEST-ISO-015 -- workers admit against the root this holds open.
-        (let [holder (hold-slot-root!)]
-          (try (if (= "gate" (get opts "--suite")) (run-gate! opts) (run-suite! opts))
-               (finally (release-slot-root! holder)))))
+      (cond (= "true" (get opts "--print-gate-stages"))
+            (doseq [target (gate-targets false)] (println target))
+            (= "gate" (get opts "--suite")) (run-gate! opts)
+            :else (run-suite! opts))
       (shutdown-agents))
     (catch Throwable e
       (binding [*out* *err*]
