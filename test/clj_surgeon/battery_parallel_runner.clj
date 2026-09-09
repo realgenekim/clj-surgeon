@@ -49,8 +49,10 @@
    battery namespace degrades the makespan rather than the verdict."
   (:require
    [babashka.process :as proc]
+   [clj-surgeon.gate-obligations :as gob]
    [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.ns-isolation :as iso]
+   [clj-surgeon.toolchain-identity :as tc]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -741,9 +743,86 @@
                           (when-not (= digest (source-digest)) [{:kind :tree-changed-during-gate}])
                           (when-not debug?
                             (mapcat #(suite-receipt-problems (:suite %) % digest) suites))))
-          receipt {:state (if (seq problems) :failed :passed)
+          ;; ---- FRAME 7 SECTION 4/5: the receipt says what this tree REQUIRED,
+          ;; who ran what, and under which observed toolchain. Before this, a
+          ;; landing receipt named seven stage strings and nothing else: the
+          ;; obligation each stage discharges, the exact selected identities and
+          ;; the runtime that produced them were all left for a consumer to
+          ;; assume. A consumer that assumes is a consumer that can be fooled by
+          ;; a self-consistent producer, which is exactly the defect Sol's
+          ;; GATE-LANES-FENCE-002 found.
+          obligation-inventory (gob/inventory {:stage-manifest (mapv :target gate-stage-manifest)
+                                               :suite-namespaces suite-namespaces})
+          obligation-bytes (pr-str obligation-inventory)
+          obligation-path (io/file "target" "gate-obligations.edn")
+          _ (do (.mkdirs (io/file "target")) (spit obligation-path obligation-bytes))
+          toolchain (tc/snapshot)
+          stage->obligations (into {} (for [o (:obligations obligation-inventory)
+                                            :when (:stage o)]
+                                        [(:stage o) [(:id o)]]))
+          obl-by-stage (into {} (for [o (:obligations obligation-inventory) :when (:stage o)]
+                                  [(:stage o) o]))
+          suite-by-name (into {} (for [sr suites] [(str (:suite sr)) sr]))
+          recovery-receipt (let [f (io/file "target" "admit-transaction-recovery-battery-receipt.edn")]
+                             (when (.isFile f) (try (edn/read-string (slurp f)) (catch Exception _ nil))))
+          ;; THE COUNTERS ARE ASSERTED BY THE PROCESS THAT OWNS THEM. Section 5:
+          ;; "absence is unknown, not zero." `:precondition-skipped` only appears
+          ;; in a merged report when it is non-zero, so a consumer reading the raw
+          ;; suite receipt cannot tell "no skip" from "nobody counted". This
+          ;; runner already applies `(get-in receipt [:result :precondition-skipped] 0)`
+          ;; as its own refusal policy, so it -- and only it -- may write the
+          ;; observed value down explicitly.
+          executions (mapv (fn [{:keys [target exit wall-ms]}]
+                             (let [obl (get obl-by-stage target)
+                                   sr (get suite-by-name (:suite obl))]
+                               (cond-> {:id (str run-id "/" target)
+                                        :obligation-ids (get stage->obligations target [])
+                                        :target target
+                                        :candidate {:commit (str/trim (:out @(proc/process {:out :string} "git" "rev-parse" "HEAD")))
+                                                    :tree (str/trim (:out @(proc/process {:out :string} "git" "rev-parse" "HEAD^{tree}")))}
+                                        :check-contract-sha256 (get-in obl [:recipe :sha256])
+                                        :runtime (:runtime obl)
+                                        :scope (:scope obl)
+                                        :declared-skips []
+                                        :focus-omissions []
+                                        :unexecuted-tests []
+                                        :expected-tests (vec (:selected-test-identities obl))
+                                        :executed-tests []
+                                        :result {:exit exit :wall-ms wall-ms}}
+                                 sr
+                                 (assoc :executed-tests (vec (sort (distinct (map (comp str :namespace) (:runs sr)))))
+                                        :result {:exit exit :wall-ms wall-ms
+                                                 :failures (get-in sr [:result :fail])
+                                                 :errors (get-in sr [:result :error])
+                                                 :tests (get-in sr [:result :test])
+                                                 :assertions (get-in sr [:result :pass])
+                                                 :isolation-violations (:isolation-failures sr)
+                                                 :leaks (:leak-failures sr)
+                                                 :skipped-preconditions (get-in sr [:result :precondition-skipped] 0)})
+
+                                 (and recovery-receipt (= "admit-transaction-recovery-battery" target))
+                                 (assoc :result {:exit exit :wall-ms wall-ms
+                                                 :arms (count (:arms recovery-receipt))
+                                                 :arms-passed (:arms-passed recovery-receipt)
+                                                 :failed-arms (vec (:failed-arms recovery-receipt))
+                                                 :verdict (:verdict recovery-receipt)}))))
+                           @stages)
+          receipt {:receipt-version 2
+                   :state (if (seq problems) :failed :passed)
                    :landing? (landing-eligible? debug? prewarm? problems)
                    :prewarm? (and prewarm? (not debug?))
+                   :toolchain toolchain
+                   :obligations {:policy-sha256 (:policy-sha256 obligation-inventory)
+                                 :inventory-version (:inventory-version obligation-inventory)
+                                 :ids (mapv :id (:obligations obligation-inventory))
+                                 :evidence {:path "target/gate-obligations.edn"
+                                            :sha256 (tc/sha256 obligation-bytes)
+                                            :bytes (count (.getBytes ^String obligation-bytes "UTF-8"))}
+                                 :discharged-by-this-receipt (vec (sort (mapcat val stage->obligations)))
+                                 :out-of-band (vec (for [o (:obligations obligation-inventory)
+                                                         :when (= :out-of-band (:by (:discharge o)))]
+                                                     (:id o)))}
+                   :executions executions
                    :run-id run-id
                    :git-head (str/trim (:out @(proc/process {:out :string} "git" "rev-parse" "HEAD")))
                    :git-tree (str/trim (:out @(proc/process {:out :string} "git" "rev-parse" "HEAD^{tree}")))

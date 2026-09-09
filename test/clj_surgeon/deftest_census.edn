@@ -238,6 +238,18 @@
   clj-surgeon.fast-lane-isolation-test/no-fast-lane-namespace-roots-a-fixture-outside-its-own-tmpdir
   clj-surgeon.fast-lane-isolation-test/the-fast-lane-home-is-a-throwaway-inside-the-run-root
   clj-surgeon.fast-lane-isolation-test/the-fast-lane-tmpdir-is-a-private-per-run-root
+  clj-surgeon.gate-obligations-test/a-policy-hash-covers-the-rules-and-not-the-data-the-rules-read
+  clj-surgeon.gate-obligations-test/a-suite-obligation-carries-the-identities-not-only-a-count
+  clj-surgeon.gate-obligations-test/an-unknown-recipe-is-named-never-an-empty-one
+  clj-surgeon.gate-obligations-test/banner-only-output-is-unknown-and-unknown-is-not-a-version
+  clj-surgeon.gate-obligations-test/every-section-4-obligation-is-present-and-named
+  clj-surgeon.gate-obligations-test/r9-and-r10-can-never-be-discharged-by-a-gate-receipt
+  clj-surgeon.gate-obligations-test/the-inventory-is-readable-by-a-real-edn-reader
+  clj-surgeon.gate-obligations-test/the-java-tool-options-banner-is-never-the-version
+  clj-surgeon.gate-obligations-test/the-policy-hash-moves-when-a-single-namespace-is-dropped
+  clj-surgeon.gate-obligations-test/the-real-tree-agrees-with-section-4s-independently-read-counts
+  clj-surgeon.gate-obligations-test/the-required-inputs-of-a-gate-obligation-exist-in-this-tree
+  clj-surgeon.gate-obligations-test/two-different-boxes-with-the-same-banner-do-not-agree
   clj-surgeon.helper-extraction-test/a-bare-symbol-referred-from-two-namespaces-refuses
   clj-surgeon.helper-extraction-test/a-caller-that-binds-every-policy-entry-refuses
   clj-surgeon.helper-extraction-test/a-caller-that-refers-a-retained-name-it-never-uses-is-mixed
