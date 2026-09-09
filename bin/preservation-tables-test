@@ -140,7 +140,8 @@
    "are-binding" "kind-collision" "uppercase-alias" "referred-testing"
    "refer-all-shadow" "use-shadow" "refer-all-external"
    "meta-owner" "shapes" "cljc-unanalysed" "cljc-analysed"
-   "spliced-require-reorder" "spliced-require-control"])
+   "spliced-require-reorder" "spliced-require-control"
+   "comment-require" "comment-require-control"])
 
 ;; ------------------------------------------------------------------- harness
 
@@ -264,6 +265,43 @@
       (let [[q verdict] (get by-head n)]
         (check! (= verdict "unmodelled") "R5 shadow witness FAILED"
                 (str "`" n "` resolved to `" q "` — a Var no table names — but the brief still trusted it"))))))
+
+;; R6 -----------------------------------------------------------------------
+;; PB-FENCE-016. Section D is generated from the same state the reconciliation
+;; reads. This rung asserts it: no retired sentence may survive, and D must name
+;; the analyzer's actual feature set. A stale caveat is a lie the reader cannot
+;; check, so the test refuses one.
+(def retired-sentences
+  ["compared as text" "no platform was elaborated"
+   "canonicalises a bare name that matches an owner"
+   "The requalification tier canonicalises"])
+(println "R6  section D generated from state:" (count retired-sentences) "retired sentences refused")
+(let [d-dir "/var/tmp/forge/item3/r6-d"
+      _ (fs/delete-tree d-dir)
+      _ (fs/create-dirs (str d-dir "/src"))
+      _ (spit (str d-dir "/src/p.clj") "(ns p)\n\n(defn f [] :a)\n")
+      _ (p/sh {:dir d-dir} "git" "init" "-q" "-b" "main")
+      _ (p/sh {:dir d-dir} "git" "add" "-A")
+      _ (p/sh {:dir d-dir :extra-env {"GIT_AUTHOR_NAME" "t" "GIT_AUTHOR_EMAIL" "t@t"
+                                      "GIT_COMMITTER_NAME" "t" "GIT_COMMITTER_EMAIL" "t@t"}}
+              "git" "commit" "-qm" "base")
+      _ (spit (str d-dir "/src/p.clj") "(ns p)\n\n(defn f [] :b)\n")
+      _ (p/sh {:dir d-dir} "git" "add" "-A")
+      _ (p/sh {:dir d-dir :extra-env {"GIT_AUTHOR_NAME" "t" "GIT_AUTHOR_EMAIL" "t@t"
+                                      "GIT_COMMITTER_NAME" "t" "GIT_COMMITTER_EMAIL" "t@t"}}
+              "git" "commit" "-qm" "cand")
+      sha (fn [r] (str/trim (:out (p/sh {:dir d-dir :out :string} "git" "rev-parse" r))))
+      out (:out (p/sh {:out :string :err :string} brief (sha "main") (sha "main~1")
+                      "--repo" d-dir "--roots" "src"))
+      d-section (if-let [i (str/index-of out "### D.")] (subs out i) "")]
+  (check! (seq d-section) "R6 no section D" "the brief emitted no section D")
+  (doseq [phrase retired-sentences]
+    (check! (not (str/includes? d-section phrase)) "R6 stale caveat in section D"
+            (str "section D still says \"" phrase "\", which the implemented path contradicts")))
+  (doseq [f (sort table-vars)] nil)
+  (doseq [feat ["clj" "cljs"]]
+    (check! (str/includes? d-section feat) "R6 section D does not name the feature set"
+            (str "section D never mentions the elaborated platform `" feat "`"))))
 
 ;; R4 -----------------------------------------------------------------------
 (println "R4  required replay rows:" (count required-replay-rows))

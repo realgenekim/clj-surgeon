@@ -444,6 +444,58 @@ for spec in "spliced-require-reorder $SP_CAND $SP_BASE" "spliced-require-control
 done
 
 
+# ---- Sol round-9 rows (PB-FENCE-014) ---------------------------------------
+# A `(comment (require …))` at top level is a namespace usage to the resolver and
+# is NOT part of the namespace's load order. `comment-require` reorders two of them
+# and must NOT report a require reorder; `comment-require-control` leaves them.
+CM="$WORK/cmt"; rm -rf "$CM"; mkdir -p "$CM/src"
+( cd "$CM"
+  git init -q -b main; git config commit.gpgsign false
+  cat > src/probe.clj <<'CLJ'
+(ns probe
+  (:require [clojure.set :as set]
+            [clojure.string :as str]))
+
+(comment (require '[clojure.edn :as edn] '[clojure.walk :as walk]))
+
+(defn f [] (str/join "," (set/union #{1} #{2})))
+CLJ
+  git add -A >/dev/null; git commit -qm base >/dev/null
+  cat > src/probe.clj <<'CLJ'
+(ns probe
+  (:require [clojure.set :as set]
+            [clojure.string :as str]))
+
+(comment (require '[clojure.walk :as walk] '[clojure.edn :as edn]))
+
+(defn f [] (str/join "," (set/union #{1} #{2})))
+CLJ
+  git add -A >/dev/null; git commit -qm "reorder requires inside a (comment ...)" >/dev/null
+  git checkout -q -B ctl main~1
+  cat > src/probe.clj <<'CLJ'
+(ns probe
+  (:require [clojure.set :as set]
+            [clojure.string :as str]))
+
+(comment (require '[clojure.edn :as edn] '[clojure.walk :as walk]))
+
+(defn f [] (str/join ";" (set/union #{1} #{2})))
+CLJ
+  git add -A >/dev/null; git commit -qm "control: body only" >/dev/null )
+CM_BASE=$(git -C "$CM" rev-parse main~1)
+CM_CAND=$(git -C "$CM" rev-parse main)
+CM_CTL=$(git -C "$CM" rev-parse ctl)
+
+for spec in "comment-require $CM_CAND $CM_BASE" "comment-require-control $CM_CTL $CM_BASE"; do
+  set -- $spec
+  st=$(date +%s.%N)
+  "$HERE/preservation-brief" "$2" "$3" --repo "$CM" --roots src \
+      --title "$1" --out "$WORK/out/$1.md" --json "$WORK/out/$1.json" >/dev/null || true
+  en=$(date +%s.%N)
+  echo "$1  wall $(echo "$en - $st" | bc)s"
+done
+
+
 python3 - "$WORK/out" <<'PY'
 import json, sys, pathlib, os
 d = pathlib.Path(sys.argv[1])
@@ -453,7 +505,8 @@ order = ["clean","wrong-binding","silent-promotion","dropped-comment",
          "are-binding","uppercase-alias","kind-collision","referred-testing",
          "refer-all-shadow","use-shadow","refer-all-external","shapes","meta-owner",
          "cljc-unanalysed","cljc-analysed",
-         "spliced-require-reorder","spliced-require-control"]
+         "spliced-require-reorder","spliced-require-control",
+         "comment-require","comment-require-control"]
 rows = []
 for k in order:
     j = json.load(open(d / f"{k}.json"))
@@ -464,6 +517,7 @@ cols = [("clear","clear"),("moved","moved"),("preserved_bodies","preserved"),("o
         ("stale_sites","stale"),("undefined_alias_sites","undef-alias"),("possible_unresolved","bare?"),
         ("in_place_needs_review","inplace-rev"),("reconcile_failures","recon"),
         ("declares","decl"),("no_var_forms","novar"),("reader_conditionals","cond"),
+        ("dynamic_requires","dynreq"),
         ("wall_ms","wall ms")]
 hdr = "| change | " + " | ".join(c[1] for c in cols) + " |"
 print(hdr)

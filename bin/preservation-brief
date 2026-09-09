@@ -255,10 +255,13 @@
                           (assoc-in m [path :failed?] true)
                           m)))
                     idx (:findings analysis))
+        idx (reduce (fn [m d] (assoc-in m [(norm (:filename d)) :nsdef] (str (:name d))))
+                    idx (:namespace-definitions a))
         idx (reduce (fn [m u]
                       (update-in m [(norm (:filename u)) :nsu] (fnil conj [])
                                  {:to (str (:to u)) :alias (some-> (:alias u) str)
                                   :refer (when (:refer u) (mapv str (:refer u)))
+                                  :refer-all (boolean (:refer-all u))
                                   :lang (some-> (:lang u) name)
                                   :row (:row u) :col (:col u)}))
                     idx (:namespace-usages a))
@@ -286,8 +289,8 @@
 (defn kondo-requires
   "Ordered require specs from the resolver, per analysed platform:
    {lang [{:lib :as :refer}]}."
-  [ki]
-  (->> (get ki :nsu [])
+  [usages]
+  (->> usages
        (sort-by (juxt #(or (:lang %) "") :row :col))
        (group-by #(or (:lang %) ":clj"))
        (reduce-kv (fn [m lang us]
@@ -340,16 +343,31 @@
                                      (:id o))))
         kondo-lang-defs (count (into #{} (map :name) (filter :lang kdefs)))
         cond-gap (max 0 (- cond-defs kondo-lang-defs))
+        ;; PB-FENCE-014/015. The private `ns` parser supplies ONE thing: the byte
+        ;; span of the `ns` form. Everything semantic — requires, aliases, refers —
+        ;; comes from the resolver, restricted to usages inside that span. A
+        ;; `(comment (require …))` at top level is a namespace usage to the resolver
+        ;; and is NOT part of the namespace's load order; it is listed separately.
         nsf (sc/ns-form forms)
-        nsname (sc/ns-name-of nsf)]
+        ns-start (or (:start nsf) 0)
+        ns-end (or (:end nsf) 0)
+        in-span? (fn [u] (let [o (off-of (:row u) (:col u))]
+                           (and o (>= o (long ns-start)) (< o (long ns-end)))))
+        all-usages (get kfacts :nsu [])
+        ns-usages (vec (filter in-span? all-usages))
+        outside-usages (vec (remove in-span? all-usages))
+        kreq (kondo-requires ns-usages)
+        aliases (into {} (for [u ns-usages :when (:alias u)] [(:alias u) (:to u)]))
+        refers (into {} (for [u ns-usages r (or (:refer u) [])] [r (:to u)]))
+        nsname (or (:nsdef kfacts) (some :ns (map #(hash-map :ns (:ns %)) kdefs)))]
     {:path rel
      :text text
      :ns nsname
      :ns-form (:text nsf)
-     :requires (sc/requires-of nsf)
-     :imports (sc/imports-of nsf)
-     :aliases (sc/alias-map nsf)
-     :refers (sc/refer-map nsf)
+     :imports []
+     :aliases aliases
+     :refers refers
+     :dynamic-requires (mapv #(str (:to %) (when (:alias %) (str " :as " (:alias %)))) outside-usages)
      :comments (mapv #(select-keys % [:line :text]) comments)
      :declare-forms (vec (for [f forms
                                :let [cs (sc/children (:text f))]
@@ -358,10 +376,10 @@
                            {:name (str/trim d) :start (:start f)}))
      :declares (mapv #(str (:ns %) "/" (:name %)) declares)
      :no-var-forms (mapv #(str (:kind %) " " (:id %)) no-var-forms)
-     :kondo-requires (kondo-requires kfacts)
+     :kondo-requires kreq
      :require-mismatch
-     (let [priv (into #{} (map :lib) (sc/requires-of (sc/ns-form forms)))
-           kond (into #{} (mapcat #(map :lib %)) (vals (kondo-requires kfacts)))
+     (let [priv (into #{} (map :lib) (sc/requires-of nsf))
+           kond (into #{} (mapcat #(map :lib %)) (vals kreq))
            ;; a require spliced by `#?@` is one synthetic "lib" to the private
            ;; parser and N real ones to the resolver — exactly PB-FENCE-013
            only-priv (vec (sort (remove #(or (str/starts-with? % "#?") (kond %)) priv)))
@@ -369,7 +387,7 @@
            ;; legitimately reports MORE libs than the parser can see — that splice
            ;; is the whole reason the resolver is authoritative here. The parser
            ;; seeing something the resolver did not is still a failure.
-           ns-cond? (boolean (some-> (:text (sc/ns-form forms)) (str/includes? "#?")))
+           ns-cond? (boolean (some-> (:text nsf) (str/includes? "#?")))
            only-kondo (if ns-cond? [] (vec (sort (remove priv kond))))]
        {:only-parser only-priv :only-resolver only-kondo
         :ok? (and (empty? only-priv) (empty? only-kondo))})
@@ -1555,6 +1573,12 @@
           :unanalysed-features (:unanalysed-features r) :cond-gap (:cond-gap r)
           :only-parser (:only-parser rm) :only-resolver (:only-resolver rm)})))
 
+(def dynamic-requires
+  (vec (sort (distinct (for [[which idx] [["base" base-idx] ["candidate" cand-idx]]
+                             [path f] idx
+                             x (:dynamic-requires f)]
+                         (str which " " path ": " x))))))
+
 (def declared-names
   (vec (sort (distinct (mapcat :declares (concat (vals base-idx) (vals cand-idx)))))))
 (def no-var-forms
@@ -1675,6 +1699,9 @@
         [(when (seq reconcile-failures)
            [(count reconcile-failures)
             "FILES this checker CANNOT CERTIFY — the two owner inventories disagree, or the file carries a reader-conditional platform the analyzer does not elaborate. Nothing in them is certifiable (A1)"])
+         (when (seq dynamic-requires)
+           [(count dynamic-requires)
+            "namespace usages OUTSIDE the `ns` form — a `require` in a comment, a REPL block or called at runtime. They are not load order and are never counted as a reorder; they are a reviewer's obligation (B4)"])
          (when (seq no-var-forms)
            [(count no-var-forms)
             "top-level forms that define no Var (`defmethod`, `extend-*`, `reify`, …). The resolver does not track them and this brief does NOT certify them — read them (A1)"])
@@ -2014,6 +2041,7 @@
     (println (tbl ["quantity" "count"]
                   [["new require edges between namespaces in this repository" (count new-edges)]
                    ["files whose require ORDER changed (`:require` order is load order)" (count reordered)]
+                   ["namespace usages OUTSIDE the `ns` form (never load order)" (count dynamic-requires)]
                    ["namespaces created — their require order has NO base to compare against" (count ns-added)]
                    ["namespaces deleted" (count ns-deleted)]
                    ["NEW intra-file forward references (owner used before it is defined, no `declare`)"
@@ -2042,6 +2070,13 @@
       (println)
       (println (tbl* ["file" "base order" "candidate order"]
                      (for [e reordered] [(:path e) (str/join " " (:order-base e)) (str/join " " (:order-cand e))]))))
+    (when (seq dynamic-requires)
+      (println)
+      (println "**Namespace usages outside the `ns` form.** A `require` inside a `(comment …)`, a REPL block")
+      (println "or a runtime call is a namespace usage to the resolver but is NOT part of the namespace's load")
+      (println "order. It is never counted as a reorder, and it is never silently dropped:")
+      (println)
+      (println (tbl* ["usage"] (for [d dynamic-requires] [d]))))
     (when (seq new-edges)
       (println)
       (println (tbl* ["from namespace" "now requires"] (for [e new-edges] [(:from e) (:to e)]))))
@@ -2161,22 +2196,48 @@
     (println)
     (println "### D. What this brief did NOT check")
     (println)
-    (println "This brief is a static, textual re-derivation over two git trees. It establishes nothing about behaviour.")
-    (println "It did not check:")
+    (println (str "This brief is a static re-derivation over two git trees, with **clj-kondo** as its resolver."
+                  " It establishes nothing about behaviour. Every sentence below is generated from the same"
+                  " state the reconciliation reads, so it cannot drift from what the run actually did."))
     (println)
-    (doseq [l ["runtime behaviour of any kind. No namespace was loaded, no test was run, no process was started."
-               "cold process startup, classpath, load order as executed, or clean interning. A require-order table is not a load."
-               "macro expansion. A relocated macro's expansion sites, and any owner consumed by a macro, are unverified here."
-               "dynamic references: `resolve`, `requiring-resolve`, `ns-resolve`, `find-var`, `intern`, symbols built from strings, multimethod dispatch registration, data readers, and any var named by data rather than by code."
-               "reader conditionals. `.cljc` branches are compared as text; no platform was elaborated."
-               "protocol, record and type identity. A relocated `defrecord`/`deftype`/`definterface` changes its generated class package; AOT or serialised artefacts were not examined."
-               "references from resources, configuration, EDN data, documentation or any non-source file that names a namespace as a string."
-               "whether the destination partition is a good one, whether a promotion was authorised, or whether a prose edit was wanted."
-               "test coverage, lint delta, formatting policy, or any repository gate."
-               "custody. This brief proves nothing about who ran what, or that any claimed execution occurred. It is a re-derivation, not an attestation."
-               "anything outside the scanned roots, and any file whose extension is not .clj/.cljc/.cljs."
-               "trailing whitespace inside a string literal, which the `:identical-modulo-whitespace` tier normalises away."
-               "anything the external resolver cannot see. A local is never canonicalised — the resolver decides what is a local — but a Var reached only at runtime, or a file it could not analyse, is refused rather than compared."]]
+    (doseq [l (concat
+               ["runtime behaviour of any kind. No namespace was loaded, no test was run, no process was started."
+                "cold process startup, classpath, load order as executed, or clean interning. A require-order table is not a load."
+                "macro expansion. A relocated macro's expansion sites, and any owner consumed by a macro, are unverified here."]
+               [(str "platforms outside the analyzer's declared feature set. The resolver elaborated "
+                     (str/join " and " (sort analysed-features))
+                     " for `.cljc`; "
+                     (if (zero? (reduce + 0 (map #(or (:reader-conditionals %) 0)
+                                                 (concat (vals base-idx) (vals cand-idx)))))
+                       "this change contains no reader conditional at all"
+                       (str "this change contains "
+                            (reduce + 0 (map #(or (:reader-conditionals %) 0)
+                                             (concat (vals base-idx) (vals cand-idx))))
+                            " reader-conditional forms"))
+                     ". A file carrying any other feature is REFUSED, not compared"
+                     (if (seq reconcile-failures)
+                       (str " — " (count reconcile-failures) " file(s) were refused in this run")
+                       " — none were refused in this run") ".")
+                (str "dynamic references the resolver cannot see: a Var reached through `resolve`, "
+                     "`requiring-resolve`, a symbol built from a string, or a `require` executed at runtime. "
+                     (if (zero? (count dynamic-requires))
+                       "No namespace usage outside an `ns` form appears in this change."
+                       (str (count dynamic-requires) " namespace usage(s) outside an `ns` form are listed in B4.")))
+                (str "identity of forms that define no Var. "
+                     (if (zero? (count no-var-forms))
+                       "This change contains none."
+                       (str (count no-var-forms) " are named in B7 and are a reviewer's obligation.")))
+                (str "anything in a file whose two owner inventories disagree. "
+                     (if (zero? (count reconcile-failures))
+                       "All parsed files reconciled in this run."
+                       (str (count reconcile-failures) " file(s) failed and nothing in them is certifiable.")))]
+               ["protocol, record and type identity. A relocated `defrecord`/`deftype`/`definterface` changes its generated class package; AOT or serialised artefacts were not examined."
+                "references from resources, configuration, EDN data, documentation or any non-source file that names a namespace as a string."
+                "whether the destination partition is a good one, whether a promotion was authorised, or whether a prose edit was wanted."
+                "test coverage, lint delta, formatting policy, or any repository gate."
+                "custody. This brief proves nothing about who ran what, or that any claimed execution occurred. It is a re-derivation, not an attestation."
+                "anything outside the scanned roots, and any file whose extension is not .clj/.cljc/.cljs."
+                "trailing whitespace inside a string literal, which the `:identical-modulo-whitespace` tier normalises away."])]
       (println (str "- " l)))
     (println)
     (println (format "_Resolver: clj-kondo via `~/bin/clj-kondo`, %.1f ms for both trees. Checker wall: %.1f ms. Generated by `bin/preservation-brief`, which reads only the two git trees._"
@@ -2219,6 +2280,7 @@
             :reconcile_unreported (reduce + 0 (map #(count (:unreported %)) reconcile-failures))
             :unanalysed_platforms (vec (sort (distinct (mapcat :unanalysed-features reconcile-failures))))
             :analysed_features (vec (sort analysed-features))
+            :dynamic_requires (count dynamic-requires)
             :reader_conditionals (reduce + 0 (map #(or (:reader-conditionals %) 0)
                                                   (concat (vals base-idx) (vals cand-idx))))
             :kind_disagreements (count kind-disagree)
