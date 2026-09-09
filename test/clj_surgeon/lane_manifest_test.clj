@@ -606,6 +606,7 @@
      clj-surgeon.require-change-test ; Pure standalone require intent and strict natural-layout refusal witnesses.
      clj-surgeon.require-change-boundary-test ; Actual CLI/profile processes, confined publication, independent oracle and undo.
      clj-surgeon.fast-lane-isolation-test ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
+     clj-surgeon.gate-obligations-test ; Frame 7 item 1 (2026-09-09): the obligation inventory `make print-gate-obligations` prints, and the banner-is-not-a-version repair the landing receipt's toolchain identity depends on.
      clj-surgeon.lane-manifest-test ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses + TEST-ISO-015's fixture-tree census witness (2026-09-09), a-namespace-in-the-tree-but-absent-from-the-census-is-named
      clj-surgeon.mcp-formatter-test ; the adopted orphan (round three)
      clj-surgeon.mcp-feature-thread-test ; the trunk's `feature_thread` verb, adopted at round five's MCP/main merge

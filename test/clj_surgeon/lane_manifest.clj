@@ -106,6 +106,7 @@
    'clj-surgeon.battery-parallel-test                   :fast
    'clj-surgeon.census-pool-test                        :fast
    'clj-surgeon.fast-lane-isolation-test                :fast
+   'clj-surgeon.gate-obligations-test                   :fast
    'clj-surgeon.helper-extraction-test                  :fast
    'clj-surgeon.lane-manifest-test                      :fast
    'clj-surgeon.mcp-change-buffer-test                  :fast

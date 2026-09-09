@@ -1149,13 +1149,24 @@ alias-migration-test-serial:
 landing-gate:
 	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite gate
 
-.PHONY: landing-gate-prewarm print-gate-stages intent-audit
+.PHONY: landing-gate-prewarm print-gate-stages print-gate-obligations intent-audit
 
 landing-gate-prewarm:
 	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite gate --prewarm true
 
 print-gate-stages:
 	@bb --classpath src:test -m clj-surgeon.battery-parallel-runner --print-gate-stages true
+
+# THE OBLIGATION INVENTORY (Frame 7 item 1, section 4). `print-gate-stages`
+# prints seven NAMES; a consumer built on names alone can only ask whether a
+# receipt named the same seven strings, which a receipt that ran 3 of 49
+# Babashka namespaces answers yes to. This target prints the RESOLVED
+# obligation set -- recipe digests, runtime, the exact selected test
+# identities, declared exclusions, required-input digests and the result
+# predicate -- so a consumer derives what this tree requires and never reads
+# the producer's own list as the expected list.
+print-gate-obligations:
+	@bb --classpath src:test -m clj-surgeon.gate-obligations --print-gate-obligations true
 
 intent-audit:
 	@bb --classpath src:test -e '(require (quote clj-surgeon.mcp-intent-contract)) (let [r (clj-surgeon.mcp-intent-contract/audit-current-repository)] (prn r) (System/exit (if (:ok r) 0 1)))'
