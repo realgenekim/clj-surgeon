@@ -1,0 +1,437 @@
+#!/usr/bin/env bash
+# preservation-replay — build a scratch repository holding a retained clean change
+# and a set of PLANTED defects on top of it, then run bin/preservation-brief over
+# every one of them and print the replay table.
+#
+# The point is falsification: a brief that declares a 141-owner relocation
+# preserved is only useful if it refuses to declare a defective one preserved.
+#
+# usage: bin/preservation-replay [workdir]
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+WORK="${1:-/var/tmp/forge/item3/planted}"
+SRC_REPO=/home/forge/src/curtaincall-cfp
+BASE=d9205abc
+CAND=65ad613b
+
+export GIT_AUTHOR_NAME=forge-anvil GIT_AUTHOR_EMAIL=forge-anvil@anvil
+export GIT_COMMITTER_NAME=forge-anvil GIT_COMMITTER_EMAIL=forge-anvil@anvil
+
+rm -rf "$WORK"; mkdir -p "$WORK/repo" "$WORK/out"
+cd "$WORK/repo"
+git init -q -b main
+git config commit.gpgsign false
+
+snap () { # snap <sha-in-src-repo> <message>
+  find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+  git -C "$SRC_REPO" archive "$1" | tar -x -C .
+  git add -A >/dev/null
+  git commit -qm "$2" --allow-empty
+}
+
+snap "$BASE" "base tree (curtaincall-cfp $BASE)"
+BASE_SHA=$(git rev-parse HEAD)
+snap "$CAND" "clean candidate (curtaincall-cfp $CAND) — the landed Cell C views split"
+CLEAN_SHA=$(git rev-parse HEAD)
+
+plant () { # plant <name> <python-edit-file>
+  git checkout -q -B "d-$1" "$CLEAN_SHA" >/dev/null 2>&1
+  python3 "$2" >&2 || { echo "EDIT FAILED: $1" >&2; exit 1; }
+  git add -A >/dev/null 2>&1
+  git diff --cached --quiet && { echo "PLANT CHANGED NOTHING: $1" >&2; exit 1; }
+  git commit -qm "planted defect: $1" >/dev/null 2>&1
+  git rev-parse HEAD
+  git checkout -q "$CLEAN_SHA" >/dev/null 2>&1
+}
+
+mkdir -p "$WORK/edits"
+
+# ---------------------------------------------------------------- 1. wrong binding
+cat > "$WORK/edits/wrong-binding.py" <<'PY'
+import pathlib
+p = pathlib.Path("src/cfp_scheduler_killer/views/committee.clj")
+s = p.read_text()
+# `committee-page` is :identical-modulo-requalification in the clean row, so the
+# tier delta is unambiguous. The site is requalified to a namespace that exists,
+# is aliased in this file, and does NOT own the name.
+target = '(organizer-layout/header "Create review committee"'
+assert s.count(target) == 1, s.count(target)
+s = s.replace(target, '(format/header "Create review committee"', 1)
+p.write_text(s)
+PY
+
+# ---------------------------------------------------------------- 2. silent promotion
+cat > "$WORK/edits/silent-promotion.py" <<'PY'
+import pathlib
+p = pathlib.Path("src/cfp_scheduler_killer/views/committee.clj")
+s = p.read_text()
+assert "(defn- committee-card" in s
+s = s.replace("(defn- committee-card", "(defn committee-card", 1)
+p.write_text(s)
+PY
+
+# ---------------------------------------------------------------- 3. dropped comment
+cat > "$WORK/edits/dropped-comment.py" <<'PY'
+import pathlib
+p = pathlib.Path("src/cfp_scheduler_killer/views/event_setup.clj")
+s = p.read_text()
+target = "   ;; Never a degenerate address. With no name there is no slug, and the line\n"
+assert target in s
+s = s.replace(target, "", 1)
+p.write_text(s)
+PY
+
+# ---------------------------------------------------------------- 4. omitted owner
+cat > "$WORK/edits/omitted-owner.py" <<'PY'
+import pathlib, re
+p = pathlib.Path("src/cfp_scheduler_killer/views/log.clj")
+s = p.read_text()
+i = s.index("(defn log-summary")
+j = s.index("(defn log-region")
+p.write_text(s[:i] + s[j:])
+PY
+
+# ---------------------------------------------------------------- 5. load-order swap
+cat > "$WORK/edits/load-order-forms.py" <<'PY'
+import pathlib
+# Swap two top-level forms inside a destination file so that the first now names
+# a sibling defined below it. In Clojure this fails at load.
+p = pathlib.Path("src/cfp_scheduler_killer/views/committee.clj")
+s = p.read_text()
+i = s.index("(defn- member-row")
+j = s.index("(defn- committee-card")
+k = s.index("(defn committee-page")
+a, b = s[i:j], s[j:k]
+p.write_text(s[:i] + b + a + s[k:])
+PY
+
+# ---------------------------------------------------------------- 5b. require reorder
+cat > "$WORK/edits/load-order-requires.py" <<'PY'
+import pathlib
+p = pathlib.Path("src/cfp_scheduler_killer/server.clj")
+s = p.read_text()
+lines = s.split("\n")
+req = [i for i, l in enumerate(lines) if l.strip().startswith("[cfp-scheduler-killer.views")]
+assert len(req) >= 2, req
+a, b = req[0], req[1]
+lines[a], lines[b] = lines[b], lines[a]
+p.write_text("\n".join(lines))
+PY
+
+# ------------------------------------------------- 7. local shadow substitution
+# Sol's PB-FENCE-001 falsifier, planted independently of this builder: a bare use
+# of the LOCAL destructured binding `edit-form` is replaced by the moved private
+# Var of the same name. The expressions resolve differently and the brief must not
+# call the body preserved.
+cat > "$WORK/edits/local-shadow.py" <<'PYEOF'
+import pathlib
+p = pathlib.Path("src/cfp_scheduler_killer/views/form_builder.clj")
+s = p.read_text()
+target = "(form-edit-panel event editing edit-form)"
+assert target in s
+s = s.replace(target,
+              "(form-edit-panel event editing cfp-scheduler-killer.views.portal/edit-form)", 1)
+p.write_text(s)
+PYEOF
+
+# ------------------------------------------------------- 8. symlink escape probe
+# Sol's PB-FENCE-002 probe: a tree entry pointing outside the repository. The brief
+# must report it as unclassified and must never read the target.
+cat > "$WORK/edits/symlink-escape.py" <<'PYEOF'
+import pathlib, os
+ext = pathlib.Path("/var/tmp/forge/item3/sol-proof-external.clj")
+ext.write_text("(ns escaped)\n\n(def escaped-owner :should-never-be-read)\n")
+lnk = pathlib.Path("src/leak.clj")
+if lnk.exists() or lnk.is_symlink():
+    lnk.unlink()
+os.symlink(str(ext), str(lnk))
+PYEOF
+
+# --------------------------------------- 9. external library binding macro (paired)
+# Sol's PB-FENCE-005 falsifier. `compojure.core/GET` is a binding macro defined in
+# NEITHER tree and spelled neither `with-*` nor `def*`, so the round-1 denylist let
+# it through. The probe is planted in BOTH trees: the base use is the route
+# binding `header`, the candidate use is the moved Var `organizer-layout/header`.
+# They resolve differently and A must not certify the body.
+cat > "$WORK/edits/extmacro-base.py" <<'PYEOF'
+import pathlib
+p = pathlib.Path("src/cfp_scheduler_killer/views.clj")
+s = p.read_text()
+anchor = "  [event {:keys [committee members member-form person cfp-state]}]\n"
+assert s.count(anchor) == 1, s.count(anchor)
+s = s.replace(anchor, anchor + '  (compojure.core/GET "/probe/:header" [header] header)\n', 1)
+p.write_text(s)
+PYEOF
+
+cat > "$WORK/edits/extmacro-cand.py" <<'PYEOF'
+import pathlib
+p = pathlib.Path("src/cfp_scheduler_killer/views/committee.clj")
+s = p.read_text()
+anchor = "  [event {:keys [committee members member-form person cfp-state]}]\n"
+assert s.count(anchor) == 1, s.count(anchor)
+s = s.replace(anchor,
+              anchor + '  (compojure.core/GET "/probe/:header" [header] organizer-layout/header)\n', 1)
+p.write_text(s)
+PYEOF
+
+plant_on () { # plant_on <branch> <from-sha> <python-edit-file>
+  git checkout -q -B "$1" "$2" >/dev/null 2>&1
+  python3 "$3" >&2 || { echo "EDIT FAILED: $1" >&2; exit 1; }
+  git add -A >/dev/null 2>&1
+  git diff --cached --quiet && { echo "PLANT CHANGED NOTHING: $1" >&2; exit 1; }
+  git commit -qm "planted: $1" >/dev/null 2>&1
+  git rev-parse HEAD
+  git checkout -q "$CLEAN_SHA" >/dev/null 2>&1
+}
+
+EXT_BASE=$(plant_on d-extmacro-base "$BASE_SHA" "$WORK/edits/extmacro-base.py")
+EXT_CAND=$(plant_on d-extmacro-cand "$CLEAN_SHA" "$WORK/edits/extmacro-cand.py")
+
+# ---- Sol round-3 pair rows -------------------------------------------------
+# Each is planted in BOTH trees: the base expression names a binding the head
+# introduces, the candidate expression names the relocated Var. A must not certify.
+cat > "$WORK/edits/pairlib.py" <<'PYEOF'
+import pathlib
+BASE = "src/cfp_scheduler_killer/views.clj"
+CAND = "src/cfp_scheduler_killer/views/committee.clj"
+ANCHOR = "  [event {:keys [committee members member-form person cfp-state]}]\n"
+
+def insert_body(path, snippet):
+    p = pathlib.Path(path); s = p.read_text()
+    assert s.count(ANCHOR) == 1, (path, s.count(ANCHOR))
+    p.write_text(s.replace(ANCHOR, ANCHOR + "  " + snippet + "\n", 1))
+
+def insert_require(path, spec):
+    p = pathlib.Path(path); s = p.read_text()
+    i = s.index("(:require")
+    j = s.index("\n", i)
+    p.write_text(s[:j] + "\n   " + spec + s[j:])
+
+def append_def(path, text):
+    p = pathlib.Path(path)
+    p.write_text(p.read_text() + text)
+PYEOF
+
+mk_pair_edit () { # <outfile> <BASE|CAND> <body-snippet> [require-spec] [extra-python]
+  { echo "import sys, pathlib"
+    echo "sys.path.insert(0, \"$WORK/edits\")"
+    echo "from pairlib import insert_body, insert_require, append_def, BASE, CAND"
+    if [ -n "${4:-}" ]; then echo "insert_require($2, \"\"\"$4\"\"\")"; fi
+    if [ -n "${5:-}" ]; then echo "$5"; fi
+    echo "insert_body($2, \"\"\"$3\"\"\")"
+  } > "$1"
+}
+
+SRVDEF='append_def("src/cfp_scheduler_killer/server.clj",'
+
+# 1. are-binding — PB-FENCE-006: clojure.test/are binds the symbols in its argv
+mk_pair_edit "$WORK/edits/are-binding-base.py" BASE '(are [header] (= header :probe) :probe)'
+mk_pair_edit "$WORK/edits/are-binding-cand.py" CAND '(are [header] (= organizer-layout/header :probe) :probe)'
+
+# 2. uppercase-alias — PB-FENCE-008: a require alias may be uppercase
+mk_pair_edit "$WORK/edits/uppercase-alias-base.py" BASE '(Route/GET "/probe/:header" [header] header)' '[compojure.core :as Route]'
+mk_pair_edit "$WORK/edits/uppercase-alias-cand.py" CAND '(Route/GET "/probe/:header" [header] organizer-layout/header)' '[compojure.core :as Route]'
+
+# 4. referred-testing — PB-FENCE-009: a referred binding macro whose NAME is in a
+# modelled table. Both trees add a binding macro named `testing` to an
+# already-required namespace and refer it; the base names the macro's local
+# binding, the candidate names the relocated Var. Spelling is not identity.
+COMMITTEES=src/cfp_scheduler_killer/committees.clj
+TESTMAC='append_def("'"$COMMITTEES"'", "\n(defmacro testing [bindings & body]\n  `(let ~bindings ~@body))\n")'
+mk_pair_edit "$WORK/edits/referred-testing-base.py" BASE '(testing [header :probe] header)' '[cfp-scheduler-killer.committees :refer [testing]]' "$TESTMAC"
+mk_pair_edit "$WORK/edits/referred-testing-cand.py" CAND '(testing [header :probe] organizer-layout/header)' '[cfp-scheduler-killer.committees :refer [testing]]' "$TESTMAC"
+
+# 3. kind-collision — PB-FENCE-007: base defmacro vs candidate defn, same [ns name]
+mk_pair_edit "$WORK/edits/kind-collision-base.py" BASE '(srv/probe-route header)' '[cfp-scheduler-killer.server :as srv]' \
+  "${SRVDEF} \"\\n(defmacro probe-route [x] x)\\n\")"
+mk_pair_edit "$WORK/edits/kind-collision-cand.py" CAND '(srv/probe-route organizer-layout/header)' '[cfp-scheduler-killer.server :as srv]' \
+  "${SRVDEF} \"\\n(defn probe-route [x] x)\\n\")"
+
+
+# 5/6/7 — PB-FENCE-010: namespace forms the private scanner never parsed.
+COMMITTEES=src/cfp_scheduler_killer/committees.clj
+TESTMAC2='append_def("'"$COMMITTEES"'", "\n(defmacro testing [bindings & body]\n  `(let ~bindings ~@body))\n")'
+
+# refer-all-shadow: [ns :refer :all] supplying a colliding binding macro
+mk_pair_edit "$WORK/edits/refer-all-shadow-base.py" BASE '(testing [header :probe] header)' '[cfp-scheduler-killer.committees :refer :all]' "$TESTMAC2"
+mk_pair_edit "$WORK/edits/refer-all-shadow-cand.py" CAND '(testing [header :probe] organizer-layout/header)' '[cfp-scheduler-killer.committees :refer :all]' "$TESTMAC2"
+
+# use-shadow: the same collision through (:use ...)
+mk_pair_edit "$WORK/edits/use-shadow-base.py" BASE '(testing [header :probe] header)' '[cfp-scheduler-killer.committees]' "$TESTMAC2"
+mk_pair_edit "$WORK/edits/use-shadow-cand.py" CAND '(testing [header :probe] organizer-layout/header)' '[cfp-scheduler-killer.committees]' "$TESTMAC2"
+
+# refer-all-external: :refer :all from a namespace OUTSIDE both trees
+mk_pair_edit "$WORK/edits/refer-all-external-base.py" BASE '(mystery-binder [header :probe] header)' '[compojure.core :refer :all]'
+mk_pair_edit "$WORK/edits/refer-all-external-cand.py" CAND '(mystery-binder [header :probe] organizer-layout/header)' '[compojure.core :refer :all]'
+
+declare -A PAIR_BASE PAIR_CAND
+for pr in are-binding uppercase-alias kind-collision referred-testing refer-all-shadow use-shadow refer-all-external; do
+  PAIR_BASE[$pr]=$(plant_on "d-$pr-base" "$BASE_SHA" "$WORK/edits/$pr-base.py")
+  PAIR_CAND[$pr]=$(plant_on "d-$pr-cand" "$CLEAN_SHA" "$WORK/edits/$pr-cand.py")
+done
+
+# ---- Sol round-6 rows (PB-FENCE-011) ---------------------------------------
+# meta-owner: `^:probe (defn hidden ...)` exists in the BASE only. The private
+# scanner never saw a metadata-prefixed definition, so the omission was invisible.
+cat > "$WORK/edits/meta-owner-base.py" <<'PYEOF'
+import sys, pathlib
+sys.path.insert(0, "REPLACE_EDITS")
+from pairlib import append_def, BASE
+append_def(BASE, "\n^:probe (defn hidden-probe [] :hidden)\n")
+PYEOF
+
+# shapes: every top-level definition shape the resolver and the scanner must agree
+# on, planted in BOTH trees. Each must be named in the brief — as an owner per the
+# resolver, or explicitly as a form that defines no Var — never silently absent.
+SHAPES='\n^:probe (defn meta-shape [] :m)\n(do (def in-do 1))\n(declare declared-shape)\n(defmulti mm-shape identity)\n(defmethod mm-shape :x [_] 1)\n(defprotocol PShape (p-op [this]))\n(definterface IShape (^void iop []))\n'
+cat > "$WORK/edits/shapes-base.py" <<PYEOF
+import sys, pathlib
+sys.path.insert(0, "$WORK/edits")
+from pairlib import append_def, BASE
+append_def(BASE, "$SHAPES")
+PYEOF
+cat > "$WORK/edits/shapes-cand.py" <<PYEOF
+import sys, pathlib
+sys.path.insert(0, "$WORK/edits")
+from pairlib import append_def, CAND
+append_def(CAND, "$SHAPES")
+PYEOF
+sed -i "s|REPLACE_EDITS|$WORK/edits|" "$WORK/edits/meta-owner-base.py"
+
+META_BASE=$(plant_on d-meta-owner-base "$BASE_SHA" "$WORK/edits/meta-owner-base.py")
+PAIR_BASE[shapes]=$(plant_on d-shapes-base "$BASE_SHA" "$WORK/edits/shapes-base.py")
+PAIR_CAND[shapes]=$(plant_on d-shapes-cand "$CLEAN_SHA" "$WORK/edits/shapes-cand.py")
+
+st=$(date +%s.%N)
+"$HERE/preservation-brief" "${PAIR_CAND[shapes]}" "${PAIR_BASE[shapes]}" --repo "$WORK/repo" \
+    --title "shapes" --out "$WORK/out/shapes.md" --json "$WORK/out/shapes.json" >/dev/null || true
+en=$(date +%s.%N)
+echo "shapes  wall $(echo "$en - $st" | bc)s"
+
+declare -A SHAS
+SHAS[clean]="$CLEAN_SHA"
+for d in wrong-binding silent-promotion dropped-comment omitted-owner load-order-forms load-order-requires local-shadow symlink-escape; do
+  SHAS[$d]=$(plant "$d" "$WORK/edits/$d.py")
+done
+
+echo
+echo "base   $BASE_SHA"
+printf '%-22s %s\n' "external-macro base" "$EXT_BASE"
+printf '%-22s %s\n' "external-macro cand" "$EXT_CAND"
+for k in clean wrong-binding silent-promotion dropped-comment omitted-owner load-order-forms load-order-requires local-shadow symlink-escape; do
+  printf '%-22s %s\n' "$k" "${SHAS[$k]}"
+done
+echo
+
+for k in clean wrong-binding silent-promotion dropped-comment omitted-owner load-order-forms load-order-requires local-shadow symlink-escape; do
+  s="${SHAS[$k]}"
+  st=$(date +%s.%N)
+  "$HERE/preservation-brief" "$s" "$BASE_SHA" --repo "$WORK/repo" \
+      --title "$k" --out "$WORK/out/$k.md" --json "$WORK/out/$k.json" >/dev/null || true
+  en=$(date +%s.%N)
+  echo "$k  wall $(echo "$en - $st" | bc)s"
+done
+
+# the external-macro row is a PAIR: its probe exists in both trees
+st=$(date +%s.%N)
+"$HERE/preservation-brief" "$EXT_CAND" "$EXT_BASE" --repo "$WORK/repo" \
+    --title "external-macro" --out "$WORK/out/external-macro.md" \
+    --json "$WORK/out/external-macro.json" >/dev/null || true
+en=$(date +%s.%N)
+echo "external-macro  wall $(echo "$en - $st" | bc)s"
+
+for pr in are-binding uppercase-alias kind-collision referred-testing refer-all-shadow use-shadow refer-all-external; do
+  st=$(date +%s.%N)
+  "$HERE/preservation-brief" "${PAIR_CAND[$pr]}" "${PAIR_BASE[$pr]}" --repo "$WORK/repo" \
+      --title "$pr" --out "$WORK/out/$pr.md" --json "$WORK/out/$pr.json" >/dev/null || true
+  en=$(date +%s.%N)
+  echo "$pr  wall $(echo "$en - $st" | bc)s"
+done
+
+# meta-owner is base-only: the metadata-prefixed Var exists in the base and the
+# clean candidate never had it, so it must surface as an OMITTED owner.
+st=$(date +%s.%N)
+"$HERE/preservation-brief" "$CLEAN_SHA" "$META_BASE" --repo "$WORK/repo" \
+    --title "meta-owner" --out "$WORK/out/meta-owner.md" \
+    --json "$WORK/out/meta-owner.json" >/dev/null || true
+en=$(date +%s.%N)
+echo "meta-owner  wall $(echo "$en - $st" | bc)s"
+
+# ---- Sol round-7 rows (PB-FENCE-012) ---------------------------------------
+# The certification scope must equal the ANALYZER's scope. clj-kondo elaborates
+# :clj and :cljs for .cljc; a Var defined in a branch it does not elaborate is in
+# neither inventory. `cljc-unanalysed` deletes such a Var and must fail closed;
+# `cljc-analysed` is the control — a reader conditional the analyzer does cover
+# must reconcile cleanly.
+CJ="$WORK/cljc"; rm -rf "$CJ"; mkdir -p "$CJ/src"
+( cd "$CJ"
+  git init -q -b main; git config commit.gpgsign false
+  printf '(ns probe)\n\n#?(:bb ^:probe (def hidden 1))\n\n(defn visible [] :v)\n' > src/probe.cljc
+  git add -A >/dev/null; git commit -qm "base: a Var in a platform kondo does not elaborate" >/dev/null
+  printf '(ns probe)\n\n(defn visible [] :v)\n' > src/probe.cljc
+  git add -A >/dev/null; git commit -qm "candidate: that Var is deleted" >/dev/null
+  git checkout -q -B ctl main~1
+  printf '(ns probe)\n\n#?(:clj (def seen 1) :cljs (def seen 2))\n\n(defn visible [] :v)\n' > src/probe.cljc
+  git add -A >/dev/null; git commit -qm "control base" >/dev/null
+  printf '(ns probe)\n\n#?(:clj (def seen 1) :cljs (def seen 2))\n\n(defn visible [] :v2)\n' > src/probe.cljc
+  git add -A >/dev/null; git commit -qm "control candidate" >/dev/null )
+CJ_BASE=$(git -C "$CJ" rev-parse main~1)
+CJ_CAND=$(git -C "$CJ" rev-parse main)
+CJ_CTL_BASE=$(git -C "$CJ" rev-parse ctl~1)
+CJ_CTL_CAND=$(git -C "$CJ" rev-parse ctl)
+
+for spec in "cljc-unanalysed $CJ_CAND $CJ_BASE" "cljc-analysed $CJ_CTL_CAND $CJ_CTL_BASE"; do
+  set -- $spec
+  st=$(date +%s.%N)
+  "$HERE/preservation-brief" "$2" "$3" --repo "$CJ" --roots src \
+      --title "$1" --out "$WORK/out/$1.md" --json "$WORK/out/$1.json" >/dev/null || true
+  en=$(date +%s.%N)
+  echo "$1  wall $(echo "$en - $st" | bc)s"
+done
+
+
+python3 - "$WORK/out" <<'PY'
+import json, sys, pathlib, os
+d = pathlib.Path(sys.argv[1])
+order = ["clean","wrong-binding","silent-promotion","dropped-comment",
+         "omitted-owner","load-order-forms","load-order-requires",
+         "local-shadow","symlink-escape","external-macro",
+         "are-binding","uppercase-alias","kind-collision","referred-testing",
+         "refer-all-shadow","use-shadow","refer-all-external","shapes","meta-owner",
+         "cljc-unanalysed","cljc-analysed"]
+rows = []
+for k in order:
+    j = json.load(open(d / f"{k}.json"))
+    rows.append((k, j))
+cols = [("clear","clear"),("moved","moved"),("preserved_bodies","preserved"),("omitted","omitted"),
+        ("new_owners","new"),("promotions","promo"),("comments_lost","cmt-lost"),
+        ("require_reorders","req-reord"),("require_sort_broken","req-unsorted"),("new_forward_refs","fwd-ref"),
+        ("stale_sites","stale"),("undefined_alias_sites","undef-alias"),("possible_unresolved","bare?"),
+        ("in_place_needs_review","inplace-rev"),("reconcile_failures","recon"),
+        ("declares","decl"),("no_var_forms","novar"),("reader_conditionals","cond"),
+        ("wall_ms","wall ms")]
+hdr = "| change | " + " | ".join(c[1] for c in cols) + " |"
+print(hdr)
+print("|" + "---|" * (len(cols)+1))
+for k, j in rows:
+    def fmt(key):
+        v = j.get(key)
+        return f"{v:.0f}" if key == "wall_ms" else str(v)
+    print(f"| {k} | " + " | ".join(fmt(c[0]) for c in cols) + " |")
+print()
+base = dict(rows)["clean"]
+print("NOTE: the external-macro row is a PAIR (its probe is planted in both trees), so its")
+print("counters are not comparable to clean; read its own tier line below.")
+print()
+for k, j in rows[1:]:
+    delta = {kk: (base.get(kk), j.get(kk)) for kk in base
+             if isinstance(base.get(kk), int) and base.get(kk) != j.get(kk)}
+    tiers = (base.get("tiers"), j.get("tiers"))
+    if k in ("external-macro","are-binding","uppercase-alias","kind-collision","referred-testing",
+             "refer-all-shadow","use-shadow","refer-all-external","shapes","meta-owner"):
+        print(f"    [PAIR] {k} tiers={j.get('tiers')} preserved={j.get('preserved_bodies')} unmodelled={len(j.get('unmodelled_macros') or [])}")
+    print(f"{k}: changed counters vs clean = {delta}")
+    if tiers[0] != tiers[1]:
+        print(f"    tiers clean={tiers[0]} defect={tiers[1]}")
+PY
