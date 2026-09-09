@@ -795,16 +795,27 @@
                                  ;; is now a typed refusal downstream, so silence here would
                                  ;; refuse every landing rather than pass one.
                                  true
-                                 (assoc :inputs-manifest {:path "target/gate-obligations.edn"
-                                                          :sha256 (tc/sha256 obligation-bytes)
-                                                          :bytes (count (.getBytes ^String obligation-bytes "UTF-8"))}
+                                 (assoc :inputs-manifest
+                                        ;; SOL-EC-006: the manifest must ACCOUNT FOR the inputs the
+                                        ;; tree names, entry by entry, not merely exist. The runner
+                                        ;; has the inventory in hand, so it writes the entries it
+                                        ;; actually read rather than a pointer to a file that lists
+                                        ;; them.
+                                        {:path "target/gate-obligations.edn"
+                                         :sha256 (tc/sha256 obligation-bytes)
+                                         :bytes (count (.getBytes ^String obligation-bytes "UTF-8"))
+                                         :entries (vec (:required-inputs obl))}
                                         :environment-manifest
-                                        {:selected (into (sorted-map)
-                                                         (for [k ["JAVA_TOOL_OPTIONS" "CLJ_SURGEON_GATE_RUN_ID"
-                                                                  "MAKELEVEL" "PATH" "SHELL" "LANG"]
-                                                               :let [v (System/getenv k)] :when v]
-                                                           [k (tc/sha256 v)]))
-                                         :basis "policy-selected keys, values digested"})
+                                        ;; ACCOUNTED FOR, not merely present: a key that is
+                                        ;; unset cannot be digested, and omitting it would be
+                                        ;; indistinguishable from a manifest that quietly
+                                        ;; shrank. So an unset key is NAMED as unset.
+                                        (let [ks (:keys gob/environment-policy)]
+                                          {:selected (into (sorted-map)
+                                                           (for [k ks :let [v (System/getenv k)] :when v]
+                                                             [k (tc/sha256 v)]))
+                                           :unset (vec (sort (remove #(System/getenv %) ks)))
+                                           :basis (:basis gob/environment-policy)}))
 
                                  sr
                                  (assoc :executed-tests (vec (sort (distinct (map (comp str :namespace) (:runs sr)))))

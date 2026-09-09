@@ -229,7 +229,7 @@
   "What a suite stage has to have PRODUCED, not merely reported. `:skipped-preconditions 0`
    is R's landing policy (section 4: \"R's landing required-suite skipped-precondition
    policy is zero; declaration does not waive it\")."
-  {:exit 0 :failures 0 :errors 0 :isolation-violations 0
+  {:exit 0 :failures 0 :errors 0 :isolation-violations 0 :leaks 0
    :skipped-preconditions 0 :unexecuted-tests [] :coverage :complete})
 
 (defn obligations
@@ -281,7 +281,10 @@
                        :must-be-ancestor true}}
       :exclusions []
       :result-predicate {:exit 0 :ledger-readable true :ledger-passing true}
-      :discharge {:by :execution-evidence
+      ;; R2 IS DISCHARGED BY THE LANDING BOX, and the inventory says so rather
+      ;; than the consumer knowing it privately. A rule that lives in one reader's
+      ;; head is the same defect as a hand-written members list.
+      :discharge {:by :landing-box-execution
                   :note (str "Freshness is a fact about the CURRENT clock and the "
                              "actual candidate history. A historical passing battery is "
                              "the policy's evidence, not proof that the battery just ran.")}}
@@ -298,6 +301,8 @@
       :scope {:kind :whole-namespaces :count (count alias-ns)}
       :exclusions []
       :result-predicate result-predicate-suite
+      :evidence-required [:vars-census :closure-basis :fixture-identities]
+      :closure-basis "discovered-namespaces-v1"
       :discharge {:by :execution-evidence
                   :note "Runs at EVERY landing; battery freshness cannot substitute."}}
 
@@ -325,6 +330,8 @@
                         :evidence-required
                         [:per-check-executions :executed-vars]})
       :result-predicate result-predicate-suite
+      :evidence-required [:vars-census :closure-basis :fixture-identities :nested-executions]
+      :closure-basis "discovered-namespaces-v1"
       :discharge {:by :execution-evidence
                   :note "A pool exit alone is insufficient; the loaded Var census and the union isolation budget are part of the claim."}}
 
@@ -339,7 +346,9 @@
       :selected-test-identities (ns-names bb-ns)
       :scope {:kind :whole-namespaces :count (count bb-ns)}
       :exclusions []
-      :result-predicate (assoc result-predicate-suite :temp-leaks 0)
+      :result-predicate result-predicate-suite
+      :evidence-required [:vars-census :closure-basis :fixture-identities]
+      :closure-basis "discovered-namespaces-v1"
       :discharge {:by :execution-evidence
                   :note "The JVM coordinator is not the BB execution runtime. JVM tests of the same source do not discharge BB compatibility."}}
 
@@ -371,7 +380,14 @@
       :selected-test-identities []
       :scope {:kind :registry-and-annotations}
       :exclusions []
-      :result-predicate {:exit 0 :ok true :violations []}
+      ;; The RECIPE maps the audit result onto the exit code --
+      ;; `(System/exit (if (:ok r) 0 1))` in the `intent-audit` rule -- so exit 0
+      ;; IS `:ok true` with `:violations []`, derived from the rule rather than
+      ;; asserted twice. Naming `:ok`/`:violations` here as well would demand a
+      ;; field the coordinator never records and refuse every landing on a fact
+      ;; the exit code already carries.
+      :result-predicate {:exit 0}
+      :predicate-basis "the recipe exits non-zero unless :ok is true"
       :discharge {:by :execution-evidence
                   :note "The exact audit RESULT on this candidate; a quoted historical \"audit-ok\" is not the audit."}}
 
@@ -443,6 +459,14 @@
                                      is)))))
         obs))
 
+(def environment-policy
+  "The environment keys a gate execution must account for. Sol SOL-EC-006: the
+   consumer checked that `:environment-manifest` was PRESENT and never that it
+   carried anything, so `{}` passed. Naming the keys HERE means both sides read
+   the same list from the same tree, and neither can shrink it privately."
+  {:keys ["JAVA_TOOL_OPTIONS" "CLJ_SURGEON_GATE_RUN_ID" "MAKELEVEL" "PATH" "SHELL" "LANG"]
+   :basis "policy-selected keys, values digested"})
+
 (defn inventory
   "The printable inventory. `:policy-sha256` moves when a recipe, a selected
    namespace, an exclusion, a required input or a predicate moves; it does not
@@ -451,6 +475,7 @@
   (let [obs (obligations policy)]
     {:inventory-version 1
      :kind :gate-obligations
+     :environment-policy environment-policy
      :stage-manifest (vec (:stage-manifest policy))
      :policy-sha256 (sha256 (pr-str (volatile-free obs)))
      :obligations obs}))
