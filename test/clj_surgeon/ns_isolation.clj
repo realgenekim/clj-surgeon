@@ -34,8 +34,8 @@
    reads `/proc`, because a witness that spawns a child to prove no child was
    spawned is the verifier being blind to its own subject."
   (:require
-   [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clj-surgeon.spawn-ledger :as spawn]
+   [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.java.io :as io]
    [clojure.set :as set]
    [clojure.string :as str])
@@ -98,6 +98,14 @@
     ;; contention on a shared box does not manufacture a refusal while a
     ;; namespace that has genuinely doubled still says so.
     clj-surgeon.mcp-feature-thread-test 90000
+    ;; TEST-ISO-007, gate lanes round two (2026-09-09): whole-namespace
+    ;; System/nanoTime snapshots measured 8,002 ms at width four and 8,836 ms
+    ;; at width eight. Real relation fixtures plus isolation snapshots pay
+    ;; scheduler contention. 18 s is ~2x that witnessed 8.836 s, following
+    ;; the integration margin above. Keep wall measurement and the separate
+    ;; 60 s fast-lane union ceiling; do not substitute per-thread CPU time,
+    ;; which omits waits and work delegated to other threads.
+    clj-surgeon.mcp-compact-relations-test 18000
     ;; MEASURED: 464.9 s in the suite spike's round one (local, load 5.18, 19-22 JVMs),
     ;; 466.9 s on 2026-09-05 02:43Z (battery lane, cores 6-9, peer full gate on the
     ;; same host), and 494 s reported by the CI run (secondary; its load is not
@@ -405,16 +413,16 @@
   []
   (into {}
         (comp
-         (mapcat (fn [p]
-                   (when-let [text (read-proc-file p)]
-                     (rest (str/split-lines text)))))
-         (keep (fn [line]
-                 (let [cols (str/split (str/trim line) #"\s+")]
-                   (when (and (>= (count cols) 10) (= "0A" (nth cols 3)))
-                     (let [local (nth cols 1)
-                           port (Long/parseLong (second (str/split local #":")) 16)
-                           inode (Long/parseLong (nth cols 9))]
-                       [inode port]))))))
+          (mapcat (fn [p]
+                    (when-let [text (read-proc-file p)]
+                      (rest (str/split-lines text)))))
+          (keep (fn [line]
+                  (let [cols (str/split (str/trim line) #"\s+")]
+                    (when (and (>= (count cols) 10) (= "0A" (nth cols 3)))
+                      (let [local (nth cols 1)
+                            port (Long/parseLong (second (str/split local #":")) 16)
+                            inode (Long/parseLong (nth cols 9))]
+                        [inode port]))))))
         ["/proc/net/tcp" "/proc/net/tcp6"]))
 
 (defn own-listeners
@@ -554,18 +562,18 @@
                     (remove (comp new-pids :pid))
                     (remove #(allowlisted-spawn? ns-sym (:command %))))]
     (into
-     (mapv (fn [pid]
-             (violation "TEST-ISO-002" ns-sym "process spawn"
-                        (format "pid %d is a live descendant that did not exist before this namespace ran: %s"
-                                pid (get-in after [:processes pid]))))
-           (sort new-pids))
-     (mapv (fn [{:keys [pid command]}]
-             (violation "TEST-ISO-002" ns-sym "process spawn"
-                        (format (str "pid %d was launched by this namespace through a "
-                                     "repository spawn helper and has already exited, so no "
-                                     "live-descendant snapshot can see it: %s")
-                                pid command)))
-           exited))))
+      (mapv (fn [pid]
+              (violation "TEST-ISO-002" ns-sym "process spawn"
+                         (format "pid %d is a live descendant that did not exist before this namespace ran: %s"
+                                 pid (get-in after [:processes pid]))))
+            (sort new-pids))
+      (mapv (fn [{:keys [pid command]}]
+              (violation "TEST-ISO-002" ns-sym "process spawn"
+                         (format (str "pid %d was launched by this namespace through a "
+                                      "repository spawn helper and has already exited, so no "
+                                      "live-descendant snapshot can see it: %s")
+                                 pid command)))
+            exited))))
 
 (defn- entry-diff
   "Names that appeared, or whose stamp moved, between two `dir-entries` maps."
@@ -583,26 +591,26 @@
   [ns-sym before after]
   (let [own (namespace-tmp-dir-name ns-sym)]
     (vec
-     (concat
-      (for [n (entry-diff (:tmp-entries before) (:tmp-entries after))
-            :when (and (not= n own) (not (structural-tmp-entries n)))]
-        (violation "TEST-ISO-003" ns-sym "temp root"
-                   (format "%s appeared or changed directly under java.io.tmpdir (%s); a fast-lane namespace may write only inside its own subdir %s"
-                           n (System/getProperty "java.io.tmpdir") own)))
-      (for [n (entry-diff (:target-entries before) (:target-entries after))]
-        (violation "TEST-ISO-003" ns-sym "target/"
-                   (format "target/%s appeared or changed; the build output is shared by every lane running from this checkout" n)))
-      (let [b (:worktree before) a (:worktree after)
-            added (sort (remove (set (keys b)) (keys a)))
-            removed (sort (remove (set (keys a)) (keys b)))
-            changed (sort (keep (fn [[k v]] (when (and (contains? b k) (not= v (get b k))) k)) a))]
-        (concat
-         (for [p added] (violation "TEST-ISO-003" ns-sym "working tree"
-                                   (format "%s was created in the repository working tree" p)))
-         (for [p removed] (violation "TEST-ISO-003" ns-sym "working tree"
-                                     (format "%s was deleted from the repository working tree" p)))
-         (for [p changed] (violation "TEST-ISO-003" ns-sym "working tree"
-                                     (format "%s was modified in the repository working tree" p)))))))))
+      (concat
+        (for [n (entry-diff (:tmp-entries before) (:tmp-entries after))
+              :when (and (not= n own) (not (structural-tmp-entries n)))]
+          (violation "TEST-ISO-003" ns-sym "temp root"
+                     (format "%s appeared or changed directly under java.io.tmpdir (%s); a fast-lane namespace may write only inside its own subdir %s"
+                             n (System/getProperty "java.io.tmpdir") own)))
+        (for [n (entry-diff (:target-entries before) (:target-entries after))]
+          (violation "TEST-ISO-003" ns-sym "target/"
+                     (format "target/%s appeared or changed; the build output is shared by every lane running from this checkout" n)))
+        (let [b (:worktree before) a (:worktree after)
+              added (sort (remove (set (keys b)) (keys a)))
+              removed (sort (remove (set (keys a)) (keys b)))
+              changed (sort (keep (fn [[k v]] (when (and (contains? b k) (not= v (get b k))) k)) a))]
+          (concat
+            (for [p added] (violation "TEST-ISO-003" ns-sym "working tree"
+                                      (format "%s was created in the repository working tree" p)))
+            (for [p removed] (violation "TEST-ISO-003" ns-sym "working tree"
+                                        (format "%s was deleted from the repository working tree" p)))
+            (for [p changed] (violation "TEST-ISO-003" ns-sym "working tree"
+                                        (format "%s was modified in the repository working tree" p)))))))))
 
 (defn listener-violations
   "@spec TEST-ISO-004 -- a socket this JVM is still listening on that it was
@@ -643,13 +651,13 @@
    and each entry there carries its reason."
   [ns-sym before after allowlist reloads]
   (vec
-   (concat
-    (root-identity-violations ns-sym before after reloads)
-    (for [[sym h] (:globals after)
-          :let [b (get (:globals before) sym ::absent)]
-          :when (and (not= b ::absent) (not= b h) (not (contains? allowlist sym)))]
-      (violation "TEST-ISO-005" ns-sym "global container"
-                 (format "the value held by #'%s changed across this namespace; if that is legitimate, add it to clj-surgeon.ns-isolation/mutable-global-allowlist WITH the reason" sym))))))
+    (concat
+      (root-identity-violations ns-sym before after reloads)
+      (for [[sym h] (:globals after)
+            :let [b (get (:globals before) sym ::absent)]
+            :when (and (not= b ::absent) (not= b h) (not (contains? allowlist sym)))]
+        (violation "TEST-ISO-005" ns-sym "global container"
+                   (format "the value held by #'%s changed across this namespace; if that is legitimate, add it to clj-surgeon.ns-isolation/mutable-global-allowlist WITH the reason" sym))))))
 
 (defn budget-violations
   "@spec TEST-ISO-007"
