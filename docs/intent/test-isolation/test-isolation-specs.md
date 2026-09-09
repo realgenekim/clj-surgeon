@@ -55,11 +55,13 @@ document rather than a memory.
 - [x] **TEST-ISO-001b**: Partitioning shall never become dropping: the 49
   namespaces round one measured shall all remain in some lane, checked
   against a pinned set, so that a green suite with less in it is
-  impossible. The corpus shall only ever GROW against round one's measured
-  865 tests, and the growth shall be shown as arithmetic at the pin: the 49
-  measured namespaces declare at least 865 tests today, every namespace in a
-  lane that round one did not measure is enumerated with its exact test
-  count, and the two shall sum to the manifest's total.
+  impossible. The test corpus shall be recorded member by member in a sorted
+  ledger of fully qualified deftest names; disagreement with the tree shall
+  name additions and removals, and a reviewer shall read the ledger diff before
+  accepting regeneration. The round-one and subsequently adopted namespace
+  sets shall partition the manifest exactly, with their test totals and the
+  manifest total derived from the tree rather than compared with a remembered
+  corpus count.
   *Witness:* `.../the-partition-drops-nothing-round-one-measured`,
   `.../the-corpus-only-ever-grows-and-the-arithmetic-is-shown`.
 

@@ -725,6 +725,7 @@
        (if (seq (:added diff)) (str/join ", " (:added diff)) "none")
        ". In the ledger but NO LONGER DECLARED (" (count (:removed diff)) "): "
        (if (seq (:removed diff)) (str/join ", " (:removed diff)) "none")
+       ". After regenerating, READ THE LEDGER DIFF before committing it"
        ". A removed name is a deleted test -- say why, or restore it. A removed "
        "AND an added name together is a rename, which the count ledger this "
        "replaced could not see. Then regenerate: " regenerate-entrance))
@@ -750,6 +751,10 @@
       (is (str/includes? msg "MAKELEVEL"))
       (is (str/includes? msg "NOTHING WAS WRITTEN"))
       (is (str/includes? msg regenerate-entrance))))
+  (testing "a mismatch sends the reviewer back to the named ledger diff"
+    (let [msg (census-ledger-message {:added ['fixture/new]
+                                      :removed ['fixture/old]})]
+      (is (str/includes? msg "READ THE LEDGER DIFF"))))
   (testing "no request, no write -- inside make or outside it"
     (is (= :skip (regenerate-decision {})))
     (is (= :skip (regenerate-decision {"MAKELEVEL" "0"})))
