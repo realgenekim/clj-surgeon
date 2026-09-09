@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+# preservation-replay — build a scratch repository holding a retained clean change
+# and a set of PLANTED defects on top of it, then run bin/preservation-brief over
+# every one of them and print the replay table.
+#
+# The point is falsification: a brief that declares a 141-owner relocation
+# preserved is only useful if it refuses to declare a defective one preserved.
+#
+# usage: bin/preservation-replay [workdir]
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+WORK="${1:-/var/tmp/forge/item3/planted}"
+SRC_REPO=/home/forge/src/curtaincall-cfp
+BASE=d9205abc
+CAND=65ad613b
+
+export GIT_AUTHOR_NAME=forge-anvil GIT_AUTHOR_EMAIL=forge-anvil@anvil
+export GIT_COMMITTER_NAME=forge-anvil GIT_COMMITTER_EMAIL=forge-anvil@anvil
+
+rm -rf "$WORK"; mkdir -p "$WORK/repo" "$WORK/out"
+cd "$WORK/repo"
+git init -q -b main
+git config commit.gpgsign false
+
+snap () { # snap <sha-in-src-repo> <message>
+  find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+  git -C "$SRC_REPO" archive "$1" | tar -x -C .
+  git add -A >/dev/null
+  git commit -qm "$2" --allow-empty
+}
+
+snap "$BASE" "base tree (curtaincall-cfp $BASE)"
+BASE_SHA=$(git rev-parse HEAD)
+snap "$CAND" "clean candidate (curtaincall-cfp $CAND) — the landed Cell C views split"
+CLEAN_SHA=$(git rev-parse HEAD)
+
+plant () { # plant <name> <python-edit-file>
+  git checkout -q -B "d-$1" "$CLEAN_SHA" >/dev/null 2>&1
+  python3 "$2" >&2 || { echo "EDIT FAILED: $1" >&2; exit 1; }
+  git add -A >/dev/null 2>&1
+  git diff --cached --quiet && { echo "PLANT CHANGED NOTHING: $1" >&2; exit 1; }
+  git commit -qm "planted defect: $1" >/dev/null 2>&1
+  git rev-parse HEAD
+  git checkout -q "$CLEAN_SHA" >/dev/null 2>&1
+}
+
+mkdir -p "$WORK/edits"
+
+# ---------------------------------------------------------------- 1. wrong binding
+cat > "$WORK/edits/wrong-binding.py" <<'PY'
+import pathlib
+p = pathlib.Path("src/cfp_scheduler_killer/views/committee.clj")
+s = p.read_text()
+assert s.count("avatar/pool-face") == 1, s.count("avatar/pool-face")
+# The relocated body is requalified to a namespace that does not own the name.
+s = s.replace("avatar/pool-face", "organizer-layout/pool-face")
+p.write_text(s)
+PY
+
+# ---------------------------------------------------------------- 2. silent promotion
+cat > "$WORK/edits/silent-promotion.py" <<'PY'
+import pathlib
+p = pathlib.Path("src/cfp_scheduler_killer/views/committee.clj")
+s = p.read_text()
+assert "(defn- committee-card" in s
+s = s.replace("(defn- committee-card", "(defn committee-card", 1)
+p.write_text(s)
+PY
+
+# ---------------------------------------------------------------- 3. dropped comment
+cat > "$WORK/edits/dropped-comment.py" <<'PY'
+import pathlib
+p = pathlib.Path("src/cfp_scheduler_killer/views/event_setup.clj")
+s = p.read_text()
+target = "   ;; Never a degenerate address. With no name there is no slug, and the line\n"
+assert target in s
+s = s.replace(target, "", 1)
+p.write_text(s)
+PY
+
+# ---------------------------------------------------------------- 4. omitted owner
+cat > "$WORK/edits/omitted-owner.py" <<'PY'
+import pathlib, re
+p = pathlib.Path("src/cfp_scheduler_killer/views/log.clj")
+s = p.read_text()
+i = s.index("(defn log-summary")
+j = s.index("(defn log-region")
+p.write_text(s[:i] + s[j:])
+PY
+
+# ---------------------------------------------------------------- 5. load-order swap
+cat > "$WORK/edits/load-order-forms.py" <<'PY'
+import pathlib
+# Swap two top-level forms inside a destination file so that the first now names
+# a sibling defined below it. In Clojure this fails at load.
+p = pathlib.Path("src/cfp_scheduler_killer/views/committee.clj")
+s = p.read_text()
+i = s.index("(defn- member-row")
+j = s.index("(defn- committee-card")
+k = s.index("(defn committee-page")
+a, b = s[i:j], s[j:k]
+p.write_text(s[:i] + b + a + s[k:])
+PY
+
+# ---------------------------------------------------------------- 5b. require reorder
+cat > "$WORK/edits/load-order-requires.py" <<'PY'
+import pathlib
+p = pathlib.Path("src/cfp_scheduler_killer/server.clj")
+s = p.read_text()
+lines = s.split("\n")
+req = [i for i, l in enumerate(lines) if l.strip().startswith("[cfp-scheduler-killer.views")]
+assert len(req) >= 2, req
+a, b = req[0], req[1]
+lines[a], lines[b] = lines[b], lines[a]
+p.write_text("\n".join(lines))
+PY
+
+declare -A SHAS
+SHAS[clean]="$CLEAN_SHA"
+for d in wrong-binding silent-promotion dropped-comment omitted-owner load-order-forms load-order-requires; do
+  SHAS[$d]=$(plant "$d" "$WORK/edits/$d.py")
+done
+
+echo
+echo "base   $BASE_SHA"
+for k in clean wrong-binding silent-promotion dropped-comment omitted-owner load-order-forms load-order-requires; do
+  printf '%-22s %s\n' "$k" "${SHAS[$k]}"
+done
+echo
+
+for k in clean wrong-binding silent-promotion dropped-comment omitted-owner load-order-forms load-order-requires; do
+  s="${SHAS[$k]}"
+  st=$(date +%s.%N)
+  "$HERE/preservation-brief" "$s" "$BASE_SHA" --repo "$WORK/repo" \
+      --title "$k" --out "$WORK/out/$k.md" --json "$WORK/out/$k.json" >/dev/null
+  en=$(date +%s.%N)
+  echo "$k  wall $(echo "$en - $st" | bc)s"
+done
+
+python3 - "$WORK/out" <<'PY'
+import json, sys, pathlib, os
+d = pathlib.Path(sys.argv[1])
+order = ["clean","wrong-binding","silent-promotion","dropped-comment",
+         "omitted-owner","load-order-forms","load-order-requires"]
+rows = []
+for k in order:
+    j = json.load(open(d / f"{k}.json"))
+    rows.append((k, j))
+cols = [("moved","moved"),("preserved_bodies","preserved"),("omitted","omitted"),
+        ("new_owners","new"),("promotions","promo"),("comments_lost","cmt-lost"),
+        ("require_reorders","req-reord"),("require_sort_broken","req-unsorted"),("new_forward_refs","fwd-ref"),
+        ("stale_sites","stale"),("undefined_alias_sites","undef-alias"),("possible_unresolved","bare?"),
+        ("in_place_needs_review","inplace-rev"),("wall_ms","wall ms")]
+hdr = "| change | " + " | ".join(c[1] for c in cols) + " |"
+print(hdr)
+print("|" + "---|" * (len(cols)+1))
+for k, j in rows:
+    def fmt(key):
+        v = j.get(key)
+        return f"{v:.0f}" if key == "wall_ms" else str(v)
+    print(f"| {k} | " + " | ".join(fmt(c[0]) for c in cols) + " |")
+print()
+base = dict(rows)["clean"]
+for k, j in rows[1:]:
+    delta = {kk: (base.get(kk), j.get(kk)) for kk in base
+             if isinstance(base.get(kk), int) and base.get(kk) != j.get(kk)}
+    tiers = (base.get("tiers"), j.get("tiers"))
+    print(f"{k}: changed counters vs clean = {delta}")
+    if tiers[0] != tiers[1]:
+        print(f"    tiers clean={tiers[0]} defect={tiers[1]}")
+PY
