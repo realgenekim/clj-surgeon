@@ -284,13 +284,15 @@
    clojure.main -m <main-ns>` under a real JVM (avoids re-running the
    slower `clojure` CLI / deps resolution; the classpath this process
    already resolved is exactly the one the child needs)."
-  [{:keys [bb-script main-ns isolate-home?]} tmp-root args]
+  [{:keys [bb-script main-ns isolate-home? bb-heap-mib]} tmp-root args]
   (let [args (mapv str args)
         ;; @spec TEST-ISO-006
         home-flags (when isolate-home?
                      [(str "-Duser.home=" (isolated-home tmp-root))])]
     (if (bb-runtime?)
-      (into (into ["bb" (str "-Djava.io.tmpdir=" tmp-root)] home-flags)
+      (into (into (cond-> ["bb"]
+                    bb-heap-mib (conj (str "-Xmx" bb-heap-mib "m"))
+                    true (conj (str "-Djava.io.tmpdir=" tmp-root))) home-flags)
             (into [bb-script] args))
       (into (into ["java" "-cp" (System/getProperty "java.class.path")]
                   (into (conj (parent-jvm-options) (str "-Djava.io.tmpdir=" tmp-root))

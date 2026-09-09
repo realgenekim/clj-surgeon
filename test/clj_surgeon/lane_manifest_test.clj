@@ -91,7 +91,6 @@
               (re-seq #"clj-surgeon\.[a-z0-9.\-]+-test"
                       (slurp (io/file "test" "run_all.clj")))))))
 
-
 ;; ---------------------------------------------------------------------------
 ;; @spec TEST-ISO-015
 ;; INTENT: TEST-ISO-015
@@ -352,12 +351,14 @@
                (when (> (count wrong) 10) " ..."))))))
 
 (deftest loaded-namespaces-carry-their-lane-at-runtime
-  (testing "the metadata survives loading -- a source scan alone is a spelling"
-    (doseq [[s lane] lm/manifest
-            :when (find-ns s)]
-      (is (= lane (:lane (meta (find-ns s))))
-          (str s " is loaded but its runtime ns metadata :lane is "
-               (pr-str (:lane (meta (find-ns s)))))))))
+  (testing "loaded metadata agrees; one conditional assertion per manifest row"
+    ;; @spec TEST-ISO-015 -- loaded membership varies by process partition.
+    ;; The predicate is unchanged; its assertion count cannot depend on which
+    ;; other namespaces share this JVM. The runner checks every selected ns too.
+    (doseq [[s lane] lm/manifest]
+      (let [loaded (find-ns s)]
+        (is (or (nil? loaded) (= lane (:lane (meta loaded))))
+            (str s " when loaded must carry :lane " lane))))))
 
 (deftest the-runner-refuses-an-undeclared-namespace
   (testing "an undeclared namespace is a typed refusal, never a silent skip"
@@ -566,54 +567,54 @@
    recover. Keyed by namespace name, so two branches adopting different
    namespaces merge without touching the same line."
   '#{clj-surgeon.receipt-artifacts-boundary-test ; Sol r10 + two Row 5 real-process witnesses (battery).
-    clj-surgeon.namespace-split-test ; Batch 5 adds six ns/footprint/lint/encoding witnesses; derived by deftest-count.
-    clj-surgeon.namespace-split-warm-test ; Batch 5 adds executed load/failed destination facts to the real nREPL matrix.
-    clj-surgeon.mcp-namespace-split-test ; Batch 5 adds text ordering, absent-probe honesty and malformed UTF-8 refusal.
-    clj-surgeon.split-proof-gate-test ; Batch 3 pure status/state matrix, plus Sol's a9da4344 temp-root admission and receipt-ceiling witnesses.
-    clj-surgeon.split-proof-gate-boundary-test ; Batch 3 detached worker and caller-exit boundaries, plus Sol's a9da4344 worker-identity boundary.
-    clj-surgeon.cell-b-oracle-test ; B07: shell lint mutation test and independent partial-preservation mutants; battery (Python subprocess).
-    clj-surgeon.mcp-expect-guard-test ; `expect` is a guard on both write routes, not discarded bookkeeping (dogfood-3, 2026-09-07).
-    clj-surgeon.outline-corpus-integration-test ; MOVED: full repository differential out of the bounded fast namespace.
-    clj-surgeon.mission-candidate-race-test ; Completion-order delivery, bounded cancellation and retained results.
-    clj-surgeon.mission-events-test ; Public completion events and isolated logging failure.
-    clj-surgeon.mission-phase-events-test ; Actual phase receipts, identity and isolated logging failure.
-    clj-surgeon.mission-provider-fallback-events-test ; Actual dispatched fallback, thread context and isolated logging.
-    clj-surgeon.mission-display-test ; Add historical nested refusal and incompatible-example witnesses.
-    clj-surgeon.mission-fallback-test ; Explicit report, actual event write and unchanged proof.
-    clj-surgeon.mission-git-identity-test ; Explicit seat author/committer survive subprocess sanitization.
-    clj-surgeon.mission-git-submodule-test ; Git config cannot hide staged gitlinks from scope guard.
-    clj-surgeon.mission-publication-test ; Durable publication intent blocks silent source undo.
-    clj-surgeon.mission-git-test ; Pure Git provenance contract.
-    clj-surgeon.mission-git-boundary-test ; Git tree and staged path boundaries.
-    clj-surgeon.mission-git-fence-test ; Identity and refusal witnesses.
-    clj-surgeon.mission-git-process-test ; Bounded subprocess lifecycle.
-    clj-surgeon.mission-git-ledger-test ; Saved receipt authority.
-    clj-surgeon.mission-commit-cli-test ; Actual public command behavior.
-    clj-surgeon.mission-usage-test ; Observed legacy/attempt usage and unknowns.
-    clj-surgeon.mission-typist-executor-admission-test ; Unsupported adapter refused before readiness.
-    clj-surgeon.mission-usage-executor-test ; Saved success/refusal usage snapshots.
-    clj-surgeon.mission-run-test ; One-process saved plan, refusal and CLI boundaries.
-    clj-surgeon.mission-test ; Adopt existing ledger orphan plus owner-forms routing and recovery witnesses.
-    clj-surgeon.mission-typist-test ; Pure routing/dossier and frozen generation policy boundaries.
-    clj-surgeon.mission-candidate-test ; Frozen span lowering boundaries.
-    clj-surgeon.mission-plain-forms-test ; Bounded raw definition decoding and actual escaping failure.
-    clj-surgeon.mission-forms-test ; Owner identity, protected syntax and lost-comment refusal.
-    clj-surgeon.mission-forms-source-test ; Strict comment text/attachment, whitespace identity and owner sentinel.
-    clj-surgeon.mission-typist-executor-test ; Add candidate diagnostic survival to proof/commit/undo and saved fallback forwarding.
-    clj-surgeon.battery-ledger-test ; TEST-ISO-009a/b: add strict archive classification and preserved failure/audit authority.
-    clj-surgeon.battery-parallel-test ; TEST-ISO-013: the battery lane run as N JVM lanes -- schedule, lane-failure classifier, shard fold, prerequisite DAG. TEST-ISO-014 (5cdd5dcc) adds two: launcher-matrix-cells-remain-independently-shardable and grouped-shards-retain-measured-per-deftest-walls.
-    clj-surgeon.require-change-test ; Pure standalone require intent and strict natural-layout refusal witnesses.
-    clj-surgeon.require-change-boundary-test ; Actual CLI/profile processes, confined publication, independent oracle and undo.
-    clj-surgeon.fast-lane-isolation-test ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
-    clj-surgeon.lane-manifest-test ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses + TEST-ISO-015's fixture-tree census witness (2026-09-09), a-namespace-in-the-tree-but-absent-from-the-census-is-named
-    clj-surgeon.mcp-formatter-test ; the adopted orphan (round three)
-    clj-surgeon.mcp-feature-thread-test ; the trunk's `feature_thread` verb, adopted at round five's MCP/main merge
-    clj-surgeon.mcp-feature-thread-sed-test ; MOVED, not new (round five): its one `sed` cross-check, out of :fast into :battery
-    clj-surgeon.mcp-inspect-cold-job-test ; MOVED, not new (round five): the one inspect-tool test that drives /bin/sh, out of :fast into :battery
-    clj-surgeon.ns-isolation-test ; TEST-ISO-002/003/004/005/007/010's witnesses (round four) + round five's four spawn-ledger witnesses
-    clj-surgeon.helper-extraction-test ; MCP-OP-HELPER's pure planner witnesses, enrolled into :fast when the planner went green (it requires only the planner, the fixture and clojure.test, and spawns nothing)
-    clj-surgeon.telemetry-events-test ; TELEMETRY-EVENTS-001's witnesses: the box-wide JSONL ledger the public MCP fns append to as a side effect (2026-09-06, the night the hourly watch reported four figures while a dozen calls landed in launcher-chosen roots it never read)
-    clj-surgeon.mcp-helper-extraction-test}) ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
+     clj-surgeon.namespace-split-test ; Batch 5 adds six ns/footprint/lint/encoding witnesses; derived by deftest-count.
+     clj-surgeon.namespace-split-warm-test ; Batch 5 adds executed load/failed destination facts to the real nREPL matrix.
+     clj-surgeon.mcp-namespace-split-test ; Batch 5 adds text ordering, absent-probe honesty and malformed UTF-8 refusal.
+     clj-surgeon.split-proof-gate-test ; Batch 3 pure status/state matrix, plus Sol's a9da4344 temp-root admission and receipt-ceiling witnesses.
+     clj-surgeon.split-proof-gate-boundary-test ; Batch 3 detached worker and caller-exit boundaries, plus Sol's a9da4344 worker-identity boundary.
+     clj-surgeon.cell-b-oracle-test ; B07: shell lint mutation test and independent partial-preservation mutants; battery (Python subprocess).
+     clj-surgeon.mcp-expect-guard-test ; `expect` is a guard on both write routes, not discarded bookkeeping (dogfood-3, 2026-09-07).
+     clj-surgeon.outline-corpus-integration-test ; MOVED: full repository differential out of the bounded fast namespace.
+     clj-surgeon.mission-candidate-race-test ; Completion-order delivery, bounded cancellation and retained results.
+     clj-surgeon.mission-events-test ; Public completion events and isolated logging failure.
+     clj-surgeon.mission-phase-events-test ; Actual phase receipts, identity and isolated logging failure.
+     clj-surgeon.mission-provider-fallback-events-test ; Actual dispatched fallback, thread context and isolated logging.
+     clj-surgeon.mission-display-test ; Add historical nested refusal and incompatible-example witnesses.
+     clj-surgeon.mission-fallback-test ; Explicit report, actual event write and unchanged proof.
+     clj-surgeon.mission-git-identity-test ; Explicit seat author/committer survive subprocess sanitization.
+     clj-surgeon.mission-git-submodule-test ; Git config cannot hide staged gitlinks from scope guard.
+     clj-surgeon.mission-publication-test ; Durable publication intent blocks silent source undo.
+     clj-surgeon.mission-git-test ; Pure Git provenance contract.
+     clj-surgeon.mission-git-boundary-test ; Git tree and staged path boundaries.
+     clj-surgeon.mission-git-fence-test ; Identity and refusal witnesses.
+     clj-surgeon.mission-git-process-test ; Bounded subprocess lifecycle.
+     clj-surgeon.mission-git-ledger-test ; Saved receipt authority.
+     clj-surgeon.mission-commit-cli-test ; Actual public command behavior.
+     clj-surgeon.mission-usage-test ; Observed legacy/attempt usage and unknowns.
+     clj-surgeon.mission-typist-executor-admission-test ; Unsupported adapter refused before readiness.
+     clj-surgeon.mission-usage-executor-test ; Saved success/refusal usage snapshots.
+     clj-surgeon.mission-run-test ; One-process saved plan, refusal and CLI boundaries.
+     clj-surgeon.mission-test ; Adopt existing ledger orphan plus owner-forms routing and recovery witnesses.
+     clj-surgeon.mission-typist-test ; Pure routing/dossier and frozen generation policy boundaries.
+     clj-surgeon.mission-candidate-test ; Frozen span lowering boundaries.
+     clj-surgeon.mission-plain-forms-test ; Bounded raw definition decoding and actual escaping failure.
+     clj-surgeon.mission-forms-test ; Owner identity, protected syntax and lost-comment refusal.
+     clj-surgeon.mission-forms-source-test ; Strict comment text/attachment, whitespace identity and owner sentinel.
+     clj-surgeon.mission-typist-executor-test ; Add candidate diagnostic survival to proof/commit/undo and saved fallback forwarding.
+     clj-surgeon.battery-ledger-test ; TEST-ISO-009a/b: add strict archive classification and preserved failure/audit authority.
+     clj-surgeon.battery-parallel-test ; TEST-ISO-013: the battery lane run as N JVM lanes -- schedule, lane-failure classifier, shard fold, prerequisite DAG. TEST-ISO-014 (5cdd5dcc) adds two: launcher-matrix-cells-remain-independently-shardable and grouped-shards-retain-measured-per-deftest-walls.
+     clj-surgeon.require-change-test ; Pure standalone require intent and strict natural-layout refusal witnesses.
+     clj-surgeon.require-change-boundary-test ; Actual CLI/profile processes, confined publication, independent oracle and undo.
+     clj-surgeon.fast-lane-isolation-test ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
+     clj-surgeon.lane-manifest-test ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses + TEST-ISO-015's fixture-tree census witness (2026-09-09), a-namespace-in-the-tree-but-absent-from-the-census-is-named
+     clj-surgeon.mcp-formatter-test ; the adopted orphan (round three)
+     clj-surgeon.mcp-feature-thread-test ; the trunk's `feature_thread` verb, adopted at round five's MCP/main merge
+     clj-surgeon.mcp-feature-thread-sed-test ; MOVED, not new (round five): its one `sed` cross-check, out of :fast into :battery
+     clj-surgeon.mcp-inspect-cold-job-test ; MOVED, not new (round five): the one inspect-tool test that drives /bin/sh, out of :fast into :battery
+     clj-surgeon.ns-isolation-test ; TEST-ISO-002/003/004/005/007/010's witnesses (round four) + round five's four spawn-ledger witnesses
+     clj-surgeon.helper-extraction-test ; MCP-OP-HELPER's pure planner witnesses, enrolled into :fast when the planner went green (it requires only the planner, the fixture and clojure.test, and spawns nothing)
+     clj-surgeon.telemetry-events-test ; TELEMETRY-EVENTS-001's witnesses: the box-wide JSONL ledger the public MCP fns append to as a side effect (2026-09-06, the night the hourly watch reported four figures while a dozen calls landed in launcher-chosen roots it never read)
+     clj-surgeon.mcp-helper-extraction-test}) ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
 
 (def ^:private census-ledger-path
   "The deftest ledger: ONE LINE PER FULLY QUALIFIED DEFTEST NAME, sorted.

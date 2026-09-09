@@ -597,3 +597,67 @@ full Cell C's bounded data grows 60,554 → 63,585 bytes. These are functional
 replays, not a new caller cohort or native wall claim. Report:
 `/var/tmp/forge/plan2/cellC/astra-rows-sublime-5-report.md`.
 Evidence: `/var/tmp/forge/rows-sublime-5/`.
+
+
+### 2026-09-09 — automatic parallel landing gate (TEST-ISO-015)
+
+The battery coordinator now owns the Make landing gate and process pools for JVM,
+BB and alias/artifact suites. Namespace membership remains in the existing
+inventories. Automatic width is capped at four, half nproc, and the available
+memory allowance; JVM/BB heaps are 512 MiB. Serial debugging cannot issue a
+landing receipt. Every tree namespace and child result is accounted for.
+
+The pre-change complete gate was 510 s, with its separately measured audit
+0.943 s. Fresh four-worker component probes preserved every namespace counter:
+JVM 54.784 s versus 102.000 s; BB 69.119 s versus 182.612 s. An eight-worker
+probe failed existing time/isolation checks. Integration checkout writes were
+visible to other fast workers, so the final runner uses a global fast-before-
+integration barrier; the earlier four-worker timings are pre-barrier evidence,
+not the final speed claim. The fixed-count metadata audit preserves checks of
+every loaded namespace; change-buffer fixtures clear retained bases they own.
+
+A launcher probe exposed JDK buffered slurp failing on procfs and silently
+selecting one lane. NIO now reads memory; unknown memory refuses. Final whole
+gate repetitions, namespace parity, fault injection, battery regression and
+commit status are reported at the fence:
+`/var/tmp/forge/plan2/cellC/astra-gate-lanes-report.md`.
+Evidence: `/var/tmp/forge/gate-lanes/`.
+
+### 2026-09-09 — landing gate shared pool, round two (TEST-ISO-015/007)
+
+The fixed four-worker cap is removed. One eight-slot pool on this host runs
+alias, MCP integration, BB and the unchanged shell sequence after the fast
+barrier. First complete trial: 173.191 s, exit 0, landing receipt; round-one
+passing median was 367.222 s (two runs), original baseline about 510 s.
+Minimum sampled MemAvailable: 17,987 MiB; peak active jobs: 8.
+Compact-relations now has a declared 18,000 ms wall ceiling under TEST-ISO-007
+(~2x the prior 8,836 ms contention measurement); 18,001 ms still refuses.
+Five corrected eight-worker probes exited 0: 7.325 / 8.379 / 8.358 / 8.869 /
+8.852 s for that namespace. Initial probes retained red census-pin results.
+Separate checkout roots plus local fast-before-integration ordering reduced a
+standalone MCP probe from 86.011 s to 62.898 + 3.063 s setup, saving 20.049 s.
+Roots without local ordering exposed six global-container violations; that
+trial is retained. The normal gate keeps the barrier; separate roots across the
+complete mixed pool remain unmeasured. Final same-snapshot parity, faults,
+three complete timings and battery regression are recorded at
+`/var/tmp/forge/plan2/cellC/astra-gate-lanes-r2-report.md`; raw evidence is under
+`/var/tmp/forge/gate-lanes/r2/`.
+
+The initial cold-clone named-failure gate additionally lost two children with
+`ClassNotFoundException: clojure.main` during simultaneous CLI cache creation.
+The coordinator now resolves the test-deps classpath once before JVM fan-out,
+rejecting a nonzero/empty preparation and recording its wall. BB-only pools
+skip that preparation. Original controls/faults are retained under
+`/var/tmp/forge/gate-lanes/r2/pre-classpath-fix/`; the final fence is repeated
+on the new commit, including an empty-cache fault clone. Derived pins are
+613 adopted / 1,638 manifest tests, with 34 coordinator witnesses.
+
+### Gate lanes round three — box admission and prewarm membership
+
+Sol GATE-LANES-FENCE-001/002 invalidated per-coordinator width and self-reported
+prewarm coverage. The repair uses inherited box-wide flock slots and one stage
+manifest for execution and consumption. Required evidence is the two-coordinator
+slot sampler, full/prewarm receipt membership and timed complete gates, retained
+in `/var/tmp/forge/gate-lanes/r3/`; the final result is reported at
+`/var/tmp/forge/plan2/cellC/astra-gate-lanes-r3-report.md`. No speedup claim follows
+from these contention walls.
