@@ -153,6 +153,10 @@
   (and (.isFile file)
        (boolean (re-matches #".+-specs\.md" (.getName file)))))
 
+;; @spec TEST-ISO-015
+;; INTENT: TEST-ISO-015 -- the derivation a census witness must consume instead
+;; of a pinned count: the ledger's membership is READ FROM THE TREE here, so a
+;; witness can compare sets and name the row that moved.
 (defn spec-doc-paths
   "Derive the audited intent spec documents by SCANNING docs/intent/<leaf>/<name>-specs.md.
 
