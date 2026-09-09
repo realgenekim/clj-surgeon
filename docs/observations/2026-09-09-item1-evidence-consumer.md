@@ -14,7 +14,8 @@ One builder. Started 2026-09-09 13:54:42Z; finished inside the 6-hour box.
 | **What the consumer costs** | **3.9 s** end-to-end (3,856 / 3,901 / 3,812 ms) |
 | **Net, per eligible clean request** | **≈ +165 s to +261 s faster at the landing** |
 | **Marginal cost over v3.6's stage-name check** | **≈ 0.26 s** (`print-gate-obligations` 2.20 s vs `print-gate-stages` 2.02 s; + 0.09 s toolchain + 0.03 s matcher) |
-| **Corpus** | ship v3.7's own: **73 rows, 73 pass**, including a **generated 845-mutant field sweep, 845 refused, 0 consumed**. `install.sh` run against a scratch DEST+FIXTURES: **INSTALL OK, 11/11** |
+| **Corpus** | ship v3.7's own: **73 rows, 1 mismatch** — the generated sweep is RED (see §1a3). `install.sh` proof from round 2: **INSTALL OK, 11/11**; it would now report NOT PROVEN |
+| **Status** | **NOT SHIPPABLE.** Producer side committed and green; consumer side has 810 generated + 5 red-team acceptances still to bind |
 | **Replay** | **both** consumed landings of 2026-09-09 would have been **refused** — and one of them consumed a gate that never ran the alias battery |
 | **Production decision today** | **`run-required reason=custody-unverified` on every landing.** ship observed nothing independently, so it cannot discharge an obligation. The saving below is what the consumer will buy once item 2's recorder can attest observation; it is **not** being banked today |
 
@@ -107,6 +108,67 @@ tidying away *another* run's litter, defeating the `fence-worktree-dirty` refusa
 make an unexplained failure loud. Scoped with `FENCE_OURS`, set only when this run launches a
 reviewer: our dirt is swept, someone else's is reported and kept. New fixture row
 `9-an-early-exit-still-returns-the-borrowed-fence-tree-clean-or-says-why`.
+
+## 1a3. Sol round 3 (`20260909T165932Z-9dc25924fc38`) — NOT SHIPPABLE as it stands
+
+Repository half committed (`2f924bee`); consumer half substantially built and **still red**. I am
+reporting the true state rather than a green number.
+
+| id | fixed? | what changed |
+|---|---|---|
+| **SOL-EC-007** | yes | `:policy-sha256` now covers the whole rule surface — obligations, `environment-policy`, stage manifest, inventory version. `:environment-manifest/:selected` values must be 64-hex digests (a `nil` digest consumed before). `:obligations/:manifest-sha256` and `:candidate/:inputs-manifest/:sha256` are bound to the **canonical digest of the obligations this tree derives** (64 `f` characters consumed before) |
+| **SOL-EC-008** | yes | the sweep has **no skip set and no depth limit**: it walks every path of the receipt (1,637 paths, 9,698 mutants incl. `:zero` and `:alien-string`), runs the consumer **in process**, and its only exemption is the consumer's own printed declaration |
+| **SOL-EC-009** | yes | the tree now **derives** the fixtures each selected namespace registers (`use-fixtures` in its own source) and the consumer compares sets; `["not/a/real-fixture"]` refuses |
+
+**A duplicate the repair surfaced:** R1 named `admit_transaction_recovery_battery.clj` twice, so
+dropping a manifest entry still left the path "accounted for". `:required-inputs` is deduplicated and
+the manifest is now compared by **canonical equality**, not coverage.
+
+### The sweep is RED, and that is the finding
+
+```
+field-mutants: 9698 over 1637 paths (full walk, no skip set);
+  8170 refused, 604 consumed-by-declared-rule (134 observer-dependent),
+  810 BAD, 163 inert-declared-but-load-bearing
+```
+
+`run-ship-v3.7` is therefore **73 rows, 1 mismatch**, and an install would report NOT PROVEN. The 810
+are not a new defect class — they are the *same* one, at fields I had not yet bound. Each remaining
+block is mechanical: compare the field against the value the inventory derives, or declare it
+observer-dependent with a reason. I stopped adding rules rather than keep going unsupervised past the
+timebox.
+
+`163 inert-declared-but-load-bearing` is a second honest signal from the same sweep: `:inert` was
+doing two jobs. It now means *no authority at all* (proved by mutating and requiring the decision and
+the discharged set to be identical), and `:validated-elsewhere` is the known-field allowlist.
+
+### Red-team pass (as asked): "what unrelated value would this obligation accept?"
+
+Run against the controlled-complete receipt with the installed consumer:
+
+| substitution | decision |
+|---|---|
+| R4's `:executed-tests` ← R5's identity list | `run-required/scope-incomplete` |
+| R4's `:check-contract-sha256` ← R5's recipe digest | `run-required/recipe-mismatch` |
+| R3's `:fixture-identities` ← R4's fixture ids | `run-required/provenance-missing` |
+| R4's `:obligation-ids` ← `[:R5]` | `run-required/evidence-missing` |
+| R4's `:runtime` ← R5's bb runtime | `run-required/runtime-mismatch` |
+| `:toolchain/:java/:version` ← the Clojure version | `run-required/toolchain-mismatch` |
+| **R5's `:vars-ref` ← R4's `:vars-ref`** | **`consume`** — a Var census belonging to a different obligation |
+| **R1's `:result` ← arms 99/99 passed** | **`consume`** — the arm count is not bound to the recovery battery's own receipt |
+| **R6's `:result` ← `{:exit 0 :wall-ms 999999}`** | **`consume`** — a shell obligation's result is only `:exit`-checked |
+| **`:candidate/:tree` ← `:phase-a-tree`** | **`consume`** — the two are compared to the merged tree separately, and equal values pass both |
+| **environment digest ← another key's digest** | **`consume`** — a digest is shape-checked, and the landing box cannot recompute the producer box's environment |
+
+Five acceptances, all the same shape: **a value that is well-formed and belongs to something else.**
+The first three are fixable by binding (the reference must name its own obligation; the arm count must
+come from the recovery receipt; a shell result needs the recipe's own success predicate). The last two
+need item 2's observer — the landing box cannot know another machine's environment, and
+`:candidate/:tree` equalling `:phase-a-tree` is only wrong if something attests they differed.
+
+**Verdict: do not ship this consumer.** The producer-side work is sound and committed; the consumer
+needs the 810 + 5 bound before it earns a GO. Every real receipt still refuses at
+`custody-unverified`, so nothing is banked in the meantime.
 
 ## 1b. The install defect (found by the coordinator, same day)
 

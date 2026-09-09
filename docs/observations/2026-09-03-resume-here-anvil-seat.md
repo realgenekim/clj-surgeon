@@ -719,3 +719,5 @@ B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa;
 ## STATE at 2026-09-09T13:37Z — Astra's order adopted (Gene: "go with astra's order"); item 0 in flight
 - Order: 0 freeze Frame 7 clocks + consumer obligations (Astra, astra-frame7-freeze → cellC/astra-frame7-freeze-report.md) → 1 Surgeon-evidence consumer (contract + offline replay) → 2 recorder after credential boundary (seat key must NOT reach gene@anvil2) → 3 review consumes preservation evidence → 4 affected sets for ordering → 5 Frame 7 under the frozen protocol. Forecasts in the captain's log entry above. Rows sublime before Frame 7 cohort (Gene, Sept 8).
 - anvil2: 9–11× slower per core, constant; instance decision is Gene's; farm-out plan inb-a2ae7e (reviewers + recorder first; blocker: logins).
+
+## STATE at 2026-09-09T18:00Z — item 1 PARKED (fable/evidence-consumer 2f924bee; DoD = mutation sweep 0 BAD / 0 inert-load-bearing; resumes after item 2 observer); item 3 at Sol round 4 (fable/proof-burden 77126c8d, ship-item3-4); item 2 blocked on Gene: seat key must leave gene@anvil2
