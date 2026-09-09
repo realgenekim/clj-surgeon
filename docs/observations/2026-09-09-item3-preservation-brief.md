@@ -19,9 +19,9 @@ review obligation it removes and the size of what it leaves behind.
 
 | specimen | checker wall | bodies mechanically preserved | obligations left for a reviewer |
 |---|---|---|---|
-| Cell C views split, real and landed (curtaincall-cfp `d9205abc` → `65ad613b`; 7,769 insertions / 4,863 deletions, 29 files) | **20.1 s** | **103/141 relocated + 32/64 caller** | 6 + 12 changed bodies · 32 + 20 uncertified for unmodelled call heads · 48 unmodelled heads named · 20 destination boundaries · 8 promotions · 11 lost comments · 7 new owners · 21 created namespaces |
-| E3 Cell B split, real (`exports` → `exports.calendar`, from the retained candidate patch) | **11.4 s** | **21/25 relocated + 9/20 caller** | 3 + 2 changed bodies · 1 + 9 uncertified · 21 unmodelled heads · 3 promotions · 2 refused tree entries |
-| Alias migration, constructed (35 files repointed) | **25.4 s** | **48/103 caller bodies** | 10 changed · 45 uncertified · 67 unmodelled heads · 2 lost comments |
+| Cell C views split, real and landed (curtaincall-cfp `d9205abc` → `65ad613b`; 7,769 insertions / 4,863 deletions, 29 files) | **19.9 s** | **103/141 relocated + 32/64 caller** | 6 changed bodies · 32 + 32 uncertified for frozen call heads · 41 frozen heads named · 20 destination boundaries · 8 promotions · 11 lost comments · 7 new owners · 21 created namespaces |
+| E3 Cell B split, real (`exports` → `exports.calendar`, from the retained candidate patch) | **11.7 s** | **20/25 relocated + 8/20 caller** | 4 changed bodies · 3 cross-tree kind disagreements · 7 frozen heads · 3 promotions · 2 refused tree entries |
+| Alias migration, constructed (35 files repointed) | **25.0 s** | **39/103 caller bodies** | 64 uncertified or changed · 17 frozen heads · 2 lost comments |
 | clj-surgeon `571170cc` comment-edits landing, real | **10.0 s** | **0** | all 9 changed bodies · 3 lost comments · 12 non-source files · 4 refused tree entries |
 | clj-surgeon `d2c3aa80` batch-5 landing, real | **15.0 s** | **0** | all 22 changed bodies · 5 lost comments · 13 non-source files · 4 refused tree entries |
 | null change (`d9205abc` against itself) | **0.18 s** | — | none; the **only** `clear: true` row in the portfolio |
@@ -36,19 +36,34 @@ under a hard-stop list.
 |---|---|---|
 | first draft | 141/141 | 64/64 |
 | after Sol's round 1 (resolution-aware canonicaliser) | 136/141 | 54/64 |
-| **after Sol's round 2 (allowlist, not denylist)** | **103/141** | **32/64** |
+| after Sol's round 2 (allowlist, not denylist) | 103/141 | 32/64 |
+| **after Sol's round 3 (every table entry carries a falsifier)** | **103/141** | **32/64** |
 
-Sol reviewed the prototype twice and broke it twice, each time by planting a case where a *bare symbol* was
-not the Var the canonicaliser assumed. Round 1: a local destructured binding replaced by a moved Var of the
-same name. Round 2: the same substitution, but bound by `compojure.core/GET` — a binding macro from a
-library, defined in neither tree and spelled neither `with-*` nor `def*`, so the denylist of "macros I do
-not model" never saw it.
+Sol reviewed the prototype three times and broke it three times — six planted specimens, six false
+certifications, every one of them the same shape: a *bare symbol* that was not the Var the canonicaliser
+assumed. Round 1: a local destructured binding replaced by a moved Var of the same name. Round 2: the same
+substitution, but bound by `compojure.core/GET` — a binding macro from a library, defined in neither tree
+and spelled neither `with-*` nor `def*`, so the denylist of "macros I do not model" never saw it. Round 3:
+three more, and this time the leak was not in the rule but in the **tables the rule consults** — `are`
+declared non-binding when `clojure.test/are` binds its argv; a merged def-head index letting a candidate
+`defn` overwrite a base `defmacro`; and an uppercase require alias slipping past the "that's a Java class"
+heuristic because the heuristic ran before alias resolution.
 
-**A denylist over syntax is never conservative.** The rule is now inverted: a bare token is canonicalised
-only when every enclosing list head is a modelled core form, a non-macro `def`/`defn` this checker can
-actually find in the two trees, or a clojure.core function from a shipped allowlist. Everything else is
-unmodelled, its subtree is frozen, the head is named and counted, and the body cannot reach a tier that
-depends on canonicalisation.
+**Round 3 cost nothing on Cell C** — the tables were tightened and a dozen macros moved to frozen, and the
+two effects cancelled at 103/141. Cell B moved 21 → 20 and 9 → 8, and now reports three real cross-tree
+kind disagreements it had been silently resolving in the candidate's favour.
+
+**A denylist over syntax is never conservative.** The rule is inverted: a bare token is canonicalised only
+when every enclosing list head is a modelled core form, a non-macro `def`/`defn` this checker can actually
+find in the two trees, or a clojure.core function from a shipped allowlist. Everything else is frozen, the
+head is named and counted, and the body cannot reach a tier that depends on canonicalisation.
+
+**And an allowlist is only as good as its audit.** `bin/preservation-tables-test` now refuses to let a table
+entry exist without its falsifier: 203 allowlist functions machine-resolved and proved non-macro, 48
+non-frozen heads proved to be special forms or resolvable Vars with no unexamined macro among them, and 45
+**executed** witnesses run against the real scope analysis — 31 binding heads that must report their binder
+bound, 4 destructuring shapes, and 12 macros declared non-binding that must report nothing bound. It reports
+PASS. It is the rung that ends this sequence, and it is the artefact I would keep if I kept nothing else.
 
 **83 of the surviving 103 are byte-identical** and need no canonicalisation at all, so the loss lands
 entirely in the requalification tier — which is exactly the tier that made this bet interesting. That is the
@@ -155,8 +170,12 @@ Three files under `bin/`, on branch `fable/proof-burden`, no edits to `src/`, `t
   comment spans, `ns`-form parsing, a flat token stream, and a structural node tree. It deliberately shares
   no code with clj-surgeon's `src/`, so its evidence cannot inherit a defect from the transform it is
   checking.
-- **`bin/preservation-replay`** — builds a scratch repository holding the landed Cell C split plus eight
-  planted defects, six mine and two Sol's, and runs the brief over every one.
+- **`bin/preservation-replay`** — builds a scratch repository holding the landed Cell C split plus twelve
+  planted defects, six mine and six Sol's, and runs the brief over every one. Five are **pairs**: their
+  probe exists in both trees.
+- **`bin/preservation-tables-test`** — the ratchet over the brief's own allowlist tables. It refuses to let
+  a table entry exist without a falsifier, and it is what makes the tables an audited claim rather than a
+  list somebody typed. Rungs R1–R4 are described in its header; it exits nonzero on any unsupported claim.
 
 What section A establishes, all of it re-derived:
 
@@ -210,12 +229,12 @@ bin/preservation-brief 65ad613b d9205abc \
 >
 > - **6** relocated bodies whose text CHANGED — read the diffs (A2)
 > - **32** relocated bodies NOT certified because they call a head this scanner cannot vouch for (A2)
-> - **20** in-place bodies NOT certified because they call a head this scanner cannot vouch for (A2)
-> - **12** in-place bodies that changed and are not preserved (A2)
+> - **16** in-place bodies NOT certified because they call a head this scanner cannot vouch for (A2)
+> - **16** in-place bodies that changed and are not preserved (A2)
 > - **11** comment texts LOST (A6)
 > - **8** PRIVACY CHANGES, including private->public promotions (B2)
 > - **1** bare references the checker could NOT confirm (B3)
-> - **48** macro forms whose binding semantics this scanner does not model, so their tokens were left UNRESOLVED: checked?, curl, date?, ds/bind, ds/copy-nearest-text, ds/keydown-expr, ds/on-meta, ds/post-action*
+> - **41** call heads whose tokens were FROZEN — unresolvable, or a macro whose binding grammar the scanner deliberately does not walk: cond->, curl, deftest, ds/bind, ds/copy-nearest-text, ds/keydown-expr, ds/on-meta, ds/post-action*
 > - **7** owners with no base origin — new code, not a relocation (A1)
 > - **2** changed files outside the scanned roots or not Clojure source — UNREAD (B7)
 > - **4** receipt claims the checker could not confirm (C)
@@ -387,8 +406,8 @@ change is that its references now follow the owners they name is mechanically pr
 | tier | owners |
 |---|---|
 | `identical-modulo-requalification` | 32 |
-| `unmodelled-macro-context` | 20 |
-| `changed` | 12 |
+| `unmodelled-macro-context` | 16 |
+| `changed` | 16 |
 
 
 Of 64 in-place body changes, **32** are mechanically preserved and **32** need a reviewer.
@@ -397,6 +416,8 @@ Of 64 in-place body changes, **32** are mechanically preserved and **32** need a
 |---|---|---|
 | opinions-stars-ride-first-comment-only-test | cfp-scheduler-killer.views-test | `changed` |
 | opinions-silent-raters-stay-named-test | cfp-scheduler-killer.views-test | `changed` |
+| histogram-buckets-and-hover-test | cfp-scheduler-killer.views-test | `changed` |
+| fmt-when-test | cfp-scheduler-killer.polish-test | `changed` |
 | scrub-slider-wiring-test | cfp-scheduler-killer.polish-test | `changed` |
 | handle-sse-state | cfp-scheduler-killer.server | `changed` |
 | board-fragment-html | cfp-scheduler-killer.server | `changed` |
@@ -406,12 +427,12 @@ Of 64 in-place body changes, **32** are mechanically preserved and **32** need a
 | handle-event-log | cfp-scheduler-killer.server | `changed` |
 | dev-render-mode-test | cfp-scheduler-killer.comms-test | `changed` |
 | capture-test | cfp-scheduler-killer.comms-test | `changed` |
+| retire-hides-without-erasing-test | cfp-scheduler-killer.forms-test | `changed` |
+| editing-the-form-never-rewrites-an-existing-submission-test | cfp-scheduler-killer.forms-test | `changed` |
 | form-page-renders-the-real-public-renderer-test | cfp-scheduler-killer.forms-test | `changed` |
-| histogram-buckets-and-hover-test | cfp-scheduler-killer.views-test | `unmodelled-macro-context` |
 | handle-create-event | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | handle-event-details-save | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | handle-events-preview | cfp-scheduler-killer.server | `unmodelled-macro-context` |
-| handle-login | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | handle-demo-login | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | reject-value! | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | handle-capture | cfp-scheduler-killer.server | `unmodelled-macro-context` |
@@ -425,9 +446,6 @@ Of 64 in-place body changes, **32** are mechanically preserved and **32** need a
 | handle-cfp-draft | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | handle-portal-draft | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | handle-cfp-import-live | cfp-scheduler-killer.server | `unmodelled-macro-context` |
-| retire-hides-without-erasing-test | cfp-scheduler-killer.forms-test | `unmodelled-macro-context` |
-| editing-the-form-never-rewrites-an-existing-submission-test | cfp-scheduler-killer.forms-test | `unmodelled-macro-context` |
-| fmt-when-test | cfp-scheduler-killer.polish-test | `identical-modulo-requalification` |
 | handle-home | cfp-scheduler-killer.server | `identical-modulo-requalification` |
 | handle-events-list | cfp-scheduler-killer.server | `identical-modulo-requalification` |
 | handle-new-event | cfp-scheduler-killer.server | `identical-modulo-requalification` |
@@ -435,6 +453,7 @@ Of 64 in-place body changes, **32** are mechanically preserved and **32** need a
 | render-event-dashboard | cfp-scheduler-killer.server | `identical-modulo-requalification` |
 | render-committee-page | cfp-scheduler-killer.server | `identical-modulo-requalification` |
 | handle-event-details | cfp-scheduler-killer.server | `identical-modulo-requalification` |
+| handle-exports-page | cfp-scheduler-killer.server | `identical-modulo-requalification` |
 
 _24 further rows suppressed by --max-list 40._
 
@@ -475,7 +494,7 @@ _24 further rows suppressed by --max-list 40._
 
 </details>
 
-<details><summary>diff — histogram-buckets-and-hover-test (in place, unmodelled-macro-context)</summary>
+<details><summary>diff — histogram-buckets-and-hover-test (in place, changed)</summary>
 
 ```diff
 --- base/histogram-buckets-and-hover-test
@@ -858,18 +877,19 @@ Comment texts lost: **11**. Comment texts added: **0**. Relocated owners at `:co
 | touched source files with no relocation or `ns` edit to explain them | 0 |
 | changed files outside the scanned roots, or not Clojure source | 2 |
 | tree entries the checker REFUSED to read (symlink, non-blob, oversized) | 0 |
-| macro forms whose binding semantics the scanner does not model | 48 |
+| call heads whose tokens were frozen (unresolvable, or a deliberately unwalked macro) | 41 |
 
 
-**Macro forms whose binding semantics this scanner does not model.** Every token inside one of these
-was treated as UNRESOLVED, so any body that depended on one for its equivalence is reported as
-changed rather than preserved:
+**Call heads whose tokens were frozen.** Either the scanner could not resolve the head to a
+non-macro definition it can read, or the head is a macro whose binding grammar it deliberately does
+not walk. Every token inside such a form is left UNRESOLVED, so a body that depended on one for its
+equivalence is reported as not certified rather than preserved:
 
 | macro form |
 |---|
-| `checked?` |
+| `cond->` |
 | `curl` |
-| `date?` |
+| `deftest` |
 | `ds/bind` |
 | `ds/copy-nearest-text` |
 | `ds/keydown-expr` |
@@ -883,12 +903,8 @@ changed rather than preserved:
 | `export` |
 | `f` |
 | `forms/add-field!` |
-| `forms/restore-field!` |
-| `forms/retire-field!` |
 | `forms/update-field!` |
 | `h/html` |
-| `handler` |
-| `hiccup2.core/html` |
 | `java.net.URLEncoder/encode` |
 | `java.time.Instant/now` |
 | `json/write-str` |
@@ -897,18 +913,22 @@ changed rather than preserved:
 | `log/warn` |
 | `note` |
 | `prose` |
-| `re-seq` |
 | `sequential?` |
 | `sig` |
 | `sig*` |
 | `str/blank?` |
-| `str/ends-with?` |
 | `str/includes?` |
 | `str/join` |
 | `str/replace` |
 | `str/split` |
+| `str/starts-with?` |
+| `submission-of` |
+| `submissions/capture!` |
+| `subs` |
+| `typed` |
+| `v` |
 
-_8 further rows suppressed by --max-list 40._
+_1 further rows suppressed by --max-list 40._
 
 
 Changed non-source or out-of-root files. **This checker read none of them:**
@@ -966,7 +986,7 @@ It did not check:
 - trailing whitespace inside a string literal, which the `:identical-modulo-whitespace` tier normalises away.
 - local bindings. The requalification tier canonicalises a bare name that matches an owner even when it is actually a local; B3 lists the cases where that could hide a broken reference.
 
-_Checker wall: 20066.3 ms. Generated by `bin/preservation-brief`, which reads only the two git trees._
+_Checker wall: 19936.0 ms. Generated by `bin/preservation-brief`, which reads only the two git trees._
 
 ---
 
@@ -974,24 +994,27 @@ _Checker wall: 20066.3 ms. Generated by `bin/preservation-brief`, which reads on
 
 Scratch repository `/var/tmp/forge/item3/planted`, rebuilt from scratch by `bin/preservation-replay`:
 base = curtaincall-cfp `d9205abc`, clean = `65ad613b` (the landed Cell C split), then one commit per planted
-defect on top of clean. Rows 7, 8 and 9 are **Sol's**, planted independently of this builder across two
-fence reviews. Row 9 is a **pair** — its probe exists in both trees — so its counters are read against its
-own base, not against `clean`.
+defect. Six rows are **Sol's**, planted independently of this builder across three fence reviews. Five rows
+are **pairs** — their probe exists in both trees — so their counters are read against their own base.
 
-| change | clear | moved | preserved | omitted | new | promo | cmt-lost | req-unsorted | fwd-ref | undef-alias | bare? | refused | wall ms |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| clean | false | 141 | 103 | 0 | 7 | 8 | 11 | 0 | 0 | 0 | 1 | 0 | 20565 |
-| wrong-binding | false | 141 | **102** | 0 | 7 | 8 | 11 | 0 | 0 | 0 | 1 | 0 | 20244 |
-| silent-promotion | false | 141 | 103 | 0 | 7 | **9** | 11 | 0 | 0 | 0 | 1 | 0 | 20474 |
-| dropped-comment | false | 141 | 103 | 0 | 7 | 8 | **12** | 0 | 0 | 0 | 1 | 0 | 19920 |
-| omitted-owner | false | **140** | 103 | **1** | 7 | 8 | 11 | 0 | 0 | 0 | 1 | 0 | 20378 |
-| load-order-forms | false | 141 | 103 | 0 | 7 | 8 | 11 | 0 | **2** | 0 | 1 | 0 | 20371 |
-| load-order-requires | false | 141 | 103 | 0 | 7 | 8 | 11 | **1** | 0 | 0 | 1 | 0 | 19939 |
-| **local-shadow** (Sol r1) | false | 141 | 103 | 0 | 7 | 8 | 11 | 0 | 0 | 0 | 1 | 0 | 20489 |
-| **symlink-escape** (Sol r1) | false | 141 | 103 | 0 | 7 | 8 | 11 | 0 | 0 | 0 | 1 | **1** | 20162 |
-| **external-macro** (Sol r2, paired) | false | 141 | **102** | 0 | 7 | 8 | 11 | 0 | 0 | 0 | **2** | 0 | 20139 |
+| change | clear | moved | preserved | omitted | new | promo | cmt-lost | req-unsorted | fwd-ref | bare? | refused | wall ms |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| clean | false | 141 | 103 | 0 | 7 | 8 | 11 | 0 | 0 | 1 | 0 | 20539 |
+| wrong-binding | false | 141 | **102** | 0 | 7 | 8 | 11 | 0 | 0 | 1 | 0 | 20247 |
+| silent-promotion | false | 141 | 103 | 0 | 7 | **9** | 11 | 0 | 0 | 1 | 0 | 20211 |
+| dropped-comment | false | 141 | 103 | 0 | 7 | 8 | **12** | 0 | 0 | 1 | 0 | 19978 |
+| omitted-owner | false | **140** | 103 | **1** | 7 | 8 | 11 | 0 | 0 | 1 | 0 | 20181 |
+| load-order-forms | false | 141 | 103 | 0 | 7 | 8 | 11 | 0 | **2** | 1 | 0 | 20389 |
+| load-order-requires | false | 141 | 103 | 0 | 7 | 8 | 11 | **1** | 0 | 1 | 0 | 20634 |
+| **local-shadow** (Sol r1) | false | 141 | 103 | 0 | 7 | 8 | 11 | 0 | 0 | 1 | 0 | 20456 |
+| **symlink-escape** (Sol r1) | false | 141 | 103 | 0 | 7 | 8 | 11 | 0 | 0 | 1 | **1** | 20248 |
+| **external-macro** (Sol r2, pair) | false | 141 | **102** | 0 | 7 | 8 | 11 | 0 | 0 | **2** | 0 | 20100 |
+| **are-binding** (Sol r3, pair) | false | 141 | **102** | 0 | 7 | 8 | 11 | 0 | 0 | **2** | 0 | 20161 |
+| **uppercase-alias** (Sol r3, pair) | false | 141 | **102** | 0 | 7 | 8 | 11 | **1** | 0 | **2** | 0 | 20305 |
+| **kind-collision** (Sol r3, pair) | false | 141 | **102** | **1** | **8** | 8 | 11 | **1** | 0 | 1 | 0 | 20204 |
 
-Body tiers, which is where three of the nine catches land:
+Body tiers, which is where six of the twelve catches land. Every one of Sol's six moves `committee-page` or
+`form-builder-page` out of a certified tier and into `:changed`, with its diff printed:
 
 | change | `:byte-identical` | `:identical-modulo-requalification` | `:unmodelled-macro-context` | `:changed` |
 |---|---|---|---|---|
@@ -999,36 +1022,68 @@ Body tiers, which is where three of the nine catches land:
 | wrong-binding | 83 | **19** | 32 | **7** |
 | local-shadow | 83 | 20 | **31** | **7** |
 | external-macro | 83 | **19** | 32 | **7** |
+| are-binding | 83 | **19** | 32 | **7** |
+| uppercase-alias | 83 | **19** | 32 | **7** |
+| kind-collision | 83 | **19** | 32 | **7** |
 
-### Planted-defect verdict: **9/9 caught, 0 escaped**
+### Planted-defect verdict: **12/12 caught, 0 escaped**
 
 | planted defect | what was planted | the signal the brief raised |
 |---|---|---|
-| wrong binding | `(organizer-layout/header "Create review committee"` → `(format/header …)` inside the relocated `committee-page`: requalified to a namespace aliased in that file that does not own the name | tier `:changed` 6 → 7 and `:identical-modulo-requalification` 20 → 19; preserved 103 → 102; rewritten sites 260 → 259; diff printed inline |
-| silent promotion | `(defn- committee-card` → `(defn committee-card` on a relocated owner | hard stop and **B2**: privacy changes 8 → 9, listed by name |
+| wrong binding | `(organizer-layout/header …)` → `(format/header …)` inside the relocated `committee-page`: requalified to a namespace aliased in that file that does not own the name | tier `:changed` 6 → 7, `:identical-modulo-requalification` 20 → 19; preserved 103 → 102; diff printed |
+| silent promotion | `(defn- committee-card` → `(defn committee-card` | hard stop and **B2**: privacy changes 8 → 9, listed by name |
 | dropped comment | one `;;` line deleted from inside the relocated `event-marquee` body | comment inventory lost 11 → 12, with the exact text |
-| omitted owner | `log-summary` deleted from its destination file | **A1** omitted 0 → 1 as a preservation FAILURE; moved 141 → 140; base call sites 87 → 85 |
+| omitted owner | `log-summary` deleted from its destination file | **A1** omitted 0 → 1 as a preservation FAILURE; moved 141 → 140 |
 | load-order swap (forms) | two top-level forms swapped so `committee-card` names `member-row`, defined below it | **B4** new intra-file forward references 0 → 2 |
-| load-order swap (requires) | two `:require` lines swapped in a caller's `ns` | **B4** require sort discipline broken 0 → 1, candidate order printed |
-| **local-shadow substitution** (Sol r1) | `(form-edit-panel event editing edit-form)` → `… cfp-scheduler-killer.views.portal/edit-form)`: the local destructured binding replaced by the moved private Var | `form-builder-page` moves to `:changed`; tier `:changed` 6 → 7; rewritten sites 260 → **261** |
-| **symlink escape** (Sol r1) | `src/leak.clj` added as a symlink to `/var/tmp/forge/item3/sol-proof-external.clj`, defining `escaped-owner` | refused entries 0 → 1, named `symlink (mode 120000) — never followed`; **`escaped-owner` appears nowhere** in the Markdown or the JSON |
-| **external binding macro** (Sol r2, paired) | `(compojure.core/GET "/probe/:header" [header] header)` in the base; the bound use replaced by `organizer-layout/header` in the candidate. The macro is defined in neither tree and is spelled neither `with-*` nor `def*` | `committee-page` moves from `:identical-modulo-requalification` in the clean row to **`:changed`**; preserved 103 → 102; `compojure.core/GET` is named in the brief's unmodelled-head list; `possible_unresolved` 1 → 2 |
+| load-order swap (requires) | two `:require` lines swapped in a caller's `ns` | **B4** require sort discipline broken 0 → 1 |
+| **local-shadow substitution** (Sol r1, PB-FENCE-001) | the local destructured `edit-form` replaced by the moved private Var of the same name | `form-builder-page` → `:changed`; tier `:changed` 6 → 7 |
+| **symlink escape** (Sol r1, PB-FENCE-002) | `src/leak.clj` as a symlink to a file outside the repository, defining `escaped-owner` | refused entries 0 → 1, named `symlink (mode 120000) — never followed`; **`escaped-owner` appears nowhere** |
+| **external binding macro** (Sol r2, PB-FENCE-005, pair) | `(compojure.core/GET "/probe/:header" [header] header)` in the base, the bound use replaced by `organizer-layout/header` in the candidate | `committee-page` → `:changed`; preserved 103 → 102; `compojure.core/GET` named as a frozen head |
+| **`are` argv binding** (Sol r3, PB-FENCE-006, pair) | `(are [header] (= header :probe) :probe)` in the base, the bound use replaced in the candidate. `clojure.test/are` binds the symbols in its argv and sat in the "introduces no binding" table | `committee-page` → `:changed`; preserved 103 → 102; `are` named as a frozen head. **`bin/preservation-tables-test` R3 would now reject that table entry before it could ship** |
+| **uppercase require alias** (Sol r3, PB-FENCE-008, pair) | `[compojure.core :as Route]` + `Route/GET`, exploiting that the interop heuristic ran before alias resolution | `committee-page` → `:changed`; preserved 103 → 102; `Route/GET` named |
+| **cross-tree kind collision** (Sol r3, PB-FENCE-007, pair) | the same `[ns name]` defined `defmacro` in the base and `defn` in the candidate, so the merged index vouched for a macro call as a function call | `committee-page` → `:changed`; preserved 103 → 102; **`kind_disagreements` 0 → 1** |
 
-Three of these escaped an earlier build and were repaired in the same session: the require reorder (§3),
-Sol's local-shadow substitution (§3), and Sol's external binding macro (§3). Each is now a permanent row.
+Six of these escaped an earlier build and were repaired in the same session. Each is now permanent.
+
+### The tables self-test
+
+`bin/preservation-tables-test` is the rung that ends the sequence. It reports **PASS**:
+
+```
+R1  core-fn-allowlist: 203 entries
+R2  non-frozen heads: 48
+R3  claims needing a witness: 41
+R3  running 45 witnesses
+R4  required replay rows: 6
+
+PASS — every table entry carries its falsifier.
+```
+
+- **R1** resolves all 203 allowlist entries in a loaded `clojure.core` and fails on any macro. That
+  resolution *is* the falsifier — a function's arguments are evaluated and cannot bind. It removed `cast`
+  and the typo `when-first?`.
+- **R2** requires every non-frozen head to be a special form or a resolvable Var, refuses an unexamined
+  macro, and refuses any head that sits in both a frozen and a non-frozen table.
+- **R3** runs 45 **executed** witnesses against the real scope analysis, through a new `--probe-scope`
+  entry point on the brief: 31 binding heads must report their binder bound, 4 destructuring shapes must
+  too, and 12 macros declared non-binding must report nothing bound.
+- **R4** requires each of the six historic false-certification classes to name a planted replay row.
+
+`frozen-heads` needs no witness, and that asymmetry is the design: **freezing is the absence of a claim**, so
+anything unproved goes there. `are`, `condp`, `cond->`, `while`, `assert`, `comment`, `time`, `delay`,
+`future`, `lazy-seq`, `locking`, `dosync`, `declare`, `defmulti` and `deftest` all moved there in this round.
 
 ### The alias-migration specimen and its own planted defect
 
 | change | in-place bodies preserved | undefined-alias sites |
 |---|---|---|
-| alias migration, clean | 48/103 | **0** |
-| alias migration + one site left on the retired alias | 47/102 | **1**, named `file:line` with the undefined prefix |
+| alias migration, clean | 39/103 | **0** |
+| alias migration + one site left on the retired alias | 38/102 | **1**, named `file:line` with the undefined prefix |
 
-Of the 55 bodies the clean run refuses to clear, 45 are refused because they call a head the scanner cannot
-vouch for — `with-event`, `with-etag`, hiccup, Datastar helpers — and 10 are genuinely changed. Three of
-those ten are a real finding about my own constructor rather than noise: the alias rewriter was a regex
-without string or comment masking, and it edited the string literals `"exports/sessions.json"` and
-`"exports/calendar.ics"` — genuine URL paths, a behavioural break — and one comment.
+Most of the 64 bodies the clean run refuses to clear are refused because they call a head the scanner cannot
+vouch for. Among the genuinely changed ones is a real finding about my own constructor: the alias rewriter
+was a regex without string or comment masking, and it edited the string literals `"exports/sessions.json"`
+and `"exports/calendar.ics"` — genuine URL paths, a behavioural break — and one comment.
 
 ## 7. Checker wall per change
 
@@ -1036,23 +1091,22 @@ Every figure is the checker's own `wall_ms`, printed at the foot of each brief.
 
 | change | source files in tree | files parsed | wall |
 |---|---|---|---|
-| Cell C split | 83 | 39 | 20.1 s |
-| Cell B split | 473 | 12 | 11.4 s |
-| alias migration (clean / defect) | 472 | 35 | 25.4 / 25.0 s |
-| clj-surgeon `571170cc` | 344 | 5 | 10.0 s |
-| clj-surgeon `d2c3aa80` | 344 | 12 | 15.0 s |
-| each of the 10 replay rows | 83 | 39 | 19.9–20.6 s |
+| Cell C split | 83 | 39 | 19.9 s |
+| Cell B split | 473 | 12 | 11.7 s |
+| alias migration (clean / defect) | 472 | 35 | 25.0 / 25.8 s |
+| clj-surgeon `571170cc` | 344 | 5 | 9.6 s |
+| clj-surgeon `d2c3aa80` | 344 | 12 | 14.8 s |
+| each of the 13 replay rows | 83 | 39 | 20.0–20.6 s |
 | null change (`d9205abc` against itself) | 62 | **0** | **0.18 s** |
+| `bin/preservation-tables-test` (203 resolutions + 45 executed witnesses) | — | — | **~9 s** |
 
 The first build took **136 s** on the Cell B specimen because it parsed the whole repository. Two-stage
 scoping brought it to 20 s with byte-identical output, and reading blobs from the object database instead of
-extracting trees took it to **11.4 s**. Neither the resolution-aware canonicaliser nor the inverted
-allowlist changed the wall measurably: the scope walk and the whole-tree `[ns name] → def-head` index are
-both cheap next to parsing. This is a Babashka script with no tuning beyond the scoping.
+extracting trees took it to **11.7 s**. None of the three soundness rounds moved the wall measurably: the
+scope walk, the per-tree def-head indexes and the table audit are all cheap next to parsing.
 
 The null row is a standing sanity witness and the portfolio's only `clear: true` row: a candidate compared
-against itself must parse nothing, move nothing, lose no comment and raise no obligation. A non-zero figure
-there means the checker is manufacturing findings.
+against itself must parse nothing, move nothing, lose no comment and raise no obligation.
 
 ## 8. Section C: cross-examining a real producer receipt
 
@@ -1240,9 +1294,13 @@ It is the document that must exist before the slice can.
     commit** with one blocker, PB-FENCE-005, verdict at
     `/var/tmp/forge/ship/20260909T163340Z-8751ed9e4d4c/verdict-1.md`; it also verified all four round-1
     repairs and the replay's tree-hash provenance.
-  - **`1cb98b5e`** — PB-FENCE-005 repaired: the denylist inverted to an allowlist. **This is the tip.**
+  - `1cb98b5e` — PB-FENCE-005 repaired: the denylist inverted to an allowlist. **Sol's round-3 review
+    returned NO-GO on this commit** with three blockers, PB-FENCE-006/007/008, verdict at
+    `/var/tmp/forge/ship/20260909T171132Z-1cb98b5e2a59/verdict-1.md`.
+  - **`77126c8d`** — round-3 repairs, and `bin/preservation-tables-test`, which refuses a table entry
+    without a falsifier. **This is the tip.**
 - **Nothing was pushed.** The branch has no upstream.
-- No edits under `src/`, `test/`, or the Makefile. Three new files, all under `bin/`.
+- No edits under `src/`, `test/`, or the Makefile. Four new files, all under `bin/`.
 - The brief no longer materialises anything: it reads blobs from the object database. The only path it
   writes is a temp directory for `diff` invocations, under `/var/tmp/forge/item3/`.
 - `/home/forge/src/clj-surgeon-item1` and `/var/tmp/forge/ship-v3.7` were never touched.
@@ -1282,6 +1340,7 @@ It is the document that must exist before the slice can.
 | **A stated evidence boundary that the implementation does not enforce is worse than none**, because the report repeats it. | The brief reads the object database, never the filesystem; symlinks, non-blobs and oversized blobs are counted as refused entries and named. The permanent `symlink-escape` row is the witness. |
 | **A headline a reviewer can consume and stop on defeats a checker whose real value is in section B.** | Every obligation is hoisted above section A into a hard-stop block, the summary carries `clear`, and the exit code is 3 when not clear. The null change is the only clear row in the portfolio. |
 | **A builder cannot review his own oracle, and one round of outside review is not enough either.** Round 1 found four findings; the round-2 probe reproduced the same false-certification class one abstraction level out. | Sol's three specimens are permanent replay rows. §9.9 requires the falsifier's specimens be planted by someone who did not build the checker, and §12 now names the next unseen classes to probe rather than declaring the set complete. |
+| **A table entry is a soundness claim, and a claim with no falsifier is how a checker certifies a defect.** Round 3's three blockers were all entries somebody typed and nobody audited: `are` in the non-binding table, a merged def-head index, an interop heuristic ordered before alias resolution. | `bin/preservation-tables-test`: 203 machine-resolved allowlist entries proved non-macro, 48 heads proved special-form-or-Var with no unexamined macro, 45 executed binding witnesses through a `--probe-scope` entry point, and a required replay row per historic failure class. It exits nonzero on any unsupported claim. **`frozen-heads` needs no witness — freezing is the absence of a claim — so anything unproved goes there.** |
 | A preregistration whose arithmetic does not close cannot be executed, however good its rules sound. | §9 now carries a specimen ledger whose counts sum, an assignment matrix whose observation count follows from reviewers × specimens, stated per-class denominators, and a co-primary restated as strict dominance because n=2 per class cannot support a rate. |
 
 ## 12. What is next
@@ -1289,11 +1348,15 @@ It is the document that must exist before the slice can.
 1. **Someone other than me plants the defects**, seals an answer key, and runs §9. Sol's fence review is the
    proof that this matters and not a formality: two of the eight replay rows are his, and one of them broke
    the tool.
-2. **Widen the planted-defect set to the classes section D admits it cannot see**: a relocated `defrecord`
+2. **Extend the tables test from "every entry has a falsifier" to "every entry's falsifier is adversarial."**
+   R3's non-binding witnesses assert that a macro reports no binder for its *natural* syntax. That is the
+   experiment `are` failed, so it is the right shape — but it was written by the same person who wrote the
+   table. The next reviewer should plant witnesses, not just specimens.
+3. **Widen the planted-defect set to the classes section D admits it cannot see**: a relocated `defrecord`
    whose generated class package moved, a namespace named as a string in a resource, a `requiring-resolve`
    on a moved owner, and a binding introduced by a macro the scanner *does* model but models wrongly. If a blind reviewer misses those under T and catches them under C, the brief is
    *creating* a blind spot and must be narrowed.
-3. **Wire it into the review entrance** so the brief is generated at the `candidate-submitted` boundary and
+4. **Wire it into the review entrance** so the brief is generated at the `candidate-submitted` boundary and
    arrives with the diff, rather than being run by hand.
 4. **Reduce the unmodelled-macro surface deliberately, and measure what each addition buys.** Three repo
    macros currently freeze the bodies that use them, and 19 of the alias-migration specimen's 22
