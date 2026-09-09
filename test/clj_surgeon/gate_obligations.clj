@@ -191,6 +191,45 @@
                    (str/replace "." "/"))
        ".clj"))
 
+(defn fixture-identities-for
+  "The fixture/hook identities a test namespace REGISTERS, derived from its own
+   source: every symbol named in a `use-fixtures` form, qualified by the
+   namespace that registers it.
+
+   Sol SOL-EC-009: the consumer checked `(seq (:fixture-identities e))`, so the
+   unrelated singleton `[\"not/a/real-fixture\"]` discharged the requirement.
+   Presence was standing in for identity again. A requirement the tree states but
+   cannot itself compute is a requirement nobody can check, so the tree computes
+   it here and the consumer compares against it."
+  [ns-name]
+  (let [f (io/file (ns-file ns-name))]
+    (if-not (.isFile f)
+      []
+      (let [src (slurp f)
+            ;; an aliased call site (`t/use-fixtures`) is the same registration.
+            forms (re-seq #"\((?:[A-Za-z][A-Za-z0-9.*+!_?<>=-]*/)?use-fixtures\s+:(?:each|once)([^)]*(?:\)[^)]*)*?)\)\s*(?:\n|$)" src)
+            noise #{"fn" "fn*" "try" "let" "do" "if" "when" "compose-fixtures"
+                    "join-fixtures" "each" "once" "partial" "comp"}]
+        (vec (sort (distinct
+                     (mapcat
+                       (fn [[_ body]]
+                         (let [syms (->> (re-seq #"[A-Za-z][A-Za-z0-9*+!_?<>=.-]*(?:/[A-Za-z][A-Za-z0-9*+!_?<>=.-]*)?"
+                                                 (str body))
+                                         (remove noise)
+                                         (remove #(str/starts-with? % "clojure."))
+                                         distinct)]
+                           (if (seq syms)
+                             (map #(if (str/includes? % "/") % (str ns-name "/" %)) syms)
+                             ;; an anonymous fixture cannot be named, and pretending
+                             ;; it does not exist is how a census silently shrinks.
+                             [(str ns-name "/anonymous-fixture")])))
+                       forms))))))))
+
+(defn fixture-identities
+  "The union of every selected namespace's registered fixtures, sorted."
+  [identities]
+  (vec (sort (distinct (mapcat fixture-identities-for identities)))))
+
 (defn selected-implementation-inputs
   "`file-digest` for each selected namespace's implementation file. A namespace
    whose file is not where the convention puts it comes back `:absent`, which
@@ -303,6 +342,7 @@
       :result-predicate result-predicate-suite
       :evidence-required [:vars-census :closure-basis :fixture-identities]
       :closure-basis "discovered-namespaces-v1"
+      :expected-fixture-identities (fixture-identities (ns-names alias-ns))
       :discharge {:by :execution-evidence
                   :note "Runs at EVERY landing; battery freshness cannot substitute."}}
 
@@ -332,6 +372,7 @@
       :result-predicate result-predicate-suite
       :evidence-required [:vars-census :closure-basis :fixture-identities :nested-executions]
       :closure-basis "discovered-namespaces-v1"
+      :expected-fixture-identities (fixture-identities (ns-names mcp-ns))
       :discharge {:by :execution-evidence
                   :note "A pool exit alone is insufficient; the loaded Var census and the union isolation budget are part of the claim."}}
 
@@ -349,6 +390,7 @@
       :result-predicate result-predicate-suite
       :evidence-required [:vars-census :closure-basis :fixture-identities]
       :closure-basis "discovered-namespaces-v1"
+      :expected-fixture-identities (fixture-identities (ns-names bb-ns))
       :discharge {:by :execution-evidence
                   :note "The JVM coordinator is not the BB execution runtime. JVM tests of the same source do not discharge BB compatibility."}}
 
@@ -467,17 +509,44 @@
   {:keys ["JAVA_TOOL_OPTIONS" "CLJ_SURGEON_GATE_RUN_ID" "MAKELEVEL" "PATH" "SHELL" "LANG"]
    :basis "policy-selected keys, values digested"})
 
+(defn- dedupe-inputs
+  "One entry per path. R1 named `test/admit_transaction_recovery_battery.clj`
+   twice -- once by hand and once via `rule-inputs` -- and a duplicate makes the
+   consumer's coverage check weaker than it reads: dropping one manifest entry
+   still left the path accounted for. Deterministic order, first occurrence wins."
+  [obs]
+  (mapv (fn [o]
+          (update o :required-inputs
+                  (fn [is]
+                    (->> is
+                         (reduce (fn [acc i]
+                                   (if (some #(= (:path i) (:path %)) acc) acc (conj acc i)))
+                                 [])
+                         (sort-by :path)
+                         vec))))
+        obs))
+
 (defn inventory
   "The printable inventory. `:policy-sha256` moves when a recipe, a selected
    namespace, an exclusion, a required input or a predicate moves; it does not
    move because the same tree was checked out somewhere else."
   [policy]
-  (let [obs (obligations policy)]
+  (let [obs (dedupe-inputs (obligations policy))]
     {:inventory-version 1
      :kind :gate-obligations
      :environment-policy environment-policy
      :stage-manifest (vec (:stage-manifest policy))
-     :policy-sha256 (sha256 (pr-str (volatile-free obs)))
+     ;; SOL-EC-007: the hash used to cover the OBLIGATIONS only, so redefining
+     ;; `environment-policy` -- a rule the consumer enforces -- left the identity
+     ;; the receipt is compared against unchanged. It now covers every rule this
+     ;; inventory states: the obligations, the environment policy, the stage
+     ;; manifest and the inventory version. `--print-reads` on the consumer lists
+     ;; what it actually reads, and a corpus row asserts that list is a subset of
+     ;; what is hashed here, so the two cannot drift apart by hand.
+     :policy-sha256 (sha256 (pr-str {:obligations (volatile-free obs)
+                                     :environment-policy environment-policy
+                                     :stage-manifest (vec (:stage-manifest policy))
+                                     :inventory-version 1}))
      :obligations obs}))
 
 (defn runner-policy
