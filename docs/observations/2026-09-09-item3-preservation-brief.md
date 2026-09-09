@@ -19,14 +19,17 @@ review obligation it removes and the size of what it leaves behind.
 
 | specimen | checker wall | bodies mechanically preserved | obligations left for a reviewer |
 |---|---|---|---|
-| Cell C views split, real and landed (curtaincall-cfp `d9205abc` → `65ad613b`; 7,769 insertions / 4,863 deletions, 29 files) | **20.2 s** | **102/141 relocated + 32/64 caller** | 6 changed bodies · 33 + 32 uncertified for frozen call heads · 59 frozen heads named · 20 destination boundaries · 8 promotions · 11 lost comments · 7 new owners · 21 created namespaces |
-| E3 Cell B split, real (`exports` → `exports.calendar`, from the retained candidate patch) | **11.4 s** | **20/25 relocated + 8/20 caller** | 4 changed bodies · 3 cross-tree kind disagreements · 7 frozen heads · 3 promotions · 2 refused tree entries |
-| Alias migration, constructed (35 files repointed) | **25.4 s** | **39/103 caller bodies** | 64 uncertified or changed · 21 frozen heads · 2 lost comments |
+| Cell C views split, real and landed (curtaincall-cfp `d9205abc` → `65ad613b`; 7,769 insertions / 4,863 deletions, 29 files) | **33.2 s** (6.1 s resolver) | **99/141 relocated + 32/64 caller** | 8 changed bodies · 34 + 32 uncertified for frozen call heads · 57 frozen heads named · 7 walker disagreements · 20 destination boundaries · 8 promotions · 11 lost comments · 7 new owners · 21 created namespaces |
+| E3 Cell B split, real (`exports` → `exports.calendar`, from the retained candidate patch) | **45.2 s** (29.8 s resolver, 473-file tree) | **21/25 relocated + 6/20 caller** | 3 promotions · 2 refused tree entries |
+| Alias migration, constructed (35 files repointed) | **61.1 s** (28.6 s resolver) | **49/103 caller bodies** | 54 uncertified or changed · 2 lost comments |
 | clj-surgeon `571170cc` comment-edits landing, real | **10.0 s** | **0** | all 9 changed bodies · 3 lost comments · 12 non-source files · 4 refused tree entries |
 | clj-surgeon `d2c3aa80` batch-5 landing, real | **15.0 s** | **0** | all 22 changed bodies · 5 lost comments · 13 non-source files · 4 refused tree entries |
-| null change (`d9205abc` against itself) | **0.18 s** | — | none; the **only** `clear: true` row in the portfolio |
+| null change (`d9205abc` against itself) | **6.0 s** (5.8 s resolver) | — | none; the **only** `clear: true` row in the portfolio |
 
-Overhead sits inside Astra's 0–30 s budget on every specimen. Against her ~573 s move-heavy review, the
+**Overhead has now left Astra's 0–30 s budget on four of six specimens**, because the external resolver
+lints the whole tree: 6.1 s on Cell C's 83 files, but 29–41 s on the 344- and 473-file trees. That is a real
+cost and it is reported, not subtracted; §12 names the fix (lint once per tree per session and cache by tree
+sha, which is what a review entrance would do anyway). Against her ~573 s move-heavy review, the
 brief now removes the reading of 135 of the 205 changed bodies in Cell C and hands the reviewer the rest
 under a hard-stop list.
 
@@ -38,9 +41,9 @@ under a hard-stop list.
 | after Sol's round 1 (resolution-aware canonicaliser) | 136/141 | 54/64 |
 | after Sol's round 2 (allowlist, not denylist) | 103/141 | 32/64 |
 | after Sol's round 3 (every table entry carries a falsifier) | 103/141 | 32/64 |
-| **after Sol's round 4 (resolution precedes every table)** | **102/141** | **32/64** |
+| after Sol's round 4 (resolution precedes every table) | 102/141 | 32/64 |
 
-Sol reviewed the prototype four times and broke it four times — seven planted specimens, seven false
+Sol reviewed the prototype five times and broke it five times — eight planted specimens, eight false
 certifications, every one of them the same shape: a *bare symbol* that was not the Var the canonicaliser
 assumed. Round 1: a local destructured binding replaced by a moved Var of the same name. Round 2: the same
 substitution, but bound by `compojure.core/GET` — a binding macro from a library, defined in neither tree
@@ -50,14 +53,28 @@ declared non-binding when `clojure.test/are` binds its argv; a merged def-head i
 `defn` overwrite a base `defmacro`; and an uppercase require alias slipping past the "that's a Java class"
 heuristic because the heuristic ran before alias resolution.
 
-Round 4 found the deepest one: the tables were keyed by **spelling**, and `head-status` matched a bare name
+Round 5 ended the sequence by deleting the thing that kept failing. `[ns :refer :all]` was never parsed, so
+a colliding binding macro imported that way reached the bare-name default and got `clojure.test/testing`'s
+meaning. **Six rounds of resolution holes — refers, aliases, uppercase prefixes, per-tree kinds, qualified
+tables, `:refer :all` — is not six bugs; it is one wrong rung.** Hand-rolling Clojure name resolution is not
+a thing a preservation checker should be doing. The resolver is now **clj-kondo**, run once per tree through
+the paved `~/bin/clj-kondo` entrance, and its `:var-usages` / `:locals` / `:var-definitions` decide what
+every token is. The private walker survives only as a cross-check whose disagreements are counted.
+
+**Independence is unchanged, and arguably improved.** clj-kondo is an external analyzer; it shares no code
+with this repository's `src/`, so section A's evidence still cannot inherit a defect from the transform it
+is checking — and the hardest part of the job is now maintained by people who do only that.
+
+Round 4 found the deepest of the hand-rolled ones: the tables were keyed by **spelling**, and `head-status` matched a bare name
 before it ever read the file's `ns` form. A file that refers a binding macro of its own named `testing` was
 handed `clojure.test/testing`'s semantics. Every table is now keyed by a fully qualified Var, and a head is
 resolved through the file's own namespace — refer, then alias, then a definition in the two trees, then the
 core default, and only when nothing shadows it — before any table is consulted.
 
-**Round 3 cost nothing on Cell C** (tightened tables and a dozen macros moved to frozen cancelled out);
-**round 4 cost one more body and named 18 more frozen heads**, 41 → 59. Cell B moved 21 → 20 and 9 → 8, and
+**Round 3 cost nothing on Cell C**; **round 4 cost one more body**; **round 5 cost three more**, 102 → 99,
+and the ratchet found four further false table claims on the way: `with-in-str` and `with-precision` take no
+binding vector at all, `binding`/`with-redefs`/`with-bindings` bind **Vars** rather than locals, and `case`'s
+test constants are unevaluated. All are frozen now. Cell B moved 21 → 20 and 9 → 8, and
 now reports three real cross-tree kind disagreements it had been silently resolving in the candidate's
 favour.
 
@@ -180,6 +197,12 @@ Three files under `bin/`, on branch `fable/proof-burden`, no edits to `src/`, `t
   receipt, **D** what it did not check. It reads the two git trees out of the **object database**
   (`git ls-tree` + one `git cat-file --batch`): nothing is materialised, no path is walked, no symlink is
   followed, and blobs above a 2 MiB cap are refused rather than parsed. Exit 3 when the brief is not clear.
+- **the resolver** — `~/bin/clj-kondo`, run once per tree with
+  `{:analysis {:locals true :keywords false} :output {:format :edn}}`. It decides what every symbol is:
+  a local, or a Var and which one, including through `:refer`, `:refer :all`, `:use` and aliases. **It is an
+  external analyzer and shares no code with this repository's `src/`**, so section A's independence is
+  intact. Anything it leaves unresolved, reports as a macro outside the tables, or cannot analyse makes the
+  body uncertifiable.
 - **`bin/preservation_scan.clj`** — an independent Clojure source scanner: byte-exact top-level form spans,
   comment spans, `ns`-form parsing, a flat token stream, and a structural node tree. It deliberately shares
   no code with clj-surgeon's `src/`, so its evidence cannot inherit a defect from the transform it is
@@ -203,11 +226,12 @@ What section A establishes, all of it re-derived:
 | A5 static call sites | every site resolved through its own file's aliases, in its own tree: rewritten, stale, undefined-prefix, retargeted |
 | A6 comment inventory | comment texts lost and added across the touched files — the comments *between* forms, which no body comparison can see |
 
-A tier is only awarded when the scanner has **proved** each reference is a Var. A lexical scope analysis
-over the node tree collects every name a binding form could bind (including destructuring), and freezes
-every token inside a quote, a `case` test constant, an interop form, and any macro form whose binding
-semantics the scanner does not model — naming that macro in the brief. A frozen or possibly-bound bare token
-is left alone, so a candidate that changed it falls to `:changed` and lands in front of a reviewer.
+A tier is only awarded when the **resolver** has said what each reference is. A token is canonicalised only
+when clj-kondo bound it to a Var and did not call it a local; heads are trusted only when the resolver names
+a Var in the brief's tables, in its clojure.core function allowlist, or defined in the two trees as a
+non-macro with both trees agreeing. Everything else is named, counted and uncertifiable. The private walker
+runs alongside as a cross-check: where it calls a name a local and the resolver calls the same name a Var in
+the same body, the body is refused and the disagreement is counted (7 on Cell C).
 
 What section B refuses to decide: destination boundaries · promotions · references the checker could not
 confirm · load order (require order, require sort discipline, and new intra-file forward references) · macro
@@ -242,14 +266,14 @@ bin/preservation-brief 65ad613b d9205abc \
 > **Do not consume the preservation figures below and stop.** The brief raised the following, and
 > every one of them needs a human. A signal that lives in section B is not a weaker signal.
 >
-> - **6** relocated bodies whose text CHANGED — read the diffs (A2)
-> - **33** relocated bodies NOT certified because they call a head this scanner cannot vouch for (A2)
-> - **16** in-place bodies NOT certified because they call a head this scanner cannot vouch for (A2)
-> - **16** in-place bodies that changed and are not preserved (A2)
+> - **8** relocated bodies whose text CHANGED — read the diffs (A2)
+> - **34** relocated bodies NOT certified because they call a head this scanner cannot vouch for (A2)
+> - **30** in-place bodies NOT certified because they call a head this scanner cannot vouch for (A2)
+> - **2** in-place bodies that changed and are not preserved (A2)
 > - **11** comment texts LOST (A6)
 > - **8** PRIVACY CHANGES, including private->public promotions (B2)
 > - **1** bare references the checker could NOT confirm (B3)
-> - **59** call heads whose tokens were FROZEN — unresolvable, or a macro whose binding grammar the scanner deliberately does not walk: /, answer-input (shadowed by a local), cond->, curl, curl (shadowed by a local), deftest, ds/bind -> datastar-kit.ds/bind, ds/copy-nearest-text -> datastar-kit.ds/copy-nearest-text
+> - **57** call heads whose tokens were FROZEN — unresolvable, or a macro whose binding grammar the scanner deliberately does not walk: Instant/parse, checked?, chosen, ctl, curl, date?, ds/bind -> datastar-kit.ds/bind, ds/copy-nearest-text -> datastar-kit.ds/copy-nearest-text
 > - **7** owners with no base origin — new code, not a relocation (A1)
 > - **2** changed files outside the scanned roots or not Clojure source — UNREAD (B7)
 > - **4** receipt claims the checker could not confirm (C)
@@ -289,41 +313,43 @@ top-level form in the base tree with the bytes of its candidate home.
 |---|---|---|
 | `:byte-identical` | 83 | identical bytes — nothing in the body to review |
 | `:identical-modulo-whitespace` | 0 | identical after trailing-space and common-indent normalisation |
-| `:identical-modulo-requalification` | 19 | identical once every reference is rewritten to the owner it named in the BASE tree — i.e. the only change is that references follow their owners, and each one still resolves to the same owner |
+| `:identical-modulo-requalification` | 16 | identical once every reference is rewritten to the owner it named in the BASE tree — i.e. the only change is that references follow their owners, and each one still resolves to the same owner |
 | `:code-identical-comments-differ` | 0 | code identical, COMMENT TEXT CHANGED — a prose review obligation |
-| `:unmodelled-macro-context` | 33 | the canonical streams matched, but the body called a head this scanner cannot vouch for, so the match is NOT evidence — read the body |
-| `:changed` | 6 | the body text differs — a FULL review obligation; diffs below |
+| `:unmodelled-macro-context` | 34 | the canonical streams matched, but the body called a head this scanner cannot vouch for, so the match is NOT evidence — read the body |
+| `:changed` | 8 | the body text differs — a FULL review obligation; diffs below |
 
 
 
 The def head's privacy suffix (`defn-` vs `defn`) is normalised before comparison, so a promotion is never scored as a body change; every privacy change is reported in **B2** instead. Privacy changes in this candidate: **8**.
 
-Mechanically preserved bodies (tiers 1–3): **102 of 141**.
+Mechanically preserved bodies (tiers 1–3): **99 of 141**.
 
 Relocated owners that are not byte-identical:
 
 | owner | tier | from | to |
 |---|---|---|---|
-| organizer-shell | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.organizer-layout |
-| event-marquee | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.event-setup |
-| member-row | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.committee |
-| board-region | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
-| log-region | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.log |
-| form-preview-region | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-builder |
-| not-blank | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.format |
-| field-errors | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-controls |
+| header | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.organizer-layout |
+| not-blank | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.format |
+| field-errors | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-controls |
+| initials | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.avatar |
+| req-mark | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-controls |
+| field-error | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-controls |
+| answer-input | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-controls |
+| datastar-script | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.shell |
+| organizer-shell | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.organizer-layout |
 | events-list-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.event-setup |
+| event-marquee | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.event-setup |
 | new-event-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.event-setup |
-| initials | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.avatar |
+| member-row | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.committee |
 | committee-card | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.committee |
-| submissions-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
-| field-error | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-controls |
 | sort-chip | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
 | status-chip | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
 | board-qs | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
 | track-chip | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
+| board-region | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
 | board-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
 | log-summary | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.log |
+| log-region | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.log |
 | submission-detail-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
 | exports-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.integrations |
 | api-docs-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.integrations |
@@ -335,20 +361,18 @@ Relocated owners that are not byte-identical:
 | edit-form | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.portal |
 | profile-form | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.portal |
 | portal-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.portal |
+| form-preview-region | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-builder |
 | field-form-fields | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-builder |
 | form-builder-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-builder |
 | cfp-closed-notice | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.public-cfp |
 | cfp-about-you | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.public-cfp |
 | cfp-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.public-cfp |
 | event-details-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.event-setup |
-| dash-feed-talk | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.dashboard |
-| event-dashboard-region | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.dashboard |
-| header | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.organizer-layout |
 
 _18 further rows suppressed by --max-list 40._
 
 
-<details><summary>diff — organizer-shell (changed)</summary>
+<details><summary>diff — organizer-shell (unmodelled-macro-context)</summary>
 
 ```diff
 --- base/organizer-shell
@@ -384,7 +408,22 @@ _18 further rows suppressed by --max-list 40._
 
 </details>
 
-<details><summary>diff — not-blank (unmodelled-macro-context)</summary>
+<details><summary>diff — header (changed)</summary>
+
+```diff
+--- base/header
++++ candidate/header
+@@ -1,4 +1,4 @@
+-(defn- header [title subtitle & right]
++(defn header [title subtitle & right]
+   [:div.app-header
+    [:div
+     [:h1.ui.header title]
+```
+
+</details>
+
+<details><summary>diff — not-blank (changed)</summary>
 
 ```diff
 --- base/not-blank
@@ -398,22 +437,7 @@ _18 further rows suppressed by --max-list 40._
 
 </details>
 
-<details><summary>diff — field-errors (unmodelled-macro-context)</summary>
-
-```diff
---- base/field-errors
-+++ candidate/field-errors
-@@ -1,3 +1,3 @@
--(defn- field-errors [errors k]
-+(defn field-errors [errors k]
-   (when-let [msgs (get errors k)]
-     [:div.ui.pointing.red.basic.label (str/join " " msgs)]))
-\ No newline at end of file
-```
-
-</details>
-
-_36 further body diffs suppressed by --diffs 3._
+_39 further body diffs suppressed by --diffs 3._
 
 **Owners that did NOT move, whose body text changed.** The same tiers apply: a caller whose only
 change is that its references now follow the owners they name is mechanically preserved too.
@@ -421,34 +445,31 @@ change is that its references now follow the owners they name is mechanically pr
 | tier | owners |
 |---|---|
 | `identical-modulo-requalification` | 32 |
-| `unmodelled-macro-context` | 16 |
-| `changed` | 16 |
+| `unmodelled-macro-context` | 30 |
+| `changed` | 2 |
 
 
 Of 64 in-place body changes, **32** are mechanically preserved and **32** need a reviewer.
 
 | owner | namespace | tier |
 |---|---|---|
-| opinions-stars-ride-first-comment-only-test | cfp-scheduler-killer.views-test | `changed` |
-| opinions-silent-raters-stay-named-test | cfp-scheduler-killer.views-test | `changed` |
-| histogram-buckets-and-hover-test | cfp-scheduler-killer.views-test | `changed` |
-| fmt-when-test | cfp-scheduler-killer.polish-test | `changed` |
-| scrub-slider-wiring-test | cfp-scheduler-killer.polish-test | `changed` |
-| handle-sse-state | cfp-scheduler-killer.server | `changed` |
-| board-fragment-html | cfp-scheduler-killer.server | `changed` |
-| dashboard-fragment-html | cfp-scheduler-killer.server | `changed` |
-| log-fragment-html | cfp-scheduler-killer.server | `changed` |
-| handle-board | cfp-scheduler-killer.server | `changed` |
-| handle-event-log | cfp-scheduler-killer.server | `changed` |
 | dev-render-mode-test | cfp-scheduler-killer.comms-test | `changed` |
 | capture-test | cfp-scheduler-killer.comms-test | `changed` |
-| retire-hides-without-erasing-test | cfp-scheduler-killer.forms-test | `changed` |
-| editing-the-form-never-rewrites-an-existing-submission-test | cfp-scheduler-killer.forms-test | `changed` |
-| form-page-renders-the-real-public-renderer-test | cfp-scheduler-killer.forms-test | `changed` |
+| opinions-stars-ride-first-comment-only-test | cfp-scheduler-killer.views-test | `unmodelled-macro-context` |
+| opinions-silent-raters-stay-named-test | cfp-scheduler-killer.views-test | `unmodelled-macro-context` |
+| histogram-buckets-and-hover-test | cfp-scheduler-killer.views-test | `unmodelled-macro-context` |
+| fmt-when-test | cfp-scheduler-killer.polish-test | `unmodelled-macro-context` |
+| scrub-slider-wiring-test | cfp-scheduler-killer.polish-test | `unmodelled-macro-context` |
 | handle-create-event | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | handle-event-details-save | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | handle-events-preview | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| handle-sse-state | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| handle-login | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | handle-demo-login | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| board-fragment-html | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| dashboard-fragment-html | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| log-fragment-html | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| handle-board | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | reject-value! | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | handle-capture | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | with-form | cfp-scheduler-killer.server | `unmodelled-macro-context` |
@@ -457,10 +478,13 @@ Of 64 in-place body changes, **32** are mechanically preserved and **32** need a
 | handle-form-preview | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | with-schedule | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | with-replay | cfp-scheduler-killer.server | `unmodelled-macro-context` |
-| render-cfp | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| handle-event-log | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | handle-cfp-draft | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | handle-portal-draft | cfp-scheduler-killer.server | `unmodelled-macro-context` |
 | handle-cfp-import-live | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| retire-hides-without-erasing-test | cfp-scheduler-killer.forms-test | `unmodelled-macro-context` |
+| editing-the-form-never-rewrites-an-existing-submission-test | cfp-scheduler-killer.forms-test | `unmodelled-macro-context` |
+| form-page-renders-the-real-public-renderer-test | cfp-scheduler-killer.forms-test | `unmodelled-macro-context` |
 | handle-home | cfp-scheduler-killer.server | `identical-modulo-requalification` |
 | handle-events-list | cfp-scheduler-killer.server | `identical-modulo-requalification` |
 | handle-new-event | cfp-scheduler-killer.server | `identical-modulo-requalification` |
@@ -473,7 +497,7 @@ Of 64 in-place body changes, **32** are mechanically preserved and **32** need a
 _24 further rows suppressed by --max-list 40._
 
 
-<details><summary>diff — opinions-stars-ride-first-comment-only-test (in place, changed)</summary>
+<details><summary>diff — opinions-stars-ride-first-comment-only-test (in place, unmodelled-macro-context)</summary>
 
 ```diff
 --- base/opinions-stars-ride-first-comment-only-test
@@ -491,7 +515,7 @@ _24 further rows suppressed by --max-list 40._
 
 </details>
 
-<details><summary>diff — opinions-silent-raters-stay-named-test (in place, changed)</summary>
+<details><summary>diff — opinions-silent-raters-stay-named-test (in place, unmodelled-macro-context)</summary>
 
 ```diff
 --- base/opinions-silent-raters-stay-named-test
@@ -509,7 +533,7 @@ _24 further rows suppressed by --max-list 40._
 
 </details>
 
-<details><summary>diff — histogram-buckets-and-hover-test (in place, changed)</summary>
+<details><summary>diff — histogram-buckets-and-hover-test (in place, unmodelled-macro-context)</summary>
 
 ```diff
 --- base/histogram-buckets-and-hover-test
@@ -892,7 +916,7 @@ Comment texts lost: **11**. Comment texts added: **0**. Relocated owners at `:co
 | touched source files with no relocation or `ns` edit to explain them | 0 |
 | changed files outside the scanned roots, or not Clojure source | 2 |
 | tree entries the checker REFUSED to read (symlink, non-blob, oversized) | 0 |
-| call heads whose tokens were frozen (unresolvable, or a deliberately unwalked macro) | 59 |
+| call heads whose tokens were frozen (unresolvable, or a deliberately unwalked macro) | 57 |
 
 
 **Call heads whose tokens were frozen.** Either the scanner could not resolve the head to a
@@ -902,48 +926,48 @@ equivalence is reported as not certified rather than preserved:
 
 | macro form |
 |---|
-| `/` |
-| `answer-input (shadowed by a local)` |
-| `cond->` |
+| `Instant/parse` |
+| `checked?` |
+| `chosen` |
+| `ctl` |
 | `curl` |
-| `curl (shadowed by a local)` |
-| `deftest` |
+| `date?` |
 | `ds/bind -> datastar-kit.ds/bind` |
 | `ds/copy-nearest-text -> datastar-kit.ds/copy-nearest-text` |
+| `ds/js -> datastar-kit.ds/js` |
 | `ds/keydown-expr -> datastar-kit.ds/keydown-expr` |
+| `ds/on-key -> datastar-kit.ds/on-key` |
 | `ds/on-meta -> datastar-kit.ds/on-meta` |
 | `ds/post-action* -> datastar-kit.ds/post-action*` |
+| `ds/signal-dec -> datastar-kit.ds/signal-dec` |
+| `ds/signal-inc -> datastar-kit.ds/signal-inc` |
 | `ds/sse-mount -> datastar-kit.ds/sse-mount` |
 | `ds/sse-mount-url -> datastar-kit.ds/sse-mount-url` |
 | `err` |
-| `err (shadowed by a local)` |
 | `events/create-event! -> cfp-scheduler-killer.events/create-event!` |
 | `events/update-event-details! -> cfp-scheduler-killer.events/update-event-details!` |
 | `export` |
-| `export (shadowed by a local)` |
 | `f` |
-| `f (shadowed by a local)` |
-| `form-controls/answer-input (shadowed by a local)` |
 | `forms/add-field! -> cfp-scheduler-killer.forms/add-field!` |
+| `forms/restore-field! -> cfp-scheduler-killer.forms/restore-field!` |
+| `forms/retire-field! -> cfp-scheduler-killer.forms/retire-field!` |
 | `forms/update-field! -> cfp-scheduler-killer.forms/update-field!` |
 | `h/html -> hiccup2.core/html` |
+| `handler` |
+| `hiccup2.core/html` |
 | `java.net.URLEncoder/encode` |
 | `java.time.Instant/now` |
 | `json/write-str -> clojure.data.json/write-str` |
-| `keyword (shadowed by a local)` |
 | `log/debug -> taoensso.timbre/debug` |
 | `log/info -> taoensso.timbre/info` |
 | `log/warn -> taoensso.timbre/warn` |
-| `name (shadowed by a local)` |
+| `mock/request -> ring.mock.request/request` |
 | `note` |
-| `note (shadowed by a local)` |
+| `page/doctype -> hiccup.page/doctype` |
 | `prose` |
-| `prose (shadowed by a local)` |
-| `sequential?` |
-| `sig` |
-| `sig (shadowed by a local)` |
+| `re-seq -> clojure.core/re-seq` |
 
-_19 further rows suppressed by --max-list 40._
+_17 further rows suppressed by --max-list 40._
 
 
 Changed non-source or out-of-root files. **This checker read none of them:**
@@ -1001,7 +1025,7 @@ It did not check:
 - trailing whitespace inside a string literal, which the `:identical-modulo-whitespace` tier normalises away.
 - local bindings. The requalification tier canonicalises a bare name that matches an owner even when it is actually a local; B3 lists the cases where that could hide a broken reference.
 
-_Checker wall: 20164.8 ms. Generated by `bin/preservation-brief`, which reads only the two git trees._
+_Resolver: clj-kondo via `~/bin/clj-kondo`, 6118.7 ms for both trees. Checker wall: 33241.0 ms. Generated by `bin/preservation-brief`, which reads only the two git trees._
 
 ---
 
@@ -1014,20 +1038,23 @@ are **pairs** — their probe exists in both trees — so their counters are rea
 
 | change | clear | moved | preserved | omitted | new | promo | cmt-lost | req-unsorted | fwd-ref | bare? | refused | wall ms |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| clean | false | 141 | 102 | 0 | 7 | 8 | 11 | 0 | 0 | 1 | 0 | 20586 |
-| wrong-binding | false | 141 | **101** | 0 | 7 | 8 | 11 | 0 | 0 | 1 | 0 | 20674 |
-| silent-promotion | false | 141 | 102 | 0 | 7 | **9** | 11 | 0 | 0 | 1 | 0 | 20161 |
-| dropped-comment | false | 141 | 102 | 0 | 7 | 8 | **12** | 0 | 0 | 1 | 0 | 20379 |
-| omitted-owner | false | **140** | 102 | **1** | 7 | 8 | 11 | 0 | 0 | 1 | 0 | 20061 |
-| load-order-forms | false | 141 | 102 | 0 | 7 | 8 | 11 | 0 | **2** | 1 | 0 | 20292 |
-| load-order-requires | false | 141 | 102 | 0 | 7 | 8 | 11 | **1** | 0 | 1 | 0 | 20150 |
-| **local-shadow** (Sol r1) | false | 141 | 102 | 0 | 7 | 8 | 11 | 0 | 0 | 1 | 0 | 20161 |
-| **symlink-escape** (Sol r1) | false | 141 | 102 | 0 | 7 | 8 | 11 | 0 | 0 | 1 | **1** | 20343 |
-| **external-macro** (Sol r2, pair) | false | 141 | **101** | 0 | 7 | 8 | 11 | 0 | 0 | **2** | 0 | 20189 |
-| **are-binding** (Sol r3, pair) | false | 141 | **101** | 0 | 7 | 8 | 11 | 0 | 0 | **2** | 0 | 20645 |
-| **uppercase-alias** (Sol r3, pair) | false | 141 | **101** | 0 | 7 | 8 | 11 | **1** | 0 | **2** | 0 | 20569 |
-| **kind-collision** (Sol r3, pair) | false | 141 | **101** | **1** | **8** | 8 | 11 | **1** | 0 | 1 | 0 | 19971 |
-| **referred-testing** (Sol r4, pair) | false | 141 | **101** | 0 | 7 | 8 | 11 | 0 | 0 | **2** | 0 | 20148 |
+| clean | false | 141 | 99 | 0 | 7 | 8 | 11 | 0 | 0 | 1 | 0 | 33747 |
+| wrong-binding | false | 141 | **98** | 0 | 7 | 8 | 11 | 0 | 0 | 1 | 0 | 33815 |
+| silent-promotion | false | 141 | 99 | 0 | 7 | **9** | 11 | 0 | 0 | 1 | 0 | 33926 |
+| dropped-comment | false | 141 | 99 | 0 | 7 | 8 | **12** | 0 | 0 | 1 | 0 | 33139 |
+| omitted-owner | false | **140** | 99 | **1** | 7 | 8 | 11 | 0 | 0 | 1 | 0 | 33515 |
+| load-order-forms | false | 141 | 99 | 0 | 7 | 8 | 11 | 0 | **2** | 1 | 0 | 33693 |
+| load-order-requires | false | 141 | 99 | 0 | 7 | 8 | 11 | **1** | 0 | 1 | 0 | 33382 |
+| **local-shadow** (Sol r1) | false | 141 | 99 | 0 | 7 | 8 | 11 | 0 | 0 | 1 | 0 | 33658 |
+| **symlink-escape** (Sol r1) | false | 141 | 99 | 0 | 7 | 8 | 11 | 0 | 0 | 1 | **1** | 33181 |
+| **external-macro** (Sol r2, pair) | false | 141 | **98** | 0 | 7 | 8 | 11 | 0 | 0 | **2** | 0 | 32857 |
+| **are-binding** (Sol r3, pair) | false | 141 | **98** | 0 | 7 | 8 | 11 | 0 | 0 | **2** | 0 | 33285 |
+| **uppercase-alias** (Sol r3, pair) | false | 141 | **98** | 0 | 7 | 8 | 11 | **1** | 0 | **2** | 0 | 33554 |
+| **kind-collision** (Sol r3, pair) | false | 141 | **98** | **1** | **8** | 8 | 11 | **1** | 0 | 1 | 0 | 33644 |
+| **referred-testing** (Sol r4, pair) | false | 141 | **98** | 0 | 7 | 8 | 11 | 0 | 0 | **2** | 0 | 33457 |
+| **refer-all-shadow** (Sol r5, pair) | false | 141 | **98** | 0 | 7 | 8 | 11 | 0 | 0 | **2** | 0 | 33560 |
+| **use-shadow** (Sol r5, pair) | false | 141 | **98** | 0 | 7 | 8 | 11 | 0 | 0 | **2** | 0 | 33237 |
+| **refer-all-external** (Sol r5, pair) | false | 141 | **98** | 0 | 7 | 8 | 11 | **1** | 0 | **2** | 0 | 33181 |
 
 Body tiers, which is where seven of the thirteen catches land. Every one of Sol's seven moves
 `committee-page` or `form-builder-page` out of a certified tier and into `:changed`, diff printed:
@@ -1043,7 +1070,7 @@ Body tiers, which is where seven of the thirteen catches land. Every one of Sol'
 | kind-collision | 83 | **18** | 33 | **7** |
 | referred-testing | 83 | **18** | 33 | **7** |
 
-### Planted-defect verdict: **13/13 caught, 0 escaped**
+### Planted-defect verdict: **16/16 caught, 0 escaped**
 
 | planted defect | what was planted | the signal the brief raised |
 |---|---|---|
@@ -1059,6 +1086,9 @@ Body tiers, which is where seven of the thirteen catches land. Every one of Sol'
 | **`are` argv binding** (Sol r3, PB-FENCE-006, pair) | `(are [header] (= header :probe) :probe)` in the base, the bound use replaced in the candidate. `clojure.test/are` binds the symbols in its argv and sat in the "introduces no binding" table | `committee-page` → `:changed`; preserved 103 → 102; `are` named as a frozen head. **`bin/preservation-tables-test` R3 would now reject that table entry before it could ship** |
 | **uppercase require alias** (Sol r3, PB-FENCE-008, pair) | `[compojure.core :as Route]` + `Route/GET`, exploiting that the interop heuristic ran before alias resolution | `committee-page` → `:changed`; preserved 103 → 102; `Route/GET` named |
 | **cross-tree kind collision** (Sol r3, PB-FENCE-007, pair) | the same `[ns name]` defined `defmacro` in the base and `defn` in the candidate, so the merged index vouched for a macro call as a function call | `committee-page` → `:changed`; preserved 102 → 101; **`kind_disagreements` 0 → 1** |
+| **`:refer :all` shadow** (Sol r5, PB-FENCE-010, pair) | the same colliding `testing` macro, imported by `[ns :refer :all]` — a namespace form the private scanner never parsed | `committee-page` → `:changed`; preserved 99 → 98 |
+| **`:use` shadow** (Sol r5, pair) | the same collision through `(:use ...)` | `committee-page` → `:changed`; preserved 99 → 98 |
+| **`:refer :all` from outside the trees** (Sol r5, pair) | `[compojure.core :refer :all]` supplying a head neither tree defines | `committee-page` → `:changed`; preserved 99 → 98 |
 | **referred binding macro named for a table entry** (Sol r4, PB-FENCE-009, pair) | a `defmacro testing` added to a namespace both trees already require, referred as `testing`; the base names its local binding, the candidate the relocated Var. The tables matched the bare spelling before reading the file's `ns` form | `committee-page` → `:changed`; preserved 102 → 101; `testing` named as a frozen head. **R5's generated shadow witnesses would now reject that table entry before it could ship** |
 
 Seven of these escaped an earlier build and were repaired in the same session. Each is now permanent.
@@ -1069,14 +1099,25 @@ Seven of these escaped an earlier build and were repaired in the same session. E
 
 ```
 R1  core-fn-vars: 202 entries
-R2  modelled/frozen Vars: 74
-R3  claims needing a witness: 37
-R3  running 45 executed witnesses
-R5  generated shadow witnesses: 276
-R4  required replay rows: 7
+R2  modelled/frozen Vars: 72
+R3  claims needing a witness: 31
+R3  running 38 witnesses through the external resolver
+R5  generated shadow witnesses: 274 (resolved by clj-kondo)
+R5  shadow actually applied by the resolver for 269 of 274 entries
+R4  required replay rows: 10
 
 PASS — every table entry carries its falsifier, including a generated shadow witness.
 ```
+
+**R3 and R5 are now linted by clj-kondo**, in generated projects, through the brief's `--probe-project`
+entry point — the exact gap Sol named in round 5, where the old R5 exercised a hand-built refer map and so
+could pass with `:refer :all` entirely unparsed. R5's assertion is the implication that matters: *where the
+resolver reports the shadow Var, the brief must refuse the head.* The shadow applied for 269 of 274 entries;
+the five it cannot shadow are special forms, which Clojure does not let a refer override.
+
+Running these rungs found four more false table claims: `with-in-str` and `with-precision` take no binding
+vector at all; `binding`, `with-redefs` and `with-bindings` bind **Vars**, not locals; and `case`'s test
+constants are unevaluated, so a symbol there is a literal. All are frozen now.
 
 - **R1** resolves all 202 allowlist entries **in their stated namespace** and fails on any macro. That
   resolution *is* the falsifier — a function's arguments are evaluated and cannot bind. It removed `cast`,
@@ -1327,8 +1368,11 @@ It is the document that must exist before the slice can.
   - `77126c8d` — round-3 repairs and `bin/preservation-tables-test`. **Sol's round-4 review returned NO-GO
     on this commit** with one blocker, PB-FENCE-009, verdict at
     `/var/tmp/forge/ship/20260909T175507Z-77126c8d81a7/verdict-1.md`.
-  - **`83c13814`** — PB-FENCE-009 repaired: every table keyed by fully qualified Var, resolution before
-    every lookup, and 276 generated shadow witnesses. **This is the tip.**
+  - `83c13814` — PB-FENCE-009 repaired. **Sol's round-5 review returned NO-GO** with PB-FENCE-010, verdict
+    at `/var/tmp/forge/ship/20260909T182037Z-83c138143738/verdict-1.md`.
+  - **`470cea34`** — PB-FENCE-010 repaired by deleting the hand-rolled resolver: clj-kondo resolves every
+    symbol, the private walker survives as a counted cross-check, and the ratchet's witnesses are linted by
+    the same analyzer. **This is the tip.**
 - **Nothing was pushed.** The branch has no upstream.
 - No edits under `src/`, `test/`, or the Makefile. Four new files, all under `bin/`.
 - The brief no longer materialises anything: it reads blobs from the object database. The only path it
@@ -1370,6 +1414,7 @@ It is the document that must exist before the slice can.
 | **A stated evidence boundary that the implementation does not enforce is worse than none**, because the report repeats it. | The brief reads the object database, never the filesystem; symlinks, non-blobs and oversized blobs are counted as refused entries and named. The permanent `symlink-escape` row is the witness. |
 | **A headline a reviewer can consume and stop on defeats a checker whose real value is in section B.** | Every obligation is hoisted above section A into a hard-stop block, the summary carries `clear`, and the exit code is 3 when not clear. The null change is the only clear row in the portfolio. |
 | **A builder cannot review his own oracle, and one round of outside review is not enough either.** Round 1 found four findings; the round-2 probe reproduced the same false-certification class one abstraction level out. | Sol's three specimens are permanent replay rows. §9.9 requires the falsifier's specimens be planted by someone who did not build the checker, and §12 now names the next unseen classes to probe rather than declaring the set complete. |
+| **Six rounds of resolution holes is one wrong rung, not six bugs.** Refers, aliases, uppercase prefixes, per-tree kinds, qualified tables, `:refer :all` — each round closed one hole in a hand-rolled Clojure name resolver and left the next. | Delete the rung. clj-kondo resolves every symbol; the brief only asks it what each token is. It is an external analyzer sharing no code with `src/`, so independence is intact and the hardest part is maintained by people who do only that. The private walker is kept as a cross-check whose disagreements are counted in the brief, not silently resolved. |
 | **Spelling is not identity; resolution precedes every table.** A table keyed by a bare name speaks for whatever that name means in the file being read. A referred macro named `testing` was handed `clojure.test/testing`'s semantics and A certified a changed binding. | Every table is keyed by a fully qualified Var; `head-info` resolves through the file's own `ns` form — refer, alias, definition in the two trees, then the core default, and only when nothing shadows it — before any lookup. The ratchet's R5 generates a shadow witness per table entry, so a new entry cannot arrive without proof that a same-named refer flips it to unmodelled. The permanent `referred-testing` pair row is the witness. |
 | **A table entry is a soundness claim, and a claim with no falsifier is how a checker certifies a defect.** Round 3's three blockers were all entries somebody typed and nobody audited: `are` in the non-binding table, a merged def-head index, an interop heuristic ordered before alias resolution. | `bin/preservation-tables-test`: 203 machine-resolved allowlist entries proved non-macro, 48 heads proved special-form-or-Var with no unexamined macro, 45 executed binding witnesses through a `--probe-scope` entry point, and a required replay row per historic failure class. It exits nonzero on any unsupported claim. **`frozen-heads` needs no witness — freezing is the absence of a claim — so anything unproved goes there.** |
 | A preregistration whose arithmetic does not close cannot be executed, however good its rules sound. | §9 now carries a specimen ledger whose counts sum, an assignment matrix whose observation count follows from reviewers × specimens, stated per-class denominators, and a co-primary restated as strict dominance because n=2 per class cannot support a rate. |
