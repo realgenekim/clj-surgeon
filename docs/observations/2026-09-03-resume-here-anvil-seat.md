@@ -707,3 +707,11 @@ B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa;
 - IN FLIGHT: Astra gate-lanes round 2 (astra-gate-lanes-r2, branch astra/gate-lanes ebaf7aec+ in clj-surgeon-astra-consult; report cellC/astra-gate-lanes-r2-report.md) → ship it; Opus ship v3.4 staged at /var/tmp/forge/ship-v3.4 (tip-bound fix block, fastlane on all exits, fence worktree clean on all exits) → install with `SRC=/var/tmp/forge/ship-v3.4 bash /var/tmp/forge/ship-v3.4/install.sh` when no ship/Astra runs.
 - Row 5: E5 as registered CANCELLED (baseline mostly zero); no more receipt facts; trust residual → recorder user on anvil2. Rows 1/2 friction-low; 5 friction-medium on the legacy meter, receipt-silent 1/15.
 - Gene's standing order: grind to a genuine sublime 9 (given 03:35Z, four hours). Witnessed so far: gates consumed at landing; gate 510→367 s; remaining for 9: gate near 3 min landed.
+
+## STATE at 2026-09-09T08:17Z — trunk 3ea3803e (gate lanes landed, gates=consumed); ship v3.6 INSTALLED; 7906 srv7906k pid 2142240 + CLI on 3ea3803e; sublime 9.0 witnessed (08:16Z)
+- `make test` = parallel coordinator, width derived per box, abstract-socket box-wide slots; `landing-gate-prewarm` / `print-gate-stages`; land consumes only a complete prewarm. Gate 166 s alone, ~316 s beside a battery. gate-trunk-timing running on a clean trunk (log /var/tmp/forge/run-bg/gate-trunk-timing.log).
+- Ship v3.6: fast lane beside review, gates consumed, tip-bound fix blocks with sealed sha in the brief header, fence worktree released only after archiving everything, real EDN reader for prewarm receipts. Install pattern: `SRC=/var/tmp/forge/ship-v3.N bash .../install.sh`, refuses while ship/Astra runs.
+- Fence briefs: verification language only (Sol's content filter refused "attack"/"leak" wording once). Sol's fix block CANDIDATE = sealed sha (printed in brief header by v3.4+).
+- Row 5: E5 cancelled; receipt-silent 1/15; trust residual → recorder user on anvil2. Rows 1/2 friction-low.
+- Next lever for t: Sol's review is the whole serial path of a landing (~8-10 min). Open notes: fence_busy 90-s window, SHIP-FENCE-RELEASE-FAILED row, socket names per netns.
+- Parked (Gene): kiloclaw copy + Anvil→anvil2 migration plan (inb-02f511); Hetzner timing box (inb-3fa126); Frame 7 stats after rows.
