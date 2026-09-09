@@ -188,6 +188,63 @@ plant_on () { # plant_on <branch> <from-sha> <python-edit-file>
 EXT_BASE=$(plant_on d-extmacro-base "$BASE_SHA" "$WORK/edits/extmacro-base.py")
 EXT_CAND=$(plant_on d-extmacro-cand "$CLEAN_SHA" "$WORK/edits/extmacro-cand.py")
 
+# ---- Sol round-3 pair rows -------------------------------------------------
+# Each is planted in BOTH trees: the base expression names a binding the head
+# introduces, the candidate expression names the relocated Var. A must not certify.
+cat > "$WORK/edits/pairlib.py" <<'PYEOF'
+import pathlib
+BASE = "src/cfp_scheduler_killer/views.clj"
+CAND = "src/cfp_scheduler_killer/views/committee.clj"
+ANCHOR = "  [event {:keys [committee members member-form person cfp-state]}]\n"
+
+def insert_body(path, snippet):
+    p = pathlib.Path(path); s = p.read_text()
+    assert s.count(ANCHOR) == 1, (path, s.count(ANCHOR))
+    p.write_text(s.replace(ANCHOR, ANCHOR + "  " + snippet + "\n", 1))
+
+def insert_require(path, spec):
+    p = pathlib.Path(path); s = p.read_text()
+    i = s.index("(:require")
+    j = s.index("\n", i)
+    p.write_text(s[:j] + "\n   " + spec + s[j:])
+
+def append_def(path, text):
+    p = pathlib.Path(path)
+    p.write_text(p.read_text() + text)
+PYEOF
+
+mk_pair_edit () { # <outfile> <BASE|CAND> <body-snippet> [require-spec] [extra-python]
+  { echo "import sys, pathlib"
+    echo "sys.path.insert(0, \"$WORK/edits\")"
+    echo "from pairlib import insert_body, insert_require, append_def, BASE, CAND"
+    if [ -n "${4:-}" ]; then echo "insert_require($2, \"\"\"$4\"\"\")"; fi
+    if [ -n "${5:-}" ]; then echo "$5"; fi
+    echo "insert_body($2, \"\"\"$3\"\"\")"
+  } > "$1"
+}
+
+SRVDEF='append_def("src/cfp_scheduler_killer/server.clj",'
+
+# 1. are-binding — PB-FENCE-006: clojure.test/are binds the symbols in its argv
+mk_pair_edit "$WORK/edits/are-binding-base.py" BASE '(are [header] (= header :probe) :probe)'
+mk_pair_edit "$WORK/edits/are-binding-cand.py" CAND '(are [header] (= organizer-layout/header :probe) :probe)'
+
+# 2. uppercase-alias — PB-FENCE-008: a require alias may be uppercase
+mk_pair_edit "$WORK/edits/uppercase-alias-base.py" BASE '(Route/GET "/probe/:header" [header] header)' '[compojure.core :as Route]'
+mk_pair_edit "$WORK/edits/uppercase-alias-cand.py" CAND '(Route/GET "/probe/:header" [header] organizer-layout/header)' '[compojure.core :as Route]'
+
+# 3. kind-collision — PB-FENCE-007: base defmacro vs candidate defn, same [ns name]
+mk_pair_edit "$WORK/edits/kind-collision-base.py" BASE '(srv/probe-route header)' '[cfp-scheduler-killer.server :as srv]' \
+  "${SRVDEF} \"\\n(defmacro probe-route [x] x)\\n\")"
+mk_pair_edit "$WORK/edits/kind-collision-cand.py" CAND '(srv/probe-route organizer-layout/header)' '[cfp-scheduler-killer.server :as srv]' \
+  "${SRVDEF} \"\\n(defn probe-route [x] x)\\n\")"
+
+declare -A PAIR_BASE PAIR_CAND
+for pr in are-binding uppercase-alias kind-collision; do
+  PAIR_BASE[$pr]=$(plant_on "d-$pr-base" "$BASE_SHA" "$WORK/edits/$pr-base.py")
+  PAIR_CAND[$pr]=$(plant_on "d-$pr-cand" "$CLEAN_SHA" "$WORK/edits/$pr-cand.py")
+done
+
 declare -A SHAS
 SHAS[clean]="$CLEAN_SHA"
 for d in wrong-binding silent-promotion dropped-comment omitted-owner load-order-forms load-order-requires local-shadow symlink-escape; do
@@ -220,12 +277,21 @@ st=$(date +%s.%N)
 en=$(date +%s.%N)
 echo "external-macro  wall $(echo "$en - $st" | bc)s"
 
+for pr in are-binding uppercase-alias kind-collision; do
+  st=$(date +%s.%N)
+  "$HERE/preservation-brief" "${PAIR_CAND[$pr]}" "${PAIR_BASE[$pr]}" --repo "$WORK/repo" \
+      --title "$pr" --out "$WORK/out/$pr.md" --json "$WORK/out/$pr.json" >/dev/null || true
+  en=$(date +%s.%N)
+  echo "$pr  wall $(echo "$en - $st" | bc)s"
+done
+
 python3 - "$WORK/out" <<'PY'
 import json, sys, pathlib, os
 d = pathlib.Path(sys.argv[1])
 order = ["clean","wrong-binding","silent-promotion","dropped-comment",
          "omitted-owner","load-order-forms","load-order-requires",
-         "local-shadow","symlink-escape","external-macro"]
+         "local-shadow","symlink-escape","external-macro",
+         "are-binding","uppercase-alias","kind-collision"]
 rows = []
 for k in order:
     j = json.load(open(d / f"{k}.json"))
@@ -252,8 +318,8 @@ for k, j in rows[1:]:
     delta = {kk: (base.get(kk), j.get(kk)) for kk in base
              if isinstance(base.get(kk), int) and base.get(kk) != j.get(kk)}
     tiers = (base.get("tiers"), j.get("tiers"))
-    if k == "external-macro":
-        print(f"    external-macro tiers = {j.get('tiers')}  unmodelled_heads={len(j.get('unmodelled_macros') or [])}")
+    if k in ("external-macro","are-binding","uppercase-alias","kind-collision"):
+        print(f"    [PAIR] {k} tiers={j.get('tiers')} preserved={j.get('preserved_bodies')} unmodelled={len(j.get('unmodelled_macros') or [])}")
     print(f"{k}: changed counters vs clean = {delta}")
     if tiers[0] != tiers[1]:
         print(f"    tiers clean={tiers[0]} defect={tiers[1]}")

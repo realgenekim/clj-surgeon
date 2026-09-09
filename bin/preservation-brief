@@ -47,7 +47,8 @@
 (def candidate-sha (first (:pos cli)))
 (def base-sha (second (:pos cli)))
 
-(when (or (nil? candidate-sha) (nil? base-sha))
+(when (and (or (nil? candidate-sha) (nil? base-sha))
+           (not (:probe-scope (:opts cli))))
   (binding [*out* *err*]
     (println "usage: preservation-brief <candidate-sha> <base-sha> [--repo DIR] [--roots src,test] [--receipt PATH] [--out PATH] [--json PATH]"))
   (System/exit 2))
@@ -238,7 +239,7 @@
 (def let-like-heads
   #{"let" "let*" "loop" "loop*" "binding" "with-open" "with-local-vars" "with-redefs"
     "with-bindings" "if-let" "when-let" "if-some" "when-some" "when-first" "dotimes"
-    "with-precision" "with-in-str" "if-let*" "when-let*"})
+    "with-precision" "with-in-str"})
 (def seq-binding-heads #{"for" "doseq"})
 (def fn-like-heads #{"fn" "fn*"})
 (def defn-like-heads #{"defn" "defn-" "defmacro"})
@@ -246,7 +247,13 @@
   #{"quote" "var" "reify" "proxy" "extend-type" "extend-protocol" "deftype" "defrecord"
     "definterface" "defprotocol" "definline" "amap" "areduce" "." ".." "new" "set!"
     "monitor-enter" "monitor-exit" "import" "ns" "js*" "gen-class" "memfn" "bean"
-    "require" "use" "refer" "load" "in-ns"})
+    "require" "use" "refer" "load" "in-ns"
+    ;; PB-FENCE-006: `clojure.test/are` binds the symbols in its argv. Every macro
+    ;; below either binds, or has unevaluated/rearranged operands, or has no
+    ;; falsifier row yet — all of which mean its tokens must be frozen, not walked.
+    "are" "condp" "cond->" "cond->>" "some->>" "while" "assert" "comment" "time"
+    "delay" "future" "lazy-seq" "lazy-cat" "locking" "dosync" "io!" "sync"
+    "defonce" "defmulti" "declare" "deftest" "deftest-" "defspec" "with-meta*"})
 
 ;; ------------------------------------------------------------ the allowlist
 ;;
@@ -272,14 +279,30 @@
 ;; token inside it is frozen, the head is named and counted in the brief, and the
 ;; body cannot reach a tier that depends on canonicalisation.
 
+(def special-forms
+  "Clojure special forms. They are not Vars, cannot be redefined, and their binding
+   behaviour is fixed by the compiler; the walker models each one explicitly."
+  ;; Only the special forms the walker WALKS. The ones it freezes — `quote`, `var`,
+  ;; `set!`, `new`, `.`, `..`, `monitor-*` — live in `frozen-heads`, and a head may
+  ;; never appear in both (the tables test refuses a collision).
+  #{"if" "do" "let*" "fn*" "loop*" "recur" "throw" "try" "catch" "finally" "def"})
+
+(def non-binding-core-macros
+  "clojure.core / clojure.test MACROS asserted to introduce no binding.
+
+   Each entry is a soundness claim, so each entry names a planted-defect replay row
+   that exercises it — `bin/preservation-tables-test` fails if a row is missing.
+   `clojure.test/are` used to sit in this table and does not belong here: it binds
+   the symbols in its argv, which is PB-FENCE-006. It is in `frozen-heads` now, and
+   its row asserts the body is NOT certified."
+  #{"when" "when-not" "if-not" "and" "or" "cond" "->" "->>" "some->" "doto"
+    "testing" "is"})
+
 (def control-heads
-  "Special forms and clojure.core macros whose argument grammar is fully modelled
-   here and which introduce no binding beyond what the walker already extracts."
-  #{"do" "if" "if-not" "when" "when-not" "and" "or" "not" "cond" "condp" "while"
-    "throw" "try" "finally" "recur" "assert" "comment" "->" "->>" "some->" "some->>"
-    "cond->" "cond->>" "doto" "delay" "future" "lazy-seq" "lazy-cat" "time" "locking"
-    "dosync" "io!" "sync" "def" "defonce" "defmulti" "declare" "deftest" "deftest-"
-    "defspec" "testing" "is" "are" "list" "vector" "hash-map" "hash-set" "str"})
+  "Heads the walker treats as introducing no binding: special forms it models, and
+   the macros above. Core FUNCTIONS are handled separately by `core-fn-allowlist`,
+   since a function's arguments are evaluated and cannot bind."
+  (into special-forms non-binding-core-macros))
 
 (def modelled-heads
   (into (into control-heads #{"case" "catch" "as->" "letfn" "defmethod"})
@@ -287,8 +310,9 @@
 
 (def core-fn-allowlist
   "clojure.core FUNCTIONS. A function's arguments are evaluated, so no token inside
-   a call to one can be a binding this scanner missed. Nothing here may be a macro;
-   adding an entry is a soundness assertion and needs its own planted-defect row."
+   a call to one can be a binding this scanner missed. `bin/preservation-tables-test`
+   resolves every entry and fails if any is a macro or does not resolve — that check
+   removed `cast` and the typo `when-first?`."
   #{"+" "-" "*" "/" "=" "==" "not=" "<" ">" "<=" ">=" "inc" "dec" "min" "max" "mod" "rem"
     "quot" "abs" "count" "first" "second" "last" "next" "rest" "nth" "nthnext" "get" "get-in"
     "assoc" "assoc-in" "dissoc" "update" "update-in" "merge" "merge-with" "select-keys"
@@ -305,11 +329,12 @@
     "odd?" "boolean" "int" "long" "double" "float" "bigdec" "bigint" "num" "parse-long"
     "parse-double" "parse-boolean" "deref" "atom" "swap!" "reset!" "swap-vals!" "reset-vals!"
     "ref" "agent" "send" "send-off" "promise" "deliver" "meta" "with-meta" "vary-meta"
-    "instance?" "class" "type" "cast" "identical?" "compare" "hash" "rand" "rand-int"
+    "instance?" "class" "type" "identical?" "compare" "hash" "rand" "rand-int"
     "rand-nth" "shuffle" "peek" "pop" "subvec" "sorted-map" "sorted-set" "array-map"
     "zipmap" "update-keys" "update-vals" "run!" "doall" "dorun" "iterate" "reductions"
-    "max-key" "min-key" "sequence" "eduction" "transduce" "completing" "cat" "halt-when"
-    "ex-info" "ex-message" "ex-data" "ex-cause" "slurp" "spit" "when-first?" "boolean?"})
+    "max-key" "min-key" "sequence" "eduction" "transduce" "completing" "cat"
+    "ex-info" "ex-message" "ex-data" "ex-cause" "slurp" "spit" "boolean?" "not"
+    "list" "vector" "hash-map" "hash-set"})
 
 (defn- head-sym [nd]
   (let [c (first (:children nd))]
@@ -322,10 +347,18 @@
 
 (defn head-status
   "One of :modelled :safe-call :unmodelled, for the head of a list form.
-   `ctx` carries {:file :owner-kind}, where owner-kind maps [ns name] to the def
-   head that created it in either scanned tree."
+
+   `ctx` carries {:file :kind :kind-disagree}. `:kind` is the def-head index for
+   THIS TREE only (PB-FENCE-007: a shared index let a candidate `defn` overwrite a
+   base `defmacro` and certify a macro call as a function call). `:kind-disagree`
+   holds every [ns name] whose def head differs between the two trees; any of them
+   is unmodelled on both sides.
+
+   Alias resolution runs BEFORE the interop heuristic (PB-FENCE-008: Clojure allows
+   an uppercase require alias, so `[compojure.core :as Route]` + `Route/GET` must
+   resolve as the macro it is, not pass as a class call)."
   [ctx h]
-  (let [{:keys [file owner-kind]} ctx]
+  (let [{:keys [file kind kind-disagree]} ctx]
     (cond
       (nil? h) :safe-call                       ; computed head — cannot be a macro
       (str/starts-with? h ":") :safe-call       ; keyword lookup
@@ -334,17 +367,23 @@
       (str/ends-with? h ".") :safe-call          ; constructor
       :else
       (let [[a n] (if-let [[_ a n] (re-matches qual-token-re h)] [a n] [nil h])
-            lib (when a (or (get (:aliases file) a) (when (str/includes? a ".") a)))
+            alias-lib (when a (get (:aliases file) a))          ; a require alias WINS
+            dotted-lib (when (and a (nil? alias-lib) (str/includes? a ".")) a)
+            lib (or alias-lib dotted-lib)
             refer-lib (when-not a (get (:refers file) n))
             target-ns (or lib refer-lib (when-not a (:ns file)))
-            kind (get owner-kind [target-ns n])]
+            k (get kind [target-ns n])]
         (cond
-          ;; Java static / interop: `Instant/parse`, `String/join`
-          (and a (Character/isUpperCase (.charAt ^String a 0))) :safe-call
-          (and a (some #(or (= a %) (str/ends-with? % (str "." a))) (:imports file))) :safe-call
-          ;; (b) resolves to a def/defn in the scanned trees and is not a macro
-          (and kind (not (contains? #{"defmacro" "definline"} kind))) :safe-call
-          kind :unmodelled                                    ; it IS a macro
+          ;; a name whose def head disagrees between the trees is never vouched for
+          (contains? kind-disagree [target-ns n]) :unmodelled
+          ;; (b) resolves to a def/defn in THIS tree and is not a macro
+          (and k (not (contains? #{"defmacro" "definline"} k))) :safe-call
+          k :unmodelled                                        ; it IS a macro here
+          ;; Java static / interop — only for a prefix that is NOT a require alias
+          (and a (nil? alias-lib) (nil? dotted-lib)
+               (Character/isUpperCase (.charAt ^String a 0))) :safe-call
+          (and a (nil? alias-lib)
+               (some #(or (= a %) (str/ends-with? % (str "." a))) (:imports file))) :safe-call
           ;; (c) clojure.core function allowlist
           (and (nil? a) (nil? refer-lib) (core-fn-allowlist n)) :safe-call
           (and (contains? #{"clojure.core" "cljs.core"} lib) (core-fn-allowlist n)) :safe-call
@@ -352,7 +391,8 @@
 
 (defn scope-analysis
   "{:bound #{names} :frozen #{token texts} :macros #{heads} :unmodelled? bool}
-   for one body, under the inverted allowlist of PB-FENCE-005."
+   for one body, under the inverted allowlist of PB-FENCE-005 and the per-tree kind
+   index of PB-FENCE-007."
   [text ctx]
   (let [st (volatile! {:bound #{} :frozen #{} :macros #{} :unmodelled? false})
         add! (fn [k vs] (vswap! st update k into vs))
@@ -369,7 +409,10 @@
                   (cond
                     (nil? h) (run! walk kids)
 
-                    (frozen-heads h) (freeze! nd)
+                    ;; A frozen head is a modelling DECISION, not an unknown, but the
+                    ;; reviewer still needs to know a body was refused because of it —
+                    ;; `are` is exactly that case (PB-FENCE-006).
+                    (frozen-heads h) (do (vswap! st update :macros conj h) (freeze! nd))
 
                     (= :unmodelled (head-status ctx h))
                     (do (vswap! st update :macros conj h)
@@ -452,6 +495,16 @@
 
 (def ^:private priv-heads {"defn-" "defn" "deftest-" "deftest" "def-" "def"})
 
+(when-let [probe-src (:probe-scope (:opts cli))]
+  ;; Entry point for bin/preservation-tables-test: report whether the walker
+  ;; considers `probe` bound in this source. Every table entry's witness runs
+  ;; through here, against the real analysis rather than a copy of it.
+  (let [{:keys [bound frozen]} (scope-analysis probe-src
+                                 {:file {:ns "probe.ns" :aliases {} :refers {} :imports []}
+                                  :kind {} :kind-disagree #{}})]
+    (println (if (or (contains? bound "probe") (contains? frozen "probe")) "BOUND" "FREE"))
+    (System/exit 0)))
+
 (defn make-canon
   "Build the token canonicaliser for one comparison.
 
@@ -497,13 +550,15 @@
 (defn body-tier
   "Returns [tier {:bound :frozen :macros}]. The scope analysis is the union of
    both sides: a name bound in either version disqualifies it in both."
-  [canon owner-kind a-text a-file b-text b-file]
+  [canon kinds a-text a-file b-text b-file]
   (cond
     (= a-text b-text) [:byte-identical {}]
     (= (ws-normal a-text) (ws-normal b-text)) [:identical-modulo-whitespace {}]
     :else
-    (let [sa (scope-analysis a-text {:file a-file :owner-kind owner-kind})
-          sb (scope-analysis b-text {:file b-file :owner-kind owner-kind})
+    (let [sa (scope-analysis a-text {:file a-file :kind (:base kinds)
+                                     :kind-disagree (:disagree kinds)})
+          sb (scope-analysis b-text {:file b-file :kind (:cand kinds)
+                                     :kind-disagree (:disagree kinds)})
           bound (set/union (:bound sa) (:bound sb))
           frozen (set/union (:frozen sa) (:frozen sb))
           macros (set/union (:macros sa) (:macros sb))
@@ -726,27 +781,34 @@
              [[(:ns cand) (:id cand)] (:ns base)])))
 (def base-owns (set (map (juxt :ns :id) (all-owners base-idx))))
 (def canon (make-canon pair-map base-owns base-owner-ns))
-(def owner-kind
-  "[namespace name] -> the def head that created it, across the WHOLE of both
-   trees, not merely the parsed scope: a call head can name a function in a file
-   the brief has no reason to parse, and treating that as unmodelled would be
-   noise rather than caution. A `defmacro` anywhere wins.
-   Parsed owners override the regex, since the parse is exact."
-  (let [cheap (merge (cheap-owner-kinds raw-base) (cheap-owner-kinds raw-cand))]
-    (reduce (fn [acc o]
-              (let [k [(:ns o) (:id o)]]
-                (if (contains? #{"defmacro" "definline"} (:kind o))
-                  (assoc acc k (:kind o))
-                  (assoc acc k (:kind o)))))
-            cheap
-            (concat (all-owners base-idx) (all-owners cand-idx)))))
+(defn- kind-index
+  "[namespace name] -> def head, for ONE tree: the whole tree by regex, with the
+   parsed owners of that tree layered on top because the parse is exact."
+  [raw idx]
+  (reduce (fn [acc o] (assoc acc [(:ns o) (:id o)] (:kind o)))
+          (cheap-owner-kinds raw)
+          (all-owners idx)))
+
+;; PB-FENCE-007. Kinds are resolved PER TREE. Merging them let a candidate `defn`
+;; overwrite a base `defmacro`, and the brief then vouched for a macro call on the
+;; base side as if it were a function call. Base-side resolution uses the base
+;; index, candidate-side the candidate index, and any [ns name] whose def head
+;; DISAGREES between the trees is unmodelled on both sides.
+(def base-kind (kind-index raw-base base-idx))
+(def cand-kind (kind-index raw-cand cand-idx))
+(def kind-disagree
+  (into #{} (for [k (set (concat (keys base-kind) (keys cand-kind)))
+                  :let [b (get base-kind k) c (get cand-kind k)]
+                  :when (and b c (not= b c))]
+              k)))
+(def kinds {:base base-kind :cand cand-kind :disagree kind-disagree})
 
 (def moved-rows
   (vec (for [{:keys [base cand matched-by]} (:moved m)]
          {:id (:id base) :kind (:kind base) :family (:family base) :kind-to (:kind cand)
           :from-ns (:ns base) :to-ns (:ns cand)
           :from-file (:path base) :to-file (:path cand)
-          :tier-info (body-tier canon owner-kind (:text base) (get base-idx (:path base))
+          :tier-info (body-tier canon kinds (:text base) (get base-idx (:path base))
                                 (:text cand) (get cand-idx (:path cand)))
           :matched-by matched-by
           :priv-from (:private? base) :priv-to (:private? cand)
@@ -758,7 +820,7 @@
 
 (def same-rows
   (vec (for [{:keys [base cand]} (:same m)
-             :let [[tier info] (body-tier canon owner-kind (:text base) (get base-idx (:path base))
+             :let [[tier info] (body-tier canon kinds (:text base) (get base-idx (:path base))
                                           (:text cand) (get cand-idx (:path cand)))]
              :when (not= tier :byte-identical)]
          {:id (:id base) :kind (:kind base) :family (:family base) :ns (:ns base) :file (:path cand)
@@ -1072,7 +1134,7 @@
          (when (seq possible-unresolved) [(count possible-unresolved) "bare references the checker could NOT confirm (B3)"])
          (when (seq (:ambiguous m)) [(count (:ambiguous m)) "owners the checker could not match unambiguously (A1)"])
          (when (seq unmodelled-macros)
-           [(count unmodelled-macros) (str "macro forms whose binding semantics this scanner does not model, so their tokens were left UNRESOLVED: "
+           [(count unmodelled-macros) (str "call heads whose tokens were FROZEN — unresolvable, or a macro whose binding grammar the scanner deliberately does not walk: "
                                            (str/join ", " (take 8 unmodelled-macros)))])
          (when (seq refused-entries) [(count refused-entries) "tree entries this checker REFUSED to read (symlinks, non-blobs, oversized) (B7)"])
          (when (seq (:added m)) [(count (:added m)) "owners with no base origin — new code, not a relocation (A1)"])
@@ -1448,7 +1510,7 @@
                     [["touched source files with no relocation or `ns` edit to explain them" (count unexplained)]
                      ["changed files outside the scanned roots, or not Clojure source" (count nonsource-changed)]
                      ["tree entries the checker REFUSED to read (symlink, non-blob, oversized)" (count refused-entries)]
-                     ["macro forms whose binding semantics the scanner does not model" (count unmodelled-macros)]]))
+                     ["call heads whose tokens were frozen (unresolvable, or a deliberately unwalked macro)" (count unmodelled-macros)]]))
       (when (seq refused-entries)
         (println)
         (println "**Tree entries this checker refused to read.** A symlink is reported by its entry, never followed;")
@@ -1457,9 +1519,10 @@
         (println (tbl* ["path" "why"] (for [e refused-entries] [(:path e) (:why e)]))))
       (when (seq unmodelled-macros)
         (println)
-        (println "**Macro forms whose binding semantics this scanner does not model.** Every token inside one of these")
-        (println "was treated as UNRESOLVED, so any body that depended on one for its equivalence is reported as")
-        (println "changed rather than preserved:")
+        (println "**Call heads whose tokens were frozen.** Either the scanner could not resolve the head to a")
+        (println "non-macro definition it can read, or the head is a macro whose binding grammar it deliberately does")
+        (println "not walk. Every token inside such a form is left UNRESOLVED, so a body that depended on one for its")
+        (println "equivalence is reported as not certified rather than preserved:")
         (println)
         (println (tbl* ["macro form"] (for [mn unmodelled-macros] [(str "`" mn "`")]))))
       (when (seq unexplained)
@@ -1543,6 +1606,7 @@
             :ns_deleted (count ns-deleted)
             :require_reorders (count reordered)
             :require_sort_broken (count sort-broken)
+            :kind_disagreements (count kind-disagree)
             :new_forward_refs (count new-forward-refs)
             :base_old_sites (count base-old-sites)
             :rewritten_sites (count cand-new-sites)
