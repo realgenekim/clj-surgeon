@@ -357,12 +357,28 @@
     (let [m (.toString masked)]
       (into #{} (map second) (re-seq bare-sym-re m)))))
 
+(declare tokens*)
+
 (defn tokens
   "Flatten source text into an ordered token stream: whitespace and indentation
    are discarded, everything else is kept verbatim. Comparing two token streams
    is how the brief decides body identity 'modulo the documented indentation
-   rules' without a whitespace heuristic that could hide a real edit."
-  [^String s]
+   rules' without a whitespace heuristic that could hide a real edit.
+
+   Each token carries its absolute :start offset, and :row/:col when a line index
+   is supplied, so clj-kondo's analysis can be joined to it by position."
+  ([^String s] (tokens s nil))
+  ([^String s idx]
+   (let [raw (tokens* s)]
+     (if (nil? idx)
+       raw
+       (mapv (fn [t]
+               (let [r (line-of idx (:start t))
+                     ls (nth idx (dec r))]
+                 (assoc t :row r :col (inc (- (long (:start t)) (long ls))))))
+             raw)))))
+
+(defn- tokens* [^String s]
   (let [n (.length s)]
     (loop [i 0 acc []]
       (if (>= i n)
@@ -373,41 +389,41 @@
 
             (= c \;)
             (let [e (loop [k i] (if (or (>= k n) (= (.charAt s k) \newline)) k (recur (inc k))))]
-              (recur e (conj acc {:kind :comment :text (str/trim (subs s i e))})))
+              (recur e (conj acc {:kind :comment :start i :text (str/trim (subs s i e))})))
 
             (= c \")
-            (let [e (read-string-lit s i)] (recur e (conj acc {:kind :str :text (subs s i e)})))
+            (let [e (read-string-lit s i)] (recur e (conj acc {:kind :str :start i :text (subs s i e)})))
 
             (= c \\)
-            (let [e (read-char-lit s i)] (recur e (conj acc {:kind :chr :text (subs s i e)})))
+            (let [e (read-char-lit s i)] (recur e (conj acc {:kind :chr :start i :text (subs s i e)})))
 
             (contains? #{\( \) \[ \] \{ \}} c)
-            (recur (inc i) (conj acc {:kind :delim :text (str c)}))
+            (recur (inc i) (conj acc {:kind :delim :start i :text (str c)}))
 
             (= c \#)
             (let [c2 (when (< (inc i) n) (.charAt s (inc i)))]
               (cond
-                (nil? c2) (recur (inc i) (conj acc {:kind :prefix :text "#"}))
+                (nil? c2) (recur (inc i) (conj acc {:kind :prefix :start i :text "#"}))
                 (= c2 \") (let [e (read-string-lit s (inc i))]
-                            (recur e (conj acc {:kind :regex :text (subs s i e)})))
+                            (recur e (conj acc {:kind :regex :start i :text (subs s i e)})))
                 (contains? #{\{ \( \_ \? \' \= \^ \:} c2)
-                (recur (+ i 2) (conj acc {:kind :prefix :text (subs s i (+ i 2))}))
+                (recur (+ i 2) (conj acc {:kind :prefix :start i :text (subs s i (+ i 2))}))
                 (= c2 \#) (let [e (read-token s (+ i 2))]
-                            (recur e (conj acc {:kind :tok :text (subs s i e)})))
+                            (recur e (conj acc {:kind :tok :start i :text (subs s i e)})))
                 :else (let [e (read-token s (inc i))]
-                        (recur e (conj acc {:kind :tag :text (subs s i e)})))))
+                        (recur e (conj acc {:kind :tag :start i :text (subs s i e)})))))
 
             (contains? #{\' \` \@ \^} c)
-            (recur (inc i) (conj acc {:kind :prefix :text (str c)}))
+            (recur (inc i) (conj acc {:kind :prefix :start i :text (str c)}))
 
             (= c \~)
             (let [e (if (and (< (inc i) n) (= (.charAt s (inc i)) \@)) (+ i 2) (inc i))]
-              (recur e (conj acc {:kind :prefix :text (subs s i e)})))
+              (recur e (conj acc {:kind :prefix :start i :text (subs s i e)})))
 
             :else
             (let [e (read-token s i)
                   e (if (<= e i) (inc i) e)]
-              (recur e (conj acc {:kind :tok :text (subs s i e)})))))))))
+              (recur e (conj acc {:kind :tok :start i :text (subs s i e)})))))))))
 
 ;; ---------------------------------------------------------------- node tree
 ;;
@@ -438,8 +454,8 @@
   (let [n (.length s)
         c (.charAt s i)]
     (cond
-      (= c \") (let [e (read-string-lit s i)] [{:kind :str :text (subs s i e)} e])
-      (= c \\) (let [e (read-char-lit s i)] [{:kind :chr :text (subs s i e)} e])
+      (= c \") (let [e (read-string-lit s i)] [{:kind :str :start i :text (subs s i e)} e])
+      (= c \\) (let [e (read-char-lit s i)] [{:kind :chr :start i :text (subs s i e)} e])
 
       (contains? closers c)
       (let [[kids e] (read-node-seq s i cbuf (closers c))]
@@ -450,7 +466,7 @@
       (let [c2 (when (< (inc i) n) (.charAt s (inc i)))]
         (cond
           (nil? c2) [{:kind :token :text "#"} (inc i)]
-          (= c2 \") (let [e (read-string-lit s (inc i))] [{:kind :regex :text (subs s i e)} e])
+          (= c2 \") (let [e (read-string-lit s (inc i))] [{:kind :regex :start i :text (subs s i e)} e])
           (= c2 \{) (let [[kids e] (read-node-seq s (inc i) cbuf \})]
                       [{:kind :set :open "#{" :children kids :text (subs s i (min e n))} e])
           (= c2 \() (let [[kids e] (read-node-seq s (inc i) cbuf \))]

@@ -50,7 +50,8 @@
 (when (and (or (nil? candidate-sha) (nil? base-sha))
            (not (:probe-scope (:opts cli)))
            (not (:probe-heads (:opts cli)))
-           (not (:dump-tables (:opts cli))))
+           (not (:dump-tables (:opts cli)))
+           (not (:probe-project (:opts cli))))
   (binding [*out* *err*]
     (println "usage: preservation-brief <candidate-sha> <base-sha> [--repo DIR] [--roots src,test] [--receipt PATH] [--out PATH] [--json PATH]"))
   (System/exit 2))
@@ -163,6 +164,87 @@
                acc))
            (transient {}) blobs)))
 
+
+;; ------------------------------------------------------ the external resolver
+;;
+;; PB-FENCE-010, and the five holes before it. Six rounds of hand-rolled symbol
+;; resolution — refers, aliases, uppercase prefixes, per-tree kinds, qualified
+;; tables, and finally `:refer :all` — each closed one hole and left the next.
+;; **Hand-rolling Clojure name resolution is the wrong rung.** The resolver is now
+;; clj-kondo, through the paved `~/bin/clj-kondo` entrance, run once per tree.
+;;
+;; clj-kondo is an external analyzer. It shares no code with this repository's
+;; `src/`, so the brief's evidence still cannot inherit a defect from the transform
+;; it is checking — the independence property that motivated the private scanner is
+;; unchanged, and the resolver is now maintained by people who do only that.
+;;
+;; From the analysis the brief takes, per source position:
+;;   :var-usages    -> the resolved [ns name] of every symbol, including one
+;;                     reached through :refer, :refer :all, :use or an alias
+;;   :locals / :local-usages -> which positions are LOCALS, by id
+;;   :var-definitions        -> :macro for every Var defined in the two trees
+;;   :findings               -> unresolved symbols, and files that failed to parse
+;;
+;; Anything kondo leaves unresolved, reports as a macro outside the tables, or
+;; cannot analyze at all, is unmodelled and its body cannot be certified.
+
+(def kondo-bin (str (fs/path (System/getProperty "user.home") "bin" "clj-kondo")))
+
+(defn dump-tree
+  "Write a tree's source blobs — read from the object database, never from a
+   working copy — into a directory for the analyzer. Only the blobs already read
+   under PB-FENCE-002 are written; no path is walked and no symlink is followed."
+  [blobs dir]
+  (doseq [[rel text] blobs]
+    (let [f (fs/file (fs/path dir rel))]
+      (fs/create-dirs (fs/parent f))
+      (spit f text)))
+  dir)
+
+(defn kondo-analyze [dir]
+  (let [{:keys [out exit err]}
+        (p/sh {:out :string :err :string :dir dir}
+              kondo-bin "--lint" "." "--parallel"
+              "--config" "{:analysis {:locals true :keywords false} :output {:format :edn}}")]
+    (when (and (not (contains? #{0 2 3} exit)) (str/blank? out))
+      (throw (ex-info (str "clj-kondo failed: " err) {:exit exit})))
+    (try (edn/read-string {:default (fn [_ v] v)} out)
+         (catch Exception e
+           (throw (ex-info (str "clj-kondo analysis was not readable EDN: " (.getMessage e)) {}))))))
+
+(defn kondo-index
+  "path -> {:var {[row col] \"ns/name\"} :macro #{[row col]} :local #{[row col]}
+            :unresolved #{[row col]} :failed? bool}, plus :defs {[ns name] macro?}."
+  [analysis]
+  (let [a (:analysis analysis)
+        norm (fn [f] (str/replace (str f) #"^\./" ""))
+        add (fn [m path k v] (update-in m [path k] (fnil conj (if (map? v) {} #{})) v))
+        idx (reduce (fn [m u]
+                      (let [path (norm (:filename u))
+                            pos [(:name-row u) (:name-col u)]
+                            q (str (:to u) "/" (:name u))]
+                        (cond-> (assoc-in m [path :var pos] q)
+                          (:macro u) (update-in [path :macro] (fnil conj #{}) pos))))
+                    {} (:var-usages a))
+        idx (reduce (fn [m l]
+                      (let [path (norm (:filename l)) pos [(:row l) (:col l)]]
+                        (-> m
+                            (update-in [path :local] (fnil conj #{}) pos)
+                            (assoc-in [path :local-name pos] (str (:name l))))))
+                    idx (concat (:locals a) (:local-usages a)))
+        idx (reduce (fn [m f]
+                      (let [path (norm (:filename f))]
+                        (case (:type f)
+                          :unresolved-symbol
+                          (update-in m [path :unresolved] (fnil conj #{}) [(:row f) (:col f)])
+                          (:syntax :reader-error)
+                          (assoc-in m [path :failed?] true)
+                          m)))
+                    idx (:findings analysis))
+        defs (into {} (for [d (:var-definitions a)]
+                        [[(str (:ns d)) (str (:name d))] (boolean (:macro d))]))]
+    {:files idx :defs defs}))
+
 (defn index-file [rel text]
   (let [{:keys [forms comments]} (sc/scan text)
         nsf (sc/ns-form forms)
@@ -256,24 +338,30 @@
   "Special forms the walker walks. The compiler resolves a special form before any
    Var, so these cannot be shadowed by a refer; they are the only bare names in
    any table."
-  #{"if" "do" "let*" "fn*" "loop*" "recur" "throw" "try" "catch" "finally" "def"})
+  #{"if" "do" "let*" "fn*" "recur" "throw" "try" "catch" "finally" "def"})
 
 (def frozen-special-forms
-  #{"quote" "var" "set!" "new" "." ".." "monitor-enter" "monitor-exit"})
+  #{"quote" "var" "set!" "new" "." ".." "monitor-enter" "monitor-exit" "loop*"})
 
 (def let-like-vars
   (into #{} (map #(str "clojure.core/" %))
-        ["let" "loop" "binding" "with-open" "with-local-vars" "with-redefs"
-         "with-bindings" "if-let" "when-let" "if-some" "when-some" "when-first"
-         "dotimes" "with-precision" "with-in-str"]))
+        ;; Only heads whose binder position is a LOCAL. `binding`, `with-redefs`
+        ;; and `with-bindings` bind VARS, not locals — the resolver says so, and the
+        ;; tables test refuses the claim — so they are frozen instead.
+        ["let" "loop" "with-open" "with-local-vars" "if-let" "when-let"
+         "if-some" "when-some" "when-first" "dotimes"]))
 (def seq-binding-vars #{"clojure.core/for" "clojure.core/doseq"})
 (def fn-like-vars #{"clojure.core/fn"})
 (def defn-like-vars #{"clojure.core/defn" "clojure.core/defn-" "clojure.core/defmacro"})
 (def other-modelled-vars
-  #{"clojure.core/case" "clojure.core/as->" "clojure.core/letfn" "clojure.core/defmethod"})
+  ;; `case` is frozen, not modelled: its test constants are unevaluated, so a
+;; symbol there is a literal and must never be canonicalised.
+  #{"clojure.core/as->" "clojure.core/letfn" "clojure.core/defmethod"})
 
 (def frozen-vars
-  (into #{"clojure.test/are" "clojure.test/deftest"}
+  (into #{"clojure.test/are" "clojure.test/deftest"
+          "clojure.core/case" "clojure.core/binding" "clojure.core/with-redefs"
+          "clojure.core/with-bindings"}
         (map #(str "clojure.core/" %))
         ;; Every entry must resolve in its stated namespace — the tables test
         ;; enforces it, and that is what removed `io!`, `gen-class`, `import`,
@@ -433,7 +521,7 @@
                         (vswap! st assoc :unmodelled? true)
                         (freeze! nd))
 
-                    (or (let-like-vars r) (= r "special/let*") (= r "special/loop*"))
+                    (or (let-like-vars r) (= r "special/let*"))
                     (let [bv (second kids)]
                       (when (= :vector (:kind bv))
                         (doseq [[b init] (pairs (:children bv))]
@@ -598,29 +686,114 @@
                  :code-identical-comments-differ :unmodelled-macro-context :changed])
 (def tier-rank (into {} (map-indexed (fn [i t] [t i]) tier-order)))
 
+(defn resolve-tokens
+  "Annotate a token stream with the resolver's verdict per token."
+  [text file ki defs owner-start lidx]
+  (let [toks (sc/tokens text (sc/line-index text))
+        locals (get ki :local #{})
+        vars (get ki :var {})
+        unres (get ki :unresolved #{})]
+    (mapv (fn [t]
+            (if-not (= :tok (:kind t))
+              t
+              (let [off (+ (long owner-start) (long (:start t)))
+                    r (sc/line-of lidx off)
+                    ls (nth lidx (dec r))
+                    c (inc (- off (long ls)))
+                    p [r c]]
+                (assoc t :row r :col c
+                       :local? (contains? locals p)
+                       :resolved (get vars p)
+                       :unresolved? (contains? unres p)))))
+          toks)))
+
+(defn head-trustworthy?
+  "A head may be trusted only when the resolver names a Var the brief can vouch
+   for: one of its tables, a clojure.core function, or a NON-macro definition in
+   one of the two trees. Everything else — unresolved, a macro outside the tables,
+   or a Var from a namespace nobody here can read — is unmodelled."
+  [defs q]
+  (cond
+    (nil? q) false
+    (= q "clojure.core//") true
+    (contains? table-vars q) true
+    (contains? core-fn-vars q) true
+    :else (let [i (str/last-index-of q "/")
+                k (when i [(subs q 0 i) (subs q (inc i))])
+                m (when k (get defs k ::absent))]
+            ;; trusted only when BOTH trees agree the Var is a non-macro definition
+            (false? m))))
+
+(defn body-verdict
+  "Returns {:tokens annotated :unmodelled? bool :heads #{names}} for one owner."
+  [text file ki defs owner-start lidx head-cols]
+  (let [toks (resolve-tokens text file ki defs owner-start lidx)
+        unres (get ki :unresolved #{})
+        failed? (boolean (:failed? ki))
+        bad-heads (into #{} (for [t toks
+                                  :when (and (= :tok (:kind t))
+                                             (contains? head-cols [(:row t) (:col t)])
+                                             (not (:local? t))
+                                             ;; a keyword head is a lookup and an
+                                             ;; interop head is a call; neither can bind
+                                             (not (str/starts-with? (:text t) ":"))
+                                             (not (str/starts-with? (:text t) "."))
+                                             (not (str/ends-with? (:text t) "."))
+                                             ;; special forms are resolved by the
+                                             ;; compiler before any Var and cannot
+                                             ;; be shadowed by a refer
+                                             (not (contains? walked-special-forms (:text t)))
+                                             (not (contains? frozen-special-forms (:text t)))
+                                             (not (head-trustworthy? defs (:resolved t))))]
+                              (str (:text t)
+                                   (when (:resolved t) (str " -> " (:resolved t))))))
+        unresolved (into #{} (for [t toks
+                                   :when (and (= :tok (:kind t))
+                                              (sc/sym-token? (:text t))
+                                              (not (:local? t))
+                                              (nil? (:resolved t))
+                                              (contains? unres [(:row t) (:col t)]))]
+                               (:text t)))]
+    {:tokens toks
+     :heads (into bad-heads (when failed? #{"<file could not be analyzed>"}))
+     :unresolved unresolved
+     :unmodelled? (or failed? (seq bad-heads) (seq unresolved))}))
+
+(defn canon-stream
+  "Canonicalise a resolved token stream to the owner identity each reference had in
+   the BASE tree. Only a token the resolver bound to a Var is rewritten; a local is
+   never touched, which is the whole of PB-FENCE-001/009."
+  [toks pair-map]
+  (mapv (fn [t]
+          (if (and (= :tok (:kind t)) (not (:local? t)) (:resolved t))
+            (let [q (:resolved t)
+                  i (str/last-index-of q "/")
+                  ns' (subs q 0 i) n (subs q (inc i))
+                  b (get pair-map [ns' n])]
+              {:kind :tok :text (str "<<" (or b ns') ">>/" n)})
+            {:kind (:kind t) :text (:text t)}))
+        toks))
+
 (defn body-tier
-  "Returns [tier {:bound :frozen :macros}]. The scope analysis is the union of
-   both sides: a name bound in either version disqualifies it in both."
-  [canon kinds a-text a-file b-text b-file]
+  "[tier info]. Identity is decided over a token stream the EXTERNAL resolver
+   annotated: locals stay literal, Vars canonicalise to the owner they named in the
+   base tree, and any body the resolver could not fully account for is refused."
+  [pair-map defs a-text a-file a-ki a-start a-lidx a-heads
+   b-text b-file b-ki b-start b-lidx b-heads walker-check]
   (cond
     (= a-text b-text) [:byte-identical {}]
     (= (ws-normal a-text) (ws-normal b-text)) [:identical-modulo-whitespace {}]
     :else
-    (let [sa (scope-analysis a-text {:file a-file :kind (:base kinds)
-                                     :kind-disagree (:disagree kinds)})
-          sb (scope-analysis b-text {:file b-file :kind (:cand kinds)
-                                     :kind-disagree (:disagree kinds)})
-          bound (set/union (:bound sa) (:bound sb))
-          frozen (set/union (:frozen sa) (:frozen sb))
-          macros (set/union (:macros sa) (:macros sb))
-          unmodelled? (or (:unmodelled? sa) (:unmodelled? sb))
-          info {:bound bound :frozen frozen :macros macros :unmodelled? unmodelled?}
-          ca (canon-tokens canon a-text a-file :base bound frozen)
-          cb (canon-tokens canon b-text b-file :cand bound frozen)]
+    (let [va (body-verdict a-text a-file a-ki defs a-start a-lidx a-heads)
+          vb (body-verdict b-text b-file b-ki defs b-start b-lidx b-heads)
+          unmodelled? (or (:unmodelled? va) (:unmodelled? vb) (:disagree? walker-check))
+          info {:macros (into (:heads va) (:heads vb))
+                :unresolved (into (:unresolved va) (:unresolved vb))
+                :walker-disagreement (:disagree? walker-check)
+                :unmodelled? unmodelled?}
+          ca (canon-stream (:tokens va) pair-map)
+          cb (canon-stream (:tokens vb) pair-map)]
       [(cond
-         ;; PB-FENCE-005: a body that called a head this scanner could not vouch for
-         ;; never reaches a tier that depends on canonicalisation, even when the
-         ;; canonical streams happen to match.
          (and unmodelled? (= ca cb)) :unmodelled-macro-context
          (= ca cb) :identical-modulo-requalification
          (and unmodelled?
@@ -759,6 +932,32 @@
 
 ;; --------------------------------------------------------------------- main
 
+(when-let [dir (:probe-project (:opts cli))]
+  ;; Entry point for bin/preservation-tables-test R5: lint a generated project and
+  ;; report, for every list head, what the EXTERNAL RESOLVER says it is and whether
+  ;; the brief would trust it. This is what makes the generated shadow witnesses
+  ;; test resolution rather than a hand-built refer map.
+  (let [ki (kondo-index (kondo-analyze dir))
+        defs (:defs ki)]
+    (doseq [[path facts] (sort-by key (:files ki))
+            :let [f (fs/file (fs/path dir path))]
+            :when (fs/exists? f)
+            :let [text (slurp f)
+                  lidx (sc/line-index text)
+                  toks (sc/tokens text lidx)
+                  heads (for [[a b] (partition 2 1 toks)
+                              :when (and (= :delim (:kind a)) (= "(" (:text a))
+                                         (= :tok (:kind b)))]
+                          b)]]
+      (doseq [h heads
+              :let [q (get-in facts [:var [(:row h) (:col h)]])]]
+        (println (str "HEAD\t" path "\t" (:text h) "\t" (or q "-") "\t"
+                      (if (head-trustworthy? defs q) "trusted" "unmodelled"))))
+      (doseq [nm (distinct (vals (get facts :local-name {})))]
+        (println (str "LOCAL\t" path "\t" nm)))))
+  (System/exit 0))
+
+
 (def cand-sha (resolve-sha candidate-sha))
 (def bse-sha (resolve-sha base-sha))
 (def base-tree (tree-sources bse-sha))
@@ -805,6 +1004,69 @@
 (def scope-paths (vec (sort (distinct (concat changed-paths extra-paths)))))
 (def base-idx (merge idx0-base (index-tree raw-base extra-paths)))
 (def cand-idx (merge idx0-cand (index-tree raw-cand extra-paths)))
+
+;; The external resolver runs once per tree, over the blobs already read from the
+;; object database. Its wall is reported at the foot of the brief.
+(def kondo-t0 (System/nanoTime))
+;; The WHOLE tree is analysed, not the parsed scope: a call head can name a
+;; function in a file the brief has no reason to parse, and the resolver must be
+;; able to say so rather than leaving it unresolved.
+(def base-dump (dump-tree raw-base (str workdir "/k-base")))
+(def cand-dump (dump-tree raw-cand (str workdir "/k-cand")))
+(def base-kondo (kondo-index (kondo-analyze base-dump)))
+(def cand-kondo (kondo-index (kondo-analyze cand-dump)))
+(def kondo-ms (/ (double (- (System/nanoTime) kondo-t0)) 1e6))
+;; PB-FENCE-007 again, one level down: merging the two trees' definition maps lets
+;; a candidate `defn` overwrite a base `defmacro` and the head reads as a function
+;; call on both sides. Kinds stay per tree, and a disagreement is untrusted.
+(def resolver-defs
+  (let [b (:defs base-kondo) c (:defs cand-kondo)]
+    (into {} (for [k (set (concat (keys b) (keys c)))
+                   :let [bv (get b k ::absent) cv (get c k ::absent)]]
+               [k (cond
+                    (and (not= bv ::absent) (not= cv ::absent) (not= bv cv)) ::disagree
+                    (not= bv ::absent) bv
+                    :else cv)]))))
+
+(defn line-idx-of [idx path] (sc/line-index (:text (get idx path))))
+
+(defn head-cols-of
+  "Positions of every list head in a file: a symbol token immediately after an
+   opening delimiter. Cheap, exact, and independent of the resolver."
+  [idx path]
+  (let [f (get idx path)
+        lidx (sc/line-index (:text f))
+        toks (sc/tokens (:text f) lidx)]
+    (into #{} (for [[a b] (partition 2 1 toks)
+                    :when (and (= :delim (:kind a)) (= "(" (:text a))
+                               (= :tok (:kind b)))]
+                [(:row b) (:col b)]))))
+
+(def base-lidx (into {} (for [p (keys base-idx)] [p (line-idx-of base-idx p)])))
+(def cand-lidx (into {} (for [p (keys cand-idx)] [p (line-idx-of cand-idx p)])))
+(def base-heads (into {} (for [p (keys base-idx)] [p (head-cols-of base-idx p)])))
+(def cand-heads (into {} (for [p (keys cand-idx)] [p (head-cols-of cand-idx p)])))
+
+(defn kondo-vars-in
+  "Bare names the resolver reports as VAR usages inside [start,end) of a file."
+  [ki lidx start end]
+  (into #{} (for [[[r c] q] (get ki :var {})
+                  :when (and lidx r c (<= (long r) (count lidx)))
+                  :let [ls (nth lidx (dec (long r)))
+                        off (+ (long ls) (dec (long c)))]
+                  :when (and (>= off (long start)) (< off (long end)))]
+              (let [i (str/last-index-of q "/")]
+                (if i (subs q (inc (long i))) q)))))
+
+(defn kondo-locals-in
+  "Local names the resolver reports inside [start,end) of a file."
+  [ki lidx start end]
+  (into #{} (for [[[r c] nm] (get ki :local-name {})
+                  :when (and lidx r c (<= (long r) (count lidx)))
+                  :let [ls (nth lidx (dec (long r)))
+                        off (+ (long ls) (dec (long c)))]
+                  :when (and (>= off (long start)) (< off (long end)))]
+              nm)))
 (def base-owner-ns (unique-owner-ns base-idx))
 (def cand-owner-ns (unique-owner-ns cand-idx))
 
@@ -854,16 +1116,67 @@
               k)))
 (def kinds {:base base-kind :cand cand-kind :disagree kind-disagree})
 
+(defn tier-for
+  "body-tier for one matched pair, with the resolver's per-file context and the
+   private walker kept as a CROSS-CHECK: if the walker's bound set names something
+   the resolver does not call a local, the body is unmodelled and counted."
+  [base cand]
+  (let [bp (:path base) cp (:path cand)
+        bki (get-in base-kondo [:files bp]) cki (get-in cand-kondo [:files cp])
+        bl (get base-lidx bp) cl (get cand-lidx cp)
+        wb (scope-analysis (:text base) {:file (get base-idx bp) :kind {} :kind-disagree #{}})
+        wc (scope-analysis (:text cand) {:file (get cand-idx cp) :kind {} :kind-disagree #{}})
+        klb (kondo-locals-in bki bl (:start base) (:end base))
+        klc (kondo-locals-in cki cl (:start cand) (:end cand))
+        vnb (kondo-vars-in bki bl (:start base) (:end base))
+        vnc (kondo-vars-in cki cl (:start cand) (:end cand))
+        ;; A real contradiction: the private walker calls a name a local while the
+        ;; resolver calls the same name a Var reference in the same body. Names the
+        ;; resolver never mentions are the walker over-approximating, not a conflict.
+        db (set/intersection (set/difference (:bound wb) klb) vnb)
+        dc (set/intersection (set/difference (:bound wc) klc) vnc)
+        disagree (or (seq db) (seq dc))]
+    (body-tier pair-map resolver-defs
+               (:text base) (get base-idx bp) bki (:start base) bl (get base-heads bp)
+               (:text cand) (get cand-idx cp) cki (:start cand) cl (get cand-heads cp)
+               {:disagree? (boolean disagree)
+                :names (set (concat db dc))})))
+
 (def moved-rows
   (vec (for [{:keys [base cand matched-by]} (:moved m)]
          {:id (:id base) :kind (:kind base) :family (:family base) :kind-to (:kind cand)
           :from-ns (:ns base) :to-ns (:ns cand)
           :from-file (:path base) :to-file (:path cand)
-          :tier-info (body-tier canon kinds (:text base) (get base-idx (:path base))
-                                (:text cand) (get cand-idx (:path cand)))
+          :tier-info (tier-for base cand)
           :matched-by matched-by
           :priv-from (:private? base) :priv-to (:private? cand)
           :base-text (:text base) :cand-text (:text cand)})))
+
+(defn tier-for
+  "body-tier for one matched pair, with the resolver's per-file context and the
+   private walker kept as a CROSS-CHECK: if the walker's bound set names something
+   the resolver does not call a local, the body is unmodelled and counted."
+  [base cand]
+  (let [bp (:path base) cp (:path cand)
+        bki (get-in base-kondo [:files bp]) cki (get-in cand-kondo [:files cp])
+        bl (get base-lidx bp) cl (get cand-lidx cp)
+        wb (scope-analysis (:text base) {:file (get base-idx bp) :kind {} :kind-disagree #{}})
+        wc (scope-analysis (:text cand) {:file (get cand-idx cp) :kind {} :kind-disagree #{}})
+        klb (kondo-locals-in bki bl (:start base) (:end base))
+        klc (kondo-locals-in cki cl (:start cand) (:end cand))
+        vnb (kondo-vars-in bki bl (:start base) (:end base))
+        vnc (kondo-vars-in cki cl (:start cand) (:end cand))
+        ;; A real contradiction: the private walker calls a name a local while the
+        ;; resolver calls the same name a Var reference in the same body. Names the
+        ;; resolver never mentions are the walker over-approximating, not a conflict.
+        db (set/intersection (set/difference (:bound wb) klb) vnb)
+        dc (set/intersection (set/difference (:bound wc) klc) vnc)
+        disagree (or (seq db) (seq dc))]
+    (body-tier pair-map resolver-defs
+               (:text base) (get base-idx bp) bki (:start base) bl (get base-heads bp)
+               (:text cand) (get cand-idx cp) cki (:start cand) cl (get cand-heads cp)
+               {:disagree? (boolean disagree)
+                :names (set (concat db dc))})))
 
 (def moved-rows (mapv #(-> % (assoc :tier (first (:tier-info %)) :scope (second (:tier-info %)))
                            (dissoc :tier-info))
@@ -871,8 +1184,7 @@
 
 (def same-rows
   (vec (for [{:keys [base cand]} (:same m)
-             :let [[tier info] (body-tier canon kinds (:text base) (get base-idx (:path base))
-                                          (:text cand) (get cand-idx (:path cand)))]
+             :let [[tier info] (tier-for base cand)]
              :when (not= tier :byte-identical)]
          {:id (:id base) :kind (:kind base) :family (:family base) :ns (:ns base) :file (:path cand)
           :tier tier :scope info
@@ -1628,8 +1940,8 @@
                "local bindings. The requalification tier canonicalises a bare name that matches an owner even when it is actually a local; B3 lists the cases where that could hide a broken reference."]]
       (println (str "- " l)))
     (println)
-    (println (format "_Checker wall: %.1f ms. Generated by `bin/preservation-brief`, which reads only the two git trees._"
-                     (wall-ms)))))
+    (println (format "_Resolver: clj-kondo via `~/bin/clj-kondo`, %.1f ms for both trees. Checker wall: %.1f ms. Generated by `bin/preservation-brief`, which reads only the two git trees._"
+                     kondo-ms (wall-ms)))))
 
 (println out)
 (when-let [o (:out (:opts cli))] (spit o out))
@@ -1638,6 +1950,10 @@
            {:repo repo :base bse-sha :candidate cand-sha :title title
             :change_class change-class
             :wall_ms (wall-ms)
+            :resolver_ms kondo-ms
+            :resolver "clj-kondo via ~/bin/clj-kondo"
+            :walker_disagreements (count (filter #(get-in % [:scope :walker-disagreement])
+                                                 (concat moved-rows same-rows)))
             :scope_files (count scope-paths)
             :all_source_files (count all-source)
             :base_owners (count (all-owners base-idx))

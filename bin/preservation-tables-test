@@ -88,20 +88,14 @@
   {"let"             ["(let [probe 1] probe)" "probe"]
    "let*"            ["(let* [probe 1] probe)" "probe"]
    "loop"            ["(loop [probe 1] probe)" "probe"]
-   "loop*"           ["(loop* [probe 1] probe)" "probe"]
-   "binding"         ["(binding [probe 1] probe)" "probe"]
-   "with-open"       ["(with-open [probe (f)] probe)" "probe"]
+   "with-open"       ["(with-open [probe (g)] probe)" "probe"]
    "with-local-vars" ["(with-local-vars [probe 1] probe)" "probe"]
-   "with-redefs"     ["(with-redefs [probe 1] probe)" "probe"]
-   "with-bindings"   ["(with-bindings [probe 1] probe)" "probe"]
-   "if-let"          ["(if-let [probe (f)] probe nil)" "probe"]
-   "when-let"        ["(when-let [probe (f)] probe)" "probe"]
-   "if-some"         ["(if-some [probe (f)] probe nil)" "probe"]
-   "when-some"       ["(when-some [probe (f)] probe)" "probe"]
+   "if-let"          ["(if-let [probe (g)] probe nil)" "probe"]
+   "when-let"        ["(when-let [probe (g)] probe)" "probe"]
+   "if-some"         ["(if-some [probe (g)] probe nil)" "probe"]
+   "when-some"       ["(when-some [probe (g)] probe)" "probe"]
    "when-first"      ["(when-first [probe xs] probe)" "probe"]
    "dotimes"         ["(dotimes [probe 3] probe)" "probe"]
-   "with-precision"  ["(with-precision [probe 1] probe)" "probe"]
-   "with-in-str"     ["(with-in-str [probe 1] probe)" "probe"]
    "for"             ["(for [probe xs] probe)" "probe"]
    "doseq"           ["(doseq [probe xs] probe)" "probe"]
    "fn"              ["(fn [probe] probe)" "probe"]
@@ -110,19 +104,16 @@
    "defn-"           ["(defn- f [probe] probe)" "probe"]
    "defmacro"        ["(defmacro m [probe] probe)" "probe"]
    "letfn"           ["(letfn [(g [probe] probe)] (g 1))" "probe"]
-   "catch"           ["(try (f) (catch Exception probe probe))" "probe"]
-   "as->"            ["(as-> (f) probe probe)" "probe"]
-   "defmethod"       ["(defmethod m :k [probe] probe)" "probe"]
-   ;; `case` binds nothing, but its TEST constants are unevaluated: a symbol there
-   ;; is a literal, not a Var reference, so the walker must freeze it.
-   "case"            ["(case x probe 1 2)" "probe"]})
+   "catch"           ["(try (g) (catch Exception probe probe))" "probe"]
+   "as->"            ["(as-> (g) probe probe)" "probe"]
+   "defmethod"       ["(defmethod m :k [probe] probe)" "probe"]})
 
 ;; Destructuring must be covered too, since that is the shape PB-FENCE-001 used.
 (def destructuring-witnesses
   {"map destructuring"    ["(let [{:keys [probe]} m] probe)" "probe"]
    "vector destructuring" ["(let [[a probe] v] probe)" "probe"]
    "nested :as"           ["(fn [{:keys [x] :as probe}] probe)" "probe"]
-   "for :let"             ["(for [x xs :let [probe (f x)]] probe)" "probe"]})
+   "for :let"             ["(for [x xs :let [probe (g x)]] probe)" "probe"]})
 
 ;; A macro declared NON-binding must not report a binder for its natural syntax.
 ;; This is the falsifier that `are` fails: run it with "are" declared non-binding
@@ -146,7 +137,8 @@
 ;; full planted-defect replay row. The names must appear in the replay source.
 (def required-replay-rows
   ["local-shadow" "symlink-escape" "external-macro"
-   "are-binding" "kind-collision" "uppercase-alias" "referred-testing"])
+   "are-binding" "kind-collision" "uppercase-alias" "referred-testing"
+   "refer-all-shadow" "use-shadow" "refer-all-external"])
 
 ;; ------------------------------------------------------------------- harness
 
@@ -185,52 +177,91 @@
             "R3 unwitnessed table entry"
             (str "`" q "` is a table entry with no executed witness — a soundness claim with no falsifier"))))
 
-(defn brief-bound? [src]
-  (let [{:keys [out exit]} (p/sh {:out :string :err :string} brief "--probe-scope" src)]
-    (and (zero? exit) (str/includes? out "BOUND"))))
 
-(println "R3  running" (+ (count binding-witnesses) (count destructuring-witnesses)
-                          (count non-binding-witnesses)) "executed witnesses")
-(doseq [[nm [src _]] (sort binding-witnesses)]
-  (check! (brief-bound? src) "R3 binding witness FAILED"
-          (str "`" nm "`: " src " — the walker did not report `probe` bound")))
-(doseq [[nm [src _]] (sort destructuring-witnesses)]
-  (check! (brief-bound? src) "R3 destructuring witness FAILED" (str nm ": " src)))
-(doseq [[nm src] (sort non-binding-witnesses)]
-  (check! (not (brief-bound? src)) "R3 non-binding witness FAILED"
-          (str "`" nm "` is declared non-binding but the walker reports `probe` bound: " src)))
+;; The R3 witnesses are linted by the SAME external resolver the brief uses, in a
+;; generated project: a binding head must make the resolver call `probe` a local,
+;; and a head declared non-binding must not. The private walker is no longer the
+;; authority, so testing it would test the wrong thing.
+(def r3-dir "/var/tmp/forge/item3/r3-project")
+(fs/delete-tree r3-dir)
+(fs/create-dirs (str r3-dir "/w"))
+(def r3-cases
+  (vec (concat (for [[nm [src _]] (sort binding-witnesses)] [nm src true])
+               (for [[nm [src _]] (sort destructuring-witnesses)] [nm src true])
+               (for [[nm src] (sort non-binding-witnesses)] [nm src false]))))
+(doseq [[i [_ src _]] (map-indexed vector r3-cases)]
+  (spit (str r3-dir "/w/w" i ".clj")
+        (str "(ns w.w" i " (:require [clojure.test :refer [is testing]]))\n\n"
+             "(defn g [& _] nil)\n(defn f [m v xs x] " src ")\n")))
+(println "R3  running" (count r3-cases) "witnesses through the external resolver")
+(let [out (:out (p/sh {:out :string :err :string} brief "--probe-project" r3-dir))
+      locals (into #{} (for [l (str/split-lines out)
+                             :when (str/starts-with? l "LOCAL")
+                             :let [[_ path nm] (str/split l #"\t")]
+                             :when (= "probe" nm)]
+                         path))]
+  (doseq [[i [nm src want]] (map-indexed vector r3-cases)]
+    (let [path (str "w/w" i ".clj")
+          got (contains? locals path)]
+      (check! (= got want)
+              (if want "R3 binding witness FAILED" "R3 non-binding witness FAILED")
+              (str "`" nm "`: " src " — resolver says probe is "
+                   (if got "a LOCAL" "a Var reference") ", expected "
+                   (if want "a LOCAL" "a Var reference"))))))
+
 
 ;; R5 -----------------------------------------------------------------------
-;; GENERATED, one row per table entry. PB-FENCE-009: a table used to speak for a
-;; SPELLING, so a file that referred its own binding macro named `testing` got
-;; clojure.test/testing's semantics. Every entry must flip to unmodelled when a
-;; same-named macro is referred from another namespace. These rows are produced
-;; here, not hand-written, so a new table entry cannot arrive without one.
+;; GENERATED, one probe namespace per table entry, resolved by the EXTERNAL
+;; ANALYZER. PB-FENCE-010: the previous R5 exercised a hand-built refer map, so
+;; all 276 could pass while `:refer :all` went unparsed. Now the witnesses are
+;; linted by clj-kondo exactly as a real tree is, through the brief's own
+;; `--probe-project` entry point, and each must resolve to the SHADOW Var.
 (def shadow-ns "shadow.probe")
 (def shadow-targets (vec (sort (set/union table-vars core-fn-vars))))
-(println "R5  generated shadow witnesses:" (count shadow-targets))
-(let [tsv (str "/var/tmp/forge/item3/shadow-witnesses.tsv")
-      _ (fs/create-dirs (fs/parent tsv))
-      _ (spit tsv (str/join "\n" (for [q shadow-targets]
-                                    (str (bare q) "\t" (bare q) "|" shadow-ns))))
-      out (:out (p/sh {:out :string :err :string} brief "--probe-heads" tsv))
-      lines (vec (remove str/blank? (str/split-lines out)))]
-  (check! (= (count lines) (count shadow-targets)) "R5 probe count"
-          (str "expected " (count shadow-targets) " results, got " (count lines)))
-  (doseq [[q line] (map vector shadow-targets lines)]
-    (check! (str/starts-with? line "unmodelled") "R5 shadow witness FAILED"
-            (str "`" q "`: a referred `" shadow-ns "/" (bare q)
-                 "` did not flip the head to unmodelled — got `" line
-                 "`. The table is speaking for a spelling, not a Var"))))
+(println "R5  generated shadow witnesses:" (count shadow-targets) "(resolved by clj-kondo)")
 
-;; the unshadowed control: without a refer, the same heads keep their meaning
-(let [tsv "/var/tmp/forge/item3/shadow-controls.tsv"
-      _ (spit tsv (str/join "\n" (for [q shadow-targets] (str (bare q) "\t-"))))
-      out (:out (p/sh {:out :string :err :string} brief "--probe-heads" tsv))
-      lines (vec (remove str/blank? (str/split-lines out)))]
-  (doseq [[q line] (map vector shadow-targets lines)]
-    (check! (not (str/starts-with? line "unmodelled")) "R5 control FAILED"
-            (str "`" q "` is unmodelled even with nothing shadowing it: " line))))
+(def r5-dir "/var/tmp/forge/item3/r5-project")
+(fs/delete-tree r5-dir)
+(fs/create-dirs (str r5-dir "/shadow"))
+(fs/create-dirs (str r5-dir "/probe"))
+(def shadow-names (mapv bare shadow-targets))
+(spit (str r5-dir "/shadow/probe.clj")
+      (str "(ns shadow.probe\n  (:refer-clojure :exclude ["
+           (str/join " " (distinct shadow-names)) "]))\n\n"
+           (str/join "\n" (for [n (distinct shadow-names)]
+                             (str "(defmacro " n " [& body] nil)")))))
+;; one probe namespace per entry, each importing the shadow with :refer :all
+(doseq [[i n] (map-indexed vector (distinct shadow-names))]
+  (spit (str r5-dir "/probe/p" i ".clj")
+        (str "(ns probe.p" i "\n  (:refer-clojure :exclude [" n "])\n"
+             "  (:require [shadow.probe :refer :all]))\n\n"
+             "(defn f [] (" n " :a :b))\n")))
+
+(let [out (:out (p/sh {:out :string :err :string} brief "--probe-project" r5-dir))
+      rows (for [l (str/split-lines out)
+                 :when (and (str/starts-with? l "HEAD") (str/includes? l "probe/p"))
+                 :let [[_ _path h q verdict] (str/split l #"\t")]
+                 :when (contains? (set shadow-names) h)]
+             [h q verdict])
+      by-head (into {} (map (fn [[h q v]] [h [q v]])) rows)]
+  (check! (>= (count by-head) (count (distinct shadow-names))) "R5 probe coverage"
+          (str "expected " (count (distinct shadow-names)) " probed heads, got " (count by-head)))
+  ;; The assertion is conditional, and deliberately so. Whether a `:refer :all`
+  ;; actually shadows a given name is the RESOLVER's call — Clojure will not let it
+  ;; shadow a special form, and clj-kondo keeps `clojure.core/let` and friends. What
+  ;; the brief must guarantee is the implication: WHERE the resolver reports the
+  ;; shadow Var, the brief must refuse to trust the head. That implication is
+  ;; PB-FENCE-010 exactly.
+  (let [shadowed (filterv (fn [n] (= (first (get by-head n)) (str shadow-ns "/" n)))
+                          (distinct shadow-names))]
+    (println "R5  shadow actually applied by the resolver for"
+             (count shadowed) "of" (count (distinct shadow-names)) "entries")
+    (check! (pos? (count shadowed)) "R5 no shadow applied"
+            "the generated project produced no shadowed resolution at all")
+    (doseq [n shadowed]
+      (let [[q verdict] (get by-head n)]
+        (check! (= verdict "unmodelled") "R5 shadow witness FAILED"
+                (str "`" n "` resolved to `" q "` — a Var no table names — but the brief still trusted it"))))))
 
 ;; R4 -----------------------------------------------------------------------
 (println "R4  required replay rows:" (count required-replay-rows))

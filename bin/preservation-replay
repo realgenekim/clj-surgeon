@@ -248,8 +248,25 @@ mk_pair_edit "$WORK/edits/kind-collision-base.py" BASE '(srv/probe-route header)
 mk_pair_edit "$WORK/edits/kind-collision-cand.py" CAND '(srv/probe-route organizer-layout/header)' '[cfp-scheduler-killer.server :as srv]' \
   "${SRVDEF} \"\\n(defn probe-route [x] x)\\n\")"
 
+
+# 5/6/7 — PB-FENCE-010: namespace forms the private scanner never parsed.
+COMMITTEES=src/cfp_scheduler_killer/committees.clj
+TESTMAC2='append_def("'"$COMMITTEES"'", "\n(defmacro testing [bindings & body]\n  `(let ~bindings ~@body))\n")'
+
+# refer-all-shadow: [ns :refer :all] supplying a colliding binding macro
+mk_pair_edit "$WORK/edits/refer-all-shadow-base.py" BASE '(testing [header :probe] header)' '[cfp-scheduler-killer.committees :refer :all]' "$TESTMAC2"
+mk_pair_edit "$WORK/edits/refer-all-shadow-cand.py" CAND '(testing [header :probe] organizer-layout/header)' '[cfp-scheduler-killer.committees :refer :all]' "$TESTMAC2"
+
+# use-shadow: the same collision through (:use ...)
+mk_pair_edit "$WORK/edits/use-shadow-base.py" BASE '(testing [header :probe] header)' '[cfp-scheduler-killer.committees]' "$TESTMAC2"
+mk_pair_edit "$WORK/edits/use-shadow-cand.py" CAND '(testing [header :probe] organizer-layout/header)' '[cfp-scheduler-killer.committees]' "$TESTMAC2"
+
+# refer-all-external: :refer :all from a namespace OUTSIDE both trees
+mk_pair_edit "$WORK/edits/refer-all-external-base.py" BASE '(mystery-binder [header :probe] header)' '[compojure.core :refer :all]'
+mk_pair_edit "$WORK/edits/refer-all-external-cand.py" CAND '(mystery-binder [header :probe] organizer-layout/header)' '[compojure.core :refer :all]'
+
 declare -A PAIR_BASE PAIR_CAND
-for pr in are-binding uppercase-alias kind-collision referred-testing; do
+for pr in are-binding uppercase-alias kind-collision referred-testing refer-all-shadow use-shadow refer-all-external; do
   PAIR_BASE[$pr]=$(plant_on "d-$pr-base" "$BASE_SHA" "$WORK/edits/$pr-base.py")
   PAIR_CAND[$pr]=$(plant_on "d-$pr-cand" "$CLEAN_SHA" "$WORK/edits/$pr-cand.py")
 done
@@ -286,7 +303,7 @@ st=$(date +%s.%N)
 en=$(date +%s.%N)
 echo "external-macro  wall $(echo "$en - $st" | bc)s"
 
-for pr in are-binding uppercase-alias kind-collision referred-testing; do
+for pr in are-binding uppercase-alias kind-collision referred-testing refer-all-shadow use-shadow refer-all-external; do
   st=$(date +%s.%N)
   "$HERE/preservation-brief" "${PAIR_CAND[$pr]}" "${PAIR_BASE[$pr]}" --repo "$WORK/repo" \
       --title "$pr" --out "$WORK/out/$pr.md" --json "$WORK/out/$pr.json" >/dev/null || true
@@ -300,7 +317,8 @@ d = pathlib.Path(sys.argv[1])
 order = ["clean","wrong-binding","silent-promotion","dropped-comment",
          "omitted-owner","load-order-forms","load-order-requires",
          "local-shadow","symlink-escape","external-macro",
-         "are-binding","uppercase-alias","kind-collision","referred-testing"]
+         "are-binding","uppercase-alias","kind-collision","referred-testing",
+         "refer-all-shadow","use-shadow","refer-all-external"]
 rows = []
 for k in order:
     j = json.load(open(d / f"{k}.json"))
@@ -327,7 +345,8 @@ for k, j in rows[1:]:
     delta = {kk: (base.get(kk), j.get(kk)) for kk in base
              if isinstance(base.get(kk), int) and base.get(kk) != j.get(kk)}
     tiers = (base.get("tiers"), j.get("tiers"))
-    if k in ("external-macro","are-binding","uppercase-alias","kind-collision","referred-testing"):
+    if k in ("external-macro","are-binding","uppercase-alias","kind-collision","referred-testing",
+             "refer-all-shadow","use-shadow","refer-all-external"):
         print(f"    [PAIR] {k} tiers={j.get('tiers')} preserved={j.get('preserved_bodies')} unmodelled={len(j.get('unmodelled_macros') or [])}")
     print(f"{k}: changed counters vs clean = {delta}")
     if tiers[0] != tiers[1]:
