@@ -8,6 +8,12 @@ is cut.
 
 ## [Unreleased]
 
+- Namespace-split receipts now include require/import entry diffs, scoped
+  whole-file byte identity, executed lint deltas and warm namespace load results.
+  Failed loads name the namespace and still roll back. Text puts committed state
+  before proof and its defined completion boolean. Lossless path/entry tables and
+  Base64 SHA-256 body digests keep the existing receipt ceiling.
+
 - Fixed namespace-split `:comment_edits` positional pairing after removals.
   Comments now match by original owning form and exact content; shifted
   survivors disappear from the diff, owner moves and replacements are distinct,

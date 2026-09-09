@@ -303,7 +303,7 @@
         active (set (map (comp name :id) (filter #(= :active (:status %)) registry)))
         tags (fn [files pattern] (set (mapcat #(map second (re-seq pattern (slurp %))) files)))
         code (tags ["src/clj_surgeon/split_proof_gate.clj" "src/clj_surgeon/namespace_split.clj" "src/clj_surgeon/namespace_split_io.clj" "src/clj_surgeon/namespace_split_warm.clj"
-                    "src/clj_surgeon/mcp_tool.clj" "src/clj_surgeon/synchronous_verification.clj"
+                    "src/clj_surgeon/mcp_tool.clj" "src/clj_surgeon/mcp_namespace_split.clj" "src/clj_surgeon/synchronous_verification.clj"
                     "test/oracles/namespace_split_papercut_oracle.py"
                     "test/oracles/cell_b_oracle.sh" "test/oracles/cell_b_preservation.clj"]
                    #"(?m)^(?:;;|#) INTENT: (NS-SPLIT-[0-9]+)")
@@ -957,7 +957,7 @@
     (is (= [0 1] ((juxt :equal :unequal) bad)))
     (is (= [1 0] ((juxt :raw_equal :raw_unequal) good)))
     (is (= "moved" (ffirst (:rows good))))
-    (is (= 64 (count (second (first (:rows good))))))
+    (is (= 32 (alength (.decode (java.util.Base64/getDecoder) ^String (second (first (:rows good)))))))
     (is (not= (second (first (:rows bad))) (nth (first (:rows bad)) 2 nil)))))
 
 ;; @spec NS-SPLIT-061
@@ -1000,7 +1000,7 @@
         good (:bodies_preserved (split/review-facts compiled))]
     (is (= [1 0 0 1] ((juxt :equal :unequal :raw_equal :raw_unequal) good)))
     (is (= :same (nth (first (:rows good)) 2)))
-    (is (= 64 (count (nth (first (:rows good)) 3 ""))))
+    (is (= 32 (alength (.decode (java.util.Base64/getDecoder) ^String (nth (first (:rows good)) 3 "")))))
     (is (not= (second (first (:rows good))) (nth (first (:rows good)) 3 nil)))
     (doseq [[from to] [["(v/helper)" "(v/helper )"] ["(v/helper)" "(inc (v/helper))"]]]
       (is (= 1 (get-in (split/review-facts
@@ -1081,3 +1081,125 @@
     (let [changed-arity (update-in compiled [:future-sources "src/app/views.clj"]
                                    str/replace "[x] (util/moved x)" "[x y] (util/moved x y)")]
       (is (= ["legacy"] (mapv :owner (get-in (split/review-facts changed-arity) [:facades :unexpected])))))))
+
+(defn expand-residual-facts [facts]
+  (let [file (fn [id] (let [[dir basename] (get (:file_table facts) id)]
+                        (str (get (:file_directories facts) dir) basename)))
+        footprint (:footprint facts)
+        members (fn [xs] (if (map? xs) (update xs :all_captured_except #(mapv file %)) (mapv file xs)))]
+    (assoc facts
+           :ns_edits (mapv (fn [[id edits]]
+                             {:file (file id)
+                              :edits (mapv (fn [[clause removed added reordered]]
+                                             (cond-> {:clause clause
+                                                      :removed (mapv #(zipmap [:index :entry] %) removed)
+                                                      :added (mapv #(zipmap [:index :entry] %) added)}
+                                               reordered (assoc :reordered (zipmap [:before :after] reordered)))) edits)})
+                           (:ns_edits facts))
+           :footprint (when footprint
+                        (-> (reduce (fn [m k] (update m k members)) footprint
+                                    [:identical :changed :created :deleted :owner_files])
+                            (update :outside_owner_files #(into {} (for [[k v] %] [k (members v)]))))))))
+
+(defn receipt-facts-for-sources [before after]
+  (expand-residual-facts (split/review-facts {:request {:source {:file "src/app/views.clj" :lib "app.views"}
+                                                        :destinations [{:file "src/app/new.clj" :lib "app.new"}]
+                                                        :roots ["src" "test"]}
+                                              :guard-sources before :future-sources after :body-baselines {}})))
+
+;; @spec NS-SPLIT-067
+;; INTENT-TEST: NS-SPLIT-067
+(deftest namespace-entry-facts-exact-diff
+  (let [file "src/app/views.clj"
+        before "(ns app.views (:require [a :as a] [b :as b] [c :as c]) (:import java.util.Date))\n"
+        after "(ns app.views (:require [b :as b] [a :as a] [d :as d]) (:import java.util.UUID))\n"
+        facts (receipt-facts-for-sources {file before} {file after})
+        table (:ns_entry_table facts)
+        edits (get-in facts [:ns_edits 0 :edits])
+        decode (fn [xs] (mapv #(get table (:entry %)) xs))]
+    (is (= file (get-in facts [:ns_edits 0 :file])))
+    (is (= ["[d :as d]"] (decode (:added (first edits)))))
+    (is (= ["[c :as c]"] (decode (:removed (first edits)))))
+    (is (= ["[a :as a]" "[b :as b]"] (mapv #(get table %) (get-in edits [0 :reordered :before]))))
+    (is (= ["[b :as b]" "[a :as a]"] (mapv #(get table %) (get-in edits [0 :reordered :after]))))
+    (is (= [{:index 2 :entry (.indexOf ^java.util.List (or table []) "[d :as d]")}]
+           (:added (first edits))))
+    (is (= :import (:clause (second edits))))
+    (is (= ["java.util.UUID"] (decode (:added (second edits)))))
+    (is (= ["java.util.Date"] (decode (:removed (second edits))))))
+  (doseq [[before after removed added]
+          [["[a] [a]" "[a]" [1] []]
+           ["[a]" "[a] [a]" [] [1]]
+           ["[a] [b]" "[c] [a] [b]" [] [0]]]]
+    (let [src #(str "(ns app.views (:require " % "))")
+          facts (receipt-facts-for-sources {"src/app/views.clj" (src before)} {"src/app/views.clj" (src after)})
+          edit (get-in facts [:ns_edits 0 :edits 0])]
+      (is (= removed (mapv :index (:removed edit))))
+      (is (= added (mapv :index (:added edit))))
+      (is (nil? (:reordered edit)))))
+  (let [s "(ns app.views (:require [a]))"
+        facts (receipt-facts-for-sources {"src/app/views.clj" s} {"src/app/views.clj" (str/replace s "[a]" "  [a]")})]
+    (is (= [] (get-in facts [:ns_edits 0 :edits])))
+    (is (= 1 (count (:ns_edits facts))))))
+
+;; @spec NS-SPLIT-068
+;; INTENT-TEST: NS-SPLIT-068
+(deftest footprint-detects-one-byte-outside-owner-change
+  (let [before {"src/app/views.clj" "(ns app.views)\n(def x 1)\n"
+                "test/other.clj" "(ns other)\n" "test/same.clj" "(ns same)\n"}
+        after {"src/app/views.clj" nil "src/app/new.clj" "(ns app.new)\n(def x 1)\n"
+               "test/other.clj" "(ns other) \n"}
+        facts (:footprint (receipt-facts-for-sources before after))]
+    (is (= ["test/same.clj"] (:identical facts)))
+    (is (= ["test/other.clj"] (:changed facts)))
+    (is (= ["src/app/new.clj"] (:created facts)))
+    (is (= ["src/app/views.clj"] (:deleted facts)))
+    (is (= {:identical ["test/same.clj"] :changed ["test/other.clj"] :created [] :deleted []}
+           (:outside_owner_files facts)))
+    (is (= ["src" "test"] (get-in facts [:scope :roots])))))
+
+;; @spec NS-SPLIT-069
+;; INTENT-TEST: NS-SPLIT-069
+(deftest lint-facts-report-executed-delta
+  (let [finding (fn [level message] {:level level :type :fixture :message message})
+        before {:findings [(finding :error "old")]}
+        after {:findings [(finding :error "new") (finding :warning "w")]
+               :check {:exit 3 :duration_ms 1}}
+        delta (boundary/lint-comparison before after)
+        facts (:facts (split/receipt (compile-fixture) [delta]))]
+    (is (= {:errors 0 :warnings 1 :baseline {:error 1 :warning 0 :info 0}
+            :post {:error 1 :warning 1 :info 0} :introduced_errors 1 :status "failed"}
+           (:lint_delta facts)))
+    (is (nil? (get-in (split/receipt (compile-fixture) []) [:facts :lint_delta])))))
+
+;; @spec NS-SPLIT-057
+;; @spec NS-SPLIT-067
+;; @spec NS-SPLIT-068
+(deftest residual-facts-losslessly-encode-hostile-identity
+  (let [file "test/rogue\u2028\u202e.clj"
+        facts (receipt-facts-for-sources {file "(ns rogue (:require [x]))"}
+                {file "(ns rogue (:require [x :as y]))"})
+        decode #(json/parse-string (str "\"" % "\""))]
+    (is (= file (decode (get-in facts [:ns_edits 0 :file]))))
+    (is (= file (decode (get-in facts [:footprint :changed 0]))))
+    (is (not (str/includes? (pr-str facts) "\u2028")))))
+
+;; @spec NS-SPLIT-064
+(deftest body-digest-encoding-is-lossless-sha256
+  (let [facts (:bodies_preserved (split/review-facts (compile-fixture)))
+        encoded (second (first (:rows facts)))]
+    (is (= "ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0="
+           (split/encode-sha256 "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")))
+    (is (= :base64 (:digest_encoding facts)))
+    (is (= 32 (try (alength (.decode (java.util.Base64/getDecoder) ^String encoded))
+                   (catch Exception _ 0))))))
+
+;; @spec NS-SPLIT-068
+(deftest large-footprint-names-exceptions-without-repeating-quiet-files
+  (let [before (into {} (for [i (range 30)] [(str "test/q" i ".clj") (str "(ns q" i ")\n")]))
+        facts (receipt-facts-for-sources before {"test/q0.clj" "(ns q0) \n"})]
+    (is (= {:all_captured_except ["test/q0.clj"] :count 29}
+           (get-in facts [:footprint :identical])))
+    (is (= ["test/q0.clj"] (get-in facts [:footprint :changed])))
+    (is (= 3 (count (:file_table facts))))
+    (is (= 64 (count (get-in facts [:footprint :scope :input_snapshot_hash] ""))))))

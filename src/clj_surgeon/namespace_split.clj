@@ -978,6 +978,100 @@
              :target (str (first (keep :target targets)))
              :arity_targets (mapv #(when % (update % :target canonical-target)) targets)})))))
 
+(defn- header-entries [parsed clause]
+  (vec (for [node (some-> parsed :ns-node n/children)
+             :when (and (= :list (n/tag node)) (= clause (first (sexpr node))))
+             entry (rest (filter meaningful? (n/children node)))]
+         (n/string entry))))
+
+(defn- entry-occurrences [entries]
+  (:entries
+    (reduce (fn [{:keys [seen] :as result} [index entry]]
+              (-> result (update-in [:seen entry] (fnil inc 0))
+                  (update :entries conj {:index index :entry entry :identity [entry (get seen entry 0)]})))
+            {:seen {} :entries []} (map-indexed vector entries))))
+
+;; @spec NS-SPLIT-067
+;; INTENT: NS-SPLIT-067
+(defn namespace-edit-facts
+  "Exact require/import token occurrence diffs. Positions are zero-based within
+  a clause kind across the header; insertion shifts alone are not reorders."
+  [before after]
+  (let [files (sort (set/union (set (keys before)) (set (keys after))))
+        changed (filterv #(not= (some-> (get before %) :ns-node n/string)
+                                (some-> (get after %) :ns-node n/string)) files)
+        table (vec (sort (set (for [file changed p [(get before file) (get after file)]
+                                    clause [:require :import] entry (header-entries p clause)] entry))))
+        ids (zipmap table (range))
+        diff (fn [file clause]
+               (let [xs (entry-occurrences (header-entries (get before file) clause))
+                     ys (entry-occurrences (header-entries (get after file) clause))
+                     old (set (map :identity xs)) new-identities (set (map :identity ys))
+                     shared (set/intersection old new-identities)
+                     x-order (mapv :identity (filter #(shared (:identity %)) xs))
+                     y-order (mapv :identity (filter #(shared (:identity %)) ys))
+                     row #(-> % (dissoc :identity) (update :entry ids))
+                     removed (mapv row (remove #(new-identities (:identity %)) xs))
+                     added (mapv row (remove #(old (:identity %)) ys))]
+                 (when (or (seq removed) (seq added) (not= x-order y-order))
+                   (cond-> {:clause clause :removed removed :added added}
+                     (not= x-order y-order)
+                     (assoc :reordered {:before (mapv (comp ids first) x-order)
+                                        :after (mapv (comp ids first) y-order)})))))]
+    {:ns_entry_table table
+     :ns_entry_encoding "entry is a zero-based ns_entry_table index; index is occurrence position within clause kind; reordered lists surviving entry IDs in order"
+     :ns_edits (mapv (fn [file]
+                       {:file file
+                        :edits (vec (keep #(diff file %) [:require :import]))}) changed)}))
+
+;; @spec NS-SPLIT-068
+;; INTENT: NS-SPLIT-068
+(defn footprint-facts
+  "Whole-file byte equality over captured source strings, never normalized.
+  No claim about uncaptured paths or residual portions of moved-owner files."
+  [request before after]
+  (let [files (sort (set/union (set (keys before)) (set (keys after))))
+        owner-files (set (cons (get-in request [:source :file]) (map :file (:destinations request))))
+        classify (fn [paths]
+                   (reduce (fn [result file]
+                             (update result (cond (not (contains? before file)) :created
+                                                  (not (contains? after file)) :deleted
+                                                  (= (get before file) (get after file)) :identical
+                                                  :else :changed) conj file))
+                           {:identical [] :changed [] :created [] :deleted []} paths))]
+    (assoc (classify files)
+           :outside_owner_files (classify (remove owner-files files))
+           :owner_files (vec (sort owner-files))
+           :scope {:roots (:roots request) :before_files (count before) :after_files (count after)
+                   :input_snapshot_hash (snapshot-hash before)
+                   :comparison "whole-file exact bytes; captured Clojure sources only"
+                   :excludes ["uncaptured paths" "residual portions of moved-owner files"]})))
+
+(defn encode-fact-text [data]
+  (walk/postwalk (fn [x]
+                   (if (string? x)
+                     (let [quoted (json/generate-string x {:escape-non-ascii true})]
+                       (subs quoted 1 (dec (count quoted)))) x)) data))
+
+;; @spec NS-SPLIT-069
+;; INTENT: NS-SPLIT-069
+;; @spec NS-SPLIT-070
+(defn check-facts
+  "Project executed evidence, never infer a load from a planned reload set."
+  [checks]
+  (let [lint (first (filter #(= "candidate-lint-delta" (:name %)) checks))
+        warm (first (filter #(= "warm-probe" (:name %)) checks))]
+    (encode-fact-text
+      {:lint_delta (when lint {:errors (get-in lint [:delta :error])
+                               :warnings (get-in lint [:delta :warning])
+                               :baseline (:baseline lint) :post (:post lint)
+                               :introduced_errors (:introduced_errors lint) :status (:status lint)})
+       :loaded (vec (:loaded warm)) :load_errors (vec (:load_errors warm))
+       :load_status (cond (nil? warm) :not-run
+                      (seq (:load_errors warm)) :failed
+                      (vector? (:loaded warm)) :passed
+                      :else :unavailable)})))
+
 ;; @spec NS-SPLIT-063
 ;; INTENT: NS-SPLIT-063
 ;; @spec NS-SPLIT-064
@@ -1022,41 +1116,43 @@
                             :after_hash (when actual (lens/source-hash actual))
                             :raw_before_hash (lens/source-hash before) :raw_equal (= before actual)})) (:body-baselines compiled))
           equal (count (filter #(= (:before_hash %) (:after_hash %)) bodies))]
-      {:comment_policy (get-in request [:source :comment_policy] "preserve")
-       :text_encoding "JSON string content; decode by wrapping in double quotes"
-       :comment_after_encoding "[:indent N] replaces before leading whitespace with N spaces"
-       :comment_before_encoding "[N text] is N spaces followed by text; changed before/after are text vectors"
-       :comment_moved_encoding "locations are vectors of lines or inclusive [start end] ranges; from/to correspond; unchanged unless changed"
-       :comment_edits
-       (mapv (fn [[[file after-file] changes]]
-               {:file file :after_file after-file
-                :edits (compact-comment-edits changes)})
-             (sort-by key (group-by (juxt :file :after_file)
-                            (comment-change-facts before after request (:body-baselines compiled)))))
-       :stale_references {:count (count stale) :sites stale :expected [] :scope scope}
-       :facades {:forms facades :expected expected-facades :unexpected unexpected-facades
-                 :policy "no-new-forwarders; retain existing unmapped forwarding owners"
-                 :scope {:file (get-in request [:source :file]) :expected_match [:owner :kind :arity_targets]
-                         :scan "def symbol/Var/partial/fn aliases and single/multi-arity direct defn/apply forwarders"
-                         :excludes ["macro expansion" "arbitrary forwarding bodies" "dynamic resolution"]}}
-       :exactly_once {:columns [:owner :destination_count :elsewhere_count] :rows counts
-                      :preexisting_namesakes
-                      (mapv (fn [x] (assoc x :after_hashes
-                                           (mapv #(lens/source-hash (n/string (:node %)))
-                                                 (filter #(and (= (:file x) (:file %)) (= (:lib x) (:lib %)))
-                                                         (get definitions (:owner x)))))) namesakes)
-                      :passed (every? #(= [1 0] (subvec % 1)) counts)
-                      :scope {:roots (:roots request) :files (count sources) :definitions "top-level named owners; declarations excluded"
-                              :namesake_rule "pre-existing file/lib/name identity and multiplicity excluded; caller rewrites may change its body"}}
-       :bodies_preserved {:basis "original owner bytes after authorized reference/alignment/promotion replay"
-                          :algorithm "SHA-256" :columns [:owner :before_hash :after_hash :raw_before_hash]
-                          :hash_encoding {:same "this hash equals before_hash exactly"}
-                          :rows (mapv (fn [b] [(:owner b) (:before_hash b)
-                                               (if (= (:before_hash b) (:after_hash b)) :same (:after_hash b))
-                                               (if (= (:before_hash b) (:raw_before_hash b)) :same (:raw_before_hash b))]) bodies)
-                          :equal equal :unequal (- (count bodies) equal)
-                          :raw_equal (count (filter :raw_equal bodies))
-                          :raw_unequal (count (remove :raw_equal bodies))}})))
+      (merge (namespace-edit-facts before after)
+             {:footprint (footprint-facts request (:guard-sources compiled) sources)}
+             {:comment_policy (get-in request [:source :comment_policy] "preserve")
+              :text_encoding "JSON string content; decode by wrapping in double quotes"
+              :comment_after_encoding "[:indent N] replaces before leading whitespace with N spaces"
+              :comment_before_encoding "[N text] is N spaces followed by text; changed before/after are text vectors"
+              :comment_moved_encoding "locations are vectors of lines or inclusive [start end] ranges; from/to correspond; unchanged unless changed"
+              :comment_edits
+              (mapv (fn [[[file after-file] changes]]
+                      {:file file :after_file after-file
+                       :edits (compact-comment-edits changes)})
+                    (sort-by key (group-by (juxt :file :after_file)
+                                   (comment-change-facts before after request (:body-baselines compiled)))))
+              :stale_references {:count (count stale) :sites stale :expected [] :scope scope}
+              :facades {:forms facades :expected expected-facades :unexpected unexpected-facades
+                        :policy "no-new-forwarders; retain existing unmapped forwarding owners"
+                        :scope {:file (get-in request [:source :file]) :expected_match [:owner :kind :arity_targets]
+                                :scan "def symbol/Var/partial/fn aliases and single/multi-arity direct defn/apply forwarders"
+                                :excludes ["macro expansion" "arbitrary forwarding bodies" "dynamic resolution"]}}
+              :exactly_once {:columns [:owner :destination_count :elsewhere_count] :rows counts
+                             :preexisting_namesakes
+                             (mapv (fn [x] (assoc x :after_hashes
+                                                  (mapv #(lens/source-hash (n/string (:node %)))
+                                                        (filter #(and (= (:file x) (:file %)) (= (:lib x) (:lib %)))
+                                                                (get definitions (:owner x)))))) namesakes)
+                             :passed (every? #(= [1 0] (subvec % 1)) counts)
+                             :scope {:roots (:roots request) :files (count sources) :definitions "top-level named owners; declarations excluded"
+                                     :namesake_rule "pre-existing file/lib/name identity and multiplicity excluded; caller rewrites may change its body"}}
+              :bodies_preserved {:basis "original owner bytes after authorized reference/alignment/promotion replay"
+                                 :algorithm "SHA-256" :columns [:owner :before_hash :after_hash :raw_before_hash]
+                                 :hash_encoding {:same "this hash equals before_hash exactly"}
+                                 :rows (mapv (fn [b] [(:owner b) (:before_hash b)
+                                                      (if (= (:before_hash b) (:after_hash b)) :same (:after_hash b))
+                                                      (if (= (:before_hash b) (:raw_before_hash b)) :same (:raw_before_hash b))]) bodies)
+                                 :equal equal :unequal (- (count bodies) equal)
+                                 :raw_equal (count (filter :raw_equal bodies))
+                                 :raw_unequal (count (remove :raw_equal bodies))}}))))
 
 (defn emit-split
   "Emit only from the shared prepared plan; facts-only never calls this function."
@@ -1085,6 +1181,65 @@
 
 ;; @spec NS-SPLIT-011
 (defn analysis-projection [compiled] (:projection compiled))
+
+(defn encode-sha256
+  "Lossless standard Base64 of a hexadecimal SHA-256 digest (32 bytes)."
+  [hex]
+  (when hex
+    (.encodeToString (java.util.Base64/getEncoder)
+      (byte-array (map #(unchecked-byte (Integer/parseInt (apply str %) 16))
+                       (partition 2 hex))))))
+
+;; @spec NS-SPLIT-057
+(defn compact-review-data
+  "Lossless tables for the new namespace/footprint evidence. Existing comment
+  identity and content evidence is unchanged. Hashes retain all 256 bits."
+  [facts]
+  (if-not (:footprint facts) facts
+    (let [footprint (:footprint facts)
+          large? (> (count (:identical footprint)) 16)
+          exceptional (mapcat #(get footprint %) [:changed :created :deleted :owner_files])
+          files (vec (sort (set (concat exceptional (when-not large? (:identical footprint))))))
+          ids (zipmap files (range))
+          directory #(subs % 0 (inc (.lastIndexOf ^String % "/")))
+          directories (vec (sort (set (map directory files))))
+          dirs (zipmap directories (range))
+          classify (fn [classes excluded]
+                     (into {} (for [[k paths] classes]
+                                [k (if (and large? (= :identical k))
+                                     {:all_captured_except (mapv ids (sort (set excluded)))
+                                      :count (count paths)}
+                                     (mapv ids paths))])))
+          changed-paths (mapcat #(get footprint %) [:changed :created :deleted])
+          compact-footprint (merge footprint
+                                   (classify (select-keys footprint [:identical :changed :created :deleted]) changed-paths)
+                                   {:owner_files (mapv ids (:owner_files footprint))
+                                    :outside_owner_files (classify (:outside_owner_files footprint)
+                                                           (concat changed-paths (:owner_files footprint)))})]
+      (-> facts
+          (assoc :file_directories directories
+                 :file_table (mapv (fn [file] [(dirs (directory file)) (subs file (count (directory file)))]) files)
+                 :file_encoding "file ID indexes file_table [directory ID, basename]; concatenate file_directories[directory ID] + basename; footprint lists file IDs; all_captured_except means every input file in scope.input_snapshot_hash except those IDs (count checked)"
+                 :footprint compact-footprint
+                 :ns_edit_columns [:file :edits]
+                 :ns_clause_columns [:clause :removed :added :reordered]
+                 :ns_entry_encoding "entry IDs index ns_entry_table; removed/added are [zero-based occurrence index, entry ID]; optional reordered is [surviving entry IDs before, after]; every row means header bytes changed; edits cover require/import only")
+          (update :ns_edits
+                  (fn [rows]
+                    (mapv (fn [row]
+                            [(ids (:file row))
+                             (mapv (fn [edit]
+                                     (cond-> [(:clause edit)
+                                              (mapv (juxt :index :entry) (:removed edit))
+                                              (mapv (juxt :index :entry) (:added edit))]
+                                       (:reordered edit)
+                                       (conj ((juxt :before :after) (:reordered edit))))) (:edits row))]) rows)))
+          (update :bodies_preserved
+                  (fn [bodies]
+                    (-> bodies (assoc :digest_encoding :base64)
+                        (update :rows (fn [rows]
+                                        (mapv (fn [row]
+                                                (into [(first row)] (map #(if (= :same %) % (encode-sha256 %))) (rest row))) rows))))))))))
 
 ;; @spec NS-SPLIT-052
 ;; INTENT: NS-SPLIT-052
@@ -1122,14 +1277,14 @@
                          (let [quoted (json/generate-string x {:escape-non-ascii true})]
                            (subs quoted 1 (dec (count quoted)))) x))]
     (merge (walk/postwalk #(if (string? %) (operation/encode-caller-text %) %) data)
-           (walk/postwalk encode negatives))))
+           (walk/postwalk encode (compact-review-data negatives)))))
 
 ;; @spec NS-SPLIT-012
 (defn receipt [compiled checks]
   (let [p (:projection compiled)]
     {:ok (:ok compiled) :operation "namespace_split"
      :state (if (:ok compiled) "planned" "refused") :committed false :mutation_attempted false
-     :source_retired false :facts (review-facts compiled) :counts (:counts p) :destination_libs (:destination_libs p)
+     :source_retired false :facts (merge (review-facts compiled) (check-facts checks)) :counts (:counts p) :destination_libs (:destination_libs p)
      :snapshot_hash (:snapshot_hash p) :map_hash (:map_hash p)
      :promotions (mapv #(-> % (dissoc :callers) (assoc :reference_count (count (:callers %)))) (:promotions p))
      :graph (:projected_ns_graph p) :coverage (:coverage p) :blockers (:blockers compiled)

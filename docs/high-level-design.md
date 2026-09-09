@@ -1385,3 +1385,10 @@ closure. Successful receipts carry bounded finished-work facts. NS-SPLIT-050..05
 in the [partition design](intent/helper-extraction/namespace-split-design.md) own
 status, worker and temp-root identity, dual-format receipt bounds, committed facts
 and snapshot-bound manifest replay.
+
+Namespace-split receipts expose exact require/import entry changes, scoped
+whole-file byte identity, executed lint deltas and warm namespace load outcomes.
+Both text entrances lead with commitment, proof and the defined cold-completion
+boolean. Lossless tables and digest encoding preserve the receipt ceiling;
+malformed UTF-8 refuses before byte-identity claims. The partition leaf owns
+NS-SPLIT-067..072 and the supporting witnesses.

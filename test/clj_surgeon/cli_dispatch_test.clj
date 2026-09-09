@@ -166,6 +166,11 @@
             receipt (edn/read-string (:out r))]
         (is (zero? (:exit r)) (pr-str r))
         (is (= "committed" (:state receipt)))
+        ;; @spec NS-SPLIT-071: the actual CLI text must keep proof beside its definition.
+        (is (str/starts-with? (:out r) "{:committed true,"))
+        (is (< (str/index-of (:out r) "\n :proof")
+               (str/index-of (:out r) ":verification_complete ")))
+        (is (str/includes? (:out r) ":verification_complete_definition"))
         (is (:verification_complete receipt))
         (is (not (.exists (io/file root ".clj-surgeon.edn"))))
         (is (not (.exists source-file)))
@@ -700,3 +705,15 @@
     (is (= 0 (:exit result)) (pr-str result))
     (when (zero? (:exit result))
       (is (= ["bad forged" "a😀b"] (edn/read-string (:out result)))))))
+
+;; @spec NS-SPLIT-057
+;; @spec NS-SPLIT-071
+(deftest cli-physical-text-keeps-the-receipt-bound-and-edn-values
+  (require 'clj-surgeon.namespace-split-io)
+  (let [receipt {:operation "namespace_split" :state "committed" :committed true
+                 :verification_complete false :proof {:tier :warm :status :pending}
+                 :facts {:paths (vec (repeat 5000 "src/a.clj"))}}
+        output (with-redefs-fn {(resolve 'clj-surgeon.namespace-split-io/execute!) (constantly receipt)}
+                 #(with-out-str (core/run {:op :split-ns! :request {}})))]
+    (is (<= (alength (.getBytes output "UTF-8")) 65536))
+    (is (= (:facts receipt) (:facts (edn/read-string output))))))

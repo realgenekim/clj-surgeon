@@ -102,3 +102,12 @@ and all ownership, behavior, architecture and protected-content gates are unchan
 - [x] **NS-SPLIT-064**: When a split publishes body preservation facts, it shall compare each original owner after authorized reference, alignment and promotion replay with actual destination bytes using SHA-256 evidence while reporting raw byte equality separately.
 - [x] **NS-SPLIT-065**: When candidate negative evidence contradicts the split contract, publication shall refuse before any mutation with the violating facts.
 - [x] **NS-SPLIT-066**: When a committed split has incomplete verification, its receipt shall explain proof tier and pending status with a proof-status next_call without changing verification_complete.
+
+## Rows sublime batch 5: residual review facts
+
+- [x] **NS-SPLIT-067**: When candidate namespace headers differ, the receipt shall publish exact require/import entry occurrence edits with original and candidate order.
+- [x] **NS-SPLIT-068**: When a candidate footprint is reported, the receipt shall classify whole-file byte identity across the captured roots, including files outside moved owner files.
+- [x] **NS-SPLIT-069**: When candidate lint has executed, receipt facts shall expose signed error/warning deltas with baseline counts and introduced error count.
+- [x] **NS-SPLIT-070**: When a warm probe executes, receipt facts shall name successfully loaded namespaces and the namespace whose require failed.
+- [x] **NS-SPLIT-071**: When a split text receipt is rendered, committed shall precede proof and its defined verification_complete boolean.
+- [x] **NS-SPLIT-072**: When byte-identity facts capture source files, the boundary shall refuse malformed UTF-8 before mutation rather than compare lossy decoded strings.
