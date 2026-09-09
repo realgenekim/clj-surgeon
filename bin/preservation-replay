@@ -391,6 +391,59 @@ for spec in "cljc-unanalysed $CJ_CAND $CJ_BASE" "cljc-analysed $CJ_CTL_CAND $CJ_
 done
 
 
+# ---- Sol round-8 rows (PB-FENCE-013) ---------------------------------------
+# A require spliced into an `ns` form by `#?@` is invisible to any private ns
+# parser. `spliced-require-reorder` reverses two libs inside BOTH analysed
+# branches and must raise a require-order signal; `spliced-require-control`
+# leaves the requires alone and must not.
+SP="$WORK/splice"; rm -rf "$SP"; mkdir -p "$SP/src"
+( cd "$SP"
+  git init -q -b main; git config commit.gpgsign false
+  cat > src/probe.cljc <<'CLJC'
+(ns probe
+  (:require #?@(:clj [[clojure.set :as set]
+                      [clojure.string :as str]]
+                :cljs [[clojure.set :as set]
+                       [clojure.string :as str]])))
+
+(defn f [] (str/join "," (set/union #{1} #{2})))
+CLJC
+  git add -A >/dev/null; git commit -qm base >/dev/null
+  cat > src/probe.cljc <<'CLJC'
+(ns probe
+  (:require #?@(:clj [[clojure.string :as str]
+                      [clojure.set :as set]]
+                :cljs [[clojure.string :as str]
+                       [clojure.set :as set]])))
+
+(defn f [] (str/join "," (set/union #{1} #{2})))
+CLJC
+  git add -A >/dev/null; git commit -qm "reverse the spliced requires" >/dev/null
+  git checkout -q -B ctl main~1
+  cat > src/probe.cljc <<'CLJC'
+(ns probe
+  (:require #?@(:clj [[clojure.set :as set]
+                      [clojure.string :as str]]
+                :cljs [[clojure.set :as set]
+                       [clojure.string :as str]])))
+
+(defn f [] (str/join ";" (set/union #{1} #{2})))
+CLJC
+  git add -A >/dev/null; git commit -qm "control: body only" >/dev/null )
+SP_BASE=$(git -C "$SP" rev-parse main~1)
+SP_CAND=$(git -C "$SP" rev-parse main)
+SP_CTL=$(git -C "$SP" rev-parse ctl)
+
+for spec in "spliced-require-reorder $SP_CAND $SP_BASE" "spliced-require-control $SP_CTL $SP_BASE"; do
+  set -- $spec
+  st=$(date +%s.%N)
+  "$HERE/preservation-brief" "$2" "$3" --repo "$SP" --roots src \
+      --title "$1" --out "$WORK/out/$1.md" --json "$WORK/out/$1.json" >/dev/null || true
+  en=$(date +%s.%N)
+  echo "$1  wall $(echo "$en - $st" | bc)s"
+done
+
+
 python3 - "$WORK/out" <<'PY'
 import json, sys, pathlib, os
 d = pathlib.Path(sys.argv[1])
