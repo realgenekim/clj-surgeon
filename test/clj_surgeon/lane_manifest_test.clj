@@ -17,18 +17,37 @@
    [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.mcp-test-runner :as runner]
    [clj-surgeon.runner-membership :as rm]
+   [clj-surgeon.tmp-leak-support :as tmp-leak]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]))
+   [clojure.test :refer [deftest is testing use-fixtures]]))
+
+;; RATCHET (2026-09-04, inb-9483a4): every fixture directory this namespace
+;; creates is tracked and swept, on failure as well as on success.
+(def ^:private temp-roots (atom []))
+(use-fixtures :each (tmp-leak/tracking-temp-dir-fixture temp-roots))
+
+(defn- temp-dir
+  [prefix]
+  (str (tmp-leak/track!
+         temp-roots
+         (java.nio.file.Files/createTempDirectory
+           prefix (into-array java.nio.file.attribute.FileAttribute [])))))
 
 (def ^:private test-root (io/file "test"))
 
 (defn- test-source-files
-  []
-  (->> (file-seq test-root)
-       (filter #(.isFile ^java.io.File %))
-       (filter #(re-find #"_test\.cljc?$" (.getName ^java.io.File %)))
-       sort))
+  "Every `*_test.clj[c]` source file under `root`. Parameterised so the census
+   witnesses below can drive the SAME discovery over a fixture tree in a temp
+   directory -- a witness that can only run against the live tree cannot be
+   made to go red on demand."
+  ([] (test-source-files test-root))
+  ([root]
+   (->> (file-seq (io/file root))
+        (filter #(.isFile ^java.io.File %))
+        (filter #(re-find #"_test\.cljc?$" (.getName ^java.io.File %)))
+        sort)))
 
 (defn- first-form
   [^java.io.File f]
@@ -47,15 +66,21 @@
   (->> (cons (meta (second form)) form)
        (some (fn [x] (when (and (map? x) (contains? x :lane)) (:lane x))))))
 
+(defn- scan-on-disk
+  "ns symbol -> {:file f :lane <declared or nil>} for every test source file
+   under `root`. THE TREE'S OWN ANSWER to what exists and what lane it claims,
+   read at test time from the files themselves."
+  [root]
+  (into {}
+        (keep (fn [f]
+                (let [form (first-form f)]
+                  (when-let [s (ns-sym-of form)]
+                    [s {:file (.getPath ^java.io.File f) :lane (declared-lane form)}]))))
+        (test-source-files root)))
+
 (def ^:private on-disk
   "ns symbol -> {:file f :lane <declared or nil>} for every test source file."
-  (delay
-    (into {}
-          (keep (fn [f]
-                  (let [form (first-form f)]
-                    (when-let [s (ns-sym-of form)]
-                      [s {:file (.getPath ^java.io.File f) :lane (declared-lane form)}])))
-                (test-source-files)))))
+  (delay (scan-on-disk test-root)))
 
 (def ^:private bb-lane
   "The babashka lane's namespaces, read out of `test/run_all.clj` rather than
@@ -65,6 +90,66 @@
     (set (map symbol
               (re-seq #"clj-surgeon\.[a-z0-9.\-]+-test"
                       (slurp (io/file "test" "run_all.clj")))))))
+
+;; ---------------------------------------------------------------------------
+;; @spec TEST-ISO-015
+;; INTENT: TEST-ISO-015
+;;
+;; THE CENSUS IS DERIVED FROM THE TREE; A COUNT IS ONLY A FLOOR.
+;;
+;; Until 2026-09-09 the lane census below was four pinned integers
+;; (`(is (= 55 (count (lm/namespaces-for :fast))))` and three siblings). Every
+;; branch that added a test namespace had to bump a number that says nothing
+;; about WHICH namespace, and on 2026-09-08 the failure mode that shape
+;; guarantees arrived: two branches each moved the fast pin 53 -> 54 for a
+;; DIFFERENT namespace, the two literals were textually equal, git merged them
+;; without a conflict, and the merged census was a namespace short while the
+;; number still read as agreement. A count cannot distinguish "the same 54" from
+;; "a different 54"; a set can, and the tree already knows the answer.
+;;
+;; So the expectation is DERIVED at test time from the same three sources the
+;; manifest claims to describe -- the `*_test.clj` files on disk, each file's own
+;; `{:lane ...}` ns metadata, and the manifest itself -- and compared as SETS in
+;; both directions, naming the members on each side. NO COUNT IS ASSERTED, not
+;; even as a `>=` floor: a floor at a historical count is the same shared number
+;; under a weaker operator -- it still has to be argued about at a merge, and it
+;; still blesses a corpus nobody re-derived. The one admissible guard is
+;; NON-EMPTINESS, because an empty derivation would make every set comparison
+;; above agree with itself.
+;; ---------------------------------------------------------------------------
+
+(defn- namespaces-declaring
+  "The namespaces in `scanned` whose OWN ns metadata declares `lane`."
+  [scanned lane]
+  (set (for [[s info] scanned :when (= lane (:lane info))] s)))
+
+(defn- census-diff
+  "Set difference in BOTH directions between a set DERIVED from the tree and the
+   set a census DECLARES. nil when they agree -- otherwise `:missing` (in the
+   tree, absent from the census) and `:extra` (declared by the census, absent
+   from the tree). Both directions, because absence must be as loud as presence:
+   a namespace deleted from a census simply stops running and the suite goes
+   green with less in it."
+  [derived declared]
+  (let [derived (set derived)
+        declared (set declared)
+        missing (vec (sort (remove declared derived)))
+        extra (vec (sort (remove derived declared)))]
+    (when (or (seq missing) (seq extra))
+      {:missing missing :extra extra})))
+
+(defn- census-diff-message
+  "The failure text for a `census-diff`: names the subject, both differences and
+   the remedy. Safe on nil, because `clojure.test` evaluates an `is` message
+   whether or not the assertion failed."
+  [subject diff]
+  (str subject ": the census and the tree disagree. "
+       "In the tree but MISSING from the census (" (count (:missing diff)) "): "
+       (if (seq (:missing diff)) (str/join ", " (:missing diff)) "none")
+       ". Declared by the census but ABSENT from the tree ("
+       (count (:extra diff)) "): "
+       (if (seq (:extra diff)) (str/join ", " (:extra diff)) "none")
+       ". Add or remove the NAMED member -- never re-pin a count."))
 
 ;; ---------------------------------------------------------------------------
 ;; @spec TEST-ISO-001
@@ -383,332 +468,350 @@
         (str (count dropped) " namespace(s) that round one MEASURED are in no "
              "lane -- partitioning must never drop: " (str/join ", " dropped)))))
 
+;; @spec TEST-ISO-001
+;; @spec TEST-ISO-015
 (deftest the-partition-matches-round-ones-measurement
-  (testing "counts are pinned so a silent re-partition is loud"
-    ;; Batch 3 adds one pure status namespace and one detached process battery.
-    ;; MERGE RESOLUTION, 2026-09-08 (fable/battery-parallel x MCP/main c41dee30):
-    ;; the SAME trap this file already records below. Batch 3 moved this pin
-    ;; 53 -> 54 for its pure status namespace and TEST-ISO-013 moved it 53 -> 54
-    ;; for battery-parallel-test; the numbers agreed textually and git merged
-    ;; them clean at 54, silently losing one namespace. Two different witnesses,
-    ;; two increments: 53 + 1 + 1 = 55.
-    (is (= 55 (count (lm/namespaces-for :fast))))
-    (is (= 7 (count (lm/namespaces-for :integration))))
-    ;; B07 enrolls its independent oracle mutation witnesses in one new battery namespace.
-    ;; Sol r10 enrolls the per-verb artifact boundary battery.
-    ;; Batch 3 adds one detached process battery; TEST-ISO-013 adds no battery
-    ;; namespace (it re-runs the ones already there), so the battery count is
-    ;; trunk's. The manifest takes BOTH sides: 95 + 2 (Batch 3) + 1 (TEST-ISO-013).
-    (is (= 36 (count (lm/namespaces-for :battery))))
-    (is (= 98 (count lm/manifest))
-        (str "round one's 49 measured namespaces, plus the two round-two "
-             "witnesses (fast-lane-isolation-test, lane-manifest-test), plus "
-             "round three's adopted orphan (mcp-formatter-test) and its "
-             "battery-ledger witness, plus round four's six runtime purity "
-             "witnesses in ns-isolation-test, plus round five's "
-             "mcp-inspect-cold-job-test -- the one inspect-tool test that "
-             "spawns a child, moved out of a :fast namespace into :battery; "
-             "and the trunk's mcp-feature-thread-test, adopted at this merge "
-             "with its own `sed` cross-check split into "
-             "mcp-feature-thread-sed-test (:battery) for the same reason; "
-             "and mission-forms-source-test, the comment-preserving source "
-             "lowering that replaced the blanket comment refusal"))))
+  (testing "each lane's membership is DERIVED from the tree, member by member"
+    (doseq [lane lm/lanes]
+      (let [diff (census-diff (namespaces-declaring @on-disk lane)
+                              (lm/namespaces-for lane))]
+        (is (nil? diff) (census-diff-message (str "lane " lane) diff)))))
+  (testing "the manifest as a whole equals every lane the tree declares"
+    (let [diff (census-diff (set (keep (fn [[s info]] (when (:lane info) s)) @on-disk))
+                            (keys lm/manifest))]
+      (is (nil? diff) (census-diff-message "manifest" diff))))
+  (testing "discovery is non-empty, so a scan that stopped working fails loud"
+    ;; The ONLY legitimate use of a count here. Not a floor against a historical
+    ;; corpus -- a floor blesses the old shared number under `>=` and still has
+    ;; to be argued about at every merge. Membership is settled above, member by
+    ;; member; all that is left is that the scan found ANYTHING at all, because
+    ;; an empty derivation would make every set comparison above pass vacuously.
+    (is (seq @on-disk)
+        (str "discovery found no test source files under " test-root
+             " -- an empty scan makes every derived comparison above agree "
+             "with itself"))
+    (is (seq lm/manifest) "the manifest declares no namespaces at all")
+    (doseq [lane lm/lanes]
+      (is (seq (lm/namespaces-for lane))
+          (str "lane " lane " is empty; a lane that runs nothing is a silent "
+               "hole, not a partition")))))
 
-(defn- deftest-count
-  "How many `deftest` forms a namespace's source file declares. A SOURCE
-   census, deliberately: it is the same number for every box and every load,
-   whereas assertion counts are context-sensitive (the round-two review
-   measured 4,319 assertions summing the lanes separately and 4,323 running
-   them together) and a pin that moves with the weather teaches people to
-   re-bless it."
+;; @spec TEST-ISO-015
+;; INTENT-TEST: TEST-ISO-015
+(deftest a-namespace-in-the-tree-but-absent-from-the-census-is-named
+  ;; RED ON DEMAND, in a FIXTURE tree under java.io.tmpdir -- never the live
+  ;; one. The live assertions above can only be observed green; this drives the
+  ;; same discovery and the same comparator over a tree we control, so the
+  ;; failure they exist to catch is exhibited rather than asserted about.
+  (let [root (temp-dir "surgeon-lane-census")
+        pkg (io/file root "test" "clj_surgeon")]
+    (.mkdirs pkg)
+    (spit (io/file pkg "enrolled_test.clj")
+          "(ns clj-surgeon.fixture-enrolled-test {:lane :fast})\n")
+    (spit (io/file pkg "newcomer_test.clj")
+          "(ns clj-surgeon.fixture-newcomer-test {:lane :fast})\n")
+    (let [scanned (scan-on-disk (io/file root "test"))
+          derived (namespaces-declaring scanned :fast)
+          census '#{clj-surgeon.fixture-enrolled-test}
+          diff (census-diff derived census)]
+      (testing "the fixture discovery sees the tree the same way the live one does"
+        (is (= 2 (count scanned)))
+        (is (= '#{clj-surgeon.fixture-enrolled-test clj-surgeon.fixture-newcomer-test}
+               derived)))
+      (testing "a namespace the tree declares and the census omits is named"
+        (is (= '[clj-surgeon.fixture-newcomer-test] (:missing diff)))
+        (is (empty? (:extra diff)))
+        (is (str/includes? (census-diff-message "lane :fast" diff)
+                           "clj-surgeon.fixture-newcomer-test")))
+      (testing "and a COUNT cannot see the defect a set does"
+        ;; The 2026-09-08 merge in one fixture: same size, different members.
+        ;; Equal counts is exactly the evidence git had when it merged two
+        ;; different 54s into one.
+        (let [swapped '#{clj-surgeon.fixture-enrolled-test clj-surgeon.fixture-ghost-test}
+              swap-diff (census-diff derived swapped)]
+          (is (= (count derived) (count swapped))
+              "the counts agree -- which is why a count pin passes here")
+          (is (= {:missing '[clj-surgeon.fixture-newcomer-test]
+                  :extra '[clj-surgeon.fixture-ghost-test]}
+                 swap-diff)
+              "...while the derived witness names both sides of the swap"))))))
+
+(defn- deftest-names
+  "The FULLY QUALIFIED names of the `deftest` forms a namespace's source file
+   declares, e.g. `clj-surgeon.foo-test/bar`. A SOURCE census, deliberately: it
+   is the same answer for every box and every load, whereas assertion counts are
+   context-sensitive (the round-two review measured 4,319 assertions summing the
+   lanes separately and 4,323 running them together).
+
+   NAMES, not a count. A count per namespace cannot see a rename or any
+   same-count replacement -- delete one member, add another, the number is
+   unchanged and the ratchet is green while the promise it protected is gone.
+   Sol's round-two fence proved exactly that against the count ledger: renaming
+   `mcp-paths-test`'s only deftest passed all six assertions."
   [ns-sym]
   (let [file (:file (get @on-disk ns-sym))]
-    (count (re-seq #"(?m)^\(deftest " (slurp file)))))
+    (into (sorted-set)
+          (map (fn [[_ nm]] (symbol (str ns-sym) nm)))
+          (re-seq #"(?m)^\(deftest\s+([^\s()\[\]{}]+)" (slurp file)))))
+
+(defn- deftest-count
+  "How many deftests `ns-sym` declares, derived from `deftest-names`."
+  [ns-sym]
+  (count (deftest-names ns-sym)))
 
 (def ^:private adopted-since-round-one
   "Namespaces in a lane today that round one did NOT measure, each with the
-   number of tests it brings and why it exists. This is the ONLY legal way
-   the corpus grows without the arithmetic below going red."
-  '{clj-surgeon.receipt-artifacts-boundary-test 15 ; Sol r10 + two Row 5 real-process witnesses (battery).
-    clj-surgeon.namespace-split-test 54 ; Batch 5 adds six ns/footprint/lint/encoding witnesses; derived by deftest-count.
-    clj-surgeon.namespace-split-warm-test 3 ; Batch 5 adds executed load/failed destination facts to the real nREPL matrix.
-    clj-surgeon.mcp-namespace-split-test 27 ; Batch 5 adds text ordering, absent-probe honesty and malformed UTF-8 refusal.
-    clj-surgeon.split-proof-gate-test 4 ; Batch 3 pure status/state matrix, plus Sol's a9da4344 temp-root admission and receipt-ceiling witnesses.
-    clj-surgeon.split-proof-gate-boundary-test 3 ; Batch 3 detached worker and caller-exit boundaries, plus Sol's a9da4344 worker-identity boundary.
-    clj-surgeon.cell-b-oracle-test 2 ; B07: shell lint mutation test and independent partial-preservation mutants; battery (Python subprocess).
-    clj-surgeon.mcp-expect-guard-test 14 ; `expect` is a guard on both write routes, not discarded bookkeeping (dogfood-3, 2026-09-07).
-    clj-surgeon.outline-corpus-integration-test 1 ; MOVED: full repository differential out of the bounded fast namespace.
-    clj-surgeon.mission-candidate-race-test 5 ; Completion-order delivery, bounded cancellation and retained results.
-    clj-surgeon.mission-events-test 8 ; Public completion events and isolated logging failure.
-    clj-surgeon.mission-phase-events-test 7 ; Actual phase receipts, identity and isolated logging failure.
-    clj-surgeon.mission-provider-fallback-events-test 8 ; Actual dispatched fallback, thread context and isolated logging.
-    clj-surgeon.mission-display-test 14 ; Add historical nested refusal and incompatible-example witnesses.
-    clj-surgeon.mission-fallback-test 8 ; Explicit report, actual event write and unchanged proof.
-    clj-surgeon.mission-git-identity-test 3 ; Explicit seat author/committer survive subprocess sanitization.
-    clj-surgeon.mission-git-submodule-test 2 ; Git config cannot hide staged gitlinks from scope guard.
-    clj-surgeon.mission-publication-test 7 ; Durable publication intent blocks silent source undo.
-    clj-surgeon.mission-git-test 4 ; Pure Git provenance contract.
-    clj-surgeon.mission-git-boundary-test 4 ; Git tree and staged path boundaries.
-    clj-surgeon.mission-git-fence-test 5 ; Identity and refusal witnesses.
-    clj-surgeon.mission-git-process-test 2 ; Bounded subprocess lifecycle.
-    clj-surgeon.mission-git-ledger-test 3 ; Saved receipt authority.
-    clj-surgeon.mission-commit-cli-test 4 ; Actual public command behavior.
-    clj-surgeon.mission-usage-test 7 ; Observed legacy/attempt usage and unknowns.
-    clj-surgeon.mission-typist-executor-admission-test 2 ; Unsupported adapter refused before readiness.
-    clj-surgeon.mission-usage-executor-test 2 ; Saved success/refusal usage snapshots.
-    clj-surgeon.mission-run-test 11 ; One-process saved plan, refusal and CLI boundaries.
-    clj-surgeon.mission-test 27 ; Adopt existing ledger orphan plus owner-forms routing and recovery witnesses.
-    clj-surgeon.mission-typist-test 6 ; Pure routing/dossier and frozen generation policy boundaries.
-    clj-surgeon.mission-candidate-test 5 ; Frozen span lowering boundaries.
-    clj-surgeon.mission-plain-forms-test 8 ; Bounded raw definition decoding and actual escaping failure.
-    clj-surgeon.mission-forms-test 5 ; Owner identity, protected syntax and lost-comment refusal.
-    clj-surgeon.mission-forms-source-test 23 ; Strict comment text/attachment, whitespace identity and owner sentinel.
-    clj-surgeon.mission-typist-executor-test 11 ; Add candidate diagnostic survival to proof/commit/undo and saved fallback forwarding.
-    clj-surgeon.battery-ledger-test        14 ; TEST-ISO-009a/b: add strict archive classification and preserved failure/audit authority.
-    clj-surgeon.battery-parallel-test      34 ; TEST-ISO-013: the battery lane run as N JVM lanes -- schedule, lane-failure classifier, shard fold, prerequisite DAG. TEST-ISO-014 (5cdd5dcc) adds two: launcher-matrix-cells-remain-independently-shardable and grouped-shards-retain-measured-per-deftest-walls.
-    clj-surgeon.require-change-test 9 ; Pure standalone require intent and strict natural-layout refusal witnesses.
-    clj-surgeon.require-change-boundary-test 12 ; Actual CLI/profile processes, confined publication, independent oracle and undo.
-    clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
-    clj-surgeon.lane-manifest-test         25 ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses
-    clj-surgeon.mcp-formatter-test         3  ; the adopted orphan (round three)
-    clj-surgeon.mcp-feature-thread-test    69 ; the trunk's `feature_thread` verb, adopted at round five's MCP/main merge
-    clj-surgeon.mcp-feature-thread-sed-test 1 ; MOVED, not new (round five): its one `sed` cross-check, out of :fast into :battery
-    clj-surgeon.mcp-inspect-cold-job-test  1  ; MOVED, not new (round five): the one inspect-tool test that drives /bin/sh, out of :fast into :battery
-    clj-surgeon.ns-isolation-test          25  ; TEST-ISO-002/003/004/005/007/010's witnesses (round four) + round five's four spawn-ledger witnesses
-    clj-surgeon.helper-extraction-test     34  ; MCP-OP-HELPER's pure planner witnesses, enrolled into :fast when the planner went green (it requires only the planner, the fixture and clojure.test, and spawns nothing)
-    clj-surgeon.telemetry-events-test       17  ; TELEMETRY-EVENTS-001's witnesses: the box-wide JSONL ledger the public MCP fns append to as a side effect (2026-09-06, the night the hourly watch reported four figures while a dozen calls landed in launcher-chosen roots it never read)
-    clj-surgeon.mcp-helper-extraction-test 51}) ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
+   reason it exists. The per-namespace TEST COUNTS that used to live here are
+   derived from the tree and recorded, one line per namespace, in
+   `census-ledger-path`; what stays here is the REASON, which no derivation can
+   recover. Keyed by namespace name, so two branches adopting different
+   namespaces merge without touching the same line."
+  '#{clj-surgeon.receipt-artifacts-boundary-test ; Sol r10 + two Row 5 real-process witnesses (battery).
+     clj-surgeon.namespace-split-test ; Batch 5 adds six ns/footprint/lint/encoding witnesses; derived by deftest-count.
+     clj-surgeon.namespace-split-warm-test ; Batch 5 adds executed load/failed destination facts to the real nREPL matrix.
+     clj-surgeon.mcp-namespace-split-test ; Batch 5 adds text ordering, absent-probe honesty and malformed UTF-8 refusal.
+     clj-surgeon.split-proof-gate-test ; Batch 3 pure status/state matrix, plus Sol's a9da4344 temp-root admission and receipt-ceiling witnesses.
+     clj-surgeon.split-proof-gate-boundary-test ; Batch 3 detached worker and caller-exit boundaries, plus Sol's a9da4344 worker-identity boundary.
+     clj-surgeon.cell-b-oracle-test ; B07: shell lint mutation test and independent partial-preservation mutants; battery (Python subprocess).
+     clj-surgeon.mcp-expect-guard-test ; `expect` is a guard on both write routes, not discarded bookkeeping (dogfood-3, 2026-09-07).
+     clj-surgeon.outline-corpus-integration-test ; MOVED: full repository differential out of the bounded fast namespace.
+     clj-surgeon.mission-candidate-race-test ; Completion-order delivery, bounded cancellation and retained results.
+     clj-surgeon.mission-events-test ; Public completion events and isolated logging failure.
+     clj-surgeon.mission-phase-events-test ; Actual phase receipts, identity and isolated logging failure.
+     clj-surgeon.mission-provider-fallback-events-test ; Actual dispatched fallback, thread context and isolated logging.
+     clj-surgeon.mission-display-test ; Add historical nested refusal and incompatible-example witnesses.
+     clj-surgeon.mission-fallback-test ; Explicit report, actual event write and unchanged proof.
+     clj-surgeon.mission-git-identity-test ; Explicit seat author/committer survive subprocess sanitization.
+     clj-surgeon.mission-git-submodule-test ; Git config cannot hide staged gitlinks from scope guard.
+     clj-surgeon.mission-publication-test ; Durable publication intent blocks silent source undo.
+     clj-surgeon.mission-git-test ; Pure Git provenance contract.
+     clj-surgeon.mission-git-boundary-test ; Git tree and staged path boundaries.
+     clj-surgeon.mission-git-fence-test ; Identity and refusal witnesses.
+     clj-surgeon.mission-git-process-test ; Bounded subprocess lifecycle.
+     clj-surgeon.mission-git-ledger-test ; Saved receipt authority.
+     clj-surgeon.mission-commit-cli-test ; Actual public command behavior.
+     clj-surgeon.mission-usage-test ; Observed legacy/attempt usage and unknowns.
+     clj-surgeon.mission-typist-executor-admission-test ; Unsupported adapter refused before readiness.
+     clj-surgeon.mission-usage-executor-test ; Saved success/refusal usage snapshots.
+     clj-surgeon.mission-run-test ; One-process saved plan, refusal and CLI boundaries.
+     clj-surgeon.mission-test ; Adopt existing ledger orphan plus owner-forms routing and recovery witnesses.
+     clj-surgeon.mission-typist-test ; Pure routing/dossier and frozen generation policy boundaries.
+     clj-surgeon.mission-candidate-test ; Frozen span lowering boundaries.
+     clj-surgeon.mission-plain-forms-test ; Bounded raw definition decoding and actual escaping failure.
+     clj-surgeon.mission-forms-test ; Owner identity, protected syntax and lost-comment refusal.
+     clj-surgeon.mission-forms-source-test ; Strict comment text/attachment, whitespace identity and owner sentinel.
+     clj-surgeon.mission-typist-executor-test ; Add candidate diagnostic survival to proof/commit/undo and saved fallback forwarding.
+     clj-surgeon.battery-ledger-test ; TEST-ISO-009a/b: add strict archive classification and preserved failure/audit authority.
+     clj-surgeon.battery-parallel-test ; TEST-ISO-013: the battery lane run as N JVM lanes -- schedule, lane-failure classifier, shard fold, prerequisite DAG. TEST-ISO-014 (5cdd5dcc) adds two: launcher-matrix-cells-remain-independently-shardable and grouped-shards-retain-measured-per-deftest-walls.
+     clj-surgeon.require-change-test ; Pure standalone require intent and strict natural-layout refusal witnesses.
+     clj-surgeon.require-change-boundary-test ; Actual CLI/profile processes, confined publication, independent oracle and undo.
+     clj-surgeon.fast-lane-isolation-test ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
+     clj-surgeon.lane-manifest-test ; TEST-ISO-001's witness (round two) + round three's exclusion, arithmetic and rename pins + round five's four membership witnesses and two landing-gate witnesses + TEST-ISO-015's fixture-tree census witness (2026-09-09), a-namespace-in-the-tree-but-absent-from-the-census-is-named
+     clj-surgeon.mcp-formatter-test ; the adopted orphan (round three)
+     clj-surgeon.mcp-feature-thread-test ; the trunk's `feature_thread` verb, adopted at round five's MCP/main merge
+     clj-surgeon.mcp-feature-thread-sed-test ; MOVED, not new (round five): its one `sed` cross-check, out of :fast into :battery
+     clj-surgeon.mcp-inspect-cold-job-test ; MOVED, not new (round five): the one inspect-tool test that drives /bin/sh, out of :fast into :battery
+     clj-surgeon.ns-isolation-test ; TEST-ISO-002/003/004/005/007/010's witnesses (round four) + round five's four spawn-ledger witnesses
+     clj-surgeon.helper-extraction-test ; MCP-OP-HELPER's pure planner witnesses, enrolled into :fast when the planner went green (it requires only the planner, the fixture and clojure.test, and spawns nothing)
+     clj-surgeon.telemetry-events-test ; TELEMETRY-EVENTS-001's witnesses: the box-wide JSONL ledger the public MCP fns append to as a side effect (2026-09-06, the night the hourly watch reported four figures while a dozen calls landed in launcher-chosen roots it never read)
+     clj-surgeon.mcp-helper-extraction-test}) ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
 
+(def ^:private census-ledger-path
+  "The deftest ledger: ONE LINE PER FULLY QUALIFIED DEFTEST NAME, sorted.
+
+   Two shapes were rejected before this one, and both rejections are the reason
+   it looks like this. A repository-wide TOTAL is the merge-conflicting scalar
+   class -- two branches add disjoint witnesses, both write the same next number,
+   git merges the equal literals without a conflict, and the total is wrong; the
+   comment history above `the-partition-matches-round-ones-measurement` records
+   that happening three separate times. A ledger of `namespace -> count` fixes
+   the merge but not the promise: it fails by name only at NAMESPACE grain, so a
+   rename -- delete one member, add another, same count -- passes (Sol's
+   round-two fence renamed `clj-surgeon.mcp-paths-test`'s only deftest and the
+   ratchet stayed green through all six assertions).
+
+   A ledger is admissible only when it is line-wise at the granularity of the
+   members it promises to preserve AND names them. So: one deftest per line, the
+   name fully qualified and stable, sorted. Two branches adding tests touch two
+   different lines; a deleted test is a NAMED line that disappears.
+
+   Regenerate ONLY through the direct entrance -- never inside make, see
+   `regenerate-decision`:
+
+     CENSUS_REGENERATE=1 clojure -M:clj-surgeon/test-deps -e \"(require 'clj-surgeon.lane-manifest-test 'clojure.test) (clojure.test/test-vars [#'clj-surgeon.lane-manifest-test/the-corpus-only-ever-grows-and-the-arithmetic-is-shown])\"
+
+   and READ THE DIFF before committing it: a removed line is the deletion this
+   ledger exists to make loud, not a line to re-bless."
+  "test/clj_surgeon/deftest_census.edn")
+
+(def ^:private regenerate-entrance
+  "The exact command that may rewrite the ledger. Quoted in the refusal so a
+   reader never has to guess what the permitted entrance is."
+  (str "CENSUS_REGENERATE=1 clojure -M:clj-surgeon/test-deps -e \"(require "
+       "'clj-surgeon.lane-manifest-test 'clojure.test) (clojure.test/test-vars "
+       "[#'clj-surgeon.lane-manifest-test/"
+       "the-corpus-only-ever-grows-and-the-arithmetic-is-shown])\""))
+
+(defn- regenerate-decision
+  "What the regenerate entrance does under environment `env`, as a pure function
+   of the environment so it can be witnessed without touching the real one:
+
+     :skip               regeneration was not requested;
+     :refuse-under-make  requested, but this process was launched BY make;
+     :write              requested through the direct entrance.
+
+   CENSUS-REGENERATE-001 (Sol fence round two): a caller-supplied
+   `CENSUS_REGENERATE=1` is EXPORTED into make's recipes, so `CENSUS_REGENERATE=1
+   make test` reached this writer through landing-gate -> mcp-test -> the fast
+   lane and could rewrite the checked-in oracle DURING THE GATE -- an oracle a
+   gate can rewrite is not an oracle. `MAKELEVEL` and `MAKEFLAGS` are set by make
+   in every recipe's environment (MAKELEVEL is `0` in the outermost one, which is
+   why PRESENCE is the test and not truthiness), so their presence is the signal
+   that this is not the deliberate, review-the-diff entrance. The Makefile itself
+   is not touched: the refusal lives here, at the writer."
+  [env]
+  (cond
+    (not= "1" (get env "CENSUS_REGENERATE")) :skip
+    (or (contains? env "MAKELEVEL") (contains? env "MAKEFLAGS")) :refuse-under-make
+    :else :write))
+
+(defn- regenerate-refusal
+  [env]
+  (str "census-regenerate-refused: CENSUS_REGENERATE=1 was requested inside a "
+       "make recipe (" (str/join ", " (sort (filter #{"MAKELEVEL" "MAKEFLAGS"}
+                                                    (keys env))))
+       " present). The ledger is the oracle this gate checks; a gate that can "
+       "rewrite its own oracle proves nothing, so NOTHING WAS WRITTEN. Regenerate "
+       "deliberately, outside make, and read the diff:\n  " regenerate-entrance))
+
+(defn- environment
+  "The process environment as a plain map, so `regenerate-decision` stays pure."
+  []
+  (into {} (System/getenv)))
+
+(defn- derived-census
+  "The fully qualified name of every deftest the manifest's namespaces declare."
+  []
+  (into (sorted-set) (mapcat deftest-names) (keys lm/manifest)))
+
+(defn- write-census-ledger!
+  "Writes `census` to `census-ledger-path`, one fully qualified deftest per line,
+   sorted. Reached ONLY through `regenerate-decision` returning `:write`."
+  [census]
+  (spit census-ledger-path
+        (str ";; Deftest census -- DERIVED, regenerated, never hand-edited.\n"
+             ";; One FULLY QUALIFIED deftest per line: two branches adding tests\n"
+             ";; touch two different lines, and a deleted test is a named line\n"
+             ";; that disappears rather than a number that stays plausible.\n"
+             ";; Regenerate: see clj-surgeon.lane-manifest-test/census-ledger-path.\n"
+             "#{"
+             (str/join "\n  " census)
+             "}\n")))
+
+(defn- census-ledger-diff
+  "Named differences between the tree's deftests and the checked-in ledger:
+   `:added` are declared in a lane but absent from the ledger, `:removed` are in
+   the ledger and no longer declared anywhere. A RENAME appears as one of each,
+   which is the whole reason the ledger holds names."
+  [derived ledger]
+  (let [added (vec (sort (remove ledger derived)))
+        removed (vec (sort (remove derived ledger)))]
+    (when (or (seq added) (seq removed))
+      {:added added :removed removed})))
+
+(defn- census-ledger-message
+  [diff]
+  (str "the tree and " census-ledger-path " disagree. "
+       "Declared in a lane but NOT in the ledger (" (count (:added diff)) "): "
+       (if (seq (:added diff)) (str/join ", " (:added diff)) "none")
+       ". In the ledger but NO LONGER DECLARED (" (count (:removed diff)) "): "
+       (if (seq (:removed diff)) (str/join ", " (:removed diff)) "none")
+       ". After regenerating, READ THE LEDGER DIFF before committing it"
+       ". A removed name is a deleted test -- say why, or restore it. A removed "
+       "AND an added name together is a rename, which the count ledger this "
+       "replaced could not see. Then regenerate: " regenerate-entrance))
+
+;; @spec TEST-ISO-015
+;; INTENT-TEST: TEST-ISO-015
+(deftest the-regenerate-entrance-refuses-inside-make
+  ;; CENSUS-REGENERATE-001. A pure decision over an environment MAP, so the rule
+  ;; is witnessed here rather than only in whatever environment this run happens
+  ;; to have. MAKELEVEL is "0" in make's outermost recipe -- presence, never
+  ;; truthiness, is the signal.
+  (testing "the direct entrance writes"
+    (is (= :write (regenerate-decision {"CENSUS_REGENERATE" "1"}))))
+  (testing "make's own environment refuses, however it is spelled"
+    (doseq [env [{"CENSUS_REGENERATE" "1" "MAKELEVEL" "0"}
+                 {"CENSUS_REGENERATE" "1" "MAKELEVEL" "1"}
+                 {"CENSUS_REGENERATE" "1" "MAKEFLAGS" ""}
+                 {"CENSUS_REGENERATE" "1" "MAKEFLAGS" "w" "MAKELEVEL" "2"}]]
+      (is (= :refuse-under-make (regenerate-decision env)) (pr-str env))))
+  (testing "the refusal names the subject, the reason and the permitted entrance"
+    (let [msg (regenerate-refusal {"CENSUS_REGENERATE" "1" "MAKELEVEL" "0"})]
+      (is (str/includes? msg "census-regenerate-refused:"))
+      (is (str/includes? msg "MAKELEVEL"))
+      (is (str/includes? msg "NOTHING WAS WRITTEN"))
+      (is (str/includes? msg regenerate-entrance))))
+  (testing "a mismatch sends the reviewer back to the named ledger diff"
+    (let [msg (census-ledger-message {:added ['fixture/new]
+                                      :removed ['fixture/old]})]
+      (is (str/includes? msg "READ THE LEDGER DIFF"))))
+  (testing "no request, no write -- inside make or outside it"
+    (is (= :skip (regenerate-decision {})))
+    (is (= :skip (regenerate-decision {"MAKELEVEL" "0"})))
+    (is (= :skip (regenerate-decision {"CENSUS_REGENERATE" "0"})))))
+
+;; @spec TEST-ISO-001
+;; @spec TEST-ISO-015
 (deftest the-corpus-only-ever-grows-and-the-arithmetic-is-shown
-  ;; ASTRA 2026-09-06: add 27 ledger + 14 pure typist + 6 executor + 5 race = 52 tests.
-  ;; ASTRA run entrance adds 8 boundary tests; current arithmetic: 921 + 281 = 1202. Counts below retain history.
-  ;; THE NOTHING-DROPPED PIN, recomputed for round three.
+  ;; PARTITIONING MUST NEVER TURN INTO DROPPING. Round one MEASURED 865 tests
+  ;; across the 49 namespaces in `round-one-jvm-namespaces`; every partition,
+  ;; move and adoption since then has to keep every one of them running
+  ;; somewhere. Two things prove it, and NEITHER is a shared number:
   ;;
-  ;; Round one MEASURED 865 tests / 13,023 assertions across the 49 namespaces
-  ;; pinned in `round-one-jvm-namespaces`. Partitioning must never turn into
-  ;; dropping, so two things are checked, and the second is the one that
-  ;; actually holds the line:
-  ;;
-  ;;   round one's 49 namespaces, today ........... 920 deftests  (>= 865)
-  ;;   adopted since round one .................... 230 deftests  (12+4+25+3+69+1+1+24+34+48+9)
-  ;;                                                --------------
-  ;;   total declared by the manifest ............. 1151 deftests
-  ;;
-  ;; ROUND SIX ADOPTED THE HELPER-EXTRACTION PAIR, 68 deftests, on the day the
-  ;; planner and the boundary both went green. They had been `excluded` with
-  ;; their own red targets for exactly as long as the namespaces they witness
-  ;; did not exist -- the repository's pattern for a not-yet-implemented
-  ;; witness -- and enrolling them retires those targets. The split is the
-  ;; lanes' own rule rather than a preference: the pure half requires only the
-  ;; planner, the fixture and clojure.test and spawns nothing, so it is :fast;
-  ;; the boundary half launches babashka children to prove fixture trees LOAD
-  ;; and drives real execute! transactions, so it is :battery.
-  ;;
-  ;; ROUND FIVE MOVED ONE TEST OUT of a round-one namespace, which is why the
-  ;; first line went 921 -> 920, and it is worth saying plainly because it is
-  ;; the exact shape this pin exists to police. It was not deleted: the one
-  ;; inspect-tool test that drives /bin/sh through the production cold-verify
-  ;; helper moved into clj-surgeon.mcp-inspect-cold-job-test (:battery), and
-  ;; that namespace's line in `adopted-since-round-one` carries the +1. The
-  ;; equality below is what makes the distinction load-bearing: a MOVE keeps
-  ;; the total, a DELETION does not, and only one of them can pass here.
-  ;;
-  ;; A namespace leaving a lane fails `the-partition-drops-nothing-...` by
-  ;; name; a namespace's tests being deleted fails the >= below; anything
-  ;; joining the corpus without a line in `adopted-since-round-one` fails the
-  ;; equality. Moving a test needs a reason AT the pin, which is the point.
-  (let [r1 (reduce + (map deftest-count round-one-jvm-namespaces))
-        adopted (reduce + (map deftest-count (keys adopted-since-round-one)))
-        total (reduce + (map deftest-count (keys lm/manifest)))]
-    (testing "every namespace round one measured still declares at least as much"
-      (is (>= r1 865)
-          (str "round one's 49 namespaces declare " r1 " tests today, fewer "
-               "than the 865 it MEASURED -- tests were deleted, not moved")))
-    (testing "the tests adopted since round one are exactly the declared ones"
-      (doseq [[s n] adopted-since-round-one]
-        (is (= n (deftest-count s))
-            (str s " declares " (deftest-count s) " tests, not the pinned " n
-                 " -- update the pin WITH the reason")))
-      (is (= (set (keys adopted-since-round-one))
-             (set (remove round-one-jvm-namespaces (keys lm/manifest))))
-          (str "a namespace joined or left the corpus without a line at the "
-               "pin: in a lane but unpinned "
-               (pr-str (sort (remove (some-fn round-one-jvm-namespaces
-                                              (set (keys adopted-since-round-one)))
-                                     (keys lm/manifest))))))
-      ;; One outline corpus test MOVED from its original namespace to adopted integration.
-      ;; 931 original + 435 adopted = 1366: add 7 inspect owner_counts/source-omission
-      ;; witnesses (5 in mcp-inspect-contract-test, 2 in mcp-inspect-tool-test), both
-      ;; round-one namespaces, so the growth lands in the original half and adopted holds;
-      ;; then add 9 public-handler result-ceiling witnesses in mcp-inspect-tool-test
-      ;; (MCP-OP-FIELD-009, inb-b60d6e: the ordinary read path now measures and refuses)
-      ;; and 3 more for the publication-point guard at the exact byte boundary,
-      ;; also a round-one namespace, so 1363 -> 1372 lands in the original half too;
-      ;; add the real two-require cardinality
-      ;; regression in mcp-contract-test; retain Astra identity/receipt witnesses and trunk
-      ;; helper request-shape refusals (48 -> 51), plus two battery archival-distance witnesses;
-      ;; closed telemetry remains 17, not trunk
-      ;; passthrough-field 18, and mission ledger remains the executor-extended 27.
-      ;; Round 3 adds three pure and two warm boundary tests: 477 + 5 = 482.
-      ;; Eight Cell C paper-cut witnesses: 464 + 8 = 472.
-      ;; B07 adds 9 compiler + 1 boundary + 2 oracle tests: 484 + 12 = 496.
-      ;; Row 3 adds 9 pure + 12 real boundary/CLI witnesses: 496 + 21 = 517.
-      ;; Sol r10 adds 13 per-verb publication witnesses: 517 + 13 = 530.
-      ;; Rows sublime adds seven external-profile/proof-honesty boundary witnesses.
-      ;; Batch 3: six receipt/facts witnesses + two pure status + two detached boundary tests.
-      ;; Sol's landing fence for a9da4344 added four JVM witnesses (2 gate, 1 gate
-      ;; boundary, 1 mcp) without moving these pins, so this arithmetic was RED at
-      ;; branch tip 0956951b; the delta fence for that tip adds the fifth, the
-      ;; actionable unsafe-tmpdir refusal (NS-SPLIT-059). 547 + 4 + 1 = 552.
-      ;; Rows sublime batch 4: source-derived pins from the manifest census,
-      ;; twelve pure and three boundary witnesses, including the Sol fence
-      ;; counterexamples -- namespace-split-test 35 -> 47 (+12) and
-      ;; mcp-namespace-split-test 21 -> 24 (+3). Both are ADOPTED namespaces,
-      ;; so all 15 land here and none of them touch r1.
-      ;; TEST-ISO-013 adds 21 parallel-battery witnesses plus three regressions
-      ;; the first wide run found (lane-integrity grain, the dropped :sharded
-      ;; field, home isolation through a selector): 24 more, in the ONE new
-      ;; adopted namespace battery-parallel-test.
-      ;; MERGE, 2026-09-08 (astra/namespace-split x MCP/main 7d62849a): the
-      ;; MERGE-BASE pin was 552 and BOTH sides moved it for different
-      ;; witnesses -- this branch to 567 (+15), trunk to 576 (+24). Neither
-      ;; number is right for the merged tree; the pin is base + both deltas,
-      ;; 552 + 15 + 24 = 591, RECOMPUTED off the merged tree by the same
-      ;; source census this test runs (`deftest-count` over
-      ;; `adopted-since-round-one`), not by trusting either side.
-      ;;
-      ;; TEST-ISO-014, 2026-09-08 (5cdd5dcc, splitting the battery reader-fence
-      ;; loop into six independent launcher cells): battery-parallel-test is
-      ;; the one ADOPTED namespace this commit touched -- it gains the two
-      ;; grouping/shard witnesses named at its pin above, 24 -> 26. (The
-      ;; reader-eval-fence-test split itself, 7 -> 13 deftests, lands in a
-      ;; ROUND-ONE namespace, so it moves r1, not adopted.) 591 + 2 = 593.
-      ;; TEST-ISO-015: tree reader derives 610 adopted / 1635 total (+6 gate witnesses).
-      ; Gate r2: tree reader derives 612 adopted / 1637 total; budget boundary and shared pool witnesses.
-      ; Cold-cache regression: tree reader derives 613 adopted / 1638 total.
-      (is (= 613 adopted) (str "adopted tests: " adopted)))
-    (testing "the arithmetic closes"
-      ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
-      ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
-      ;; witnesses, so the number agreed textually and git auto-merged it while
-      ;; the corpus had grown TWICE. The pin is the SUM of both deltas, 1381,
-      ;; and this line records both -- a pin whose two sides collide on the same
-      ;; value is the one case where agreement is not evidence:
-      ;;
-      ;;   +9 on trunk: the public-handler result-ceiling witnesses in
-      ;;      mcp-inspect-tool-test (MCP-OP-FIELD-009, inb-b60d6e), narrated in
-      ;;      the block above, 1363 -> 1372.
-      ;;   +9 here: the hot-verification witnesses in
-      ;;      clj-surgeon.mcp-hot-verify-test (inb-adcc9e) -- that a hot
-      ;;      verification ends at a terminal status instead of blocking to its
-      ;;      :timeout-ms ceiling, that `interrupted` is a failure and not a
-      ;;      pass, that the ceiling is one deadline no response resets, that a
-      ;;      connect failure and a mid-read closure stay distinct typed
-      ;;      refusals, and that both keep their bounded output. 1372 -> 1381.
-      ;;
-      ;; Both namespaces are ROUND-ONE, so all 18 land in r1 and adopted holds
-      ;; at 435.
-      ;; MERGE RESOLUTION, 2026-09-06 (fable/refusal-text-shape x MCP/main
-      ;; 0ad609ff, the receipts landing 2b4080fe). THIRD time at the same
-      ;; trap, and it is now a pattern rather than an accident: BOTH sides
-      ;; arrive carrying a merge-resolution comment of their own, and the
-      ;; number each one states was true for the trunk it was computed
-      ;; against. Neither is adopted. The pin is trunk's CURRENT value plus
-      ;; THIS branch's own delta, RECOUNTED namespace by namespace against
-      ;; origin/MCP/main at merge time:
-      ;;
-      ;;   trunk 0ad609ff (receipt-truth's 1381 + 12 = 1393) ......... 1393
-      ;;   +15 mcp-compact-relations-test: MCP-OP-EDIT-037/038 -- the refusal
-      ;;       sentence in text, the D1 filled example, the ceiling boundary,
-      ;;       the oversized caller path, the leak and totality witnesses, the
-      ;;       forged-line/size/escaping witnesses, and the Unicode separator,
-      ;;       supplementary-format-mark and legitimate-supplementary triple.
-      ;;   +3  mcp-tool-test (56 -> 59, ON TOP of receipt-truth's four): the
-      ;;       EDIT-037 per-verb sweep
-      ;;       every-public-verb-shows-the-structured-error-sentence-it-publishes,
-      ;;       plus round two's two next_call REPLAY witnesses --
-      ;;       a-rendered-next-call-replays-to-the-structured-next-call-exactly
-      ;;       and an-oversized-next-call-renders-the-structured-pointer-not-a-
-      ;;       lossy-line (Astra's replay review of e67a6f13: the rendered
-      ;;       next_call was prose-sanitised, so the text and
-      ;;       structuredContent.next_call named DIFFERENT requests).
-      ;;   +1  mcp-inspect-tool-test: inspect-diagnostic-fields-cannot-forge-
-      ;;       receipt-lines (EDIT-038, Sol fence r5).
-      ;;   +3  mcp-operation-test: the RESULT-003 byte-identity witness Sol
-      ;;       fence r7 demanded, the construction-then-finalizer witness, and
-      ;;       the "canonicalization touches only the two quoted sentences"
-      ;;       witness (inb-2da8ea).
-      ;;   +3  mcp-alias-migration-test: the round-three PUBLIC-PATH witnesses
-      ;;       for alias reuse (Sol fence r3 on d32a3c9d) --
-      ;;       r3-reuse-never-writes-an-alias-outside-alias-policy,
-      ;;       r3-an-off-policy-target-alias-does-not-rescue-an-exhausted-policy
-      ;;       and r3-committed-reuse-preserves-comments-and-discard-forms.
-      ;;       The planner-level twins already existed; these drive `execute!`
-      ;;       and assert the COMMITTED bytes, because reuse that bypassed
-      ;;       `alias_policy` committed `forbidden/fetch-event` under a receipt
-      ;;       that read ok=true -- a planner assertion could not have seen it.
-      ;;                                                    ------
-      ;;   1393 + 22 + 3 ................................. 1418
-      ;;
-      ;; All five namespaces are ROUND-ONE, so the whole +25 lands in r1 and
-      ;; `adopted` holds at 435.
-      ;;
-      ;; MERGE, 2026-09-07: the aggregate-`expect` guard branch adopted ONE new
-      ;; namespace, mcp-expect-guard-test, carrying 14 deftests, and it is not
-      ;; round-one, so this is the one addition that moves `adopted`: 435 -> 449.
-      ;; Both ledgers are live; neither replaces the other.
-      ;;
-      ;;   1418 + 14 ..................................... 1432
-      ;;
-      ;; RECOMPUTED, not reconciled. Neither side of the merge conflict was
-      ;; right: this branch pinned 1429 (blind to the alias witnesses' +3) and
-      ;; trunk pinned 1418 (blind to the 14 above). Both numbers were correct
-      ;; for a tree that no longer exists, and averaging or picking one is how
-      ;; a corpus ledger silently stops counting. The number below was read off
-      ;; the merged tree.
-      ;; LID batch 1: seven TRACE-005 regressions in mcp-intent-contract-test
-      ;; (11 -> 18 tests); 1432 + 7 = 1439. No namespace or lane was added.
-      ;; Round 2 adds exact debt retirement/growth and malformed-ledger witnesses
-      ;; (18 -> 20). Recomputed: 992 original + 449 adopted = 1441.
-      ;; Sentinel merge-gate wiring witness: source census recomputed as
-      ;; 993 original + 449 adopted = 1442; lane membership is unchanged.
-      ;; Friction batch 1 adds five inspect witnesses: three contract + two tool.
-      ;; 1442 + 5 = 1447; the structural-lens witness belongs to the BB suite.
-      ;; Round-two cardinality receipt forgery: two additive inspect-tool
-      ;; witnesses; 1447 + 2 = 1449, no lane membership changes.
-      ;; +5 extraction Andon witnesses: identity, handoff, continuation and real roots.
-      ;; Cell C paper-cut round: eight namespace-split witnesses, no lane change.
-      ;; Round 4 merged with origin/MCP/main aa587ec3: source census = 1489.
-      ;; B07 adds 12 JVM witnesses; one new CLI test runs separately in the BB suite.
-      ;; Standalone require intent: 1501 + 21 = 1522, with boundary processes in battery.
-      ;; Sol r10 adds 13 witnesses: 1530 + 13 = 1543.
-      ;; Rows sublime: seven split boundaries plus six alias telemetry witnesses.
-      ;; 1543 + 7 + 6 = 1556; no test or namespace leaves the corpus.
-      ;; Batch 3 adds ten JVM witnesses; the encoder CLI witness stays in the BB lane.
-      ;; Sol's a9da4344 fence (+4) and the 0956951b delta fence (+1) carry the same
-      ;; five witnesses through the source census; the delta fence's help witness
-      ;; lives in the BB lane's cli-dispatch-test and is not counted here.
-      ;; 1566 + 4 + 1 = 1571.
-      ;; Batch 4 source census: +15 adopted witnesses (namespace-split-test +12,
-      ;; mcp-namespace-split-test +3), no namespace added.
-      ;; TEST-ISO-013, the parallel battery: 24 witnesses in one new :fast
-      ;; namespace, battery-parallel-test.
-      ;; MERGE, 2026-09-08 (astra/namespace-split x MCP/main 7d62849a): the
-      ;; merge-base pin was 1571; this branch moved it to 1586 (+15) and trunk
-      ;; to 1595 (+24), for DISJOINT witnesses. 1571 + 15 + 24 = 1610, and the
-      ;; merged tree's own census confirms it: 1019 original + 591 adopted.
-      ;;
-      ;; TEST-ISO-014, 2026-09-08 (5cdd5dcc): +6 in reader-eval-fence-test
-      ;; (round-one, 7 -> 13: the fence loop's one deftest split into six
-      ;; per-launcher-pair cells, net -1 +7 including the new
-      ;; build-file-matrix-covers-the-frozen-launcher-pairs witness) lands in
-      ;; r1; +2 in battery-parallel-test (adopted, 24 -> 26, named at its pin
-      ;; above) lands in adopted. 1610 + 6 + 2 = 1618, and the merged tree's
-      ;; own census confirms it: 1025 original + 593 adopted.
-      (is (= 1638 total) (str "manifest declares " total " tests"))
-      (is (= total (+ r1 adopted))
-          (str total " != " r1 " + " adopted
-               " -- a namespace is being counted twice or not at all")))))
+  ;;   1. the per-DEFTEST ledger below -- a deletion is a NAMED line that
+  ;;      disappeared, a rename is one line out and one line in, and a move
+  ;;      between namespaces is neither, because the name is qualified by the
+  ;;      namespace that declares it;
+  ;;   2. the arithmetic, computed entirely from the tree: the round-one half
+  ;;      plus the adopted half must be the whole manifest, as sets AND as sums,
+  ;;      so a namespace cannot be counted twice or not at all.
+  (let [derived (derived-census)
+        env (environment)
+        decision (regenerate-decision env)]
+    (when (= :write decision)
+      (write-census-ledger! derived)
+      (println "CENSUS_REGENERATE=1: wrote" (count derived) "deftests to"
+               census-ledger-path))
+    (testing "regeneration never happens inside a make recipe"
+      (is (not= :refuse-under-make decision) (regenerate-refusal env)))
+    (testing "the corpus is not empty, so nothing below passes vacuously"
+      (is (seq derived))
+      (let [barren (sort (remove (comp seq deftest-names) (keys lm/manifest)))]
+        (is (empty? barren)
+            (str "namespace(s) declaring no deftests at all: "
+                 (str/join ", " barren)))))
+    (testing "every deftest in the tree is a named line in the ledger"
+      (let [ledger (edn/read-string (slurp census-ledger-path))
+            diff (census-ledger-diff derived ledger)]
+        (is (set? ledger) (str census-ledger-path " must hold a set of names"))
+        (is (nil? diff) (census-ledger-message diff))))
+    (testing "the two halves are the whole manifest, as sets"
+      (let [diff (census-diff (set (keys lm/manifest))
+                              (into (set round-one-jvm-namespaces)
+                                    adopted-since-round-one))]
+        (is (nil? diff)
+            (census-diff-message
+              (str "round-one + adopted vs the manifest -- a namespace joined or "
+                   "left the corpus without a reason at the pin")
+              diff))))
+    (testing "and as sums, all three derived from the tree"
+      (let [r1 (reduce + (map deftest-count round-one-jvm-namespaces))
+            adopted (reduce + (map deftest-count adopted-since-round-one))
+            total (count derived)]
+        (is (= total (+ r1 adopted))
+            (str total " != " r1 " + " adopted
+                 " -- a namespace is being counted twice or not at all"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; The intent audit for this family.
