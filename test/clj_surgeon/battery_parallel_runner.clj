@@ -493,8 +493,27 @@
         (.shutdownNow executor)
         (.awaitTermination executor 30 java.util.concurrent.TimeUnit/SECONDS)))))
 
+;; @spec TEST-ISO-015 -- cold CLI caches must be complete before fan-out.
+(defn worker-preparation-command [plan]
+  (when (some #(= :jvm (:runtime %)) plan)
+    ["clojure" "-J-Xms64m" "-J-Xmx512m" "-Spath" "-M:clj-surgeon/test-deps"]))
+
+(defn prepare-worker-runtime! [plan]
+  (when-let [command (worker-preparation-command plan)]
+    (let [started (System/nanoTime)
+          result @(apply proc/process
+                    {:out :string :err :inherit
+                     :extra-env {"JAVA_TOOL_OPTIONS" (str (System/getenv "JAVA_TOOL_OPTIONS") " -Xmx512m")}}
+                    command)
+          receipt {:command command :exit (:exit result)
+                   :wall-ms (quot (- (System/nanoTime) started) 1000000)}]
+      (when (or (not= 0 (:exit result)) (str/blank? (:out result)))
+        (throw (ex-info "gate-refused: JVM worker classpath preparation failed" receipt)))
+      receipt)))
+
 (defn execute-plan! [plan width]
   (let [started (System/nanoTime)
+        preparation (prepare-worker-runtime! plan)
         active (atom 0)
         peak (atom 0)
         phases (atom [])
@@ -510,7 +529,7 @@
                                              :wall-ms (quot (- (System/nanoTime) t0) 1000000)})
                          results))
                      (sort-by key (group-by :phase plan))))]
-    {:lanes lanes :phases @phases :peak-worker-count @peak
+    {:lanes lanes :phases @phases :preparation preparation :peak-worker-count @peak
      :wall-ms (quot (- (System/nanoTime) started) 1000000)}))
 
 ;; ---------------------------------------------------------------------------
@@ -1032,7 +1051,8 @@
       (throw (ex-info "gate-refused: runtime pool failed"
                       {:shell-exit (:exit shell) :suites (mapv #(select-keys % [:suite :state :problems]) receipts)})))
     {:target "runtime-pool" :exit 0 :wall-ms (:wall-ms execution)
-     :phases (:phases execution) :peak-worker-count (:peak-worker-count execution)
+     :phases (:phases execution) :preparation (:preparation execution)
+     :peak-worker-count (:peak-worker-count execution)
      :shell-checks (dissoc shell :emitted)}))
 
 (defn -main [& args]

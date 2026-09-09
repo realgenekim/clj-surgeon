@@ -564,6 +564,16 @@
     (is (= '[[f1 f2] [i1 i2]] (bp/gate-phases '[f1 f2 i1 i2] lanes)))
     (is (= [[] []] (bp/gate-phases [] lanes)))))
 
+;; @spec TEST-ISO-015 -- fresh clone 2026-09-09: two of eight CLI starts
+;; read a concurrently written .cpcache and lost clojure.main before any test.
+(deftest a-cold-checkout-prepares-the-worker-classpath
+  (let [command (requiring-resolve 'clj-surgeon.battery-parallel-runner/worker-preparation-command)
+        expected ["clojure" "-J-Xms64m" "-J-Xmx512m" "-Spath" "-M:clj-surgeon/test-deps"]]
+    (is (= expected (command [{:runtime :jvm}])))
+    (is (= expected (command [{:runtime :bb} {:runtime :jvm} {:runtime :jvm}])))
+    (is (nil? (command [{:runtime :bb}])))
+    (is (nil? (command [])))))
+
 ;; @spec TEST-ISO-015 -- competing suites consume one shared width budget.
 (deftest gate-pool-overlaps-suites-without-multiplying-width
   (let [pool (requiring-resolve 'clj-surgeon.battery-parallel-runner/run-pool!)

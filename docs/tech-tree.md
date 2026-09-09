@@ -642,3 +642,12 @@ complete mixed pool remain unmeasured. Final same-snapshot parity, faults,
 three complete timings and battery regression are recorded at
 `/var/tmp/forge/plan2/cellC/astra-gate-lanes-r2-report.md`; raw evidence is under
 `/var/tmp/forge/gate-lanes/r2/`.
+
+The initial cold-clone named-failure gate additionally lost two children with
+`ClassNotFoundException: clojure.main` during simultaneous CLI cache creation.
+The coordinator now resolves the test-deps classpath once before JVM fan-out,
+rejecting a nonzero/empty preparation and recording its wall. BB-only pools
+skip that preparation. Original controls/faults are retained under
+`/var/tmp/forge/gate-lanes/r2/pre-classpath-fix/`; the final fence is repeated
+on the new commit, including an empty-cache fault clone. Derived pins are
+613 adopted / 1,638 manifest tests, with 34 coordinator witnesses.

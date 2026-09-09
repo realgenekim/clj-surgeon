@@ -100,3 +100,14 @@ separate roots alone are insufficient. The measured MCP saving is 20.049 s.
 The normal gate retains the shared-checkout barrier; the full mixed pool on
 separate roots is unmeasured. Evidence and final repetitions are in the external
 round-two report. Pool job exceptions drain siblings before returning failure.
+
+TEST-ISO-015 cold-start ratchet: before any JVM shard starts, the coordinator
+resolves the test-deps classpath once with bounded `clojure -Spath`. The first
+cold-clone named-failure run also lost two children to `ClassNotFoundException:
+clojure.main`; parallel CLI starts shared an initially absent .cpcache entry.
+Classpath readiness is coordinator work, not a namespace budget exception.
+A nonzero or empty classpath refuses before fan-out. BB-only jobs need no JVM
+classpath preparation. The receipt records this preparation wall separately.
+Witness: `battery-parallel-test/a-cold-checkout-prepares-the-worker-classpath`;
+the real empty-cache named-failure gate must retain every namespace and show
+only the deliberately failing assertion.
