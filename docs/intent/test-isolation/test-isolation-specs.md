@@ -373,10 +373,14 @@ evidence -- so every landing pays it in full.
   the failure message instead of the members; deriving the expectation from the
   census being audited (a tautology); replacing the floor with an equality
   "for precision", which reintroduces the bump; deleting the floor, so an
-  emptied or unreadable tree passes by agreeing with itself; treating the
-  deftest-count corpus ledger in `the-corpus-only-ever-grows-and-the-arithmetic-is-shown`
-  as the same thing -- that one is a nothing-was-deleted ledger against round
-  one's measurement, and its equality is deliberate.
+  emptied or unreadable tree passes by agreeing with itself; keeping a floor
+  against a HISTORICAL corpus and calling it an empty-discovery guard -- the only
+  admissible guard is non-emptiness, because a historical floor is the same shared
+  number under a weaker operator; and recording a nothing-was-deleted ledger as a
+  TOTAL rather than one line per member, which merges without a conflict and can
+  never name what was deleted (`the-corpus-only-ever-grows-and-the-arithmetic-is-shown`
+  keeps that ledger per namespace in `test/clj_surgeon/deftest_census.edn`,
+  regenerated with `CENSUS_REGENERATE=1`, and derives its arithmetic).
 
   *Witness:* `clj-surgeon.lane-manifest-test/the-partition-matches-round-ones-measurement`,
   `clj-surgeon.lane-manifest-test/a-namespace-in-the-tree-but-absent-from-the-census-is-named`,
