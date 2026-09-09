@@ -49,14 +49,32 @@
 (def sha256 tc/sha256)
 
 (defn file-digest
-  "`{:path :sha256 :bytes}` for `path`, or `{:path :status :absent}`. A missing
-   required input is NAMED, never silently dropped: section 4's `:required-inputs`
-   are how a consumer notices that the thing a check reads is not there."
-  [path]
-  (let [f (io/file path)]
-    (if (.isFile f)
-      {:path path :sha256 (sha256 (slurp f)) :bytes (.length f)}
-      {:path path :status :absent})))
+  "`{:path :role :sha256 :bytes}` for `path`, or `{:path :role :status :absent}`.
+   A missing required input is NAMED, never silently dropped: section 4's
+   `:required-inputs` are how a consumer notices that the thing a check reads is
+   not there.
+
+   `role` is `:policy` or `:data`, and the distinction is load-bearing.
+
+   A POLICY input is a rule -- the Makefile, the lane manifest, `run_all.clj`,
+   the deftest census, the hygiene script. Changing one changes what a landing
+   REQUIRES, so it must move `:policy-sha256` and refuse a receipt produced
+   against the old rule.
+
+   A DATA input is something a rule READS -- `docs/observations/battery-ledger.edn`
+   is the only one today. Its bytes are expected to change between the moment the
+   gate ran and the moment the landing merges; that is precisely what the landing
+   delta allowlist exists to permit. Hashing it into the POLICY would make the
+   policy hash move for a file the policy already says may move, and every landing
+   that raced a battery run would rerun the whole gate for no reason -- defeating
+   the feature exactly where it was designed to help. The digest is still recorded
+   and still reported; it is simply not part of the rules."
+  ([path] (file-digest path :policy))
+  ([path role]
+   (let [f (io/file path)]
+     (if (.isFile f)
+       {:path path :role role :sha256 (sha256 (slurp f)) :bytes (.length f)}
+       {:path path :role role :status :absent}))))
 
 ;; ---------------------------------------------------------------------------
 ;; Makefile recipes
@@ -187,7 +205,7 @@
                 :argv ["bb" "test/clj_surgeon/battery_ledger.clj" "check"]}
       :recipe (recipe "battery-fresh")
       :required-inputs [(file-digest "test/clj_surgeon/battery_ledger.clj")
-                        (file-digest "docs/observations/battery-ledger.edn")]
+                        (file-digest "docs/observations/battery-ledger.edn" :data)]
       :selected-test-identities []
       :scope {:kind :predicate
               :bounds {:max-age-hours 26 :max-counted-commits-behind 30
@@ -340,10 +358,20 @@
                              "the producer's own operation and never this.")}}]))
 
 (defn- volatile-free
-  "The obligations with nothing candidate-specific in them, for the policy hash.
-   `:required-inputs` digests DO stay: they are what the policy is about."
+  "The obligations reduced to POLICY, for the policy hash: everything except the
+   bytes of inputs whose `:role` is `:data`. A `:data` input keeps its path and
+   its role in the hashed projection -- so removing it, adding one, or changing
+   its role still moves the hash -- and loses only its digest and length."
   [obs]
-  (mapv #(dissoc % :candidate) obs))
+  (mapv (fn [o]
+          (-> o
+              (dissoc :candidate)
+              (update :required-inputs
+                      (fn [is] (mapv #(if (= :data (:role %))
+                                        (select-keys % [:path :role])
+                                        %)
+                                     is)))))
+        obs))
 
 (defn inventory
   "The printable inventory. `:policy-sha256` moves when a recipe, a selected

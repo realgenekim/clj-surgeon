@@ -238,6 +238,7 @@
   clj-surgeon.fast-lane-isolation-test/no-fast-lane-namespace-roots-a-fixture-outside-its-own-tmpdir
   clj-surgeon.fast-lane-isolation-test/the-fast-lane-home-is-a-throwaway-inside-the-run-root
   clj-surgeon.fast-lane-isolation-test/the-fast-lane-tmpdir-is-a-private-per-run-root
+  clj-surgeon.gate-obligations-test/a-policy-hash-covers-the-rules-and-not-the-data-the-rules-read
   clj-surgeon.gate-obligations-test/a-suite-obligation-carries-the-identities-not-only-a-count
   clj-surgeon.gate-obligations-test/an-unknown-recipe-is-named-never-an-empty-one
   clj-surgeon.gate-obligations-test/banner-only-output-is-unknown-and-unknown-is-not-a-version

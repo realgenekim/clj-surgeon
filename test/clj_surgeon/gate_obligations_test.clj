@@ -94,6 +94,46 @@
           "mcp-test's checks are part of its recipe, per section 4")
       (is (re-matches #"[0-9a-f]{64}" (:sha256 r))))))
 
+(deftest a-policy-hash-covers-the-rules-and-not-the-data-the-rules-read
+  (testing "the battery ledger is DATA: the freshness check reads it, and it is expected"
+    (testing "to change between the gate running and the landing merging"
+      (let [inv (gob/inventory (gob/runner-policy))
+            r2 (first (filter #(= :R2 (:id %)) (:obligations inv)))
+            ledger (first (filter #(= "docs/observations/battery-ledger.edn" (:path %))
+                                  (:required-inputs r2)))]
+        (is (= :data (:role ledger))
+            (str "the ledger must be :data -- hashing it into the policy makes every "
+                 "landing that races a battery run refuse for a file the landing delta "
+                 "allowlist already permits to change"))
+        (is (string? (:sha256 ledger))
+            "its digest is still recorded and reported; it is simply not policy"))))
+  (testing "the rules themselves are POLICY and every one of them is hashed"
+    (let [inv (gob/inventory (gob/runner-policy))]
+      (is (every? #(= :policy (:role %))
+                  (for [o (:obligations inv)
+                        i (:required-inputs o)
+                        :when (not= "docs/observations/battery-ledger.edn" (:path i))]
+                    i))
+          "the ledger is the only :data input today; a new one needs its own reason")))
+  (testing "changing a DATA input's bytes does not move the policy hash, and"
+    (testing "changing a POLICY input's bytes does"
+      ;; Driven through `obligations` with a substituted digest rather than by
+      ;; touching the real tree: a test that rewrote the repository's battery
+      ;; ledger to prove a point about hashing would be a worse bug than the one
+      ;; it is checking for.
+      (let [base (gob/obligations fake-policy)
+            with (fn [role sha]
+                   (mapv #(assoc % :required-inputs
+                                 [{:path "x" :role role :sha256 sha :bytes 1}])
+                         base))
+            h #(gob/sha256 (pr-str (#'gob/volatile-free %)))]
+        (is (= (h (with :data "aaaa")) (h (with :data "bbbb")))
+            "a data input's bytes are not policy")
+        (is (not= (h (with :policy "aaaa")) (h (with :policy "bbbb")))
+            "a policy input's bytes are")
+        (is (not= (h (with :data "aaaa")) (h (with :policy "aaaa")))
+            "and the ROLE itself is hashed, so reclassifying an input is visible")))))
+
 (deftest the-required-inputs-of-a-gate-obligation-exist-in-this-tree
   (testing "a missing required input is named :absent, never dropped"
     (let [inv (gob/inventory (gob/runner-policy))
