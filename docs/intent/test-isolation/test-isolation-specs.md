@@ -346,6 +346,47 @@ evidence -- so every landing pays it in full.
   `clj-surgeon.battery-parallel-test/launcher-matrix-cells-remain-independently-shardable`,
   `clj-surgeon.battery-parallel-test/grouped-shards-retain-measured-per-deftest-walls`.
 
+## Round seven -- the census is derived, 2026-09-09
+
+### TEST-ISO-015 — a census names its members, never a count
+
+- [x] **TEST-ISO-015**: When a witness asserts the composition of the JVM lane
+  manifest or of the non-MCP intent ledger, it shall compare SETS derived from
+  the tree at test time -- test namespaces discovered under `test/` with their
+  own `{:lane ...}` ns metadata, and intent rows discovered from `docs/intent/`
+  through `clj-surgeon.mcp-intent-contract/spec-doc-paths` -- and shall report
+  disagreement in BOTH directions, naming the missing and the extra members.
+  Counts may appear only as `>=` floors whose purpose is to make an empty or
+  collapsed discovery fail loudly; no witness may assert equality on a census
+  count, because adding a member must never require bumping a number.
+
+  Earned 2026-09-08, when five landings tripped on the same shape: the fast-lane
+  pin moved 53 -> 54 on two branches for two DIFFERENT namespaces, the literals
+  were textually equal, git merged them without a conflict, and the merged census
+  was a namespace short while the number still read as agreement. The intent
+  ledger repeated it the same day (merge-base 238, one side 245, the other 239),
+  and both were resolved only by recounting the tree by hand -- the derivation
+  the witness should have been performing.
+
+  Misreadings: bumping the pin and calling it derived; deriving one direction
+  only, so a census entry naming nothing on disk survives; printing a count in
+  the failure message instead of the members; deriving the expectation from the
+  census being audited (a tautology); replacing the floor with an equality
+  "for precision", which reintroduces the bump; deleting the floor, so an
+  emptied or unreadable tree passes by agreeing with itself; keeping a floor
+  against a HISTORICAL corpus and calling it an empty-discovery guard -- the only
+  admissible guard is non-emptiness, because a historical floor is the same shared
+  number under a weaker operator; and recording a nothing-was-deleted ledger as a
+  TOTAL rather than one line per member, which merges without a conflict and can
+  never name what was deleted (`the-corpus-only-ever-grows-and-the-arithmetic-is-shown`
+  keeps that ledger per namespace in `test/clj_surgeon/deftest_census.edn`,
+  regenerated with `CENSUS_REGENERATE=1`, and derives its arithmetic).
+
+  *Witness:* `clj-surgeon.lane-manifest-test/the-partition-matches-round-ones-measurement`,
+  `clj-surgeon.lane-manifest-test/a-namespace-in-the-tree-but-absent-from-the-census-is-named`,
+  `clj-surgeon.mcp-intent-contract-test/the-derived-audit-includes-every-previously-invisible-row`,
+  `clj-surgeon.mcp-intent-contract-test/an-intent-the-registry-cannot-reach-is-named-not-silently-dropped`.
+
 ### TEST-ISO-009b archival distance
 
 Only modifications of existing regular non-executable files at these exact
