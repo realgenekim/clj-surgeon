@@ -58,6 +58,8 @@
 (def non-binding-macro-vars (:non-binding-macro-vars tables))
 (def core-fn-vars (:core-fn-vars tables))
 (def table-vars (:table-vars tables))
+(def refusal-kinds (:refusal-kinds tables))
+(def defensive-refusal-kinds (:defensive-refusal-kinds tables))
 
 (defn bare [q] (last (str/split q #"/")))
 (defn nspace [q] (first (str/split q #"/")))
@@ -347,24 +349,56 @@
 ;; because a false signal under a header that says "every entry needs a human"
 ;; costs a reviewer real time.
 (def refusal-specimens
-  {"ns-count"
-   ["(ns first.ns\n  (:require [clojure.string :as str]))\n\n(ns second.ns\n  (:require [clojure.edn :as edn]\n            [clojure.set :as set]))\n\n(defn f [] (set/union #{(edn/read-string \"1\")} #{2}))\n"
-    "(ns first.ns\n  (:require [clojure.string :as str]))\n\n(ns second.ns\n  (:require [clojure.set :as set]\n            [clojure.edn :as edn]))\n\n(defn f [] (set/union #{(edn/read-string \"1\")} #{2}))\n"]
+  {"ns-span"
+   [["src/refused.clj"
+     "^:tagged (ns tagged.ns)\n\n(defn f [] :a)\n"
+     "^:tagged (ns tagged.ns)\n\n(defn f [] :a)\n\n(defn g [] :b)\n"]]
+   "unreported-owner"
+   [["src/refused.clj"
+     "(ns unrep.ns)\n\n(defentity Widget [])\n\n(defn f [] :a)\n"
+     "(ns unrep.ns)\n\n(defentity Widget [])\n\n(defn f [] :b)\n"]]
+   "unreported-branch-def"
+   [["src/refused.cljc"
+     "(ns branch.ns)\n\n#?(:clj (defentity Gadget []))\n\n(defn f [] :a)\n"
+     "(ns branch.ns)\n\n#?(:clj (defentity Gadget []))\n\n(defn f [] :b)\n"]]
+   "require-mismatch"
+   [["src/refused.clj"
+     "(ns reqm.ns\n  (:require (clojure.string)))\n\n(defn f [] :a)\n"
+     "(ns reqm.ns\n  (:require (clojure.string)))\n\n(defn f [] :b)\n"]]
+   "ns-count"
+   [["src/refused.clj"
+     "(ns first.ns\n  (:require [clojure.string :as str]))\n\n(ns second.ns\n  (:require [clojure.edn :as edn]\n            [clojure.set :as set]))\n\n(defn f [] (set/union #{(edn/read-string \"1\")} #{2}))\n"
+     "(ns first.ns\n  (:require [clojure.string :as str]))\n\n(ns second.ns\n  (:require [clojure.set :as set]\n            [clojure.edn :as edn]))\n\n(defn f [] (set/union #{(edn/read-string \"1\")} #{2}))\n"]]
    "unelaborated-platform"
-   ["(ns p)\n\n#?(:bb ^:probe (def hidden 1))\n\n(defn visible [] :v)\n"
-    "(ns p)\n\n(defn visible [] :v)\n"]
+   [["src/refused.cljc"
+     "(ns p)\n\n#?(:bb ^:probe (def hidden 1))\n\n(defn visible [] :v)\n"
+     "(ns p)\n\n(defn visible [] :v)\n"]]
    "unparsable"
-   ["(ns p)\n\n(defn f [] :a)\n"
-    "(ns p)\n\n(defn f [] :a\n"]})
+   [["src/refused.clj"
+     "(ns p)\n\n(defn f [] :a)\n"
+     "(ns p)\n\n(defn f [] :a\n"]]})
 
-(println "R8  refusal specimens:" (count refusal-specimens))
-(doseq [[kind [base-src cand-src]] (sort refusal-specimens)]
+(println "R8  refusal kinds:" (count refusal-kinds)
+         "| generated specimens:" (count refusal-specimens)
+         "| defensive (documented, not triggerable):" (count defensive-refusal-kinds))
+;; the enumeration is the authority in BOTH directions
+(doseq [k refusal-kinds]
+  (check! (contains? refusal-specimens k) "R8 refusal kind with no specimen"
+          (str "`" k "` is in refusal-kinds but R8 generates no input that triggers it")))
+(doseq [k (keys refusal-specimens)]
+  (check! (some #{k} refusal-kinds) "R8 specimen for an unknown kind"
+          (str "`" k "` has a generator but is not in refusal-kinds")))
+(doseq [[k reason] defensive-refusal-kinds]
+  (check! (not (some #{k} refusal-kinds)) "R8 defensive kind also enumerated"
+          (str "`" k "` is both triggerable and defensive"))
+  (check! (and (string? reason) (> (count reason) 60)) "R8 defensive kind without a reason"
+          (str "`" k "` is untested and carries no written reason")))
+
+(doseq [[kind [[rel base-src cand-src]]] (sort refusal-specimens)]
   (let [dir (str "/var/tmp/forge/item3/r8-" kind)
         env {"GIT_AUTHOR_NAME" "t" "GIT_AUTHOR_EMAIL" "t@t"
-             "GIT_COMMITTER_NAME" "t" "GIT_COMMITTER_EMAIL" "t@t"}
-        ;; a reader conditional is only valid in .cljc
-        rel (if (= kind "unelaborated-platform") "src/refused.cljc" "src/refused.clj")]
-    (fs/delete-tree dir) (fs/create-dirs (str dir "/src"))
+             "GIT_COMMITTER_NAME" "t" "GIT_COMMITTER_EMAIL" "t@t"}]
+    (fs/delete-tree dir) (fs/create-dirs (str dir "/" (str/replace rel #"/[^/]*$" "")))
     (spit (str dir "/" rel) base-src)
     (p/sh {:dir dir} "git" "init" "-q" "-b" "main")
     (p/sh {:dir dir} "git" "add" "-A")

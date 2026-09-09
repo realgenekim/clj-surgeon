@@ -335,16 +335,19 @@
         ;; definition map, or the file fails closed
         ;; Count DISTINCT names: `#?(:clj (def seen 1) :cljs (def seen 2))` defines
         ;; one Var, and the analyzer reports it once.
-        cond-defs (count (into #{} (for [c conds
+        cond-def-names (into #{} (for [c conds
                                          b (:pairs c)
                                          :when (contains? analysed-features (:feature b))
                                          :when (sc/def-shaped? (:text b))
                                          :let [o (sc/form-owner {:text (str/replace (:text b) #"^\^[^\s]+\s+" "")
                                                                  :line 0 :start 0 :end 0})]
                                          :when o]
-                                     (:id o))))
-        kondo-lang-defs (count (into #{} (map :name) (filter :lang kdefs)))
-        cond-gap (max 0 (- cond-defs kondo-lang-defs))
+                                     (:id o)))
+        ;; Compare NAMES, not counts: `#?(:clj (def seen 1) :cljs (def seen 2))` is
+        ;; one Var reported once, while in a `.cljc` every definition in the file
+        ;; carries a :lang and a count comparison would mask a missing one.
+        kondo-def-names (into #{} (map :name) kdefs)
+        cond-gap (count (set/difference cond-def-names kondo-def-names))
         ;; PB-FENCE-014/015. The private `ns` parser supplies ONE thing: the byte
         ;; span of the `ns` form. Everything semantic — requires, aliases, refers —
         ;; comes from the resolver, restricted to usages inside that span. A
@@ -777,6 +780,31 @@
      :kind (if nm {[ns' nm] "defmacro"} {})
      :kind-disagree #{}}))
 
+;; PB-FENCE-019. The refusal kinds are ONE enumeration. `file-refusal` dispatches
+;; on it and `bin/preservation-tables-test` R8 iterates it: a kind with no
+;; generated specimen fails the test, and a generator for a kind not listed here
+;; fails it too. Eight branches of a fail-closed boundary cannot sit behind a green
+;; test that only exercises three.
+(def refusal-kinds
+  "Every refusal kind that a valid input can trigger. `bin/preservation-tables-test`
+   R8 iterates THIS vector: a kind with no generated specimen fails the test, and a
+   generator for a kind not listed here fails it too."
+  ["unparsable" "ns-count" "unelaborated-platform" "ns-span"
+   "unreported-owner" "unreported-branch-def" "require-mismatch"])
+
+(def defensive-refusal-kinds
+  "Refusal kinds that remain as fail-closed guards but that no VALID input can
+   trigger, with the reason. They are excluded from R8's generated specimens
+   deliberately and explicitly, rather than left silently untested — and they are
+   kept rather than deleted, because deleting a guard to make a test green is how
+   a fail-closed boundary stops being one."
+  {"unplaced-definition"
+   (str "The scanner enumerates every top-level datum in the file, so a definition "
+        "the resolver reports always falls inside one of its spans. Reaching this "
+        "branch would require the scanner's datum boundaries to be wrong — a defect "
+        "in bin/preservation_scan.clj, not an input. The guard stays for exactly "
+        "that case.")})
+
 (when (:dump-tables (:opts cli))
   (prn {:walked-special-forms walked-special-forms
         :frozen-special-forms frozen-special-forms
@@ -788,7 +816,9 @@
         :frozen-vars frozen-vars
         :non-binding-macro-vars non-binding-macro-vars
         :core-fn-vars core-fn-vars
-        :table-vars table-vars})
+        :table-vars table-vars
+        :refusal-kinds refusal-kinds
+        :defensive-refusal-kinds defensive-refusal-kinds})
   (System/exit 0))
 
 (when-let [f (:probe-heads (:opts cli))]
@@ -1230,7 +1260,8 @@
 ;; silence: the hard stop says every listed signal needs a human, so a false signal
 ;; there costs a reviewer real time.
 (defn file-refusal
-  "The one reason this file is refused, or nil."
+  "The one reason this file is refused, or nil. Every `:kind` it can return is in
+   `refusal-kinds`, in this order."
   [f]
   (let [r (:reconcile f) rm (:require-mismatch f)]
     (cond
