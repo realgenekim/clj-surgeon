@@ -362,3 +362,37 @@ The complete DAG remains authoritative; raw distance and excluded archive count
 must accompany counted distance. Above 1000 raw commits, count all commits
 without archival exemptions to bound per-commit inspection. Ancestry, age,
 newest-failure authority and the 30-commit budget remain unchanged.
+
+### TEST-ISO-015 — automatic complete landing gate
+
+- [x] **TEST-ISO-015**: When `make test` or `make landing-gate` succeeds, the
+  shared TEST-ISO-013 coordinator shall publish current-tree landing evidence
+  covering every discovered member of every required runtime suite.
+
+  Width derives from nproc, capped at four and half the CPUs, with a 2048 MiB
+  reserve and 1536 MiB per lane; gate JVM and Babashka worker heaps (including
+  Babashka temp-isolation re-exec) have a 512 MiB maximum.
+  Missing, duplicate, unexpected, failed or unreadable child evidence refuses.
+  Child paths are unique to the invocation. Loaded deftest execution coverage provides a cheap
+  per-namespace drift witness (namespace hooks retain their own semantics).
+  Namespace counts and walls are recorded; skipped must be zero. JVM isolation
+  and time budgets are evaluated over the union. All fast JVM workers finish before any integration worker starts, preserving
+  the global isolation phase boundary across processes.
+  Serial debugging retains manifest order. Runtime metadata auditing uses one
+  conditional assertion per manifest row so counts do not depend on co-loaded
+  tests; it still checks every loaded namespace. Change-buffer tests clear their
+  retained bases at fixture boundaries. BB preserves its existing temp
+  leak guard. Whole namespaces preserve fixtures and test-ns-hook; per-var splits
+  retain TEST-ISO-013's refusal. A changed tree during the run refuses.
+
+  Serial debugging prints SERIAL/NOT-A-GATE and cannot emit a landing receipt.
+  The one-lane parity control is fence evidence, with a cheap per-namespace drift
+  witness in the normal gate. Existing target callers require no new flags.
+
+  Misreadings: equal total counts establish namespace parity; missing output is
+  a zero-test success; stale evidence is current; a width flag is required;
+  parallel makespan substitutes for summed namespace budgets; debugging is a gate.
+
+  Witnesses: `clj-surgeon.battery-parallel-test/gate-width-is-resource-bounded`,
+  `.../gate-census-rejects-every-loss-and-duplicate`,
+  `.../gate-parity-is-per-namespace`, `.../serial-cannot-authorize-a-landing`.

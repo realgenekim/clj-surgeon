@@ -597,3 +597,28 @@ full Cell C's bounded data grows 60,554 → 63,585 bytes. These are functional
 replays, not a new caller cohort or native wall claim. Report:
 `/var/tmp/forge/plan2/cellC/astra-rows-sublime-5-report.md`.
 Evidence: `/var/tmp/forge/rows-sublime-5/`.
+
+
+### 2026-09-09 — automatic parallel landing gate (TEST-ISO-015)
+
+The battery coordinator now owns the Make landing gate and process pools for JVM,
+BB and alias/artifact suites. Namespace membership remains in the existing
+inventories. Automatic width is capped at four, half nproc, and the available
+memory allowance; JVM/BB heaps are 512 MiB. Serial debugging cannot issue a
+landing receipt. Every tree namespace and child result is accounted for.
+
+The pre-change complete gate was 510 s, with its separately measured audit
+0.943 s. Fresh four-worker component probes preserved every namespace counter:
+JVM 54.784 s versus 102.000 s; BB 69.119 s versus 182.612 s. An eight-worker
+probe failed existing time/isolation checks. Integration checkout writes were
+visible to other fast workers, so the final runner uses a global fast-before-
+integration barrier; the earlier four-worker timings are pre-barrier evidence,
+not the final speed claim. The fixed-count metadata audit preserves checks of
+every loaded namespace; change-buffer fixtures clear retained bases they own.
+
+A launcher probe exposed JDK buffered slurp failing on procfs and silently
+selecting one lane. NIO now reads memory; unknown memory refuses. Final whole
+gate repetitions, namespace parity, fault injection, battery regression and
+commit status are reported at the fence:
+`/var/tmp/forge/plan2/cellC/astra-gate-lanes-report.md`.
+Evidence: `/var/tmp/forge/gate-lanes/`.

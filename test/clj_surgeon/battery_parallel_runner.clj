@@ -1,5 +1,8 @@
 (ns clj-surgeon.battery-parallel-runner
-  "TEST-ISO-013 -- THE BATTERY LANE, RUN AS N SEPARATE JVM LANES.
+  "TEST-ISO-013/015 -- shared battery and landing-gate process coordinator.
+   Gate suites derive bounded width; fast and integration use separate waves.
+
+   Historical battery rationale:
 
    THE PROBLEM. `make test-battery` was 809 s serial on a 16-core box
    (receipt: docs/observations/battery-ledger.edn, sha afde6652, 2026-09-08),
@@ -209,7 +212,6 @@
         singles (mapv vector (remove grouped namespaces))]
     (into (mapv vec groups) singles)))
 
-
 (defn read-walls
   "namespace symbol -> measured wall in ms, from `walls-path`. Missing,
    unreadable or partial is not an error: it degrades to the fallback."
@@ -322,18 +324,18 @@
    A namespace that cannot be sharded degrades to one whole unit, loudly."
   [namespaces decls var-walls walls]
   (vec
-   (mapcat
-    (fn [n]
-      (if-let [{:keys [shards]} (get decls n)]
-        (do (try (require n) (catch Throwable t
-                               (println (format "battery-parallel: cannot load %s to shard it (%s)"
-                                                n (.getMessage t)))))
-            (if-let [why (shard-refusal n)]
-              (do (println (str "battery-parallel: NOT sharding -- " why)) [[n]])
-              (shard-vars (test-var-names n) var-walls shards
-                          (quot (get walls n fallback-wall-ms) (max 1 shards)))))
-        [[n]]))
-    namespaces)))
+    (mapcat
+      (fn [n]
+        (if-let [{:keys [shards]} (get decls n)]
+          (do (try (require n) (catch Throwable t
+                                 (println (format "battery-parallel: cannot load %s to shard it (%s)"
+                                                  n (.getMessage t)))))
+              (if-let [why (shard-refusal n)]
+                (do (println (str "battery-parallel: NOT sharding -- " why)) [[n]])
+                (shard-vars (test-var-names n) var-walls shards
+                            (quot (get walls n fallback-wall-ms) (max 1 shards)))))
+          [[n]]))
+      namespaces)))
 
 (defn namespace-budget-violation
   "@spec TEST-ISO-007 re-derived over the SUM of a sharded namespace's shards
@@ -436,7 +438,7 @@
                 (map str namespaces))))
 
 (defn- run-lane!
-  [{:keys [index namespaces java-opts work-dir]}]
+  [{:keys [index namespaces java-opts work-dir runtime phase]}]
   (let [out-path (io/file work-dir (format "lane-%d.edn" index))
         log-path (io/file work-dir (format "lane-%d.out" index))
         err-path (io/file work-dir (format "lane-%d.err" index))
@@ -446,11 +448,14 @@
                    {:out :write :out-file log-path
                     :err :write :err-file err-path
                     :dir (System/getProperty "user.dir")}
-                   (lane-command java-opts out-path namespaces))
+                   (if (= :bb runtime)
+                     (into ["bb" "-Xmx512m" "test/run_all.clj" "--emit-edn" (str out-path) "--ns"] (map str namespaces))
+                     (lane-command java-opts out-path namespaces)))
           exit (deref (future (:exit @p)) lane-timeout-ms ::timeout)
           timed-out? (= ::timeout exit)]
       (when timed-out? (proc/destroy-tree p) (try @p (catch Exception _ nil)))
       {:index index
+       :phase phase
        :namespaces (vec namespaces)
        :exit (if timed-out? :timeout exit)
        :wall-ms (quot (- (System/nanoTime) t0) 1000000)
@@ -469,6 +474,187 @@
    a var selector `<namespace>/<deftest>` answers its namespace."
   [sel]
   (if (namespace sel) (symbol (namespace sel)) sel))
+
+;; @spec TEST-ISO-015 -- pure admission decisions, shared by every gate entrance.
+(defn gate-width [cpus memory-mib]
+  (let [by-memory (quot (- memory-mib 2048) 1536)]
+    (when (< by-memory 1)
+      (throw (ex-info "gate-refused: insufficient memory for a bounded lane"
+                      {:memory-mib memory-mib :required-mib 3584})))
+    (max 1 (min 4 (max 1 (quot cpus 2)) by-memory))))
+
+(defn machine-capacity []
+  (let [cpus (try (parse-long (str/trim (:out @(proc/process {:out :string} "nproc"))))
+                  (catch Exception _ (.availableProcessors (Runtime/getRuntime))))
+        memory (try (quot (parse-long (second (re-find #"MemAvailable:\s+(\d+)"
+                                                       ;; JDK buffered slurp calls available(), which
+                                                       ;; procfs rejects on this host. NIO reads it directly.
+                                                       (java.nio.file.Files/readString
+                                                         (java.nio.file.Paths/get "/proc/meminfo" (make-array String 0)))))) 1024)
+                    (catch Exception e
+                      (throw (ex-info "gate-refused: available memory is unknown" {} e))))]
+    {:cpus cpus :memory-mib memory :lanes (gate-width cpus memory)
+     :heap-mib 512 :reserve-mib 2048 :lane-charge-mib 1536}))
+
+(defn census-problems [expected observed]
+  (cond-> []
+    (not= (set expected) (set observed))
+    (conj {:kind :namespace-census-mismatch
+           :missing (vec (sort (remove (set observed) expected)))
+           :unexpected (vec (sort (remove (set expected) observed)))})
+    (not= (count observed) (count (set observed)))
+    (conj {:kind :duplicate-namespace})))
+
+(defn parity-delta [control candidate]
+  (vec (for [n (sort (into (set (keys control)) (keys candidate)))
+             :when (not= (get control n) (get candidate n))]
+         {:namespace n :control (get control n) :candidate (get candidate n)})))
+
+(defn landing-eligible? [debug? problems]
+  (and (not debug?) (empty? problems)))
+
+(defn bb-namespaces []
+  (or (some-> (re-find #"(?s)\(def namespaces\s+'(\[.*?\])\)"
+                       (slurp "test/run_all.clj")) second edn/read-string)
+      (throw (ex-info "gate-refused: unreadable Babashka namespace census" {}))))
+
+(defn suite-namespaces [suite]
+  (case suite
+    "battery" (lm/namespaces-for :battery)
+    "fast" (lm/namespaces-for :fast)
+    "mcp" (vec (mapcat lm/namespaces-for [:fast :integration]))
+    "bb" (bb-namespaces)
+    "alias" '[clj-surgeon.mcp-alias-migration-test clj-surgeon.receipt-artifacts-boundary-test]
+    (throw (ex-info "gate-refused: unknown suite" {:suite suite}))))
+
+(defn source-digest []
+  (let [md (java.security.MessageDigest/getInstance "SHA-256")
+        files (concat (map io/file ["Makefile" "deps.edn" "bb.edn"])
+                      (mapcat #(filter (fn [f] (.isFile ^java.io.File f))
+                                       (file-seq (io/file %)))
+                              ["src" "test" "resources" "docs/intent"]))]
+    (doseq [f (sort-by str files)]
+      (.update md (.getBytes (str f "\u0000") "UTF-8"))
+      (.update md (java.nio.file.Files/readAllBytes (.toPath ^java.io.File f))))
+    (apply str (map #(format "%02x" (bit-and 255 %)) (.digest md)))))
+
+(defn tree-census []
+  (let [discovered (vec (sort (keep (fn [f]
+                                      (when (and (.isFile ^java.io.File f)
+                                                 (re-find #"_test\.cljc?$" (.getName ^java.io.File f)))
+                                        (or (some-> (re-find #"(?m)^\(ns\s+(?:\^\{[^}]*\}\s+)?([a-z][a-z0-9.\-]+)"
+                                                             (slurp f)) second symbol)
+                                            (throw (ex-info "gate-refused: unreadable test namespace declaration"
+                                                            {:file (str f)})))))
+                                (file-seq (io/file "test")))))
+        accounted (vec (sort (into (set (keys lm/manifest))
+                                   (concat (keys lm/excluded) (bb-namespaces)))))]
+    {:discovered discovered :discovered-count (count discovered)
+     :accounted accounted :accounted-count (count accounted)
+     :problems (census-problems accounted discovered)}))
+
+(defn child-data-problems [{:keys [namespaces runs result leak-fail]}]
+  (cond
+    (not (and (sequential? namespaces) (seq namespaces) (vector? runs)
+              (map? result) (nat-int? leak-fail)
+              (every? (fn [r] (and (symbol? (:namespace r))
+                                (nat-int? (:elapsed-ms r))
+                                (vector? (:violations r))
+                                (map? (:counters r))
+                                (every? #(nat-int? (get (:counters r) %))
+                                        [:test :pass :fail :error]))) runs)))
+    [{:kind :malformed-child-result}]
+    :else (cond-> (census-problems namespaces (mapv :namespace runs))
+            (not= result (apply merge-with + (map :counters runs)))
+            (conj {:kind :child-counter-mismatch})
+            (some #(and (some? (:expected-vars %))
+                        (seq (remove (set (:executed-vars %)) (:expected-vars %)))) runs)
+            (conj {:kind :loaded-test-coverage-drift}))))
+
+(defn suite-receipt-problems [suite receipt digest]
+  (vec (concat
+         (when-not (and (= :passed (:state receipt))
+                        (false? (:debug receipt))
+                        (= digest (:source-digest receipt))
+                        (= suite (:suite receipt))
+                        (zero? (get-in receipt [:result :precondition-skipped] 0)))
+           [{:kind :invalid-suite-receipt :suite suite}])
+         (census-problems (suite-namespaces suite) (map :namespace (:runs receipt))))))
+
+(defn gate-phases
+  "Global fast-before-integration barrier: integration may write checkout files
+   that other processes' fast isolation snapshots would observe."
+  [namespaces lane-map]
+  (mapv (fn [phase] (filterv #(= phase (get lane-map %)) namespaces))
+        [:fast :integration]))
+
+(defn gate-targets [debug?]
+  (let [suffix (if debug? "-serial" "")]
+    ["admit-transaction-recovery-battery" "battery-fresh"
+     (str "alias-migration-test" suffix) (str "mcp-test" suffix)
+     (str "test-bb" suffix) "repository-hygiene"]))
+
+(defn run-gate! [opts]
+  (let [debug? (= "true" (get opts "--debug-serial"))
+        run-id (str (java.util.UUID/randomUUID))
+        base-dir (io/file (if debug? "target/gate-serial" "target/gate-parallel"))
+        work-dir (io/file base-dir run-id)
+        output (io/file "target/landing-gate.edn")
+        _ (io/delete-file output true)
+        _ (.mkdirs work-dir)
+        _ (spit (io/file base-dir "latest-run") run-id)
+        started (str (java.time.Instant/now))
+        t0 (System/nanoTime)
+        digest (source-digest)
+        census (tree-census)
+        capacity (machine-capacity)
+        targets (gate-targets debug?)
+        _ (when debug? (println "SERIAL/NOT-A-GATE: debugging only; no landing receipt"))
+        _ (doseq [s ["alias" "mcp" "bb"]]
+            (io/delete-file (io/file work-dir s "receipt.edn") true))
+        stages (atom [])]
+    (when (seq (:problems census))
+      (throw (ex-info "gate-refused: tree namespace census" census)))
+    (doseq [target targets]
+      (let [start (System/nanoTime)
+            _ (println "gate-stage:" target "started" (str (java.time.Instant/now)))
+            _ (flush)
+            rc (:exit @(proc/process {:out :inherit :err :inherit
+                                      :extra-env {"JAVA_TOOL_OPTIONS" (str (System/getenv "JAVA_TOOL_OPTIONS") " -Xmx512m")
+                                                  "CLJ_SURGEON_GATE_RUN_ID" run-id}}
+                         "make" "--no-print-directory" target))
+            stage {:target target :exit rc
+                   :wall-ms (quot (- (System/nanoTime) start) 1000000)}]
+        (swap! stages conj stage)
+        (spit (io/file work-dir "stages.edn") (pr-str @stages))
+        (println "gate-stage:" (pr-str stage))
+        (when-not (zero? rc)
+          (throw (ex-info "gate-refused: required stage failed" stage)))))
+    (let [start (System/nanoTime)
+          audit ((requiring-resolve 'clj-surgeon.mcp-intent-contract/audit-current-repository))
+          _ (swap! stages conj {:target "intent-audit" :exit (if (:ok audit) 0 1)
+                                :wall-ms (quot (- (System/nanoTime) start) 1000000)})
+          suites (mapv #(edn/read-string (slurp (io/file work-dir % "receipt.edn")))
+                       ["alias" "mcp" "bb"])
+          problems (vec (concat
+                          (when-not (:ok audit) [{:kind :intent-audit :violations (:violations audit)}])
+                          (when-not (= digest (source-digest)) [{:kind :tree-changed-during-gate}])
+                          (when-not debug?
+                            (mapcat #(suite-receipt-problems (:suite %) % digest) suites))))
+          receipt {:state (if (seq problems) :failed :passed)
+                   :landing? (landing-eligible? debug? problems)
+                   :run-id run-id
+                   :git-head (str/trim (:out @(proc/process {:out :string} "git" "rev-parse" "HEAD")))
+                   :git-tree (str/trim (:out @(proc/process {:out :string} "git" "rev-parse" "HEAD^{tree}")))
+                   :started-at started :completed-at (str (java.time.Instant/now))
+                   :wall-ms (quot (- (System/nanoTime) t0) 1000000)
+                   :source-digest digest :capacity capacity :namespace-census census
+                   :stages @stages :suites suites :problems problems}]
+      (spit (io/file work-dir "stages.edn") (pr-str @stages))
+      (when (:landing? receipt) (spit output (pr-str receipt)))
+      (println "landing-gate:" (pr-str (dissoc receipt :suites :namespace-census)))
+      (when (seq problems) (throw (ex-info "gate-refused: incomplete landing proof" {:problems problems})))
+      (shutdown-agents))))
 
 (defn lane-failures
   "Lanes that did not deliver a readable result. A lane that died before
@@ -503,6 +689,13 @@
                          index (pr-str (vec (:namespaces emitted)))
                          (pr-str (vec (distinct (map selector-namespace namespaces)))) log)
 
+                 (seq (child-data-problems emitted))
+                 (format "lane %d invalid child facts: %s (log %s)" index
+                         (pr-str (child-data-problems emitted)) log)
+
+                 (not= 0 exit)
+                 (format "lane %d exited %s (log %s)" index exit log)
+
                  :else nil))
              lanes)))
 
@@ -517,32 +710,34 @@
 (defn report!
   "Prints the union summary, the per-namespace walls, the schedule and the
    isolation verdict. Returns the isolation violation count."
-  [runs lanes wall-ms]
-  (let [vs (into (vec (mapcat :violations runs))
-                 ;; @spec TEST-ISO-007 -- the LANE budget, over the union.
-                 ;; The sum of the namespaces' walls is what a serial run
-                 ;; would have paid, so this is the same number the serial
-                 ;; lane is held to; the parallel makespan is reported
-                 ;; separately and never substituted for it.
-                 (keep (fn [[lane rs]]
-                         (iso/lane-budget-violation lane (reduce + (map :elapsed-ms rs))))
-                       (group-by (comp lm/lane-of :namespace) runs)))]
-    (binding [*out* *err*]
-      (println (format "\nnamespace walls (%d, slowest first, serial-equivalent total %d ms):"
-                       (count runs) (reduce + (map :elapsed-ms runs))))
-      (doseq [r (sort-by (comp - :elapsed-ms) runs)]
-        (println (format "  %8d ms  %s" (:elapsed-ms r) (:namespace r))))
-      (println (format "\nlanes (%d), makespan %d ms:" (count lanes) wall-ms))
-      (doseq [l (sort-by :index lanes)]
-        (println (format "  lane %d  %8d ms  exit %s  %s"
-                         (:index l) (:wall-ms l) (:exit l)
-                         (str/join " " (:namespaces l)))))
-      (if (seq vs)
-        (do (println (format "\nTEST-ISOLATION: %d violation(s) -- the suite's own purity rules, per namespace:" (count vs)))
-            (doseq [v vs] (println "  " (iso/message v))))
-        (println (format "\ntest-isolation: 0 violations across %d namespace(s) (TEST-ISO-002/003/004/005/007/010)"
-                         (count runs)))))
-    (count vs)))
+  ([runs lanes wall-ms] (report! runs lanes wall-ms true))
+  ([runs lanes wall-ms isolation?]
+   (let [vs (into (vec (mapcat :violations runs))
+                  ;; @spec TEST-ISO-007 -- the LANE budget, over the union.
+                  ;; The sum of the namespaces' walls is what a serial run
+                  ;; would have paid, so this is the same number the serial
+                  ;; lane is held to; the parallel makespan is reported
+                  ;; separately and never substituted for it.
+                  (keep (fn [[lane rs]]
+                          (iso/lane-budget-violation lane (reduce + (map :elapsed-ms rs))))
+                        (when isolation? (group-by (comp lm/lane-of :namespace) runs))))]
+     (binding [*out* *err*]
+       (println (format "\nnamespace walls (%d, slowest first, serial-equivalent total %d ms):"
+                        (count runs) (reduce + (map :elapsed-ms runs))))
+       (doseq [r (sort-by (comp - :elapsed-ms) runs)]
+         (println (format "  %8d ms  %s" (:elapsed-ms r) (:namespace r))))
+       (println (format "\nlanes (%d), makespan %d ms:" (count lanes) wall-ms))
+       (doseq [l (sort-by :index lanes)]
+         (println (format "  lane %d  %8d ms  exit %s  %s"
+                          (:index l) (:wall-ms l) (:exit l)
+                          (str/join " " (:namespaces l)))))
+       (if (seq vs)
+         (do (println (format "\nTEST-ISOLATION: %d violation(s) -- the suite's own purity rules, per namespace:" (count vs)))
+             (doseq [v vs] (println "  " (iso/message v))))
+         (println (if isolation?
+                    (format "\ntest-isolation: 0 violations across %d namespace(s) (TEST-ISO-002/003/004/005/007/010)" (count runs))
+                    "bb-isolation: existing per-process temp leak contract; no JVM probe claim"))))
+     (count vs))))
 
 (defn write-walls!
   "Records what every namespace -- and every measured SHARD's vars -- cost, for
@@ -575,36 +770,65 @@
 
 ;; ---------------------------------------------------------------------------
 
-(defn -main
-  [& args]
-  (let [opts (apply hash-map (map str args))
-        lanes-n (or (some-> (get opts "--lanes") parse-long)
-                    (some-> (System/getenv "BATTERY_LANES") parse-long)
-                    default-lanes)
-        java-opts (or (get opts "--java-opts") (System/getenv "BATTERY_CHILD_JAVA_OPTS"))
-        work-dir (doto (io/file (or (get opts "--work-dir") "target/battery-parallel"))
+(defn run-suite!
+  [opts]
+  (let [suite (get opts "--suite" "battery")
+        battery? (= "battery" suite)
+        debug? (= "true" (get opts "--debug-serial"))
+        _ (when (and (not battery?) (contains? opts "--lanes"))
+            (throw (ex-info "gate-refused: width is automatic; use --debug-serial true for diagnostics" {})))
+        inventory (suite-namespaces suite)
+        run-id (or (System/getenv "CLJ_SURGEON_GATE_RUN_ID") (str (java.util.UUID/randomUUID)))
+        _ (when-not (re-matches #"[A-Za-z0-9-]+" run-id)
+            (throw (ex-info "gate-refused: invalid run identity" {})))
+        capacity (when-not battery? (machine-capacity))
+        digest (when-not battery? (source-digest))
+        lanes-n (if battery?
+                  (or (some-> (get opts "--lanes") parse-long)
+                      (some-> (System/getenv "BATTERY_LANES") parse-long) default-lanes)
+                  (if debug? 1 (min (count inventory) (:lanes capacity))))
+        java-opts (if battery?
+                    (or (get opts "--java-opts") (System/getenv "BATTERY_CHILD_JAVA_OPTS") "-J-Xms64m -J-Xmx512m")
+                    "-J-Xms64m -J-Xmx512m")
+        work-dir (doto (io/file (or (get opts "--work-dir")
+                                    (if battery? "target/battery-parallel"
+                                        (str (if debug? "target/gate-serial/" "target/gate-parallel/") run-id "/" suite))))
                    (.mkdirs))
+        _ (io/delete-file (io/file work-dir "receipt.edn") true)
+        _ (when debug? (println "SERIAL/NOT-A-GATE:" suite))
+        effective-walls-path (if battery? walls-path (str "target/gate-parallel/" suite "/walls.edn"))
         ;; THE INVENTORY IS THE GATE'S OWN MEMBERSHIP, never a list typed here:
         ;; `lane-manifest` is the single source of truth for what the battery
         ;; lane contains, and a namespace added to it is scheduled by the next
         ;; run without anyone remembering to edit this file.
-        prereqs? (contains? #{"1" "true" "yes"}
-                            (or (get opts "--prereqs")
-                                (System/getenv "BATTERY_PREREQS") "1"))
-        battery-namespaces (lm/namespaces-for :battery)
-        walls-file (let [f (io/file walls-path)]
+        prereqs? (or (not battery?)
+                     (contains? #{"1" "true" "yes"}
+                                (or (get opts "--prereqs")
+                                    (System/getenv "BATTERY_PREREQS") "1")))
+        battery-namespaces inventory
+        walls-file (let [f (io/file effective-walls-path)]
                      (if (.exists f)
                        (try (or (edn/read-string (slurp f)) {}) (catch Exception _ {}))
-                       {}))
+                       (if battery? {}
+                           (try (get (edn/read-string (slurp "docs/observations/gate-namespace-walls.edn"))
+                                     (keyword suite) {})
+                                (catch Exception _ {})))))
         walls (:walls-ms walls-file {})
         var-walls (:var-walls-ms walls-file {})
         units (-> battery-namespaces
-                  (apply-serial-groups serial-groups)
-                  (->> (mapcat #(shard-units % shardable var-walls walls)))
+                  (apply-serial-groups (if battery? serial-groups []))
+                  (->> (mapcat #(shard-units % (if battery? shardable {}) var-walls walls)))
                   vec)
         unknown (vec (remove walls battery-namespaces))
         floor (floor-unit units walls var-walls)
-        plan (partition-lanes units walls var-walls lanes-n)
+        waves (cond
+                (and debug? (not battery?)) [[(vec inventory)]]
+                (= "mcp" suite) (mapv #(partition-lanes (mapv vector %) walls var-walls lanes-n)
+                                      (gate-phases inventory lm/manifest))
+                :else [(partition-lanes units walls var-walls lanes-n)])
+        plan (vec (mapcat (fn [phase groups]
+                            (map (fn [namespaces] {:phase phase :namespaces namespaces}) groups))
+                    (range) waves))
         t0 (System/nanoTime)]
     (println (format "battery-parallel: %d namespace(s) in %d unit(s) over %d lane(s); floor is %s at %d ms"
                      (count battery-namespaces) (count units) lanes-n
@@ -613,14 +837,15 @@
       (println (format (str "battery-parallel: %d namespace(s) have no measured wall and are "
                             "scheduled first at the %d ms fallback: %s")
                        (count unknown) fallback-wall-ms (str/join " " unknown))))
-    (doseq [[i ns-syms] (map-indexed vector plan)]
-      (println (format "  lane %d (est %d ms): %s" i
+    (doseq [[i {:keys [namespaces phase]}] (map-indexed vector plan)
+            :let [ns-syms namespaces]]
+      (println (format "  process %d phase %d (est %d ms): %s" i phase
                        (unit-cost walls var-walls ns-syms)
                        (str/join " " ns-syms))))
     (flush)
     ;; The DAG's one edge, honoured BEFORE any lane opens. Consumers are named
     ;; so a reader can see which lane the edge actually binds.
-    (let [pending (if prereqs? (pending-prerequisites prerequisite-stages) [])
+    (let [pending (if (and battery? prereqs?) (pending-prerequisites prerequisite-stages) [])
           prereq-failures
           (vec (keep (fn [stage]
                        (println (format "battery-parallel: %s is absent; %s consume(s) it"
@@ -636,64 +861,91 @@
         (println (str "battery-parallel: BATTERY_PREREQS is off -- prerequisite stages are "
                       "NOT run and an unmet precondition stays a counted, named skip "
                       "(the serial lane's semantics)")))
-    (let [lanes (->> plan
-                     (map-indexed (fn [i ns-syms]
-                                    {:index i :namespaces ns-syms
-                                     :java-opts java-opts :work-dir work-dir}))
-                     (remove (comp empty? :namespaces))
-                     (mapv #(future (run-lane! %)))
-                     (mapv deref))
-          wall-ms (quot (- (System/nanoTime) t0) 1000000)]
-      ;; The complete transcript, in LANE ORDER, so a parallel run's output can
-      ;; be diffed against a serial one instead of being interleaved noise.
-      (doseq [l (sort-by :index lanes)]
-        (println (format "\n========== lane %d (%s) exit %s, %d ms =========="
-                         (:index l) (str/join " " (:namespaces l)) (:exit l) (:wall-ms l)))
-        (when (.exists (io/file (:log l))) (print (slurp (:log l))))
-        (when (.exists (io/file (:err-log l)))
-          (let [e (slurp (:err-log l))]
-            (when-not (str/blank? e)
-              (println (format "---------- lane %d stderr ----------" (:index l)))
-              (print e)))))
-      (flush)
-      (let [broken (lane-failures lanes)
-            runs (union-runs lanes battery-namespaces)
-            missing (vec (remove (set (map :namespace runs)) battery-namespaces))
-            result (if (seq runs)
-                     (apply merge-with + (map :counters runs))
-                     {:test 0 :pass 0 :fail 0 :error 0})
-            notes (apply merge-with into (keep (comp :notes :emitted) lanes))
-            _ (print-summary! result notes)
-            iso-fail (report! runs lanes wall-ms)
-            leak-fail (reduce + (keep (comp :leak-fail :emitted) lanes))]
-        (when (seq broken)
-          (binding [*out* *err*]
-            (println (format "\nBATTERY-LANE: %d lane failure(s):" (count broken)))
-            (doseq [b broken] (println "  " b))))
-        (when (seq missing)
-          (binding [*out* *err*]
-            (println (format (str "\nBATTERY-LANE: %d battery namespace(s) produced NO result: %s "
-                                  "-- a battery that ran less is a failure, never a pass.")
-                             (count missing) (str/join " " missing)))))
-        (when (and (empty? broken) (empty? missing))
-          (write-walls! walls-path runs lanes))
-        (when (seq prereq-failures)
-          (binding [*out* *err*]
-            (println (format "\nBATTERY-PREREQ: %d prerequisite stage(s) failed:" (count prereq-failures)))
-            (doseq [f prereq-failures] (println "  " f))))
-        ;; @spec TEST-ISO-013 -- the skip count in the RECEIPT, always; RED only
-        ;; when the caller declared the prerequisites satisfied.
-        (let [skipped (or (:precondition-skipped result) 0)
-              skipped-red (if (and prereqs? (pos? skipped)) skipped 0)]
-          (spit (io/file work-dir "skipped") (str skipped))
-          (when (pos? skipped-red)
+      (let [lanes (->> plan
+                       (map-indexed (fn [i entry]
+                                      (assoc entry :index i :java-opts java-opts
+                                             :work-dir work-dir :runtime (if (= suite "bb") :bb :jvm))))
+                       (remove (comp empty? :namespaces))
+                       (partition-by :phase)
+                       ;; Fully dereference a wave before launching the next.
+                       (mapcat (fn [wave] (->> wave (mapv #(future (run-lane! %))) (mapv deref))))
+                       vec)
+            wall-ms (quot (- (System/nanoTime) t0) 1000000)]
+        ;; The complete transcript, in LANE ORDER, so a parallel run's output can
+        ;; be diffed against a serial one instead of being interleaved noise.
+        (doseq [l (sort-by :index lanes)]
+          (println (format "\n========== lane %d (%s) exit %s, %d ms =========="
+                           (:index l) (str/join " " (:namespaces l)) (:exit l) (:wall-ms l)))
+          (when (.exists (io/file (:log l))) (print (slurp (:log l))))
+          (when (.exists (io/file (:err-log l)))
+            (let [e (slurp (:err-log l))]
+              (when-not (str/blank? e)
+                (println (format "---------- lane %d stderr ----------" (:index l)))
+                (print e)))))
+        (flush)
+        (let [broken (lane-failures lanes)
+              runs (union-runs lanes battery-namespaces)
+              missing (vec (remove (set (map :namespace runs)) battery-namespaces))
+              result (if (seq runs)
+                       (apply merge-with + (map :counters runs))
+                       {:test 0 :pass 0 :fail 0 :error 0})
+              notes (apply merge-with into (keep (comp :notes :emitted) lanes))
+              _ (print-summary! result notes)
+              iso-fail (report! runs lanes wall-ms (not= suite "bb"))
+              leak-fail (reduce + (keep (comp :leak-fail :emitted) lanes))]
+          (when (seq broken)
             (binding [*out* *err*]
-              (println (format (str "\nBATTERY-PREREQ: %d precondition(s) still skipped with "
-                                    "BATTERY_PREREQS=1 -- having declared the prerequisites "
-                                    "satisfied, a remaining skip is a broken declaration, not a note.")
-                               skipped))))
-          (println (format "battery-parallel: makespan %d ms over %d lane(s); serial-equivalent %d ms; skipped %d"
-                           wall-ms (count lanes) (reduce + (map :elapsed-ms runs)) skipped))
-          (System/exit (+ (:fail result) (:error result) iso-fail leak-fail
-                          (count broken) (count missing)
-                          (count prereq-failures) skipped-red))))))))
+              (println (format "\nBATTERY-LANE: %d lane failure(s):" (count broken)))
+              (doseq [b broken] (println "  " b))))
+          (when (seq missing)
+            (binding [*out* *err*]
+              (println (format (str "\nBATTERY-LANE: %d battery namespace(s) produced NO result: %s "
+                                    "-- a battery that ran less is a failure, never a pass.")
+                               (count missing) (str/join " " missing)))))
+          (when (and (empty? broken) (empty? missing))
+            (write-walls! effective-walls-path runs lanes))
+          (when (seq prereq-failures)
+            (binding [*out* *err*]
+              (println (format "\nBATTERY-PREREQ: %d prerequisite stage(s) failed:" (count prereq-failures)))
+              (doseq [f prereq-failures] (println "  " f))))
+          ;; @spec TEST-ISO-013 -- the skip count in the RECEIPT, always; RED only
+          ;; when the caller declared the prerequisites satisfied.
+          (let [skipped (or (:precondition-skipped result) 0)
+                skipped-red (if (and prereqs? (pos? skipped)) skipped 0)]
+            (spit (io/file work-dir "skipped") (str skipped))
+            (when (pos? skipped-red)
+              (binding [*out* *err*]
+                (println (format (str "\nBATTERY-PREREQ: %d precondition(s) still skipped with "
+                                      "BATTERY_PREREQS=1 -- having declared the prerequisites "
+                                      "satisfied, a remaining skip is a broken declaration, not a note.")
+                                 skipped))))
+            (println (format "battery-parallel: makespan %d ms over %d lane(s); serial-equivalent %d ms; skipped %d"
+                             wall-ms lanes-n (reduce + (map :elapsed-ms runs)) skipped))
+            (let [census-errors (when-not battery? (census-problems inventory (mapv :namespace runs)))
+                  changed? (and (not battery?) (not= digest (source-digest)))
+                  failures (+ (:fail result) (:error result) iso-fail leak-fail
+                              (count broken) (count missing) (count census-errors)
+                              (count prereq-failures) skipped-red
+                              (if changed? 1 0))
+                  receipt {:suite suite :runtime (if (= suite "bb") :bb :jvm)
+                           :state (if (zero? failures) :passed :failed) :debug debug? :run-id run-id
+                           :source-digest digest :capacity capacity :lane-count lanes-n :process-count (count lanes)
+                           :phase-count (count waves)
+                           :namespace-census {:expected inventory :observed (mapv :namespace runs)
+                                              :expected-count (count inventory) :observed-count (count runs)}
+                           :lanes (mapv #(dissoc % :emitted) lanes) :runs runs :result result
+                           :isolation-failures iso-fail :leak-failures leak-fail
+                           :wall-ms wall-ms :problems (vec (concat broken census-errors
+                                                             (when changed? [:tree-changed-during-suite])))}]
+              (spit (io/file work-dir "receipt.edn") (pr-str receipt))
+              (System/exit (if (zero? failures) 0 1)))))))))
+
+(defn -main [& args]
+  (try
+    (let [opts (apply hash-map (map str args))]
+      (if (= "gate" (get opts "--suite")) (run-gate! opts) (run-suite! opts)))
+    (catch Throwable e
+      (binding [*out* *err*]
+        (println "gate-refused:" (.getMessage e) (pr-str (ex-data e))))
+      (shutdown-agents)
+      (System/exit 1))))

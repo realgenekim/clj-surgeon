@@ -266,12 +266,14 @@
                (when (> (count wrong) 10) " ..."))))))
 
 (deftest loaded-namespaces-carry-their-lane-at-runtime
-  (testing "the metadata survives loading -- a source scan alone is a spelling"
-    (doseq [[s lane] lm/manifest
-            :when (find-ns s)]
-      (is (= lane (:lane (meta (find-ns s))))
-          (str s " is loaded but its runtime ns metadata :lane is "
-               (pr-str (:lane (meta (find-ns s)))))))))
+  (testing "loaded metadata agrees; one conditional assertion per manifest row"
+    ;; @spec TEST-ISO-015 -- loaded membership varies by process partition.
+    ;; The predicate is unchanged; its assertion count cannot depend on which
+    ;; other namespaces share this JVM. The runner checks every selected ns too.
+    (doseq [[s lane] lm/manifest]
+      (let [loaded (find-ns s)]
+        (is (or (nil? loaded) (= lane (:lane (meta loaded))))
+            (str s " when loaded must carry :lane " lane))))))
 
 (deftest the-runner-refuses-an-undeclared-namespace
   (testing "an undeclared namespace is a typed refusal, never a silent skip"
@@ -463,7 +465,7 @@
     clj-surgeon.mission-forms-source-test 23 ; Strict comment text/attachment, whitespace identity and owner sentinel.
     clj-surgeon.mission-typist-executor-test 11 ; Add candidate diagnostic survival to proof/commit/undo and saved fallback forwarding.
     clj-surgeon.battery-ledger-test        14 ; TEST-ISO-009a/b: add strict archive classification and preserved failure/audit authority.
-    clj-surgeon.battery-parallel-test      26 ; TEST-ISO-013: the battery lane run as N JVM lanes -- schedule, lane-failure classifier, shard fold, prerequisite DAG. TEST-ISO-014 (5cdd5dcc) adds two: launcher-matrix-cells-remain-independently-shardable and grouped-shards-retain-measured-per-deftest-walls.
+    clj-surgeon.battery-parallel-test      32 ; TEST-ISO-013: the battery lane run as N JVM lanes -- schedule, lane-failure classifier, shard fold, prerequisite DAG. TEST-ISO-014 (5cdd5dcc) adds two: launcher-matrix-cells-remain-independently-shardable and grouped-shards-retain-measured-per-deftest-walls.
     clj-surgeon.require-change-test 9 ; Pure standalone require intent and strict natural-layout refusal witnesses.
     clj-surgeon.require-change-boundary-test 12 ; Actual CLI/profile processes, confined publication, independent oracle and undo.
     clj-surgeon.fast-lane-isolation-test   4  ; TEST-ISO-006's witness (round two) + round five's finding-3 fixture-root scan
@@ -581,8 +583,8 @@
       ;; grouping/shard witnesses named at its pin above, 24 -> 26. (The
       ;; reader-eval-fence-test split itself, 7 -> 13 deftests, lands in a
       ;; ROUND-ONE namespace, so it moves r1, not adopted.) 591 + 2 = 593.
-      ;; Batch 5: tests' own deftest-count reader derives 604 adopted / 1629 total.
-      (is (= 604 adopted) (str "adopted tests: " adopted)))
+      ;; TEST-ISO-015: tree reader derives 610 adopted / 1635 total (+6 gate witnesses).
+      (is (= 610 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -701,7 +703,7 @@
       ;; r1; +2 in battery-parallel-test (adopted, 24 -> 26, named at its pin
       ;; above) lands in adopted. 1610 + 6 + 2 = 1618, and the merged tree's
       ;; own census confirms it: 1025 original + 593 adopted.
-      (is (= 1629 total) (str "manifest declares " total " tests"))
+      (is (= 1635 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

@@ -114,3 +114,12 @@ The ledger, executable fixtures, live operational briefs and unknown documents
 remain counted. Failed or malformed diff inspection cannot grant an exemption.
 The CLI reports raw, counted and excluded distances; very long histories fall
 back to raw distance rather than granting uninspected exemptions.
+
+## Automatic landing gate
+
+TEST-ISO-015 extends the TEST-ISO-013 process coordinator to the normal landing
+path. Runtime-specific children produce namespace facts; a single parent owns
+coverage and union verdicts. `make test` derives bounded width from CPU and memory
+and includes the intent audit. `make test-serial` is a diagnostic, explicitly
+incapable of producing a landing receipt. The design, failure matrix and fence
+are in [parallel landing gate](../../plans/parallel-landing-gate.md).

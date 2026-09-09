@@ -482,8 +482,9 @@
     ;; assertions below must be derived separately.
     ;; TEST-ISO-014 adds the six-cell launcher coverage promise.
     ;; Batch 5: spec-ids over spec-doc-paths derives 253, including NS-SPLIT-067..072.
-    (is (= 253 (count non-mcp)))
-    (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 21
+    ;; TEST-ISO-015: tree scan derives 254 non-MCP IDs, 22 in this family.
+    (is (= 254 (count non-mcp)))
+    (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 22
             "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3}
            (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"
                                   "MEASURE-" "TELEMETRY-EVENTS-" "ROUTING-"]]
