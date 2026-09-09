@@ -4532,3 +4532,42 @@ times slower per core than Anvil's EPYC on the same commit while Anvil carried t
 gate 41 to 44 s vs 16 s). Dev and records box only; never a timing box; no cohort may mix the two. Two ratchets
 owed: `tighten` hardcodes the seat host (wrote a binding epoch claiming Anvil's seat), and the seat env had to
 reach three shell paths (fixed and verified there).
+
+## Ship v3.1/v3.2 installed, E4 lands, Astra on the gate, projected sublime 8 (2026-09-09T03:34Z)
+
+**Ship v3.1 and v3.2 are installed** (records 840b1ffe, installed 02:44Z; ship 466f51a835497ae1, land
+4a1eae94a7e289b6; six fixture corpora, 102 rows, 0 mismatches against the installed bytes). Stage 1 runs the
+cold gate on a second disposable worktree of the sealed candidate beside Sol's review and stops the ship in one
+poll on red with the first failing line named; unknown is never red. Stage 2 writes `<run>/gates-prewarm.edn`
+(tree, both invocations, recipe and manifest hashes, toolchain, isolation, every count line, audit line) and
+`land --consume-gate-receipt` re-derives it on the merged tree: `LAND-GATES consumed` or `rerun reason=<typed>`;
+ship reports `gates=consumed|rerun:<reason>`. Two silent no-ops caught before install: land merges the receipt
+commit, not the candidate, so the tree always differed; and ship's and land's invocation strings differed
+cosmetically. Both are fixture rows now. Owed: ship leaks candidate/fix worktrees (934 MB) and run-bg calls a
+fast-finishing job FAILED to start (inb-9a725e). No field evidence yet: the next real landing is the meter.
+
+**E4 landed** (records 5f2dad0c, 43 min). Median paired E4/E3 answerable 0.675 against the ≤0.50 gate: row 5
+stays friction-medium. Cohort answerable 24 to 15, corroborations 7 to 11, median wall 147.2 s, 6/6 first-attempt
+accept. Astra's prediction 0.70 hit within 0.025, the first hit in the row. The learning: batch 5's facts were
+fully adopted and the reads they targeted fell as predicted; what remains is independent-witness demand. Five of
+six arms kept `git status` on principle ("a self-report and a repair are indistinguishable if the tool were
+wrong"), and the preregistered classifier scores that as answerable. The gate is now measuring trust, not receipt
+completeness. Recommendation: no more facts for row 5; a preregistered meter change before E5 that separates
+"the receipt did not say" from "I will not take the tool's word"; the trust residual belongs to the recorder user
+on anvil2. Astra riffs it after gate-lanes.
+
+**Astra gate-lanes, third launch.** The first launch completed its 9-minute serial baseline before I killed it to
+amend the brief; the second stood down after 11 minutes because it found that baseline and asked whether to take
+over. Third launch (astra-gate-lanes-3, 02:45Z) with explicit ownership of the baseline. Two relaunches on one
+brief tonight is friction to name: an amendment should reach a running Astra as a follow-up file, and a brief
+should say who owns pre-existing evidence.
+
+**Gene asked what took 48 minutes.** The task panel shows an agent's last progress line beside its total time;
+"appending a section" was the final step of the 49-minute ship builder (two stages, six corpora), and the
+25-minute line was the E4 cohort's readout. Neither was stuck. The faster feel is one builder per stage.
+
+**Projected sublime score for the window: 8/10** (from 7.5). Up: landing routine mechanized further, the gate
+being parallelized under the perfect-tool standard, a prediction hit, anvil2 provisioned with a finding attached.
+Held under 9: both t-reductions are projected, not witnessed (no landing has consumed a gate receipt, gate-lanes
+unreported); row 5 did not clear its gate; two relaunches and the worktree leak. Moves to 9 when the next real
+landing shows `gates=consumed` and a gate wall near three minutes.
