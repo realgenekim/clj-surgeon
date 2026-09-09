@@ -810,6 +810,37 @@ default to `:proof :cold`; `:proof :warm` requires that live probe and skips the
 cold command list, reporting `committed-probe-only`, `verification_complete false`
 and every skipped command in `proof_pending`. Warm results cannot prove absence
 of stale Vars or replace final cold acceptance.
+The receipt now puts `:committed` first, followed by `:proof` and the definition
+of `:verification_complete` (CLI `:verification_complete_definition`): all required substantive cold checks passed over
+the committed snapshot. Its review facts include:
+
+- `:ns_edits`: exact require/import token additions, removals and survivor order,
+  using the declared entry and file tables. Each row identifies a changed header;
+  an empty edit list means its bytes changed outside those entries.
+- `:footprint`: identical, changed, created and deleted whole files within the
+  captured Clojure roots, also classified outside source/destination owner files.
+  This excludes uncaptured paths and residual portions of moved-owner files.
+- `:lint_delta`: signed errors/warnings, baseline/post counts and introduced errors
+  from the executed comparison. Zero net errors can still contain new errors.
+- `:loaded` and `:load_errors`: executed warm require results. `:load_status`
+  distinguishes passed, failed, not-run and unavailable evidence. Test failures
+  do not erase successful loads. A failed require names its namespace and rolls back.
+
+File IDs index `:file_table` rows `[directory-ID basename]`; concatenate the
+corresponding `:file_directories` entry with the basename. Large identical sets
+use `{:all_captured_except [file-IDs] :count n}`: every input source file at
+`footprint.scope.input_snapshot_hash` except the named paths. Outside-owner
+identity also excludes owner files; this is an exact scoped statement, not a
+truncated list. Malformed UTF-8 refuses before mutation because lossy decoding
+cannot establish byte identity. `:ns_edit_columns` and
+`:ns_clause_columns` describe row layouts; entry IDs index `:ns_entry_table`.
+Strings retain lossless JSON-content encoding. Body SHA-256 values use standard
+Base64 (`:digest_encoding :base64`), preserving all 256 bits; `:same` still means
+exact equality with the first hash. Both EDN and escaped JSON keep the 65,536-byte
+ceiling. CLI EDN uses one top-level field per line with compact nested values;
+MCP shows a brief leading proof summary plus the complete JSON receipt. No new
+fact changes the fixed comment identity diff.
+
 For partial extraction, set `:source {:file ... :lib ... :retain true}` and
 omit `:source_retirement`. Supply only the moved owner names; unmapped forms stay
 in place. The compiler qualifies cross-boundary references, preserves mixed

@@ -428,9 +428,9 @@
    number of tests it brings and why it exists. This is the ONLY legal way
    the corpus grows without the arithmetic below going red."
   '{clj-surgeon.receipt-artifacts-boundary-test 15 ; Sol r10 + two Row 5 real-process witnesses (battery).
-    clj-surgeon.namespace-split-test 48 ; NS-SPLIT-060: identity diff regression; source census retained in comment-edits/census.edn.
-    clj-surgeon.namespace-split-warm-test 2 ; Round 3: real nREPL failure/green matrix and stale/foreign discovery, integration.
-    clj-surgeon.mcp-namespace-split-test 24 ; Batch 3's six receipt/facts/budget witnesses on the previous 13, plus Sol's a9da4344 committed-facts witness and the 0956951b delta fence's actionable unsafe-tmpdir refusal.
+    clj-surgeon.namespace-split-test 54 ; Batch 5 adds six ns/footprint/lint/encoding witnesses; derived by deftest-count.
+    clj-surgeon.namespace-split-warm-test 3 ; Batch 5 adds executed load/failed destination facts to the real nREPL matrix.
+    clj-surgeon.mcp-namespace-split-test 27 ; Batch 5 adds text ordering, absent-probe honesty and malformed UTF-8 refusal.
     clj-surgeon.split-proof-gate-test 4 ; Batch 3 pure status/state matrix, plus Sol's a9da4344 temp-root admission and receipt-ceiling witnesses.
     clj-surgeon.split-proof-gate-boundary-test 3 ; Batch 3 detached worker and caller-exit boundaries, plus Sol's a9da4344 worker-identity boundary.
     clj-surgeon.cell-b-oracle-test 2 ; B07: shell lint mutation test and independent partial-preservation mutants; battery (Python subprocess).
@@ -581,7 +581,8 @@
       ;; grouping/shard witnesses named at its pin above, 24 -> 26. (The
       ;; reader-eval-fence-test split itself, 7 -> 13 deftests, lands in a
       ;; ROUND-ONE namespace, so it moves r1, not adopted.) 591 + 2 = 593.
-      (is (= 594 adopted) (str "adopted tests: " adopted)))
+      ;; Batch 5: tests' own deftest-count reader derives 604 adopted / 1629 total.
+      (is (= 604 adopted) (str "adopted tests: " adopted)))
     (testing "the arithmetic closes"
       ;; MERGE RESOLUTION, 2026-09-06 (fable/hot-verify-done x MCP/main
       ;; 7030bb56): TWO branches moved this pin from 1363 to 1372 for DIFFERENT
@@ -700,7 +701,7 @@
       ;; r1; +2 in battery-parallel-test (adopted, 24 -> 26, named at its pin
       ;; above) lands in adopted. 1610 + 6 + 2 = 1618, and the merged tree's
       ;; own census confirms it: 1025 original + 593 adopted.
-      (is (= 1619 total) (str "manifest declares " total " tests"))
+      (is (= 1629 total) (str "manifest declares " total " tests"))
       (is (= total (+ r1 adopted))
           (str total " != " r1 " + " adopted
                " -- a namespace is being counted twice or not at all")))))

@@ -65,7 +65,7 @@
     (is (seq (boundary/validate-request request))))
   (let [result {:ok false :state "refused" :blockers [{:type "x"}] :elapsed_ms 1}]
     (is (= (json/parse-string (json/generate-string result))
-           (json/parse-string (second (str/split (tool/summary result) #"\n" 2)))))))
+           (json/parse-string (last (str/split-lines (tool/summary result))))))))
 
 ;; @spec NS-SPLIT-059
 ;; INTENT-TEST: NS-SPLIT-059
@@ -174,7 +174,7 @@
       (with-redefs [boundary/analyze! analysis]
         (let [r (boundary/cli! {:op :split-ns! :request request :plan-only true})]
           (is (:ok r))
-          (is (= :state (first (keys r))))
+          (is (= :committed (first (keys r))))
           (is (:read_complete r))
           (is (= 4 (get-in r [:counts :forms]))))))))
 
@@ -451,10 +451,10 @@
           (is (= {:tier :warm :status :pending :execution :manual :next_call next-call}
                  (:proof result)))
           (is (= next-call (:next_call result)))
-          (is (str/includes? (first (str/split-lines (tool/summary result))) "proof pending"))
-          (is (str/includes? (first (str/split-lines (tool/summary result))) ":proof-status"))
+          (is (str/includes? (tool/summary result) "proof pending"))
+          (is (str/includes? (tool/summary result) ":proof-status"))
           (is (= (json/parse-string (json/generate-string result))
-                 (json/parse-string (second (str/split (tool/summary result) #"\n" 2)))))
+                 (json/parse-string (last (str/split-lines (tool/summary result))))))
           (is (= "pending" (:state (gate/status! (:receipt_path result)))))
           (is (= (:proof result) (:proof (boundary/execute! (assoc request :plan_only "facts"))))))))))
 
@@ -475,3 +475,57 @@
               (is (= "negative-facts-violation" (:error_type result)) (pr-str [kind result]))
               (is (false? (:mutation_attempted result)))
               (is (= before (boundary/capture! root-path ["src" "test"]))))))))))
+
+;; @spec NS-SPLIT-071
+;; INTENT-TEST: NS-SPLIT-071
+(deftest proof-text-orders-commit-proof-and-defined-boolean
+  (doseq [complete? [false true]]
+    (let [r {:state "committed" :committed true :verification_complete complete?
+             :proof {:tier :cold :status (if complete? :complete :pending)}}
+          lines (str/split-lines (tool/summary r))]
+      (is (= ":committed true" (first lines)))
+      (is (str/starts-with? (get lines 1 "") ":proof "))
+      (is (str/starts-with? (get lines 2 "") (str "  :verification_complete " complete?)))
+      (is (str/includes? (get lines 2 "") "all required substantive cold checks passed over the committed snapshot"))
+      (is (= (json/parse-string (json/generate-string r)) (json/parse-string (last lines))))
+      ;; At the data ceiling, both physical text faces must preserve the byte ratchet.
+      (let [base (assoc r :padding "")
+            room (- gate/max-receipt-bytes 256 (gate/receipt-size base))
+            sized (assoc base :padding (apply str (repeat room "x")))]
+        (is (some? (gate/bounded-receipt! sized)))
+        (is (<= (alength (.getBytes (tool/summary sized) "UTF-8")) gate/max-receipt-bytes))
+        (is (<= (alength (.getBytes (boundary/receipt-text sized) "UTF-8")) gate/max-receipt-bytes)))
+      (with-redefs [boundary/execute! (constantly r)]
+        (let [view (boundary/cli! {:request fixture/request})]
+          (is (= [:committed :proof :verification_complete :verification_complete_definition]
+                 (vec (take 4 (keys view)))))
+          (is (= complete? (:verification_complete view)))
+          (is (= "all required substantive cold checks passed over the committed snapshot"
+                 (:verification_complete_definition view))))))))
+
+;; @spec NS-SPLIT-070
+(deftest absent-warm-probe-does-not-claim-loads
+  (with-workspace
+    (fn [_ request]
+      (with-redefs [boundary/analyze! analysis proof/run-proof! proved]
+        (let [r (boundary/execute! {:verification-profiles profiles} request)]
+          (is (:committed r))
+          (is (= :not-run (get-in r [:facts :load_status])))
+          (is (= [] (get-in r [:facts :loaded])))
+          (is (= [] (get-in r [:facts :load_errors]))))))))
+
+;; @spec NS-SPLIT-072
+;; INTENT-TEST: NS-SPLIT-072
+(deftest byte-identity-refuses-lossy-source-decoding
+  (with-workspace
+    (fn [root request]
+      (let [file (io/file root "test/app/binary.clj")
+            bytes (byte-array (concat (.getBytes "(ns app.binary)\n;" "UTF-8") [(unchecked-byte 255)]))]
+        (with-open [out (io/output-stream file)] (.write out bytes))
+        (with-redefs [boundary/analyze! analysis]
+          (let [r (boundary/execute! {:verification-profiles profiles} request)]
+            (is (= "invalid-source-encoding" (:error_type r)))
+            (is (false? (:mutation_attempted r)))
+            (is (= (vec bytes) (vec (java.nio.file.Files/readAllBytes (.toPath file)))))
+            (is (= (get fixture/sources "src/app/views.clj")
+                   (slurp (io/file root "src/app/views.clj"))))))))))

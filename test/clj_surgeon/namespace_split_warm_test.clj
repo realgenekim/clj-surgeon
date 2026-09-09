@@ -127,3 +127,26 @@
           (is (nil? (warm/discover! root)) "A live JVM for another cwd is unavailable")
           (is (= 42 (warm/eval! (:port server) "42" 1000)))
           (finally (nrepl-server/stop-server server)))))))
+
+;; @spec NS-SPLIT-070
+;; INTENT-TEST: NS-SPLIT-070
+(deftest warm-load-facts-name-failed-destination
+  ;; Execute the boundary's original valid-source/destination-only throw fixture.
+  (let [original boundary/execute!]
+    (with-redefs [boundary/execute!
+                  (fn [& args]
+                    (let [r (apply original args)
+                          request (last args)
+                          dest (get-in request [:destinations 0 :lib])
+                          check (first (filter #(= "warm-probe" (:name %)) (:checks r)))
+                          reload-failure? (and (= "failed" (:status check)) (zero? (:failures check)))]
+                      (if reload-failure?
+                        (do (is (= [dest] (get-in r [:facts :load_errors])))
+                            (is (= [] (get-in r [:facts :loaded])))
+                            (is (= :failed (get-in r [:facts :load_status])))
+                            (is (= "rolled-back" (:state r))))
+                        (do (is (some #{dest} (get-in r [:facts :loaded])))
+                            (is (= [] (get-in r [:facts :load_errors])))
+                            (is (= :passed (get-in r [:facts :load_status])))))
+                      r))]
+      ((:test (meta #'warm-probe-precedes-cold-and-rolls-back))))))

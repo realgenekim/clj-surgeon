@@ -85,22 +85,35 @@
             {:port port}))))
     (catch Exception _ nil)))
 
+;; @spec NS-SPLIT-070
+;; INTENT: NS-SPLIT-070
 (defn probe-code [{:keys [reload tests]}]
-  ;; Print data as data; never interpolate a request-derived library into code.
+  ;; Libraries remain printed data. Catch at the require that failed so the
+  ;; receipt names the destination even when nREPL would only say eval-error.
   (str "(do (require 'clojure.test) "
-       "(doseq [lib " (pr-str reload) "] (require (symbol lib) :reload)) "
+       "(let [loads (loop [libs " (pr-str reload) " loaded []] "
+       "(if-let [lib (first libs)] "
+       "(let [ok? (try (require (symbol lib) :reload) true (catch Throwable _ false))] "
+       "(if ok? (recur (rest libs) (conj loaded lib)) {:loaded loaded :load_errors [lib]})) "
+       "{:loaded loaded :load_errors []}))] "
+       "(assoc loads :summary "
+       "(if (seq (:load_errors loads)) {:test 0 :pass 0 :fail 0 :error 0} "
        "(binding [*out* (java.io.Writer/nullWriter) *err* (java.io.Writer/nullWriter)] "
        (if (seq tests)
          (str "(apply clojure.test/run-tests (map symbol " (pr-str tests) "))")
-         "{:test 0 :pass 0 :fail 0 :error 0}") "))"))
+         "{:test 0 :pass 0 :fail 0 :error 0}") ")))))"))
 
 (defn probe!
   [live selection]
   (let [started (System/nanoTime)
         result (try
-                 (let [summary (eval! (:port live) (probe-code selection) 60000)]
-                   (if (and (map? summary) (every? #(nat-int? (get summary %)) [:test :pass :fail :error]))
-                     {:ok (zero? (+ (:fail summary) (:error summary))) :summary summary}
+                 (let [evidence (eval! (:port live) (probe-code selection) 60000)
+                       summary (:summary evidence)]
+                   (if (and (map? summary) (every? #(nat-int? (get summary %)) [:test :pass :fail :error])
+                            (vector? (:loaded evidence)) (every? string? (:loaded evidence))
+                            (vector? (:load_errors evidence)) (every? string? (:load_errors evidence)))
+                     {:ok (and (empty? (:load_errors evidence)) (zero? (+ (:fail summary) (:error summary))))
+                      :summary summary :loaded (:loaded evidence) :load_errors (:load_errors evidence)}
                      {:ok false :error "Warm probe returned no valid test summary"}))
                  (catch Exception e {:ok false :error (.getMessage e)}))]
     (merge {:name "warm-probe" :duration_ms (/ (- (System/nanoTime) started) 1e6)

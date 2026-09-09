@@ -48,6 +48,11 @@ Plan-only if mapping is uncertain; never repeat a committed split. Warm-only is 
 
 Profiles may select `:proof :warm :gate :background`: a detached pid closes a separate receipt; use `:op :proof-status :receipt ORIGINAL`. The original stays pending forever. Failed/stale closure never rolls back caller work.
 Committed receipts embed bounded candidate negatives (owner/content comment diffs (moved/changed/added/deleted; mere line shifts omitted), stale references, facades, definition counts, body hashes with raw/replayed equality) and explicit proof tier/status; committed facts-only reads reuse them or name the closure in a typed refusal. The printed manifest includes verification for direct plan-only replay.
+Split receipts also expose ns_edits (require/import occurrence diff), footprint
+byte identity within captured roots, lint_delta and executed loaded/load_errors.
+Decode their declared file/entry tables; all_captured_except is an exact snapshot
+complement. Body SHA-256 digests use declared Base64. load_status=not-run claims
+no load. Text leads with committed, then proof and the defined completion boolean.
 
 ## Meter and kill switch
 
