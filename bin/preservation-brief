@@ -609,43 +609,97 @@
 
 (def receipt (read-receipt (:receipt (:opts cli))))
 
-(defn deep-find [x ks]
+(def ^:private none ::none)
+
+(defn deep-find
+  "First value stored under any of `ks`, anywhere in the receipt. Returns ::none
+   when absent, so a receipt field whose value is `false` or `0` is not lost."
+  [x ks]
   (cond
-    (map? x) (or (some #(when (contains? x %) (get x %)) ks) (some #(deep-find % ks) (vals x)))
-    (sequential? x) (some #(deep-find % ks) x)
+    (map? x) (let [hit (first (keep #(when (contains? x %) [(get x %)]) ks))]
+               (if hit (first hit) (or (first (keep #(let [v (deep-find % ks)]
+                                                       (when (not= v none) [v])) (vals x)))
+                                       none)))
+    (sequential? x) (or (first (keep #(let [v (deep-find % ks)]
+                                        (when (not= v none) [v])) x)) none)
+    :else none))
+
+(defn deep-collect
+  "Every value stored under any of `ks`, anywhere in the receipt."
+  [x ks]
+  (cond
+    (map? x) (concat (keep #(when (contains? x %) (get x %)) ks)
+                     (mapcat #(deep-collect % ks) (vals x)))
+    (sequential? x) (mapcat #(deep-collect % ks) x)
     :else nil))
+
+(defn- present [v] (when (not= v none) v))
+
+(defn- claim-n [v] (cond (number? v) v (coll? v) (count v) :else nil))
+
+(def noop-commands #{"/bin/true" "/usr/bin/true" "true" ":"})
 
 (def disagreements
   (when receipt
-    (let [claims {:owners-moved (deep-find receipt [:owners_moved :moved_owners :owners "owners_moved"])
-                  :destinations (deep-find receipt [:destinations "destinations"])
-                  :call-sites (deep-find receipt [:static_sites :call_sites "static_sites"])
-                  :verification-complete (deep-find receipt [:verification_complete "verification_complete"])
-                  :state (deep-find receipt [:state "state"])
-                  :proof-pending (deep-find receipt [:proof_pending "proof_pending"])}
+    (let [moved-names (seq (distinct (flatten (deep-collect receipt [:owners_moved :moved_owners "owners_moved"]))))
+          claims {:owners-moved moved-names
+                  :destinations (present (deep-find receipt [:destination_libs :destinations "destination_libs"]))
+                  :caller-sites (let [ns' (filter number? (deep-collect receipt [:caller_sites :static_sites :call_sites "caller_sites"]))]
+                                  (when (seq ns') (apply max ns')))
+                  :promotions (present (deep-find receipt [:promotions "promotions"]))
+                  :verification-complete (present (deep-find receipt [:verification_complete "verification_complete"]))
+                  :state (present (deep-find receipt [:state "state"]))
+                  :proof-pending (present (deep-find receipt [:proof_pending "proof_pending"]))
+                  :candidate-hash (present (deep-find receipt [:candidate_hash "candidate_hash"]))
+                  :commit (present (deep-find receipt [:commit_sha :commit "commit"]))}
           n-moved (count moved-rows)
           n-dest (count (set (map :to-ns moved-rows)))
-          claim-n (fn [v] (cond (number? v) v (coll? v) (count v) :else nil))
-          rows (cond-> []
+          n-promo (count (filter #(= "private -> public" (:direction %)) promotions))
+          agree (cond-> []
+                  (and (claim-n (:caller-sites claims)) (= (claim-n (:caller-sites claims)) (count base-old-sites)))
+                  (conj ["caller sites" (str (claim-n (:caller-sites claims))) (str (count base-old-sites))])
+                  (and (claim-n (:owners-moved claims)) (= (claim-n (:owners-moved claims)) n-moved))
+                  (conj ["relocated owners" (str (claim-n (:owners-moved claims))) (str n-moved)])
+                  (and (claim-n (:destinations claims)) (= (claim-n (:destinations claims)) n-dest))
+                  (conj ["destination namespaces" (str (claim-n (:destinations claims))) (str n-dest)])
+                  (and (claim-n (:promotions claims)) (= (claim-n (:promotions claims)) n-promo))
+                  (conj ["promotions" (str (claim-n (:promotions claims))) (str n-promo)]))
+          binding-row
+          (cond
+            (and (:commit claims) (str/starts-with? cand-sha (str (:commit claims)))) nil
+            (:commit claims)
+            ["candidate identity" (str (:commit claims)) cand-sha
+             "the receipt names a different candidate; it cannot discharge anything about this tree"]
+            :else
+            ["candidate identity"
+             (if (:candidate-hash claims) (str "content hash " (:candidate-hash claims)) "absent")
+             cand-sha
+             "the receipt carries no commit that binds it to this tree — UNVERIFIED, not agreement"])
+          rows (cond-> (if binding-row [binding-row] [])
                  (and (claim-n (:owners-moved claims)) (not= (claim-n (:owners-moved claims)) n-moved))
                  (conj ["relocated-owner count" (str (claim-n (:owners-moved claims))) (str n-moved)
                         "the checker's own count differs from the receipt's"])
                  (and (claim-n (:destinations claims)) (not= (claim-n (:destinations claims)) n-dest))
                  (conj ["destination namespaces" (str (claim-n (:destinations claims))) (str n-dest)
                         "the checker sees a different number of destination namespaces"])
-                 (and (claim-n (:call-sites claims)) (not= (claim-n (:call-sites claims)) (count cand-new-sites)))
-                 (conj ["rewritten static sites" (str (claim-n (:call-sites claims))) (str (count cand-new-sites))
+                 (and (claim-n (:caller-sites claims)) (not= (claim-n (:caller-sites claims)) (count base-old-sites)))
+                 (conj ["caller sites" (str (claim-n (:caller-sites claims))) (str (count base-old-sites))
                         "the checker's re-derived site count differs"])
-                 (false? (:verification-complete claims))
-                 (conj ["verification_complete" "false" "not derivable here"
-                        "the receipt is not proof; required checks are still outstanding"])
-                 (and (:proof-pending claims) (seq (:proof-pending claims)))
-                 (conj ["proof_pending" (pr-str (:proof-pending claims)) "not derivable here"
-                        "the receipt still carries pending proof"])
+                 (and (claim-n (:promotions claims)) (not= (claim-n (:promotions claims)) n-promo))
+                 (conj ["promotions" (str (claim-n (:promotions claims))) (str n-promo)
+                        "the checker's re-derived promotion count differs"])
+                 (not (true? (:verification-complete claims)))
+                 (conj ["verification_complete" (pr-str (:verification-complete claims)) "not derivable here"
+                        "the receipt is not proof; required checks are outstanding"])
                  (and (:state claims) (not= "committed" (str (:state claims))))
                  (conj ["state" (str (:state claims)) "not derivable here"
-                        "the receipt does not report a committed write"]))]
-      {:claims claims :rows rows})))
+                        "not a finished committed state; a probe-only receipt is unfinished proof"])
+                 (seq (:proof-pending claims))
+                 (conj ["proof_pending" (pr-str (:proof-pending claims)) "not derivable here"
+                        (if (some #(noop-commands (str %)) (:proof-pending claims))
+                          "still pending — and the pending command is a NO-OP, so it proves nothing when it closes"
+                          "the receipt still carries pending proof")]))]
+      {:claims claims :rows rows :agree agree})))
 
 ;; ------------------------------------------------------------------- output
 
@@ -1009,9 +1063,17 @@
       (println)
       (println (str "Receipt: `" (:receipt (:opts cli)) "`"))
       (println)
+      (when (seq (:agree disagreements))
+        (println "Receipt claims the checker independently re-derived and **agrees with**:")
+        (println)
+        (println (tbl ["claim" "receipt says" "checker re-derived"] (:agree disagreements)))
+        (println)
+        (println "Agreement here means two derivations produced the same number. It does not transfer the receipt's")
+        (println "authority to anything else in it.")
+        (println))
       (if (seq (:rows disagreements))
-        (do (println "**The checker cannot confirm the following receipt claims. Each is a review obligation, not a")
-            (println "discrepancy to be reconciled by re-reading the receipt.**")
+        (do (println "**The checker cannot confirm the following. Each is a review obligation, not a discrepancy to be")
+            (println "reconciled by re-reading the receipt.**")
             (println)
             (println (tbl ["claim" "receipt says" "checker re-derived" "why it matters"] (:rows disagreements))))
         (println (str "No contradiction was found between the receipt claims this checker knows how to read and its own"
