@@ -695,3 +695,8 @@ B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa;
 - Landed today via ship v3: rows batch 3, rows batch 4, parallel battery, battery floor. Rows: 1 friction-low (background gate = capability), 2 friction-low (entrance 4/4; residual = orientation + post-receipt verification), 5 friction-medium (inspection 12→9→5, ratio 0.81 vs gate 0.5; comment_edits defect in flight), 3 uncalibrated.
 - Box 1 purchased (Hetzner CX53); waiting on hostname + key; then provisioning (inb-94ba79) + cold-start proof. docs/two-vm-plan.md.
 - Rules learned today: records lane pulls --rebase and publishes via records-push only; add files by name; never edit a running bash script; agents must not push records during a landing.
+
+## STATE at 2026-09-09T00:03:37Z — expired night brief reconciled; current program not restarted
+- Latest landing in operator records: comment_edits 571170cc (23:39Z); do not re-land astra/comment-edits. Row 1/2 friction-low; row 5 friction-medium, E2 inspection gate failed; E3 launched 23:40Z, terminal status unverified here.
+- astra-watch erroneously reopened September 8 authorization at September 9 midnight (HHMM-only window, stale pulse). /var/tmp/forge/night/STOP now blocks further launches, witnessed skipped:stop. Do not remove it until a newly authorized dated window and permanent deadline guard exist. Source unchanged; no active process stopped.
+- Gene report corrected: 2026-09-08-gene-report-night.md; prior report + raw watchdog witness in 2026-09-09-night-reconciliation/. Headroom 6.8 GiB at arrival. Whole-program 4–8× remains unproved.

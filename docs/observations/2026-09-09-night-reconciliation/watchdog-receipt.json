@@ -1,0 +1,29 @@
+{
+  "observed_at": "2026-09-09T00:02:20.019694+00:00",
+  "brief_deadline": "2026-09-08T12:00:00Z",
+  "script_sha256": "220cd33e889104d24564a70c6a8f4d168c5911465365f554f28d408bbd27dbba",
+  "window_source": [
+    "# Test seams: PULSE_FILE, NIGHT_DIR, DRY_RUN=1, MAX_AGE_MIN, WINDOW_END_HHMM, ASTRA_BRIEF.",
+    "WINDOW_END_HHMM=${WINDOW_END_HHMM:-1200}",
+    "HHMM=$(date -u +%H%M)",
+    "if [ \"$((10#$HHMM))\" -ge \"$((10#$WINDOW_END_HHMM))\" ]; then",
+    "  log_and_exit \"$AGE\" \"skipped:window-closed\""
+  ],
+  "watch_tail": [
+    "2026-09-08T22:15:01Z pulse_age=544 action=skipped:window-closed",
+    "2026-09-08T22:30:01Z pulse_age=559 action=skipped:window-closed",
+    "2026-09-08T22:45:01Z pulse_age=574 action=skipped:window-closed",
+    "2026-09-08T23:00:01Z pulse_age=589 action=skipped:window-closed",
+    "2026-09-08T23:15:01Z pulse_age=604 action=skipped:window-closed",
+    "2026-09-08T23:30:01Z pulse_age=619 action=skipped:window-closed",
+    "2026-09-08T23:45:01Z pulse_age=634 action=skipped:window-closed",
+    "2026-09-09T00:00:01Z pulse_age=649 action=launched",
+    "2026-09-09T00:02:19Z pulse_age=unknown action=skipped:stop"
+  ],
+  "launch": "2026-09-09T00:00:01Z astra-night rc=0\nRUN name=astra-night-20260909T000005Z pid=3222933 log=/var/tmp/forge/run-bg/astra-night-20260909T000005Z.log wait='while kill -0 3222933 2>/dev/null; do sleep 30; done'\nastra-night: mode=fresh session_id=01a08376-f12d-7fd2-8f51-b30b97b944f2 (recorded in /var/tmp/forge/night/session.id) brief=/var/tmp/forge/plan2/cellC/brief-astra-night.md report=/var/tmp/forge/night/report-20260909T000005Z.md log=/var/tmp/forge/run-bg/astra-night-20260909T000005Z.log\n",
+  "containment": "Set 2026-09-09T00:01:21.211229+00:00 by Astra takeover reconciliation.\nSeptember 8 12:00Z brief expired; astra-watch HHMM-only gate reopened September 9.\nPrevents duplicate stale takeovers. Preserve until operator establishes a dated new window.\nNo running jobs stopped; no launcher source changed.\n",
+  "stop_check_passed": true,
+  "source_changed": false,
+  "active_jobs_stopped": false,
+  "permanent_fix": "pending: replace recurring HHMM gate with absolute UTC deadline and test midnight rollover"
+}
