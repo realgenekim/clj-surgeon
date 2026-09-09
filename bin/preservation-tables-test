@@ -1,0 +1,420 @@
+#!/usr/bin/env bb
+;; preservation-tables-test — the ratchet over the brief's own allowlist tables.
+;;
+;; PB-FENCE-006 was a table entry whose semantics were never modelled: `are` sat in
+;; the "introduces no binding" table while `clojure.test/are` binds the symbols in
+;; its argv. Fixing that one entry fixes nothing; the class is that **a table entry
+;; is a soundness claim, and an unexamined claim is exactly how a checker
+;; certifies a defect.**
+;;
+;; So every entry in every table must carry its falsifier here:
+;;
+;;   R1  every `core-fn-allowlist` entry resolves to a real clojure.core Var that is
+;;       NOT a macro. That resolution IS the falsifier: a function's arguments are
+;;       evaluated, so it cannot introduce a binding. This rung removed `cast` and
+;;       the typo `when-first?`.
+;;   R2  every head in a non-frozen table is a special form, or resolves in
+;;       clojure.core / clojure.test. If it resolves to a MACRO it must be declared
+;;       either non-binding (and carry an R3 witness) or frozen.
+;;   R3  every non-frozen head that the walker gives binding treatment, and every
+;;       macro declared non-binding, carries an EXECUTED witness below that
+;;       exercises its binding semantics against the real `scope-analysis`.
+;;       A table entry with no witness fails this test.
+;;   R4  the three historic false-certification classes carry full planted-defect
+;;       replay rows in `bin/preservation-replay`, named here.
+;;
+;; `frozen-heads` needs no witness: freezing is the ABSENCE of a claim. That
+;; asymmetry is the whole design — anything unproved goes there.
+(ns preservation-tables-test
+  (:require [babashka.fs :as fs]
+            [babashka.classpath :refer [add-classpath]]
+            [clojure.string :as str]
+            [clojure.edn :as edn]
+            [clojure.set :as set]
+            [babashka.process :as p]
+            [cheshire.core :as json]
+            [clojure.test :as t]))
+
+(def here (fs/parent (fs/real-path *file*)))
+(add-classpath (str here))
+(require '[preservation-scan :as sc])
+
+(def brief-src (slurp (str (fs/path here "preservation-brief"))))
+(def replay-src (slurp (str (fs/path here "preservation-replay"))))
+
+(def brief (str (fs/path here "preservation-brief")))
+
+(def tables
+  (edn/read-string (:out (p/sh {:out :string :err :string} brief "--dump-tables" "1"))))
+
+(def walked-special-forms (:walked-special-forms tables))
+(def frozen-special-forms (:frozen-special-forms tables))
+(def let-like-vars (:let-like-vars tables))
+(def seq-binding-vars (:seq-binding-vars tables))
+(def fn-like-vars (:fn-like-vars tables))
+(def defn-like-vars (:defn-like-vars tables))
+(def other-modelled-vars (:other-modelled-vars tables))
+(def frozen-vars (:frozen-vars tables))
+(def non-binding-macro-vars (:non-binding-macro-vars tables))
+(def core-fn-vars (:core-fn-vars tables))
+(def table-vars (:table-vars tables))
+
+(defn bare [q] (last (str/split q #"/")))
+(defn nspace [q] (first (str/split q #"/")))
+
+;; Every Var the walker gives binding treatment to, plus every macro declared
+;; non-binding. These are the claims that need an executed witness.
+(def claim-vars
+  (set/union let-like-vars seq-binding-vars fn-like-vars defn-like-vars
+             other-modelled-vars non-binding-macro-vars))
+
+;; --------------------------------------------------------------- resolution
+
+(defn var-for
+  "Resolve a fully qualified table entry in its stated namespace."
+  [q]
+  (let [n (nspace q) b (bare q)]
+    (try (ns-resolve (symbol n) (symbol b)) (catch Exception _ nil))))
+
+(defn macro? [nm] (boolean (:macro (meta (var-for nm)))))
+
+;; ------------------------------------------------------------- the witnesses
+;;
+;; Each entry: head -> [source, binder-that-must-be-detected].
+;; The witness runs the REAL `scope-analysis` and asserts the head's binding
+;; position is reported bound, so a bare use of that name can never be
+;; canonicalised to a Var. A head with no entry fails R3.
+
+(def binding-witnesses
+  {"let"             ["(let [probe 1] probe)" "probe"]
+   "let*"            ["(let* [probe 1] probe)" "probe"]
+   "loop"            ["(loop [probe 1] probe)" "probe"]
+   "with-open"       ["(with-open [probe (g)] probe)" "probe"]
+   "with-local-vars" ["(with-local-vars [probe 1] probe)" "probe"]
+   "if-let"          ["(if-let [probe (g)] probe nil)" "probe"]
+   "when-let"        ["(when-let [probe (g)] probe)" "probe"]
+   "if-some"         ["(if-some [probe (g)] probe nil)" "probe"]
+   "when-some"       ["(when-some [probe (g)] probe)" "probe"]
+   "when-first"      ["(when-first [probe xs] probe)" "probe"]
+   "dotimes"         ["(dotimes [probe 3] probe)" "probe"]
+   "for"             ["(for [probe xs] probe)" "probe"]
+   "doseq"           ["(doseq [probe xs] probe)" "probe"]
+   "fn"              ["(fn [probe] probe)" "probe"]
+   "fn*"             ["(fn* [probe] probe)" "probe"]
+   "defn"            ["(defn f [probe] probe)" "probe"]
+   "defn-"           ["(defn- f [probe] probe)" "probe"]
+   "defmacro"        ["(defmacro m [probe] probe)" "probe"]
+   "letfn"           ["(letfn [(g [probe] probe)] (g 1))" "probe"]
+   "catch"           ["(try (g) (catch Exception probe probe))" "probe"]
+   "as->"            ["(as-> (g) probe probe)" "probe"]
+   "defmethod"       ["(defmethod m :k [probe] probe)" "probe"]})
+
+;; Destructuring must be covered too, since that is the shape PB-FENCE-001 used.
+(def destructuring-witnesses
+  {"map destructuring"    ["(let [{:keys [probe]} m] probe)" "probe"]
+   "vector destructuring" ["(let [[a probe] v] probe)" "probe"]
+   "nested :as"           ["(fn [{:keys [x] :as probe}] probe)" "probe"]
+   "for :let"             ["(for [x xs :let [probe (g x)]] probe)" "probe"]})
+
+;; A macro declared NON-binding must not report a binder for its natural syntax.
+;; This is the falsifier that `are` fails: run it with "are" declared non-binding
+;; and the witness below shows `probe` unbound, which is precisely the state that
+;; let Sol's PB-FENCE-006 pair be certified.
+(def non-binding-witnesses
+  {"when"     "(when true probe)"
+   "when-not" "(when-not false probe)"
+   "if-not"   "(if-not false probe nil)"
+   "and"      "(and probe)"
+   "or"       "(or probe)"
+   "cond"     "(cond :else probe)"
+   "->"       "(-> probe f)"
+   "->>"      "(->> probe f)"
+   "some->"   "(some-> probe f)"
+   "doto"     "(doto probe f)"
+   "testing"  "(testing \"x\" probe)"
+   "is"       "(is (= probe 1))"})
+
+;; R4: the three classes that produced a false section-A certification each have a
+;; full planted-defect replay row. The names must appear in the replay source.
+(def required-replay-rows
+  ["local-shadow" "symlink-escape" "external-macro"
+   "are-binding" "kind-collision" "uppercase-alias" "referred-testing"
+   "refer-all-shadow" "use-shadow" "refer-all-external"
+   "meta-owner" "shapes" "cljc-unanalysed" "cljc-analysed"
+   "spliced-require-reorder" "spliced-require-control"
+   "comment-require" "comment-require-control"
+   "two-ns" "meta-declare"])
+
+;; ------------------------------------------------------------------- harness
+
+(def failures (atom []))
+(defn check! [ok? label detail]
+  (when-not ok? (swap! failures conj (str label " — " detail)))
+  ok?)
+
+;; R1 -----------------------------------------------------------------------
+(println "R1  core-fn-vars:" (count core-fn-vars) "entries")
+(doseq [q (sort core-fn-vars)]
+  (let [v (var-for q)]
+    (check! (some? v) "R1 unresolved" (str "`" q "` resolves to no Var"))
+    (when v (check! (not (:macro (meta v))) "R1 macro in function table"
+                    (str "`" q "` is a MACRO; a macro's operands may be binding forms")))))
+
+;; R2 -----------------------------------------------------------------------
+(println "R2  modelled/frozen Vars:" (count table-vars))
+(doseq [q (sort table-vars)]
+  (let [v (var-for q)]
+    (check! (some? v) "R2 unresolved table Var" (str "`" q "` resolves to no Var")))
+  (check! (not (contains? core-fn-vars q)) "R2 table collision"
+          (str "`" q "` is in both a modelled/frozen table and the function allowlist")))
+(doseq [q (sort non-binding-macro-vars)]
+  (let [v (var-for q)]
+    (when v (check! (:macro (meta v)) "R2 function in macro table"
+                    (str "`" q "` is declared a non-binding MACRO but resolves to a function")))))
+(check! (empty? (set/intersection walked-special-forms frozen-special-forms))
+        "R2 special-form collision" "a special form is both walked and frozen")
+
+;; R3 -----------------------------------------------------------------------
+(println "R3  claims needing a witness:" (count claim-vars))
+(doseq [q (sort claim-vars)]
+  (let [b (bare q)]
+    (check! (or (contains? binding-witnesses b) (contains? non-binding-witnesses b))
+            "R3 unwitnessed table entry"
+            (str "`" q "` is a table entry with no executed witness — a soundness claim with no falsifier"))))
+
+
+;; The R3 witnesses are linted by the SAME external resolver the brief uses, in a
+;; generated project: a binding head must make the resolver call `probe` a local,
+;; and a head declared non-binding must not. The private walker is no longer the
+;; authority, so testing it would test the wrong thing.
+(def r3-dir "/var/tmp/forge/item3/r3-project")
+(fs/delete-tree r3-dir)
+(fs/create-dirs (str r3-dir "/w"))
+(def r3-cases
+  (vec (concat (for [[nm [src _]] (sort binding-witnesses)] [nm src true])
+               (for [[nm [src _]] (sort destructuring-witnesses)] [nm src true])
+               (for [[nm src] (sort non-binding-witnesses)] [nm src false]))))
+(doseq [[i [_ src _]] (map-indexed vector r3-cases)]
+  (spit (str r3-dir "/w/w" i ".clj")
+        (str "(ns w.w" i " (:require [clojure.test :refer [is testing]]))\n\n"
+             "(defn g [& _] nil)\n(defn f [m v xs x] " src ")\n")))
+(println "R3  running" (count r3-cases) "witnesses through the external resolver")
+(let [out (:out (p/sh {:out :string :err :string} brief "--probe-project" r3-dir))
+      locals (into #{} (for [l (str/split-lines out)
+                             :when (str/starts-with? l "LOCAL")
+                             :let [[_ path nm] (str/split l #"\t")]
+                             :when (= "probe" nm)]
+                         path))]
+  (doseq [[i [nm src want]] (map-indexed vector r3-cases)]
+    (let [path (str "w/w" i ".clj")
+          got (contains? locals path)]
+      (check! (= got want)
+              (if want "R3 binding witness FAILED" "R3 non-binding witness FAILED")
+              (str "`" nm "`: " src " — resolver says probe is "
+                   (if got "a LOCAL" "a Var reference") ", expected "
+                   (if want "a LOCAL" "a Var reference"))))))
+
+
+;; R5 -----------------------------------------------------------------------
+;; GENERATED, one probe namespace per table entry, resolved by the EXTERNAL
+;; ANALYZER. PB-FENCE-010: the previous R5 exercised a hand-built refer map, so
+;; all 276 could pass while `:refer :all` went unparsed. Now the witnesses are
+;; linted by clj-kondo exactly as a real tree is, through the brief's own
+;; `--probe-project` entry point, and each must resolve to the SHADOW Var.
+(def shadow-ns "shadow.probe")
+(def shadow-targets (vec (sort (set/union table-vars core-fn-vars))))
+(println "R5  generated shadow witnesses:" (count shadow-targets) "(resolved by clj-kondo)")
+
+(def r5-dir "/var/tmp/forge/item3/r5-project")
+(fs/delete-tree r5-dir)
+(fs/create-dirs (str r5-dir "/shadow"))
+(fs/create-dirs (str r5-dir "/probe"))
+(def shadow-names (mapv bare shadow-targets))
+(spit (str r5-dir "/shadow/probe.clj")
+      (str "(ns shadow.probe\n  (:refer-clojure :exclude ["
+           (str/join " " (distinct shadow-names)) "]))\n\n"
+           (str/join "\n" (for [n (distinct shadow-names)]
+                             (str "(defmacro " n " [& body] nil)")))))
+;; one probe namespace per entry, each importing the shadow with :refer :all
+(doseq [[i n] (map-indexed vector (distinct shadow-names))]
+  (spit (str r5-dir "/probe/p" i ".clj")
+        (str "(ns probe.p" i "\n  (:refer-clojure :exclude [" n "])\n"
+             "  (:require [shadow.probe :refer :all]))\n\n"
+             "(defn f [] (" n " :a :b))\n")))
+
+(let [out (:out (p/sh {:out :string :err :string} brief "--probe-project" r5-dir))
+      rows (for [l (str/split-lines out)
+                 :when (and (str/starts-with? l "HEAD") (str/includes? l "probe/p"))
+                 :let [[_ _path h q verdict] (str/split l #"\t")]
+                 :when (contains? (set shadow-names) h)]
+             [h q verdict])
+      by-head (into {} (map (fn [[h q v]] [h [q v]])) rows)]
+  (check! (>= (count by-head) (count (distinct shadow-names))) "R5 probe coverage"
+          (str "expected " (count (distinct shadow-names)) " probed heads, got " (count by-head)))
+  ;; The assertion is conditional, and deliberately so. Whether a `:refer :all`
+  ;; actually shadows a given name is the RESOLVER's call — Clojure will not let it
+  ;; shadow a special form, and clj-kondo keeps `clojure.core/let` and friends. What
+  ;; the brief must guarantee is the implication: WHERE the resolver reports the
+  ;; shadow Var, the brief must refuse to trust the head. That implication is
+  ;; PB-FENCE-010 exactly.
+  (let [shadowed (filterv (fn [n] (= (first (get by-head n)) (str shadow-ns "/" n)))
+                          (distinct shadow-names))]
+    (println "R5  shadow actually applied by the resolver for"
+             (count shadowed) "of" (count (distinct shadow-names)) "entries")
+    (check! (pos? (count shadowed)) "R5 no shadow applied"
+            "the generated project produced no shadowed resolution at all")
+    (doseq [n shadowed]
+      (let [[q verdict] (get by-head n)]
+        (check! (= verdict "unmodelled") "R5 shadow witness FAILED"
+                (str "`" n "` resolved to `" q "` — a Var no table names — but the brief still trusted it"))))))
+
+;; R6 -----------------------------------------------------------------------
+;; PB-FENCE-016. Section D is generated from the same state the reconciliation
+;; reads. This rung asserts it: no retired sentence may survive, and D must name
+;; the analyzer's actual feature set. A stale caveat is a lie the reader cannot
+;; check, so the test refuses one.
+(def retired-sentences
+  ["compared as text" "no platform was elaborated"
+   "canonicalises a bare name that matches an owner"
+   "The requalification tier canonicalises"])
+(println "R6  section D generated from state:" (count retired-sentences) "retired sentences refused")
+(let [d-dir "/var/tmp/forge/item3/r6-d"
+      _ (fs/delete-tree d-dir)
+      _ (fs/create-dirs (str d-dir "/src"))
+      _ (spit (str d-dir "/src/p.clj") "(ns p)\n\n(defn f [] :a)\n")
+      _ (p/sh {:dir d-dir} "git" "init" "-q" "-b" "main")
+      _ (p/sh {:dir d-dir} "git" "add" "-A")
+      _ (p/sh {:dir d-dir :extra-env {"GIT_AUTHOR_NAME" "t" "GIT_AUTHOR_EMAIL" "t@t"
+                                      "GIT_COMMITTER_NAME" "t" "GIT_COMMITTER_EMAIL" "t@t"}}
+              "git" "commit" "-qm" "base")
+      _ (spit (str d-dir "/src/p.clj") "(ns p)\n\n(defn f [] :b)\n")
+      _ (p/sh {:dir d-dir} "git" "add" "-A")
+      _ (p/sh {:dir d-dir :extra-env {"GIT_AUTHOR_NAME" "t" "GIT_AUTHOR_EMAIL" "t@t"
+                                      "GIT_COMMITTER_NAME" "t" "GIT_COMMITTER_EMAIL" "t@t"}}
+              "git" "commit" "-qm" "cand")
+      sha (fn [r] (str/trim (:out (p/sh {:dir d-dir :out :string} "git" "rev-parse" r))))
+      out (:out (p/sh {:out :string :err :string} brief (sha "main") (sha "main~1")
+                      "--repo" d-dir "--roots" "src"))
+      d-section (if-let [i (str/index-of out "### D.")] (subs out i) "")]
+  (check! (seq d-section) "R6 no section D" "the brief emitted no section D")
+  (doseq [phrase retired-sentences]
+    (check! (not (str/includes? d-section phrase)) "R6 stale caveat in section D"
+            (str "section D still says \"" phrase "\", which the implemented path contradicts")))
+  (doseq [f (sort table-vars)] nil)
+  (doseq [feat ["clj" "cljs"]]
+    (check! (str/includes? d-section feat) "R6 section D does not name the feature set"
+            (str "section D never mentions the elaborated platform `" feat "`"))))
+
+;; R7 -----------------------------------------------------------------------
+;; PB-FENCE-018. The grep invariant becomes a test. The brief may read the private
+;; scanner ONLY for spans, bytes, lexical tokens and positions; the two functions
+;; that read structure exist solely as the second side of the reconciliation. A new
+;; structural read added by hand would otherwise be a private inventory again, and
+;; that is the class that took five rounds to finish.
+(def scanner-allowlist
+  {"scan"                    "bytes: top-level form spans and comment spans"
+   "tokens"                  "lexical token stream with positions"
+   "nodes"                   "lexical node tree, used only for reader-conditional detection"
+   "line-index"              "positions"
+   "line-of"                 "positions"
+   "all-tokens"              "lexical tokens of a subtree"
+   "sym-token?"              "lexical predicate"
+   "ns-form"                 "the ns form's SPAN only; its content is the resolver's"
+   "reader-conditionals"     "lexical detection of #? / #?@ and their feature keys"
+   "def-shaped?"             "lexical predicate, counts branch definitions only"
+   "qualified-sites-with-pos" "lexical site positions; resolution is the resolver's"
+   "bare-symbols"            "lexical tokens of a body"
+   ;; the two reconciliation sites, and nothing else
+   "form-owner"              "RECONCILIATION ONLY: the scanner's owner inventory, compared with the resolver's"
+   "requires-of"             "RECONCILIATION ONLY: the scanner's require inventory, compared with the resolver's"})
+(println "R7  private-scanner reads allowed:" (count scanner-allowlist))
+(let [called (into #{} (map second) (re-seq #"sc/([A-Za-z][\w*+!?<>=$-]*)" brief-src))
+      extra (set/difference called (set (keys scanner-allowlist)))
+      unused (set/difference (set (keys scanner-allowlist)) called)]
+  (doseq [f (sort extra)]
+    (check! false "R7 unlisted private-scanner read"
+            (str "`sc/" f "` is called from bin/preservation-brief but is not on the "
+                 "span/bytes/tokens/positions allowlist. If it reads STRUCTURE it is a second "
+                 "inventory, and the resolver must own it instead.")))
+  (doseq [f (sort unused)]
+    (check! false "R7 stale allowlist entry"
+            (str "`sc/" f "` is on the allowlist but nothing calls it — remove the entry"))))
+
+;; R8 -----------------------------------------------------------------------
+;; PB-FENCE-017, second half. A refused file is refused WHOLE: it contributes one
+;; reconciliation row and one hard-stop line, and NOTHING to any other inventory,
+;; counter or explanation. One generated specimen per refusal kind asserts it,
+;; because a false signal under a header that says "every entry needs a human"
+;; costs a reviewer real time.
+(def refusal-specimens
+  {"ns-count"
+   ["(ns first.ns\n  (:require [clojure.string :as str]))\n\n(ns second.ns\n  (:require [clojure.edn :as edn]\n            [clojure.set :as set]))\n\n(defn f [] (set/union #{(edn/read-string \"1\")} #{2}))\n"
+    "(ns first.ns\n  (:require [clojure.string :as str]))\n\n(ns second.ns\n  (:require [clojure.set :as set]\n            [clojure.edn :as edn]))\n\n(defn f [] (set/union #{(edn/read-string \"1\")} #{2}))\n"]
+   "unelaborated-platform"
+   ["(ns p)\n\n#?(:bb ^:probe (def hidden 1))\n\n(defn visible [] :v)\n"
+    "(ns p)\n\n(defn visible [] :v)\n"]
+   "unparsable"
+   ["(ns p)\n\n(defn f [] :a)\n"
+    "(ns p)\n\n(defn f [] :a\n"]})
+
+(println "R8  refusal specimens:" (count refusal-specimens))
+(doseq [[kind [base-src cand-src]] (sort refusal-specimens)]
+  (let [dir (str "/var/tmp/forge/item3/r8-" kind)
+        env {"GIT_AUTHOR_NAME" "t" "GIT_AUTHOR_EMAIL" "t@t"
+             "GIT_COMMITTER_NAME" "t" "GIT_COMMITTER_EMAIL" "t@t"}
+        ;; a reader conditional is only valid in .cljc
+        rel (if (= kind "unelaborated-platform") "src/refused.cljc" "src/refused.clj")]
+    (fs/delete-tree dir) (fs/create-dirs (str dir "/src"))
+    (spit (str dir "/" rel) base-src)
+    (p/sh {:dir dir} "git" "init" "-q" "-b" "main")
+    (p/sh {:dir dir} "git" "add" "-A")
+    (p/sh {:dir dir :extra-env env} "git" "commit" "-qm" "base")
+    (spit (str dir "/" rel) cand-src)
+    (p/sh {:dir dir} "git" "add" "-A")
+    (p/sh {:dir dir :extra-env env} "git" "commit" "-qm" "cand")
+    (let [sha (fn [r] (str/trim (:out (p/sh {:dir dir :out :string} "git" "rev-parse" r))))
+          jf (str dir "/out.json")
+          md (:out (p/sh {:out :string :err :string} brief (sha "main") (sha "main~1")
+                         "--repo" dir "--roots" "src" "--json" jf))
+          j (try (json/parse-string (slurp jf) true) (catch Exception _ {}))]
+      (check! (pos? (or (:refused_files j) 0)) "R8 specimen was not refused"
+              (str kind ": the brief did not refuse `" rel "`"))
+      (check! (some #{kind} (:refusal_kinds j)) "R8 wrong refusal kind"
+              (str kind ": got " (pr-str (:refusal_kinds j))))
+      ;; every counter that would describe the refused file must be zero
+      (doseq [c [:dynamic_requires :undefined_alias_sites :unresolved_sites :require_reorders
+                 :require_sort_broken :moved :preserved_bodies :omitted :new_owners
+                 :comments_lost :declares :no_var_forms :base_owners :cand_owners
+                 :new_forward_refs :retargeted :rewritten_sites]]
+        (check! (zero? (or (get j c) 0)) "R8 refused file still counted"
+                (str kind ": " (name c) " = " (get j c) " for a tree whose only file is refused")))
+      ;; and its name must appear nowhere but the refusal rows and the hard stop
+      (let [lines (str/split-lines md)
+            in-recon? (atom false)
+            leaked (for [l lines]
+                     (cond
+                       (str/includes? l "Owner-inventory reconciliation failures") (do (reset! in-recon? true) nil)
+                       (and @in-recon? (str/starts-with? l "**Tree entries")) (do (reset! in-recon? false) nil)
+                       (str/starts-with? l ">") nil
+                       (and (not @in-recon?) (str/includes? l rel)) l
+                       :else nil))]
+        (doseq [l (remove nil? leaked)]
+          (check! false "R8 refused file leaked into another section"
+                  (str kind ": `" rel "` appears outside the refusal rows and the hard stop: "
+                       (str/trim (subs l 0 (min 120 (count l)))))))))))
+
+;; R4 -----------------------------------------------------------------------
+(println "R4  required replay rows:" (count required-replay-rows))
+(doseq [r required-replay-rows]
+  (check! (str/includes? replay-src r) "R4 missing replay row"
+          (str "`" r "` has no planted-defect row in bin/preservation-replay")))
+
+;; --------------------------------------------------------------------------
+(println)
+(if (empty? @failures)
+  (do (println "PASS — every table entry carries its falsifier, including a generated shadow witness.")
+      (System/exit 0))
+  (do (println (str "FAIL — " (count @failures) " table claims are unsupported:"))
+      (doseq [f (take 40 @failures)] (println "  -" f))
+      (when (> (count @failures) 40) (println "  ... and" (- (count @failures) 40) "more"))
+      (System/exit 1)))
