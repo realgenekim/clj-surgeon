@@ -148,6 +148,46 @@ if lnk.exists() or lnk.is_symlink():
 os.symlink(str(ext), str(lnk))
 PYEOF
 
+# --------------------------------------- 9. external library binding macro (paired)
+# Sol's PB-FENCE-005 falsifier. `compojure.core/GET` is a binding macro defined in
+# NEITHER tree and spelled neither `with-*` nor `def*`, so the round-1 denylist let
+# it through. The probe is planted in BOTH trees: the base use is the route
+# binding `header`, the candidate use is the moved Var `organizer-layout/header`.
+# They resolve differently and A must not certify the body.
+cat > "$WORK/edits/extmacro-base.py" <<'PYEOF'
+import pathlib
+p = pathlib.Path("src/cfp_scheduler_killer/views.clj")
+s = p.read_text()
+anchor = "  [event {:keys [committee members member-form person cfp-state]}]\n"
+assert s.count(anchor) == 1, s.count(anchor)
+s = s.replace(anchor, anchor + '  (compojure.core/GET "/probe/:header" [header] header)\n', 1)
+p.write_text(s)
+PYEOF
+
+cat > "$WORK/edits/extmacro-cand.py" <<'PYEOF'
+import pathlib
+p = pathlib.Path("src/cfp_scheduler_killer/views/committee.clj")
+s = p.read_text()
+anchor = "  [event {:keys [committee members member-form person cfp-state]}]\n"
+assert s.count(anchor) == 1, s.count(anchor)
+s = s.replace(anchor,
+              anchor + '  (compojure.core/GET "/probe/:header" [header] organizer-layout/header)\n', 1)
+p.write_text(s)
+PYEOF
+
+plant_on () { # plant_on <branch> <from-sha> <python-edit-file>
+  git checkout -q -B "$1" "$2" >/dev/null 2>&1
+  python3 "$3" >&2 || { echo "EDIT FAILED: $1" >&2; exit 1; }
+  git add -A >/dev/null 2>&1
+  git diff --cached --quiet && { echo "PLANT CHANGED NOTHING: $1" >&2; exit 1; }
+  git commit -qm "planted: $1" >/dev/null 2>&1
+  git rev-parse HEAD
+  git checkout -q "$CLEAN_SHA" >/dev/null 2>&1
+}
+
+EXT_BASE=$(plant_on d-extmacro-base "$BASE_SHA" "$WORK/edits/extmacro-base.py")
+EXT_CAND=$(plant_on d-extmacro-cand "$CLEAN_SHA" "$WORK/edits/extmacro-cand.py")
+
 declare -A SHAS
 SHAS[clean]="$CLEAN_SHA"
 for d in wrong-binding silent-promotion dropped-comment omitted-owner load-order-forms load-order-requires local-shadow symlink-escape; do
@@ -156,6 +196,8 @@ done
 
 echo
 echo "base   $BASE_SHA"
+printf '%-22s %s\n' "external-macro base" "$EXT_BASE"
+printf '%-22s %s\n' "external-macro cand" "$EXT_CAND"
 for k in clean wrong-binding silent-promotion dropped-comment omitted-owner load-order-forms load-order-requires local-shadow symlink-escape; do
   printf '%-22s %s\n' "$k" "${SHAS[$k]}"
 done
@@ -170,12 +212,20 @@ for k in clean wrong-binding silent-promotion dropped-comment omitted-owner load
   echo "$k  wall $(echo "$en - $st" | bc)s"
 done
 
+# the external-macro row is a PAIR: its probe exists in both trees
+st=$(date +%s.%N)
+"$HERE/preservation-brief" "$EXT_CAND" "$EXT_BASE" --repo "$WORK/repo" \
+    --title "external-macro" --out "$WORK/out/external-macro.md" \
+    --json "$WORK/out/external-macro.json" >/dev/null || true
+en=$(date +%s.%N)
+echo "external-macro  wall $(echo "$en - $st" | bc)s"
+
 python3 - "$WORK/out" <<'PY'
 import json, sys, pathlib, os
 d = pathlib.Path(sys.argv[1])
 order = ["clean","wrong-binding","silent-promotion","dropped-comment",
          "omitted-owner","load-order-forms","load-order-requires",
-         "local-shadow","symlink-escape"]
+         "local-shadow","symlink-escape","external-macro"]
 rows = []
 for k in order:
     j = json.load(open(d / f"{k}.json"))
@@ -195,10 +245,15 @@ for k, j in rows:
     print(f"| {k} | " + " | ".join(fmt(c[0]) for c in cols) + " |")
 print()
 base = dict(rows)["clean"]
+print("NOTE: the external-macro row is a PAIR (its probe is planted in both trees), so its")
+print("counters are not comparable to clean; read its own tier line below.")
+print()
 for k, j in rows[1:]:
     delta = {kk: (base.get(kk), j.get(kk)) for kk in base
              if isinstance(base.get(kk), int) and base.get(kk) != j.get(kk)}
     tiers = (base.get("tiers"), j.get("tiers"))
+    if k == "external-macro":
+        print(f"    external-macro tiers = {j.get('tiers')}  unmodelled_heads={len(j.get('unmodelled_macros') or [])}")
     print(f"{k}: changed counters vs clean = {delta}")
     if tiers[0] != tiers[1]:
         print(f"    tiers clean={tiers[0]} defect={tiers[1]}")

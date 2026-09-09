@@ -142,6 +142,24 @@
        :nonblob (filterv #(and (not= "blob" (:type %)) (not= "120000" (:mode %))) entries)
        :oversized oversized})))
 
+(def ns-name-re #"(?m)^\(ns\s+(?:\^[^\s]+\s+)*([A-Za-z][\w.*+!?<>=$-]*)")
+(def owner-head-re
+  #"(?m)^\((def(?:n-|n|macro|multi|method|protocol|record|type|interface|once|inline|struct|-)?)\s+(?:\^[^\s]+\s+)*([A-Za-z*+!?<>=$_-][\w*+!?<>=$.-]*)")
+
+(defn cheap-owner-kinds
+  "[ns name] -> def head, by regex over a whole tree's raw blobs. Used only to
+   decide whether a call head names a macro; never section-A evidence. It
+   deliberately covers files the brief has no reason to parse, because a call head
+   can name a function that lives in one of them."
+  [blobs]
+  (persistent!
+   (reduce (fn [acc [_ text]]
+             (if-let [nsn (second (re-find ns-name-re text))]
+               (reduce (fn [a [_ head nm]] (assoc! a [nsn nm] head))
+                       acc (re-seq owner-head-re text))
+               acc))
+           (transient {}) blobs)))
+
 (defn index-file [rel text]
   (let [{:keys [forms comments]} (sc/scan text)
         nsf (sc/ns-form forms)
@@ -227,11 +245,71 @@
 (def frozen-heads
   #{"quote" "var" "reify" "proxy" "extend-type" "extend-protocol" "deftype" "defrecord"
     "definterface" "defprotocol" "definline" "amap" "areduce" "." ".." "new" "set!"
-    "monitor-enter" "monitor-exit" "import" "ns" "js*" "gen-class" "memfn" "bean"})
+    "monitor-enter" "monitor-exit" "import" "ns" "js*" "gen-class" "memfn" "bean"
+    "require" "use" "refer" "load" "in-ns"})
+
+;; ------------------------------------------------------------ the allowlist
+;;
+;; PB-FENCE-005. The previous build named the heads it would NOT trust. That set
+;; can never be complete: `compojure.core/GET` binds `[header]` and is neither
+;; defined in the scanned trees nor spelled `with-*`/`def*`, so it fell through to
+;; a plain walk and A certified a changed binding. A denylist over syntax is never
+;; conservative — every library anyone can write is outside it.
+;;
+;; The rule is inverted. A bare token may be canonicalised only when EVERY
+;; enclosing list form has a head this scanner positively knows introduces no
+;; binding it has failed to model:
+;;
+;;   (a) a special form or clojure.core macro modelled explicitly below;
+;;   (b) a symbol that resolves, through the file's own `ns` requires / refers /
+;;       aliases, to a `def`/`defn` in one of the two scanned trees that is NOT a
+;;       `defmacro`;
+;;   (c) a clojure.core FUNCTION from the shipped allowlist below — functions only,
+;;       no macros, since a function's arguments are evaluated and cannot bind.
+;;
+;; Any other head — an unresolved symbol, a library alias or refer whose target is
+;; outside the trees, a symbol resolving to a `defmacro` — is UNMODELLED. Every
+;; token inside it is frozen, the head is named and counted in the brief, and the
+;; body cannot reach a tier that depends on canonicalisation.
+
+(def control-heads
+  "Special forms and clojure.core macros whose argument grammar is fully modelled
+   here and which introduce no binding beyond what the walker already extracts."
+  #{"do" "if" "if-not" "when" "when-not" "and" "or" "not" "cond" "condp" "while"
+    "throw" "try" "finally" "recur" "assert" "comment" "->" "->>" "some->" "some->>"
+    "cond->" "cond->>" "doto" "delay" "future" "lazy-seq" "lazy-cat" "time" "locking"
+    "dosync" "io!" "sync" "def" "defonce" "defmulti" "declare" "deftest" "deftest-"
+    "defspec" "testing" "is" "are" "list" "vector" "hash-map" "hash-set" "str"})
+
 (def modelled-heads
-  (into #{"case" "catch" "as->" "letfn" "defmethod" "try" "finally" "throw" "do" "if" "when"
-          "recur" "def" "defonce" "deftest" "deftest-" "defmulti" "declare" "comment"}
+  (into (into control-heads #{"case" "catch" "as->" "letfn" "defmethod"})
         (concat let-like-heads seq-binding-heads fn-like-heads defn-like-heads frozen-heads)))
+
+(def core-fn-allowlist
+  "clojure.core FUNCTIONS. A function's arguments are evaluated, so no token inside
+   a call to one can be a binding this scanner missed. Nothing here may be a macro;
+   adding an entry is a soundness assertion and needs its own planted-defect row."
+  #{"+" "-" "*" "/" "=" "==" "not=" "<" ">" "<=" ">=" "inc" "dec" "min" "max" "mod" "rem"
+    "quot" "abs" "count" "first" "second" "last" "next" "rest" "nth" "nthnext" "get" "get-in"
+    "assoc" "assoc-in" "dissoc" "update" "update-in" "merge" "merge-with" "select-keys"
+    "keys" "vals" "find" "contains?" "conj" "cons" "into" "concat" "map" "mapv" "mapcat"
+    "filter" "filterv" "remove" "reduce" "reduce-kv" "keep" "keep-indexed" "map-indexed"
+    "take" "take-while" "take-last" "drop" "drop-while" "drop-last" "partition" "partition-all"
+    "partition-by" "split-at" "split-with" "sort" "sort-by" "group-by" "frequencies" "distinct"
+    "dedupe" "interpose" "interleave" "flatten" "reverse" "range" "repeat" "repeatedly" "cycle"
+    "some" "every?" "not-any?" "not-every?" "empty?" "seq" "seq?" "vec" "set" "list*" "apply"
+    "identity" "constantly" "comp" "partial" "juxt" "complement" "fnil" "memoize" "trampoline"
+    "str" "name" "namespace" "keyword" "symbol" "pr-str" "print-str" "format" "println" "print"
+    "prn" "pr" "read-string" "number?" "string?" "keyword?" "symbol?" "map?" "vector?" "set?"
+    "coll?" "list?" "fn?" "nil?" "some?" "true?" "false?" "int?" "pos?" "neg?" "zero?" "even?"
+    "odd?" "boolean" "int" "long" "double" "float" "bigdec" "bigint" "num" "parse-long"
+    "parse-double" "parse-boolean" "deref" "atom" "swap!" "reset!" "swap-vals!" "reset-vals!"
+    "ref" "agent" "send" "send-off" "promise" "deliver" "meta" "with-meta" "vary-meta"
+    "instance?" "class" "type" "cast" "identical?" "compare" "hash" "rand" "rand-int"
+    "rand-nth" "shuffle" "peek" "pop" "subvec" "sorted-map" "sorted-set" "array-map"
+    "zipmap" "update-keys" "update-vals" "run!" "doall" "dorun" "iterate" "reductions"
+    "max-key" "min-key" "sequence" "eduction" "transduce" "completing" "cat" "halt-when"
+    "ex-info" "ex-message" "ex-data" "ex-cause" "slurp" "spit" "when-first?" "boolean?"})
 
 (defn- head-sym [nd]
   (let [c (first (:children nd))]
@@ -242,22 +320,41 @@
 
 (defn- pairs [xs] (partition-all 2 xs))
 
-(defn unmodelled-head?
-  "A head whose binding semantics this scanner does not model: a macro defined in
-   either tree, or an unrecognised `with-*` / `def*` head, which by convention
-   introduces bindings."
-  [macro-names h]
-  (and h
-       (not (modelled-heads h))
-       (or (contains? macro-names h)
-           (contains? macro-names (last (str/split h #"/")))
-           (re-find #"^(with-|def)" h)
-           (re-find #"(^|/)(with-|def)" h))))
+(defn head-status
+  "One of :modelled :safe-call :unmodelled, for the head of a list form.
+   `ctx` carries {:file :owner-kind}, where owner-kind maps [ns name] to the def
+   head that created it in either scanned tree."
+  [ctx h]
+  (let [{:keys [file owner-kind]} ctx]
+    (cond
+      (nil? h) :safe-call                       ; computed head — cannot be a macro
+      (str/starts-with? h ":") :safe-call       ; keyword lookup
+      (modelled-heads h) :modelled
+      (str/starts-with? h ".") :safe-call        ; interop member call
+      (str/ends-with? h ".") :safe-call          ; constructor
+      :else
+      (let [[a n] (if-let [[_ a n] (re-matches qual-token-re h)] [a n] [nil h])
+            lib (when a (or (get (:aliases file) a) (when (str/includes? a ".") a)))
+            refer-lib (when-not a (get (:refers file) n))
+            target-ns (or lib refer-lib (when-not a (:ns file)))
+            kind (get owner-kind [target-ns n])]
+        (cond
+          ;; Java static / interop: `Instant/parse`, `String/join`
+          (and a (Character/isUpperCase (.charAt ^String a 0))) :safe-call
+          (and a (some #(or (= a %) (str/ends-with? % (str "." a))) (:imports file))) :safe-call
+          ;; (b) resolves to a def/defn in the scanned trees and is not a macro
+          (and kind (not (contains? #{"defmacro" "definline"} kind))) :safe-call
+          kind :unmodelled                                    ; it IS a macro
+          ;; (c) clojure.core function allowlist
+          (and (nil? a) (nil? refer-lib) (core-fn-allowlist n)) :safe-call
+          (and (contains? #{"clojure.core" "cljs.core"} lib) (core-fn-allowlist n)) :safe-call
+          :else :unmodelled)))))
 
 (defn scope-analysis
-  "{:bound #{names} :frozen #{token texts} :macros #{heads}} for one body."
-  [text macro-names]
-  (let [st (volatile! {:bound #{} :frozen #{} :macros #{}})
+  "{:bound #{names} :frozen #{token texts} :macros #{heads} :unmodelled? bool}
+   for one body, under the inverted allowlist of PB-FENCE-005."
+  [text ctx]
+  (let [st (volatile! {:bound #{} :frozen #{} :macros #{} :unmodelled? false})
         add! (fn [k vs] (vswap! st update k into vs))
         freeze! (fn [nd] (add! :frozen (sc/all-tokens nd)))]
     (letfn [(walk [nd]
@@ -274,8 +371,10 @@
 
                     (frozen-heads h) (freeze! nd)
 
-                    (unmodelled-head? macro-names h)
-                    (do (vswap! st update :macros conj h) (freeze! nd))
+                    (= :unmodelled (head-status ctx h))
+                    (do (vswap! st update :macros conj h)
+                        (vswap! st assoc :unmodelled? true)
+                        (freeze! nd))
 
                     (let-like-heads h)
                     (let [bv (second kids)]
@@ -338,7 +437,15 @@
 
                     :else (run! walk kids)))
 
-                :anon-fn (do (add! :bound #{"%" "%1" "%2" "%3" "%4" "%5"}) (run! walk (:children nd)))
+                :anon-fn
+                (do (add! :bound #{"%" "%1" "%2" "%3" "%4" "%5" "%&"})
+                    (let [h (when (= :token (:kind (first (:children nd))))
+                              (:text (first (:children nd))))]
+                      (if (= :unmodelled (head-status ctx h))
+                        (do (vswap! st update :macros conj h)
+                            (vswap! st assoc :unmodelled? true)
+                            (freeze! nd))
+                        (run! walk (:children nd)))))
                 (run! walk (:children nd))))]
       (run! walk (sc/nodes text)))
     @st))
@@ -384,27 +491,35 @@
         (sc/tokens text)))
 
 (def tier-order [:byte-identical :identical-modulo-whitespace :identical-modulo-requalification
-                 :code-identical-comments-differ :changed])
+                 :code-identical-comments-differ :unmodelled-macro-context :changed])
 (def tier-rank (into {} (map-indexed (fn [i t] [t i]) tier-order)))
 
 (defn body-tier
   "Returns [tier {:bound :frozen :macros}]. The scope analysis is the union of
    both sides: a name bound in either version disqualifies it in both."
-  [canon macro-names a-text a-file b-text b-file]
+  [canon owner-kind a-text a-file b-text b-file]
   (cond
     (= a-text b-text) [:byte-identical {}]
     (= (ws-normal a-text) (ws-normal b-text)) [:identical-modulo-whitespace {}]
     :else
-    (let [sa (scope-analysis a-text macro-names)
-          sb (scope-analysis b-text macro-names)
+    (let [sa (scope-analysis a-text {:file a-file :owner-kind owner-kind})
+          sb (scope-analysis b-text {:file b-file :owner-kind owner-kind})
           bound (set/union (:bound sa) (:bound sb))
           frozen (set/union (:frozen sa) (:frozen sb))
           macros (set/union (:macros sa) (:macros sb))
-          info {:bound bound :frozen frozen :macros macros}
+          unmodelled? (or (:unmodelled? sa) (:unmodelled? sb))
+          info {:bound bound :frozen frozen :macros macros :unmodelled? unmodelled?}
           ca (canon-tokens canon a-text a-file :base bound frozen)
           cb (canon-tokens canon b-text b-file :cand bound frozen)]
       [(cond
+         ;; PB-FENCE-005: a body that called a head this scanner could not vouch for
+         ;; never reaches a tier that depends on canonicalisation, even when the
+         ;; canonical streams happen to match.
+         (and unmodelled? (= ca cb)) :unmodelled-macro-context
          (= ca cb) :identical-modulo-requalification
+         (and unmodelled?
+              (= (remove #(= :comment (:kind %)) ca) (remove #(= :comment (:kind %)) cb)))
+         :unmodelled-macro-context
          (= (remove #(= :comment (:kind %)) ca) (remove #(= :comment (:kind %)) cb))
          :code-identical-comments-differ
          :else :changed)
@@ -611,16 +726,27 @@
              [[(:ns cand) (:id cand)] (:ns base)])))
 (def base-owns (set (map (juxt :ns :id) (all-owners base-idx))))
 (def canon (make-canon pair-map base-owns base-owner-ns))
-(def macro-names
-  (into #{} (comp (filter #(= "defmacro" (:kind %))) (map :id))
-        (concat (all-owners base-idx) (all-owners cand-idx))))
+(def owner-kind
+  "[namespace name] -> the def head that created it, across the WHOLE of both
+   trees, not merely the parsed scope: a call head can name a function in a file
+   the brief has no reason to parse, and treating that as unmodelled would be
+   noise rather than caution. A `defmacro` anywhere wins.
+   Parsed owners override the regex, since the parse is exact."
+  (let [cheap (merge (cheap-owner-kinds raw-base) (cheap-owner-kinds raw-cand))]
+    (reduce (fn [acc o]
+              (let [k [(:ns o) (:id o)]]
+                (if (contains? #{"defmacro" "definline"} (:kind o))
+                  (assoc acc k (:kind o))
+                  (assoc acc k (:kind o)))))
+            cheap
+            (concat (all-owners base-idx) (all-owners cand-idx)))))
 
 (def moved-rows
   (vec (for [{:keys [base cand matched-by]} (:moved m)]
          {:id (:id base) :kind (:kind base) :family (:family base) :kind-to (:kind cand)
           :from-ns (:ns base) :to-ns (:ns cand)
           :from-file (:path base) :to-file (:path cand)
-          :tier-info (body-tier canon macro-names (:text base) (get base-idx (:path base))
+          :tier-info (body-tier canon owner-kind (:text base) (get base-idx (:path base))
                                 (:text cand) (get cand-idx (:path cand)))
           :matched-by matched-by
           :priv-from (:private? base) :priv-to (:private? cand)
@@ -632,7 +758,7 @@
 
 (def same-rows
   (vec (for [{:keys [base cand]} (:same m)
-             :let [[tier info] (body-tier canon macro-names (:text base) (get base-idx (:path base))
+             :let [[tier info] (body-tier canon owner-kind (:text base) (get base-idx (:path base))
                                           (:text cand) (get cand-idx (:path cand)))]
              :when (not= tier :byte-identical)]
          {:id (:id base) :kind (:kind base) :family (:family base) :ns (:ns base) :file (:path cand)
@@ -927,6 +1053,12 @@
            [(get tier-counts :changed 0) "relocated bodies whose text CHANGED — read the diffs (A2)"])
          (when (pos? (get tier-counts :code-identical-comments-differ 0))
            [(get tier-counts :code-identical-comments-differ 0) "relocated bodies whose COMMENTS changed (A2)"])
+         (when (pos? (get tier-counts :unmodelled-macro-context 0))
+           [(get tier-counts :unmodelled-macro-context 0)
+            "relocated bodies NOT certified because they call a head this scanner cannot vouch for (A2)"])
+         (when (pos? (get same-tier-counts :unmodelled-macro-context 0))
+           [(get same-tier-counts :unmodelled-macro-context 0)
+            "in-place bodies NOT certified because they call a head this scanner cannot vouch for (A2)"])
          (when (pos? (+ (get same-tier-counts :changed 0) (get same-tier-counts :code-identical-comments-differ 0)))
            [(+ (get same-tier-counts :changed 0) (get same-tier-counts :code-identical-comments-differ 0))
             "in-place bodies that changed and are not preserved (A2)"])
@@ -1021,6 +1153,8 @@
                     "identical once every reference is rewritten to the owner it named in the BASE tree — i.e. the only change is that references follow their owners, and each one still resolves to the same owner"]
                    ["`:code-identical-comments-differ`" (get tier-counts :code-identical-comments-differ 0)
                     "code identical, COMMENT TEXT CHANGED — a prose review obligation"]
+                   ["`:unmodelled-macro-context`" (get tier-counts :unmodelled-macro-context 0)
+                    "the canonical streams matched, but the body called a head this scanner cannot vouch for, so the match is NOT evidence — read the body"]
                    ["`:changed`" (get tier-counts :changed 0)
                     "the body text differs — a FULL review obligation; diffs below"]]))
     (println)
@@ -1041,7 +1175,8 @@
         (println (tbl* ["owner" "tier" "from" "to"]
                        (for [r (sort-by (comp - tier-rank :tier) nonid)]
                          [(:id r) (str "`" (name (:tier r)) "`") (:from-ns r) (:to-ns r)])))
-        (let [needs-eyes (filter #(#{:changed :code-identical-comments-differ} (:tier %)) nonid)]
+        (let [needs-eyes (filter #(#{:changed :code-identical-comments-differ :unmodelled-macro-context}
+                                     (:tier %)) nonid)]
           (doseq [r (take max-diffs needs-eyes)]
             (println)
             (println (str "<details><summary>diff — " (:id r) " (" (name (:tier r)) ")</summary>"))
@@ -1067,13 +1202,16 @@
                     (reduce + 0 (map #(get same-tier-counts % 0)
                                      [:identical-modulo-whitespace :identical-modulo-requalification]))
                     "** are mechanically preserved and **"
-                    (+ (get same-tier-counts :changed 0) (get same-tier-counts :code-identical-comments-differ 0))
+                    (+ (get same-tier-counts :changed 0)
+                       (get same-tier-counts :code-identical-comments-differ 0)
+                       (get same-tier-counts :unmodelled-macro-context 0))
                     "** need a reviewer."))
       (println)
       (println (tbl* ["owner" "namespace" "tier"]
                      (for [r (sort-by (comp - tier-rank :tier) same-rows)]
                        [(:id r) (:ns r) (str "`" (name (:tier r)) "`")])))
-      (let [needs (filter #(#{:changed :code-identical-comments-differ} (:tier %)) same-rows)]
+      (let [needs (filter #(#{:changed :code-identical-comments-differ :unmodelled-macro-context}
+                              (:tier %)) same-rows)]
         (doseq [r (take max-diffs needs)]
           (println)
           (println (str "<details><summary>diff — " (:id r) " (in place, " (name (:tier r)) ")</summary>"))
@@ -1423,7 +1561,8 @@
             :in_place_preserved (reduce + 0 (map #(get same-tier-counts % 0)
                                                  [:identical-modulo-whitespace :identical-modulo-requalification]))
             :in_place_needs_review (+ (get same-tier-counts :changed 0)
-                                      (get same-tier-counts :code-identical-comments-differ 0))
+                                      (get same-tier-counts :code-identical-comments-differ 0)
+                                      (get same-tier-counts :unmodelled-macro-context 0))
             :nonsource_changes (count nonsource-changed)
             :disagreements (count (:rows disagreements))
             :clear clear?
