@@ -4492,3 +4492,43 @@ Answered: reuse curtaincall-cfp docs/anvil-history.md's sequence (bootstrap root
 ## 2026-09-09T02:06Z — correction on the batch-5 red: not missing text — the three drift tests enforce a 70-LINE limit on the skill entrance, and Astra's proof-presentation guidance pushed it to 75 lines; the canonical and mirrored bytes already agreed. Astra reflowed the entrance to 70 lines with every word unchanged and regenerated the mirrors by `make sync-clj-surgeon-skill` (cc1d98d7); receipt semantics untouched. Reshipping (ship v3, same brief) as the first real run whose landing-gate red will be compared against v3.1's fast-lane prewarm once that installs.
 
 ## 2026-09-09T02:22Z — **LANDED**: rows batch 5 on MCP/main as d2c3aa80 via ship v3 (`review_elapsed=465s battery_elapsed=164s ship_elapsed=965s attempts=1 fix_attempts=0 auto_closes=0`; five plain GOs since v3 installed — the auto-close remains unexercised). Trunk's split receipt now carries `:ns_edits`, footprint byte-identity, executed lint delta, executed loads, `:committed true` first and `:proof` above the boolean (NS-SPLIT-067..072). 7906 rebuilt on d2c3aa80 (srv7906i), CLI reinstalled. Six landings today through ship. Gene's go on gates-during-review (v3.2: prewarm gate receipt bound to candidate tree + manifest + toolchain, consumed at landing when the tree is identical, rerun on any mismatch) sent to the v3.1 builder as stage 2. E4 launches now against Astra's preregistered 0.70 / 135 s.
+
+## Parallelism: what we have, what is owed, and the standard it must meet (2026-09-09T02:30Z)
+
+Gene asked whether we had explored parallel testing in kaocha. We had, and we shipped it, but not inside kaocha.
+
+**Two prior arts, one adopted.** Kaocha PR #234 runs namespaces as in-JVM futures: open since 2021, measured
+6 to 10 percent on I/O-bound suites, with dynamic-var and `with-redefs` hazards across threads. Rejected.
+andreacrotti's approach runs N kaocha processes, each handed namespaces packed by recorded walls. That is the
+TEST-ISO-013/014 coordinator: the battery went 839 s to 164 s on 8 lanes, per-namespace parity all zero, every
+JVM heap-bounded. No kaocha fork; kaocha-sublime stays plugins only.
+
+**What is still serial: the landing gate itself.** After every GO, `make test` runs the fast JVM lane (~870
+tests) and the Babashka lane (~890) one namespace after another, about 8 minutes, and ship v3.1 now also runs
+it as the prewarm. Astra was launched on it at 02:2xZ (astra-gate-lanes, cellC brief).
+
+**Gene's correction, verbatim (02:3xZ):** "what does this mean? shouldn't this be done in makefile, or something
+to keep things super dry? or make it impossible not to be run in parallel? should meet perfect tool standard
+(see skill)". My first brief carried the battery's landing-safety habit (a default-off `GATE_LANES` flag, Sol
+rules the flip) into the wrong place. Withdrawn. The amended brief (astra-gate-lanes-2, gpt-6-astra) sets
+the standard:
+
+- one coordinator: the gate reuses the battery's shard coordinator, generalized in place, never copied;
+- one entrance: `make test` IS the parallel gate; lane count derives from `nproc`, bounded so N heaps fit the
+  box; no flag to remember;
+- serial survives only as an explicit debugging entrance that prints a loud SERIAL/NOT-A-GATE line and can
+  never emit a landing receipt;
+- impossible to lose a shard: the receipt carries lanes, per-namespace walls, and a namespace census equal to
+  the tree's discovered count, so a missing shard is red, not quiet;
+- the one-lane parity control runs once at the fence plus a cheap drift witness; it is not an operating mode;
+- every caller (ship prewarm, land, suite-run, receipt-chain) keeps working unchanged and is listed in the report.
+
+Order unchanged: measure per-lane walls first, then the fast lane, then the bb lane, parity plus fault
+injection, three timed runs. Expected gate about 3 minutes, floor set by the slowest namespace.
+
+**anvil2, same hour.** Provisioning script and doc landed on records c8999a2b (five seat users, toolchains
+pinned to Anvil, no logins, no secrets). Headline: the CX53 is Intel Skylake shared and measures 2.5 to 3
+times slower per core than Anvil's EPYC on the same commit while Anvil carried three times the load (cold mvr
+gate 41 to 44 s vs 16 s). Dev and records box only; never a timing box; no cohort may mix the two. Two ratchets
+owed: `tighten` hardcodes the seat host (wrote a binding epoch claiming Anvil's seat), and the seat env had to
+reach three shell paths (fixed and verified there).
