@@ -19,7 +19,7 @@ review obligation it removes and the size of what it leaves behind.
 
 | specimen | checker wall | bodies mechanically preserved | obligations left for a reviewer |
 |---|---|---|---|
-| Cell C views split, real and landed (curtaincall-cfp `d9205abc` → `65ad613b`; 7,769 insertions / 4,863 deletions, 29 files) | **33.2 s** (6.1 s resolver) | **99/141 relocated + 32/64 caller** | 8 changed bodies · 34 + 32 uncertified for frozen call heads · 57 frozen heads named · 7 walker disagreements · 20 destination boundaries · 8 promotions · 11 lost comments · 7 new owners · 21 created namespaces |
+| Cell C views split, real and landed (curtaincall-cfp `d9205abc` → `65ad613b`; 7,769 insertions / 4,863 deletions, 29 files) | **37.2 s** (6.1 s resolver) | **99/141 relocated + 32/64 caller** | 8 changed bodies · 34 + 32 uncertified for frozen call heads · 57 frozen heads · 8 forward declarations · 8 forms defining no Var · 0 reconciliation failures · 7 walker disagreements · 20 destination boundaries · 8 promotions · 11 lost comments · 7 new owners · 21 created namespaces |
 | E3 Cell B split, real (`exports` → `exports.calendar`, from the retained candidate patch) | **45.2 s** (29.8 s resolver, 473-file tree) | **21/25 relocated + 6/20 caller** | 3 promotions · 2 refused tree entries |
 | Alias migration, constructed (35 files repointed) | **61.1 s** (28.6 s resolver) | **49/103 caller bodies** | 54 uncertified or changed · 2 lost comments |
 | clj-surgeon `571170cc` comment-edits landing, real | **10.0 s** | **0** | all 9 changed bodies · 3 lost comments · 12 non-source files · 4 refused tree entries |
@@ -43,7 +43,7 @@ under a hard-stop list.
 | after Sol's round 3 (every table entry carries a falsifier) | 103/141 | 32/64 |
 | after Sol's round 4 (resolution precedes every table) | 102/141 | 32/64 |
 
-Sol reviewed the prototype five times and broke it five times — eight planted specimens, eight false
+Sol reviewed the prototype six times and broke it six times — nine planted specimens, nine false
 certifications, every one of them the same shape: a *bare symbol* that was not the Var the canonicaliser
 assumed. Round 1: a local destructured binding replaced by a moved Var of the same name. Round 2: the same
 substitution, but bound by `compojure.core/GET` — a binding macro from a library, defined in neither tree
@@ -53,7 +53,18 @@ declared non-binding when `clojure.test/are` binds its argv; a merged def-head i
 `defn` overwrite a base `defmacro`; and an uppercase require alias slipping past the "that's a Java class"
 heuristic because the heuristic ran before alias resolution.
 
-Round 5 ended the sequence by deleting the thing that kept failing. `[ns :refer :all]` was never parsed, so
+Round 6 found the same class one level up. Round 5 made clj-kondo the resolver for *references* and left the
+private scanner deciding what an OWNER is — and `form-owner` only recognised a top-level datum whose text
+began with `(`, so `^:probe (defn hidden [] :hidden)` was invisible to A1 while kondo reported it. A planted
+omitted owner certified clear. **clj-kondo's `:var-definitions` are the owner inventory now**; the scanner
+only locates each definition's top-level span, so a reader-metadata prefix is part of the body it extracts.
+Reconciliation runs both ways and fails closed: a definition the scanner cannot place, or an owner the
+resolver never reported, makes that file uncertifiable and is named. Two categories are named rather than
+disputed, because the resolver is right about both — `declare` (a forward declaration, listed, never an
+owner) and `defmethod`/`extend-*` (which define no Var, so the brief says plainly that it cannot track their
+identity across a move).
+
+Round 5 ended the previous sequence by deleting the thing that kept failing. `[ns :refer :all]` was never parsed, so
 a colliding binding macro imported that way reached the bare-name default and got `clojure.test/testing`'s
 meaning. **Six rounds of resolution holes — refers, aliases, uppercase prefixes, per-tree kinds, qualified
 tables, `:refer :all` — is not six bugs; it is one wrong rung.** Hand-rolling Clojure name resolution is not
@@ -71,7 +82,10 @@ handed `clojure.test/testing`'s semantics. Every table is now keyed by a fully q
 resolved through the file's own namespace — refer, then alias, then a definition in the two trees, then the
 core default, and only when nothing shadows it — before any table is consulted.
 
-**Round 3 cost nothing on Cell C**; **round 4 cost one more body**; **round 5 cost three more**, 102 → 99,
+**Round 3 cost nothing on Cell C**; **round 4 cost one more body**; **round 5 cost three more**, 102 → 99;
+**round 6 cost none but changed the denominator** — the owner inventory is kondo's now, so Cell C reads
+713 base / 720 candidate owners instead of the scanner's 678 / 685, with 8 forward declarations and 8
+no-Var forms named separately,
 and the ratchet found four further false table claims on the way: `with-in-str` and `with-precision` take no
 binding vector at all, `binding`/`with-redefs`/`with-bindings` bind **Vars** rather than locals, and `case`'s
 test constants are unevaluated. All are frozen now. Cell B moved 21 → 20 and 9 → 8, and
@@ -266,6 +280,7 @@ bin/preservation-brief 65ad613b d9205abc \
 > **Do not consume the preservation figures below and stop.** The brief raised the following, and
 > every one of them needs a human. A signal that lives in section B is not a weaker signal.
 >
+> - **8** top-level forms that define no Var (`defmethod`, `extend-*`, `reify`, …). The resolver does not track them and this brief does NOT certify them — read them (A1)
 > - **8** relocated bodies whose text CHANGED — read the diffs (A2)
 > - **34** relocated bodies NOT certified because they call a head this scanner cannot vouch for (A2)
 > - **30** in-place bodies NOT certified because they call a head this scanner cannot vouch for (A2)
@@ -284,9 +299,9 @@ bin/preservation-brief 65ad613b d9205abc \
 
 | quantity | count |
 |---|---|
-| owners in the base tree, within the parsed scope | 678 |
-| owners in the candidate tree, within the parsed scope | 685 |
-| owners that stayed in their namespace | 537 |
+| owners in the base tree, within the parsed scope | 713 |
+| owners in the candidate tree, within the parsed scope | 720 |
+| owners that stayed in their namespace | 572 |
 | owners relocated to another namespace | 141 |
 | owners in the base with NO candidate home (omitted) | 0 |
 | owners in the candidate with no base origin (new) | 7 |
@@ -915,8 +930,42 @@ Comment texts lost: **11**. Comment texts added: **0**. Relocated owners at `:co
 |---|---|
 | touched source files with no relocation or `ns` edit to explain them | 0 |
 | changed files outside the scanned roots, or not Clojure source | 2 |
+| files whose owner inventories disagree between the resolver and the scanner | 0 |
+| forward declarations (`declare`) — named, never counted as owners | 8 |
+| top-level forms that define no Var — NOT certified by this brief | 8 |
 | tree entries the checker REFUSED to read (symlink, non-blob, oversized) | 0 |
 | call heads whose tokens were frozen (unresolvable, or a deliberately unwalked macro) | 57 |
+
+
+**Top-level forms that define no Var.** A `defmethod` extends a multimethod, an `extend-*`
+installs protocol implementations: neither creates a Var, so the resolver reports no
+definition and this brief cannot track their identity across the change. They are named here
+rather than silently absent, and they are a reviewer's obligation:
+
+| form |
+|---|
+| base src/cfp_scheduler_killer/sinks.clj: defmethod defmethod store/deliver-sink! :airtable |
+| base src/cfp_scheduler_killer/sinks.clj: defmethod defmethod store/deliver-sink! :gcs-snapshot |
+| base src/cfp_scheduler_killer/sinks.clj: defmethod defmethod store/deliver-sink! :pc-push |
+| base src/cfp_scheduler_killer/sinks.clj: defmethod defmethod store/deliver-sink! :slack |
+| candidate src/cfp_scheduler_killer/sinks.clj: defmethod defmethod store/deliver-sink! :airtable |
+| candidate src/cfp_scheduler_killer/sinks.clj: defmethod defmethod store/deliver-sink! :gcs-snapshot |
+| candidate src/cfp_scheduler_killer/sinks.clj: defmethod defmethod store/deliver-sink! :pc-push |
+| candidate src/cfp_scheduler_killer/sinks.clj: defmethod defmethod store/deliver-sink! :slack |
+
+
+Forward declarations the resolver reports as definitions. They are not owners:
+
+| declared |
+|---|
+| cfp-scheduler-killer.auth/gate |
+| cfp-scheduler-killer.views.organizer-layout/time-travel-bar |
+| cfp-scheduler-killer.views.review/row-controls* |
+| cfp-scheduler-killer.views/cfp-note |
+| cfp-scheduler-killer.views/datastar-script |
+| cfp-scheduler-killer.views/portal-draft-status |
+| cfp-scheduler-killer.views/row-controls* |
+| cfp-scheduler-killer.views/time-travel-bar |
 
 
 **Call heads whose tokens were frozen.** Either the scanner could not resolve the head to a
@@ -1025,7 +1074,7 @@ It did not check:
 - trailing whitespace inside a string literal, which the `:identical-modulo-whitespace` tier normalises away.
 - local bindings. The requalification tier canonicalises a bare name that matches an owner even when it is actually a local; B3 lists the cases where that could hide a broken reference.
 
-_Resolver: clj-kondo via `~/bin/clj-kondo`, 6118.7 ms for both trees. Checker wall: 33241.0 ms. Generated by `bin/preservation-brief`, which reads only the two git trees._
+_Resolver: clj-kondo via `~/bin/clj-kondo`, 6031.2 ms for both trees. Checker wall: 37437.4 ms. Generated by `bin/preservation-brief`, which reads only the two git trees._
 
 ---
 
@@ -1070,7 +1119,7 @@ Body tiers, which is where seven of the thirteen catches land. Every one of Sol'
 | kind-collision | 83 | **18** | 33 | **7** |
 | referred-testing | 83 | **18** | 33 | **7** |
 
-### Planted-defect verdict: **16/16 caught, 0 escaped**
+### Planted-defect verdict: **18/18 caught, 0 escaped**
 
 | planted defect | what was planted | the signal the brief raised |
 |---|---|---|
@@ -1086,6 +1135,8 @@ Body tiers, which is where seven of the thirteen catches land. Every one of Sol'
 | **`are` argv binding** (Sol r3, PB-FENCE-006, pair) | `(are [header] (= header :probe) :probe)` in the base, the bound use replaced in the candidate. `clojure.test/are` binds the symbols in its argv and sat in the "introduces no binding" table | `committee-page` → `:changed`; preserved 103 → 102; `are` named as a frozen head. **`bin/preservation-tables-test` R3 would now reject that table entry before it could ship** |
 | **uppercase require alias** (Sol r3, PB-FENCE-008, pair) | `[compojure.core :as Route]` + `Route/GET`, exploiting that the interop heuristic ran before alias resolution | `committee-page` → `:changed`; preserved 103 → 102; `Route/GET` named |
 | **cross-tree kind collision** (Sol r3, PB-FENCE-007, pair) | the same `[ns name]` defined `defmacro` in the base and `defn` in the candidate, so the merged index vouched for a macro call as a function call | `committee-page` → `:changed`; preserved 102 → 101; **`kind_disagreements` 0 → 1** |
+| **metadata-prefixed owner** (Sol r6, PB-FENCE-011) | `^:probe (defn hidden-probe [] :hidden)` in the base only. The scanner recognised a top-level owner only when its text began with `(`, so the deletion was invisible to A1 | **omitted 0 → 1**, `hidden-probe` named as a preservation FAILURE with its file and line |
+| **every definition shape at once** (Sol r6, pair) | metadata-prefixed `defn`, a `def` inside `do`, a `declare`, a `defmulti`/`defmethod` pair, a `defprotocol`, a `definterface` — planted in both trees | owners 141 → 148, forward declarations 8 → 10, forms defining no Var 8 → 10. Each shape is accounted for: an owner per the resolver, or explicitly named as something the brief does not certify. None silently absent |
 | **`:refer :all` shadow** (Sol r5, PB-FENCE-010, pair) | the same colliding `testing` macro, imported by `[ns :refer :all]` — a namespace form the private scanner never parsed | `committee-page` → `:changed`; preserved 99 → 98 |
 | **`:use` shadow** (Sol r5, pair) | the same collision through `(:use ...)` | `committee-page` → `:changed`; preserved 99 → 98 |
 | **`:refer :all` from outside the trees** (Sol r5, pair) | `[compojure.core :refer :all]` supplying a head neither tree defines | `committee-page` → `:changed`; preserved 99 → 98 |
@@ -1370,9 +1421,12 @@ It is the document that must exist before the slice can.
     `/var/tmp/forge/ship/20260909T175507Z-77126c8d81a7/verdict-1.md`.
   - `83c13814` — PB-FENCE-009 repaired. **Sol's round-5 review returned NO-GO** with PB-FENCE-010, verdict
     at `/var/tmp/forge/ship/20260909T182037Z-83c138143738/verdict-1.md`.
-  - **`470cea34`** — PB-FENCE-010 repaired by deleting the hand-rolled resolver: clj-kondo resolves every
+  - `470cea34` — PB-FENCE-010 repaired by deleting the hand-rolled resolver: clj-kondo resolves every
     symbol, the private walker survives as a counted cross-check, and the ratchet's witnesses are linted by
-    the same analyzer. **This is the tip.**
+    the same analyzer. **Sol's round-6 review returned NO-GO** with PB-FENCE-011, verdict at
+    `/var/tmp/forge/ship/20260909T191634Z-470cea34a978/verdict-1.md`.
+  - **`33e65cef`** — PB-FENCE-011 repaired: clj-kondo's `:var-definitions` are the owner inventory, with
+    two-way reconciliation that fails closed. **This is the tip.**
 - **Nothing was pushed.** The branch has no upstream.
 - No edits under `src/`, `test/`, or the Makefile. Four new files, all under `bin/`.
 - The brief no longer materialises anything: it reads blobs from the object database. The only path it
@@ -1414,6 +1468,7 @@ It is the document that must exist before the slice can.
 | **A stated evidence boundary that the implementation does not enforce is worse than none**, because the report repeats it. | The brief reads the object database, never the filesystem; symlinks, non-blobs and oversized blobs are counted as refused entries and named. The permanent `symlink-escape` row is the witness. |
 | **A headline a reviewer can consume and stop on defeats a checker whose real value is in section B.** | Every obligation is hoisted above section A into a hard-stop block, the summary carries `clear`, and the exit code is 3 when not clear. The null change is the only clear row in the portfolio. |
 | **A builder cannot review his own oracle, and one round of outside review is not enough either.** Round 1 found four findings; the round-2 probe reproduced the same false-certification class one abstraction level out. | Sol's three specimens are permanent replay rows. §9.9 requires the falsifier's specimens be planted by someone who did not build the checker, and §12 now names the next unseen classes to probe rather than declaring the set complete. |
+| **A second inventory is a second oracle, and the two will disagree.** Round 5 made the resolver authoritative for references and left the scanner deciding what an owner IS. `^:probe (defn …)` was in one inventory and not the other, and nothing compared them. | kondo's `:var-definitions` are the owner inventory; the scanner only locates spans. Reconciliation runs in both directions and fails the whole FILE closed, counted and named. `declare` and `defmethod`/`extend-*` are named as explicit categories rather than silently present or absent. The permanent `meta-owner` and `shapes` rows are the witnesses. |
 | **Six rounds of resolution holes is one wrong rung, not six bugs.** Refers, aliases, uppercase prefixes, per-tree kinds, qualified tables, `:refer :all` — each round closed one hole in a hand-rolled Clojure name resolver and left the next. | Delete the rung. clj-kondo resolves every symbol; the brief only asks it what each token is. It is an external analyzer sharing no code with `src/`, so independence is intact and the hardest part is maintained by people who do only that. The private walker is kept as a cross-check whose disagreements are counted in the brief, not silently resolved. |
 | **Spelling is not identity; resolution precedes every table.** A table keyed by a bare name speaks for whatever that name means in the file being read. A referred macro named `testing` was handed `clojure.test/testing`'s semantics and A certified a changed binding. | Every table is keyed by a fully qualified Var; `head-info` resolves through the file's own `ns` form — refer, alias, definition in the two trees, then the core default, and only when nothing shadows it — before any lookup. The ratchet's R5 generates a shadow witness per table entry, so a new entry cannot arrive without proof that a same-named refer flips it to unmodelled. The permanent `referred-testing` pair row is the witness. |
 | **A table entry is a soundness claim, and a claim with no falsifier is how a checker certifies a defect.** Round 3's three blockers were all entries somebody typed and nobody audited: `are` in the non-binding table, a merged def-head index, an interop heuristic ordered before alias resolution. | `bin/preservation-tables-test`: 203 machine-resolved allowlist entries proved non-macro, 48 heads proved special-form-or-Var with no unexamined macro, 45 executed binding witnesses through a `--probe-scope` entry point, and a required replay row per historic failure class. It exits nonzero on any unsupported claim. **`frozen-heads` needs no witness — freezing is the absence of a claim — so anything unproved goes there.** |
