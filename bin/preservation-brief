@@ -1,0 +1,2253 @@
+#!/usr/bin/env bb
+;; preservation-brief <candidate-sha> <base-sha> [options]
+;;
+;; Produces the review entrance's preservation brief for a namespace-split or
+;; alias-migration candidate: what a checker can MECHANICALLY establish about
+;; the change, what DECISIONS remain for a human/model reviewer, and where the
+;; checker DISAGREES with a producer receipt.
+;;
+;; Every fact in section A is re-derived from the two git trees by this program.
+;; Nothing in section A is read from a Surgeon receipt. A receipt, when supplied
+;; with --receipt, is used only to look for disagreement (section C).
+;;
+;; Options
+;;   --repo DIR       repository to read (default: cwd)
+;;   --roots a,b      path prefixes to scan (default: src,test,dev,bin)
+;;   --receipt PATH   producer receipt (EDN or JSON) to cross-examine
+;;   --out PATH       write the markdown brief here as well as stdout
+;;   --json PATH      write a machine summary here
+;;   --max-list N     cap on per-table rows printed (default 40)
+;;   --diffs N        cap on inline body diffs printed (default 10)
+;;   --title STR      label for the change
+(ns preservation-brief
+  (:require [babashka.fs :as fs]
+            [babashka.process :as p]
+            [babashka.classpath :refer [add-classpath]]
+            [clojure.string :as str]
+            [clojure.set :as set]
+            [clojure.edn :as edn]
+            [cheshire.core :as json]))
+
+(add-classpath (str (fs/parent (fs/real-path *file*))))
+(require '[preservation-scan :as sc])
+
+(def t-start (System/nanoTime))
+(defn wall-ms [] (/ (double (- (System/nanoTime) t-start)) 1e6))
+
+;; ---------------------------------------------------------------- arguments
+
+(defn parse-args [argv]
+  (loop [[a & more] argv pos [] opts {}]
+    (cond
+      (nil? a) {:pos pos :opts opts}
+      (str/starts-with? a "--") (recur (rest more) pos (assoc opts (keyword (subs a 2)) (first more)))
+      :else (recur more (conj pos a) opts))))
+
+(def cli (parse-args *command-line-args*))
+(def candidate-sha (first (:pos cli)))
+(def base-sha (second (:pos cli)))
+
+(when (and (or (nil? candidate-sha) (nil? base-sha))
+           (not (:probe-scope (:opts cli)))
+           (not (:probe-heads (:opts cli)))
+           (not (:dump-tables (:opts cli)))
+           (not (:probe-project (:opts cli))))
+  (binding [*out* *err*]
+    (println "usage: preservation-brief <candidate-sha> <base-sha> [--repo DIR] [--roots src,test] [--receipt PATH] [--out PATH] [--json PATH]"))
+  (System/exit 2))
+
+(def repo (str (fs/real-path (or (:repo (:opts cli)) "."))))
+(def roots (str/split (or (:roots (:opts cli)) "src,test,dev,bin") #","))
+(def max-list (Integer/parseInt (or (:max-list (:opts cli)) "40")))
+(def max-diffs (Integer/parseInt (or (:diffs (:opts cli)) "10")))
+(def title (or (:title (:opts cli)) (str candidate-sha " over " base-sha)))
+
+;; ------------------------------------------------------------------- git io
+
+(defn git [& args]
+  (let [{:keys [out err exit]} (apply p/sh {:dir repo :out :string :err :string} "git" args)]
+    (when-not (zero? exit)
+      (throw (ex-info (str "git " (str/join " " args) " failed: " err) {:exit exit})))
+    out))
+
+(def workdir (str "/var/tmp/forge/item3/run-" (System/currentTimeMillis) "-" (rand-int 100000)))
+
+(defn resolve-sha [s] (str/trim (git "rev-parse" s)))
+
+;; ---------------------------------------------------------- tree reading
+;;
+;; The brief claims to read only the two git trees, so it reads the OBJECT
+;; DATABASE, not an extracted directory. Nothing is materialised, no path is
+;; walked, and a symlink entry is reported as unclassified rather than followed.
+;; (PB-FENCE-002.)
+
+(def max-blob-bytes (* 2 1024 1024))
+(def max-total-bytes (* 64 1024 1024))
+
+(def source-ext #{"clj" "cljc" "cljs"})
+(defn ext-of [p] (let [i (str/last-index-of p ".")] (when i (subs p (inc i)))))
+(defn under-roots? [rel]
+  (some #(or (= rel %) (str/starts-with? rel (str % "/"))) roots))
+
+(defn ls-tree
+  "Entries of a tree, straight from git. Never touches the filesystem."
+  [sha]
+  (->> (str/split (git "ls-tree" "-r" "-l" "-z" sha) #"\x00")
+       (remove str/blank?)
+       (map (fn [l]
+              (let [[meta path] (str/split l #"\t" 2)
+                    [mode type oid size] (str/split (str/trim meta) #"\s+")]
+                {:mode mode :type type :oid oid
+                 :size (when (re-matches #"\d+" (str size)) (parse-long size))
+                 :path path})))
+       vec))
+
+(defn read-blobs
+  "oid -> contents, via one `git cat-file --batch`. Bytes never reach a file."
+  [oids]
+  (if (empty? oids)
+    {}
+    (let [{:keys [out]} (p/sh {:dir repo :in (str/join "\n" oids) :out :bytes :err :string}
+                              "git" "cat-file" "--batch")
+          ^bytes b out
+          n (alength b)]
+      (loop [i 0 acc {}]
+        (if (>= i n)
+          acc
+          (let [eol (loop [j i] (if (or (>= j n) (= (aget b j) (byte 10))) j (recur (inc j))))
+                header (String. b i (- eol i) "UTF-8")
+                [oid _type size] (str/split (str/trim header) #"\s+")
+                sz (if (and size (re-matches #"\d+" size)) (parse-long size) 0)
+                start (inc eol)
+                stop (min n (+ start sz))]
+            (recur (inc stop) (assoc acc oid (String. b start (- stop start) "UTF-8")))))))))
+
+(defn tree-sources
+  "Source blobs of a tree under the scanned roots, plus the entries this checker
+   refuses to read."
+  [sha]
+  (let [entries (ls-tree sha)
+        wanted (filter #(and (= "blob" (:type %))
+                             (contains? #{"100644" "100755"} (:mode %))
+                             (source-ext (ext-of (:path %)))
+                             (under-roots? (:path %)))
+                       entries)
+        oversized (filterv #(> (long (or (:size %) 0)) max-blob-bytes) wanted)
+        readable (remove #(> (long (or (:size %) 0)) max-blob-bytes) wanted)
+        total (reduce + 0 (map #(long (or (:size %) 0)) readable))]
+    (when (> total max-total-bytes)
+      (binding [*out* *err*]
+        (println (format "REFUSED: %s source bytes in tree %s exceeds the %s-byte pre-parse cap"
+                         total sha max-total-bytes)))
+      (System/exit 4))
+    (let [by-oid (read-blobs (distinct (map :oid readable)))]
+      {:blobs (into {} (for [e readable :let [t (get by-oid (:oid e))] :when t] [(:path e) t]))
+       :symlinks (filterv #(= "120000" (:mode %)) entries)
+       :nonblob (filterv #(and (not= "blob" (:type %)) (not= "120000" (:mode %))) entries)
+       :oversized oversized})))
+
+(def ns-name-re #"(?m)^\(ns\s+(?:\^[^\s]+\s+)*([A-Za-z][\w.*+!?<>=$-]*)")
+(def owner-head-re
+  #"(?m)^\((def(?:n-|n|macro|multi|method|protocol|record|type|interface|once|inline|struct|-)?)\s+(?:\^[^\s]+\s+)*([A-Za-z*+!?<>=$_-][\w*+!?<>=$.-]*)")
+
+(defn cheap-owner-kinds
+  "[ns name] -> def head, by regex over a whole tree's raw blobs. Used only to
+   decide whether a call head names a macro; never section-A evidence. It
+   deliberately covers files the brief has no reason to parse, because a call head
+   can name a function that lives in one of them."
+  [blobs]
+  (persistent!
+   (reduce (fn [acc [_ text]]
+             (if-let [nsn (second (re-find ns-name-re text))]
+               (reduce (fn [a [_ head nm]] (assoc! a [nsn nm] head))
+                       acc (re-seq owner-head-re text))
+               acc))
+           (transient {}) blobs)))
+
+
+;; ------------------------------------------------------ the external resolver
+;;
+;; PB-FENCE-010, and the five holes before it. Six rounds of hand-rolled symbol
+;; resolution — refers, aliases, uppercase prefixes, per-tree kinds, qualified
+;; tables, and finally `:refer :all` — each closed one hole and left the next.
+;; **Hand-rolling Clojure name resolution is the wrong rung.** The resolver is now
+;; clj-kondo, through the paved `~/bin/clj-kondo` entrance, run once per tree.
+;;
+;; clj-kondo is an external analyzer. It shares no code with this repository's
+;; `src/`, so the brief's evidence still cannot inherit a defect from the transform
+;; it is checking — the independence property that motivated the private scanner is
+;; unchanged, and the resolver is now maintained by people who do only that.
+;;
+;; From the analysis the brief takes, per source position:
+;;   :var-usages    -> the resolved [ns name] of every symbol, including one
+;;                     reached through :refer, :refer :all, :use or an alias
+;;   :locals / :local-usages -> which positions are LOCALS, by id
+;;   :var-definitions        -> :macro for every Var defined in the two trees
+;;   :findings               -> unresolved symbols, and files that failed to parse
+;;
+;; Anything kondo leaves unresolved, reports as a macro outside the tables, or
+;; cannot analyze at all, is unmodelled and its body cannot be certified.
+
+(def kondo-bin (str (fs/path (System/getProperty "user.home") "bin" "clj-kondo")))
+
+(defn dump-tree
+  "Write a tree's source blobs — read from the object database, never from a
+   working copy — into a directory for the analyzer. Only the blobs already read
+   under PB-FENCE-002 are written; no path is walked and no symlink is followed."
+  [blobs dir]
+  (doseq [[rel text] blobs]
+    (let [f (fs/file (fs/path dir rel))]
+      (fs/create-dirs (fs/parent f))
+      (spit f text)))
+  dir)
+
+;; PB-FENCE-012. The checker's certification scope is EXACTLY the analyzer's. The
+;; feature set is declared here, passed to kondo, and read back by the file-level
+;; reconciliation — never hard-coded at the point of use.
+;;
+;; Empirically pinned on clj-kondo v2026.08.04: adding a feature to
+;; `:cljc {:features …}` does NOT make it elaborate that branch. A `#?(:bb …)` Var
+;; is reported by no feature set this version accepts. So the analysed set is the
+;; two platforms it really elaborates, and every other feature key — `:default`
+;; included — makes the file uncertifiable.
+(def analysed-features #{":clj" ":cljs"})
+
+(def kondo-config
+  (str "{:cljc {:features [" (str/join " " (sort analysed-features)) "]}"
+       " :analysis {:locals true :keywords false} :output {:format :edn}}"))
+
+(defn kondo-analyze [dir]
+  (let [{:keys [out exit err]}
+        (p/sh {:out :string :err :string :dir dir}
+              kondo-bin "--lint" "." "--parallel" "--config" kondo-config)]
+    (when (and (not (contains? #{0 2 3} exit)) (str/blank? out))
+      (throw (ex-info (str "clj-kondo failed: " err) {:exit exit})))
+    (try (edn/read-string {:default (fn [_ v] v)} out)
+         (catch Exception e
+           (throw (ex-info (str "clj-kondo analysis was not readable EDN: " (.getMessage e)) {}))))))
+
+(defn kondo-index
+  "path -> {:var {[row col] \"ns/name\"} :macro #{[row col]} :local #{[row col]}
+            :unresolved #{[row col]} :failed? bool}, plus :defs {[ns name] macro?}."
+  [analysis]
+  (let [a (:analysis analysis)
+        norm (fn [f] (str/replace (str f) #"^\./" ""))
+        add (fn [m path k v] (update-in m [path k] (fnil conj (if (map? v) {} #{})) v))
+        idx (reduce (fn [m u]
+                      (let [path (norm (:filename u))
+                            pos [(:name-row u) (:name-col u)]
+                            q (str (:to u) "/" (:name u))]
+                        (cond-> (assoc-in m [path :var pos] q)
+                          (:macro u) (update-in [path :macro] (fnil conj #{}) pos))))
+                    {} (:var-usages a))
+        idx (reduce (fn [m l]
+                      (let [path (norm (:filename l)) pos [(:row l) (:col l)]]
+                        (-> m
+                            (update-in [path :local] (fnil conj #{}) pos)
+                            (assoc-in [path :local-name pos] (str (:name l))))))
+                    idx (concat (:locals a) (:local-usages a)))
+        idx (reduce (fn [m f]
+                      (let [path (norm (:filename f))]
+                        (case (:type f)
+                          :unresolved-symbol
+                          (update-in m [path :unresolved] (fnil conj #{}) [(:row f) (:col f)])
+                          (:syntax :reader-error)
+                          (assoc-in m [path :failed?] true)
+                          m)))
+                    idx (:findings analysis))
+        idx (reduce (fn [m u]
+                      (update-in m [(norm (:filename u)) :nsu] (fnil conj [])
+                                 {:to (str (:to u)) :alias (some-> (:alias u) str)
+                                  :refer (when (:refer u) (mapv str (:refer u)))
+                                  :lang (some-> (:lang u) name)
+                                  :row (:row u) :col (:col u)}))
+                    idx (:namespace-usages a))
+        defs (into {} (for [d (:var-definitions a)]
+                        [[(str (:ns d)) (str (:name d))] (boolean (:macro d))]))
+        by-file (reduce (fn [m d]
+                          (update m (norm (:filename d)) (fnil conj [])
+                                  {:ns (str (:ns d)) :name (str (:name d))
+                                   :row (:row d) :col (:col d)
+                                   :end-row (:end-row d) :end-col (:end-col d)
+                                   :macro (boolean (:macro d))
+                                   :private (boolean (:private d))
+                                   :lang (:lang d)
+                                   :defined-by (str (or (:defined-by d) "def"))}))
+                        {} (:var-definitions a))]
+    {:files idx :defs defs :defs-by-file by-file}))
+
+;; PB-FENCE-011. The private scanner used to decide what an owner IS, and it only
+;; recognised a top-level datum whose text starts with "(" — so `^:probe (defn x …)`
+;; was invisible to A1 while clj-kondo reported it. Two inventories, one of them
+;; hand-rolled, never reconciled. **clj-kondo's :var-definitions ARE the owner
+;; inventory now.** The scanner only locates the byte span of the top-level form
+;; that contains each definition, so the reader-metadata prefix is part of the body
+;; it extracts. Either direction of mismatch makes the file uncertifiable.
+(defn kondo-requires
+  "Ordered require specs from the resolver, per analysed platform:
+   {lang [{:lib :as :refer}]}."
+  [ki]
+  (->> (get ki :nsu [])
+       (sort-by (juxt #(or (:lang %) "") :row :col))
+       (group-by #(or (:lang %) ":clj"))
+       (reduce-kv (fn [m lang us]
+                    (assoc m lang (mapv (fn [u] {:lib (:to u) :as (:alias u)
+                                                 :refer (:refer u)}) us)))
+                  {})))
+
+(defn index-file [rel text kdefs kfacts]
+  (let [{:keys [forms comments]} (sc/scan text)
+        lidx (sc/line-index text)
+        off-of (fn [r c] (when (and r c (<= (long r) (count lidx)))
+                           (+ (long (nth lidx (dec (long r)))) (dec (long c)))))
+        span-for (fn [d] (let [o (off-of (:row d) (:col d))]
+                           (when o (first (filter #(and (<= (long (:start %)) o)
+                                                        (< o (long (:end %)))) forms)))))
+;; `declare` names a Var the resolver reports as a definition, but it is a forward
+        ;; declaration, not an owner. It is listed, never counted as one, and never
+        ;; silently absent.
+        declares (vec (filter #(= "clojure.core/declare" (:defined-by %)) kdefs))
+        kdefs (vec (remove #(= "clojure.core/declare" (:defined-by %)) kdefs))
+        located (vec (for [d kdefs :let [f (span-for d)] :when f] [d f]))
+        unlocated (vec (for [d kdefs :when (nil? (span-for d))] d))
+        owner-spans (into #{} (map (comp :start second)) located)
+        scanner-owners (vec (keep sc/form-owner forms))
+;; A `defmethod`, `extend-type` and friends define no Var — the resolver is right
+        ;; not to report them. They are named as forms this brief does not certify, and
+        ;; they are NOT a reconciliation failure. A `def`/`defn` the resolver missed
+        ;; would be.
+        no-var-kinds #{"defmethod" "extend-type" "extend-protocol" "extend"
+                       "reify" "proxy" "comment"}
+        unreported (vec (for [o scanner-owners :when (not (owner-spans (:start o)))] o))
+        no-var-forms (vec (filter #(no-var-kinds (:kind %)) unreported))
+        unexplained (vec (remove #(no-var-kinds (:kind %)) unreported))
+        conds (sc/reader-conditionals text)
+        unanalysed (vec (sort (distinct (for [c conds
+                                              f (:features c)
+                                              :when (not (contains? analysed-features f))]
+                                          f))))
+        ;; every definition in a branch the analyzer DID cover must appear in its
+        ;; definition map, or the file fails closed
+        ;; Count DISTINCT names: `#?(:clj (def seen 1) :cljs (def seen 2))` defines
+        ;; one Var, and the analyzer reports it once.
+        cond-defs (count (into #{} (for [c conds
+                                         b (:pairs c)
+                                         :when (contains? analysed-features (:feature b))
+                                         :when (sc/def-shaped? (:text b))
+                                         :let [o (sc/form-owner {:text (str/replace (:text b) #"^\^[^\s]+\s+" "")
+                                                                 :line 0 :start 0 :end 0})]
+                                         :when o]
+                                     (:id o))))
+        kondo-lang-defs (count (into #{} (map :name) (filter :lang kdefs)))
+        cond-gap (max 0 (- cond-defs kondo-lang-defs))
+        nsf (sc/ns-form forms)
+        nsname (sc/ns-name-of nsf)]
+    {:path rel
+     :text text
+     :ns nsname
+     :ns-form (:text nsf)
+     :requires (sc/requires-of nsf)
+     :imports (sc/imports-of nsf)
+     :aliases (sc/alias-map nsf)
+     :refers (sc/refer-map nsf)
+     :comments (mapv #(select-keys % [:line :text]) comments)
+     :declare-forms (vec (for [f forms
+                               :let [cs (sc/children (:text f))]
+                               :when (= "declare" (some-> (first cs) str/trim))
+                               d (rest cs)]
+                           {:name (str/trim d) :start (:start f)}))
+     :declares (mapv #(str (:ns %) "/" (:name %)) declares)
+     :no-var-forms (mapv #(str (:kind %) " " (:id %)) no-var-forms)
+     :kondo-requires (kondo-requires kfacts)
+     :require-mismatch
+     (let [priv (into #{} (map :lib) (sc/requires-of (sc/ns-form forms)))
+           kond (into #{} (mapcat #(map :lib %)) (vals (kondo-requires kfacts)))
+           ;; a require spliced by `#?@` is one synthetic "lib" to the private
+           ;; parser and N real ones to the resolver — exactly PB-FENCE-013
+           only-priv (vec (sort (remove #(or (str/starts-with? % "#?") (kond %)) priv)))
+           ;; When the `ns` form itself carries a reader conditional, the resolver
+           ;; legitimately reports MORE libs than the parser can see — that splice
+           ;; is the whole reason the resolver is authoritative here. The parser
+           ;; seeing something the resolver did not is still a failure.
+           ns-cond? (boolean (some-> (:text (sc/ns-form forms)) (str/includes? "#?")))
+           only-kondo (if ns-cond? [] (vec (sort (remove priv kond))))]
+       {:only-parser only-priv :only-resolver only-kondo
+        :ok? (and (empty? only-priv) (empty? only-kondo))})
+     :reader-conditionals (count conds)
+     :unanalysed-features unanalysed
+     :reconcile {:unlocated (mapv #(str (:ns %) "/" (:name %)) unlocated)
+                 :unreported (mapv :id unexplained)
+                 :unanalysed-features unanalysed
+                 :cond-gap cond-gap
+                 :ok? (and (empty? unlocated) (empty? unexplained)
+                           (empty? unanalysed) (zero? cond-gap))}
+     :owners (vec (for [[d f] located
+                        :let [kind (last (str/split (:defined-by d) #"/"))]]
+                    {:path rel :ns (:ns d) :id (:name d)
+                     :kind kind
+                     :family (str/replace kind #"-$" "")
+                     :private? (:private d)
+                     :macro? (:macro d)
+                     :start (:start f) :end (:end f) :line (:line f)
+                     :text (:text f)}))}))
+
+(defn index-tree [blobs paths kbf kfiles]
+  (into {} (keep (fn [r] (when-let [t (get blobs r)]
+                           [r (index-file r t (get kbf r []) (get kfiles r {}))])) paths)))
+
+(defn all-owners [idx] (for [[_ f] idx o (:owners f)] o))
+
+(defn unique-owner-ns
+  "name -> namespace, only for names owned exactly once in the tree."
+  [idx]
+  (->> (all-owners idx)
+       (group-by :id)
+       (keep (fn [[nm os]]
+               (let [nss (set (map :ns os))]
+                 (when (= 1 (count nss)) [nm (first nss)]))))
+       (into {})))
+
+;; ------------------------------------------------------------- normalisation
+
+(defn rtrim-lines [s] (->> (str/split-lines s) (map str/trimr) (str/join "\n")))
+
+(defn dedent [s]
+  (let [ls (str/split-lines s)
+        indents (->> (rest ls) (remove str/blank?) (map #(count (take-while #{\space \tab} %))))
+        m (if (seq indents) (apply min indents) 0)]
+    (str/join "\n" (cons (first ls)
+                         (map #(if (str/blank? %) "" (subs % (min m (count %)))) (rest ls))))))
+
+(defn ws-normal [s] (-> s rtrim-lines dedent str/trim (str/replace #"\n{2,}" "\n")))
+
+(defn strip-comments [s]
+  (let [{:keys [comments]} (sc/scan s)
+        sb (StringBuilder. ^String s)]
+    (doseq [{:keys [start end]} comments]
+      (doseq [i (range start end)] (.setCharAt sb i \space)))
+    (.toString sb)))
+
+;; ------------------------------------------------- reference canonicalisation
+
+(def ^:private qual-token-re
+  #"^([A-Za-z][\w.*+!?<>=$-]*)/([A-Za-z*+!?<>=$_-][\w.*+!?<>=$-]*)$")
+
+
+;; ------------------------------------------------- lexical scope and freezes
+;;
+;; PB-FENCE-001. A bare token may be canonicalised to an owner ONLY when this
+;; scanner has established it is a Var reference. Anything that a binding form
+;; could have bound, that sits inside a quote, or that sits inside a macro form
+;; whose semantics are not modelled here, is UNRESOLVED: it is left alone, which
+;; makes the two token streams differ whenever the candidate changed it, which
+;; puts the body in `:changed` and the reference in front of a reviewer.
+;;
+;; The analysis is body-scoped, not position-scoped: a name bound anywhere in a
+;; body disqualifies that name throughout the body. That can only move a body OUT
+;; of the preserved tiers, never into them.
+
+
+;; ------------------------------------------------------- tables, keyed by VAR
+;;
+;; PB-FENCE-009. The tables used to be keyed by SPELLING, and `head-status`
+;; matched a bare spelling before it ever looked at the file's `ns` form. A file
+;; that refers a binding macro of its own named `testing` therefore got
+;; `clojure.test/testing`'s semantics, and A certified a changed binding.
+;;
+;; **Spelling is not identity.** Every table below is keyed by a fully qualified
+;; Var, and `head-info` resolves a head through the file's own namespace — refers,
+;; then aliases and dotted namespaces, then definitions in the two trees, and only
+;; then the `clojure.core` / `clojure.test` default, and only when nothing shadows
+;; it. The resolved Var, never the spelling, is what the tables are consulted with.
+
+(def walked-special-forms
+  "Special forms the walker walks. The compiler resolves a special form before any
+   Var, so these cannot be shadowed by a refer; they are the only bare names in
+   any table."
+  #{"if" "do" "let*" "fn*" "recur" "throw" "try" "catch" "finally" "def"})
+
+(def frozen-special-forms
+  #{"quote" "var" "set!" "new" "." ".." "monitor-enter" "monitor-exit" "loop*"})
+
+(def let-like-vars
+  (into #{} (map #(str "clojure.core/" %))
+        ;; Only heads whose binder position is a LOCAL. `binding`, `with-redefs`
+        ;; and `with-bindings` bind VARS, not locals — the resolver says so, and the
+        ;; tables test refuses the claim — so they are frozen instead.
+        ["let" "loop" "with-open" "with-local-vars" "if-let" "when-let"
+         "if-some" "when-some" "when-first" "dotimes"]))
+(def seq-binding-vars #{"clojure.core/for" "clojure.core/doseq"})
+(def fn-like-vars #{"clojure.core/fn"})
+(def defn-like-vars #{"clojure.core/defn" "clojure.core/defn-" "clojure.core/defmacro"})
+(def other-modelled-vars
+  ;; `case` is frozen, not modelled: its test constants are unevaluated, so a
+;; symbol there is a literal and must never be canonicalised.
+  #{"clojure.core/as->" "clojure.core/letfn" "clojure.core/defmethod"})
+
+(def frozen-vars
+  (into #{"clojure.test/are" "clojure.test/deftest"
+          "clojure.core/case" "clojure.core/binding" "clojure.core/with-redefs"
+          "clojure.core/with-bindings"}
+        (map #(str "clojure.core/" %))
+        ;; Every entry must resolve in its stated namespace — the tables test
+        ;; enforces it, and that is what removed `io!`, `gen-class`, `import`,
+        ;; `definline`, `definterface` and `clojure.core/deftest`. A head no table
+        ;; names is unmodelled anyway, which freezes it just the same, so dropping
+        ;; an unresolvable entry loses nothing but a false claim.
+        ["condp" "cond->" "cond->>" "some->>" "while" "assert" "comment" "time"
+         "delay" "future" "lazy-seq" "lazy-cat" "locking" "dosync" "sync"
+         "defonce" "defmulti" "declare" "defprotocol" "defrecord" "deftype"
+         "reify" "proxy" "extend-type" "extend-protocol"
+         "amap" "areduce" "require" "use" "refer" "load" "in-ns" "ns" "memfn" "bean"]))
+
+(def non-binding-macro-vars
+  "clojure.core / clojure.test MACROS asserted to introduce no binding. Each entry
+   is a soundness claim, so each carries an executed witness in
+   `bin/preservation-tables-test`, plus a GENERATED shadow witness proving that a
+   same-named referred macro flips the head to unmodelled."
+  (into #{"clojure.test/testing" "clojure.test/is"}
+        (map #(str "clojure.core/" %))
+        ["when" "when-not" "if-not" "and" "or" "cond" "->" "->>" "some->" "doto"]))
+
+(def core-fn-vars
+  "clojure.core FUNCTIONS. A function's arguments are evaluated, so no token inside
+   a call to one can be a binding this scanner missed. The tables test resolves
+   every entry and fails if any is a macro or does not resolve."
+  (into #{} (map #(str "clojure.core/" %))
+        ["+" "-" "*" "=" "==" "not=" "<" ">" "<=" ">=" "inc" "dec" "min" "max" "mod" "rem"
+         "quot" "abs" "count" "first" "second" "last" "next" "rest" "nth" "nthnext" "get" "get-in"
+         "assoc" "assoc-in" "dissoc" "update" "update-in" "merge" "merge-with" "select-keys"
+         "keys" "vals" "find" "contains?" "conj" "cons" "into" "concat" "map" "mapv" "mapcat"
+         "filter" "filterv" "remove" "reduce" "reduce-kv" "keep" "keep-indexed" "map-indexed"
+         "take" "take-while" "take-last" "drop" "drop-while" "drop-last" "partition" "partition-all"
+         "partition-by" "split-at" "split-with" "sort" "sort-by" "group-by" "frequencies" "distinct"
+         "dedupe" "interpose" "interleave" "flatten" "reverse" "range" "repeat" "repeatedly" "cycle"
+         "some" "every?" "not-any?" "not-every?" "empty?" "seq" "seq?" "vec" "set" "list*" "apply"
+         "identity" "constantly" "comp" "partial" "juxt" "complement" "fnil" "memoize" "trampoline"
+         "str" "name" "namespace" "keyword" "symbol" "pr-str" "print-str" "format" "println" "print"
+         "prn" "pr" "read-string" "number?" "string?" "keyword?" "symbol?" "map?" "vector?" "set?"
+         "coll?" "list?" "fn?" "nil?" "some?" "true?" "false?" "int?" "pos?" "neg?" "zero?" "even?"
+         "odd?" "boolean" "int" "long" "double" "float" "bigdec" "bigint" "num" "parse-long"
+         "parse-double" "parse-boolean" "deref" "atom" "swap!" "reset!" "swap-vals!" "reset-vals!"
+         "ref" "agent" "send" "send-off" "promise" "deliver" "meta" "with-meta" "vary-meta"
+         "instance?" "class" "type" "identical?" "compare" "hash" "rand" "rand-int"
+         "rand-nth" "shuffle" "peek" "pop" "subvec" "sorted-map" "sorted-set" "array-map"
+         "zipmap" "update-keys" "update-vals" "run!" "doall" "dorun" "iterate" "reductions"
+         "max-key" "min-key" "sequence" "eduction" "transduce" "completing" "cat"
+         "ex-info" "ex-message" "ex-data" "ex-cause" "slurp" "spit" "boolean?" "not"
+         "list" "vector" "hash-map" "hash-set"]))
+
+(def table-vars
+  "Every Var any table speaks for. A head that resolves to something outside this
+   set, and outside `core-fn-vars`, is unmodelled."
+  (reduce into #{} [let-like-vars seq-binding-vars fn-like-vars defn-like-vars
+                    other-modelled-vars frozen-vars non-binding-macro-vars]))
+
+(defn- head-sym [nd]
+  (let [c (first (:children nd))]
+    (when (= :token (:kind c)) (:text c))))
+
+(defn- binder-syms [nd]
+  (into #{} (filter sc/sym-token?) (sc/all-tokens nd)))
+
+(defn- pairs [xs] (partition-all 2 xs))
+
+(defn head-info
+  "Resolve a list head through the FILE'S OWN namespace, then look the resolved Var
+   up in the tables. Returns {:status :modelled|:safe-call|:unmodelled :resolved q}.
+
+   Order, and it matters (PB-FENCE-009): special forms (which the compiler resolves
+   before any Var and so cannot be shadowed) → an explicit `:refer` → a require
+   alias or dotted namespace → a definition in the file's own namespace → and only
+   then the `clojure.core`/`clojure.test` default. A head that resolves to a Var no
+   table speaks for is unmodelled, whatever it is spelled."
+  [ctx h]
+  (let [{:keys [file kind kind-disagree]} ctx]
+    (cond
+      (nil? h) {:status :safe-call}
+      (str/starts-with? h ":") {:status :safe-call}
+      (walked-special-forms h) {:status :modelled :resolved (str "special/" h)}
+      (frozen-special-forms h) {:status :modelled :resolved (str "special-frozen/" h)}
+      (str/starts-with? h ".") {:status :safe-call :resolved "interop"}
+      (str/ends-with? h ".") {:status :safe-call :resolved "interop"}
+      :else
+      (let [[a n] (if-let [[_ a n] (re-matches qual-token-re h)] [a n] [nil h])
+            alias-lib (when a (get (:aliases file) a))
+            dotted (when (and a (nil? alias-lib) (str/includes? a ".")) a)
+            refer-lib (when-not a (get (:refers file) n))
+            own-ns (when-not a (:ns file))
+            own-def (when (and own-ns (get kind [own-ns n])) own-ns)
+            lib (or alias-lib dotted refer-lib own-def)
+            qual (when lib (str lib "/" n))
+            k (when lib (get kind [lib n]))]
+        (cond
+          ;; interop only for a prefix that is neither an alias nor a namespace
+          (and a (nil? alias-lib) (nil? dotted)
+               (or (Character/isUpperCase (.charAt ^String a 0))
+                   (some #(or (= a %) (str/ends-with? % (str "." a))) (:imports file))))
+          {:status :safe-call :resolved "interop"}
+
+          (and lib (contains? kind-disagree [lib n])) {:status :unmodelled :resolved qual}
+
+          ;; the head resolves to a definition we can read in the two trees
+          (and k (contains? #{"defmacro" "definline"} k))
+          (if (contains? table-vars qual)
+            {:status :modelled :resolved qual}
+            {:status :unmodelled :resolved qual})
+          k {:status :safe-call :resolved qual}
+
+          ;; resolved to a namespace we cannot read
+          qual (cond
+                 (contains? table-vars qual) {:status :modelled :resolved qual}
+                 (contains? core-fn-vars qual) {:status :safe-call :resolved qual}
+                 :else {:status :unmodelled :resolved qual})
+
+          ;; bare, nothing shadows it: the clojure.core / clojure.test default
+          :else
+          (let [c (str "clojure.core/" n) t (str "clojure.test/" n)]
+            (cond
+              (contains? table-vars c) {:status :modelled :resolved c}
+              (contains? table-vars t) {:status :modelled :resolved t}
+              (contains? core-fn-vars c) {:status :safe-call :resolved c}
+              :else {:status :unmodelled :resolved n})))))))
+
+(defn scope-analysis
+  "{:bound #{names} :frozen #{token texts} :macros #{heads} :unmodelled? bool}
+   for one body, under the inverted allowlist of PB-FENCE-005 and the per-tree kind
+   index of PB-FENCE-007."
+  [text ctx]
+  (let [st (volatile! {:bound #{} :frozen #{} :macros #{} :heads #{} :unmodelled? false})
+        add! (fn [k vs] (vswap! st update k into vs))
+        freeze! (fn [nd] (add! :frozen (sc/all-tokens nd)))]
+    (letfn [(walk [nd]
+              (case (:kind nd)
+                :prefixed
+                (if (contains? #{"'" "`" "#'" "#_" "#="} (:prefix nd))
+                  (freeze! nd)
+                  (run! walk (:children nd)))
+                :list
+                (let [kids (:children nd)
+                      h (head-sym nd)
+                      {:keys [status resolved]} (head-info ctx h)
+                      r (or resolved "")
+                      _ (when h (vswap! st update :heads conj h))]
+                  (cond
+                    (nil? h) (run! walk kids)
+
+                    ;; A frozen head is a modelling DECISION, not an unknown, but the
+                    ;; reviewer still needs to know a body was refused because of it —
+                    ;; `are` is exactly that case (PB-FENCE-006).
+                    (or (frozen-vars r) (str/starts-with? r "special-frozen/"))
+                    (do (vswap! st update :macros conj h) (freeze! nd))
+
+                    (= :unmodelled status)
+                    (do (vswap! st update :macros conj (str h
+                                                           (when (and resolved (not= resolved h))
+                                                             (str " -> " resolved))))
+                        (vswap! st assoc :unmodelled? true)
+                        (freeze! nd))
+
+                    (or (let-like-vars r) (= r "special/let*"))
+                    (let [bv (second kids)]
+                      (when (= :vector (:kind bv))
+                        (doseq [[b init] (pairs (:children bv))]
+                          (when b (add! :bound (binder-syms b)))
+                          (when init (walk init))))
+                      (run! walk (drop 2 kids)))
+
+                    (seq-binding-vars r)
+                    (let [bv (second kids)]
+                      (when (= :vector (:kind bv))
+                        (doseq [[b init] (pairs (:children bv))]
+                          (cond
+                            (and b (= ":let" (:text b)))
+                            (when init
+                              (doseq [[b2 i2] (pairs (:children init))]
+                                (when b2 (add! :bound (binder-syms b2)))
+                                (when i2 (walk i2))))
+                            (and b (contains? #{":when" ":while"} (:text b))) (when init (walk init))
+                            :else (do (when b (add! :bound (binder-syms b)))
+                                      (when init (walk init))))))
+                      (run! walk (drop 2 kids)))
+
+                    (or (fn-like-vars r) (defn-like-vars r) (= r "special/fn*"))
+                    (doseq [k (rest kids)]
+                      (cond
+                        (= :vector (:kind k)) (add! :bound (binder-syms k))
+                        (and (= :list (:kind k)) (= :vector (:kind (first (:children k)))))
+                        (do (add! :bound (binder-syms (first (:children k))))
+                            (run! walk (rest (:children k))))
+                        :else (walk k)))
+
+                    (= r "clojure.core/letfn")
+                    (let [bv (second kids)]
+                      (when (= :vector (:kind bv))
+                        (doseq [f (:children bv)]
+                          (add! :bound (binder-syms f))))
+                      (run! walk (drop 2 kids)))
+
+                    (= r "clojure.core/defmethod")
+                    (do (when-let [d (nth kids 2 nil)] (freeze! d))
+                        (doseq [k (drop 3 kids)]
+                          (if (= :vector (:kind k)) (add! :bound (binder-syms k)) (walk k))))
+
+                    (= r "special/catch")
+                    (do (when-let [b (nth kids 2 nil)] (add! :bound (binder-syms b)))
+                        (run! walk (drop 3 kids)))
+
+                    (= r "clojure.core/as->")
+                    (do (when-let [e (nth kids 1 nil)] (walk e))
+                        (when-let [b (nth kids 2 nil)] (add! :bound (binder-syms b)))
+                        (run! walk (drop 3 kids)))
+
+                    (= r "clojure.core/case")
+                    (let [clauses (drop 2 kids)]
+                      (when-let [e (nth kids 1 nil)] (walk e))
+                      (doseq [[test result] (pairs clauses)]
+                        (if result (do (freeze! test) (walk result)) (walk test))))
+
+                    :else (run! walk kids)))
+
+                :anon-fn
+                (do (add! :bound #{"%" "%1" "%2" "%3" "%4" "%5" "%&"})
+                    (let [h (when (= :token (:kind (first (:children nd))))
+                              (:text (first (:children nd))))]
+                      (if (= :unmodelled (:status (head-info ctx h)))
+                        (do (vswap! st update :macros conj h)
+                            (vswap! st assoc :unmodelled? true)
+                            (freeze! nd))
+                        (run! walk (:children nd)))))
+                (run! walk (:children nd))))]
+      (run! walk (sc/nodes text)))
+    ;; A local binding that shadows a head this walker modelled means the head was
+    ;; never the Var the table spoke for. Body-scoped and conservative.
+    (let [{:keys [bound heads] :as st'} @st
+          shadowed (clojure.set/intersection bound heads)]
+      (if (seq shadowed)
+        (-> st' (assoc :unmodelled? true) (update :macros into (map #(str % " (shadowed by a local)")) shadowed))
+        st'))))
+
+(def ^:private priv-heads {"defn-" "defn" "deftest-" "deftest" "def-" "def"})
+
+(defn probe-ctx [refer-spec]
+  ;; refer-spec is "<name>|<namespace>"; `|` because a Var may be named `=`.
+  (let [[nm ns'] (when refer-spec (str/split refer-spec #"\|"))]
+    {:file {:ns "probe.ns" :aliases {} :imports []
+            :refers (if nm {nm ns'} {})}
+     :kind (if nm {[ns' nm] "defmacro"} {})
+     :kind-disagree #{}}))
+
+(when (:dump-tables (:opts cli))
+  (prn {:walked-special-forms walked-special-forms
+        :frozen-special-forms frozen-special-forms
+        :let-like-vars let-like-vars
+        :seq-binding-vars seq-binding-vars
+        :fn-like-vars fn-like-vars
+        :defn-like-vars defn-like-vars
+        :other-modelled-vars other-modelled-vars
+        :frozen-vars frozen-vars
+        :non-binding-macro-vars non-binding-macro-vars
+        :core-fn-vars core-fn-vars
+        :table-vars table-vars})
+  (System/exit 0))
+
+(when-let [f (:probe-heads (:opts cli))]
+  ;; Batch head resolution for bin/preservation-tables-test. Each input line is
+  ;; `<head><TAB><refer-name>|<namespace>` (or `-`); each output line is
+  ;; `<status> <resolved>`.
+  (doseq [line (str/split-lines (slurp f))
+          :when (not (str/blank? line))]
+    (let [[h refer-spec] (str/split line #"\t")
+          {:keys [status resolved]} (head-info (probe-ctx (when (not= "-" refer-spec) refer-spec)) h)]
+      (println (name status) (or resolved "-"))))
+  (System/exit 0))
+
+(when-let [probe-src (:probe-scope (:opts cli))]
+  ;; Entry point for bin/preservation-tables-test: report whether the walker
+  ;; considers `probe` bound in this source. Every table entry's witness runs
+  ;; through here, against the real analysis rather than a copy of it.
+  (let [{:keys [bound frozen]} (scope-analysis probe-src (probe-ctx (:probe-refer (:opts cli))))]
+    (println (if (or (contains? bound "probe") (contains? frozen "probe")) "BOUND" "FREE"))
+    (System/exit 0)))
+
+(defn make-canon
+  "Build the token canonicaliser for one comparison.
+
+   `pair-map` maps a CANDIDATE owner home [ns name] back to the namespace that
+   owner had in the BASE tree; `base-owns` is the set of base [ns name] homes;
+   `base-home` maps a name to its unique base namespace when it has one.
+
+   A relocation that requalifies `foo` to `dest/foo` because `foo` moved to
+   `dest` yields the same canonical token the base body had. A requalification
+   to the WRONG namespace does not. That is what lets a split's bodies be called
+   preserved even though their reference syntax necessarily changed, without
+   accepting an arbitrary rewrite."
+  [pair-map base-owns base-home]
+  (fn [t file side bound frozen]
+    (or (get priv-heads t)
+        (when (contains? frozen t) t)
+        (if-let [[_ a n] (re-matches qual-token-re t)]
+          (let [lib (or (get (:aliases file) a) (when (str/includes? a ".") a))
+                b (when (and lib (= side :cand)) (get pair-map [lib n]))]
+            (cond
+              b (str "<<" b ">>/" n)
+              lib (str "<<" lib ">>/" n)
+              :else t))
+          (let [nsn (:ns file)]
+            (cond
+              ;; PB-FENCE-001: never certify a bare token that could be a local,
+              ;; a :refer, or syntax captured by a macro we do not model.
+              (contains? bound t) t
+              (and (= side :base) (contains? base-owns [nsn t])) (str "<<" nsn ">>/" t)
+              (and (= side :cand) (get pair-map [nsn t])) (str "<<" (get pair-map [nsn t]) ">>/" t)
+              (get base-home t) (str "<<" (get base-home t) ">>/" t)
+              :else t))))))
+
+(defn canon-tokens [canon text file side bound frozen]
+  (mapv (fn [{:keys [kind text]}]
+          {:kind kind :text (if (= kind :tok) (canon text file side bound frozen) text)})
+        (sc/tokens text)))
+
+(def tier-order [:byte-identical :identical-modulo-whitespace :identical-modulo-requalification
+                 :code-identical-comments-differ :unmodelled-macro-context :changed])
+(def tier-rank (into {} (map-indexed (fn [i t] [t i]) tier-order)))
+
+(defn resolve-tokens
+  "Annotate a token stream with the resolver's verdict per token."
+  [text file ki defs owner-start lidx]
+  (let [toks (sc/tokens text (sc/line-index text))
+        locals (get ki :local #{})
+        vars (get ki :var {})
+        unres (get ki :unresolved #{})]
+    (mapv (fn [t]
+            (if-not (= :tok (:kind t))
+              t
+              (let [off (+ (long owner-start) (long (:start t)))
+                    r (sc/line-of lidx off)
+                    ls (nth lidx (dec r))
+                    c (inc (- off (long ls)))
+                    p [r c]]
+                (assoc t :row r :col c
+                       :local? (contains? locals p)
+                       :resolved (get vars p)
+                       :unresolved? (contains? unres p)))))
+          toks)))
+
+(defn head-trustworthy?
+  "A head may be trusted only when the resolver names a Var the brief can vouch
+   for: one of its tables, a clojure.core function, or a NON-macro definition in
+   one of the two trees. Everything else — unresolved, a macro outside the tables,
+   or a Var from a namespace nobody here can read — is unmodelled."
+  [defs q]
+  (cond
+    (nil? q) false
+    (= q "clojure.core//") true
+    (contains? table-vars q) true
+    (contains? core-fn-vars q) true
+    :else (let [i (str/last-index-of q "/")
+                k (when i [(subs q 0 i) (subs q (inc i))])
+                m (when k (get defs k ::absent))]
+            ;; trusted only when BOTH trees agree the Var is a non-macro definition
+            (false? m))))
+
+(defn body-verdict
+  "Returns {:tokens annotated :unmodelled? bool :heads #{names}} for one owner."
+  [text file ki defs owner-start lidx head-cols]
+  (let [toks (resolve-tokens text file ki defs owner-start lidx)
+        unres (get ki :unresolved #{})
+        failed? (boolean (:failed? ki))
+        bad-heads (into #{} (for [t toks
+                                  :when (and (= :tok (:kind t))
+                                             (contains? head-cols [(:row t) (:col t)])
+                                             (not (:local? t))
+                                             ;; a keyword head is a lookup and an
+                                             ;; interop head is a call; neither can bind
+                                             (not (str/starts-with? (:text t) ":"))
+                                             (not (str/starts-with? (:text t) "."))
+                                             (not (str/ends-with? (:text t) "."))
+                                             ;; special forms are resolved by the
+                                             ;; compiler before any Var and cannot
+                                             ;; be shadowed by a refer
+                                             (not (contains? walked-special-forms (:text t)))
+                                             (not (contains? frozen-special-forms (:text t)))
+                                             (not (head-trustworthy? defs (:resolved t))))]
+                              (str (:text t)
+                                   (when (:resolved t) (str " -> " (:resolved t))))))
+        unresolved (into #{} (for [t toks
+                                   :when (and (= :tok (:kind t))
+                                              (sc/sym-token? (:text t))
+                                              (not (:local? t))
+                                              (nil? (:resolved t))
+                                              (contains? unres [(:row t) (:col t)]))]
+                               (:text t)))]
+    {:tokens toks
+     :heads (into bad-heads (when failed? #{"<file could not be analyzed>"}))
+     :unresolved unresolved
+     :unmodelled? (or failed? (seq bad-heads) (seq unresolved))}))
+
+(defn canon-stream
+  "Canonicalise a resolved token stream to the owner identity each reference had in
+   the BASE tree. Only a token the resolver bound to a Var is rewritten; a local is
+   never touched, which is the whole of PB-FENCE-001/009."
+  [toks pair-map]
+  (mapv (fn [t]
+          (if (and (= :tok (:kind t)) (not (:local? t)) (:resolved t))
+            (let [q (:resolved t)
+                  i (str/last-index-of q "/")
+                  ns' (subs q 0 i) n (subs q (inc i))
+                  b (get pair-map [ns' n])]
+              {:kind :tok :text (str "<<" (or b ns') ">>/" n)})
+            {:kind (:kind t) :text (:text t)}))
+        toks))
+
+(defn body-tier
+  "[tier info]. Identity is decided over a token stream the EXTERNAL resolver
+   annotated: locals stay literal, Vars canonicalise to the owner they named in the
+   base tree, and any body the resolver could not fully account for is refused."
+  [pair-map defs a-text a-file a-ki a-start a-lidx a-heads
+   b-text b-file b-ki b-start b-lidx b-heads walker-check]
+  (cond
+    (= a-text b-text) [:byte-identical {}]
+    (= (ws-normal a-text) (ws-normal b-text)) [:identical-modulo-whitespace {}]
+    :else
+    (let [va (body-verdict a-text a-file a-ki defs a-start a-lidx a-heads)
+          vb (body-verdict b-text b-file b-ki defs b-start b-lidx b-heads)
+          unmodelled? (or (:unmodelled? va) (:unmodelled? vb) (:disagree? walker-check))
+          info {:macros (into (:heads va) (:heads vb))
+                :unresolved (into (:unresolved va) (:unresolved vb))
+                :walker-disagreement (:disagree? walker-check)
+                :unmodelled? unmodelled?}
+          ca (canon-stream (:tokens va) pair-map)
+          cb (canon-stream (:tokens vb) pair-map)]
+      [(cond
+         (and unmodelled? (= ca cb)) :unmodelled-macro-context
+         (= ca cb) :identical-modulo-requalification
+         (and unmodelled?
+              (= (remove #(= :comment (:kind %)) ca) (remove #(= :comment (:kind %)) cb)))
+         :unmodelled-macro-context
+         (= (remove #(= :comment (:kind %)) ca) (remove #(= :comment (:kind %)) cb))
+         :code-identical-comments-differ
+         :else :changed)
+       info])))
+
+(defn unified-diff [a b label]
+  (let [d (str workdir "/diff")]
+    (fs/create-dirs d)
+    (let [fa (str d "/a.clj") fb (str d "/b.clj")]
+      (spit fa a) (spit fb b)
+      (:out (p/sh {:out :string :err :string} "diff" "-u"
+                  "--label" (str "base/" label) "--label" (str "candidate/" label) fa fb)))))
+
+;; ------------------------------------------------------------- owner matching
+
+(defn instance-key [o] [(:path o) (:family o) (:id o) (:line o)])
+
+(defn match-owners [base-idx cand-idx]
+  (let [bo (vec (all-owners base-idx))
+        co (vec (all-owners cand-idx))
+        home (fn [o] [(:ns o) (:family o) (:id o)])
+        by-home-c (group-by home co)
+        by-home-b (group-by home bo)
+        same (vec (for [o bo :let [hits (get by-home-c (home o))] :when (seq hits)]
+                    {:base o :cand (first hits)}))
+        b-left (vec (remove #(seq (get by-home-c (home %))) bo))
+        c-left (vec (remove #(seq (get by-home-b (home %))) co))
+        used (atom #{})
+        c-by-body (group-by :text c-left)
+        stage1 (vec (keep (fn [o]
+                            (when-let [hit (first (remove #(@used (instance-key %)) (get c-by-body (:text o))))]
+                              (swap! used conj (instance-key hit))
+                              {:base o :cand hit :matched-by :body-bytes}))
+                          b-left))
+        b-left2 (vec (remove (set (map :base stage1)) b-left))
+        c-left2 (vec (remove #(@used (instance-key %)) c-left))
+        c-by-name (group-by (fn [o] [(:family o) (:id o)]) c-left2)
+        stage2 (vec (keep (fn [o]
+                            (let [hits (remove #(@used (instance-key %)) (get c-by-name [(:family o) (:id o)]))]
+                              (when (= 1 (count hits))
+                                (swap! used conj (instance-key (first hits)))
+                                {:base o :cand (first hits) :matched-by :name})))
+                          b-left2))
+        b-left3 (vec (remove (set (map :base stage2)) b-left2))
+        c-left3 (vec (remove #(@used (instance-key %)) c-left2))
+        ambiguous (vec (filter #(< 1 (count (get c-by-name [(:family %) (:id %)] []))) b-left3))]
+    {:same same
+     :moved (vec (concat stage1 stage2))
+     :removed (vec (remove (set ambiguous) b-left3))
+     :added c-left3
+     :ambiguous ambiguous}))
+
+;; --------------------------------------------------------------- derivations
+
+;; PB-FENCE-013. The private `ns` parser never saw a require spliced in by `#?@`,
+;; so a reversal inside an analysed branch produced no reorder signal. clj-kondo's
+;; :namespace-usages ARE the require inventory now — per tree, per analysed
+;; platform, in positional order. The private parser only supplies the `ns`-form
+;; span and the reconciliation's other side.
+(defn require-diff-lang
+  "Added / removed / reordered / alias-changed for ONE platform's require list."
+  [br cr]
+  (let [bl (mapv :lib br) cl (mapv :lib cr)
+        bs (set bl) cs (set cl)
+        by-lib-b (into {} (map (juxt :lib identity)) br)]
+    {:added (vec (remove bs cl))
+     :removed (vec (remove cs bl))
+     :order-base (vec (filter cs bl))
+     :order-cand (vec (filter bs cl))
+     :reordered? (not= (vec (filter cs bl)) (vec (filter bs cl)))
+     :base-sorted? (= bl (vec (sort bl)))
+     :cand-sorted? (= cl (vec (sort cl)))
+     :full-base bl :full-cand cl
+     :alias-changed (vec (for [r cr :let [o (get by-lib-b (:lib r))]
+                               :when (and o (not= (:as o) (:as r)))]
+                           {:lib (:lib r) :from (:as o) :to (:as r)}))
+     :refer-changed (vec (for [r cr :let [o (get by-lib-b (:lib r))]
+                               :when (and o (not= (:refer o) (:refer r)))]
+                           {:lib (:lib r) :from (:refer o) :to (:refer r)}))}))
+
+(defn require-diff [bf cf]
+  (let [br (or (:requires bf) []) cr (or (:requires cf) [])
+        bl (mapv :lib br) cl (mapv :lib cr)
+        bs (set bl) cs (set cl)
+        by-lib-b (into {} (map (juxt :lib identity)) br)]
+    {:added (vec (remove bs cl))
+     :removed (vec (remove cs bl))
+     :order-base (vec (filter cs bl))
+     :order-cand (vec (filter bs cl))
+     :reordered? (not= (vec (filter cs bl)) (vec (filter bs cl)))
+     :base-sorted? (= bl (vec (sort bl)))
+     :cand-sorted? (= cl (vec (sort cl)))
+     :full-base bl
+     :full-cand cl
+     :alias-changed (vec (for [r cr :let [o (get by-lib-b (:lib r))]
+                               :when (and o (not= (:as o) (:as r)))]
+                           {:lib (:lib r) :from (:as o) :to (:as r)}))
+     :refer-changed (vec (for [r cr :let [o (get by-lib-b (:lib r))]
+                               :when (and o (not= (:refer o) (:refer r)))]
+                           {:lib (:lib r) :from (:refer o) :to (:refer r)}))
+     :imports-added (vec (remove (set (:imports bf)) (:imports cf)))
+     :imports-removed (vec (remove (set (:imports cf)) (:imports bf)))}))
+
+(defn resolve-site [f {:keys [alias]}]
+  (or (get (:aliases f) alias) (when (str/includes? alias ".") alias)))
+
+(defn site-index
+  "Qualified-reference sites per file. `paths` limits the scan: a file that does
+   not literally contain any relevant name cannot hold a site for one, so the
+   whole-tree scan is unnecessary."
+  [idx paths]
+  (into {} (for [rel paths :let [f (get idx rel)] :when f]
+             [rel (sc/qualified-sites-with-pos (:text f))])))
+
+(defn files-mentioning
+  "Paths whose raw text contains any of `names` (a cheap textual prefilter)."
+  [idx names]
+  (if (empty? names)
+    []
+    (let [pat (re-pattern (str "(?<![\\w./*+!?<>=$-])(?:"
+                              (str/join "|" (map #(java.util.regex.Pattern/quote %) names))
+                              ")(?![\\w./*+!?<>=$-])"))]
+      (vec (for [[rel f] idx :when (re-find pat (:text f))] rel)))))
+
+(defn comment-multiset [idx paths]
+  (frequencies (for [p paths :let [f (get idx p)] :when f c (:comments f)]
+                 (str/trim (:text c)))))
+
+;; ------------------------------------------------------------------- receipt
+
+(defn read-receipt [path]
+  (when path
+    (let [t (slurp path)]
+      (try (edn/read-string {:default (fn [_ v] v)} t)
+           (catch Exception _
+             (try (json/parse-string t true) (catch Exception _ {:unparseable true})))))))
+
+;; ---------------------------------------------------------------- rendering
+
+(defn tbl [headers rows]
+  (if (empty? rows)
+    "_(none)_\n"
+    (str "| " (str/join " | " headers) " |\n"
+         "|" (str/join "|" (repeat (count headers) "---")) "|\n"
+         (str/join "\n" (for [r rows]
+                          (str "| " (str/join " | " (map #(-> (str %)
+                                                              (str/replace "|" "\\|")
+                                                              (str/replace "\n" " ")) r)) " |")))
+         "\n")))
+
+(defn tbl* [headers rows]
+  (let [rows (vec rows)
+        shown (vec (take max-list rows))
+        extra (- (count rows) (count shown))]
+    (str (tbl headers shown)
+         (when (pos? extra) (str "\n_" extra " further rows suppressed by --max-list " max-list "._\n")))))
+
+;; --------------------------------------------------------------------- main
+
+(when-let [dir (:probe-project (:opts cli))]
+  ;; Entry point for bin/preservation-tables-test R5: lint a generated project and
+  ;; report, for every list head, what the EXTERNAL RESOLVER says it is and whether
+  ;; the brief would trust it. This is what makes the generated shadow witnesses
+  ;; test resolution rather than a hand-built refer map.
+  (let [ki (kondo-index (kondo-analyze dir))
+        defs (:defs ki)]
+    (doseq [[path facts] (sort-by key (:files ki))
+            :let [f (fs/file (fs/path dir path))]
+            :when (fs/exists? f)
+            :let [text (slurp f)
+                  lidx (sc/line-index text)
+                  toks (sc/tokens text lidx)
+                  heads (for [[a b] (partition 2 1 toks)
+                              :when (and (= :delim (:kind a)) (= "(" (:text a))
+                                         (= :tok (:kind b)))]
+                          b)]]
+      (doseq [h heads
+              :let [q (get-in facts [:var [(:row h) (:col h)]])]]
+        (println (str "HEAD\t" path "\t" (:text h) "\t" (or q "-") "\t"
+                      (if (head-trustworthy? defs q) "trusted" "unmodelled"))))
+      (doseq [nm (distinct (vals (get facts :local-name {})))]
+        (println (str "LOCAL\t" path "\t" nm)))))
+  (System/exit 0))
+
+
+(def cand-sha (resolve-sha candidate-sha))
+(def bse-sha (resolve-sha base-sha))
+(def base-tree (tree-sources bse-sha))
+(def cand-tree (tree-sources cand-sha))
+(def raw-base (:blobs base-tree))
+(def raw-cand (:blobs cand-tree))
+(def refused-entries
+  (vec (concat (for [e (concat (:symlinks base-tree) (:symlinks cand-tree))]
+                 {:path (:path e) :why "symlink (mode 120000) — never followed"})
+               (for [e (concat (:nonblob base-tree) (:nonblob cand-tree))]
+                 {:path (:path e) :why (str "not a regular blob (" (:mode e) " " (:type e) ")")})
+               (for [e (concat (:oversized base-tree) (:oversized cand-tree))]
+                 {:path (:path e) :why (str "blob of " (:size e) " bytes exceeds the "
+                                            max-blob-bytes "-byte pre-parse cap — not read")}))))
+
+;; Scope, in two stages. Stage 1 parses only the files the candidate changed: a
+;; relocation must touch both its source and its destination, so matching over
+;; changed files alone is complete for moves. Stage 2 adds every file in either
+;; tree that textually mentions a name that moved, was dropped or was added —
+;; the only files that can hold a call site or a duplicate for one. Everything
+;; else in the repository is provably irrelevant to section A and is not parsed.
+(def all-source (vec (sort (distinct (concat (keys raw-base) (keys raw-cand))))))
+(def changed-paths
+  (vec (sort (remove #(= (get raw-base %) (get raw-cand %)) all-source))))
+
+;; The external resolver runs once per tree, over the blobs already read from the
+;; object database. Its wall is reported at the foot of the brief.
+(def kondo-t0 (System/nanoTime))
+;; The WHOLE tree is analysed, not the parsed scope: a call head can name a
+;; function in a file the brief has no reason to parse, and the resolver must be
+;; able to say so rather than leaving it unresolved.
+(def base-dump (dump-tree raw-base (str workdir "/k-base")))
+(def cand-dump (dump-tree raw-cand (str workdir "/k-cand")))
+(def base-kondo (kondo-index (kondo-analyze base-dump)))
+(def cand-kondo (kondo-index (kondo-analyze cand-dump)))
+(def kondo-ms (/ (double (- (System/nanoTime) kondo-t0)) 1e6))
+;; PB-FENCE-007 again, one level down: merging the two trees' definition maps lets
+;; a candidate `defn` overwrite a base `defmacro` and the head reads as a function
+;; call on both sides. Kinds stay per tree, and a disagreement is untrusted.
+(def resolver-defs
+  (let [b (:defs base-kondo) c (:defs cand-kondo)]
+    (into {} (for [k (set (concat (keys b) (keys c)))
+                   :let [bv (get b k ::absent) cv (get c k ::absent)]]
+               [k (cond
+                    (and (not= bv ::absent) (not= cv ::absent) (not= bv cv)) ::disagree
+                    (not= bv ::absent) bv
+                    :else cv)]))))
+
+
+
+(def idx0-base (index-tree raw-base changed-paths (:defs-by-file base-kondo) (:files base-kondo)))
+(def idx0-cand (index-tree raw-cand changed-paths (:defs-by-file cand-kondo) (:files cand-kondo)))
+(def m0 (match-owners idx0-base idx0-cand))
+(def names-of-interest
+  (into #{} (concat (map (comp :id :base) (:moved m0))
+                    (map :id (:removed m0))
+                    (map :id (:added m0))
+                    (map :id (:ambiguous m0)))))
+(def mention-re
+  (when (seq names-of-interest)
+    (re-pattern (str "(?<![\\w./*+!?<>=$-])(?:"
+                     (str/join "|" (map #(java.util.regex.Pattern/quote %) names-of-interest))
+                     ")(?![\\w./*+!?<>=$-])"))))
+(def extra-paths
+  (let [ch (set changed-paths)]
+    (vec (sort (distinct (when mention-re
+                           (for [[p t] (concat raw-base raw-cand)
+                                 :when (and (not (ch p)) (re-find mention-re t))] p)))))))
+(def scope-paths (vec (sort (distinct (concat changed-paths extra-paths)))))
+(def base-idx (merge idx0-base (index-tree raw-base extra-paths (:defs-by-file base-kondo) (:files base-kondo))))
+(def cand-idx (merge idx0-cand (index-tree raw-cand extra-paths (:defs-by-file cand-kondo) (:files cand-kondo))))
+
+(defn line-idx-of [idx path] (sc/line-index (:text (get idx path))))
+
+(defn head-cols-of
+  "Positions of every list head in a file: a symbol token immediately after an
+   opening delimiter. Cheap, exact, and independent of the resolver."
+  [idx path]
+  (let [f (get idx path)
+        lidx (sc/line-index (:text f))
+        toks (sc/tokens (:text f) lidx)]
+    (into #{} (for [[a b] (partition 2 1 toks)
+                    :when (and (= :delim (:kind a)) (= "(" (:text a))
+                               (= :tok (:kind b)))]
+                [(:row b) (:col b)]))))
+
+(def base-lidx (into {} (for [p (keys base-idx)] [p (line-idx-of base-idx p)])))
+(def cand-lidx (into {} (for [p (keys cand-idx)] [p (line-idx-of cand-idx p)])))
+(def base-heads (into {} (for [p (keys base-idx)] [p (head-cols-of base-idx p)])))
+(def cand-heads (into {} (for [p (keys cand-idx)] [p (head-cols-of cand-idx p)])))
+
+(defn kondo-vars-in
+  "Bare names the resolver reports as VAR usages inside [start,end) of a file."
+  [ki lidx start end]
+  (into #{} (for [[[r c] q] (get ki :var {})
+                  :when (and lidx r c (<= (long r) (count lidx)))
+                  :let [ls (nth lidx (dec (long r)))
+                        off (+ (long ls) (dec (long c)))]
+                  :when (and (>= off (long start)) (< off (long end)))]
+              (let [i (str/last-index-of q "/")]
+                (if i (subs q (inc (long i))) q)))))
+
+(defn kondo-locals-in
+  "Local names the resolver reports inside [start,end) of a file."
+  [ki lidx start end]
+  (into #{} (for [[[r c] nm] (get ki :local-name {})
+                  :when (and lidx r c (<= (long r) (count lidx)))
+                  :let [ls (nth lidx (dec (long r)))
+                        off (+ (long ls) (dec (long c)))]
+                  :when (and (>= off (long start)) (< off (long end)))]
+              nm)))
+(def base-owner-ns (unique-owner-ns base-idx))
+(def cand-owner-ns (unique-owner-ns cand-idx))
+
+(def path-sets
+  (let [bp (set (keys base-idx)) cp (set (keys cand-idx))]
+    {:added (vec (sort (set/difference cp bp)))
+     :deleted (vec (sort (set/difference bp cp)))
+     :modified (vec (sort (filter #(not= (:text (base-idx %)) (:text (cand-idx %)))
+                                  (set/intersection bp cp))))}))
+(def touched (vec (sort (concat (:added path-sets) (:deleted path-sets) (:modified path-sets)))))
+
+(def scope-note
+  (str (count scope-paths) " of " (count all-source) " Clojure source files"))
+
+(def nonsource-changed
+  (->> (str/split-lines (git "diff" "--name-only" bse-sha cand-sha))
+       (remove str/blank?)
+       (remove #(and (source-ext (ext-of %)) (under-roots? %)))
+       vec))
+
+(def m (match-owners base-idx cand-idx))
+
+(def pair-map
+  (into {} (for [{:keys [base cand]} (concat (:same m) (:moved m))]
+             [[(:ns cand) (:id cand)] (:ns base)])))
+(def base-owns (set (map (juxt :ns :id) (all-owners base-idx))))
+(def canon (make-canon pair-map base-owns base-owner-ns))
+(defn- kind-index
+  "[namespace name] -> def head, for ONE tree: the whole tree by regex, with the
+   parsed owners of that tree layered on top because the parse is exact."
+  [raw idx]
+  (reduce (fn [acc o] (assoc acc [(:ns o) (:id o)] (:kind o)))
+          (cheap-owner-kinds raw)
+          (all-owners idx)))
+
+;; PB-FENCE-007. Kinds are resolved PER TREE. Merging them let a candidate `defn`
+;; overwrite a base `defmacro`, and the brief then vouched for a macro call on the
+;; base side as if it were a function call. Base-side resolution uses the base
+;; index, candidate-side the candidate index, and any [ns name] whose def head
+;; DISAGREES between the trees is unmodelled on both sides.
+(def base-kind (kind-index raw-base base-idx))
+(def cand-kind (kind-index raw-cand cand-idx))
+(def kind-disagree
+  (into #{} (for [k (set (concat (keys base-kind) (keys cand-kind)))
+                  :let [b (get base-kind k) c (get cand-kind k)]
+                  :when (and b c (not= b c))]
+              k)))
+(def kinds {:base base-kind :cand cand-kind :disagree kind-disagree})
+
+(defn tier-for
+  "body-tier for one matched pair, with the resolver's per-file context and the
+   private walker kept as a CROSS-CHECK: if the walker's bound set names something
+   the resolver does not call a local, the body is unmodelled and counted."
+  [base cand]
+  (let [bp (:path base) cp (:path cand)
+        bki (get-in base-kondo [:files bp]) cki (get-in cand-kondo [:files cp])
+        bl (get base-lidx bp) cl (get cand-lidx cp)
+        wb (scope-analysis (:text base) {:file (get base-idx bp) :kind {} :kind-disagree #{}})
+        wc (scope-analysis (:text cand) {:file (get cand-idx cp) :kind {} :kind-disagree #{}})
+        klb (kondo-locals-in bki bl (:start base) (:end base))
+        klc (kondo-locals-in cki cl (:start cand) (:end cand))
+        vnb (kondo-vars-in bki bl (:start base) (:end base))
+        vnc (kondo-vars-in cki cl (:start cand) (:end cand))
+        ;; A real contradiction: the private walker calls a name a local while the
+        ;; resolver calls the same name a Var reference in the same body. Names the
+        ;; resolver never mentions are the walker over-approximating, not a conflict.
+        db (set/intersection (set/difference (:bound wb) klb) vnb)
+        dc (set/intersection (set/difference (:bound wc) klc) vnc)
+        recon-bad (or (not (get-in base-idx [bp :reconcile :ok?] true))
+                      (not (get-in cand-idx [cp :reconcile :ok?] true)))
+        disagree (or (seq db) (seq dc) recon-bad)]
+    (body-tier pair-map resolver-defs
+               (:text base) (get base-idx bp) bki (:start base) bl (get base-heads bp)
+               (:text cand) (get cand-idx cp) cki (:start cand) cl (get cand-heads cp)
+               {:disagree? (boolean disagree)
+                :names (set (concat db dc))})))
+
+(def moved-rows
+  (vec (for [{:keys [base cand matched-by]} (:moved m)]
+         {:id (:id base) :kind (:kind base) :family (:family base) :kind-to (:kind cand)
+          :from-ns (:ns base) :to-ns (:ns cand)
+          :from-file (:path base) :to-file (:path cand)
+          :tier-info (tier-for base cand)
+          :matched-by matched-by
+          :priv-from (:private? base) :priv-to (:private? cand)
+          :base-text (:text base) :cand-text (:text cand)})))
+
+(defn tier-for
+  "body-tier for one matched pair, with the resolver's per-file context and the
+   private walker kept as a CROSS-CHECK: if the walker's bound set names something
+   the resolver does not call a local, the body is unmodelled and counted."
+  [base cand]
+  (let [bp (:path base) cp (:path cand)
+        bki (get-in base-kondo [:files bp]) cki (get-in cand-kondo [:files cp])
+        bl (get base-lidx bp) cl (get cand-lidx cp)
+        wb (scope-analysis (:text base) {:file (get base-idx bp) :kind {} :kind-disagree #{}})
+        wc (scope-analysis (:text cand) {:file (get cand-idx cp) :kind {} :kind-disagree #{}})
+        klb (kondo-locals-in bki bl (:start base) (:end base))
+        klc (kondo-locals-in cki cl (:start cand) (:end cand))
+        vnb (kondo-vars-in bki bl (:start base) (:end base))
+        vnc (kondo-vars-in cki cl (:start cand) (:end cand))
+        ;; A real contradiction: the private walker calls a name a local while the
+        ;; resolver calls the same name a Var reference in the same body. Names the
+        ;; resolver never mentions are the walker over-approximating, not a conflict.
+        db (set/intersection (set/difference (:bound wb) klb) vnb)
+        dc (set/intersection (set/difference (:bound wc) klc) vnc)
+        recon-bad (or (not (get-in base-idx [bp :reconcile :ok?] true))
+                      (not (get-in cand-idx [cp :reconcile :ok?] true)))
+        disagree (or (seq db) (seq dc) recon-bad)]
+    (body-tier pair-map resolver-defs
+               (:text base) (get base-idx bp) bki (:start base) bl (get base-heads bp)
+               (:text cand) (get cand-idx cp) cki (:start cand) cl (get cand-heads cp)
+               {:disagree? (boolean disagree)
+                :names (set (concat db dc))})))
+
+(def moved-rows (mapv #(-> % (assoc :tier (first (:tier-info %)) :scope (second (:tier-info %)))
+                           (dissoc :tier-info))
+                      moved-rows))
+
+(def same-rows
+  (vec (for [{:keys [base cand]} (:same m)
+             :let [[tier info] (tier-for base cand)]
+             :when (not= tier :byte-identical)]
+         {:id (:id base) :kind (:kind base) :family (:family base) :ns (:ns base) :file (:path cand)
+          :tier tier :scope info
+          :priv-from (:private? base) :priv-to (:private? cand)
+          :base-text (:text base) :cand-text (:text cand)})))
+
+(def promotions
+  (vec (concat
+        (for [r moved-rows :when (not= (:priv-from r) (:priv-to r))]
+          {:id (:id r) :kind (:kind r) :from-ns (:from-ns r) :to-ns (:to-ns r)
+           :direction (if (:priv-from r) "private -> public" "public -> private")})
+        (for [r same-rows :when (not= (:priv-from r) (:priv-to r))]
+          {:id (:id r) :kind (:kind r) :from-ns (:ns r) :to-ns (:ns r)
+           :direction (if (:priv-from r) "private -> public" "public -> private")}))))
+
+(def cand-owner-freq (frequencies (map (juxt :family :id) (all-owners cand-idx))))
+(def base-owner-freq (frequencies (map (juxt :family :id) (all-owners base-idx))))
+(def duplicated
+  (vec (for [[k n] cand-owner-freq
+             :when (and (> n (get base-owner-freq k 0)) (> n 1))]
+         {:owner (second k) :kind (first k) :count n :base-count (get base-owner-freq k 0)
+          :homes (str/join ", " (map :path (filter #(= k [(:family %) (:id %)]) (all-owners cand-idx))))})))
+
+(def source-leftovers
+  (vec (for [r moved-rows :let [f (get cand-idx (:from-file r))] :when f
+             o (:owners f) :when (= [(:family o) (:id o)] [(:family r) (:id r)])]
+         {:owner (:id r) :file (:from-file r)})))
+
+(defn ns-edit-for
+  "The ns-edit record for one file, computed from the RESOLVER's require inventory,
+   per analysed platform. A file whose requires are spliced by `#?@` has a
+   different list per platform, and a reorder in any one of them is a reorder."
+  [p bf cf]
+  (let [bl (:kondo-requires bf) cl (:kondo-requires cf)
+        langs (vec (sort (distinct (concat (keys bl) (keys cl)))))
+        per (into {} (for [l langs] [l (require-diff-lang (get bl l []) (get cl l []))]))
+        any (fn [k] (boolean (some #(get % k) (vals per))))
+        cat (fn [k] (vec (distinct (mapcat #(get % k) (vals per)))))
+        first-lang (first langs)]
+    (merge (get per first-lang (require-diff bf cf))
+           {:path p :ns (:ns cf)
+            :langs langs
+            :per-lang per
+            :added (cat :added) :removed (cat :removed)
+            :alias-changed (cat :alias-changed)
+            :refer-changed (cat :refer-changed)
+            :reordered? (any :reordered?)
+            :base-sorted? (every? #(get % :base-sorted?) (vals per))
+            :cand-sorted? (every? #(get % :cand-sorted?) (vals per))
+            :imports-added (vec (remove (set (:imports bf)) (:imports cf)))
+            :imports-removed (vec (remove (set (:imports cf)) (:imports bf)))})))
+
+(def ns-edits
+  (vec (for [p touched :let [bf (get base-idx p) cf (get cand-idx p)]
+             :when (and bf cf (or (not= (:ns-form bf) (:ns-form cf))
+                                  (not= (:kondo-requires bf) (:kondo-requires cf))))]
+         (ns-edit-for p bf cf))))
+(def ns-added
+  (vec (for [p (:added path-sets) :let [cf (get cand-idx p)] :when cf]
+         {:path p :ns (:ns cf) :requires (mapv :lib (:requires cf))})))
+(def ns-deleted
+  (vec (for [p (:deleted path-sets) :let [bf (get base-idx p)] :when bf]
+         {:path p :ns (:ns bf)})))
+(def reordered (vec (filter :reordered? ns-edits)))
+;; A reorder among requires the CANDIDATE added is invisible to the
+;; common-subsequence test above: there is no base position to compare with. The
+;; sort-discipline test catches it whenever the base file kept its requires
+;; sorted, which is the convention in every repository this has been run on.
+(def sort-broken
+  (vec (concat
+        (filter #(and (:base-sorted? %) (not (:cand-sorted? %))) ns-edits)
+        (for [e ns-added
+              :let [r (:requires e)]
+              :when (and (> (count r) 1) (not= r (vec (sort r))))]
+          (assoc e :full-base [] :full-cand r :base-sorted? true :cand-sorted? false)))))
+
+(def moved-from-ns (into {} (for [r moved-rows] [(:id r) (:from-ns r)])))
+(def moved-to-ns (into {} (for [r moved-rows] [(:id r) (:to-ns r)])))
+(def moved-names (vec (keys moved-from-ns)))
+(def scan-paths (vec (keys cand-idx)))
+(def base-sites (site-index base-idx (vec (keys base-idx))))
+(def cand-sites (site-index cand-idx scan-paths))
+
+(defn sites-for [sidx idx pred]
+  (vec (for [[rel ss] sidx s ss
+             :let [f (get idx rel) lib (resolve-site f s)]
+             :when (pred (:name s) lib)]
+         {:file rel :line (:line s) :text (:text s) :lib lib :name (:name s)})))
+
+(def base-old-sites
+  (sites-for base-sites base-idx #(and (moved-from-ns %1) (= %2 (moved-from-ns %1)))))
+(def cand-new-sites
+  (sites-for cand-sites cand-idx #(and (moved-to-ns %1) (= %2 (moved-to-ns %1)))))
+(def cand-stale-sites
+  (sites-for cand-sites cand-idx
+             #(and (moved-from-ns %1)
+                   (not= (moved-from-ns %1) (moved-to-ns %1))
+                   (= %2 (moved-from-ns %1)))))
+(def interop-allow #{"js" "goog" "cljs" "Math" "System" "Object" "String" "Integer" "Long" "Double" "Boolean" "Character" "Thread" "Class" "Arrays" "Collections"})
+
+(defn interop-alias?
+  "A prefix that is a Java class or host namespace rather than a Clojure alias."
+  [f a]
+  (or (contains? interop-allow a)
+      (Character/isUpperCase (.charAt ^String a 0))
+      (some #(or (= a %) (str/ends-with? % (str "." a))) (:imports f))))
+
+(def cand-unresolved-sites
+  (vec (for [rel touched :let [f (get cand-idx rel)] :when f
+             s (get cand-sites rel)
+             :when (and (nil? (resolve-site f s))
+                        (not (interop-alias? f (:alias s))))]
+         {:file rel :line (:line s) :text (:text s) :alias (:alias s)})))
+
+;; A prefix that the file's own ns form does not define, that is not a Java class
+;; and not a fully-qualified namespace, cannot resolve at load time. After an
+;; alias migration this is exactly the shape of a call site left on the retired
+;; alias.
+(def undefined-alias-sites
+  (vec (remove #(str/includes? (:alias %) ".") cand-unresolved-sites)))
+
+(def retargeted
+  (vec (for [rel touched
+             :let [cf (get cand-idx rel) bf (get base-idx rel)]
+             :when (and cf bf)
+             s (get cand-sites rel)
+             :let [clib (resolve-site cf s)
+                   bhit (first (filter #(= (:name %) (:name s)) (get base-sites rel)))
+                   blib (when bhit (resolve-site bf bhit))]
+             :when (and clib blib (not= clib blib))]
+         {:file rel :line (:line s) :name (:name s) :from blib :to clib})))
+
+(def base-comments (comment-multiset base-idx touched))
+(def cand-comments (comment-multiset cand-idx touched))
+(def comments-removed
+  (vec (sort-by (comp - :n)
+                (for [[t n] base-comments :let [d (- n (get cand-comments t 0))] :when (pos? d)]
+                  {:text t :n d}))))
+(def comments-added
+  (vec (sort-by (comp - :n)
+                (for [[t n] cand-comments :let [d (- n (get base-comments t 0))] :when (pos? d)]
+                  {:text t :n d}))))
+
+(def all-moved-names (set (map :id moved-rows)))
+(def possible-unresolved
+  (vec (for [r moved-rows
+             :let [cf (get cand-idx (:to-file r))
+                   defined (set (map :id (:owners cf)))
+                   referred (set (keys (:refers cf)))
+                   bare (sc/bare-symbols (:cand-text r))]
+             n (sort (set/intersection bare all-moved-names))
+             :when (and (not= n (:id r)) (not (defined n)) (not (referred n))
+                        (not= (moved-to-ns n) (:to-ns r)))]
+         {:owner (:id r) :file (:to-file r) :symbol n :now-in (moved-to-ns n)})))
+
+(def risky-re #"\b(defmacro|definterface|deftype|defrecord|defprotocol|gen-class|proxy|reify|definline|declare|alter-var-root|intern|resolve|requiring-resolve|ns-resolve|find-var|eval|read-string|load|import)\b")
+(def macro-context
+  (vec (for [r moved-rows :let [hits (set (map second (re-seq risky-re (:cand-text r))))] :when (seq hits)]
+         {:owner (:id r) :to-ns (:to-ns r) :constructs (str/join ", " (sort hits))})))
+(def gen-class-nses
+  (vec (for [[p f] cand-idx :when (and (:ns-form f) (str/includes? (:ns-form f) ":gen-class"))] p)))
+
+(defn forward-refs
+  "Owners that reference a sibling defined LATER in the same file with no earlier
+   `declare`. In Clojure that fails at load time, and a split that reorders forms
+   inside a destination file is exactly how it happens."
+  [idx paths]
+  (vec (for [rel paths
+             :let [f (get idx rel)]
+             :when f
+             :let [owners (:owners f)
+                   at (into {} (map (juxt :id :start)) owners)]
+             o owners
+             n (sort (sc/bare-symbols (:text o)))
+             :let [tgt (get at n)]
+             :when (and tgt (> (long tgt) (long (:start o))) (not= n (:id o))
+                        (not (some #(and (= (:name %) n) (< (long (:start %)) (long (:start o))))
+                                   (:declare-forms f))))]
+         {:file rel :ns (:ns f) :owner (:id o) :refers n})))
+
+(def cand-forward-refs (forward-refs cand-idx (concat touched (map :path ns-added))))
+(def base-forward-refs (set (map (juxt :ns :owner :refers) (forward-refs base-idx touched))))
+(def new-forward-refs
+  (vec (remove #(base-forward-refs [(:ns %) (:owner %) (:refers %)]) cand-forward-refs)))
+
+(def cand-nses (set (keep :ns (vals cand-idx))))
+(def new-edges
+  (vec (concat
+        (for [e ns-edits lib (:added e) :when (cand-nses lib)] {:from (:ns e) :to lib})
+        (for [e ns-added lib (:requires e) :when (cand-nses lib)] {:from (:ns e) :to lib}))))
+
+(def change-class
+  (cond
+    (and (seq moved-rows) (or (seq ns-deleted) (seq ns-added)))
+    "namespace-split (owners relocated into new or out of deleted files)"
+    (seq moved-rows) "owner relocation without file creation or deletion"
+    (and (seq retargeted) (seq ns-edits)) "alias migration / reference retargeting"
+    :else "NOT a mechanical relocation — no relocated owner was detected"))
+
+(def unmodelled-macros
+  (vec (sort (into #{} (mapcat #(get-in % [:scope :macros])) (concat moved-rows same-rows)))))
+
+(def reconcile-failures
+  (vec (for [[which idx] [["base" base-idx] ["candidate" cand-idx]]
+             [path f] idx
+             :let [r (:reconcile f) rm (:require-mismatch f)]
+             :when (or (not (:ok? r)) (not (:ok? rm)))]
+         {:tree which :path path
+          :unlocated (:unlocated r) :unreported (:unreported r)
+          :unanalysed-features (:unanalysed-features r) :cond-gap (:cond-gap r)
+          :only-parser (:only-parser rm) :only-resolver (:only-resolver rm)})))
+
+(def declared-names
+  (vec (sort (distinct (mapcat :declares (concat (vals base-idx) (vals cand-idx)))))))
+(def no-var-forms
+  (vec (sort (distinct (for [[which idx] [["base" base-idx] ["candidate" cand-idx]]
+                             [path f] idx
+                             x (:no-var-forms f)]
+                         (str which " " path ": " x))))))
+
+(def tier-counts (frequencies (map :tier moved-rows)))
+(def same-tier-counts (frequencies (map :tier same-rows)))
+
+;; ------------------------------------------------------------ receipt compare
+
+(def receipt (read-receipt (:receipt (:opts cli))))
+
+(def ^:private none ::none)
+
+(defn deep-find
+  "First value stored under any of `ks`, anywhere in the receipt. Returns ::none
+   when absent, so a receipt field whose value is `false` or `0` is not lost."
+  [x ks]
+  (cond
+    (map? x) (let [hit (first (keep #(when (contains? x %) [(get x %)]) ks))]
+               (if hit (first hit) (or (first (keep #(let [v (deep-find % ks)]
+                                                       (when (not= v none) [v])) (vals x)))
+                                       none)))
+    (sequential? x) (or (first (keep #(let [v (deep-find % ks)]
+                                        (when (not= v none) [v])) x)) none)
+    :else none))
+
+(defn deep-collect
+  "Every value stored under any of `ks`, anywhere in the receipt."
+  [x ks]
+  (cond
+    (map? x) (concat (keep #(when (contains? x %) (get x %)) ks)
+                     (mapcat #(deep-collect % ks) (vals x)))
+    (sequential? x) (mapcat #(deep-collect % ks) x)
+    :else nil))
+
+(defn- present [v] (when (not= v none) v))
+
+(defn- claim-n [v] (cond (number? v) v (coll? v) (count v) :else nil))
+
+(def noop-commands #{"/bin/true" "/usr/bin/true" "true" ":"})
+
+(def disagreements
+  (when receipt
+    (let [moved-names (seq (distinct (flatten (deep-collect receipt [:owners_moved :moved_owners "owners_moved"]))))
+          claims {:owners-moved moved-names
+                  :destinations (present (deep-find receipt [:destination_libs :destinations "destination_libs"]))
+                  :caller-sites (let [ns' (filter number? (deep-collect receipt [:caller_sites :static_sites :call_sites "caller_sites"]))]
+                                  (when (seq ns') (apply max ns')))
+                  :promotions (present (deep-find receipt [:promotions "promotions"]))
+                  :verification-complete (present (deep-find receipt [:verification_complete "verification_complete"]))
+                  :state (present (deep-find receipt [:state "state"]))
+                  :proof-pending (present (deep-find receipt [:proof_pending "proof_pending"]))
+                  :candidate-hash (present (deep-find receipt [:candidate_hash "candidate_hash"]))
+                  :commit (present (deep-find receipt [:commit_sha :commit "commit"]))}
+          n-moved (count moved-rows)
+          n-dest (count (set (map :to-ns moved-rows)))
+          n-promo (count (filter #(= "private -> public" (:direction %)) promotions))
+          agree (cond-> []
+                  (and (claim-n (:caller-sites claims)) (= (claim-n (:caller-sites claims)) (count base-old-sites)))
+                  (conj ["caller sites" (str (claim-n (:caller-sites claims))) (str (count base-old-sites))])
+                  (and (claim-n (:owners-moved claims)) (= (claim-n (:owners-moved claims)) n-moved))
+                  (conj ["relocated owners" (str (claim-n (:owners-moved claims))) (str n-moved)])
+                  (and (claim-n (:destinations claims)) (= (claim-n (:destinations claims)) n-dest))
+                  (conj ["destination namespaces" (str (claim-n (:destinations claims))) (str n-dest)])
+                  (and (claim-n (:promotions claims)) (= (claim-n (:promotions claims)) n-promo))
+                  (conj ["promotions" (str (claim-n (:promotions claims))) (str n-promo)]))
+          binding-row
+          (cond
+            (and (:commit claims) (str/starts-with? cand-sha (str (:commit claims)))) nil
+            (:commit claims)
+            ["candidate identity" (str (:commit claims)) cand-sha
+             "the receipt names a different candidate; it cannot discharge anything about this tree"]
+            :else
+            ["candidate identity"
+             (if (:candidate-hash claims) (str "content hash " (:candidate-hash claims)) "absent")
+             cand-sha
+             "the receipt carries no commit that binds it to this tree — UNVERIFIED, not agreement"])
+          rows (cond-> (if binding-row [binding-row] [])
+                 (and (claim-n (:owners-moved claims)) (not= (claim-n (:owners-moved claims)) n-moved))
+                 (conj ["relocated-owner count" (str (claim-n (:owners-moved claims))) (str n-moved)
+                        "the checker's own count differs from the receipt's"])
+                 (and (claim-n (:destinations claims)) (not= (claim-n (:destinations claims)) n-dest))
+                 (conj ["destination namespaces" (str (claim-n (:destinations claims))) (str n-dest)
+                        "the checker sees a different number of destination namespaces"])
+                 (and (claim-n (:caller-sites claims)) (not= (claim-n (:caller-sites claims)) (count base-old-sites)))
+                 (conj ["caller sites" (str (claim-n (:caller-sites claims))) (str (count base-old-sites))
+                        "the checker's re-derived site count differs"])
+                 (and (claim-n (:promotions claims)) (not= (claim-n (:promotions claims)) n-promo))
+                 (conj ["promotions" (str (claim-n (:promotions claims))) (str n-promo)
+                        "the checker's re-derived promotion count differs"])
+                 (not (true? (:verification-complete claims)))
+                 (conj ["verification_complete" (pr-str (:verification-complete claims)) "not derivable here"
+                        "the receipt is not proof; required checks are outstanding"])
+                 (and (:state claims) (not= "committed" (str (:state claims))))
+                 (conj ["state" (str (:state claims)) "not derivable here"
+                        "not a finished committed state; a probe-only receipt is unfinished proof"])
+                 (seq (:proof-pending claims))
+                 (conj ["proof_pending" (pr-str (:proof-pending claims)) "not derivable here"
+                        (if (some #(noop-commands (str %)) (:proof-pending claims))
+                          "still pending — and the pending command is a NO-OP, so it proves nothing when it closes"
+                          "the receipt still carries pending proof")]))]
+      {:claims claims :rows rows :agree agree})))
+
+
+;; ------------------------------------------------------------- the hard stop
+;;
+;; PB-FENCE-003. A reviewer must not be able to read "141 of 141 preserved" and
+;; stop. Every signal that needs a human — including the ones that live in
+;; section B — is hoisted to a hard-stop block ABOVE section A, and the exit code
+;; is nonzero whenever the brief is not clear.
+
+(def hard-stops
+  (vec (remove nil?
+        [(when (seq reconcile-failures)
+           [(count reconcile-failures)
+            "FILES this checker CANNOT CERTIFY — the two owner inventories disagree, or the file carries a reader-conditional platform the analyzer does not elaborate. Nothing in them is certifiable (A1)"])
+         (when (seq no-var-forms)
+           [(count no-var-forms)
+            "top-level forms that define no Var (`defmethod`, `extend-*`, `reify`, …). The resolver does not track them and this brief does NOT certify them — read them (A1)"])
+         (when (seq (:removed m)) [(count (:removed m)) "owners with NO candidate home (A1)"])
+         (when (seq duplicated) [(count duplicated) "owner ids duplicated beyond their base multiplicity (A3)"])
+         (when (seq source-leftovers) [(count source-leftovers) "relocated owners still present in their source file (A3)"])
+         (when (pos? (get tier-counts :changed 0))
+           [(get tier-counts :changed 0) "relocated bodies whose text CHANGED — read the diffs (A2)"])
+         (when (pos? (get tier-counts :code-identical-comments-differ 0))
+           [(get tier-counts :code-identical-comments-differ 0) "relocated bodies whose COMMENTS changed (A2)"])
+         (when (pos? (get tier-counts :unmodelled-macro-context 0))
+           [(get tier-counts :unmodelled-macro-context 0)
+            "relocated bodies NOT certified because they call a head this scanner cannot vouch for (A2)"])
+         (when (pos? (get same-tier-counts :unmodelled-macro-context 0))
+           [(get same-tier-counts :unmodelled-macro-context 0)
+            "in-place bodies NOT certified because they call a head this scanner cannot vouch for (A2)"])
+         (when (pos? (+ (get same-tier-counts :changed 0) (get same-tier-counts :code-identical-comments-differ 0)))
+           [(+ (get same-tier-counts :changed 0) (get same-tier-counts :code-identical-comments-differ 0))
+            "in-place bodies that changed and are not preserved (A2)"])
+         (when (seq cand-stale-sites) [(count cand-stale-sites) "call sites still naming the OLD namespace (A5)"])
+         (when (seq undefined-alias-sites) [(count undefined-alias-sites) "call sites naming an alias the `ns` form does not define — cannot resolve at load (A5)"])
+         (when (seq comments-removed) [(count comments-removed) "comment texts LOST (A6)"])
+         (when (seq promotions) [(count promotions) "PRIVACY CHANGES, including private->public promotions (B2)"])
+         (when (seq new-forward-refs) [(count new-forward-refs) "NEW intra-file forward references — a load-order break (B4)"])
+         (when (seq reordered) [(count reordered) "files whose `:require` ORDER changed — that is load order (B4)"])
+         (when (seq sort-broken) [(count sort-broken) "files whose `:require` list lost the sorted order the base kept (B4)"])
+         (when (seq possible-unresolved) [(count possible-unresolved) "bare references the checker could NOT confirm (B3)"])
+         (when (seq (:ambiguous m)) [(count (:ambiguous m)) "owners the checker could not match unambiguously (A1)"])
+         (when (seq unmodelled-macros)
+           [(count unmodelled-macros) (str "call heads whose tokens were FROZEN — unresolvable, or a macro whose binding grammar the scanner deliberately does not walk: "
+                                           (str/join ", " (take 8 unmodelled-macros)))])
+         (when (seq refused-entries) [(count refused-entries) "tree entries this checker REFUSED to read (symlinks, non-blobs, oversized) (B7)"])
+         (when (seq (:added m)) [(count (:added m)) "owners with no base origin — new code, not a relocation (A1)"])
+         (when (seq nonsource-changed) [(count nonsource-changed) "changed files outside the scanned roots or not Clojure source — UNREAD (B7)"])
+         (when (and receipt (seq (:rows disagreements)))
+           [(count (:rows disagreements)) "receipt claims the checker could not confirm (C)"])])))
+
+(def clear? (empty? hard-stops))
+
+;; ------------------------------------------------------------------- output
+
+(def out
+  (with-out-str
+    (println (str "## Preservation brief — " title))
+    (println)
+    (println (str "- repository: `" repo "`"))
+    (println (str "- base: `" bse-sha "`"))
+    (println (str "- candidate: `" cand-sha "`"))
+    (println (str "- roots scanned: `" (str/join "," roots) "`"))
+    (println (str "- Clojure source files parsed: " scope-note
+                  " (every changed file, plus every file that textually mentions an owner defined in a changed file)"))
+    (println (str "- change class, as re-derived by this checker: **" change-class "**"))
+    (println "- evidence source: **the two git trees, read from the object database by this checker.** No")
+    (println "  filesystem path is walked, no symlink is followed, and no receipt field is used in section A.")
+    (println)
+    (if clear?
+      (println "> ## CLEAR — no obligation was raised.\n>\n> Every changed body was mechanically preserved and no decision was left open. `clear: true`, exit 0.")
+      (do
+        (println "> ## ⛔ HARD STOP — this candidate is NOT clear. `clear: false`, exit 3.")
+        (println ">")
+        (println "> **Do not consume the preservation figures below and stop.** The brief raised the following, and")
+        (println "> every one of them needs a human. A signal that lives in section B is not a weaker signal.")
+        (println ">")
+        (doseq [[n what] hard-stops]
+          (println (str "> - **" n "** " what)))))
+    (println)
+
+    (println "### A. Mechanically preserved (independently re-derived)")
+    (println)
+    (println "**A1 — owner accounting.**")
+    (println)
+    (println (tbl ["quantity" "count"]
+                  [["owners in the base tree, within the parsed scope" (count (all-owners base-idx))]
+                   ["owners in the candidate tree, within the parsed scope" (count (all-owners cand-idx))]
+                   ["owners that stayed in their namespace" (count (:same m))]
+                   ["owners relocated to another namespace" (count moved-rows)]
+                   ["owners in the base with NO candidate home (omitted)" (count (:removed m))]
+                   ["owners in the candidate with no base origin (new)" (count (:added m))]
+                   ["owners whose match is ambiguous" (count (:ambiguous m))]]))
+    (when (seq (:removed m))
+      (println)
+      (println "**Owners present in the base and absent from the entire candidate tree. This is a preservation FAILURE:**")
+      (println)
+      (println (tbl* ["owner" "kind" "base namespace" "base file:line"]
+                     (for [o (:removed m)] [(:id o) (:kind o) (:ns o) (str (:path o) ":" (:line o))]))))
+    (when (seq (:added m))
+      (println)
+      (println "**Owners with no base origin — new code, not a relocation, and a full review obligation:**")
+      (println)
+      (println (tbl* ["owner" "kind" "candidate namespace" "file:line"]
+                     (for [o (:added m)] [(:id o) (:kind o) (:ns o) (str (:path o) ":" (:line o))]))))
+    (when (seq (:ambiguous m))
+      (println)
+      (println "**Owners the checker could not match unambiguously (several candidates share the name):**")
+      (println)
+      (println (tbl* ["owner" "kind" "base namespace"] (for [o (:ambiguous m)] [(:id o) (:kind o) (:ns o)]))))
+
+    (println)
+    (println "**A2 — body identity of relocated owners.** Each tier is computed by comparing the exact bytes of the")
+    (println "top-level form in the base tree with the bytes of its candidate home.")
+    (println)
+    (println (tbl ["tier" "owners" "meaning"]
+                  [["`:byte-identical`" (get tier-counts :byte-identical 0)
+                    "identical bytes — nothing in the body to review"]
+                   ["`:identical-modulo-whitespace`" (get tier-counts :identical-modulo-whitespace 0)
+                    "identical after trailing-space and common-indent normalisation"]
+                   ["`:identical-modulo-requalification`" (get tier-counts :identical-modulo-requalification 0)
+                    "identical once every reference is rewritten to the owner it named in the BASE tree — i.e. the only change is that references follow their owners, and each one still resolves to the same owner"]
+                   ["`:code-identical-comments-differ`" (get tier-counts :code-identical-comments-differ 0)
+                    "code identical, COMMENT TEXT CHANGED — a prose review obligation"]
+                   ["`:unmodelled-macro-context`" (get tier-counts :unmodelled-macro-context 0)
+                    "the canonical streams matched, but the body called a head this scanner cannot vouch for, so the match is NOT evidence — read the body"]
+                   ["`:changed`" (get tier-counts :changed 0)
+                    "the body text differs — a FULL review obligation; diffs below"]]))
+    (println)
+    (println)
+    (println (str "The def head's privacy suffix (`defn-` vs `defn`) is normalised before comparison, so a promotion"
+                  " is never scored as a body change; every privacy change is reported in **B2** instead."
+                  " Privacy changes in this candidate: **" (count promotions) "**."))
+    (println)
+    (println (str "Mechanically preserved bodies (tiers 1–3): **"
+                  (reduce + 0 (map #(get tier-counts % 0)
+                                   [:byte-identical :identical-modulo-whitespace :identical-modulo-requalification]))
+                  " of " (count moved-rows) "**."))
+    (let [nonid (vec (filter #(not= :byte-identical (:tier %)) moved-rows))]
+      (when (seq nonid)
+        (println)
+        (println "Relocated owners that are not byte-identical:")
+        (println)
+        (println (tbl* ["owner" "tier" "from" "to"]
+                       (for [r (sort-by (comp - tier-rank :tier) nonid)]
+                         [(:id r) (str "`" (name (:tier r)) "`") (:from-ns r) (:to-ns r)])))
+        (let [needs-eyes (filter #(#{:changed :code-identical-comments-differ :unmodelled-macro-context}
+                                     (:tier %)) nonid)]
+          (doseq [r (take max-diffs needs-eyes)]
+            (println)
+            (println (str "<details><summary>diff — " (:id r) " (" (name (:tier r)) ")</summary>"))
+            (println)
+            (println "```diff")
+            (print (unified-diff (:base-text r) (:cand-text r) (:id r)))
+            (println "```")
+            (println)
+            (println "</details>"))
+          (when (> (count needs-eyes) max-diffs)
+            (println)
+            (println (str "_" (- (count needs-eyes) max-diffs) " further body diffs suppressed by --diffs " max-diffs "._"))))))
+    (when (seq same-rows)
+      (println)
+      (println "**Owners that did NOT move, whose body text changed.** The same tiers apply: a caller whose only")
+      (println "change is that its references now follow the owners they name is mechanically preserved too.")
+      (println)
+      (println (tbl ["tier" "owners"]
+                    (for [t tier-order :when (pos? (get same-tier-counts t 0))]
+                      [(str "`" (name t) "`") (get same-tier-counts t 0)])))
+      (println)
+      (println (str "Of " (count same-rows) " in-place body changes, **"
+                    (reduce + 0 (map #(get same-tier-counts % 0)
+                                     [:identical-modulo-whitespace :identical-modulo-requalification]))
+                    "** are mechanically preserved and **"
+                    (+ (get same-tier-counts :changed 0)
+                       (get same-tier-counts :code-identical-comments-differ 0)
+                       (get same-tier-counts :unmodelled-macro-context 0))
+                    "** need a reviewer."))
+      (println)
+      (println (tbl* ["owner" "namespace" "tier"]
+                     (for [r (sort-by (comp - tier-rank :tier) same-rows)]
+                       [(:id r) (:ns r) (str "`" (name (:tier r)) "`")])))
+      (let [needs (filter #(#{:changed :code-identical-comments-differ :unmodelled-macro-context}
+                              (:tier %)) same-rows)]
+        (doseq [r (take max-diffs needs)]
+          (println)
+          (println (str "<details><summary>diff — " (:id r) " (in place, " (name (:tier r)) ")</summary>"))
+          (println)
+          (println "```diff")
+          (print (unified-diff (:base-text r) (:cand-text r) (:id r)))
+          (println "```")
+          (println)
+          (println "</details>"))
+        (when (> (count needs) max-diffs)
+          (println)
+          (println (str "_" (- (count needs) max-diffs) " further in-place diffs suppressed by --diffs " max-diffs "._")))))
+
+    (println)
+    (println "**A3 — exactly once.**")
+    (println)
+    (println (tbl ["check" "result"]
+                  [["owner ids duplicated in the candidate beyond their base multiplicity"
+                    (if (seq duplicated) (str "**FAIL** — " (count duplicated)) "pass — 0")]
+                   ["relocated owners still present in their source file"
+                    (if (seq source-leftovers) (str "**FAIL** — " (count source-leftovers)) "pass — 0")]]))
+    (when (seq duplicated)
+      (println)
+      (println (tbl* ["owner" "kind" "candidate copies" "base copies" "homes"]
+                     (for [d duplicated] [(:owner d) (:kind d) (:count d) (:base-count d) (:homes d)]))))
+    (when (seq source-leftovers)
+      (println)
+      (println (tbl* ["owner" "still in"] (for [d source-leftovers] [(:owner d) (:file d)]))))
+
+    (println)
+    (println "**A4 — namespace-edit inventory, re-derived by diffing the `ns` forms.**")
+    (println)
+    (println (tbl ["quantity" "count"]
+                  [["files whose `ns` form changed" (count ns-edits)]
+                   ["namespaces created" (count ns-added)]
+                   ["namespaces deleted" (count ns-deleted)]
+                   ["files with a `:require` ORDER change" (count reordered)]]))
+    (when (seq ns-edits)
+      (println)
+      (println (tbl* ["file" "requires added" "requires removed" "order changed" "alias changed" "imports +/-"]
+                     (for [e ns-edits]
+                       [(:path e)
+                        (if (seq (:added e)) (str/join " " (:added e)) "—")
+                        (if (seq (:removed e)) (str/join " " (:removed e)) "—")
+                        (if (:reordered? e) "**YES**" "no")
+                        (if (seq (:alias-changed e))
+                          (str/join " " (map #(str (:lib %) " " (:from %) "→" (:to %)) (:alias-changed e))) "—")
+                        (str (count (:imports-added e)) "/" (count (:imports-removed e)))]))))
+    (when (seq ns-added)
+      (println)
+      (println "Namespaces created by this candidate:")
+      (println)
+      (println (tbl* ["file" "namespace" "requires"]
+                     (for [e ns-added] [(:path e) (:ns e) (str/join " " (:requires e))]))))
+    (when (seq ns-deleted)
+      (println)
+      (println "Namespaces deleted by this candidate:")
+      (println)
+      (println (tbl* ["file" "namespace"] (for [e ns-deleted] [(:path e) (:ns e)]))))
+
+    (println)
+    (println "**A5 — static call sites.** Every site is resolved through the `ns` aliases of the file it lives in,")
+    (println "in the tree it lives in.")
+    (println)
+    (println (tbl ["quantity" "count"]
+                  [["base sites naming a relocated owner through its OLD namespace" (count base-old-sites)]
+                   ["candidate sites naming a relocated owner through its NEW namespace (rewritten)" (count cand-new-sites)]
+                   ["candidate sites STILL naming the old namespace (stale unless a facade is retained)" (count cand-stale-sites)]
+                   ["candidate sites whose alias the checker could not resolve" (count cand-unresolved-sites)]
+                   ["candidate sites naming an alias the file's `ns` form does NOT define (undefined at load)"
+                    (count undefined-alias-sites)]
+                   ["qualified references in touched files whose resolved namespace changed" (count retargeted)]]))
+    (when (seq cand-new-sites)
+      (println)
+      (println "Rewritten sites:")
+      (println)
+      (println (tbl* ["file:line" "site" "resolves to"]
+                     (for [s (sort-by (juxt :file :line) cand-new-sites)]
+                       [(str (:file s) ":" (:line s)) (str "`" (:text s) "`") (:lib s)]))))
+    (when (seq undefined-alias-sites)
+      (println)
+      (println "**Sites naming an undefined alias. The file's `ns` form does not define this prefix, it is not a Java")
+      (println "class and it is not a fully-qualified namespace, so it cannot resolve at load:**")
+      (println)
+      (println (tbl* ["file:line" "site" "undefined prefix"]
+                     (for [s undefined-alias-sites] [(str (:file s) ":" (:line s)) (str "`" (:text s) "`") (:alias s)]))))
+    (when (seq cand-stale-sites)
+      (println)
+      (println "**Stale sites — the candidate still points at the old namespace:**")
+      (println)
+      (println (tbl* ["file:line" "site" "resolves to"]
+                     (for [s cand-stale-sites] [(str (:file s) ":" (:line s)) (str "`" (:text s) "`") (:lib s)]))))
+    (when (seq retargeted)
+      (println)
+      (println "Retargeted references — same name, different namespace after the change:")
+      (println)
+      (println (tbl* ["file:line" "name" "from" "to"]
+                     (for [s (sort-by (juxt :file :line) retargeted)]
+                       [(str (:file s) ":" (:line s)) (:name s) (:from s) (:to s)]))))
+
+    (println)
+    (println "**A6 — comment inventory over the touched files.** Comments inside a relocated owner are covered by A2;")
+    (println "this covers the comments between forms, which no body comparison can see.")
+    (println)
+    (println (tbl ["quantity" "count"]
+                  [["comment occurrences in the base (touched files)" (reduce + 0 (vals base-comments))]
+                   ["comment occurrences in the candidate (touched files)" (reduce + 0 (vals cand-comments))]
+                   ["distinct comment texts LOST" (count comments-removed)]
+                   ["distinct comment texts ADDED" (count comments-added)]]))
+    (when (seq comments-removed)
+      (println)
+      (println "**Comment texts present in the base and absent from the candidate:**")
+      (println)
+      (println (tbl* ["n" "comment"] (for [c comments-removed] [(:n c) (str "`" (:text c) "`")]))))
+    (when (seq comments-added)
+      (println)
+      (println "Comment texts added by the candidate:")
+      (println)
+      (println (tbl* ["n" "comment"] (for [c comments-added] [(:n c) (str "`" (:text c) "`")]))))
+
+    (println)
+    (println "### B. Decisions that remain for the reviewer")
+    (println)
+    (println "Nothing here is discharged by section A. These are the obligations the checker deliberately does not decide.")
+    (println)
+
+    (println "**B1 — destination boundaries.** The partition is a design judgement. The checker can say where every")
+    (println "owner went; it cannot say whether that is the right place.")
+    (println)
+    (println (tbl* ["destination namespace" "owners received" "file"]
+                   (for [[ns rs] (sort-by first (group-by :to-ns moved-rows))]
+                     [ns (count rs) (:to-file (first rs))])))
+
+    (println)
+    (println "**B2 — promotions and privacy changes.**")
+    (println)
+    (println (tbl* ["owner" "kind" "from" "to" "change"]
+                   (for [p promotions] [(:id p) (:kind p) (:from-ns p) (:to-ns p) (:direction p)])))
+    (println)
+    (println (str "Private→public relocations widen the public surface whether or not the transform's promotion policy"
+                  " demanded it. Count: **"
+                  (count (filter #(= "private -> public" (:direction %)) promotions)) "**."))
+
+    (println)
+    (println "**B3 — references the checker could not confirm.**")
+    (println)
+    (println (tbl ["quantity" "count"]
+                  [["candidate sites with an unresolvable alias" (count cand-unresolved-sites)]
+                   ["candidate sites naming an alias the `ns` form does not define" (count undefined-alias-sites)]
+                   ["bare references inside a relocated body naming an owner that now lives elsewhere" (count possible-unresolved)]
+                   ["ambiguous owner matches" (count (:ambiguous m))]
+                   ["stale sites still naming the old namespace" (count cand-stale-sites)]]))
+    (when (seq possible-unresolved)
+      (println)
+      (println "**Bare references inside relocated bodies that name an owner now in a different namespace.** Each is")
+      (println "either a local binding that shadows the name, a `:refer`, or a broken reference; the checker cannot")
+      (println "tell which without resolution, so each one is a review obligation:")
+      (println)
+      (println (tbl* ["relocated owner" "in file" "bare symbol" "that owner now lives in"]
+                     (for [u possible-unresolved] [(:owner u) (:file u) (:symbol u) (:now-in u)]))))
+    (when (seq cand-unresolved-sites)
+      (println)
+      (println (tbl* ["file:line" "site"] (for [s cand-unresolved-sites] [(str (:file s) ":" (:line s)) (str "`" (:text s) "`")]))))
+
+    (println)
+    (println "**B4 — load order.**")
+    (println)
+    (println (tbl ["quantity" "count"]
+                  [["new require edges between namespaces in this repository" (count new-edges)]
+                   ["files whose require ORDER changed (`:require` order is load order)" (count reordered)]
+                   ["namespaces created — their require order has NO base to compare against" (count ns-added)]
+                   ["namespaces deleted" (count ns-deleted)]
+                   ["NEW intra-file forward references (owner used before it is defined, no `declare`)"
+                    (count new-forward-refs)]
+                   ["files whose `:require` list lost the sorted order the base kept" (count sort-broken)]]))
+    (when (seq sort-broken)
+      (println)
+      (println "**`:require` sort discipline broken.** The base file listed its requires in sorted order and the")
+      (println "candidate does not. A reorder among requires the candidate ADDED has no base position to compare")
+      (println "against, so this is the only mechanical signal for it — and `:require` order is load order:")
+      (println)
+      (println (tbl* ["file" "candidate require order"]
+                     (for [e sort-broken] [(:path e) (str/join " " (:full-cand e))]))))
+    (when (seq new-forward-refs)
+      (println)
+      (println "**Intra-file definition-order violations introduced by this candidate.** A top-level form that names a")
+      (println "sibling defined further down the same file, with no earlier `declare`, fails at load. (A local binding")
+      (println "that shadows the name would produce the same line here, so each is a review item, not a proven break.)")
+      (println)
+      (println (tbl* ["file" "owner" "references (defined later)"]
+                     (for [r new-forward-refs] [(:file r) (:owner r) (:refers r)]))))
+    (when (seq reordered)
+      (println)
+      (println "**Require-order changes. `:require` order is load order, and a reorder is a semantic change this")
+      (println "checker cannot clear:**")
+      (println)
+      (println (tbl* ["file" "base order" "candidate order"]
+                     (for [e reordered] [(:path e) (str/join " " (:order-base e)) (str/join " " (:order-cand e))]))))
+    (when (seq new-edges)
+      (println)
+      (println (tbl* ["from namespace" "now requires"] (for [e new-edges] [(:from e) (:to e)]))))
+
+    (println)
+    (println "**B5 — macro context and generated classes.**")
+    (println)
+    (println (tbl ["quantity" "count"]
+                  [["relocated owners containing macro / class / dynamic-resolution constructs" (count macro-context)]
+                   ["candidate namespaces carrying `:gen-class`" (count gen-class-nses)]]))
+    (when (seq macro-context)
+      (println)
+      (println (tbl* ["relocated owner" "new namespace" "constructs found in the body"]
+                     (for [c macro-context] [(:owner c) (:to-ns c) (:constructs c)]))))
+    (when (seq gen-class-nses)
+      (println)
+      (println (str "`:gen-class` files: " (str/join ", " gen-class-nses)
+                    " — relocating one changes the generated class package.")))
+
+    (println)
+    (println "**B6 — prose edits.**")
+    (println)
+    (println (str "Comment texts lost: **" (count comments-removed) "**. Comment texts added: **"
+                  (count comments-added) "**. Relocated owners at `:code-identical-comments-differ`: **"
+                  (get tier-counts :code-identical-comments-differ 0) "**. Each is a prose change that must be"
+                  " separately authorised. A transform author may not declare its own prose edits outside review."))
+
+    (println)
+    (println "**B7 — everything the checker could not classify.**")
+    (println)
+    (let [ns-files (set (concat (map :path ns-added) (map :path ns-edits) (map :path ns-deleted)))
+          explained (into ns-files (concat (map :to-file moved-rows) (map :from-file moved-rows)
+                                           (map :file same-rows)))
+          unexplained (vec (remove explained touched))]
+      (println (tbl ["quantity" "count"]
+                    [["touched source files with no relocation or `ns` edit to explain them" (count unexplained)]
+                     ["changed files outside the scanned roots, or not Clojure source" (count nonsource-changed)]
+                     ["files whose owner inventories disagree between the resolver and the scanner" (count reconcile-failures)]
+                     ["forward declarations (`declare`) — named, never counted as owners" (count declared-names)]
+                     ["top-level forms that define no Var — NOT certified by this brief" (count no-var-forms)]
+                     ["tree entries the checker REFUSED to read (symlink, non-blob, oversized)" (count refused-entries)]
+                     ["call heads whose tokens were frozen (unresolvable, or a deliberately unwalked macro)" (count unmodelled-macros)]]))
+      (when (seq no-var-forms)
+        (println)
+        (println "**Top-level forms that define no Var.** A `defmethod` extends a multimethod, an `extend-*`")
+        (println "installs protocol implementations: neither creates a Var, so the resolver reports no")
+        (println "definition and this brief cannot track their identity across the change. They are named here")
+        (println "rather than silently absent, and they are a reviewer's obligation:")
+        (println)
+        (println (tbl* ["form"] (for [x no-var-forms] [x]))))
+      (when (seq declared-names)
+        (println)
+        (println "Forward declarations the resolver reports as definitions. They are not owners:")
+        (println)
+        (println (tbl* ["declared"] (for [d declared-names] [d]))))
+      (when (seq reconcile-failures)
+        (println)
+        (println "**Owner-inventory reconciliation failures.** clj-kondo's `:var-definitions` are the owner")
+        (println "inventory; the scanner only locates each definition's top-level span. Where the two do not")
+        (println "agree, nothing in that file is certifiable:")
+        (println)
+        (println (tbl* ["tree" "file" "definition not placed" "owner not reported" "unanalysed platform" "unreported branch defs" "require seen only by the parser / only by the resolver"]
+                       (for [r reconcile-failures]
+                         [(:tree r) (:path r)
+                          (if (seq (:unlocated r)) (str/join ", " (:unlocated r)) "—")
+                          (if (seq (:unreported r)) (str/join ", " (:unreported r)) "—")
+                          (if (seq (:unanalysed-features r)) (str/join " " (:unanalysed-features r)) "—")
+                          (if (pos? (long (or (:cond-gap r) 0))) (str (:cond-gap r)) "—")
+                          (str (if (seq (:only-parser r)) (str/join " " (:only-parser r)) "—")
+                               " / "
+                               (if (seq (:only-resolver r)) (str/join " " (:only-resolver r)) "—"))]))))
+      (when (seq refused-entries)
+        (println)
+        (println "**Tree entries this checker refused to read.** A symlink is reported by its entry, never followed;")
+        (println "its target is outside both git trees and can never be section-A evidence:")
+        (println)
+        (println (tbl* ["path" "why"] (for [e refused-entries] [(:path e) (:why e)]))))
+      (when (seq unmodelled-macros)
+        (println)
+        (println "**Call heads whose tokens were frozen.** Either the scanner could not resolve the head to a")
+        (println "non-macro definition it can read, or the head is a macro whose binding grammar it deliberately does")
+        (println "not walk. Every token inside such a form is left UNRESOLVED, so a body that depended on one for its")
+        (println "equivalence is reported as not certified rather than preserved:")
+        (println)
+        (println (tbl* ["macro form"] (for [mn unmodelled-macros] [(str "`" mn "`")]))))
+      (when (seq unexplained)
+        (println)
+        (println (tbl* ["file"] (for [p unexplained] [p]))))
+      (when (seq nonsource-changed)
+        (println)
+        (println "Changed non-source or out-of-root files. **This checker read none of them:**")
+        (println)
+        (println (tbl* ["file"] (for [p nonsource-changed] [p])))))
+
+    (when receipt
+      (println)
+      (println "### C. Disagreement with the producer receipt")
+      (println)
+      (println (str "Receipt: `" (:receipt (:opts cli)) "`"))
+      (println)
+      (when (seq (:agree disagreements))
+        (println "Receipt claims the checker independently re-derived and **agrees with**:")
+        (println)
+        (println (tbl ["claim" "receipt says" "checker re-derived"] (:agree disagreements)))
+        (println)
+        (println "Agreement here means two derivations produced the same number. It does not transfer the receipt's")
+        (println "authority to anything else in it.")
+        (println))
+      (if (seq (:rows disagreements))
+        (do (println "**The checker cannot confirm the following. Each is a review obligation, not a discrepancy to be")
+            (println "reconciled by re-reading the receipt.**")
+            (println)
+            (println (tbl ["claim" "receipt says" "checker re-derived" "why it matters"] (:rows disagreements))))
+        (println (str "No contradiction was found between the receipt claims this checker knows how to read and its own"
+                      " derivation. That is **not** agreement about anything the checker does not derive."))))
+
+    (println)
+    (println "### D. What this brief did NOT check")
+    (println)
+    (println "This brief is a static, textual re-derivation over two git trees. It establishes nothing about behaviour.")
+    (println "It did not check:")
+    (println)
+    (doseq [l ["runtime behaviour of any kind. No namespace was loaded, no test was run, no process was started."
+               "cold process startup, classpath, load order as executed, or clean interning. A require-order table is not a load."
+               "macro expansion. A relocated macro's expansion sites, and any owner consumed by a macro, are unverified here."
+               "dynamic references: `resolve`, `requiring-resolve`, `ns-resolve`, `find-var`, `intern`, symbols built from strings, multimethod dispatch registration, data readers, and any var named by data rather than by code."
+               "reader conditionals. `.cljc` branches are compared as text; no platform was elaborated."
+               "protocol, record and type identity. A relocated `defrecord`/`deftype`/`definterface` changes its generated class package; AOT or serialised artefacts were not examined."
+               "references from resources, configuration, EDN data, documentation or any non-source file that names a namespace as a string."
+               "whether the destination partition is a good one, whether a promotion was authorised, or whether a prose edit was wanted."
+               "test coverage, lint delta, formatting policy, or any repository gate."
+               "custody. This brief proves nothing about who ran what, or that any claimed execution occurred. It is a re-derivation, not an attestation."
+               "anything outside the scanned roots, and any file whose extension is not .clj/.cljc/.cljs."
+               "trailing whitespace inside a string literal, which the `:identical-modulo-whitespace` tier normalises away."
+               "anything the external resolver cannot see. A local is never canonicalised — the resolver decides what is a local — but a Var reached only at runtime, or a file it could not analyse, is refused rather than compared."]]
+      (println (str "- " l)))
+    (println)
+    (println (format "_Resolver: clj-kondo via `~/bin/clj-kondo`, %.1f ms for both trees. Checker wall: %.1f ms. Generated by `bin/preservation-brief`, which reads only the two git trees._"
+                     kondo-ms (wall-ms)))))
+
+(println out)
+(when-let [o (:out (:opts cli))] (spit o out))
+(when-let [j (:json (:opts cli))]
+  (spit j (json/generate-string
+           {:repo repo :base bse-sha :candidate cand-sha :title title
+            :change_class change-class
+            :wall_ms (wall-ms)
+            :resolver_ms kondo-ms
+            :resolver "clj-kondo via ~/bin/clj-kondo"
+            :walker_disagreements (count (filter #(get-in % [:scope :walker-disagreement])
+                                                 (concat moved-rows same-rows)))
+            :scope_files (count scope-paths)
+            :all_source_files (count all-source)
+            :base_owners (count (all-owners base-idx))
+            :cand_owners (count (all-owners cand-idx))
+            :moved (count moved-rows)
+            :tiers (into {} (map (fn [[k v]] [(name k) v])) tier-counts)
+            :preserved_bodies (reduce + 0 (map #(get tier-counts % 0)
+                                               [:byte-identical :identical-modulo-whitespace
+                                                :identical-modulo-requalification]))
+            :omitted (count (:removed m))
+            :new_owners (count (:added m))
+            :ambiguous (count (:ambiguous m))
+            :duplicated (count duplicated)
+            :source_leftovers (count source-leftovers)
+            :ns_edits (count ns-edits)
+            :ns_added (count ns-added)
+            :ns_deleted (count ns-deleted)
+            :require_reorders (count reordered)
+            :require_sort_broken (count sort-broken)
+            :reconcile_failures (count reconcile-failures)
+            :declares (count declared-names)
+            :no_var_forms (count no-var-forms)
+            :reconcile_unlocated (reduce + 0 (map #(count (:unlocated %)) reconcile-failures))
+            :reconcile_unreported (reduce + 0 (map #(count (:unreported %)) reconcile-failures))
+            :unanalysed_platforms (vec (sort (distinct (mapcat :unanalysed-features reconcile-failures))))
+            :analysed_features (vec (sort analysed-features))
+            :reader_conditionals (reduce + 0 (map #(or (:reader-conditionals %) 0)
+                                                  (concat (vals base-idx) (vals cand-idx))))
+            :kind_disagreements (count kind-disagree)
+            :new_forward_refs (count new-forward-refs)
+            :base_old_sites (count base-old-sites)
+            :rewritten_sites (count cand-new-sites)
+            :stale_sites (count cand-stale-sites)
+            :unresolved_sites (count cand-unresolved-sites)
+            :undefined_alias_sites (count undefined-alias-sites)
+            :retargeted (count retargeted)
+            :promotions (count (filter #(= "private -> public" (:direction %)) promotions))
+            :privacy_changes (count promotions)
+            :comments_lost (count comments-removed)
+            :comments_added (count comments-added)
+            :possible_unresolved (count possible-unresolved)
+            :macro_context (count macro-context)
+            :changed_bodies_in_place (count same-rows)
+            :in_place_tiers (into {} (map (fn [[k v]] [(name k) v])) same-tier-counts)
+            :in_place_preserved (reduce + 0 (map #(get same-tier-counts % 0)
+                                                 [:identical-modulo-whitespace :identical-modulo-requalification]))
+            :in_place_needs_review (+ (get same-tier-counts :changed 0)
+                                      (get same-tier-counts :code-identical-comments-differ 0)
+                                      (get same-tier-counts :unmodelled-macro-context 0))
+            :nonsource_changes (count nonsource-changed)
+            :disagreements (count (:rows disagreements))
+            :clear clear?
+            :hard_stops (mapv (fn [[n w]] {:n n :what w}) hard-stops)
+            :refused_entries (count refused-entries)
+            :unmodelled_macros unmodelled-macros}
+           {:pretty true})))
+(fs/delete-tree workdir)
+(System/exit (if clear? 0 3))
