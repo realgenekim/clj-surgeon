@@ -13,6 +13,7 @@
    this suite as a child with a private `-Djava.io.tmpdir`."
   (:require
    [clj-surgeon.lane-manifest :as lm]
+   [clj-surgeon.namespace-execution :as execution]
    [clj-surgeon.ns-isolation :as iso]
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.string :as str]
@@ -85,7 +86,7 @@
    (let [sharded? (seq vars)
          var-walls (atom {})
          before (iso/probe repo-root)
-         counters (if sharded? (test-vars-of n vars var-walls) (t/test-ns n))
+         facts (execution/run-observed n vars #(if sharded? (test-vars-of n vars var-walls) (t/test-ns n)))
          after (iso/probe-after repo-root)
          lane (lm/lane-of n)
          vs (iso/enforced lane
@@ -95,7 +96,9 @@
                                            (get iso/lane-default-budget-ms lane
                                                 iso/default-namespace-budget-ms)}))]
      (cond-> {:namespace n
-              :counters counters
+              :counters (:counters facts)
+              :expected-vars (:expected-vars facts)
+              :executed-vars (:executed-vars facts)
               :elapsed-ms (quot (- (:instant-ns after) (:instant-ns before)) 1000000)
               :violations (if sharded?
                             (vec (remove (comp #{"time budget"} :resource) vs))
@@ -353,12 +356,12 @@
         repo-root (System/getProperty "user.dir")
         runs (mapv (fn [n]
                      (run-namespace-with-snapshot
-                      n repo-root
-                      (when-let [names (seq (get shard-vars n))]
-                        (mapv #(or (ns-resolve n %)
-                                   (throw (ex-info (format "lane-refused: %s/%s is not a var" n %)
-                                                   {:namespace n :var %})))
-                              names))))
+                       n repo-root
+                       (when-let [names (seq (get shard-vars n))]
+                         (mapv #(or (ns-resolve n %)
+                                    (throw (ex-info (format "lane-refused: %s/%s is not a var" n %)
+                                                    {:namespace n :var %})))
+                               names))))
                    namespaces)
         result (apply merge-with + (map :counters runs))
         _ (report-namespace-walls! runs)
@@ -372,13 +375,14 @@
       ;; exit code carries only what it alone can decide.
       (do (spit emit-edn
                 (pr-str {:namespaces (mapv :namespace runs)
-                         :runs (mapv #(select-keys % [:namespace :counters :elapsed-ms
+                         :runs (mapv #(select-keys % [:namespace :counters :expected-vars :executed-vars :elapsed-ms
                                                       :violations :sharded :vars :var-walls-ms])
                                      runs)
                          :result result
                          :notes (summary-notes)
                          :leak-fail leak-fail}))
           (System/exit (+ (:fail result) (:error result) leak-fail)))
-      (let [_ (t/do-report (assoc result :type :summary))
+      (let [_ (println "SERIAL/NOT-A-GATE: direct namespace runner; use make test for landing")
+            _ (t/do-report (assoc result :type :summary))
             iso-fail (report-isolation! runs)]
         (System/exit (+ (:fail result) (:error result) iso-fail leak-fail))))))

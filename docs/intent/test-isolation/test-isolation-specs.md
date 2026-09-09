@@ -232,6 +232,14 @@ it); the battery lane to 007 alone (it exists to launch cold child JVMs).
   (at the ceiling passes, one ms past it refuses),
   `.../the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays`.
 
+  Round-two gate margin (2026-09-09): compact-relations has an explicit
+  18,000 ms namespace override, about twice its measured 8,836 ms under
+  eight-worker contention (the four-worker fence measured 8,002/8,000 ms).
+  This remains elapsed wall across namespace execution and isolation probes;
+  the 60,000 ms fast-lane union ceiling remains independent and unchanged.
+  Witness `.../compact-relations-has-a-declared-contention-margin` accepts
+  8,002 and 18,000 ms and rejects 18,001 ms with the declared ceiling.
+
 - [x] **TEST-ISO-010**: No thread or executor leaks. The live NON-DAEMON
   thread set shall be snapshotted around each namespace and a thread alive
   afterwards that was not alive before shall fail naming its id and its name.
@@ -404,6 +412,70 @@ evidence -- so every landing pays it in full.
   `clj-surgeon.lane-manifest-test/a-namespace-in-the-tree-but-absent-from-the-census-is-named`,
   `clj-surgeon.mcp-intent-contract-test/the-derived-audit-includes-every-previously-invisible-row`,
   `clj-surgeon.mcp-intent-contract-test/an-intent-the-registry-cannot-reach-is-named-not-silently-dropped`.
+
+### TEST-ISO-015 execution — automatic complete landing gate
+
+Every worker shall hold an inherited flock slot under
+`/var/tmp/forge/gate-slots/` for its lifetime. Each acquisition shall recompute
+width from live MemAvailable under the shared admission lock and account for
+all occupied slots, including slots above a newly reduced width. Insufficient
+or unknown memory shall refuse; reduced capacity shall wait for holders to
+drain. Abrupt worker exit shall release its lock through the operating system.
+
+The coordinator shall derive `print-gate-stages` and execution from one ordered
+manifest. Prewarm shall execute every stage except battery-fresh and publish
+`:landing? false`, `:prewarm? true` and flat `:stages` entries containing
+`:target` and `:exit`. A full receipt shall include the same stage set printed
+by the manifest entrance. A consumer shall rerun for stage-set-mismatch when
+the merged tree's membership differs from prewarm plus battery-fresh.
+
+The same census contract governs execution: when `make test` or
+`make landing-gate` succeeds, the
+  shared TEST-ISO-013 coordinator shall publish current-tree landing evidence
+  covering every discovered member of every required runtime suite.
+
+  Width is min(floor(nproc/2), floor((MemAvailableMiB-2048)/1536)),
+  capped by namespace count, with a 2048 MiB
+  reserve and 1536 MiB per lane; gate JVM and Babashka worker heaps (including
+  Babashka temp-isolation re-exec) have a 512 MiB maximum.
+  Missing, duplicate, unexpected, failed or unreadable child evidence refuses.
+  Child paths are unique to the invocation. Loaded deftest execution coverage provides a cheap
+  per-namespace drift witness (namespace hooks retain their own semantics).
+  Namespace counts and walls are recorded; skipped must be zero. JVM isolation
+  and time budgets are evaluated over the union. All fast JVM workers finish before any integration worker starts, preserving
+  the global isolation phase boundary across processes.
+  One shared executor owns the width across alias, MCP and BB suites. The
+  unchanged shell/oracle sequence occupies one slot after the fast barrier.
+  Recovery and freshness precede the pool; hygiene and audit follow it.
+  Serial debugging retains manifest order. Runtime metadata auditing uses one
+  conditional assertion per manifest row so counts do not depend on co-loaded
+  tests; it still checks every loaded namespace. Change-buffer tests clear their
+  retained bases at fixture boundaries. BB preserves its existing temp
+  leak guard. Whole namespaces preserve fixtures and test-ns-hook; per-var splits
+  retain TEST-ISO-013's refusal. A changed tree during the run refuses.
+
+  Serial debugging prints SERIAL/NOT-A-GATE and cannot emit a landing receipt.
+  The one-lane parity control is fence evidence, with a cheap per-namespace drift
+  witness in the normal gate. Existing target callers require no new flags.
+
+  Misreadings: equal total counts establish namespace parity; missing output is
+  a zero-test success; stale evidence is current; a width flag is required;
+  parallel makespan substitutes for summed namespace budgets; debugging is a gate.
+
+  Witnesses: `clj-surgeon.battery-parallel-test/gate-width-is-resource-bounded`,
+  `.../gate-census-rejects-every-loss-and-duplicate`,
+  `.../gate-parity-is-per-namespace`, `.../serial-cannot-authorize-a-landing`.
+
+TEST-ISO-015 cold-start ratchet: before any JVM shard starts, the coordinator
+resolves the test-deps classpath once with bounded `clojure -Spath`. The first
+cold-clone named-failure run also lost two children to `ClassNotFoundException:
+clojure.main`; parallel CLI starts shared an initially absent .cpcache entry.
+Classpath readiness is coordinator work, not a namespace budget exception.
+A nonzero or empty classpath refuses before fan-out. BB-only jobs need no JVM
+classpath preparation. The receipt records this preparation wall separately.
+Witness: `battery-parallel-test/a-cold-checkout-prepares-the-worker-classpath`;
+the real empty-cache named-failure gate must retain every namespace and show
+only the deliberately failing assertion.
 
 ### TEST-ISO-009b archival distance
 

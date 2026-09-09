@@ -32,7 +32,7 @@ printf '%s\n' "$start_output" | grep -Fq -- 'refusing a competing launch'
 
 test_output=$(make --no-print-directory -n mcp-test)
 printf '%s\n' "$test_output" | grep -Fq -- '-J-Xms64m -J-Xmx512m'
-printf '%s\n' "$test_output" | grep -Fq -- '-M:clj-surgeon/mcp-test'
+printf '%s\n' "$test_output" | grep -Fq -- '-M:clj-surgeon/test-battery-parallel --suite mcp'
 
 nrepl_output=$(make --no-print-directory -n nrepl)
 printf '%s\n' "$nrepl_output" | grep -Fq -- '-J-Xms64m -J-Xmx512m'

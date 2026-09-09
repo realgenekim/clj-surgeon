@@ -1,4 +1,5 @@
-(ns ^{:lane :fast} clj-surgeon.mcp-change-buffer-test
+(ns clj-surgeon.mcp-change-buffer-test
+  {:lane :fast}
   (:require
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
@@ -15,7 +16,12 @@
 ;; leaked Anvil /tmp entries were `clj-surgeon-change-buffer-*` from this
 ;; namespace. Track every root it creates and sweep them after each test.
 (def ^:private temp-roots (atom []))
-(use-fixtures :each (tmp-leak/tracking-temp-dir-fixture temp-roots))
+;; @spec TEST-ISO-015 -- this namespace owns its retained-basis fixture.
+;; A different shard order must not make an unrelated test's bases its input.
+(use-fixtures :each (tmp-leak/tracking-temp-dir-fixture temp-roots)
+  (fn [run!]
+    (change-buffer/clear-bases!)
+    (try (run!) (finally (change-buffer/clear-bases!)))))
 
 (def core-source
   (str "(ns sample.core)\n"
