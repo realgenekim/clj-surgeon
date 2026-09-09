@@ -48,7 +48,9 @@
 (def base-sha (second (:pos cli)))
 
 (when (and (or (nil? candidate-sha) (nil? base-sha))
-           (not (:probe-scope (:opts cli))))
+           (not (:probe-scope (:opts cli)))
+           (not (:probe-heads (:opts cli)))
+           (not (:dump-tables (:opts cli))))
   (binding [*out* *err*]
     (println "usage: preservation-brief <candidate-sha> <base-sha> [--repo DIR] [--roots src,test] [--receipt PATH] [--out PATH] [--json PATH]"))
   (System/exit 2))
@@ -236,105 +238,96 @@
 ;; body disqualifies that name throughout the body. That can only move a body OUT
 ;; of the preserved tiers, never into them.
 
-(def let-like-heads
-  #{"let" "let*" "loop" "loop*" "binding" "with-open" "with-local-vars" "with-redefs"
-    "with-bindings" "if-let" "when-let" "if-some" "when-some" "when-first" "dotimes"
-    "with-precision" "with-in-str"})
-(def seq-binding-heads #{"for" "doseq"})
-(def fn-like-heads #{"fn" "fn*"})
-(def defn-like-heads #{"defn" "defn-" "defmacro"})
-(def frozen-heads
-  #{"quote" "var" "reify" "proxy" "extend-type" "extend-protocol" "deftype" "defrecord"
-    "definterface" "defprotocol" "definline" "amap" "areduce" "." ".." "new" "set!"
-    "monitor-enter" "monitor-exit" "import" "ns" "js*" "gen-class" "memfn" "bean"
-    "require" "use" "refer" "load" "in-ns"
-    ;; PB-FENCE-006: `clojure.test/are` binds the symbols in its argv. Every macro
-    ;; below either binds, or has unevaluated/rearranged operands, or has no
-    ;; falsifier row yet — all of which mean its tokens must be frozen, not walked.
-    "are" "condp" "cond->" "cond->>" "some->>" "while" "assert" "comment" "time"
-    "delay" "future" "lazy-seq" "lazy-cat" "locking" "dosync" "io!" "sync"
-    "defonce" "defmulti" "declare" "deftest" "deftest-" "defspec" "with-meta*"})
 
-;; ------------------------------------------------------------ the allowlist
+;; ------------------------------------------------------- tables, keyed by VAR
 ;;
-;; PB-FENCE-005. The previous build named the heads it would NOT trust. That set
-;; can never be complete: `compojure.core/GET` binds `[header]` and is neither
-;; defined in the scanned trees nor spelled `with-*`/`def*`, so it fell through to
-;; a plain walk and A certified a changed binding. A denylist over syntax is never
-;; conservative — every library anyone can write is outside it.
+;; PB-FENCE-009. The tables used to be keyed by SPELLING, and `head-status`
+;; matched a bare spelling before it ever looked at the file's `ns` form. A file
+;; that refers a binding macro of its own named `testing` therefore got
+;; `clojure.test/testing`'s semantics, and A certified a changed binding.
 ;;
-;; The rule is inverted. A bare token may be canonicalised only when EVERY
-;; enclosing list form has a head this scanner positively knows introduces no
-;; binding it has failed to model:
-;;
-;;   (a) a special form or clojure.core macro modelled explicitly below;
-;;   (b) a symbol that resolves, through the file's own `ns` requires / refers /
-;;       aliases, to a `def`/`defn` in one of the two scanned trees that is NOT a
-;;       `defmacro`;
-;;   (c) a clojure.core FUNCTION from the shipped allowlist below — functions only,
-;;       no macros, since a function's arguments are evaluated and cannot bind.
-;;
-;; Any other head — an unresolved symbol, a library alias or refer whose target is
-;; outside the trees, a symbol resolving to a `defmacro` — is UNMODELLED. Every
-;; token inside it is frozen, the head is named and counted in the brief, and the
-;; body cannot reach a tier that depends on canonicalisation.
+;; **Spelling is not identity.** Every table below is keyed by a fully qualified
+;; Var, and `head-info` resolves a head through the file's own namespace — refers,
+;; then aliases and dotted namespaces, then definitions in the two trees, and only
+;; then the `clojure.core` / `clojure.test` default, and only when nothing shadows
+;; it. The resolved Var, never the spelling, is what the tables are consulted with.
 
-(def special-forms
-  "Clojure special forms. They are not Vars, cannot be redefined, and their binding
-   behaviour is fixed by the compiler; the walker models each one explicitly."
-  ;; Only the special forms the walker WALKS. The ones it freezes — `quote`, `var`,
-  ;; `set!`, `new`, `.`, `..`, `monitor-*` — live in `frozen-heads`, and a head may
-  ;; never appear in both (the tables test refuses a collision).
+(def walked-special-forms
+  "Special forms the walker walks. The compiler resolves a special form before any
+   Var, so these cannot be shadowed by a refer; they are the only bare names in
+   any table."
   #{"if" "do" "let*" "fn*" "loop*" "recur" "throw" "try" "catch" "finally" "def"})
 
-(def non-binding-core-macros
-  "clojure.core / clojure.test MACROS asserted to introduce no binding.
+(def frozen-special-forms
+  #{"quote" "var" "set!" "new" "." ".." "monitor-enter" "monitor-exit"})
 
-   Each entry is a soundness claim, so each entry names a planted-defect replay row
-   that exercises it — `bin/preservation-tables-test` fails if a row is missing.
-   `clojure.test/are` used to sit in this table and does not belong here: it binds
-   the symbols in its argv, which is PB-FENCE-006. It is in `frozen-heads` now, and
-   its row asserts the body is NOT certified."
-  #{"when" "when-not" "if-not" "and" "or" "cond" "->" "->>" "some->" "doto"
-    "testing" "is"})
+(def let-like-vars
+  (into #{} (map #(str "clojure.core/" %))
+        ["let" "loop" "binding" "with-open" "with-local-vars" "with-redefs"
+         "with-bindings" "if-let" "when-let" "if-some" "when-some" "when-first"
+         "dotimes" "with-precision" "with-in-str"]))
+(def seq-binding-vars #{"clojure.core/for" "clojure.core/doseq"})
+(def fn-like-vars #{"clojure.core/fn"})
+(def defn-like-vars #{"clojure.core/defn" "clojure.core/defn-" "clojure.core/defmacro"})
+(def other-modelled-vars
+  #{"clojure.core/case" "clojure.core/as->" "clojure.core/letfn" "clojure.core/defmethod"})
 
-(def control-heads
-  "Heads the walker treats as introducing no binding: special forms it models, and
-   the macros above. Core FUNCTIONS are handled separately by `core-fn-allowlist`,
-   since a function's arguments are evaluated and cannot bind."
-  (into special-forms non-binding-core-macros))
+(def frozen-vars
+  (into #{"clojure.test/are" "clojure.test/deftest"}
+        (map #(str "clojure.core/" %))
+        ;; Every entry must resolve in its stated namespace — the tables test
+        ;; enforces it, and that is what removed `io!`, `gen-class`, `import`,
+        ;; `definline`, `definterface` and `clojure.core/deftest`. A head no table
+        ;; names is unmodelled anyway, which freezes it just the same, so dropping
+        ;; an unresolvable entry loses nothing but a false claim.
+        ["condp" "cond->" "cond->>" "some->>" "while" "assert" "comment" "time"
+         "delay" "future" "lazy-seq" "lazy-cat" "locking" "dosync" "sync"
+         "defonce" "defmulti" "declare" "defprotocol" "defrecord" "deftype"
+         "reify" "proxy" "extend-type" "extend-protocol"
+         "amap" "areduce" "require" "use" "refer" "load" "in-ns" "ns" "memfn" "bean"]))
 
-(def modelled-heads
-  (into (into control-heads #{"case" "catch" "as->" "letfn" "defmethod"})
-        (concat let-like-heads seq-binding-heads fn-like-heads defn-like-heads frozen-heads)))
+(def non-binding-macro-vars
+  "clojure.core / clojure.test MACROS asserted to introduce no binding. Each entry
+   is a soundness claim, so each carries an executed witness in
+   `bin/preservation-tables-test`, plus a GENERATED shadow witness proving that a
+   same-named referred macro flips the head to unmodelled."
+  (into #{"clojure.test/testing" "clojure.test/is"}
+        (map #(str "clojure.core/" %))
+        ["when" "when-not" "if-not" "and" "or" "cond" "->" "->>" "some->" "doto"]))
 
-(def core-fn-allowlist
+(def core-fn-vars
   "clojure.core FUNCTIONS. A function's arguments are evaluated, so no token inside
-   a call to one can be a binding this scanner missed. `bin/preservation-tables-test`
-   resolves every entry and fails if any is a macro or does not resolve — that check
-   removed `cast` and the typo `when-first?`."
-  #{"+" "-" "*" "/" "=" "==" "not=" "<" ">" "<=" ">=" "inc" "dec" "min" "max" "mod" "rem"
-    "quot" "abs" "count" "first" "second" "last" "next" "rest" "nth" "nthnext" "get" "get-in"
-    "assoc" "assoc-in" "dissoc" "update" "update-in" "merge" "merge-with" "select-keys"
-    "keys" "vals" "find" "contains?" "conj" "cons" "into" "concat" "map" "mapv" "mapcat"
-    "filter" "filterv" "remove" "reduce" "reduce-kv" "keep" "keep-indexed" "map-indexed"
-    "take" "take-while" "take-last" "drop" "drop-while" "drop-last" "partition" "partition-all"
-    "partition-by" "split-at" "split-with" "sort" "sort-by" "group-by" "frequencies" "distinct"
-    "dedupe" "interpose" "interleave" "flatten" "reverse" "range" "repeat" "repeatedly" "cycle"
-    "some" "every?" "not-any?" "not-every?" "empty?" "seq" "seq?" "vec" "set" "list*" "apply"
-    "identity" "constantly" "comp" "partial" "juxt" "complement" "fnil" "memoize" "trampoline"
-    "str" "name" "namespace" "keyword" "symbol" "pr-str" "print-str" "format" "println" "print"
-    "prn" "pr" "read-string" "number?" "string?" "keyword?" "symbol?" "map?" "vector?" "set?"
-    "coll?" "list?" "fn?" "nil?" "some?" "true?" "false?" "int?" "pos?" "neg?" "zero?" "even?"
-    "odd?" "boolean" "int" "long" "double" "float" "bigdec" "bigint" "num" "parse-long"
-    "parse-double" "parse-boolean" "deref" "atom" "swap!" "reset!" "swap-vals!" "reset-vals!"
-    "ref" "agent" "send" "send-off" "promise" "deliver" "meta" "with-meta" "vary-meta"
-    "instance?" "class" "type" "identical?" "compare" "hash" "rand" "rand-int"
-    "rand-nth" "shuffle" "peek" "pop" "subvec" "sorted-map" "sorted-set" "array-map"
-    "zipmap" "update-keys" "update-vals" "run!" "doall" "dorun" "iterate" "reductions"
-    "max-key" "min-key" "sequence" "eduction" "transduce" "completing" "cat"
-    "ex-info" "ex-message" "ex-data" "ex-cause" "slurp" "spit" "boolean?" "not"
-    "list" "vector" "hash-map" "hash-set"})
+   a call to one can be a binding this scanner missed. The tables test resolves
+   every entry and fails if any is a macro or does not resolve."
+  (into #{} (map #(str "clojure.core/" %))
+        ["+" "-" "*" "=" "==" "not=" "<" ">" "<=" ">=" "inc" "dec" "min" "max" "mod" "rem"
+         "quot" "abs" "count" "first" "second" "last" "next" "rest" "nth" "nthnext" "get" "get-in"
+         "assoc" "assoc-in" "dissoc" "update" "update-in" "merge" "merge-with" "select-keys"
+         "keys" "vals" "find" "contains?" "conj" "cons" "into" "concat" "map" "mapv" "mapcat"
+         "filter" "filterv" "remove" "reduce" "reduce-kv" "keep" "keep-indexed" "map-indexed"
+         "take" "take-while" "take-last" "drop" "drop-while" "drop-last" "partition" "partition-all"
+         "partition-by" "split-at" "split-with" "sort" "sort-by" "group-by" "frequencies" "distinct"
+         "dedupe" "interpose" "interleave" "flatten" "reverse" "range" "repeat" "repeatedly" "cycle"
+         "some" "every?" "not-any?" "not-every?" "empty?" "seq" "seq?" "vec" "set" "list*" "apply"
+         "identity" "constantly" "comp" "partial" "juxt" "complement" "fnil" "memoize" "trampoline"
+         "str" "name" "namespace" "keyword" "symbol" "pr-str" "print-str" "format" "println" "print"
+         "prn" "pr" "read-string" "number?" "string?" "keyword?" "symbol?" "map?" "vector?" "set?"
+         "coll?" "list?" "fn?" "nil?" "some?" "true?" "false?" "int?" "pos?" "neg?" "zero?" "even?"
+         "odd?" "boolean" "int" "long" "double" "float" "bigdec" "bigint" "num" "parse-long"
+         "parse-double" "parse-boolean" "deref" "atom" "swap!" "reset!" "swap-vals!" "reset-vals!"
+         "ref" "agent" "send" "send-off" "promise" "deliver" "meta" "with-meta" "vary-meta"
+         "instance?" "class" "type" "identical?" "compare" "hash" "rand" "rand-int"
+         "rand-nth" "shuffle" "peek" "pop" "subvec" "sorted-map" "sorted-set" "array-map"
+         "zipmap" "update-keys" "update-vals" "run!" "doall" "dorun" "iterate" "reductions"
+         "max-key" "min-key" "sequence" "eduction" "transduce" "completing" "cat"
+         "ex-info" "ex-message" "ex-data" "ex-cause" "slurp" "spit" "boolean?" "not"
+         "list" "vector" "hash-map" "hash-set"]))
+
+(def table-vars
+  "Every Var any table speaks for. A head that resolves to something outside this
+   set, and outside `core-fn-vars`, is unmodelled."
+  (reduce into #{} [let-like-vars seq-binding-vars fn-like-vars defn-like-vars
+                    other-modelled-vars frozen-vars non-binding-macro-vars]))
 
 (defn- head-sym [nd]
   (let [c (first (:children nd))]
@@ -345,56 +338,71 @@
 
 (defn- pairs [xs] (partition-all 2 xs))
 
-(defn head-status
-  "One of :modelled :safe-call :unmodelled, for the head of a list form.
+(defn head-info
+  "Resolve a list head through the FILE'S OWN namespace, then look the resolved Var
+   up in the tables. Returns {:status :modelled|:safe-call|:unmodelled :resolved q}.
 
-   `ctx` carries {:file :kind :kind-disagree}. `:kind` is the def-head index for
-   THIS TREE only (PB-FENCE-007: a shared index let a candidate `defn` overwrite a
-   base `defmacro` and certify a macro call as a function call). `:kind-disagree`
-   holds every [ns name] whose def head differs between the two trees; any of them
-   is unmodelled on both sides.
-
-   Alias resolution runs BEFORE the interop heuristic (PB-FENCE-008: Clojure allows
-   an uppercase require alias, so `[compojure.core :as Route]` + `Route/GET` must
-   resolve as the macro it is, not pass as a class call)."
+   Order, and it matters (PB-FENCE-009): special forms (which the compiler resolves
+   before any Var and so cannot be shadowed) → an explicit `:refer` → a require
+   alias or dotted namespace → a definition in the file's own namespace → and only
+   then the `clojure.core`/`clojure.test` default. A head that resolves to a Var no
+   table speaks for is unmodelled, whatever it is spelled."
   [ctx h]
   (let [{:keys [file kind kind-disagree]} ctx]
     (cond
-      (nil? h) :safe-call                       ; computed head — cannot be a macro
-      (str/starts-with? h ":") :safe-call       ; keyword lookup
-      (modelled-heads h) :modelled
-      (str/starts-with? h ".") :safe-call        ; interop member call
-      (str/ends-with? h ".") :safe-call          ; constructor
+      (nil? h) {:status :safe-call}
+      (str/starts-with? h ":") {:status :safe-call}
+      (walked-special-forms h) {:status :modelled :resolved (str "special/" h)}
+      (frozen-special-forms h) {:status :modelled :resolved (str "special-frozen/" h)}
+      (str/starts-with? h ".") {:status :safe-call :resolved "interop"}
+      (str/ends-with? h ".") {:status :safe-call :resolved "interop"}
       :else
       (let [[a n] (if-let [[_ a n] (re-matches qual-token-re h)] [a n] [nil h])
-            alias-lib (when a (get (:aliases file) a))          ; a require alias WINS
-            dotted-lib (when (and a (nil? alias-lib) (str/includes? a ".")) a)
-            lib (or alias-lib dotted-lib)
+            alias-lib (when a (get (:aliases file) a))
+            dotted (when (and a (nil? alias-lib) (str/includes? a ".")) a)
             refer-lib (when-not a (get (:refers file) n))
-            target-ns (or lib refer-lib (when-not a (:ns file)))
-            k (get kind [target-ns n])]
+            own-ns (when-not a (:ns file))
+            own-def (when (and own-ns (get kind [own-ns n])) own-ns)
+            lib (or alias-lib dotted refer-lib own-def)
+            qual (when lib (str lib "/" n))
+            k (when lib (get kind [lib n]))]
         (cond
-          ;; a name whose def head disagrees between the trees is never vouched for
-          (contains? kind-disagree [target-ns n]) :unmodelled
-          ;; (b) resolves to a def/defn in THIS tree and is not a macro
-          (and k (not (contains? #{"defmacro" "definline"} k))) :safe-call
-          k :unmodelled                                        ; it IS a macro here
-          ;; Java static / interop — only for a prefix that is NOT a require alias
-          (and a (nil? alias-lib) (nil? dotted-lib)
-               (Character/isUpperCase (.charAt ^String a 0))) :safe-call
-          (and a (nil? alias-lib)
-               (some #(or (= a %) (str/ends-with? % (str "." a))) (:imports file))) :safe-call
-          ;; (c) clojure.core function allowlist
-          (and (nil? a) (nil? refer-lib) (core-fn-allowlist n)) :safe-call
-          (and (contains? #{"clojure.core" "cljs.core"} lib) (core-fn-allowlist n)) :safe-call
-          :else :unmodelled)))))
+          ;; interop only for a prefix that is neither an alias nor a namespace
+          (and a (nil? alias-lib) (nil? dotted)
+               (or (Character/isUpperCase (.charAt ^String a 0))
+                   (some #(or (= a %) (str/ends-with? % (str "." a))) (:imports file))))
+          {:status :safe-call :resolved "interop"}
+
+          (and lib (contains? kind-disagree [lib n])) {:status :unmodelled :resolved qual}
+
+          ;; the head resolves to a definition we can read in the two trees
+          (and k (contains? #{"defmacro" "definline"} k))
+          (if (contains? table-vars qual)
+            {:status :modelled :resolved qual}
+            {:status :unmodelled :resolved qual})
+          k {:status :safe-call :resolved qual}
+
+          ;; resolved to a namespace we cannot read
+          qual (cond
+                 (contains? table-vars qual) {:status :modelled :resolved qual}
+                 (contains? core-fn-vars qual) {:status :safe-call :resolved qual}
+                 :else {:status :unmodelled :resolved qual})
+
+          ;; bare, nothing shadows it: the clojure.core / clojure.test default
+          :else
+          (let [c (str "clojure.core/" n) t (str "clojure.test/" n)]
+            (cond
+              (contains? table-vars c) {:status :modelled :resolved c}
+              (contains? table-vars t) {:status :modelled :resolved t}
+              (contains? core-fn-vars c) {:status :safe-call :resolved c}
+              :else {:status :unmodelled :resolved n})))))))
 
 (defn scope-analysis
   "{:bound #{names} :frozen #{token texts} :macros #{heads} :unmodelled? bool}
    for one body, under the inverted allowlist of PB-FENCE-005 and the per-tree kind
    index of PB-FENCE-007."
   [text ctx]
-  (let [st (volatile! {:bound #{} :frozen #{} :macros #{} :unmodelled? false})
+  (let [st (volatile! {:bound #{} :frozen #{} :macros #{} :heads #{} :unmodelled? false})
         add! (fn [k vs] (vswap! st update k into vs))
         freeze! (fn [nd] (add! :frozen (sc/all-tokens nd)))]
     (letfn [(walk [nd]
@@ -405,21 +413,27 @@
                   (run! walk (:children nd)))
                 :list
                 (let [kids (:children nd)
-                      h (head-sym nd)]
+                      h (head-sym nd)
+                      {:keys [status resolved]} (head-info ctx h)
+                      r (or resolved "")
+                      _ (when h (vswap! st update :heads conj h))]
                   (cond
                     (nil? h) (run! walk kids)
 
                     ;; A frozen head is a modelling DECISION, not an unknown, but the
                     ;; reviewer still needs to know a body was refused because of it —
                     ;; `are` is exactly that case (PB-FENCE-006).
-                    (frozen-heads h) (do (vswap! st update :macros conj h) (freeze! nd))
+                    (or (frozen-vars r) (str/starts-with? r "special-frozen/"))
+                    (do (vswap! st update :macros conj h) (freeze! nd))
 
-                    (= :unmodelled (head-status ctx h))
-                    (do (vswap! st update :macros conj h)
+                    (= :unmodelled status)
+                    (do (vswap! st update :macros conj (str h
+                                                           (when (and resolved (not= resolved h))
+                                                             (str " -> " resolved))))
                         (vswap! st assoc :unmodelled? true)
                         (freeze! nd))
 
-                    (let-like-heads h)
+                    (or (let-like-vars r) (= r "special/let*") (= r "special/loop*"))
                     (let [bv (second kids)]
                       (when (= :vector (:kind bv))
                         (doseq [[b init] (pairs (:children bv))]
@@ -427,7 +441,7 @@
                           (when init (walk init))))
                       (run! walk (drop 2 kids)))
 
-                    (seq-binding-heads h)
+                    (seq-binding-vars r)
                     (let [bv (second kids)]
                       (when (= :vector (:kind bv))
                         (doseq [[b init] (pairs (:children bv))]
@@ -442,7 +456,7 @@
                                       (when init (walk init))))))
                       (run! walk (drop 2 kids)))
 
-                    (or (fn-like-heads h) (defn-like-heads h))
+                    (or (fn-like-vars r) (defn-like-vars r) (= r "special/fn*"))
                     (doseq [k (rest kids)]
                       (cond
                         (= :vector (:kind k)) (add! :bound (binder-syms k))
@@ -451,28 +465,28 @@
                             (run! walk (rest (:children k))))
                         :else (walk k)))
 
-                    (= "letfn" h)
+                    (= r "clojure.core/letfn")
                     (let [bv (second kids)]
                       (when (= :vector (:kind bv))
                         (doseq [f (:children bv)]
                           (add! :bound (binder-syms f))))
                       (run! walk (drop 2 kids)))
 
-                    (= "defmethod" h)
+                    (= r "clojure.core/defmethod")
                     (do (when-let [d (nth kids 2 nil)] (freeze! d))
                         (doseq [k (drop 3 kids)]
                           (if (= :vector (:kind k)) (add! :bound (binder-syms k)) (walk k))))
 
-                    (= "catch" h)
+                    (= r "special/catch")
                     (do (when-let [b (nth kids 2 nil)] (add! :bound (binder-syms b)))
                         (run! walk (drop 3 kids)))
 
-                    (= "as->" h)
+                    (= r "clojure.core/as->")
                     (do (when-let [e (nth kids 1 nil)] (walk e))
                         (when-let [b (nth kids 2 nil)] (add! :bound (binder-syms b)))
                         (run! walk (drop 3 kids)))
 
-                    (= "case" h)
+                    (= r "clojure.core/case")
                     (let [clauses (drop 2 kids)]
                       (when-let [e (nth kids 1 nil)] (walk e))
                       (doseq [[test result] (pairs clauses)]
@@ -484,24 +498,61 @@
                 (do (add! :bound #{"%" "%1" "%2" "%3" "%4" "%5" "%&"})
                     (let [h (when (= :token (:kind (first (:children nd))))
                               (:text (first (:children nd))))]
-                      (if (= :unmodelled (head-status ctx h))
+                      (if (= :unmodelled (:status (head-info ctx h)))
                         (do (vswap! st update :macros conj h)
                             (vswap! st assoc :unmodelled? true)
                             (freeze! nd))
                         (run! walk (:children nd)))))
                 (run! walk (:children nd))))]
       (run! walk (sc/nodes text)))
-    @st))
+    ;; A local binding that shadows a head this walker modelled means the head was
+    ;; never the Var the table spoke for. Body-scoped and conservative.
+    (let [{:keys [bound heads] :as st'} @st
+          shadowed (clojure.set/intersection bound heads)]
+      (if (seq shadowed)
+        (-> st' (assoc :unmodelled? true) (update :macros into (map #(str % " (shadowed by a local)")) shadowed))
+        st'))))
 
 (def ^:private priv-heads {"defn-" "defn" "deftest-" "deftest" "def-" "def"})
+
+(defn probe-ctx [refer-spec]
+  ;; refer-spec is "<name>|<namespace>"; `|` because a Var may be named `=`.
+  (let [[nm ns'] (when refer-spec (str/split refer-spec #"\|"))]
+    {:file {:ns "probe.ns" :aliases {} :imports []
+            :refers (if nm {nm ns'} {})}
+     :kind (if nm {[ns' nm] "defmacro"} {})
+     :kind-disagree #{}}))
+
+(when (:dump-tables (:opts cli))
+  (prn {:walked-special-forms walked-special-forms
+        :frozen-special-forms frozen-special-forms
+        :let-like-vars let-like-vars
+        :seq-binding-vars seq-binding-vars
+        :fn-like-vars fn-like-vars
+        :defn-like-vars defn-like-vars
+        :other-modelled-vars other-modelled-vars
+        :frozen-vars frozen-vars
+        :non-binding-macro-vars non-binding-macro-vars
+        :core-fn-vars core-fn-vars
+        :table-vars table-vars})
+  (System/exit 0))
+
+(when-let [f (:probe-heads (:opts cli))]
+  ;; Batch head resolution for bin/preservation-tables-test. Each input line is
+  ;; `<head><TAB><refer-name>|<namespace>` (or `-`); each output line is
+  ;; `<status> <resolved>`.
+  (doseq [line (str/split-lines (slurp f))
+          :when (not (str/blank? line))]
+    (let [[h refer-spec] (str/split line #"\t")
+          {:keys [status resolved]} (head-info (probe-ctx (when (not= "-" refer-spec) refer-spec)) h)]
+      (println (name status) (or resolved "-"))))
+  (System/exit 0))
 
 (when-let [probe-src (:probe-scope (:opts cli))]
   ;; Entry point for bin/preservation-tables-test: report whether the walker
   ;; considers `probe` bound in this source. Every table entry's witness runs
   ;; through here, against the real analysis rather than a copy of it.
-  (let [{:keys [bound frozen]} (scope-analysis probe-src
-                                 {:file {:ns "probe.ns" :aliases {} :refers {} :imports []}
-                                  :kind {} :kind-disagree #{}})]
+  (let [{:keys [bound frozen]} (scope-analysis probe-src (probe-ctx (:probe-refer (:opts cli))))]
     (println (if (or (contains? bound "probe") (contains? frozen "probe")) "BOUND" "FREE"))
     (System/exit 0)))
 

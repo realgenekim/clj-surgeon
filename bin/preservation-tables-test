@@ -41,40 +41,39 @@
 (def brief-src (slurp (str (fs/path here "preservation-brief"))))
 (def replay-src (slurp (str (fs/path here "preservation-replay"))))
 
-(defn table
-  "The literal set bound by `(def <nm> ... #{...})` in the brief's source."
-  [nm]
-  (let [forms (:forms (sc/scan brief-src))
-        f (first (filter #(let [cs (sc/children (:text %))]
-                            (and (= "def" (some-> (first cs) str/trim))
-                                 (= nm (some-> (second cs) str/trim))))
-                         forms))]
-    (when f
-      (let [cs (sc/children (:text f))
-            lit (last cs)]
-        (edn/read-string lit)))))
+(def brief (str (fs/path here "preservation-brief")))
 
-(def special-forms (table "special-forms"))
-(def non-binding-core-macros (table "non-binding-core-macros"))
-(def let-like-heads (table "let-like-heads"))
-(def seq-binding-heads (table "seq-binding-heads"))
-(def fn-like-heads (table "fn-like-heads"))
-(def defn-like-heads (table "defn-like-heads"))
-(def frozen-heads (table "frozen-heads"))
-(def core-fn-allowlist (table "core-fn-allowlist"))
-(def other-modelled #{"case" "catch" "as->" "letfn" "defmethod"})
+(def tables
+  (edn/read-string (:out (p/sh {:out :string :err :string} brief "--dump-tables" "1"))))
 
-;; Every head the walker gives binding treatment to, plus every macro declared
+(def walked-special-forms (:walked-special-forms tables))
+(def frozen-special-forms (:frozen-special-forms tables))
+(def let-like-vars (:let-like-vars tables))
+(def seq-binding-vars (:seq-binding-vars tables))
+(def fn-like-vars (:fn-like-vars tables))
+(def defn-like-vars (:defn-like-vars tables))
+(def other-modelled-vars (:other-modelled-vars tables))
+(def frozen-vars (:frozen-vars tables))
+(def non-binding-macro-vars (:non-binding-macro-vars tables))
+(def core-fn-vars (:core-fn-vars tables))
+(def table-vars (:table-vars tables))
+
+(defn bare [q] (last (str/split q #"/")))
+(defn nspace [q] (first (str/split q #"/")))
+
+;; Every Var the walker gives binding treatment to, plus every macro declared
 ;; non-binding. These are the claims that need an executed witness.
-(def claim-heads
-  (set/union let-like-heads seq-binding-heads fn-like-heads defn-like-heads
-             other-modelled non-binding-core-macros))
+(def claim-vars
+  (set/union let-like-vars seq-binding-vars fn-like-vars defn-like-vars
+             other-modelled-vars non-binding-macro-vars))
 
 ;; --------------------------------------------------------------- resolution
 
-(defn var-for [nm]
-  (or (try (ns-resolve 'clojure.core (symbol nm)) (catch Exception _ nil))
-      (try (ns-resolve 'clojure.test (symbol nm)) (catch Exception _ nil))))
+(defn var-for
+  "Resolve a fully qualified table entry in its stated namespace."
+  [q]
+  (let [n (nspace q) b (bare q)]
+    (try (ns-resolve (symbol n) (symbol b)) (catch Exception _ nil))))
 
 (defn macro? [nm] (boolean (:macro (meta (var-for nm)))))
 
@@ -147,7 +146,7 @@
 ;; full planted-defect replay row. The names must appear in the replay source.
 (def required-replay-rows
   ["local-shadow" "symlink-escape" "external-macro"
-   "are-binding" "kind-collision" "uppercase-alias"])
+   "are-binding" "kind-collision" "uppercase-alias" "referred-testing"])
 
 ;; ------------------------------------------------------------------- harness
 
@@ -157,60 +156,81 @@
   ok?)
 
 ;; R1 -----------------------------------------------------------------------
-(println "R1  core-fn-allowlist:" (count core-fn-allowlist) "entries")
-(doseq [nm (sort core-fn-allowlist)]
-  (let [v (var-for nm)]
-    (check! (some? v) "R1 unresolved" (str "core-fn-allowlist entry `" nm "` resolves to no Var"))
-    (when v
-      (check! (not (:macro (meta v))) "R1 macro in function table"
-              (str "`" nm "` is a MACRO; a macro's operands may be binding forms")))))
+(println "R1  core-fn-vars:" (count core-fn-vars) "entries")
+(doseq [q (sort core-fn-vars)]
+  (let [v (var-for q)]
+    (check! (some? v) "R1 unresolved" (str "`" q "` resolves to no Var"))
+    (when v (check! (not (:macro (meta v))) "R1 macro in function table"
+                    (str "`" q "` is a MACRO; a macro's operands may be binding forms")))))
 
 ;; R2 -----------------------------------------------------------------------
-(def non-frozen-heads
-  (set/union special-forms non-binding-core-macros let-like-heads seq-binding-heads
-             fn-like-heads defn-like-heads other-modelled))
-(println "R2  non-frozen heads:" (count non-frozen-heads))
-(doseq [nm (sort non-frozen-heads)]
-  (when-not (special-forms nm)
-    (let [v (var-for nm)]
-      (check! (some? v) "R2 unresolved head"
-              (str "`" nm "` is neither a special form nor a resolvable clojure.core/clojure.test Var"))
-      (when (and v (:macro (meta v)))
-        (check! (or (non-binding-core-macros nm) (contains? binding-witnesses nm))
-                "R2 unexamined macro"
-                (str "`" nm "` is a MACRO in a non-frozen table with no declared binding treatment"))))))
-(doseq [nm (sort frozen-heads)]
-  (check! (not (contains? non-frozen-heads nm)) "R2 table collision"
-          (str "`" nm "` is both frozen and non-frozen")))
+(println "R2  modelled/frozen Vars:" (count table-vars))
+(doseq [q (sort table-vars)]
+  (let [v (var-for q)]
+    (check! (some? v) "R2 unresolved table Var" (str "`" q "` resolves to no Var")))
+  (check! (not (contains? core-fn-vars q)) "R2 table collision"
+          (str "`" q "` is in both a modelled/frozen table and the function allowlist")))
+(doseq [q (sort non-binding-macro-vars)]
+  (let [v (var-for q)]
+    (when v (check! (:macro (meta v)) "R2 function in macro table"
+                    (str "`" q "` is declared a non-binding MACRO but resolves to a function")))))
+(check! (empty? (set/intersection walked-special-forms frozen-special-forms))
+        "R2 special-form collision" "a special form is both walked and frozen")
 
 ;; R3 -----------------------------------------------------------------------
-(println "R3  claims needing a witness:" (count claim-heads))
-(doseq [nm (sort claim-heads)]
-  (check! (or (contains? binding-witnesses nm) (contains? non-binding-witnesses nm))
-          "R3 unwitnessed table entry"
-          (str "`" nm "` is a table entry with no executed witness — a soundness claim with no falsifier")))
+(println "R3  claims needing a witness:" (count claim-vars))
+(doseq [q (sort claim-vars)]
+  (let [b (bare q)]
+    (check! (or (contains? binding-witnesses b) (contains? non-binding-witnesses b))
+            "R3 unwitnessed table entry"
+            (str "`" q "` is a table entry with no executed witness — a soundness claim with no falsifier"))))
 
-;; the witnesses themselves, run against the real scope-analysis via the brief
-(def brief (str (fs/path here "preservation-brief")))
-
-(defn brief-bound?
-  "Ask the brief itself whether `probe` is bound in this source, using its own
-   scope analysis through a tiny --probe-scope entry point."
-  [src]
+(defn brief-bound? [src]
   (let [{:keys [out exit]} (p/sh {:out :string :err :string} brief "--probe-scope" src)]
     (and (zero? exit) (str/includes? out "BOUND"))))
 
 (println "R3  running" (+ (count binding-witnesses) (count destructuring-witnesses)
-                          (count non-binding-witnesses)) "witnesses")
+                          (count non-binding-witnesses)) "executed witnesses")
 (doseq [[nm [src _]] (sort binding-witnesses)]
   (check! (brief-bound? src) "R3 binding witness FAILED"
-          (str "`" nm "`: " src " — the walker did not report `probe` bound, so a bare "
-               "`probe` elsewhere in the body could be canonicalised to a Var")))
+          (str "`" nm "`: " src " — the walker did not report `probe` bound")))
 (doseq [[nm [src _]] (sort destructuring-witnesses)]
   (check! (brief-bound? src) "R3 destructuring witness FAILED" (str nm ": " src)))
 (doseq [[nm src] (sort non-binding-witnesses)]
   (check! (not (brief-bound? src)) "R3 non-binding witness FAILED"
           (str "`" nm "` is declared non-binding but the walker reports `probe` bound: " src)))
+
+;; R5 -----------------------------------------------------------------------
+;; GENERATED, one row per table entry. PB-FENCE-009: a table used to speak for a
+;; SPELLING, so a file that referred its own binding macro named `testing` got
+;; clojure.test/testing's semantics. Every entry must flip to unmodelled when a
+;; same-named macro is referred from another namespace. These rows are produced
+;; here, not hand-written, so a new table entry cannot arrive without one.
+(def shadow-ns "shadow.probe")
+(def shadow-targets (vec (sort (set/union table-vars core-fn-vars))))
+(println "R5  generated shadow witnesses:" (count shadow-targets))
+(let [tsv (str "/var/tmp/forge/item3/shadow-witnesses.tsv")
+      _ (fs/create-dirs (fs/parent tsv))
+      _ (spit tsv (str/join "\n" (for [q shadow-targets]
+                                    (str (bare q) "\t" (bare q) "|" shadow-ns))))
+      out (:out (p/sh {:out :string :err :string} brief "--probe-heads" tsv))
+      lines (vec (remove str/blank? (str/split-lines out)))]
+  (check! (= (count lines) (count shadow-targets)) "R5 probe count"
+          (str "expected " (count shadow-targets) " results, got " (count lines)))
+  (doseq [[q line] (map vector shadow-targets lines)]
+    (check! (str/starts-with? line "unmodelled") "R5 shadow witness FAILED"
+            (str "`" q "`: a referred `" shadow-ns "/" (bare q)
+                 "` did not flip the head to unmodelled — got `" line
+                 "`. The table is speaking for a spelling, not a Var"))))
+
+;; the unshadowed control: without a refer, the same heads keep their meaning
+(let [tsv "/var/tmp/forge/item3/shadow-controls.tsv"
+      _ (spit tsv (str/join "\n" (for [q shadow-targets] (str (bare q) "\t-"))))
+      out (:out (p/sh {:out :string :err :string} brief "--probe-heads" tsv))
+      lines (vec (remove str/blank? (str/split-lines out)))]
+  (doseq [[q line] (map vector shadow-targets lines)]
+    (check! (not (str/starts-with? line "unmodelled")) "R5 control FAILED"
+            (str "`" q "` is unmodelled even with nothing shadowing it: " line))))
 
 ;; R4 -----------------------------------------------------------------------
 (println "R4  required replay rows:" (count required-replay-rows))
@@ -221,8 +241,9 @@
 ;; --------------------------------------------------------------------------
 (println)
 (if (empty? @failures)
-  (do (println "PASS — every table entry carries its falsifier.")
+  (do (println "PASS — every table entry carries its falsifier, including a generated shadow witness.")
       (System/exit 0))
   (do (println (str "FAIL — " (count @failures) " table claims are unsupported:"))
-      (doseq [f @failures] (println "  -" f))
+      (doseq [f (take 40 @failures)] (println "  -" f))
+      (when (> (count @failures) 40) (println "  ... and" (- (count @failures) 40) "more"))
       (System/exit 1)))
