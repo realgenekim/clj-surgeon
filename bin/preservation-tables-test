@@ -1,0 +1,228 @@
+#!/usr/bin/env bb
+;; preservation-tables-test — the ratchet over the brief's own allowlist tables.
+;;
+;; PB-FENCE-006 was a table entry whose semantics were never modelled: `are` sat in
+;; the "introduces no binding" table while `clojure.test/are` binds the symbols in
+;; its argv. Fixing that one entry fixes nothing; the class is that **a table entry
+;; is a soundness claim, and an unexamined claim is exactly how a checker
+;; certifies a defect.**
+;;
+;; So every entry in every table must carry its falsifier here:
+;;
+;;   R1  every `core-fn-allowlist` entry resolves to a real clojure.core Var that is
+;;       NOT a macro. That resolution IS the falsifier: a function's arguments are
+;;       evaluated, so it cannot introduce a binding. This rung removed `cast` and
+;;       the typo `when-first?`.
+;;   R2  every head in a non-frozen table is a special form, or resolves in
+;;       clojure.core / clojure.test. If it resolves to a MACRO it must be declared
+;;       either non-binding (and carry an R3 witness) or frozen.
+;;   R3  every non-frozen head that the walker gives binding treatment, and every
+;;       macro declared non-binding, carries an EXECUTED witness below that
+;;       exercises its binding semantics against the real `scope-analysis`.
+;;       A table entry with no witness fails this test.
+;;   R4  the three historic false-certification classes carry full planted-defect
+;;       replay rows in `bin/preservation-replay`, named here.
+;;
+;; `frozen-heads` needs no witness: freezing is the ABSENCE of a claim. That
+;; asymmetry is the whole design — anything unproved goes there.
+(ns preservation-tables-test
+  (:require [babashka.fs :as fs]
+            [babashka.classpath :refer [add-classpath]]
+            [clojure.string :as str]
+            [clojure.edn :as edn]
+            [clojure.set :as set]
+            [babashka.process :as p]
+            [clojure.test :as t]))
+
+(def here (fs/parent (fs/real-path *file*)))
+(add-classpath (str here))
+(require '[preservation-scan :as sc])
+
+(def brief-src (slurp (str (fs/path here "preservation-brief"))))
+(def replay-src (slurp (str (fs/path here "preservation-replay"))))
+
+(defn table
+  "The literal set bound by `(def <nm> ... #{...})` in the brief's source."
+  [nm]
+  (let [forms (:forms (sc/scan brief-src))
+        f (first (filter #(let [cs (sc/children (:text %))]
+                            (and (= "def" (some-> (first cs) str/trim))
+                                 (= nm (some-> (second cs) str/trim))))
+                         forms))]
+    (when f
+      (let [cs (sc/children (:text f))
+            lit (last cs)]
+        (edn/read-string lit)))))
+
+(def special-forms (table "special-forms"))
+(def non-binding-core-macros (table "non-binding-core-macros"))
+(def let-like-heads (table "let-like-heads"))
+(def seq-binding-heads (table "seq-binding-heads"))
+(def fn-like-heads (table "fn-like-heads"))
+(def defn-like-heads (table "defn-like-heads"))
+(def frozen-heads (table "frozen-heads"))
+(def core-fn-allowlist (table "core-fn-allowlist"))
+(def other-modelled #{"case" "catch" "as->" "letfn" "defmethod"})
+
+;; Every head the walker gives binding treatment to, plus every macro declared
+;; non-binding. These are the claims that need an executed witness.
+(def claim-heads
+  (set/union let-like-heads seq-binding-heads fn-like-heads defn-like-heads
+             other-modelled non-binding-core-macros))
+
+;; --------------------------------------------------------------- resolution
+
+(defn var-for [nm]
+  (or (try (ns-resolve 'clojure.core (symbol nm)) (catch Exception _ nil))
+      (try (ns-resolve 'clojure.test (symbol nm)) (catch Exception _ nil))))
+
+(defn macro? [nm] (boolean (:macro (meta (var-for nm)))))
+
+;; ------------------------------------------------------------- the witnesses
+;;
+;; Each entry: head -> [source, binder-that-must-be-detected].
+;; The witness runs the REAL `scope-analysis` and asserts the head's binding
+;; position is reported bound, so a bare use of that name can never be
+;; canonicalised to a Var. A head with no entry fails R3.
+
+(def binding-witnesses
+  {"let"             ["(let [probe 1] probe)" "probe"]
+   "let*"            ["(let* [probe 1] probe)" "probe"]
+   "loop"            ["(loop [probe 1] probe)" "probe"]
+   "loop*"           ["(loop* [probe 1] probe)" "probe"]
+   "binding"         ["(binding [probe 1] probe)" "probe"]
+   "with-open"       ["(with-open [probe (f)] probe)" "probe"]
+   "with-local-vars" ["(with-local-vars [probe 1] probe)" "probe"]
+   "with-redefs"     ["(with-redefs [probe 1] probe)" "probe"]
+   "with-bindings"   ["(with-bindings [probe 1] probe)" "probe"]
+   "if-let"          ["(if-let [probe (f)] probe nil)" "probe"]
+   "when-let"        ["(when-let [probe (f)] probe)" "probe"]
+   "if-some"         ["(if-some [probe (f)] probe nil)" "probe"]
+   "when-some"       ["(when-some [probe (f)] probe)" "probe"]
+   "when-first"      ["(when-first [probe xs] probe)" "probe"]
+   "dotimes"         ["(dotimes [probe 3] probe)" "probe"]
+   "with-precision"  ["(with-precision [probe 1] probe)" "probe"]
+   "with-in-str"     ["(with-in-str [probe 1] probe)" "probe"]
+   "for"             ["(for [probe xs] probe)" "probe"]
+   "doseq"           ["(doseq [probe xs] probe)" "probe"]
+   "fn"              ["(fn [probe] probe)" "probe"]
+   "fn*"             ["(fn* [probe] probe)" "probe"]
+   "defn"            ["(defn f [probe] probe)" "probe"]
+   "defn-"           ["(defn- f [probe] probe)" "probe"]
+   "defmacro"        ["(defmacro m [probe] probe)" "probe"]
+   "letfn"           ["(letfn [(g [probe] probe)] (g 1))" "probe"]
+   "catch"           ["(try (f) (catch Exception probe probe))" "probe"]
+   "as->"            ["(as-> (f) probe probe)" "probe"]
+   "defmethod"       ["(defmethod m :k [probe] probe)" "probe"]
+   ;; `case` binds nothing, but its TEST constants are unevaluated: a symbol there
+   ;; is a literal, not a Var reference, so the walker must freeze it.
+   "case"            ["(case x probe 1 2)" "probe"]})
+
+;; Destructuring must be covered too, since that is the shape PB-FENCE-001 used.
+(def destructuring-witnesses
+  {"map destructuring"    ["(let [{:keys [probe]} m] probe)" "probe"]
+   "vector destructuring" ["(let [[a probe] v] probe)" "probe"]
+   "nested :as"           ["(fn [{:keys [x] :as probe}] probe)" "probe"]
+   "for :let"             ["(for [x xs :let [probe (f x)]] probe)" "probe"]})
+
+;; A macro declared NON-binding must not report a binder for its natural syntax.
+;; This is the falsifier that `are` fails: run it with "are" declared non-binding
+;; and the witness below shows `probe` unbound, which is precisely the state that
+;; let Sol's PB-FENCE-006 pair be certified.
+(def non-binding-witnesses
+  {"when"     "(when true probe)"
+   "when-not" "(when-not false probe)"
+   "if-not"   "(if-not false probe nil)"
+   "and"      "(and probe)"
+   "or"       "(or probe)"
+   "cond"     "(cond :else probe)"
+   "->"       "(-> probe f)"
+   "->>"      "(->> probe f)"
+   "some->"   "(some-> probe f)"
+   "doto"     "(doto probe f)"
+   "testing"  "(testing \"x\" probe)"
+   "is"       "(is (= probe 1))"})
+
+;; R4: the three classes that produced a false section-A certification each have a
+;; full planted-defect replay row. The names must appear in the replay source.
+(def required-replay-rows
+  ["local-shadow" "symlink-escape" "external-macro"
+   "are-binding" "kind-collision" "uppercase-alias"])
+
+;; ------------------------------------------------------------------- harness
+
+(def failures (atom []))
+(defn check! [ok? label detail]
+  (when-not ok? (swap! failures conj (str label " — " detail)))
+  ok?)
+
+;; R1 -----------------------------------------------------------------------
+(println "R1  core-fn-allowlist:" (count core-fn-allowlist) "entries")
+(doseq [nm (sort core-fn-allowlist)]
+  (let [v (var-for nm)]
+    (check! (some? v) "R1 unresolved" (str "core-fn-allowlist entry `" nm "` resolves to no Var"))
+    (when v
+      (check! (not (:macro (meta v))) "R1 macro in function table"
+              (str "`" nm "` is a MACRO; a macro's operands may be binding forms")))))
+
+;; R2 -----------------------------------------------------------------------
+(def non-frozen-heads
+  (set/union special-forms non-binding-core-macros let-like-heads seq-binding-heads
+             fn-like-heads defn-like-heads other-modelled))
+(println "R2  non-frozen heads:" (count non-frozen-heads))
+(doseq [nm (sort non-frozen-heads)]
+  (when-not (special-forms nm)
+    (let [v (var-for nm)]
+      (check! (some? v) "R2 unresolved head"
+              (str "`" nm "` is neither a special form nor a resolvable clojure.core/clojure.test Var"))
+      (when (and v (:macro (meta v)))
+        (check! (or (non-binding-core-macros nm) (contains? binding-witnesses nm))
+                "R2 unexamined macro"
+                (str "`" nm "` is a MACRO in a non-frozen table with no declared binding treatment"))))))
+(doseq [nm (sort frozen-heads)]
+  (check! (not (contains? non-frozen-heads nm)) "R2 table collision"
+          (str "`" nm "` is both frozen and non-frozen")))
+
+;; R3 -----------------------------------------------------------------------
+(println "R3  claims needing a witness:" (count claim-heads))
+(doseq [nm (sort claim-heads)]
+  (check! (or (contains? binding-witnesses nm) (contains? non-binding-witnesses nm))
+          "R3 unwitnessed table entry"
+          (str "`" nm "` is a table entry with no executed witness — a soundness claim with no falsifier")))
+
+;; the witnesses themselves, run against the real scope-analysis via the brief
+(def brief (str (fs/path here "preservation-brief")))
+
+(defn brief-bound?
+  "Ask the brief itself whether `probe` is bound in this source, using its own
+   scope analysis through a tiny --probe-scope entry point."
+  [src]
+  (let [{:keys [out exit]} (p/sh {:out :string :err :string} brief "--probe-scope" src)]
+    (and (zero? exit) (str/includes? out "BOUND"))))
+
+(println "R3  running" (+ (count binding-witnesses) (count destructuring-witnesses)
+                          (count non-binding-witnesses)) "witnesses")
+(doseq [[nm [src _]] (sort binding-witnesses)]
+  (check! (brief-bound? src) "R3 binding witness FAILED"
+          (str "`" nm "`: " src " — the walker did not report `probe` bound, so a bare "
+               "`probe` elsewhere in the body could be canonicalised to a Var")))
+(doseq [[nm [src _]] (sort destructuring-witnesses)]
+  (check! (brief-bound? src) "R3 destructuring witness FAILED" (str nm ": " src)))
+(doseq [[nm src] (sort non-binding-witnesses)]
+  (check! (not (brief-bound? src)) "R3 non-binding witness FAILED"
+          (str "`" nm "` is declared non-binding but the walker reports `probe` bound: " src)))
+
+;; R4 -----------------------------------------------------------------------
+(println "R4  required replay rows:" (count required-replay-rows))
+(doseq [r required-replay-rows]
+  (check! (str/includes? replay-src r) "R4 missing replay row"
+          (str "`" r "` has no planted-defect row in bin/preservation-replay")))
+
+;; --------------------------------------------------------------------------
+(println)
+(if (empty? @failures)
+  (do (println "PASS — every table entry carries its falsifier.")
+      (System/exit 0))
+  (do (println (str "FAIL — " (count @failures) " table claims are unsupported:"))
+      (doseq [f @failures] (println "  -" f))
+      (System/exit 1)))
