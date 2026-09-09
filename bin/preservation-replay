@@ -496,6 +496,72 @@ for spec in "comment-require $CM_CAND $CM_BASE" "comment-require-control $CM_CTL
 done
 
 
+# ---- Sol round-10 rows (PB-FENCE-017 / 018) --------------------------------
+# two-ns: a file with two live `ns` forms. The second's requires are load order,
+# not "runtime usage", so the file is refused whole rather than explained wrongly.
+# meta-declare: `^:probe (declare later-fn)` — invisible to a head-symbol test, so
+# the private read used to suppress the forward-reference hard stop on its own.
+NS2="$WORK/twons"; rm -rf "$NS2"; mkdir -p "$NS2/src"
+( cd "$NS2"
+  git init -q -b main; git config commit.gpgsign false
+  cat > src/two.clj <<'CLJ'
+(ns first.ns
+  (:require [clojure.string :as str]))
+
+(ns second.ns
+  (:require [clojure.edn :as edn]
+            [clojure.set :as set]))
+
+(defn f [] (set/union #{(edn/read-string "1")} #{2}))
+CLJ
+  git add -A >/dev/null; git commit -qm base >/dev/null
+  cat > src/two.clj <<'CLJ'
+(ns first.ns
+  (:require [clojure.string :as str]))
+
+(ns second.ns
+  (:require [clojure.set :as set]
+            [clojure.edn :as edn]))
+
+(defn f [] (set/union #{(edn/read-string "1")} #{2}))
+CLJ
+  git add -A >/dev/null; git commit -qm "reverse the SECOND ns form's requires" >/dev/null )
+
+DC="$WORK/metadecl"; rm -rf "$DC"; mkdir -p "$DC/src"
+( cd "$DC"
+  git init -q -b main; git config commit.gpgsign false
+  cat > src/decl.clj <<'CLJ'
+(ns decl.probe)
+
+^:probe (declare later-fn)
+
+(defn early [] (later-fn))
+
+(defn later-fn [] :x)
+CLJ
+  git add -A >/dev/null; git commit -qm base >/dev/null
+  cat > src/decl.clj <<'CLJ'
+(ns decl.probe)
+
+^:probe (declare later-fn)
+
+(defn early [] (later-fn) :changed)
+
+(defn later-fn [] :x)
+CLJ
+  git add -A >/dev/null; git commit -qm "touch the declare-guarded body" >/dev/null )
+
+for spec in "two-ns $NS2" "meta-declare $DC"; do
+  set -- $spec
+  st=$(date +%s.%N)
+  "$HERE/preservation-brief" "$(git -C "$2" rev-parse main)" "$(git -C "$2" rev-parse main~1)" \
+      --repo "$2" --roots src --title "$1" --out "$WORK/out/$1.md" \
+      --json "$WORK/out/$1.json" >/dev/null || true
+  en=$(date +%s.%N)
+  echo "$1  wall $(echo "$en - $st" | bc)s"
+done
+
+
 python3 - "$WORK/out" <<'PY'
 import json, sys, pathlib, os
 d = pathlib.Path(sys.argv[1])
@@ -506,7 +572,7 @@ order = ["clean","wrong-binding","silent-promotion","dropped-comment",
          "refer-all-shadow","use-shadow","refer-all-external","shapes","meta-owner",
          "cljc-unanalysed","cljc-analysed",
          "spliced-require-reorder","spliced-require-control",
-         "comment-require","comment-require-control"]
+         "comment-require","comment-require-control","two-ns","meta-declare"]
 rows = []
 for k in order:
     j = json.load(open(d / f"{k}.json"))
@@ -517,7 +583,7 @@ cols = [("clear","clear"),("moved","moved"),("preserved_bodies","preserved"),("o
         ("stale_sites","stale"),("undefined_alias_sites","undef-alias"),("possible_unresolved","bare?"),
         ("in_place_needs_review","inplace-rev"),("reconcile_failures","recon"),
         ("declares","decl"),("no_var_forms","novar"),("reader_conditionals","cond"),
-        ("dynamic_requires","dynreq"),
+        ("dynamic_requires","dynreq"),("ns_count_failures","nsfail"),
         ("wall_ms","wall ms")]
 hdr = "| change | " + " | ".join(c[1] for c in cols) + " |"
 print(hdr)

@@ -141,7 +141,8 @@
    "refer-all-shadow" "use-shadow" "refer-all-external"
    "meta-owner" "shapes" "cljc-unanalysed" "cljc-analysed"
    "spliced-require-reorder" "spliced-require-control"
-   "comment-require" "comment-require-control"])
+   "comment-require" "comment-require-control"
+   "two-ns" "meta-declare"])
 
 ;; ------------------------------------------------------------------- harness
 
@@ -302,6 +303,41 @@
   (doseq [feat ["clj" "cljs"]]
     (check! (str/includes? d-section feat) "R6 section D does not name the feature set"
             (str "section D never mentions the elaborated platform `" feat "`"))))
+
+;; R7 -----------------------------------------------------------------------
+;; PB-FENCE-018. The grep invariant becomes a test. The brief may read the private
+;; scanner ONLY for spans, bytes, lexical tokens and positions; the two functions
+;; that read structure exist solely as the second side of the reconciliation. A new
+;; structural read added by hand would otherwise be a private inventory again, and
+;; that is the class that took five rounds to finish.
+(def scanner-allowlist
+  {"scan"                    "bytes: top-level form spans and comment spans"
+   "tokens"                  "lexical token stream with positions"
+   "nodes"                   "lexical node tree, used only for reader-conditional detection"
+   "line-index"              "positions"
+   "line-of"                 "positions"
+   "all-tokens"              "lexical tokens of a subtree"
+   "sym-token?"              "lexical predicate"
+   "ns-form"                 "the ns form's SPAN only; its content is the resolver's"
+   "reader-conditionals"     "lexical detection of #? / #?@ and their feature keys"
+   "def-shaped?"             "lexical predicate, counts branch definitions only"
+   "qualified-sites-with-pos" "lexical site positions; resolution is the resolver's"
+   "bare-symbols"            "lexical tokens of a body"
+   ;; the two reconciliation sites, and nothing else
+   "form-owner"              "RECONCILIATION ONLY: the scanner's owner inventory, compared with the resolver's"
+   "requires-of"             "RECONCILIATION ONLY: the scanner's require inventory, compared with the resolver's"})
+(println "R7  private-scanner reads allowed:" (count scanner-allowlist))
+(let [called (into #{} (map second) (re-seq #"sc/([A-Za-z][\w*+!?<>=$-]*)" brief-src))
+      extra (set/difference called (set (keys scanner-allowlist)))
+      unused (set/difference (set (keys scanner-allowlist)) called)]
+  (doseq [f (sort extra)]
+    (check! false "R7 unlisted private-scanner read"
+            (str "`sc/" f "` is called from bin/preservation-brief but is not on the "
+                 "span/bytes/tokens/positions allowlist. If it reads STRUCTURE it is a second "
+                 "inventory, and the resolver must own it instead.")))
+  (doseq [f (sort unused)]
+    (check! false "R7 stale allowlist entry"
+            (str "`sc/" f "` is on the allowlist but nothing calls it — remove the entry"))))
 
 ;; R4 -----------------------------------------------------------------------
 (println "R4  required replay rows:" (count required-replay-rows))

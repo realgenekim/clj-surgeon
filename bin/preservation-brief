@@ -255,7 +255,9 @@
                           (assoc-in m [path :failed?] true)
                           m)))
                     idx (:findings analysis))
-        idx (reduce (fn [m d] (assoc-in m [(norm (:filename d)) :nsdef] (str (:name d))))
+        idx (reduce (fn [m d]
+                      (update-in m [(norm (:filename d)) :nsdefs] (fnil conj [])
+                                 {:name (str (:name d)) :row (:row d) :col (:col d)}))
                     idx (:namespace-definitions a))
         idx (reduce (fn [m u]
                       (update-in m [(norm (:filename u)) :nsu] (fnil conj [])
@@ -348,9 +350,20 @@
         ;; comes from the resolver, restricted to usages inside that span. A
         ;; `(comment (require …))` at top level is a namespace usage to the resolver
         ;; and is NOT part of the namespace's load order; it is listed separately.
+        ;; PB-FENCE-017. How many namespaces a file declares is the RESOLVER's
+        ;; answer, not the scanner's. A file with zero or two or more namespace
+        ;; definitions is refused whole: there is no single `ns` span to filter by,
+        ;; and calling a second namespace's requires "runtime usage" would be a
+        ;; false explanation, not a conservative one.
+        nsdefs (get kfacts :nsdefs [])
         nsf (sc/ns-form forms)
         ns-start (or (:start nsf) 0)
         ns-end (or (:end nsf) 0)
+        nsdef-off (when (= 1 (count nsdefs))
+                    (off-of (:row (first nsdefs)) (:col (first nsdefs))))
+        ns-span-agrees? (and nsdef-off (>= (long nsdef-off) (long ns-start))
+                             (< (long nsdef-off) (long ns-end)))
+        ns-count-ok? (= 1 (count nsdefs))
         in-span? (fn [u] (let [o (off-of (:row u) (:col u))]
                            (and o (>= o (long ns-start)) (< o (long ns-end)))))
         all-usages (get kfacts :nsu [])
@@ -359,7 +372,7 @@
         kreq (kondo-requires ns-usages)
         aliases (into {} (for [u ns-usages :when (:alias u)] [(:alias u) (:to u)]))
         refers (into {} (for [u ns-usages r (or (:refer u) [])] [r (:to u)]))
-        nsname (or (:nsdef kfacts) (some :ns (map #(hash-map :ns (:ns %)) kdefs)))]
+        nsname (or (:name (first nsdefs)) (some :ns (map #(hash-map :ns (:ns %)) kdefs)))]
     {:path rel
      :text text
      :ns nsname
@@ -369,11 +382,12 @@
      :refers refers
      :dynamic-requires (mapv #(str (:to %) (when (:alias %) (str " :as " (:alias %)))) outside-usages)
      :comments (mapv #(select-keys % [:line :text]) comments)
-     :declare-forms (vec (for [f forms
-                               :let [cs (sc/children (:text f))]
-                               :when (= "declare" (some-> (first cs) str/trim))
-                               d (rest cs)]
-                           {:name (str/trim d) :start (:start f)}))
+;; PB-FENCE-018. `declare` names and positions come from the RESOLVER's
+     ;; definitions, not from re-parsing the form. A metadata-wrapped `(declare …)`
+     ;; is invisible to a head-symbol test and was suppressing the B4
+     ;; forward-reference hard stop.
+     :declare-forms (vec (for [d declares :let [o (off-of (:row d) (:col d))] :when o]
+                           {:name (:name d) :start o}))
      :declares (mapv #(str (:ns %) "/" (:name %)) declares)
      :no-var-forms (mapv #(str (:kind %) " " (:id %)) no-var-forms)
      :kondo-requires kreq
@@ -397,8 +411,11 @@
                  :unreported (mapv :id unexplained)
                  :unanalysed-features unanalysed
                  :cond-gap cond-gap
+                 :ns-count (count nsdefs)
+                 :ns-span-agrees? (boolean ns-span-agrees?)
                  :ok? (and (empty? unlocated) (empty? unexplained)
-                           (empty? unanalysed) (zero? cond-gap))}
+                           (empty? unanalysed) (zero? cond-gap)
+                           ns-count-ok? ns-span-agrees?)}
      :owners (vec (for [[d f] located
                         :let [kind (last (str/split (:defined-by d) #"/"))]]
                     {:path rel :ns (:ns d) :id (:name d)
@@ -1571,6 +1588,7 @@
          {:tree which :path path
           :unlocated (:unlocated r) :unreported (:unreported r)
           :unanalysed-features (:unanalysed-features r) :cond-gap (:cond-gap r)
+          :ns-count (:ns-count r) :ns-span-agrees? (:ns-span-agrees? r)
           :only-parser (:only-parser rm) :only-resolver (:only-resolver rm)})))
 
 (def dynamic-requires
@@ -2138,7 +2156,7 @@
         (println "inventory; the scanner only locates each definition's top-level span. Where the two do not")
         (println "agree, nothing in that file is certifiable:")
         (println)
-        (println (tbl* ["tree" "file" "definition not placed" "owner not reported" "unanalysed platform" "unreported branch defs" "require seen only by the parser / only by the resolver"]
+        (println (tbl* ["tree" "file" "definition not placed" "owner not reported" "unanalysed platform" "unreported branch defs" "require seen only by the parser / only by the resolver" "ns forms"]
                        (for [r reconcile-failures]
                          [(:tree r) (:path r)
                           (if (seq (:unlocated r)) (str/join ", " (:unlocated r)) "—")
@@ -2147,7 +2165,12 @@
                           (if (pos? (long (or (:cond-gap r) 0))) (str (:cond-gap r)) "—")
                           (str (if (seq (:only-parser r)) (str/join " " (:only-parser r)) "—")
                                " / "
-                               (if (seq (:only-resolver r)) (str/join " " (:only-resolver r)) "—"))]))))
+                               (if (seq (:only-resolver r)) (str/join " " (:only-resolver r)) "—"))
+                          (cond (not= 1 (:ns-count r))
+                                (str "**" (:ns-count r) " namespace definitions — refused whole**")
+                                (not (:ns-span-agrees? r))
+                                "**the parsed `ns` span does not contain the resolver's namespace definition**"
+                                :else "1")]))))
       (when (seq refused-entries)
         (println)
         (println "**Tree entries this checker refused to read.** A symlink is reported by its entry, never followed;")
@@ -2277,6 +2300,7 @@
             :declares (count declared-names)
             :no_var_forms (count no-var-forms)
             :reconcile_unlocated (reduce + 0 (map #(count (:unlocated %)) reconcile-failures))
+            :ns_count_failures (count (filter #(not= 1 (:ns-count %)) reconcile-failures))
             :reconcile_unreported (reduce + 0 (map #(count (:unreported %)) reconcile-failures))
             :unanalysed_platforms (vec (sort (distinct (mapcat :unanalysed-features reconcile-failures))))
             :analysed_features (vec (sort analysed-features))
