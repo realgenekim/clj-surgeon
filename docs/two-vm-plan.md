@@ -49,3 +49,6 @@ Gene bought a Hetzner **CX53** (16 shared vCPU, 32 GB, 320 GB SSD, shared cost-o
 
 ## Status 2026-09-09T01:37Z — box 1 = 2.28.125.30 (CX53); provisioning plan
 Reuse curtaincall-cfp docs/anvil-history.md's sequence. Users = seats, one per Codex login: forge, sol, astra, recorder (receipt issuance only — makes Sol's condition 2 real on one box), gene (passwordless sudo). Seat key: ~/.ssh/id_ed25519.pub on Anvil (generated 2026-09-09). Then toolchains, one-shots, skills, records repo, cold-start proof, disk retention.
+
+## Status 2026-09-09T01:53Z — anvil2 secured; provisioning in flight
+root@2.28.125.30 keys-only (seat key), hostname anvil2, root password rotated (break-glass, ~/secrets on Anvil). Provisioning script being written at /home/forge/bin/provision-anvil2.sh (records repo bin/ when done). Seats as users: forge, sol, astra, recorder, gene. Not yet: Codex/Claude logins (Gene, interactive), tailscale, the surgeon worktrees and 7906 (migration plan, parked).
