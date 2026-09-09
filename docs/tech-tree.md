@@ -576,3 +576,24 @@ PAPERCUTS=0, and an independent line oracle verifies every reported comment
 location and byte value. No split meter or routing-performance claim is added.
 Report: `/var/tmp/forge/plan2/cellC/astra-comment-edits-report.md`.
 Evidence: `/var/tmp/forge/comment-edits/`.
+
+
+### 2026-09-09T01:34:48.085279+00:00 — rows sublime batch 5: residual receipt facts
+
+NS-SPLIT-067..072 add require/import occurrence diffs, snapshot-scoped whole-file
+identity, executed lint deltas and warm load outcomes. Both MCP and CLI put
+commitment before defined proof completion. Exact tables/complement statements
+and Base64 SHA-256 digests retain the 65,536-byte ceiling; malformed UTF-8 refuses
+before mutation. The comment identity algorithm and E3's accepted source patch
+remain byte-identical to their controls.
+
+Full Cell C has 141 owners / 20 destinations and PAPERCUTS=0. Final affected warm
+gate: 195 tests / 2,112 assertions plus four CLI witnesses / 41 assertions.
+One cold JVM gate passed before the final CLI presentation follow-up; its scope
+and the final fresh-Babashka witnesses are explicit in the report. Census pins
+come from the tests' own readers: 604 adopted / 1,629 total, 253 non-MCP IDs.
+E3's reported 30,933-byte CLI baseline becomes 34,691 bytes in the replay;
+full Cell C's bounded data grows 60,554 → 63,585 bytes. These are functional
+replays, not a new caller cohort or native wall claim. Report:
+`/var/tmp/forge/plan2/cellC/astra-rows-sublime-5-report.md`.
+Evidence: `/var/tmp/forge/rows-sublime-5/`.

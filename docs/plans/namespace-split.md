@@ -270,3 +270,24 @@ removal; moved owner; policy rewrite; insertion/deletion separated by surviving
 anchors; repeated text; namesakes; reordered comments; hostile string encoding;
 full Cell C receipt under both 65,536-byte ceilings. Pure tests precede code;
 then affected warm tests, Cell C papercut oracle, one affected cold gate.
+
+## Rows sublime batch 5 — residual receipt facts
+
+Gene authorizes the complete linked-intent-testing branch cycle for the
+row5-adopt-3 gaps (8a325486). NS-SPLIT-067..072 in the
+[owning design](../intent/helper-extraction/namespace-split-design.md) and its
+append-only registry define exact namespace entry diffs, scoped byte identity,
+executed lint/load evidence, proof text ordering and strict UTF-8 capture.
+
+Behavior matrix: entry addition/removal/reorder/duplicates/trivia, one-byte
+outside-owner changes, large exact-complement identity statements, nonzero lint
+and error substitution, successful/failed/unavailable loads, rollback, hostile
+text, lossless digest decoding and physical CLI/MCP size bounds. The existing
+comment identity algorithm and completion boolean meanings are preserved.
+
+Gates: red-first witnesses, affected warm namespaces, full Cell C paper-cut and
+ownership oracles, one affected cold JVM gate, actual Babashka CLI/exit evidence,
+serialized ~/bin/clj-kondo and pins derived by the tests' own readers. E3 replay
+bytes are compared with the accepted frozen candidate; no new caller-performance
+or routing claim follows from that replay. Final evidence and the cold gate's
+CLI-follow-up timing caveat are in the batch-5 report under /var/tmp/forge/plan2/cellC/.
