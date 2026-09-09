@@ -111,9 +111,12 @@
 ;; So the expectation is DERIVED at test time from the same three sources the
 ;; manifest claims to describe -- the `*_test.clj` files on disk, each file's own
 ;; `{:lane ...}` ns metadata, and the manifest itself -- and compared as SETS in
-;; both directions, naming the members on each side. The only surviving number is
-;; a floor (`>=`), whose whole job is to make an EMPTY or collapsed discovery
-;; fail loudly rather than pass vacuously; a floor never needs bumping to add.
+;; both directions, naming the members on each side. NO COUNT IS ASSERTED, not
+;; even as a `>=` floor: a floor at a historical count is the same shared number
+;; under a weaker operator -- it still has to be argued about at a merge, and it
+;; still blesses a corpus nobody re-derived. The one admissible guard is
+;; NON-EMPTINESS, because an empty derivation would make every set comparison
+;; above agree with itself.
 ;; ---------------------------------------------------------------------------
 
 (defn- namespaces-declaring
@@ -532,16 +535,28 @@
                  swap-diff)
               "...while the derived witness names both sides of the swap"))))))
 
-(defn- deftest-count
-  "How many `deftest` forms a namespace's source file declares. A SOURCE
-   census, deliberately: it is the same number for every box and every load,
-   whereas assertion counts are context-sensitive (the round-two review
-   measured 4,319 assertions summing the lanes separately and 4,323 running
-   them together) and a pin that moves with the weather teaches people to
-   re-bless it."
+(defn- deftest-names
+  "The FULLY QUALIFIED names of the `deftest` forms a namespace's source file
+   declares, e.g. `clj-surgeon.foo-test/bar`. A SOURCE census, deliberately: it
+   is the same answer for every box and every load, whereas assertion counts are
+   context-sensitive (the round-two review measured 4,319 assertions summing the
+   lanes separately and 4,323 running them together).
+
+   NAMES, not a count. A count per namespace cannot see a rename or any
+   same-count replacement -- delete one member, add another, the number is
+   unchanged and the ratchet is green while the promise it protected is gone.
+   Sol's round-two fence proved exactly that against the count ledger: renaming
+   `mcp-paths-test`'s only deftest passed all six assertions."
   [ns-sym]
   (let [file (:file (get @on-disk ns-sym))]
-    (count (re-seq #"(?m)^\(deftest " (slurp file)))))
+    (into (sorted-set)
+          (map (fn [[_ nm]] (symbol (str ns-sym) nm)))
+          (re-seq #"(?m)^\(deftest\s+([^\s()\[\]{}]+)" (slurp file)))))
+
+(defn- deftest-count
+  "How many deftests `ns-sym` declares, derived from `deftest-names`."
+  [ns-sym]
+  (count (deftest-names ns-sym)))
 
 (def ^:private adopted-since-round-one
   "Namespaces in a lane today that round one did NOT measure, each with the
@@ -601,60 +616,144 @@
     clj-surgeon.mcp-helper-extraction-test}) ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
 
 (def ^:private census-ledger-path
-  "The per-namespace deftest ledger: one line per namespace, keyed by NAME.
+  "The deftest ledger: ONE LINE PER FULLY QUALIFIED DEFTEST NAME, sorted.
 
-   This replaces the two shared scalars this test used to pin (`adopted` and
-   `total`). A total is the merge-conflicting class this whole family exists to
-   kill -- two branches add disjoint witnesses, both write the same next number,
+   Two shapes were rejected before this one, and both rejections are the reason
+   it looks like this. A repository-wide TOTAL is the merge-conflicting scalar
+   class -- two branches add disjoint witnesses, both write the same next number,
    git merges the equal literals without a conflict, and the total is wrong; the
    comment history above `the-partition-matches-round-ones-measurement` records
-   that happening three separate times. A count also cannot distinguish a
-   deletion plus an addition from no change at all.
+   that happening three separate times. A ledger of `namespace -> count` fixes
+   the merge but not the promise: it fails by name only at NAMESPACE grain, so a
+   rename -- delete one member, add another, same count -- passes (Sol's
+   round-two fence renamed `clj-surgeon.mcp-paths-test`'s only deftest and the
+   ratchet stayed green through all six assertions).
 
-   A ledger keyed by namespace cannot collide: two branches touch two different
-   lines, and a deletion is a NAMED line that disappears rather than a number
-   that stays plausible. Regenerate with
+   A ledger is admissible only when it is line-wise at the granularity of the
+   members it promises to preserve AND names them. So: one deftest per line, the
+   name fully qualified and stable, sorted. Two branches adding tests touch two
+   different lines; a deleted test is a NAMED line that disappears.
 
-     CENSUS_REGENERATE=1 clojure -M:clj-surgeon/test-deps \\
-       -e \"(require 'clj-surgeon.lane-manifest-test 'clojure.test) \\
-            (clojure.test/test-vars [#'clj-surgeon.lane-manifest-test/the-corpus-only-ever-grows-and-the-arithmetic-is-shown])\"
+   Regenerate ONLY through the direct entrance -- never inside make, see
+   `regenerate-decision`:
 
-   and READ THE DIFF before committing it: a shrinking line is the deletion this
-   ledger exists to make loud, not a number to re-bless."
+     CENSUS_REGENERATE=1 clojure -M:clj-surgeon/test-deps -e \"(require 'clj-surgeon.lane-manifest-test 'clojure.test) (clojure.test/test-vars [#'clj-surgeon.lane-manifest-test/the-corpus-only-ever-grows-and-the-arithmetic-is-shown])\"
+
+   and READ THE DIFF before committing it: a removed line is the deletion this
+   ledger exists to make loud, not a line to re-bless."
   "test/clj_surgeon/deftest_census.edn")
 
-(defn- derived-census
-  "namespace -> deftests it declares, for every namespace in the manifest, read
-   from the tree at test time."
+(def ^:private regenerate-entrance
+  "The exact command that may rewrite the ledger. Quoted in the refusal so a
+   reader never has to guess what the permitted entrance is."
+  (str "CENSUS_REGENERATE=1 clojure -M:clj-surgeon/test-deps -e \"(require "
+       "'clj-surgeon.lane-manifest-test 'clojure.test) (clojure.test/test-vars "
+       "[#'clj-surgeon.lane-manifest-test/"
+       "the-corpus-only-ever-grows-and-the-arithmetic-is-shown])\""))
+
+(defn- regenerate-decision
+  "What the regenerate entrance does under environment `env`, as a pure function
+   of the environment so it can be witnessed without touching the real one:
+
+     :skip               regeneration was not requested;
+     :refuse-under-make  requested, but this process was launched BY make;
+     :write              requested through the direct entrance.
+
+   CENSUS-REGENERATE-001 (Sol fence round two): a caller-supplied
+   `CENSUS_REGENERATE=1` is EXPORTED into make's recipes, so `CENSUS_REGENERATE=1
+   make test` reached this writer through landing-gate -> mcp-test -> the fast
+   lane and could rewrite the checked-in oracle DURING THE GATE -- an oracle a
+   gate can rewrite is not an oracle. `MAKELEVEL` and `MAKEFLAGS` are set by make
+   in every recipe's environment (MAKELEVEL is `0` in the outermost one, which is
+   why PRESENCE is the test and not truthiness), so their presence is the signal
+   that this is not the deliberate, review-the-diff entrance. The Makefile itself
+   is not touched: the refusal lives here, at the writer."
+  [env]
+  (cond
+    (not= "1" (get env "CENSUS_REGENERATE")) :skip
+    (or (contains? env "MAKELEVEL") (contains? env "MAKEFLAGS")) :refuse-under-make
+    :else :write))
+
+(defn- regenerate-refusal
+  [env]
+  (str "census-regenerate-refused: CENSUS_REGENERATE=1 was requested inside a "
+       "make recipe (" (str/join ", " (sort (filter #{"MAKELEVEL" "MAKEFLAGS"}
+                                                    (keys env))))
+       " present). The ledger is the oracle this gate checks; a gate that can "
+       "rewrite its own oracle proves nothing, so NOTHING WAS WRITTEN. Regenerate "
+       "deliberately, outside make, and read the diff:\n  " regenerate-entrance))
+
+(defn- environment
+  "The process environment as a plain map, so `regenerate-decision` stays pure."
   []
-  (into (sorted-map) (map (juxt identity deftest-count)) (keys lm/manifest)))
+  (into {} (System/getenv)))
+
+(defn- derived-census
+  "The fully qualified name of every deftest the manifest's namespaces declare."
+  []
+  (into (sorted-set) (mapcat deftest-names) (keys lm/manifest)))
 
 (defn- write-census-ledger!
-  "Writes `census` to `census-ledger-path`, one namespace per line, sorted.
-   Runs ONLY under CENSUS_REGENERATE=1: the fast lane never writes into the
-   working tree on an ordinary run."
+  "Writes `census` to `census-ledger-path`, one fully qualified deftest per line,
+   sorted. Reached ONLY through `regenerate-decision` returning `:write`."
   [census]
   (spit census-ledger-path
-        (str ";; Per-namespace deftest census -- DERIVED, regenerated, never hand-edited.\n"
-             ";; One line per namespace so two branches never touch the same line.\n"
-             ";; Regenerate: CENSUS_REGENERATE=1 (see clj-surgeon.lane-manifest-test/census-ledger-path).\n"
-             "{"
-             (str/join "\n " (map (fn [[s n]] (str s " " n)) census))
+        (str ";; Deftest census -- DERIVED, regenerated, never hand-edited.\n"
+             ";; One FULLY QUALIFIED deftest per line: two branches adding tests\n"
+             ";; touch two different lines, and a deleted test is a named line\n"
+             ";; that disappears rather than a number that stays plausible.\n"
+             ";; Regenerate: see clj-surgeon.lane-manifest-test/census-ledger-path.\n"
+             "#{"
+             (str/join "\n  " census)
              "}\n")))
 
 (defn- census-ledger-diff
-  "Named differences between the tree's census and the checked-in ledger:
-   namespaces the ledger does not carry, namespaces it carries that are gone,
-   and namespaces whose declared test count moved (old -> new)."
+  "Named differences between the tree's deftests and the checked-in ledger:
+   `:added` are declared in a lane but absent from the ledger, `:removed` are in
+   the ledger and no longer declared anywhere. A RENAME appears as one of each,
+   which is the whole reason the ledger holds names."
   [derived ledger]
-  (let [added (sort (remove ledger (keys derived)))
-        removed (sort (remove derived (keys ledger)))
-        changed (sort (for [[s n] derived
-                            :let [was (get ledger s)]
-                            :when (and was (not= was n))]
-                        [s was n]))]
-    (when (or (seq added) (seq removed) (seq changed))
-      {:added (vec added) :removed (vec removed) :changed (vec changed)})))
+  (let [added (vec (sort (remove ledger derived)))
+        removed (vec (sort (remove derived ledger)))]
+    (when (or (seq added) (seq removed))
+      {:added added :removed removed})))
+
+(defn- census-ledger-message
+  [diff]
+  (str "the tree and " census-ledger-path " disagree. "
+       "Declared in a lane but NOT in the ledger (" (count (:added diff)) "): "
+       (if (seq (:added diff)) (str/join ", " (:added diff)) "none")
+       ". In the ledger but NO LONGER DECLARED (" (count (:removed diff)) "): "
+       (if (seq (:removed diff)) (str/join ", " (:removed diff)) "none")
+       ". A removed name is a deleted test -- say why, or restore it. A removed "
+       "AND an added name together is a rename, which the count ledger this "
+       "replaced could not see. Then regenerate: " regenerate-entrance))
+
+;; @spec TEST-ISO-015
+;; INTENT-TEST: TEST-ISO-015
+(deftest the-regenerate-entrance-refuses-inside-make
+  ;; CENSUS-REGENERATE-001. A pure decision over an environment MAP, so the rule
+  ;; is witnessed here rather than only in whatever environment this run happens
+  ;; to have. MAKELEVEL is "0" in make's outermost recipe -- presence, never
+  ;; truthiness, is the signal.
+  (testing "the direct entrance writes"
+    (is (= :write (regenerate-decision {"CENSUS_REGENERATE" "1"}))))
+  (testing "make's own environment refuses, however it is spelled"
+    (doseq [env [{"CENSUS_REGENERATE" "1" "MAKELEVEL" "0"}
+                 {"CENSUS_REGENERATE" "1" "MAKELEVEL" "1"}
+                 {"CENSUS_REGENERATE" "1" "MAKEFLAGS" ""}
+                 {"CENSUS_REGENERATE" "1" "MAKEFLAGS" "w" "MAKELEVEL" "2"}]]
+      (is (= :refuse-under-make (regenerate-decision env)) (pr-str env))))
+  (testing "the refusal names the subject, the reason and the permitted entrance"
+    (let [msg (regenerate-refusal {"CENSUS_REGENERATE" "1" "MAKELEVEL" "0"})]
+      (is (str/includes? msg "census-regenerate-refused:"))
+      (is (str/includes? msg "MAKELEVEL"))
+      (is (str/includes? msg "NOTHING WAS WRITTEN"))
+      (is (str/includes? msg regenerate-entrance))))
+  (testing "no request, no write -- inside make or outside it"
+    (is (= :skip (regenerate-decision {})))
+    (is (= :skip (regenerate-decision {"MAKELEVEL" "0"})))
+    (is (= :skip (regenerate-decision {"CENSUS_REGENERATE" "0"})))))
 
 ;; @spec TEST-ISO-001
 ;; @spec TEST-ISO-015
@@ -662,49 +761,35 @@
   ;; PARTITIONING MUST NEVER TURN INTO DROPPING. Round one MEASURED 865 tests
   ;; across the 49 namespaces in `round-one-jvm-namespaces`; every partition,
   ;; move and adoption since then has to keep every one of them running
-  ;; somewhere. Two things prove it, and NEITHER is a shared number any more:
+  ;; somewhere. Two things prove it, and NEITHER is a shared number:
   ;;
-  ;;   1. the per-namespace ledger below -- a deletion is a NAMED line whose
-  ;;      count fell, and a move is one line down and another up;
+  ;;   1. the per-DEFTEST ledger below -- a deletion is a NAMED line that
+  ;;      disappeared, a rename is one line out and one line in, and a move
+  ;;      between namespaces is neither, because the name is qualified by the
+  ;;      namespace that declares it;
   ;;   2. the arithmetic, computed entirely from the tree: the round-one half
   ;;      plus the adopted half must be the whole manifest, as sets AND as sums,
   ;;      so a namespace cannot be counted twice or not at all.
-  ;;
-  ;; A MOVE keeps the total and a DELETION does not -- that distinction is what
-  ;; made the old equality worth its cost, and the ledger keeps it while naming
-  ;; the namespace, which the equality never could.
   (let [derived (derived-census)
-        regenerate? (= "1" (System/getenv "CENSUS_REGENERATE"))]
-    (when regenerate?
+        env (environment)
+        decision (regenerate-decision env)]
+    (when (= :write decision)
       (write-census-ledger! derived)
-      (println "CENSUS_REGENERATE=1: wrote" (count derived) "namespaces to"
+      (println "CENSUS_REGENERATE=1: wrote" (count derived) "deftests to"
                census-ledger-path))
+    (testing "regeneration never happens inside a make recipe"
+      (is (not= :refuse-under-make decision) (regenerate-refusal env)))
     (testing "the corpus is not empty, so nothing below passes vacuously"
       (is (seq derived))
-      (is (every? pos? (vals derived))
-          (str "namespace(s) declaring no deftests at all: "
-               (str/join ", " (sort (map key (remove (comp pos? val) derived)))))))
-    (testing "every namespace's declared tests match the checked-in ledger"
+      (let [barren (sort (remove (comp seq deftest-names) (keys lm/manifest)))]
+        (is (empty? barren)
+            (str "namespace(s) declaring no deftests at all: "
+                 (str/join ", " barren)))))
+    (testing "every deftest in the tree is a named line in the ledger"
       (let [ledger (edn/read-string (slurp census-ledger-path))
             diff (census-ledger-diff derived ledger)]
-        (is (map? ledger) (str census-ledger-path " must hold a map"))
-        (is (nil? diff)
-            (str "the tree and " census-ledger-path " disagree. "
-                 "In a lane but NOT in the ledger ("
-                 (count (:added diff)) "): "
-                 (if (seq (:added diff)) (str/join ", " (:added diff)) "none")
-                 ". In the ledger but no longer in a lane ("
-                 (count (:removed diff)) "): "
-                 (if (seq (:removed diff)) (str/join ", " (:removed diff)) "none")
-                 ". Declared test count MOVED (" (count (:changed diff)) "): "
-                 (if (seq (:changed diff))
-                   (str/join ", " (map (fn [[s was now]]
-                                         (format "%s %d -> %d" s was now))
-                                       (:changed diff)))
-                   "none")
-                 ". A count that FELL is a deleted test -- say why, or restore "
-                 "it. Then regenerate: CENSUS_REGENERATE=1, see "
-                 "clj-surgeon.lane-manifest-test/census-ledger-path."))))
+        (is (set? ledger) (str census-ledger-path " must hold a set of names"))
+        (is (nil? diff) (census-ledger-message diff))))
     (testing "the two halves are the whole manifest, as sets"
       (let [diff (census-diff (set (keys lm/manifest))
                               (into (set round-one-jvm-namespaces)
@@ -717,7 +802,7 @@
     (testing "and as sums, all three derived from the tree"
       (let [r1 (reduce + (map deftest-count round-one-jvm-namespaces))
             adopted (reduce + (map deftest-count adopted-since-round-one))
-            total (reduce + (vals derived))]
+            total (count derived)]
         (is (= total (+ r1 adopted))
             (str total " != " r1 " + " adopted
                  " -- a namespace is being counted twice or not at all"))))))

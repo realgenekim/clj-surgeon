@@ -546,9 +546,10 @@
 ;;                 `*-specs.md` rule and its own id regex.
 ;; Two derivations that must agree catch what one cannot: a spec document the
 ;; production scan cannot reach (nested a directory deeper, say) is invisible to
-;; the audit while looking perfectly registered to a reader. The only surviving
-;; numbers are FLOORS, so an emptied tree fails loudly instead of agreeing with
-;; itself.
+;; the audit while looking perfectly registered to a reader. NO COUNT IS
+;; ASSERTED, not even as a `>=` floor: a floor at a historical count is the same
+;; shared number under a weaker operator. The one admissible guard is
+;; NON-EMPTINESS, so an emptied tree fails loudly instead of agreeing with itself.
 ;; ---------------------------------------------------------------------------
 
 ;; @spec MCP-OP-TRACE-005
