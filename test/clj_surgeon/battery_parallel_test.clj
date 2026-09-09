@@ -1,10 +1,11 @@
-(ns ^{:lane :fast} clj-surgeon.battery-parallel-test
+(ns clj-surgeon.battery-parallel-test
   "@spec TEST-ISO-013 -- the witnesses for the battery lane run wide.
 
    Every one of these is a fold over DATA: the scheduler, the lane-failure
    classifier, the union, and the summary renderer are pure, so the ways a
    parallel suite silently runs LESS than a serial one are all provable here,
    in the fast lane, with no JVM launched and no minutes spent."
+  {:lane :fast}
   (:require
    [clj-surgeon.battery-parallel-runner :as bp]
    [clj-surgeon.lane-manifest :as lm]
@@ -80,6 +81,13 @@
   (testing "a width below one is still one lane, never zero"
     (is (= 1 (count (bp/partition-lanes units walls 0))))))
 
+(defn complete-emission [namespaces]
+  {:namespaces namespaces
+   :runs (mapv (fn [n] {:namespace n :counters {:test 1 :pass 1 :fail 0 :error 0}
+                        :elapsed-ms 1 :violations []}) namespaces)
+   :result {:test (count namespaces) :pass (count namespaces) :fail 0 :error 0}
+   :leak-fail 0})
+
 (deftest a-lane-that-ran-less-than-it-was-asked-for-is-a-named-failure
   (let [asked '[clj-surgeon.a-test clj-surgeon.b-test]
         lane {:index 3 :namespaces asked :exit 0 :log "/tmp/lane-3.out"
@@ -95,8 +103,8 @@
         "and the log a reader has to open"))
   (testing "a lane that ran exactly what it was asked for is not a failure"
     (is (= [] (bp/lane-failures
-               [{:index 0 :namespaces '[clj-surgeon.a-test] :exit 0 :log "x"
-                 :emitted {:namespaces '[clj-surgeon.a-test]}}])))))
+                [{:index 0 :namespaces '[clj-surgeon.a-test] :exit 0 :log "x"
+                  :emitted (complete-emission '[clj-surgeon.a-test])}])))))
 
 (deftest a-lane-that-timed-out-or-wrote-nothing-is-a-named-failure
   (testing "timeout"
@@ -111,8 +119,8 @@
       (is (str/includes? msg "137"))))
   (testing "wrote an unreadable result"
     (let [[msg] (bp/lane-failures
-                 [{:index 4 :namespaces '[clj-surgeon.a-test] :exit 0 :log "L"
-                   :emitted {:clj-surgeon.battery-parallel-runner/unreadable "EOF"}}])]
+                  [{:index 4 :namespaces '[clj-surgeon.a-test] :exit 0 :log "L"
+                    :emitted {:clj-surgeon.battery-parallel-runner/unreadable "EOF"}}])]
       (is (str/includes? msg "unreadable")))))
 
 ;; ---------------------------------------------------------------------------
@@ -350,13 +358,13 @@
 (deftest grouped-shards-retain-measured-per-deftest-walls
   (testing "new cells have a namespace-share estimate before their first run"
     (is (= 100 (bp/unit-cost
-                '{clj-surgeon.reader-eval-fence-test 1300} {}
-                '[clj-surgeon.reader-eval-fence-test/new-cell]))
+                 '{clj-surgeon.reader-eval-fence-test 1300} {}
+                 '[clj-surgeon.reader-eval-fence-test/new-cell]))
         "unmeasured cells must not pack behind measured work at a token 1 ms")
     (is (= 37 (bp/unit-cost
-               '{clj-surgeon.reader-eval-fence-test 1300}
-               '{clj-surgeon.reader-eval-fence-test/new-cell 37}
-               '[clj-surgeon.reader-eval-fence-test/new-cell]))))
+                '{clj-surgeon.reader-eval-fence-test 1300}
+                '{clj-surgeon.reader-eval-fence-test/new-cell 37}
+                '[clj-surgeon.reader-eval-fence-test/new-cell]))))
   (let [n-sym (gensym "measured-shard-")
         n (create-ns n-sym)
         a (intern n (with-meta 'a {:test #(is true)}) (fn []))
@@ -453,16 +461,16 @@
                 clj-surgeon.reader-eval-fence-test/a-non-string-paths-entry-never-reaches-io-file
                 clj-surgeon.reader-eval-fence-test/the-oracle-names-every-evaluator-it-claims-to-fence]
         lane {:index 1 :namespaces asked :exit 0 :log "L"
-              :emitted {:namespaces '[clj-surgeon.mission-test
-                                      clj-surgeon.reader-eval-fence-test]}}]
+              :emitted (complete-emission '[clj-surgeon.mission-test
+                                            clj-surgeon.reader-eval-fence-test])}]
     (is (= [] (bp/lane-failures [lane]))
         "a lane that ran every namespace it was given is not a failure"))
   (testing "and a genuinely short lane still fails, named, in the same shape"
     (let [[msg] (bp/lane-failures
-                 [{:index 1 :exit 0 :log "L"
-                   :namespaces '[clj-surgeon.mission-test
-                                 clj-surgeon.reader-eval-fence-test/the-oracle-names-every-evaluator-it-claims-to-fence]
-                   :emitted {:namespaces '[clj-surgeon.mission-test]}}])]
+                  [{:index 1 :exit 0 :log "L"
+                    :namespaces '[clj-surgeon.mission-test
+                                  clj-surgeon.reader-eval-fence-test/the-oracle-names-every-evaluator-it-claims-to-fence]
+                    :emitted {:namespaces '[clj-surgeon.mission-test]}}])]
       (is (str/includes? msg "reader-eval-fence-test"))
       (is (not (str/includes? msg "/the-oracle"))
           "the refusal names the NAMESPACE that produced no result, not a selector")))
@@ -498,3 +506,101 @@
     (is (str/includes? (slurp (io/file "test/clj_surgeon/mcp_test_runner.clj"))
                        "(lm/lane-of (selector-namespace %))")
         "the home-isolation decision must read through the selector")))
+
+;; @spec TEST-ISO-015
+(deftest gate-width-is-resource-bounded
+  (let [width (requiring-resolve 'clj-surgeon.battery-parallel-runner/gate-width)]
+    (is (= 8 (width 16 32768)))
+    (is (= 11 (width 64 20000)))
+    (is (= 2 (width 4 32768)))
+    (is (= 1 (width 1 4096)))
+    (is (= 2 (width 64 5120)))
+    (is (thrown? clojure.lang.ExceptionInfo (width 16 2048)))))
+
+;; @spec TEST-ISO-015
+(deftest gate-census-rejects-every-loss-and-duplicate
+  (let [problems (requiring-resolve 'clj-surgeon.battery-parallel-runner/census-problems)
+        expected '[a b c]]
+    (is (empty? (problems expected expected)))
+    (doseq [observed ['[] '[a] '[b c] '[a b] '[a b c c] '[a b c d] '[a a c]]]
+      (is (seq (problems expected observed)) (str observed)))))
+
+;; @spec TEST-ISO-015
+(deftest gate-parity-is-per-namespace
+  (let [delta (requiring-resolve 'clj-surgeon.battery-parallel-runner/parity-delta)
+        a {'a {:test 2 :pass 3 :fail 0 :error 0}
+           'b {:test 1 :pass 4 :fail 0 :error 0}}]
+    (is (empty? (delta a a)))
+    (is (seq (delta a (assoc-in a ['a :pass] 4))))
+    (is (seq (delta a (assoc a 'a (a 'b) 'b (a 'a)))))
+    (is (seq (delta a (dissoc a 'a))))))
+
+;; @spec TEST-ISO-015
+(deftest serial-cannot-authorize-a-landing
+  (let [eligible (requiring-resolve 'clj-surgeon.battery-parallel-runner/landing-eligible?)]
+    (is (true? (eligible false [])))
+    (is (false? (eligible true [])))
+    (is (false? (eligible false [:lost-shard])))))
+
+;; @spec TEST-ISO-015
+(deftest gate-refuses-malformed-and-lost-child-facts
+  (let [facts (complete-emission '[a b])
+        lane {:index 0 :namespaces '[a b] :exit 0 :log "child.log" :emitted facts}]
+    (is (empty? (bp/lane-failures [lane])))
+    (doseq [bad [(dissoc facts :runs) (assoc facts :runs [])
+                 (update facts :runs conj (first (:runs facts)))
+                 (assoc-in facts [:result :test] 1)
+                 (assoc-in facts [:runs 0 :counters :pass] -1)
+                 (assoc-in facts [:runs 0 :expected-vars] '[missing-test])
+                 (assoc facts :leak-fail nil)]]
+      (is (seq (bp/lane-failures [(assoc lane :emitted bad)]))))
+    (is (seq (bp/lane-failures [(assoc lane :exit 7)])))
+    (is (seq (bp/lane-failures [(assoc lane :emitted nil)])))))
+
+;; @spec TEST-ISO-015
+(deftest gate-preserves-fast-before-integration
+  (let [lanes {'f1 :fast 'f2 :fast 'i1 :integration 'i2 :integration}]
+    (is (= '[[f2 f1] [i2 i1]] (bp/gate-phases '[i2 f2 i1 f1] lanes)))
+    (is (= '[[f1 f2] [i1 i2]] (bp/gate-phases '[f1 f2 i1 i2] lanes)))
+    (is (= [[] []] (bp/gate-phases [] lanes)))))
+
+;; @spec TEST-ISO-015 -- fresh clone 2026-09-09: two of eight CLI starts
+;; read a concurrently written .cpcache and lost clojure.main before any test.
+(deftest a-cold-checkout-prepares-the-worker-classpath
+  (let [command (requiring-resolve 'clj-surgeon.battery-parallel-runner/worker-preparation-command)
+        expected ["clojure" "-J-Xms64m" "-J-Xmx512m" "-Spath" "-M:clj-surgeon/test-deps"]]
+    (is (= expected (command [{:runtime :jvm}])))
+    (is (= expected (command [{:runtime :bb} {:runtime :jvm} {:runtime :jvm}])))
+    (is (nil? (command [{:runtime :bb}])))
+    (is (nil? (command [])))))
+
+;; @spec TEST-ISO-015 -- competing suites consume one shared width budget.
+(deftest gate-pool-overlaps-suites-without-multiplying-width
+  (let [pool (requiring-resolve 'clj-surgeon.battery-parallel-runner/run-pool!)
+        started (java.util.concurrent.CountDownLatch. 3)
+        active (atom 0)
+        peak (atom 0)
+        seen (atom #{})
+        jobs [{:suite "alias"} {:suite "mcp"} {:suite "bb"}]
+        result (pool jobs 3
+                     (fn [{:keys [suite] :as job}]
+                       (swap! peak max (swap! active inc))
+                       (swap! seen conj suite)
+                       (.countDown started)
+                       (try
+                         (assoc job :overlapped? (.await started 10 java.util.concurrent.TimeUnit/SECONDS))
+                         (finally (swap! active dec)))))]
+    (is (= 3 @peak))
+    (is (= #{"alias" "mcp" "bb"} @seen))
+    (is (every? :overlapped? result))
+    (is (= jobs (mapv #(dissoc % :overlapped?) result)))
+    (is (= 0 @active))
+    (is (= (vec (range 11)) (pool (range 11) 1 identity)))
+    (let [completed (atom [])]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"pool job failed"
+            (bp/run-pool! (range 3) 1
+                          (fn [n]
+                            (swap! completed conj n)
+                            (when (zero? n) (throw (ex-info "failed job" {})))))))
+      (is (= [0 1 2] @completed) "a failed job cannot abandon its queued siblings"))
+    (is (thrown? clojure.lang.ExceptionInfo (bp/run-pool! [] 0 identity)))))

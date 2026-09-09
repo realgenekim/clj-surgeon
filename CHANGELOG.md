@@ -8,6 +8,13 @@ is cut.
 
 ## [Unreleased]
 
+- `make test` now automatically runs JVM and Babashka namespace suites through
+  the existing battery process coordinator. CPU/memory bounds choose lane count;
+  namespace census, per-namespace execution counts, isolation and prerequisite
+  evidence must all pass before `target/landing-gate.edn` is written. The intent
+  audit is included. `make test-serial` is a labelled diagnostic with no landing
+  authority. Existing component targets retain their names.
+
 - Namespace-split receipts now include require/import entry diffs, scoped
   whole-file byte identity, executed lint deltas and warm namespace load results.
   Failed loads name the namespace and still roll back. Text puts committed state

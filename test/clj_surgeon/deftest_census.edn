@@ -185,6 +185,7 @@
   clj-surgeon.battery-ledger-test/every-refusal-carries-the-remedy
   clj-surgeon.battery-ledger-test/only-existing-regular-archive-content-is-exempt
   clj-surgeon.battery-ledger-test/the-make-targets-are-wired-to-this-mechanism
+  clj-surgeon.battery-parallel-test/a-cold-checkout-prepares-the-worker-classpath
   clj-surgeon.battery-parallel-test/a-correctly-sharded-lane-is-not-a-lane-that-ran-less
   clj-surgeon.battery-parallel-test/a-lane-child-reports-that-it-sharded-and-which-vars
   clj-surgeon.battery-parallel-test/a-lane-of-only-shards-is-still-a-battery-lane-for-home-isolation
@@ -199,9 +200,16 @@
   clj-surgeon.battery-parallel-test/emit-edn-is-stripped-from-argv-wherever-it-appears
   clj-surgeon.battery-parallel-test/every-deftest-of-a-sharded-namespace-lands-in-exactly-one-shard
   clj-surgeon.battery-parallel-test/every-namespace-is-scheduled-exactly-once-across-the-lanes
+  clj-surgeon.battery-parallel-test/gate-census-rejects-every-loss-and-duplicate
+  clj-surgeon.battery-parallel-test/gate-parity-is-per-namespace
+  clj-surgeon.battery-parallel-test/gate-pool-overlaps-suites-without-multiplying-width
+  clj-surgeon.battery-parallel-test/gate-preserves-fast-before-integration
+  clj-surgeon.battery-parallel-test/gate-refuses-malformed-and-lost-child-facts
+  clj-surgeon.battery-parallel-test/gate-width-is-resource-bounded
   clj-surgeon.battery-parallel-test/grouped-shards-retain-measured-per-deftest-walls
   clj-surgeon.battery-parallel-test/launcher-matrix-cells-remain-independently-shardable
   clj-surgeon.battery-parallel-test/one-lane-is-the-serial-shape
+  clj-surgeon.battery-parallel-test/serial-cannot-authorize-a-landing
   clj-surgeon.battery-parallel-test/the-declared-shard-target-is-the-namespace-that-owns-the-floor
   clj-surgeon.battery-parallel-test/the-floor-is-the-largest-unit
   clj-surgeon.battery-parallel-test/the-inventory-is-the-lane-manifests-battery-lane
@@ -1421,6 +1429,7 @@
   clj-surgeon.ns-isolation-test/a-spawn-seen-by-both-observations-is-reported-once
   clj-surgeon.ns-isolation-test/a-write-outside-the-namespaces-own-tmp-subdir-fails-with-the-path
   clj-surgeon.ns-isolation-test/an-allowlisted-command-that-is-still-running-is-refused-anyway
+  clj-surgeon.ns-isolation-test/compact-relations-has-a-declared-contention-margin
   clj-surgeon.ns-isolation-test/each-lane-has-its-own-default-budget-because-a-lane-is-a-cost-class
   clj-surgeon.ns-isolation-test/each-lane-is-held-only-to-the-rules-that-lane-can-keep
   clj-surgeon.ns-isolation-test/every-src-spawn-site-records-into-the-ledger

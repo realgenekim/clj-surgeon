@@ -75,12 +75,17 @@
    that let the old predicate accept anything appearing anywhere."
   [makefile-text target]
   (let [lines (str/split-lines (or makefile-text ""))
-        head (re-pattern (str "^" (java.util.regex.Pattern/quote target) ":(?!=)(.*)$"))]
+        head (re-pattern (str "^(?:[a-z0-9-]+ +)*" (java.util.regex.Pattern/quote target) "(?: +[a-z0-9-]+)*:(?!=)(.*)$"))]
     (loop [[line & more] lines]
       (when line
         (if-let [[_ prereqs] (re-find head line)]
-          {:prerequisites (vec (remove str/blank? (str/split (str/trim (or prereqs "")) #"\s+")))
-           :recipe (str/join "\n" (take-while #(str/starts-with? % "\t") more))}
+          (let [recipe (str/join "\n" (take-while #(str/starts-with? % "\t") more))
+                gate? (str/includes? recipe "test-battery-parallel --suite gate")]
+            {:prerequisites (into (vec (remove str/blank? (str/split (str/trim (or prereqs "")) #"\s+")))
+                                  (when gate?
+                                    ((requiring-resolve 'clj-surgeon.battery-parallel-runner/gate-targets)
+                                     (str/includes? recipe "--debug-serial true"))))
+             :recipe recipe})
           (recur more))))))
 
 ;; ---------------------------------------------------------------------------
@@ -107,7 +112,7 @@
   (namespaces-named-in (read-if-present (io/file "test" "run_all.clj"))))
 
 (defn- resolve-main-opts
-  [main-opts ctx]
+  [main-opts _ctx]
   (let [opts (vec main-opts)
         i (.indexOf opts "-m")]
     (cond
@@ -159,7 +164,15 @@
           sub-targets (concat prerequisites
                               (map second (re-seq #"\$\(MAKE\)(?:\s+--[a-z\-]+)*\s+([a-z0-9\-]+)" recipe)))
           bb-lane? (str/includes? recipe "bb test/run_all.clj")
-          parts (concat (map #(resolve-alias % ctx) aliases)
+          coordinator-suite (when (str/includes? recipe "test-battery-parallel --suite")
+                              (second (re-find #"--suite (fast|mcp|bb|alias|gate)" recipe)))
+          coordinator-members (when coordinator-suite
+                                (if (= "gate" coordinator-suite) #{}
+                                    (set ((requiring-resolve 'clj-surgeon.battery-parallel-runner/suite-namespaces)
+                                          coordinator-suite))))
+          parts (concat (if coordinator-members
+                          [{:namespaces coordinator-members :unresolved []}]
+                          (map #(resolve-alias % ctx) aliases))
                         (map #(resolve-runner (str "make " %) ctx seen) sub-targets)
                         (when bb-lane? [{:namespaces (bb-lane-namespaces) :unresolved []}])
                         [{:namespaces (namespaces-named-in recipe) :unresolved []}])
@@ -216,42 +229,42 @@
      :not-a-member      the runner resolves, and this namespace is not in it"
   [excluded ctx]
   (vec
-   (for [[s reason] (sort-by key excluded)
-         :let [runners (vec (runners-named-in reason))
-               resolutions (mapv #(vector % (resolve-runner % ctx)) runners)
-               member (some (fn [[r {:keys [namespaces]}]]
-                              (when (contains? namespaces s) r))
-                            resolutions)]
-         :when (not member)
-         :let [unresolved (mapcat (comp :unresolved second) resolutions)]]
-     (cond
-       (empty? runners)
-       {:namespace s :kind :no-runner-named :reason reason
-        :message (str "excluded namespace " s " names no runner at all. An "
-                      "exclusion is a REDIRECTION: its reason must name a "
-                      "`make <target>` or a :clj-surgeon/<alias> that RUNS it "
-                      "(TEST-ISO-001). Its reason was: " (pr-str reason))}
+    (for [[s reason] (sort-by key excluded)
+          :let [runners (vec (runners-named-in reason))
+                resolutions (mapv #(vector % (resolve-runner % ctx)) runners)
+                member (some (fn [[r {:keys [namespaces]}]]
+                               (when (contains? namespaces s) r))
+                             resolutions)]
+          :when (not member)
+          :let [unresolved (mapcat (comp :unresolved second) resolutions)]]
+      (cond
+        (empty? runners)
+        {:namespace s :kind :no-runner-named :reason reason
+         :message (str "excluded namespace " s " names no runner at all. An "
+                       "exclusion is a REDIRECTION: its reason must name a "
+                       "`make <target>` or a :clj-surgeon/<alias> that RUNS it "
+                       "(TEST-ISO-001). Its reason was: " (pr-str reason))}
 
-       (seq unresolved)
-       {:namespace s :kind :unresolved-runner :reason reason
-        :message (str "excluded namespace " s " names runner(s) "
-                      (str/join ", " runners) " whose selection could not be "
-                      "resolved, so membership is UNPROVEN and this fails "
-                      "closed: " (str/join "; " unresolved))}
+        (seq unresolved)
+        {:namespace s :kind :unresolved-runner :reason reason
+         :message (str "excluded namespace " s " names runner(s) "
+                       (str/join ", " runners) " whose selection could not be "
+                       "resolved, so membership is UNPROVEN and this fails "
+                       "closed: " (str/join "; " unresolved))}
 
-       :else
-       {:namespace s :kind :not-a-member :reason reason
-        :message (str "excluded namespace " s " names runner(s) "
-                      (str/join ", " runners)
-                      " -- and none of them RUNS it. `" (first runners)
-                      "` runs "
-                      (let [ns-set (:namespaces (second (first resolutions)))]
-                        (str (count ns-set) " namespace(s), not including this one"))
-                      ". A target that merely EXISTS is a spelling, not a "
-                      "runner: this is the round-three review's finding 4 "
-                      "sabotage. Point the exclusion at the runner that "
-                      "really runs it, adopt the namespace into a lane, or "
-                      "delete it.")}))))
+        :else
+        {:namespace s :kind :not-a-member :reason reason
+         :message (str "excluded namespace " s " names runner(s) "
+                       (str/join ", " runners)
+                       " -- and none of them RUNS it. `" (first runners)
+                       "` runs "
+                       (let [ns-set (:namespaces (second (first resolutions)))]
+                         (str (count ns-set) " namespace(s), not including this one"))
+                       ". A target that merely EXISTS is a spelling, not a "
+                       "runner: this is the round-three review's finding 4 "
+                       "sabotage. Point the exclusion at the runner that "
+                       "really runs it, adopt the namespace into a lane, or "
+                       "delete it.")}))))
 
 (defn repo-context
   "The live tree's Makefile and deps.edn."

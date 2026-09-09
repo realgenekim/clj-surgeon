@@ -5682,7 +5682,9 @@
                                     (slurp makefile)))]
         (is (some? recipe)
             "the Makefile has no `test:` recipe to own the battery")
-        (is (str/includes? (str recipe) target-name)
+        (is (and (str/includes? (str recipe) "landing-gate")
+                 (contains? (set ((requiring-resolve 'clj-surgeon.battery-parallel-runner/gate-targets) false))
+                            target-name))
             (str "`make test` does not run " target
                  " · nothing in the repository drives the skip bucket"
                  " to zero, so the exemption rests on a fixture no lane owns"

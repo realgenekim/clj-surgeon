@@ -65,14 +65,15 @@ WORKSPACE ?=
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
 	@echo ""
-	@echo "  make test                      LANDING GATE (default): battery-fresh receipt + alias-migration-test + mcp-test + test-bb + hygiene"
+	@echo "  make test                      PARALLEL LANDING GATE: automatic bounded lanes, recovery, freshness, suites, hygiene, audit"
 	@echo "  make test-full                 Run all tests: analyzer, recovery battery, mcp-test, test-battery, smoke, memory battery, bench tail (CI/nightly)"
-	@echo "  make test-fast                 JVM FAST lane (no child process, no port, no network)"
+	@echo "  make test-serial               SERIAL/NOT-A-GATE debugging; never landing evidence"
+	@echo "  make test-fast                 JVM FAST lane via the shared parallel coordinator"
 	@echo "  make test-integration          JVM INTEGRATION lane (ephemeral ports, in-process servers)"
 	@echo "  make test-battery              JVM BATTERY lane (cold child JVMs; minutes-scale). BATTERY_LANES=N runs it over N JVM lanes"
 	@echo "  make test-battery-serial       the same lane in ONE JVM -- the control the parallel lane is compared against"
 	@echo "  make battery-fresh             refuse if the newest battery receipt is stale"
-	@echo "  make landing-gate              THE landing gate ~/bin/land runs (battery-fresh + alias-migration-test + mcp-test + test-bb + hygiene)"
+	@echo "  make landing-gate              same automatic complete gate as make test; receipt target/landing-gate.edn"
 	@echo "  make test-bb                   babashka lane (was: make test-fast, renamed 2026-09-04)"
 	@echo "  make anvil-arms-self-test      PF-5 smoke for the E3/E6 arm apparatus (fake driver)"
 	@echo "  make analyzer-contract-test    Run the serialized real-analyzer contracts"
@@ -214,7 +215,15 @@ repository-hygiene-self-test:
 runtests: mcp-test
 
 # @spec MCP-OP-TRACE-006
-mcp-test: mcp-operation-oracle performance-regression-sentinel-intent-test
+mcp-test: mcp-operation-oracle performance-regression-sentinel-intent-test mcp-test-common
+mcp-test-serial: mcp-test-common
+.PHONY: mcp-test-common mcp-test-checks
+
+mcp-test-common: mcp-test-checks
+	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite mcp $(if $(filter mcp-test-serial,$(MAKECMDGOALS)),--debug-serial true,)
+
+# Shared unchanged shell/oracle sequence; the gate schedules it as one pool job.
+mcp-test-checks: mcp-operation-oracle performance-regression-sentinel-intent-test
 	@# NS-SPLIT-031: oracle attribution regression; no JVM and no workspace mutation.
 	python3 -B -m unittest discover -s test/oracles -p test_namespace_split_papercut_oracle.py
 	# @spec REQUIRE-CHANGE-014
@@ -224,7 +233,6 @@ mcp-test: mcp-operation-oracle performance-regression-sentinel-intent-test
 	python3 -B -m unittest discover -s test/oracles -p test_cell_b_oracle.py
 	@# @spec MCP-OP-TMPHYG-001
 	@# @spec MCP-OP-TMPHYG-002
-	clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/mcp-test
 	@$(MAKE) --no-print-directory repository-hygiene-self-test
 	@$(MAKE) --no-print-directory txn-kernel-warning-check
 	@$(MAKE) --no-print-directory mcp-heap-config-self-test
@@ -1017,7 +1025,7 @@ test-fast:
 	@# @spec TEST-ISO-001
 	@# @spec MCP-OP-TMPHYG-001
 	@# @spec MCP-OP-TMPHYG-002
-	clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/test-fast
+	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite fast
 
 test-integration:
 	@# @spec TEST-ISO-001
@@ -1094,7 +1102,10 @@ battery-fresh:
 test-bb:
 	@# @spec MCP-OP-TMPHYG-001
 	@# @spec MCP-OP-TMPHYG-002
-	bb test/run_all.clj
+	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite bb
+
+test-bb-serial:
+	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite bb --debug-serial true
 
 # ============================================================
 # TEST-ISO-009b -- THE LANDING GATE. This is the target `~/bin/land` runs.
@@ -1122,16 +1133,22 @@ test-bb:
 # @spec ALIAS-MIGRATION-003
 # This affected battery runs at every landing; historical freshness is insufficient.
 alias-migration-test:
-	clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/test-deps -m clj-surgeon.mcp-test-runner --ns clj-surgeon.mcp-alias-migration-test clj-surgeon.receipt-artifacts-boundary-test
+	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite alias
 
+alias-migration-test-serial:
+	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite alias --debug-serial true
+
+# @spec TEST-ISO-015 -- one shared coordinator owns the complete gate DAG.
+# Width is automatic: min(4, max(1, nproc/2), (available MiB-2048)/1536).
+# 512 MiB per JVM; insufficient memory refuses. No gate width flag.
 landing-gate:
-	@# @spec TEST-ISO-009b
-	@# @spec TEST-ISO-001
-	$(MAKE) --no-print-directory battery-fresh
-	$(MAKE) --no-print-directory alias-migration-test
-	$(MAKE) --no-print-directory mcp-test
-	$(MAKE) --no-print-directory test-bb
-	$(MAKE) --no-print-directory repository-hygiene
+	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite gate
+
+.PHONY: test-serial mcp-test-serial test-bb-serial alias-migration-test-serial
+
+test-serial:
+	@echo "SERIAL/NOT-A-GATE: debugging only; cannot emit a landing receipt"
+	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite gate --debug-serial true
 
 # ============================================================
 # TEST-ISO-009 -- the concurrency battery (the spike's merge gate)
@@ -1194,15 +1211,8 @@ analyzer-contract-target-self-test:
 
 test:
 	@# @spec TEST-ISO-001
-	@# The default is the landing gate (Gene 2026-09-05: "Tests need to be faster. Integrate
-	@# the 2.5m changes immediately"). REAL COVERAGE of the default: battery-fresh (reads the
-	@# battery-ledger receipt; it does NOT rerun the whole battery), alias-migration-test, mcp-test, test-bb, repository-hygiene.
-	@# It OMITS analyzer-contract-test, the admit recovery battery, mcp-smoke, the memory battery and
-	@# the bench self-test tail. Those run in `test-full` (CI/nightly). A stale battery receipt fails here.
-	@# @spec MCP-OP-ADMIT-150
-	@# The default lane OWNS the transaction-recovery battery receipt: the fast lane counts its
-	@# absence as a named skip, and this line is what drives that bucket to zero (sub-second arms).
-	$(MAKE) --no-print-directory admit-transaction-recovery-battery
+	@# @spec TEST-ISO-015
+	@# @spec MCP-OP-ADMIT-150 -- coordinator owns recovery before consumers.
 	$(MAKE) --no-print-directory landing-gate
 
 test-full:
