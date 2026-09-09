@@ -217,9 +217,13 @@ runtests: mcp-test
 # @spec MCP-OP-TRACE-006
 mcp-test: mcp-operation-oracle performance-regression-sentinel-intent-test mcp-test-common
 mcp-test-serial: mcp-test-common
-.PHONY: mcp-test-common
+.PHONY: mcp-test-common mcp-test-checks
 
-mcp-test-common: mcp-operation-oracle performance-regression-sentinel-intent-test
+mcp-test-common: mcp-test-checks
+	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite mcp $(if $(filter mcp-test-serial,$(MAKECMDGOALS)),--debug-serial true,)
+
+# Shared unchanged shell/oracle sequence; the gate schedules it as one pool job.
+mcp-test-checks: mcp-operation-oracle performance-regression-sentinel-intent-test
 	@# NS-SPLIT-031: oracle attribution regression; no JVM and no workspace mutation.
 	python3 -B -m unittest discover -s test/oracles -p test_namespace_split_papercut_oracle.py
 	# @spec REQUIRE-CHANGE-014
@@ -229,7 +233,6 @@ mcp-test-common: mcp-operation-oracle performance-regression-sentinel-intent-tes
 	python3 -B -m unittest discover -s test/oracles -p test_cell_b_oracle.py
 	@# @spec MCP-OP-TMPHYG-001
 	@# @spec MCP-OP-TMPHYG-002
-	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite mcp $(if $(filter mcp-test-serial,$(MAKECMDGOALS)),--debug-serial true,)
 	@$(MAKE) --no-print-directory repository-hygiene-self-test
 	@$(MAKE) --no-print-directory txn-kernel-warning-check
 	@$(MAKE) --no-print-directory mcp-heap-config-self-test

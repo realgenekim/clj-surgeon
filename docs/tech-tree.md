@@ -622,3 +622,23 @@ gate repetitions, namespace parity, fault injection, battery regression and
 commit status are reported at the fence:
 `/var/tmp/forge/plan2/cellC/astra-gate-lanes-report.md`.
 Evidence: `/var/tmp/forge/gate-lanes/`.
+
+### 2026-09-09 — landing gate shared pool, round two (TEST-ISO-015/007)
+
+The fixed four-worker cap is removed. One eight-slot pool on this host runs
+alias, MCP integration, BB and the unchanged shell sequence after the fast
+barrier. First complete trial: 173.191 s, exit 0, landing receipt; round-one
+passing median was 367.222 s (two runs), original baseline about 510 s.
+Minimum sampled MemAvailable: 17,987 MiB; peak active jobs: 8.
+Compact-relations now has a declared 18,000 ms wall ceiling under TEST-ISO-007
+(~2x the prior 8,836 ms contention measurement); 18,001 ms still refuses.
+Five corrected eight-worker probes exited 0: 7.325 / 8.379 / 8.358 / 8.869 /
+8.852 s for that namespace. Initial probes retained red census-pin results.
+Separate checkout roots plus local fast-before-integration ordering reduced a
+standalone MCP probe from 86.011 s to 62.898 + 3.063 s setup, saving 20.049 s.
+Roots without local ordering exposed six global-container violations; that
+trial is retained. The normal gate keeps the barrier; separate roots across the
+complete mixed pool remain unmeasured. Final same-snapshot parity, faults,
+three complete timings and battery regression are recorded at
+`/var/tmp/forge/plan2/cellC/astra-gate-lanes-r2-report.md`; raw evidence is under
+`/var/tmp/forge/gate-lanes/r2/`.

@@ -510,7 +510,8 @@
 ;; @spec TEST-ISO-015
 (deftest gate-width-is-resource-bounded
   (let [width (requiring-resolve 'clj-surgeon.battery-parallel-runner/gate-width)]
-    (is (= 4 (width 16 32768)))
+    (is (= 8 (width 16 32768)))
+    (is (= 11 (width 64 20000)))
     (is (= 2 (width 4 32768)))
     (is (= 1 (width 1 4096)))
     (is (= 2 (width 64 5120)))
@@ -562,3 +563,34 @@
     (is (= '[[f2 f1] [i2 i1]] (bp/gate-phases '[i2 f2 i1 f1] lanes)))
     (is (= '[[f1 f2] [i1 i2]] (bp/gate-phases '[f1 f2 i1 i2] lanes)))
     (is (= [[] []] (bp/gate-phases [] lanes)))))
+
+;; @spec TEST-ISO-015 -- competing suites consume one shared width budget.
+(deftest gate-pool-overlaps-suites-without-multiplying-width
+  (let [pool (requiring-resolve 'clj-surgeon.battery-parallel-runner/run-pool!)
+        started (java.util.concurrent.CountDownLatch. 3)
+        active (atom 0)
+        peak (atom 0)
+        seen (atom #{})
+        jobs [{:suite "alias"} {:suite "mcp"} {:suite "bb"}]
+        result (pool jobs 3
+                     (fn [{:keys [suite] :as job}]
+                       (swap! peak max (swap! active inc))
+                       (swap! seen conj suite)
+                       (.countDown started)
+                       (try
+                         (assoc job :overlapped? (.await started 10 java.util.concurrent.TimeUnit/SECONDS))
+                         (finally (swap! active dec)))))]
+    (is (= 3 @peak))
+    (is (= #{"alias" "mcp" "bb"} @seen))
+    (is (every? :overlapped? result))
+    (is (= jobs (mapv #(dissoc % :overlapped?) result)))
+    (is (= 0 @active))
+    (is (= (vec (range 11)) (pool (range 11) 1 identity)))
+    (let [completed (atom [])]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"pool job failed"
+            (bp/run-pool! (range 3) 1
+                          (fn [n]
+                            (swap! completed conj n)
+                            (when (zero? n) (throw (ex-info "failed job" {})))))))
+      (is (= [0 1 2] @completed) "a failed job cannot abandon its queued siblings"))
+    (is (thrown? clojure.lang.ExceptionInfo (bp/run-pool! [] 0 identity)))))

@@ -123,3 +123,10 @@ coverage and union verdicts. `make test` derives bounded width from CPU and memo
 and includes the intent audit. `make test-serial` is a diagnostic, explicitly
 incapable of producing a landing receipt. The design, failure matrix and fence
 are in [parallel landing gate](../../plans/parallel-landing-gate.md).
+
+Round two shares one executor admission budget across alias, MCP, Babashka and
+the existing shell-check sequence after a global fast snapshot barrier. Width
+is half nproc bounded by a 2,048 MiB reserve and 1,536 MiB per worker, with no
+fixed four-worker cap. Each runtime still folds its own complete namespace
+facts; a failed job drains sibling work before refusal. TEST-ISO-007 retains
+wall measurement and gives compact-relations a documented 18,000 ms override.

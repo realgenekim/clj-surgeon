@@ -230,6 +230,14 @@ it); the battery lane to 007 alone (it exists to launch cold child JVMs).
   (at the ceiling passes, one ms past it refuses),
   `.../the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays`.
 
+  Round-two gate margin (2026-09-09): compact-relations has an explicit
+  18,000 ms namespace override, about twice its measured 8,836 ms under
+  eight-worker contention (the four-worker fence measured 8,002/8,000 ms).
+  This remains elapsed wall across namespace execution and isolation probes;
+  the 60,000 ms fast-lane union ceiling remains independent and unchanged.
+  Witness `.../compact-relations-has-a-declared-contention-margin` accepts
+  8,002 and 18,000 ms and rejects 18,001 ms with the declared ceiling.
+
 - [x] **TEST-ISO-010**: No thread or executor leaks. The live NON-DAEMON
   thread set shall be snapshotted around each namespace and a thread alive
   afterwards that was not alive before shall fail naming its id and its name.
@@ -369,7 +377,8 @@ newest-failure authority and the 30-commit budget remain unchanged.
   shared TEST-ISO-013 coordinator shall publish current-tree landing evidence
   covering every discovered member of every required runtime suite.
 
-  Width derives from nproc, capped at four and half the CPUs, with a 2048 MiB
+  Width is min(floor(nproc/2), floor((MemAvailableMiB-2048)/1536)),
+  capped by namespace count, with a 2048 MiB
   reserve and 1536 MiB per lane; gate JVM and Babashka worker heaps (including
   Babashka temp-isolation re-exec) have a 512 MiB maximum.
   Missing, duplicate, unexpected, failed or unreadable child evidence refuses.
@@ -378,6 +387,9 @@ newest-failure authority and the 30-commit budget remain unchanged.
   Namespace counts and walls are recorded; skipped must be zero. JVM isolation
   and time budgets are evaluated over the union. All fast JVM workers finish before any integration worker starts, preserving
   the global isolation phase boundary across processes.
+  One shared executor owns the width across alias, MCP and BB suites. The
+  unchanged shell/oracle sequence occupies one slot after the fast barrier.
+  Recovery and freshness precede the pool; hygiene and audit follow it.
   Serial debugging retains manifest order. Runtime metadata auditing uses one
   conditional assertion per manifest row so counts do not depend on co-loaded
   tests; it still checks every loaded namespace. Change-buffer tests clear their
