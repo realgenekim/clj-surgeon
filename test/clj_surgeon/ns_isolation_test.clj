@@ -1,4 +1,4 @@
-(ns ^{:lane :fast} clj-surgeon.ns-isolation-test
+(ns clj-surgeon.ns-isolation-test
   "The six runtime purity witnesses on one per-namespace snapshot fixture --
    TEST-ISO-002, 003, 004, 005, 007, 010.
 
@@ -20,6 +20,7 @@
    throwaway namespace really does spawn, really does bind, and really does
    leak, and the lane really does refuse. A witness that can only go red at
    authoring time is not a ratchet (the marker-audit lesson)."
+  {:lane :fast}
   (:require
    [clj-surgeon.ns-isolation :as iso]
    [clj-surgeon.spawn-ledger :as spawn]
@@ -73,7 +74,6 @@
     (testing "a child that was ALREADY running is not attributed to this namespace"
       (let [pre (assoc (empty-snapshot) :processes {4242 "an inherited child"})]
         (is (empty? (of-intent (iso/violations subject pre after) "TEST-ISO-002")))))))
-
 
 ;; @spec TEST-ISO-002
 (deftest a-child-that-already-exited-fails-by-pid-and-command-line
@@ -417,6 +417,17 @@
 ;; ---------------------------------------------------------------------------
 ;; TEST-ISO-007 -- time budgets
 ;; ---------------------------------------------------------------------------
+
+;; @spec TEST-ISO-007 -- 2026-09-09 gate round-two 8,002/8,000 ms regression.
+(deftest compact-relations-has-a-declared-contention-margin
+  (let [n 'clj-surgeon.mcp-compact-relations-test
+        check #(iso/budget-violations n {:instant-ns 0}
+                 {:instant-ns (* % 1000000)}
+                 iso/namespace-budget-overrides 8000)]
+    (is (empty? (check 8002)))
+    (is (empty? (check 18000)))
+    (is (= 1 (count (check 18001))))
+    (is (str/includes? (:detail (first (check 18001))) "18000 ms budget"))))
 
 ;; @spec TEST-ISO-007
 (deftest a-namespace-over-its-budget-fails-with-its-wall
