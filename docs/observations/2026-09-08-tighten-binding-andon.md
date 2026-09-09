@@ -585,3 +585,86 @@ records-push `d19e1828467bc458`. Install: `bash /var/tmp/forge/ship-v3/install.s
 and the fail-closed gate); structured verification of the runner's result (exit code plus retained
 logs today); crash/reattach resume; and the live hand-drive on a real GO-WITH-FIX — a ship was in
 flight for the whole session, so every claim above is fixture evidence, not field evidence.
+
+## ship v3.1 — the cold fast lane beside the review, and the landing gate it can hand over (inb-7b825d)
+
+_Written 2026-09-09T02:48:06Z by forge@anvil (Claude Fable 5.1)._
+
+**What it cost to not have this.** Three landings died today in lanes `land` runs LAST — the census
+pin in `lane_manifest_test` (fast lane, twice) and the bb-lane skill-mirror drift (three tests) —
+13–16 minutes each, every one of them spent on a review and a battery for a candidate a cold suite
+would have failed in about three minutes.
+
+**Stage 1 — early detection.** At prewarm time `ship` now also launches the cold landing lanes
+(`make admit-transaction-recovery-battery mcp-test test-bb repository-hygiene`, i.e. `make test`
+minus `battery-fresh`, whose ledger receipt the battery is still minting) on a SECOND disposable
+worktree of the sealed candidate — never the fence worktree, never the receipt worktree. It is
+polled with the reviewer, at the verdict, through the battery wait and again before publishing.
+Red at any of those points is `SHIP-STOP reason=fast-lane-red detail='<first FAIL in line>'
+log=<path>` within one poll; the reviewer is NOT killed, and a detached recorder appends
+`SHIP-REVIEW-LATE … informational=true` to the ledger when its verdict finally arrives. The SHIP
+line gained `fastlane=<green|red|unknown> fastlane_elapsed=<s>`, and every disposable worktree is
+removed on every exit path (the disk was at 91% when this was written).
+
+`unknown` is deliberately not red: a lane that dies without its terminal marker proved nothing, and
+an early detector that fails must never fail a candidate. A lane still running at publish time is
+never waited on — `land` reruns those same targets anyway, so waiting would spend the wall this was
+built to save.
+
+**Stage 2 — the prewarm run BECOMES the landing gate when identity holds.** `land` gained
+`--consume-gate-receipt` (and the `LAND_GATE_RECEIPT` env it also reads). Ship completes the gate
+after the battery is ready — phase B is `make battery-fresh` plus the audit — and writes
+`<run>/gates-prewarm.edn` naming the tree, the two invocations, a gate-recipe hash and a
+gate-manifest hash, the four toolchain lines, the isolation line, the admit-recovery arms line,
+every lane's Ran/failures line, the audit line, stamps and the runner's pid identity. Land
+re-derives all of it on the tree it just merged and prints either
+`LAND-GATES consumed receipt=… candidate=… tree=…` or `LAND-GATES rerun reason=<typed>`; ship reads
+that back onto the SHIP line as `gates=<consumed|rerun:<reason>>`. Sol's rule governs, verbatim:
+*"Skipping another make test is sound only if the identical C already passed EVERY required landing
+check with equivalent invocation/environment/isolation and fulfilled prerequisites."*
+
+**The finding that nearly made stage 2 a silent no-op.** `land` does not merge the candidate — it
+merges the RECEIPT commit, which `receipt-chain` builds on top of the candidate with the battery's
+ledger entry. A receipt bound to the candidate's tree could therefore never be consumed: the landing
+tree always carries one more file. Phase B now FAST-FORWARDS the gates worktree to the receipt
+commit (`--ff-only` on purpose — it descends from the candidate, so anything else means the receipt
+is not about this candidate) and runs there, so `:tree` is the tree that will be landed. The delta
+phase A did not see is recorded AND re-derived by land, which refuses any path outside the battery
+receipt's own allowlist.
+
+**Second near-miss of the same class:** ship's receipt and land's check compare two strings byte for
+byte. Ship's defaults were spelled `$HOME/bin/suite-run make test` and an unquoted audit form; land's
+are `~/bin/suite-run make test` and a quoted one. Every landing would have silently rerun the gates
+and the stage would have bought nothing — a failure whose signature is a green board. Fixture row
+`8-ship-and-land-agree-on-the-gate-and-audit-invocation-by-DEFAULT` now EVALUATES both defaults out
+of the two files and compares the values, so the drift cannot come back.
+
+**Corpora (all against the installed bytes, at install time).** land-auto 19 · land-publication-truth
+12 · ship-v2 28 · ship-v3 22 · ship-v3.1 13 (new, the fast lane) · ship-v3.2 8 (new, consumption) —
+102 rows, 0 mismatches. Installed hashes: ship `466f51a835497ae1`, land `4a1eae94a7e289b6`,
+stamp `20260909T024418Z` (backups under `/var/tmp/forge/<name>.bak.20260909T024418Z`).
+
+**Three defects the fixtures found in the apparatus itself, all of the same shape — a probe blind to
+its own subject.** (1) `eval "$cmd"` swallowed the terminal marker whenever the command ended in
+`exit`, so every red read as `unknown`; the command runs in a subshell now. (2) `run-bg` reports
+"FAILED to start" for a job that finished before its own liveness check — a lane that had completed
+green looked unstarted, so ship now reads the marker before believing the launcher. (3) `new_tip` in
+`run-ship-v3.sh` increments a counter inside a command substitution, so it writes identical bytes
+every call: once a row lands them, the next `new_tip` commits nothing and hands back a tip identical
+to main. A fixture whose tip equals its base cannot prove a publication, and two rows were passing
+on exactly that.
+
+**Two pre-existing drifts surfaced and repaired in the fixtures, not in the tools.** `records-push`
+now defaults to `records/MCP-main` (Gene, 01:3xZ) while the v3 corpus still published to `MCP/main`
+— rows 20/21 were red against the INSTALLED records-push before any change of mine; the fixture now
+pins records-push's real default so the next such change shows up here rather than in a landing. And
+`run-land-publication-truth`'s row (d) is a SOURCE SCAN keyed to one spelling: parameterising land's
+destination broke it while the behaviour it guards was untouched. It accepts either spelling now,
+and the note in it says plainly that rows a–c, which drive stand-ins, are what actually hold the line.
+
+**Still owed.** No field evidence: every claim above is fixture evidence — the first real landing
+through this path is the receipt that matters, and its `fastlane=`/`gates=` fields are the meter.
+`ship` still leaves its `candidate-N`/`fix-N` worktrees behind (15 registrations under
+`/var/tmp/forge/ship/`, 934 MB, 4 trees still on disk); only the new gates worktree is cleaned. And
+the fast lane spends a suite lane beside the battery, so a contention-induced false red would stop a
+good run — the stop names its log, but the first one should be looked at rather than believed.
