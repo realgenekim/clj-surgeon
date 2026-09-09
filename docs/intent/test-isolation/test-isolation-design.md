@@ -117,6 +117,12 @@ back to raw distance rather than granting uninspected exemptions.
 
 ## Automatic landing gate
 
+Box admission and prewarm consumption use the round-three contract in the
+parallel landing gate plan. A live-memory-derived flock semaphore is shared
+across coordinators; local executor width alone grants no worker admission.
+One ordered stage manifest supplies both execution and consumable membership.
+Prewarm receipts explicitly deny landing authority and omit only freshness.
+
 TEST-ISO-015 extends the TEST-ISO-013 process coordinator to the normal landing
 path. Runtime-specific children produce namespace facts; a single parent owns
 coverage and union verdicts. `make test` derives bounded width from CPU and memory

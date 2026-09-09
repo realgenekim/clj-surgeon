@@ -437,6 +437,9 @@
                  "--emit-edn" (str out-path) "--ns"]
                 (map str namespaces))))
 
+(defn slot-command [argv]
+  (into ["python3" "-B" (.getCanonicalPath (io/file "test/gate_slot.py")) "--"] argv))
+
 (defn- run-lane!
   [{:keys [index namespaces java-opts work-dir runtime phase suite target checkout-root]}]
   (let [out-path (io/file work-dir (format "lane-%d.edn" index))
@@ -449,10 +452,10 @@
                    {:out :write :out-file log-path
                     :err :write :err-file err-path
                     :dir (or checkout-root (System/getProperty "user.dir"))}
-                   (cond target ["make" "--no-print-directory" target]
-                     (= :bb runtime)
-                     (into ["bb" "-Xmx512m" "test/run_all.clj" "--emit-edn" (str out-path) "--ns"] (map str namespaces))
-                     :else (lane-command java-opts out-path namespaces)))
+                   (slot-command (cond target ["make" "--no-print-directory" target]
+                                   (= :bb runtime)
+                                   (into ["bb" "-Xmx512m" "test/run_all.clj" "--emit-edn" (str out-path) "--ns"] (map str namespaces))
+                                   :else (lane-command java-opts out-path namespaces))))
           exit (deref (future (:exit @p)) lane-timeout-ms ::timeout)
           timed-out? (= ::timeout exit)]
       (when timed-out? (proc/destroy-tree p) (try @p (catch Exception _ nil)))
@@ -504,7 +507,7 @@
           result @(apply proc/process
                     {:out :string :err :inherit
                      :extra-env {"JAVA_TOOL_OPTIONS" (str (System/getenv "JAVA_TOOL_OPTIONS") " -Xmx512m")}}
-                    command)
+                    (slot-command command))
           receipt {:command command :exit (:exit result)
                    :wall-ms (quot (- (System/nanoTime) started) 1000000)}]
       (when (or (not= 0 (:exit result)) (str/blank? (:out result)))
@@ -577,8 +580,10 @@
              :when (not= (get control n) (get candidate n))]
          {:namespace n :control (get control n) :candidate (get candidate n)})))
 
-(defn landing-eligible? [debug? problems]
-  (and (not debug?) (empty? problems)))
+(defn landing-eligible?
+  ([debug? problems] (landing-eligible? debug? false problems))
+  ([debug? prewarm? problems]
+   (and (not debug?) (not prewarm?) (empty? problems))))
 
 (defn bb-namespaces []
   (or (some-> (re-find #"(?s)\(def namespaces\s+'(\[.*?\])\)"
@@ -655,84 +660,100 @@
   (mapv (fn [phase] (filterv #(= phase (get lane-map %)) namespaces))
         [:fast :integration]))
 
+(def gate-stage-manifest
+  [{:target "admit-transaction-recovery-battery" :kind :before}
+   {:target "battery-fresh" :kind :before}
+   {:target "alias-migration-test" :kind :suite :suite "alias"}
+   {:target "mcp-test" :kind :suite :suite "mcp"}
+   {:target "test-bb" :kind :suite :suite "bb"}
+   {:target "repository-hygiene" :kind :after}
+   {:target "intent-audit" :kind :audit}])
+
+;; @spec TEST-ISO-015 -- execution and print-gate-stages share this manifest.
+(defn gate-stages [debug? prewarm?]
+  (mapv #(cond-> % (and debug? (= :suite (:kind %))) (update :target str "-serial"))
+        (remove #(and prewarm? (= "battery-fresh" (:target %))) gate-stage-manifest)))
+
 (defn gate-targets [debug?]
-  (let [suffix (if debug? "-serial" "")]
-    ["admit-transaction-recovery-battery" "battery-fresh"
-     (str "alias-migration-test" suffix) (str "mcp-test" suffix)
-     (str "test-bb" suffix) "repository-hygiene"]))
+  (mapv :target (gate-stages debug? false)))
+
+(defn run-gate-stage! [run-id target]
+  (let [start (System/nanoTime)
+        _ (println "gate-stage:" target "started" (str (java.time.Instant/now)))
+        _ (flush)
+        rc (:exit @(apply proc/process
+                     {:out :inherit :err :inherit
+                      :extra-env {"JAVA_TOOL_OPTIONS" (str (System/getenv "JAVA_TOOL_OPTIONS") " -Xmx512m")
+                                  "CLJ_SURGEON_GATE_RUN_ID" run-id}}
+                     (slot-command ["make" "--no-print-directory" target])))]
+    {:target target :exit rc :wall-ms (quot (- (System/nanoTime) start) 1000000)}))
 
 (declare run-gate-pool!)
 
 (defn run-gate! [opts]
   (let [debug? (= "true" (get opts "--debug-serial"))
+        prewarm? (= "true" (get opts "--prewarm"))
         run-id (str (java.util.UUID/randomUUID))
-        base-dir (io/file (if debug? "target/gate-serial" "target/gate-parallel"))
+        base-dir (io/file (cond debug? "target/gate-serial" prewarm? "target/gate-prewarm" :else "target/gate-parallel"))
         work-dir (io/file base-dir run-id)
-        output (io/file "target/landing-gate.edn")
+        output (io/file (if prewarm? "target/landing-gate-prewarm.edn" "target/landing-gate.edn"))
         _ (io/delete-file output true)
+        _ (when prewarm? (io/delete-file (io/file "target/landing-gate.edn") true))
         _ (.mkdirs work-dir)
         _ (spit (io/file base-dir "latest-run") run-id)
         started (str (java.time.Instant/now))
         t0 (System/nanoTime)
         digest (source-digest)
         census (tree-census)
+        manifest (gate-stages debug? prewarm?)
+        required-suites (vec (keep :suite manifest))
         capacity (update (machine-capacity) :lanes min
-                         (reduce + (map (comp count suite-namespaces) ["alias" "mcp" "bb"])))
-        targets (gate-targets debug?)
+                         (reduce + (map (comp count suite-namespaces) required-suites)))
         _ (when debug? (println "SERIAL/NOT-A-GATE: debugging only; no landing receipt"))
-        _ (doseq [s ["alias" "mcp" "bb"]]
+        _ (doseq [s required-suites]
             (io/delete-file (io/file work-dir s "receipt.edn") true))
-        stages (atom [])]
+        stages (atom [])
+        pool (atom nil)]
     (when (seq (:problems census))
       (throw (ex-info "gate-refused: tree namespace census" census)))
-    (doseq [target (if debug? targets (take 2 targets))]
-      (let [start (System/nanoTime)
-            _ (println "gate-stage:" target "started" (str (java.time.Instant/now)))
-            _ (flush)
-            rc (:exit @(proc/process {:out :inherit :err :inherit
-                                      :extra-env {"JAVA_TOOL_OPTIONS" (str (System/getenv "JAVA_TOOL_OPTIONS") " -Xmx512m")
-                                                  "CLJ_SURGEON_GATE_RUN_ID" run-id}}
-                         "make" "--no-print-directory" target))
-            stage {:target target :exit rc
-                   :wall-ms (quot (- (System/nanoTime) start) 1000000)}]
+    (doseq [{:keys [target kind suite]} manifest]
+      (let [stage (if (and (= :suite kind) (not debug?))
+                    (do
+                      (when-not @pool (reset! pool (run-gate-pool! opts run-id capacity work-dir)))
+                      (get-in @pool [:stages suite]))
+                    ;; Serial suite targets coordinate their own workers; never
+                    ;; hold a slot around a coordinator that waits for slots.
+                    (if (= :suite kind)
+                      (let [start (System/nanoTime)
+                            rc (:exit @(proc/process {:out :inherit :err :inherit
+                                                      :extra-env {"CLJ_SURGEON_GATE_RUN_ID" run-id}}
+                                         "make" "--no-print-directory" target))]
+                        {:target target :exit rc :wall-ms (quot (- (System/nanoTime) start) 1000000)})
+                      (run-gate-stage! run-id target)))]
         (swap! stages conj stage)
         (spit (io/file work-dir "stages.edn") (pr-str @stages))
         (println "gate-stage:" (pr-str stage))
-        (when-not (zero? rc)
+        (when-not (= 0 (:exit stage))
           (throw (ex-info "gate-refused: required stage failed" stage)))))
-    (when-not debug?
-      (let [stage (run-gate-pool! opts run-id capacity work-dir)]
-        (swap! stages conj stage)
-        (println "gate-stage:" (pr-str stage)))
-      (let [start (System/nanoTime)
-            rc (:exit @(proc/process {:out :inherit :err :inherit}
-                                     "make" "--no-print-directory" "repository-hygiene"))
-            stage {:target "repository-hygiene" :exit rc
-                   :wall-ms (quot (- (System/nanoTime) start) 1000000)}]
-        (swap! stages conj stage)
-        (when-not (zero? rc) (throw (ex-info "gate-refused: hygiene failed" stage)))))
-    (let [start (System/nanoTime)
-          audit ((requiring-resolve 'clj-surgeon.mcp-intent-contract/audit-current-repository))
-          _ (swap! stages conj {:target "intent-audit" :exit (if (:ok audit) 0 1)
-                                :wall-ms (quot (- (System/nanoTime) start) 1000000)})
-          suites (mapv #(edn/read-string (slurp (io/file work-dir % "receipt.edn")))
-                       ["alias" "mcp" "bb"])
+    (let [suites (mapv #(edn/read-string (slurp (io/file work-dir % "receipt.edn")))
+                       required-suites)
           problems (vec (concat
-                          (when-not (:ok audit) [{:kind :intent-audit :violations (:violations audit)}])
                           (when-not (= digest (source-digest)) [{:kind :tree-changed-during-gate}])
                           (when-not debug?
                             (mapcat #(suite-receipt-problems (:suite %) % digest) suites))))
           receipt {:state (if (seq problems) :failed :passed)
-                   :landing? (landing-eligible? debug? problems)
+                   :landing? (landing-eligible? debug? prewarm? problems)
+                   :prewarm? (and prewarm? (not debug?))
                    :run-id run-id
                    :git-head (str/trim (:out @(proc/process {:out :string} "git" "rev-parse" "HEAD")))
                    :git-tree (str/trim (:out @(proc/process {:out :string} "git" "rev-parse" "HEAD^{tree}")))
                    :started-at started :completed-at (str (java.time.Instant/now))
                    :wall-ms (quot (- (System/nanoTime) t0) 1000000)
                    :source-digest digest :capacity capacity :namespace-census census
-                   :stages @stages :suites suites :problems problems}]
+                   :stages @stages :pool (dissoc @pool :stages) :suites suites :problems problems}]
       (spit (io/file work-dir "stages.edn") (pr-str @stages))
-      (when (:landing? receipt) (spit output (pr-str receipt)))
+      (spit (io/file work-dir "receipt.edn") (pr-str receipt))
+      (when (and (= :passed (:state receipt)) (not debug?)) (spit output (pr-str receipt)))
       (println "landing-gate:" (pr-str (dissoc receipt :suites :namespace-census)))
       (when (seq problems) (throw (ex-info "gate-refused: incomplete landing proof" {:problems problems})))
       (shutdown-agents))))
@@ -1029,7 +1050,7 @@
 
 (defn run-gate-pool! [opts run-id capacity work-dir]
   (let [contexts (mapv #(prepare-suite! (assoc opts "--suite" % ::run-id run-id ::capacity capacity))
-                       ["alias" "mcp" "bb"])
+                       (keep :suite gate-stage-manifest))
         ;; The fast snapshots observe this checkout. The original shell checks,
         ;; alias battery and BB workers join integration only after they drain.
         plan (conj (vec (for [context contexts job (:plan context)]
@@ -1051,6 +1072,9 @@
       (throw (ex-info "gate-refused: runtime pool failed"
                       {:shell-exit (:exit shell) :suites (mapv #(select-keys % [:suite :state :problems]) receipts)})))
     {:target "runtime-pool" :exit 0 :wall-ms (:wall-ms execution)
+     :stages (into {} (for [{:keys [target suite]} gate-stage-manifest :when suite
+                            :let [receipt (first (filter #(= suite (:suite %)) receipts))]]
+                        [suite {:target target :exit 0 :wall-ms (:wall-ms receipt)}]))
      :phases (:phases execution) :preparation (:preparation execution)
      :peak-worker-count (:peak-worker-count execution)
      :shell-checks (dissoc shell :emitted)}))
@@ -1058,7 +1082,10 @@
 (defn -main [& args]
   (try
     (let [opts (apply hash-map (map str args))]
-      (if (= "gate" (get opts "--suite")) (run-gate! opts) (run-suite! opts))
+      (cond (= "true" (get opts "--print-gate-stages"))
+            (doseq [target (gate-targets false)] (println target))
+            (= "gate" (get opts "--suite")) (run-gate! opts)
+            :else (run-suite! opts))
       (shutdown-agents))
     (catch Throwable e
       (binding [*out* *err*]

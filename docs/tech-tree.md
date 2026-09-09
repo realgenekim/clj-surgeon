@@ -651,3 +651,13 @@ skip that preparation. Original controls/faults are retained under
 `/var/tmp/forge/gate-lanes/r2/pre-classpath-fix/`; the final fence is repeated
 on the new commit, including an empty-cache fault clone. Derived pins are
 613 adopted / 1,638 manifest tests, with 34 coordinator witnesses.
+
+### Gate lanes round three — box admission and prewarm membership
+
+Sol GATE-LANES-FENCE-001/002 invalidated per-coordinator width and self-reported
+prewarm coverage. The repair uses inherited box-wide flock slots and one stage
+manifest for execution and consumption. Required evidence is the two-coordinator
+slot sampler, full/prewarm receipt membership and timed complete gates, retained
+in `/var/tmp/forge/gate-lanes/r3/`; the final result is reported at
+`/var/tmp/forge/plan2/cellC/astra-gate-lanes-r3-report.md`. No speedup claim follows
+from these contention walls.

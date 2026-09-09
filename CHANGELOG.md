@@ -8,6 +8,11 @@ is cut.
 
 ## [Unreleased]
 
+- Gate workers now share box-wide inherited flock slots with live memory
+  admission across concurrent coordinators. `landing-gate-prewarm` covers all
+  stages except freshness and explicitly denies landing authority.
+  `print-gate-stages` derives consumable membership from the execution manifest.
+
 - `make test` now automatically runs JVM and Babashka namespace suites through
   the existing battery process coordinator. CPU/memory bounds choose lane count;
   namespace census, per-namespace execution counts, isolation and prerequisite

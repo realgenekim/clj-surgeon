@@ -542,6 +542,31 @@
     (is (false? (eligible true [])))
     (is (false? (eligible false [:lost-shard])))))
 
+;; @spec TEST-ISO-015 -- Sol GATE-LANES-FENCE-002, omitted alias/audit prewarm.
+(deftest prewarm-membership-and-authority-are-explicit
+  (let [stages (requiring-resolve 'clj-surgeon.battery-parallel-runner/gate-stages)
+        full (stages false false)
+        warm (stages false true)]
+    (is (= ["admit-transaction-recovery-battery" "battery-fresh"
+            "alias-migration-test" "mcp-test" "test-bb"
+            "repository-hygiene" "intent-audit"] (mapv :target full)))
+    (is (= (filterv #(not= "battery-fresh" (:target %)) full) warm))
+    (is (= (count full) (count (set (map :target full)))))
+    (is (= (mapv :target full) (bp/gate-targets false)))
+    (is (false? (bp/landing-eligible? false true [])))
+    (is (true? (bp/landing-eligible? false false [])))
+    (is (false? (bp/landing-eligible? true true [])))))
+
+;; @spec TEST-ISO-015 -- Sol GATE-LANES-FENCE-001, every runtime shares flock.
+(deftest worker-admission-wraps-argv-without-shell-interpolation
+  (let [command (requiring-resolve 'clj-surgeon.battery-parallel-runner/slot-command)]
+    (doseq [argv [["java" "-Xmx512m"] ["bb" "task.clj"]
+                  ["make" "mcp-test-checks"] ["sh" "-c" "exit 7"]]]
+      (let [wrapped (command argv)]
+        (is (= ["python3" "-B"] (subvec wrapped 0 2)))
+        (is (.endsWith ^String (nth wrapped 2) "/test/gate_slot.py"))
+        (is (= (into ["--"] argv) (subvec wrapped 3)))))))
+
 ;; @spec TEST-ISO-015
 (deftest gate-refuses-malformed-and-lost-child-facts
   (let [facts (complete-emission '[a b])

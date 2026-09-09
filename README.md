@@ -2333,10 +2333,23 @@ also runs the complete alias-migration and receipt-artifact boundary batteries,
 the transaction recovery battery, battery freshness, operation oracles,
 repository hygiene and the intent audit. The battery's TEST-ISO-013 coordinator
 runs all gate namespace suites in separate processes, packed by measured walls.
-No parallelism flag is needed: width is `min(4, max(1, nproc / 2),
+No parallelism flag is needed: width is `min(max(1, nproc / 2),
 (available-memory-MiB - 2048) / 1536)` using integer division, capped by the
 suite's namespace count. Insufficient memory refuses; gate JVM and Babashka
-worker heaps (including temp-isolation re-exec) are bounded at 512 MiB. Shell self-tests remain serial.
+worker heaps (including temp-isolation re-exec) are bounded at 512 MiB. Shell self-tests remain serial within one admitted worker. Every worker holds a
+box-wide flock slot under `/var/tmp/forge/gate-slots/`; admission recomputes
+MemAvailable on every attempt and counts holders across coordinators. A lower
+width waits for existing holders to drain; running work is not killed.
+
+`make landing-gate-prewarm` runs the same coordinator except `battery-fresh`.
+Its `target/landing-gate-prewarm.edn` has `:landing? false :prewarm? true`.
+`make print-gate-stages` prints the deterministic stage target list from the
+coordinator manifest. Both receipts expose a flat `:stages` vector of maps with
+`:target` and `:exit`; pool execution details live at `:pool`. Consumers must
+require prewarm targets plus `battery-fresh` to equal the merged tree's printed
+stage set, otherwise rerun with `reason=stage-set-mismatch`. Commands for ship:
+`GATES_PREWARM_CMD='make landing-gate-prewarm'` and
+`GATES_PHASE_B_CMD='make battery-fresh'`.
 
 `target/landing-gate.edn` records the source digest, unique run identity, required
 stage exits, lane counts, tree namespace census, per-namespace counters and walls,

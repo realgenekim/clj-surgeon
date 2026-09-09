@@ -1,5 +1,33 @@
 # Parallel landing gate (TEST-ISO-015)
 
+## Round three: box admission and consumable prewarm
+
+The approved September 9 contract repairs GATE-LANES-FENCE-001/002. Every
+coordinator worker enters a box semaphore in `/var/tmp/forge/gate-slots/`.
+An admission flock serializes live MemAvailable sampling and occupied-slot
+counting; a worker inherits one flock through exec for its entire lifetime.
+Width is recomputed at every acquire attempt. A shrinking width admits nothing
+until the existing population fits; running work drains without being killed.
+Slot files are permanent inodes, never unlinked or mistaken for live holders.
+CPU/memory packing in the coordinator is advisory; the semaphore is authority.
+Recovery, freshness, classpath preparation, hygiene and shell oracles also
+acquire a slot. A coordinator never holds a slot while waiting on its pool.
+
+One ordered stage manifest drives execution and `make print-gate-stages`.
+`make landing-gate-prewarm` executes that manifest minus battery-fresh, writes
+`target/landing-gate-prewarm.edn` with `:landing? false :prewarm? true`, and
+retains the complete per-run receipt. Both modes expose flat `:stages`, each
+entry carrying `:target` and `:exit`; pool details remain separate. Land must
+compare prewarm targets plus battery-fresh with the merged tree's printed set,
+and rerun on `stage-set-mismatch`. Installed ship/land are outside this change.
+
+Witness matrix: live width changes, occupied high slots after shrink, unknown
+and insufficient memory, worker success/failure/exec failure and lock release;
+two simultaneous fixture coordinators sampled through flock, both complete;
+full/prewarm/debug stage membership and authority; one locked full gate, one
+prewarm, focused tests, formatter and serialized kondo. Preserve all outputs
+and report measured concurrent wall without claiming a speedup.
+
 ## Intent and design
 
 Gene's 2026-09-09 amendment requires one automatic gate, one shared coordinator,

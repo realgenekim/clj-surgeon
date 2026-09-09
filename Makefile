@@ -74,6 +74,8 @@ help:
 	@echo "  make test-battery-serial       the same lane in ONE JVM -- the control the parallel lane is compared against"
 	@echo "  make battery-fresh             refuse if the newest battery receipt is stale"
 	@echo "  make landing-gate              same automatic complete gate as make test; receipt target/landing-gate.edn"
+	@echo "  make landing-gate-prewarm      complete coordinator gate except battery-fresh; never landing authority"
+	@echo "  make print-gate-stages         exact ordered landing target membership from the coordinator"
 	@echo "  make test-bb                   babashka lane (was: make test-fast, renamed 2026-09-04)"
 	@echo "  make anvil-arms-self-test      PF-5 smoke for the E3/E6 arm apparatus (fake driver)"
 	@echo "  make analyzer-contract-test    Run the serialized real-analyzer contracts"
@@ -224,6 +226,8 @@ mcp-test-common: mcp-test-checks
 
 # Shared unchanged shell/oracle sequence; the gate schedules it as one pool job.
 mcp-test-checks: mcp-operation-oracle performance-regression-sentinel-intent-test
+	@# @spec TEST-ISO-015 -- box semaphore boundaries and live-capacity regression.
+	python3 -B -m unittest discover -s test/oracles -p test_gate_slot.py
 	@# NS-SPLIT-031: oracle attribution regression; no JVM and no workspace mutation.
 	python3 -B -m unittest discover -s test/oracles -p test_namespace_split_papercut_oracle.py
 	# @spec REQUIRE-CHANGE-014
@@ -1139,10 +1143,22 @@ alias-migration-test-serial:
 	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite alias --debug-serial true
 
 # @spec TEST-ISO-015 -- one shared coordinator owns the complete gate DAG.
-# Width is automatic: min(4, max(1, nproc/2), (available MiB-2048)/1536).
+# Width is automatic: min(max(1, nproc/2), (available MiB-2048)/1536).
+# Box-wide flock slots recheck live memory on every worker acquire.
 # 512 MiB per JVM; insufficient memory refuses. No gate width flag.
 landing-gate:
 	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite gate
+
+.PHONY: landing-gate-prewarm print-gate-stages intent-audit
+
+landing-gate-prewarm:
+	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite gate --prewarm true
+
+print-gate-stages:
+	@bb --classpath src:test -m clj-surgeon.battery-parallel-runner --print-gate-stages true
+
+intent-audit:
+	@bb --classpath src:test -e '(require (quote clj-surgeon.mcp-intent-contract)) (let [r (clj-surgeon.mcp-intent-contract/audit-current-repository)] (prn r) (System/exit (if (:ok r) 0 1)))'
 
 .PHONY: test-serial mcp-test-serial test-bb-serial alias-migration-test-serial
 

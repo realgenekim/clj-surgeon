@@ -415,6 +415,20 @@ evidence -- so every landing pays it in full.
 
 ### TEST-ISO-015 execution — automatic complete landing gate
 
+Every worker shall hold an inherited flock slot under
+`/var/tmp/forge/gate-slots/` for its lifetime. Each acquisition shall recompute
+width from live MemAvailable under the shared admission lock and account for
+all occupied slots, including slots above a newly reduced width. Insufficient
+or unknown memory shall refuse; reduced capacity shall wait for holders to
+drain. Abrupt worker exit shall release its lock through the operating system.
+
+The coordinator shall derive `print-gate-stages` and execution from one ordered
+manifest. Prewarm shall execute every stage except battery-fresh and publish
+`:landing? false`, `:prewarm? true` and flat `:stages` entries containing
+`:target` and `:exit`. A full receipt shall include the same stage set printed
+by the manifest entrance. A consumer shall rerun for stage-set-mismatch when
+the merged tree's membership differs from prewarm plus battery-fresh.
+
 The same census contract governs execution: when `make test` or
 `make landing-gate` succeeds, the
   shared TEST-ISO-013 coordinator shall publish current-tree landing evidence

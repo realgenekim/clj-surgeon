@@ -209,6 +209,7 @@
   clj-surgeon.battery-parallel-test/grouped-shards-retain-measured-per-deftest-walls
   clj-surgeon.battery-parallel-test/launcher-matrix-cells-remain-independently-shardable
   clj-surgeon.battery-parallel-test/one-lane-is-the-serial-shape
+  clj-surgeon.battery-parallel-test/prewarm-membership-and-authority-are-explicit
   clj-surgeon.battery-parallel-test/serial-cannot-authorize-a-landing
   clj-surgeon.battery-parallel-test/the-declared-shard-target-is-the-namespace-that-owns-the-floor
   clj-surgeon.battery-parallel-test/the-floor-is-the-largest-unit
@@ -219,6 +220,7 @@
   clj-surgeon.battery-parallel-test/the-prerequisite-dag-names-its-target-its-product-and-its-consumers
   clj-surgeon.battery-parallel-test/the-re-derived-time-budget-is-word-for-word-the-serial-one
   clj-surgeon.battery-parallel-test/the-union-is-taken-in-manifest-order-whichever-lane-ran-it
+  clj-surgeon.battery-parallel-test/worker-admission-wraps-argv-without-shell-interpolation
   clj-surgeon.cell-b-oracle-test/cell-b-lint-case-witness
   clj-surgeon.cell-b-oracle-test/cell-b-partial-negative-witnesses
   clj-surgeon.census-pool-test/pooled-map-maps-every-input-exactly-once
