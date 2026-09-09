@@ -201,11 +201,25 @@
       (spit f text)))
   dir)
 
+;; PB-FENCE-012. The checker's certification scope is EXACTLY the analyzer's. The
+;; feature set is declared here, passed to kondo, and read back by the file-level
+;; reconciliation — never hard-coded at the point of use.
+;;
+;; Empirically pinned on clj-kondo v2026.08.04: adding a feature to
+;; `:cljc {:features …}` does NOT make it elaborate that branch. A `#?(:bb …)` Var
+;; is reported by no feature set this version accepts. So the analysed set is the
+;; two platforms it really elaborates, and every other feature key — `:default`
+;; included — makes the file uncertifiable.
+(def analysed-features #{":clj" ":cljs"})
+
+(def kondo-config
+  (str "{:cljc {:features [" (str/join " " (sort analysed-features)) "]}"
+       " :analysis {:locals true :keywords false} :output {:format :edn}}"))
+
 (defn kondo-analyze [dir]
   (let [{:keys [out exit err]}
         (p/sh {:out :string :err :string :dir dir}
-              kondo-bin "--lint" "." "--parallel"
-              "--config" "{:analysis {:locals true :keywords false} :output {:format :edn}}")]
+              kondo-bin "--lint" "." "--parallel" "--config" kondo-config)]
     (when (and (not (contains? #{0 2 3} exit)) (str/blank? out))
       (throw (ex-info (str "clj-kondo failed: " err) {:exit exit})))
     (try (edn/read-string {:default (fn [_ v] v)} out)
@@ -250,6 +264,7 @@
                                    :end-row (:end-row d) :end-col (:end-col d)
                                    :macro (boolean (:macro d))
                                    :private (boolean (:private d))
+                                   :lang (:lang d)
                                    :defined-by (str (or (:defined-by d) "def"))}))
                         {} (:var-definitions a))]
     {:files idx :defs defs :defs-by-file by-file}))
@@ -287,6 +302,25 @@
         unreported (vec (for [o scanner-owners :when (not (owner-spans (:start o)))] o))
         no-var-forms (vec (filter #(no-var-kinds (:kind %)) unreported))
         unexplained (vec (remove #(no-var-kinds (:kind %)) unreported))
+        conds (sc/reader-conditionals text)
+        unanalysed (vec (sort (distinct (for [c conds
+                                              f (:features c)
+                                              :when (not (contains? analysed-features f))]
+                                          f))))
+        ;; every definition in a branch the analyzer DID cover must appear in its
+        ;; definition map, or the file fails closed
+        ;; Count DISTINCT names: `#?(:clj (def seen 1) :cljs (def seen 2))` defines
+        ;; one Var, and the analyzer reports it once.
+        cond-defs (count (into #{} (for [c conds
+                                         b (:pairs c)
+                                         :when (contains? analysed-features (:feature b))
+                                         :when (sc/def-shaped? (:text b))
+                                         :let [o (sc/form-owner {:text (str/replace (:text b) #"^\^[^\s]+\s+" "")
+                                                                 :line 0 :start 0 :end 0})]
+                                         :when o]
+                                     (:id o))))
+        kondo-lang-defs (count (into #{} (map :name) (filter :lang kdefs)))
+        cond-gap (max 0 (- cond-defs kondo-lang-defs))
         nsf (sc/ns-form forms)
         nsname (sc/ns-name-of nsf)]
     {:path rel
@@ -305,9 +339,14 @@
                            {:name (str/trim d) :start (:start f)}))
      :declares (mapv #(str (:ns %) "/" (:name %)) declares)
      :no-var-forms (mapv #(str (:kind %) " " (:id %)) no-var-forms)
+     :reader-conditionals (count conds)
+     :unanalysed-features unanalysed
      :reconcile {:unlocated (mapv #(str (:ns %) "/" (:name %)) unlocated)
                  :unreported (mapv :id unexplained)
-                 :ok? (and (empty? unlocated) (empty? unexplained))}
+                 :unanalysed-features unanalysed
+                 :cond-gap cond-gap
+                 :ok? (and (empty? unlocated) (empty? unexplained)
+                           (empty? unanalysed) (zero? cond-gap))}
      :owners (vec (for [[d f] located
                         :let [kind (last (str/split (:defined-by d) #"/"))]]
                     {:path rel :ns (:ns d) :id (:name d)
@@ -1427,7 +1466,8 @@
              :let [r (:reconcile f)]
              :when (not (:ok? r))]
          {:tree which :path path
-          :unlocated (:unlocated r) :unreported (:unreported r)})))
+          :unlocated (:unlocated r) :unreported (:unreported r)
+          :unanalysed-features (:unanalysed-features r) :cond-gap (:cond-gap r)})))
 
 (def declared-names
   (vec (sort (distinct (mapcat :declares (concat (vals base-idx) (vals cand-idx)))))))
@@ -1548,7 +1588,7 @@
   (vec (remove nil?
         [(when (seq reconcile-failures)
            [(count reconcile-failures)
-            "FILES whose two owner inventories DISAGREE — the resolver named a definition the scanner could not place, or the scanner saw an owner the resolver never reported. Nothing in those files is certifiable (A1)"])
+            "FILES this checker CANNOT CERTIFY — the two owner inventories disagree, or the file carries a reader-conditional platform the analyzer does not elaborate. Nothing in them is certifiable (A1)"])
          (when (seq no-var-forms)
            [(count no-var-forms)
             "top-level forms that define no Var (`defmethod`, `extend-*`, `reify`, …). The resolver does not track them and this brief does NOT certify them — read them (A1)"])
@@ -1977,11 +2017,13 @@
         (println "inventory; the scanner only locates each definition's top-level span. Where the two do not")
         (println "agree, nothing in that file is certifiable:")
         (println)
-        (println (tbl* ["tree" "file" "definition the scanner could not place" "owner the resolver never reported"]
+        (println (tbl* ["tree" "file" "definition not placed" "owner not reported" "unanalysed platform" "unreported branch defs"]
                        (for [r reconcile-failures]
                          [(:tree r) (:path r)
                           (if (seq (:unlocated r)) (str/join ", " (:unlocated r)) "—")
-                          (if (seq (:unreported r)) (str/join ", " (:unreported r)) "—")]))))
+                          (if (seq (:unreported r)) (str/join ", " (:unreported r)) "—")
+                          (if (seq (:unanalysed-features r)) (str/join " " (:unanalysed-features r)) "—")
+                          (if (pos? (long (or (:cond-gap r) 0))) (str (:cond-gap r)) "—")]))))
       (when (seq refused-entries)
         (println)
         (println "**Tree entries this checker refused to read.** A symlink is reported by its entry, never followed;")
@@ -2086,6 +2128,10 @@
             :no_var_forms (count no-var-forms)
             :reconcile_unlocated (reduce + 0 (map #(count (:unlocated %)) reconcile-failures))
             :reconcile_unreported (reduce + 0 (map #(count (:unreported %)) reconcile-failures))
+            :unanalysed_platforms (vec (sort (distinct (mapcat :unanalysed-features reconcile-failures))))
+            :analysed_features (vec (sort analysed-features))
+            :reader_conditionals (reduce + 0 (map #(or (:reader-conditionals %) 0)
+                                                  (concat (vals base-idx) (vals cand-idx))))
             :kind_disagreements (count kind-disagree)
             :new_forward_refs (count new-forward-refs)
             :base_old_sites (count base-old-sites)

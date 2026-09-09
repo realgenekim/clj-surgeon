@@ -547,3 +547,40 @@
   [t]
   (boolean (and t (re-matches #"[A-Za-z*+!?<>=$_&.-][\w*+!?<>=$/.-]*" t)
                 (not (contains? #{"nil" "true" "false" "&" "_"} t)))))
+
+;; --------------------------------------------------- reader conditionals
+;;
+;; PB-FENCE-012. clj-kondo elaborates `.cljc` for a fixed feature set, so a Var
+;; defined in a branch it does not analyse is in NEITHER inventory: kondo reports
+;; no definition and `form-owner` does not descend into `#?`. The scanner's job
+;; here is not to elaborate the branch — it is to say the branch EXISTS, so the
+;; brief can refuse a file whose certification scope is smaller than its content.
+
+(defn reader-conditionals
+  "Every `#?` / `#?@` form in a source, as
+   {:prefix \"#?\" :features #{\":bb\" ...} :defs [owner-ish texts]}."
+  [^String s]
+  (letfn [(walk [nd acc]
+            (cond
+              (and (= :prefixed (:kind nd))
+                   (contains? #{"#?" "#?@"} (:prefix nd)))
+              (let [body (first (:children nd))
+                    kids (or (:children body) [])
+                    feats (into #{} (comp (take-nth 2) (map :text)
+                                          (filter #(and % (str/starts-with? % ":"))))
+                                kids)
+                    branches (vec (take-nth 2 (rest kids)))]
+                (conj acc {:prefix (:prefix nd)
+                           :features feats
+                           :branches (mapv (fn [b] {:feature nil :text (:text b)}) branches)
+                           :pairs (vec (for [[f b] (partition 2 kids)
+                                             :when (and (:text f) (str/starts-with? (:text f) ":"))]
+                                         {:feature (:text f) :text (:text b)}))}))
+              :else (reduce #(walk %2 %1) acc (or (:children nd) []))))]
+    (reduce #(walk %2 %1) [] (nodes s))))
+
+(defn def-shaped?
+  "Does this datum text look like a top-level definition? Used only to count what
+   a reader-conditional branch contains, never as an owner inventory."
+  [^String t]
+  (boolean (re-find #"^\(\s*(?:\^[^\s]+\s+)*def" (str/triml t))))

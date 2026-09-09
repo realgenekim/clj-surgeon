@@ -358,6 +358,39 @@ st=$(date +%s.%N)
 en=$(date +%s.%N)
 echo "meta-owner  wall $(echo "$en - $st" | bc)s"
 
+# ---- Sol round-7 rows (PB-FENCE-012) ---------------------------------------
+# The certification scope must equal the ANALYZER's scope. clj-kondo elaborates
+# :clj and :cljs for .cljc; a Var defined in a branch it does not elaborate is in
+# neither inventory. `cljc-unanalysed` deletes such a Var and must fail closed;
+# `cljc-analysed` is the control — a reader conditional the analyzer does cover
+# must reconcile cleanly.
+CJ="$WORK/cljc"; rm -rf "$CJ"; mkdir -p "$CJ/src"
+( cd "$CJ"
+  git init -q -b main; git config commit.gpgsign false
+  printf '(ns probe)\n\n#?(:bb ^:probe (def hidden 1))\n\n(defn visible [] :v)\n' > src/probe.cljc
+  git add -A >/dev/null; git commit -qm "base: a Var in a platform kondo does not elaborate" >/dev/null
+  printf '(ns probe)\n\n(defn visible [] :v)\n' > src/probe.cljc
+  git add -A >/dev/null; git commit -qm "candidate: that Var is deleted" >/dev/null
+  git checkout -q -B ctl main~1
+  printf '(ns probe)\n\n#?(:clj (def seen 1) :cljs (def seen 2))\n\n(defn visible [] :v)\n' > src/probe.cljc
+  git add -A >/dev/null; git commit -qm "control base" >/dev/null
+  printf '(ns probe)\n\n#?(:clj (def seen 1) :cljs (def seen 2))\n\n(defn visible [] :v2)\n' > src/probe.cljc
+  git add -A >/dev/null; git commit -qm "control candidate" >/dev/null )
+CJ_BASE=$(git -C "$CJ" rev-parse main~1)
+CJ_CAND=$(git -C "$CJ" rev-parse main)
+CJ_CTL_BASE=$(git -C "$CJ" rev-parse ctl~1)
+CJ_CTL_CAND=$(git -C "$CJ" rev-parse ctl)
+
+for spec in "cljc-unanalysed $CJ_CAND $CJ_BASE" "cljc-analysed $CJ_CTL_CAND $CJ_CTL_BASE"; do
+  set -- $spec
+  st=$(date +%s.%N)
+  "$HERE/preservation-brief" "$2" "$3" --repo "$CJ" --roots src \
+      --title "$1" --out "$WORK/out/$1.md" --json "$WORK/out/$1.json" >/dev/null || true
+  en=$(date +%s.%N)
+  echo "$1  wall $(echo "$en - $st" | bc)s"
+done
+
+
 python3 - "$WORK/out" <<'PY'
 import json, sys, pathlib, os
 d = pathlib.Path(sys.argv[1])
@@ -365,7 +398,8 @@ order = ["clean","wrong-binding","silent-promotion","dropped-comment",
          "omitted-owner","load-order-forms","load-order-requires",
          "local-shadow","symlink-escape","external-macro",
          "are-binding","uppercase-alias","kind-collision","referred-testing",
-         "refer-all-shadow","use-shadow","refer-all-external","shapes","meta-owner"]
+         "refer-all-shadow","use-shadow","refer-all-external","shapes","meta-owner",
+         "cljc-unanalysed","cljc-analysed"]
 rows = []
 for k in order:
     j = json.load(open(d / f"{k}.json"))
@@ -375,7 +409,8 @@ cols = [("clear","clear"),("moved","moved"),("preserved_bodies","preserved"),("o
         ("require_reorders","req-reord"),("require_sort_broken","req-unsorted"),("new_forward_refs","fwd-ref"),
         ("stale_sites","stale"),("undefined_alias_sites","undef-alias"),("possible_unresolved","bare?"),
         ("in_place_needs_review","inplace-rev"),("reconcile_failures","recon"),
-        ("declares","decl"),("no_var_forms","novar"),("wall_ms","wall ms")]
+        ("declares","decl"),("no_var_forms","novar"),("reader_conditionals","cond"),
+        ("wall_ms","wall ms")]
 hdr = "| change | " + " | ".join(c[1] for c in cols) + " |"
 print(hdr)
 print("|" + "---|" * (len(cols)+1))
