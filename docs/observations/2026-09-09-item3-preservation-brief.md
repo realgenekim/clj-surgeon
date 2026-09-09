@@ -43,8 +43,9 @@ under a hard-stop list.
 | after Sol's round 3 (every table entry carries a falsifier) | 103/141 | 32/64 |
 | after Sol's round 4 (resolution precedes every table) | 102/141 | 32/64 |
 
-Sol reviewed the prototype eight times and broke it eight times — eleven planted specimens, eleven false
-certifications, every one of them the same shape: a *bare symbol* that was not the Var the canonicaliser
+Sol reviewed the prototype nine times and broke it nine times — fourteen planted specimens, and every
+finding after round 5 was one class: **a private inventory kept beside the analyzer's.** The earlier ones
+were the same shape too: a *bare symbol* that was not the Var the canonicaliser
 assumed. Round 1: a local destructured binding replaced by a moved Var of the same name. Round 2: the same
 substitution, but bound by `compojure.core/GET` — a binding macro from a library, defined in neither tree
 and spelled neither `with-*` nor `def*`, so the denylist of "macros I do not model" never saw it. Round 3:
@@ -53,7 +54,23 @@ declared non-binding when `clojure.test/are` binds its argv; a merged def-head i
 `defn` overwrite a base `defmacro`; and an uppercase require alias slipping past the "that's a Java class"
 heuristic because the heuristic ran before alias resolution.
 
-Round 8 is the third instance of one class, and worth stating as such: **rounds 6, 7 and 8 were all a
+Round 9 finished the class and named its last member. `:namespace-usages` were being taken whole rather than
+restricted to the `ns`-form span, so a top-level `(comment (require '[clojure.edn :as edn] …))` reordered in
+the candidate became a **fictitious load-order edit** — conservative for safety, but it manufactured a
+mandatory review decision and mislabelled it. And `:aliases`/`:refers` still came from the private parser and
+fed head resolution, canonicalisation and A5, which is why the `#?@` control reported two valid call sites as
+undefined aliases.
+
+Both are gone. The require inventory is the namespace usages **inside the span the private parser proves**;
+every usage outside it is a named "namespace usage outside the `ns` form" obligation, never a reorder.
+Aliases and refers come from `:namespace-usages` — the private maps are **deleted, not cross-checked**.
+Cell C's unresolved call sites went 40 → 0.
+
+**The alias map was the last private inventory.** Audited by grep: every remaining call into the private
+scanner reads spans, bytes, lexical tokens or positions. The two exceptions, `form-owner` and `requires-of`,
+exist only as the *second side of the two-way reconciliation* — which is the design, not a leak.
+
+Round 8 is the third instance of that class, and worth stating as such: **rounds 6, 7 and 8 were all a
 private inventory kept beside the analyzer's.** Round 6 gave the resolver the OWNERS. Round 7 gave it the
 SCOPE. Round 8 gave it the REQUIRES: `(:require #?@(:clj [[clojure.set :as set] [clojure.string :as str]] …))`
 with the two reversed in both analysed branches read as one synthetic library to the private `ns` parser, so
@@ -101,7 +118,7 @@ resolved through the file's own namespace — refer, then alias, then a definiti
 core default, and only when nothing shadows it — before any table is consulted.
 
 **Round 3 cost nothing on Cell C**; **round 4 cost one more body**; **round 5 cost three more**, 102 → 99;
-**rounds 7 and 8 cost nothing on Cell C, which is `.clj` only with no reader conditionals** — stated rather
+**rounds 7, 8 and 9 cost nothing on Cell C, which is `.clj` only with no reader conditionals** — stated rather
 than implied, with the evidence carried by four `.cljc` replay rows instead; **round 6 cost none but changed the
 denominator** — the owner inventory is kondo's now, so Cell C reads
 713 base / 720 candidate owners instead of the scanner's 678 / 685, with 8 forward declarations and 8
@@ -625,27 +642,27 @@ Namespaces created by this candidate:
 
 | file | namespace | requires |
 |---|---|---|
-| src/cfp_scheduler_killer/views/auth.clj | cfp-scheduler-killer.views.auth | cfp-scheduler-killer.views.shell |
-| src/cfp_scheduler_killer/views/avatar.clj | cfp-scheduler-killer.views.avatar | clojure.string |
-| src/cfp_scheduler_killer/views/committee.clj | cfp-scheduler-killer.views.committee | cfp-scheduler-killer.committees cfp-scheduler-killer.views.avatar cfp-scheduler-killer.views.form-controls cfp-scheduler-killer.views.format cfp-scheduler-killer.views.organizer-layout |
-| src/cfp_scheduler_killer/views/communications.clj | cfp-scheduler-killer.views.communications | cfp-scheduler-killer.views.format cfp-scheduler-killer.views.organizer-layout |
-| src/cfp_scheduler_killer/views/dashboard.clj | cfp-scheduler-killer.views.dashboard | cfp-scheduler-killer.views.avatar cfp-scheduler-killer.views.format cfp-scheduler-killer.views.organizer-layout cfp-scheduler-killer.views.review datastar-kit.ds |
-| src/cfp_scheduler_killer/views/event_setup.clj | cfp-scheduler-killer.views.event-setup | cfp-scheduler-killer.events cfp-scheduler-killer.views.form-controls cfp-scheduler-killer.views.format cfp-scheduler-killer.views.organizer-layout clojure.string datastar-kit.ds |
-| src/cfp_scheduler_killer/views/form_builder.clj | cfp-scheduler-killer.views.form-builder | cfp-scheduler-killer.forms cfp-scheduler-killer.submissions cfp-scheduler-killer.views.form-controls cfp-scheduler-killer.views.organizer-layout clojure.string datastar-kit.ds |
-| src/cfp_scheduler_killer/views/form_controls.clj | cfp-scheduler-killer.views.form-controls | clojure.string |
-| src/cfp_scheduler_killer/views/format.clj | cfp-scheduler-killer.views.format | cfp-scheduler-killer.events clojure.string |
-| src/cfp_scheduler_killer/views/integrations.clj | cfp-scheduler-killer.views.integrations | cfp-scheduler-killer.events cfp-scheduler-killer.exports cfp-scheduler-killer.submissions cfp-scheduler-killer.views.format cfp-scheduler-killer.views.organizer-layout cfp-scheduler-killer.views.review cfp-scheduler-killer.views.shell clojure.string |
+| src/cfp_scheduler_killer/views/auth.clj | cfp-scheduler-killer.views.auth |  |
+| src/cfp_scheduler_killer/views/avatar.clj | cfp-scheduler-killer.views.avatar |  |
+| src/cfp_scheduler_killer/views/committee.clj | cfp-scheduler-killer.views.committee |  |
+| src/cfp_scheduler_killer/views/communications.clj | cfp-scheduler-killer.views.communications |  |
+| src/cfp_scheduler_killer/views/dashboard.clj | cfp-scheduler-killer.views.dashboard |  |
+| src/cfp_scheduler_killer/views/event_setup.clj | cfp-scheduler-killer.views.event-setup |  |
+| src/cfp_scheduler_killer/views/form_builder.clj | cfp-scheduler-killer.views.form-builder |  |
+| src/cfp_scheduler_killer/views/form_controls.clj | cfp-scheduler-killer.views.form-controls |  |
+| src/cfp_scheduler_killer/views/format.clj | cfp-scheduler-killer.views.format |  |
+| src/cfp_scheduler_killer/views/integrations.clj | cfp-scheduler-killer.views.integrations |  |
 | src/cfp_scheduler_killer/views/live_drafts.clj | cfp-scheduler-killer.views.live-drafts |  |
-| src/cfp_scheduler_killer/views/log.clj | cfp-scheduler-killer.views.log | cfp-scheduler-killer.views.format cfp-scheduler-killer.views.organizer-layout cfp-scheduler-killer.views.review clojure.string |
-| src/cfp_scheduler_killer/views/organizer_layout.clj | cfp-scheduler-killer.views.organizer-layout | cfp-scheduler-killer.committees cfp-scheduler-killer.events cfp-scheduler-killer.forms cfp-scheduler-killer.submissions cfp-scheduler-killer.views.shell clojure.string datastar-kit.ds hiccup.page hiccup2.core |
-| src/cfp_scheduler_killer/views/people.clj | cfp-scheduler-killer.views.people | cfp-scheduler-killer.views.avatar cfp-scheduler-killer.views.format cfp-scheduler-killer.views.organizer-layout cfp-scheduler-killer.views.review |
-| src/cfp_scheduler_killer/views/portal.clj | cfp-scheduler-killer.views.portal | cfp-scheduler-killer.portal cfp-scheduler-killer.submissions cfp-scheduler-killer.views.form-controls cfp-scheduler-killer.views.format cfp-scheduler-killer.views.live-drafts cfp-scheduler-killer.views.shell clojure.string datastar-kit.ds |
-| src/cfp_scheduler_killer/views/public_cfp.clj | cfp-scheduler-killer.views.public-cfp | cfp-scheduler-killer.events cfp-scheduler-killer.submissions cfp-scheduler-killer.views.form-controls cfp-scheduler-killer.views.format cfp-scheduler-killer.views.live-drafts cfp-scheduler-killer.views.shell clojure.string datastar-kit.ds hiccup2.core |
-| src/cfp_scheduler_killer/views/replay.clj | cfp-scheduler-killer.views.replay | cfp-scheduler-killer.views.organizer-layout datastar-kit.ds |
-| src/cfp_scheduler_killer/views/review.clj | cfp-scheduler-killer.views.review | cfp-scheduler-killer.committees cfp-scheduler-killer.events cfp-scheduler-killer.forms cfp-scheduler-killer.reviews cfp-scheduler-killer.submissions cfp-scheduler-killer.views.avatar cfp-scheduler-killer.views.form-controls cfp-scheduler-killer.views.format cfp-scheduler-killer.views.organizer-layout clojure.data.json clojure.string datastar-kit.ds |
-| src/cfp_scheduler_killer/views/schedule.clj | cfp-scheduler-killer.views.schedule | cfp-scheduler-killer.events cfp-scheduler-killer.schedule cfp-scheduler-killer.views.organizer-layout cfp-scheduler-killer.views.shell clojure.string datastar-kit.ds |
-| src/cfp_scheduler_killer/views/shell.clj | cfp-scheduler-killer.views.shell | hiccup.page hiccup2.core |
-| test/cfp_scheduler_killer/view_architecture_test.clj | cfp-scheduler-killer.view-architecture-test | clojure.data.json clojure.java.io clojure.java.shell clojure.set clojure.string clojure.test |
+| src/cfp_scheduler_killer/views/log.clj | cfp-scheduler-killer.views.log |  |
+| src/cfp_scheduler_killer/views/organizer_layout.clj | cfp-scheduler-killer.views.organizer-layout |  |
+| src/cfp_scheduler_killer/views/people.clj | cfp-scheduler-killer.views.people |  |
+| src/cfp_scheduler_killer/views/portal.clj | cfp-scheduler-killer.views.portal |  |
+| src/cfp_scheduler_killer/views/public_cfp.clj | cfp-scheduler-killer.views.public-cfp |  |
+| src/cfp_scheduler_killer/views/replay.clj | cfp-scheduler-killer.views.replay |  |
+| src/cfp_scheduler_killer/views/review.clj | cfp-scheduler-killer.views.review |  |
+| src/cfp_scheduler_killer/views/schedule.clj | cfp-scheduler-killer.views.schedule |  |
+| src/cfp_scheduler_killer/views/shell.clj | cfp-scheduler-killer.views.shell |  |
+| test/cfp_scheduler_killer/view_architecture_test.clj | cfp-scheduler-killer.view-architecture-test |  |
 
 
 Namespaces deleted by this candidate:
@@ -863,8 +880,9 @@ tell which without resolution, so each one is a review obligation:
 
 | quantity | count |
 |---|---|
-| new require edges between namespaces in this repository | 74 |
+| new require edges between namespaces in this repository | 23 |
 | files whose require ORDER changed (`:require` order is load order) | 0 |
+| namespace usages OUTSIDE the `ns` form (never load order) | 0 |
 | namespaces created — their require order has NO base to compare against | 21 |
 | namespaces deleted | 1 |
 | NEW intra-file forward references (owner used before it is defined, no `declare`) | 0 |
@@ -896,25 +914,6 @@ tell which without resolution, so each one is a review obligation:
 | cfp-scheduler-killer.polish-test | cfp-scheduler-killer.views.format |
 | cfp-scheduler-killer.polish-test | cfp-scheduler-killer.views.organizer-layout |
 | cfp-scheduler-killer.views-test | cfp-scheduler-killer.views.review |
-| cfp-scheduler-killer.views.auth | cfp-scheduler-killer.views.shell |
-| cfp-scheduler-killer.views.committee | cfp-scheduler-killer.views.avatar |
-| cfp-scheduler-killer.views.committee | cfp-scheduler-killer.views.form-controls |
-| cfp-scheduler-killer.views.committee | cfp-scheduler-killer.views.format |
-| cfp-scheduler-killer.views.committee | cfp-scheduler-killer.views.organizer-layout |
-| cfp-scheduler-killer.views.communications | cfp-scheduler-killer.views.format |
-| cfp-scheduler-killer.views.communications | cfp-scheduler-killer.views.organizer-layout |
-| cfp-scheduler-killer.views.dashboard | cfp-scheduler-killer.views.avatar |
-| cfp-scheduler-killer.views.dashboard | cfp-scheduler-killer.views.format |
-| cfp-scheduler-killer.views.dashboard | cfp-scheduler-killer.views.organizer-layout |
-| cfp-scheduler-killer.views.dashboard | cfp-scheduler-killer.views.review |
-| cfp-scheduler-killer.views.event-setup | cfp-scheduler-killer.events |
-| cfp-scheduler-killer.views.event-setup | cfp-scheduler-killer.views.form-controls |
-| cfp-scheduler-killer.views.event-setup | cfp-scheduler-killer.views.format |
-| cfp-scheduler-killer.views.event-setup | cfp-scheduler-killer.views.organizer-layout |
-| cfp-scheduler-killer.views.form-builder | cfp-scheduler-killer.views.form-controls |
-| cfp-scheduler-killer.views.form-builder | cfp-scheduler-killer.views.organizer-layout |
-
-_34 further rows suppressed by --max-list 40._
 
 
 **B5 — macro context and generated classes.**
@@ -1077,14 +1076,15 @@ reconciled by re-reading the receipt.**
 
 ### D. What this brief did NOT check
 
-This brief is a static, textual re-derivation over two git trees. It establishes nothing about behaviour.
-It did not check:
+This brief is a static re-derivation over two git trees, with **clj-kondo** as its resolver. It establishes nothing about behaviour. Every sentence below is generated from the same state the reconciliation reads, so it cannot drift from what the run actually did.
 
 - runtime behaviour of any kind. No namespace was loaded, no test was run, no process was started.
 - cold process startup, classpath, load order as executed, or clean interning. A require-order table is not a load.
 - macro expansion. A relocated macro's expansion sites, and any owner consumed by a macro, are unverified here.
-- dynamic references: `resolve`, `requiring-resolve`, `ns-resolve`, `find-var`, `intern`, symbols built from strings, multimethod dispatch registration, data readers, and any var named by data rather than by code.
-- reader conditionals. `.cljc` branches are compared as text; no platform was elaborated.
+- platforms outside the analyzer's declared feature set. The resolver elaborated :clj and :cljs for `.cljc`; this change contains no reader conditional at all. A file carrying any other feature is REFUSED, not compared — none were refused in this run.
+- dynamic references the resolver cannot see: a Var reached through `resolve`, `requiring-resolve`, a symbol built from a string, or a `require` executed at runtime. No namespace usage outside an `ns` form appears in this change.
+- identity of forms that define no Var. 8 are named in B7 and are a reviewer's obligation.
+- anything in a file whose two owner inventories disagree. All parsed files reconciled in this run.
 - protocol, record and type identity. A relocated `defrecord`/`deftype`/`definterface` changes its generated class package; AOT or serialised artefacts were not examined.
 - references from resources, configuration, EDN data, documentation or any non-source file that names a namespace as a string.
 - whether the destination partition is a good one, whether a promotion was authorised, or whether a prose edit was wanted.
@@ -1092,9 +1092,8 @@ It did not check:
 - custody. This brief proves nothing about who ran what, or that any claimed execution occurred. It is a re-derivation, not an attestation.
 - anything outside the scanned roots, and any file whose extension is not .clj/.cljc/.cljs.
 - trailing whitespace inside a string literal, which the `:identical-modulo-whitespace` tier normalises away.
-- anything the external resolver cannot see. A local is never canonicalised — the resolver decides what is a local — but a Var reached only at runtime, or a file it could not analyse, is refused rather than compared.
 
-_Resolver: clj-kondo via `~/bin/clj-kondo`, 6186.0 ms for both trees. Checker wall: 42829.7 ms. Generated by `bin/preservation-brief`, which reads only the two git trees._
+_Resolver: clj-kondo via `~/bin/clj-kondo`, 6110.2 ms for both trees. Checker wall: 38237.4 ms. Generated by `bin/preservation-brief`, which reads only the two git trees._
 
 ---
 
@@ -1139,7 +1138,7 @@ Body tiers, which is where seven of the thirteen catches land. Every one of Sol'
 | kind-collision | 83 | **18** | 33 | **7** |
 | referred-testing | 83 | **18** | 33 | **7** |
 
-### Planted-defect verdict: **22/22 caught, 0 escaped**
+### Planted-defect verdict: **22/22 caught, 0 escaped** — plus 4 negative controls that must stay silent
 
 | planted defect | what was planted | the signal the brief raised |
 |---|---|---|
@@ -1155,6 +1154,7 @@ Body tiers, which is where seven of the thirteen catches land. Every one of Sol'
 | **`are` argv binding** (Sol r3, PB-FENCE-006, pair) | `(are [header] (= header :probe) :probe)` in the base, the bound use replaced in the candidate. `clojure.test/are` binds the symbols in its argv and sat in the "introduces no binding" table | `committee-page` → `:changed`; preserved 103 → 102; `are` named as a frozen head. **`bin/preservation-tables-test` R3 would now reject that table entry before it could ship** |
 | **uppercase require alias** (Sol r3, PB-FENCE-008, pair) | `[compojure.core :as Route]` + `Route/GET`, exploiting that the interop heuristic ran before alias resolution | `committee-page` → `:changed`; preserved 103 → 102; `Route/GET` named |
 | **cross-tree kind collision** (Sol r3, PB-FENCE-007, pair) | the same `[ns name]` defined `defmacro` in the base and `defn` in the candidate, so the merged index vouched for a macro call as a function call | `committee-page` → `:changed`; preserved 102 → 101; **`kind_disagreements` 0 → 1** |
+| **require reordered inside `(comment …)`** (Sol r9, PB-FENCE-014, pair) | `(comment (require '[clojure.edn :as edn] '[clojure.walk :as walk]))` reversed in the candidate. The require inventory took every namespace usage, not just those inside the `ns` span, so this read as a load-order change on a namespace whose require list never changed | **require_reorders stays 0** — the fictitious signal is gone — and the four usages are named as "namespace usages outside the `ns` form", a B4 obligation. `reconcile_failures` 2 → 0 |
 | **spliced require reordered** (Sol r8, PB-FENCE-013, pair) | `(:require #?@(:clj [[clojure.set :as set] [clojure.string :as str]] :cljs […]))` with the two reversed in BOTH analysed branches. The private `ns` parser read each whole `#?@` as one synthetic library, so the ns-edit inventory compared one giant string with another | **require_reorders 0 → 1** and **require sort discipline 0 → 1**, 0 reconciliation failures, exit 3 |
 | **spliced require untouched** (Sol r8 control, pair) | the same `#?@` `ns` with the requires left alone and only a body edit | `ns_edits` 0, `require_reorders` 0, 0 reconciliation failures; the body edit still raised as 2 in-place obligations. The refusal above is a signal, not a blanket `.cljc` ban |
 | **Var in an unanalysed platform** (Sol r7, PB-FENCE-012) | `#?(:bb ^:probe (def hidden 1))` in a `.cljc`, deleted in the candidate. clj-kondo elaborates `:clj`/`:cljs` only, so it reported no definition, and the scanner does not descend into `#?` — both inventories were empty and the omission was certified | **reconciliation failures 0 → 1**, `unanalysed_platforms [":bb"]`, the file named with its features, exit 3. Nothing in that file is certifiable |
@@ -1457,8 +1457,11 @@ It is the document that must exist before the slice can.
     `/var/tmp/forge/ship/20260909T204306Z-5ec9edc5bd10/verdict-1.md`.
   - `71be8cfb` — PB-FENCE-013 repaired: the resolver's `:namespace-usages` are the require inventory, per
     analysed platform, with two-way reconciliation.
-  - **`a8ec1923`** — the round-8 replay rows landed (their shell block had not been inserted); 23 rows,
-    22 planted defects, 22 caught. **This is the tip.**
+  - `a8ec1923` — the round-8 replay rows landed. **Sol's round-9 review returned NO-GO** with
+    PB-FENCE-014/015/016, verdict at `/var/tmp/forge/ship/20260909T214120Z-a8ec1923418d/verdict-1.md`.
+  - **`de83b75d`** — round-9 repairs: the require inventory is restricted to the `ns` span, aliases and
+    refers come from the resolver, and section D is generated from the state the reconciliation reads.
+    **This is the tip.**
 - **Nothing was pushed.** The branch has no upstream.
 - No edits under `src/`, `test/`, or the Makefile. Four new files, all under `bin/`.
 - The brief no longer materialises anything: it reads blobs from the object database. The only path it
@@ -1500,7 +1503,10 @@ It is the document that must exist before the slice can.
 | **A stated evidence boundary that the implementation does not enforce is worse than none**, because the report repeats it. | The brief reads the object database, never the filesystem; symlinks, non-blobs and oversized blobs are counted as refused entries and named. The permanent `symlink-escape` row is the witness. |
 | **A headline a reviewer can consume and stop on defeats a checker whose real value is in section B.** | Every obligation is hoisted above section A into a hard-stop block, the summary carries `clear`, and the exit code is 3 when not clear. The null change is the only clear row in the portfolio. |
 | **A builder cannot review his own oracle, and one round of outside review is not enough either.** Round 1 found four findings; the round-2 probe reproduced the same false-certification class one abstraction level out. | Sol's three specimens are permanent replay rows. §9.9 requires the falsifier's specimens be planted by someone who did not build the checker, and §12 now names the next unseen classes to probe rather than declaring the set complete. |
-| **Any private inventory kept beside the analyzer's will eventually disagree with it — owners, scope, requires, three rounds running.** The `ns` parser could not see a require spliced by `#?@`, so a real load-order change read as no change at all. | The resolver's `:namespace-usages` are the require inventory, per analysed platform, in positional order; the private parser supplies only the `ns`-form span and the other side of a two-way reconciliation that fails the file closed. The rule generalises: **if the analyzer has an inventory, the brief does not keep a second one.** The permanent `spliced-require-reorder` row is the witness and `spliced-require-control` is the control. |
+| **The alias map was the last private inventory, and finishing the class took four rounds.** Owners (r6), scope (r7), requires (r8), aliases and refers (r9). Each round I removed one and left the next, and each time Sol found the one I left. | The rule, stated once and now audited: **if the analyzer has an inventory, the brief keeps no second one.** Every remaining call into the private scanner reads spans, bytes, lexical tokens or positions; the only two that read structure — `form-owner` and `requires-of` — exist solely as the second side of the reconciliation. Confirmed by grep, and the grep belongs in the ratchet next. |
+| **An inventory taken whole is not the same inventory.** `:namespace-usages` includes a `require` inside a `(comment …)`; treating those as load order manufactured a mandatory review decision that was simply false. | The require inventory is restricted to usages inside the parser-proven `ns` span; everything outside is named as a separate obligation, never a reorder, never dropped. |
+| **A caveat the code contradicts is worse than no caveat, because the reader cannot check it.** Section D claimed `.cljc` branches were compared as text long after they were being refused. | Section D is generated from the same state the reconciliation reads — feature set, reader-conditional count, files refused, usages outside `ns` forms, forms defining no Var. Ratchet rung **R6** refuses four retired sentences and requires D to name the elaborated platforms. |
+| **Any private inventory kept beside the analyzer's will eventually disagree with it — owners, scope, requires, aliases, four rounds running.** The `ns` parser could not see a require spliced by `#?@`, so a real load-order change read as no change at all. | The resolver's `:namespace-usages` are the require inventory, per analysed platform, in positional order; the private parser supplies only the `ns`-form span and the other side of a two-way reconciliation that fails the file closed. The rule generalises: **if the analyzer has an inventory, the brief does not keep a second one.** The permanent `spliced-require-reorder` row is the witness and `spliced-require-control` is the control. |
 | **An oracle's silence is not evidence of absence.** Where clj-kondo does not elaborate a platform it reports nothing, and the scanner does not descend into `#?` — so a deleted Var was missing from both inventories and the reconciliation compared two empty sets. | The checker's certification scope is exactly the analyzer's. The feature set is declared once, passed to the analyzer, and read back by the reconciliation; any reader-conditional feature outside it refuses the whole file, counted and named with its features. The permanent `cljc-unanalysed` row is the witness and `cljc-analysed` is the control that must still certify. |
 | **A second inventory is a second oracle, and the two will disagree.** Round 5 made the resolver authoritative for references and left the scanner deciding what an owner IS. `^:probe (defn …)` was in one inventory and not the other, and nothing compared them. | kondo's `:var-definitions` are the owner inventory; the scanner only locates spans. Reconciliation runs in both directions and fails the whole FILE closed, counted and named. `declare` and `defmethod`/`extend-*` are named as explicit categories rather than silently present or absent. The permanent `meta-owner` and `shapes` rows are the witnesses. |
 | **Six rounds of resolution holes is one wrong rung, not six bugs.** Refers, aliases, uppercase prefixes, per-tree kinds, qualified tables, `:refer :all` — each round closed one hole in a hand-rolled Clojure name resolver and left the next. | Delete the rung. clj-kondo resolves every symbol; the brief only asks it what each token is. It is an external analyzer sharing no code with `src/`, so independence is intact and the hardest part is maintained by people who do only that. The private walker is kept as a cross-check whose disagreements are counted in the brief, not silently resolved. |
