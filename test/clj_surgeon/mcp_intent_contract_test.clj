@@ -332,6 +332,64 @@
          (java.nio.file.Files/createTempDirectory
            prefix (into-array java.nio.file.attribute.FileAttribute [])))))
 
+(defn- witness-side-spec-docs
+  "The `*-specs.md` documents under `<root>/docs/intent`, discovered by a
+   RECURSIVE walk written independently of `spec-doc-paths` (which lists exactly
+   two levels). Repo-relative, sorted, `excluded` removed."
+  [root excluded]
+  (let [base (io/file root "docs" "intent")
+        prefix (str (.getPath base) java.io.File/separator)]
+    (->> (file-seq base)
+         (filter #(.isFile ^java.io.File %))
+         (filter #(re-matches #".+-specs\.md" (.getName ^java.io.File %)))
+         (map (fn [^java.io.File f]
+                (str "docs/intent/" (subs (.getPath f) (count prefix)))))
+         (remove (set (keys excluded)))
+         sort
+         vec)))
+
+(defn- witness-side-ids
+  "The intent ids `paths` register, parsed by this witness's own spelling of the
+   ledger row rule rather than by the production parser."
+  [root paths]
+  (set (for [path paths
+             [_ id] (re-seq #"(?m)^- \[[ xD]\] \*\*([A-Z][A-Z0-9-]*-[0-9]{3}[a-z]?)\*\*:"
+                            (slurp (io/file root path)))]
+         id)))
+
+(defn- prefix-histogram
+  "id-prefix -> how many rows carry it, DERIVED from the ids themselves: the
+   prefix is everything before an id's trailing `-NNN[a]`. Replaces a frozen map
+   of seven remembered counts, so a new family appears here by being registered
+   and none of them is a line two branches must both edit."
+  [ids]
+  (into (sorted-map)
+        (frequencies (keep #(second (re-matches #"(.+-)[0-9]{3}[a-z]?" %)) ids))))
+
+(defn- ledger-diff
+  "Set difference in BOTH directions between two derivations of the ledger. nil
+   when they agree; otherwise `:missing` (the witness sees it, the audit does
+   not -- a registered intent the audit is blind to) and `:extra` (the audit
+   sees it, the witness does not)."
+  [witness production]
+  (let [witness (set witness)
+        production (set production)
+        missing (vec (sort (remove production witness)))
+        extra (vec (sort (remove witness production)))]
+    (when (or (seq missing) (seq extra))
+      {:missing missing :extra extra})))
+
+(defn- ledger-diff-message
+  [subject diff]
+  (str subject ": the two independent derivations of the intent ledger disagree. "
+       "Registered in docs/intent but INVISIBLE to the audit ("
+       (count (:missing diff)) "): "
+       (if (seq (:missing diff)) (str/join ", " (:missing diff)) "none")
+       ". Seen by the audit but not by this witness's own walk ("
+       (count (:extra diff)) "): "
+       (if (seq (:extra diff)) (str/join ", " (:extra diff)) "none")
+       ". Name the row -- never re-pin a count."))
+
 (deftest a-new-intent-leaf-is-picked-up-by-adding-only-a-file
   (testing "a lane adds docs/intent/<leaf>/<leaf>-specs.md and nothing else"
     (let [root (temp-dir "surgeon-intent-scan")
@@ -347,7 +405,39 @@
             (spec-line "x" "MCP-OP-TEMPLANE-999"))
       (is (= ["docs/intent/temp-lane/temp-lane-specs.md"] (spec-doc-paths root {})))
       (is (= #{"MCP-OP-TEMPLANE-001" "FUTURE2-001"}
-             (spec-ids root (spec-doc-paths root {})))))))
+             (spec-ids root (spec-doc-paths root {})))))
+    ;; @spec TEST-ISO-015
+    ;; INTENT-TEST: TEST-ISO-015
+    ;; ZERO EDITS UNDER test/. A SECOND leaf, added to the same fixture tree with
+    ;; no change to any witness datum, must be picked up by BOTH derivations and
+    ;; leave them agreeing -- which is the property the two hand-kept vectors
+    ;; (`expected-spec-docs`, `lanes-added-since-derivation`) used to break: each
+    ;; new leaf meant a line in a shared witness list, and two branches adding two
+    ;; leaves collided there.
+    (testing "adding a second leaf keeps both derivations agreeing, no test edit"
+      (let [root (temp-dir "surgeon-intent-newleaf")
+            first-leaf (io/file root "docs" "intent" "one-lane")
+            second-leaf (io/file root "docs" "intent" "two-lane")]
+        (.mkdirs first-leaf)
+        (spit (io/file first-leaf "one-lane-specs.md") (spec-line "x" "ONELANE-001"))
+        (is (nil? (ledger-diff (witness-side-spec-docs root {}) (spec-doc-paths root {})))
+            "one leaf: the two derivations must already agree")
+        (.mkdirs second-leaf)
+        (spit (io/file second-leaf "two-lane-specs.md")
+              (str (spec-line "x" "TWOLANE-001") (spec-line "x" "MCP-OP-TWOLANE-001")))
+        (let [paths (spec-doc-paths root {})]
+          (is (nil? (ledger-diff (witness-side-spec-docs root {}) paths))
+              "two leaves: still agreeing, with nothing edited under test/")
+          (is (= ["docs/intent/one-lane/one-lane-specs.md"
+                  "docs/intent/two-lane/two-lane-specs.md"]
+                 paths))
+          (is (= #{"ONELANE-001" "TWOLANE-001" "MCP-OP-TWOLANE-001"}
+                 (spec-ids root paths))
+              "the new leaf's rows join the ledger by existing, not by a bump")
+          (is (= {"ONELANE-" 1 "TWOLANE-" 1}
+                 (prefix-histogram (remove #(str/starts-with? % "MCP-OP-")
+                                           (spec-ids root paths))))
+              "and the prefix breakdown grows a key rather than needing one"))))))
 
 (deftest an-orphan-spec-doc-listing-fails-loudly
   (testing "an exclusion naming a file that does not exist throws, never shrinks silently"
@@ -378,45 +468,11 @@
       (is (and (string? reason) (<= 40 (count (str/trim reason))))
           (str "exclusion needs a substantive one-line reason: " path)))))
 
-(def ^:private expected-spec-docs
-  "The spec documents the scan is expected to find at this HEAD, asserted exactly so
-   that drift in docs/intent is VISIBLE rather than silent. A lane that adds an intent
-   leaf adds one line here and one line to `lanes-added-since-derivation` below --
-   in the WITNESS, never in the production registry, which is what the ratchet was for."
-  ["docs/intent/2026-08-29-ratification/measurement-evidence-specs.md"
-   "docs/intent/2026-08-30-prepared-request-ratification/prepared-request-specs.md"
-   "docs/intent/agent-routing/agent-routing-specs.md"
-   "docs/intent/alias-migration/alias-migration-specs.md"
-   "docs/intent/alias-migration/receipt-artifacts-specs.md"
-   "docs/intent/feature-thread/feature-thread-specs.md"
-   "docs/intent/helper-extraction/helper-extraction-specs.md"
-   "docs/intent/helper-extraction/namespace-split-specs.md"
-   "docs/intent/helper-extraction/split-repair-specs.md"
-   "docs/intent/hot-verification/hot-verification-specs.md"
-   "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md"
-   "docs/intent/mcp-operation-contract/admit-clojure-patch-specs.md"
-   "docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md"
-   "docs/intent/memory-boundedness/memory-boundedness-specs.md"
-   "docs/intent/memory/memory-transaction-specs.md"
-   "docs/intent/operation-algebra/operation-algebra-specs.md"
-   "docs/intent/performance-regression-sentinel/performance-regression-sentinel-specs.md"
-   "docs/intent/prepared-request-actions/prepared-request-actions-specs.md"
-   "docs/intent/prepared-request/prepared-request-specs.md"
-   "docs/intent/read-path-memory/read-path-memory-specs.md"
-   "docs/intent/read-request-normalization/read-request-normalization-specs.md"
-   "docs/intent/relation-census/relation-census-specs.md"
-   "docs/intent/require-change/require-change-specs.md"
-   "docs/intent/shell-argv-safety/shell-argv-safety-specs.md"
-   "docs/intent/sibling-pair-edit/sibling-pair-edit-specs.md"
-   "docs/intent/telemetry-events/telemetry-events-specs.md"
-   "docs/intent/temp-dir-hygiene/temp-dir-hygiene-specs.md"
-   "docs/intent/test-isolation/test-isolation-specs.md"
-   "docs/intent/worktree-lifecycle/worktree-lifecycle-specs.md"
-   "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md"])
-
 (def ^:private pre-derivation-literal-vector
   "The literal vector `audit-current-repository` carried before the registry was
-   derived (main @ 99394bf)."
+   derived (main @ 99394bf). FROZEN HISTORY -- it is a record of what the audit
+   used to cover, never a description of the tree today, so it is never edited
+   again. Adding an intent leaf does not touch it; that is the whole point."
   ["docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md"
    "docs/intent/read-request-normalization/read-request-normalization-specs.md"
    "docs/intent/prepared-request/prepared-request-specs.md"
@@ -425,33 +481,48 @@
    "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md"
    "docs/intent/shell-argv-safety/shell-argv-safety-specs.md"])
 
-(def ^:private lanes-added-since-derivation
-  "Intent leaves merged onto the integration branch after the registry was derived.
-   Each one used to mean a line in the shared production vector; now it means a file."
-  ["docs/intent/alias-migration/alias-migration-specs.md"
-   "docs/intent/alias-migration/receipt-artifacts-specs.md"
-   "docs/intent/memory-boundedness/memory-boundedness-specs.md"
-   "docs/intent/memory/memory-transaction-specs.md"
-   "docs/intent/read-path-memory/read-path-memory-specs.md"
-   "docs/intent/mcp-operation-contract/admit-clojure-patch-specs.md"
-   "docs/intent/relation-census/relation-census-specs.md"
-   "docs/intent/feature-thread/feature-thread-specs.md"
-   "docs/intent/temp-dir-hygiene/temp-dir-hygiene-specs.md"
-   "docs/intent/test-isolation/test-isolation-specs.md"
-   "docs/intent/helper-extraction/helper-extraction-specs.md"
-   "docs/intent/hot-verification/hot-verification-specs.md"])
-
+;; @spec TEST-ISO-015
 (deftest the-derived-spec-doc-set-matches-the-expected-set-exactly
-  (testing "drift in docs/intent is visible here, not silent"
-    (is (= expected-spec-docs (spec-doc-paths ".")))))
+  ;; This used to compare the scan against a hand-kept vector of thirty paths,
+  ;; whose own docstring told a lane adding an intent leaf to append a line to it
+  ;; -- the additive shared-line class, inside the witness that exists to kill it.
+  ;; The expectation is now an INDEPENDENT WALK of the same tree, so a new leaf
+  ;; is picked up by both sides with zero edits under test/.
+  (testing "the production registry equals an independent walk of docs/intent"
+    (let [diff (ledger-diff (witness-side-spec-docs "." (excluded-spec-docs))
+                            (spec-doc-paths "."))]
+      (is (nil? diff) (ledger-diff-message "spec documents" diff))))
+  (testing "an exclusion hides a document that IS there, and only that document"
+    ;; The one thing the two walks cannot check about each other, because both
+    ;; apply the same exclusion map: that an excluded path names a real file the
+    ;; unfiltered walk finds. Without this an exclusion could quietly cover a
+    ;; typo instead of a document.
+    (let [unfiltered (set (witness-side-spec-docs "." {}))
+          excluded (set (keys (excluded-spec-docs)))]
+      (is (empty? (remove unfiltered excluded))
+          (str "excluded spec document(s) that the unfiltered walk does not "
+               "find: " (str/join ", " (sort (remove unfiltered excluded)))))
+      (is (= (set (spec-doc-paths ".")) (set (remove excluded unfiltered)))
+          "the scan must be exactly the tree minus the declared exclusions"))))
 
+;; @spec TEST-ISO-015
 (deftest the-derived-audit-preserves-the-registered-mcp-intents
-  (testing "prefix widening preserves the previously registered MCP-OP intent set"
-    (let [registered (spec-ids "." (concat pre-derivation-literal-vector
-                                           lanes-added-since-derivation))
-          derived (spec-ids "." (spec-doc-paths "."))]
-      (is (= (set (filter #(str/starts-with? % "MCP-OP-") registered))
-             (set (filter #(str/starts-with? % "MCP-OP-") derived)))))))
+  ;; Was: the derived MCP-OP set must EQUAL the ids of a frozen vector plus a
+  ;; hand-kept `lanes-added-since-derivation` list -- so every branch that added
+  ;; a leaf with MCP-OP rows had to edit that list. The guarantee that actually
+  ;; matters is one-directional and needs no list: nothing the audit covered
+  ;; BEFORE the registry was derived may be uncovered now. Widening is free;
+  ;; losing coverage is named.
+  (testing "no MCP-OP intent the pre-derivation audit covered is now unaudited"
+    (let [registered (spec-ids "." pre-derivation-literal-vector)
+          derived (spec-ids "." (spec-doc-paths "."))
+          lost (sort (remove derived
+                             (filter #(str/starts-with? % "MCP-OP-") registered)))]
+      (is (seq registered) "the frozen pre-derivation documents must still parse")
+      (is (empty? lost)
+          (str (count lost) " MCP-OP intent(s) the audit covered before the "
+               "registry was derived are no longer discovered: "
+               (str/join ", " lost))))))
 
 ;; ---------------------------------------------------------------------------
 ;; @spec TEST-ISO-015
@@ -480,67 +551,6 @@
 ;; itself.
 ;; ---------------------------------------------------------------------------
 
-(defn- witness-side-spec-docs
-  "The `*-specs.md` documents under `<root>/docs/intent`, discovered by a
-   RECURSIVE walk written independently of `spec-doc-paths` (which lists exactly
-   two levels). Repo-relative, sorted, `excluded` removed."
-  [root excluded]
-  (let [base (io/file root "docs" "intent")
-        prefix (str (.getPath base) java.io.File/separator)]
-    (->> (file-seq base)
-         (filter #(.isFile ^java.io.File %))
-         (filter #(re-matches #".+-specs\.md" (.getName ^java.io.File %)))
-         (map (fn [^java.io.File f]
-                (str "docs/intent/" (subs (.getPath f) (count prefix)))))
-         (remove (set (keys excluded)))
-         sort
-         vec)))
-
-(defn- witness-side-ids
-  "The intent ids `paths` register, parsed by this witness's own spelling of the
-   ledger row rule rather than by the production parser."
-  [root paths]
-  (set (for [path paths
-             [_ id] (re-seq #"(?m)^- \[[ xD]\] \*\*([A-Z][A-Z0-9-]*-[0-9]{3}[a-z]?)\*\*:"
-                            (slurp (io/file root path)))]
-         id)))
-
-(defn- ledger-diff
-  "Set difference in BOTH directions between two derivations of the ledger. nil
-   when they agree; otherwise `:missing` (the witness sees it, the audit does
-   not -- a registered intent the audit is blind to) and `:extra` (the audit
-   sees it, the witness does not)."
-  [witness production]
-  (let [witness (set witness)
-        production (set production)
-        missing (vec (sort (remove production witness)))
-        extra (vec (sort (remove witness production)))]
-    (when (or (seq missing) (seq extra))
-      {:missing missing :extra extra})))
-
-(defn- ledger-diff-message
-  [subject diff]
-  (str subject ": the two independent derivations of the intent ledger disagree. "
-       "Registered in docs/intent but INVISIBLE to the audit ("
-       (count (:missing diff)) "): "
-       (if (seq (:missing diff)) (str/join ", " (:missing diff)) "none")
-       ". Seen by the audit but not by this witness's own walk ("
-       (count (:extra diff)) "): "
-       (if (seq (:extra diff)) (str/join ", " (:extra diff)) "none")
-       ". Name the row -- never re-pin a count."))
-
-(def ^:private ledger-floor
-  "The non-MCP ledger size when this witness stopped pinning counts (253 rows,
-   2026-09-08). A FLOOR: registering an intent never moves it, and an emptied or
-   unreadable docs/intent fails here instead of agreeing with itself."
-  253)
-
-(def ^:private prefix-floors
-  "Per-prefix floors, same rule as `ledger-floor`. Retiring a whole prefix must
-   be loud; adding to one must be free."
-  {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 21
-   "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3})
-
 ;; @spec MCP-OP-TRACE-005
 ;; @spec TEST-ISO-015
 (deftest the-derived-audit-includes-every-previously-invisible-row
@@ -556,16 +566,25 @@
     (testing "every row registered in the tree is a row the audit derives"
       (let [diff (ledger-diff witness-non-mcp non-mcp)]
         (is (nil? diff) (ledger-diff-message "non-MCP intent rows" diff))))
-    (testing "the only numbers are floors, so an empty ledger fails loud"
-      (is (>= (count non-mcp) ledger-floor)
-          (str "the derived ledger holds " (count non-mcp) " non-MCP rows, fewer "
-               "than the " ledger-floor " it carried when this witness was "
-               "derived -- rows were retired, and the differences above name them"))
-      (doseq [[prefix floor] prefix-floors]
-        (let [n (count (filter #(str/starts-with? % prefix) non-mcp))]
-          (is (>= n floor)
-              (str "prefix " prefix " derives " n " rows, below its floor of "
-                   floor " -- a prefix that shrinks is a promise being retired")))))))
+    (testing "the per-prefix breakdown agrees between the two derivations"
+      ;; The prefix histogram used to be a frozen map of seven counts. It is now
+      ;; derived on BOTH sides from the ids themselves: a prefix appears because
+      ;; rows carry it, and its size is whatever the tree says. Two independent
+      ;; derivations agreeing is the check; a remembered number never was one.
+      (is (= (prefix-histogram witness-non-mcp) (prefix-histogram non-mcp))
+          (str "the two derivations disagree on the per-prefix breakdown: "
+               "witness " (pr-str (prefix-histogram witness-non-mcp))
+               " vs audit " (pr-str (prefix-histogram non-mcp)))))
+    (testing "discovery is non-empty, so nothing above passes vacuously"
+      ;; The ONLY legitimate count here. No floor against the 2026-09-08 corpus:
+      ;; a floor blesses the old shared number under `>=` and still has to be
+      ;; argued about at every merge. Membership is settled member by member
+      ;; above; all that is left is that the scan found anything at all.
+      (is (seq production-paths) "the registry discovered no spec documents")
+      (is (seq non-mcp) "the derived ledger holds no non-MCP rows at all")
+      (doseq [[prefix n] (prefix-histogram non-mcp)]
+        (is (pos? n)
+            (str "prefix " prefix " exists in the tree but derives no rows"))))))
 
 ;; @spec TEST-ISO-015
 ;; INTENT-TEST: TEST-ISO-015
