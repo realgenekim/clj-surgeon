@@ -139,11 +139,78 @@
                    (conj blocks {:target t :lines block})
                    unresolved)
             (recur (rest queue) (conj seen t) blocks (conj unresolved t))))
-        (let [ordered (vec (sort-by :target blocks))]
+        (let [ordered (vec (sort-by :target blocks))
+              text (str/join "\n" (mapcat :lines ordered))]
           {:root target
            :targets (mapv :target ordered)
            :unresolved (vec (sort unresolved))
-           :sha256 (sha256 (str/join "\n" (mapcat :lines ordered)))})))))
+           :text text
+           :sha256 (sha256 text)})))))
+
+;; ---------------------------------------------------------------------------
+;; THE RULE FILES A RECIPE INVOKES (SOL-EC-002 / SOL-EC-003)
+;; ---------------------------------------------------------------------------
+
+(def ^:private rule-file-pattern
+  "Paths a gate recipe names. Sol's finding, verbatim: R4 \"omits the bytes of
+   the Prolog oracle, four Python oracle files, and the eight shell/self-test
+   implementations invoked by `mcp-test-checks`\" -- so a candidate could weaken
+   one of those rules, print a matching inventory, and have the weakened evidence
+   consumed. The set is DERIVED from the recipe text, never hand-listed: a second
+   list is a second thing to forget to update, which is the same defect as a
+   producer naming its own obligations."
+  #"(?:^|[\s\"'=])((?:src|test|bench|bin|resources)/[A-Za-z0-9_./-]+\.(?:clj|cljc|cljs|py|sh|pl|edn|json))")
+
+(defn recipe-rule-files
+  "Every rule FILE the recipe text names, plus the ones a `-p <glob>` unittest
+   discovery selects, sorted and deduplicated. Only files that exist are
+   returned; a named-but-absent path is reported separately by the caller so it
+   refuses rather than silently shrinking the rule set."
+  [recipe-text]
+  (let [named (map second (re-seq rule-file-pattern (str recipe-text)))
+        ;; `python3 -m unittest discover -s test/oracles -p test_gate_slot.py`
+        discovered (for [[_ dir pat] (re-seq #"discover\s+-s\s+(\S+)\s+-p\s+(\S+)"
+                                             (str recipe-text))]
+                     (str dir "/" pat))]
+    (vec (sort (distinct (concat named discovered))))))
+
+(defn rule-inputs
+  "`file-digest` for every rule file the recipe names. A path the recipe names
+   that is NOT on disk is returned with `:status :absent`, so it is visible in
+   the inventory and moves the policy hash rather than quietly vanishing."
+  [recipe-map]
+  (mapv #(file-digest % :policy) (recipe-rule-files (:text recipe-map))))
+
+(defn ns-file
+  "The file a test namespace is declared in, under `test/`. Sol SOL-EC-003:
+   \"Selected test implementation/Var contracts are likewise represented by
+   names, not rule digests.\" A name is not a rule; the bytes are."
+  [ns-name]
+  (str "test/" (-> (str ns-name)
+                   (str/replace "-" "_")
+                   (str/replace "." "/"))
+       ".clj"))
+
+(defn selected-implementation-inputs
+  "`file-digest` for each selected namespace's implementation file. A namespace
+   whose file is not where the convention puts it comes back `:absent`, which
+   moves the policy hash and is visible -- never silently dropped."
+  [identities]
+  (mapv #(file-digest (ns-file %) :policy) identities))
+
+(defn nested-check-members
+  "The checks a recipe actually invokes, DERIVED from its own text: the Make
+   sub-targets it calls, the Python discoveries it runs, and the oracle scripts
+   it names. Sol SOL-EC-002: R4's fourteen members were a second hand-written
+   list, and \"the `no second list` check fails\" because of it."
+  [recipe-map]
+  (let [text (str (:text recipe-map))]
+    (vec (sort (distinct
+                 (concat
+                   (map second (re-seq #"\$\(MAKE\)[^\n]*?--no-print-directory\s+([A-Za-z0-9_.-]+)" text))
+                   (for [[_ dir pat] (re-seq #"discover\s+-s\s+(\S+)\s+-p\s+(\S+)" text)]
+                     (str dir "/" pat))
+                   (map second (re-seq #"((?:src|test|bench|bin)/[A-Za-z0-9_./-]+\.(?:pl|sh|py))" text))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; the inventory
@@ -187,8 +254,9 @@
                 :argv ["java" "-cp" "$(clojure -Spath -A:clj-surgeon/mcp-test)"
                        "clojure.main" "test/admit_transaction_recovery_battery.clj"]}
       :recipe (recipe "admit-transaction-recovery-battery")
-      :required-inputs [(file-digest "test/admit_transaction_recovery_battery.clj")
-                        (file-digest "deps.edn")]
+      :required-inputs (into [(file-digest "test/admit_transaction_recovery_battery.clj")
+                              (file-digest "deps.edn")]
+                             (rule-inputs (recipe "admit-transaction-recovery-battery")))
       :selected-test-identities []
       :scope {:kind :whole-script}
       :exclusions []
@@ -204,8 +272,9 @@
       :runtime {:kind :bb :mode :cold
                 :argv ["bb" "test/clj_surgeon/battery_ledger.clj" "check"]}
       :recipe (recipe "battery-fresh")
-      :required-inputs [(file-digest "test/clj_surgeon/battery_ledger.clj")
-                        (file-digest "docs/observations/battery-ledger.edn" :data)]
+      :required-inputs (into [(file-digest "test/clj_surgeon/battery_ledger.clj")
+                              (file-digest "docs/observations/battery-ledger.edn" :data)]
+                             (rule-inputs (recipe "battery-fresh")))
       :selected-test-identities []
       :scope {:kind :predicate
               :bounds {:max-age-hours 26 :max-counted-commits-behind 30
@@ -222,7 +291,9 @@
       :authority-policy "battery-parallel-runner/suite-namespaces \"alias\""
       :runtime {:kind :jvm :mode :cold :argv jvm-worker-argv}
       :recipe (recipe "alias-migration-test")
-      :required-inputs [(file-digest "test/clj_surgeon/lane_manifest.clj")]
+      :required-inputs (into (into [(file-digest "test/clj_surgeon/lane_manifest.clj")]
+                                   (rule-inputs (recipe "alias-migration-test")))
+                             (selected-implementation-inputs (ns-names alias-ns)))
       :selected-test-identities (ns-names alias-ns)
       :scope {:kind :whole-namespaces :count (count alias-ns)}
       :exclusions []
@@ -235,29 +306,24 @@
       :authority-policy "lane-manifest :fast then :integration, sorted"
       :runtime {:kind :jvm :mode :cold :argv jvm-worker-argv}
       :recipe (recipe "mcp-test")
-      :required-inputs [(file-digest "test/clj_surgeon/lane_manifest.clj")
-                        (file-digest "deps.edn")]
+      :required-inputs (into (into [(file-digest "test/clj_surgeon/lane_manifest.clj")
+                                   (file-digest "deps.edn")]
+                                   (rule-inputs (recipe "mcp-test")))
+                             (selected-implementation-inputs (ns-names mcp-ns)))
       :selected-test-identities (ns-names mcp-ns)
       :scope {:kind :whole-namespaces :count (count mcp-ns)
               :phases {:fast (count fast-ns) :integration (count integration-ns)}
               :barrier "global fast-before-integration"}
       :exclusions []
-      :nested-checks {:target "mcp-test-checks"
-                      :recipe (recipe "mcp-test-checks")
-                      :members ["mcp-operation-oracle"
-                                "performance-regression-sentinel-intent-test"
-                                "test/oracles/test_gate_slot.py"
-                                "test/oracles/test_namespace_split_papercut_oracle.py"
-                                "test/oracles/test_require_change_oracle.py"
-                                "test/oracles/test_cell_b_oracle.py"
-                                "repository-hygiene-self-test"
-                                "txn-kernel-warning-check"
-                                "mcp-heap-config-self-test"
-                                "tmp-leak-ratchet-self-test"
-                                "clj-kondo-admission-path-self-test"
-                                "analyzer-contract-target-self-test"
-                                "cclsp-start-self-test"
-                                "cclsp-client-audit-self-test"]}
+      :nested-checks (let [r (recipe "mcp-test-checks")]
+                       {:target "mcp-test-checks"
+                        :recipe (dissoc r :text)
+                        ;; SOL-EC-002: DERIVED from the recipe the coordinator
+                        ;; executes, never a second hand-written list.
+                        :members (nested-check-members r)
+                        :rule-inputs (rule-inputs r)
+                        :evidence-required
+                        [:per-check-executions :executed-vars]})
       :result-predicate result-predicate-suite
       :discharge {:by :execution-evidence
                   :note "A pool exit alone is insufficient; the loaded Var census and the union isolation budget are part of the claim."}}
@@ -267,7 +333,9 @@
       :authority-policy "test/run_all.clj literal namespace vector"
       :runtime {:kind :bb :mode :cold :argv bb-worker-argv}
       :recipe (recipe "test-bb")
-      :required-inputs [(file-digest "test/run_all.clj")]
+      :required-inputs (into (into [(file-digest "test/run_all.clj")]
+                                   (rule-inputs (recipe "test-bb")))
+                             (selected-implementation-inputs (ns-names bb-ns)))
       :selected-test-identities (ns-names bb-ns)
       :scope {:kind :whole-namespaces :count (count bb-ns)}
       :exclusions []
@@ -281,8 +349,9 @@
       :runtime {:kind :shell :mode :cold
                 :argv ["sh" "test/repository_hygiene_gate.sh"]}
       :recipe (recipe "repository-hygiene")
-      :required-inputs [(file-digest "test/repository_hygiene_gate.sh")
-                        (file-digest ".gitignore")]
+      :required-inputs (into [(file-digest "test/repository_hygiene_gate.sh")
+                              (file-digest ".gitignore")]
+                             (rule-inputs (recipe "repository-hygiene")))
       :selected-test-identities []
       :scope {:kind :workspace-state :lifecycle :final-candidate}
       :exclusions []
@@ -297,7 +366,8 @@
                 :argv ["bb" "--classpath" "src:test" "-e"
                        "(require 'clj-surgeon.mcp-intent-contract) ... audit-current-repository"]}
       :recipe (recipe "intent-audit")
-      :required-inputs [(file-digest "src/clj_surgeon/mcp_intent_contract.clj")]
+      :required-inputs (into [(file-digest "src/clj_surgeon/mcp_intent_contract.clj")]
+                             (rule-inputs (recipe "intent-audit")))
       :selected-test-identities []
       :scope {:kind :registry-and-annotations}
       :exclusions []

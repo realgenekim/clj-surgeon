@@ -789,8 +789,29 @@
                                         :expected-tests (vec (:selected-test-identities obl))
                                         :executed-tests []
                                         :result {:exit exit :wall-ms wall-ms}}
+                                 ;; SOL-EC-001: provenance fields are EMITTED, always, so a
+                                 ;; consumer can tell "nothing was skipped" from "nobody
+                                 ;; recorded whether anything was skipped". A missing field
+                                 ;; is now a typed refusal downstream, so silence here would
+                                 ;; refuse every landing rather than pass one.
+                                 true
+                                 (assoc :inputs-manifest {:path "target/gate-obligations.edn"
+                                                          :sha256 (tc/sha256 obligation-bytes)
+                                                          :bytes (count (.getBytes ^String obligation-bytes "UTF-8"))}
+                                        :environment-manifest
+                                        {:selected (into (sorted-map)
+                                                         (for [k ["JAVA_TOOL_OPTIONS" "CLJ_SURGEON_GATE_RUN_ID"
+                                                                  "MAKELEVEL" "PATH" "SHELL" "LANG"]
+                                                               :let [v (System/getenv k)] :when v]
+                                                           [k (tc/sha256 v)]))
+                                         :basis "policy-selected keys, values digested"})
+
                                  sr
                                  (assoc :executed-tests (vec (sort (distinct (map (comp str :namespace) (:runs sr)))))
+                                        ;; SOL-EC-002 / deviation 9: VAR identities, not only
+                                        ;; namespaces. The child runs already carry them.
+                                        :expected-vars (vec (sort (distinct (map str (mapcat :expected-vars (:runs sr))))))
+                                        :executed-vars (vec (sort (distinct (map str (mapcat :executed-vars (:runs sr))))))
                                         :result {:exit exit :wall-ms wall-ms
                                                  :failures (get-in sr [:result :fail])
                                                  :errors (get-in sr [:result :error])

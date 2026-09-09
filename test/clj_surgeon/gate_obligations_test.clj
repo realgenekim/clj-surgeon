@@ -134,6 +134,63 @@
         (is (not= (h (with :data "aaaa")) (h (with :policy "aaaa")))
             "and the ROLE itself is hashed, so reclassifying an input is visible")))))
 
+(deftest nested-checks-are-derived-from-the-recipe-not-a-second-list
+  ;; Sol SOL-EC-002: R4's fourteen members were a second hand-written list in this
+  ;; namespace, so "the `no second list` check fails". A second list is a second
+  ;; thing to forget to update -- the same defect as a producer naming its own
+  ;; obligations, one level down.
+  (testing "the recipe's own text yields the oracles and self-tests"
+    (let [r (gob/recipe "mcp-test-checks")
+          members (set (gob/nested-check-members r))]
+      (is (contains? members "test/mcp_operation_contract_oracle.pl")
+          "the SWI-Prolog oracle is invoked by the recipe and must be derived from it")
+      (doseq [py ["test/oracles/test_gate_slot.py"
+                  "test/oracles/test_namespace_split_papercut_oracle.py"
+                  "test/oracles/test_require_change_oracle.py"
+                  "test/oracles/test_cell_b_oracle.py"]]
+        (is (contains? members py) (str py " must be derived from the discovery invocation")))
+      (doseq [t ["repository-hygiene-self-test" "txn-kernel-warning-check"
+                 "mcp-heap-config-self-test" "tmp-leak-ratchet-self-test"
+                 "clj-kondo-admission-path-self-test" "analyzer-contract-target-self-test"
+                 "cclsp-start-self-test" "cclsp-client-audit-self-test"]]
+        (is (contains? members t) (str t " must be derived from the $(MAKE) sub-target")))))
+  (testing "and the inventory carries the derived set, with per-check evidence required"
+    (let [by-id (into {} (map (juxt :id identity))
+                      (:obligations (gob/inventory (gob/runner-policy))))
+          nc (:nested-checks (:R4 by-id))]
+      (is (>= (count (:members nc)) 14))
+      (is (= [:per-check-executions :executed-vars] (:evidence-required nc))))))
+
+(deftest the-policy-hash-covers-the-bytes-of-every-rule-the-recipe-invokes
+  ;; Sol SOL-EC-003: R4 "omits the bytes of the Prolog oracle, four Python oracle
+  ;; files, and the eight shell/self-test implementations". A candidate could
+  ;; weaken one of those rules, print a matching inventory, and have the weakened
+  ;; evidence consumed.
+  (testing "the rule files a recipe names are required inputs, by digest"
+    (let [by-id (into {} (map (juxt :id identity))
+                      (:obligations (gob/inventory (gob/runner-policy))))
+          paths (set (map :path (:required-inputs (:R4 by-id))))]
+      (is (contains? paths "test/mcp_operation_contract_oracle.pl"))
+      (is (contains? paths "test/oracles/test_gate_slot.py"))
+      (is (contains? paths "test/repository_hygiene_gate_self_test.sh"))
+      (testing "including the IMPLEMENTATION of every selected namespace"
+        (is (contains? paths "test/clj_surgeon/mcp_tool_test.clj")
+            "a selected test is a rule; its name is not its bytes"))))
+  (testing "a rule file the recipe names but the tree lacks is :absent, not dropped"
+    (let [absent (gob/file-digest "test/no_such_oracle.py" :policy)]
+      (is (= :absent (:status absent)))
+      (is (= :policy (:role absent))))))
+
+(deftest the-shell-identity-is-a-resolved-path-not-the-word-sh
+  ;; Sol SOL-EC-004: the producer "records shell :version \"sh\" from the first
+  ;; line and discards the resolved executable path". An identity identical on
+  ;; every box distinguishes nothing.
+  (testing "the recorded argv resolves the interpreter"
+    (let [argv (second (first (filter #(= :sh (first %)) tc/gate-toolchain)))]
+      (is (some #(str/includes? % "readlink -f /bin/sh") argv)
+          "the shell entry must resolve /bin/sh, not echo $0")
+      (is (not-any? #(str/includes? % "echo $0") argv)))))
+
 (deftest the-required-inputs-of-a-gate-obligation-exist-in-this-tree
   (testing "a missing required input is named :absent, never dropped"
     (let [inv (gob/inventory (gob/runner-policy))

@@ -106,7 +106,11 @@
    [:python ["python3" "--version"]]
    [:git ["git" "--version"]]
    [:make ["make" "--version"]]
-   [:sh ["sh" "-c" "echo $0; exec 2>/dev/null; readlink -f /bin/sh"]]
+   ;; SOL-EC-004: the RESOLVED EXECUTABLE PATH, not the word "sh". The old form
+   ;; printed `$0` first, so the recorded shell identity was the string "sh" --
+   ;; identical on every box, and the resolved path on the second line was
+   ;; discarded. An identity that cannot distinguish two shells is not one.
+   [:sh ["sh" "-c" "readlink -f /bin/sh 2>/dev/null || command -v sh"]]
    [:swipl ["swipl" "--version"]]])
 
 (defn snapshot
