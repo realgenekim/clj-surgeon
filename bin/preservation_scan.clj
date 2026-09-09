@@ -408,3 +408,126 @@
             (let [e (read-token s i)
                   e (if (<= e i) (inc i) e)]
               (recur e (conj acc {:kind :tok :text (subs s i e)})))))))))
+
+;; ---------------------------------------------------------------- node tree
+;;
+;; A structural view of the same bytes. `tokens` above is a flat stream and
+;; cannot say whether a symbol sits in a binding position, inside a quote, or
+;; inside a macro form the scanner does not model. The canonicaliser needs that
+;; distinction: a bare symbol may only be rewritten to a Var when it is provably
+;; a Var reference. (PB-FENCE-001.)
+
+(declare read-node)
+
+(defn- read-node-seq [^String s ^long i cbuf close]
+  ;; s[i] is the opening delimiter; returns [children end]
+  (let [n (.length s)]
+    (loop [j (inc i) acc []]
+      (let [j (skip-ws s j cbuf)]
+        (cond
+          (>= j n) [acc j]
+          (= (.charAt s j) close) [acc (inc j)]
+          (contains? #{\) \] \}} (.charAt s j)) [acc (inc j)]
+          :else (let [[node e] (read-node s j cbuf)
+                      e (if (<= e j) (inc j) e)]
+                  (recur e (conj acc node))))))))
+
+(defn read-node
+  "Read one datum at i as a node. Returns [node end]."
+  [^String s ^long i cbuf]
+  (let [n (.length s)
+        c (.charAt s i)]
+    (cond
+      (= c \") (let [e (read-string-lit s i)] [{:kind :str :text (subs s i e)} e])
+      (= c \\) (let [e (read-char-lit s i)] [{:kind :chr :text (subs s i e)} e])
+
+      (contains? closers c)
+      (let [[kids e] (read-node-seq s i cbuf (closers c))]
+        [{:kind (case c \( :list \[ :vector \{ :map) :open (str c) :children kids
+          :text (subs s i (min e n))} e])
+
+      (= c \#)
+      (let [c2 (when (< (inc i) n) (.charAt s (inc i)))]
+        (cond
+          (nil? c2) [{:kind :token :text "#"} (inc i)]
+          (= c2 \") (let [e (read-string-lit s (inc i))] [{:kind :regex :text (subs s i e)} e])
+          (= c2 \{) (let [[kids e] (read-node-seq s (inc i) cbuf \})]
+                      [{:kind :set :open "#{" :children kids :text (subs s i (min e n))} e])
+          (= c2 \() (let [[kids e] (read-node-seq s (inc i) cbuf \))]
+                      [{:kind :anon-fn :open "#(" :children kids :text (subs s i (min e n))} e])
+          (= c2 \_) (let [j (skip-ws s (+ i 2) cbuf)
+                          [d e] (read-node s j cbuf)
+                          e (max e (inc j))
+                          j2 (skip-ws s e cbuf)]
+                      (if (or (>= j2 n) (contains? #{\) \] \}} (.charAt s j2)))
+                        [{:kind :prefixed :prefix "#_" :children [d] :text (subs s i (min e n))} e]
+                        (let [[d2 e2] (read-node s j2 cbuf)]
+                          [{:kind :prefixed :prefix "#_" :children [d d2]
+                            :text (subs s i (min e2 n))} e2])))
+          (contains? #{\? \' \= \^ \:} c2)
+          (let [j (skip-ws s (+ i 2) cbuf)
+                j (if (and (= c2 \?) (< j n) (= (.charAt s j) \@)) (skip-ws s (inc j) cbuf) j)
+                [d e] (read-node s j cbuf)
+                e (max e (inc j))]
+            [{:kind :prefixed :prefix (subs s i (+ i 2)) :children [d] :text (subs s i (min e n))} e])
+          (= c2 \#) (let [e (read-token s (+ i 2))] [{:kind :token :text (subs s i e)} e])
+          :else (let [j (read-token s (inc i))
+                      j2 (skip-ws s j cbuf)
+                      [d e] (read-node s j2 cbuf)]
+                  [{:kind :prefixed :prefix (subs s i j) :children [d] :text (subs s i (min e n))} e])))
+
+      (contains? #{\' \` \@} c)
+      (let [j (skip-ws s (inc i) cbuf)
+            [d e] (read-node s j cbuf)
+            e (max e (inc j))]
+        [{:kind :prefixed :prefix (str c) :children [d] :text (subs s i (min e n))} e])
+
+      (= c \~)
+      (let [j0 (if (and (< (inc i) n) (= (.charAt s (inc i)) \@)) (+ i 2) (inc i))
+            j (skip-ws s j0 cbuf)
+            [d e] (read-node s j cbuf)
+            e (max e (inc j))]
+        [{:kind :prefixed :prefix (subs s i j0) :children [d] :text (subs s i (min e n))} e])
+
+      (= c \^)
+      (let [j (skip-ws s (inc i) cbuf)
+            [m e1] (read-node s j cbuf)
+            e1 (max e1 (inc j))
+            j2 (skip-ws s e1 cbuf)
+            [d e2] (read-node s j2 cbuf)
+            e2 (max e2 (inc j2))]
+        [{:kind :prefixed :prefix "^" :children [m d] :text (subs s i (min e2 n))} e2])
+
+      :else (let [e (read-token s i)
+                  e (if (<= e i) (inc i) e)]
+              [{:kind :token :text (subs s i e)} e]))))
+
+(defn nodes
+  "Top-level nodes of a source string."
+  [^String s]
+  (let [cbuf (volatile! []) n (.length s)]
+    (loop [i 0 acc []]
+      (let [i (skip-ws s i cbuf)]
+        (if (>= i n)
+          acc
+          (let [[node e] (read-node s i cbuf)
+                e (if (<= e i) (inc i) e)]
+            (recur e (conj acc node))))))))
+
+(defn node
+  "The single node a datum's text represents, or nil."
+  [^String s]
+  (first (nodes s)))
+
+(defn all-tokens
+  "Every :token/:regex text in a node subtree."
+  [nd]
+  (if (contains? #{:token :regex} (:kind nd))
+    [(:text nd)]
+    (mapcat all-tokens (:children nd))))
+
+(defn sym-token?
+  "Does this token text look like a symbol (not a keyword, number, or nil/bool)?"
+  [t]
+  (boolean (and t (re-matches #"[A-Za-z*+!?<>=$_&.-][\w*+!?<>=$/.-]*" t)
+                (not (contains? #{"nil" "true" "false" "&" "_"} t)))))

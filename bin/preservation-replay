@@ -52,9 +52,12 @@ cat > "$WORK/edits/wrong-binding.py" <<'PY'
 import pathlib
 p = pathlib.Path("src/cfp_scheduler_killer/views/committee.clj")
 s = p.read_text()
-assert s.count("avatar/pool-face") == 1, s.count("avatar/pool-face")
-# The relocated body is requalified to a namespace that does not own the name.
-s = s.replace("avatar/pool-face", "organizer-layout/pool-face")
+# `committee-page` is :identical-modulo-requalification in the clean row, so the
+# tier delta is unambiguous. The site is requalified to a namespace that exists,
+# is aliased in this file, and does NOT own the name.
+target = '(organizer-layout/header "Create review committee"'
+assert s.count(target) == 1, s.count(target)
+s = s.replace(target, '(format/header "Create review committee"', 1)
 p.write_text(s)
 PY
 
@@ -116,24 +119,53 @@ lines[a], lines[b] = lines[b], lines[a]
 p.write_text("\n".join(lines))
 PY
 
+# ------------------------------------------------- 7. local shadow substitution
+# Sol's PB-FENCE-001 falsifier, planted independently of this builder: a bare use
+# of the LOCAL destructured binding `edit-form` is replaced by the moved private
+# Var of the same name. The expressions resolve differently and the brief must not
+# call the body preserved.
+cat > "$WORK/edits/local-shadow.py" <<'PYEOF'
+import pathlib
+p = pathlib.Path("src/cfp_scheduler_killer/views/form_builder.clj")
+s = p.read_text()
+target = "(form-edit-panel event editing edit-form)"
+assert target in s
+s = s.replace(target,
+              "(form-edit-panel event editing cfp-scheduler-killer.views.portal/edit-form)", 1)
+p.write_text(s)
+PYEOF
+
+# ------------------------------------------------------- 8. symlink escape probe
+# Sol's PB-FENCE-002 probe: a tree entry pointing outside the repository. The brief
+# must report it as unclassified and must never read the target.
+cat > "$WORK/edits/symlink-escape.py" <<'PYEOF'
+import pathlib, os
+ext = pathlib.Path("/var/tmp/forge/item3/sol-proof-external.clj")
+ext.write_text("(ns escaped)\n\n(def escaped-owner :should-never-be-read)\n")
+lnk = pathlib.Path("src/leak.clj")
+if lnk.exists() or lnk.is_symlink():
+    lnk.unlink()
+os.symlink(str(ext), str(lnk))
+PYEOF
+
 declare -A SHAS
 SHAS[clean]="$CLEAN_SHA"
-for d in wrong-binding silent-promotion dropped-comment omitted-owner load-order-forms load-order-requires; do
+for d in wrong-binding silent-promotion dropped-comment omitted-owner load-order-forms load-order-requires local-shadow symlink-escape; do
   SHAS[$d]=$(plant "$d" "$WORK/edits/$d.py")
 done
 
 echo
 echo "base   $BASE_SHA"
-for k in clean wrong-binding silent-promotion dropped-comment omitted-owner load-order-forms load-order-requires; do
+for k in clean wrong-binding silent-promotion dropped-comment omitted-owner load-order-forms load-order-requires local-shadow symlink-escape; do
   printf '%-22s %s\n' "$k" "${SHAS[$k]}"
 done
 echo
 
-for k in clean wrong-binding silent-promotion dropped-comment omitted-owner load-order-forms load-order-requires; do
+for k in clean wrong-binding silent-promotion dropped-comment omitted-owner load-order-forms load-order-requires local-shadow symlink-escape; do
   s="${SHAS[$k]}"
   st=$(date +%s.%N)
   "$HERE/preservation-brief" "$s" "$BASE_SHA" --repo "$WORK/repo" \
-      --title "$k" --out "$WORK/out/$k.md" --json "$WORK/out/$k.json" >/dev/null
+      --title "$k" --out "$WORK/out/$k.md" --json "$WORK/out/$k.json" >/dev/null || true
   en=$(date +%s.%N)
   echo "$k  wall $(echo "$en - $st" | bc)s"
 done
@@ -142,16 +174,17 @@ python3 - "$WORK/out" <<'PY'
 import json, sys, pathlib, os
 d = pathlib.Path(sys.argv[1])
 order = ["clean","wrong-binding","silent-promotion","dropped-comment",
-         "omitted-owner","load-order-forms","load-order-requires"]
+         "omitted-owner","load-order-forms","load-order-requires",
+         "local-shadow","symlink-escape"]
 rows = []
 for k in order:
     j = json.load(open(d / f"{k}.json"))
     rows.append((k, j))
-cols = [("moved","moved"),("preserved_bodies","preserved"),("omitted","omitted"),
+cols = [("clear","clear"),("moved","moved"),("preserved_bodies","preserved"),("omitted","omitted"),
         ("new_owners","new"),("promotions","promo"),("comments_lost","cmt-lost"),
         ("require_reorders","req-reord"),("require_sort_broken","req-unsorted"),("new_forward_refs","fwd-ref"),
         ("stale_sites","stale"),("undefined_alias_sites","undef-alias"),("possible_unresolved","bare?"),
-        ("in_place_needs_review","inplace-rev"),("wall_ms","wall ms")]
+        ("in_place_needs_review","inplace-rev"),("refused_entries","refused"),("wall_ms","wall ms")]
 hdr = "| change | " + " | ".join(c[1] for c in cols) + " |"
 print(hdr)
 print("|" + "---|" * (len(cols)+1))
