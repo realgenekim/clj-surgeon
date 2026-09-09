@@ -271,6 +271,44 @@ for pr in are-binding uppercase-alias kind-collision referred-testing refer-all-
   PAIR_CAND[$pr]=$(plant_on "d-$pr-cand" "$CLEAN_SHA" "$WORK/edits/$pr-cand.py")
 done
 
+# ---- Sol round-6 rows (PB-FENCE-011) ---------------------------------------
+# meta-owner: `^:probe (defn hidden ...)` exists in the BASE only. The private
+# scanner never saw a metadata-prefixed definition, so the omission was invisible.
+cat > "$WORK/edits/meta-owner-base.py" <<'PYEOF'
+import sys, pathlib
+sys.path.insert(0, "REPLACE_EDITS")
+from pairlib import append_def, BASE
+append_def(BASE, "\n^:probe (defn hidden-probe [] :hidden)\n")
+PYEOF
+
+# shapes: every top-level definition shape the resolver and the scanner must agree
+# on, planted in BOTH trees. Each must be named in the brief — as an owner per the
+# resolver, or explicitly as a form that defines no Var — never silently absent.
+SHAPES='\n^:probe (defn meta-shape [] :m)\n(do (def in-do 1))\n(declare declared-shape)\n(defmulti mm-shape identity)\n(defmethod mm-shape :x [_] 1)\n(defprotocol PShape (p-op [this]))\n(definterface IShape (^void iop []))\n'
+cat > "$WORK/edits/shapes-base.py" <<PYEOF
+import sys, pathlib
+sys.path.insert(0, "$WORK/edits")
+from pairlib import append_def, BASE
+append_def(BASE, "$SHAPES")
+PYEOF
+cat > "$WORK/edits/shapes-cand.py" <<PYEOF
+import sys, pathlib
+sys.path.insert(0, "$WORK/edits")
+from pairlib import append_def, CAND
+append_def(CAND, "$SHAPES")
+PYEOF
+sed -i "s|REPLACE_EDITS|$WORK/edits|" "$WORK/edits/meta-owner-base.py"
+
+META_BASE=$(plant_on d-meta-owner-base "$BASE_SHA" "$WORK/edits/meta-owner-base.py")
+PAIR_BASE[shapes]=$(plant_on d-shapes-base "$BASE_SHA" "$WORK/edits/shapes-base.py")
+PAIR_CAND[shapes]=$(plant_on d-shapes-cand "$CLEAN_SHA" "$WORK/edits/shapes-cand.py")
+
+st=$(date +%s.%N)
+"$HERE/preservation-brief" "${PAIR_CAND[shapes]}" "${PAIR_BASE[shapes]}" --repo "$WORK/repo" \
+    --title "shapes" --out "$WORK/out/shapes.md" --json "$WORK/out/shapes.json" >/dev/null || true
+en=$(date +%s.%N)
+echo "shapes  wall $(echo "$en - $st" | bc)s"
+
 declare -A SHAS
 SHAS[clean]="$CLEAN_SHA"
 for d in wrong-binding silent-promotion dropped-comment omitted-owner load-order-forms load-order-requires local-shadow symlink-escape; do
@@ -311,6 +349,15 @@ for pr in are-binding uppercase-alias kind-collision referred-testing refer-all-
   echo "$pr  wall $(echo "$en - $st" | bc)s"
 done
 
+# meta-owner is base-only: the metadata-prefixed Var exists in the base and the
+# clean candidate never had it, so it must surface as an OMITTED owner.
+st=$(date +%s.%N)
+"$HERE/preservation-brief" "$CLEAN_SHA" "$META_BASE" --repo "$WORK/repo" \
+    --title "meta-owner" --out "$WORK/out/meta-owner.md" \
+    --json "$WORK/out/meta-owner.json" >/dev/null || true
+en=$(date +%s.%N)
+echo "meta-owner  wall $(echo "$en - $st" | bc)s"
+
 python3 - "$WORK/out" <<'PY'
 import json, sys, pathlib, os
 d = pathlib.Path(sys.argv[1])
@@ -318,7 +365,7 @@ order = ["clean","wrong-binding","silent-promotion","dropped-comment",
          "omitted-owner","load-order-forms","load-order-requires",
          "local-shadow","symlink-escape","external-macro",
          "are-binding","uppercase-alias","kind-collision","referred-testing",
-         "refer-all-shadow","use-shadow","refer-all-external"]
+         "refer-all-shadow","use-shadow","refer-all-external","shapes","meta-owner"]
 rows = []
 for k in order:
     j = json.load(open(d / f"{k}.json"))
@@ -327,7 +374,8 @@ cols = [("clear","clear"),("moved","moved"),("preserved_bodies","preserved"),("o
         ("new_owners","new"),("promotions","promo"),("comments_lost","cmt-lost"),
         ("require_reorders","req-reord"),("require_sort_broken","req-unsorted"),("new_forward_refs","fwd-ref"),
         ("stale_sites","stale"),("undefined_alias_sites","undef-alias"),("possible_unresolved","bare?"),
-        ("in_place_needs_review","inplace-rev"),("refused_entries","refused"),("wall_ms","wall ms")]
+        ("in_place_needs_review","inplace-rev"),("reconcile_failures","recon"),
+        ("declares","decl"),("no_var_forms","novar"),("wall_ms","wall ms")]
 hdr = "| change | " + " | ".join(c[1] for c in cols) + " |"
 print(hdr)
 print("|" + "---|" * (len(cols)+1))
@@ -346,7 +394,7 @@ for k, j in rows[1:]:
              if isinstance(base.get(kk), int) and base.get(kk) != j.get(kk)}
     tiers = (base.get("tiers"), j.get("tiers"))
     if k in ("external-macro","are-binding","uppercase-alias","kind-collision","referred-testing",
-             "refer-all-shadow","use-shadow","refer-all-external"):
+             "refer-all-shadow","use-shadow","refer-all-external","shapes","meta-owner"):
         print(f"    [PAIR] {k} tiers={j.get('tiers')} preserved={j.get('preserved_bodies')} unmodelled={len(j.get('unmodelled_macros') or [])}")
     print(f"{k}: changed counters vs clean = {delta}")
     if tiers[0] != tiers[1]:

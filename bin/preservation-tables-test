@@ -138,7 +138,8 @@
 (def required-replay-rows
   ["local-shadow" "symlink-escape" "external-macro"
    "are-binding" "kind-collision" "uppercase-alias" "referred-testing"
-   "refer-all-shadow" "use-shadow" "refer-all-external"])
+   "refer-all-shadow" "use-shadow" "refer-all-external"
+   "meta-owner" "shapes"])
 
 ;; ------------------------------------------------------------------- harness
 
