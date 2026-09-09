@@ -359,11 +359,15 @@
         nsf (sc/ns-form forms)
         ns-start (or (:start nsf) 0)
         ns-end (or (:end nsf) 0)
-        nsdef-off (when (= 1 (count nsdefs))
-                    (off-of (:row (first nsdefs)) (:col (first nsdefs))))
-        ns-span-agrees? (and nsdef-off (>= (long nsdef-off) (long ns-start))
-                             (< (long nsdef-off) (long ns-end)))
-        ns-count-ok? (= 1 (count nsdefs))
+        ;; A `.cljc` namespace is reported once per elaborated platform. That is one
+        ;; namespace, not two, so the count is of DISTINCT namespace names.
+        ns-names (distinct (map :name nsdefs))
+        ns-count-ok? (= 1 (count ns-names))
+        nsdef-off (when ns-count-ok?
+                    (some #(let [o (off-of (:row %) (:col %))]
+                             (when (and o (>= (long o) (long ns-start)) (< (long o) (long ns-end))) o))
+                          nsdefs))
+        ns-span-agrees? (boolean nsdef-off)
         in-span? (fn [u] (let [o (off-of (:row u) (:col u))]
                            (and o (>= o (long ns-start)) (< o (long ns-end)))))
         all-usages (get kfacts :nsu [])
@@ -411,7 +415,7 @@
                  :unreported (mapv :id unexplained)
                  :unanalysed-features unanalysed
                  :cond-gap cond-gap
-                 :ns-count (count nsdefs)
+                 :ns-count (count ns-names)
                  :ns-span-agrees? (boolean ns-span-agrees?)
                  :ok? (and (empty? unlocated) (empty? unexplained)
                            (empty? unanalysed) (zero? cond-gap)
