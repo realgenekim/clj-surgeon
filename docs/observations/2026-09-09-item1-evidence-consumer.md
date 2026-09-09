@@ -14,8 +14,9 @@ One builder. Started 2026-09-09 13:54:42Z; finished inside the 6-hour box.
 | **What the consumer costs** | **3.9 s** end-to-end (3,856 / 3,901 / 3,812 ms) |
 | **Net, per eligible clean request** | **≈ +165 s to +261 s faster at the landing** |
 | **Marginal cost over v3.6's stage-name check** | **≈ 0.26 s** (`print-gate-obligations` 2.20 s vs `print-gate-stages` 2.02 s; + 0.09 s toolchain + 0.03 s matcher) |
-| **Corpus** | ship v3.7's own: **48 rows, 48 pass**. The whole bridge corpus against **frozen** staged bytes: **11/11 fixtures, 0 mismatches** |
+| **Corpus** | ship v3.7's own: **73 rows, 73 pass**, including a **generated 845-mutant field sweep, 845 refused, 0 consumed**. `install.sh` run against a scratch DEST+FIXTURES: **INSTALL OK, 11/11** |
 | **Replay** | **both** consumed landings of 2026-09-09 would have been **refused** — and one of them consumed a gate that never ran the alias battery |
+| **Production decision today** | **`run-required reason=custody-unverified` on every landing.** ship observed nothing independently, so it cannot discharge an obligation. The saving below is what the consumer will buy once item 2's recorder can attest observation; it is **not** being banked today |
 
 Astra's forecast was *central 0–30 s saved per eligible clean request, plausible −10 to +120 s*. The
 measured landing-side saving is **above the top of that range**, because the forecast is about a
@@ -26,24 +27,167 @@ something else (review). If it did not, the work moved earlier and L is unchange
 
 ---
 
+## 1a. Sol's NO-GO, and what changed (2026-09-09, verdict `20260909T145900Z-1ed995c63dac`)
+
+Sol returned NO-GO on `1ed995c6` with four blockers, all one class: **the consumer could return
+`consume` while authority and execution evidence were unknown.** All four are fixed; the honest
+consequence is that **the production path now refuses on every landing**, which Sol and §4 both say
+is the correct answer today.
+
+| id | the hole | the repair | witnessed by |
+|---|---|---|---|
+| **SOL-EC-001** | `:custody :self-reported` consumed. A fixture Sol derived with `:inputs-manifest`, `:workspace-snapshot-sha256` and every execution's `:inputs-manifest`, `:environment-manifest`, `:declared-skips`, `:focus-omissions`, `:unexecuted-tests` **removed** returned the same `consume` — because the matcher tested the omission vectors with `seq`, and `(seq nil)` is nil, so a *missing* field read as *no omissions* | consumption requires `:custody :observed` attested by a principal that is not the producer; every listed field must be **present** (presence, not emptiness); `:proof/:complete?` must be an explicit `true` | 14 rows incl. `sol-stripped-provenance` → `provenance-missing`, `self-reported-custody` / `observer-is-the-producer` / `observer-unnamed` / `observer-no-observation-id` → `custody-unverified` |
+| **SOL-EC-002** | the fourteen `mcp-test-checks` members were a **second hand-written list**; one passing `mcp-test` exit discharged them all; namespace-only matching could not see a Var that stopped running | members are **derived from the recipe text** the coordinator executes; the consumer requires a per-check execution for each derived member and **Var identities**, expected ⊇ executed | `nested-checks-are-derived-from-the-recipe-not-a-second-list` (repo) + `no-nested-executions`, `nested-check-red`, `missing-var`, `no-vars-evidence` |
+| **SOL-EC-003** | `:policy-sha256` omitted the bytes of the Prolog oracle, four Python oracles, eight shell self-tests and every selected test's own implementation, so a weakened rule could be consumed | rule files are **derived from the recipe** (including `-s/-p` unittest discoveries) and from each selected namespace's file. **R4: 2 → 81 declared inputs; R5: 1 → 50**, none absent | `the-policy-hash-covers-the-bytes-of-every-rule-the-recipe-invokes` (repo) |
+| **SOL-EC-004** | the receipt claimed nine tools, land observed eight, and the comparison ran only where the observed map already had the key — so `:sh` was compared against nothing; and `:sh`'s "version" was the string `"sh"` from `echo $0`, identical on every box | land observes `:sh` too, **with the resolved path** (`/usr/bin/dash` here); **any key the receipt claims that the observer cannot produce is `toolchain-unobserved`**, never a skip | `the-shell-identity-is-a-resolved-path-not-the-word-sh` (repo) + `extra-tool-claim` |
+
+**A fifth thing fell out of the repair.** Emitting 913 + 891 Var identities inline pushed the
+envelope to **230,479 bytes**, and the writer refused — §5: *"larger detailed evidence is
+content-addressed by path/digest/byte length … Do not truncate proof to fit."* The Var lists moved to
+sidecars beside the envelope and the execution keeps a `:vars-ref` with path, digest, byte length and
+counts. The envelope is **23,831 bytes**. The consumer resolves the reference under the envelope's own
+directory and refuses on a missing file, a disagreeing digest, a disagreeing length, or a path that
+tries to escape the root — four more rows.
+
+**Deviation 7 is now closed the other way.** My §7 said "no live consumption is qualified" while the
+consumer would in fact have consumed once installed. It no longer will: the production answer is
+`custody-unverified`, and the consume path is proven only against a controlled complete fixture whose
+observer attestation ship cannot produce. Sol's audit table entries 1, 2, 3, 4, 7 and 9 are all
+addressed; 5, 6 and 8 were already preserved.
+
+## 1a2. Sol round 2 (verdict `20260909T153507Z-45beeb7eaff3`) — NO-GO, both blockers fixed
+
+Sol found two more of the same family and the coordinator's instruction was to fix them as **one
+rule**, not two patches: *the consumer validates every provenance VALUE against the independently
+derived inventory; anything it cannot validate refuses by name.*
+
+| id | the hole | the repair |
+|---|---|---|
+| **SOL-EC-005** | `resolve-vars` took the inline branch whenever `:expected-vars`/`:executed-vars` were present and never looked at a simultaneous `:vars-ref`. Sol added **empty inline vectors beside a valid reference** and the consumer authorized the empty census while the real one sat there as decorative bytes | inline and `:vars-ref` are **mutually exclusive** → `vars-ambiguous`; an empty census where the tree selects ≥1 namespace refuses; the reference's advertised `:expected-count`/`:executed-count` must match the sidecar it names |
+| **SOL-EC-006** | every required key present but `:inputs-manifest` / `:environment-manifest` replaced by `{}` still consumed — presence was checked, values never were; no `:closure-basis`, no fixture/hook identities, and it consumed anyway | `:inputs-manifest` must **account for the obligation's required inputs by digest**; `:environment-manifest` must account for **every key the inventory's `environment-policy` names** (digested, or explicitly listed `:unset`); `:closure-basis` and `:fixture-identities` are required where the **inventory** names them; every reference field is type-checked; every `:result` value must be a measurement, not `nil`/`{}`/`[]` |
+
+**The ratchet that stops round 4.** Three rounds each found the next field nobody had thought to
+strip, because hand-listing negatives is a race against the reviewer's imagination. So the corpus now
+**generates** them: `fixtures/gen-field-mutants.clj` walks every authority-bearing field of the
+controlled-complete receipt and emits five mutations each — absent, `[]`, `{}`, `nil`, and
+*duplicated-alongside-an-alternate* (the SOL-EC-005 shape) — then asserts refusal.
+
+```
+field-mutants: 845 generated from 240 fields, 845 refused, 0 CONSUMED
+```
+
+It is not allowed a second list either: it asks `gate-consume.clj --print-inert` for the fields the
+consumer **declares** inert and attacks everything else, and it reads the inventory to know which
+evidence each obligation actually requires (R1 has no Var census; R2 is discharged by the landing
+box, so mutating its execution proves nothing). On its first run it found **513** accepted fields;
+closing them produced the envelope schema — every field is validated or declared inert, with
+declared types, and an **unknown field refuses**, so a producer cannot introduce one the consumer
+silently ignores.
+
+Two rules moved out of the consumer's private knowledge and into the tree, because a rule living in
+one reader's head is the same defect Sol found at the nested-check level: the **environment policy**
+(which keys must be accounted for) and **`:discharge {:by :landing-box-execution}`** for R2, which
+had been a hard-coded `(= :R2 …)` in the matcher.
+
+## 1c. The fence worktree was not released on early exits (field defect)
+
+`/home/forge/src/clj-surgeon-fence` was found holding an untracked
+`docs/observations/proof-burden-fence.md`, which makes the **next** run refuse on
+`fence-worktree-dirty`. Cause: the pre-review sweep sets `FENCE_RELEASED=1`, and `fence_release`
+short-circuits on that flag — so every exit between launching a reviewer and archiving its verdict
+called `fence_release` and returned instantly, after the reviewer had already written into the tree.
+A second guard then refused to sweep when no verdict had been archived, which is exactly the case.
+
+Repaired: the flag is cleared **at the moment the tree starts being written**, not after the archive
+exists; and the no-archive guard no longer skips the sweep, because the sweep already copies every
+doomed file out before cleaning — the copy *is* the archive, and a failed copy still stops it.
+
+**v3.4's own ratchet then caught a regression in that fix**, which is the system working: ship began
+tidying away *another* run's litter, defeating the `fence-worktree-dirty` refusal whose purpose is to
+make an unexplained failure loud. Scoped with `FENCE_OURS`, set only when this run launches a
+reviewer: our dirt is swept, someone else's is reported and kept. New fixture row
+`9-an-early-exit-still-returns-the-borrowed-fence-tree-clean-or-says-why`.
+
+## 1b. The install defect (found by the coordinator, same day)
+
+`install.sh` reported `run-ship-v3.6: 8 rows, mismatches: 6` → **INSTALL NOT PROVEN**. Reproduced
+exactly and fixed.
+
+**Cause, two halves.** The installer copies only `"$SRC/fixtures"/*.sh` into the canonical fixture
+directory, so my new `stub-gate.clj` — which the three migrated fixtures build their producer with —
+was never copied; and it re-runs the fixtures with `V3_DIR=$DEST`, so my fixtures' `$V3/fixtures/stub-gate.clj`
+resolved to `/home/forge/bin/fixtures/`, which does not exist. The `cp` failed silently, the fixture
+repository was committed **without** the helper, `landing-gate-prewarm` ran `bb stub-gate.clj` against
+a missing file, the fast lane went RED, and six rows failed as "run stopped / did not land" — fail-closed,
+and completely mysterious from outside.
+
+**Why my corpus missed it:** `run-corpus.sh` sets `V3_DIR` to the *staging* directory, where
+`fixtures/stub-gate.clj` does exist. I proved the staged files against staged fixtures **in their
+staging layout**, never in the layout the installer creates. That is the same class as the scar in §7
+of this report: a verifier blind to the arrangement its subject will actually be in.
+
+**Fixes:** each fixture resolves its helper **beside itself** (`$(dirname "$0")`), with fallbacks, and
+**refuses loudly** when it cannot find it — a fixture that quietly builds a broken repository reports a
+code defect where there is a missing file. `install.sh` now copies `*.clj` and `*.edn` helpers as well
+as `*.sh`, fails the install if a fixture copy fails, and runs `run-ship-v3.7` in its post-install
+list. The v3.7 corpus resolves its binaries from `$V3_DIR` and its inputs from beside itself, so the
+post-install run tests the **installed** bytes.
+
+**A second install-proof blocker, found by running `install.sh` itself:** the installer decides
+OK/NOT-PROVEN by matching **`mismatches: 0`** against each fixture's last line, and my new corpus
+ended `== corpus: 72 passed, 0 failed` — which never matches. Adding it to the installer's list made
+**every** install report NOT PROVEN however green it was. A fixture whose verdict its own runner
+cannot read reports nothing. Its summary line now speaks the installer's vocabulary.
+
+**Proved by running `install.sh` itself** against a scratch `DEST` + `FIXTURES` (it already supports
+both as env overrides), with the ship lease free:
+
+```
+== re-running the fixtures against the INSTALLED files
+   run-land-auto: land-auto fixtures: 19 rows, mismatches: 0
+   run-land-publication-truth: land-publication-truth fixtures: 12 rows, mismatches: 0
+   run-ship-v2: ship-v2 fixtures: 28 rows, mismatches: 0
+   run-ship-v3: ship-v3 fixtures: 22 rows, mismatches: 0
+   run-ship-v3.1: ship-v3.1 fixtures: 13 rows, mismatches: 0
+   run-ship-v3.2: ship-v3.2 fixtures: 8 rows, mismatches: 0
+   run-ship-v3.3: ship-v3.3 fixtures: 13 rows, mismatches: 0
+   run-ship-v3.4: ship-v3.4 fixtures: 14 rows, mismatches: 0
+   run-ship-v3.5: ship-v3.5 fixtures: 5 rows, mismatches: 0
+   run-ship-v3.6: ship-v3.6 fixtures: 9 rows, mismatches: 0
+   run-ship-v3.7: ship-v3.7 fixtures: 73 rows, mismatches: 0
+INSTALL OK v3.7 stamp=20260909T164437Z files='ship land fence-run receipt-chain land-auto
+  records-push ship-fix-block-spec.md run-bg sol-yolo gate-envelope.clj gate-consume.clj mutate.clj'
+  — every fixture green against the installed bytes.   (rc=0)
+```
+
+**On isolation:** the fixtures already export `SHIP_ROOT="$FX/ship"`, so the ship **lease** is
+per-fixture and a live ship cannot collide through it; their gate stages are `echo` stubs, so they
+take no box-wide slots. The one genuinely shared thing was the installer's own refusal —
+`INSTALL REFUSED reason=ship-lease-live` — which is correct, and is why this proof waited for
+`/var/tmp/forge/ship/.lease/owner` to disappear. Nothing was installed; `~/bin` was not touched.
+
+---
+
 ## 2. What was built
 
 ### A. Producer — repository, branch `fable/evidence-consumer`
 
 Worktree `/home/forge/src/clj-surgeon-item1`, created from `origin/MCP/main`; HEAD proved equal to
-**3ea3803ea2e303a961a3edc1d76b8095ab5ff4f7**. Two commits, author `forge-anvil <forge-anvil@anvil>`,
+**3ea3803ea2e303a961a3edc1d76b8095ab5ff4f7**. Four commits, author `forge-anvil <forge-anvil@anvil>`,
 Gene + Fable trailers. **Not pushed.**
 
 - **`7582c0d9`** — `gate: print-gate-obligations, and a landing receipt that says what it discharged`
 - **`1ed995c6`** — `gate: a policy hash covers the RULES, not the data the rules read`
+- **`45beeb7e`** — `gate: rule bytes, derived nested checks, Var identities, a resolved shell` (Sol round 1)
+- **`9dc25924`** — `gate: the inventory states the environment policy and what evidence discharges what` (Sol round 2)
 
-HEAD `1ed995c63dacacffd95156e6f0c27914206119b6`, tree `49887df4648481e4c9cb688a8b7aec3accffb4b8`.
+HEAD `9dc25924fc3851af3fbf8767df0a1bed6cffe304`. Four commits, none pushed.
 
 | file | what |
 |---|---|
 | `test/clj_surgeon/gate_obligations.clj` (new) | derives R1–R10 from the tree: transitive Makefile recipe digests, runtime, exact selected test identities, declared exclusions, required-input digests with a `:policy`/`:data` role, result predicates, `:policy-sha256` |
 | `test/clj_surgeon/toolchain_identity.clj` (new) | runs each gate tool, digests stdout and stderr, takes the **first non-banner line** as the version, files launcher noise under `:diagnostic`, returns `:status :unknown` for a failed or banner-only command |
-| `test/clj_surgeon/gate_obligations_test.clj` (new, `:fast`) | **12 tests / 40 assertions** |
+| `test/clj_surgeon/gate_obligations_test.clj` (new, `:fast`) | **15 tests / 63 assertions** |
 | `test/clj_surgeon/battery_parallel_runner.clj` | the gate receipt becomes `:receipt-version 2` and gains `:toolchain`, `:obligations`, `:executions` |
 | `Makefile` | **one** new target, `print-gate-obligations`. `print-gate-stages` kept unchanged |
 | `lane_manifest.clj`, `lane_manifest_test.clj`, `deftest_census.edn` | new namespace registered; census regenerated through the direct entrance, diff read |
@@ -69,21 +213,19 @@ repository's real ledger.
 
 Copied from v3.6. **`~/bin` untouched; no installer run; nothing pushed.**
 
-| file | sha256 (16) | bytes |
-|---|---|---|
-| `ship` | `7463e9444ff29ea4` | 107,228 |
-| `land` | `9c80e9117232912d` | 13,402 |
-| `gate-envelope.clj` (new) | `5b5c225de6f4cd44` | 12,063 |
-| `gate-consume.clj` (new) | `a8d8bee9d674bfb6` | 25,141 |
-| `mutate.clj` (new) | `8366fcc3f160f00c` | 5,630 |
-| `replay.clj` (new) | `0b4b267c9ed89c92` | 11,731 |
-| `install.sh` | `852d4c7d47de221d` | 8,186 |
-| `run-corpus.sh` | `5c29105a711317a2` | 940 |
-| `fixtures/stub-gate.clj` (new) | `4c984f42611cbc90` | 7,993 |
-| `fixtures/run-ship-v3.2.sh` | `e7b4d4bc379808af` | 19,942 |
-| `fixtures/run-ship-v3.5.sh` | `a66e252a98480f84` | 21,585 |
-| `fixtures/run-ship-v3.6.sh` | `e55387480a287fa3` | 22,345 |
-| `fixtures/run-ship-v3.7.sh` (new) | `65116a947fdf09da` | 10,842 |
+| file | sha256 (16) |
+|---|---|
+| `ship` | `e95ea5e60d130c56` |
+| `land` | `647a734413567a86` |
+| `gate-envelope.clj` (new) | `034b5afed6023b29` |
+| `gate-consume.clj` (new) | `6448222daab675d9` |
+| `mutate.clj` (new) | `cb28ac1a416bdee4` |
+| `replay.clj` (new) | `0b4b267c9ed89c92` |
+| `install.sh` | `6b980cad87d3a7d8` |
+| `fixtures/stub-gate.clj` (new) | `bface800a969df10` |
+| `fixtures/gen-field-mutants.clj` (new) | `044c446daa9ba216` |
+| `fixtures/run-ship-v3.6.sh` | `3d2b972a7ac754c6` |
+| `fixtures/run-ship-v3.7.sh` (new) | `dc58d565d86cd930` |
 
 Fixture bytes at `/var/tmp/forge/item1-fixtures/`: `envelope-green.edn` `5528f54ea4ae83c9` (18,887 B),
 `inventory-3ea3803e.edn` `d887ddd138883ea7`, `producer-landing.edn` `e06788657ab182ff`,
@@ -201,6 +343,8 @@ line: the check had **zero operating effectiveness**.
 
 | what it replaces | wall |
 |---|---|
+| `make test` on this branch, run 9 (7 stages, Sol round 2) | 171,885 ms |
+| `make test` on this branch, run 6 (7 stages, Sol round 1) | 169,140 ms |
 | `make test` on this branch, run 5 (7 stages) | 169,383 ms |
 | `make test` on this branch, run 4 | 170,279 ms |
 | `make test` on this branch, run 2 | 171,272 ms |
@@ -219,8 +363,10 @@ line: the check had **zero operating effectiveness**.
 
 ## 6. Corpora
 
-**ship v3.7's own corpus — 48 rows, 48 pass, 0 fail.** One positive built by ship's own writer from
-the **real** producer bytes of a green `make test`, and 47 fail-closed negatives.
+**ship v3.7's own corpus — 72 rows, 72 pass, 0 fail.** The positive is a **controlled complete**
+fixture (the real producer bytes plus the observer attestation and per-check executions ship cannot
+yet supply, labelled as such in `:extensions`); the **real** ship bytes are a *negative* row that must
+refuse with `custody-unverified`. The other 70 are fail-closed negatives.
 
 Retained inputs used **as bytes**, never regenerated: the exact 3,014-byte historical envelope (with
 the digest the ledger records, and with a wrong digest); `/var/tmp/forge/gate-lanes/r3/{prewarm,full}-receipt.edn`;
@@ -238,12 +384,16 @@ recovery arms) · `lane-red` (including **an absent counter, which is unknown an
 identities) · `inputs-mismatch` · `candidate-mismatch` · `delta-outside-allowlist` (including a delta
 that **cannot be computed**, which is unknown and fails closed) · `obligations-policy-mismatch` ·
 `recipe-mismatch` · `runtime-mismatch` · `proof-pending` · `authority-inconsistent` ·
-`toolchain-unknown` (banner-only Java) · `toolchain-mismatch` · `toolchain-missing` · `evidence-stale`
-(red freshness) · `no-obligation-inventory` · `reader-unavailable`.
+`toolchain-unknown` (banner-only Java) · `toolchain-mismatch` · `toolchain-missing` ·
+`toolchain-unobserved` (a tool the receipt claims and the observer cannot produce) · `evidence-stale`
+(red freshness) · `no-obligation-inventory` · `reader-unavailable` · `custody-unverified`
+(self-reported, self-attested, unattributed, and no observation id) · `provenance-missing` (Sol's
+all-fields-stripped fixture, and each field on its own) · `nested-check-evidence-missing` ·
+`scope-incomplete` on a **missing Var** · `evidence-missing` on a Var reference that is absent, whose
+digest disagrees, or whose path tries to escape the envelope's directory.
 
-**The whole bridge corpus against FROZEN staged bytes** — every fixture the landing bridge has ever
-shipped, run against the v3.7 files whose hashes are in §2B, nothing edited during the run
-(`/var/tmp/forge/item1-corpus-frozen.log`; per-fixture logs in `/var/tmp/forge/ship-v3.7/corpus/`):
+**The whole bridge corpus THE INSTALLER'S WAY** — `DEST` and `FIXTURES` pointed at scratch copies,
+`V3_DIR=$DEST`, only the files the installer would have copied, nothing edited during the run:
 
 ```
 run-land-auto                19 rows, 0 mismatches
@@ -255,8 +405,8 @@ run-ship-v3.2                 8 rows, 0 mismatches   (migrated)
 run-ship-v3.3                13 rows, 0 mismatches
 run-ship-v3.4                14 rows, 0 mismatches
 run-ship-v3.5                 5 rows, 0 mismatches   (migrated)
-run-ship-v3.6                 8 rows, 0 mismatches   (migrated)
-run-ship-v3.7                48 rows, 0 mismatches   (new)
+run-ship-v3.6                 9 rows, 0 mismatches   (migrated + fence row)
+run-ship-v3.7                73 rows, 0 mismatches   (new, incl. the 845-mutant sweep)
 ```
 
 ### The fixture migration, named rather than silent
@@ -300,10 +450,12 @@ independently computed answers rather than between two hand-typed strings.
 
 Stated, not reinterpreted.
 
-1. **Custody is `:self-reported`, and stays that way.** §4: "A signer of producer-supplied assertions
-   has not observed execution." ship signs nothing it observed independently; the envelope says
-   `:custody :self-reported` and the consumer treats it as a producer claim. Item 2 (the recorder) is
-   where custody qualification lives. Nothing here should be read as custody having qualified.
+1. **Custody is `:self-reported`, and now it REFUSES.** §4: "A signer of producer-supplied assertions
+   has not observed execution." ship signs nothing it observed independently, so the consumer will
+   not discharge any obligation on its receipts: **every real landing runs its own gate today**, with
+   `reason=custody-unverified`. Item 2 (the recorder) is where observed custody must come from. This
+   was deviation 1 in the first report, where I named it and then let the consumer consume anyway —
+   Sol SOL-EC-001. Naming a deviation is not enforcing it.
 2. **`:environment-manifest` and `:workspace-snapshot-sha256` are partial.** The receipt carries the
    runner's `source-digest` (Makefile, deps.edn, bb.edn, and regular files under `src`, `test`,
    `resources`, `docs/intent`) plus a content-addressed reference to the obligation inventory. §4's
@@ -311,20 +463,18 @@ Stated, not reinterpreted.
    inputs, external file digests and environment" — is **not** fully implemented: untracked and ignored
    inputs, and a structured policy-selected environment, are not captured. Consequence: a change
    confined to an untracked input the gate reads would move no digest the consumer checks.
-3. **`:declared-skips`, `:focus-omissions` and `:closure-basis` are emitted as empty vectors, not
-   derived.** This runner produces no Kaocha-style scope/basis/focus data, so there is nothing to read.
-   The consumer *refuses* on a non-empty `:focus-omissions` or `:unexecuted-tests` (both witnessed),
-   but an emitted `[]` here means "this runner has no focus mechanism", **not** "the closure was proven
-   complete". §5's `legacy-scope-unknown` distinction is therefore not representable in this producer
-   yet; when Kaocha evidence arrives it must be added as an additive, validated-together field group,
-   and absence must stay unknown.
-4. **`mcp-test-checks` is pinned by name and by transitive recipe digest, not by execution.** The
-   fourteen members (Prolog oracle, four Python unittest discoveries, eight self-test Make targets) are
-   listed in R4's `:nested-checks` and their recipe bytes are inside R4's digest, so a changed or
-   removed recipe refuses, and a check that ran and failed already fails the stage. But the receipt
-   records **one** exit for `mcp-test`, not fourteen per-check results — a check that was *skipped
-   inside a passing recipe* would not be caught. Closing that needs per-check receipts from those
-   targets.
+3. **`:declared-skips`, `:focus-omissions` and `:closure-basis`: presence is now required, but an
+   emitted `[]` still means "this runner has no focus mechanism", not "the closure was proven
+   complete".** The consumer refuses when a field is *absent* (SOL-EC-001) and when a vector is
+   *non-empty*; what it cannot yet do is distinguish a proven-empty closure from a runner that has no
+   closure concept. `:closure-basis` is still not emitted. When Kaocha evidence arrives it must be
+   added as an additive, validated-together field group, and absence must stay unknown.
+4. **`mcp-test-checks` members are derived from the recipe and per-check evidence is now REQUIRED —
+   and the producer cannot yet supply it, so R4 refuses.** The consumer demands a `:nested-executions`
+   record per derived member; the gate runs `mcp-test` as one Make target and reports one exit, so a
+   real receipt refuses with `nested-check-evidence-missing`. That is Sol's "or refuse", and it is a
+   second independent reason a real landing reruns today (the first being custody). Closing it for
+   real needs per-check receipts from those fourteen targets.
 5. **The replay's per-obligation rows for pre-repair artifacts are counterfactual.** They are computed
    against **this** tree's inventory, and those receipts describe other trees (`da100208…`,
    `5b7c4ad7…`). Through the production path each refuses earlier — at transport, or on
@@ -334,35 +484,37 @@ Stated, not reinterpreted.
 6. **R9/R10 have no mechanism, only a slot.** They are in the inventory, marked `:out-of-band`, and
    printed as NOT discharged on every consumption. Nothing here consumes a review verdict or a
    destination-ref observation.
-7. **No live consumption is qualified.** §5's migration step 5 ("enable live consumption on an
-   authorized slice after custody qualifies") is not reached: `~/bin` is untouched, the installer was
-   not run, nothing was pushed and nothing landed.
+7. **No live consumption is qualified, and the code now enforces that rather than relying on it.**
+   §5's migration step 5 ("enable live consumption on an authorized slice after custody qualifies") is
+   not reached, and the consumer refuses accordingly. `~/bin` is untouched by me, nothing was pushed,
+   nothing landed. (The coordinator did install v3.7 once; the install refused to call itself proven,
+   which is §1b.)
 8. **The nine missing Kaocha raw receipts named in `receipts-to-verify.edn` are still missing.** The
    stream-line rows in §5's corpus table test a parser I did not build. Not implemented.
-9. **One §4 sentence I implemented in a narrower place than it is written.** "Missing, duplicate and
-   unexpected obligations … refuse" is enforced over `:obligation-ids` and over the executed census;
-   it is **not** enforced over per-Var identities, because this runner reports namespaces, not Vars,
-   in its suite receipts. A namespace that executed with a Var silently removed would pass R4's scope
-   check and be caught only by the deftest census inside the suite — which is a real ratchet, but a
-   different one from the consumer's.
+9. **Per-Var matching is now implemented** (it was a deviation in the first report and Sol
+   SOL-EC-002). The receipt carries `:expected-vars`/`:executed-vars` folded from the child runs
+   (913 each for mcp-test), behind a content-addressed `:vars-ref` once they exceed the envelope
+   bound, and the consumer requires executed ⊇ expected. What remains open: **fixture and hook
+   identity** are still not represented, so a Var that ran without its fixture would not be seen.
 
 ---
 
 ## 8. Reproduction
 
 ```bash
-# the branch (two commits, not pushed)
-git -C /home/forge/src/clj-surgeon-item1 log --oneline -2   # 1ed995c6, 7582c0d9; base 3ea3803e
+# the branch (three commits, not pushed)
+git -C /home/forge/src/clj-surgeon-item1 log --oneline -3   # 45beeb7e, 1ed995c6, 7582c0d9; base 3ea3803e
 cd /home/forge/src/clj-surgeon-item1
 make -s print-gate-obligations | head -c 200
 ~/bin/suite-run make test                                   # 7/7 green, 169 s
 
-# the consumer's own corpus (48 rows)
-GREEN_TREE=49887df4648481e4c9cb688a8b7aec3accffb4b8 \
+# the consumer's own corpus (72 rows), inputs beside the script
+FX=/var/tmp/forge/ship-v3.7/fixtures
+FX_DIR=$FX GREEN_TREE=$(bb -e '(println (get-in (clojure.edn/read-string (slurp (first *command-line-args*))) [:candidate :tree]))' $FX/envelope-green.edn) \
   bash /var/tmp/forge/ship-v3.7/fixtures/run-ship-v3.7.sh
 
-# every bridge fixture against the staged bytes (11 fixtures)
-bash /var/tmp/forge/ship-v3.7/run-corpus.sh
+# every bridge fixture THE INSTALLER'S WAY, against scratch copies (never ~/bin)
+#   see §1b; DEST=/var/tmp/forge/v37-scratchbin  FIXTURES=/var/tmp/forge/v37-scratchfx
 
 # the offline replay
 bb /var/tmp/forge/ship-v3.7/replay.clj /var/tmp/forge/item1-fixtures/inventory-3ea3803e.edn
@@ -375,4 +527,4 @@ decision table, `replay.edn`) · `/var/tmp/forge/item1-corpus/` (per-row decisio
 
 Boundaries held: no `pkill`/`pgrep -f`; every temp path under `/var/tmp/forge`; suites via
 `~/bin/suite-run` under the lock, in the background, verdict read; no contact with ports
-7888/7890/7894/7895/8300-8339; `~/bin` not edited; no installer run; no push.
+7888/7890/7894/7895/8300-8339; `~/bin` not edited; no installer run by me; no push.

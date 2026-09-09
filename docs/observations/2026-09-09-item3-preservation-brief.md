@@ -19,38 +19,58 @@ review obligation it removes and the size of what it leaves behind.
 
 | specimen | checker wall | bodies mechanically preserved | obligations left for a reviewer |
 |---|---|---|---|
-| Cell C views split, real and landed (curtaincall-cfp `d9205abc` → `65ad613b`; 7,769 insertions / 4,863 deletions, 29 files) | **20.3 s** | **136/141 relocated + 54/64 caller** | 5 + 10 changed bodies · 20 destination boundaries · 8 promotions · 11 lost comments · 1 unconfirmed bare reference · 3 unmodelled macros · 7 new owners · 21 created namespaces · 2 non-source files |
-| E3 Cell B split, real (`exports` → `exports.calendar`, from the retained candidate patch) | **11.6 s** | **25/25 relocated + 19/20 caller** | 1 changed body · 1 destination boundary · 3 promotions · 1 unmodelled macro · 2 refused tree entries |
-| Alias migration, constructed (35 files repointed) | **25.0 s** | **81/103 caller bodies** | 22 changed bodies · 3 unmodelled macros · 2 lost comments |
-| clj-surgeon `571170cc` comment-edits landing, real | **9.7 s** | **0** | all 9 changed bodies · 3 lost comments · 12 non-source files · 4 refused tree entries |
-| clj-surgeon `d2c3aa80` batch-5 landing, real | **14.9 s** | **0** | all 22 changed bodies · 5 lost comments · 13 non-source files · 4 refused tree entries |
-| null change (`d9205abc` against itself) | **0.15 s** | — | none; the **only** `clear: true` row in the portfolio |
+| Cell C views split, real and landed (curtaincall-cfp `d9205abc` → `65ad613b`; 7,769 insertions / 4,863 deletions, 29 files) | **20.1 s** | **103/141 relocated + 32/64 caller** | 6 + 12 changed bodies · 32 + 20 uncertified for unmodelled call heads · 48 unmodelled heads named · 20 destination boundaries · 8 promotions · 11 lost comments · 7 new owners · 21 created namespaces |
+| E3 Cell B split, real (`exports` → `exports.calendar`, from the retained candidate patch) | **11.4 s** | **21/25 relocated + 9/20 caller** | 3 + 2 changed bodies · 1 + 9 uncertified · 21 unmodelled heads · 3 promotions · 2 refused tree entries |
+| Alias migration, constructed (35 files repointed) | **25.4 s** | **48/103 caller bodies** | 10 changed · 45 uncertified · 67 unmodelled heads · 2 lost comments |
+| clj-surgeon `571170cc` comment-edits landing, real | **10.0 s** | **0** | all 9 changed bodies · 3 lost comments · 12 non-source files · 4 refused tree entries |
+| clj-surgeon `d2c3aa80` batch-5 landing, real | **15.0 s** | **0** | all 22 changed bodies · 5 lost comments · 13 non-source files · 4 refused tree entries |
+| null change (`d9205abc` against itself) | **0.18 s** | — | none; the **only** `clear: true` row in the portfolio |
 
 Overhead sits inside Astra's 0–30 s budget on every specimen. Against her ~573 s move-heavy review, the
-brief removes the reading of 190 of the 205 changed bodies in Cell C and replaces the rest with a hard-stop
-list the reviewer cannot skip.
+brief now removes the reading of 135 of the 205 changed bodies in Cell C and hands the reviewer the rest
+under a hard-stop list.
 
-**These figures are lower than this report's first draft, and deliberately so.** Sol's fence review found
-that the canonicaliser certified a body in which a local binding had been replaced by a Var of the same
-name. Making it resolution-aware cost 5 relocated and 10 caller bodies on Cell C — they now say `:changed`
-and print their diffs, because their equivalence depended on a bare symbol the scanner could not prove was
-a Var. That is the correct answer, and the previous 141/141 was not.
+### These figures fell twice, and both falls were correct
+
+| Cell C | relocated bodies preserved | caller bodies preserved |
+|---|---|---|
+| first draft | 141/141 | 64/64 |
+| after Sol's round 1 (resolution-aware canonicaliser) | 136/141 | 54/64 |
+| **after Sol's round 2 (allowlist, not denylist)** | **103/141** | **32/64** |
+
+Sol reviewed the prototype twice and broke it twice, each time by planting a case where a *bare symbol* was
+not the Var the canonicaliser assumed. Round 1: a local destructured binding replaced by a moved Var of the
+same name. Round 2: the same substitution, but bound by `compojure.core/GET` — a binding macro from a
+library, defined in neither tree and spelled neither `with-*` nor `def*`, so the denylist of "macros I do
+not model" never saw it.
+
+**A denylist over syntax is never conservative.** The rule is now inverted: a bare token is canonicalised
+only when every enclosing list head is a modelled core form, a non-macro `def`/`defn` this checker can
+actually find in the two trees, or a clojure.core function from a shipped allowlist. Everything else is
+unmodelled, its subtree is frozen, the head is named and counted, and the body cannot reach a tier that
+depends on canonicalisation.
+
+**83 of the surviving 103 are byte-identical** and need no canonicalisation at all, so the loss lands
+entirely in the requalification tier — which is exactly the tier that made this bet interesting. That is the
+state of the evidence, not a reason to soften the rule. The recovery path is in §12 and it is real work:
+widen the resolver by reading definitions it currently misses (`>defn` alone hides real functions from it),
+each widening carrying its own planted-defect row.
 
 ## 2. Top win
 
-**The load-bearing insight is that byte-identity is nearly worthless on a split, and the fix is cheap.**
+**The load-bearing insight is that byte-identity is nearly worthless on a split, and requalification-aware
+comparison is the whole idea — but only where it can be proved.**
 
-The first build scored Cell C at 96/141 bodies preserved. The reason is structural, not a bug: a split
-*must* rewrite intra-namespace references, `(organizer-shell …)` becomes
-`(organizer-layout/organizer-shell …)`, the head widens, and the formatter reindents the entire form. A
-reviewer looking at that diff sees the whole body change and has to read all of it.
+The first build scored Cell C at 96/141. The reason is structural, not a bug: a split *must* rewrite
+intra-namespace references, `(organizer-shell …)` becomes `(organizer-layout/organizer-shell …)`, the head
+widens, and the formatter reindents the entire form. A reviewer looking at that diff sees the whole body
+change and has to read all of it.
 
 Comparing a **token stream in which every reference is canonicalised to the owner it named in the base
-tree** turns 45 of those into a proven identity. Cell C went from 96/141 to **141/141** — and the strength
-of the check went *up*, not down: the planted defect that requalifies a body to a namespace which does not
-own the name still lands in `:changed`, because its canonical token is a different owner. That is the whole
-prototype in one sentence: *accept a reference that follows its owner, refuse one that is repointed
-anywhere else.*
+tree** recovers those bodies: *accept a reference that follows its owner, refuse one that is repointed
+anywhere else.* The naive version of that rule reached 141/141 and was wrong twice; the version that only
+canonicalises a token it has proved is a Var reaches **103/141**, and the three planted substitutions all
+land in `:changed`. **The idea survived both falsifications; the naive implementation did not.**
 
 **Second win: the counts corroborate the frozen manifests without touching a receipt.** Cell C's manifest
 says 141 owners, 20 destinations, 87 static sites. The checker, reading only the two trees, re-derives
@@ -62,12 +82,22 @@ input at all.
 preserves nothing and hands the reviewer 100% of the changed bodies. A tool that shrinks the reviewer's
 burden on a behavioural change would be worse than useless; this one declines.
 
-**Fourth win, and it is Sol's, not mine: the conservative refusal is cheap.** Requiring the scanner to prove
-a bare token is a Var before certifying it cost 15 of 205 bodies on the real Cell C split — about 7%. The
-bet survives the correct rule comfortably, which is a much better place to be than defending the incorrect
-one.
+**Fourth win, and it is Sol's, not mine: the tool now fails in the safe direction, and says so loudly.**
+Two independent falsifiers, two false certifications, two repairs. What survives is a checker whose
+preserved count is a claim it can defend — 83 byte-identical bodies that need no argument at all, plus 20
+whose every reference the scanner resolved through heads it can name. The 70 it now refuses to certify are
+listed, with the call heads that caused the refusal, so a reviewer can see precisely why — and that list is
+itself the work plan for recovering them (§12).
 
 ## 3. Top losses
+
+**The denylist was the design error, and it took two rounds to see it.** Round 1 froze macros defined in the
+scanned trees, plus any unrecognised `with-*`/`def*` head. That is a denylist over *spelling*, and Sol
+defeated it in one line with `compojure.core/GET` — a real binding macro from a real library, matching none
+of those patterns. The lesson generalises past this tool: **an enumeration of the constructs you distrust
+can never be complete when anyone may define a new one; only an enumeration of the constructs you have
+positively verified can be.** Inverting the rule cost 33 more relocated and 22 more caller bodies on Cell C,
+and it is the only version of this checker whose section-A claim is defensible.
 
 **The canonicaliser certified a changed binding, and an independent reviewer found it, not me.** Sol planted
 a use of a local destructured `edit-form` replaced by the moved Var
@@ -78,9 +108,9 @@ token is now canonicalised only when the scanner has established it is a Var ref
 a quote, a `case` test, an interop form, or a macro whose semantics are not modelled is frozen and the macro
 is named. Sol's exact candidate is now a permanent replay row and lands in A as `:changed`.
 
-The general lesson is the uncomfortable one: **my own six planted defects all passed, and the seventh, which
-someone else designed, did not.** A builder planting his own falsifiers tests the failures he already
-imagined.
+The general lesson is the uncomfortable one: **my own six planted defects all passed; both of the ones
+someone else designed broke the tool.** A builder planting his own falsifiers tests the failures he already
+imagined, which is the set that is already handled.
 
 **"Reads only the two git trees" was false.** The first build extracted each tree and walked it with
 `file-seq`, so a `src/leak.clj` symlink pointing at `/var/tmp/…` was followed and an external definition
@@ -178,12 +208,14 @@ bin/preservation-brief 65ad613b d9205abc \
 > **Do not consume the preservation figures below and stop.** The brief raised the following, and
 > every one of them needs a human. A signal that lives in section B is not a weaker signal.
 >
-> - **5** relocated bodies whose text CHANGED — read the diffs (A2)
-> - **10** in-place bodies that changed and are not preserved (A2)
+> - **6** relocated bodies whose text CHANGED — read the diffs (A2)
+> - **32** relocated bodies NOT certified because they call a head this scanner cannot vouch for (A2)
+> - **20** in-place bodies NOT certified because they call a head this scanner cannot vouch for (A2)
+> - **12** in-place bodies that changed and are not preserved (A2)
 > - **11** comment texts LOST (A6)
 > - **8** PRIVACY CHANGES, including private->public promotions (B2)
 > - **1** bare references the checker could NOT confirm (B3)
-> - **3** macro forms whose binding semantics this scanner does not model, so their tokens were left UNRESOLVED: with-as-of, with-etag, with-viewer-session
+> - **48** macro forms whose binding semantics this scanner does not model, so their tokens were left UNRESOLVED: checked?, curl, date?, ds/bind, ds/copy-nearest-text, ds/keydown-expr, ds/on-meta, ds/post-action*
 > - **7** owners with no base origin — new code, not a relocation (A1)
 > - **2** changed files outside the scanned roots or not Clojure source — UNREAD (B7)
 > - **4** receipt claims the checker could not confirm (C)
@@ -223,220 +255,186 @@ top-level form in the base tree with the bytes of its candidate home.
 |---|---|---|
 | `:byte-identical` | 83 | identical bytes — nothing in the body to review |
 | `:identical-modulo-whitespace` | 0 | identical after trailing-space and common-indent normalisation |
-| `:identical-modulo-requalification` | 53 | identical once every reference is rewritten to the owner it named in the BASE tree — i.e. the only change is that references follow their owners, and each one still resolves to the same owner |
+| `:identical-modulo-requalification` | 20 | identical once every reference is rewritten to the owner it named in the BASE tree — i.e. the only change is that references follow their owners, and each one still resolves to the same owner |
 | `:code-identical-comments-differ` | 0 | code identical, COMMENT TEXT CHANGED — a prose review obligation |
-| `:changed` | 5 | the body text differs — a FULL review obligation; diffs below |
+| `:unmodelled-macro-context` | 32 | the canonical streams matched, but the body called a head this scanner cannot vouch for, so the match is NOT evidence — read the body |
+| `:changed` | 6 | the body text differs — a FULL review obligation; diffs below |
 
 
 
 The def head's privacy suffix (`defn-` vs `defn`) is normalised before comparison, so a promotion is never scored as a body change; every privacy change is reported in **B2** instead. Privacy changes in this candidate: **8**.
 
-Mechanically preserved bodies (tiers 1–3): **136 of 141**.
+Mechanically preserved bodies (tiers 1–3): **103 of 141**.
 
 Relocated owners that are not byte-identical:
 
 | owner | tier | from | to |
 |---|---|---|---|
+| organizer-shell | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.organizer-layout |
 | event-marquee | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.event-setup |
 | member-row | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.committee |
 | board-region | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
 | log-region | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.log |
 | form-preview-region | `changed` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-builder |
-| organizer-shell | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.organizer-layout |
+| not-blank | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.format |
+| field-errors | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-controls |
+| events-list-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.event-setup |
+| new-event-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.event-setup |
+| initials | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.avatar |
+| committee-card | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.committee |
+| field-error | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-controls |
+| sort-chip | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
+| status-chip | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
+| board-qs | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
+| track-chip | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
+| board-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
+| log-summary | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.log |
+| submission-detail-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
+| exports-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.integrations |
+| api-docs-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.integrations |
+| settings-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.integrations |
+| schedule-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.schedule |
+| agenda-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.schedule |
+| capture-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
+| replay-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.replay |
+| edit-form | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.portal |
+| profile-form | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.portal |
+| portal-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.portal |
+| field-form-fields | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-builder |
+| form-builder-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-builder |
+| cfp-closed-notice | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.public-cfp |
+| cfp-about-you | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.public-cfp |
+| cfp-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.public-cfp |
+| event-details-page | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.event-setup |
+| dash-feed-talk | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.dashboard |
+| event-dashboard-region | `unmodelled-macro-context` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.dashboard |
 | header | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.organizer-layout |
-| not-blank | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.format |
-| field-errors | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-controls |
-| events-list-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.event-setup |
-| new-event-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.event-setup |
-| initials | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.avatar |
-| committee-card | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.committee |
 | committee-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.committee |
-| submissions-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
-| req-mark | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-controls |
-| field-error | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-controls |
-| answer-input | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.form-controls |
-| board-row | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
-| sort-chip | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
-| status-chip | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
-| board-qs | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
-| track-chip | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
-| board-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
-| log-summary | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.log |
-| log-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.log |
-| submission-detail-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
-| exports-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.integrations |
-| api-docs-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.integrations |
-| settings-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.integrations |
-| schedule-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.schedule |
-| agenda-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.schedule |
-| inform-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.communications |
-| capture-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.review |
-| replay-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.replay |
-| comms-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.communications |
-| portal-submission | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.portal |
-| edit-form | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.portal |
-| profile-form | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.portal |
-| portal-page | `identical-modulo-requalification` | cfp-scheduler-killer.views | cfp-scheduler-killer.views.portal |
 
 _18 further rows suppressed by --max-list 40._
 
 
-<details><summary>diff — event-marquee (changed)</summary>
+<details><summary>diff — organizer-shell (changed)</summary>
 
 ```diff
---- base/event-marquee
-+++ candidate/event-marquee
-@@ -12,7 +12,7 @@
-    ;; Never a degenerate address. With no name there is no slug, and the line
-    ;; says so in the same ghost idiom as the headline rather than inventing
-    ;; something like /cfp/2026 out of the dates.
--   (if-let [s (not-blank slug)]
-+   (if-let [s (format/not-blank slug)]
-      [:div.marquee-url
-       [:span.url-text (str host "/cfp/" s)]
-       ;; Clipboard is one of the few things the browser owns (global CLAUDE.md)
+--- base/organizer-shell
++++ candidate/organizer-shell
+@@ -11,20 +11,20 @@
+       [:meta {:charset "utf-8"}]
+       [:meta {:name "viewport" :content "width=device-width, initial-scale=1.0"}]
+       [:title title]
+-      [:link {:rel "icon" :href favicon-data-uri}]
++      [:link {:rel "icon" :href shell/favicon-data-uri}]
+       [:link {:rel "stylesheet"
+               :href "https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.3/dist/semantic.min.css"}]
+       [:script {:src "https://code.jquery.com/jquery-3.6.0.min.js"}]
+       [:script {:src "https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.3/dist/semantic.min.js"}]
+-      [:script {:src (versioned "/js/datastar-kit.js")}]
+-      [:script {:src (versioned "/js/keyboard.js") :defer true}]
+-      [:script {:src (versioned "/js/ghost-fill.js") :defer true}]
++      [:script {:src (shell/versioned "/js/datastar-kit.js")}]
++      [:script {:src (shell/versioned "/js/keyboard.js") :defer true}]
++      [:script {:src (shell/versioned "/js/ghost-fill.js") :defer true}]
+         ;; Some pages need Datastar for one-shot actions without owning a
+         ;; persistent stream. Keep runtime loading separate from SSE mounting so
+         ;; live scrub cannot consume a browser connection for the page lifetime.
+       (when (or (:datastar? nav) (:sse? nav))
+-        [:script {:type "module" :src (versioned "/vendor/datastar-aliased.js")}])
+-      [:link {:rel "stylesheet" :href (versioned "/css/app.css")}]]
++        [:script {:type "module" :src (shell/versioned "/vendor/datastar-aliased.js")}])
++      [:link {:rel "stylesheet" :href (shell/versioned "/css/app.css")}]]
+      [:body (when-let [attrs (:body-attrs nav)] attrs)
+         ;; The sidebar owns the top of the viewport (Gene, 2026-08-10: no
+         ;; wasted band above it) — whoami rides the content column's first
 ```
 
 </details>
 
-<details><summary>diff — member-row (changed)</summary>
+<details><summary>diff — not-blank (unmodelled-macro-context)</summary>
 
 ```diff
---- base/member-row
-+++ candidate/member-row
-@@ -4,7 +4,7 @@
-    morph); Open is a plain link to the person page."
-   [event-slug m]
-   [:div.member-row {:key (str (:membership-id m))}
--   [:img.member-avatar-img {:src (pool-face (:person-id m)) :alt (:name m)}]
-+   [:img.member-avatar-img {:src (avatar/pool-face (:person-id m)) :alt (:name m)}]
-    [:div.member-who
-     [:span.member-name (:name m)]
-     [:span.member-role-pill {:class (:role m)} (:role m)]
+--- base/not-blank
++++ candidate/not-blank
+@@ -1 +1 @@
+-(defn- not-blank [s] (when-not (str/blank? s) s))
+\ No newline at end of file
++(defn not-blank [s] (when-not (str/blank? s) s))
+\ No newline at end of file
 ```
 
 </details>
 
-<details><summary>diff — board-region (changed)</summary>
+<details><summary>diff — field-errors (unmodelled-macro-context)</summary>
 
 ```diff
---- base/board-region
-+++ candidate/board-region
-@@ -12,13 +12,13 @@
-    [:div.board-toprow
-     [:form.board-controls {:method "get" :action (str "/events/" (:slug event) "/board")}
-      [:input {:type "hidden" :name "sort" :value sort-key}]
--     (when (not-blank status) [:input {:type "hidden" :name "status" :value status}])
--     (when (not-blank track) [:input {:type "hidden" :name "track" :value track}])
-+     (when (format/not-blank status) [:input {:type "hidden" :name "status" :value status}])
-+     (when (format/not-blank track) [:input {:type "hidden" :name "track" :value track}])
-      [:input {:type "search" :name "q" :value (or q "")
-               :placeholder "Search title, speaker, org…"
-               :style "padding:0.35em 0.6em; width:18em;"}]
-      [:button.ui.mini.button {:type "submit"} "Search"]
--     (when (not-blank q)
-+     (when (format/not-blank q)
-        [:a.chip {:href (str "/events/" (:slug event) "/board?sort=" sort-key)} "clear"])]
-     ;; ALL submissions over the call's life, never the filtered view (a
-     ;; filter is a lens, the sparkline is the weather).
+--- base/field-errors
++++ candidate/field-errors
+@@ -1,3 +1,3 @@
+-(defn- field-errors [errors k]
++(defn field-errors [errors k]
+   (when-let [msgs (get errors k)]
+     [:div.ui.pointing.red.basic.label (str/join " " msgs)]))
+\ No newline at end of file
 ```
 
 </details>
 
-<details><summary>diff — log-region (changed)</summary>
-
-```diff
---- base/log-region
-+++ candidate/log-region
-@@ -7,7 +7,7 @@
-       [:div.empty-state "Nothing recorded yet."]
-       (for [e (reverse log-entries)]
-         [:div.log-row
--         [:div.log-when (or (fmt-when (:at e) (:tz event)) (:at e))]
-+         [:div.log-when (or (format/fmt-when (:at e) (:tz event)) (:at e))]
-          [:div.log-type (:type e)]
-          [:div.log-what (log-summary e)]
-          [:div.log-actor (:actor e)]]))]
-```
-
-</details>
-
-<details><summary>diff — form-preview-region (changed)</summary>
-
-```diff
---- base/form-preview-region
-+++ candidate/form-preview-region
-@@ -17,11 +17,11 @@
-       (fn [i f]
-         [:div.pv-item {:key (str "pv-" i)}
-          [:span.pv-num (inc i)]
--         [:div.pv-field (answer-input f {} {})]])
-+         [:div.pv-field (form-controls/answer-input f {} {})]])
-       (submissions/session-fields (forms/active-fields fields)))
-      (when ghost
-        [:div.fb-ghost {:key "ghost"}
--        (answer-input ghost {} {})
-+        (form-controls/answer-input ghost {} {})
-         [:div.field-hint "Not added yet — appears here when you press Add question."]])
-      [:div.cfp-section-title "About you"]
-      [:div.field-hint
-```
-
-</details>
+_35 further body diffs suppressed by --diffs 3._
 
 **Owners that did NOT move, whose body text changed.** The same tiers apply: a caller whose only
 change is that its references now follow the owners they name is mechanically preserved too.
 
 | tier | owners |
 |---|---|
-| `identical-modulo-requalification` | 54 |
-| `changed` | 10 |
+| `identical-modulo-requalification` | 32 |
+| `unmodelled-macro-context` | 20 |
+| `changed` | 12 |
 
 
-Of 64 in-place body changes, **54** are mechanically preserved and **10** need a reviewer.
+Of 64 in-place body changes, **32** are mechanically preserved and **32** need a reviewer.
 
 | owner | namespace | tier |
 |---|---|---|
 | opinions-stars-ride-first-comment-only-test | cfp-scheduler-killer.views-test | `changed` |
 | opinions-silent-raters-stay-named-test | cfp-scheduler-killer.views-test | `changed` |
+| scrub-slider-wiring-test | cfp-scheduler-killer.polish-test | `changed` |
+| handle-sse-state | cfp-scheduler-killer.server | `changed` |
 | board-fragment-html | cfp-scheduler-killer.server | `changed` |
 | dashboard-fragment-html | cfp-scheduler-killer.server | `changed` |
 | log-fragment-html | cfp-scheduler-killer.server | `changed` |
 | handle-board | cfp-scheduler-killer.server | `changed` |
-| handle-api-docs | cfp-scheduler-killer.server | `changed` |
 | handle-event-log | cfp-scheduler-killer.server | `changed` |
 | dev-render-mode-test | cfp-scheduler-killer.comms-test | `changed` |
 | capture-test | cfp-scheduler-killer.comms-test | `changed` |
-| histogram-buckets-and-hover-test | cfp-scheduler-killer.views-test | `identical-modulo-requalification` |
+| form-page-renders-the-real-public-renderer-test | cfp-scheduler-killer.forms-test | `changed` |
+| histogram-buckets-and-hover-test | cfp-scheduler-killer.views-test | `unmodelled-macro-context` |
+| handle-create-event | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| handle-event-details-save | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| handle-events-preview | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| handle-login | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| handle-demo-login | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| reject-value! | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| handle-capture | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| with-form | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| handle-form-add | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| handle-form-update | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| handle-form-preview | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| with-schedule | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| with-replay | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| render-cfp | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| handle-cfp-draft | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| handle-portal-draft | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| handle-cfp-import-live | cfp-scheduler-killer.server | `unmodelled-macro-context` |
+| retire-hides-without-erasing-test | cfp-scheduler-killer.forms-test | `unmodelled-macro-context` |
+| editing-the-form-never-rewrites-an-existing-submission-test | cfp-scheduler-killer.forms-test | `unmodelled-macro-context` |
 | fmt-when-test | cfp-scheduler-killer.polish-test | `identical-modulo-requalification` |
-| scrub-slider-wiring-test | cfp-scheduler-killer.polish-test | `identical-modulo-requalification` |
 | handle-home | cfp-scheduler-killer.server | `identical-modulo-requalification` |
 | handle-events-list | cfp-scheduler-killer.server | `identical-modulo-requalification` |
 | handle-new-event | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| handle-create-event | cfp-scheduler-killer.server | `identical-modulo-requalification` |
 | not-found-page | cfp-scheduler-killer.server | `identical-modulo-requalification` |
 | render-event-dashboard | cfp-scheduler-killer.server | `identical-modulo-requalification` |
 | render-committee-page | cfp-scheduler-killer.server | `identical-modulo-requalification` |
 | handle-event-details | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| handle-event-details-save | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| handle-events-preview | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| handle-sse-state | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| handle-exports-page | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| handle-login-page | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| handle-login | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| handle-auth-token | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| handle-demo-login | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| handle-submission-detail | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| detail-page-response | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| push-board-updates! | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| push-notice! | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| reject-value! | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| render-portal | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| handle-comms | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| handle-capture-page | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| handle-capture | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| handle-inform-page | cfp-scheduler-killer.server | `identical-modulo-requalification` |
-| settings-response | cfp-scheduler-killer.server | `identical-modulo-requalification` |
 
 _24 further rows suppressed by --max-list 40._
 
@@ -477,152 +475,31 @@ _24 further rows suppressed by --max-list 40._
 
 </details>
 
-<details><summary>diff — board-fragment-html (in place, changed)</summary>
+<details><summary>diff — histogram-buckets-and-hover-test (in place, unmodelled-macro-context)</summary>
 
 ```diff
---- base/board-fragment-html
-+++ candidate/board-fragment-html
-@@ -9,4 +9,4 @@
-   (let [tt (time-travel-context req event (str "/events/" (:slug event) "/board"))]
-     (with-as-of (:cutoff tt)
-       (let [past-event (or (events/event-by-slug (:slug event)) event)]
--        (str (h/html (views/board-region past-event (board-state req past-event))))))))
-\ No newline at end of file
-+        (str (h/html (review/board-region past-event (board-state req past-event))))))))
-\ No newline at end of file
+--- base/histogram-buckets-and-hover-test
++++ candidate/histogram-buckets-and-hover-test
+@@ -2,10 +2,10 @@
+   ;; Second ruling (Gene, 2026-08-10): histograms have BARS; five buckets,
+   ;; halves folding down. Every bucket renders (empty ones marked), and the
+   ;; hover title names every rater precisely.
+-  (let [html (render (views/star-histogram
+-                      [{:person-name "Ann" :stars 4.0}
+-                       {:person-name "Gene" :stars 4.5}
+-                       {:person-name "Alex" :stars 2.0}]))]
++  (let [html (render (review/star-histogram
++                       [{:person-name "Ann" :stars 4.0}
++                        {:person-name "Gene" :stars 4.5}
++                        {:person-name "Alex" :stars 2.0}]))]
+     (testing "five buckets, three empty (1, 3, 5)"
+       (is (= 5 (count (re-seq #"hbar" html))))
+       (is (= 3 (count (re-seq #"empty" html)))))
 ```
 
 </details>
 
-<details><summary>diff — dashboard-fragment-html (in place, changed)</summary>
-
-```diff
---- base/dashboard-fragment-html
-+++ candidate/dashboard-fragment-html
-@@ -6,7 +6,7 @@
-     (with-as-of (:cutoff tt)
-       (let [past-event (or (events/event-by-slug (:slug event)) event)]
-         (str (h/html
--              (views/event-dashboard-region
--               (request-host req)
--               past-event
--               (dashboard-state req past-event nil))))))))
-\ No newline at end of file
-+              (dashboard/event-dashboard-region
-+                   (request-host req)
-+                   past-event
-+                   (dashboard-state req past-event nil))))))))
-\ No newline at end of file
-```
-
-</details>
-
-<details><summary>diff — log-fragment-html (in place, changed)</summary>
-
-```diff
---- base/log-fragment-html
-+++ candidate/log-fragment-html
-@@ -3,5 +3,5 @@
-   (let [tt (time-travel-context req event (str "/events/" (:slug event) "/log"))]
-     (with-as-of (:cutoff tt)
-       (let [past-event (or (events/event-by-slug (:slug event)) event)]
--        (str (h/html (views/log-region past-event
-+        (str (h/html (v-log/log-region past-event
-                                        (events/log-for-event (:id past-event)))))))))
-\ No newline at end of file
-```
-
-</details>
-
-<details><summary>diff — handle-board (in place, changed)</summary>
-
-```diff
---- base/handle-board
-+++ candidate/handle-board
-@@ -7,6 +7,6 @@
-           ;; had a different name, or not existed at all.
-           (let [past-event (or (events/event-by-slug slug) event)]
-             (html-response
--             (views/board-page past-event
--                               (assoc (board-state req past-event) :time-travel tt))))))
-+             (review/board-page past-event
-+                                (assoc (board-state req past-event) :time-travel tt))))))
-       (not-found-page slug))))
-\ No newline at end of file
-```
-
-</details>
-
-<details><summary>diff — handle-api-docs (in place, changed)</summary>
-
-```diff
---- base/handle-api-docs
-+++ candidate/handle-api-docs
-@@ -6,6 +6,6 @@
-   (let [slug (get-in req [:path-params :slug])]
-     (if-let [event (events/event-by-slug slug)]
-       (with-etag req
--        (-> (html-response (views/api-docs-page (request-host req) event))
-+        (-> (html-response (integrations/api-docs-page (request-host req) event))
-             (assoc-in [:headers "Access-Control-Allow-Origin"] "*")))
-       (json-response 404 {"error" "no such event" "slug" slug}))))
-\ No newline at end of file
-```
-
-</details>
-
-<details><summary>diff — handle-event-log (in place, changed)</summary>
-
-```diff
---- base/handle-event-log
-+++ candidate/handle-event-log
-@@ -7,7 +7,7 @@
-       (let [tt (time-travel-context req event (str "/events/" slug "/log"))]
-         (with-as-of (:cutoff tt)
-           (let [past-event (or (events/event-by-slug slug) event)]
--            (html-response (views/log-page past-event
-+            (html-response (v-log/log-page past-event
-                                            (events/log-for-event (:id past-event))
-                                            (auth/current-person req)
-                                            tt)))))
-```
-
-</details>
-
-<details><summary>diff — dev-render-mode-test (in place, changed)</summary>
-
-```diff
---- base/dev-render-mode-test
-+++ candidate/dev-render-mode-test
-@@ -25,4 +25,4 @@
-     (testing "the Log narrates it as 'Would send'"
-       (let [e (first (filter #(= "comms.rendered" (:type %))
-                              (store/log-for-event (:id event))))]
--        (is (str/includes? (@#'cfp-scheduler-killer.views/log-summary e) "Would send"))))))
-\ No newline at end of file
-+        (is (str/includes? (@#'log/log-summary e) "Would send"))))))
-\ No newline at end of file
-```
-
-</details>
-
-<details><summary>diff — capture-test (in place, changed)</summary>
-
-```diff
---- base/capture-test
-+++ candidate/capture-test
-@@ -57,7 +57,7 @@
-                                   (str/starts-with? (str (get-in % [:payload :source]))
-                                                     "on-behalf-of"))
-                             (store/log-for-event (:id event))))]
--        (is (str/includes? (@#'cfp-scheduler-killer.views/log-summary e)
-+        (is (str/includes? (@#'log/log-summary e)
-                            "Captured on behalf of"))))
- 
-     (testing "and it all survives a reload"
-```
-
-</details>
+_29 further in-place diffs suppressed by --diffs 3._
 
 **A3 — exactly once.**
 
@@ -981,7 +858,7 @@ Comment texts lost: **11**. Comment texts added: **0**. Relocated owners at `:co
 | touched source files with no relocation or `ns` edit to explain them | 0 |
 | changed files outside the scanned roots, or not Clojure source | 2 |
 | tree entries the checker REFUSED to read (symlink, non-blob, oversized) | 0 |
-| macro forms whose binding semantics the scanner does not model | 3 |
+| macro forms whose binding semantics the scanner does not model | 48 |
 
 
 **Macro forms whose binding semantics this scanner does not model.** Every token inside one of these
@@ -990,9 +867,48 @@ changed rather than preserved:
 
 | macro form |
 |---|
-| `with-as-of` |
-| `with-etag` |
-| `with-viewer-session` |
+| `checked?` |
+| `curl` |
+| `date?` |
+| `ds/bind` |
+| `ds/copy-nearest-text` |
+| `ds/keydown-expr` |
+| `ds/on-meta` |
+| `ds/post-action*` |
+| `ds/sse-mount` |
+| `ds/sse-mount-url` |
+| `err` |
+| `events/create-event!` |
+| `events/update-event-details!` |
+| `export` |
+| `f` |
+| `forms/add-field!` |
+| `forms/restore-field!` |
+| `forms/retire-field!` |
+| `forms/update-field!` |
+| `h/html` |
+| `handler` |
+| `hiccup2.core/html` |
+| `java.net.URLEncoder/encode` |
+| `java.time.Instant/now` |
+| `json/write-str` |
+| `log/debug` |
+| `log/info` |
+| `log/warn` |
+| `note` |
+| `prose` |
+| `re-seq` |
+| `sequential?` |
+| `sig` |
+| `sig*` |
+| `str/blank?` |
+| `str/ends-with?` |
+| `str/includes?` |
+| `str/join` |
+| `str/replace` |
+| `str/split` |
+
+_8 further rows suppressed by --max-list 40._
 
 
 Changed non-source or out-of-root files. **This checker read none of them:**
@@ -1050,7 +966,7 @@ It did not check:
 - trailing whitespace inside a string literal, which the `:identical-modulo-whitespace` tier normalises away.
 - local bindings. The requalification tier canonicalises a bare name that matches an owner even when it is actually a local; B3 lists the cases where that could hide a broken reference.
 
-_Checker wall: 20268.5 ms. Generated by `bin/preservation-brief`, which reads only the two git trees._
+_Checker wall: 20066.3 ms. Generated by `bin/preservation-brief`, which reads only the two git trees._
 
 ---
 
@@ -1058,53 +974,61 @@ _Checker wall: 20268.5 ms. Generated by `bin/preservation-brief`, which reads on
 
 Scratch repository `/var/tmp/forge/item3/planted`, rebuilt from scratch by `bin/preservation-replay`:
 base = curtaincall-cfp `d9205abc`, clean = `65ad613b` (the landed Cell C split), then one commit per planted
-defect on top of clean. Every row is one run of `bin/preservation-brief <row> <base>`. Rows 7 and 8 are
-**Sol's**, planted independently of this builder during the fence review.
+defect on top of clean. Rows 7, 8 and 9 are **Sol's**, planted independently of this builder across two
+fence reviews. Row 9 is a **pair** — its probe exists in both trees — so its counters are read against its
+own base, not against `clean`.
 
-| change | clear | moved | preserved | omitted | new | promo | cmt-lost | req-unsorted | fwd-ref | undef-alias | refused | wall ms |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| clean | false | 141 | 136 | 0 | 7 | 8 | 11 | 0 | 0 | 0 | 0 | 20065 |
-| wrong-binding | false | 141 | **135** | 0 | 7 | 8 | 11 | 0 | 0 | 0 | 0 | 20506 |
-| silent-promotion | false | 141 | 136 | 0 | 7 | **9** | 11 | 0 | 0 | 0 | 0 | 20612 |
-| dropped-comment | false | 141 | 136 | 0 | 7 | 8 | **12** | 0 | 0 | 0 | 0 | 20383 |
-| omitted-owner | false | **140** | **135** | **1** | 7 | 8 | 11 | 0 | 0 | 0 | 0 | 20327 |
-| load-order-forms | false | 141 | 136 | 0 | 7 | 8 | 11 | 0 | **2** | 0 | 0 | 19982 |
-| load-order-requires | false | 141 | 136 | 0 | 7 | 8 | 11 | **1** | 0 | 0 | 0 | 20065 |
-| **local-shadow** (Sol) | false | 141 | **135** | 0 | 7 | 8 | 11 | 0 | 0 | 0 | 0 | 20219 |
-| **symlink-escape** (Sol) | false | 141 | 136 | 0 | 7 | 8 | 11 | 0 | 0 | 0 | **1** | 20311 |
+| change | clear | moved | preserved | omitted | new | promo | cmt-lost | req-unsorted | fwd-ref | undef-alias | bare? | refused | wall ms |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| clean | false | 141 | 103 | 0 | 7 | 8 | 11 | 0 | 0 | 0 | 1 | 0 | 20565 |
+| wrong-binding | false | 141 | **102** | 0 | 7 | 8 | 11 | 0 | 0 | 0 | 1 | 0 | 20244 |
+| silent-promotion | false | 141 | 103 | 0 | 7 | **9** | 11 | 0 | 0 | 0 | 1 | 0 | 20474 |
+| dropped-comment | false | 141 | 103 | 0 | 7 | 8 | **12** | 0 | 0 | 0 | 1 | 0 | 19920 |
+| omitted-owner | false | **140** | 103 | **1** | 7 | 8 | 11 | 0 | 0 | 0 | 1 | 0 | 20378 |
+| load-order-forms | false | 141 | 103 | 0 | 7 | 8 | 11 | 0 | **2** | 0 | 1 | 0 | 20371 |
+| load-order-requires | false | 141 | 103 | 0 | 7 | 8 | 11 | **1** | 0 | 0 | 1 | 0 | 19939 |
+| **local-shadow** (Sol r1) | false | 141 | 103 | 0 | 7 | 8 | 11 | 0 | 0 | 0 | 1 | 0 | 20489 |
+| **symlink-escape** (Sol r1) | false | 141 | 103 | 0 | 7 | 8 | 11 | 0 | 0 | 0 | 1 | **1** | 20162 |
+| **external-macro** (Sol r2, paired) | false | 141 | **102** | 0 | 7 | 8 | 11 | 0 | 0 | 0 | **2** | 0 | 20139 |
 
-### Planted-defect verdict: **8/8 caught, 0 escaped**
+Body tiers, which is where three of the nine catches land:
+
+| change | `:byte-identical` | `:identical-modulo-requalification` | `:unmodelled-macro-context` | `:changed` |
+|---|---|---|---|---|
+| clean | 83 | 20 | 32 | 6 |
+| wrong-binding | 83 | **19** | 32 | **7** |
+| local-shadow | 83 | 20 | **31** | **7** |
+| external-macro | 83 | **19** | 32 | **7** |
+
+### Planted-defect verdict: **9/9 caught, 0 escaped**
 
 | planted defect | what was planted | the signal the brief raised |
 |---|---|---|
-| wrong binding | `(organizer-layout/header "Create review committee"` → `(format/header …)` inside the relocated `committee-page`: requalified to a namespace that is aliased in that file and does not own the name | body tier `:changed` 5 → 6; preserved 136 → 135; rewritten sites 260 → 259; the diff is printed inline |
-| silent promotion | `(defn- committee-card` → `(defn committee-card` on a relocated owner | hard stop and **B2**: privacy changes 8 → 9, listed by name as `private -> public` |
+| wrong binding | `(organizer-layout/header "Create review committee"` → `(format/header …)` inside the relocated `committee-page`: requalified to a namespace aliased in that file that does not own the name | tier `:changed` 6 → 7 and `:identical-modulo-requalification` 20 → 19; preserved 103 → 102; rewritten sites 260 → 259; diff printed inline |
+| silent promotion | `(defn- committee-card` → `(defn committee-card` on a relocated owner | hard stop and **B2**: privacy changes 8 → 9, listed by name |
 | dropped comment | one `;;` line deleted from inside the relocated `event-marquee` body | comment inventory lost 11 → 12, with the exact text |
-| omitted owner | `log-summary` deleted from its destination file | **A1** omitted 0 → 1, named as a preservation FAILURE; moved 141 → 140; base call sites 87 → 85 |
-| load-order swap (forms) | two top-level forms swapped inside a destination so `committee-card` now names `member-row`, defined below it | **B4** new intra-file forward references 0 → 2, both named |
-| load-order swap (requires) | two `:require` lines swapped in a caller's `ns` form | **B4** require sort discipline broken 0 → 1, with the candidate's require order printed |
-| **local-shadow substitution** (Sol, PB-FENCE-001) | `(form-edit-panel event editing edit-form)` → `(form-edit-panel event editing cfp-scheduler-killer.views.portal/edit-form)`: the local destructured binding replaced by the moved private Var of the same name | body tier `:changed` 5 → 6 (`form-builder-page` joins the list); preserved 136 → 135; rewritten sites 260 → **261** |
-| **symlink escape** (Sol, PB-FENCE-002) | `src/leak.clj` added as a symlink to `/var/tmp/forge/item3/sol-proof-external.clj`, which defines `escaped-owner` | refused entries 0 → 1, `src/leak.clj` named with `symlink (mode 120000) — never followed`; **`escaped-owner` appears nowhere in the brief** and the candidate owner count is unchanged |
+| omitted owner | `log-summary` deleted from its destination file | **A1** omitted 0 → 1 as a preservation FAILURE; moved 141 → 140; base call sites 87 → 85 |
+| load-order swap (forms) | two top-level forms swapped so `committee-card` names `member-row`, defined below it | **B4** new intra-file forward references 0 → 2 |
+| load-order swap (requires) | two `:require` lines swapped in a caller's `ns` | **B4** require sort discipline broken 0 → 1, candidate order printed |
+| **local-shadow substitution** (Sol r1) | `(form-edit-panel event editing edit-form)` → `… cfp-scheduler-killer.views.portal/edit-form)`: the local destructured binding replaced by the moved private Var | `form-builder-page` moves to `:changed`; tier `:changed` 6 → 7; rewritten sites 260 → **261** |
+| **symlink escape** (Sol r1) | `src/leak.clj` added as a symlink to `/var/tmp/forge/item3/sol-proof-external.clj`, defining `escaped-owner` | refused entries 0 → 1, named `symlink (mode 120000) — never followed`; **`escaped-owner` appears nowhere** in the Markdown or the JSON |
+| **external binding macro** (Sol r2, paired) | `(compojure.core/GET "/probe/:header" [header] header)` in the base; the bound use replaced by `organizer-layout/header` in the candidate. The macro is defined in neither tree and is spelled neither `with-*` nor `def*` | `committee-page` moves from `:identical-modulo-requalification` in the clean row to **`:changed`**; preserved 103 → 102; `compojure.core/GET` is named in the brief's unmodelled-head list; `possible_unresolved` 1 → 2 |
 
-Two of these escaped an earlier build and were repaired in the same session: the require reorder (§3) and
-Sol's local-shadow substitution (§3). The wrong-binding row was also re-targeted after the scope repair:
-its original host body had itself become `:changed`, which made the catch a site-count delta rather than a
-tier delta, so the plant was moved to `committee-page`, which the clean row certifies as preserved.
+Three of these escaped an earlier build and were repaired in the same session: the require reorder (§3),
+Sol's local-shadow substitution (§3), and Sol's external binding macro (§3). Each is now a permanent row.
 
 ### The alias-migration specimen and its own planted defect
 
 | change | in-place bodies preserved | undefined-alias sites |
 |---|---|---|
-| alias migration, clean | 81/103 | **0** |
-| alias migration + one site left on the retired alias | 80/102 | **1**, named `file:line` with the undefined prefix |
+| alias migration, clean | 48/103 | **0** |
+| alias migration + one site left on the retired alias | 47/102 | **1**, named `file:line` with the undefined prefix |
 
-Three of the 22 in-place bodies the clean run refuses to clear are worth naming, because they are a real
-finding about the constructor and not noise. My alias rewriter was a regex without string or comment
-masking, and it edited three things that are not references: the string literals `"exports/sessions.json"`
-and `"exports/calendar.ics"` — genuine URL paths, a behavioural break — and one comment. The brief isolated
-exactly those. The remaining 19 fall to `:changed` under the scope-aware rule because their equivalence
-depended on a bare symbol inside `with-event` / `with-etag` forms, macros the scanner does not model; the
-brief names those macros rather than certifying past them.
+Of the 55 bodies the clean run refuses to clear, 45 are refused because they call a head the scanner cannot
+vouch for — `with-event`, `with-etag`, hiccup, Datastar helpers — and 10 are genuinely changed. Three of
+those ten are a real finding about my own constructor rather than noise: the alias rewriter was a regex
+without string or comment masking, and it edited the string literals `"exports/sessions.json"` and
+`"exports/calendar.ics"` — genuine URL paths, a behavioural break — and one comment.
 
 ## 7. Checker wall per change
 
@@ -1112,25 +1036,23 @@ Every figure is the checker's own `wall_ms`, printed at the foot of each brief.
 
 | change | source files in tree | files parsed | wall |
 |---|---|---|---|
-| Cell C split | 83 | 39 | 20.3 s |
-| Cell B split | 473 | 12 | 11.6 s |
-| alias migration (clean) | 472 | 35 | 25.0 s |
-| alias migration (defect) | 472 | 35 | 25.0 s |
-| clj-surgeon `571170cc` | 344 | 5 | 9.7 s |
-| clj-surgeon `d2c3aa80` | 344 | 12 | 14.9 s |
-| each of the 9 replay rows | 83 | 39 | 20.0–20.6 s |
-| null change (`d9205abc` against itself) | 62 | **0** | **0.15 s** |
+| Cell C split | 83 | 39 | 20.1 s |
+| Cell B split | 473 | 12 | 11.4 s |
+| alias migration (clean / defect) | 472 | 35 | 25.4 / 25.0 s |
+| clj-surgeon `571170cc` | 344 | 5 | 10.0 s |
+| clj-surgeon `d2c3aa80` | 344 | 12 | 15.0 s |
+| each of the 10 replay rows | 83 | 39 | 19.9–20.6 s |
+| null change (`d9205abc` against itself) | 62 | **0** | **0.18 s** |
 
 The first build took **136 s** on the Cell B specimen because it parsed the whole repository. Two-stage
-scoping — parse the changed files, then only the files that textually mention a name that moved, was
-dropped or was added — brought it to 20 s with byte-identical output, and reading blobs from the object
-database instead of extracting trees took it to **11.6 s**. Nothing else can hold a call site or a duplicate
-for a changed owner, so the narrower scope is not a weaker claim; it is the same claim computed without
-reading 460 irrelevant files. This is a Babashka script with no tuning beyond that.
+scoping brought it to 20 s with byte-identical output, and reading blobs from the object database instead of
+extracting trees took it to **11.4 s**. Neither the resolution-aware canonicaliser nor the inverted
+allowlist changed the wall measurably: the scope walk and the whole-tree `[ns name] → def-head` index are
+both cheap next to parsing. This is a Babashka script with no tuning beyond the scoping.
 
-The null row is a standing sanity witness, and after PB-FENCE-003 it is also the portfolio's only
-`clear: true` row: a candidate compared against itself must parse nothing, move nothing, lose no comment and
-raise no obligation. A non-zero figure there means the checker is manufacturing findings.
+The null row is a standing sanity witness and the portfolio's only `clear: true` row: a candidate compared
+against itself must parse nothing, move nothing, lose no comment and raise no obligation. A non-zero figure
+there means the checker is manufacturing findings.
 
 ## 8. Section C: cross-examining a real producer receipt
 
@@ -1314,7 +1236,11 @@ It is the document that must exist before the slice can.
   - `1e00e17c` — the repairs my own replay forced, and the receipt cross-examination. **Sol's fence review
     returned NO-GO on this commit**, verdict at
     `/var/tmp/forge/ship/20260909T160254Z-1e00e17c8d95/verdict-1.md`.
-  - **`8751ed9e`** — all four fence findings repaired. **This is the tip.**
+  - `8751ed9e` — all four round-1 fence findings repaired. **Sol's round-2 review returned NO-GO on this
+    commit** with one blocker, PB-FENCE-005, verdict at
+    `/var/tmp/forge/ship/20260909T163340Z-8751ed9e4d4c/verdict-1.md`; it also verified all four round-1
+    repairs and the replay's tree-hash provenance.
+  - **`1cb98b5e`** — PB-FENCE-005 repaired: the denylist inverted to an allowlist. **This is the tip.**
 - **Nothing was pushed.** The branch has no upstream.
 - No edits under `src/`, `test/`, or the Makefile. Three new files, all under `bin/`.
 - The brief no longer materialises anything: it reads blobs from the object database. The only path it
@@ -1352,8 +1278,10 @@ It is the document that must exist before the slice can.
 | A tool that reports "preserved" must be able to report "nothing preserved". | The two clj-surgeon landings are permanent portfolio members; if either ever reports a non-zero preserved count, something is wrong with the checker, not with the change. |
 | **A builder's own planted defects test only the failures he already imagined.** My six all passed; the seventh, designed by someone else, broke the tool. | Sol's two probes are permanent replay rows, and §9.9 now requires that the falsifier's specimens be planted by someone who did not build the checker, with the answer key sealed before the first arm. |
 | **A bare symbol is not a Var until something proves it is.** Canonicalising by name alone equates a local binding with the Var that shadows it. | A structural node reader plus a lexical scope analysis; a token inside a binding form, a quote, a `case` test, an interop form or an unmodelled macro is frozen, and the unmodelled macro is named in the brief. The permanent `local-shadow` row is the witness. |
+| **A denylist over syntax is never conservative.** Round 1 froze macros defined in the scanned trees plus any `with-*`/`def*` head — an enumeration of distrusted *spellings*, which one library call defeated. Anyone can define a construct that is not on your list; nobody can add one to the list of constructs you have positively verified. | The rule is inverted: canonicalise only inside heads that are a modelled core form, a non-macro `def`/`defn` findable in the two trees, or a shipped clojure.core **function** allowlist. Everything else freezes, is named, is counted, and blocks certification. Cost stated in §1: 136/141 → 103/141. The permanent `external-macro` row is the witness, and each future allowlist entry must carry its own planted row. |
 | **A stated evidence boundary that the implementation does not enforce is worse than none**, because the report repeats it. | The brief reads the object database, never the filesystem; symlinks, non-blobs and oversized blobs are counted as refused entries and named. The permanent `symlink-escape` row is the witness. |
 | **A headline a reviewer can consume and stop on defeats a checker whose real value is in section B.** | Every obligation is hoisted above section A into a hard-stop block, the summary carries `clear`, and the exit code is 3 when not clear. The null change is the only clear row in the portfolio. |
+| **A builder cannot review his own oracle, and one round of outside review is not enough either.** Round 1 found four findings; the round-2 probe reproduced the same false-certification class one abstraction level out. | Sol's three specimens are permanent replay rows. §9.9 requires the falsifier's specimens be planted by someone who did not build the checker, and §12 now names the next unseen classes to probe rather than declaring the set complete. |
 | A preregistration whose arithmetic does not close cannot be executed, however good its rules sound. | §9 now carries a specimen ledger whose counts sum, an assignment matrix whose observation count follows from reviewers × specimens, stated per-class denominators, and a co-primary restated as strict dominance because n=2 per class cannot support a rate. |
 
 ## 12. What is next
@@ -1372,6 +1300,13 @@ It is the document that must exist before the slice can.
    unpreserved bodies are `with-event`/`with-etag` frozen regions. Modelling a macro's binding form is a
    small change with a measurable return in preserved bodies — and a correctness risk if modelled wrongly,
    so each one needs its own planted-defect row before it ships.
-5. **Charge it honestly.** Under Frame 7 the brief's 20 s is inside `L`. It buys review time only if the
+5. **Widen the resolver, because that is where the value went.** 48 heads are unmodelled on Cell C and they
+   cost 33 relocated bodies. Three fixable causes, in order of return: (i) definitions the regex resolver
+   cannot see — `>defn` from guardrails/malli defines real functions and currently reads as unresolvable;
+   (ii) `clojure.string`, `clojure.set` and `clojure.walk`, which are pure-function namespaces whose members
+   could join the shipped allowlist; (iii) the repo's own three `with-*` macros, whose binding forms are
+   small and modellable. **Each addition is a soundness assertion and must ship with its own planted-defect
+   row**, because that is precisely the kind of claim Sol has now falsified twice.
+6. **Charge it honestly.** Under Frame 7 the brief's 20 s is inside `L`. It buys review time only if the
    review was actually reading bodies; on a review that was already skipping them it buys nothing, and the
    §9.7 null check is what will say so.
