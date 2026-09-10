@@ -10,6 +10,7 @@
    [clj-surgeon.alias-migration :as planner]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.intent-transaction :as transaction]
+   [clj-surgeon.jvm-error :as jvm]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.receipt-artifacts :as artifacts]
@@ -2756,7 +2757,12 @@
   (let [attempted (volatile! false)]
     (try
       (execute-migration! config params attempted)
-      (catch OutOfMemoryError error
+      ;; `Error` + a class-name test, never `catch OutOfMemoryError`:
+      ;; babashka v1.12.209's SCI cannot resolve that classname in any
+      ;; spelling and fails at ANALYSIS time, so one mention of it makes this
+      ;; namespace unloadable there -- see clj-surgeon.jvm-error.
+      (catch Error error
+        (when-not (jvm/out-of-memory? error) (throw error))
         (let [mutated? @attempted]
           {:ok false
            :operation "alias_migration"

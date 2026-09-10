@@ -21,6 +21,7 @@
   @spec MCP-OP-MEM-001
   @spec MCP-OP-MEM-011"
   (:require
+   [clj-surgeon.jvm-error :as jvm]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.pprint :as pprint]
@@ -170,12 +171,14 @@
   (try
     (aset box 0 (run root))
     {:ok true}
-    (catch OutOfMemoryError _
-      (aset box 0 nil)
-      {:oom? true})
+    ;; ONE clause, and it asks the caught value what it is. `catch
+    ;; OutOfMemoryError` is unresolvable in babashka v1.12.209's SCI in any
+    ;; spelling and fails at ANALYSIS time -- see clj-surgeon.jvm-error.
     (catch Throwable e
       (aset box 0 nil)
-      {:error (str (.getName (class e)) ": " (.getMessage e))})))
+      (if (jvm/out-of-memory? e)
+        {:oom? true}
+        {:error (str (.getName (class e)) ": " (.getMessage e))}))))
 
 (defn- measure-once
   "Measure one invocation. Returns a raw reading, not yet a battery cell."

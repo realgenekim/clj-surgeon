@@ -70,6 +70,30 @@ fi
 echo
 echo "  Runtime (required to install and run the CLI)"
 need "  babashka" bb "the CLI and every :op run on it" required --version
+# THE FLOOR IS bb.edn's, READ FROM bb.edn. On 2026-09-10 the skiff's
+# bb v1.12.209 could not ANALYSE src/clj_surgeon/core.clj -- its SCI has no
+# `StackOverflowError` -- and all 49 bb test namespaces died before a test ran.
+# The tree no longer names a class SCI may lack, and this line is how an
+# operator learns their babashka is older than anything this tree was measured
+# on, on the screen they read BEFORE spending minutes on a suite.
+bb_minimum=$(sed -n 's/.*:min-bb-version[[:space:]]*"\([0-9.]*\)".*/\1/p' "$repo/bb.edn" 2>/dev/null | head -1)
+if [ -n "$bb_minimum" ] && command -v bb >/dev/null 2>&1; then
+  bb_version=$(version_of bb --version | sed 's/^babashka v//')
+  # bash 3.2, and macOS `sort` has no -V. awk compares the three parts.
+  bb_verdict=$(awk -v a="$bb_version" -v b="$bb_minimum" 'BEGIN{
+      na=split(a,A,"."); nb=split(b,B,".");
+      for(i=1;i<=3;i++){x=(i<=na?A[i]+0:0); y=(i<=nb?B[i]+0:0);
+        if(x<y){print "below"; exit} if(x>y){print "ok"; exit}}
+      print "ok"}')
+  if [ "$bb_verdict" = below ]; then
+    say "  bb minimum" "$bb_minimum -- THIS BOX HAS $bb_version"
+    say "" "older than any babashka this tree has been measured on;"
+    say "" "\`make test\`'s bb lane may fail to ANALYSE before it runs"
+    gate_blockers="$gate_blockers babashka-below-$bb_minimum"
+  else
+    say "  bb minimum" "$bb_minimum (bb.edn :min-bb-version) -- this box is newer or equal"
+  fi
+fi
 need "  java" java "the MCP server and every JVM suite" required -version
 need "  clojure" clojure "the JVM entrance and the landing gate" required -Sdescribe
 need "  git" git "install receipts record the source commit" required --version
