@@ -1,12 +1,8 @@
 (ns clj-surgeon.insert-forms-anchor-cardinality-test
   {:lane :fast}
   (:require
-   [clj-surgeon.insert-forms :as insert]
    [clj-surgeon.insert-forms-support :as h]
-   [clojure.java.io :as io]
-   [clojure.test :refer [deftest is testing]])
-  (:import
-   (java.nio.file Files)))
+   [clojure.test :refer [deftest is]]))
 
 ;; @spec INSERT-FORMS-006
 ;; INTENT-TEST: INSERT-FORMS-006
