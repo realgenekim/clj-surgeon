@@ -12,6 +12,11 @@
 ;; INTENT-TEST: INSERT-FORMS-011
 (deftest insert-forms-reader-safety-and-limits
 
+  (let [s (str (apply str (repeat 32768 " ")) "(defn a [] 1)")
+        req (assoc (h/request s) :payload {:text (apply str (repeat 1000 "1\n")) :forms 1000})
+        result (insert/plan s req)]
+    (is (= :limit-exceeded (:error-type result)))
+    (is (= true (:source_unchanged result))))
   (h/with-file h/source
     (fn [_ file req]
       (let [huge (assoc-in req [:anchor :owner :name] (apply str (repeat 2097153 "a")))
