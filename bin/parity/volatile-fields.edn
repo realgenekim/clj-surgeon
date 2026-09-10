@@ -112,10 +112,15 @@
    :reason "The telemetry row's own wall clock."
    :evidence "alias_migration probe, 2026-09-10"}
   {:match :regex
-   :pattern "/var/tmp/forge/[a-z-]+-receipts/[0-9a-f]{8,}/[0-9a-f-]{8,}"
+   :pattern "/var/tmp/forge/[a-z-]+-receipts/[0-9a-f]{8,}(/[A-Za-z0-9_-]+(\\.edn)?)?"
    :to "<RECEIPT-STORE-PATH>"
-   :reason "The receipt store path as it appears INSIDE string values (notably the :undo_command argv vector). Its directory is content-addressed over data that includes the per-run workspace, and its basename is the receipt UUID. Only the LOCATION is normalised; the receipt's own content is read from disk and compared field by field."
+   :reason "The receipt store path as it appears INSIDE string values (the :undo_command argv vector, and the `per-file detail at …` line of the rendered text block). Its basename is a fresh per-run UUID, exactly like :receipt_id. Its directory is content-addressed over data that includes the per-run workspace, and its basename is the receipt UUID. Only the LOCATION is normalised; the receipt's own content is read from disk and compared field by field."
    :evidence "stable-vs-stable RED0: [:undo_command 4] differed"}
+  {:match :regex
+   :pattern "[0-9]+\\.[0-9]+ ms"
+   :to "<ELAPSED> ms"
+   :reason "The elapsed time as RENDERED into the human-readable text block that every MCP verb publishes alongside its structured receipt. It is the same :elapsed_ms already declared volatile above; the text block is a second copy of it, and a declared-key rule cannot reach inside a rendered string. Named separately so the text block is still compared byte for byte in every other respect — it carries counts, hashes, check results and the terminal-evidence lines, and a harness that compared only structuredContent would not see them at all."
+   :evidence "stable-vs-stable GREEN: alias 3766.30 ms vs 3914.32 ms, fanout 226.53 ms vs 236.07 ms; nothing else in either text block differed"}
   {:match :path-in
    :to "<RUN-ROOT>"
    :reason "Any absolute path under the harness run root that appears inside a string value (refusal texts, next_call examples, check command lines). The run root is the ONLY input that differs between the two builds; leaving it unnormalised would make every receipt differ for a reason that is not the build."
