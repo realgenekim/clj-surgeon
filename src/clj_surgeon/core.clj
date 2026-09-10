@@ -2158,8 +2158,8 @@
                                  "clj-surgeon :op :require-change! :request-file requires.edn"]
                       :category :write}
 
-    ;; @spec NS-SPLIT-014
-    ;; @spec NS-SPLIT-041
+    ;; @spec INSERT-FORMS-018
+    ;; INTENT: INSERT-FORMS-018
     :insert-forms! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.insert-forms/cli!) opts))
                     :desc "Insert forms at one guarded structural boundary; preserve all original bytes."
                     :args {:request-file {:desc "Required: bounded EDN request containing version, workspace_root, file, guard, anchor, payload."}}
@@ -2169,6 +2169,8 @@
                             "Schema and example: docs/intent/insert-forms/contract.md."]
                     :examples ["clj-surgeon :insert-forms! :request-file insert.edn"
                                "clj-surgeon :op :insert-forms! :request-file insert.edn"] :category :write}
+    ;; @spec NS-SPLIT-014
+    ;; @spec NS-SPLIT-041
     :split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))
                        :desc "Compile a namespace partition or retained-source extraction; :facts-only reads shared facts"
                        :args {:request {:desc "Complete namespace_split request as an EDN map"}
@@ -2928,9 +2930,10 @@
       ;; refusal — and is printed untouched, because a bound belongs at the
       ;; exit that OWNS the answer and this function does not own theirs.
       (= :unknown-operation (:error-type result)) (print-launcher-refusal! result)
-      ;; @spec NS-SPLIT-057: nested pretty-print indentation is outside the data bound.
+      ;; @spec INSERT-FORMS-018
       (= :insert-forms! canonical)
       (do (print ((requiring-resolve 'clj-surgeon.insert-forms/receipt-text) result)) (flush))
+      ;; @spec NS-SPLIT-057: nested pretty-print indentation is outside the data bound.
       (= :split-ns! canonical)
       (do (print ((requiring-resolve 'clj-surgeon.namespace-split-io/receipt-text) result))
           (flush))
