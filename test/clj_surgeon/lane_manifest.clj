@@ -94,6 +94,24 @@
   "test namespace -> lane. THE authority. Adding a JVM test namespace without
    adding it here fails `clj-surgeon.lane-manifest-test` by name."
   {;; ---- :fast (49) ----
+   'clj-surgeon.insert-forms-after-prefix-named-defn-test :fast
+   'clj-surgeon.insert-forms-deftest-nested-testing-test :fast
+   'clj-surgeon.insert-forms-unbalanced-payload-test :fast
+   'clj-surgeon.insert-forms-stale-hash-test :fast
+   'clj-surgeon.insert-forms-anchor-decoys-test :fast
+   'clj-surgeon.insert-forms-anchor-cardinality-test :fast
+   'clj-surgeon.insert-forms-body-boundaries-test :fast
+   'clj-surgeon.insert-forms-defn-headers-test :fast
+   'clj-surgeon.insert-forms-payload-count-test :fast
+   'clj-surgeon.insert-forms-trivia-test :fast
+   'clj-surgeon.insert-forms-reader-safety-test :fast
+   'clj-surgeon.insert-forms-portable-receipt-test :fast
+   'clj-surgeon.insert-forms-preservation-test :fast
+   'clj-surgeon.insert-forms-atomic-test :fast
+   'clj-surgeon.insert-forms-paths-test :fast
+   'clj-surgeon.insert-forms-receipt-test :fast
+   'clj-surgeon.insert-forms-terminal-test :fast
+   'clj-surgeon.insert-forms-parity-test :battery
    'clj-surgeon.mission-usage-test :fast
    'clj-surgeon.mission-git-test :fast
    'clj-surgeon.mission-typist-test                    :fast

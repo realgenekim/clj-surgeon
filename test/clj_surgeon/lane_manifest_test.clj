@@ -566,7 +566,25 @@
    `census-ledger-path`; what stays here is the REASON, which no derivation can
    recover. Keyed by namespace name, so two branches adopting different
    namespaces merge without touching the same line."
-  '#{clj-surgeon.receipt-artifacts-boundary-test ; Sol r10 + two Row 5 real-process witnesses (battery).
+  '#{clj-surgeon.insert-forms-after-prefix-named-defn-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-anchor-cardinality-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-anchor-decoys-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-atomic-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-body-boundaries-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-defn-headers-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-deftest-nested-testing-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-parity-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-paths-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-payload-count-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-portable-receipt-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-preservation-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-reader-safety-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-receipt-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-stale-hash-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-terminal-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-trivia-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-unbalanced-payload-test ; insert_forms v1 contract witness.
+     clj-surgeon.receipt-artifacts-boundary-test ; Sol r10 + two Row 5 real-process witnesses (battery).
      clj-surgeon.namespace-split-test ; Batch 5 adds six ns/footprint/lint/encoding witnesses; derived by deftest-count.
      clj-surgeon.namespace-split-warm-test ; Batch 5 adds executed load/failed destination facts to the real nREPL matrix.
      clj-surgeon.mcp-namespace-split-test ; Batch 5 adds text ordering, absent-probe honesty and malformed UTF-8 refusal.
