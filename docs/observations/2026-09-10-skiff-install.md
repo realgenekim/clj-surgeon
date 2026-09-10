@@ -1,6 +1,6 @@
 # Surgeon on the skiff: `make install` on a clean system
 
-**Branch** `fable/skiff-install` (5 commits), worktree
+**Branch** `fable/skiff-install` (6 commits), worktree
 `/home/forge/src/clj-surgeon-skiff`, base proven `HEAD = origin/MCP/main =
 3ea3803ea2e303a961a3edc1d76b8095ab5ff4f7`. Author `forge-anvil`, Gene + Fable
 trailers, **nothing pushed**. 1,126 insertions / 51 deletions across 16 files.
@@ -51,6 +51,35 @@ Rather than only correcting the words, `make test` now refuses at the gate
 **entrance** (`gate-prerequisites`), so the sentence became *true* instead of
 merely accurate — a box without swipl no longer pays three stages to find out.
 The same entrance refuses a RAM-backed temp base. Neither is skippable.
+
+### Round 2: NO-GO on one residue, fixed in `6067f938`
+
+Sol re-reviewed `064bc8bc` and found the same safety class surviving in a
+different disguise. The grammar was right and the contract was written down two
+lines above the bug — *the mount point is the exact bytes between the device
+separator and the option group* — and then the code ran `str/trim` over those
+bytes anyway. A trailing space is legal in a Unix path, so with two spaces before
+the option group (`/dev/ram on /Volumes/ram  (tmpfs, local)`) trimming turned the
+covering row `/Volumes/ram ` into `/Volumes/ram`; it stopped covering the target
+`/Volumes/ram /T`, and the `/` row became positive proof of disk again.
+
+**The lesson worth keeping from both rounds is one sentence: both failures were
+the parser deciding it knew better than the bytes** — once by searching for a
+separator that can occur inside the data, once by tidying the data after
+capturing it correctly. Exactly one byte is removed now, the space delimiting the
+option group, and a fixture asserts that `/Volumes/ram` and `/Volumes/ram ` are
+distinct mount points answering `hfs` and `tmpfs` respectively.
+
+Round 2's check (a) otherwise passed: adversarial mount points with an unmatched
+` (`, an inner `)`, a trailing `on`, and an embedded ` on ` all select `tmpfs`; a
+bogus row yields `:unknown`; the absolute mount authorities cannot be redirected
+by `PATH`. Lock topology (d) passed — including a fork worktree sharing the lock
+because its root commit is the same, which Sol called the correct conservative
+choice. Entrance and preflight passed; Linux paths unchanged.
+
+No full `make test` was run for this last commit, deliberately: it touches only
+`parse-darwin-mount-table` and its own test namespace — no Makefile, no
+`gate_slot.py`, no preflight, no gate wiring. The gate was green on its parent.
 
 Sol's checks **(b)–(f) held**, including confirmation that the path-socket
 guarantee behaves exactly as documented — same-process replacement detected,
@@ -358,6 +387,7 @@ and that Homebrew's `clojure`/`bb`/`swipl` behave as their Linux builds do.
 | 10 | swipl absence unreadable | `Makefile:206` | yes | named refusal + remedy, **no bypass** |
 | 13 | **parser could PROVE the wrong fs** (Sol 001) | `tmp_leak_support.clj` | yes | anchored grammar; any unparseable row ⇒ whole table `:unknown` |
 | 14 | `mount` via bare `PATH` was forgeable, and the docstring denied it (Sol 001) | `tmp_leak_support.clj` | yes | absolute `/sbin/mount`; claim corrected to what is true |
+| 17 | **trimming the mount point re-opened the same fail-open** (Sol 001 r2) | `tmp_leak_support.clj` | yes | exact bytes kept; one delimiter byte removed, no more |
 | 15 | lock collides across different repos (Sol 002) | `Makefile` | yes | keyed by repository root commit |
 | 16 | "swipl is gate stage one" — false (Sol 003) | Makefile, preflight, skiff.md | yes | claim corrected **and** made true via `gate-prerequisites` |
 | 11 | `head -1` reports `JAVA_TOOL_OPTIONS` as the Java version | preflight | yes | filtered, and the variable reported |
