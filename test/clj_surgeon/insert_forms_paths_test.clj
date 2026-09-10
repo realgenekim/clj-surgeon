@@ -12,7 +12,7 @@
 ;; INTENT-TEST: INSERT-FORMS-015
 (deftest insert-forms-path-confinement
 
-  (doseq [path ["../escape.clj" "/absolute.clj" "missing.clj" "src/example.cljs"]]
+  (doseq [path ["../escape.clj" "/absolute.clj" "missing.clj" "src/example.cljs" "src/\u0000.clj"]]
     (h/with-file h/source
       (fn [_ file req]
         (let [r (insert/execute! (assoc req :file path))]
