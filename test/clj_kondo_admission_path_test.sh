@@ -50,7 +50,21 @@ grep -Fq 'process-env/run-bounded!' test/clj_surgeon/analyzer_contract_test.clj
 # CLJ_SURGEON_PRESSURE_STATUS and never routes through mcp_process.clj, so the
 # PYTHON DEFAULT (with no override at all -- neither args nor the env var) is
 # its own live contract, not dead duplication of the Clojure one.
-default_status=$(env -u CLJ_SURGEON_PRESSURE_STATUS python3 -c '
+#
+# RATCHET (2026-09-10, ship fast-lane RED on 49232f08): `importlib`'s
+# `exec_module` byte-compiles the module it loads exactly like a real
+# `import` does, and this call named no cache destination -- Python wrote
+# resources/__pycache__/clj-kondo-admission.cpython-*.pyc INTO THE TRACKED
+# WORKING TREE, which every parallel gate suite in the same worktree
+# independently detects as a mid-run tree mutation and refuses on
+# (`gate-refused: … :tree-changed-during-suite`), in a FRESH worktree where
+# no stale __pycache__/ already existed to hide it. PYTHONPYCACHEPREFIX below
+# matches the py_compile check further up this file, which already avoided
+# this the same way; PYTHONDONTWRITEBYTECODE=1 makes it unconditional so no
+# future import in this witness can regress it silently.
+default_status=$(env -u CLJ_SURGEON_PRESSURE_STATUS \
+  PYTHONDONTWRITEBYTECODE=1 PYTHONPYCACHEPREFIX="$test_root/pycache-default" \
+  python3 -c '
 import importlib.util
 from types import SimpleNamespace
 spec = importlib.util.spec_from_file_location(
@@ -74,5 +88,43 @@ case "$default_status" in
     exit 1
     ;;
 esac
+
+# RATCHET (2026-09-10, ship fast-lane RED on 49232f08): the Python fallback
+# check above once wrote resources/__pycache__/clj-kondo-admission.cpython-*.pyc
+# INTO THE TRACKED TREE -- `importlib`'s exec_module byte-compiles exactly
+# like a real `import` unless told not to, and nothing here named a cache
+# destination. This dev checkout already carries a stale __pycache__/ from
+# the earlier runs above, so re-running the same command here would not
+# reproduce the failure -- it only shows up as a NEW file in a tree that had
+# none, which is exactly what ship's fast lane runs against (`make
+# landing-gate-prewarm` in a fresh disposable worktree). So this proves the
+# fix the same way: a REAL fresh worktree of the committed HEAD, the exact
+# suspect command, and an untracked/modified-file diff that must be empty.
+hygiene_worktree=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-kondo-hygiene.XXXXXX")
+trap 'rm -rf "$test_root"; git worktree remove --force "$hygiene_worktree" 2>/dev/null || true; rm -rf "$hygiene_worktree"; git worktree prune -q 2>/dev/null || true' EXIT HUP INT TERM
+git worktree add -q --detach "$hygiene_worktree" HEAD
+before_status=$(cd "$hygiene_worktree" && git status --porcelain --ignored)
+(
+  cd "$hygiene_worktree"
+  env -u CLJ_SURGEON_PRESSURE_STATUS \
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPYCACHEPREFIX="$hygiene_worktree/pycache-hygiene-check" \
+    python3 -c '
+import importlib.util
+from types import SimpleNamespace
+spec = importlib.util.spec_from_file_location(
+    "clj_kondo_admission", "resources/clj-kondo-admission.py")
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+print(mod.pressure_status_path(SimpleNamespace(pressure_status=None)))
+' >/dev/null
+)
+after_status=$(cd "$hygiene_worktree" && git status --porcelain --ignored)
+
+if [ "$before_status" != "$after_status" ]; then
+  echo "clj-kondo admission path hygiene regression: the Python fallback witness dirtied a fresh worktree of HEAD" >&2
+  echo "before: $before_status" >&2
+  echo "after:  $after_status" >&2
+  exit 1
+fi
 
 echo "clj-kondo admission path regression passed"
