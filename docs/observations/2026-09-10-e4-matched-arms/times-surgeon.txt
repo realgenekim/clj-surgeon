@@ -1,0 +1,1 @@
+authoring=7.140249995 exec=.730577335 verify_oracle=.575549983 complete=8.480297155 oracle_rc=0

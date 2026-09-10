@@ -1,0 +1,7 @@
+{"workspace_root":"/var/tmp/forge/ethno/4h/wt-oracle",
+ "op":"require_change","plan_only":true,
+ "add":{"lib":"cfp-scheduler-killer.events","alias_policy":["ev"]},
+ "files":[{"file":"src/cfp_scheduler_killer/views/schedule.clj",
+           "remove":{"lib":"cfp-scheduler-killer.events","as":"events"}}],
+ "expect":{"files":1,"adds":1,"removes":1},
+ "verification":{"profile":"none"}}

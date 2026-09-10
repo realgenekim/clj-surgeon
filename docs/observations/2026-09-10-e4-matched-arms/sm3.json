@@ -1,0 +1,5 @@
+{"workspace_root":"/var/tmp/forge/ethno/4h/wt-surgeon-mistaken",
+ "edits":[{"file":"src/cfp_scheduler_killer/views/schedule.clj","within":{"namespace":true},
+           "from":"[cfp-scheduler-killer.events :as events]","to":"[cfp-scheduler-killer.events :as ev]"},
+          {"file":"src/cfp_scheduler_killer/views/schedule.clj","within":{"root":true},
+           "from":"events/day-hours","to":"ev/day-hours","matches":2}]}

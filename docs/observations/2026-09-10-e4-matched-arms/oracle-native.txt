@@ -1,0 +1,17 @@
+=== oracle: wt-native ===
+  PASS A1-alias-binding -- namespace-usages -> cfp-scheduler-killer.events: 1, alias=(ev) (want exactly 1 with alias ev)
+  PASS A2-usage-count -- var-usages -> cfp-scheduler-killer.events: 2 (want 2)
+  PASS A3-usage-set -- usage set = ({:name day-hours, :alias ev, :from-var agenda-days, :arity 1} {:name day-hours, :alias ev, :from-var schedule-page, :arity 1})
+  PASS A4-no-stale-alias -- residual uses of old alias `events`: 0
+  PASS B1-form-count -- top-level forms: base 35, cand 35
+  PASS B2-only-intended-forms-changed -- forms changed: ("ns" "agenda-days" "schedule-page") | UNINTENDED: ()
+  PASS B3-gaps-and-comments-identical -- inter-form gaps (whitespace + top-level comments) differing at indices: ()
+  PASS B4-changed-bodies-differ-only-by-alias-token -- the two alias-holding forms are byte-identical to 00e8f0fa once the new alias token is mapped back
+  PASS C1-route-string-count -- string literals containing `events/`: base 29, cand 29
+  PASS C2-every-route-string-survives -- BROKEN ROUTE STRINGS: 0
+  PASS C3-string-multiset-identical -- string-literal multiset differs in 0 baseline strings, 0 new strings
+
+ORACLE: PASS
+  [secondary] clj-kondo findings (bare config): baseline 5, candidate 5 -> GREEN
+  [secondary] clj-kondo in-repo (repo .clj-kondo config): linting took 62ms, errors: 0, warnings: 4
+  [note] the secondary signals are NOT part of the verdict; the spike found them green on a file with 19 broken routes.
