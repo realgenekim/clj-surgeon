@@ -97,10 +97,10 @@
                               ^"[Ljava.nio.file.OpenOption;"
                               (into-array OpenOption [StandardOpenOption/CREATE
                                                       StandardOpenOption/WRITE]))]
-          (let [lock (.lock channel)]
-            (try
-              (f)
-              (finally (.release lock))))))
+          ;; Closing the channel releases its lock on JVM and Babashka. The
+          ;; concrete FileLock implementation is not exposed by Babashka SCI.
+          (.lock channel)
+          (f)))
       (finally (.unlock monitor)))))
 
 (defn with-publish-lock-dir*
