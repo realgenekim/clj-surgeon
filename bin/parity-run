@@ -75,7 +75,7 @@ materialise_build() { # <ref> <slot>  -> echoes build dir
       [ -d "$val" ] || { echo "no such build dir: $val" >&2; exit 2; }
       echo "$val" ;;
     sha)
-      local sha; sha="$(git -C "$CLJ_SURGEON_REPO" rev-parse "$val")" || exit 2
+      local sha; sha="$(git -C "$CLJ_SURGEON_REPO" rev-parse "$val^{commit}")" || exit 2
       local dir="$PARITY_ROOT/builds/$sha"
       if [ ! -d "$dir" ]; then
         mkdir -p "$dir"
