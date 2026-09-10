@@ -3,15 +3,18 @@
   (:require
    [clj-surgeon.insert-forms :as insert]
    [clj-surgeon.insert-forms-support :as h]
-   [clojure.java.io :as io]
-   [clojure.test :refer [deftest is testing]])
-  (:import
-   (java.nio.file Files)))
+   [clojure.test :refer [deftest is]]))
 
 ;; @spec INSERT-FORMS-016
 ;; INTENT-TEST: INSERT-FORMS-016
 (deftest insert-forms-receipt-accounting
 
+  (h/with-file h/source
+    (fn [_ file req]
+      (let [result (insert/execute! (assoc req :payload {:text (str "9" (apply str (repeat 20000 "a"))) :forms 1}))]
+        (is (= :payload-parse-error (:error-type result)))
+        (is (= h/source (slurp file)))
+        (is (<= (alength (.getBytes (insert/receipt-text result) "UTF-8")) 4096)))))
   (h/with-file h/source
     (fn [_ _ req]
       (let [result (insert/execute! (assoc req :payload {:text (apply str (repeat 1000 "1\n")) :forms 1000}))]
