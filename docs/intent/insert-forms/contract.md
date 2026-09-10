@@ -237,7 +237,9 @@ source/result byte counts, splice, and ordered per-form preservation entries:
 Indexes are 1-based CST root expression ordinals including discarded expression nodes;
 comments/gaps have their own spans. Include ALL other forms, even unnamed and duplicate
 ones, plus the edited owner's before/after digest for body insertion. Never key by name.
-The full inventory can exceed 4 KiB; the inline summary cannot. Include inverse splice
+The full inventory can exceed 4 KiB; the inline summary cannot. Before publication,
+refuse `:limit-exceeded` at `[:receipt]` if required projected inline facts exceed
+3,200 UTF-8 bytes, reserving the remainder for outcome diagnostics and timing. Include inverse splice
 evidence in the durable receipt; no hidden source-file writes beyond the target.
 
 `next_action="none"` discharges this verb's write, parse and preservation checks.

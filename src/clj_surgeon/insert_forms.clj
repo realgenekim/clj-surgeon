@@ -71,7 +71,16 @@
   (let [path (artifacts/target "insert-forms" (:workspace_root request) (str (UUID/randomUUID) ".edn"))
         detail (merge (:detail result) {:receipt (assoc (:receipt result) :state "planned" :next_action "await-publication")
                                         :transaction_receipt (transaction/build-receipt compiled)})
-        text (str (pr-str detail) "\n")]
+        text (str (pr-str detail) "\n")
+        summary (merge (dissoc (:receipt result) :inserted_form_ranges)
+                       {:state "committed" :ok true :committed true :mutation_attempted true
+                        :source_unchanged false :write_verified true
+                        :read_back_hashes {(:file request) (get-in result [:receipt :result_hash])}
+                        :receipt_details_path path :receipt_hash (p/sha text)})]
+    ;; Reserve space for timing, EDN separators and bounded failure diagnostics.
+    ;; Required inline facts are never silently dropped to accommodate long paths.
+    (when (> (alength (p/bytes (pr-str summary))) 3200)
+      (p/refuse! :limit-exceeded [:receipt] "Required inline receipt facts exceed the 4 KiB envelope."))
     (io/make-parents path)
     (file-ops/atomic-write! path text)
     (when-not (= (p/sha text) (journal/sha256-file path))
@@ -160,7 +169,7 @@
       (catch Exception e
         (cond
           @attempted (failed "recovery-required" true nil :commit-outcome-unknown (.getMessage e) @detail)
-          (= :source-changed-before-commit (:error-type (ex-data e))) (merge (p/refusal e) @detail)
+          (#{:source-changed-before-commit :limit-exceeded} (:error-type (ex-data e))) (merge (p/refusal e) @detail)
           :else (failed "failed" false true :io-error (.getMessage e) @detail)))
       (finally
         (when @stage (Files/deleteIfExists (.toPath ^java.io.File @stage)))
