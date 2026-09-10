@@ -111,6 +111,10 @@
    'clj-surgeon.insert-forms-paths-test :fast
    'clj-surgeon.insert-forms-receipt-test :fast
    'clj-surgeon.insert-forms-terminal-test :fast
+   'clj-surgeon.insert-forms-candidate-test :fast
+   'clj-surgeon.insert-forms-spacing-test :fast
+   'clj-surgeon.insert-forms-envelope-test :fast
+   'clj-surgeon.insert-forms-recovery-test :fast
    'clj-surgeon.insert-forms-parity-test :battery
    'clj-surgeon.mission-usage-test :fast
    'clj-surgeon.mission-git-test :fast

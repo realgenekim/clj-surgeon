@@ -573,6 +573,10 @@
      clj-surgeon.insert-forms-body-boundaries-test ; insert_forms v1 contract witness.
      clj-surgeon.insert-forms-defn-headers-test ; insert_forms v1 contract witness.
      clj-surgeon.insert-forms-deftest-nested-testing-test ; insert_forms v1 contract witness.
+     clj-surgeon.insert-forms-candidate-test ; Opus F1: structure guard deletion and parse refusal regressions.
+     clj-surgeon.insert-forms-envelope-test ; Opus F3: candidate identity and per-type remedies.
+     clj-surgeon.insert-forms-spacing-test ; Fable F2 ruling: existing separators and body closers.
+     clj-surgeon.insert-forms-recovery-test ; Planned durable receipt crash-window classification.
      clj-surgeon.insert-forms-parity-test ; insert_forms v1 contract witness.
      clj-surgeon.insert-forms-paths-test ; insert_forms v1 contract witness.
      clj-surgeon.insert-forms-payload-count-test ; insert_forms v1 contract witness.
