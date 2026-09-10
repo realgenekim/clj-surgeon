@@ -700,3 +700,21 @@
         "no accountant is nil, which the verdict renders UNMEASURED")
     (is (= 0.0 (battery/reserved-peak-mb {:reserved {:heap-reserved-peak-bytes 0}}))
         "zero is a MEASUREMENT, not an absence")))
+
+;; @spec MCP-OP-MEM-011
+;; RATCHET (2026-09-10, public candidate seat-path repair): MEMBAT_ROOT used
+;; to default to the literal "/home/forge/tmp/membat" -- writable, if at all,
+;; only on the one machine that ran this file first. This runner is a JVM
+;; entrance (its default is computed inline in `-main`, not a separately
+;; callable function like receipt-artifacts/default-artifact-root), so the
+;; proportionate witness here is the same source-text technique this
+;; namespace already uses for the Makefile above: read the real file, assert
+;; the old literal is gone and the new per-user form is present.
+(deftest membat-root-default-is-derived-per-user
+  (let [src (slurp "src/clj_surgeon/memory_battery_runner.clj")]
+    (is (not (str/includes? src "/home/forge/tmp/membat"))
+        "the old seat-named default must be gone")
+    (is (str/includes? src "(System/getProperty \"user.home\")")
+        "the default must be derived from the invoking user's own home")
+    (is (str/includes? src ".local/state/clj-surgeon/memory-battery")
+        "and land in the tool's own per-user state directory")))

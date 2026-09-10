@@ -144,9 +144,14 @@
 
 ;; @spec MCP-OP-TMPHYG-011
 (deftest a-seam-sourced-fstype-can-never-prove-real-disk
-  (let [findmnt (ns-resolve 'clj-surgeon.tmp-leak-support 'findmnt-fstype)
-        table (ns-resolve 'clj-surgeon.tmp-leak-support 'mounts-table-fstype)
-        seam (ns-resolve 'clj-surgeon.tmp-leak-support 'seam-mounts-file)
+  ;; RATCHET (2026-09-10, SPF-004): this classification logic lives in
+  ;; clj-surgeon.path-classification now (moved so the bb CLI's production
+  ;; classpath can reach it); tmp-leak-support/mount-fstype and
+  ;; /base-refusal are the SAME function objects (delegating `def`s), so
+  ;; stubbing the private helpers here still governs what they observe.
+  (let [findmnt (ns-resolve 'clj-surgeon.path-classification 'findmnt-fstype)
+        table (ns-resolve 'clj-surgeon.path-classification 'mounts-table-fstype)
+        seam (ns-resolve 'clj-surgeon.path-classification 'seam-mounts-file)
         disk "/var/tmp/forge"]
     (testing "with no seam set, a mounts-table ext4 answer IS proof of disk"
       (with-redefs-fn {findmnt (constantly nil)
@@ -306,7 +311,7 @@
             `/dev/fake on / (apfs, local)` and base-refusal returned nil. The
             docstring's claim that this was non-redirectable was false. Only
             absolute paths are named now."
-    (let [binaries @(resolve 'clj-surgeon.tmp-leak-support/darwin-mount-binaries)]
+    (let [binaries @(resolve 'clj-surgeon.path-classification/darwin-mount-binaries)]
       (is (seq binaries))
       (is (every? #(clojure.string/starts-with? % "/") binaries)
           "a bare name is redirectable by PATH; an absolute path is not")))
