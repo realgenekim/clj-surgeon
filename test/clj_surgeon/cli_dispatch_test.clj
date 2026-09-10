@@ -10,6 +10,7 @@
    - subprocess CLI with BARE STRING ops — the exact invocation shape that
      threw ClassCastException before ed6ad99 (`:op ls-tree`, no leading colon)."
   (:require
+   [clj-surgeon.artifact-boundary-support :as boundary]
    [babashka.process :as proc]
    [clj-surgeon.core :as core]
    [clj-surgeon.relation-census :as relation-census]
@@ -688,7 +689,7 @@
                                        :find ":old" :do [:replace ":new"] :expect {:matches 1}}]
                             :expect {:changes 1 :edits 1 :files 1}}})]
         (is (:committed result) (pr-str result))
-        (is (str/starts-with? (:receipt-file result) "/var/tmp/forge/change-receipts/"))
+        (is (boundary/published-under-root? "change" (:receipt-file result)))
         (is (.isFile (io/file (:receipt-file result))))
         (is (not (.exists (io/file root "undo.edn"))))
         (is (str/includes? (slurp source) ":new"))

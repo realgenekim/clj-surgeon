@@ -1,5 +1,6 @@
 (ns ^{:lane :fast} clj-surgeon.mcp-workspace-test
   (:require
+   [clj-surgeon.artifact-boundary-support :as boundary]
    [clj-surgeon.mcp-workspace :as workspace]
    [clojure.java.io :as io]
    [clojure.test :refer [deftest is testing]]))
@@ -118,7 +119,8 @@
             b (workspace/receipt-dir (.getPath root-b))]
         (is (= a1 a2) "one canonical workspace has one receipt directory")
         (is (not= a1 b) "different workspaces cannot share default receipts")
-        (is (.startsWith a1 "/var/tmp/forge/edit-clojure-receipts/")))
+        ;; Canonical on BOTH sides -- see clj-surgeon.artifact-boundary-support.
+        (is (boundary/published-under-root? "edit-clojure" a1)))
       (finally
         (delete-tree! root-a)
         (delete-tree! root-b)))))
