@@ -63,24 +63,74 @@
 (def defensive-refusal-kinds
   (into {} (for [r refusal-table :when (:defensive? r)] [(:kind r) (:reason r)])))
 
-(defn file-refusal-violations
-  "Source-shape check: `file-refusal` must be a pure dispatch over the table. A
-   literal kind string or a `cond`/`case` inside it means a branch exists that the
-   table does not know about — the drift PB-FENCE-020 demonstrated."
+(defn file-refusal-shape-hints
+  "FAST PRE-FILTER ONLY, never the authority. A textual check will always have an
+   edge — PB-FENCE-021 was a SECOND `(defn file-refusal` after the table-driven one,
+   which the previous version's first-occurrence scan could not see. The behavioural
+   property below decides; these hints only fail early with a clearer message."
   [src]
-  (let [i (str/index-of src "(defn file-refusal")
-        body (when i (subs src i (min (count src) (+ i 700))))
-        end (when body (or (str/index-of body "\n\n(def") (count body)))
-        body (when body (subs body 0 end))]
+  (let [defs (count (re-seq #"\(defn file-refusal\b" src))
+        tables (count (re-seq #"\(def [a-z-]*refusal-kinds\b" src))]
     (cond-> []
-      (nil? body) (conj "bin/preservation-brief has no `file-refusal`")
-      (and body (re-find #"\(cond\b|\(case\b|\(condp\b" body))
-      (conj "`file-refusal` contains a cond/case — it must dispatch only through the table")
-      (and body (seq (remove #{"\"The one reason this file is refused, or nil. Every branch lives in\""}
-                             (map first (re-seq #"\"[a-z][a-z-]{3,}\"" body)))))
-      (conj (str "`file-refusal` contains literal string(s) "
-                 (pr-str (map first (re-seq #"\"[a-z][a-z-]{3,}\"" body)))
-                 " — a kind may exist only as a table row")))))
+      (not= 1 defs) (conj (str defs " definitions of `file-refusal` — there must be exactly one"))
+      (not= 1 tables) (conj (str tables " refusal-kind collections — there must be exactly one")))))
+
+;; ---- the independent reference dispatch -----------------------------------
+;; Written here, from each row's declarative `:on` spec, so it is not the brief's
+;; own function compared with itself.
+(defn ref-predicate [{:keys [path test]}]
+  (fn [f]
+    (let [v (get-in f (mapv keyword (map name path)))]
+      (case (keyword (name test))
+        :truthy    (boolean v)
+        :falsey    (not v)
+        :non-empty (boolean (seq v))
+        :not-one   (not= 1 v)
+        :pos       (pos? (long (or v 0)))
+        false))))
+
+(defn ref-file-refusal [table f]
+  (some (fn [{:keys [kind on]}] (when ((ref-predicate on) f) kind)) table))
+
+(defn generated-file-maps
+  "Every combination of the predicate-relevant fields, plus random extra keys so a
+   dispatch that reads something it should not is caught too."
+  []
+  (let [bools [true false]]
+    (vec (for [parsed? bools
+               nsc [0 1 2]
+               plat [[] [":bb"]]
+               span bools
+               unloc [[] ["a/b"]]
+               unrep [[] ["c"]]
+               gap [0 1]
+               reqok bools]
+           (cond-> {:analyzer-failed? parsed?
+                    :reconcile {:ns-count nsc :unanalysed-features plat
+                                :ns-span-agrees? span :unlocated unloc
+                                :unreported unrep :cond-gap gap}
+                    :require-mismatch {:ok? reqok :only-parser ["z"]}}
+             (zero? (rand-int 3)) (assoc :declares ["d"])
+             (zero? (rand-int 3)) (assoc :noise (rand-int 1000))
+             (zero? (rand-int 3)) (assoc :owners [{:id "x"}]))))))
+
+(defn probe-refusals
+  "Ask a brief (real or mutated) for its LIVE answer on each generated map."
+  [brief-path maps]
+  (let [f (str "/var/tmp/forge/item3/r8-probe-" (System/currentTimeMillis) ".edn")]
+    (spit f (pr-str maps))
+    (let [{:keys [out exit]} (p/sh {:out :string :err :string} brief-path "--refusal-probe" f)]
+      (when-not (zero? exit) (throw (ex-info (str "probe failed: " brief-path) {})))
+      (mapv edn/read-string (remove str/blank? (str/split-lines out))))))
+
+(defn dispatch-divergences
+  "Where a brief's LIVE answer differs from the reference rebuilt from its table."
+  [brief-path table maps]
+  (let [live (probe-refusals brief-path maps)]
+    (vec (for [[m got] (map vector maps live)
+               :let [want (ref-file-refusal table m)]
+               :when (not= got want)]
+           {:map m :live got :reference want}))))
 
 (defn bare [q] (last (str/split q #"/")))
 (defn nspace [q] (first (str/split q #"/")))
@@ -90,8 +140,6 @@
 (def claim-vars
   (set/union let-like-vars seq-binding-vars fn-like-vars defn-like-vars
              other-modelled-vars non-binding-macro-vars))
-
-;; --------------------------------------------------------------- resolution
 
 (defn var-for
   "Resolve a fully qualified table entry in its stated namespace."
@@ -409,19 +457,57 @@
 (doseq [k (keys refusal-specimens)]
   (check! (some #{k} refusal-kinds) "R8 specimen for an unknown kind"
           (str "`" k "` has a generator but is not in refusal-kinds")))
-;; (b) the table is the dispatch, asserted by reading the source
-(doseq [v (file-refusal-violations brief-src)]
-  (check! false "R8 file-refusal is not table-driven" v))
-;; (c) the drift control: inject a literal branch into a COPY and require (b) to fail
-(let [mutated (str/replace brief-src
-                           "(defn file-refusal"
-                           "(defn file-refusal-injected [f] (cond (seq (:declares f)) \"declaration-present\" :else nil))\n\n(defn file-refusal")
-      mutated (str/replace mutated
-                           "  (some (fn [{:keys [kind predicate detail]}]"
-                           "  (cond (seq (:declares f)) {:kind \"declaration-present\" :detail \"drift\"} :else\n  (some (fn [{:keys [kind predicate detail]}]")]
-  (check! (seq (file-refusal-violations mutated)) "R8 drift control did not fire"
-          (str "a literal `declaration-present` branch injected into a copy of `file-refusal` "
-               "was not detected; the source-shape check cannot see the drift it exists for")))
+;; (b) BEHAVIOURAL: the live dispatch must equal a reference rebuilt from the table
+(doseq [h (file-refusal-shape-hints brief-src)]
+  (check! false "R8 shape pre-filter" h))
+(def r8-maps (generated-file-maps))
+(println "R8  behavioural dispatch property:" (count r8-maps) "generated file maps")
+(doseq [d (take 5 (dispatch-divergences brief refusal-table r8-maps))]
+  (check! false "R8 live dispatch disagrees with the table"
+          (str "on " (pr-str (:map d)) " the brief answered " (pr-str (:live d))
+               " but the table says " (pr-str (:reference d))
+               " — a branch or collection exists that the table does not describe")))
+
+;; (c) BEHAVIOURAL drift controls: both of Sol's injections must break the property
+(let [mut-dir "/var/tmp/forge/item3/r8-drift"]
+  (fs/delete-tree mut-dir)
+  (fs/create-dirs mut-dir)
+  (fs/copy (str here "/preservation_scan.clj") (str mut-dir "/preservation_scan.clj"))
+  (let [write! (fn [nm src]
+                 (let [f (str mut-dir "/" nm)]
+                   (spit f src)
+                   (fs/set-posix-file-permissions f "rwxr-xr-x")
+                   f))
+        literal (write! "b-literal"
+                  (-> brief-src
+                      (str/replace "  (some (fn [{:keys [kind on detail]}]"
+                                   "  (if (seq (:declares f)) {:kind \"declaration-present\" :detail \"drift\"}\n  (some (fn [{:keys [kind on detail]}]")
+                      (str/replace "        refusal-kinds))" "        refusal-kinds)))")))
+        second-def (write! "b-second"
+                     (str/replace brief-src
+                       "(when-let [f (:refusal-probe (:opts cli))]"
+                       (str "(def alternate-refusal-kinds\n"
+                            "  [{:kind \"declaration-present\"\n"
+                            "    :on {:path [:declares] :test :non-empty}\n"
+                            "    :detail (fn [_] \"a declaration exists\")}])\n\n"
+                            "(defn file-refusal [f]\n"
+                            "  (or (some (fn [{:keys [kind on detail]}]\n"
+                            "              (when ((predicate-for on) f) {:kind kind :detail (detail f)}))\n"
+                            "            alternate-refusal-kinds)\n"
+                            "      (some (fn [{:keys [kind on detail]}]\n"
+                            "              (when ((predicate-for on) f) {:kind kind :detail (detail f)}))\n"
+                            "            refusal-kinds)))\n\n"
+                            "(when-let [f (:refusal-probe (:opts cli))]")))
+        declares-maps (mapv #(assoc % :declares ["d"]) r8-maps)]
+    (doseq [[label path] [["round-13 literal branch" literal]
+                          ["round-14 second definition over its own table" second-def]]]
+      (let [hints (file-refusal-shape-hints (slurp path))
+            divs (try (dispatch-divergences path refusal-table declares-maps)
+                      (catch Exception _ [:probe-failed]))]
+        (check! (or (seq hints) (seq divs)) "R8 drift control did not fire"
+                (str label ": the injected drift produced neither a shape hint nor a dispatch "
+                     "divergence — the rung cannot see the drift it exists for"))))))
+
 
 (doseq [[k reason] defensive-refusal-kinds]
   (check! (not (some #{k} refusal-kinds)) "R8 defensive kind also enumerated"

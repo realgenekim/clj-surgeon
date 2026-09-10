@@ -51,6 +51,7 @@
            (not (:probe-scope (:opts cli)))
            (not (:probe-heads (:opts cli)))
            (not (:dump-tables (:opts cli)))
+           (not (:refusal-probe (:opts cli)))
            (not (:probe-project (:opts cli))))
   (binding [*out* *err*]
     (println "usage: preservation-brief <candidate-sha> <base-sha> [--repo DIR] [--roots src,test] [--receipt PATH] [--out PATH] [--json PATH]"))
@@ -795,22 +796,33 @@
 ;; about; a platform outside the analyzer's scope invalidates the inventories; and
 ;; only then the finer inventory disagreements.
 (def refusal-kinds
+  "Ordered. Each row's `:on` is a DECLARATIVE predicate spec — a path into the file
+   map and a test — so `bin/preservation-tables-test` can rebuild the dispatch
+   independently rather than calling the brief's own function and comparing it with
+   itself. `predicate-for` is the only place a spec becomes code.
+
+   **Order is precedence.** The first matching row decides, so a file satisfying two
+   rules has exactly one answer and it is the earlier row. The order is
+   cheapest-and-most-fundamental first: a file the analyzer could not parse says
+   nothing else useful; a file without exactly one namespace has no span to reason
+   about; a platform outside the analyzer's scope invalidates the inventories; and
+   only then the finer inventory disagreements."
   [{:kind "unparsable"
-    :predicate (fn [f] (boolean (:analyzer-failed? f)))
+    :on {:path [:analyzer-failed?] :test :truthy}
     :detail (fn [_] "the analyzer could not parse this file")}
 
    {:kind "ns-count"
-    :predicate (fn [f] (not= 1 (get-in f [:reconcile :ns-count])))
+    :on {:path [:reconcile :ns-count] :test :not-one}
     :detail (fn [f] (str (get-in f [:reconcile :ns-count])
                          " namespace definitions in one file"))}
 
    {:kind "unelaborated-platform"
-    :predicate (fn [f] (boolean (seq (get-in f [:reconcile :unanalysed-features]))))
+    :on {:path [:reconcile :unanalysed-features] :test :non-empty}
     :detail (fn [f] (str "reader-conditional platform(s) the analyzer does not elaborate: "
                          (str/join " " (get-in f [:reconcile :unanalysed-features]))))}
 
    {:kind "ns-span"
-    :predicate (fn [f] (not (get-in f [:reconcile :ns-span-agrees?])))
+    :on {:path [:reconcile :ns-span-agrees?] :test :falsey}
     :detail (fn [_] "the parsed `ns` span does not contain the resolver's namespace definition")}
 
    {:kind "unplaced-definition"
@@ -821,32 +833,55 @@
                  "in bin/preservation_scan.clj, not an input. The guard stays for exactly "
                  "that case, and deleting a fail-closed branch to make a test green is how a "
                  "boundary stops being one.")
-    :predicate (fn [f] (boolean (seq (get-in f [:reconcile :unlocated]))))
+    :on {:path [:reconcile :unlocated] :test :non-empty}
     :detail (fn [f] (str "definition(s) the scanner could not place: "
                          (str/join " " (get-in f [:reconcile :unlocated]))))}
 
    {:kind "unreported-owner"
-    :predicate (fn [f] (boolean (seq (get-in f [:reconcile :unreported]))))
+    :on {:path [:reconcile :unreported] :test :non-empty}
     :detail (fn [f] (str "owner(s) the resolver never reported: "
                          (str/join " " (get-in f [:reconcile :unreported]))))}
 
    {:kind "unreported-branch-def"
-    :predicate (fn [f] (pos? (long (or (get-in f [:reconcile :cond-gap]) 0))))
+    :on {:path [:reconcile :cond-gap] :test :pos}
     :detail (fn [f] (str (get-in f [:reconcile :cond-gap])
                          " definition(s) in an analysed branch the resolver did not report"))}
 
    {:kind "require-mismatch"
-    :predicate (fn [f] (not (get-in f [:require-mismatch :ok?])))
+    :on {:path [:require-mismatch :ok?] :test :falsey}
     :detail (fn [f] (str "require(s) seen only by the parser: "
                          (str/join " " (get-in f [:require-mismatch :only-parser]))))}])
+
+(defn predicate-for
+  "The only place a declarative `:on` spec becomes code."
+  [{:keys [path test]}]
+  (fn [f]
+    (let [v (get-in f path)]
+      (case test
+        :truthy    (boolean v)
+        :falsey    (not v)
+        :non-empty (boolean (seq v))
+        :not-one   (not= 1 v)
+        :pos       (pos? (long (or v 0)))
+        false))))
 
 (defn file-refusal
   "The one reason this file is refused, or nil. Every branch lives in
    `refusal-kinds`; this function has none of its own."
   [f]
-  (some (fn [{:keys [kind predicate detail]}]
-          (when (predicate f) {:kind kind :detail (detail f)}))
+  (some (fn [{:keys [kind on detail]}]
+          (when ((predicate-for on) f) {:kind kind :detail (detail f)}))
         refusal-kinds))
+
+(when-let [f (:refusal-probe (:opts cli))]
+  ;; Entry point for bin/preservation-tables-test R8. It runs the SAME
+  ;; `file-refusal` the index pipeline calls, so a second definition, a shadowing
+  ;; redefinition or a second refusal collection anywhere in this file changes the
+  ;; answer here too. The test compares these answers with a dispatch it rebuilds
+  ;; independently from each row's declarative `:on` spec.
+  (doseq [m (edn/read-string (slurp f))]
+    (println (pr-str (:kind (file-refusal m)))))
+  (System/exit 0))
 
 (when (:dump-tables (:opts cli))
   (prn {:walked-special-forms walked-special-forms
@@ -860,7 +895,7 @@
         :non-binding-macro-vars non-binding-macro-vars
         :core-fn-vars core-fn-vars
         :table-vars table-vars
-        :refusal-kinds (mapv #(select-keys % [:kind :defensive? :reason]) refusal-kinds)})
+        :refusal-kinds (mapv #(select-keys % [:kind :defensive? :reason :on]) refusal-kinds)})
   (System/exit 0))
 
 (when-let [f (:probe-heads (:opts cli))]
