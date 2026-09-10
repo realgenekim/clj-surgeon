@@ -731,3 +731,5 @@ B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa;
 ## STATE at 2026-09-10T04:47Z — trunk 59d8bc0c (skiff-ready install LANDED); mayor told (inbox); 7906 srv7906l + CLI on 59d8bc0c; squeeze block (records lane off the lease, ship v3.8 staged) running to ~07:33Z; then Astra steward qualification → install v3.8. Items 1/3 parked; item 2 on Gene.
 
 ## STATE at 2026-09-10T09:11Z — squeeze PARKED at the cap (delivery /var/tmp/forge/ship-v3.8-delivery, INSTALL OK v3.10 scratch; DoD in inbox); trunk 59d8bc0c; ship v3.7 installed; items 1/3 parked; item 2 on Gene; mayor told (inb-62826b); Buster benchmark on mayor (inb-8bd9ad). Gene's three-part order complete except the skiff receipt, which is his.
+
+## STATE at 2026-09-10T11:35Z — trunk 59d8bc0c = tag stable/2026-09-10 (sublime state 9). Window readings are not state readings.
