@@ -53,8 +53,11 @@
       (catch Exception _ false))))
 
 (defn- under-home? [path]
-  (let [home (System/getProperty "user.home")]
-    (or (= path home) (str/starts-with? path (str home java.io.File/separator)))))
+  (try
+    (let [home (.getCanonicalPath (io/file (System/getProperty "user.home")))
+          path (.getCanonicalPath (io/file path))]
+      (or (= path home) (str/starts-with? path (str home java.io.File/separator))))
+    (catch Exception _ false)))
 
 ;; @spec ALIAS-MIGRATION-001
 (defn validate-artifact-root!

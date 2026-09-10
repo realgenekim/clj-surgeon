@@ -7375,6 +7375,22 @@
     (is (some? error))
     (is (= :artifact-root-not-owned (:error-type (ex-data error))))))
 
+;; @spec ALIAS-MIGRATION-001
+(deftest artifact-root-refuses-lexical-home-traversal
+  ;; A lexical `$HOME/...` prefix is not containment: enough `..` segments
+  ;; resolve this candidate into root's home. The ownership exception must
+  ;; compare canonical paths or an override can escape into another user's
+  ;; state while still passing the raw starts-with check.
+  (let [home (io/file (System/getProperty "user.home"))
+        ups (str/join "/" (repeat (.getNameCount (.toPath home)) ".."))
+        root (str home "/" ups "/root/clj-surgeon-spf001-traversal-witness")
+        error (try (artifacts/validate-artifact-root! root) nil
+                   (catch clojure.lang.ExceptionInfo e e))]
+    (is (= "/root/clj-surgeon-spf001-traversal-witness"
+           (.getCanonicalPath (io/file root))))
+    (is (some? error))
+    (is (= :artifact-root-not-owned (:error-type (ex-data error))))))
+
 (deftest artifact-root-accepts-a-path-under-home
   (let [root (str (System/getProperty "user.home")
                    "/.local/state/clj-surgeon/spf001-home-witness")]
