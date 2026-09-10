@@ -1,9 +1,9 @@
 (ns clj-surgeon.insert-forms-portable-receipt-test
   {:lane :fast}
   (:require
-   [clj-surgeon.mcp-inspect-tool :as inspect]
    [clj-surgeon.insert-forms :as insert]
    [clj-surgeon.insert-forms-support :as h]
+   [clj-surgeon.mcp-inspect-tool :as inspect]
    [clojure.test :refer [deftest is]]))
 
 ;; @spec INSERT-FORMS-012
