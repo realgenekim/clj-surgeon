@@ -36,13 +36,38 @@
   (let [s (or message "Operation failed.")]
     (if (> (count s) 512)
       (str (subs s 0 (if (Character/isHighSurrogate (.charAt ^String s 511)) 511 512)) "…") s)))
+;; @spec INSERT-FORMS-022
+;; INTENT: INSERT-FORMS-022
+(defn remedy [{:keys [error-type candidates at]}]
+  (case error-type
+    :invalid-request (str "Follow the closed request schema at " (pr-str at) ".")
+    :invalid-path "Choose a singly-linked regular .clj file inside the canonical workspace."
+    :invalid-guard "Supply exactly one guard: sha256 or a complete path-bound read_receipt."
+    :unsupported-source "Choose supported .clj source in UTF-8, with uniform LF or CRLF and no unsupported reader syntax."
+    :unsupported-payload-syntax "Remove reader-discard, reader-eval, reader conditionals or BOM from the payload."
+    :limit-exceeded "Reduce the input or projected receipt to the reported limit."
+    :source-hash-mismatch "Refresh the guard from a fresh read of the complete target before retrying."
+    :source-changed-before-commit "The target changed before publication; reconsider the insertion using a fresh read and guard."
+    :unsupported-indentation "Use spaces instead of tabs in measured source or payload indentation."
+    :unsupported-owner-shape "Choose an owner with a supported defn, deftest or testing body header."
+    :anchor-not-found "Choose an existing exact supported owner or direct testing label at the reported selection step."
+    :anchor-multiple-matches (str "Choose a unique supported owner or direct label; candidates: "
+                                 (diagnostic (pr-str candidates)) ". Duplicate owners cannot be selected by line.")
+    :anchor-ambiguous (str "Choose a 1-based arity from candidates: " (diagnostic (pr-str candidates)) ".")
+    :anchor-index-out-of-range "Choose a 1-based child or arity index within the reported child_count or arity_count."
+    :payload-parse-error "Repair the payload syntax at the reported line and column."
+    :source-parse-error "Repair the source syntax at the reported line and column, then capture a fresh guard."
+    :candidate-parse-error "Report the candidate parser failure with this request; do not replay until the splice defect is repaired."
+    :candidate-structure-mismatch "Report the candidate placement or preservation failure; do not replay until the splice defect is repaired."
+    :payload-form-count-mismatch "Set payload.forms to the intended effective form count, or revise the payload to that count."
+    (str "Resolve the reported " (name error-type) " failure at " (pr-str at) " before retrying.")))
 (defn refusal [e]
   (merge {:state "refused" :committed false :mutation_attempted false
           :source_unchanged true :ok false :operation "insert_forms"
           :error (diagnostic (.getMessage ^Exception e))
           :next_action (if (#{:source-hash-mismatch :source-changed-before-commit}
                             (:error-type (ex-data e))) "refresh-source" "revise-request")
-          :remedy "Revise the field named by at using the reported contract."}
+          :remedy (remedy (ex-data e))}
          (ex-data e)))
 (defn bounded! [s kind]
   (when (> (alength (bytes s)) (limits kind))
@@ -260,6 +285,12 @@
     (and (= :list (:tag form)) (= (:kind owner) (kind form))
          (= (:name owner) (raw (unwrap (second (effective form))))))))
 
+;; @spec INSERT-FORMS-023
+;; INTENT: INSERT-FORMS-023
+(defn candidate-summary [node]
+  (merge (select-keys node [:line :start :end])
+         {:kind (kind node) :name (raw (unwrap (second (effective (unwrap node)))))}))
+
 ;; @spec INSERT-FORMS-006
 ;; INTENT: INSERT-FORMS-006
 (defn one! [candidates at]
@@ -267,7 +298,7 @@
     (refuse! (if (empty? candidates) :anchor-not-found :anchor-multiple-matches)
              at "Expected exactly one structural match."
              {:expected 1 :actual (count candidates)
-              :candidates (mapv #(select-keys % [:line :start :end]) (take 10 candidates))
+              :candidates (mapv candidate-summary (take 10 candidates))
               :candidates_truncated (> (count candidates) 10)}))
   (first candidates))
 
@@ -294,7 +325,13 @@
           (= :list (:tag (first tail)))
           (let [arities (if (= :map (:tag (last tail))) (pop tail) tail)]
             (when-not (every? #(and (= :list (:tag %)) (= :vector (:tag (first (effective %))))) arities) (malformed))
-            (when-not (:arity anchor) (refuse! :anchor-ambiguous [:anchor :arity] "Multi-arity owner requires arity."))
+            (when-not (:arity anchor)
+              (refuse! :anchor-ambiguous [:anchor :arity] "Multi-arity owner requires arity."
+                       {:actual (count arities) :candidates_truncated (> (count arities) 10)
+                        :candidates (mapv (fn [i node]
+                                            (merge (select-keys node [:line :start :end])
+                                                   {:kind "arity" :name (raw (first (effective node))) :arity (inc i)}))
+                                          (range) (take 10 arities))}))
             (when (> (:arity anchor) (count arities))
               (refuse! :anchor-index-out-of-range [:anchor :arity] "Arity is outside owner."
                        {:arity_count (count arities) :actual (:arity anchor)}))
