@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-insert-forms
   (:require
    [clj-surgeon.insert-forms :as insert]
+   [clj-surgeon.insert-forms-plan :as p]
    [clj-surgeon.insert-forms-schema :as schema]
    [clj-surgeon.mcp-operation :as operation]
    [clojure.walk :as walk]))
@@ -9,7 +10,10 @@
 ;; INTENT: INSERT-FORMS-018
 (defn handle [_exchange params callback]
   (operation/invoke!
-    {:execute #(insert/execute! (walk/keywordize-keys params))
+    {:execute #(try
+                 (p/request-shape! params)
+                 (insert/execute! (walk/keywordize-keys params))
+                 (catch Exception e (assoc (p/refusal e) :elapsed_ms 0.0)))
      :summarize insert/receipt-text
      ;; Domain refusals are ordinary MCP tool results, even when :ok is false.
      :callback (fn [content _is-error receipt] (callback content false receipt))}))

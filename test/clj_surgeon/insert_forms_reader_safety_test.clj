@@ -8,6 +8,9 @@
 ;; @spec INSERT-FORMS-011
 ;; INTENT-TEST: INSERT-FORMS-011
 (deftest insert-forms-reader-safety-and-limits
+  (h/refused h/source
+    (assoc (h/request h/source) :extra (reduce (fn [x _] [x]) nil (range 600)))
+    :limit-exceeded)
 
   (h/with-file h/source
     (fn [_ file req]

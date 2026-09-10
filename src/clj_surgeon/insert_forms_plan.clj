@@ -146,7 +146,19 @@
     (refuse! kind at "Closed map has missing or unsupported fields.")))
 (defn positive! [x at]
   (when-not (and (integer? x) (pos? x)) (refuse! :invalid-request at "Positive integer required.")))
+(defn request-shape! [r]
+  (loop [pending [[r 0]] units 0]
+    (when-let [[value depth] (peek pending)]
+      (when (or (> depth (:depth limits)) (>= units (:units limits)))
+        (refuse! :limit-exceeded [:request] "Request collection shape exceeds prewalk bounds."))
+      (recur (if (coll? value)
+               (into (pop pending) (map #(vector % (inc depth))) value)
+               (pop pending))
+             (inc units))))
+  r)
+
 (defn validate! [r]
+  (request-shape! r)
   (bounded! (pr-str r) :request)
   (closed! r [:version :workspace_root :file :guard :anchor :payload] [] [] :invalid-request)
   (when-not (and (= 1 (:version r)) (integer? (:version r))
@@ -414,12 +426,12 @@
                         (tree-seq (comp seq :children) :children before))
         before-positions (position-facts source (mapcat (juxt :start :end) trivia))
         after-positions (position-facts candidate
-                           (concat [p (+ p (dec (count inserted)))]
-                             (mapcat (fn [form] [(:start form) (dec (:end form))]) inserted-roots)
-                             (mapcat (fn [node]
-                                       (for [v [(:start node) (:end node)]]
-                                         (if (>= v p) (+ v (count inserted)) v))) trivia)
-                             [(+ p (count inserted))]))
+                          (concat [p (+ p (dec (count inserted)))]
+                            (mapcat (fn [form] [(:start form) (dec (:end form))]) inserted-roots)
+                            (mapcat (fn [node]
+                                      (for [v [(:start node) (:end node)]]
+                                        (if (>= v p) (+ v (count inserted)) v))) trivia)
+                            [(+ p (count inserted))]))
         line-at #(get-in after-positions [% :line])
         entries (mapv (fn [i a b]
                         {:before_index (inc i) :after_index (inc (future-index (:start b)))
