@@ -16,6 +16,7 @@ repo=${1:-.}
 status=0
 missing_required=""
 missing_optional=""
+missing_gate=""
 
 say() { printf '  %-22s %s\n' "$1" "$2"; }
 
@@ -96,7 +97,14 @@ fi
 
 echo
 echo "  Test gate (only needed to run \`make test\` yourself)"
-need "  swipl" swipl "the MCP operation contract oracle -- gate stage one" optional --version
+if command -v swipl >/dev/null 2>&1; then
+  say "  swipl" "$(version_of swipl --version)"
+else
+  say "  swipl" "MISSING -- \`make test\` cannot run (gate stage one)"
+  say "" "macOS: brew install swi-prolog  |  Debian: apt install swi-prolog-nox"
+  say "" "the CLI, the skills and the MCP server do NOT need it"
+  missing_gate="yes"
+fi
 if command -v timeout >/dev/null 2>&1 || command -v gtimeout >/dev/null 2>&1; then
   say "  timeout" "$(command -v timeout || command -v gtimeout)"
 else
@@ -134,7 +142,12 @@ if [ -n "$missing_required" ]; then
 fi
 if [ -n "$missing_optional" ]; then
   echo "OK to install. Reduced capability without:$missing_optional"
+elif [ -n "$missing_gate" ]; then
+  echo "OK to install. \`make test\` will refuse until swipl is installed."
 else
   echo "OK to install. Every earned win is available on this box."
+fi
+if [ -n "$missing_optional" ] && [ -n "$missing_gate" ]; then
+  echo "                \`make test\` will refuse until swipl is installed."
 fi
 exit 0

@@ -228,6 +228,19 @@ check-clj-surgeon-skill-mirrors:
 
 mcp-operation-oracle:
 	# @spec MCP-OP-ORACLE-001
+	@# SWI-Prolog is gate stage one and it is NOT on a clean macOS or a clean
+	@# Ubuntu. `swipl: command not found` from make is a true statement that
+	@# tells the reader nothing, so name the tool, the reason and the remedy.
+	@# There is deliberately NO bypass: this oracle is a merge gate, and a
+	@# gate with an opt-out is not a gate. Fail loud, to a named remedy.
+	@command -v swipl >/dev/null 2>&1 || { \
+	  echo "gate-refused: SWI-Prolog (swipl) is not installed." >&2; \
+	  echo "  It runs the MCP operation contract oracle, which is the FIRST" >&2; \
+	  echo "  stage of \`make test\`. Installing clj-surgeon does not need it;" >&2; \
+	  echo "  running the landing gate yourself does." >&2; \
+	  echo "  macOS:  brew install swi-prolog" >&2; \
+	  echo "  Debian: sudo apt-get install swi-prolog-nox" >&2; \
+	  exit 1; }
 	swipl -q -f test/mcp_operation_contract_oracle.pl
 
 repository-hygiene:
