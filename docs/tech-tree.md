@@ -682,3 +682,24 @@ comparison over the planned receipt, with a crash-window witness. Evidence:
 `/var/tmp/forge/insert-fx/opus-redteam-report.md`, `fix1-red.log`, and
 `astra-fix1-report.md`. This is correctness work, not new routing admission or a
 performance claim; Sol review remains outstanding.
+
+### 2026-09-10T23:48:32.139677+00:00 — fixed alias request-file verb
+
+`rename_alias` now shares insertion's bounded EDN, guard, publication and receipt
+seams, with reader-role prefix planning and a complete guarded multi-file snapshot.
+The exact E4 source produces `02332a74caf1ead4d70c555b530230b8b03aebc306bd72f5d129f111c876da0c`;
+all 29 route literals survive. The final independent-oracle replay takes 19.803 s
+from request construction to verdict, with no native control or performance admission.
+
+RED-first witnesses exposed missing map-qualifier coordinates, cross-file validation
+stage ordering, and accidental alias restrictions on unchanged declaration symbols.
+The shared span wrapper now handles rewrite-clj's coordinate-free qualifier node;
+all files complete each validation stage before the next. Alias restrictions remain
+strict while legal library/referred symbols retain their own grammar. Final focused
+witnesses pass 507 assertions; test-fast passes 766 tests / 8,236 assertions with
+zero isolation violations; serialized lint has zero errors/warnings.
+
+[Design and requirements](intent/rename-alias/design.md). Build receipts, earlier
+failures, the 20-line seam map, final E4 wall and remaining judgment boundaries:
+`/var/tmp/forge/rename-fx/astra-build-report.md`. No push, landing-gate-prewarm,
+behavioral proof or automatic routing admission.

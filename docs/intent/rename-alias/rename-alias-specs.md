@@ -51,4 +51,3 @@ The frozen contract is normative; IDs are permanent. Each boundary retains the f
 - [x] **RENAME-ALIAS-011**: When either request-file CLI spelling or MCP is invoked, the entrance shall expose the same domain result and mutation state.
 
   Witness: `rename-alias-cli-mcp-parity`. Misreading: Turn a domain refusal into a transport error or report exit zero without a verified commit. Boundary: Closed bounded EDN, help, stdout, 0/2/1 exits, success/refusal/recovery parity and terminal omission.
-
