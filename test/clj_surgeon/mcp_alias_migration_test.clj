@@ -1102,10 +1102,19 @@
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- namespace-source-path
+  "Almost every reachable clj-surgeon namespace lives under src/. A shared
+   support namespace can legitimately live under test/ instead (e.g.
+   clj-surgeon.tmp-leak-support, required from src/clj_surgeon/receipt_artifacts.clj
+   and src/clj_surgeon/memory_battery_runner.clj alike) -- this returns
+   whichever actually exists, preferring src/ when both would (they never do
+   in this tree; a namespace has exactly one source file)."
   [namespace-name]
-  (str "src/"
-       (str/replace (str/replace (str namespace-name) "." "/") "-" "_")
-       ".clj"))
+  (let [relative (str (str/replace (str/replace (str namespace-name) "." "/") "-" "_")
+                      ".clj")
+        src-path (str "src/" relative)]
+    (if (.exists (io/file src-path))
+      src-path
+      (str "test/" relative))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- required-clj-surgeon-namespaces
@@ -5908,7 +5917,13 @@
     "alias-migration-walk-too-large" "ambiguous-change-subject"
     "ambiguous-form" "ambiguous-match" "analyzer-authority-unverified"
     "analyzer-mission-budget-exhausted" "analyzer-mission-expired"
-    "apply-failed" "atomic-write-failed" "basis-coverage-mismatch"
+    "apply-failed"
+    ;; SPF-001 (2026-09-10, fence NO-GO on bac7ba22): validate-artifact-root!
+    ;; fails closed on the selected artifact root before any receipt writer
+    ;; trusts it -- 149 -> 153.
+    "artifact-root-blank" "artifact-root-not-owned" "artifact-root-ram-backed"
+    "artifact-root-relative"
+    "atomic-write-failed" "basis-coverage-mismatch"
     "basis-edit-address-drift" "basis-edit-covers-owner"
     "basis-workspace-mismatch" "change-buffer-budget-exceeded"
     "clj-kondo-admission-unavailable" "clj-kondo-executable-unavailable"
@@ -5985,7 +6000,7 @@
   ;; could see. Both directions are asserted — a kind that appears and a kind
   ;; that vanishes are each a change to what a text-reading client is promised.
   (let [kinds (set (refusal-kinds-in-source))]
-    (is (= 149 (count kinds))
+    (is (= 153 (count kinds))
         (str "the entrance's refusal enumeration changed size: "
              (count kinds) " kinds"))
     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))
@@ -7300,3 +7315,181 @@
             (is (= 16 (count rows)))
             (is (= (set (map str (range 16))) (set (map :id rows)))))))
       (finally (delete-tree! artifact-root)))))
+
+;; RATCHET (2026-09-10, public candidate seat-path repair): *artifact-root*
+;; used to default to the literal "/var/tmp/forge" -- unwritable, or worse
+;; writable by everyone, on any machine that is not that one.
+;; default-artifact-root resolves it per user instead; this witness pins the
+;; CONTRACT (absolute, per-user, never the old seat literal), not one
+;; machine's spelling. Override reachability itself (CLJ_SURGEON_ARTIFACT_ROOT,
+;; and the *artifact-root* dynamic binding) is already exercised throughout
+;; this file, e.g. route-telemetry-appends-whole-concurrent-lines above.
+(deftest artifact-root-default-is-derived-per-user
+  (let [root (artifacts/default-artifact-root)]
+    (is (not= "/var/tmp/forge" root)
+        "the old seat-named literal must be gone")
+    (is (.isAbsolute (io/file root)) "the artifact root is always absolute")
+    (is (str/includes? root "clj-surgeon")
+        "lands under the tool's own namespaced state, not a bare shared dir")
+    (when-not (or (System/getenv "CLJ_SURGEON_ARTIFACT_ROOT")
+                  (System/getenv "XDG_STATE_HOME"))
+      (is (str/starts-with? root (System/getProperty "user.home"))
+          "with no override, resolves under the invoking user's own home"))))
+
+;; RATCHET (2026-09-10, SPF-001, Sol's fence NO-GO on bac7ba22):
+;; default-artifact-root only SELECTED a candidate (CLJ_SURGEON_ARTIFACT_ROOT,
+;; XDG_STATE_HOME) with no validation -- blank, relative, RAM-backed, and
+;; another user's path were all silently accepted, and the writer's only
+;; guard checked containment inside the CURRENT workspace, never the root's
+;; own safety. validate-artifact-root! is the one place that decides whether
+;; a selected root is safe to write to; every failure below is a typed
+;; ex-info naming :error-type and the offending :root.
+(deftest artifact-root-refuses-blank
+  (let [error (try (artifacts/validate-artifact-root! "") nil
+                    (catch clojure.lang.ExceptionInfo e e))]
+    (is (some? error))
+    (is (= :artifact-root-blank (:error-type (ex-data error))))))
+
+(deftest artifact-root-refuses-relative
+  (let [error (try (artifacts/validate-artifact-root! "relative/state/path") nil
+                    (catch clojure.lang.ExceptionInfo e e))]
+    (is (some? error))
+    (is (= :artifact-root-relative (:error-type (ex-data error))))))
+
+(deftest artifact-root-refuses-ram-backed
+  ;; Matches the fence's own probe: XDG_STATE_HOME=/tmp produced
+  ;; /tmp/clj-surgeon/artifacts, and base-refusal on that is :ram-path-prefix.
+  (let [error (try (artifacts/validate-artifact-root!
+                      "/tmp/clj-surgeon-spf001-ram-witness") nil
+                    (catch clojure.lang.ExceptionInfo e e))]
+    (is (some? error))
+    (is (= :artifact-root-ram-backed (:error-type (ex-data error))))))
+
+(deftest artifact-root-refuses-another-users-path
+  ;; No sudo on this seat, so /root is guaranteed unwritable and not owned by
+  ;; the invoking user -- the same class the fence flagged with
+  ;; /home/someone-else/state.
+  (let [error (try (artifacts/validate-artifact-root!
+                      "/root/clj-surgeon-spf001-foreign-witness") nil
+                    (catch clojure.lang.ExceptionInfo e e))]
+    (is (some? error))
+    (is (= :artifact-root-not-owned (:error-type (ex-data error))))))
+
+(deftest artifact-root-accepts-a-path-under-home
+  (let [root (str (System/getProperty "user.home")
+                   "/.local/state/clj-surgeon/spf001-home-witness")]
+    (is (= root (artifacts/validate-artifact-root! root)))))
+
+(deftest artifact-root-retains-the-controlled-parity-harness-override
+  ;; The fence's explicit non-negotiable: CLJ_SURGEON_ARTIFACT_ROOT pointed at
+  ;; a real-disk path THIS invocation owns (the stable build's own literal,
+  ;; /var/tmp/forge) must still be accepted, not swept up by the new refusal.
+  (is (= "/var/tmp/forge" (artifacts/validate-artifact-root! "/var/tmp/forge"))))
+
+(deftest artifact-root-is-validated-before-every-receipt-directory-is-computed
+  (let [root (temp-dir)]
+    (try
+      (binding [artifacts/*artifact-root* "relative/not-a-real-root"]
+        (let [error (try (artifacts/directory "edit-clojure" (str root)) nil
+                          (catch clojure.lang.ExceptionInfo e e))]
+          (is (some? error))
+          (is (= :artifact-root-relative (:error-type (ex-data error))))))
+      (finally (delete-tree! root)))))
+
+;; RATCHET (2026-09-10, SPF-004, Sol's fence NO-GO on 3dd61167):
+;; validate-artifact-root! called mkdirs BEFORE its ownership/RAM checks, so
+;; a refused candidate was created and left behind on disk. Every case here
+;; proves the opposite: after a refusal, the probe path does not exist.
+(deftest artifact-root-refusal-leaves-no-directory-behind-tmp
+  (let [probe (str "/tmp/clj-surgeon-spf004-probe-" (System/nanoTime))]
+    (is (thrown? clojure.lang.ExceptionInfo (artifacts/validate-artifact-root! probe)))
+    (is (not (.exists (io/file probe))))))
+
+(deftest artifact-root-refusal-leaves-no-directory-behind-devshm
+  (let [probe (str "/dev/shm/clj-surgeon-spf004-probe-" (System/nanoTime))]
+    (is (thrown? clojure.lang.ExceptionInfo (artifacts/validate-artifact-root! probe)))
+    (is (not (.exists (io/file probe))))))
+
+(deftest artifact-root-refusal-leaves-no-directory-behind-tmpfs-under-home
+  ;; A real symlink under $HOME pointing at a genuinely RAM-backed directory
+  ;; (/run/user/<uid>, tmpfs on this box) -- the exact shape the fence's own
+  ;; probe used ("a default rooted below a $HOME/.local/state symlink into
+  ;; /dev/shm"). The literal-name check alone cannot catch this (the path
+  ;; text never mentions /tmp or /dev/shm); only base-refusal's real
+  ;; findmnt/mounts-table classification of the symlink's TARGET can.
+  (let [run-user (io/file "/run/user" (str (.trim (:out (shell/sh "id" "-u")))))]
+    (when (.isDirectory run-user)
+      (let [link-parent (io/file (System/getProperty "user.home")
+                                  ".local/state" (str "spf004-tmpfs-link-" (System/nanoTime)))
+            link (io/file link-parent "artifacts")
+            probe (str link "/probe")]
+        (try
+          (.mkdirs link-parent)
+          (java.nio.file.Files/createSymbolicLink
+            (.toPath link) (.toPath run-user)
+            (make-array java.nio.file.attribute.FileAttribute 0))
+          (is (thrown? clojure.lang.ExceptionInfo (artifacts/validate-artifact-root! (str link "/artifacts"))))
+          (is (not (.exists (io/file probe))))
+          ;; NEVER the shared delete-tree! here: it walks via file-seq,
+          ;; which follows a symlinked directory, and would try to recurse
+          ;; into (and delete from) the REAL /run/user/<uid> it points at.
+          ;; Delete only the symlink itself (Files/delete does not follow
+          ;; it), then the now-empty parent.
+          (finally
+            (Files/deleteIfExists (.toPath link))
+            (Files/deleteIfExists (.toPath link-parent))))))))
+
+(deftest artifact-root-refuses-as-unknown-not-accepted-when-classification-is-unavailable
+  ;; SPF-004's second half: the self-contained predicate FAILED OPEN when
+  ;; findmnt was unavailable. The production classifier must fail CLOSED
+  ;; instead -- with EVERY mount source hidden (findmnt stubbed away, the
+  ;; mounts-table fallback pointed at the documented witness seam), an
+  ;; actually-tmpfs path must still refuse (:unknown-fstype), never be
+  ;; silently accepted as real disk.
+  (require 'clj-surgeon.path-classification)
+  (let [findmnt (ns-resolve 'clj-surgeon.path-classification 'findmnt-fstype)
+        mounts-file (ns-resolve 'clj-surgeon.path-classification 'mounts-file)
+        run-user (io/file "/run/user" (str/trim (:out (shell/sh "id" "-u"))))]
+    (when (.isDirectory run-user)
+      (with-redefs-fn {findmnt (constantly nil)
+                       mounts-file (constantly "/nonexistent-clj-surgeon-mounts-seam")}
+        #(let [probe (str run-user "/spf004-unknown-probe")]
+           (is (= :unknown-fstype
+                  (:reason ((ns-resolve 'clj-surgeon.path-classification 'base-refusal) probe)))
+               "with no mount source able to answer, classification must be :unknown, never a pass")
+           (is (thrown? clojure.lang.ExceptionInfo (artifacts/validate-artifact-root! probe)))
+           (is (not (.exists (io/file probe)))))))))
+
+;; RATCHET (2026-09-10, SPF-005, Sol's fence NO-GO on 3dd61167):
+;; append-telemetry! built its directory straight from *artifact-root* and
+;; called mkdirs directly, bypassing validate-artifact-root!/writable-root!
+;; entirely -- an unvalidated root (CLJ_SURGEON_ARTIFACT_ROOT on tmpfs)
+;; reached a real write. Proves the entrance is now load-bearing: refuses,
+;; and writes nothing.
+(deftest telemetry-with-a-ram-root-refuses-and-writes-nothing
+  (let [probe (str "/dev/shm/clj-surgeon-spf005-telemetry-" (System/nanoTime))]
+    (with-bindings {(resolve 'clj-surgeon.receipt-artifacts/*artifact-root*) probe}
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (alias-migration/append-telemetry!
+                     {:type :telemetry :id "spf005" :wall_ms 1 :outcome "refused"}))))
+    (is (not (.exists (io/file probe))))))
+
+;; RATCHET (2026-09-10, SPF-005): ONE entrance for every writer under a
+;; derived *artifact-root* -- a source scan, not a listed set, so a new
+;; writer that skips the entrance fails this by name on the day it is
+;; written. Every src/*.clj file that reaches into
+;; receipt-artifacts/*artifact-root* directly must also call
+;; receipt-artifacts/writable-root! (or BE receipt_artifacts.clj, which
+;; defines the entrance and is exempt from calling itself).
+(deftest no-src-writer-reaches-artifact-root-without-the-entrance
+  (let [offenders (for [file (file-seq (io/file "src"))
+                        :when (and (.isFile ^java.io.File file)
+                                   (str/ends-with? (.getName ^java.io.File file) ".clj")
+                                   (not= "receipt_artifacts.clj" (.getName ^java.io.File file)))
+                        :let [text (slurp file)]
+                        :when (str/includes? text "*artifact-root*")
+                        :when (not (str/includes? text "writable-root!"))]
+                    (str file))]
+    (is (= [] offenders)
+        (str "reaches *artifact-root* directly without calling writable-root! first: "
+             (pr-str offenders)))))
