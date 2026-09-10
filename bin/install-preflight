@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+# `make install` preflight: say what this box is and what it is missing, BEFORE
+# anything is written.
+#
+# Written for bash 3.2 -- the bash Apple ships as /bin/bash. No associative
+# arrays, no ${var,,}, no mapfile, no `wait -n`. It must run on the laptop it is
+# reporting about.
+#
+# It never fails the install for a MISSING OPTIONAL tool: the point is that a
+# clean machine learns, in one screen, exactly which of the earned wins it can
+# use today and what one command buys the rest. It DOES fail for a missing hard
+# requirement, because writing a launcher that cannot run is worse than saying so.
+set -u
+
+repo=${1:-.}
+status=0
+missing_required=""
+missing_optional=""
+gate_blockers=""
+
+say() { printf '  %-22s %s\n' "$1" "$2"; }
+
+version_of() {
+  # First MEANINGFUL line. Some of these print several lines and some print to
+  # stderr; both are normal. JAVA_TOOL_OPTIONS is the trap: the JVM announces
+  # "Picked up JAVA_TOOL_OPTIONS: ..." on stderr before ANY output, from every
+  # java process on the box, so a naive `head -1` reports the environment
+  # variable instead of the version -- and any script parsing java output the
+  # same way is reading that line too.
+  "$@" 2>&1 | grep -v '^Picked up ' | head -1 | tr -d '\r'
+}
+
+need() { # need <label> <binary> <why> <required|optional> [version-args...]
+  label=$1; binary=$2; why=$3; kind=$4; shift 4
+  if command -v "$binary" >/dev/null 2>&1; then
+    if [ "$#" -gt 0 ]; then
+      say "$label" "$(version_of "$binary" "$@")"
+    else
+      say "$label" "$(command -v "$binary")"
+    fi
+  else
+    say "$label" "MISSING -- $why"
+    if [ "$kind" = required ]; then
+      missing_required="$missing_required $binary"
+      status=1
+    else
+      missing_optional="$missing_optional $binary"
+    fi
+  fi
+}
+
+uname_s=$(uname -s 2>/dev/null || echo unknown)
+uname_m=$(uname -m 2>/dev/null || echo unknown)
+
+echo "clj-surgeon install preflight"
+echo "----------------------------------------------------------------"
+say "platform" "$uname_s $uname_m ($(uname -r 2>/dev/null || echo '?'))"
+say "shell" "${SHELL:-unknown}"
+say "bash (this script)" "${BASH_VERSION:-not bash}"
+say "bash on PATH" "$(version_of bash --version)"
+say "HOME" "${HOME:-unset}"
+say "install prefix" "${HOME:-~}/bin, ${HOME:-~}/.claude/skills, ${HOME:-~}/.codex/skills"
+say "TMPDIR" "${TMPDIR:-unset (scratch falls back to /var/tmp)}"
+if [ -n "${JAVA_TOOL_OPTIONS:-}" ]; then
+  say "JAVA_TOOL_OPTIONS" "$JAVA_TOOL_OPTIONS"
+  say "" "(every JVM prints a \"Picked up\" line to stderr because of this)"
+fi
+[ -n "${JAVA_HOME:-}" ] && say "JAVA_HOME" "$JAVA_HOME"
+
+echo
+echo "  Runtime (required to install and run the CLI)"
+need "  babashka" bb "the CLI and every :op run on it" required --version
+need "  java" java "the MCP server and every JVM suite" required -version
+need "  clojure" clojure "the JVM entrance and the landing gate" required -Sdescribe
+need "  git" git "install receipts record the source commit" required --version
+need "  python3" python3 "the gate's box-wide slot semaphore and its oracles" required --version
+
+echo
+echo "  Analyzer (required by :ls / :outline / :fix-declares!)"
+if command -v clj-kondo >/dev/null 2>&1; then
+  say "  clj-kondo" "$(version_of clj-kondo --version)"
+  if [ -x "${HOME}/bin/clj-kondo" ]; then
+    if grep -q 'Serialize one analyzer' "${HOME}/bin/clj-kondo" 2>/dev/null; then
+      say "  serializer" "installed (\$HOME/bin/clj-kondo is the paved entrance)"
+    else
+      say "  serializer" "NOT installed -- \$HOME/bin/clj-kondo is a plain binary"
+      say "" "\`make install-with-analyzer\` installs the serializing entrance"
+    fi
+  else
+    say "  serializer" "not installed -- optional; \`make install-with-analyzer\`"
+  fi
+else
+  say "  clj-kondo" "MISSING -- :ls / :outline / :fix-declares! will refuse"
+  say "" "install (no sudo): brew install clj-kondo/brew/clj-kondo"
+  missing_optional="$missing_optional clj-kondo"
+fi
+
+echo
+echo "  Test gate (only needed to run \`make test\` yourself)"
+if command -v swipl >/dev/null 2>&1; then
+  say "  swipl" "$(version_of swipl --version)"
+else
+  say "  swipl" "MISSING -- \`make test\` cannot run (gate stage one)"
+  say "" "macOS: brew install swi-prolog  |  Debian: apt install swi-prolog-nox"
+  say "" "the CLI, the skills and the MCP server do NOT need it"
+  gate_blockers="$gate_blockers swipl"
+fi
+if command -v timeout >/dev/null 2>&1 || command -v gtimeout >/dev/null 2>&1; then
+  say "  timeout" "$(command -v timeout || command -v gtimeout)"
+else
+  say "  timeout" "absent -- bounded steps run unbounded (brew install coreutils)"
+fi
+
+echo
+echo "  Scratch (the suite refuses a RAM-backed temp dir)"
+# ASK THE RATCHET ITSELF, never a second implementation of its rule.
+#
+# On a clean login with no TMPDIR and /tmp on tmpfs, every JVM in the suite
+# exits 97 -- 113 namespaces on the box this was found on -- and the operator's
+# whole evidence is a four-kilobyte namespace-census dump. The refusal is
+# correct; being unreadable is the defect. One line here, before any JVM starts,
+# is worth more than the dump. A shell re-implementation of the rule would drift
+# from it, so this executes the real decision function.
+tmp_base=${TMPDIR:-/tmp}
+if command -v bb >/dev/null 2>&1; then
+  tmp_verdict=$(cd "$repo" 2>/dev/null && bb --classpath test -e     '(require (quote [clj-surgeon.tmp-leak-support :as t]))
+     (let [d (or (System/getenv "TMPDIR") "/tmp")
+           r (t/base-refusal d)]
+       (println (if r (str "REFUSE " (name (:reason r))) "ok")
+                (pr-str (t/mount-fstype d))))' 2>/dev/null | tail -1)
+else
+  tmp_verdict=""
+fi
+case "$tmp_verdict" in
+  ok*)
+    say "  temp base" "$tmp_base (${tmp_verdict#ok } -- accepted)" ;;
+  REFUSE*)
+    say "  temp base" "$tmp_base -- REFUSED (${tmp_verdict})"
+    say "" "\`make test\` will exit 97 in EVERY lane until this is fixed."
+    if [ -z "${TMPDIR:-}" ]; then
+      say "" "TMPDIR is unset, which is the usual cause. Set one on real disk:"
+      say "" "  export TMPDIR=/var/tmp/clj-surgeon && mkdir -p \"\$TMPDIR\""
+    else
+      say "" "point TMPDIR at a real-disk directory (not /tmp, not /dev/shm)"
+    fi
+    gate_blockers="$gate_blockers a-RAM-backed-TMPDIR" ;;
+  *)
+    say "  temp base" "$tmp_base (not checked -- bb could not answer)" ;;
+esac
+
+echo
+echo "  Gate admission"
+case "$uname_s" in
+  Linux)
+    say "  mode" ":abstract-socket -- a split semaphore is UNREPRESENTABLE"
+    say "" "(Linux abstract Unix namespace: no path, no inode, no root)" ;;
+  Darwin)
+    say "  mode" ":path-socket -- a split semaphore is DETECTED, not impossible"
+    say "" "darwin has no abstract namespace; slots are pathname sockets under"
+    say "" "${TMPDIR:-/var/tmp}clj-surgeon-gate (see test/gate_slot.py)" ;;
+  *)
+    say "  mode" ":path-socket (no abstract Unix namespace on $uname_s)" ;;
+esac
+if [ -n "${GATE_MEMAVAIL_MIB:-}" ]; then
+  say "  memory" "declared by GATE_MEMAVAIL_MIB=$GATE_MEMAVAIL_MIB"
+elif [ -r /proc/meminfo ]; then
+  say "  memory" "read from /proc/meminfo"
+elif command -v vm_stat >/dev/null 2>&1; then
+  say "  memory" "read from vm_stat + sysctl hw.memsize"
+else
+  say "  memory" "UNREADABLE -- set GATE_MEMAVAIL_MIB to run the gate"
+fi
+
+echo "----------------------------------------------------------------"
+if [ -n "$missing_required" ]; then
+  echo "REFUSED: missing required tools:$missing_required"
+  echo "Install them and re-run \`make install\`. Nothing has been written."
+  exit 1
+fi
+if [ -n "$missing_optional" ]; then
+  echo "OK to install. Reduced capability without:$missing_optional"
+elif [ -z "$gate_blockers" ]; then
+  echo "OK to install. Every earned win is available on this box."
+else
+  echo "OK to install."
+fi
+# Name the ACTUAL blockers. An earlier draft of this line blamed swipl for a
+# RAM-backed TMPDIR, which is how a preflight becomes a thing people stop reading.
+if [ -n "$gate_blockers" ]; then
+  echo "                \`make test\` will refuse because of:$gate_blockers"
+fi
+exit 0

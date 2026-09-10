@@ -400,11 +400,32 @@
                         :expected (entries-digest expected)}})
             {:status :ok})))))))
 
-(def ^:private allowed-root-prefix
+(defn- scratch-base
+  "The per-user scratch root this box actually has.
+
+  It was the literal string \"/home/forge/tmp\" -- a directory that exists on
+  exactly one machine. On any other box, including the laptop this ships to,
+  every MEMBAT_ROOT was therefore outside the allowed scope and the battery
+  refused before it started. The prefix is now derived the same way the
+  Makefile derives its scratch roots, and NEVER a RAM-backed tmpfs (a tree
+  battery writes hundreds of megabytes).
+
+  MEMBAT_ALLOWED_ROOT overrides it outright."
+  []
+  (or (System/getenv "MEMBAT_ALLOWED_ROOT")
+      (let [tmp (System/getenv "TMPDIR")]
+        (if (and tmp (not (re-find #"^/(tmp|dev/shm)(/|$)" tmp)))
+          (str/replace tmp #"/$" "")
+          "/var/tmp"))))
+
+(defn- allowed-root-prefix
   "MEMBAT_ROOT must resolve inside this directory unless the caller sets
   MEMBAT_ALLOW_ANY_ROOT=1. It is arbitrary and, without a marker, a fresh run
   would create or write into whatever it pointed at."
-  "/home/forge/tmp")
+  []
+  (str (scratch-base) "/clj-surgeon-" (or (System/getenv "UID")
+                                          (System/getProperty "user.name")
+                                          "shared")))
 
 (defn- membat-root-marker [root] (io/file root ".membat-root"))
 
@@ -423,15 +444,17 @@
   ([root allow-any-root?]
    (let [rf (io/file root)
          canonical (.getCanonicalPath rf)
-         allowed (.getCanonicalPath (io/file allowed-root-prefix))]
+         prefix (allowed-root-prefix)
+         allowed (.getCanonicalPath (io/file prefix))]
      (when (and (not allow-any-root?)
                 (not (or (= canonical allowed)
                         (str/starts-with? canonical (str allowed java.io.File/separator)))))
-       (throw (ex-info (str "MEMBAT_ROOT resolves outside " allowed-root-prefix
-                            ": " canonical)
+       (throw (ex-info (str "MEMBAT_ROOT resolves outside " prefix ": " canonical)
                        {:reason :membat-root-outside-allowed
-                        :root root :resolved canonical :allowed allowed-root-prefix
-                        :remedy "point MEMBAT_ROOT under /home/forge/tmp, or set MEMBAT_ALLOW_ANY_ROOT=1"})))
+                        :root root :resolved canonical :allowed prefix
+                        :remedy (str "point MEMBAT_ROOT under " prefix
+                                     ", set MEMBAT_ALLOWED_ROOT, or set "
+                                     "MEMBAT_ALLOW_ANY_ROOT=1")})))
      (if (.exists rf)
        (when-not (.exists (membat-root-marker rf))
          (throw (ex-info (str "MEMBAT_ROOT exists without its marker: " root)
@@ -492,7 +515,8 @@
 
 (defn- parse-args
   [args]
-  (loop [a args acc {:root (or (System/getenv "MEMBAT_ROOT") "/home/forge/tmp/membat")
+  (loop [a args acc {:root (or (System/getenv "MEMBAT_ROOT")
+                               (str (allowed-root-prefix) "/membat"))
                      :scales [100 1000 10000]}]
     (if-let [x (first a)]
       (case x
@@ -638,12 +662,16 @@
 ;; directory (potentially unrelated to the battery) was written into on the
 ;; same footing as a battery-owned one.
 (defn- root-marker-self-test! []
-  (let [base "/home/forge/tmp"
+  (let [base (allowed-root-prefix)
         stamp (System/currentTimeMillis)
         fresh-root (io/file base (str "membat-marker-selftest-" stamp))
         unmarked-root (io/file base (str "membat-unmarked-selftest-" stamp))
-        outside-root (io/file (System/getProperty "java.io.tmpdir")
-                              (str "membat-outside-selftest-" stamp))]
+        ;; A SIBLING of the allowed base, not a child. It shares the base's
+        ;; string prefix and is still outside it, which is exactly the case a
+        ;; naive startsWith check gets wrong -- and it needs no second
+        ;; directory on the box to witness.
+        outside-root (io/file (str base "-outside-selftest-" stamp))]
+    (.mkdirs (io/file base))
     (try
       ;; A fresh root is created and marked by the battery itself.
       (ensure-root-marker! (str fresh-root))
@@ -661,7 +689,7 @@
         (assert (= :membat-root-unmarked reason)
                 (str "an unmarked pre-existing root is refused, got " reason)))
 
-      ;; A root outside /home/forge/tmp is refused by default...
+      ;; A root outside the allowed prefix is refused by default...
       (let [reason (try (ensure-root-marker! (str outside-root) false) :did-not-throw
                         (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))]
         (assert (= :membat-root-outside-allowed reason)

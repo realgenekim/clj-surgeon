@@ -39,7 +39,15 @@
 
 (defn- temp-root
   [label]
-  (let [dir (io/file (or (System/getenv "CLJ_SURGEON_MEMORY_TMP") "/home/forge/tmp")
+  (let [dir (io/file (or (System/getenv "CLJ_SURGEON_MEMORY_TMP")
+                             ;; NEVER a literal box-specific path: this default
+                             ;; resolved on exactly one machine. Never /tmp
+                             ;; either -- a RAM-backed tmpfs cannot hold a
+                             ;; memory battery's synthetic scope.
+                             (let [tmp (System/getenv "TMPDIR")]
+                               (if (and tmp (not (re-matches #"/(tmp|dev/shm)(/.*)?" tmp)))
+                                 tmp
+                                 "/var/tmp")))
                      (str "clj-surgeon-green-" label "-" (System/currentTimeMillis)))]
     (.mkdirs dir)
     (.getCanonicalPath dir)))
