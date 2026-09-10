@@ -3,6 +3,7 @@
    [clj-surgeon.insert-forms :as insert]
    [clj-surgeon.insert-forms-oracle :as oracle]
    [clj-surgeon.receipt-artifacts :as artifacts]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.test :refer [is]])
   (:import
@@ -51,3 +52,6 @@
           #(f workspace file (assoc (request s) :workspace_root (.getCanonicalPath workspace)))))
       (finally
         (doseq [p (reverse (file-seq dir))] (io/delete-file p true))))))
+
+(defn fixtures []
+  (edn/read-string (slurp (io/resource "clj_surgeon/insert_forms_fixtures.edn"))))
