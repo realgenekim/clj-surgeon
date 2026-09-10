@@ -157,8 +157,7 @@ case "$uname_s" in
     say "" "(Linux abstract Unix namespace: no path, no inode, no root)" ;;
   Darwin)
     say "  mode" ":path-socket -- a split semaphore is DETECTED, not impossible"
-    say "" "darwin has no abstract namespace; slots are pathname sockets under"
-    say "" "${TMPDIR:-/var/tmp}clj-surgeon-gate (see test/gate_slot.py)" ;;
+    say "" "darwin has no abstract namespace; slots are pathname sockets" ;;
   *)
     say "  mode" ":path-socket (no abstract Unix namespace on $uname_s)" ;;
 esac
@@ -172,6 +171,21 @@ esac
 # worse than one that prints nothing, because it moves the operator on. So this
 # runs `clj-surgeon.gate-memory`, which is the function the coordinator calls;
 # there is no second implementation left to be green.
+# ASK THE MODULE THAT CHOOSES IT. darwin caps a socket path at 104 bytes
+# (sun_path) and the macOS per-user TMPDIR overflows that, which is how the
+# skiff got `AF_UNIX path too long` out of bind() with no path, no limit and no
+# chooser named. The preflight is where an operator can still act on it.
+if command -v python3 >/dev/null 2>&1; then
+  slot_root=$(cd "$repo" 2>/dev/null && python3 -B test/gate_slot.py --print-root 2>&1 | tail -1)
+  case "$slot_root" in
+    abstract) : ;;
+    /*)
+      slot_budget=$(cd "$repo" 2>/dev/null && python3 -B test/gate_slot.py --print-slot-budget 2>/dev/null)
+      set -- ${slot_budget:-? ? ?}
+      say "  socket dir" "$slot_root (worst case $1 bytes; budget $2, sun_path $3)" ;;
+    *)  say "  socket dir" "not checked -- $slot_root" ;;
+  esac
+fi
 if command -v bb >/dev/null 2>&1; then
   mem_out=$(cd "$repo" 2>/dev/null && bb --classpath test -m clj-surgeon.gate-memory 2>&1 \
               | grep -v '^Picked up ')

@@ -598,6 +598,17 @@
   []
   (mem/available-mib))
 
+(defn gate-slot-root
+  "The directory the box-wide semaphore publishes its slots under, or
+   \"abstract\" on a platform with an abstract Unix namespace -- ASKED OF
+   `test/gate_slot.py`, which is the module that chooses it. The landing
+   receipt carries it because the skiff's `AF_UNIX path too long` named
+   neither the path nor the limit nor who picked them, and a receipt that
+   cannot say where its own semaphore lives cannot be used to diagnose one."
+  []
+  (let [{:keys [exit out]} (mem/shell-result "python3" "-B" "test/gate_slot.py" "--print-root")]
+    (if (= 0 exit) out (str "unknown (" (pr-str exit) ")"))))
+
 (defn gate-admission-mode
   "The guarantee level of the box-wide slot semaphore, carried in the landing
    receipt. :abstract-socket -- a split semaphore is UNREPRESENTABLE (linux
@@ -768,8 +779,10 @@
         ;; BEFORE any stage: what this box was measured to have, what the gate
         ;; will spend it on, and the floor -- so the arithmetic behind a later
         ;; refusal is already on the screen the operator kept.
-        _ (println (format "gate-capacity: %d MiB available, %d cpus, %d lane(s); %s"
+        capacity (assoc capacity :slot-root (gate-slot-root))
+        _ (println (format "gate-capacity: %d MiB available, %d cpus, %d lane(s); slots %s %s; %s"
                            (:memory-mib capacity) (:cpus capacity) (:lanes capacity)
+                           (name (:admission capacity)) (:slot-root capacity)
                            mem/floor-note))
         _ (when debug? (println "SERIAL/NOT-A-GATE: debugging only; no landing receipt"))
         _ (doseq [s required-suites]
