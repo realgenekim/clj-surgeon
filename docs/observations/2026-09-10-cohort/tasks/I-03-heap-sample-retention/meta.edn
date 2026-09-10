@@ -1,0 +1,20 @@
+;; Frozen by the independent curator before any arm ran.
+{:family :I
+ :repo "/home/forge/src/clj-surgeon"
+ :sha "cc04af6ac77345b476cda374bda8e6ef5856e38d"
+ :file "test/clj_surgeon/memory/heap.clj"
+ :session "agent-a2b6bbcbdc96b2925.jsonl"
+ :expected-forms-changed 2
+ :gate "clojure -J-Xmx1g -M:clj-surgeon/test-deps -e \"(require 'clj-surgeon.memory.heap)\""
+ :deadline-s 900
+
+ ;; curator provenance and caveats -- not part of the task given to a caller
+ :row-id "ce3346538bf39e73"
+ :census-ts "2026-09-03T05:08:48.794Z"
+ :census-model "claude-opus-5"
+ :gate-baseline-required true
+ :gate-note "Run :gate on the UNTOUCHED tree at :sha first and record that
+   verdict as the baseline. Several of these files pin numbers derived from the
+   rest of the corpus, so a namespace can be red at :sha for reasons that have
+   nothing to do with the task. Score the gate as NO NEW FAILURES against that
+   baseline, never as absolute green."}

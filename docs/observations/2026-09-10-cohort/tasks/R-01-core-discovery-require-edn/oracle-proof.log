@@ -1,0 +1,19 @@
+oracle proof for R-01-core-discovery-require-edn
+file: test/clj_surgeon/core_discovery_test.clj
+run at: 2026-09-10T23:36:39Z
+oracle sha256: f22ee8729f2d2e3c7dc6cd39639a895b22be4d3c688f51a949aaebf954aab3f3
+
+=== expected (expected-output.clj)  expected exit 0, got 0  PROVEN
+    GREEN: R-01-core-discovery-require-edn: intent met, and every other byte of test/clj_surgeon/core_discovery_test.clj is where it was
+      GREEN preservation: 25 top-level forms; changed=['clj-surgeon.core-discovery-test'] added=- gap-changed=-; order and every other byte intact
+
+=== wrong (wrong-output.clj)  expected exit 1, got 1  PROVEN
+    RED: 1 failed assertion(s)
+      - the clj-surgeon.core require or its alias was lost (missing requires: clj-surgeon.core:core)
+
+=== pre-edit (pre-edit.clj)  expected exit 1, got 1  PROVEN
+    RED: 2 failed assertion(s)
+      - clojure.edn is not required with the alias edn (missing requires: clojure.edn:edn)
+      - RED preservation: form declared in scope did not change: ns clj-surgeon.core-discovery-test
+
+PROVEN   R-01-core-discovery-require-edn  (green on expected, red on wrong, red on pre-edit)

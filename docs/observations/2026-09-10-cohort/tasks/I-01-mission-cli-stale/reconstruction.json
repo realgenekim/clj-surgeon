@@ -1,0 +1,14 @@
+{
+ "row_id": "87a553dd7e50add7",
+ "repo": "/home/forge/src/clj-surgeon",
+ "sha": "71dd6eff8207bed39a6e83220314a91286c35e03",
+ "file": "src/clj_surgeon/mission_cli.clj",
+ "family": "I",
+ "session": "agent-ac38752acbe3f6769.jsonl",
+ "ts": "2026-09-05T18:47:34.857Z",
+ "model": "claude-opus-5",
+ "op": "replace",
+ "old": "(defn apply!",
+ "new": "(defn- read-if-present\n  [path]\n  (let [f (io/file path)] (when (.isFile f) (slurp f))))\n\n(defn stale?\n  \"@stale-resume. Whether the tree has moved under this mission's plan.\n\n  Returns the typed refusal, or nil when the snapshot still holds. Called\n  BEFORE anything is staged: the kernel's own frozen-source gate would catch\n  the same drift at commit time and refuse correctly, but only after the caller\n  has paid for a transaction, and its refusal does not name the files.\"\n  [m]\n  (when-let [snap (:snapshot m)]\n    (let [drifted (mission/drift snap read-if-present)]\n      (when-not (:clean? drifted)\n        (mission/stale-refusal (:id m) snap drifted)))))\n\n(defn apply!",
+ "note": "insert defn read-if-present anchored on apply!"
+}

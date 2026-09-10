@@ -1,0 +1,22 @@
+oracle proof for T-04-lane-manifest-total
+file: test/clj_surgeon/lane_manifest_test.clj
+run at: 2026-09-10T23:36:49Z
+oracle sha256: f57c40139cfbce9626ab35b8e86cb99ac92fd1d5eb74a74e6e9ad6a49314b5fb
+
+=== expected (expected-output.clj)  expected exit 0, got 0  PROVEN
+    GREEN: T-04-lane-manifest-total: intent met, and every other byte of test/clj_surgeon/lane_manifest_test.clj is where it was
+      GREEN preservation: 46 top-level forms; changed=['the-corpus-only-ever-grows-and-the-arithmetic-is-shown'] added=- gap-changed=-; order and every other byte intact
+
+=== wrong (wrong-output.clj)  expected exit 1, got 1  PROVEN
+    RED: 2 failed assertion(s)
+      - the adopted-tests pin was changed; it is not part of this task
+      - the changed pin carries no reason beside it
+
+=== pre-edit (pre-edit.clj)  expected exit 1, got 1  PROVEN
+    RED: 4 failed assertion(s)
+      - the corpus total is not pinned at 1373
+      - the old total 1370 is still asserted
+      - the changed pin carries no reason beside it
+      - RED preservation: form declared in scope did not change: deftest the-corpus-only-ever-grows-and-the-arithmetic-is-shown
+
+PROVEN   T-04-lane-manifest-total  (green on expected, red on wrong, red on pre-edit)

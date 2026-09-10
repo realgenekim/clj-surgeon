@@ -1,0 +1,20 @@
+oracle proof for T-02-study-row-line-range
+file: test/clj_surgeon/mcp_study_test.clj
+run at: 2026-09-10T23:36:44Z
+oracle sha256: aa74403b4ad1e75bec1f3c40faf8aa49893ff242eb176729c81ce891f2e36aef
+
+=== expected (expected-output.clj)  expected exit 0, got 0  PROVEN
+    GREEN: T-02-study-row-line-range: intent met, and every other byte of test/clj_surgeon/mcp_study_test.clj is where it was
+      GREEN preservation: 183 top-level forms; changed=['forms-text-carries-the-source-a-caller-asked-for'] added=- gap-changed=-; order and every other byte intact
+
+=== wrong (wrong-output.clj)  expected exit 1, got 1  PROVEN
+    RED: 1 failed assertion(s)
+      - the assertion still pins a literal line range instead of computing it
+
+=== pre-edit (pre-edit.clj)  expected exit 1, got 1  PROVEN
+    RED: 3 failed assertion(s)
+      - the hardcoded 37-39 line range is still pinned in the file
+      - the assertion still pins a literal line range instead of computing it
+      - RED preservation: form declared in scope did not change: deftest forms-text-carries-the-source-a-caller-asked-for
+
+PROVEN   T-02-study-row-line-range  (green on expected, red on wrong, red on pre-edit)

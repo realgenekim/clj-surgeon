@@ -1,0 +1,14 @@
+{
+ "row_id": "ce3346538bf39e73",
+ "repo": "/home/forge/src/clj-surgeon",
+ "sha": "cc04af6ac77345b476cda374bda8e6ef5856e38d",
+ "file": "test/clj_surgeon/memory/heap.clj",
+ "family": "I",
+ "session": "agent-a2b6bbcbdc96b2925.jsonl",
+ "ts": "2026-09-03T05:08:48.794Z",
+ "model": "claude-opus-5",
+ "op": "replace",
+ "old": "(defn- to-mb [bytes] (double (/ (double bytes) mb)))",
+ "new": "(defn- to-mb [bytes] (double (/ (double bytes) mb)))\n\n(def ^:private retention-peak (atom 0))\n\n(defn sample-retention!\n  \"Force a full collection and record what is still live.\n\n   This is the only honest retention meter at a small heap. `heap-used-peak`\n   under default G1 tracks how close allocation ran to the ceiling, not what the\n   arm holds: an eight-file control that retained twelve megabytes peaked at two\n   hundred and fifty-one. Call this at checkpoints, not in a loop; it is a stop\n   the world.\"\n  []\n  (System/gc)\n  (Thread/sleep 60)\n  (let [used (heap-used)]\n    (swap! retention-peak max used)\n    used))",
+ "note": "insert defn to-mb anchored on to-mb"
+}

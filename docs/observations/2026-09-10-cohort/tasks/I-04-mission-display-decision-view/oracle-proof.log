@@ -1,0 +1,21 @@
+oracle proof for I-04-mission-display-decision-view
+file: src/clj_surgeon/mission_display.clj
+run at: 2026-09-10T23:36:38Z
+oracle sha256: b79f54789104b6ae5bf8274790c60f90937b5e85daa3b7ec75a4ef44b355f459
+
+=== expected (expected-output.clj)  expected exit 0, got 0  PROVEN
+    GREEN: I-04-mission-display-decision-view: intent met, and every other byte of src/clj_surgeon/mission_display.clj is where it was
+      GREEN preservation: 14 top-level forms; changed=- added=['decision-view'] gap-changed=-; order and every other byte intact
+
+=== wrong (wrong-output.clj)  expected exit 1, got 1  PROVEN
+    RED: 2 failed assertion(s)
+      - show-result was modified; it is not part of this task
+      - RED preservation: form changed but was not in scope: defn show-result
+
+=== pre-edit (pre-edit.clj)  expected exit 1, got 1  PROVEN
+    RED: 3 failed assertion(s)
+      - no decision-view function was defined (missing vars: decision-view)
+      - decision-view is not immediately above show-result (a named form is missing)
+      - the saved evidence is never consulted
+
+PROVEN   I-04-mission-display-decision-view  (green on expected, red on wrong, red on pre-edit)

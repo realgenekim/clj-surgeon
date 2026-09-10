@@ -1,0 +1,14 @@
+{
+ "row_id": "1412ce2f75ae9f23",
+ "repo": "/home/forge/src/clj-surgeon",
+ "sha": "827a751add48fbb8da364fbbf74544e1cf485d99",
+ "file": "test/clj_surgeon/mcp_alias_migration_test.clj",
+ "family": "T",
+ "session": "rollout-2026-09-08T10-13-01-01a08081-bea1-7371-a785-6742d3b591d4.jsonl",
+ "ts": "2026-09-08T10:20:30.730Z",
+ "model": "gpt-6-astra",
+ "op": "replace",
+ "old": "(is (= 147 (count kinds))",
+ "new": "(is (= 149 (count kinds))",
+ "note": "deftest body edit"
+}

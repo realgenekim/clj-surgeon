@@ -1,0 +1,14 @@
+{
+ "row_id": "d0051e6c30a5729e",
+ "repo": "/home/forge/src/clj-surgeon",
+ "sha": "a9da43441234f0f815ab9c9393ae03dda7fa82f4",
+ "file": "src/clj_surgeon/namespace_split.clj",
+ "family": "R",
+ "session": "rollout-2026-09-08T19-43-35-01a0828c-1c31-7852-a9f5-11d0e6a22b94.jsonl",
+ "ts": "2026-09-08T19:54:28.107Z",
+ "model": "gpt-6-astra",
+ "op": "replace",
+ "old": "   [clj-surgeon.extract :as extract]",
+ "new": "   [cheshire.core :as json]\n   [clj-surgeon.extract :as extract]",
+ "note": "alias extract->json"
+}

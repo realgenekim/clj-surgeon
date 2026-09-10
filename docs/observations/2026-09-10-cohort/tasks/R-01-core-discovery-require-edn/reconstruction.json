@@ -1,0 +1,14 @@
+{
+ "row_id": "bf645a8c47aed216",
+ "repo": "/home/forge/src/clj-surgeon",
+ "sha": "077f5a64dfc0b124a6326de37d27e1b1d3178057",
+ "file": "test/clj_surgeon/core_discovery_test.clj",
+ "family": "R",
+ "session": "agent-a1354cc443351aeca.jsonl",
+ "ts": "2026-09-04T00:14:02.952Z",
+ "model": "claude-opus-5",
+ "op": "replace",
+ "old": "   [clojure.string :as str]\n",
+ "new": "   [clojure.edn :as edn]\n   [clojure.string :as str]\n",
+ "note": "alias str->edn"
+}

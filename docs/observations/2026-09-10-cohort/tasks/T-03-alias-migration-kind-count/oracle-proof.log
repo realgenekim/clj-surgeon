@@ -1,0 +1,25 @@
+oracle proof for T-03-alias-migration-kind-count
+file: test/clj_surgeon/mcp_alias_migration_test.clj
+run at: 2026-09-10T23:36:46Z
+oracle sha256: 6c0e72825b63883993272ade4b1af75e2b4e45836fde21d5a4108d5cc9654e7b
+
+=== expected (expected-output.clj)  expected exit 0, got 0  PROVEN
+    GREEN: T-03-alias-migration-kind-count: intent met, and every other byte of test/clj_surgeon/mcp_alias_migration_test.clj is where it was
+      GREEN preservation: 233 top-level forms; changed=['frozen-refusal-kinds', 'the-refusal-enumeration-is-pinned-in-count-and-in-membership'] added=- gap-changed=-; order and every other byte intact
+
+=== wrong (wrong-output.clj)  expected exit 1, got 1  PROVEN
+    RED: 3 failed assertion(s)
+      - the kind receipt-dir-inside-workspace is not in the file
+      - the two new kinds are not inside the frozen-refusal-kinds set
+      - RED preservation: form declared in scope did not change: def frozen-refusal-kinds
+
+=== pre-edit (pre-edit.clj)  expected exit 1, got 1  PROVEN
+    RED: 6 failed assertion(s)
+      - the kind receipt-dir-inside-workspace is not in the file
+      - the count assertion does not agree with the new set size
+      - the old count 147 is still asserted
+      - the two new kinds are not inside the frozen-refusal-kinds set
+      - RED preservation: form declared in scope did not change: def frozen-refusal-kinds
+      - RED preservation: form declared in scope did not change: deftest the-refusal-enumeration-is-pinned-in-count-and-in-membership
+
+PROVEN   T-03-alias-migration-kind-count  (green on expected, red on wrong, red on pre-edit)

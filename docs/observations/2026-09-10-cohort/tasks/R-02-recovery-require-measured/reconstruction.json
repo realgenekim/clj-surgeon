@@ -1,0 +1,14 @@
+{
+ "row_id": "678880f9b3bd7ebe",
+ "repo": "/home/forge/src/clj-surgeon",
+ "sha": "2b3177dfac2d27b9c6517df40480a22b96c5bc26",
+ "file": "test/clj_surgeon/recovery_test.clj",
+ "family": "R",
+ "session": "agent-ae61ded67ebe1aeda.jsonl",
+ "ts": "2026-09-04T05:51:32.518Z",
+ "model": "claude-opus-5",
+ "op": "replace",
+ "old": "   [clj-surgeon.recovery :as recovery]\n",
+ "new": "   [clj-surgeon.measured :as measured]\n   [clj-surgeon.recovery :as recovery]\n",
+ "note": "alias recovery->measured"
+}

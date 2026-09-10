@@ -1,0 +1,14 @@
+{
+ "row_id": "2f27c0e451a62006",
+ "repo": "/home/forge/src/clj-surgeon",
+ "sha": "2bbcc530df8270e52f800896ea5cf586e4bb9a37",
+ "file": "src/clj_surgeon/mission_display.clj",
+ "family": "I",
+ "session": "rollout-2026-09-06T01-49-24-01a07467-f3ae-7422-8186-80c758f753aa.jsonl",
+ "ts": "2026-09-06T03:30:39.173Z",
+ "model": "gpt-6-astra",
+ "op": "slice_insert",
+ "old": "(defn show-result",
+ "new": "(defn decision-view\n  \"Clarify saved historical diagnostics without changing their authority.\"\n  [decision verb]\n  (if-not (map? decision)\n    decision\n    (let [direct (or (:error_type decision) (:error-type decision))\n          nested (or (get-in decision [:evidence :error_type])\n                     (get-in decision [:evidence :error-type]))\n          spell (fn [value] (when (or (keyword? value) (string? value)) (name value)))\n          declared (keep spell [(get-in decision [:example :verb])\n                                (get-in decision [:example :request :op])])\n          mismatch (some #(not= (spell verb) %) declared)]\n      (cond-> decision\n        (and (nil? direct) nested)\n        (assoc :error_type nested :error_source :saved-decision-evidence)\n        mismatch (dissoc :example)\n        mismatch (assoc :example_omitted :incompatible-mission-verb\n                        :recovery (command [\"bin/mission\" \"help\"\n                                            (if (= \"owner_forms\" (spell verb)) \"run\" \"plan\")]))))))\n\n",
+ "note": "insert decision-view anchored on show-result"
+}

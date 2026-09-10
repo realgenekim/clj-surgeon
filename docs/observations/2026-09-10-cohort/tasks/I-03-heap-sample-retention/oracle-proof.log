@@ -1,0 +1,27 @@
+oracle proof for I-03-heap-sample-retention
+file: test/clj_surgeon/memory/heap.clj
+run at: 2026-09-10T23:36:37Z
+oracle sha256: 65e00a484bb5b37c172d592f252c751ff936c52238b169d9d70281915120a874
+
+=== expected (expected-output.clj)  expected exit 0, got 0  PROVEN
+    GREEN: I-03-heap-sample-retention: intent met, and every other byte of test/clj_surgeon/memory/heap.clj is where it was
+      GREEN preservation: 11 top-level forms; changed=- added=['retention-peak', 'sample-retention!'] gap-changed=-; order and every other byte intact
+
+=== wrong (wrong-output.clj)  expected exit 1, got 1  PROVEN
+    RED: 4 failed assertion(s)
+      - no sample-retention! checkpoint function was defined (missing vars: sample-retention!)
+      - the checkpoint function is not beside its state (a named form is missing)
+      - the new pair is not directly before measure (a named form is missing)
+      - the highest reading is never remembered
+
+=== pre-edit (pre-edit.clj)  expected exit 1, got 1  PROVEN
+    RED: 7 failed assertion(s)
+      - no sample-retention! checkpoint function was defined (missing vars: sample-retention!)
+      - no private peak state was defined (missing vars: retention-peak)
+      - the peak state is not private
+      - the new state is not directly after to-mb (a named form is missing)
+      - the checkpoint function is not beside its state (a named form is missing)
+      - the new pair is not directly before measure (a named form is missing)
+      - the highest reading is never remembered
+
+PROVEN   I-03-heap-sample-retention  (green on expected, red on wrong, red on pre-edit)

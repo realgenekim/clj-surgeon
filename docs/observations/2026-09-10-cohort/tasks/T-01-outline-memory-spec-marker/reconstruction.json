@@ -1,0 +1,14 @@
+{
+ "row_id": "7fefa81a19a783c9",
+ "repo": "/home/forge/src/clj-surgeon",
+ "sha": "a8452157be7073a8f6b165a17dce6b316a14a9c2",
+ "file": "test/clj_surgeon/outline_memory_test.clj",
+ "family": "T",
+ "session": "agent-a5f1869c82f793e00.jsonl",
+ "ts": "2026-09-03T04:47:21.249Z",
+ "model": "claude-opus-5",
+ "op": "replace",
+ "old": "(deftest outline-of-one-file-allocates-within-its-ceiling",
+ "new": "\n;; @spec MCP-OP-MEM-015\n(deftest outline-of-one-file-allocates-within-its-ceiling",
+ "note": "deftest body edit"
+}

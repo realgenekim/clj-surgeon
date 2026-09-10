@@ -1,0 +1,23 @@
+oracle proof for I-02-mission-cli-admitted-profiles
+file: src/clj_surgeon/mission_cli.clj
+run at: 2026-09-10T23:36:36Z
+oracle sha256: 578fe57c444cc389240884a43616691278b0dbefe2eed2543c21a3e64d333a46
+
+=== expected (expected-output.clj)  expected exit 0, got 0  PROVEN
+    GREEN: I-02-mission-cli-admitted-profiles: intent met, and every other byte of src/clj_surgeon/mission_cli.clj is where it was
+      GREEN preservation: 22 top-level forms; changed=- added=['occupant-sizes'] gap-changed=-; order and every other byte intact
+
+=== wrong (wrong-output.clj)  expected exit 1, got 1  PROVEN
+    RED: 2 failed assertion(s)
+      - ledger-of was modified; it is not part of this task
+      - RED preservation: form changed but was not in scope: defn- ledger-of
+
+=== pre-edit (pre-edit.clj)  expected exit 1, got 1  PROVEN
+    RED: 5 failed assertion(s)
+      - no occupant-sizes helper was defined (missing vars: occupant-sizes)
+      - the helper is not private
+      - the helper is not immediately above ledger-of (a named form is missing)
+      - the helper does not consider every key a refusal can name a file under
+      - nothing distinguishes the zero-byte case
+
+PROVEN   I-02-mission-cli-admitted-profiles  (green on expected, red on wrong, red on pre-edit)

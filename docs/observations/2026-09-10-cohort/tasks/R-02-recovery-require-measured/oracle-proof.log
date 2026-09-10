@@ -1,0 +1,19 @@
+oracle proof for R-02-recovery-require-measured
+file: test/clj_surgeon/recovery_test.clj
+run at: 2026-09-10T23:36:40Z
+oracle sha256: 2b5747b5ea9ab91965dce9e455ad4aea3d3ec59060a109acf532b28e9cabdcfc
+
+=== expected (expected-output.clj)  expected exit 0, got 0  PROVEN
+    GREEN: R-02-recovery-require-measured: intent met, and every other byte of test/clj_surgeon/recovery_test.clj is where it was
+      GREEN preservation: 5 top-level forms; changed=['clj-surgeon.recovery-test'] added=- gap-changed=-; order and every other byte intact
+
+=== wrong (wrong-output.clj)  expected exit 1, got 1  PROVEN
+    RED: 1 failed assertion(s)
+      - clj-surgeon.measured is not required with the alias measured (missing requires: clj-surgeon.measured:measured)
+
+=== pre-edit (pre-edit.clj)  expected exit 1, got 1  PROVEN
+    RED: 2 failed assertion(s)
+      - clj-surgeon.measured is not required with the alias measured (missing requires: clj-surgeon.measured:measured)
+      - RED preservation: form declared in scope did not change: ns clj-surgeon.recovery-test
+
+PROVEN   R-02-recovery-require-measured  (green on expected, red on wrong, red on pre-edit)

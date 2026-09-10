@@ -1,0 +1,14 @@
+{
+ "row_id": "9af09bc9a550d182",
+ "repo": "/home/forge/src/clj-surgeon",
+ "sha": "e6b9c7e9a2aee08d4303fb1d1769341f008b2553",
+ "file": "test/clj_surgeon/mcp_workspace_test.clj",
+ "family": "R",
+ "session": "agent-afea61718ab0ac849.jsonl",
+ "ts": "2026-09-10T17:24:08.023Z",
+ "model": "claude-sonnet-5",
+ "op": "replace",
+ "old": "(is (clojure.string/includes? a1 \"/edit-clojure-receipts/\"))",
+ "new": "(is (str/includes? a1 \"/edit-clojure-receipts/\"))",
+ "note": "alias-use string->str"
+}

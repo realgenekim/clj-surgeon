@@ -1,0 +1,25 @@
+oracle proof for R-03-workspace-string-alias
+file: test/clj_surgeon/mcp_workspace_test.clj
+run at: 2026-09-10T23:36:41Z
+oracle sha256: 4ebb355dfab2a447d3bd29fe5936dcead8844490da75b9837ca94c54546d78c4
+
+=== expected (expected-output.clj)  expected exit 0, got 0  PROVEN
+    GREEN: R-03-workspace-string-alias: intent met, and every other byte of test/clj_surgeon/mcp_workspace_test.clj is where it was
+      GREEN preservation: 9 top-level forms; changed=['clj-surgeon.mcp-workspace-test', 'receipt-directories-are-deterministic-and-workspace-isolated'] added=- gap-changed=-; order and every other byte intact
+
+=== wrong (wrong-output.clj)  expected exit 1, got 1  PROVEN
+    RED: 3 failed assertion(s)
+      - clojure.string is not required with the alias str (missing requires: clojure.string:str)
+      - the analyzer no longer resolves the call to clojure.string/includes? (missing usages: clojure.string/includes?)
+      - RED preservation: form declared in scope did not change: ns clj-surgeon.mcp-workspace-test
+
+=== pre-edit (pre-edit.clj)  expected exit 1, got 1  PROVEN
+    RED: 6 failed assertion(s)
+      - clojure.string is not required with the alias str (missing requires: clojure.string:str)
+      - the longhand clojure.string/ call is still there
+      - the call site does not go through the alias with its original arguments
+      - the analyzer no longer resolves the call to clojure.string/includes? (missing usages: clojure.string/includes?)
+      - RED preservation: form declared in scope did not change: ns clj-surgeon.mcp-workspace-test
+      - RED preservation: form declared in scope did not change: deftest receipt-directories-are-deterministic-and-workspace-isolated
+
+PROVEN   R-03-workspace-string-alias  (green on expected, red on wrong, red on pre-edit)

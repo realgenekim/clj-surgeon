@@ -1,0 +1,24 @@
+oracle proof for I-01-mission-cli-stale
+file: src/clj_surgeon/mission_cli.clj
+run at: 2026-09-10T23:36:35Z
+oracle sha256: 2b6202b9bf0f1c056714c97953b2ea9c4dc7f317f133055ff4a3fdef5f11852d
+
+=== expected (expected-output.clj)  expected exit 0, got 0  PROVEN
+    GREEN: I-01-mission-cli-stale: intent met, and every other byte of src/clj_surgeon/mission_cli.clj is where it was
+      GREEN preservation: 19 top-level forms; changed=- added=['read-if-present', 'stale?'] gap-changed=-; order and every other byte intact
+
+=== wrong (wrong-output.clj)  expected exit 1, got 1  PROVEN
+    RED: 1 failed assertion(s)
+      - stale? is not immediately above apply! (stale? at 17 is not immediately before apply! at 12)
+
+=== pre-edit (pre-edit.clj)  expected exit 1, got 1  PROVEN
+    RED: 7 failed assertion(s)
+      - no stale? was defined (missing vars: stale?)
+      - no private reader helper was defined (missing vars: read-if-present)
+      - the reader helper is not immediately above stale? (a named form is missing)
+      - stale? is not immediately above apply! (a named form is missing)
+      - stale? never calls mission/drift (missing usages: clj-surgeon.mission/drift)
+      - stale? never calls mission/stale-refusal (missing usages: clj-surgeon.mission/stale-refusal)
+      - the reader helper is not private
+
+PROVEN   I-01-mission-cli-stale  (green on expected, red on wrong, red on pre-edit)

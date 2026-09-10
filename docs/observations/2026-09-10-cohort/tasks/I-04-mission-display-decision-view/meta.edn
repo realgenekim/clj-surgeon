@@ -1,0 +1,20 @@
+;; Frozen by the independent curator before any arm ran.
+{:family :I
+ :repo "/home/forge/src/clj-surgeon"
+ :sha "2bbcc530df8270e52f800896ea5cf586e4bb9a37"
+ :file "src/clj_surgeon/mission_display.clj"
+ :session "rollout-2026-09-06T01-49-24-01a07467-f3ae-7422-8186-80c758f753aa.jsonl"
+ :expected-forms-changed 1
+ :gate "clojure -J-Xmx1g -M:clj-surgeon/test-deps -m clj-surgeon.mcp-test-runner --ns clj-surgeon.mission-display-test"
+ :deadline-s 900
+
+ ;; curator provenance and caveats -- not part of the task given to a caller
+ :row-id "2f27c0e451a62006"
+ :census-ts "2026-09-06T03:30:39.173Z"
+ :census-model "gpt-6-astra"
+ :gate-baseline-required true
+ :gate-note "Run :gate on the UNTOUCHED tree at :sha first and record that
+   verdict as the baseline. Several of these files pin numbers derived from the
+   rest of the corpus, so a namespace can be red at :sha for reasons that have
+   nothing to do with the task. Score the gate as NO NEW FAILURES against that
+   baseline, never as absolute green."}

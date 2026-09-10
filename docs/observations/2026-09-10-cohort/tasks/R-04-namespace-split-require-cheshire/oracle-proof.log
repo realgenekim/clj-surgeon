@@ -1,0 +1,19 @@
+oracle proof for R-04-namespace-split-require-cheshire
+file: src/clj_surgeon/namespace_split.clj
+run at: 2026-09-10T23:36:42Z
+oracle sha256: 2fa0243cf34d00bf68a5aa3c20203c015a18ef9ed5566f8ad8a99467ae7cb1d4
+
+=== expected (expected-output.clj)  expected exit 0, got 0  PROVEN
+    GREEN: R-04-namespace-split-require-cheshire: intent met, and every other byte of src/clj_surgeon/namespace_split.clj is where it was
+      GREEN preservation: 54 top-level forms; changed=['clj-surgeon.namespace-split'] added=- gap-changed=-; order and every other byte intact
+
+=== wrong (wrong-output.clj)  expected exit 1, got 1  PROVEN
+    RED: 1 failed assertion(s)
+      - a require that was already there was lost or re-aliased: clj-surgeon.quoted-var-refs:quoted-vars (missing requires: clj-surgeon.quoted-var-refs:quoted-vars)
+
+=== pre-edit (pre-edit.clj)  expected exit 1, got 1  PROVEN
+    RED: 2 failed assertion(s)
+      - cheshire.core is not required with the alias json (missing requires: cheshire.core:json)
+      - RED preservation: form declared in scope did not change: ns clj-surgeon.namespace-split
+
+PROVEN   R-04-namespace-split-require-cheshire  (green on expected, red on wrong, red on pre-edit)

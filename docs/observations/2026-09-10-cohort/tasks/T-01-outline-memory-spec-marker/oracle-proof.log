@@ -1,0 +1,21 @@
+oracle proof for T-01-outline-memory-spec-marker
+file: test/clj_surgeon/outline_memory_test.clj
+run at: 2026-09-10T23:36:44Z
+oracle sha256: 0e511476642b3231c58bf5b3c65948dcd949f8c4aa0cba9a9d84d81a4ebc528d
+
+=== expected (expected-output.clj)  expected exit 0, got 0  PROVEN
+    GREEN: T-01-outline-memory-spec-marker: intent met, and every other byte of test/clj_surgeon/outline_memory_test.clj is where it was
+      GREEN preservation: 13 top-level forms; changed=- added=- gap-changed=['outline-of-one-file-allocates-within-its-ceiling']; order and every other byte intact
+
+=== wrong (wrong-output.clj)  expected exit 1, got 1  PROVEN
+    RED: 2 failed assertion(s)
+      - the marker is not on the line immediately above outline-of-one-file-allocates-within-its-ceiling
+      - RED preservation: the text between top-level forms changed before: deftest thread-allocation-meter-is-available
+
+=== pre-edit (pre-edit.clj)  expected exit 1, got 1  PROVEN
+    RED: 3 failed assertion(s)
+      - the spec marker comment is not present on its own line
+      - the marker is not on the line immediately above outline-of-one-file-allocates-within-its-ceiling
+      - the marker appears more than once
+
+PROVEN   T-01-outline-memory-spec-marker  (green on expected, red on wrong, red on pre-edit)

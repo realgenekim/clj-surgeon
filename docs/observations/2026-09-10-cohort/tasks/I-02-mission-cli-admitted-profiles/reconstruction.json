@@ -1,0 +1,14 @@
+{
+ "row_id": "dc38a17d807fefbe",
+ "repo": "/home/forge/src/clj-surgeon",
+ "sha": "57c9bb42f910b67fa131dc026fbc7b18f8430a13",
+ "file": "src/clj_surgeon/mission_cli.clj",
+ "family": "I",
+ "session": "agent-a26c1a2d353219639.jsonl",
+ "ts": "2026-09-05T19:17:04.480Z",
+ "model": "claude-opus-5",
+ "op": "replace",
+ "old": "(defn- ledger-of",
+ "new": "(defn admitted-profiles\n  \"@caller-probe. The profiles this call may prove a write with: the\n   WORKSPACE'S OWN `.clj-surgeon.edn` first, then an explicit --config, then\n   anything the spec passed. The probe's four applies all died on\n   `configured_profiles []` while that file sat in the workspace, because this\n   entrance only ever forwarded the spec's map.\"\n  [workspace-root {:keys [config profiles]}]\n  (merge (mission/configured-profiles workspace-root config) profiles))\n\n(defn- occupant-sizes\n  \"@caller-probe. Any file a refusal NAMES, with its size on disk.\n\n  A `target-exists` refusal against a ZERO-BYTE file is almost always a fixture\n  artifact \u2014 the probe lost four minutes to a materialization recipe that spat\n  an empty destination \u2014 and a byte count makes that obvious at a glance.\"\n  [refusal workspace-root]\n  (let [paths (keep (fn [k] (let [v (get refusal k)]\n                              (cond (string? v) v\n                                    (map? v) (:file v))))\n                    [:file :path :target :destination :to])]\n    (into {} (for [path paths\n                   :let [f (if (str/starts-with? path \"/\")\n                             (io/file path)\n                             (io/file workspace-root path))]\n                   :when (.isFile f)]\n               [(str f) {:bytes (.length f)\n                         :note (when (zero? (.length f))\n                                 \"ZERO BYTES \u2014 an empty occupant is usually a fixture artifact, not real code\")}]))))\n\n(defn- ledger-of",
+ "note": "insert defn admitted-profiles anchored on ledger-of"
+}

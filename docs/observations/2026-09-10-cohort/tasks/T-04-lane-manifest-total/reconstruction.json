@@ -1,0 +1,14 @@
+{
+ "row_id": "f6abb053471f2ab5",
+ "repo": "/home/forge/src/clj-surgeon",
+ "sha": "0659d8b6c37430a6cfee7f54a7695ff6265e27b0",
+ "file": "test/clj_surgeon/lane_manifest_test.clj",
+ "family": "T",
+ "session": "agent-a24a8eab9ce018faf.jsonl",
+ "ts": "2026-09-06T22:19:55.068Z",
+ "model": "claude-opus-5",
+ "op": "replace",
+ "old": "      (is (= 1370 total) (str \"manifest declares \" total \" tests\"))",
+ "new": "      ;; +3 round two (peer-review HOLD, executed bb probes): percent-bearing\n      ;; verification strings must not throw out of the receipt renderer; the\n      ;; real profile shape carries hot and cold verdicts beside :checks; the\n      ;; 2000-character failure budget is one TOTAL, not one per check.\n      (is (= 1373 total) (str \"manifest declares \" total \" tests\"))",
+ "note": "deftest body edit"
+}
