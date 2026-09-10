@@ -129,6 +129,71 @@
         (str/trim out)))
     (catch Throwable _ nil)))
 
+(defn darwin?
+  []
+  (str/includes? (str/lower-case (or (System/getProperty "os.name") "")) "mac"))
+
+(defn parse-darwin-mount-table
+  "The fstype covering `target` in the text `mount(8)` prints, or nil.
+
+   PURE, and public, so it can be witnessed against real macOS bytes from a
+   Linux box -- which is the only witness available here. The shell-out lives in
+   `darwin-mount-fstype`; this is the part that can be wrong.
+
+   Each line is `DEVICE on MOUNTPOINT (fstype, opt, opt)`. A mount point may
+   contain spaces (`/Volumes/Macintosh HD`) and a DEVICE may contain the literal
+   text ` on `, so the mount point is taken from the LAST ` on ` separator and
+   ends at the first ` (` after it -- never by splitting on whitespace. The
+   longest matching mount point wins, so a nested volume beats `/`."
+  [text target]
+  (->> (str/split-lines (or text ""))
+       (keep (fn [line]
+               (when-let [idx (str/last-index-of line " on ")]
+                 (let [tail (subs line (+ idx 4))
+                       paren (str/index-of tail " (")]
+                   (when paren
+                     (let [mnt (subs tail 0 paren)
+                           types (subs tail (+ paren 2))
+                           fstype (-> types
+                                      (str/replace #"\)\s*$" "")
+                                      (str/split #",")
+                                      first
+                                      str/trim)]
+                       (when (and (seq mnt) (seq fstype)
+                                  (or (= target mnt)
+                                      (= mnt "/")
+                                      (str/starts-with? target (str mnt "/"))))
+                         [mnt fstype])))))))
+       (sort-by (comp count first) >)
+       first
+       second))
+
+(defn- darwin-mount-fstype
+  "Longest-mount-point-prefix scan of `mount(8)`, the darwin equivalent of
+   findmnt.
+
+   WHY THIS HAD TO EXIST. Both existing mount sources are Linux-only: findmnt
+   is util-linux and the table is /proc/mounts. On macOS neither can answer, so
+   `mount-fstype` returned :unknown, `base-refusal` correctly failed CLOSED, and
+   EVERY JVM in the suite exited 97. The ratchet was not wrong -- it had no
+   authority to ask, and a gate with no authority is a gate that refuses
+   everything. This gives it one.
+
+   `mount` prints `DEVICE on MOUNTPOINT (fstype, opt, opt)`. A mount point may
+   contain spaces, so the split is anchored on the LAST ` on ` separator and the
+   first ` (` after it, never on whitespace.
+
+   Like findmnt, this is the system's own authority and not a seam: there is no
+   environment variable that can redirect it, so a caller cannot hand it a lying
+   table the way CLJ_SURGEON_MOUNTS_FILE can."
+  [dir]
+  (when (darwin?)
+    (try
+      (let [{:keys [exit out]} (shell/sh "mount")]
+        (when (zero? exit)
+          (parse-darwin-mount-table out (canonical dir))))
+      (catch Throwable _ nil))))
+
 (defn- mounts-table-fstype
   "Longest-mount-point-prefix scan of the mounts table.
 
@@ -167,6 +232,8 @@
    ran on RAM. `:unknown` is a refusal (see `base-refusal`), not a pass."
   [dir]
   (or (findmnt-fstype dir)
+      ;; darwin's own authority, for the same reason findmnt is Linux's.
+      (darwin-mount-fstype dir)
       ;; A seam-sourced fstype is NEVER positive proof of real disk. The gate
       ;; only ever needs the seam to produce a REFUSAL, so a forged table can
       ;; refuse (tmpfs) but a non-tmpfs answer from it reads as `nothing could
@@ -189,10 +256,22 @@
   [dir]
   (= "tmpfs" (mount-fstype dir)))
 
-(def ^:private refusal-remedy
-  (str "Launch with -Djava.io.tmpdir=/var/tmp/forge, or export "
-       "TMPDIR=/var/tmp/forge before invoking bb (bb does not read "
-       "JAVA_TOOL_OPTIONS -- see ~/bin/suite-run / seat-tmp-guard.sh)."))
+(defn- suggested-tmp-base
+  "A real-disk scratch base to SUGGEST in a refusal. The remedy used to name
+   /var/tmp/forge unconditionally -- a directory on exactly one machine, offered
+   as advice to every operator on every box."
+  []
+  (let [candidates (cond-> ["/var/tmp"] (darwin?) (conj "/private/var/tmp"))]
+    (or (first (filter #(.isDirectory (io/file %)) candidates)) "/var/tmp")))
+
+(defn- refusal-remedy
+  []
+  (let [base (suggested-tmp-base)]
+    (str "Launch with -Djava.io.tmpdir=" base "/clj-surgeon, or export TMPDIR="
+         base "/clj-surgeon before invoking bb (bb does not read "
+         "JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already "
+         "sets is real disk and needs no override -- an EMPTY TMPDIR is the "
+         "usual cause of this refusal, not a wrong one.")))
 
 ;; @spec MCP-OP-TMPHYG-003
 (defn base-refusal
@@ -233,7 +312,7 @@
             (str "was launched WITHOUT the isolated user.home this run "
                  "requires (TEST-ISO-006): " detail)
             "is not usable as a temp base.")
-          refusal-remedy))
+          (refusal-remedy)))
 
 (defn- refuse!
   [refusal]

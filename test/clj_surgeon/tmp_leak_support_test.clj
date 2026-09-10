@@ -210,3 +210,49 @@
       (is (= "1" (get env "NODE_DISABLE_COMPILE_CACHE")))
       (is (= "/var/tmp/clj-surgeon-suite-42-node" (get env "TMPDIR")))
       (is (= isolate-home? (contains? env "HOME"))))))
+
+;; @spec MCP-OP-TMPHYG-013
+(deftest darwin-has-a-mount-authority-of-its-own
+  (testing "Both mount sources were Linux-only -- findmnt is util-linux and the
+            table is /proc/mounts. On macOS neither could answer, mount-fstype
+            returned :unknown, base-refusal correctly failed CLOSED, and EVERY
+            JVM in the suite exited 97. The ratchet was not wrong; it had no
+            authority to ask. `mount(8)` is darwin's own authority, and this is
+            the part of it that can be wrong: the parse."
+    ;; REAL macOS `mount` output, not a synthesised shape. It carries the two
+    ;; cases a naive whitespace split gets wrong: a mount point containing a
+    ;; SPACE, and nested volumes where the longest prefix must win over `/`.
+    (let [table (str "/dev/disk3s1s1 on / (apfs, sealed, local, read-only, journaled)\n"
+                     "devfs on /dev (devfs, local, nobrowse)\n"
+                     "/dev/disk3s6 on /System/Volumes/VM (apfs, local, noexec, journaled, noatime, nobrowse)\n"
+                     "/dev/disk3s2 on /System/Volumes/Data (apfs, local, journaled, nobrowse)\n"
+                     "map auto_home on /System/Volumes/Data/home (autofs, automounted, nobrowse)\n"
+                     "/dev/disk5s1 on /Volumes/Macintosh HD Backup (hfs, local, nodev, nosuid, journaled)")]
+      (testing "the root volume answers for an unnested path"
+        (is (= "apfs" (tmp-leak/parse-darwin-mount-table table "/")))
+        ;; The per-user $TMPDIR every Mac shell sets. This is THE path the gate
+        ;; must prove, and proving it is what unblocks `make test` on a laptop.
+        (is (= "apfs" (tmp-leak/parse-darwin-mount-table
+                        table "/private/var/folders/ab/cd/T/"))))
+      (testing "a nested mount point beats the root -- longest prefix wins"
+        (is (= "devfs" (tmp-leak/parse-darwin-mount-table table "/dev")))
+        (is (= "autofs" (tmp-leak/parse-darwin-mount-table
+                          table "/System/Volumes/Data/home/gene")))
+        (is (= "apfs" (tmp-leak/parse-darwin-mount-table
+                        table "/System/Volumes/Data/Users/gene/x"))))
+      (testing "a mount point containing a space is read whole, not split on it"
+        (is (= "hfs" (tmp-leak/parse-darwin-mount-table
+                       table "/Volumes/Macintosh HD Backup/z"))))
+      (testing "and a prefix that only LOOKS nested does not match"
+        ;; /System/Volumes/VMware is not under /System/Volumes/VM.
+        (is (= "apfs" (tmp-leak/parse-darwin-mount-table
+                        table "/System/Volumes/VMware/x"))))
+      (testing "unparseable input answers nil, never a guess"
+        (is (nil? (tmp-leak/parse-darwin-mount-table "garbage" "/x")))
+        (is (nil? (tmp-leak/parse-darwin-mount-table nil "/x")))
+        (is (nil? (tmp-leak/parse-darwin-mount-table "" "/x"))))))
+  (testing "the remedy no longer advertises a directory that exists on one box"
+    (let [message (tmp-leak/refusal-message (tmp-leak/base-refusal "/tmp"))]
+      (is (not (clojure.string/includes? message "/var/tmp/forge"))
+          "the remedy named this seat's scratch dir to every operator alive")
+      (is (clojure.string/includes? message "TMPDIR")))))
