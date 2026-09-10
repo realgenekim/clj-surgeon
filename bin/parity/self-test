@@ -9,7 +9,7 @@
 # is re-executed). Exit 0 = every witness held.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SUBJECT="${1:-/var/tmp/forge/parity/runs/OBS-stable-vs-stable/split}"
+SUBJECT="${1:-/var/tmp/forge/parity/runs/OBS2-provenance/split}"
 WORK="${PARITY_ROOT:-/var/tmp/forge/parity}/self-test.$$"
 mkdir -p "$WORK"; trap 'rm -rf "$WORK"' EXIT
 PASS=0; FAIL=0
@@ -107,6 +107,72 @@ cp -r "$SUBJECT/A" "$WORK/nocapture/A"; cp -r "$SUBJECT/B" "$WORK/nocapture/B"
 rm -f "$WORK/nocapture/A/exit.txt" "$WORK/nocapture/B/exit.txt"
 OUT="$(run "$WORK/nocapture/A" "$WORK/nocapture/B" "$HERE/volatile-fields.edn")"; RC=$?
 check "a required artifact captured on neither side refuses rather than passing" REFUSED "captured on NEITHER side" "$OUT" $RC
+
+echo "PARITY-FENCE-003 — an observation must be backed by retained bytes"
+
+# 3a. Sol's round-2 control, made permanent: invent an observation for a run that
+# never happened, cite it from a new rule, and (unlike a careless forger) repair
+# the file digest so the refusal has to come from the MISSING CAPTURE itself.
+mkdir -p "$WORK/forge"
+python3 - "$HERE/observed-volatility.edn" "$WORK/forge/observed-volatility.edn" <<'PY'
+import sys, re
+s = open(sys.argv[1]).read()
+row = '{:run "RUN-THAT-NEVER-HAPPENED", :specimen :split, :path [:candidate_hash], :source "stdout.edn", :capture-digest "0000"}'
+s = s.replace(' :observations\n [', ' :observations\n [' + row + '\n  ', 1)
+open(sys.argv[2], 'w').write(s)
+PY
+cp "$HERE/observe-volatility.clj" "$WORK/forge/observe-volatility.clj"
+cp "$HERE/specimens.edn" "$WORK/forge/specimens.edn"
+# a forger who knows the digest is checked simply recomputes it
+bb -e '
+(require (quote [clojure.edn :as edn]))
+(defn sha256 [^String s] (let [d (java.security.MessageDigest/getInstance "SHA-256")]
+  (apply str (map #(format "%02x" %) (.digest d (.getBytes s "UTF-8"))))))
+(let [f (first *command-line-args*) doc (edn/read-string (slurp f))
+      d (sha256 (pr-str (mapv #(into (sorted-map) %) (:observations doc))))]
+  (spit f (clojure.string/replace (slurp f) (re-pattern (str ":file-digest \"" (:file-digest doc) "\"")) (str ":file-digest \"" d "\""))))' "$WORK/forge/observed-volatility.edn"
+cp "$HERE/compare.clj" "$WORK/forge/compare.clj"
+python3 - "$HERE/volatile-fields.edn" "$WORK/forge/volatile-fields.edn" <<'PY'
+import sys
+s = open(sys.argv[1]).read()
+rule = ('{:key :candidate_hash :match :key :to "<CANDIDATE-HASH>"\n'
+        '   :reason "invented"\n'
+        '   :evidence {:run "RUN-THAT-NEVER-HAPPENED" :specimen :split :path [:candidate_hash]}}\n  ')
+s = s.replace(' :fields\n [', ' :fields\n [' + rule, 1)
+open(sys.argv[2], 'w').write(s)
+PY
+OUT="$(bb "$WORK/forge/compare.clj" "$SUBJECT/A" "$SUBJECT/B" "$WORK/forge/volatile-fields.edn" split 2>&1)"; RC=$?
+check "a rule citing a run with no retained capture refuses, naming the run" REFUSED "RUN-THAT-NEVER-HAPPENED" "$OUT" $RC
+
+# 3b. a hand edit that does NOT repair the digest is caught by the digest.
+python3 - "$HERE/observed-volatility.edn" "$WORK/forge/tampered.edn" <<'PY'
+import sys
+s = open(sys.argv[1]).read()
+row = '{:run "RUN-THAT-NEVER-HAPPENED", :specimen :split, :path [:candidate_hash], :source "stdout.edn", :capture-digest "0000"}'
+s = s.replace(' :observations\n [', ' :observations\n [' + row + '\n  ', 1)
+open(sys.argv[2], 'w').write(s)
+PY
+cp "$WORK/forge/tampered.edn" "$WORK/forge/observed-volatility.edn"
+OUT="$(bb "$WORK/forge/compare.clj" "$SUBJECT/A" "$SUBJECT/B" "$HERE/volatile-fields.edn" split 2>&1)"; RC=$?
+check "a hand-edited evidence file fails its own digest" REFUSED "edited by hand after generation" "$OUT" $RC
+
+# 3c. the retained bytes are the evidence: corrupt one and the rules citing it refuse.
+rm -rf "$WORK/tamper"; cp -r "$HERE" "$WORK/tamper" 2>/dev/null
+echo "corrupted" >> "$WORK/tamper/evidence/OBS2-provenance/split/A/stdout.edn"
+OUT="$(bb "$WORK/tamper/compare.clj" "$SUBJECT/A" "$SUBJECT/B" "$WORK/tamper/volatile-fields.edn" split 2>&1)"; RC=$?
+check "a retained capture that no longer hashes to its record refuses" REFUSED "does not hash to what capture.edn records" "$OUT" $RC
+
+echo "PARITY-FENCE-004 — :expects-receipt is a two-way contract"
+
+# 4a. Sol's control: a pair that DOES carry receipts, compared as a specimen that
+# declares it publishes none, must not be silently compared to parity.
+OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$HERE/volatile-fields.edn" fanout)"; RC=$?
+check "receipts present where the specimen declares :expects-receipt false is a DIVERGENCE" DIVERGENCE "declares :expects-receipt false" "$OUT" $RC
+
+# 4b. a receipt present for a specimen nobody declared refuses.
+OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$HERE/volatile-fields.edn" undeclared)"; RC=$?
+check "a receipt present for an undeclared specimen refuses" REFUSED "does not declare :expects-receipt" "$OUT" $RC
+
 
 echo
 echo "self-test: $PASS passed, $FAIL failed"

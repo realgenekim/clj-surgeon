@@ -1,22 +1,32 @@
 #!/usr/bin/env bb
-;; observe-volatility — produce the evidence that a normalisation rule is allowed to exist.
+;; observe-volatility — produce the evidence that a normalisation rule is allowed
+;; to exist, AND retain the bytes that evidence was derived from.
 ;;
-;;   observe-volatility.clj <run-dir> <run-id> <specimen> [<fixture-A> <fixture-B>]
+;;   observe-volatility.clj <run-dir> <run-id> <specimen> <stable-build-sha> \
+;;                          <evidence-root> [<fixture-A> <fixture-B>]
 ;;
 ;; Compares the two captured sides of a STABLE-vs-STABLE run with NO
-;; normalisation at all and prints, as EDN, every field path and tree path that
-;; differed between two runs of one build. That output is the only admissible
-;; source for the :evidence of a rule in volatile-fields.edn: a rule may exist
-;; because a run showed the field differing, and for no other reason.
+;; normalisation at all — and, when the fixtures are given, their trees with NO
+;; exclusions — and prints, as EDN, every path that differed between two runs of
+;; one build.
 ;;
-;; When the two fixture directories are given it also diffs them with NO tree
-;; exclusions, so an exclusion has to be paid for the same way a field rule is.
+;; A CHECKED-IN ROW ASSERTING ITS OWN PROVENANCE IS NOT EVIDENCE. So this also
+;; copies the exact captured sides it compared into
+;; <evidence-root>/<run>/<specimen>/{A,B}/ and writes a capture.edn naming the
+;; stable build sha, this generator's own source digest, and a sha256 per
+;; retained file. bin/parity/compare.clj re-opens those bytes, recomputes the
+;; digests, and RE-DERIVES the difference before it will honour any rule that
+;; cites the observation. A row whose run has no retained capture refuses.
 (ns parity.observe
-  (:require [clojure.edn :as edn] [clojure.java.io :as io]
-            [clojure.string :as str] [clojure.java.shell :as shell]))
+  (:require [clojure.edn :as edn] [clojure.java.io :as io] [clojure.string :as str]))
 
 (defn- read-edn [f] (with-open [r (java.io.PushbackReader. (io/reader f))] (edn/read {:eof ::eof} r)))
 (defn- exists? [f] (.exists (io/file f)))
+
+(defn sha256 [^String s]
+  (let [d (java.security.MessageDigest/getInstance "SHA-256")]
+    (apply str (map #(format "%02x" %) (.digest d (.getBytes s "UTF-8"))))))
+(defn sha256-file [f] (sha256 (slurp f)))
 
 (defn diffs
   ([a b] (diffs a b [] []))
@@ -30,40 +40,63 @@
      (reduce (fn [acc i] (diffs (nth a i) (nth b i) (conj path i) acc)) acc (range (count a)))
      :else (conj acc [path a b]))))
 
-(defn- trunc [x] (let [s (pr-str x)] (if (> (count s) 200) (str (subs s 0 200) "…") s)))
-
-(defn- full-manifest [dir]
+(defn full-manifest
+  "sha256 of every file in the tree, NO exclusions: an exclusion must be paid for
+  exactly the way a field rule is."
+  [dir]
   (->> (file-seq (io/file dir))
        (filter #(.isFile %))
-       (map #(subs (.getPath %) (count dir)))
-       sort))
+       (map (fn [f] [(subs (.getPath f) (count dir)) (try (sha256-file f) (catch Exception _ "unreadable"))]))
+       (sort-by first)))
 
-(defn -main [& [run-dir run-id specimen fx-a fx-b]]
-  (let [out (atom [])]
+(defn manifest->text [m] (str/join "\n" (map (fn [[p h]] (str h "  " p)) m)))
+
+(defn -main [& [run-dir run-id specimen stable-build evidence-root fx-a fx-b]]
+  (let [spec (keyword specimen)
+        dest (str evidence-root "/" run-id "/" specimen)
+        _ (doseq [s ["A" "B"]] (.mkdirs (io/file (str dest "/" s))))
+        retained (atom {})
+        retain! (fn [side name content]
+                  (let [p (str dest "/" side "/" name)]
+                    (spit p content)
+                    (swap! retained assoc (str side "/" name) (sha256 content))))
+        out (atom [])]
+
+    ;; retain the receipt objects exactly as captured, then derive from the copies
+    (doseq [side ["A" "B"] file ["stdout.edn" "receipt.edn"]]
+      (let [src (str run-dir "/" side "/" file)]
+        (when (exists? src) (retain! side file (slurp src)))))
+
     (doseq [file ["stdout.edn" "receipt.edn"]]
-      (let [a (str run-dir "/A/" file) b (str run-dir "/B/" file)]
+      (let [a (str dest "/A/" file) b (str dest "/B/" file)]
         (when (and (exists? a) (exists? b))
           (doseq [[p va vb] (diffs (read-edn a) (read-edn b))]
-            (swap! out conj {:run run-id :specimen (keyword specimen) :path p
-                             :a (trunc va) :b (trunc vb) :source file})))))
-    (when (and fx-a fx-b (exists? fx-a) (exists? fx-b))
-      (let [ma (full-manifest fx-a) mb (full-manifest fx-b)
-            common (filter (set mb) ma)]
-        (doseq [rel common]
-          (let [fa (io/file (str fx-a rel)) fb (io/file (str fx-b rel))]
-            (when (or (not= (.length fa) (.length fb))
-                      (not= (:out (shell/sh "sha256sum" (.getPath fa)))
-                            (str/replace (:out (shell/sh "sha256sum" (.getPath fb))) (.getPath fb) (.getPath fa))))
-              (swap! out conj {:run run-id :specimen (keyword specimen)
-                               :path ["tree" rel] :source "fixture-tree"
-                               :a "differs" :b "differs"}))))
-        (doseq [rel (remove (set mb) ma)]
-          (swap! out conj {:run run-id :specimen (keyword specimen) :path ["tree" rel]
-                           :source "fixture-tree" :a "present" :b ::absent}))
-        (doseq [rel (remove (set ma) mb)]
-          (swap! out conj {:run run-id :specimen (keyword specimen) :path ["tree" rel]
-                           :source "fixture-tree" :a ::absent :b "present"}))))
-    (binding [*print-length* nil]
-      (doseq [o @out] (prn o)))))
+            (swap! out conj {:run run-id :specimen spec :path p :source file})))))
 
+    ;; retain the UNEXCLUDED tree manifests, then derive tree observations from them
+    (when (and fx-a fx-b (exists? fx-a) (exists? fx-b))
+      (retain! "A" "full-tree-manifest.txt" (manifest->text (full-manifest fx-a)))
+      (retain! "B" "full-tree-manifest.txt" (manifest->text (full-manifest fx-b)))
+      (let [->m (fn [side] (into {} (for [l (str/split-lines (slurp (str dest "/" side "/full-tree-manifest.txt")))
+                                          :when (seq l)]
+                                      (let [[h p] (str/split l #"  " 2)] [p h]))))
+            la (->m "A") lb (->m "B")]
+        (doseq [p (sort (distinct (concat (remove (set (keys lb)) (keys la))
+                                          (remove (set (keys la)) (keys lb))
+                                          (for [[p h] la :when (and (contains? lb p) (not= h (get lb p)))] p))))]
+          (swap! out conj {:run run-id :specimen spec :path ["tree" p] :source "full-tree-manifest.txt"}))))
+
+    (let [files (into (sorted-map) @retained)
+          capture-digest (sha256 (pr-str files))
+          capture {:run run-id :specimen spec
+                   :stable-build stable-build
+                   :generator-sha256 (sha256-file *file*)
+                   :files files
+                   :capture-digest capture-digest
+                   :created (str (java.time.Instant/now))}]
+      (spit (str dest "/capture.edn") (with-out-str (clojure.pprint/pprint capture)))
+      (binding [*print-length* nil]
+        (doseq [o @out] (prn (assoc o :capture-digest capture-digest)))))))
+
+(require 'clojure.pprint)
 (apply -main *command-line-args*)

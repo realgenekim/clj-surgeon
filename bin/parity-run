@@ -117,9 +117,17 @@ capture() { # <outdir> <fixture> <exit> <wall>
   echo "$fx" > "$out/fixture-root.txt"
   tree_manifest "$fx" "$out/tree-manifest.txt"
   # the receipt the operation names, copied next to the run for field comparison
+  # The PUBLISHED path is recorded whenever the operation publishes one, whether or
+  # not the file it names exists. Writing it only on success would make the
+  # published-path check circular: it could never see a path that named nothing.
   local rp
   rp="$(bb -e '(try (let [m (clojure.edn/read-string (slurp (first *command-line-args*)))] (println (or (:receipt_path m) (get-in m [:structured :receipt_path]) ""))) (catch Exception _ (println "")))' "$out/stdout.edn" 2>/dev/null | tail -1)"
-  if [ -n "$rp" ] && [ -f "$rp" ]; then cp "$rp" "$out/receipt.edn"; echo "$rp" > "$out/receipt-path.txt"; fi
+  if [ -n "$rp" ]; then
+    echo "$rp" > "$out/receipt-path.txt"
+    if [ -f "$rp" ]; then cp "$rp" "$out/receipt.edn"; else
+      log "WARNING: published receipt_path $rp names no file"
+    fi
+  fi
 }
 
 # --- specimen: namespace split (exact Cell C contract) ---------------------

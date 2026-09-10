@@ -1,67 +1,70 @@
-{;; observed-volatility.edn — THE ONLY ADMISSIBLE SOURCE OF EVIDENCE for a rule
- ;; in volatile-fields.edn.
+{;; observed-volatility.edn — the only admissible source of evidence for a rule in
+ ;; volatile-fields.edn. GENERATED, never written:
  ;;
- ;; Every entry is a field path or tree path that DIFFERED between two runs of
- ;; ONE build (run OBS-stable-vs-stable, both sides built from
- ;; 59d8bc0cad8886a028c24e8ffd52e4e5d82185c1). It is generated, not written:
+ ;;   bin/parity/observe-volatility.clj <run-dir> <run-id> <specimen> <stable-sha> \
+ ;;                                     bin/parity/evidence [fxA fxB]
  ;;
- ;;   bin/parity/observe-volatility.clj <run-dir> <run-id> <specimen> [fxA fxB]
- ;;
- ;; compares the two captured sides with NO normalisation at all, and the fixture
- ;; trees with NO exclusions, so an exclusion has to be paid for exactly the way a
- ;; field rule does. bin/parity/compare.clj REFUSES to run if any rule names an
- ;; observation that is not in this file.
- ;;
- ;; Generated 2026-09-10T16:51:22Z from run OBS-stable-vs-stable.
+ ;; Every row is a path that DIFFERED between two runs of ONE build, and the bytes
+ ;; it was derived from are retained under bin/parity/evidence/<run>/<specimen>/.
+ ;; bin/parity/compare.clj re-opens those bytes, recomputes every digest, and
+ ;; RE-DERIVES the difference before honouring any rule that cites a row. A row whose
+ ;; run has no retained capture refuses, naming the run: a checked-in row asserting
+ ;; its own provenance is an assertion, not evidence.
+ :stable-build "59d8bc0cad8886a028c24e8ffd52e4e5d82185c1"
+ :evidence-root "evidence"
+ :generator-sha256 "cafd7820188ecf656ab26514f3b4840381d8888fa70b4efa6824b24a8ecf2c6d"
+ :file-digest "867039db307c50bdb56809b9af2921e319b749dea04e3f3de0027dff546497cf"
  :observations
- [{:run "OBS-stable-vs-stable", :specimen :split, :path [:checks 0 :duration_ms], :a "2727.934146", :b "2829.209207", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:checks 1 :duration_ms], :a "35.161261", :b "35.462824", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:checks 2 :duration_ms], :a "2666.07658", :b "2719.694636", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:checks 3 :command 0], :a "\"/var/tmp/forge/parity/fx/OBS-stable-vs-stable-split-A/bin/kaocha\"", :b "\"/var/tmp/forge/parity/fx/OBS-stable-vs-stable-split-B/bin/kaocha\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:checks 3 :duration_ms], :a "36390.431149", :b "27934.062744", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:checks 4 :command 2], :a "\"/var/tmp/forge/parity/fx/OBS-stable-vs-stable-split-A\"", :b "\"/var/tmp/forge/parity/fx/OBS-stable-vs-stable-split-B\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:checks 4 :duration_ms], :a "82.075183", :b "84.165818", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:checks 5 :duration_ms], :a "16.752589", :b "8.627421", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:closure_receipt], :a "\"/var/tmp/forge/namespace-split-receipts/0264f87c81e54f2e053c0a9bb6ef6273b97a5073d717e031353e3fc2a499a346/7bd6e584-36f0-4824-ad38-4282179b869d-closure.edn\"", :b "\"/var/tmp/forge/namespace-split-receipts/ae7b52bda9396a8766b6e3da6512bd4a3a19892f39efe71d2c1c8a2370824f29/de6a3e01-5238-4d66-a6d2-8ad149ed66c9-closure.edn\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:details_path], :a "\"/var/tmp/forge/namespace-split-receipts/0264f87c81e54f2e053c0a9bb6ef6273b97a5073d717e031353e3fc2a499a346/7bd6e584-36f0-4824-ad38-4282179b869d-details.edn\"", :b "\"/var/tmp/forge/namespace-split-receipts/ae7b52bda9396a8766b6e3da6512bd4a3a19892f39efe71d2c1c8a2370824f29/de6a3e01-5238-4d66-a6d2-8ad149ed66c9-details.edn\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:elapsed_ms], :a "55033.169521", :b "47044.033502", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:receipt_hash], :a "\"a0fa9979d15df6479099043b8a846526ef5a8aa0511da6bee0680dd7fb1e4575\"", :b "\"6ff004208f4bcb7de35263ba07a8f1a14a56df37b811161743c2e0ea31426d41\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:receipt_id], :a "\"7bd6e584-36f0-4824-ad38-4282179b869d\"", :b "\"de6a3e01-5238-4d66-a6d2-8ad149ed66c9\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:receipt_path], :a "\"/var/tmp/forge/namespace-split-receipts/0264f87c81e54f2e053c0a9bb6ef6273b97a5073d717e031353e3fc2a499a346/7bd6e584-36f0-4824-ad38-4282179b869d-receipt.edn\"", :b "\"/var/tmp/forge/namespace-split-receipts/ae7b52bda9396a8766b6e3da6512bd4a3a19892f39efe71d2c1c8a2370824f29/de6a3e01-5238-4d66-a6d2-8ad149ed66c9-receipt.edn\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:undo_command 4], :a "\"/var/tmp/forge/namespace-split-receipts/0264f87c81e54f2e053c0a9bb6ef6273b97a5073d717e031353e3fc2a499a346/7bd6e584-36f0-4824-ad38-4282179b869d-undo.edn\"", :b "\"/var/tmp/forge/namespace-split-receipts/ae7b52bda9396a8766b6e3da6512bd4a3a19892f39efe71d2c1c8a2370824f29/de6a3e01-5238-4d66-a6d2-8ad149ed66c9-undo.edn\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:undo_receipt], :a "\"/var/tmp/forge/namespace-split-receipts/0264f87c81e54f2e053c0a9bb6ef6273b97a5073d717e031353e3fc2a499a346/7bd6e584-36f0-4824-ad38-4282179b869d-undo.edn\"", :b "\"/var/tmp/forge/namespace-split-receipts/ae7b52bda9396a8766b6e3da6512bd4a3a19892f39efe71d2c1c8a2370824f29/de6a3e01-5238-4d66-a6d2-8ad149ed66c9-undo.edn\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:workspace_root], :a "\"/var/tmp/forge/parity/fx/OBS-stable-vs-stable-split-A\"", :b "\"/var/tmp/forge/parity/fx/OBS-stable-vs-stable-split-B\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path [:workspace_status :command 2], :a "\"/var/tmp/forge/parity/fx/OBS-stable-vs-stable-split-A\"", :b "\"/var/tmp/forge/parity/fx/OBS-stable-vs-stable-split-B\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path ["tree" "/.clj-surgeon.edn"], :source "fixture-tree", :a "differs", :b "differs"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path ["tree" "/.git/index"], :source "fixture-tree", :a "differs", :b "differs"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path ["tree" "/.git/logs/HEAD"], :source "fixture-tree", :a "differs", :b "differs"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path ["tree" "/.git/logs/refs/heads/master"], :source "fixture-tree", :a "differs", :b "differs"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path ["tree" "/.git/refs/heads/master"], :source "fixture-tree", :a "differs", :b "differs"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path ["tree" "/00SERVER-LOGS.txt"], :source "fixture-tree", :a "differs", :b "differs"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path ["tree" "/.git/objects/39/beb041f4169910630b4311199a9d6e7ad416cd"], :source "fixture-tree", :a "present", :b :parity.observe/absent}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path ["tree" "/.git/objects/69/2de929716826105dd8700e997b163651077bf8"], :source "fixture-tree", :a "present", :b :parity.observe/absent}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path ["tree" "/.git/objects/7a/e211dbe4130b9f5121af0ffe9c80328e326b74"], :source "fixture-tree", :a "present", :b :parity.observe/absent}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path ["tree" "/.git/objects/5d/03cbc82918760985a9e8639133056d5df1c47f"], :source "fixture-tree", :a :parity.observe/absent, :b "present"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path ["tree" "/.git/objects/e3/3709e48f05a5ab6f78cf4a96413798f2d9a4d1"], :source "fixture-tree", :a :parity.observe/absent, :b "present"}
-  {:run "OBS-stable-vs-stable", :specimen :split, :path ["tree" "/.git/objects/ee/c8fc9d251bcd8f21a193e41e807f2bce4e4a4b"], :source "fixture-tree", :a :parity.observe/absent, :b "present"}
-  {:run "OBS-stable-vs-stable", :specimen :alias, :path [:structured :details_path], :a "\"/var/tmp/forge/alias-migration-receipts/f89f2522210d516a9474a573d7fdbe550caf9dcb3f6606446091176c4573865d/detail-24fd7593-07d0-4ce5-b07c-17a9e513599b.edn\"", :b "\"/var/tmp/forge/alias-migration-receipts/eaba5ec1549c59615c9ad04f2ee17704a4125b9539196381b9a5708e65bb5465/detail-c043dd66-3664-4825-8127-75201166d1f8.edn\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :alias, :path [:structured :elapsed_ms], :a "4661.642016", :b "3966.110141", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :alias, :path [:structured :receipt_hash], :a "\"1b978f77fcb0410441d299d01a39c15a2652b32c20c9cf9585d1212fec752d6d\"", :b "\"bfa4557b3362708d303a5d48703ff3666562bddb85fa05645e8aaff3e553d8ab\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :alias, :path [:structured :telemetry :id], :a "\"d202e117-df37-4603-8d81-7b8412c12f06\"", :b "\"2c6b24ab-88b9-47cd-b719-0588b99524ed\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :alias, :path [:structured :telemetry :wall_ms], :a "4658.468707", :b "3963.309662", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :alias, :path [:structured :undo_receipt], :a "\"/var/tmp/forge/alias-migration-receipts/f89f2522210d516a9474a573d7fdbe550caf9dcb3f6606446091176c4573865d/0c65403f-ae25-4b46-971f-19ccba0c5739.edn\"", :b "\"/var/tmp/forge/alias-migration-receipts/eaba5ec1549c59615c9ad04f2ee17704a4125b9539196381b9a5708e65bb5465/49503c1b-952e-4cb7-b0da-752216ab633b.edn\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :alias, :path [:structured :workspace_root], :a "\"/var/tmp/forge/parity/fx/OBS-stable-vs-stable-alias-A\"", :b "\"/var/tmp/forge/parity/fx/OBS-stable-vs-stable-alias-B\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :alias, :path [:structured :workspace_status :command 2], :a "\"/var/tmp/forge/parity/fx/OBS-stable-vs-stable-alias-A\"", :b "\"/var/tmp/forge/parity/fx/OBS-stable-vs-stable-alias-B\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :alias, :path [:text 0], :a "\"alias_migration\\n  9 files · 21 sites · aliases {\\\"mjson\\\" 9} · 3 collisions resolved · 4661.64 ms\\n\\n✓ atomic commit complete\\n✓ written bytes read back\\n✓ verification: none requested — bytes read …", :b "\"alias_migration\\n  9 files · 21 sites · aliases {\\\"mjson\\\" 9} · 3 collisions resolved · 3966.11 ms\\n\\n✓ atomic commit complete\\n✓ written bytes read back\\n✓ verification: none requested — bytes read …", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :alias, :path ["tree" "/.git/index"], :source "fixture-tree", :a "differs", :b "differs"}
-  {:run "OBS-stable-vs-stable", :specimen :alias, :path ["tree" "/.git/logs/HEAD"], :source "fixture-tree", :a "differs", :b "differs"}
-  {:run "OBS-stable-vs-stable", :specimen :alias, :path ["tree" "/.git/logs/refs/heads/master"], :source "fixture-tree", :a "differs", :b "differs"}
-  {:run "OBS-stable-vs-stable", :specimen :alias, :path ["tree" "/.git/refs/heads/master"], :source "fixture-tree", :a "differs", :b "differs"}
-  {:run "OBS-stable-vs-stable", :specimen :alias, :path ["tree" "/.git/objects/20/f32df0303527b9c4cf6be6c5a33e8aba0e32ba"], :source "fixture-tree", :a "present", :b :parity.observe/absent}
-  {:run "OBS-stable-vs-stable", :specimen :alias, :path ["tree" "/.git/objects/98/72b934de81604f693f8a59d0b1851652dd8533"], :source "fixture-tree", :a :parity.observe/absent, :b "present"}
-  {:run "OBS-stable-vs-stable", :specimen :fanout, :path [:structured :elapsed_ms], :a "243.434651", :b "243.320028", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :fanout, :path [:structured :receipt_hash], :a "\"28dd301409957f99de1e105555b078e994891abe1e726a1f3dc1f4eb67b43963\"", :b "\"9e6e61306bd7b92202e07c7ca9d1c7a47112d6efa8edd73685043e80719beb54\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :fanout, :path [:structured :undo_receipt], :a "\"/var/tmp/forge/edit-clojure-receipts/3faa861d7eeb0793bab6e0e199f42b4d98e14ac2b99b215c9ad222a0400c4aa2/c4499f0d-0fc2-4649-b92e-fd4b24ee3e14.edn\"", :b "\"/var/tmp/forge/edit-clojure-receipts/a9f771b661849029d205f0c04dd16047f483cbcd57a60810f7ea185bcd7d999e/21694134-e671-434d-b2fd-eec2cb8e5aa9.edn\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :fanout, :path [:structured :workspace_root], :a "\"/var/tmp/forge/parity/fx/OBS-stable-vs-stable-fanout-A\"", :b "\"/var/tmp/forge/parity/fx/OBS-stable-vs-stable-fanout-B\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :fanout, :path [:structured :workspace_status :command 2], :a "\"/var/tmp/forge/parity/fx/OBS-stable-vs-stable-fanout-A\"", :b "\"/var/tmp/forge/parity/fx/OBS-stable-vs-stable-fanout-B\"", :source "stdout.edn"}
-  {:run "OBS-stable-vs-stable", :specimen :fanout, :path [:text 0], :a "\"apply_clojure_changes\\n  3 edits · 3 files · 243.43 ms\\n\\n✓ atomic commit complete\\n✓ written bytes read back\\n✓ verification: none requested — bytes read back only\\n✓ terminal evidence · verificatio…", :b "\"apply_clojure_changes\\n  3 edits · 3 files · 243.32 ms\\n\\n✓ atomic commit complete\\n✓ written bytes read back\\n✓ verification: none requested — bytes read back only\\n✓ terminal evidence · verificatio…", :source "stdout.edn"}]}
+ [
+  {:run "OBS2-provenance", :specimen :split, :path [:checks 0 :duration_ms], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:checks 1 :duration_ms], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:checks 2 :duration_ms], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:checks 3 :command 0], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:checks 3 :duration_ms], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:checks 4 :command 2], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:checks 4 :duration_ms], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:checks 5 :duration_ms], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:closure_receipt], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:details_path], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:elapsed_ms], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:receipt_hash], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:receipt_id], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:receipt_path], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:undo_command 4], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:undo_receipt], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:workspace_root], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:workspace_status :command 2], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.clj-surgeon.edn"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/index"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/logs/HEAD"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/logs/refs/heads/master"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/objects/30/e3be47ed819996d9a2eca5c91d64a11937df9c"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/objects/43/b78f9c2df9e2f412f0efd3db94b251b296412e"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/objects/5c/4c3f7f3ccdae708ffd91a05086417b13ce3c04"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/objects/7f/8f7465d573819389ce3e994aafc67f73e746e6"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/objects/83/330610b28747b55a47458ed7f882283a579a85"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/objects/b9/fe9d05e289997821a3a170edf28eb305ef766a"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/refs/heads/master"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/00SERVER-LOGS.txt"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:structured :details_path], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:structured :elapsed_ms], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:structured :receipt_hash], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:structured :telemetry :id], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:structured :telemetry :wall_ms], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:structured :undo_receipt], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:structured :workspace_root], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:structured :workspace_status :command 2], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:text 0], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path ["tree" "/.git/index"], :source "full-tree-manifest.txt", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path ["tree" "/.git/logs/HEAD"], :source "full-tree-manifest.txt", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path ["tree" "/.git/logs/refs/heads/master"], :source "full-tree-manifest.txt", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path ["tree" "/.git/objects/08/c91717d2a4be9e2034611412874f61591271d2"], :source "full-tree-manifest.txt", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path ["tree" "/.git/objects/a6/c806ec91631a153ac92f6ccc4591dd6a96f0f6"], :source "full-tree-manifest.txt", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path ["tree" "/.git/refs/heads/master"], :source "full-tree-manifest.txt", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :fanout, :path [:structured :elapsed_ms], :source "stdout.edn", :capture-digest "4da6dd3e7fe8965bfb792dfa1d971db5642a81cf2eab9f0ccfecf550cc4f91f7"}
+  {:run "OBS2-provenance", :specimen :fanout, :path [:structured :receipt_hash], :source "stdout.edn", :capture-digest "4da6dd3e7fe8965bfb792dfa1d971db5642a81cf2eab9f0ccfecf550cc4f91f7"}
+  {:run "OBS2-provenance", :specimen :fanout, :path [:structured :undo_receipt], :source "stdout.edn", :capture-digest "4da6dd3e7fe8965bfb792dfa1d971db5642a81cf2eab9f0ccfecf550cc4f91f7"}
+  {:run "OBS2-provenance", :specimen :fanout, :path [:structured :workspace_root], :source "stdout.edn", :capture-digest "4da6dd3e7fe8965bfb792dfa1d971db5642a81cf2eab9f0ccfecf550cc4f91f7"}
+  {:run "OBS2-provenance", :specimen :fanout, :path [:structured :workspace_status :command 2], :source "stdout.edn", :capture-digest "4da6dd3e7fe8965bfb792dfa1d971db5642a81cf2eab9f0ccfecf550cc4f91f7"}
+  {:run "OBS2-provenance", :specimen :fanout, :path [:text 0], :source "stdout.edn", :capture-digest "4da6dd3e7fe8965bfb792dfa1d971db5642a81cf2eab9f0ccfecf550cc4f91f7"}
+]}

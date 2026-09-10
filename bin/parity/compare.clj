@@ -27,47 +27,141 @@
 
 (defn- read-edn [f] (with-open [r (java.io.PushbackReader. (io/reader f))]
                       (edn/read {:eof ::eof} r)))
+
+(defn sha256 [^String s]
+  (let [d (java.security.MessageDigest/getInstance "SHA-256")]
+    (apply str (map #(format "%02x" %) (.digest d (.getBytes s "UTF-8"))))))
 (defn- exists? [f] (.exists (io/file f)))
 (defn- slurp-or [f d] (if (exists? f) (str/trim (slurp f)) d))
 
 ;; ---------------------------------------------------------------------------
-;; contract 1: the declaration is validated before anything is compared
+;; contract 1: a rule is honoured only if its evidence can be RE-DERIVED from
+;; retained bytes.
+;;
+;; A checked-in row asserting its own provenance is not evidence: a hand edit can
+;; invent both the observation and the rule that cites it. So the comparator
+;; re-opens the capture the observation names, recomputes every digest, and
+;; RE-DERIVES the difference from those bytes. A rule citing a run with no
+;; retained capture refuses, naming the run.
 
-(def ^:private evidence-file
-  (str (.getParent (io/file *file*)) "/observed-volatility.edn"))
+(def ^:private here (.getParent (io/file *file*)))
+(def ^:private evidence-file (str here "/observed-volatility.edn"))
+(def ^:private generator-file (str here "/observe-volatility.clj"))
 
 (defn- rule-name [{:keys [key pattern glob match]}]
   (str (or key pattern glob (some-> match name)) " (" (or (some-> match name) "tree-exclude") ")"))
 
-(defn- observed? [observations {:keys [run specimen path]}]
-  (some (fn [o] (and (= (:run o) run) (= (:specimen o) specimen) (= (:path o) path)))
-        observations))
+(defn- diff-paths-of
+  "Re-derive, from the RETAINED bytes, every path that differed between the two
+  captured sides. This is what an observation must appear in."
+  [dir]
+  (let [dv (fn dv [a b path acc]
+             (cond
+               (= a b) acc
+               (and (map? a) (map? b))
+               (reduce (fn [acc k] (dv (get a k ::absent) (get b k ::absent) (conj path k) acc))
+                       acc (sort-by str (distinct (concat (keys a) (keys b)))))
+               (and (sequential? a) (sequential? b) (= (count a) (count b)))
+               (reduce (fn [acc i] (dv (nth a i) (nth b i) (conj path i) acc)) acc (range (count a)))
+               :else (conj acc path)))
+        object-paths
+        (mapcat (fn [f]
+                  (let [a (str dir "/A/" f) b (str dir "/B/" f)]
+                    (if (and (exists? a) (exists? b)) (dv (read-edn a) (read-edn b) [] []) [])))
+                ["stdout.edn" "receipt.edn"])
+        tree-paths
+        (let [a (str dir "/A/full-tree-manifest.txt") b (str dir "/B/full-tree-manifest.txt")]
+          (if (and (exists? a) (exists? b))
+            (let [->m (fn [f] (into {} (for [l (str/split-lines (slurp f)) :when (seq l)]
+                                         (let [[h p] (str/split l #"  " 2)] [p h]))))
+                  la (->m a) lb (->m b)]
+              (map (fn [p] ["tree" p])
+                   (distinct (concat (remove (set (keys lb)) (keys la))
+                                     (remove (set (keys la)) (keys lb))
+                                     (for [[p h] la :when (and (contains? lb p) (not= h (get lb p)))] p)))))
+            []))]
+    (set (concat object-paths tree-paths))))
+
+(def ^:private capture-cache (atom {}))
+
+(defn verify-capture
+  "nil when the cited observation is backed by retained bytes that still show it."
+  [evidence-root {:keys [run specimen path] :as cited} cited-digest]
+  (let [dir (str evidence-root "/" run "/" (name specimen))
+        capture-file (str dir "/capture.edn")]
+    (cond
+      (not (exists? capture-file))
+      (str "no capture is retained for run " (pr-str run) " specimen " (pr-str specimen)
+           " under " evidence-root "/. An observation may only exist because a run produced it; "
+           "a row that names a run nobody kept the bytes of is an assertion, not evidence.")
+      :else
+      (let [capture (read-edn capture-file)
+            recomputed (into (sorted-map)
+                             (for [[f _] (:files capture)]
+                               [f (if (exists? (str dir "/" f)) (sha256 (slurp (str dir "/" f))) "MISSING")]))
+            bad (for [[f h] (:files capture) :when (not= h (get recomputed f))] f)]
+        (cond
+          (seq bad)
+          (str "the retained capture for run " (pr-str run) " specimen " (pr-str specimen)
+               " does not hash to what capture.edn records: " (pr-str (vec bad)))
+          (not= (sha256 (pr-str recomputed)) (:capture-digest capture))
+          (str "the capture digest for run " (pr-str run) " specimen " (pr-str specimen) " does not recompute")
+          (and cited-digest (not= cited-digest (:capture-digest capture)))
+          (str "the observation cites capture digest " cited-digest
+               " but the retained capture is " (:capture-digest capture))
+          (not (contains? (or (get @capture-cache dir)
+                              (get (swap! capture-cache assoc dir (diff-paths-of dir)) dir))
+                          path))
+          (str "the retained capture for run " (pr-str run) " specimen " (pr-str specimen)
+               " does NOT show " (pr-str path) " differing. The bytes are the evidence; "
+               "the row is only a claim about them.")
+          :else nil)))))
+
+(defn- observation-for [observations {:keys [run specimen path]}]
+  (first (filter (fn [o] (and (= (:run o) run) (= (:specimen o) specimen) (= (:path o) path)))
+                 observations)))
 
 (defn validate-declaration
   "Return a vector of refusal strings; empty means the declaration may be used."
-  [decl observations]
-  (let [check (fn [what rule]
-                (let [{:keys [reason evidence]} rule
-                      nm (str what " " (rule-name rule))]
-                  (cond
-                    (not (string? reason))
-                    [(str "REFUSING: " nm " has no :reason. A normalisation is permission for the "
-                          "candidate to change a field unnoticed; state the physical reason two runs "
-                          "of ONE build cannot agree on it.")]
-                    (str/blank? reason)
-                    [(str "REFUSING: " nm " has an empty :reason.")]
-                    (not (map? evidence))
-                    [(str "REFUSING: " nm " has no :evidence map. Name the observation: "
-                          "{:run <run-id> :specimen <name> :path [<field path>]}.")]
-                    (not (and (:run evidence) (:specimen evidence) (:path evidence)))
-                    [(str "REFUSING: " nm " :evidence must carry :run, :specimen and :path; got "
-                          (pr-str evidence))]
-                    (not (observed? observations evidence))
-                    [(str "REFUSING: " nm " names an observation that is not recorded in "
-                          "observed-volatility.edn: " (pr-str evidence) ". A rule may only exist "
-                          "because a run showed the field differing between two runs of one build.")]
-                    :else [])))]
-    (vec (concat (mapcat #(check "field rule" %) (:fields decl))
+  [decl doc]
+  (let [observations (:observations doc)
+        evidence-root (str here "/" (or (:evidence-root doc) "evidence"))
+        file-refusals
+        (cond-> []
+          (not= (:generator-sha256 doc)
+                (and (exists? generator-file) (sha256 (slurp generator-file))))
+          (conj (str "REFUSING: observed-volatility.edn was generated by a different "
+                     "observe-volatility.clj than the one in this tree. Regenerate the evidence; "
+                     "an attestation that does not name the code that produced it attests to nothing."))
+          (not= (:file-digest doc) (sha256 (pr-str (mapv #(into (sorted-map) %) observations))))
+          (conj "REFUSING: observed-volatility.edn does not hash to its recorded :file-digest — it was edited by hand after generation."))
+        check
+        (fn [what rule]
+          (let [{:keys [reason evidence]} rule
+                nm (str what " " (rule-name rule))]
+            (cond
+              (not (string? reason))
+              [(str "REFUSING: " nm " has no :reason. A normalisation is permission for the "
+                    "candidate to change a field unnoticed; state the physical reason two runs "
+                    "of ONE build cannot agree on it.")]
+              (str/blank? reason)
+              [(str "REFUSING: " nm " has an empty :reason.")]
+              (not (map? evidence))
+              [(str "REFUSING: " nm " has no :evidence map. Name the observation: "
+                    "{:run <run-id> :specimen <name> :path [<field path>]}.")]
+              (not (and (:run evidence) (:specimen evidence) (:path evidence)))
+              [(str "REFUSING: " nm " :evidence must carry :run, :specimen and :path; got "
+                    (pr-str evidence))]
+              (nil? (observation-for observations evidence))
+              [(str "REFUSING: " nm " names an observation that is not recorded in "
+                    "observed-volatility.edn: " (pr-str evidence))]
+              :else
+              (if-let [bad (verify-capture evidence-root evidence
+                                           (:capture-digest (observation-for observations evidence)))]
+                [(str "REFUSING: " nm " — " bad)]
+                []))))]
+    (vec (concat file-refusals
+                 (mapcat #(check "field rule" %) (:fields decl))
                  (mapcat #(check "tree exclusion" %) (:tree-excludes decl))))))
 
 ;; ---------------------------------------------------------------------------
@@ -139,14 +233,14 @@
 
 (defn -main [& [dir-a dir-b decl-file specimen-name]]
   (let [decl (read-edn decl-file)
-        observations (if (exists? evidence-file) (:observations (read-edn evidence-file)) [])
-        refusals (validate-declaration decl observations)]
+        doc (if (exists? evidence-file) (read-edn evidence-file) {})
+        refusals (validate-declaration decl doc)]
     (when (seq refusals)
       (println "REFUSED" (count refusals))
       (doseq [r refusals] (println (str "  " r)))
       (System/exit 2))
 
-    (let [specimens (let [f (str (.getParent (io/file *file*)) "/specimens.edn")]
+    (let [specimens (let [f (str here "/specimens.edn")]
                       (if (exists? f) (read-edn f) {}))
           spec (get specimens (keyword (or specimen-name "unknown")) {})
           expects-receipt (get spec :expects-receipt ::unset)
@@ -160,6 +254,10 @@
           refuse (fn [msg] (swap! hard conj msg))]
 
       ;; ---- presence, before content -------------------------------------
+      ;; The specimen's declaration is a TWO-WAY contract. Expected present and
+      ;; absent is a divergence; expected ABSENT and present is a divergence too,
+      ;; naming the declaration — otherwise a `false` entry silently switches the
+      ;; receipt comparison off for a specimen that does publish one.
       (doseq [{:keys [file required]} artifacts]
         (let [a (exists? (str dir-a "/" file)) b (exists? (str dir-b "/" file))]
           (cond
@@ -177,6 +275,18 @@
                 (true? expects-receipt)
                 (note :presence "receipt.edn is MISSING on both sides but this specimen declares :expects-receipt true")
                 :else nil)
+              :else nil))
+          ;; the other direction: declared absent, but here
+          (when (and (= file "receipt.edn") (or a b))
+            (cond
+              (= expects-receipt ::unset)
+              (refuse (str "REFUSING: a receipt was captured but specimen " (pr-str specimen-name)
+                           " does not declare :expects-receipt in bin/parity/specimens.edn. "
+                           "A comparison whose predicted artifact state is unstated cannot be trusted either way."))
+              (false? expects-receipt)
+              (note :presence (str "receipt.edn is PRESENT (" (str/join " and " (remove nil? [(when a "A") (when b "B")]))
+                                   ") but specimen " (pr-str specimen-name)
+                                   " declares :expects-receipt false — the declaration is wrong, or the operation changed what it publishes"))
               :else nil))))
 
       ;; a published receipt path that names a file nobody captured

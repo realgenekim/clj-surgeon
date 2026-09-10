@@ -1,0 +1,21 @@
+{:run "OBS2-provenance",
+ :specimen :split,
+ :stable-build "59d8bc0cad8886a028c24e8ffd52e4e5d82185c1",
+ :generator-sha256
+ "cafd7820188ecf656ab26514f3b4840381d8888fa70b4efa6824b24a8ecf2c6d",
+ :files
+ {"A/full-tree-manifest.txt"
+  "64d13825fec4a5c020a2b7dfea32b9f57eca60db9292f23ad9a7e9f79f5416ca",
+  "A/receipt.edn"
+  "e3bbe4649fbca84239fd6813df86e659c85a7e276d65cec5d04058da061ab7dc",
+  "A/stdout.edn"
+  "6c766dbf9a4f9f2dae1eab36696e19cdd6e811c1056e56b271a8fc22d200ffcb",
+  "B/full-tree-manifest.txt"
+  "6d6fd1cdfc91dcd08db2d8185d4c32ea764457f2049f668e4c2216381f7c586a",
+  "B/receipt.edn"
+  "cce4e6e421b8d204565730e97f426b2b16e06f6c6bdadb6ed5279057be13d167",
+  "B/stdout.edn"
+  "dfb9130abd90cf2b2b165837edeca0b62350ff07dad578c41986e9d820bce238"},
+ :capture-digest
+ "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f",
+ :created "2026-09-10T17:22:08.327987058Z"}
