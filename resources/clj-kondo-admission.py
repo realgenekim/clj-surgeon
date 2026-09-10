@@ -130,11 +130,13 @@ def append_event(args, event):
 
 
 def pressure_status_path(args):
+    # SPF-002: this default must track clj_surgeon.mcp_process's own default
+    # (~/.local/state/clj-surgeon/pressure-status.json) -- direct-shell mode
+    # calls this without going through mcp_process.clj, so a stale literal
+    # here silently ships a second default for the same admission contract.
     return args.pressure_status or os.environ.get(
         "CLJ_SURGEON_PRESSURE_STATUS",
-        os.path.expanduser(
-            "~/.local/state/diagnose-skiff-cpu-memory/monitor/status.json"
-        ),
+        os.path.expanduser("~/.local/state/clj-surgeon/pressure-status.json"),
     )
 
 
