@@ -45,12 +45,29 @@ SELF_TEST_TMP ?= $(if $(filter /tmp /tmp/% /dev/shm /dev/shm/%,$(TMPDIR)),/var/t
 #
 # It was `flock /home/forge/tmp/suite.lock`: a util-linux binary macOS does not
 # have, on an absolute path that exists on exactly one box in the world. Both
-# halves are now derived. The path is per-user and follows the same tmpfs
-# redirection as every other scratch root here; the lock itself is
-# bin/with-lock (fcntl.flock, portable, released by the kernel on SIGKILL).
-# A seat that wants to share a lane with an out-of-repo runner overrides
-# SUITE_LOCK; nothing in this repository assumes the Anvil path any more.
-SUITE_LOCK ?= $(SELF_TEST_TMP)/clj-surgeon-suite-$(shell id -u).lock
+# halves are derived now, and the lock itself is bin/with-lock (fcntl.flock,
+# portable, released by the kernel on SIGKILL exactly as flock(1) is).
+#
+# THE KEY IS REPOSITORY IDENTITY, not the scratch root. Sol
+# SKIFF-INSTALL-FENCE-002: keyed by scratch root + UID alone, two checkouts of
+# DIFFERENT repositories owned by one user produced the same lock path and
+# blocked each other.
+#
+# The rule, and why:
+#   * Two worktrees of the SAME repository SHARE the lock. That is the real
+#     collision -- an agent running a heap witness in a worktree while another
+#     runs one in the main checkout measures the neighbour's JVM. They are the
+#     same product and must serialize.
+#   * Two DIFFERENT repositories DO NOT share it. An unrelated project's suite
+#     is not ours to block, and must not block us.
+#
+# The root commit is that identity: identical across every worktree, clone and
+# branch of one repository, and different for any other. A tree that is not a
+# git repository at all falls back to a hash of its own path -- distinct by
+# construction, which is the safe direction.
+SUITE_LOCK_KEY := $(shell git -C "$(CLJ_SURGEON_HOME)" rev-list --max-parents=0 HEAD 2>/dev/null | tail -1 | cut -c1-16)
+SUITE_LOCK_KEY := $(if $(SUITE_LOCK_KEY),$(SUITE_LOCK_KEY),path-$(shell printf '%s' "$(CLJ_SURGEON_HOME)" | shasum -a 256 | cut -c1-12))
+SUITE_LOCK ?= $(SELF_TEST_TMP)/clj-surgeon-suite-$(shell id -u)-$(SUITE_LOCK_KEY).lock
 WITH_LOCK := $(CLJ_SURGEON_HOME)bin/with-lock
 # Scratch root for the heavy memory witnesses. Same reasoning: a default that
 # only resolves on Anvil is a defect on every other box.
@@ -226,21 +243,46 @@ sync-clj-surgeon-skill:
 check-clj-surgeon-skill-mirrors:
 	bash bench/sync_clj_surgeon_skill.sh --check
 
-mcp-operation-oracle:
-	# @spec MCP-OP-ORACLE-001
-	@# SWI-Prolog is gate stage one and it is NOT on a clean macOS or a clean
-	@# Ubuntu. `swipl: command not found` from make is a true statement that
-	@# tells the reader nothing, so name the tool, the reason and the remedy.
-	@# There is deliberately NO bypass: this oracle is a merge gate, and a
-	@# gate with an opt-out is not a gate. Fail loud, to a named remedy.
+.PHONY: require-swipl gate-prerequisites
+
+# `swipl: command not found` from make is a true statement that tells the reader
+# nothing, so name the tool, where it is actually needed, and the remedy.
+#
+# There is deliberately NO bypass: this oracle is a merge gate, and a gate with
+# an opt-out is not a gate.
+#
+# Sol SKIFF-INSTALL-FENCE-003: an earlier version of this text called the oracle
+# "the FIRST stage of make test". It is not. `make print-gate-stages` puts
+# mcp-test FOURTH of seven, and the oracle runs inside it as a phase-1 pool job.
+# Saying "stage one" was wrong, and it mattered: a reader trusted it to mean the
+# refusal came before any other work, which it did not.
+require-swipl:
 	@command -v swipl >/dev/null 2>&1 || { \
 	  echo "gate-refused: SWI-Prolog (swipl) is not installed." >&2; \
-	  echo "  It runs the MCP operation contract oracle, which is the FIRST" >&2; \
-	  echo "  stage of \`make test\`. Installing clj-surgeon does not need it;" >&2; \
-	  echo "  running the landing gate yourself does." >&2; \
+	  echo "  The MCP operation contract oracle needs it. That oracle runs" >&2; \
+	  echo "  inside the \`mcp-test\` gate stage (mcp-test -> mcp-test-checks" >&2; \
+	  echo "  -> mcp-operation-oracle), the 4th of 7 stages." >&2; \
+	  echo "  \`make test\` refuses HERE, at the gate entrance, so you do not" >&2; \
+	  echo "  pay the three stages before it to learn this." >&2; \
+	  echo "  Installing clj-surgeon does NOT need swipl; the gate does." >&2; \
 	  echo "  macOS:  brew install swi-prolog" >&2; \
 	  echo "  Debian: sudo apt-get install swi-prolog-nox" >&2; \
 	  exit 1; }
+
+# Everything the gate needs that is cheap to check and fatal to every lane.
+# Both members were learned from a clean machine: a box without swipl paid three
+# stages first, and a box whose temp base is RAM-backed refused in all 113
+# namespaces with no line naming the temp directory.
+gate-prerequisites: require-swipl
+	@bb --classpath test -e '(require (quote [clj-surgeon.tmp-leak-support :as t]))\
+	  (let [d (or (System/getenv "TMPDIR") "/tmp") r (t/base-refusal d)]\
+	    (when r (binding [*out* *err*]\
+	      (println "gate-refused:" (t/refusal-message r))\
+	      (println "  Every gate lane would exit 97. Refusing at the entrance."))\
+	      (System/exit 1)))'
+
+mcp-operation-oracle: require-swipl
+	# @spec MCP-OP-ORACLE-001
 	swipl -q -f test/mcp_operation_contract_oracle.pl
 
 repository-hygiene:
@@ -1186,12 +1228,12 @@ alias-migration-test-serial:
 # (linux: the abstract Unix-domain namespace; darwin: pathname sockets under a
 # per-user runtime root -- see test/gate_slot.py and the receipt's :admission).
 # 512 MiB per JVM; insufficient memory refuses. No gate width flag.
-landing-gate:
+landing-gate: gate-prerequisites
 	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite gate
 
 .PHONY: landing-gate-prewarm print-gate-stages intent-audit
 
-landing-gate-prewarm:
+landing-gate-prewarm: gate-prerequisites
 	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite gate --prewarm true
 
 print-gate-stages:

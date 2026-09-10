@@ -133,40 +133,70 @@
   []
   (str/includes? (str/lower-case (or (System/getProperty "os.name") "")) "mac"))
 
+(def ^:private darwin-mount-row
+  "`DEVICE on MOUNTPOINT (fstype, flag, flag)`, anchored at BOTH ends.
+
+   The mount point is whatever lies between the device token and the trailing
+   parenthesised group -- it is never found by searching for a separator, because
+   a mount point may legally CONTAIN the separator. The trailing group is the
+   last `(...)` on the line and may not itself contain parentheses, so a mount
+   point that contains them (`/Volumes/My (Disk)`) still parses.
+
+   The device is one token, except the automounter's `map <name>` form."
+  #"^(?:map \S+|\S+) on (.*) \(([^()]+)\)$")
+
 (defn parse-darwin-mount-table
-  "The fstype covering `target` in the text `mount(8)` prints, or nil.
+  "The fstype covering `target`: an fstype string, nil when no row covers it, or
+   `:unknown` when the text is not a mount table this parser fully understands.
 
-   PURE, and public, so it can be witnessed against real macOS bytes from a
-   Linux box -- which is the only witness available here. The shell-out lives in
-   `darwin-mount-fstype`; this is the part that can be wrong.
+   THE SAFETY PROPERTY, and the reason this is not a `keep`. Sol
+   SKIFF-INSTALL-FENCE-001: an earlier version split each line on the LAST
+   literal ` on `, so a mount point containing those bytes --
 
-   Each line is `DEVICE on MOUNTPOINT (fstype, opt, opt)`. A mount point may
-   contain spaces (`/Volumes/Macintosh HD`) and a DEVICE may contain the literal
-   text ` on `, so the mount point is taken from the LAST ` on ` separator and
-   ends at the first ` (` after it -- never by splitting on whitespace. The
-   longest matching mount point wins, so a nested volume beats `/`."
+       /dev/ram on /private/var/folders/evil on ram (tmpfs, local)
+
+   -- was discarded as malformed, and the surviving `/` row then answered
+   \"apfs\" for a target on that tmpfs. Crafted mount text could make the ratchet
+   PROVE real disk. Discarding a row you do not understand is the bug: the row
+   you cannot read is exactly the row that may be covering your target.
+
+   So ANY non-blank line that does not match the anchored grammar poisons the
+   WHOLE table to `:unknown`, and longest-prefix selection runs only over a table
+   that parsed completely. Refuse, or answer; never prove past an ambiguity.
+
+   PURE and public, so the property is witnessed from a Linux box."
   [text target]
-  (->> (str/split-lines (or text ""))
-       (keep (fn [line]
-               (when-let [idx (str/last-index-of line " on ")]
-                 (let [tail (subs line (+ idx 4))
-                       paren (str/index-of tail " (")]
-                   (when paren
-                     (let [mnt (subs tail 0 paren)
-                           types (subs tail (+ paren 2))
-                           fstype (-> types
-                                      (str/replace #"\)\s*$" "")
-                                      (str/split #",")
-                                      first
-                                      str/trim)]
-                       (when (and (seq mnt) (seq fstype)
-                                  (or (= target mnt)
-                                      (= mnt "/")
-                                      (str/starts-with? target (str mnt "/"))))
-                         [mnt fstype])))))))
-       (sort-by (comp count first) >)
-       first
-       second))
+  (let [lines (remove str/blank? (str/split-lines (or text "")))
+        rows (reduce (fn [acc line]
+                       (if-let [[_ mnt types] (re-matches darwin-mount-row line)]
+                         (let [fstype (str/trim (first (str/split types #",")))]
+                           (if (and (seq (str/trim mnt)) (seq fstype))
+                             (conj acc [(str/trim mnt) fstype])
+                             (reduced :unknown)))
+                         (reduced :unknown)))
+                     [] lines)]
+    (cond
+      (= :unknown rows) :unknown
+      (empty? rows) nil
+      :else (->> rows
+                 (filter (fn [[mnt _]]
+                           (or (= target mnt)
+                               (= mnt "/")
+                               (str/starts-with? target (str mnt "/")))))
+                 (sort-by (comp count first) >)
+                 first
+                 second))))
+
+(def ^:private darwin-mount-binaries
+  "`mount(8)` by ABSOLUTE path, never by bare name.
+
+   Sol SKIFF-INSTALL-FENCE-001, second half: the earlier version shelled out to
+   `mount` through PATH, and the claim in its docstring that this was a
+   non-redirectable system source was simply FALSE -- a `mount` earlier on PATH
+   printing `/dev/fake on / (apfs, local)` made base-refusal return nil. An
+   absolute path cannot be redirected by the environment; writing to /sbin needs
+   privileges that already defeat every check in this namespace."
+  ["/sbin/mount" "/bin/mount"])
 
 (defn- darwin-mount-fstype
   "Longest-mount-point-prefix scan of `mount(8)`, the darwin equivalent of
@@ -183,15 +213,19 @@
    contain spaces, so the split is anchored on the LAST ` on ` separator and the
    first ` (` after it, never on whitespace.
 
-   Like findmnt, this is the system's own authority and not a seam: there is no
-   environment variable that can redirect it, so a caller cannot hand it a lying
-   table the way CLJ_SURGEON_MOUNTS_FILE can."
+   The authority claim, stated exactly: the binary is named by ABSOLUTE path, so
+   PATH cannot redirect it, and a table this parser cannot fully read answers
+   `:unknown` rather than falling back to a covering row. It is not
+   unforgeable -- nothing reachable from bb is -- but forging it now requires
+   write access to /sbin, which already defeats every check here."
   [dir]
   (when (darwin?)
     (try
-      (let [{:keys [exit out]} (shell/sh "mount")]
-        (when (zero? exit)
-          (parse-darwin-mount-table out (canonical dir))))
+      (let [binary (first (filter #(.canExecute (io/file %)) darwin-mount-binaries))]
+        (when binary
+          (let [{:keys [exit out]} (shell/sh binary)]
+            (when (zero? exit)
+              (parse-darwin-mount-table out (canonical dir))))))
       (catch Throwable _ nil))))
 
 (defn- mounts-table-fstype

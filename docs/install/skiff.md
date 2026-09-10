@@ -37,11 +37,17 @@ Two more that are not needed to install, only to use:
 
 - **`clj-kondo`** — `:ls`, `:outline` and `:fix-declares!` refuse without it.
   `brew install clj-kondo/brew/clj-kondo`
-- **`swipl` (SWI-Prolog)** — **`make test` cannot run without it.** It is gate
-  stage one. `brew install swi-prolog`
+- **`swipl` (SWI-Prolog)** — **`make test` cannot run without it.** It runs the
+  MCP operation contract oracle inside the `mcp-test` stage (the 4th of 7), but
+  `make test` checks for it *at the gate entrance*, so you find out before
+  paying the three stages before it. `brew install swi-prolog`
 
 There is no opt-out for the Prolog oracle. It is a merge gate, and a gate with a
 bypass is not a gate — so `make test` refuses by name rather than skipping.
+
+The same entrance check also refuses a RAM-backed temp directory, the other
+condition that makes every gate lane exit 97. Both name themselves; neither is
+skippable.
 
 Optional: `brew install coreutils` gives you `gtimeout`, which bounds a couple of
 steps that otherwise run unbounded. Nothing fails without it.

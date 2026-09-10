@@ -247,10 +247,47 @@
         ;; /System/Volumes/VMware is not under /System/Volumes/VM.
         (is (= "apfs" (tmp-leak/parse-darwin-mount-table
                         table "/System/Volumes/VMware/x"))))
-      (testing "unparseable input answers nil, never a guess"
-        (is (nil? (tmp-leak/parse-darwin-mount-table "garbage" "/x")))
+      (testing "an EMPTY table covers nothing; it does not invent a filesystem"
         (is (nil? (tmp-leak/parse-darwin-mount-table nil "/x")))
         (is (nil? (tmp-leak/parse-darwin-mount-table "" "/x"))))))
+  ;; @spec MCP-OP-TMPHYG-013
+  (testing "Sol SKIFF-INSTALL-FENCE-001. A mount point may CONTAIN the bytes
+            ` on `. Splitting on the last one discarded the nested row as
+            malformed, and the surviving `/` row then answered apfs for a target
+            that was really on tmpfs -- crafted text making the ratchet PROVE
+            real disk. The row you cannot read is exactly the row that may be
+            covering your target."
+    (let [evil (str "/dev/root on / (apfs, local)\n"
+                    "/dev/ram on /private/var/folders/evil on ram (tmpfs, local)")
+          answer (tmp-leak/parse-darwin-mount-table
+                   evil "/private/var/folders/evil on ram/T")]
+      (is (not= "apfs" answer)
+          "the exact regression: crafted mount text proved real disk")
+      (is (contains? #{"tmpfs" :unknown} answer)
+          "a covering row is read, or the table refuses -- never a fallback")))
+  (testing "a mount point containing PARENTHESES still parses: the trailing
+            group is the last (...) and flags never contain parentheses"
+    (let [table (str "/dev/root on / (apfs, local)\n"
+                     "/dev/d5 on /Volumes/My (Disk) Backup (hfs, local)")]
+      (is (= "hfs" (tmp-leak/parse-darwin-mount-table
+                     table "/Volumes/My (Disk) Backup/z")))))
+  (testing "ANY row this parser cannot read poisons the WHOLE table to
+            :unknown, which base-refusal treats as a refusal. A partially
+            understood mount table must never answer for a target."
+    (is (= :unknown (tmp-leak/parse-darwin-mount-table
+                      "/dev/root on / (apfs, local)\ntotally bogus line" "/x")))
+    (is (= :unknown (tmp-leak/parse-darwin-mount-table "garbage" "/x")))
+    (is (= :unknown (tmp-leak/parse-darwin-mount-table
+                      "/dev/root on / (apfs, local)\n/dev/x on /y (" "/y/z"))))
+  (testing "Sol SKIFF-INSTALL-FENCE-001, second half: `mount` was run by BARE
+            NAME through PATH, so a shim earlier on PATH could print
+            `/dev/fake on / (apfs, local)` and base-refusal returned nil. The
+            docstring's claim that this was non-redirectable was false. Only
+            absolute paths are named now."
+    (let [binaries @(resolve 'clj-surgeon.tmp-leak-support/darwin-mount-binaries)]
+      (is (seq binaries))
+      (is (every? #(clojure.string/starts-with? % "/") binaries)
+          "a bare name is redirectable by PATH; an absolute path is not")))
   (testing "the remedy no longer advertises a directory that exists on one box"
     (let [message (tmp-leak/refusal-message (tmp-leak/base-refusal "/tmp"))]
       (is (not (clojure.string/includes? message "/var/tmp/forge"))

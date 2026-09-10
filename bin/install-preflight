@@ -100,7 +100,8 @@ echo "  Test gate (only needed to run \`make test\` yourself)"
 if command -v swipl >/dev/null 2>&1; then
   say "  swipl" "$(version_of swipl --version)"
 else
-  say "  swipl" "MISSING -- \`make test\` cannot run (gate stage one)"
+  say "  swipl" "MISSING -- \`make test\` refuses at the gate entrance"
+  say "" "needed by the mcp-test stage (4th of 7); the gate checks it up front"
   say "" "macOS: brew install swi-prolog  |  Debian: apt install swi-prolog-nox"
   say "" "the CLI, the skills and the MCP server do NOT need it"
   gate_blockers="$gate_blockers swipl"
