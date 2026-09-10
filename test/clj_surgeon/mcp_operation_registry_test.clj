@@ -65,6 +65,10 @@
     :verification-failed 'clj-surgeon.mcp-namespace-split-test/failing-proof-restores-the-entire-file-set
     :typed-refusal 'clj-surgeon.mcp-namespace-split-test/refused-callback-is-actionable-and-preserves-bytes
     :read 'clj-surgeon.mcp-namespace-split-test/plan-only-captures-once-and-never-publishes}
+   "insert_forms"
+   {:committed 'clj-surgeon.insert-forms-parity-test/insert-forms-cli-mcp-parity
+    :typed-refusal 'clj-surgeon.insert-forms-parity-test/insert-forms-cli-mcp-parity
+    :verification-failed 'clj-surgeon.insert-forms-atomic-test/insert-forms-atomic-multiform-and-race}
    "require_change"
    {:committed 'clj-surgeon.require-change-boundary-test/standalone-mcp-commits-and-retains-undo
     :verification-failed 'clj-surgeon.require-change-boundary-test/failing-proof-rolls-back-all-files

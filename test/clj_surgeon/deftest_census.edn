@@ -275,6 +275,30 @@
   clj-surgeon.helper-extraction-test/the-source-requiring-a-third-namespace-refuses-at-the-same-edge
   clj-surgeon.helper-extraction-test/the-target-exists-refusal-never-invents-a-destination
   clj-surgeon.helper-extraction-test/the-write-is-one-transaction-and-a-refusal-stages-nothing
+  clj-surgeon.insert-forms-after-prefix-named-defn-test/insert-forms-after-prefix-named-defn
+  clj-surgeon.insert-forms-anchor-cardinality-test/insert-forms-anchor-cardinality
+  clj-surgeon.insert-forms-anchor-decoys-test/insert-forms-comment-string-anchor-decoys
+  clj-surgeon.insert-forms-atomic-test/insert-forms-atomic-multiform-and-race
+  clj-surgeon.insert-forms-body-boundaries-test/insert-forms-body-boundaries
+  clj-surgeon.insert-forms-candidate-test/insert-forms-candidate-structure-refuses
+  clj-surgeon.insert-forms-candidate-test/insert-forms-parse-errors-refuse
+  clj-surgeon.insert-forms-defn-headers-test/insert-forms-defn-headers-and-arities
+  clj-surgeon.insert-forms-deftest-nested-testing-test/insert-forms-deftest-nested-testing
+  clj-surgeon.insert-forms-envelope-test/insert-forms-candidate-envelope
+  clj-surgeon.insert-forms-envelope-test/insert-forms-refusal-remedies
+  clj-surgeon.insert-forms-parity-test/insert-forms-cli-mcp-parity
+  clj-surgeon.insert-forms-paths-test/insert-forms-path-confinement
+  clj-surgeon.insert-forms-payload-count-test/insert-forms-payload-count-and-order
+  clj-surgeon.insert-forms-portable-receipt-test/insert-forms-portable-read-receipt
+  clj-surgeon.insert-forms-preservation-test/insert-forms-other-top-level-hashes
+  clj-surgeon.insert-forms-reader-safety-test/insert-forms-reader-safety-and-limits
+  clj-surgeon.insert-forms-receipt-test/insert-forms-receipt-accounting
+  clj-surgeon.insert-forms-recovery-test/insert-forms-planned-receipt-recovery
+  clj-surgeon.insert-forms-spacing-test/insert-forms-existing-separators
+  clj-surgeon.insert-forms-stale-hash-test/insert-forms-stale-hash-refuses
+  clj-surgeon.insert-forms-terminal-test/insert-forms-terminal-response-eligibility
+  clj-surgeon.insert-forms-trivia-test/insert-forms-trivia-and-indentation
+  clj-surgeon.insert-forms-unbalanced-payload-test/insert-forms-unbalanced-payload-refuses
   clj-surgeon.lane-manifest-test/a-false-redirection-to-an-existing-target-is-refused-by-name
   clj-surgeon.lane-manifest-test/a-namespace-in-the-tree-but-absent-from-the-census-is-named
   clj-surgeon.lane-manifest-test/an-exclusion-naming-an-unreadable-runner-fails-closed
