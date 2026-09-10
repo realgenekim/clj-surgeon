@@ -733,3 +733,5 @@ B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa;
 ## STATE at 2026-09-10T09:11Z — squeeze PARKED at the cap (delivery /var/tmp/forge/ship-v3.8-delivery, INSTALL OK v3.10 scratch; DoD in inbox); trunk 59d8bc0c; ship v3.7 installed; items 1/3 parked; item 2 on Gene; mayor told (inb-62826b); Buster benchmark on mayor (inb-8bd9ad). Gene's three-part order complete except the skiff receipt, which is his.
 
 ## STATE at 2026-09-10T11:35Z — trunk 59d8bc0c = tag stable/2026-09-10 (sublime state 9). Window readings are not state readings.
+
+## STATE at 2026-09-10T15:57Z — PUBLIC-MAIN PLAN OF RECORD active (docs/observations/2026-09-10-public-main-merge-plan.md). Stage 0 building: fable/public-candidate (hygiene + scan; worktree clj-surgeon-pubcand) and fable/parity-harness (worktree clj-surgeon-parity). NEVER push either to origin (public); fork only on Gene's word. Curtain Call prod promotion routed to skiff (inb-e7c772/inb-511a9e). Gene's decisions pending in the inbox.
