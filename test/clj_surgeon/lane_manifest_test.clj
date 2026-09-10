@@ -566,7 +566,9 @@
    `census-ledger-path`; what stays here is the REASON, which no derivation can
    recover. Keyed by namespace name, so two branches adopting different
    namespaces merge without touching the same line."
-  '#{clj-surgeon.insert-forms-after-prefix-named-defn-test ; insert_forms v1 contract witness.
+  '#{clj-surgeon.rename-alias-test ; Fixed alias reader roles, E4 and transaction contract.
+     clj-surgeon.rename-alias-parity-test ; Actual request-file transport parity.
+     clj-surgeon.insert-forms-after-prefix-named-defn-test ; insert_forms v1 contract witness.
      clj-surgeon.insert-forms-anchor-cardinality-test ; insert_forms v1 contract witness.
      clj-surgeon.insert-forms-anchor-decoys-test ; insert_forms v1 contract witness.
      clj-surgeon.insert-forms-atomic-test ; insert_forms v1 contract witness.

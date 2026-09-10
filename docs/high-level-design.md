@@ -1400,3 +1400,11 @@ CLI and MCP share the operation and its typed outcomes. Supporting structural
 reads expose portable, path-bound digest projections. Write verification is
 parse plus preservation; behavioral verification remains caller work.
 The [insertion design](intent/insert-forms/design.md) owns INSERT-FORMS-001..018.
+
+## Fixed alias renaming
+
+`rename_alias` uses one closed request-file contract for CLI and MCP, with a
+complete guarded snapshot and reader-role prefix edits for a fixed library.
+It shares insertion's parsing, guards, publication and receipt seams. The
+[rename design](intent/rename-alias/design.md) owns the RED-first requirements
+and the exact E4 preservation specimen; no behavioral or routing admission follows.

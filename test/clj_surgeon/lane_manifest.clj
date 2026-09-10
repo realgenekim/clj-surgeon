@@ -94,6 +94,8 @@
   "test namespace -> lane. THE authority. Adding a JVM test namespace without
    adding it here fails `clj-surgeon.lane-manifest-test` by name."
   {;; ---- :fast (49) ----
+   'clj-surgeon.rename-alias-test :fast
+   'clj-surgeon.rename-alias-parity-test :battery
    'clj-surgeon.insert-forms-after-prefix-named-defn-test :fast
    'clj-surgeon.insert-forms-deftest-nested-testing-test :fast
    'clj-surgeon.insert-forms-unbalanced-payload-test :fast

@@ -1,0 +1,190 @@
+(ns clj-surgeon.rename-alias-test
+  {:lane :fast}
+  (:require [clj-surgeon.rename-alias :as sut]
+            [clj-surgeon.rename-alias-oracle :as oracle]
+            [clj-surgeon.insert-forms-support :as h]
+            [clj-surgeon.insert-forms-oracle :as o]
+            [clojure.java.io :as io]
+            [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]))
+
+(def header "(ns demo (:require [example.events :as events]))\n")
+(def file "src/example.clj")
+(defn request [sources n]
+  {:version 1 :workspace_root "/fixture" :scope {:paths (vec (sort (keys sources))) :expect_files (count sources)}
+   :lib "example.events" :old_alias "events" :new_alias "ev"
+   :expect {:references {:total n}} :guards (into {} (map (fn [[f s]] [f {:sha256 (h/sha s)}]) sources))})
+(defn accept [source expected n & [change]]
+  (let [sources {file source} req (merge (request sources n) change) result (sut/plan sources req)]
+    (is (:ok result) (pr-str result))
+    (is (= {file expected} (:candidates result)))
+    (is (= n (get-in result [:receipt :references_changed])))
+    (when (:ok result)
+      (is (:ok (oracle/verify source (get-in result [:candidates file]) req (first (get-in result [:detail :per_file]))))))
+    result))
+(defn refuse [sources req kind]
+  (let [result (sut/plan sources req)]
+    (is (= kind (:error-type result)) (pr-str result))
+    (is (= {:state "refused" :committed false :mutation_attempted false :source_unchanged true}
+           (select-keys result [:state :committed :mutation_attempted :source_unchanged])))
+    (is (= sources (merge sources (:candidates result))))
+    result))
+(defn rejected [s kind & [change]]
+  (refuse {file s} (merge (request {file s} 0) change) kind))
+
+;; @spec RENAME-ALIAS-001
+;; INTENT-TEST: RENAME-ALIAS-001
+(deftest rename-alias-e4-verbatim
+  (let [f "src/cfp_scheduler_killer/views/schedule.clj"
+        a (slurp "test-fixtures/rename-alias/e4-schedule.clj")
+        req (assoc (request {f a} 31) :lib "cfp-scheduler-killer.events")
+        r (refuse {f a} req :expect-count-mismatch)]
+    (is (= "5f086f7789fdb556ba6e819b26d6eba8ec0345e22b7aaa152b2e1a03648234a1" (h/sha a)))
+    (is (= 2 (:actual_count r)))
+    (is (= [153 1112] (mapv :line (get-in r [:write_refusal_evidence :items]))))
+    (is (= [537 4661] (mapv #(get-in % [:address :preorder]) (get-in r [:write_refusal_evidence :items]))))
+    (let [r (sut/plan {f a} (assoc-in req [:expect :references :total] 2)) b (get-in r [:candidates f])]
+      (is (:ok r) (pr-str r))
+      (when b
+        (is (= "02332a74caf1ead4d70c555b530230b8b03aebc306bd72f5d129f111c876da0c" (h/sha b)))
+        (is (= [4 153 1112] (keep-indexed #(when (not= %2 (nth (str/split-lines b) %1)) (inc %1)) (str/split-lines a))))
+        (is (= 29 (count (re-seq #"events/" b)))))
+      (is (= 3 (get-in r [:receipt :forms_changed])))
+      (is (= 32 (get-in r [:receipt :other_forms_checked]))))))
+
+;; @spec RENAME-ALIAS-002
+;; INTENT-TEST: RENAME-ALIAS-002
+(deftest rename-alias-prefix-trap
+  (accept "(ns demo (:require [example.events :as ev]))\n[ev/anything event/x ev/foo-bar ev/z?]"
+          "(ns demo (:require [example.events :as next]))\n[next/anything event/x next/foo-bar next/z?]"
+          3 {:old_alias "ev" :new_alias "next"}))
+
+;; @spec RENAME-ALIAS-003
+;; INTENT-TEST: RENAME-ALIAS-003
+(deftest rename-alias-reader-roles
+  (doseq [[a b n] [["[::events/kw :events/kw ::kw]" "[::ev/kw :events/kw ::kw]" 1]
+                    ["['events/x #'events/y `events/z]" "['ev/x #'ev/y `ev/z]" 3]
+                    ["`[events/x ~events/y ~@events/z]" "`[ev/x ~ev/y ~@ev/z]" 3]
+                    ["^events/T ^{::events/k events/v} x" "^ev/T ^{::ev/k ev/v} x" 3]
+                    ["(let [{::events/keys [x]} m] x)" "(let [{::ev/keys [x]} m] x)" 1]
+                    ["[#::events{:x events/y} #:events{:x events/y}]" "[#::ev{:x ev/y} #:events{:x ev/y}]" 3]
+                    ["#events/tag [events/x ::events/k]" "#events/tag [ev/x ::ev/k]" 2]
+                    ["(comment events/x)" "(comment ev/x)" 1]]]
+    (accept (str header a) (str (str/replace header ":as events" ":as ev") b) n)))
+
+;; @spec RENAME-ALIAS-004
+;; INTENT-TEST: RENAME-ALIAS-004
+(deftest rename-alias-string-decoy
+  (let [body "(def x \"events/x \\\"events/z\\\"\n events/y\")\n#\"events/x\" \\e ; events/x\n(comment events/x)"]
+    (accept (str header body) (str (str/replace header ":as events" ":as ev") (str/replace body "(comment events/x)" "(comment ev/x)")) 1)))
+
+;; @spec RENAME-ALIAS-005
+;; INTENT-TEST: RENAME-ALIAS-005
+(deftest rename-alias-discard-decoy
+  (doseq [body ["#_events/x" "#_[::events/k #_events/x events/y]" "#_(ns wrong (:require [x :as ev]))"]]
+    (accept (str header body) (str (str/replace header ":as events" ":as ev") body) 0))
+  (rejected (str header "#_[events/x") :source-parse-error)
+  (doseq [body ["#_#?(:clj events/x)" "#_#=(events/x)"]]
+    (rejected (str header body) :unsupported-source)))
+
+;; @spec RENAME-ALIAS-006
+;; INTENT-TEST: RENAME-ALIAS-006
+(deftest rename-alias-binding-matrix
+  (doseq [[s kind] [["(ns demo (:require [example.events :as events] [other :as ev]))" :alias-collision]
+                    ["(ns demo (:require [example.events :as events] [other :as-alias ev]))" :alias-collision]
+                    ["(ns demo (:require [example.events :as events] [example.events :as e]))" :ambiguous-alias-binding]
+                    ["(ns demo (:require [example.events :as events] [other :as events]))" :ambiguous-alias-binding]
+                    ["(ns demo (:require [other :as events]))" :alias-library-mismatch]
+                    ["(ns demo)" :old-alias-absent]
+                    [(str header "ev/x") :new-alias-capture]
+                    [(str header "::ev/k") :new-alias-capture]
+                    [(str header "#::ev{:k 1}") :new-alias-capture]
+                    ["(ns demo (:require [example.events :as events :refer [x] :rename {y z}]))" :unsupported-libspec]
+                    ["(ns demo (:require [example.events :as events :as x]))" :unsupported-libspec]]]
+    (rejected s kind))
+  (doseq [s ["(ns demo (:require [example.events :as-alias events]))"
+             "(ns demo (:require [example.events :as events :refer [ev x] :rename {x y} :exclude [z]]))"
+             "(ns demo (:require [example.events :as events :refer :all :rename {x y}]))"
+             (str header "(let [ev 1] [ev :ev/x #_ev/x])")]]
+    (accept s (str/replace s #":as(-alias)? events" ":as$1 ev") 0))
+  (rejected header :invalid-request {:new_alias "events"})
+  (rejected "(ns demo (:require [events :as events]))" :ambiguous-alias-namespace {:lib "events"}))
+
+;; @spec RENAME-ALIAS-007
+;; INTENT-TEST: RENAME-ALIAS-007
+(deftest rename-alias-scope-guards-counts
+  (let [a (str header "events/x events/y") sources {file a "src/b.clj" "(ns b)"}
+        req (assoc (request sources 2) :scope {:repository true :expect_files 2})]
+    (is (:ok (sut/plan sources req)))
+    (refuse sources (assoc-in req [:scope :expect_files] 1) :scope-file-count-mismatch)
+    (refuse sources (update req :guards dissoc "src/b.clj") :invalid-guard)
+    (refuse sources (assoc-in req [:guards file :sha256] (apply str (repeat 64 "0"))) :source-hash-mismatch)
+    (let [r (refuse sources (assoc req :expect {:references {:per_file {file 31 "src/b.clj" 0}}}) :expect-count-mismatch)]
+      (is (= {file 2 "src/b.clj" 0} (:actual_count r)))
+      (is (= [file] (:mismatched_files r)))
+      (is (= 2 (count (get-in r [:write_refusal_evidence :items]))))))
+  (let [req (request {file header} 0)
+        receipt {:version 1 :read_complete true :workspace_root "/fixture" :file file :sha256 (h/sha header)}]
+    (is (:ok (sut/plan {file header} (assoc-in req [:guards file] {:read_receipt receipt})))))
+  (doseq [scope [{:file file :expect_files 1} {:paths [file] :expect_files 1} {:repository true :expect_files 1}]]
+    (is (:ok (sut/plan {file header} (assoc (request {file header} 0) :scope scope))))))
+
+;; @spec RENAME-ALIAS-008
+;; INTENT-TEST: RENAME-ALIAS-008
+(deftest rename-alias-source-boundaries
+  (doseq [[s kind] [["(def x 1)" :ns-not-found]
+                    ["(ns a) (ns b)" :multiple-ns-forms]
+                    ["1 (ns demo)" :unsupported-ns-shape]
+                    ["(ns demo (:use foo))" :unsupported-ns-shape]
+                    ["(ns demo (:load \"foo\"))" :unsupported-ns-shape]
+                    ["(ns demo (:require (foo [bar :as events])))" :unsupported-ns-shape]
+                    [(str header "(alias 'x 'y)") :unsupported-namespace-mutation]
+                    [(str header "(clojure.core/in-ns 'x)") :unsupported-namespace-mutation]
+                    [(str header "#?(:clj events/x)") :unsupported-source]
+                    [(str "\uFEFF" header) :unsupported-source]
+                    [(str header "\r\n") :unsupported-source]]]
+    (rejected s kind))
+  (accept (str (str/replace header "\n" "\r\n") "[\"λ\"\t events/x]\r\n")
+          (str (str/replace (str/replace header "\n" "\r\n") ":as events" ":as ev") "[\"λ\"\t ev/x]\r\n") 1)
+  (refuse {"src/x.cljc" header} (request {"src/x.cljc" header} 0) :unsupported-source))
+
+;; @spec RENAME-ALIAS-009
+;; INTENT-TEST: RENAME-ALIAS-009
+(deftest rename-alias-transaction-faults
+  (doseq [[stage wanted] [[:stage "failed"] [:before-recheck "refused"] [:read-back "rolled-back"]
+                          [:second-replacement "rolled-back"] [:external-after-write "recovery-required"]
+                          [:restore "recovery-required"] [:receipt-finalize "recovery-required"]]]
+    (h/with-file (str header "events/x")
+      (fn [dir target _]
+        (let [second-file (io/file dir "src/b.clj")
+              source (slurp target) _ (spit second-file source)
+              req (assoc (request {file source "src/b.clj" source} 2) :workspace_root (.getCanonicalPath dir))
+              fault (fn []
+                      (when (#{:before-recheck :external-after-write} stage) (spit target "external\n"))
+                      (when-not (= stage :before-recheck) (throw (java.io.IOException. "injected"))))
+              hooks (cond-> {stage fault} (= stage :restore) (assoc :read-back #(throw (java.io.IOException. "read"))))
+              r (sut/execute! req hooks)]
+          (is (= wanted (:state r)) (pr-str r))
+          (is (not (true? (:committed r))))
+          (when (#{"failed" "rolled-back"} wanted)
+            (is (= source (slurp target) (slurp second-file))))
+          (when (= stage :before-recheck)
+            (is (= :source-changed-before-commit (:error-type r)))
+            (is (false? (:mutation_attempted r))))
+          (when (= stage :external-after-write) (is (= "external\n" (slurp target)))))))))
+
+;; @spec RENAME-ALIAS-010
+;; INTENT-TEST: RENAME-ALIAS-010
+(deftest rename-alias-receipt-oracle
+  (let [a (str header "; neighbor\n#_events/x\n(def x events/x)\n(def x 2)\n")
+        r (sut/plan {file a} (request {file a} 1)) detail (first (get-in r [:detail :per_file]))]
+    (is (:ok r))
+    (is (= 2 (:forms_changed detail)))
+    (is (= 2 (count (:changed_forms detail))))
+    (is (= 2 (get-in detail [:preservation :other_forms_checked])))
+    (is (true? (get-in detail [:preservation :other_forms_unchanged])))
+    (doseq [f (get-in detail [:preservation :other_forms])]
+      (is (= (:before_sha256 f) (:after_sha256 f))))
+    (is (not (contains? (:receipt r) :terminal_response)))
+    (is (false? (get-in r [:receipt :verification_complete])))
+    (is (= 4 (count (remove #(#{:whitespace :newline :comment :comma} (:tag %)) (:entries (o/inventory a))))))))
