@@ -576,7 +576,8 @@
   (when (:refused (tmp-leak/secure-tmpdir!
                     {:main-ns "clj-surgeon.memory-battery-runner"} args))
     (System/exit 97))
-  (let [root (env "MEMBAT_ROOT" "/home/forge/tmp/membat")
+  (let [root (env "MEMBAT_ROOT" (str (System/getProperty "user.home")
+                                 "/.local/state/clj-surgeon/memory-battery"))
         mode (keyword (env "MEMBAT_MODE" "battery"))
         scales (mapv #(Long/parseLong (str/trim %))
                      (str/split (env "MEMBAT_SCALES" "100,1000,10000") #","))

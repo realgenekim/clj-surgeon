@@ -191,7 +191,7 @@
   (or *pressure-status-path*
       (System/getenv "CLJ_SURGEON_PRESSURE_STATUS")
       (str (System/getProperty "user.home")
-           "/.local/state/diagnose-skiff-cpu-memory/monitor/status.json")))
+           "/.local/state/clj-surgeon/pressure-status.json")))
 
 (defn- maximum-normalized-load []
   (or *maximum-normalized-load*

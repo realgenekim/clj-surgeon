@@ -3,6 +3,7 @@
    [clj-surgeon.artifact-boundary-support :as boundary]
    [clj-surgeon.mcp-workspace :as workspace]
    [clojure.java.io :as io]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
 
 (defn- temp-dir
