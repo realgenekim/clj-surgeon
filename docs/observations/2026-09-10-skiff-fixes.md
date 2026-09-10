@@ -3,9 +3,9 @@
 **forge@anvil, 2026-09-10.** Branch `fable/skiff-fixes` in
 `/home/forge/src/clj-surgeon-skifffix`, based on `stable/2026-09-10` =
 **59d8bc0cad8886a028c24e8ffd52e4e5d82185c1** (proved at worktree creation).
-Seven commits: one per item, one for docs, one for the four things this
-repository's own gates caught in the first full `make test`. **Not pushed** —
-the mayor ships.
+Nine commits: one per item, one for docs, one for the four things this
+repository's own gates caught in the first full `make test`, and two for Sol's
+fence verdict. **Not pushed** — the mayor ships.
 
 No Mac is reachable from this box. Every fix is therefore driven from a forced
 darwin path or a made symlink on Linux, and — for the babashka defect — from
@@ -24,6 +24,8 @@ against the tree at both the broken and the repaired commit.
 | 4c | inb-e748f0 (c) | — | **OPEN by name.** Exit code decoded; one of the eleven closed by 4b. See "For the mayor". |
 | — | — | `e5f12304` | `docs/install/skiff.md` states the floor, the socket dir, the bb minimum, the one-reader rule |
 | — | — | `32678de6` | the tree's own gates caught four things on the first full run — including a defect in a ratchet I had just written |
+| — | SKF-001 | `c196aab1` | Sol's GO-WITH-FIX, applied verbatim: the boundary predicate failed OPEN on a nonexistent path |
+| — | — | `98f7d23b` | the one call site that fix exposed as asking a different question |
 
 ## Two root causes were not what the reports said
 
@@ -312,6 +314,29 @@ the fourth was a defect in a ratchet I had written an hour earlier.
 
 ## The landing receipt
 
+**After Sol's fence fix — `~/bin/suite-run make test`, one run, background,
+waited on pid 1298608, at HEAD `98f7d23b`:**
+
+```
+gate-stage: {:target "admit-transaction-recovery-battery", :exit 0, :wall-ms 26092}
+gate-stage: {:target "battery-fresh",                      :exit 0, :wall-ms 2062}
+gate-stage: {:target "alias-migration-test",               :exit 0, :wall-ms 182732}
+gate-stage: {:target "mcp-test",                           :exit 0, :wall-ms 176884}
+gate-stage: {:target "test-bb",                            :exit 0, :wall-ms 128614}
+gate-stage: {:target "repository-hygiene",                 :exit 0, :wall-ms 1835}
+gate-stage: {:target "intent-audit",                       :exit 0, :wall-ms 1941}
+
+landing-gate: {… :state :passed, :landing? true, :problems [], :wall-ms 247793,
+               :git-head "98f7d23b8cc17bc78cbcb6510f95c577ce5351a1"}
+```
+
+Zero `FAIL in` / `ERROR in` lines in the whole log. `clj-kondo` 0 errors, 0
+warnings on both files Sol's patch touched and on both files the follow-up
+touched. **This is the sha to ship.**
+
+The earlier run below is kept because it is the receipt for the four items
+themselves, before the fence.
+
 `~/bin/suite-run make test`, one run, background, waited on pid 838569, at
 HEAD `32678de6`:
 
@@ -349,6 +374,61 @@ the skiff says where its semaphore lived.
 `clj-kondo` (through `~/bin/clj-kondo`): 0 errors, 0 warnings on every file
 touched.
 
+**Ship `98f7d23b`**, not `32678de6`.
+
+## Sol's fence review — GO-WITH-FIX, and it landed on a line I wrote as a feature
+
+**SKF-001** (verdict: `/var/tmp/forge/ship/20260910T165922Z-32678de68cfb/verdict-1.md`,
+candidate `3266d0f8`). `published-under-root?` used `getCanonicalFile`, and my
+own docstring sold the reason: *"it answers for a path that does not exist yet,
+so a boundary check does not depend on when it is asked."* For a diagnostic
+that is a virtue. For a **publication** witness it is failing open — a
+nonexistent artefact whose lexical name sits under the receipt root was
+accepted as published, and Sol's direct probe returned `true`.
+
+`c196aab1` applies Sol's hunks **verbatim** (test files only; the verdict
+document is deliberately not committed — verdicts travel via ship's archive),
+zero rejects, author `sol-anvil <sol-anvil@anvil>`, committer `forge-anvil`.
+`toRealPath` on both sides; a resolution failure is a typed
+`:artifact-path-unresolvable` refusal carrying the path and the cause; a
+focused regression pins the nonexistent-artefact case.
+
+Re-run here in the shape Sol used, on the repaired tree:
+
+```
+published-under-root? on a REAL receipt      -> true
+published-under-root? on a NONEXISTENT path  -> :artifact-path-unresolvable
+under-root?           on a NONEXISTENT path  -> true   (placement only, by design)
+```
+
+The middle line is the one that used to read `true`.
+
+**And the fix immediately caught one more thing, which is the point of failing
+closed.** `mcp-workspace-test/receipt-directories-are-deterministic-and-workspace-isolated`
+went from green to `NoSuchFileException`. The error was right and the caller was
+wrong: `workspace/receipt-dir` *computes* where receipts would go and writes
+nothing, so that test was never about a publication. When I migrated those
+assertions off their literal roots in 4b I routed every one of them through the
+publication predicate without noticing that this one had never been about a
+publication — the migration was correct about the literal and careless about the
+question. `98f7d23b` splits the two:
+
+* `under-root?` — lexical placement, canonical both sides, no existence
+  required. For a computed path.
+* `published-under-root?` — a receipt that EXISTS inside the root, both sides
+  resolved. Unchanged from Sol's fix.
+
+The names are the fence. A witness that wants to know a receipt was *written*
+must not be able to reach the version that cannot tell — which is exactly the
+failure mode SKF-001 named, and leaving the weak one reachable under an obvious
+name would hand the next migration the same mistake with a shorter path to it.
+
+Sol also recorded an advisory fact worth carrying: **`:min-bb-version` does not
+refuse an older runtime.** A deliberately future minimum warns, runs the body
+and exits 0; the preflight names an old babashka as a gate blocker but also
+exits 0. So 1.12.209 is an *advertised and measured* floor, not runtime
+enforcement — the enforcement is `jvm-error-test`, which is why that scan exists.
+
 ## Learnings that became ratchets
 
 | learning | ratchet |
@@ -360,6 +440,8 @@ touched.
 | One wrong comparison, copied longhand into nine namespaces, fails on whichever lane runs first. | One shared predicate, plus a scan forbidding the literal comparison in any test source. |
 | A witness that passes on the box running it and fails on the box that matters is the bug, not a check on it. | Forced-platform flags (`GATE_MEMORY_SOURCE`, `GATE_SLOT_BACKEND`), a made symlink, a real 120-byte TMPDIR bind, and the skiff's actual bb binary. |
 | A scanner whose SCOPE is computed from prose scans the wrong set — and a scan of the wrong set cannot fail. | The closure reads the `:require` clause, and the witness asserts the closure both DOES reach `clj-surgeon.core` and does NOT reach the JVM-only namespaces. |
+| "It works on a path that does not exist yet" is a virtue in a diagnostic and failing OPEN in a witness (Sol, SKF-001). | `published-under-root?` requires both sides to resolve and refuses `:artifact-path-unresolvable`; the lexical question keeps a separate name so nobody reaches the weak one by accident. |
+| A migration can be right about the LITERAL it removes and careless about the QUESTION it replaces. | Two named predicates, and the call site that had been asking the wrong one is corrected with the error that found it quoted in the commit. |
 
 ## Boundaries and one mistake to record
 
