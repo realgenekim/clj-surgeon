@@ -727,3 +727,5 @@ B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa;
 ## STATE at 2026-09-10T03:14Z — WRAPPED. Item 3 PARKED by Astra on a design finding (fable/proof-burden 10b77576 retained as evidence); item 1 PARKED (2f924bee, needs observer); item 2 blocked on Gene (seat key on gene@anvil2); trunk 3ea3803e; ship v3.7 installed. Next per Astra: fund the review entrance; CLI gets the machinery. Open asks from Gene: benchmark Buster vs Anvil vs anvil2; document MCP vs CLI.
 
 ## STATE at 2026-09-10T03:22Z — Gene's order in progress: (1) fable/skiff-install (Opus, 2 h) → ship → (2) inbox to mayor: pull + make install → (3) 4-h tighten squeeze with Astra (lever chosen by astra-squeeze). Buster benchmark assigned to mayor (inb-8bd9ad). Items 1 and 3 PARKED. Item 2 blocked on Gene.
+
+## STATE at 2026-09-10T04:47Z — trunk 59d8bc0c (skiff-ready install LANDED); mayor told (inbox); 7906 srv7906l + CLI on 59d8bc0c; squeeze block (records lane off the lease, ship v3.8 staged) running to ~07:33Z; then Astra steward qualification → install v3.8. Items 1/3 parked; item 2 on Gene.
