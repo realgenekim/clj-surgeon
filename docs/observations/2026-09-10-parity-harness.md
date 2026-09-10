@@ -2,10 +2,10 @@
 
 **2026-09-10 · forge@anvil · branch `fable/parity-harness` in `/home/forge/src/clj-surgeon-parity`
 (created from tag `stable/2026-09-10`, HEAD proved = `59d8bc0cad8886a028c24e8ffd52e4e5d82185c1`).
-Eight commits, authored `forge-anvil`. Nothing pushed.
-Sol's fence review returned NO-GO twice — on `d1343a87` and again on `4b594926`. All four
-findings are fixed, each with a permanent witness, and every verdict below was re-measured under
-the fences that resulted.**
+Ten commits, authored `forge-anvil`. Nothing pushed.
+Sol's fence review returned NO-GO three times — on `d1343a87`, `4b594926` and `0d58fda2`. All
+seven findings are fixed, each with a permanent witness (**28 witnesses, 28 passing**), and every
+verdict below was re-measured under the fences that resulted.**
 
 ## The verdict
 
@@ -70,7 +70,7 @@ Four things, per specimen, per build:
 
 ## The normalisation list
 
-`bin/parity/volatile-fields.edn` — **14 fields, 3 tree-excludes, every one carrying its physical
+`bin/parity/volatile-fields.edn` — **9 fields, 3 tree-excludes, every one carrying its physical
 reason and a machine-checked reference to the observation that produced it.** Anything not on it
 must be byte-identical, and a rule that cannot name its observation refuses the run.
 
@@ -212,11 +212,71 @@ now records the published path **whenever one is published**.
 **`bin/parity/self-test`: 15 witnesses, 15 passing**, including all four of Sol's controls
 verbatim, plus a tampered retained capture and a hand-edited evidence file.
 
-**Every verdict in this report was re-measured under the round-2 fences** — stable-vs-stable
+### Round 3 — the rule had to explain its own evidence
+
+**PARITY-FENCE-005 (CRITICAL) — evidence was not bound to the rule it authorised.** Round 2 proved
+a rule cited a retained path that really differed; it never proved the rule had anything to do with
+that path. Sol added a `:candidate_hash` rule whose evidence cited the genuine retained
+`[:elapsed_ms]` observation — every digest and retained-byte check passed — and it normalised a
+planted candidate hash away. **Any real volatility could launder permission for any invariant.**
+
+A rule is now authorised only by **replay over the retained bytes**, and it must be both
+**necessary and sufficient** for the difference it cites:
+
+- its selector must select the cited path (a `:key` rule must cite that key, a `:key-under` rule
+  that key under that parent, a tree exclusion's glob must match its own evidence path);
+- with the whole declaration replayed, the cited difference must be **gone**;
+- with **this rule removed**, it must **come back**.
+
+Sufficiency alone lets a redundant rule ride on another's work; necessity alone lets a rule that
+explains nothing sit in the list. Together they refuse Sol's laundering twice — on the selector
+shape, and because `:candidate_hash` is not necessary to explain `[:elapsed_ms]`.
+
+Turning it on cut the declaration from fourteen rules to **nine**: `:receipt_path`,
+`:details_path`, `:closure_receipt` and `:undo_receipt` were already explained by the
+receipt-store regex, and `:workspace_root` by the `path-in` rule. None of them was paying for
+anything. It also exposed a hole of its own — the run-root scrub ran whether or not a `:path-in`
+rule was declared, which made that rule unremovable and therefore *unpayable*, since nothing could
+ever show it was necessary. The scrub is now declared like everything else.
+
+**PARITY-FENCE-006 (HIGH) — provenance was self-consistent, not commit-bound.** The generator
+digest was checked against the file lying beside the comparator, so editing both kept the story
+straight; Sol modified the generator, refreshed every digest, rebound `:stable-build` to
+`"NOT-A-COMMIT"`, and still got PARITY. The evidence now names the **repository commit that owns
+the generator**, and the comparator reads that blob **out of git** (`cat-file`, not the working
+tree), requires the commit to be an ancestor of HEAD, requires `:stable-build` to be a real
+commit, and requires every capture to name the same commit, generator and stable build as the
+authenticated document.
+
+**PARITY-FENCE-007 (MEDIUM) — the child could resolve the installed launcher.** Its inherited
+`PATH` contained the seat's `~/bin`, so "the isolated build is the only executor" was a claim the
+environment did not enforce. The fix was wrong twice before it was right, and both mistakes are
+the interesting part: the launcher is installed in **`/usr/local/bin` as well as `~/bin`** — and
+`/usr/local/bin` is where `bb`, `clojure` and `clj-kondo` live — so dropping a directory could not
+work; and enumerating tools by hand did not work either, because the `clojure` launcher shells out
+to `cksum` and `cut` and the first curated PATH broke every child. What works is the ordinary
+system utility directories, which hold no launcher, plus a curated directory of symlinks to an
+enumerated list of runtimes lifted out of `/usr/local/bin`. The harness **asserts rather than
+assumes**: it refuses if `clj-surgeon` resolves under that PATH, refuses if a required runtime does
+not, records the PATH the children actually got, and prints it in the run header.
+
+**Every verdict in this report was re-measured under the round-3 fences** — stable-vs-stable
 PARITY on split, alias and fanout; planted CLI receipt byte DIVERGENCE naming
 `[:verification_complete_definition]`; planted MCP receipt byte DIVERGENCE naming
 `[:structured :details_retention]`; behaviour-neutral require reorder still PARITY; the candidate
 with its artifact root pinned still PARITY on all three.
+
+### What three fence rounds actually cost, and bought
+
+Every round found the same disease one level deeper: a verifier that could not see its own
+subject. Round 1, the declaration was unaccountable. Round 2, the observation was unaccountable.
+Round 3, the *rule-to-observation relationship* was unaccountable. Each round the harness said
+PARITY about something it had not measured, and each time the control that caught it was cheap.
+
+The declaration went **14 rules → 9**, and three of six tree exclusions were deleted. Everything
+removed was removed because a machine could not show it was doing any work. That is the real
+return: not that the harness passes, but that what it is allowed to ignore has shrunk every time
+anyone looked.
 
 ## A second, unplanned result: the specimens reproduce across days and builds
 
@@ -289,7 +349,7 @@ its own footprint. `PARITY_KEEP_FIXTURES=1` keeps them for the case that needs t
 | generated evidence for every rule | `…/bin/parity/observed-volatility.edn` (+ its generator `observe-volatility.clj`) |
 | the retained bytes that evidence was derived from | `…/bin/parity/evidence/OBS2-provenance/<specimen>/{A,B}/` + `capture.edn` (776 KB) |
 | per-specimen presence expectations | `…/bin/parity/specimens.edn` |
-| witnesses for all four fences (15/15) | `…/bin/parity/self-test` |
+| witnesses for all seven fences (28/28) | `…/bin/parity/self-test` |
 | MCP client | `…/bin/parity/mcp-call.py` |
 | run evidence (16 specimen runs) | `/var/tmp/forge/parity/runs/<run-id>/<specimen>/{A,B}/` |
 | recovered specimen provenance | `/var/tmp/forge/plan2/cellC/recovered/specimens.md` |
