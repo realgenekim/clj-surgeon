@@ -723,3 +723,5 @@ B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa;
 ## STATE at 2026-09-09T18:00Z — item 1 PARKED (fable/evidence-consumer 2f924bee; DoD = mutation sweep 0 BAD / 0 inert-load-bearing; resumes after item 2 observer); item 3 at Sol round 4 (fable/proof-burden 77126c8d, ship-item3-4); item 2 blocked on Gene: seat key must leave gene@anvil2
 
 ## STATE at 2026-09-10T02:04Z — sublime 6; item 3 at Sol round 17 (fable/proof-burden 10b77576, ship-item3-17); CAP: park after round 18 if no GO; item 1 parked (2f924bee); item 2 blocked on Gene (seat key on gene@anvil2); no landing since 3ea3803e
+
+## STATE at 2026-09-10T03:14Z — WRAPPED. Item 3 PARKED by Astra on a design finding (fable/proof-burden 10b77576 retained as evidence); item 1 PARKED (2f924bee, needs observer); item 2 blocked on Gene (seat key on gene@anvil2); trunk 3ea3803e; ship v3.7 installed. Next per Astra: fund the review entrance; CLI gets the machinery. Open asks from Gene: benchmark Buster vs Anvil vs anvil2; document MCP vs CLI.
