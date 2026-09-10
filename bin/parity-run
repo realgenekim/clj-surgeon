@@ -168,14 +168,40 @@ PY
 MCP_PORT_A="${MCP_PORT_A:-7951}"
 MCP_PORT_B="${MCP_PORT_B:-7952}"
 declare -A MCP_PID=()
+declare -A MCP_JAVA=()
+declare -A MCP_PORT_OF=()
 
 mcp_url() { local slot="$1" p; [ "$slot" = A ] && p="$MCP_PORT_A" || p="$MCP_PORT_B"; echo "http://127.0.0.1:$p/mcp"; }
+
+port_listening() { (echo > "/dev/tcp/127.0.0.1/$1") >/dev/null 2>&1; }
+
+# Bind the proof to its subject.  A health check only proves that SOMETHING is
+# listening; it cannot tell this build's server from a stale one left behind by an
+# earlier run.  That is not hypothetical: on 2026-09-10 a leaked pair of servers
+# from the previous run answered /healthz in 1s and the harness reported PARITY
+# for a build whose planted defect had never executed.  So: refuse a port that is
+# already in use, and after the server answers, prove a java process exists whose
+# WORKING DIRECTORY is this build and whose argv names this port.
+mcp_identify() { # <build> <port> -> echoes the pid, or nothing
+  local build="$1" port="$2" pid cwd
+  for pid in $(pgrep -u "$(id -u)" java 2>/dev/null); do
+    cwd="$(readlink "/proc/$pid/cwd" 2>/dev/null)" || continue
+    [ "$cwd" = "$build" ] || continue
+    tr '\0' '\n' < "/proc/$pid/cmdline" 2>/dev/null | grep -qx "$port" || continue
+    echo "$pid"; return 0
+  done
+  return 1
+}
 
 mcp_start() { # <build> <slot>
   local build="$1" slot="$2" port
   [ "$slot" = A ] && port="$MCP_PORT_A" || port="$MCP_PORT_B"
   case "$port" in 7888|7890|7894|7895|83[0-3][0-9]) log "REFUSING reserved port $port"; return 2 ;; esac
   [ -n "${MCP_PID[$slot]:-}" ] && return 0
+  if port_listening "$port"; then
+    log "REFUSING to start mcp/$slot: port $port is ALREADY IN USE. A stale server would answer for this build and the run would report a parity verdict it never measured."
+    return 2
+  fi
   local state="$RUN_DIR/mcp-$slot"; mkdir -p "$state/telemetry"
   ( cd "$build" && MCP_STATE_DIR="$state" \
       clojure -J-Xms64m -J-Xmx"$JVM_XMX" -X:clj-surgeon/mcp \
@@ -183,22 +209,38 @@ mcp_start() { # <build> <slot>
         :telemetry-dir "\"$state/telemetry\"" :log-file "\"$state/server.log\"" \
         :port-file "\"$state/nrepl-port\"" \
         > "$state/stdout.log" 2>&1 ) &
-  MCP_PID[$slot]=$!
-  local health="http://127.0.0.1:$port/healthz" i
+  local wrapper=$!
+  local health="http://127.0.0.1:$port/healthz" i ready=0
   for i in $(seq 1 180); do
-    curl -fsS --max-time 2 "$health" >/dev/null 2>&1 && { log "mcp/$slot ready on $port after ${i}s"; return 0; }
-    kill -0 "${MCP_PID[$slot]}" 2>/dev/null || { log "mcp/$slot DIED during startup"; tail -20 "$state/stdout.log" | sed 's/^/      /' | tee -a "$RUN_DIR/harness.log"; return 3; }
+    curl -fsS --max-time 2 "$health" >/dev/null 2>&1 && { ready=1; break; }
+    kill -0 "$wrapper" 2>/dev/null || { log "mcp/$slot DIED during startup"; tail -20 "$state/stdout.log" | sed 's/^/      /' | tee -a "$RUN_DIR/harness.log"; return 3; }
     sleep 1
   done
-  log "mcp/$slot NEVER became ready on $port"; return 3
+  [ "$ready" = 1 ] || { log "mcp/$slot NEVER became ready on $port"; return 3; }
+  local jpid
+  jpid="$(mcp_identify "$build" "$port")" || {
+    log "mcp/$slot answered on $port but NO java process has cwd=$build — refusing to attribute this port to this build"
+    kill "$wrapper" 2>/dev/null; return 3; }
+  MCP_PID[$slot]="$wrapper"; MCP_JAVA[$slot]="$jpid"; MCP_PORT_OF[$slot]="$port"
+  echo "$jpid $build $port" > "$state/identity.txt"
+  log "mcp/$slot ready on $port after ${i}s (java pid $jpid, cwd proved = $(basename "$build"))"
+  return 0
 }
 
 mcp_stop_all() {
-  local slot
+  local slot i
   for slot in "${!MCP_PID[@]}"; do
-    kill "${MCP_PID[$slot]}" 2>/dev/null && log "mcp/$slot stopped"
+    kill "${MCP_JAVA[$slot]:-}" 2>/dev/null
+    kill "${MCP_PID[$slot]}" 2>/dev/null
+    local port="${MCP_PORT_OF[$slot]:-}"
+    for i in $(seq 1 30); do port_listening "$port" || break; sleep 1; done
+    if [ -n "$port" ] && port_listening "$port"; then
+      log "mcp/$slot LEAKED: port $port is still listening after stop — the next run must refuse it"
+    else
+      log "mcp/$slot stopped, port $port free"
+    fi
   done
-  MCP_PID=()
+  MCP_PID=(); MCP_JAVA=(); MCP_PORT_OF=()
 }
 trap mcp_stop_all EXIT
 
