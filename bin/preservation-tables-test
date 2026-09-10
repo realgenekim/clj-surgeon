@@ -127,6 +127,36 @@
       (when-not (zero? exit) (throw (ex-info (str "probe failed: " brief-path) {})))
       (mapv edn/read-string (remove str/blank? (str/split-lines out))))))
 
+(defn parse-refusal-table
+  "Strict parse of the reconciliation table out of a rendered brief.
+
+   PB-FENCE-023: the previous oracle compared SETS, so a renderer printing each row
+   twice passed. Rows come back as an ordered vector WITH multiplicity, the table
+   must appear exactly once, every row must have exactly four columns, and a blank
+   or malformed row is an error rather than something to skip."
+  [md]
+  (let [lines (vec (str/split-lines md))
+        heads (vec (keep-indexed (fn [i l]
+                                   (when (str/starts-with?
+                                          (str/trim l) "| tree | file | refusal | why |")
+                                     i))
+                                 lines))
+        errors (cond-> []
+                 (not= 1 (count heads))
+                 (conj (str (count heads) " reconciliation tables in the rendered brief"
+                            " — there must be exactly one")))]
+    (if (not= 1 (count heads))
+      {:rows [] :errors errors}
+      (let [start (+ 2 (first heads))          ; header, then the |---| rule
+            body (take-while #(str/starts-with? (str/trim %) "|") (drop start lines))
+            cells (mapv (fn [l] (mapv str/trim (str/split l #"\|" -1))) body)
+            bad (vec (for [[i c] (map-indexed vector cells)
+                           :when (not= 6 (count c))]   ; "" | 4 columns | ""
+                       (str "row " (inc i) " has " (max 0 (- (count c) 2))
+                            " columns, expected 4: " (pr-str (nth body i)))))]
+        {:rows (mapv (fn [c] [(nth c 1) (nth c 2) (nth c 3)]) cells)
+         :errors (into errors bad)}))))
+
 (defn dispatch-divergences
   "Where a brief's LIVE answer differs from the reference rebuilt from its table."
   [brief-path table maps]
@@ -513,6 +543,30 @@
                                    "(defn refusal-rows"))
                             (str/replace "                      :let [r (file-refusal f)]"
                                          "                      :let [r (pipeline-refusal f)]")))]
+    ;; renderer drift: the row oracle must notice a duplicated row and a reordering
+    (doseq [[label mutate expect]
+            [["round-16 duplicated reconciliation row"
+              #(str/replace % "(for [r reconcile-failures] [(:tree r) (:path r) (:kind r) (:detail r)])"
+                              "(for [r (concat reconcile-failures reconcile-failures)] [(:tree r) (:path r) (:kind r) (:detail r)])")
+              :dup]
+             ["round-16 reordered reconciliation rows"
+              #(str/replace % "(for [r reconcile-failures] [(:tree r) (:path r) (:kind r) (:detail r)])"
+                              "(for [r (reverse reconcile-failures)] [(:tree r) (:path r) (:kind r) (:detail r)])")
+              :order]]]
+      (let [path (write! (str "b-render-" (name expect)) (mutate brief-src))
+            dir (str "/var/tmp/forge/item3/r8-ns-count")
+            sha (fn [r] (str/trim (:out (p/sh {:dir dir :out :string} "git" "rev-parse" r))))
+            jf (str mut-dir "/render-" (name expect) ".json")
+            md (:out (p/sh {:out :string :err :string} path (sha "main") (sha "main~1")
+                           "--repo" dir "--roots" "src" "--json" jf))
+            j (try (json/parse-string (slurp jf) true) (catch Exception _ {}))
+            parsed (parse-refusal-table md)
+            json-rows (mapv (fn [r] [(:tree r) (:path r) (:kind r)]) (:refusal_rows j))]
+        (check! (or (seq (:errors parsed)) (not= (:rows parsed) json-rows))
+                "R8 renderer drift control did not fire"
+                (str label ": the mutated renderer produced rows the oracle accepted — "
+                     "the comparison is not multiplicity- and order-exact"))))
+
     (doseq [[label path] [["round-13 literal branch" literal]
                           ["round-14 second definition over its own table" second-def]
                           ["round-15 second dispatch inside the pipeline path" pipeline-seam]]]
@@ -560,15 +614,14 @@
                 (str kind ": " (name c) " = " (get j c) " for a tree whose only file is refused")))
       ;; END TO END: the rows the renderer printed must be the rows the pipeline
       ;; produced. A renderer that computed its own would be a second producer.
-      (let [tbl-rows (into #{} (for [l (str/split-lines md)
-                                     :when (re-find #"^\| (base|candidate|probe) \| " l)
-                                     :let [cs (mapv str/trim (str/split l #"\|"))]]
-                                 [(nth cs 1 nil) (nth cs 2 nil) (nth cs 3 nil)]))
-            json-rows (into #{} (for [r (:refusal_rows j)] [(:tree r) (:path r) (:kind r)]))]
-        (check! (= tbl-rows json-rows) "R8 rendered rows differ from the pipeline's"
-                (str kind ": the reconciliation table printed " (pr-str tbl-rows)
+      (let [parsed (parse-refusal-table md)
+            json-rows (mapv (fn [r] [(:tree r) (:path r) (:kind r)]) (:refusal_rows j))]
+        (doseq [e (:errors parsed)]
+          (check! false "R8 reconciliation table is malformed" (str kind ": " e)))
+        (check! (= (:rows parsed) json-rows) "R8 rendered rows differ from the pipeline's"
+                (str kind ": the reconciliation table printed " (pr-str (:rows parsed))
                      " while the pipeline produced " (pr-str json-rows)
-                     " — the renderer is not reading `refused-files`")))
+                     " — compared as ORDERED sequences WITH multiplicity, in the pipeline's order")))
       ;; and its name must appear nowhere but the refusal rows and the hard stop
       (let [lines (str/split-lines md)
             in-recon? (atom false)
