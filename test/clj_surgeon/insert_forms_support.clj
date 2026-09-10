@@ -1,6 +1,7 @@
 (ns clj-surgeon.insert-forms-support
   (:require
    [clj-surgeon.insert-forms :as insert]
+   [clj-surgeon.insert-forms-oracle :as oracle]
    [clojure.java.io :as io]
    [clojure.test :refer [is]])
   (:import
@@ -24,6 +25,8 @@
   (let [result (insert/plan s req)]
     (is (= true (:ok result)) (pr-str result))
     (is (= expected (:candidate result)))
+    (when (:ok result)
+      (is (= true (:ok (oracle/verify s (:candidate result) req (:receipt result))))))
     result))
 (defn refused [s req kind]
   (let [result (insert/plan s req)]
