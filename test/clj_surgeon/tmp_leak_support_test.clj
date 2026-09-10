@@ -210,3 +210,86 @@
       (is (= "1" (get env "NODE_DISABLE_COMPILE_CACHE")))
       (is (= "/var/tmp/clj-surgeon-suite-42-node" (get env "TMPDIR")))
       (is (= isolate-home? (contains? env "HOME"))))))
+
+;; @spec MCP-OP-TMPHYG-013
+(deftest darwin-has-a-mount-authority-of-its-own
+  (testing "Both mount sources were Linux-only -- findmnt is util-linux and the
+            table is /proc/mounts. On macOS neither could answer, mount-fstype
+            returned :unknown, base-refusal correctly failed CLOSED, and EVERY
+            JVM in the suite exited 97. The ratchet was not wrong; it had no
+            authority to ask. `mount(8)` is darwin's own authority, and this is
+            the part of it that can be wrong: the parse."
+    ;; REAL macOS `mount` output, not a synthesised shape. It carries the two
+    ;; cases a naive whitespace split gets wrong: a mount point containing a
+    ;; SPACE, and nested volumes where the longest prefix must win over `/`.
+    (let [table (str "/dev/disk3s1s1 on / (apfs, sealed, local, read-only, journaled)\n"
+                     "devfs on /dev (devfs, local, nobrowse)\n"
+                     "/dev/disk3s6 on /System/Volumes/VM (apfs, local, noexec, journaled, noatime, nobrowse)\n"
+                     "/dev/disk3s2 on /System/Volumes/Data (apfs, local, journaled, nobrowse)\n"
+                     "map auto_home on /System/Volumes/Data/home (autofs, automounted, nobrowse)\n"
+                     "/dev/disk5s1 on /Volumes/Macintosh HD Backup (hfs, local, nodev, nosuid, journaled)")]
+      (testing "the root volume answers for an unnested path"
+        (is (= "apfs" (tmp-leak/parse-darwin-mount-table table "/")))
+        ;; The per-user $TMPDIR every Mac shell sets. This is THE path the gate
+        ;; must prove, and proving it is what unblocks `make test` on a laptop.
+        (is (= "apfs" (tmp-leak/parse-darwin-mount-table
+                        table "/private/var/folders/ab/cd/T/"))))
+      (testing "a nested mount point beats the root -- longest prefix wins"
+        (is (= "devfs" (tmp-leak/parse-darwin-mount-table table "/dev")))
+        (is (= "autofs" (tmp-leak/parse-darwin-mount-table
+                          table "/System/Volumes/Data/home/gene")))
+        (is (= "apfs" (tmp-leak/parse-darwin-mount-table
+                        table "/System/Volumes/Data/Users/gene/x"))))
+      (testing "a mount point containing a space is read whole, not split on it"
+        (is (= "hfs" (tmp-leak/parse-darwin-mount-table
+                       table "/Volumes/Macintosh HD Backup/z"))))
+      (testing "and a prefix that only LOOKS nested does not match"
+        ;; /System/Volumes/VMware is not under /System/Volumes/VM.
+        (is (= "apfs" (tmp-leak/parse-darwin-mount-table
+                        table "/System/Volumes/VMware/x"))))
+      (testing "an EMPTY table covers nothing; it does not invent a filesystem"
+        (is (nil? (tmp-leak/parse-darwin-mount-table nil "/x")))
+        (is (nil? (tmp-leak/parse-darwin-mount-table "" "/x"))))))
+  ;; @spec MCP-OP-TMPHYG-013
+  (testing "Sol SKIFF-INSTALL-FENCE-001. A mount point may CONTAIN the bytes
+            ` on `. Splitting on the last one discarded the nested row as
+            malformed, and the surviving `/` row then answered apfs for a target
+            that was really on tmpfs -- crafted text making the ratchet PROVE
+            real disk. The row you cannot read is exactly the row that may be
+            covering your target."
+    (let [evil (str "/dev/root on / (apfs, local)\n"
+                    "/dev/ram on /private/var/folders/evil on ram (tmpfs, local)")
+          answer (tmp-leak/parse-darwin-mount-table
+                   evil "/private/var/folders/evil on ram/T")]
+      (is (not= "apfs" answer)
+          "the exact regression: crafted mount text proved real disk")
+      (is (contains? #{"tmpfs" :unknown} answer)
+          "a covering row is read, or the table refuses -- never a fallback")))
+  (testing "a mount point containing PARENTHESES still parses: the trailing
+            group is the last (...) and flags never contain parentheses"
+    (let [table (str "/dev/root on / (apfs, local)\n"
+                     "/dev/d5 on /Volumes/My (Disk) Backup (hfs, local)")]
+      (is (= "hfs" (tmp-leak/parse-darwin-mount-table
+                     table "/Volumes/My (Disk) Backup/z")))))
+  (testing "ANY row this parser cannot read poisons the WHOLE table to
+            :unknown, which base-refusal treats as a refusal. A partially
+            understood mount table must never answer for a target."
+    (is (= :unknown (tmp-leak/parse-darwin-mount-table
+                      "/dev/root on / (apfs, local)\ntotally bogus line" "/x")))
+    (is (= :unknown (tmp-leak/parse-darwin-mount-table "garbage" "/x")))
+    (is (= :unknown (tmp-leak/parse-darwin-mount-table
+                      "/dev/root on / (apfs, local)\n/dev/x on /y (" "/y/z"))))
+  (testing "Sol SKIFF-INSTALL-FENCE-001, second half: `mount` was run by BARE
+            NAME through PATH, so a shim earlier on PATH could print
+            `/dev/fake on / (apfs, local)` and base-refusal returned nil. The
+            docstring's claim that this was non-redirectable was false. Only
+            absolute paths are named now."
+    (let [binaries @(resolve 'clj-surgeon.tmp-leak-support/darwin-mount-binaries)]
+      (is (seq binaries))
+      (is (every? #(clojure.string/starts-with? % "/") binaries)
+          "a bare name is redirectable by PATH; an absolute path is not")))
+  (testing "the remedy no longer advertises a directory that exists on one box"
+    (let [message (tmp-leak/refusal-message (tmp-leak/base-refusal "/tmp"))]
+      (is (not (clojure.string/includes? message "/var/tmp/forge"))
+          "the remedy named this seat's scratch dir to every operator alive")
+      (is (clojure.string/includes? message "TMPDIR")))))

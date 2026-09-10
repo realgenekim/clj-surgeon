@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+"""Portable exclusive lock around a command.
+
+`flock(1)` is util-linux. macOS ships neither it nor a BSD equivalent, so a
+Makefile recipe that shells out to `flock` is a Linux-only recipe. `fcntl.flock`
+is in Python's standard library on both platforms and holds the SAME kind of
+lock: it names an open file description, the kernel releases it when the last
+descriptor closes, and that includes SIGKILL.
+
+    bin/with-lock <lockfile> COMMAND [ARG ...]
+
+The lock file is created if missing and is never truncated or removed: removing
+it is how two holders end up locking two different inodes.
+
+WHAT THIS IS FOR. Heap measurements. A JVM measuring its own peak heap must not
+share a box lane with a second JVM suite, or it measures the neighbour. It is
+not the gate's admission semaphore -- that is test/gate_slot.py, which needs
+death-detection semantics an inode lock cannot give across a replaced path.
+"""
+
+import fcntl
+import os
+import sys
+
+
+def main(argv):
+    if len(argv) < 2:
+        print('usage: with-lock LOCKFILE COMMAND [ARG ...]', file=sys.stderr)
+        return 2
+    lockfile, command = argv[0], argv[1:]
+    parent = os.path.dirname(os.path.abspath(lockfile))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    # Not O_TRUNC: the inode must be stable for every holder that already has it
+    # open, and truncation would tell a reader nothing while risking exactly the
+    # replaced-inode split this lock exists to avoid.
+    handle = os.open(lockfile, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        # execvp keeps the descriptor open across the exec, so the lock is held
+        # for the command's whole life and released by the kernel when it dies.
+        os.set_inheritable(handle, True)
+        os.execvp(command[0], command)
+    except OSError as error:
+        print('with-lock: %s' % error, file=sys.stderr)
+        os.close(handle)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))

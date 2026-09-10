@@ -129,6 +129,105 @@
         (str/trim out)))
     (catch Throwable _ nil)))
 
+(defn darwin?
+  []
+  (str/includes? (str/lower-case (or (System/getProperty "os.name") "")) "mac"))
+
+(def ^:private darwin-mount-row
+  "`DEVICE on MOUNTPOINT (fstype, flag, flag)`, anchored at BOTH ends.
+
+   The mount point is whatever lies between the device token and the trailing
+   parenthesised group -- it is never found by searching for a separator, because
+   a mount point may legally CONTAIN the separator. The trailing group is the
+   last `(...)` on the line and may not itself contain parentheses, so a mount
+   point that contains them (`/Volumes/My (Disk)`) still parses.
+
+   The device is one token, except the automounter's `map <name>` form."
+  #"^(?:map \S+|\S+) on (.*) \(([^()]+)\)$")
+
+(defn parse-darwin-mount-table
+  "The fstype covering `target`: an fstype string, nil when no row covers it, or
+   `:unknown` when the text is not a mount table this parser fully understands.
+
+   THE SAFETY PROPERTY, and the reason this is not a `keep`. Sol
+   SKIFF-INSTALL-FENCE-001: an earlier version split each line on the LAST
+   literal ` on `, so a mount point containing those bytes --
+
+       /dev/ram on /private/var/folders/evil on ram (tmpfs, local)
+
+   -- was discarded as malformed, and the surviving `/` row then answered
+   \"apfs\" for a target on that tmpfs. Crafted mount text could make the ratchet
+   PROVE real disk. Discarding a row you do not understand is the bug: the row
+   you cannot read is exactly the row that may be covering your target.
+
+   So ANY non-blank line that does not match the anchored grammar poisons the
+   WHOLE table to `:unknown`, and longest-prefix selection runs only over a table
+   that parsed completely. Refuse, or answer; never prove past an ambiguity.
+
+   PURE and public, so the property is witnessed from a Linux box."
+  [text target]
+  (let [lines (remove str/blank? (str/split-lines (or text "")))
+        rows (reduce (fn [acc line]
+                       (if-let [[_ mnt types] (re-matches darwin-mount-row line)]
+                         (let [fstype (str/trim (first (str/split types #",")))]
+                           (if (and (seq (str/trim mnt)) (seq fstype))
+                             (conj acc [(str/trim mnt) fstype])
+                             (reduced :unknown)))
+                         (reduced :unknown)))
+                     [] lines)]
+    (cond
+      (= :unknown rows) :unknown
+      (empty? rows) nil
+      :else (->> rows
+                 (filter (fn [[mnt _]]
+                           (or (= target mnt)
+                               (= mnt "/")
+                               (str/starts-with? target (str mnt "/")))))
+                 (sort-by (comp count first) >)
+                 first
+                 second))))
+
+(def ^:private darwin-mount-binaries
+  "`mount(8)` by ABSOLUTE path, never by bare name.
+
+   Sol SKIFF-INSTALL-FENCE-001, second half: the earlier version shelled out to
+   `mount` through PATH, and the claim in its docstring that this was a
+   non-redirectable system source was simply FALSE -- a `mount` earlier on PATH
+   printing `/dev/fake on / (apfs, local)` made base-refusal return nil. An
+   absolute path cannot be redirected by the environment; writing to /sbin needs
+   privileges that already defeat every check in this namespace."
+  ["/sbin/mount" "/bin/mount"])
+
+(defn- darwin-mount-fstype
+  "Longest-mount-point-prefix scan of `mount(8)`, the darwin equivalent of
+   findmnt.
+
+   WHY THIS HAD TO EXIST. Both existing mount sources are Linux-only: findmnt
+   is util-linux and the table is /proc/mounts. On macOS neither can answer, so
+   `mount-fstype` returned :unknown, `base-refusal` correctly failed CLOSED, and
+   EVERY JVM in the suite exited 97. The ratchet was not wrong -- it had no
+   authority to ask, and a gate with no authority is a gate that refuses
+   everything. This gives it one.
+
+   `mount` prints `DEVICE on MOUNTPOINT (fstype, opt, opt)`. A mount point may
+   contain spaces, so the split is anchored on the LAST ` on ` separator and the
+   first ` (` after it, never on whitespace.
+
+   The authority claim, stated exactly: the binary is named by ABSOLUTE path, so
+   PATH cannot redirect it, and a table this parser cannot fully read answers
+   `:unknown` rather than falling back to a covering row. It is not
+   unforgeable -- nothing reachable from bb is -- but forging it now requires
+   write access to /sbin, which already defeats every check here."
+  [dir]
+  (when (darwin?)
+    (try
+      (let [binary (first (filter #(.canExecute (io/file %)) darwin-mount-binaries))]
+        (when binary
+          (let [{:keys [exit out]} (shell/sh binary)]
+            (when (zero? exit)
+              (parse-darwin-mount-table out (canonical dir))))))
+      (catch Throwable _ nil))))
+
 (defn- mounts-table-fstype
   "Longest-mount-point-prefix scan of the mounts table.
 
@@ -167,6 +266,8 @@
    ran on RAM. `:unknown` is a refusal (see `base-refusal`), not a pass."
   [dir]
   (or (findmnt-fstype dir)
+      ;; darwin's own authority, for the same reason findmnt is Linux's.
+      (darwin-mount-fstype dir)
       ;; A seam-sourced fstype is NEVER positive proof of real disk. The gate
       ;; only ever needs the seam to produce a REFUSAL, so a forged table can
       ;; refuse (tmpfs) but a non-tmpfs answer from it reads as `nothing could
@@ -189,10 +290,22 @@
   [dir]
   (= "tmpfs" (mount-fstype dir)))
 
-(def ^:private refusal-remedy
-  (str "Launch with -Djava.io.tmpdir=/var/tmp/forge, or export "
-       "TMPDIR=/var/tmp/forge before invoking bb (bb does not read "
-       "JAVA_TOOL_OPTIONS -- see ~/bin/suite-run / seat-tmp-guard.sh)."))
+(defn- suggested-tmp-base
+  "A real-disk scratch base to SUGGEST in a refusal. The remedy used to name
+   /var/tmp/forge unconditionally -- a directory on exactly one machine, offered
+   as advice to every operator on every box."
+  []
+  (let [candidates (cond-> ["/var/tmp"] (darwin?) (conj "/private/var/tmp"))]
+    (or (first (filter #(.isDirectory (io/file %)) candidates)) "/var/tmp")))
+
+(defn- refusal-remedy
+  []
+  (let [base (suggested-tmp-base)]
+    (str "Launch with -Djava.io.tmpdir=" base "/clj-surgeon, or export TMPDIR="
+         base "/clj-surgeon before invoking bb (bb does not read "
+         "JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already "
+         "sets is real disk and needs no override -- an EMPTY TMPDIR is the "
+         "usual cause of this refusal, not a wrong one.")))
 
 ;; @spec MCP-OP-TMPHYG-003
 (defn base-refusal
@@ -233,7 +346,7 @@
             (str "was launched WITHOUT the isolated user.home this run "
                  "requires (TEST-ISO-006): " detail)
             "is not usable as a temp base.")
-          refusal-remedy))
+          (refusal-remedy)))
 
 (defn- refuse!
   [refusal]

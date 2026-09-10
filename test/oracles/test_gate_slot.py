@@ -54,14 +54,27 @@ COORDINATOR = ('import importlib.util,sys; '
                'sys.stdin.readline()')
 
 
+# The backend and its root are PLATFORM FACTS, not inherited gate state: on
+# darwin every process resolves them identically without being told. Carrying
+# them lets this linux box witness the darwin backend under the same oracle,
+# and an independent coordinator stays independent -- it still shares no file,
+# no descriptor and no namespace knowledge with its parent.
+PLATFORM_ENV = {key: os.environ[key]
+                for key in ('GATE_SLOT_BACKEND', 'CLJ_SURGEON_GATE_ROOT',
+                            'GATE_MEMAVAIL_MIB', 'TMPDIR')
+                if key in os.environ}
+
+
 class GateSlotTest(unittest.TestCase):
     def independent_coordinator(self, namespace, width=1):
         """A process with no inherited gate state whatsoever: no shared file, no
         shared descriptor, and an environment carrying only PATH."""
+        env = {'PATH': os.environ.get('PATH', '/usr/bin:/bin')}
+        env.update(PLATFORM_ENV)
         child = subprocess.Popen(
             ['python3', '-B', '-c', COORDINATOR, str(MODULE), namespace, str(width)],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
-            env={'PATH': os.environ.get('PATH', '/usr/bin:/bin')})
+            env=env)
         self.addCleanup(self.release, child)
         return child
 
@@ -222,6 +235,118 @@ class GateSlotTest(unittest.TestCase):
             child = self.independent_coordinator(namespace, width=2)
             verdicts.append(child.stdout.readline().strip())
         self.assertEqual(['admitted', 'admitted', 'refused'], verdicts)
+
+
+class PortabilityTest(unittest.TestCase):
+    """TEST-ISO-015 portability: the darwin backend exists, says so, and its
+    guarantee is weaker by a NAMED amount rather than silently."""
+
+    def test_backend_follows_the_platform_and_names_its_guarantee(self):
+        modes = {'abstract': ':abstract-socket', 'path-socket': ':path-socket'}
+        self.assertIn(slot.backend(), modes)
+        self.assertEqual(modes[slot.backend()], slot.admission_mode())
+        if os.sys.platform.startswith('linux'):
+            self.assertTrue(slot._abstract_supported())
+        else:
+            self.assertFalse(slot._abstract_supported())
+            self.assertEqual('path-socket', slot.backend())
+
+    def test_unknown_backend_is_a_typed_refusal(self):
+        previous = os.environ.get('GATE_SLOT_BACKEND')
+        os.environ['GATE_SLOT_BACKEND'] = 'flock'
+        try:
+            with self.assertRaisesRegex(RuntimeError, 'unknown GATE_SLOT_BACKEND'):
+                slot.backend()
+        finally:
+            if previous is None:
+                del os.environ['GATE_SLOT_BACKEND']
+            else:
+                os.environ['GATE_SLOT_BACKEND'] = previous
+
+    def test_declared_memory_overrides_and_refuses_garbage(self):
+        previous = os.environ.get('GATE_MEMAVAIL_MIB')
+        try:
+            os.environ['GATE_MEMAVAIL_MIB'] = '8192'
+            self.assertEqual(8192, slot.memory_available_mib())
+            os.environ['GATE_MEMAVAIL_MIB'] = 'lots'
+            with self.assertRaisesRegex(RuntimeError, 'GATE_MEMAVAIL_MIB'):
+                slot.memory_available_mib()
+        finally:
+            if previous is None:
+                os.environ.pop('GATE_MEMAVAIL_MIB', None)
+            else:
+                os.environ['GATE_MEMAVAIL_MIB'] = previous
+
+    def test_capacity_is_readable_on_this_platform(self):
+        current = slot.capacity()
+        self.assertGreaterEqual(current['cpus'], 1)
+        self.assertGreaterEqual(current['memory-mib'], 0)
+        self.assertEqual(slot.derived_width(current['cpus'],
+                                            current['memory-mib']),
+                         current['width'])
+
+    @unittest.skipUnless(os.environ.get('GATE_SLOT_BACKEND') == 'path-socket'
+                         or not os.sys.platform.startswith('linux'),
+                         'path-socket backend only')
+    def test_replaced_root_is_a_typed_refusal_not_a_silent_split(self):
+        """R3 on darwin cannot be made unrepresentable, so it is DETECTED.
+
+        A holder that already published under one root and then finds a
+        different root refuses by name instead of quietly binding a second
+        semaphore beside its own live holdings.
+        """
+        namespace = unique_namespace()
+        held = slot.claim(slot.slot_name(namespace, 'slot-0'))
+        self.addCleanup(held.close)
+        root = slot.slot_root()
+        moved = Path('%s.replaced-%s' % (root, uuid.uuid4().hex))
+        os.rename(str(root), str(moved))
+        try:
+            with self.assertRaisesRegex(RuntimeError, 'gate root was replaced'):
+                slot.claim(slot.slot_name(namespace, 'slot-1'))
+        finally:
+            for stray in Path(str(root)).glob('*') if root.is_dir() else []:
+                stray.unlink()
+            if root.is_dir():
+                root.rmdir()
+            os.rename(str(moved), str(root))
+
+    @unittest.skipUnless(os.environ.get('GATE_SLOT_BACKEND') == 'path-socket'
+                         or not os.sys.platform.startswith('linux'),
+                         'path-socket backend only')
+    def test_a_dead_holders_entry_is_reclaimed_not_leaked(self):
+        """No kernel reaper removes a pathname socket, so the NEXT acquirer
+        must reclaim it. SIGKILL leaves the file; connect() refuses; the name
+        becomes free without anyone having run a cleanup callback."""
+        namespace = unique_namespace()
+        program = ('import importlib.util,sys,time; '
+                   's=importlib.util.spec_from_file_location("slot",sys.argv[1]); '
+                   'm=importlib.util.module_from_spec(s); s.loader.exec_module(m); '
+                   'h=m.claim(m.slot_name(sys.argv[2],"slot-0")); '
+                   'print("held" if h else "refused", flush=True); '
+                   'time.sleep(300)')
+        child = subprocess.Popen(['python3', '-B', '-c', program,
+                                  str(MODULE), namespace],
+                                 stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual('held', child.stdout.readline().strip())
+            self.assertIsNone(slot.claim(slot.slot_name(namespace, 'slot-0')))
+            child.kill()
+            child.wait(timeout=10)
+            deadline = time.monotonic() + 10
+            while True:
+                reclaimed = slot.claim(slot.slot_name(namespace, 'slot-0'))
+                if reclaimed is not None or time.monotonic() >= deadline:
+                    break
+                time.sleep(0.02)
+            self.assertIsNotNone(reclaimed, 'a dead holder never released')
+            reclaimed.close()
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.wait()
+            if child.stdout is not None:
+                child.stdout.close()
 
 
 if __name__ == '__main__':
