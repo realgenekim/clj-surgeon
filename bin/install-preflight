@@ -16,7 +16,7 @@ repo=${1:-.}
 status=0
 missing_required=""
 missing_optional=""
-missing_gate=""
+gate_blockers=""
 
 say() { printf '  %-22s %s\n' "$1" "$2"; }
 
@@ -103,13 +103,50 @@ else
   say "  swipl" "MISSING -- \`make test\` cannot run (gate stage one)"
   say "" "macOS: brew install swi-prolog  |  Debian: apt install swi-prolog-nox"
   say "" "the CLI, the skills and the MCP server do NOT need it"
-  missing_gate="yes"
+  gate_blockers="$gate_blockers swipl"
 fi
 if command -v timeout >/dev/null 2>&1 || command -v gtimeout >/dev/null 2>&1; then
   say "  timeout" "$(command -v timeout || command -v gtimeout)"
 else
   say "  timeout" "absent -- bounded steps run unbounded (brew install coreutils)"
 fi
+
+echo
+echo "  Scratch (the suite refuses a RAM-backed temp dir)"
+# ASK THE RATCHET ITSELF, never a second implementation of its rule.
+#
+# On a clean login with no TMPDIR and /tmp on tmpfs, every JVM in the suite
+# exits 97 -- 113 namespaces on the box this was found on -- and the operator's
+# whole evidence is a four-kilobyte namespace-census dump. The refusal is
+# correct; being unreadable is the defect. One line here, before any JVM starts,
+# is worth more than the dump. A shell re-implementation of the rule would drift
+# from it, so this executes the real decision function.
+tmp_base=${TMPDIR:-/tmp}
+if command -v bb >/dev/null 2>&1; then
+  tmp_verdict=$(cd "$repo" 2>/dev/null && bb --classpath test -e     '(require (quote [clj-surgeon.tmp-leak-support :as t]))
+     (let [d (or (System/getenv "TMPDIR") "/tmp")
+           r (t/base-refusal d)]
+       (println (if r (str "REFUSE " (name (:reason r))) "ok")
+                (pr-str (t/mount-fstype d))))' 2>/dev/null | tail -1)
+else
+  tmp_verdict=""
+fi
+case "$tmp_verdict" in
+  ok*)
+    say "  temp base" "$tmp_base (${tmp_verdict#ok } -- accepted)" ;;
+  REFUSE*)
+    say "  temp base" "$tmp_base -- REFUSED (${tmp_verdict})"
+    say "" "\`make test\` will exit 97 in EVERY lane until this is fixed."
+    if [ -z "${TMPDIR:-}" ]; then
+      say "" "TMPDIR is unset, which is the usual cause. Set one on real disk:"
+      say "" "  export TMPDIR=/var/tmp/clj-surgeon && mkdir -p \"\$TMPDIR\""
+    else
+      say "" "point TMPDIR at a real-disk directory (not /tmp, not /dev/shm)"
+    fi
+    gate_blockers="$gate_blockers a-RAM-backed-TMPDIR" ;;
+  *)
+    say "  temp base" "$tmp_base (not checked -- bb could not answer)" ;;
+esac
 
 echo
 echo "  Gate admission"
@@ -142,12 +179,14 @@ if [ -n "$missing_required" ]; then
 fi
 if [ -n "$missing_optional" ]; then
   echo "OK to install. Reduced capability without:$missing_optional"
-elif [ -n "$missing_gate" ]; then
-  echo "OK to install. \`make test\` will refuse until swipl is installed."
-else
+elif [ -z "$gate_blockers" ]; then
   echo "OK to install. Every earned win is available on this box."
+else
+  echo "OK to install."
 fi
-if [ -n "$missing_optional" ] && [ -n "$missing_gate" ]; then
-  echo "                \`make test\` will refuse until swipl is installed."
+# Name the ACTUAL blockers. An earlier draft of this line blamed swipl for a
+# RAM-backed TMPDIR, which is how a preflight becomes a thing people stop reading.
+if [ -n "$gate_blockers" ]; then
+  echo "                \`make test\` will refuse because of:$gate_blockers"
 fi
 exit 0

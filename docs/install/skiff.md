@@ -59,8 +59,17 @@ steps that otherwise run unbounded. Nothing fails without it.
     memory               read from vm_stat + sysctl hw.memsize
 ```
 
-`:path-socket` and `vm_stat + sysctl` are the two lines that say the darwin code
-paths were actually selected. If `memory` says **UNREADABLE**, that is the one
+and, just above it:
+
+```
+  Scratch (the suite refuses a RAM-backed temp dir)
+    temp base            /var/folders/.../T/ ("apfs" -- accepted)
+```
+
+`:path-socket`, `vm_stat + sysctl`, and an accepted `apfs` temp base are the
+three lines that say the darwin code paths were actually selected. If the temp
+base is REFUSED, `make test` would exit 97 in every lane — the preflight asks the
+suite's own decision function, so it cannot disagree with the gate. If `memory` says **UNREADABLE**, that is the one
 piece with no Linux witness — set `GATE_MEMAVAIL_MIB` to the MiB you are willing
 to lend the gate (e.g. `export GATE_MEMAVAIL_MIB=16384`) and say so.
 
