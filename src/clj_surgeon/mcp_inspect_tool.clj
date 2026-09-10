@@ -377,6 +377,7 @@
     "file_count" {:type "integer"}
     "results" {:type "array"}
     "file_hashes" {:type "object"}
+    "read_receipts" {:type "object" :description "Portable v1 path-bound SHA-256 projections for insertion guards."}
     "snapshot_guards" snapshot-guards-schema
     "continuation" continuation-schema
     "source_character_count" {:type "integer"}
@@ -885,9 +886,16 @@
         telemetry params result {:total_ms (:inspection_elapsed_ms result)}))
     result))
 
+;; @spec INSERT-FORMS-012
+;; INTENT: INSERT-FORMS-012
 (defn- attach-workspace-root
   [result workspace-root]
   (cond-> (assoc result :workspace_root workspace-root)
+    (and (:read_complete result) (:file_hashes result))
+    (assoc :read_receipts
+           (into {} (map (fn [[file digest]]
+                           [file {:version 1 :read_complete true :workspace_root workspace-root
+                                  :file file :sha256 digest}]) (:file_hashes result))))
     (get-in result [:continuation :retry_template :arguments])
     (assoc-in [:continuation :retry_template :arguments :workspace_root]
               workspace-root)))

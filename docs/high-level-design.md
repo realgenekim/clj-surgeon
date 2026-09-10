@@ -1392,3 +1392,11 @@ Both text entrances lead with commitment, proof and the defined cold-completion
 boolean. Lossless tables and digest encoding preserve the receipt ceiling;
 malformed UTF-8 refuses before byte-identity claims. The partition leaf owns
 NS-SPLIT-067..072 and the supporting witnesses.
+
+`insert_forms` adds a request-file-first, single-file insertion operation. A CST
+planner resolves one exact owner/body boundary; staged publication under the
+workspace lock preserves all original bytes and records inverse evidence.
+CLI and MCP share the operation and its typed outcomes. Supporting structural
+reads expose portable, path-bound digest projections. Write verification is
+parse plus preservation; behavioral verification remains caller work.
+The [insertion design](intent/insert-forms/design.md) owns INSERT-FORMS-001..018.

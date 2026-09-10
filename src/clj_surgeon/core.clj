@@ -2158,6 +2158,17 @@
                                  "clj-surgeon :op :require-change! :request-file requires.edn"]
                       :category :write}
 
+    ;; @spec INSERT-FORMS-018
+    ;; INTENT: INSERT-FORMS-018
+    :insert-forms! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.insert-forms/cli!) opts))
+                    :desc "Insert forms at one guarded structural boundary; preserve all original bytes."
+                    :args {:request-file {:desc "Required: bounded EDN request containing version, workspace_root, file, guard, anchor, payload."}}
+                    :workflow ["Exactly one EDN map, no tags or trailing values. No batch, preview, replacement or formatter."
+                            "Inspect state, committed, mutation_attempted, source_unchanged first. Exit 0: committed and write_verified; 2: no-write refusal; 1: I/O, rollback or recovery failure."
+                            "verification_complete=false: only parse and byte preservation, never application behavior. Never blindly replay recovery-required."
+                            "Schema and example: docs/intent/insert-forms/contract.md."]
+                    :examples ["clj-surgeon :insert-forms! :request-file insert.edn"
+                               "clj-surgeon :op :insert-forms! :request-file insert.edn"] :category :write}
     ;; @spec NS-SPLIT-014
     ;; @spec NS-SPLIT-041
     :split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))
@@ -2919,6 +2930,9 @@
       ;; refusal — and is printed untouched, because a bound belongs at the
       ;; exit that OWNS the answer and this function does not own theirs.
       (= :unknown-operation (:error-type result)) (print-launcher-refusal! result)
+      ;; @spec INSERT-FORMS-018
+      (= :insert-forms! canonical)
+      (do (print ((requiring-resolve 'clj-surgeon.insert-forms/receipt-text) result)) (flush))
       ;; @spec NS-SPLIT-057: nested pretty-print indentation is outside the data bound.
       (= :split-ns! canonical)
       (do (print ((requiring-resolve 'clj-surgeon.namespace-split-io/receipt-text) result))
@@ -3094,7 +3108,8 @@
    list, and the refusal is generic for the same reason the collapse was: this
    fn builds the map before anything knows which op it is for."
   [args]
-  (let [help-flags #{"--help" "-h"}
+  (let [args (if (= ":insert-forms!" (first args)) (cons ":op" args) args)
+        help-flags #{"--help" "-h"}
         has-help?  (some help-flags args)
         kv-args    (remove help-flags args)]
     (when (odd? (count kv-args))
@@ -3270,7 +3285,21 @@
 
                 :else (run opts))))]
       (when (and (map? result) (:error result))
-        (System/exit 1)))
+        ;; @spec INSERT-FORMS-018
+        ;; INTENT: INSERT-FORMS-018
+        (System/exit (if (and (= "insert_forms" (:operation result))
+                              (= "refused" (:state result))) 2 1))))
     (catch Throwable t
-      (print-launcher-refusal! (launcher-throwable-refusal t))
-      (System/exit 1))))
+      (if (or (= ":insert-forms!" (first args))
+              (= [":op" ":insert-forms!"] (vec (take 2 args))))
+        (let [parse-error? (#{:invalid-arguments :duplicate-argument :argument-nesting-too-deep} (:error-type (ex-data t)))
+              receipt (if parse-error?
+                        ((requiring-resolve 'clj-surgeon.insert-forms-plan/refusal)
+                         (ex-info (.getMessage t) {:error-type :invalid-request :at []}))
+                        ((requiring-resolve 'clj-surgeon.insert-forms/failed)
+                         "recovery-required" true nil :commit-outcome-unknown (.getMessage t) {}))]
+          (print ((requiring-resolve 'clj-surgeon.insert-forms/receipt-text) receipt))
+          (flush)
+          (System/exit (if parse-error? 2 1)))
+        (do (print-launcher-refusal! (launcher-throwable-refusal t))
+            (System/exit 1))))))
