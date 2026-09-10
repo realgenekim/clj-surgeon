@@ -33,6 +33,13 @@ DECL="$HERE/bin/parity/volatile-fields.edn"
 SPECIMENS="split"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 JVM_XMX="${JVM_XMX:-1g}"
+# Fixtures are the whole footprint: one curtaincall-cfp copy is 1.9 GB and a
+# three-specimen run makes six.  The captured EVIDENCE — the sha256 tree
+# manifest, the receipt, stdout/stderr, the exit code — is what the comparator
+# reads, and it is kilobytes.  So a fixture is deleted the moment its evidence
+# is captured, and at most ONE is live at a time.  Set PARITY_KEEP_FIXTURES=1
+# to keep them when a divergence needs the actual bytes inspected by hand.
+KEEP_FIXTURES="${PARITY_KEEP_FIXTURES:-0}"
 
 usage() { sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 2; }
 [ $# -ge 2 ] || usage
@@ -330,7 +337,13 @@ run_specimen() { # <name>
     log "$name/$i run ($(basename "$build"))"
     "specimen_${name}_run" "$build" "$fx" "$sdir/$i" "$i"
     capture "$sdir/$i" "$fx"
-    log "$name/$i exit=$(cat "$sdir/$i/exit.txt") wall=$(cat "$sdir/$i/wall.txt")s"
+    local fxsize; fxsize="$(du -sh "$fx" 2>/dev/null | cut -f1)"
+    log "$name/$i exit=$(cat "$sdir/$i/exit.txt") wall=$(cat "$sdir/$i/wall.txt")s fixture=$fxsize"
+    if [ "$KEEP_FIXTURES" = 1 ]; then
+      log "$name/$i fixture KEPT at $fx ($fxsize)"
+    else
+      rm -rf "$fx"
+    fi
   done
   log "$name compare"
   bb "$HERE/bin/parity/compare.clj" "$sdir/A" "$sdir/B" "$DECL" > "$sdir/compare.txt" 2>&1
@@ -353,6 +366,7 @@ for s in "${WANTED[@]}"; do
   fi
 done
 
+log "footprint: builds $(du -sh "$PARITY_ROOT/builds" 2>/dev/null | cut -f1), live fixtures $(du -sh "$PARITY_ROOT/fx" 2>/dev/null | cut -f1), evidence $(du -sh "$PARITY_ROOT/runs" 2>/dev/null | cut -f1)"
 log "run dir $RUN_DIR"
 cat "$RUN_DIR/verdicts.txt" 2>/dev/null
 exit $STATUS
