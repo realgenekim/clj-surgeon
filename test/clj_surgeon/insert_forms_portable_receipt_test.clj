@@ -22,7 +22,7 @@
   (let [projection {:version 1 :read_complete true :workspace_root "/fixture"
                     :file "src/example.clj" :sha256 (h/sha h/source)}
         req (assoc (h/request h/source) :guard {:read_receipt projection})]
-    (h/accepted h/source req "(defn a [] 1)\n(defn b [] 3)\n\n(defn ab [] 2)\n")
+    (h/accepted h/source req "(defn a [] 1)\n(defn b [] 3)\n(defn ab [] 2)\n")
     (doseq [p [(assoc projection :workspace_root "/wrong")
                (assoc projection :file "other.clj")
                (assoc projection :read_complete false) (dissoc projection :sha256)]]

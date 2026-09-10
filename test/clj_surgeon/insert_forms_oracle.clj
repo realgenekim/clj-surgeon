@@ -74,6 +74,24 @@
   (if (:entries entry)
     [(:tag entry) (mapv token-tree (remove #(#{:whitespace :newline :comma :comment} (:tag %)) (:entries entry)))]
     [(:tag entry) (:text entry)]))
+(defn gap-policy [source destination]
+  (let [left (:previous destination)
+        end (or (:end left) 0)
+        comment (when left (re-find #"^[ \t,]*;[^\n\r]*" (subs source end)))
+        start (+ end (count comment))
+        whitespace (if left (re-find #"^[ \t,\r\n]*" (subs source start)) "")
+        breaks (count (filter #{\newline} whitespace))
+        used (if (pos? breaks) whitespace "")
+        p (+ start (count used))
+        peers (:children destination)
+        peer-breaks (for [[a b] (partition 2 1 peers)
+                          :let [n (count (filter #{\newline} (subs source (:end a) (:start b))))]
+                          :when (pos? n)] n)]
+    {:p p :breaks breaks :count (if (pos? breaks) breaks (or (first peer-breaks) 1))
+     :indent (if (pos? breaks) (last (str/split used #"\n" -1)) "")
+     :closing? (and (not= :forms (get-in destination [:container :tag]))
+                    (= p (dec (get-in destination [:container :end]))))}))
+
 (defn exact-added [source payload destination p]
   (let [anchor (if (= :forms (get-in destination [:container :tag]))
                  (:owner destination)
@@ -103,18 +121,22 @@
                                              (str (subs line 0 (- (count line) (count ending))) newline) line)]
                             (if (or (str/blank? line) (literal? offset)) normalized
                                 (str (apply str (repeat target-column " ")) (subs normalized minimum))))))]
-    (str (when-not (or (zero? p) (= \newline (nth source (dec p)))) newline)
-         adjusted (when-not (str/ends-with? adjusted "\n") newline))))
+    (let [{:keys [breaks count indent closing?]} (gap-policy source destination)
+          trailing (clojure.core/count (filter #{\newline} (or (re-find #"(?:\r?\n)+$" adjusted) "")))
+          payload-start (if (pos? breaks) (min target-column (clojure.core/count indent)) 0)]
+      (str (when (and (pos? p) (zero? breaks)) (apply str (repeat count newline)))
+           (subs adjusted payload-start)
+           (if closing?
+             (when (pos? trailing) (apply str (repeat target-column " ")))
+             (str (apply str (repeat (max 0 (- count trailing)) newline))
+                  (when (< p (clojure.core/count source)) indent)))))))
 
 (defn verify [a b request receipt]
   (try
     (assert-law (= (digest a) (:source_hash receipt)) :source-hash)
     (assert-law (= (digest b) (:result_hash receipt)) :result-hash)
     (let [before (inventory a) after (inventory b) selected (destination before request)
-          left (:previous selected) end (or (:end left) 0)
-          tail (subs a end)
-          attached (when left (re-find #"^[ \t,]*;[^\n\r]*(?:\r\n|\n|$)" tail))
-          p (+ end (count attached))
+          p (:p (gap-policy a selected))
           delta (- (count b) (count a))
           _ (assert-law (pos? delta) :nonempty-splice)
           added (subs b p (+ p delta))

@@ -14,13 +14,13 @@
              "(clojure.core/defn a [x]\n  x)"]]
     (let [r (assoc (h/request s) :anchor (h/body "defn" "a" {:position "last"})
                    :payload {:text "42" :forms 1})]
-      (h/accepted s r (str (subs s 0 (dec (count s))) "\n  42\n)"))))
+      (h/accepted s r (str (subs s 0 (dec (count s))) "\n  42)"))))
   (let [s "(defn a ([] 0) ([x]\n  x) {:attr true})"
         r (assoc (h/request s) :anchor (h/body "defn" "a" {:position "last"})
                  :payload {:text "42" :forms 1})]
     (h/refused s r :anchor-ambiguous)
     (h/accepted s (assoc-in r [:anchor :arity] 2)
-                "(defn a ([] 0) ([x]\n  x\n  42\n) {:attr true})")
+                "(defn a ([] 0) ([x]\n  x\n  42) {:attr true})")
     (h/refused s (assoc-in r [:anchor :arity] 3) :anchor-index-out-of-range))
   (h/refused h/source (assoc (h/request h/source) :anchor
                         (assoc (h/body "defn" "a" {:position "last"}) :arity 1))

@@ -37,7 +37,7 @@
           (is (= 0 (:exit result)) (pr-str result))
           (is (= "committed" (:state receipt)))
           (is (= true (:write_verified receipt)))
-          (is (= "(defn a [] 1)\n(defn b [] 3)\n\n(defn ab [] 2)\n" (slurp file)))
+          (is (= "(defn a [] 1)\n(defn b [] 3)\n(defn ab [] 2)\n" (slurp file)))
           (is (number? (:elapsed_ms receipt)))
           (is (< (count (:out result)) 4097))
           (spit file h/source)

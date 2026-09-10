@@ -13,4 +13,4 @@
     (h/refused decoy (h/request decoy) :anchor-not-found)
     (let [s (str decoy h/source)]
       (h/accepted s (h/request s)
-                  (str decoy "(defn a [] 1)\n(defn b [] 3)\n\n(defn ab [] 2)\n")))))
+                  (str decoy "(defn a [] 1)\n(defn b [] 3)\n(defn ab [] 2)\n")))))

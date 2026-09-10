@@ -14,4 +14,4 @@
   (h/refused h/source (assoc (h/request h/source) :payload {:text "#_1 2" :forms 1})
              :unsupported-payload-syntax)
   (h/accepted h/source (assoc (h/request h/source) :payload {:text "'x #foo/bar 2" :forms 2})
-              "(defn a [] 1)\n'x #foo/bar 2\n\n(defn ab [] 2)\n"))
+              "(defn a [] 1)\n'x #foo/bar 2\n(defn ab [] 2)\n"))

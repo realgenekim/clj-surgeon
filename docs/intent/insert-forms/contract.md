@@ -127,13 +127,7 @@ Plan one insertion offset p between source bytes. No original byte is deleted.
 Find L, the preceding body child (or last header token for first/empty body), and
 R, the following child (or container closing delimiter). Top-level before/after
 uses the preceding/following root forms; virtual L at BOF has offset zero.
-Start p at L's exclusive end. If the gap immediately following L consists of
-horizontal whitespace/commas then a semicolon comment on L's physical line,
-advance p through that comment AND its newline (or EOF). Otherwise leave p there.
-All remaining gap bytes stay on the right. Never move a standalone comment across
-R: such comments remain immediately before R in the unchanged right-hand suffix.
-At BOF, insert before all leading trivia. This deliberately does not guess whether
-a file-header comment documents the whole file. Payload comments belong to payload.
+Start p at L's exclusive end, advancing past an attached trailing semicolon comment but leaving its newline in the gap. A top-level insertion reproduces the named anchor's existing inter-form gap on both sides of the payload (one blank line stays one blank line); a trailing comment stays attached to its original form and the gap rule applies after it. A body insertion uses the body's existing separator: newline plus sibling indentation, with blank lines only where the body already uses them. Advance p over the whitespace gap before the following sibling or closer, reusing its newline and indentation before the payload and reproducing the separator after the payload; no original byte is deleted. Never orphan a closer at column zero for last or empty bodies; indent a closer following a payload newline. At BOF insert before leading trivia, with no prefix; standalone comments remain before their original following form and payload comments belong to the payload.
 
 Choose target column C (zero-based, Unicode codepoints; tabs in indentation refuse):
 top-level = named anchor's opening column; body = first existing body's child
@@ -148,10 +142,7 @@ payload newline tokens outside literals to the source newline style (LF if none)
 Never normalize a newline inside a literal. Reparse the resulting payload and assert
 unchanged form count and unchanged nontrivia token spellings.
 
-Added bytes S = prefix + reindented payload + suffix. Prefix is one source-style
-newline unless p=0 or the preceding byte ends a newline. Suffix is one source-style
-newline unless the reindented payload already ends in a newline. Retain even redundant
-original blank lines. Source result B = A[0:p] + S + A[p:]; reparse B completely.
+Added bytes S = the separator chosen above + reindented payload + only the missing right separator. Consumed gap bytes supply the left separator; at EOF add a final source-style newline unless the payload already ends with one. Source result B = A[0:p] + S + A[p:]; reparse B completely.
 Verify inserted root/body siblings occupy exactly the requested boundary in B;
 a swallowed form or altered token boundary refuses `:candidate-structure-mismatch`.
 Source parse errors refuse `:source-parse-error`; candidate parse errors refuse
@@ -206,14 +197,14 @@ rebound to the owned fixture. Generated hashes and counts here are exact:
 {:state "committed" :committed true :mutation_attempted true :source_unchanged false
  :ok true :operation "insert_forms" :version 1 :file "src/example.clj"
  :source_hash "81f14e0bae64ca76014a2c2368a7ca83dedb374ef244f8c5019b22ab61eb2b12"
- :result_hash "e51722e43edda0df0cc6689090281ba4ab7e946806711b266950d370d865d247"
- :read_back_hashes {"src/example.clj" "e51722e43edda0df0cc6689090281ba4ab7e946806711b266950d370d865d247"}
- :bytes_added 15 :forms_inserted 1 :anchor_column 0
- :splice {:offset 13 :length 15 :sha256 "6e460fd413f380e275e9c769cb90498cf7804956fd893f56816ef521a9c323ef"}
- :line_range {:start 1 :end 2}
+ :result_hash "42941c271c531c0c058a984996826c4b65c2cec5d355b09965d8f03b409f0454"
+ :read_back_hashes {"src/example.clj" "42941c271c531c0c058a984996826c4b65c2cec5d355b09965d8f03b409f0454"}
+ :bytes_added 14 :forms_inserted 1 :anchor_column 0
+ :splice {:offset 14 :length 14 :sha256 "b30dac5980dce85bdbf4130d40cdb14f8f4acc4640cfaacbe9eeb5b24dc6e5b4"}
+ :line_range {:start 2 :end 2}
  :inserted_form_ranges [{:ordinal 1 :start_line 2 :end_line 2}]
- :preservation {:prefix_sha256 "1d1f4497724ad81799012397fd4781c16ca5cc6fcbaec3a42d75dfd80f2d160e"
-                :suffix_sha256 "c35754ffc009bb12060d89d0f63814c80d264267a52f6528392ac3e02a3bafe4"
+ :preservation {:prefix_sha256 "9f7f8b28df3ae36aea970ba670a8939a2cd35620f77ce6cdb5723fb221c9a948"
+                :suffix_sha256 "83f9249d855af8169bc768f86b07677f3ff636f1b477ed7399bd06511fbe7a7f"
                 :other_forms_checked 2 :other_forms_unchanged true}
  :write_verified true :verification_complete false
  :verification {:tier "parse+byte-preservation" :behavior "not-run"}
