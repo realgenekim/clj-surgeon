@@ -394,7 +394,7 @@
 
 ;; @spec INSERT-FORMS-021
 ;; INTENT: INSERT-FORMS-021
-(defn spacing [source selection base c newline adjusted]
+(defn spacing [source selection base c newline adjusted adjusted-root]
   (let [top? (= :forms (get-in selection [:container :tag]))
         ;; The comment's newline is part of the gap, including for a tail at EOF.
         base (if (and (:left selection) (pos? base)
@@ -420,10 +420,14 @@
         adjusted (if (pos? lines)
                    (subs adjusted (min c (count indentation))) adjusted)
         trailing (count (re-seq #"\n" (or (re-find #"(?:\r?\n)+\z" adjusted) "")))
+        tail-comment? (= :comment (:tag (last (:children adjusted-root))))
+        right-indent (if (and (not top?) (zero? lines))
+                       (apply str (repeat (max 0 (- c (count gap))) " ")) indentation)
         suffix (if closing?
-                 (when (pos? trailing) (apply str (repeat c " ")))
+                 (when (or (pos? trailing) tail-comment?)
+                   (str (when (zero? trailing) newline) (apply str (repeat c " "))))
                  (str (apply str (repeat (max 0 (- n trailing)) newline))
-                      (when (< p (count source)) indentation)))]
+                      (when (< p (count source)) right-indent)))]
     {:offset p :inserted (str prefix adjusted suffix)}))
 
 ;; @spec INSERT-FORMS-010
@@ -581,7 +585,7 @@
             adjusted (indent payload literals c newline) adjusted-root (tree adjusted :payload)
             _ (when-not (= (spellings payload-root) (spellings adjusted-root))
                 (refuse! :candidate-structure-mismatch [:payload] "Reindentation changed tokens."))
-            layout (spacing source selection base c newline adjusted)
+            layout (spacing source selection base c newline adjusted adjusted-root)
             p (:offset layout) inserted (:inserted layout)
             _ (when (> (+ (alength (bytes source)) (alength (bytes inserted))) (:candidate limits))
                 (refuse! :limit-exceeded [:candidate] "Candidate exceeds 16 MiB before materialization."))

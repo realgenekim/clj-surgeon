@@ -20,6 +20,9 @@
            ["(defn a [])" {:position "first"} "1" "(defn a []\n  1)"]
            ["(deftest t\n)" {:position "last"} "3" "(deftest t\n  3)"]
            ["(deftest t)" {:position "last"} "3\n" "(deftest t\n  3\n  )"]
+           ["(deftest t)" {:position "last"} "3 ; tail" "(deftest t\n  3 ; tail\n  )"]
+           ["(deftest t 1 2)" {:position "first"} "3"
+            "(deftest t\n           3\n           1 2)"]
            ["(deftest t\n  1\n  2)" {:position "first"} "3\n"
             "(deftest t\n  3\n  1\n  2)"]]]
     (h/accepted source

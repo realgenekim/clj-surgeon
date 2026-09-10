@@ -89,6 +89,7 @@
                           :when (pos? n)] n)]
     {:p p :breaks breaks :count (if (pos? breaks) breaks (or (first peer-breaks) 1))
      :indent (if (pos? breaks) (last (str/split used #"\n" -1)) "")
+     :right-gap (if (zero? breaks) whitespace "")
      :closing? (and (not= :forms (get-in destination [:container :tag]))
                     (= p (dec (get-in destination [:container :end]))))}))
 
@@ -121,15 +122,19 @@
                                              (str (subs line 0 (- (count line) (count ending))) newline) line)]
                             (if (or (str/blank? line) (literal? offset)) normalized
                                 (str (apply str (repeat target-column " ")) (subs normalized minimum))))))
-        {:keys [breaks count indent closing?]} (gap-policy source destination)
+        {:keys [breaks count indent closing? right-gap]} (gap-policy source destination)
           trailing (clojure.core/count (filter #{\newline} (or (re-find #"(?:\r?\n)+$" adjusted) "")))
+          comment-tail? (= :comment (:tag (last (:entries (inventory payload)))))
+          indent-right (if (and (zero? breaks) (not= :forms (get-in destination [:container :tag])))
+                         (apply str (repeat (max 0 (- target-column (clojure.core/count right-gap))) " ")) indent)
           payload-start (if (pos? breaks) (min target-column (clojure.core/count indent)) 0)]
       (str (when (and (pos? p) (zero? breaks)) (apply str (repeat count newline)))
            (subs adjusted payload-start)
            (if closing?
-             (when (pos? trailing) (apply str (repeat target-column " ")))
+             (when (or (pos? trailing) comment-tail?)
+               (str (when (zero? trailing) newline) (apply str (repeat target-column " "))))
              (str (apply str (repeat (max 0 (- count trailing)) newline))
-                  (when (< p (clojure.core/count source)) indent))))))
+                  (when (< p (clojure.core/count source)) indent-right))))))
 
 (defn verify [a b request receipt]
   (try
