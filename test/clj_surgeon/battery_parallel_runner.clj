@@ -49,6 +49,7 @@
    battery namespace degrades the makespan rather than the verdict."
   (:require
    [babashka.process :as proc]
+   [clj-surgeon.gate-memory :as mem]
    [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.ns-isolation :as iso]
    [clojure.edn :as edn]
@@ -557,9 +558,8 @@
   "Trimmed stdout of a command, or nil when it does not exist or fails.
    A missing binary is a normal answer on a foreign platform, not an error."
   [& argv]
-  (try (let [{:keys [exit out]} @(proc/process {:out :string :err :string} argv)]
-         (when (zero? exit) (str/trim out)))
-       (catch Exception _ nil)))
+  (let [{:keys [exit out]} (apply mem/shell-result argv)]
+    (when (= 0 exit) out)))
 
 (defn machine-cpus
   "The CPU count the gate divides. `nproc` is GNU coreutils and is absent on
@@ -570,46 +570,20 @@
       (some-> (shell-out "sysctl" "-n" "hw.ncpu") parse-long)
       (.availableProcessors (Runtime/getRuntime))))
 
-(defn- linux-memory-available-mib []
-  (when (.exists (io/file "/proc/meminfo"))
-    (some-> (re-find #"MemAvailable:\s+(\d+)"
-                     ;; JDK buffered slurp calls available(), which procfs
-                     ;; rejects on this host. NIO reads it directly.
-                     (java.nio.file.Files/readString
-                       (java.nio.file.Paths/get "/proc/meminfo" (make-array String 0))))
-            second parse-long (quot 1024))))
-
-(defn- darwin-memory-available-mib
-  "free + inactive + speculative + purgeable pages, capped by hw.memsize.
-   `MemAvailable` has no darwin equivalent; vm_stat's reclaimable classes are
-   the closest honest analogue -- pages the VM can hand a new JVM without
-   swapping. The cap keeps a misparse from inventing capacity."
-  []
-  (when-let [stat (shell-out "vm_stat")]
-    (let [page (or (some-> (re-find #"page size of (\d+) bytes" stat) second parse-long) 4096)
-          total (some-> (shell-out "sysctl" "-n" "hw.memsize") parse-long)
-          pages (keep (fn [label]
-                        (some-> (re-find (re-pattern (str "(?m)^" label ":\\s+(\\d+)")) stat)
-                                second parse-long))
-                      ["Pages free" "Pages inactive" "Pages speculative" "Pages purgeable"])]
-      (when (seq pages)
-        (quot (cond-> (* (reduce + pages) page) total (min total))
-              (* 1024 1024))))))
-
+;; @spec TEST-ISO-015 -- ONE reader, and this is the call the gate makes.
+;;
+;; The reader itself lives in `clj-surgeon.gate-memory` so that
+;; `bin/install-preflight` can execute THE SAME CODE without loading this
+;; coordinator. Before 2026-09-10 the preflight decided for itself that darwin
+;; memory was readable (`command -v vm_stat`) and printed a source; the gate's
+;; reader then refused on the same box minutes later. A preflight that prints a
+;; source the gate cannot use is the defect, and it can only be closed by there
+;; being one implementation to be green about.
 (defn machine-memory-available-mib
-  "Available MiB, or a typed refusal naming the documented override.
-   GATE_MEMAVAIL_MIB is honoured FIRST on every platform: a box whose memory the
-   gate cannot read may declare it rather than be locked out of its own suite."
+  "Available MiB, or a typed refusal naming the step that could not answer and
+   the documented override."
   []
-  (if-let [declared (System/getenv "GATE_MEMAVAIL_MIB")]
-    (or (parse-long (str/trim declared))
-        (throw (ex-info "gate-refused: GATE_MEMAVAIL_MIB is not an integer MiB count"
-                        {:value declared})))
-    (or (linux-memory-available-mib)
-        (darwin-memory-available-mib)
-        (throw (ex-info "gate-refused: available memory is unknown"
-                        {:os (System/getProperty "os.name")
-                         :remedy "set GATE_MEMAVAIL_MIB to the MiB this box may lend the gate"})))))
+  (mem/available-mib))
 
 (defn gate-admission-mode
   "The guarantee level of the box-wide slot semaphore, carried in the landing

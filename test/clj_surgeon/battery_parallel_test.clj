@@ -8,6 +8,7 @@
   {:lane :fast}
   (:require
    [clj-surgeon.battery-parallel-runner :as bp]
+   [clj-surgeon.gate-memory :as mem]
    [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.mcp-test-runner :as runner]
    [clj-surgeon.ns-isolation :as iso]
@@ -516,6 +517,59 @@
     (is (= 1 (width 1 4096)))
     (is (= 2 (width 64 5120)))
     (is (thrown? clojure.lang.ExceptionInfo (width 16 2048)))))
+
+;; @spec TEST-ISO-015
+;; ONE READER -- the darwin arithmetic, witnessed on the linux box that has
+;; the suite. The skiff (2026-09-10) refused `available memory is unknown
+;; {:os "Mac OS X"}` while its own preflight had just reported the reader
+;; green. Two defects were behind that one line and BOTH are pinned here and
+;; in `test/gate_memory_one_reader_test.sh`:
+;;   1. the preflight never called a reader (it checked that `vm_stat` EXISTED);
+;;   2. the reader could not have worked if it had -- it handed babashka.process
+;;      a COLLECTION where that API takes varargs, so it launched a program
+;;      named `(vm_stat)`. Linux never noticed, because linux answers from
+;;      /proc/meminfo and never reaches the shell-out at all.
+(deftest darwin-memory-reader-is-the-documented-arithmetic
+  (let [stat (str "Mach Virtual Memory Statistics: (page size of 16384 bytes)\n"
+                  "Pages free:                              300000.\n"
+                  "Pages active:                            111111.\n"
+                  "Pages inactive:                          100000.\n"
+                  "Pages speculative:                        20000.\n"
+                  "Pages throttled:                              0.\n"
+                  "Pages wired down:                        222222.\n"
+                  "Pages purgeable:                          10000.\n")]
+    (testing "free + inactive + speculative + purgeable, at the reported page size"
+      ;; 430 000 pages x 16 KiB = 7 045 120 000 B = 6718 MiB. `Pages active`
+      ;; and `Pages wired down` are NOT reclaimable and must not be counted.
+      (is (= 6718 (mem/darwin-mib-from stat 68719476736))))
+    (testing "hw.memsize caps it, so a misparse cannot invent capacity"
+      (is (= 1024 (mem/darwin-mib-from stat (* 1024 1024 1024)))))
+    (testing "a 4 KiB page box is read at ITS page size, not at a constant"
+      (is (= 1679 (mem/darwin-mib-from (str/replace stat "16384" "4096") 68719476736))))
+    (testing "no reclaimable class parsed is a TYPED refusal naming the step"
+      (let [error (try (mem/darwin-mib-from "Mach Virtual Memory Statistics:\n" 1)
+                       (catch clojure.lang.ExceptionInfo e e))]
+        (is (= "gate-refused: available memory is unknown" (ex-message error)))
+        (is (= {:source :darwin :step "vm_stat" :reason :no-reclaimable-classes}
+               (select-keys (ex-data error) [:source :step :reason])))
+        (is (str/includes? (:remedy (ex-data error)) "GATE_MEMAVAIL_MIB")
+            "every refusal names the operator override")))))
+
+;; @spec TEST-ISO-015
+(deftest memory-refusals-name-the-step-that-could-not-answer
+  (testing "/proc/meminfo without MemAvailable refuses by REASON, not by platform"
+    (let [error (try (mem/linux-mib-from "MemTotal:  16384 kB\n")
+                     (catch clojure.lang.ExceptionInfo e e))]
+      (is (= {:source :linux :step "/proc/meminfo" :reason :no-memavailable-line}
+             (select-keys (ex-data error) [:source :step :reason])))))
+  (testing "the preflight line is the reader's own answer, never a source name"
+    (with-redefs [mem/available-mib (fn [] (throw (ex-info "gate-refused: available memory is unknown"
+                                                          {:step "vm_stat"})))]
+      (let [line (mem/preflight-line)]
+        (is (str/starts-with? line "REFUSED gate-refused: available memory is unknown"))
+        (is (str/includes? line ":step \"vm_stat\""))))
+    (with-redefs [mem/available-mib (fn [] 4096)]
+      (is (str/starts-with? (mem/preflight-line) "OK 4096 MiB available")))))
 
 ;; @spec TEST-ISO-015
 (deftest gate-census-rejects-every-loss-and-duplicate

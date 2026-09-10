@@ -162,15 +162,32 @@ case "$uname_s" in
   *)
     say "  mode" ":path-socket (no abstract Unix namespace on $uname_s)" ;;
 esac
-if [ -n "${GATE_MEMAVAIL_MIB:-}" ]; then
-  say "  memory" "declared by GATE_MEMAVAIL_MIB=$GATE_MEMAVAIL_MIB"
-elif [ -r /proc/meminfo ]; then
-  say "  memory" "read from /proc/meminfo"
-elif command -v vm_stat >/dev/null 2>&1; then
-  say "  memory" "read from vm_stat + sysctl hw.memsize"
+# ASK THE READER THE GATE ASKS, exactly as the temp-base check above does.
+#
+# An earlier draft of this block decided for ITSELF that memory was readable --
+# `[ -r /proc/meminfo ]`, else `command -v vm_stat` -- and printed the SOURCE it
+# had found. On the skiff (2026-09-10) it printed "read from vm_stat + sysctl
+# hw.memsize" and `make test` refused "available memory is unknown" on the same
+# box minutes later. A preflight that prints a source the gate cannot use is
+# worse than one that prints nothing, because it moves the operator on. So this
+# runs `clj-surgeon.gate-memory`, which is the function the coordinator calls;
+# there is no second implementation left to be green.
+if command -v bb >/dev/null 2>&1; then
+  mem_line=$(cd "$repo" 2>/dev/null && bb --classpath test -m clj-surgeon.gate-memory 2>&1 \
+               | grep -v '^Picked up ' | tail -1)
 else
-  say "  memory" "UNREADABLE -- set GATE_MEMAVAIL_MIB to run the gate"
+  mem_line=""
 fi
+case "$mem_line" in
+  OK*)
+    say "  memory" "${mem_line#OK }" ;;
+  REFUSED*)
+    say "  memory" "${mem_line#REFUSED }"
+    say "" "\`make test\` will refuse at the gate with this exact refusal."
+    gate_blockers="$gate_blockers unreadable-memory" ;;
+  *)
+    say "  memory" "not checked -- bb could not run the gate's reader" ;;
+esac
 
 echo "----------------------------------------------------------------"
 if [ -n "$missing_required" ]; then
