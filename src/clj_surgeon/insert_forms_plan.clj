@@ -226,6 +226,8 @@
   (loop [i 0 result [0]]
     (if (>= i (count s)) result
         (recur (inc i) (cond-> result (= \newline (.charAt s i)) (conj (inc i)))))))
+;; @spec INSERT-FORMS-020
+;; INTENT: INSERT-FORMS-020
 (defn tree [source kind]
   (try
     (let [root (parser/parse-string-all source) ls (starts source)]
@@ -339,6 +341,9 @@
         prefix (subs source start p)]
     (when (str/includes? prefix "\t") (refuse! :unsupported-indentation [:anchor] "Tab in measured source indentation."))
     (.codePointCount source start p)))
+(def ^:dynamic *splice-offset* identity)
+(def ^:dynamic *candidate-text* identity)
+
 (defn offset [^String source left]
   (let [p (or (:end left) 0)]
     (if (nil? left) 0
@@ -413,6 +418,8 @@
                (assoc result position {:byte byte-offset :line line})))
       result)))
 
+;; @spec INSERT-FORMS-019
+;; INTENT: INSERT-FORMS-019
 (defn facts [source candidate inserted p c r before after selection payload-root]
   (let [byte-p (alength (bytes (subs source 0 p))) length (alength (bytes inserted))
         originals (root-inventory before) future (root-inventory after)
@@ -453,7 +460,7 @@
       :inserted_form_ranges (mapv (fn [i form] {:ordinal (inc i) :start_line (line-at (:start form))
                                                 :end_line (line-at (dec (:end form)))}) (range) inserted-roots)
       :preservation {:prefix_sha256 (sha (subs source 0 p)) :suffix_sha256 (sha (subs source p))
-                     :other_forms_checked (count other) :other_forms_unchanged true}
+                     :other_forms_checked (count other) :other_forms_unchanged (every? #(= (:before_sha256 %) (:after_sha256 %)) other)}
       :verification_complete false :verification {:tier "parse+byte-preservation" :behavior "not-run"}
       :concurrency "cooperative-lock+final-recheck" :next_action "none"}
      :detail {:request r :source_bytes (alength (bytes source)) :result_bytes (alength (bytes candidate))
@@ -498,7 +505,7 @@
       (when-not (= count-forms (get-in r [:payload :forms]))
         (refuse! :payload-form-count-mismatch [:payload :forms] "Payload form count differs."
                  {:expected (get-in r [:payload :forms]) :actual count-forms}))
-      (let [selection (resolve-anchor before (:anchor r)) p (offset source (:left selection))
+      (let [selection (resolve-anchor before (:anchor r)) p (*splice-offset* (offset source (:left selection)))
             c (+ (column source (:column-node selection)) (if (:empty? selection) 2 0))
             adjusted (indent payload literals c newline) adjusted-root (tree adjusted :payload)
             _ (when-not (= (spellings payload-root) (spellings adjusted-root))
@@ -507,7 +514,7 @@
                           adjusted (when-not (str/ends-with? adjusted "\n") newline))
             _ (when (> (+ (alength (bytes source)) (alength (bytes inserted))) (:candidate limits))
                 (refuse! :limit-exceeded [:candidate] "Candidate exceeds 16 MiB before materialization."))
-            candidate (str (subs source 0 p) inserted (subs source p)) after (tree candidate :candidate)]
+            candidate (*candidate-text* (str (subs source 0 p) inserted (subs source p))) after (tree candidate :candidate)]
         (merge {:ok true :candidate candidate :offset p :inserted inserted}
                (facts source candidate inserted p c r before after selection adjusted-root))))
     (catch Exception e
