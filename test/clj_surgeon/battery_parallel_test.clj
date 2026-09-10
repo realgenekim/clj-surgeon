@@ -561,10 +561,15 @@
 ;; green. Two defects were behind that one line and BOTH are pinned here and
 ;; in `test/gate_memory_one_reader_test.sh`:
 ;;   1. the preflight never called a reader (it checked that `vm_stat` EXISTED);
-;;   2. the reader could not have worked if it had -- it handed babashka.process
-;;      a COLLECTION where that API takes varargs, so it launched a program
-;;      named `(vm_stat)`. Linux never noticed, because linux answers from
-;;      /proc/meminfo and never reaches the shell-out at all.
+;;   2. the reader could not have worked if it had -- it handed babashka's
+;;      process API a COLLECTION where that API takes varargs, so it launched a
+;;      program named `(vm_stat)`. Linux never noticed, because linux answers
+;;      from /proc/meminfo and never reaches the shell-out at all.
+;;
+;; (Spelled "babashka's process API" and not the namespace: this is a FAST-lane
+;;  namespace, and `no-fast-lane-namespace-spells-a-child-process` reads the
+;;  source for that spelling. It is right to -- a fast-lane test must launch no
+;;  child -- and it caught this comment on the first full run.)
 (deftest darwin-memory-reader-is-the-documented-arithmetic
   (let [stat (str "Mach Virtual Memory Statistics: (page size of 16384 bytes)\n"
                   "Pages free:                              300000.\n"

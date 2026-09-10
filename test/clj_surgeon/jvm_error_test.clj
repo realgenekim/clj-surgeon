@@ -33,8 +33,9 @@
    here from their `ns` forms rather than assumed.
 
    This namespace runs in the BB lane on purpose: the runtime that cares is the
-   one doing the checking."
-  {:lane :bb}
+   one doing the checking. A bb namespace is declared in `test/run_all.clj` and
+   carries NO `{:lane ...}` ns metadata: that key names a JVM lane, and
+   `lane-manifest-test` reads it as a claim to be in `lane-manifest/manifest`."
   (:require
    [clj-surgeon.jvm-error :as jvm]
    [clojure.edn :as edn]
@@ -77,12 +78,20 @@
              (str file)))))
 
 (defn required-namespaces
-  "The `clj-surgeon.*` namespaces an `ns` form requires. Read from the ns form
-  ONLY, so a namespace merely NAMED in prose does not enlarge the closure."
+  "The `clj-surgeon.*` namespaces an `ns` form requires.
+
+  Read from the `:require` CLAUSE, not from the ns form: a docstring naming a
+  namespace is prose, and reading the whole form pulled JVM-only namespaces
+  into the closure through a sentence explaining a bug. (Measured on the first
+  full run: `clj-surgeon.mcp-admit-tool` entered a babashka closure it cannot
+  even load -- it requires nrepl -- because a docstring mentioned the test that
+  requires it. Closure 130 instead of 100.)"
   [source]
-  (->> (re-seq #"clj-surgeon\.[a-zA-Z0-9.*+!_?<>=-]+" (ns-form source))
-       (map symbol)
-       distinct))
+  (let [form (ns-form source)
+        clause (some-> (str/index-of form "(:require") (as-> i (subs form i)))]
+    (->> (re-seq #"clj-surgeon\.[a-zA-Z0-9.*+!_?<>=-]+" (or clause ""))
+         (map symbol)
+         distinct)))
 
 (defn babashka-closure
   "Every file babashka loads when it runs `test/run_all.clj`: the declared
