@@ -741,3 +741,5 @@ B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa;
 ## STATE at 2026-09-10T17:10Z — stage 0 reports in: public candidate 57740672 (manifest, scan green-ish 447+860 allowlisted; NOT to publish), parity harness 4b594926 (round 2, ships after skiff-fixes), skiff-fixes shipping (ship-skiff-fixes), seat-path defects landing (fable/seat-path-defaults, Sonnet). Gene's D1–D8 pending.
 
 ## STATE at 2026-09-10T17:33Z — trunk 13635f74 = stable/2026-09-10.1 (skiff fixes landed; mcp exit 11 open, logs requested from the mayor); 7906 srv7906m + CLI on it. In flight: parity round 3, seat-path defaults landing (Sonnet). Public candidate 57740672 = manifest only. Gene's D1–D8 pending.
+
+## STATE at 2026-09-10T18:18Z — parity harness PARKED at the cap (fable/parity-harness b204521f; DoD in inbox). Trunk 13635f74 = stable/2026-09-10.1. In flight: seat-path defaults round 2 (new branch fable/seat-path-defaults-r2). Public candidate = manifest. Mayor: second Mac receipt requested (inb-8818c3). Gene: D1–D8.
