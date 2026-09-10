@@ -265,6 +265,28 @@
           "the exact regression: crafted mount text proved real disk")
       (is (contains? #{"tmpfs" :unknown} answer)
           "a covering row is read, or the table refuses -- never a fallback")))
+  ;; @spec MCP-OP-TMPHYG-013
+  (testing "Sol SKIFF-INSTALL-FENCE-001 round 2. A trailing space is a legal
+            Unix path byte. The parser captured the mount point correctly and
+            then ran str/trim over it, so the covering row `/Volumes/ram `
+            became `/Volumes/ram`, stopped covering the real target, and the `/`
+            row proved apfs for a tmpfs path -- the same safety class as the
+            crafted ` on ` row, reintroduced by a normalisation nobody asked for.
+            Exactly one byte is removed: the space delimiting the option group."
+    (let [;; TWO spaces before `(tmpfs`: the first is the last byte of the
+          ;; mount point, the second is the delimiter.
+          table (str "/dev/root on / (apfs, local)\n"
+                     "/dev/ram on /Volumes/ram  (tmpfs, local)")
+          answer (tmp-leak/parse-darwin-mount-table table "/Volumes/ram /T")]
+      (is (not= "apfs" answer)
+          "trimming the mount point let the root row prove past a tmpfs mount")
+      (is (= "tmpfs" answer)))
+    (testing "and the trimmed and untrimmed spellings are DISTINCT mount points"
+      (let [table (str "/dev/root on / (apfs, local)\n"
+                       "/dev/a on /Volumes/ram (hfs, local)\n"
+                       "/dev/b on /Volumes/ram  (tmpfs, local)")]
+        (is (= "hfs" (tmp-leak/parse-darwin-mount-table table "/Volumes/ram/T")))
+        (is (= "tmpfs" (tmp-leak/parse-darwin-mount-table table "/Volumes/ram /T"))))))
   (testing "a mount point containing PARENTHESES still parses: the trailing
             group is the last (...) and flags never contain parentheses"
     (let [table (str "/dev/root on / (apfs, local)\n"

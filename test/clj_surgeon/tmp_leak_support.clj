@@ -138,7 +138,9 @@
 
    The mount point is whatever lies between the device token and the trailing
    parenthesised group -- it is never found by searching for a separator, because
-   a mount point may legally CONTAIN the separator. The trailing group is the
+   a mount point may legally CONTAIN the separator. Exactly ONE byte is removed,
+   the single space delimiting the option group; a mount point that legally ends
+   in a space keeps it. The trailing group is the
    last `(...)` on the line and may not itself contain parentheses, so a mount
    point that contains them (`/Volumes/My (Disk)`) still parses.
 
@@ -170,8 +172,20 @@
         rows (reduce (fn [acc line]
                        (if-let [[_ mnt types] (re-matches darwin-mount-row line)]
                          (let [fstype (str/trim (first (str/split types #",")))]
-                           (if (and (seq (str/trim mnt)) (seq fstype))
-                             (conj acc [(str/trim mnt) fstype])
+                           ;; `mnt` is stored BYTE-FOR-BYTE. Sol
+                           ;; SKIFF-INSTALL-FENCE-001 round 2: this used to be
+                           ;; `(str/trim mnt)`, which silently contradicted the
+                           ;; exact-bytes contract two lines above it. A trailing
+                           ;; space is a legal Unix path byte, so trimming turned
+                           ;; the covering row `/Volumes/ram ` into
+                           ;; `/Volumes/ram`, it stopped covering the real target,
+                           ;; and the `/` row proved apfs for a tmpfs path. The
+                           ;; grammar already removes the one delimiter space
+                           ;; before the option group and nothing else; any
+                           ;; further normalisation here is a second, invisible
+                           ;; parser disagreeing with the first.
+                           (if (and (not (str/blank? mnt)) (seq fstype))
+                             (conj acc [mnt fstype])
                              (reduced :unknown)))
                          (reduced :unknown)))
                      [] lines)]
