@@ -2,6 +2,7 @@
   (:require
    [clj-surgeon.insert-forms :as insert]
    [clj-surgeon.insert-forms-oracle :as oracle]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clojure.java.io :as io]
    [clojure.test :refer [is]])
   (:import
@@ -40,10 +41,13 @@
   (let [dir (.toFile (Files/createTempDirectory
                        (.toPath (io/file (System/getProperty "java.io.tmpdir")))
                        "insert-" (make-array java.nio.file.attribute.FileAttribute 0)))
-        file (io/file dir "src/example.clj")]
+        workspace (io/file dir "workspace")
+        file (io/file workspace "src/example.clj")]
     (try
       (.mkdirs (.getParentFile file))
       (spit file s)
-      (f dir file (assoc (request s) :workspace_root (.getCanonicalPath dir)))
+      (binding [artifacts/*artifact-root* (str (io/file dir "artifacts"))]
+        (with-redefs-fn {(ns-resolve 'clj-surgeon.file-ops 'publish-monitors) (atom {})}
+          #(f workspace file (assoc (request s) :workspace_root (.getCanonicalPath workspace)))))
       (finally
         (doseq [p (reverse (file-seq dir))] (io/delete-file p true))))))
