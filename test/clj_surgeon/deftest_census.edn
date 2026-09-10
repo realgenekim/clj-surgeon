@@ -372,6 +372,7 @@
   clj-surgeon.mcp-alias-migration-test/artifact-root-refuses-another-users-path
   clj-surgeon.mcp-alias-migration-test/artifact-root-refuses-as-unknown-not-accepted-when-classification-is-unavailable
   clj-surgeon.mcp-alias-migration-test/artifact-root-refuses-blank
+  clj-surgeon.mcp-alias-migration-test/artifact-root-refuses-lexical-home-traversal
   clj-surgeon.mcp-alias-migration-test/artifact-root-refuses-ram-backed
   clj-surgeon.mcp-alias-migration-test/artifact-root-refuses-relative
   clj-surgeon.mcp-alias-migration-test/artifact-root-retains-the-controlled-parity-harness-override
