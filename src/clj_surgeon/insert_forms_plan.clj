@@ -12,18 +12,34 @@
    (java.nio.charset CodingErrorAction StandardCharsets)
    (java.security MessageDigest)))
 
-(def limits {:request 2097152 :source 8388608 :payload 1048576 :forms 1000 :depth 512})
-(defn bytes [^String s] (.getBytes s StandardCharsets/UTF_8))
+(def limits {:request 2097152 :source 8388608 :payload 1048576 :forms 1000 :depth 512 :units 100000 :candidate 16777216})
+(defn bytes [^String s]
+  (loop [i 0]
+    (when (< i (.length s))
+      (let [c (.charAt s i)]
+        (cond
+          (Character/isHighSurrogate c)
+          (if (and (< (inc i) (.length s)) (Character/isLowSurrogate (.charAt s (inc i))))
+            (recur (+ i 2))
+            (throw (ex-info "Unpaired Unicode surrogate." {:error-type :invalid-request :at [:encoding]})))
+          (Character/isLowSurrogate c)
+          (throw (ex-info "Unpaired Unicode surrogate." {:error-type :invalid-request :at [:encoding]}))
+          :else (recur (inc i))))))
+  (.getBytes s StandardCharsets/UTF_8))
 (defn sha [s]
   (apply str (map #(format "%02x" (bit-and 255 %))
                   (.digest (MessageDigest/getInstance "SHA-256")
                            (if (string? s) (bytes s) s)))))
 (defn refuse! [kind at message & [data]]
   (throw (ex-info message (merge {:error-type kind :at at} data))))
+(defn diagnostic [message]
+  (let [s (or message "Operation failed.")]
+    (if (> (count s) 512)
+      (str (subs s 0 (if (Character/isHighSurrogate (.charAt ^String s 511)) 511 512)) "…") s)))
 (defn refusal [e]
   (merge {:state "refused" :committed false :mutation_attempted false
           :source_unchanged true :ok false :operation "insert_forms"
-          :error (.getMessage ^Exception e)
+          :error (diagnostic (.getMessage ^Exception e))
           :next_action (if (#{:source-hash-mismatch :source-changed-before-commit}
                             (:error-type (ex-data e))) "refresh-source" "revise-request")
           :remedy "Revise the field named by at using the reported contract."}
@@ -41,6 +57,37 @@
     (catch Exception _ (refuse! (if (= kind :request) :invalid-request :unsupported-source)
                          [kind] "Strict UTF-8 required."))))
 
+(defn complete-expression [stack]
+  (loop [stack stack]
+    (cond (empty? stack) stack
+          (= :collection (peek stack)) stack
+          (> (peek stack) 1) (conj (pop stack) (dec (peek stack)))
+          :else (recur (pop stack)))))
+
+(defn shape-limit! [source literals kind]
+  (let [regions (loop [pairs literals start 0 result []]
+                  (if-let [[a b] (first pairs)]
+                    (recur (next pairs) b (conj result (subs source start a) :literal))
+                    (conj result (subs source start))))
+        tokens (mapcat #(if (= :literal %) [:literal]
+                          (re-seq #";[^\r\n]*|[\s,]+|~@|#_|#\{|#\(|\\(?:[a-zA-Z]+|.)|[()\[\]{}'`~@^]|[^\s,()\[\]{}'`~@^;]+" %)) regions)]
+    (loop [tokens (seq tokens) count-units 0 stack []]
+      (when-let [token (first tokens)]
+        (when (>= count-units (:units limits))
+          (refuse! :limit-exceeded [kind] "Lexical shape exceeds 100000 units before parsing."))
+        (let [stack (cond
+                      (= token :literal) (complete-expression stack)
+                      (or (str/blank? token) (str/starts-with? token ";") (re-matches #"[\s,]+" token)) stack
+                      (#{"(" "[" "{" "#{" "#("} token) (conj stack :collection)
+                      (#{")" "]" "}"} token) (if (= :collection (peek stack)) (complete-expression (pop stack)) stack)
+                      (= "^" token) (conj stack 2)
+                      (or (#{"'" "`" "~" "~@" "@" "#_"} token)
+                          (and (str/starts-with? token "#") (not (str/starts-with? token "##")))) (conj stack 1)
+                      :else (complete-expression stack))]
+          (when (> (count stack) (:depth limits))
+            (refuse! :limit-exceeded [kind] "Reader/container depth exceeds 512 before parsing."))
+          (recur (next tokens) (inc count-units) stack))))))
+
 ;; Lexical preflight is bounded before the recursive CST parser. It never reads data.
 ;; @spec INSERT-FORMS-011
 ;; INTENT: INSERT-FORMS-011
@@ -51,7 +98,7 @@
     (when (str/starts-with? s "\uFEFF") (refuse! unsupported [kind] "BOM is unsupported."))
     (loop [i 0 mode :code depth 0 literal-start nil literals []]
       (if (>= i size)
-        literals
+        (do (shape-limit! s literals kind) literals)
         (let [c (.charAt s i) next-c (when (< (inc i) size) (.charAt s (inc i)))]
           (case mode
             :comment (recur (inc i) (if (#{\newline \return} c) :code :comment) depth nil literals)
@@ -69,8 +116,8 @@
                                            (recur (inc j)) j))]
                                (recur end :code depth nil literals))
                     (and (= c \#) (or (and (= kind :request) (not (#{\{ \:} next-c)))
-                                       (#{\= \?} next-c)
-                                      (and (= next-c \_) (not= kind :source))))
+                                    (#{\= \?} next-c)
+                                    (and (= next-c \_) (not= kind :source))))
                     (refuse! unsupported [kind] "Unsupported reader syntax.")
                     (#{\( \[ \{} c)
                     (do (when (>= depth (:depth limits))
@@ -255,7 +302,7 @@
     (if (= "top-level" (:scope anchor))
       (let [index (.indexOf roots owner) index (if (= "after" (:position anchor)) (inc index) index)]
         {:owner owner :container root :body roots :index index
-         :left (when (pos? index) (nth roots (dec index))) :column-node (unwrap owner)})
+         :left (when (pos? index) (nth roots (dec index))) :column-node owner})
       (let [selected (reduce
                        (fn [{:keys [body]} [i segment]]
                          (let [match (one! (filterv (fn [node]
@@ -294,7 +341,14 @@
 ;; @spec INSERT-FORMS-010
 ;; INTENT: INSERT-FORMS-010
 (defn indent [payload literals c newline]
-  (let [inside? (fn [i] (some (fn [[a b]] (< a i b)) literals))
+  (let [literals (vec literals)
+        inside? (fn [i]
+                  (loop [lo 0 hi (dec (count literals))]
+                    (when (<= lo hi)
+                      (let [mid (quot (+ lo hi) 2) [a b] (nth literals mid)]
+                        (cond (<= i a) (recur lo (dec mid))
+                              (>= i b) (recur (inc mid) hi)
+                              :else true)))))
         lines (vec (re-seq #"[^\r\n]*(?:\r\n|\n|\r|\z)" payload))
         entries (loop [xs lines p 0 out []]
                   (if-let [s (first xs)] (recur (next xs) (+ p (count s)) (conj out [p s])) out))
@@ -303,7 +357,16 @@
                      (when (str/includes? indentation "\t")
                        (refuse! :unsupported-indentation [:payload] "Tab in payload indentation."))
                      (count indentation)))
-        m (if (seq measured) (apply min measured) 0)]
+        m (if (seq measured) (apply min measured) 0)
+        projected (reduce + 0
+                          (for [[p line] entries]
+                            (let [ending (re-find #"(?:\r\n|\n|\r)$" line)
+                                  changed? (and (not (inside? p)) (not (str/blank? line)))
+                                  normalize? (and ending (not (inside? (+ p (- (count line) (count ending))))))]
+                              (+ (alength (bytes line)) (if changed? (- c m) 0)
+                                 (if normalize? (- (count newline) (count ending)) 0)))))]
+    (when (> projected (:candidate limits))
+      (refuse! :limit-exceeded [:candidate] "Reindented payload exceeds candidate byte ceiling before materialization."))
     (apply str
            (for [[p original-line] entries]
              (let [s original-line
@@ -328,16 +391,38 @@
 ;; INTENT: INSERT-FORMS-013
 ;; INTENT: INSERT-FORMS-016
 ;; INTENT: INSERT-FORMS-017
+(defn position-facts [s positions]
+  (loop [positions (sort (set positions)) previous 0 byte-offset 0 line 1 result {}]
+    (if-let [position (first positions)]
+      (let [span (subs s previous position)
+            byte-offset (+ byte-offset (alength (bytes span)))
+            line (+ line (count (re-seq #"\n" span)))]
+        (recur (next positions) position byte-offset line
+               (assoc result position {:byte byte-offset :line line})))
+      result)))
+
 (defn facts [source candidate inserted p c r before after selection payload-root]
   (let [byte-p (alength (bytes (subs source 0 p))) length (alength (bytes inserted))
-        line-at #(inc (count (re-seq #"\n" (subs candidate 0 %))))
         originals (root-inventory before) future (root-inventory after)
+        future-index (into {} (map-indexed (fn [i form] [(:start form) i]) future))
         top? (= "top-level" (get-in r [:anchor :scope]))
         inserted-roots (filterv #(and (<= p (:start %)) (<= (:end %) (+ p (count inserted))))
                          (if top? future (:body (resolve-anchor after (:anchor r)))))
-        retained (if top? (filterv #(not (some #{%} inserted-roots)) future) future)
+        inserted-starts (set (map :start inserted-roots))
+        retained (if top? (filterv #(not (inserted-starts (:start %))) future) future)
+        trivia (filterv #(#{:whitespace :newline :comment :comma} (:tag %))
+                        (tree-seq (comp seq :children) :children before))
+        before-positions (position-facts source (mapcat (juxt :start :end) trivia))
+        after-positions (position-facts candidate
+                           (concat [p (+ p (dec (count inserted)))]
+                             (mapcat (fn [form] [(:start form) (dec (:end form))]) inserted-roots)
+                             (mapcat (fn [node]
+                                       (for [v [(:start node) (:end node)]]
+                                         (if (>= v p) (+ v (count inserted)) v))) trivia)
+                             [(+ p (count inserted))]))
+        line-at #(get-in after-positions [% :line])
         entries (mapv (fn [i a b]
-                        {:before_index (inc i) :after_index (inc (.indexOf future b))
+                        {:before_index (inc i) :after_index (inc (future-index (:start b)))
                          :before_sha256 (sha (raw a)) :after_sha256 (sha (raw b))})
                       (range) originals retained)
         owner-index (.indexOf originals (:owner selection))
@@ -360,7 +445,28 @@
       :verification_complete false :verification {:tier "parse+byte-preservation" :behavior "not-run"}
       :concurrency "cooperative-lock+final-recheck" :next_action "none"}
      :detail {:request r :source_bytes (alength (bytes source)) :result_bytes (alength (bytes candidate))
-              :resolved_anchor (select-keys selection [:index :empty?])
+              :resolved_anchor
+              {:owner (merge (get-in r [:anchor :owner])
+                             {:root_index (inc owner-index)
+                              :start (:start (:owner selection)) :end (:end (:owner selection))})
+               :scope (get-in r [:anchor :scope]) :arity (get-in r [:anchor :arity])
+               :testing_path (get-in r [:anchor :testing_path] [])
+               :container_span (select-keys (:container selection) [:start :end])
+               :body_child_boundary (:index selection) :splice_offset byte-p}
+              :trivia_spans
+              (mapv (fn [node]
+                      (let [a (:start node) b (:end node)
+                            spans (cond (<= b p) [[a b]]
+                                        (>= a p) [[(+ a (count inserted)) (+ b (count inserted))]]
+                                        :else [[a p] [(+ p (count inserted)) (+ b (count inserted))]])
+                            surviving (apply str (map (fn [[x y]] (subs candidate x y)) spans))]
+                        {:kind (name (:tag node))
+                         :before_start (get-in before-positions [a :byte])
+                         :before_length (alength (bytes (raw node)))
+                         :after_spans (mapv (fn [[x y]] {:offset (get-in after-positions [x :byte])
+                                                         :length (alength (bytes (subs candidate x y)))}) spans)
+                         :before_sha256 (sha (raw node)) :after_sha256 (sha surviving)}))
+                    trivia)
               :preservation_entries entries
               :inverse_splice {:offset byte-p :remove_sha256 (sha inserted) :remove_length length}}}))
 
@@ -387,6 +493,8 @@
                 (refuse! :candidate-structure-mismatch [:payload] "Reindentation changed tokens."))
             inserted (str (when-not (or (zero? p) (= \newline (nth source (dec p)))) newline)
                           adjusted (when-not (str/ends-with? adjusted "\n") newline))
+            _ (when (> (+ (alength (bytes source)) (alength (bytes inserted))) (:candidate limits))
+                (refuse! :limit-exceeded [:candidate] "Candidate exceeds 16 MiB before materialization."))
             candidate (str (subs source 0 p) inserted (subs source p)) after (tree candidate :candidate)]
         (merge {:ok true :candidate candidate :offset p :inserted inserted}
                (facts source candidate inserted p c r before after selection adjusted-root))))

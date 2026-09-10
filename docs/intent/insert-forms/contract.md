@@ -34,6 +34,16 @@ Refuse symlink components, traversal, nonregular files, missing files and hardli
 with link count >1. Preserve file permission bits. No file creation or Git commit.
 Bound before parsing: request 2 MiB, source 8 MiB, payload 1 MiB, 1,000 inserted
 forms, CST depth 512. Exceeding any bound is `:limit-exceeded`, never truncation.
+
+Builder amendment (2026-09-10): source, payload and request parsing additionally
+refuse more than 100,000 lexical units (tokens, reader prefixes, delimiters,
+comments and whitespace runs), or reader/container nesting beyond 512, before
+recursive parsing. The complete candidate is limited to 16 MiB of UTF-8; projected
+indentation expansion is checked before materializing the adjusted payload, and
+the complete candidate size is checked before materializing it. Staging and
+read-back use this candidate ceiling, while initial capture retains the 8 MiB
+source ceiling. These bounds refuse with `:limit-exceeded`; no truncation occurs.
+
 LF and uniform CRLF sources are accepted; mixed newlines refuse. No BOM.
 `.cljs`, `.cljc`, reader conditionals and reader-eval in source/payload refuse v1.
 Parse syntax without evaluation, alias resolution, macroexpansion or data readers.
