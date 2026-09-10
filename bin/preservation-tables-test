@@ -70,10 +70,14 @@
    property below decides; these hints only fail early with a clearer message."
   [src]
   (let [defs (count (re-seq #"\(defn file-refusal\b" src))
-        tables (count (re-seq #"\(def [a-z-]*refusal-kinds\b" src))]
+        tables (count (re-seq #"\(def [a-z-]*refusal-kinds\b" src))
+        producers (count (re-seq #"\(defn refusal-rows\b" src))
+        callers (count (re-seq #"\(file-refusal " src))]
     (cond-> []
       (not= 1 defs) (conj (str defs " definitions of `file-refusal` — there must be exactly one"))
-      (not= 1 tables) (conj (str tables " refusal-kind collections — there must be exactly one")))))
+      (not= 1 tables) (conj (str tables " refusal-kind collections — there must be exactly one"))
+      (not= 1 producers) (conj (str producers " definitions of `refusal-rows` — there must be exactly one"))
+      (not= 1 callers) (conj (str callers " call sites of `file-refusal` — only `refusal-rows` may call it")))))
 
 ;; ---- the independent reference dispatch -----------------------------------
 ;; Written here, from each row's declarative `:on` spec, so it is not the brief's
@@ -498,9 +502,20 @@
                             "              (when ((predicate-for on) f) {:kind kind :detail (detail f)}))\n"
                             "            refusal-kinds)))\n\n"
                             "(when-let [f (:refusal-probe (:opts cli))]")))
-        declares-maps (mapv #(assoc % :declares ["d"]) r8-maps)]
+        declares-maps (mapv #(assoc % :declares ["d"]) r8-maps)
+        pipeline-seam (write! "b-seam"
+                        (-> brief-src
+                            (str/replace "(defn refusal-rows"
+                              (str "(defn pipeline-refusal [f]\n"
+                                   "  (if (seq (:declares f))\n"
+                                   "    {:kind \"declaration-present\" :detail \"probe/pipeline drift\"}\n"
+                                   "    (file-refusal f)))\n\n"
+                                   "(defn refusal-rows"))
+                            (str/replace "                      :let [r (file-refusal f)]"
+                                         "                      :let [r (pipeline-refusal f)]")))]
     (doseq [[label path] [["round-13 literal branch" literal]
-                          ["round-14 second definition over its own table" second-def]]]
+                          ["round-14 second definition over its own table" second-def]
+                          ["round-15 second dispatch inside the pipeline path" pipeline-seam]]]
       (let [hints (file-refusal-shape-hints (slurp path))
             divs (try (dispatch-divergences path refusal-table declares-maps)
                       (catch Exception _ [:probe-failed]))]
@@ -543,6 +558,17 @@
                  :new_forward_refs :retargeted :rewritten_sites]]
         (check! (zero? (or (get j c) 0)) "R8 refused file still counted"
                 (str kind ": " (name c) " = " (get j c) " for a tree whose only file is refused")))
+      ;; END TO END: the rows the renderer printed must be the rows the pipeline
+      ;; produced. A renderer that computed its own would be a second producer.
+      (let [tbl-rows (into #{} (for [l (str/split-lines md)
+                                     :when (re-find #"^\| (base|candidate|probe) \| " l)
+                                     :let [cs (mapv str/trim (str/split l #"\|"))]]
+                                 [(nth cs 1 nil) (nth cs 2 nil) (nth cs 3 nil)]))
+            json-rows (into #{} (for [r (:refusal_rows j)] [(:tree r) (:path r) (:kind r)]))]
+        (check! (= tbl-rows json-rows) "R8 rendered rows differ from the pipeline's"
+                (str kind ": the reconciliation table printed " (pr-str tbl-rows)
+                     " while the pipeline produced " (pr-str json-rows)
+                     " — the renderer is not reading `refused-files`")))
       ;; and its name must appear nowhere but the refusal rows and the hard stop
       (let [lines (str/split-lines md)
             in-recon? (atom false)

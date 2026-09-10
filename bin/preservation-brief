@@ -873,14 +873,28 @@
           (when ((predicate-for on) f) {:kind kind :detail (detail f)}))
         refusal-kinds))
 
+;; PB-FENCE-022. `refusal-rows` is the ONE producer of refusal rows. The index
+;; pipeline calls it, the markdown renderer and the JSON summary read its result,
+;; and the probe below exercises IT — not `file-refusal`. Round 15's escape was a
+;; second dispatch inserted between the pipeline and the probed function: both call
+;; sites existed, the prose said they were the same, and nothing executable said so.
+(defn refusal-rows
+  "Refusal rows for a sequence of [tree-label index] pairs. The only producer."
+  [indexes]
+  (vec (sort-by (juxt :tree :path)
+                (for [[tree idx] indexes
+                      [path f] idx
+                      :let [r (file-refusal f)]
+                      :when r]
+                  (assoc r :tree tree :path path)))))
+
 (when-let [f (:refusal-probe (:opts cli))]
-  ;; Entry point for bin/preservation-tables-test R8. It runs the SAME
-  ;; `file-refusal` the index pipeline calls, so a second definition, a shadowing
-  ;; redefinition or a second refusal collection anywhere in this file changes the
-  ;; answer here too. The test compares these answers with a dispatch it rebuilds
-  ;; independently from each row's declarative `:on` spec.
+  ;; Entry point for bin/preservation-tables-test R8. It calls the PIPELINE ENTRY on
+  ;; a synthetic one-file index, so any dispatch the pipeline reaches — including one
+  ;; inserted between the pipeline and `file-refusal` — is exercised here too. There
+  ;; is deliberately no direct call to `file-refusal` in this block.
   (doseq [m (edn/read-string (slurp f))]
-    (println (pr-str (:kind (file-refusal m)))))
+    (println (pr-str (:kind (first (refusal-rows [["probe" {"probe.clj" m}]]))))))
   (System/exit 0))
 
 (when (:dump-tables (:opts cli))
@@ -1337,12 +1351,7 @@
 ;; silence: the hard stop says every listed signal needs a human, so a false signal
 ;; there costs a reviewer real time.
 (def refused-files
-  (vec (sort-by (juxt :tree :path)
-                (for [[tree idx] [["base" base-idx-all] ["candidate" cand-idx-all]]
-                      [path f] idx
-                      :let [r (file-refusal f)]
-                      :when r]
-                  (assoc r :tree tree :path path)))))
+  (refusal-rows [["base" base-idx-all] ["candidate" cand-idx-all]]))
 
 (def refused-paths (into #{} (map :path) refused-files))
 
@@ -2420,6 +2429,7 @@
             :ns_count_failures (count (filter #(= "ns-count" (:kind %)) reconcile-failures))
             :refused_files (count (distinct (map :path refused-files)))
             :refusal_kinds (vec (sort (distinct (map :kind refused-files))))
+            :refusal_rows (mapv #(select-keys % [:tree :path :kind]) refused-files)
             :reconcile_unreported (reduce + 0 (map #(count (:unreported %)) reconcile-failures))
             :unanalysed_platforms (vec (sort (distinct (for [r refused-files
                                                              :when (= "unelaborated-platform" (:kind r))
