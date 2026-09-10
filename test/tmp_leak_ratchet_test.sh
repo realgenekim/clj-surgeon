@@ -20,6 +20,20 @@ cd "$REPO_ROOT"
 FX=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-tmpleak-witness.XXXXXX")
 trap 'chmod -R u+rwX "$FX" 2>/dev/null || true; rm -rf "$FX"' EXIT INT TERM
 
+# `timeout(1)` is GNU coreutils. Stock macOS has neither it nor a BSD
+# equivalent; Homebrew coreutils installs it as `gtimeout`. Resolve once and
+# degrade to no wrapper rather than failing the whole ratchet: the bound is a
+# convenience against a wedged JVM, not the thing under test.
+TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || true)
+run_bounded() {
+  seconds=$1; shift
+  if [ -n "$TIMEOUT_BIN" ]; then
+    "$TIMEOUT_BIN" "$seconds" "$@"
+  else
+    "$@"
+  fi
+}
+
 CP=$(clojure -Spath -A:clj-surgeon/mcp-test)
 PROBE=clj-surgeon.tmp-leak-probe
 
@@ -354,7 +368,7 @@ assert_runner_refuses() {
   ns=$1
   out_file="$FX/runner-$(printf '%s' "$ns" | tr './' '--').out"
   set +e
-  env TMPDIR=/tmp timeout 45 java -cp "$CP" clojure.main -m "$ns" >"$out_file" 2>&1
+  run_bounded 45 env TMPDIR=/tmp java -cp "$CP" clojure.main -m "$ns" >"$out_file" 2>&1
   rc=$?
   set -e
   echo "--- runner $ns (exit=$rc) ---"

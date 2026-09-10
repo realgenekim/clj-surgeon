@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-test_root=$(mktemp -d -t clj-surgeon-kondo-path.XXXXXX)
+test_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-kondo-path.XXXXXX")
 trap 'rm -rf "$test_root"' EXIT HUP INT TERM
 
 test_home="$test_root/home"
