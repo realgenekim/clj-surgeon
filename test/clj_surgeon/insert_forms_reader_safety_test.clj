@@ -3,15 +3,22 @@
   (:require
    [clj-surgeon.insert-forms :as insert]
    [clj-surgeon.insert-forms-support :as h]
-   [clojure.java.io :as io]
-   [clojure.test :refer [deftest is testing]])
-  (:import
-   (java.nio.file Files)))
+   [clojure.test :refer [deftest is]]))
 
 ;; @spec INSERT-FORMS-011
 ;; INTENT-TEST: INSERT-FORMS-011
 (deftest insert-forms-reader-safety-and-limits
 
+  (h/with-file h/source
+    (fn [_ file req]
+      (let [text (str "(def x \"" (char 0xd800) "\")")
+            result (insert/execute! (assoc req :payload {:text text :forms 1}))]
+        (is (= :invalid-request (:error-type result)))
+        (is (= h/source (slurp file))))))
+  (let [s (str (apply str (repeat 50001 "x ")) h/source)]
+    (h/refused s (h/request s) :limit-exceeded))
+  (h/refused h/source (assoc (h/request h/source) :payload
+                        {:text (str (apply str (repeat 513 "'")) "x") :forms 1}) :limit-exceeded)
   (let [s (str (apply str (repeat 32768 " ")) "(defn a [] 1)")
         req (assoc (h/request s) :payload {:text (apply str (repeat 1000 "1\n")) :forms 1000})
         result (insert/plan s req)]
