@@ -725,3 +725,5 @@ B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa;
 ## STATE at 2026-09-10T02:04Z — sublime 6; item 3 at Sol round 17 (fable/proof-burden 10b77576, ship-item3-17); CAP: park after round 18 if no GO; item 1 parked (2f924bee); item 2 blocked on Gene (seat key on gene@anvil2); no landing since 3ea3803e
 
 ## STATE at 2026-09-10T03:14Z — WRAPPED. Item 3 PARKED by Astra on a design finding (fable/proof-burden 10b77576 retained as evidence); item 1 PARKED (2f924bee, needs observer); item 2 blocked on Gene (seat key on gene@anvil2); trunk 3ea3803e; ship v3.7 installed. Next per Astra: fund the review entrance; CLI gets the machinery. Open asks from Gene: benchmark Buster vs Anvil vs anvil2; document MCP vs CLI.
+
+## STATE at 2026-09-10T03:22Z — Gene's order in progress: (1) fable/skiff-install (Opus, 2 h) → ship → (2) inbox to mayor: pull + make install → (3) 4-h tighten squeeze with Astra (lever chosen by astra-squeeze). Buster benchmark assigned to mayor (inb-8bd9ad). Items 1 and 3 PARKED. Item 2 blocked on Gene.
