@@ -2,7 +2,9 @@
 
 **2026-09-10 · forge@anvil · branch `fable/parity-harness` in `/home/forge/src/clj-surgeon-parity`
 (created from tag `stable/2026-09-10`, HEAD proved = `59d8bc0cad8886a028c24e8ffd52e4e5d82185c1`).
-Five commits, authored `forge-anvil`. Nothing pushed.**
+Seven commits, authored `forge-anvil`. Nothing pushed.
+Sol's fence review returned NO-GO on `d1343a87`; both findings are fixed, witnessed, and every
+verdict below was re-measured under the fenced comparator.**
 
 ## The verdict
 
@@ -10,10 +12,10 @@ Five commits, authored `forge-anvil`. Nothing pushed.**
 it on purpose, and with that one input pinned it is byte-identical to stable on all three
 retained specimens.**
 
-Verified at **two** tips, because the branch advanced while this ran: `6f74db0e` (five commits
-ahead of stable) and, after another builder pushed `39699689` + `9405a6eb`, at **`9405a6eb`
-(seven commits ahead)**. Both give the same result, so the verdict is not a snapshot artefact —
-but it is still a claim about a named tip, and the tip is `9405a6eb2fa6f14a08d0fd77d9e7efd85c526973`.
+Verified at **three** tips, because the branch kept advancing while this ran — `6f74db0e`,
+`9405a6eb`, and finally **`d7e9b32ecfed052c168ce1ef1b3595fcedb4bf3b`** under the fenced
+comparator. All three give the same result, so the verdict is not a snapshot artefact — but it
+is still a claim about a named tip, and the tip is `d7e9b32e`.
 
 | run | specimen | verdict | what differed |
 |---|---|---|---|
@@ -22,7 +24,7 @@ but it is still a claim about a named tip, and the tip is `9405a6eb2fa6f14a08d0f
 | stable vs candidate, **as shipped** | alias | **DIVERGENCE** | `[:telemetry :ledger]` and the same path inside the rendered text block |
 | stable vs candidate, **as shipped** | fanout | **PARITY** | — |
 | stable vs candidate, **artifact root pinned** | split · alias · fanout | **PARITY · PARITY · PARITY** | nothing |
-| *(all four rows re-run at tip `9405a6eb`)* | | **identical outcome** | same one divergence as shipped; full parity pinned |
+| *(re-run at tips `9405a6eb` and `d7e9b32e`, the latter under the fenced comparator)* | | **identical outcome** | same one divergence as shipped; full parity pinned |
 
 Every divergence is one deliberate change: `6f74db0e` replaces the hardcoded
 `(def *artifact-root* "/var/tmp/forge")` with a per-user derived root
@@ -67,8 +69,9 @@ Four things, per specimen, per build:
 
 ## The normalisation list
 
-`bin/parity/volatile-fields.edn` — **14 fields, 6 tree-excludes, every one carrying its physical
-reason and the observation that produced it.** Anything not on it must be byte-identical.
+`bin/parity/volatile-fields.edn` — **14 fields, 3 tree-excludes, every one carrying its physical
+reason and a machine-checked reference to the observation that produced it.** Anything not on it
+must be byte-identical, and a rule that cannot name its observation refuses the run.
 
 The list was not written from imagination. **The stable-vs-stable control was run FIRST and it
 failed**: eleven fields differed between two runs of the identical executor. Each was then
@@ -116,6 +119,61 @@ names this port, and records that pid; (c) kills the java process, waits for the
 quiet, and prints `LEAKED` if it does not — so a leak is reported by the run that caused it
 instead of being inherited by the next one. Every MCP line in every run since reads
 `cwd proved = <build>`.
+
+## The fence review, and what it cost
+
+Sol reviewed `d1343a87` and returned **NO-GO** with two controls that produced a false `PARITY`.
+Both were real, and both are the same disease this harness exists to treat — a verifier that
+could not see its own subject.
+
+**PARITY-FENCE-001 (HIGH) — the declaration could be widened silently.** The comparator consumed
+every rule without checking it carried anything. Sol added
+`{:key :unobserved_guard :match :key :to "<UNOBSERVED>"}` with no `:reason` and no `:evidence`,
+and the comparator honoured it and hid a real difference. **A normalisation is permission for the
+candidate to change a field unnoticed, so it now has to be paid for:**
+
+- the declaration is validated **before anything is compared**. Every rule — field rules and tree
+  exclusions alike — needs a non-empty `:reason` and an `:evidence` map naming
+  `{:run, :specimen, :path}`. A rule missing either **refuses the whole run and names the rule**.
+  `REFUSED` is a third verdict, exit 2, and is never reported as parity;
+- `:evidence` must resolve against `bin/parity/observed-volatility.edn`, which is **generated, not
+  written**. `bin/parity/observe-volatility.clj` compares the two captured sides of a
+  stable-vs-stable run with **no normalisation at all**, and the fixture trees with **no
+  exclusions**, and emits every path that differed between two runs of one build (51 observations).
+  A rule may exist because a run showed the field differing, and for no other reason.
+
+Running that generator immediately paid for the exclusions Sol flagged as unevidenced — and
+**killed three of the six**. `.cpcache/**`, `.clj-surgeon/**` and `**/.nrepl-port` never differ;
+they are gone, and those files are now hashed like every other file. `.git/**`,
+`.clj-surgeon.edn` and `00SERVER-LOGS.txt` kept theirs, each naming the exact tree path the
+observation run saw diverge.
+
+**PARITY-FENCE-002 (CRITICAL) — a receipt missing on one side was skipped, not compared.** The
+on-disk comparison was guarded by `(and exists-A exists-B)`, and because `.clj-surgeon/**` was
+also excluded from the tree manifest, nothing else saw the missing artifact. **Presence is now
+part of parity, for every compared artifact:**
+
+- captured on one side, missing on the other → **DIVERGENCE** naming it;
+- missing on **both** → PARITY only where the specimen declares `:expects-receipt false` in
+  `bin/parity/specimens.edn`. A specimen with no entry **refuses**: absence can only be accepted
+  where it was predicted;
+- a published `receipt_path` naming a file nobody captured → reported;
+- an artifact the harness always writes, missing on both sides, is a **capture failure** and
+  refuses rather than passing.
+
+`bin/parity/self-test` carries **ten witnesses, 10/10 passing**, including Sol's two controls
+verbatim: inject the undocumented rule, and move build B's `receipt.edn` aside. Each fails first
+if its fence is removed.
+
+Sol's other five requested checks passed unchanged: `:map_hash`/`:snapshot_hash`/`:candidate_hash`
+are on no normalisation rule and a one-character plant in `:candidate_hash` returns
+`DIVERGENCE 1`; the occupied-port guard refuses and records `server-unavailable`; build isolation
+holds (`/proc` cwd, private port in argv, no reference to the installed launcher or 7906); the
+port policy refuses 7888/7890/7894/7895 and all of 8300–8339.
+
+**All verdicts in this report were re-measured under the fenced comparator** — stable-vs-stable
+PARITY on all three specimens, both planted builds still stopping with the field named, the
+require reorder still PARITY, and the candidate verdict unchanged.
 
 ## A second, unplanned result: the specimens reproduce across days and builds
 
@@ -185,6 +243,9 @@ its own footprint. `PARITY_KEEP_FIXTURES=1` keeps them for the case that needs t
 | harness | `/home/forge/src/clj-surgeon-parity/bin/parity-run` |
 | comparator | `…/bin/parity/compare.clj` (replays over stored snapshots; no re-execution) |
 | normalisation declaration | `…/bin/parity/volatile-fields.edn` |
+| generated evidence for every rule | `…/bin/parity/observed-volatility.edn` (+ its generator `observe-volatility.clj`) |
+| per-specimen presence expectations | `…/bin/parity/specimens.edn` |
+| witnesses for both fences (10/10) | `…/bin/parity/self-test` |
 | MCP client | `…/bin/parity/mcp-call.py` |
 | run evidence (16 specimen runs) | `/var/tmp/forge/parity/runs/<run-id>/<specimen>/{A,B}/` |
 | recovered specimen provenance | `/var/tmp/forge/plan2/cellC/recovered/specimens.md` |
@@ -194,5 +255,6 @@ Reproduce the verdict:
 ```
 cd /home/forge/src/clj-surgeon-parity
 CLJ_SURGEON_ARTIFACT_ROOT=/var/tmp/forge ./bin/parity-run \
-  sha:stable/2026-09-10 sha:9405a6eb --specimens split,alias,fanout
+  sha:stable/2026-09-10 sha:fable/public-candidate --specimens split,alias,fanout
+./bin/parity/self-test   # the two fences, ten witnesses
 ```
