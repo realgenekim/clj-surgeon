@@ -7,7 +7,7 @@ status: implemented
 # insert_forms v1 atomic requirements
 
 Source authority: 2026-09-10-insert-forms-contract-astra.md, sections 1–9.
-IDs are permanent. All eighteen named witnesses passed with 457 assertions on the implementation snapshot.
+IDs are permanent. The original eighteen witnesses remain required; fix round 1 adds six named regression witnesses across four namespaces.
 
 - [x] **INSERT-FORMS-001**: When a unique root owner is selected, the planner shall insert at its requested adjacent boundary.
 
@@ -81,3 +81,27 @@ IDs are permanent. All eighteen named witnesses passed with 457 assertions on th
 
   Witness: `insert-forms-cli-mcp-parity`. Misreading: infer success from parsing or a write alone. Boundary: the exact variants frozen in the named witness and the source contract remain binding.
 
+
+- [x] **INSERT-FORMS-019**: When candidate structure differs from the requested sibling insertion, the operation shall refuse :candidate-structure-mismatch before publication.
+
+  Witness: `insert-forms-candidate-structure-refuses`. Misreading: parsing alone proves placement. Boundary: a one-byte offset defect must fail even with valid candidate syntax.
+
+- [x] **INSERT-FORMS-020**: When source or candidate parsing fails, the operation shall refuse with the corresponding parse error before publication.
+
+  Witness: `insert-forms-parse-errors-refuse`. Misreading: a parse failure can become generic invalid-request. Boundary: exact error type and unchanged disk bytes.
+
+- [x] **INSERT-FORMS-021**: When inserting siblings, the planner shall reproduce the existing gap without adding redundant blank lines or orphaning body closers.
+
+  Witness: `insert-forms-existing-separators`. Misreading: always append a newline. Boundary: top-level blank gaps, attached comments, body first/last/empty, payload ending in a newline, CRLF.
+
+- [x] **INSERT-FORMS-022**: When a validation refusal is returned, its remedy shall name the missing decision for that refusal type.
+
+  Witness: `insert-forms-refusal-remedies`. Misreading: a generic revise-request sentence suffices. Boundary: stale guards need a fresh read; ambiguous arities name bounded candidates.
+
+- [x] **INSERT-FORMS-023**: When refusal candidates are returned, each shall include kind, name, and line.
+
+  Witness: `insert-forms-candidate-envelope`. Misreading: byte offsets replace owner identity. Boundary: owner, testing-label, and arity candidates retain the ten-entry cap.
+
+- [x] **INSERT-FORMS-024**: When recovering a planned receipt, the recovery reader shall classify the target by comparing its digest with result_hash before source_hash.
+
+  Witness: `insert-forms-planned-receipt-recovery`. Misreading: planned means no write and permits blind replay. Boundary: candidate present, original present, and unrelated bytes are distinct verdicts.

@@ -17,3 +17,12 @@ scratch/artifacts under /var/tmp/forge/insert-fx, no services or pushes.
 Report commits, witness counts, amendments, remaining risks and three uncertain
 choices in /var/tmp/forge/insert-fx/astra-build-report.md. A seam requiring more
 than one paragraph of contract change stops the build for Fable's decision.
+
+Fix round 1 (2026-09-10) supersedes the builder's prewarm requirement for this
+handoff: fix F1, F2, F3 in that order, then the recovery docstring and witness.
+Capture guard-deletion RED in `/var/tmp/forge/insert-fx/fix1-red.log`; amend the
+single §3 gap paragraph and §5 golden; retain every original witness. Regenerate
+and read the census after enrolling new namespaces, run all insert namespaces,
+`make test-fast`, and lint via `~/bin/clj-kondo`. Do not run prewarm in this round.
+Report named-file commits and every changed spacing expectation in
+`/var/tmp/forge/insert-fx/astra-fix1-report.md`; never push.

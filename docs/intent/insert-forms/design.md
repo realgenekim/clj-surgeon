@@ -46,3 +46,23 @@ that reconstructs the splice and hashes every other root form. They reject
 neighbor formatting, comment removal, misplaced body insertion and forged hashes.
 Frozen examples derive from census-named namespaces at base bd124492; their
 provenance does not claim the exact historical incident bytes.
+
+## Fix round 1 after Opus GO-WITH-FIX
+
+Candidate placement is guarded before publication; per-form comparisons compute
+preservation booleans independently of that guard. Dynamic identity seams allow
+witnesses to perturb the splice offset or candidate text without changing source
+code. Deleting the structure guard must make the offset-defect witness fail.
+
+The §3 spacing ruling reuses existing whitespace before the insertion and copies
+its separator after the payload. Body closers stay with the payload unless the
+payload ends with a newline or trailing comment, in which case the closer is indented.
+No formatter runs. Candidate diagnostics include kind, name, and line; each
+refusal type explains its missing decision, including fresh guards for stale reads.
+
+`clj-surgeon.insert-forms/recovery-status` documents recovery from a planned durable
+receipt and classifies a fresh target digest as published, not-published, or changed.
+It does not replay, finalize, or clean up automatically. The six new regression
+witnesses are INSERT-FORMS-019 through INSERT-FORMS-024. Final validation for this
+round is the complete insert suite, census regeneration and diff review, test-fast,
+and lint 0/0; landing-gate-prewarm belongs to the ship's fast lane.

@@ -669,3 +669,16 @@ request-file CLI spellings. Eighteen RED-first witness namespaces cover exact
 boundaries, preservation, refusals, guarded publication and receipts. This is
 capability implementation only; no native-control or automatic-routing admission.
 See [design and requirements](intent/insert-forms/design.md).
+
+### 2026-09-10 — insert_forms v1 Opus fix round 1
+
+Opus found a structure guard whose deletion left 457 assertions green. The new
+injected-offset witness fails with that guard deleted (three failures, including
+changed target bytes), while the restored guard refuses before publication.
+Preservation booleans now compare actual per-form hashes. Fable's spacing ruling
+removes redundant blank lines and orphaned body closers; refusal envelopes gain
+candidate identities and reason-specific remedies. Recovery is a documented digest
+comparison over the planned receipt, with a crash-window witness. Evidence:
+`/var/tmp/forge/insert-fx/opus-redteam-report.md`, `fix1-red.log`, and
+`astra-fix1-report.md`. This is correctness work, not new routing admission or a
+performance claim; Sol review remains outstanding.
