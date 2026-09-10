@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-test_root=$(mktemp -d -t clj-surgeon-cclsp-start.XXXXXX)
+test_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-cclsp-start.XXXXXX")
 trap 'rm -rf "$test_root"' EXIT HUP INT TERM
 
 fake_bin="$test_root/bin"
