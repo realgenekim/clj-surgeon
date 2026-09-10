@@ -120,8 +120,8 @@
                                 normalized (if (and ending (not (literal? ending-start)))
                                              (str (subs line 0 (- (count line) (count ending))) newline) line)]
                             (if (or (str/blank? line) (literal? offset)) normalized
-                                (str (apply str (repeat target-column " ")) (subs normalized minimum))))))]
-    (let [{:keys [breaks count indent closing?]} (gap-policy source destination)
+                                (str (apply str (repeat target-column " ")) (subs normalized minimum))))))
+        {:keys [breaks count indent closing?]} (gap-policy source destination)
           trailing (clojure.core/count (filter #{\newline} (or (re-find #"(?:\r?\n)+$" adjusted) "")))
           payload-start (if (pos? breaks) (min target-column (clojure.core/count indent)) 0)]
       (str (when (and (pos? p) (zero? breaks)) (apply str (repeat count newline)))
@@ -129,7 +129,7 @@
            (if closing?
              (when (pos? trailing) (apply str (repeat target-column " ")))
              (str (apply str (repeat (max 0 (- count trailing)) newline))
-                  (when (< p (clojure.core/count source)) indent)))))))
+                  (when (< p (clojure.core/count source)) indent))))))
 
 (defn verify [a b request receipt]
   (try
