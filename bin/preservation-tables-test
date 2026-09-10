@@ -58,8 +58,29 @@
 (def non-binding-macro-vars (:non-binding-macro-vars tables))
 (def core-fn-vars (:core-fn-vars tables))
 (def table-vars (:table-vars tables))
-(def refusal-kinds (:refusal-kinds tables))
-(def defensive-refusal-kinds (:defensive-refusal-kinds tables))
+(def refusal-table (:refusal-kinds tables))
+(def refusal-kinds (mapv :kind (remove :defensive? refusal-table)))
+(def defensive-refusal-kinds
+  (into {} (for [r refusal-table :when (:defensive? r)] [(:kind r) (:reason r)])))
+
+(defn file-refusal-violations
+  "Source-shape check: `file-refusal` must be a pure dispatch over the table. A
+   literal kind string or a `cond`/`case` inside it means a branch exists that the
+   table does not know about — the drift PB-FENCE-020 demonstrated."
+  [src]
+  (let [i (str/index-of src "(defn file-refusal")
+        body (when i (subs src i (min (count src) (+ i 700))))
+        end (when body (or (str/index-of body "\n\n(def") (count body)))
+        body (when body (subs body 0 end))]
+    (cond-> []
+      (nil? body) (conj "bin/preservation-brief has no `file-refusal`")
+      (and body (re-find #"\(cond\b|\(case\b|\(condp\b" body))
+      (conj "`file-refusal` contains a cond/case — it must dispatch only through the table")
+      (and body (seq (remove #{"\"The one reason this file is refused, or nil. Every branch lives in\""}
+                             (map first (re-seq #"\"[a-z][a-z-]{3,}\"" body)))))
+      (conj (str "`file-refusal` contains literal string(s) "
+                 (pr-str (map first (re-seq #"\"[a-z][a-z-]{3,}\"" body)))
+                 " — a kind may exist only as a table row")))))
 
 (defn bare [q] (last (str/split q #"/")))
 (defn nspace [q] (first (str/split q #"/")))
@@ -388,6 +409,20 @@
 (doseq [k (keys refusal-specimens)]
   (check! (some #{k} refusal-kinds) "R8 specimen for an unknown kind"
           (str "`" k "` has a generator but is not in refusal-kinds")))
+;; (b) the table is the dispatch, asserted by reading the source
+(doseq [v (file-refusal-violations brief-src)]
+  (check! false "R8 file-refusal is not table-driven" v))
+;; (c) the drift control: inject a literal branch into a COPY and require (b) to fail
+(let [mutated (str/replace brief-src
+                           "(defn file-refusal"
+                           "(defn file-refusal-injected [f] (cond (seq (:declares f)) \"declaration-present\" :else nil))\n\n(defn file-refusal")
+      mutated (str/replace mutated
+                           "  (some (fn [{:keys [kind predicate detail]}]"
+                           "  (cond (seq (:declares f)) {:kind \"declaration-present\" :detail \"drift\"} :else\n  (some (fn [{:keys [kind predicate detail]}]")]
+  (check! (seq (file-refusal-violations mutated)) "R8 drift control did not fire"
+          (str "a literal `declaration-present` branch injected into a copy of `file-refusal` "
+               "was not detected; the source-shape check cannot see the drift it exists for")))
+
 (doseq [[k reason] defensive-refusal-kinds]
   (check! (not (some #{k} refusal-kinds)) "R8 defensive kind also enumerated"
           (str "`" k "` is both triggerable and defensive"))

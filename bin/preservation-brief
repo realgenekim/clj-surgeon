@@ -780,30 +780,73 @@
      :kind (if nm {[ns' nm] "defmacro"} {})
      :kind-disagree #{}}))
 
-;; PB-FENCE-019. The refusal kinds are ONE enumeration. `file-refusal` dispatches
-;; on it and `bin/preservation-tables-test` R8 iterates it: a kind with no
-;; generated specimen fails the test, and a generator for a kind not listed here
-;; fails it too. Eight branches of a fail-closed boundary cannot sit behind a green
-;; test that only exercises three.
+;; PB-FENCE-019/020. The refusal kinds are ONE TABLE, and that table IS the
+;; dispatch. `file-refusal` reduces to `(some …)` over it and contains no literal
+;; kind string and no `cond`, so a kind cannot come into existence anywhere but as
+;; a row here. Exporting an enumeration beside an independent `cond` was not
+;; enough: a new branch could be added to the real function while both the
+;; enumeration and the test stayed green, which is exactly the drift the previous
+;; round was meant to make impossible.
+;;
+;; **Order is precedence.** The first predicate that matches decides, so a file
+;; that satisfies two rules has one answer and it is the earlier row. The order is
+;; cheapest-and-most-fundamental first: a file the analyzer could not parse says
+;; nothing else useful; a file without exactly one namespace has no span to reason
+;; about; a platform outside the analyzer's scope invalidates the inventories; and
+;; only then the finer inventory disagreements.
 (def refusal-kinds
-  "Every refusal kind that a valid input can trigger. `bin/preservation-tables-test`
-   R8 iterates THIS vector: a kind with no generated specimen fails the test, and a
-   generator for a kind not listed here fails it too."
-  ["unparsable" "ns-count" "unelaborated-platform" "ns-span"
-   "unreported-owner" "unreported-branch-def" "require-mismatch"])
+  [{:kind "unparsable"
+    :predicate (fn [f] (boolean (:analyzer-failed? f)))
+    :detail (fn [_] "the analyzer could not parse this file")}
 
-(def defensive-refusal-kinds
-  "Refusal kinds that remain as fail-closed guards but that no VALID input can
-   trigger, with the reason. They are excluded from R8's generated specimens
-   deliberately and explicitly, rather than left silently untested — and they are
-   kept rather than deleted, because deleting a guard to make a test green is how
-   a fail-closed boundary stops being one."
-  {"unplaced-definition"
-   (str "The scanner enumerates every top-level datum in the file, so a definition "
-        "the resolver reports always falls inside one of its spans. Reaching this "
-        "branch would require the scanner's datum boundaries to be wrong — a defect "
-        "in bin/preservation_scan.clj, not an input. The guard stays for exactly "
-        "that case.")})
+   {:kind "ns-count"
+    :predicate (fn [f] (not= 1 (get-in f [:reconcile :ns-count])))
+    :detail (fn [f] (str (get-in f [:reconcile :ns-count])
+                         " namespace definitions in one file"))}
+
+   {:kind "unelaborated-platform"
+    :predicate (fn [f] (boolean (seq (get-in f [:reconcile :unanalysed-features]))))
+    :detail (fn [f] (str "reader-conditional platform(s) the analyzer does not elaborate: "
+                         (str/join " " (get-in f [:reconcile :unanalysed-features]))))}
+
+   {:kind "ns-span"
+    :predicate (fn [f] (not (get-in f [:reconcile :ns-span-agrees?])))
+    :detail (fn [_] "the parsed `ns` span does not contain the resolver's namespace definition")}
+
+   {:kind "unplaced-definition"
+    :defensive? true
+    :reason (str "The scanner enumerates every top-level datum in the file, so a definition "
+                 "the resolver reports always falls inside one of its spans. Reaching this "
+                 "branch would require the scanner's datum boundaries to be wrong — a defect "
+                 "in bin/preservation_scan.clj, not an input. The guard stays for exactly "
+                 "that case, and deleting a fail-closed branch to make a test green is how a "
+                 "boundary stops being one.")
+    :predicate (fn [f] (boolean (seq (get-in f [:reconcile :unlocated]))))
+    :detail (fn [f] (str "definition(s) the scanner could not place: "
+                         (str/join " " (get-in f [:reconcile :unlocated]))))}
+
+   {:kind "unreported-owner"
+    :predicate (fn [f] (boolean (seq (get-in f [:reconcile :unreported]))))
+    :detail (fn [f] (str "owner(s) the resolver never reported: "
+                         (str/join " " (get-in f [:reconcile :unreported]))))}
+
+   {:kind "unreported-branch-def"
+    :predicate (fn [f] (pos? (long (or (get-in f [:reconcile :cond-gap]) 0))))
+    :detail (fn [f] (str (get-in f [:reconcile :cond-gap])
+                         " definition(s) in an analysed branch the resolver did not report"))}
+
+   {:kind "require-mismatch"
+    :predicate (fn [f] (not (get-in f [:require-mismatch :ok?])))
+    :detail (fn [f] (str "require(s) seen only by the parser: "
+                         (str/join " " (get-in f [:require-mismatch :only-parser]))))}])
+
+(defn file-refusal
+  "The one reason this file is refused, or nil. Every branch lives in
+   `refusal-kinds`; this function has none of its own."
+  [f]
+  (some (fn [{:keys [kind predicate detail]}]
+          (when (predicate f) {:kind kind :detail (detail f)}))
+        refusal-kinds))
 
 (when (:dump-tables (:opts cli))
   (prn {:walked-special-forms walked-special-forms
@@ -817,8 +860,7 @@
         :non-binding-macro-vars non-binding-macro-vars
         :core-fn-vars core-fn-vars
         :table-vars table-vars
-        :refusal-kinds refusal-kinds
-        :defensive-refusal-kinds defensive-refusal-kinds})
+        :refusal-kinds (mapv #(select-keys % [:kind :defensive? :reason]) refusal-kinds)})
   (System/exit 0))
 
 (when-let [f (:probe-heads (:opts cli))]
@@ -1259,36 +1301,6 @@
 ;; comment or a runtime call", "these aliases are undefined" — is worse than
 ;; silence: the hard stop says every listed signal needs a human, so a false signal
 ;; there costs a reviewer real time.
-(defn file-refusal
-  "The one reason this file is refused, or nil. Every `:kind` it can return is in
-   `refusal-kinds`, in this order."
-  [f]
-  (let [r (:reconcile f) rm (:require-mismatch f)]
-    (cond
-      (:analyzer-failed? f)
-      {:kind "unparsable" :detail "the analyzer could not parse this file"}
-      (not= 1 (:ns-count r))
-      {:kind "ns-count" :detail (str (:ns-count r) " namespace definitions in one file")}
-      (seq (:unanalysed-features r))
-      {:kind "unelaborated-platform"
-       :detail (str "reader-conditional platform(s) the analyzer does not elaborate: "
-                    (str/join " " (:unanalysed-features r)))}
-      (not (:ns-span-agrees? r))
-      {:kind "ns-span" :detail "the parsed `ns` span does not contain the resolver's namespace definition"}
-      (seq (:unlocated r))
-      {:kind "unplaced-definition"
-       :detail (str "definition(s) the scanner could not place: " (str/join " " (:unlocated r)))}
-      (seq (:unreported r))
-      {:kind "unreported-owner"
-       :detail (str "owner(s) the resolver never reported: " (str/join " " (:unreported r)))}
-      (pos? (long (or (:cond-gap r) 0)))
-      {:kind "unreported-branch-def"
-       :detail (str (:cond-gap r) " definition(s) in an analysed branch the resolver did not report")}
-      (not (:ok? rm))
-      {:kind "require-mismatch"
-       :detail (str "require(s) seen only by the parser: " (str/join " " (:only-parser rm)))}
-      :else nil)))
-
 (def refused-files
   (vec (sort-by (juxt :tree :path)
                 (for [[tree idx] [["base" base-idx-all] ["candidate" cand-idx-all]]
