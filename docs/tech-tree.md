@@ -661,3 +661,11 @@ slot sampler, full/prewarm receipt membership and timed complete gates, retained
 in `/var/tmp/forge/gate-lanes/r3/`; the final result is reported at
 `/var/tmp/forge/plan2/cellC/astra-gate-lanes-r3-report.md`. No speedup claim follows
 from these contention walls.
+
+### 2026-09-10: request-file insertion build
+
+`fable/insert-forms` adds the `insert_forms` MCP tool and both `:insert-forms!`
+request-file CLI spellings. Eighteen RED-first witness namespaces cover exact
+boundaries, preservation, refusals, guarded publication and receipts. This is
+capability implementation only; no native-control or automatic-routing admission.
+See [design and requirements](intent/insert-forms/design.md).
