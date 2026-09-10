@@ -12,11 +12,18 @@
 ;; INTENT-TEST: INSERT-FORMS-016
 (deftest insert-forms-receipt-accounting
 
+  (h/with-file h/source
+    (fn [_ _ req]
+      (let [result (insert/execute! (assoc req :payload {:text (apply str (repeat 1000 "1\n")) :forms 1000}))]
+        (is (= true (:ok result)))
+        (is (<= (alength (.getBytes (insert/receipt-text result) "UTF-8")) 4096)))))
   (let [r (insert/plan h/source (h/request h/source))
         receipt (:receipt r)]
     (is (= "81f14e0bae64ca76014a2c2368a7ca83dedb374ef244f8c5019b22ab61eb2b12" (:source_hash receipt)))
     (is (= "e51722e43edda0df0cc6689090281ba4ab7e946806711b266950d370d865d247" (:result_hash receipt)))
     (is (= 15 (:bytes_added receipt)))
+    (is (= "a" (get-in r [:detail :resolved_anchor :owner :name])))
+    (is (seq (get-in r [:detail :trivia_spans])))
     (is (= {:offset 13 :length 15 :sha256 "6e460fd413f380e275e9c769cb90498cf7804956fd893f56816ef521a9c323ef"} (:splice receipt)))
     (is (= {:start 1 :end 2} (:line_range receipt)))
     (is (= [{:ordinal 1 :start_line 2 :end_line 2}] (:inserted_form_ranges receipt)))
