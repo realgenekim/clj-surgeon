@@ -278,7 +278,7 @@
                        [:result :capabilities :tools :listChanged])))
         (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
                 "transform_clojure" "relation_census"
-                "alias_migration" "helper_extraction" "namespace_split" "admit_clojure_patch"
+                "alias_migration" "helper_extraction" "namespace_split" "insert_forms" "admit_clojure_patch"
                 "feature_thread" "require_change"]
                (mapv :name tools)))
         (is (= true (get-in tools [0 :annotations :readOnlyHint])))
@@ -371,7 +371,7 @@
                 :status :synchronized
                 :removed []
                 :upserted ["inspect_clojure" "temporary_probe"]
-                :tool-count 12
+                :tool-count 13
                 :server-restart-required false
                 :agent-session-restart :client-dependent}
                (select-keys
@@ -390,6 +390,7 @@
                  "alias_migration"
                  "helper_extraction"
                  "namespace_split"
+                 "insert_forms"
                  "admit_clojure_patch"
                  "feature_thread"
                  "require_change"
@@ -401,7 +402,7 @@
                 :status :synchronized
                 :removed ["temporary_probe"]
                 :upserted ["inspect_clojure"]
-                :tool-count 11
+                :tool-count 12
                 :server-restart-required false
                 :agent-session-restart :client-dependent}
                (select-keys
@@ -414,7 +415,7 @@
                (:after-contract-hash restored)))
         (is (= #{"inspect_clojure" "apply_clojure_changes" "edit_clojure"
                  "transform_clojure" "relation_census"
-                 "alias_migration" "helper_extraction" "namespace_split" "admit_clojure_patch"
+                 "alias_migration" "helper_extraction" "namespace_split" "insert_forms" "admit_clojure_patch"
                  "feature_thread" "require_change"}
                (set (map :name restored-tools))))
         (is (= inspect-tool/tool-description
