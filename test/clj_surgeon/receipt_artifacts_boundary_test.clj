@@ -99,8 +99,18 @@
                   "a literal starts-with against the declared root is what failed on darwin"))
             (testing "canonical on both sides accepts it"
               (is (boundary/published-under-root? "edit-clojure" (str published))))
+            (testing "a plausible but nonexistent artifact fails closed by name"
+              (let [error (try
+                            (boundary/published-under-root?
+                              "edit-clojure" (str (io/file dir "missing.edn")))
+                            nil
+                            (catch clojure.lang.ExceptionInfo caught caught))]
+                (is (= :artifact-path-unresolvable (:error-type (ex-data error))))
+                (is (= (str (io/file dir "missing.edn")) (:path (ex-data error))))))
             (testing "and still refuses a genuine escape"
+              (spit (io/file workspace "undo.edn") "{}")
               (is (not (boundary/published-under-root? "edit-clojure" (str workspace "/undo.edn"))))
+              (.mkdirs (io/file real "namespace-split-receipts"))
               (is (not (boundary/published-under-root? "namespace-split" (str published)))
                   "another verb's directory is not this verb's"))))))))
 

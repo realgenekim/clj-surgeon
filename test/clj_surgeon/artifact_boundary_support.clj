@@ -27,6 +27,19 @@
   [path]
   (str (.getCanonicalFile (io/file (str path)))))
 
+(defn- require-real-path!
+  "Prove that a boundary side exists now, or fail closed with a typed reason."
+  [path]
+  (try
+    (.toRealPath (.toPath (io/file (str path)))
+                 (make-array java.nio.file.LinkOption 0))
+    (catch Exception error
+      (throw (ex-info "artifact-boundary-refused: path cannot be resolved"
+                      {:error-type :artifact-path-unresolvable
+                       :path (str path)
+                       :cause (.getName (class error))}
+                      error)))))
+
 (defn verb-receipt-root
   "The canonical directory `verb` publishes under, from the root THIS RUN
    declared. Read from `receipt-artifacts/*artifact-root*` rather than from a
@@ -38,5 +51,10 @@
 (defn published-under-root?
   "Is `path` inside `verb`'s receipt root? Canonical on BOTH sides."
   [verb path]
+  ;; A publication witness must never accept a plausible future pathname.
+  ;; Apply `toRealPath` to both the artifact and its declared root before the
+  ;; comparison; `canonical` remains usable for diagnostic future paths.
+  (require-real-path! path)
+  (require-real-path! (io/file artifacts/*artifact-root* (str verb "-receipts")))
   (str/starts-with? (canonical path)
                     (str (verb-receipt-root verb) java.io.File/separator)))
