@@ -1,4 +1,6 @@
-(ns clj-surgeon.insert-forms)
+(ns clj-surgeon.insert-forms
+  (:require
+   [clj-surgeon.insert-forms-plan :as planner]))
 
 (defn not-implemented []
   {:state "refused" :committed false :mutation_attempted false
@@ -6,6 +8,6 @@
    :error-type :not-implemented :error "insert_forms is not implemented."
    :next_action "revise-request"})
 
-(defn plan [_source _request] (not-implemented))
+(defn plan [source request] (planner/plan source request))
 (defn execute! ([_request] (not-implemented)) ([_request _hooks] (not-implemented)))
-(defn read-request [_text] (not-implemented))
+(defn read-request [text] (planner/read-request text))
