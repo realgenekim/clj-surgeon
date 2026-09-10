@@ -739,3 +739,5 @@ B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa;
 ## STATE at 2026-09-10T16:13Z — skiff installed 59d8bc0c (green install, red gate: inb-7e7366/9af090/ef25cd/e748f0); fable/skiff-fixes building (worktree clj-surgeon-skifffix); pubcand + parity building; public-main decisions D1–D8 pending Gene.
 
 ## STATE at 2026-09-10T17:10Z — stage 0 reports in: public candidate 57740672 (manifest, scan green-ish 447+860 allowlisted; NOT to publish), parity harness 4b594926 (round 2, ships after skiff-fixes), skiff-fixes shipping (ship-skiff-fixes), seat-path defects landing (fable/seat-path-defaults, Sonnet). Gene's D1–D8 pending.
+
+## STATE at 2026-09-10T17:33Z — trunk 13635f74 = stable/2026-09-10.1 (skiff fixes landed; mcp exit 11 open, logs requested from the mayor); 7906 srv7906m + CLI on it. In flight: parity round 3, seat-path defaults landing (Sonnet). Public candidate 57740672 = manifest only. Gene's D1–D8 pending.
