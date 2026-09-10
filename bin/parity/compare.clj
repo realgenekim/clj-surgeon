@@ -47,7 +47,11 @@
 ;; retained capture refuses, naming the run.
 
 (def ^:private here (.getParent (io/file *file*)))
-(def ^:private evidence-file (str here "/observed-volatility.edn"))
+(def ^:private evidence-file
+  ;; PARITY_EVIDENCE_FILE exists so a WITNESS can hand the comparator a tampered
+  ;; evidence document without mutating the real one. It changes which document is
+  ;; authenticated, never whether it is.
+  (or (System/getenv "PARITY_EVIDENCE_FILE") (str here "/observed-volatility.edn")))
 (def ^:private generator-file (str here "/observe-volatility.clj"))
 
 (defn- rule-name [{:keys [key pattern glob match]}]
@@ -286,7 +290,8 @@
   "Return a vector of refusal strings; empty means the declaration may be used."
   [decl doc]
   (let [observations (:observations doc)
-        evidence-root (str here "/" (or (:evidence-root doc) "evidence"))
+        evidence-root (let [r (or (:evidence-root doc) "evidence")]
+                        (if (str/starts-with? r "/") r (str here "/" r)))
         file-refusals
         (cond-> (if-let [bad (verify-provenance doc)] [bad] [])
           (not= (:generator-sha256 doc)

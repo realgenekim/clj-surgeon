@@ -9,7 +9,7 @@
 # is re-executed). Exit 0 = every witness held.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SUBJECT="${1:-/var/tmp/forge/parity/runs/OBS2-provenance/split}"
+SUBJECT="${1:-/var/tmp/forge/parity/runs/OBS3-commit-bound/split}"
 WORK="${PARITY_ROOT:-/var/tmp/forge/parity}/self-test.$$"
 mkdir -p "$WORK"; trap 'rm -rf "$WORK"' EXIT
 PASS=0; FAIL=0
@@ -156,10 +156,16 @@ cp "$WORK/forge/tampered.edn" "$WORK/forge/observed-volatility.edn"
 OUT="$(bb "$WORK/forge/compare.clj" "$SUBJECT/A" "$SUBJECT/B" "$HERE/volatile-fields.edn" split 2>&1)"; RC=$?
 check "a hand-edited evidence file fails its own digest" REFUSED "edited by hand after generation" "$OUT" $RC
 
-# 3c. the retained bytes are the evidence: corrupt one and the rules citing it refuse.
-rm -rf "$WORK/tamper"; cp -r "$HERE" "$WORK/tamper" 2>/dev/null
-echo "corrupted" >> "$WORK/tamper/evidence/OBS2-provenance/split/A/stdout.edn"
-OUT="$(bb "$WORK/tamper/compare.clj" "$SUBJECT/A" "$SUBJECT/B" "$WORK/tamper/volatile-fields.edn" split 2>&1)"; RC=$?
+# 3c. the retained bytes ARE the evidence: corrupt one and every rule citing it refuses.
+rm -rf "$WORK/evidence"; cp -r "$HERE/evidence" "$WORK/evidence"
+echo "corrupted" >> "$WORK/evidence/OBS3-commit-bound/split/A/stdout.edn"
+python3 - "$HERE/observed-volatility.edn" "$WORK/tampered-bytes.edn" "$WORK/evidence" <<'PY'
+import sys
+s = open(sys.argv[1]).read()
+s = s.replace(':evidence-root "evidence"', ':evidence-root "%s"' % sys.argv[3])
+open(sys.argv[2], 'w').write(s)
+PY
+OUT="$(PARITY_EVIDENCE_FILE="$WORK/tampered-bytes.edn" run "$SUBJECT/A" "$SUBJECT/B" "$HERE/volatile-fields.edn")"; RC=$?
 check "a retained capture that no longer hashes to its record refuses" REFUSED "does not hash to what capture.edn records" "$OUT" $RC
 
 echo "PARITY-FENCE-004 — :expects-receipt is a two-way contract"
@@ -184,7 +190,7 @@ import sys
 s = open(sys.argv[1]).read()
 rule = ('{:key :candidate_hash :match :key :to "<CANDIDATE-HASH>"\n'
         '   :reason "claims wall-clock volatility"\n'
-        '   :evidence {:run "OBS2-provenance" :specimen :split :path [:elapsed_ms]}}\n  ')
+        '   :evidence {:run "OBS3-commit-bound" :specimen :split :path [:elapsed_ms]}}\n  ')
 s = s.replace(' :fields\n [', ' :fields\n [' + rule, 1)
 open(sys.argv[2], 'w').write(s)
 PY
@@ -194,59 +200,67 @@ check "a rule laundering an unrelated observation refuses, naming rule and path"
 # 5b. and it says WHY: the selector does not select the path it cites.
 check "the refusal names the selector mismatch" REFUSED "does not select its evidence path" "$OUT" $RC
 
-# 5c. a rule that explains nothing new — a duplicate of one already in the list —
-# cannot be paid for by the observation the original explains.
-python3 - "$HERE/volatile-fields.edn" "$WORK/redundant.edn" <<'PY'
-import sys, re
-s = open(sys.argv[1]).read()
-m = re.search(r'  \{:key :elapsed_ms\n(?:   [^\n]*\n)*', s)
-s = s[:m.end()] + m.group(0).replace(':elapsed_ms :match', ':elapsed_ms :match') + s[m.end():]
-open(sys.argv[2], 'w').write(s)
-PY
+# 5c. a rule that explains nothing new — a second copy of one already in the list,
+# citing the same observation — is not NECESSARY for it, and cannot be paid for by it.
+bb -e '
+(require (quote [clojure.edn :as edn]))
+(let [[src dst] *command-line-args*
+      d (edn/read-string (slurp src))
+      dup (first (filter #(= :elapsed_ms (:key %)) (:fields d)))]
+  (spit dst (pr-str (update d :fields #(vec (cons (assoc dup :to "<DUP>") %))))))' \
+  "$HERE/volatile-fields.edn" "$WORK/redundant.edn"
 OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$WORK/redundant.edn")"; RC=$?
 check "a duplicated rule is not necessary for its own evidence and refuses" REFUSED "not necessary for its own evidence" "$OUT" $RC
 
 echo "PARITY-FENCE-006 — provenance is bound to a commit, not to the file beside it"
 
-# 6a. Sol's control: modify the generator, refresh every digest, rebind the
-# stable build. The commit binding is what refuses.
-rm -rf "$WORK/rebound"; cp -r "$HERE" "$WORK/rebound"
-printf '\n;; modified\n' >> "$WORK/rebound/observe-volatility.clj"
+# 6a. Sol's control: refresh the generator digest in the evidence document, as a
+# forger who knows the digest is checked would. The comparator runs from the real
+# tree, so the commit binding is live — the generator blob at :source-commit no
+# longer hashes to the refreshed value, and it refuses.
 bb -e '
-(require (quote [clojure.edn :as edn]) (quote [clojure.string :as s]))
+(require (quote [clojure.string :as s]))
 (defn sha256 [^String x] (let [d (java.security.MessageDigest/getInstance "SHA-256")]
   (apply str (map #(format "%02x" %) (.digest d (.getBytes x "UTF-8"))))))
-(let [dir (first *command-line-args*)
-      f (str dir "/observed-volatility.edn")
-      gen (sha256 (slurp (str dir "/observe-volatility.clj")))
-      txt (-> (slurp f)
-              (s/replace #":generator-sha256 \"[0-9a-f]+\"" (str ":generator-sha256 \"" gen "\""))
-              (s/replace #":stable-build \"[0-9a-zA-Z-]+\"" ":stable-build \"NOT-A-COMMIT\""))]
-  (spit f txt))' "$WORK/rebound"
-OUT="$(bb "$WORK/rebound/compare.clj" "$SUBJECT/A" "$SUBJECT/B" "$WORK/rebound/volatile-fields.edn" split 2>&1)"; RC=$?
-check "a modified generator with refreshed digests refuses on the commit binding" REFUSED "generator blob" "$OUT" $RC
+(let [[src dst] *command-line-args*]
+  (spit dst (s/replace (slurp src) #":generator-sha256 \"[0-9a-f]+\""
+                       (str ":generator-sha256 \"" (sha256 "a modified generator") "\""))))' \
+  "$HERE/observed-volatility.edn" "$WORK/regen.edn"
+OUT="$(PARITY_EVIDENCE_FILE="$WORK/regen.edn" run "$SUBJECT/A" "$SUBJECT/B" "$HERE/volatile-fields.edn")"; RC=$?
+check "a refreshed generator digest refuses against the blob at its own commit" REFUSED "generator blob" "$OUT" $RC
+
+# 6b. rebinding the stable build to something that is not a commit refuses too.
+sed 's/:stable-build "[0-9a-f]*"/:stable-build "NOT-A-COMMIT"/' "$HERE/observed-volatility.edn" > "$WORK/nocommit.edn"
+OUT="$(PARITY_EVIDENCE_FILE="$WORK/nocommit.edn" run "$SUBJECT/A" "$SUBJECT/B" "$HERE/volatile-fields.edn")"; RC=$?
+check "a :stable-build that is not a commit refuses" REFUSED "NOT-A-COMMIT" "$OUT" $RC
 
 echo "PARITY-FENCE-007 — the child cannot resolve the installed launcher"
 
-LAUNCHER="$(command -v clj-surgeon 2>/dev/null || echo /home/forge/bin/clj-surgeon)"
+LAUNCHER="$(command -v clj-surgeon 2>/dev/null || echo /usr/local/bin/clj-surgeon)"
 LDIR="$(dirname "$LAUNCHER")"
-CHILD_PATH="${PARITY_SAFE_PATH:-/usr/local/bin:/usr/bin:/bin}"
-case ":$CHILD_PATH:" in
-  *":$LDIR:"*) echo "  FAIL  the child PATH still contains $LDIR"; FAIL=$((FAIL+1)) ;;
-  *)           echo "  PASS  the child PATH excludes the launcher directory $LDIR"; PASS=$((PASS+1)) ;;
-esac
-if PATH="$CHILD_PATH" command -v clj-surgeon >/dev/null 2>&1; then
-  echo "  FAIL  clj-surgeon still resolves under the child PATH"; FAIL=$((FAIL+1))
+CHILD_PATH_FILE="${PARITY_ROOT:-/var/tmp/forge/parity}/childbin/.PATH"
+if [ ! -f "$CHILD_PATH_FILE" ]; then
+  echo "  FAIL  no child PATH was recorded at $CHILD_PATH_FILE — run bin/parity-run once"; FAIL=$((FAIL+1))
 else
-  echo "  PASS  clj-surgeon does not resolve under the child PATH"; PASS=$((PASS+1))
-fi
-for t in bb clojure java git python3; do
-  if PATH="$CHILD_PATH" command -v "$t" >/dev/null 2>&1; then
-    PASS=$((PASS+1)); echo "  PASS  the child PATH still provides $t"
+  CHILD_PATH="$(cat "$CHILD_PATH_FILE")"
+  echo "  ....  child PATH under test: $CHILD_PATH"
+  case ":$CHILD_PATH:" in
+    *":$LDIR:"*) echo "  FAIL  the child PATH contains the launcher directory $LDIR"; FAIL=$((FAIL+1)) ;;
+    *)           echo "  PASS  the child PATH excludes the launcher directory $LDIR"; PASS=$((PASS+1)) ;;
+  esac
+  if PATH="$CHILD_PATH" command -v clj-surgeon >/dev/null 2>&1; then
+    echo "  FAIL  clj-surgeon resolves under the child PATH"; FAIL=$((FAIL+1))
   else
-    FAIL=$((FAIL+1)); echo "  FAIL  the child PATH does not provide $t"
+    echo "  PASS  clj-surgeon does not resolve under the child PATH"; PASS=$((PASS+1))
   fi
-done
+  for t in bb clojure java git python3 sh; do
+    if PATH="$CHILD_PATH" command -v "$t" >/dev/null 2>&1; then
+      PASS=$((PASS+1)); echo "  PASS  the child PATH still provides $t"
+    else
+      FAIL=$((FAIL+1)); echo "  FAIL  the child PATH does not provide $t"
+    fi
+  done
+fi
 
 echo
 echo "self-test: $PASS passed, $FAIL failed"

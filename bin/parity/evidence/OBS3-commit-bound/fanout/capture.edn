@@ -1,0 +1,14 @@
+{:run "OBS3-commit-bound",
+ :specimen :fanout,
+ :stable-build "59d8bc0cad8886a028c24e8ffd52e4e5d82185c1",
+ :source-commit "9353347616a2daa7006ff60545a557129c4c905f",
+ :generator-sha256
+ "752c5559fbf42ce690d03d0e37b29c0323253dbd78a0886ca77ce38101aab70e",
+ :files
+ {"A/stdout.edn"
+  "2ee727843c87f3c405429aa91d22c9005d30e5119229d4d89ace850953a9a411",
+  "B/stdout.edn"
+  "ee338b205aec4d8a9d10c63845a1abcfcfa9683c2861f38bcc158bd20c67e6ab"},
+ :capture-digest
+ "9a2a91f253c935fdeb8311a273fe5007076b636f5c06e265b683495785db71c4",
+ :created "2026-09-10T17:57:44.152589762Z"}

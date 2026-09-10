@@ -47,13 +47,39 @@ KEEP_FIXTURES="${PARITY_KEEP_FIXTURES:-0}"
 # resolves under /usr/local/bin, /usr/bin or /bin, so the launcher directory is
 # simply not on the path. (clj-surgeon's own lint invokes ~/bin/clj-kondo by
 # ABSOLUTE path, the seat's paved serialised entrance, which this does not disturb.)
-SAFE_PATH="${PARITY_SAFE_PATH:-/usr/local/bin:/usr/bin:/bin}"
-LAUNCHER_DIR="$(dirname "$(command -v clj-surgeon 2>/dev/null || echo /home/forge/bin/clj-surgeon)")"
-case ":$SAFE_PATH:" in
-  *":$LAUNCHER_DIR:"*)
-    echo "REFUSING: the child PATH ($SAFE_PATH) contains the installed launcher directory $LAUNCHER_DIR" >&2
-    exit 2 ;;
-esac
+# The installed launcher lives in BOTH /usr/local/bin and ~/bin on this seat, and
+# /usr/local/bin also holds runtimes the specimens need, so "drop a directory" is
+# not enough. The child PATH is therefore: the ordinary system utility
+# directories, which hold no launcher, plus a CURATED directory of symlinks to an
+# ENUMERATED list of developer runtimes taken out of /usr/local/bin. Anything not
+# on that list — the installed launcher first among them — is simply not
+# reachable from a child.
+CHILD_RUNTIMES="${PARITY_CHILD_RUNTIMES:-bb clojure clj-kondo babashka java javac jq rlwrap}"
+CHILD_BIN="$PARITY_ROOT/childbin"
+build_child_path() {
+  rm -rf "$CHILD_BIN"; mkdir -p "$CHILD_BIN"
+  local t src
+  for t in $CHILD_RUNTIMES; do
+    src="/usr/local/bin/$t"
+    [ -x "$src" ] && ln -sf "$src" "$CHILD_BIN/$t"
+  done
+  SAFE_PATH="${PARITY_SAFE_PATH:-$CHILD_BIN:/usr/bin:/bin}"
+  # the assertion, not the assumption: no launcher may be reachable, and every
+  # runtime the specimens need must be.
+  if PATH="$SAFE_PATH" command -v clj-surgeon >/dev/null 2>&1; then
+    echo "REFUSING: clj-surgeon resolves to $(PATH="$SAFE_PATH" command -v clj-surgeon) under the child PATH" >&2
+    exit 2
+  fi
+  local missing="" 
+  for t in bb clojure java git python3 sh; do
+    PATH="$SAFE_PATH" command -v "$t" >/dev/null 2>&1 || missing="$missing $t"
+  done
+  if [ -n "$missing" ]; then
+    echo "REFUSING: the child PATH is missing required runtimes:$missing" >&2; exit 2
+  fi
+  printf '%s\n' "$SAFE_PATH" > "$CHILD_BIN/.PATH"   # the witness reads what the children got
+}
+build_child_path
 
 usage() { sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 2; }
 [ $# -ge 2 ] || usage
