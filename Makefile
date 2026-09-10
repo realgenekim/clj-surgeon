@@ -273,8 +273,13 @@ require-swipl:
 # Both members were learned from a clean machine: a box without swipl paid three
 # stages first, and a box whose temp base is RAM-backed refused in all 113
 # namespaces with no line naming the temp directory.
+# RATCHET (2026-09-10, SPF-004): --classpath test alone broke this the moment
+# tmp-leak-support started delegating to clj-surgeon.path-classification
+# (src/) -- a fresh-worktree landing gate refused at THIS line with a
+# FileNotFoundException before a single test ran. src must always be on this
+# classpath too.
 gate-prerequisites: require-swipl
-	@bb --classpath test -e '(require (quote [clj-surgeon.tmp-leak-support :as t]))\
+	@bb --classpath src:test -e '(require (quote [clj-surgeon.tmp-leak-support :as t]))\
 	  (let [d (or (System/getenv "TMPDIR") "/tmp") r (t/base-refusal d)]\
 	    (when r (binding [*out* *err*]\
 	      (println "gate-refused:" (t/refusal-message r))\

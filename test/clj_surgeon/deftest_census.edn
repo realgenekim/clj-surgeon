@@ -363,6 +363,19 @@
   clj-surgeon.mcp-alias-migration-test/an-indirect-reference-refuses-closed-and-names-the-file
   clj-surgeon.mcp-alias-migration-test/an-unread-exclusion-leaves-expect-files-alone-and-says-why
   clj-surgeon.mcp-alias-migration-test/an-unreadable-subtree-refuses-instead-of-silently-shrinking-the-scope
+  clj-surgeon.mcp-alias-migration-test/artifact-root-accepts-a-path-under-home
+  clj-surgeon.mcp-alias-migration-test/artifact-root-default-is-derived-per-user
+  clj-surgeon.mcp-alias-migration-test/artifact-root-is-validated-before-every-receipt-directory-is-computed
+  clj-surgeon.mcp-alias-migration-test/artifact-root-refusal-leaves-no-directory-behind-devshm
+  clj-surgeon.mcp-alias-migration-test/artifact-root-refusal-leaves-no-directory-behind-tmp
+  clj-surgeon.mcp-alias-migration-test/artifact-root-refusal-leaves-no-directory-behind-tmpfs-under-home
+  clj-surgeon.mcp-alias-migration-test/artifact-root-refuses-another-users-path
+  clj-surgeon.mcp-alias-migration-test/artifact-root-refuses-as-unknown-not-accepted-when-classification-is-unavailable
+  clj-surgeon.mcp-alias-migration-test/artifact-root-refuses-blank
+  clj-surgeon.mcp-alias-migration-test/artifact-root-refuses-lexical-home-traversal
+  clj-surgeon.mcp-alias-migration-test/artifact-root-refuses-ram-backed
+  clj-surgeon.mcp-alias-migration-test/artifact-root-refuses-relative
+  clj-surgeon.mcp-alias-migration-test/artifact-root-retains-the-controlled-parity-harness-override
   clj-surgeon.mcp-alias-migration-test/detail-pruning-deletes-only-documents-it-can-prove-it-wrote
   clj-surgeon.mcp-alias-migration-test/detail-pruning-never-deletes-a-document-this-writer-does-not-own
   clj-surgeon.mcp-alias-migration-test/detail-retention-is-published-as-best-effort-because-peers-are-pruned
@@ -373,6 +386,7 @@
   clj-surgeon.mcp-alias-migration-test/expect-mismatch-refuses-closed-with-an-executable-next-call
   clj-surgeon.mcp-alias-migration-test/heap-exhaustion-is-published-as-a-typed-refusal-not-an-untyped-throw
   clj-surgeon.mcp-alias-migration-test/no-reachable-namespace-spells-a-refusal-kind-dynamically
+  clj-surgeon.mcp-alias-migration-test/no-src-writer-reaches-artifact-root-without-the-entrance
   clj-surgeon.mcp-alias-migration-test/one-call-migrates-the-whole-fan-out-and-returns-one-summary-receipt
   clj-surgeon.mcp-alias-migration-test/one-file-symlinked-out-of-the-root-refuses-with-a-replayable-next-call
   clj-surgeon.mcp-alias-migration-test/only-string-literals-count-as-mention-sites
@@ -400,6 +414,7 @@
   clj-surgeon.mcp-alias-migration-test/string-mention-sites-are-ordered-by-file-then-numeric-line
   clj-surgeon.mcp-alias-migration-test/string-mentions-are-counted-in-var-mode-and-name-their-site
   clj-surgeon.mcp-alias-migration-test/target-lib-already-defined-is-refused
+  clj-surgeon.mcp-alias-migration-test/telemetry-with-a-ram-root-refuses-and-writes-nothing
   clj-surgeon.mcp-alias-migration-test/the-alias-qualify-refer-policy-rewrites-referred-names-instead
   clj-surgeon.mcp-alias-migration-test/the-byte-ceiling-refusal-narrows-to-the-largest-fitting-subtree
   clj-surgeon.mcp-alias-migration-test/the-derived-remedy-is-a-glob-the-parser-accepts-and-the-tree-matches
@@ -965,6 +980,7 @@
   clj-surgeon.mcp-process-test/exec-owner-death-releases-admission-without-stale-file-cleanup
   clj-surgeon.mcp-process-test/explicit-admission-skips-a-path-shadowing-shell-shim
   clj-surgeon.mcp-process-test/host-admission-serializes-concurrent-clj-kondo-sections
+  clj-surgeon.mcp-process-test/pressure-status-default-is-derived-per-user
   clj-surgeon.mcp-process-test/recognizes-only-clj-kondo-executables
   clj-surgeon.mcp-process-test/red-pressure-defers-without-launching-the-analyzer
   clj-surgeon.mcp-process-test/stale-owner-text-does-not-own-the-operating-system-lock

@@ -672,3 +672,20 @@
     (is (str/includes? (:err result)
                        "clj-kondo-mission-post-exit-sample-required"))
     (is (false? (.exists (io/file marker-path))))))
+
+(deftest pressure-status-default-is-derived-per-user
+  ;; RATCHET (2026-09-10, public candidate seat-path repair): defaulted to a
+  ;; monitor path named after one seat's box
+  ;; (~/.local/state/diagnose-skiff-cpu-memory/monitor/status.json). Now
+  ;; ~/.local/state/clj-surgeon/pressure-status.json. Override reachability is
+  ;; unchanged and already exercised elsewhere in this file: the
+  ;; *pressure-status-path* dynamic binding (e.g. the fixture above) and the
+  ;; CLJ_SURGEON_PRESSURE_STATUS environment variable (direct-shell-shim-uses-
+  ;; the-same-host-admission's base-environment).
+  (binding [process/*pressure-status-path* nil]
+    (let [path (#'process/pressure-status-path)]
+      (is (not (str/includes? path "diagnose-skiff-cpu-memory"))
+          "the old seat-named monitor path must be gone")
+      (when-not (System/getenv "CLJ_SURGEON_PRESSURE_STATUS")
+        (is (str/includes? path "/.local/state/clj-surgeon/pressure-status.json")
+            "falls back to the tool's own per-user state file")))))
