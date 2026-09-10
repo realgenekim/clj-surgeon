@@ -7,7 +7,28 @@
   (:import
    (java.security MessageDigest)))
 
-(def ^:dynamic *artifact-root* "/var/tmp/forge")
+(defn default-artifact-root
+  "Where external verb receipts and undo artifacts live, by default.
+
+   These artifacts must outlive the workspace and must NOT live inside it, so
+   the root is deliberately outside the repository. It must also be private to
+   the invoking user: a fixed shared directory is either unwritable on a normal
+   machine or, worse, writable by everyone on a shared one.
+
+   Resolution order, first that is set:
+     CLJ_SURGEON_ARTIFACT_ROOT   an explicit choice always wins
+     $XDG_STATE_HOME/clj-surgeon/artifacts
+     $HOME/.local/state/clj-surgeon/artifacts
+
+   The last form is the convention the rest of this tool already uses for
+   durable per-user state (see clj-surgeon.mcp-process)."
+  []
+  (or (System/getenv "CLJ_SURGEON_ARTIFACT_ROOT")
+      (some-> (System/getenv "XDG_STATE_HOME")
+              (str "/clj-surgeon/artifacts"))
+      (str (System/getProperty "user.home") "/.local/state/clj-surgeon/artifacts")))
+
+(def ^:dynamic *artifact-root* (default-artifact-root))
 
 ;; @spec ALIAS-MIGRATION-001
 (defn directory [verb workspace]

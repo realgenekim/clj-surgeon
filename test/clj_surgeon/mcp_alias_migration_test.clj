@@ -7300,3 +7300,23 @@
             (is (= 16 (count rows)))
             (is (= (set (map str (range 16))) (set (map :id rows)))))))
       (finally (delete-tree! artifact-root)))))
+
+;; RATCHET (2026-09-10, public candidate seat-path repair): *artifact-root*
+;; used to default to the literal "/var/tmp/forge" -- unwritable, or worse
+;; writable by everyone, on any machine that is not that one.
+;; default-artifact-root resolves it per user instead; this witness pins the
+;; CONTRACT (absolute, per-user, never the old seat literal), not one
+;; machine's spelling. Override reachability itself (CLJ_SURGEON_ARTIFACT_ROOT,
+;; and the *artifact-root* dynamic binding) is already exercised throughout
+;; this file, e.g. route-telemetry-appends-whole-concurrent-lines above.
+(deftest artifact-root-default-is-derived-per-user
+  (let [root (artifacts/default-artifact-root)]
+    (is (not= "/var/tmp/forge" root)
+        "the old seat-named literal must be gone")
+    (is (.isAbsolute (io/file root)) "the artifact root is always absolute")
+    (is (str/includes? root "clj-surgeon")
+        "lands under the tool's own namespaced state, not a bare shared dir")
+    (when-not (or (System/getenv "CLJ_SURGEON_ARTIFACT_ROOT")
+                  (System/getenv "XDG_STATE_HOME"))
+      (is (str/starts-with? root (System/getProperty "user.home"))
+          "with no override, resolves under the invoking user's own home"))))
