@@ -33,6 +33,8 @@
 ;; @spec INSERT-FORMS-015
 ;; INTENT: INSERT-FORMS-015
 (defn target! [request]
+  (when (some #(str/includes? % (str (char 0))) [(:workspace_root request) (:file request)])
+    (p/refuse! :invalid-path [:file] "NUL is not a filesystem path character."))
   (let [root (.toPath (io/file (:workspace_root request)))
         file (.toPath (io/file (:file request)))
         invalid #(p/refuse! :invalid-path [:file] "Target must be a regular, singly-linked file inside a canonical root.")]
@@ -54,7 +56,7 @@
 (defn failed [state attempted unchanged kind message detail]
   (merge {:state state :committed (when-not (= state "recovery-required") false)
           :mutation_attempted attempted :source_unchanged unchanged :ok false
-          :operation "insert_forms" :error-type kind :error message
+          :operation "insert_forms" :error-type kind :error (p/diagnostic message)
           :next_action (if (= state "recovery-required") "recover" "retry-after-repair")}
          detail))
 
@@ -85,7 +87,7 @@
         hook! (fn [k] (when-let [f (get hooks k)] (f)))
         read-source (fn [path]
                       (when (and @attempted (compare-and-set! hook-fired false true)) (hook! :read-back))
-                      (read-bounded path :source))]
+                      (read-bounded path :candidate))]
     (try
       (reset! detail (durable-detail! request result compiled))
       (hook! :stage)
@@ -141,6 +143,11 @@
         (when @stage (Files/deleteIfExists (.toPath ^java.io.File @stage)))
         (when @seed (Files/deleteIfExists (.toPath ^java.io.File @seed)))))))
 
+(defn bounded-summary [result]
+  (if (> (alength (p/bytes (pr-str result))) 3900)
+    (dissoc result :inserted_form_ranges)
+    result))
+
 (defn execute!
   ([request] (execute! request {}))
   ([request hooks]
@@ -157,18 +164,16 @@
                         (let [source (read-bounded file :source)
                               result (plan source request)]
                           (reset! completed (if (:ok result) (commit-plan! request file source result hooks) result))))))
-                  (catch java.nio.file.InvalidPathException e
-                    (p/refusal (ex-info "Invalid filesystem path." {:error-type :invalid-path :at [:file]})))
                   (catch Exception e
                     (cond
                       (:mutation_attempted @completed)
                       (failed "recovery-required" true nil :commit-outcome-unknown (.getMessage e)
                               (select-keys @completed [:receipt_details_path :receipt_hash]))
                       (#{:invalid-request :invalid-path :unsupported-source :limit-exceeded}
-                         (:error-type (ex-data e)))
+                       (:error-type (ex-data e)))
                       (p/refusal e)
                       :else (failed "failed" false true :io-error (.getMessage e) {}))))]
-     (assoc result :elapsed_ms (/ (- (System/nanoTime) start) 1e6)))))
+     (bounded-summary (assoc result :elapsed_ms (/ (- (System/nanoTime) start) 1e6))))))
 
 (def leading [:state :committed :mutation_attempted :source_unchanged])
 (defn receipt-text [receipt]
@@ -183,7 +188,7 @@
       (p/closed! opts [:op :request-file] [] [] :invalid-request)
       (when-not (string? (:request-file opts)) (p/refuse! :invalid-request [:request-file] "Request file required."))
       (let [request (read-request (read-bounded (:request-file opts) :request))]
-        (if (:error-type request) request (execute! request)))
+        (if (:error-type request) (assoc request :elapsed_ms (/ (- (System/nanoTime) start) 1e6)) (execute! request)))
       (catch Exception e
         (assoc (if (:error-type (ex-data e)) (p/refusal e)
                    (failed "failed" false true :io-error (.getMessage e) {}))
