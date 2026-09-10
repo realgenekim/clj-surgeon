@@ -1,6 +1,7 @@
 (ns clj-surgeon.receipt-artifacts
   "External verb bookkeeping and measured post-write workspace evidence."
   (:require
+   [clj-surgeon.path-classification :as pc]
    [clojure.java.io :as io]
    [clojure.java.shell :as shell]
    [clojure.string :as str])
@@ -34,27 +35,18 @@
 
 (def ^:dynamic *artifact-root* (default-artifact-root))
 
-(defn- nearest-existing-ancestor
-  "Walk up from `path` to the first ancestor that exists, or nil if none does
-   (should not happen once the filesystem root is reached)."
-  [path]
-  (loop [f (io/file (str path))]
-    (cond
-      (nil? f) nil
-      (.exists f) f
-      :else (recur (.getParentFile f)))))
-
 (defn- owned-by-invoking-user?
   "True when the NEAREST EXISTING ANCESTOR of `path` is owned by the invoking
    user, checked by real filesystem ownership rather than by a path-string
    convention. This is what lets an explicit CLJ_SURGEON_ARTIFACT_ROOT like
-   /var/tmp/forge -- a scratch directory THIS invocation created (or already
-   owns) under a shared sticky-bit base -- pass, while /home/someone-else/...
-   fails: mkdirs cannot create it, its nearest existing ancestor belongs to
-   someone else, and the check is honest about that regardless of the
-   literal path text."
+   /var/tmp/forge -- a scratch directory THIS invocation already owns under a
+   shared sticky-bit base -- pass, while /home/someone-else/... fails: its
+   nearest existing ancestor belongs to someone else, and the check is
+   honest about that regardless of the literal path text. NEVER creates
+   anything (SPF-004: the previous version mkdirs'd the candidate before
+   this check ran, so a refused root was created and left behind)."
   [path]
-  (when-let [ancestor (nearest-existing-ancestor path)]
+  (when-let [ancestor (pc/nearest-existing-ancestor path)]
     (try
       (= (System/getProperty "user.name")
          (str (Files/getOwner (.toPath ancestor) (make-array java.nio.file.LinkOption 0))))
@@ -65,26 +57,6 @@
     (or (= path home) (str/starts-with? path (str home java.io.File/separator)))))
 
 ;; @spec ALIAS-MIGRATION-001
-;; NOTE ON DUPLICATION: `clj-surgeon.tmp-leak-support/base-refusal` already
-;; answers this question, more thoroughly (darwin's `mount(8)`, a mounts-table
-;; fallback, a seam for tests). It lives under test/, and the bb CLI's actual
-;; classpath for this entrance (clj-surgeon.core, loaded by an installed
-;; `clj-surgeon` script) does not include test/ -- confirmed the hard way:
-;; requiring it from here made `bb -m clj-surgeon.core` fail to load AT ALL,
-;; for every verb, not only receipt writes. This is the minimal, self-
-;; contained subset (literal /tmp or /dev/shm, or findmnt reporting tmpfs)
-;; that a writer reachable from the bb entrance can depend on.
-(defn- ram-backed-path?
-  [path]
-  (let [p (str path)]
-    (or (some #(or (= p %) (str/starts-with? p (str % "/"))) ["/tmp" "/dev/shm"])
-        (= "tmpfs"
-           (try
-             (let [{:keys [exit out]} (shell/sh "findmnt" "-n" "-o" "FSTYPE" "--target" p)]
-               (when (and (zero? exit) (seq (str/trim out))) (str/trim out)))
-             (catch Throwable _ nil))))))
-
-;; @spec ALIAS-MIGRATION-001
 (defn validate-artifact-root!
   "Fails CLOSED on the resolved artifact root before any receipt writer
    trusts it (SPF-001: `default-artifact-root` accepted CLJ_SURGEON_ARTIFACT_ROOT
@@ -93,21 +65,36 @@
    passes every check; otherwise throws ex-info with a typed :error-type and
    the offending :root, naming the two variables that could have produced it.
 
-   Checks, in order:
+   SPF-004 repaired TWO defects in the first version of this function, both
+   in how it classified rather than in the checks themselves:
+     - it called `mkdirs` on the candidate BEFORE the ownership/RAM checks,
+       so a refused root was created and left behind on disk (/tmp/... and
+       /dev/shm/... probes were created, then rejected). This version
+       creates NOTHING -- classification runs only against paths that
+       already exist (`pc/nearest-existing-ancestor`), never against a
+       side effect of validating.
+     - its self-contained RAM predicate FAILED OPEN when `findmnt` was
+       unavailable (a `/run/user/.../` tmpfs path was accepted). Real-disk
+       classification now goes through `clj-surgeon.path-classification`,
+       the production fail-closed classifier (mounts-table + Darwin
+       fallback, `:unknown` filesystem == refusal, never a pass) --
+       requirable from here because it lives under src/, unlike the
+       test/-only `clj-surgeon.tmp-leak-support` this function tried and
+       reverted to depend on in the previous round (see path_classification's
+       own docstring for why that broke the bb CLI).
+
+   Checks, in order, against `pc/nearest-existing-ancestor` of the
+   candidate (never against a path this function created):
      1. non-blank
      2. absolute
-     3. (after best-effort mkdirs, so an explicit override under a shared
-        sticky-bit base like /var/tmp/forge is judged by what it actually
-        resolves to) owned by the invoking user, or under $HOME -- trivially
-        safe even before it exists
-     4. real disk, never RAM-backed (literal /tmp or /dev/shm, or a tmpfs
-        mount by `findmnt`) -- see `ram-backed-path?`'s note on why this
-        duplicates rather than requires `clj-surgeon.tmp-leak-support`
+     3. owned by the invoking user, or under $HOME -- trivially safe even
+        before it exists
+     4. real disk, never RAM-backed, per `pc/base-refusal`
 
    This retains a controlled external override (CLJ_SURGEON_ARTIFACT_ROOT
    pointed at a real-disk path this invocation owns, e.g. the parity harness
-   case /var/tmp/forge) while refusing every uncontrolled widening the
-   fence found."
+   case /var/tmp/forge, which already exists on every box that runs this
+   suite) while refusing every uncontrolled widening the fence found."
   [root]
   (let [root (str root)
         checked-vars ["CLJ_SURGEON_ARTIFACT_ROOT" "XDG_STATE_HOME"]]
@@ -120,23 +107,45 @@
       (throw (ex-info "Artifact root is not an absolute path"
                        {:error-type :artifact-root-relative :root root :checked-vars checked-vars}))
 
+      ;; Checked by NAME first, ahead of ownership: /tmp and /dev/shm are
+      ;; RAM-backed regardless of who owns them (often root, via a sticky
+      ;; bit), and a caller reading the refusal deserves the precise reason
+      ;; rather than "not owned" masking "RAM-backed" for exactly the two
+      ;; paths this whole repair exists to catch.
+      (pc/literal-ram-path? root)
+      (throw (ex-info (pc/refusal-message {:reason :ram-path-prefix :base root})
+                       {:reason :ram-path-prefix :base root
+                        :error-type :artifact-root-ram-backed
+                        :root root :checked-vars checked-vars}))
+
+      (not (or (under-home? root) (owned-by-invoking-user? root)))
+      (throw (ex-info "Artifact root is outside $HOME and not owned by the invoking user"
+                       {:error-type :artifact-root-not-owned :root root :checked-vars checked-vars}))
+
       :else
-      (do
-        (try (.mkdirs (io/file root)) (catch Throwable _ nil))
-        (cond
-          (not (or (under-home? root) (owned-by-invoking-user? root)))
-          (throw (ex-info "Artifact root is outside $HOME and not owned by the invoking user"
-                           {:error-type :artifact-root-not-owned :root root :checked-vars checked-vars}))
+      (let [ancestor (pc/nearest-existing-ancestor root)]
+        (if-let [refusal (and ancestor (pc/base-refusal ancestor))]
+          (throw (ex-info (pc/refusal-message refusal)
+                           (assoc refusal :error-type :artifact-root-ram-backed
+                                  :root root :checked-vars checked-vars)))
+          root)))))
 
-          (ram-backed-path? root)
-          (throw (ex-info "Artifact root is RAM-backed (/tmp, /dev/shm, or a tmpfs mount)"
-                           {:error-type :artifact-root-ram-backed :root root :checked-vars checked-vars}))
-
-          :else root)))))
+;; @spec ALIAS-MIGRATION-001
+(defn writable-root!
+  "THE single entrance every writer under *artifact-root* must call before
+   creating anything (SPF-005: mcp-alias-migration/append-telemetry! built
+   its directory straight from *artifact-root* and called mkdirs directly,
+   never through here or through `directory` -- an unvalidated root reached
+   a real write). Validates and returns *artifact-root* unchanged; throws on
+   any failure. No mkdirs, no touch, no side effect happens in this
+   function or in `validate-artifact-root!` -- callers do their own mkdirs
+   only AFTER this returns."
+  []
+  (validate-artifact-root! *artifact-root*))
 
 ;; @spec ALIAS-MIGRATION-001
 (defn directory [verb workspace]
-  (validate-artifact-root! *artifact-root*)
+  (writable-root!)
   (let [root (.getCanonicalFile (io/file (str workspace)))
         digest (.digest (MessageDigest/getInstance "SHA-256") (.getBytes (str root) "UTF-8"))
         identity (apply str (map #(format "%02x" (bit-and 255 %)) digest))

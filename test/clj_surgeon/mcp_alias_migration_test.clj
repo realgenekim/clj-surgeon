@@ -7395,3 +7395,101 @@
           (is (some? error))
           (is (= :artifact-root-relative (:error-type (ex-data error))))))
       (finally (delete-tree! root)))))
+
+;; RATCHET (2026-09-10, SPF-004, Sol's fence NO-GO on 3dd61167):
+;; validate-artifact-root! called mkdirs BEFORE its ownership/RAM checks, so
+;; a refused candidate was created and left behind on disk. Every case here
+;; proves the opposite: after a refusal, the probe path does not exist.
+(deftest artifact-root-refusal-leaves-no-directory-behind-tmp
+  (let [probe (str "/tmp/clj-surgeon-spf004-probe-" (System/nanoTime))]
+    (is (thrown? clojure.lang.ExceptionInfo (artifacts/validate-artifact-root! probe)))
+    (is (not (.exists (io/file probe))))))
+
+(deftest artifact-root-refusal-leaves-no-directory-behind-devshm
+  (let [probe (str "/dev/shm/clj-surgeon-spf004-probe-" (System/nanoTime))]
+    (is (thrown? clojure.lang.ExceptionInfo (artifacts/validate-artifact-root! probe)))
+    (is (not (.exists (io/file probe))))))
+
+(deftest artifact-root-refusal-leaves-no-directory-behind-tmpfs-under-home
+  ;; A real symlink under $HOME pointing at a genuinely RAM-backed directory
+  ;; (/run/user/<uid>, tmpfs on this box) -- the exact shape the fence's own
+  ;; probe used ("a default rooted below a $HOME/.local/state symlink into
+  ;; /dev/shm"). The literal-name check alone cannot catch this (the path
+  ;; text never mentions /tmp or /dev/shm); only base-refusal's real
+  ;; findmnt/mounts-table classification of the symlink's TARGET can.
+  (let [run-user (io/file "/run/user" (str (.trim (:out (shell/sh "id" "-u")))))]
+    (when (.isDirectory run-user)
+      (let [link-parent (io/file (System/getProperty "user.home")
+                                  ".local/state" (str "spf004-tmpfs-link-" (System/nanoTime)))
+            link (io/file link-parent "artifacts")
+            probe (str link "/probe")]
+        (try
+          (.mkdirs link-parent)
+          (java.nio.file.Files/createSymbolicLink
+            (.toPath link) (.toPath run-user)
+            (make-array java.nio.file.attribute.FileAttribute 0))
+          (is (thrown? clojure.lang.ExceptionInfo (artifacts/validate-artifact-root! (str link "/artifacts"))))
+          (is (not (.exists (io/file probe))))
+          ;; NEVER the shared delete-tree! here: it walks via file-seq,
+          ;; which follows a symlinked directory, and would try to recurse
+          ;; into (and delete from) the REAL /run/user/<uid> it points at.
+          ;; Delete only the symlink itself (Files/delete does not follow
+          ;; it), then the now-empty parent.
+          (finally
+            (Files/deleteIfExists (.toPath link))
+            (Files/deleteIfExists (.toPath link-parent))))))))
+
+(deftest artifact-root-refuses-as-unknown-not-accepted-when-classification-is-unavailable
+  ;; SPF-004's second half: the self-contained predicate FAILED OPEN when
+  ;; findmnt was unavailable. The production classifier must fail CLOSED
+  ;; instead -- with EVERY mount source hidden (findmnt stubbed away, the
+  ;; mounts-table fallback pointed at the documented witness seam), an
+  ;; actually-tmpfs path must still refuse (:unknown-fstype), never be
+  ;; silently accepted as real disk.
+  (require 'clj-surgeon.path-classification)
+  (let [findmnt (ns-resolve 'clj-surgeon.path-classification 'findmnt-fstype)
+        mounts-file (ns-resolve 'clj-surgeon.path-classification 'mounts-file)
+        run-user (io/file "/run/user" (str/trim (:out (shell/sh "id" "-u"))))]
+    (when (.isDirectory run-user)
+      (with-redefs-fn {findmnt (constantly nil)
+                       mounts-file (constantly "/nonexistent-clj-surgeon-mounts-seam")}
+        #(let [probe (str run-user "/spf004-unknown-probe")]
+           (is (= :unknown-fstype
+                  (:reason ((ns-resolve 'clj-surgeon.path-classification 'base-refusal) probe)))
+               "with no mount source able to answer, classification must be :unknown, never a pass")
+           (is (thrown? clojure.lang.ExceptionInfo (artifacts/validate-artifact-root! probe)))
+           (is (not (.exists (io/file probe)))))))))
+
+;; RATCHET (2026-09-10, SPF-005, Sol's fence NO-GO on 3dd61167):
+;; append-telemetry! built its directory straight from *artifact-root* and
+;; called mkdirs directly, bypassing validate-artifact-root!/writable-root!
+;; entirely -- an unvalidated root (CLJ_SURGEON_ARTIFACT_ROOT on tmpfs)
+;; reached a real write. Proves the entrance is now load-bearing: refuses,
+;; and writes nothing.
+(deftest telemetry-with-a-ram-root-refuses-and-writes-nothing
+  (let [probe (str "/dev/shm/clj-surgeon-spf005-telemetry-" (System/nanoTime))]
+    (with-bindings {(resolve 'clj-surgeon.receipt-artifacts/*artifact-root*) probe}
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (alias-migration/append-telemetry!
+                     {:type :telemetry :id "spf005" :wall_ms 1 :outcome "refused"}))))
+    (is (not (.exists (io/file probe))))))
+
+;; RATCHET (2026-09-10, SPF-005): ONE entrance for every writer under a
+;; derived *artifact-root* -- a source scan, not a listed set, so a new
+;; writer that skips the entrance fails this by name on the day it is
+;; written. Every src/*.clj file that reaches into
+;; receipt-artifacts/*artifact-root* directly must also call
+;; receipt-artifacts/writable-root! (or BE receipt_artifacts.clj, which
+;; defines the entrance and is exempt from calling itself).
+(deftest no-src-writer-reaches-artifact-root-without-the-entrance
+  (let [offenders (for [file (file-seq (io/file "src"))
+                        :when (and (.isFile ^java.io.File file)
+                                   (str/ends-with? (.getName ^java.io.File file) ".clj")
+                                   (not= "receipt_artifacts.clj" (.getName ^java.io.File file)))
+                        :let [text (slurp file)]
+                        :when (str/includes? text "*artifact-root*")
+                        :when (not (str/includes? text "writable-root!"))]
+                    (str file))]
+    (is (= [] offenders)
+        (str "reaches *artifact-root* directly without calling writable-root! first: "
+             (pr-str offenders)))))

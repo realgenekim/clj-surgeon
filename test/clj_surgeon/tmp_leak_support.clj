@@ -52,8 +52,8 @@
   (:require
    [babashka.fs :as fs]
    [babashka.process :as proc]
+   [clj-surgeon.path-classification :as pc]
    [clojure.java.io :as io]
-   [clojure.java.shell :as shell]
    [clojure.set :as set]
    [clojure.string :as str]))
 
@@ -71,12 +71,6 @@
    delete-tree -- is `clj-surgeon-suite-<pid>-<8 hex>`."
   "clj-surgeon-suite-")
 
-(def ^:private ram-path-prefixes
-  "Paths that are RAM-backed on this seat BY NAME -- checked with no external
-   binary and no procfs, exactly as ~/bin/seat-tmp-guard.sh does it. This is
-   the check that refuses when no mount source can answer at all."
-  ["/tmp" "/dev/shm"])
-
 ;; @spec TEST-ISO-006
 (def isolated-home-name
   "The throwaway `user.home` a home-isolated run is launched on, as a child of
@@ -89,278 +83,43 @@
   [root]
   (io/file (str root) isolated-home-name))
 
-(defn- canonical
-  [dir]
-  (try (.getCanonicalPath (io/file (str dir)))
-       (catch Throwable _ (str dir))))
+(def canonical pc/canonical)
 
 (defn- current-pid
   []
   (try (.pid (java.lang.ProcessHandle/current)) (catch Throwable _ 0)))
 
-(defn literal-ram-path?
-  "True when `dir` IS, or is under, a path this seat knows to be RAM-backed
-   by name (/tmp, /dev/shm) -- checked both as written and canonicalised, so
-   a symlink into /tmp cannot slip past."
-  [dir]
-  (let [candidates (distinct [(str dir) (canonical dir)])]
-    (boolean
-      (some (fn [p]
-              (some (fn [prefix] (or (= p prefix) (str/starts-with? p (str prefix "/"))))
-                    ram-path-prefixes))
-            candidates))))
-
-(defn- seam-mounts-file
-  "The mounts-table override, or nil. `CLJ_SURGEON_MOUNTS_FILE` is a witness
-   seam: the ratchet's own gate points it at a nonexistent path to execute the
-   \"no mount source can answer\" branch."
-  []
-  (System/getenv "CLJ_SURGEON_MOUNTS_FILE"))
-
-(defn- mounts-file
-  []
-  (or (seam-mounts-file) "/proc/mounts"))
-
-(defn- findmnt-fstype
-  [dir]
-  (try
-    (let [{:keys [exit out]} (shell/sh "findmnt" "-n" "-o" "FSTYPE" "--target" (str dir))]
-      (when (and (zero? exit) (seq (str/trim out)))
-        (str/trim out)))
-    (catch Throwable _ nil)))
-
-(defn darwin?
-  []
-  (str/includes? (str/lower-case (or (System/getProperty "os.name") "")) "mac"))
-
-(def ^:private darwin-mount-row
-  "`DEVICE on MOUNTPOINT (fstype, flag, flag)`, anchored at BOTH ends.
-
-   The mount point is whatever lies between the device token and the trailing
-   parenthesised group -- it is never found by searching for a separator, because
-   a mount point may legally CONTAIN the separator. Exactly ONE byte is removed,
-   the single space delimiting the option group; a mount point that legally ends
-   in a space keeps it. The trailing group is the
-   last `(...)` on the line and may not itself contain parentheses, so a mount
-   point that contains them (`/Volumes/My (Disk)`) still parses.
-
-   The device is one token, except the automounter's `map <name>` form."
-  #"^(?:map \S+|\S+) on (.*) \(([^()]+)\)$")
-
-(defn parse-darwin-mount-table
-  "The fstype covering `target`: an fstype string, nil when no row covers it, or
-   `:unknown` when the text is not a mount table this parser fully understands.
-
-   THE SAFETY PROPERTY, and the reason this is not a `keep`. Sol
-   SKIFF-INSTALL-FENCE-001: an earlier version split each line on the LAST
-   literal ` on `, so a mount point containing those bytes --
-
-       /dev/ram on /private/var/folders/evil on ram (tmpfs, local)
-
-   -- was discarded as malformed, and the surviving `/` row then answered
-   \"apfs\" for a target on that tmpfs. Crafted mount text could make the ratchet
-   PROVE real disk. Discarding a row you do not understand is the bug: the row
-   you cannot read is exactly the row that may be covering your target.
-
-   So ANY non-blank line that does not match the anchored grammar poisons the
-   WHOLE table to `:unknown`, and longest-prefix selection runs only over a table
-   that parsed completely. Refuse, or answer; never prove past an ambiguity.
-
-   PURE and public, so the property is witnessed from a Linux box."
-  [text target]
-  (let [lines (remove str/blank? (str/split-lines (or text "")))
-        rows (reduce (fn [acc line]
-                       (if-let [[_ mnt types] (re-matches darwin-mount-row line)]
-                         (let [fstype (str/trim (first (str/split types #",")))]
-                           ;; `mnt` is stored BYTE-FOR-BYTE. Sol
-                           ;; SKIFF-INSTALL-FENCE-001 round 2: this used to be
-                           ;; `(str/trim mnt)`, which silently contradicted the
-                           ;; exact-bytes contract two lines above it. A trailing
-                           ;; space is a legal Unix path byte, so trimming turned
-                           ;; the covering row `/Volumes/ram ` into
-                           ;; `/Volumes/ram`, it stopped covering the real target,
-                           ;; and the `/` row proved apfs for a tmpfs path. The
-                           ;; grammar already removes the one delimiter space
-                           ;; before the option group and nothing else; any
-                           ;; further normalisation here is a second, invisible
-                           ;; parser disagreeing with the first.
-                           (if (and (not (str/blank? mnt)) (seq fstype))
-                             (conj acc [mnt fstype])
-                             (reduced :unknown)))
-                         (reduced :unknown)))
-                     [] lines)]
-    (cond
-      (= :unknown rows) :unknown
-      (empty? rows) nil
-      :else (->> rows
-                 (filter (fn [[mnt _]]
-                           (or (= target mnt)
-                               (= mnt "/")
-                               (str/starts-with? target (str mnt "/")))))
-                 (sort-by (comp count first) >)
-                 first
-                 second))))
-
-(def ^:private darwin-mount-binaries
-  "`mount(8)` by ABSOLUTE path, never by bare name.
-
-   Sol SKIFF-INSTALL-FENCE-001, second half: the earlier version shelled out to
-   `mount` through PATH, and the claim in its docstring that this was a
-   non-redirectable system source was simply FALSE -- a `mount` earlier on PATH
-   printing `/dev/fake on / (apfs, local)` made base-refusal return nil. An
-   absolute path cannot be redirected by the environment; writing to /sbin needs
-   privileges that already defeat every check in this namespace."
-  ["/sbin/mount" "/bin/mount"])
-
-(defn- darwin-mount-fstype
-  "Longest-mount-point-prefix scan of `mount(8)`, the darwin equivalent of
-   findmnt.
-
-   WHY THIS HAD TO EXIST. Both existing mount sources are Linux-only: findmnt
-   is util-linux and the table is /proc/mounts. On macOS neither can answer, so
-   `mount-fstype` returned :unknown, `base-refusal` correctly failed CLOSED, and
-   EVERY JVM in the suite exited 97. The ratchet was not wrong -- it had no
-   authority to ask, and a gate with no authority is a gate that refuses
-   everything. This gives it one.
-
-   `mount` prints `DEVICE on MOUNTPOINT (fstype, opt, opt)`. A mount point may
-   contain spaces, so the split is anchored on the LAST ` on ` separator and the
-   first ` (` after it, never on whitespace.
-
-   The authority claim, stated exactly: the binary is named by ABSOLUTE path, so
-   PATH cannot redirect it, and a table this parser cannot fully read answers
-   `:unknown` rather than falling back to a covering row. It is not
-   unforgeable -- nothing reachable from bb is -- but forging it now requires
-   write access to /sbin, which already defeats every check here."
-  [dir]
-  (when (darwin?)
-    (try
-      (let [binary (first (filter #(.canExecute (io/file %)) darwin-mount-binaries))]
-        (when binary
-          (let [{:keys [exit out]} (shell/sh binary)]
-            (when (zero? exit)
-              (parse-darwin-mount-table out (canonical dir))))))
-      (catch Throwable _ nil))))
-
-(defn- mounts-table-fstype
-  "Longest-mount-point-prefix scan of the mounts table.
-
-   MEASURED 2026-09-04, and the reason round one's fallback was unreachable
-   dead code: procfs reports st_size = 0, so `slurp`, `(.readAllBytes
-   (io/input-stream ...))` AND `(line-seq (io/reader ...))` all throw
-   `java.io.IOException: Invalid argument` on /proc/mounts -- on bb AND on a
-   real JVM. `java.nio.file.Files/lines` is the one approach that reads all
-   41 lines on both runtimes, so it is the one used here."
-  [dir]
-  (try
-    (let [file (io/file (mounts-file))]
-      (when (.exists file)
-        (let [target (canonical dir)
-              lines (with-open [stream (java.nio.file.Files/lines (.toPath file))]
-                      (vec (iterator-seq (.iterator stream))))
-              best (->> lines
-                        (keep (fn [line]
-                                (let [[_dev mnt fstype] (str/split line #"\s+")]
-                                  (when (and mnt fstype
-                                             (or (= target mnt)
-                                                 (= mnt "/")
-                                                 (str/starts-with? target (str mnt "/"))))
-                                    [mnt fstype]))))
-                        (sort-by (comp count first) >)
-                        first)]
-          (second best))))
-    (catch Throwable _ nil)))
-
-(defn mount-fstype
-  "Filesystem type for `dir` as a TRI-STATE: the fstype string when a mount
-   source could answer, or `:unknown` when none could.
-
-   Round one returned nil here and `tmpfs?` coerced nil to \"not tmpfs\",
-   so an undeterminable filesystem was treated as proven-safe and the suite
-   ran on RAM. `:unknown` is a refusal (see `base-refusal`), not a pass."
-  [dir]
-  (or (findmnt-fstype dir)
-      ;; darwin's own authority, for the same reason findmnt is Linux's.
-      (darwin-mount-fstype dir)
-      ;; A seam-sourced fstype is NEVER positive proof of real disk. The gate
-      ;; only ever needs the seam to produce a REFUSAL, so a forged table can
-      ;; refuse (tmpfs) but a non-tmpfs answer from it reads as `nothing could
-      ;; answer`. Without this, an operator handing the check a lying table
-      ;; converts `I cannot prove this is disk` into `proven disk` -- a gate a
-      ;; caller can turn off, and the review ran a whole suite on RAM that way.
-      ;; @spec MCP-OP-TMPHYG-011
-      (let [fstype (mounts-table-fstype dir)]
-        (cond
-          (nil? fstype) nil
-          (= "tmpfs" fstype) fstype
-          (some? (seam-mounts-file)) nil
-          :else fstype))
-      :unknown))
-
-(defn tmpfs?
-  "True when `dir`'s filesystem is KNOWN to be tmpfs (RAM-backed). Note that
-   false here means \"not known to be tmpfs\" and is NOT on its own a licence
-   to run -- `base-refusal` is the decision function."
-  [dir]
-  (= "tmpfs" (mount-fstype dir)))
-
-(defn- suggested-tmp-base
-  "A real-disk scratch base to SUGGEST in a refusal. The remedy used to name
-   /var/tmp/forge unconditionally -- a directory on exactly one machine, offered
-   as advice to every operator on every box."
-  []
-  (let [candidates (cond-> ["/var/tmp"] (darwin?) (conj "/private/var/tmp"))]
-    (or (first (filter #(.isDirectory (io/file %)) candidates)) "/var/tmp")))
-
-(defn- refusal-remedy
-  []
-  (let [base (suggested-tmp-base)]
-    (str "Launch with -Djava.io.tmpdir=" base "/clj-surgeon, or export TMPDIR="
-         base "/clj-surgeon before invoking bb (bb does not read "
-         "JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already "
-         "sets is real disk and needs no override -- an EMPTY TMPDIR is the "
-         "usual cause of this refusal, not a wrong one.")))
-
+(def literal-ram-path? pc/literal-ram-path?)
+(def darwin? pc/darwin?)
+(def parse-darwin-mount-table pc/parse-darwin-mount-table)
+(def mount-fstype pc/mount-fstype)
+(def tmpfs? pc/tmpfs?)
 ;; @spec MCP-OP-TMPHYG-003
-(defn base-refusal
-  "nil when `dir` is PROVEN to be a real-disk path; otherwise a typed refusal
-   map {:reason :ram-path-prefix|:tmpfs|:unknown-fstype :base ... :fstype ...}.
+(def base-refusal pc/base-refusal)
 
-   Fails CLOSED: every path out of this function that is not a positive proof
-   of real disk is a refusal."
-  [dir]
-  (if (literal-ram-path? dir)
-    {:reason :ram-path-prefix :base (str dir)}
-    (let [fstype (mount-fstype dir)]
-      (cond
-        (= :unknown fstype) {:reason :unknown-fstype :base (str dir)}
-        (= "tmpfs" fstype) {:reason :tmpfs :base (str dir) :fstype fstype}
-        :else nil))))
 
 (defn refusal-message
-  [{:keys [reason base fstype detail]}]
-  (format "tmp-refused: java.io.tmpdir base=%s %s %s"
-          base
-          (case reason
-            :ram-path-prefix
-            "is a RAM-backed path by name (/tmp or /dev/shm)."
-            :unknown-fstype
-            (str "has an UNDETERMINABLE filesystem type -- neither findmnt nor "
-                 "the mounts table could answer, so nothing proves it is not RAM. "
-                 "Refusing rather than assuming disk.")
-            :tmpfs
-            (format "is RAM-backed (tmpfs, fstype=%s)." fstype)
-            :unusable-base
-            (str "cannot be used as a temp base: " detail)
-            :sentinel-mismatch
-            (str "was handed a re-exec sentinel it does not own: " detail)
-            :node-compile-cache-not-disabled
-            "was launched WITHOUT NODE_DISABLE_COMPILE_CACHE=1 required by the test runner."
-            :home-not-isolated
-            (str "was launched WITHOUT the isolated user.home this run "
-                 "requires (TEST-ISO-006): " detail)
-            "is not usable as a temp base.")
-          (refusal-remedy)))
+  "The three path-classification reasons (:ram-path-prefix, :unknown-fstype,
+   :tmpfs) delegate to `clj-surgeon.path-classification/refusal-message` so
+   the wording lives in one place; the rest are this ratchet's own reasons,
+   unrelated to filesystem classification."
+  [{:keys [reason base detail] :as refusal}]
+  (if (#{:ram-path-prefix :unknown-fstype :tmpfs} reason)
+    (pc/refusal-message refusal)
+    (format "tmp-refused: java.io.tmpdir base=%s %s %s"
+            base
+            (case reason
+              :unusable-base
+              (str "cannot be used as a temp base: " detail)
+              :sentinel-mismatch
+              (str "was handed a re-exec sentinel it does not own: " detail)
+              :node-compile-cache-not-disabled
+              "was launched WITHOUT NODE_DISABLE_COMPILE_CACHE=1 required by the test runner."
+              :home-not-isolated
+              (str "was launched WITHOUT the isolated user.home this run "
+                   "requires (TEST-ISO-006): " detail)
+              "is not usable as a temp base.")
+            (pc/refusal-remedy))))
 
 (defn- refuse!
   [refusal]
