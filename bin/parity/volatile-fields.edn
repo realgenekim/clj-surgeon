@@ -19,26 +19,6 @@
    :to "<ELAPSED>"
    :reason "Wall clock of the operation. MCP-OP-TIME-001 stamps it from System/nanoTime inside the finalizer; two runs of one build never agree."
    :evidence "differs stable-vs-stable"}
-  {:key :started_at
-   :match :key
-   :to "<TIME>"
-   :reason "Wall-clock start stamp."
-   :evidence "differs stable-vs-stable"}
-  {:key :finished_at
-   :match :key
-   :to "<TIME>"
-   :reason "Wall-clock finish stamp."
-   :evidence "differs stable-vs-stable"}
-  {:key :timestamp
-   :match :key
-   :to "<TIME>"
-   :reason "Wall-clock stamp."
-   :evidence "differs stable-vs-stable"}
-  {:key :run_id
-   :match :key
-   :to "<RUN-ID>"
-   :reason "Per-invocation identity, minted fresh on every call by construction."
-   :evidence "differs stable-vs-stable"}
   {:key :receipt_path
    :match :key
    :to "<RECEIPT-PATH>"
@@ -57,28 +37,8 @@
   {:key :duration_ms
    :match :key
    :to "<ELAPSED>"
-   :reason "Per-check wall clock inside a verification profile result."
-   :evidence "differs stable-vs-stable"}
-  {:key :ms
-   :match :key
-   :to "<ELAPSED>"
-   :reason "Per-check wall clock inside a verification profile result."
-   :evidence "differs stable-vs-stable"}
-  {:key :commit
-   :match :key
-   :to "<COMMIT>"
-   :reason "The git commit the operation created in the fixture. Two fresh fixtures produce different commit SHAs because the committer timestamp differs; the TREE those commits point at is compared byte for byte by the tree manifest, which is the stronger check."
-   :evidence "differs stable-vs-stable"}
-  {:key :commit_sha
-   :match :key
-   :to "<COMMIT>"
-   :reason "As :commit."
-   :evidence "differs stable-vs-stable"}
-  {:key :head
-   :match :key
-   :to "<COMMIT>"
-   :reason "As :commit."
-   :evidence "differs stable-vs-stable"}
+   :reason "The wall clock of ONE check inside a verification profile result. Only the duration is normalised; the check's name, command, exit code and status are compared byte for byte, which is what actually says the verification did the same work."
+   :evidence "stable-vs-stable GREEN, all six checks of the split-unit profile: e.g. [:checks 3 :duration_ms] 21896.34 vs 21314.60"}
   {:key :receipt_id
    :match :key
    :to "<RECEIPT-ID>"
