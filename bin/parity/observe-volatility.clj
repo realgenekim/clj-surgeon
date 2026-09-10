@@ -18,7 +18,12 @@
 ;; digests, and RE-DERIVES the difference before it will honour any rule that
 ;; cites the observation. A row whose run has no retained capture refuses.
 (ns parity.observe
-  (:require [clojure.edn :as edn] [clojure.java.io :as io] [clojure.string :as str]))
+  (:require [clojure.edn :as edn] [clojure.java.io :as io]
+            [clojure.java.shell :as shell] [clojure.string :as str]))
+
+(defn- git-head [dir]
+  (let [{:keys [exit out]} (shell/sh "git" "-C" dir "rev-parse" "HEAD")]
+    (when (zero? exit) (str/trim-newline out))))
 
 (defn- read-edn [f] (with-open [r (java.io.PushbackReader. (io/reader f))] (edn/read {:eof ::eof} r)))
 (defn- exists? [f] (.exists (io/file f)))
@@ -90,6 +95,10 @@
           capture-digest (sha256 (pr-str files))
           capture {:run run-id :specimen spec
                    :stable-build stable-build
+                   ;; the commit that OWNS these generator bytes; the comparator
+                   ;; reads the blob out of git at this commit rather than trusting
+                   ;; the file lying beside it
+                   :source-commit (git-head (str (.getParent (io/file *file*)) "/../.."))
                    :generator-sha256 (sha256-file *file*)
                    :files files
                    :capture-digest capture-digest

@@ -174,6 +174,80 @@ OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$HERE/volatile-fields.edn" undeclared)"; R
 check "a receipt present for an undeclared specimen refuses" REFUSED "does not declare :expects-receipt" "$OUT" $RC
 
 
+echo "PARITY-FENCE-005 — a rule is authorised by replay, not by citation"
+
+# 5a. Sol's round-3 control, made permanent: a :candidate_hash rule whose evidence
+# cites the GENUINE retained [:elapsed_ms] observation. Every digest and
+# retained-byte check passes; the replay is what refuses.
+python3 - "$HERE/volatile-fields.edn" "$WORK/laundered.edn" <<'PY'
+import sys
+s = open(sys.argv[1]).read()
+rule = ('{:key :candidate_hash :match :key :to "<CANDIDATE-HASH>"\n'
+        '   :reason "claims wall-clock volatility"\n'
+        '   :evidence {:run "OBS2-provenance" :specimen :split :path [:elapsed_ms]}}\n  ')
+s = s.replace(' :fields\n [', ' :fields\n [' + rule, 1)
+open(sys.argv[2], 'w').write(s)
+PY
+OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$WORK/laundered.edn")"; RC=$?
+check "a rule laundering an unrelated observation refuses, naming rule and path" REFUSED ":candidate_hash" "$OUT" $RC
+
+# 5b. and it says WHY: the selector does not select the path it cites.
+check "the refusal names the selector mismatch" REFUSED "does not select its evidence path" "$OUT" $RC
+
+# 5c. a rule that explains nothing new — a duplicate of one already in the list —
+# cannot be paid for by the observation the original explains.
+python3 - "$HERE/volatile-fields.edn" "$WORK/redundant.edn" <<'PY'
+import sys, re
+s = open(sys.argv[1]).read()
+m = re.search(r'  \{:key :elapsed_ms\n(?:   [^\n]*\n)*', s)
+s = s[:m.end()] + m.group(0).replace(':elapsed_ms :match', ':elapsed_ms :match') + s[m.end():]
+open(sys.argv[2], 'w').write(s)
+PY
+OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$WORK/redundant.edn")"; RC=$?
+check "a duplicated rule is not necessary for its own evidence and refuses" REFUSED "not necessary for its own evidence" "$OUT" $RC
+
+echo "PARITY-FENCE-006 — provenance is bound to a commit, not to the file beside it"
+
+# 6a. Sol's control: modify the generator, refresh every digest, rebind the
+# stable build. The commit binding is what refuses.
+rm -rf "$WORK/rebound"; cp -r "$HERE" "$WORK/rebound"
+printf '\n;; modified\n' >> "$WORK/rebound/observe-volatility.clj"
+bb -e '
+(require (quote [clojure.edn :as edn]) (quote [clojure.string :as s]))
+(defn sha256 [^String x] (let [d (java.security.MessageDigest/getInstance "SHA-256")]
+  (apply str (map #(format "%02x" %) (.digest d (.getBytes x "UTF-8"))))))
+(let [dir (first *command-line-args*)
+      f (str dir "/observed-volatility.edn")
+      gen (sha256 (slurp (str dir "/observe-volatility.clj")))
+      txt (-> (slurp f)
+              (s/replace #":generator-sha256 \"[0-9a-f]+\"" (str ":generator-sha256 \"" gen "\""))
+              (s/replace #":stable-build \"[0-9a-zA-Z-]+\"" ":stable-build \"NOT-A-COMMIT\""))]
+  (spit f txt))' "$WORK/rebound"
+OUT="$(bb "$WORK/rebound/compare.clj" "$SUBJECT/A" "$SUBJECT/B" "$WORK/rebound/volatile-fields.edn" split 2>&1)"; RC=$?
+check "a modified generator with refreshed digests refuses on the commit binding" REFUSED "generator blob" "$OUT" $RC
+
+echo "PARITY-FENCE-007 — the child cannot resolve the installed launcher"
+
+LAUNCHER="$(command -v clj-surgeon 2>/dev/null || echo /home/forge/bin/clj-surgeon)"
+LDIR="$(dirname "$LAUNCHER")"
+CHILD_PATH="${PARITY_SAFE_PATH:-/usr/local/bin:/usr/bin:/bin}"
+case ":$CHILD_PATH:" in
+  *":$LDIR:"*) echo "  FAIL  the child PATH still contains $LDIR"; FAIL=$((FAIL+1)) ;;
+  *)           echo "  PASS  the child PATH excludes the launcher directory $LDIR"; PASS=$((PASS+1)) ;;
+esac
+if PATH="$CHILD_PATH" command -v clj-surgeon >/dev/null 2>&1; then
+  echo "  FAIL  clj-surgeon still resolves under the child PATH"; FAIL=$((FAIL+1))
+else
+  echo "  PASS  clj-surgeon does not resolve under the child PATH"; PASS=$((PASS+1))
+fi
+for t in bb clojure java git python3; do
+  if PATH="$CHILD_PATH" command -v "$t" >/dev/null 2>&1; then
+    PASS=$((PASS+1)); echo "  PASS  the child PATH still provides $t"
+  else
+    FAIL=$((FAIL+1)); echo "  FAIL  the child PATH does not provide $t"
+  fi
+done
+
 echo
 echo "self-test: $PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]

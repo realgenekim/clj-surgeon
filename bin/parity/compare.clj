@@ -22,6 +22,7 @@
 (ns parity.compare
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojure.java.shell :as shell]
             [clojure.string :as str]
             [clojure.walk :as walk]))
 
@@ -32,6 +33,7 @@
   (let [d (java.security.MessageDigest/getInstance "SHA-256")]
     (apply str (map #(format "%02x" %) (.digest d (.getBytes s "UTF-8"))))))
 (defn- exists? [f] (.exists (io/file f)))
+(declare normalise)
 (defn- slurp-or [f d] (if (exists? f) (str/trim (slurp f)) d))
 
 ;; ---------------------------------------------------------------------------
@@ -83,6 +85,73 @@
     (set (concat object-paths tree-paths))))
 
 (def ^:private capture-cache (atom {}))
+(def ^:dynamic *doc* nil)
+
+;; --- commit-bound provenance ----------------------------------------------
+;; A generator digest checked against the file lying beside the comparator is
+;; self-consistent and proves nothing: edit both and the story still hangs
+;; together. The evidence therefore names the REPOSITORY COMMIT that owns the
+;; generator, and the bytes are read out of git, not the working tree.
+(defn- git [& args]
+  (let [{:keys [exit out]} (apply shell/sh (concat ["git" "-C" here] args))]
+    (when (zero? exit) (str/trim-newline out))))
+
+(defn- git-blob [commit path]
+  (let [{:keys [exit out]} (shell/sh "git" "-C" here "cat-file" "blob" (str commit ":" path))]
+    (when (zero? exit) out)))
+
+(defn verify-provenance
+  "nil when the evidence document is bound to a real commit on this branch whose
+  generator blob is the one that produced it."
+  [doc]
+  (let [{:keys [source-commit generator-sha256 stable-build]} doc
+        rel "bin/parity/observe-volatility.clj"]
+    (cond
+      (not (string? source-commit))
+      "REFUSING: observed-volatility.edn does not name the :source-commit that produced it. Provenance that names no commit is provenance nobody can check."
+      (nil? (git "cat-file" "-e" (str source-commit "^{commit}")))
+      (str "REFUSING: :source-commit " (pr-str source-commit) " is not a commit in this repository.")
+      (not (zero? (:exit (shell/sh "git" "-C" here "merge-base" "--is-ancestor" source-commit "HEAD"))))
+      (str "REFUSING: :source-commit " (pr-str source-commit) " is not an ancestor of HEAD. Evidence generated off this branch cannot authorise rules on it.")
+      (nil? (git-blob source-commit rel))
+      (str "REFUSING: commit " (pr-str source-commit) " contains no " rel " — it cannot be the generator's provenance authority.")
+      (not= generator-sha256 (sha256 (git-blob source-commit rel)))
+      (str "REFUSING: the generator blob at " (pr-str source-commit) " does not hash to the :generator-sha256 the evidence records. A modified generator with refreshed digests is exactly what this check exists to stop.")
+      (not (string? stable-build))
+      "REFUSING: observed-volatility.edn does not name the :stable-build both sides were built from."
+      (not (zero? (:exit (shell/sh "git" "-C" here "cat-file" "-e" (str stable-build "^{commit}")))))
+      (str "REFUSING: :stable-build " (pr-str stable-build) " is not a commit — the executor both sides ran must be nameable.")
+      :else nil)))
+
+;; --- 005: a rule is authorised by REPLAY, not by citation -------------------
+;; Citing a real volatile path is not enough: any real difference could otherwise
+;; buy permission to normalise an unrelated invariant. A rule is honoured only if,
+;; replayed ALONE over the retained bytes, its selector picks out exactly the path
+;; it cites, that difference disappears under it, and the difference is still
+;; there under every OTHER rule — so the permission is paid for by the difference
+;; it actually explains.
+
+(defn- selector-shape-ok?
+  [{:keys [match key under]} path]
+  (case match
+    :key       (= (last path) key)
+    :key-under (and (= (last path) key) (= (last (butlast path)) under))
+    (:regex :path-in) (not= (first path) "tree")
+    true))
+
+(defn- glob->re
+  "A tree-exclusion glob as a regex over a manifest-relative path. `**` spans
+  directories, `*` does not; every other character is literal."
+  [g]
+  (let [esc (fn [s] (clojure.string/replace s #"([.+^$(){}\[\]|?\\])" "\\\\$1"))
+        parts (clojure.string/split g #"\*\*" -1)
+        body (clojure.string/join ".*"
+               (for [part parts]
+                 (clojure.string/join "[^/]*"
+                   (map esc (clojure.string/split part #"\*" -1)))))]
+    (re-pattern (str "^/?" body "$"))))
+
+(defn- tree-path-of [path] (when (= (first path) "tree") (str/replace (second path) #"^/" "")))
 
 (defn verify-capture
   "nil when the cited observation is backed by retained bytes that still show it."
@@ -106,6 +175,13 @@
                " does not hash to what capture.edn records: " (pr-str (vec bad)))
           (not= (sha256 (pr-str recomputed)) (:capture-digest capture))
           (str "the capture digest for run " (pr-str run) " specimen " (pr-str specimen) " does not recompute")
+          (not= (:source-commit capture) (:source-commit *doc*))
+          (str "the capture for run " (pr-str run) " names :source-commit " (pr-str (:source-commit capture))
+               " but the evidence document names " (pr-str (:source-commit *doc*)))
+          (not= (:generator-sha256 capture) (:generator-sha256 *doc*))
+          (str "the capture for run " (pr-str run) " names a different generator than the authenticated document")
+          (not= (:stable-build capture) (:stable-build *doc*))
+          (str "the capture for run " (pr-str run) " names a different :stable-build than the authenticated document")
           (and cited-digest (not= cited-digest (:capture-digest capture)))
           (str "the observation cites capture digest " cited-digest
                " but the retained capture is " (:capture-digest capture))
@@ -115,6 +191,91 @@
           (str "the retained capture for run " (pr-str run) " specimen " (pr-str specimen)
                " does NOT show " (pr-str path) " differing. The bytes are the evidence; "
                "the row is only a claim about them.")
+          :else nil)))))
+
+(defn- capture-roots
+  "The two fixture roots the retained capture was produced in. They are the only
+  input that differed between the sides, and the :path-in rule is about them, so
+  the replay has to know them exactly as the live comparison does."
+  [dir]
+  (vec (remove str/blank?
+         (for [side ["A" "B"]]
+           (let [f (str dir "/" side "/stdout.edn")]
+             (when (exists? f)
+               (let [m (read-edn f)]
+                 (or (:workspace_root m) (get-in m [:structured :workspace_root])))))))))
+
+(defn- normalised-diff-paths
+  "The set of paths still differing in the retained capture under DECL."
+  [dir decl]
+  (let [dv (fn dv [a b path acc]
+             (cond
+               (= a b) acc
+               (and (map? a) (map? b))
+               (reduce (fn [acc k] (dv (get a k ::absent) (get b k ::absent) (conj path k) acc))
+                       acc (sort-by str (distinct (concat (keys a) (keys b)))))
+               (and (sequential? a) (sequential? b) (= (count a) (count b)))
+               (reduce (fn [acc i] (dv (nth a i) (nth b i) (conj path i) acc)) acc (range (count a)))
+               :else (conj acc path)))]
+    (set (mapcat (fn [f]
+                   (let [a (str dir "/A/" f) b (str dir "/B/" f)]
+                     (if (and (exists? a) (exists? b))
+                       (let [roots (capture-roots dir)]
+                         (dv (normalise (read-edn a) roots decl) (normalise (read-edn b) roots decl) [] []))
+                       [])))
+                 ["stdout.edn" "receipt.edn"]))))
+
+(def ^:private replay-cache (atom {}))
+(defn- replay [dir decl]
+  (let [k [dir (pr-str decl)]]
+    (or (get @replay-cache k)
+        (get (swap! replay-cache assoc k (normalised-diff-paths dir decl)) k))))
+
+(defn authorise-rule
+  "nil when replaying THIS rule alone over the retained bytes explains the exact
+  difference it cites, and no other rule already does."
+  [evidence-root decl rule {:keys [run specimen path]}]
+  (let [dir (str evidence-root "/" run "/" (name specimen))
+        tree? (= (first path) "tree")
+        exclusion? (contains? rule :glob)]
+    (cond
+      (and exclusion? (not tree?))
+      (str "a tree exclusion cites " (pr-str path) ", which is not a tree path")
+      (and (not exclusion?) tree?)
+      (str "a field rule cites the tree path " (pr-str path) "; only a tree exclusion can be paid for by one")
+
+      exclusion?
+      (let [p (tree-path-of path)
+            mine (re-matches (glob->re (:glob rule)) p)
+            others (filter #(and (not= % rule) (re-matches (glob->re (:glob %)) p)) (:tree-excludes decl))]
+        (cond
+          (nil? mine) (str "its glob " (pr-str (:glob rule)) " does not match its own evidence path " (pr-str p))
+          (seq others) (str "the path " (pr-str p) " is already excluded by " (pr-str (mapv :glob others))
+                            " — this exclusion is not what explains that difference")
+          :else nil))
+
+      (not (selector-shape-ok? rule path))
+      (str "its selector does not select its evidence path " (pr-str path)
+           " — a rule may only be paid for by the difference it actually explains")
+
+      :else
+      ;; NECESSARY and SUFFICIENT, replayed over the retained bytes:
+      ;;   with the whole declaration the cited difference must be gone, and
+      ;;   with this rule REMOVED it must come back.
+      ;; Sufficiency alone would let a redundant rule ride on someone else's work;
+      ;; necessity alone would let a rule that explains nothing sit in the list.
+      ;; Together they stop the laundering attack: a :candidate_hash rule citing
+      ;; the genuine [:elapsed_ms] observation is not necessary to explain
+      ;; [:elapsed_ms] — the :elapsed_ms rule already does — so it refuses.
+      (let [full    (replay dir {:fields (vec (:fields decl))})
+            without (replay dir {:fields (vec (remove #(= % rule) (:fields decl)))})]
+        (cond
+          (contains? full path)
+          (str "the declaration as a whole does NOT remove the difference at " (pr-str path)
+               " that it cites")
+          (not (contains? without path))
+          (str "removing this rule leaves the difference at " (pr-str path) " explained anyway — "
+               "the rule is not necessary for its own evidence, so that observation does not pay for it")
           :else nil)))))
 
 (defn- observation-for [observations {:keys [run specimen path]}]
@@ -127,7 +288,7 @@
   (let [observations (:observations doc)
         evidence-root (str here "/" (or (:evidence-root doc) "evidence"))
         file-refusals
-        (cond-> []
+        (cond-> (if-let [bad (verify-provenance doc)] [bad] [])
           (not= (:generator-sha256 doc)
                 (and (exists? generator-file) (sha256 (slurp generator-file))))
           (conj (str "REFUSING: observed-volatility.edn was generated by a different "
@@ -159,7 +320,9 @@
               (if-let [bad (verify-capture evidence-root evidence
                                            (:capture-digest (observation-for observations evidence)))]
                 [(str "REFUSING: " nm " — " bad)]
-                []))))]
+                (if-let [bad (authorise-rule evidence-root decl rule evidence)]
+                  [(str "REFUSING: " nm " cites " (pr-str (:path evidence)) " but " bad)]
+                  [])))))]
     (vec (concat file-refusals
                  (mapcat #(check "field rule" %) (:fields decl))
                  (mapcat #(check "tree exclusion" %) (:tree-excludes decl))))))
@@ -198,7 +361,10 @@
                                     (reduce-kv (fn [vm k2 v2] (assoc vm k2 (get (get under k) k2 v2))) {} v)
                                     :else v)))
                               {} x)
-          (string? x) (scrub-string x roots (or tok "<RUN-ROOT>") rules)
+          ;; the run-root scrub happens ONLY when a :path-in rule is declared.
+          ;; Applying it by default would make the rule unremovable and therefore
+          ;; unpayable: nothing could ever show it was necessary.
+          (string? x) (scrub-string x (if tok roots []) (or tok "<RUN-ROOT>") rules)
           :else x))
       form)))
 
@@ -234,7 +400,7 @@
 (defn -main [& [dir-a dir-b decl-file specimen-name]]
   (let [decl (read-edn decl-file)
         doc (if (exists? evidence-file) (read-edn evidence-file) {})
-        refusals (validate-declaration decl doc)]
+        refusals (binding [*doc* doc] (validate-declaration decl doc))]
     (when (seq refusals)
       (println "REFUSED" (count refusals))
       (doseq [r refusals] (println (str "  " r)))

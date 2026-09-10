@@ -19,21 +19,6 @@
    :to "<ELAPSED>"
    :reason "Wall clock of the operation. MCP-OP-TIME-001 stamps it from System/nanoTime inside the finalizer; two runs of one build never agree."
    :evidence {:run "OBS2-provenance" :specimen :split  :path [:elapsed_ms]}}
-  {:key :receipt_path
-   :match :key
-   :to "<RECEIPT-PATH>"
-   :reason "Absolute path into the per-run fixture, which differs by construction because each build gets its own fresh copy. The receipt's CONTENT is compared; only its location is normalised."
-   :evidence {:run "OBS2-provenance" :specimen :split  :path [:receipt_path]}}
-  {:key :details_path
-   :match :key
-   :to "<DETAILS-PATH>"
-   :reason "Same as :receipt_path: an absolute path into the per-run fixture."
-   :evidence {:run "OBS2-provenance" :specimen :split  :path [:details_path]}}
-  {:key :workspace_root
-   :match :key
-   :to "<WORKSPACE>"
-   :reason "The fresh fixture copy, different for each build by construction. The request is otherwise identical, so this is the only intended input difference."
-   :evidence {:run "OBS2-provenance" :specimen :split  :path [:workspace_root]}}
   {:key :duration_ms
    :match :key
    :to "<ELAPSED>"
@@ -49,16 +34,6 @@
    :to "<RECEIPT-HASH>"
    :reason "A hash OVER the published receipt document, which itself contains :receipt_id and the absolute receipt path. It is volatile BY CONSTRUCTION and is therefore NOT a parity signal. The parity signals for this operation are :map_hash, :snapshot_hash and :candidate_hash — content hashes of the split plan, the pre-state and the emitted result — and those are compared byte for byte and are NOT on this list."
    :evidence {:run "OBS2-provenance" :specimen :split  :path [:receipt_hash]}}
-  {:key :closure_receipt
-   :match :key
-   :to "<CLOSURE-RECEIPT-PATH>"
-   :reason "Absolute path into the per-run receipt store; the path embeds :receipt_id."
-   :evidence {:run "OBS2-provenance" :specimen :split  :path [:closure_receipt]}}
-  {:key :undo_receipt
-   :match :key
-   :to "<UNDO-RECEIPT-PATH>"
-   :reason "Absolute path into the per-run receipt store; the path embeds :receipt_id."
-   :evidence {:run "OBS2-provenance" :specimen :split  :path [:undo_receipt]}}
   {:key :id
    :match :key-under
    :under :telemetry
@@ -84,7 +59,7 @@
   {:match :path-in
    :to "<RUN-ROOT>"
    :reason "Any absolute path under the harness run root that appears inside a string value (refusal texts, next_call examples, check command lines). The run root is the ONLY input that differs between the two builds; leaving it unnormalised would make every receipt differ for a reason that is not the build."
-   :evidence {:run "OBS2-provenance" :specimen :split :path [:checks 3 :command 0]}}]
+   :evidence {:run "OBS2-provenance" :specimen :split :path [:workspace_status :command 2]}}]
 
  ;; Paths never compared in the TREE manifest, with the same burden of proof.
  :tree-excludes

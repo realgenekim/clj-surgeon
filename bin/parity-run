@@ -40,6 +40,20 @@ JVM_XMX="${JVM_XMX:-1g}"
 # is captured, and at most ONE is live at a time.  Set PARITY_KEEP_FIXTURES=1
 # to keep them when a divergence needs the actual bytes inspected by hand.
 KEEP_FIXTURES="${PARITY_KEEP_FIXTURES:-0}"
+# Children run with a MINIMAL EXPLICIT PATH. The seat's own ~/bin holds the
+# INSTALLED clj-surgeon launcher, and a child that inherits it can resolve
+# `clj-surgeon` to a build nobody is comparing. Every runtime and utility the
+# specimens need — bb, clojure, java, git, python3, curl, clj-kondo, coreutils —
+# resolves under /usr/local/bin, /usr/bin or /bin, so the launcher directory is
+# simply not on the path. (clj-surgeon's own lint invokes ~/bin/clj-kondo by
+# ABSOLUTE path, the seat's paved serialised entrance, which this does not disturb.)
+SAFE_PATH="${PARITY_SAFE_PATH:-/usr/local/bin:/usr/bin:/bin}"
+LAUNCHER_DIR="$(dirname "$(command -v clj-surgeon 2>/dev/null || echo /home/forge/bin/clj-surgeon)")"
+case ":$SAFE_PATH:" in
+  *":$LAUNCHER_DIR:"*)
+    echo "REFUSING: the child PATH ($SAFE_PATH) contains the installed launcher directory $LAUNCHER_DIR" >&2
+    exit 2 ;;
+esac
 
 usage() { sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 2; }
 [ $# -ge 2 ] || usage
@@ -92,6 +106,7 @@ HASH_A="$(source_hash "$BUILD_A")"; HASH_B="$(source_hash "$BUILD_B")"
 
 {
   echo "run_id        $RUN_ID"
+  echo "child_PATH    $SAFE_PATH"
   echo "build_A_ref   $BUILD_A_REF"
   echo "build_A_dir   $BUILD_A"
   echo "build_A_hash  $HASH_A"
@@ -164,7 +179,7 @@ PY
   local cpr="$PARITY_ROOT/cp/$(basename "$build")"
   mkdir -p "$(dirname "$cpr")"; printf '%s\n' "$build/" > "$cpr"
   local s=$(date +%s)
-  ( cd "$fx" && CLJ_SURGEON_CONTROL_PLANE_ROOT_FILE="$cpr" BABASHKA_PRELOADS= \
+  ( cd "$fx" && PATH="$SAFE_PATH" CLJ_SURGEON_CONTROL_PLANE_ROOT_FILE="$cpr" BABASHKA_PRELOADS= \
       bb --classpath "$build/src" -m clj-surgeon.core \
          :op :split-ns! :request-file "$out/request.edn" ) \
       > "$out/stdout.edn" 2> "$out/stderr.txt"
@@ -217,7 +232,7 @@ mcp_start() { # <build> <slot>
     return 2
   fi
   local state="$RUN_DIR/mcp-$slot"; mkdir -p "$state/telemetry"
-  ( cd "$build" && MCP_STATE_DIR="$state" \
+  ( cd "$build" && PATH="$SAFE_PATH" MCP_STATE_DIR="$state" \
       clojure -J-Xms64m -J-Xmx"$JVM_XMX" -X:clj-surgeon/mcp \
         :port "$port" :nrepl-port :none :telemetry :metrics \
         :telemetry-dir "\"$state/telemetry\"" :log-file "\"$state/server.log\"" \
