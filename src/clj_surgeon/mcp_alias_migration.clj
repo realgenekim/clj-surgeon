@@ -2811,6 +2811,13 @@
 (defn append-telemetry!
   "One line per call. Local plus file locking prevents thread/process interleave."
   [row]
+  ;; SPF-005 (fence round 3): this used to build `dir` straight from
+  ;; *artifact-root* and call mkdirs directly, never through
+  ;; `artifacts/directory` or a validator -- an unvalidated root (e.g.
+  ;; CLJ_SURGEON_ARTIFACT_ROOT pointed at tmpfs) reached a real write.
+  ;; `writable-root!` is the one entrance every artifact writer calls before
+  ;; creating anything; it throws before this function's own mkdirs runs.
+  (artifacts/writable-root!)
   (let [dir (io/file artifacts/*artifact-root* (str "alias-migration" "-receipts"))
         ledger (io/file dir "ledger.edn")]
     (.mkdirs dir)

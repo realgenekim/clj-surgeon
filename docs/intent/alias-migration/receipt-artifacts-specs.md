@@ -1,6 +1,6 @@
 # Receipt artifact isolation
 
-- [x] **ALIAS-MIGRATION-001**: When a Surgeon verb publishes receipt, detail or undo artifacts, it shall place them under `/var/tmp/forge/<verb>-receipts/` outside the workspace and report their absolute paths.
+- [x] **ALIAS-MIGRATION-001**: When a Surgeon verb publishes receipt, detail or undo artifacts, it shall place them under `<artifact-root>/<verb>-receipts/` outside the workspace and report their absolute paths, where `<artifact-root>` is derived per invoking user (`CLJ_SURGEON_ARTIFACT_ROOT`, else `$XDG_STATE_HOME/clj-surgeon/artifacts`, else `$HOME/.local/state/clj-surgeon/artifacts`) and validated before any write: non-blank, absolute, owned by the invoking user or under `$HOME`, and real disk (never RAM-backed) per `clj-surgeon.receipt-artifacts/validate-artifact-root!`.
 - [x] **ALIAS-MIGRATION-002**: When a verb completes a write in a Git workspace, its receipt shall publish `workspace_clean_except` only after post-write `git status --porcelain --untracked-files=all` proves there are no changed paths outside the verb's changed-file set; failed or unavailable proof shall be explicit and shall preserve the actual commit state.
 - [x] **ALIAS-MIGRATION-003**: When `make test` or `make landing-gate` runs, it shall execute the complete `clj-surgeon.mcp-alias-migration-test` and `clj-surgeon.receipt-artifacts-boundary-test` namespaces and propagate any failure; a battery freshness receipt shall not replace that execution.
 
