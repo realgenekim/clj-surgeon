@@ -3,11 +3,25 @@
   (:require
    [clj-surgeon.insert-forms :as insert]
    [clj-surgeon.insert-forms-support :as h]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is]]))
 
 ;; @spec INSERT-FORMS-016
 ;; INTENT-TEST: INSERT-FORMS-016
 (deftest insert-forms-receipt-accounting
+  (h/with-file h/source
+    (fn [dir _ req]
+      (let [relative (str (str/join "/" (repeat 16 (apply str (repeat 125 "x")))) "/example.clj")
+            file (io/file dir relative)
+            _ (io/make-parents file)
+            _ (spit file h/source)
+            result (insert/execute! (assoc req :file relative))]
+        (is (= :limit-exceeded (:error-type result)))
+        (is (= "refused" (:state result)))
+        (is (false? (:mutation_attempted result)))
+        (is (= h/source (slurp file)))
+        (is (<= (count (insert/receipt-text result)) 4096)))))
 
   (h/with-file h/source
     (fn [_ file req]
