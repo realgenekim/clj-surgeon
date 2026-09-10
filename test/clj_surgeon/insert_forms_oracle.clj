@@ -74,6 +74,38 @@
   (if (:entries entry)
     [(:tag entry) (mapv token-tree (remove #(#{:whitespace :newline :comma :comment} (:tag %)) (:entries entry)))]
     [(:tag entry) (:text entry)]))
+(defn exact-added [source payload destination p]
+  (let [anchor (if (= :forms (get-in destination [:container :tag]))
+                 (:owner destination)
+                 (or (first (:children destination)) (:container destination)))
+        start (:start anchor)
+        line-start (inc (.lastIndexOf ^String source "\n" (max 0 (dec start))))
+        target-column (+ (.codePointCount ^String source line-start start)
+                         (if (and (not= :forms (get-in destination [:container :tag]))
+                                  (empty? (:children destination))) 2 0))
+        newline (if (str/includes? source "\r\n") "\r\n" "\n")
+        literal-spans (for [entry (tree-seq (comp seq :entries) :entries (inventory payload))
+                            :when (or (str/starts-with? (:text entry) "\"")
+                                      (str/starts-with? (:text entry) "#\""))]
+                        [(:start entry) (:end entry)])
+        literal? (fn [pos] (some (fn [[a b]] (< a pos b)) literal-spans))
+        lines (re-seq #"[^\r\n]*(?:\r\n|\n|\r|$)" payload)
+        offsets (reductions + 0 (map count lines))
+        rows (map vector offsets lines)
+        measured (for [[offset line] rows :when (and (not (str/blank? line)) (not (literal? offset)))]
+                   (count (take-while #{\space} line)))
+        minimum (if (seq measured) (apply min measured) 0)
+        adjusted (apply str
+                        (for [[offset line] rows]
+                          (let [ending (re-find #"(?:\r\n|\n|\r)$" line)
+                                ending-start (+ offset (- (count line) (count ending)))
+                                normalized (if (and ending (not (literal? ending-start)))
+                                             (str (subs line 0 (- (count line) (count ending))) newline) line)]
+                            (if (or (str/blank? line) (literal? offset)) normalized
+                                (str (apply str (repeat target-column " ")) (subs normalized minimum))))))]
+    (str (when-not (or (zero? p) (= \newline (nth source (dec p)))) newline)
+         adjusted (when-not (str/ends-with? adjusted "\n") newline))))
+
 (defn verify [a b request receipt]
   (try
     (assert-law (= (digest a) (:source_hash receipt)) :source-hash)
@@ -96,6 +128,7 @@
           rest-roots (if top? (vec (remove (set inserted) future)) future)
           owner-index (.indexOf original (:owner selected))]
       (assert-law (= b (str (subs a 0 p) added (subs a p))) :one-splice)
+      (assert-law (= added (exact-added a (get-in request [:payload :text]) selected p)) :exact-added-bytes)
       (assert-law (= (get-in request [:payload :forms]) (count payload)) :payload-count)
       (assert-law (= (mapv token-tree payload) (mapv token-tree inserted)) :inserted-tokens)
       (assert-law (= (count original) (count rest-roots)) :root-count)
