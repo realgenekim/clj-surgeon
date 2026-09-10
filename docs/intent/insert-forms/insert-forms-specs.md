@@ -7,7 +7,7 @@ status: implemented
 # insert_forms v1 atomic requirements
 
 Source authority: 2026-09-10-insert-forms-contract-astra.md, sections 1–9.
-IDs are permanent. All eighteen named witnesses passed with 452 assertions on the implementation snapshot.
+IDs are permanent. All eighteen named witnesses passed with 457 assertions on the implementation snapshot.
 
 - [x] **INSERT-FORMS-001**: When a unique root owner is selected, the planner shall insert at its requested adjacent boundary.
 
