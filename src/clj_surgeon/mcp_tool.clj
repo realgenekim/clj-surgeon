@@ -18,6 +18,7 @@
    [clj-surgeon.mcp-formatter :as formatter]
    [clj-surgeon.mcp-helper-extraction :as helper-extraction]
    [clj-surgeon.mcp-namespace-split :as namespace-split]
+   [clj-surgeon.mcp-insert-forms :as insert-forms]
    [clj-surgeon.mcp-require-change :as require-change]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-operation :as mcp-operation]
@@ -2560,6 +2561,7 @@
            alias-migration-tool
            (helper-extraction/tool)
            namespace-split/tool
+           insert-forms/tool
            admit-tool/admit-clojure-patch-tool
            feature-thread/feature-thread-tool
            (assoc require-change/tool :tool-fn
