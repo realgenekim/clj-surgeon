@@ -64,10 +64,33 @@ MAX_SLOTS = 64
 ADMISSION_TIMEOUT_S = 60.0
 
 
+# The gate's memory arithmetic, kept spelling-for-spelling with
+# clj-surgeon.gate-memory (test/clj_surgeon/gate_memory.clj). This module holds
+# the per-acquire re-read because a slot must not pay a JVM start; the numbers
+# and the sentence are the coordinator's.
+RESERVE_MIB = 2048
+LANE_CHARGE_MIB = 1536
+SINGLE_LANE_FLOOR_MIB = RESERVE_MIB + LANE_CHARGE_MIB
+FLOOR_NOTE = ('%d MiB floor = reserve %d + %d per lane; GATE_MEMAVAIL_MIB=<MiB> '
+              'declares what this box may lend'
+              % (SINGLE_LANE_FLOOR_MIB, RESERVE_MIB, LANE_CHARGE_MIB))
+
+
+def insufficient_memory(memory_mib):
+    """The refusal, naming the floor, the formula and the override in one line.
+
+    Until 2026-09-10 it said only `insufficient memory for a bounded lane`, and
+    the skiff's operator -- who had already granted 3072 MiB by hand -- had no
+    way to learn that 3584 was the number or where it came from.
+    """
+    return RuntimeError('gate-refused: insufficient memory for a bounded lane '
+                        '-- %d MiB available, %s' % (memory_mib, FLOOR_NOTE))
+
+
 def derived_width(cpus, memory_mib):
-    allowance = (memory_mib - 2048) // 1536
+    allowance = (memory_mib - RESERVE_MIB) // LANE_CHARGE_MIB
     if allowance < 1:
-        raise RuntimeError('gate-refused: insufficient memory for a bounded lane')
+        raise insufficient_memory(memory_mib)
     return min(max(1, cpus // 2), allowance)
 
 
@@ -405,7 +428,7 @@ def try_acquire(namespace=None, read_capacity=capacity):
         current = read_capacity()
         width = current['width']
         if width < 1:
-            raise RuntimeError('gate-refused: insufficient memory for a bounded lane')
+            raise insufficient_memory(current['memory-mib'])
         free = []
         occupied = 0
         try:

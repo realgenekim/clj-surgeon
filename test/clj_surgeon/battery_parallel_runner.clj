@@ -547,11 +547,24 @@
   (if (namespace sel) (symbol (namespace sel)) sel))
 
 ;; @spec TEST-ISO-015 -- pure admission decisions, shared by every gate entrance.
+;;
+;; The floor, the formula and the override are read from
+;; `clj-surgeon.gate-memory` so that the refusal, `bin/install-preflight` and
+;; docs/install/skiff.md cannot drift apart. On 2026-09-10 the skiff's operator
+;; declared GATE_MEMAVAIL_MIB=3072 -- an honest grant, larger than a whole lane
+;; charge -- and was bounced by `{:memory-mib 3072 :required-mib 3584}` with no
+;; statement anywhere of where 3584 came from or of how much to grant instead.
 (defn gate-width [cpus memory-mib]
-  (let [by-memory (quot (- memory-mib 2048) 1536)]
+  (let [by-memory (quot (- memory-mib mem/reserve-mib) mem/lane-charge-mib)]
     (when (< by-memory 1)
-      (throw (ex-info "gate-refused: insufficient memory for a bounded lane"
-                      {:memory-mib memory-mib :required-mib 3584})))
+      (throw (ex-info (format "gate-refused: insufficient memory for a bounded lane -- %d MiB available, %s"
+                              memory-mib mem/floor-note)
+                      {:memory-mib memory-mib
+                       :required-mib mem/single-lane-floor-mib
+                       :reserve-mib mem/reserve-mib
+                       :lane-charge-mib mem/lane-charge-mib
+                       :remedy (str "grant at least " mem/single-lane-floor-mib
+                                    " with GATE_MEMAVAIL_MIB")})))
     (max 1 (min (max 1 (quot cpus 2)) by-memory))))
 
 (defn- shell-out
@@ -604,7 +617,10 @@
         memory (machine-memory-available-mib)]
     {:cpus cpus :memory-mib memory :lanes (gate-width cpus memory)
      :admission (gate-admission-mode)
-     :heap-mib 512 :reserve-mib 2048 :lane-charge-mib 1536}))
+     :heap-mib 512
+     :reserve-mib mem/reserve-mib
+     :lane-charge-mib mem/lane-charge-mib
+     :floor-mib mem/single-lane-floor-mib}))
 
 (defn census-problems [expected observed]
   (cond-> []
@@ -749,6 +765,12 @@
         required-suites (vec (keep :suite manifest))
         capacity (update (machine-capacity) :lanes min
                          (reduce + (map (comp count suite-namespaces) required-suites)))
+        ;; BEFORE any stage: what this box was measured to have, what the gate
+        ;; will spend it on, and the floor -- so the arithmetic behind a later
+        ;; refusal is already on the screen the operator kept.
+        _ (println (format "gate-capacity: %d MiB available, %d cpus, %d lane(s); %s"
+                           (:memory-mib capacity) (:cpus capacity) (:lanes capacity)
+                           mem/floor-note))
         _ (when debug? (println "SERIAL/NOT-A-GATE: debugging only; no landing receipt"))
         _ (doseq [s required-suites]
             (io/delete-file (io/file work-dir s "receipt.edn") true))

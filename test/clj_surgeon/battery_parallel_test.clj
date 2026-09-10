@@ -519,6 +519,42 @@
     (is (thrown? clojure.lang.ExceptionInfo (width 16 2048)))))
 
 ;; @spec TEST-ISO-015
+;; THE FLOOR IS PUBLISHED, NOT DISCOVERED BY REFUSAL. The skiff's operator was
+;; told the gate could not read his memory, granted GATE_MEMAVAIL_MIB=3072 --
+;; twice a lane's charge, an honest guess -- and was bounced with
+;; `{:memory-mib 3072 :required-mib 3584}` and no statement of where 3584 came
+;; from or how much to grant instead. One constant now feeds the refusal, the
+;; preflight and docs/install/skiff.md.
+(deftest the-single-lane-floor-is-named-with-its-formula-and-its-override
+  (let [width (requiring-resolve 'clj-surgeon.battery-parallel-runner/gate-width)]
+    (testing "the floor IS the formula, so it cannot be a stale literal"
+      (is (= 3584 mem/single-lane-floor-mib))
+      (is (= mem/single-lane-floor-mib (+ mem/reserve-mib mem/lane-charge-mib))))
+    (testing "one MiB below the floor refuses; the floor itself opens one lane"
+      (is (thrown? clojure.lang.ExceptionInfo (width 16 (dec mem/single-lane-floor-mib))))
+      (is (= 1 (width 16 mem/single-lane-floor-mib))))
+    (testing "the refusal names the grant, the floor, the formula and the override"
+      (let [error (try (width 16 3072) (catch clojure.lang.ExceptionInfo e e))
+            message (ex-message error)]
+        (is (str/includes? message "3072 MiB available"))
+        (is (str/includes? message mem/floor-note))
+        (is (str/includes? message "GATE_MEMAVAIL_MIB"))
+        (is (= {:memory-mib 3072 :required-mib 3584 :reserve-mib 2048 :lane-charge-mib 1536}
+               (select-keys (ex-data error) [:memory-mib :required-mib :reserve-mib :lane-charge-mib])))))
+    (testing "the preflight line carries the floor exactly when the gate would refuse"
+      (with-redefs [mem/available-mib (fn [] 3072)]
+        (let [line (mem/preflight-line)]
+          (is (str/starts-with? line "BELOW-FLOOR 3072 MiB available"))
+          (is (str/includes? line mem/floor-note))))
+      (with-redefs [mem/available-mib (fn [] 3584)]
+        (is (str/starts-with? (mem/preflight-line) "OK 3584 MiB available"))))
+    (testing "the python semaphore refuses in the coordinator's own words"
+      (let [python (slurp (io/file "test/gate_slot.py"))]
+        (is (str/includes? python "RESERVE_MIB = 2048"))
+        (is (str/includes? python "LANE_CHARGE_MIB = 1536"))
+        (is (str/includes? python "MiB floor = reserve %d + %d per lane"))))))
+
+;; @spec TEST-ISO-015
 ;; ONE READER -- the darwin arithmetic, witnessed on the linux box that has
 ;; the suite. The skiff (2026-09-10) refused `available memory is unknown
 ;; {:os "Mac OS X"}` while its own preflight had just reported the reader

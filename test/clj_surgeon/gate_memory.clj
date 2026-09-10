@@ -46,6 +46,35 @@
    analogue: pages the VM can hand a new JVM without swapping."
   ["Pages free" "Pages inactive" "Pages speculative" "Pages purgeable"])
 
+(def reserve-mib
+  "MiB the gate never spends: the coordinator JVM, the analyzer, and whatever
+   else the box was already doing when the operator typed `make test`."
+  2048)
+
+(def lane-charge-mib
+  "MiB charged per bounded lane. A lane is a cold JVM at -Xmx512m plus its
+   children; 1536 is the measured charge, not the flag."
+  1536)
+
+(def single-lane-floor-mib
+  "The smallest box this gate will open AT ALL: reserve + one lane = 3584 MiB.
+
+   THIS NUMBER WAS DISCOVERABLE ONLY BY REFUSAL until 2026-09-10. The skiff's
+   operator, told the gate could not read his memory, honestly declared
+   `GATE_MEMAVAIL_MIB=3072` -- a grant larger than the whole lane charge -- and
+   the gate bounced him with `{:memory-mib 3072 :required-mib 3584}`. A floor
+   an operator can only find by hitting it is a floor that costs a round trip
+   every time, so the preflight, the refusal and docs/install/skiff.md all
+   print it now, and all three read it from HERE."
+  (+ reserve-mib lane-charge-mib))
+
+(def floor-note
+  "The floor, its formula, and the override, in one line. The same sentence
+   appears in the preflight and in the gate's refusal so an operator who has
+   seen one recognises the other."
+  (format "%d MiB floor = reserve %d + %d per lane; GATE_MEMAVAIL_MIB=<MiB> declares what this box may lend"
+          single-lane-floor-mib reserve-mib lane-charge-mib))
+
 (defn shell-result
   "Exit code, trimmed stdout and trimmed stderr of a command.
 
@@ -164,23 +193,33 @@
 
 (defn preflight-line
   "The ONE line `bin/install-preflight` prints for memory, computed by the
-   reader `make test` uses. `OK <n>` or `REFUSED <message> <data>`; never a
-   claim about which source is installed."
+   reader `make test` uses. `OK <n>`, `BELOW-FLOOR <n>` or
+   `REFUSED <message> <data>`; never a claim about which source is installed.
+
+   BELOW-FLOOR exists because a number the gate will reject is not good news,
+   and the preflight is the only screen the operator reads before spending
+   minutes on a suite that was never going to open."
   []
   (try
     (let [declared (System/getenv "GATE_MEMAVAIL_MIB")
           mib (available-mib)]
-      (format "OK %d MiB available (%s)"
+      (format "%s %d MiB available (%s)%s"
+              (if (< mib single-lane-floor-mib) "BELOW-FLOOR" "OK")
               mib
               (if declared
                 "declared by GATE_MEMAVAIL_MIB"
-                (str "read by the gate's " (name (source)) " reader"))))
+                (str "read by the gate's " (name (source)) " reader"))
+              (if (< mib single-lane-floor-mib)
+                (str " -- `make test` will refuse: " floor-note)
+                "")))
     (catch Throwable error
       (format "REFUSED %s %s" (ex-message error) (pr-str (ex-data error))))))
 
 (defn -main
-  "`bb --classpath test -m clj-surgeon.gate-memory` prints `preflight-line`.
-   Exit 0 either way: the preflight reports, it does not adjudicate."
+  "`bb --classpath test -m clj-surgeon.gate-memory` prints the floor and then
+   `preflight-line`. Exit 0 either way: the preflight reports, it does not
+   adjudicate. The memory line is LAST so a caller may take it with `tail -1`."
   [& _]
+  (println (str "FLOOR " floor-note))
   (println (preflight-line))
   (flush))

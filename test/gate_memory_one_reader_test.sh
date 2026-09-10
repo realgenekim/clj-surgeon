@@ -107,4 +107,36 @@ if [ "${reader#REFUSED }" != "$preflight" ]; then
   fail "preflight refusal [$preflight] is not the gate's refusal [${reader#REFUSED }]"
 fi
 echo "gate-memory-one-reader: missing  both refuse identically: $preflight"
+
+# ---------------------------------------------------------------------------
+# 3. the floor is PRINTED, not discovered by refusal
+#
+# The skiff's operator declared GATE_MEMAVAIL_MIB=3072 -- more than a whole
+# lane costs -- and learned 3584 only from `{:memory-mib 3072 :required-mib
+# 3584}` after the refusal. Both screens must carry the floor and its formula
+# before anything runs, including on a box with room to spare.
+# ---------------------------------------------------------------------------
+floor_note="3584 MiB floor = reserve 2048 + 1536 per lane"
+
+healthy=$( cd "$repo" && GATE_MEMAVAIL_MIB=8192 sh bin/install-preflight "$repo" 2>&1 )
+case "$healthy" in
+  *"$floor_note"*) : ;;
+  *) fail "the preflight does not print the floor on a box with room to spare" ;;
+esac
+
+short=$( cd "$repo" && GATE_MEMAVAIL_MIB=3072 sh bin/install-preflight "$repo" 2>&1 )
+case "$short" in
+  *"$floor_note"*"make test\` will refuse because of: insufficient-memory"*) : ;;
+  *) fail "a below-floor grant is not named as a gate blocker by the preflight" ;;
+esac
+
+refusal=$( cd "$repo" && GATE_MEMAVAIL_MIB=3072 bb --classpath src:test -e \
+  '(require (quote [clj-surgeon.battery-parallel-runner :as bp]))
+   (try (bp/machine-capacity) (catch Exception e (println (ex-message e))))' 2>&1 \
+  | grep -v '^Picked up ' | tail -1 )
+case "$refusal" in
+  *"3072 MiB available, $floor_note"*GATE_MEMAVAIL_MIB*) : ;;
+  *) fail "the gate refusal does not name the floor and the override: [$refusal]" ;;
+esac
+echo "gate-memory-one-reader: floor    printed by the preflight and by the refusal"
 echo "gate-memory-one-reader: OK"

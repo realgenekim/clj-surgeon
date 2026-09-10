@@ -173,14 +173,19 @@ esac
 # runs `clj-surgeon.gate-memory`, which is the function the coordinator calls;
 # there is no second implementation left to be green.
 if command -v bb >/dev/null 2>&1; then
-  mem_line=$(cd "$repo" 2>/dev/null && bb --classpath test -m clj-surgeon.gate-memory 2>&1 \
-               | grep -v '^Picked up ' | tail -1)
+  mem_out=$(cd "$repo" 2>/dev/null && bb --classpath test -m clj-surgeon.gate-memory 2>&1 \
+              | grep -v '^Picked up ')
+  mem_line=$(printf '%s\n' "$mem_out" | tail -1)
+  mem_floor=$(printf '%s\n' "$mem_out" | sed -n 's/^FLOOR //p' | tail -1)
 else
-  mem_line=""
+  mem_out=""; mem_line=""; mem_floor=""
 fi
 case "$mem_line" in
   OK*)
     say "  memory" "${mem_line#OK }" ;;
+  BELOW-FLOOR*)
+    say "  memory" "${mem_line#BELOW-FLOOR }"
+    gate_blockers="$gate_blockers insufficient-memory" ;;
   REFUSED*)
     say "  memory" "${mem_line#REFUSED }"
     say "" "\`make test\` will refuse at the gate with this exact refusal."
@@ -188,6 +193,12 @@ case "$mem_line" in
   *)
     say "  memory" "not checked -- bb could not run the gate's reader" ;;
 esac
+# ALWAYS, including on a box with room to spare. The floor was discoverable
+# only by refusal until 2026-09-10: an operator who declared 3072 MiB by hand
+# -- more than a whole lane costs -- was bounced with `:required-mib 3584` and
+# no statement of where 3584 came from. A number an operator can only find by
+# hitting it costs a round trip every single time.
+[ -n "$mem_floor" ] && say "  lane floor" "$mem_floor"
 
 echo "----------------------------------------------------------------"
 if [ -n "$missing_required" ]; then
