@@ -5,6 +5,7 @@
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.txn-journal :as journal]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str])
   (:import
@@ -68,7 +69,7 @@
 
 (defn durable-detail! [request result compiled]
   (let [path (artifacts/target "insert-forms" (:workspace_root request) (str (UUID/randomUUID) ".edn"))
-        detail (merge (:detail result) {:receipt (:receipt result)
+        detail (merge (:detail result) {:receipt (assoc (:receipt result) :state "planned" :next_action "await-publication")
                                         :transaction_receipt (transaction/build-receipt compiled)})
         text (str (pr-str detail) "\n")]
     (io/make-parents path)
@@ -76,6 +77,28 @@
     (when-not (= (p/sha text) (journal/sha256-file path))
       (throw (java.io.IOException. "Durable receipt read-back differs.")))
     {:receipt_details_path path :receipt_hash (p/sha text)}))
+
+(defn finalize-detail! [file outcome]
+  (if-let [path (:receipt_details_path outcome)]
+    (try
+      (let [detail (edn/read-string (slurp path :encoding "UTF-8"))
+            observed (try (journal/sha256-file file) (catch Exception _ nil))
+            detail (assoc detail :receipt (merge (:receipt detail)
+                                            (dissoc outcome :receipt_details_path :receipt_hash))
+                                 :observed_source_hash observed)
+            text (str (pr-str detail) "\n")]
+        (file-ops/atomic-write! path text)
+        (when-not (= (p/sha text) (journal/sha256-file path))
+          (throw (java.io.IOException. "Outcome receipt read-back differs.")))
+        (assoc outcome :receipt_hash (p/sha text)))
+      (catch Exception e
+        (merge outcome
+          (failed (if (:mutation_attempted outcome) "recovery-required" "failed")
+                  (:mutation_attempted outcome) (when-not (:mutation_attempted outcome) true)
+                  (if (:mutation_attempted outcome) :commit-outcome-unknown :io-error)
+                  (.getMessage e) {})
+          {:receipt_persistence_failed true})))
+    outcome))
 
 ;; @spec INSERT-FORMS-014
 ;; INTENT: INSERT-FORMS-014
@@ -163,7 +186,7 @@
                         (target! request)
                         (let [source (read-bounded file :source)
                               result (plan source request)]
-                          (reset! completed (if (:ok result) (commit-plan! request file source result hooks) result))))))
+                          (reset! completed (if (:ok result) (finalize-detail! file (commit-plan! request file source result hooks)) result))))))
                   (catch Exception e
                     (cond
                       (:mutation_attempted @completed)
