@@ -12,6 +12,8 @@
 ;; INTENT-TEST: INSERT-FORMS-008
 (deftest insert-forms-defn-headers-and-arities
 
+  (let [s "(defn \"a\" [] 1)"]
+    (h/refused s (assoc-in (h/request s) [:anchor :owner :name] "\"a\"") :invalid-request))
   (doseq [s ["(defn ^:private a \"doc\" {:a 1} [x] {:pre [x]}\n  x)"
              "(clojure.core/defn a [x]\n  x)"]]
     (let [r (assoc (h/request s) :anchor (h/body "defn" "a" {:position "last"})
