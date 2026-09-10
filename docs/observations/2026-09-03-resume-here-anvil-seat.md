@@ -737,3 +737,5 @@ B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa;
 ## STATE at 2026-09-10T15:57Z — PUBLIC-MAIN PLAN OF RECORD active (docs/observations/2026-09-10-public-main-merge-plan.md). Stage 0 building: fable/public-candidate (hygiene + scan; worktree clj-surgeon-pubcand) and fable/parity-harness (worktree clj-surgeon-parity). NEVER push either to origin (public); fork only on Gene's word. Curtain Call prod promotion routed to skiff (inb-e7c772/inb-511a9e). Gene's decisions pending in the inbox.
 
 ## STATE at 2026-09-10T16:13Z — skiff installed 59d8bc0c (green install, red gate: inb-7e7366/9af090/ef25cd/e748f0); fable/skiff-fixes building (worktree clj-surgeon-skifffix); pubcand + parity building; public-main decisions D1–D8 pending Gene.
+
+## STATE at 2026-09-10T17:10Z — stage 0 reports in: public candidate 57740672 (manifest, scan green-ish 447+860 allowlisted; NOT to publish), parity harness 4b594926 (round 2, ships after skiff-fixes), skiff-fixes shipping (ship-skiff-fixes), seat-path defects landing (fable/seat-path-defaults, Sonnet). Gene's D1–D8 pending.
