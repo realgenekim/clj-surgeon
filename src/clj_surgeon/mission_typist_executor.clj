@@ -1,6 +1,7 @@
 (ns clj-surgeon.mission-typist-executor
   "Flagged owner-forms executor. Frozen plan authority, staged proof, guarded commit."
   (:require
+   [clj-surgeon.jvm-error :as jvm]
    [clj-surgeon.receipt-artifacts :as artifacts]
    [cheshire.core :as json]
    [clj-surgeon.file-ops :as file-ops]
@@ -152,7 +153,9 @@
                   :basis {:sources target-sources :owners owners :budget (:budget facts)}
                   :dossier dossier :route (get-in dossier [:dossier :route])
                   :gate gate :acceptance acceptance}}))
-    (catch StackOverflowError _ (refuse :typist-parser-depth))
+    ;; `Error` + a class-name test: see clj-surgeon.jvm-error.
+    (catch Error error
+      (if (jvm/stack-overflow? error) (refuse :typist-parser-depth) (throw error)))
     (catch Exception e (refuse (or (:error-type (ex-data e)) :typist-plan-invalid)))))
 
 (defn format-replacements! [root replacements]
@@ -201,7 +204,7 @@
       (reject! :typist-output-budget))
     ;; JSON only: never read or evaluate arbitrary Clojure to decode the envelope.
     (json/parse-string-strict content true)
-    (catch StackOverflowError _ nil)
+    (catch Error error (if (jvm/stack-overflow? error) nil (throw error)))
     (catch Exception _ nil)))
 
 (defn compile-candidate! [authority candidate]

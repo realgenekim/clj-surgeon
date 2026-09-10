@@ -17,6 +17,7 @@
   and at most the existing compiler's 128 changes. These are admission limits,
   not an arbitrary-Clojure grammar or a performance claim."
   (:require
+   [clj-surgeon.jvm-error :as jvm]
    [clj-surgeon.mission-candidate :as candidate]
    [clj-surgeon.mission-forms :as forms]))
 
@@ -113,5 +114,7 @@
                                  definitions)
               compiled (forms/compile-forms basis replacements)]
           (if (:ok compiled) (assoc compiled :replacements replacements) compiled))))
-    (catch StackOverflowError _ (forms/refusal :candidate-parser-depth))
+    ;; `Error` + a class-name test: see clj-surgeon.jvm-error.
+    (catch Error error
+      (if (jvm/stack-overflow? error) (forms/refusal :candidate-parser-depth) (throw error)))
     (catch Exception e (forms/refusal (or (:error-type (ex-data e)) :candidate-unparseable)))))

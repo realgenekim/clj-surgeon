@@ -1,5 +1,6 @@
 (ns ^{:lane :fast} clj-surgeon.mcp-workspace-test
   (:require
+   [clj-surgeon.artifact-boundary-support :as boundary]
    [clj-surgeon.mcp-workspace :as workspace]
    [clojure.java.io :as io]
    [clojure.test :refer [deftest is testing]]))
@@ -118,7 +119,13 @@
             b (workspace/receipt-dir (.getPath root-b))]
         (is (= a1 a2) "one canonical workspace has one receipt directory")
         (is (not= a1 b) "different workspaces cannot share default receipts")
-        (is (.startsWith a1 "/var/tmp/forge/edit-clojure-receipts/")))
+        ;; `under-root?`, not `published-under-root?`: `receipt-dir` COMPUTES
+        ;; where receipts would go and writes nothing, so there is no
+        ;; publication to witness here -- only placement. SKF-001 made
+        ;; `published-under-root?` fail closed on a path that does not exist,
+        ;; which is right, and which is what surfaced that this call site had
+        ;; been asking the wrong question since the migration.
+        (is (boundary/under-root? "edit-clojure" a1)))
       (finally
         (delete-tree! root-a)
         (delete-tree! root-b)))))

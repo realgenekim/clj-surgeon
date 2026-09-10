@@ -1,6 +1,7 @@
 (ns clj-surgeon.mission-candidate-test
   {:lane :fast}
   (:require
+   [clj-surgeon.jvm-error :as jvm]
    [clj-surgeon.mission-candidate :as candidate]
    [clojure.test :refer [deftest is testing]]))
 
@@ -72,6 +73,9 @@
                    [{:file "src/a.clj" :before "1"
                      :after (str (apply str (repeat 6000 "(")) "1"
                                  (apply str (repeat 6000 ")")))}])
-                 (catch StackOverflowError _ :stack-overflow))]
+                 ;; `Error` + a class-name test: this namespace is in the bb
+                 ;; lane, and babashka v1.12.209 cannot analyse the classname.
+                 (catch Error error
+                   (if (jvm/stack-overflow? error) :stack-overflow (throw error))))]
     (is (map? result))
     (is (false? (:ok result)))))

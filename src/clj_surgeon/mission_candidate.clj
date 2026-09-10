@@ -2,6 +2,7 @@
   "Compile candidate literal anchors against one frozen span-authorized snapshot.
    Returns future bytes or a typed refusal. Never touches the filesystem."
   (:require
+   [clj-surgeon.jvm-error :as jvm]
    [clj-surgeon.mission-typist :as typist]
    [rewrite-clj.parser :as parser]))
 
@@ -105,6 +106,8 @@
             {:ok true :original-sources originals :future-sources future
              :changed-files (count future) :replacement-chars chars
              :mutation-attempted false}
-            (catch StackOverflowError _ (refuse :candidate-parser-depth {}))
+            ;; `Error` + a class-name test: see clj-surgeon.jvm-error.
+            (catch Error error
+              (if (jvm/stack-overflow? error) (refuse :candidate-parser-depth {}) (throw error)))
             (catch Exception e
               (refuse (or (:error-type (ex-data e)) :candidate-unparseable) {}))))))))

@@ -64,10 +64,33 @@ MAX_SLOTS = 64
 ADMISSION_TIMEOUT_S = 60.0
 
 
+# The gate's memory arithmetic, kept spelling-for-spelling with
+# clj-surgeon.gate-memory (test/clj_surgeon/gate_memory.clj). This module holds
+# the per-acquire re-read because a slot must not pay a JVM start; the numbers
+# and the sentence are the coordinator's.
+RESERVE_MIB = 2048
+LANE_CHARGE_MIB = 1536
+SINGLE_LANE_FLOOR_MIB = RESERVE_MIB + LANE_CHARGE_MIB
+FLOOR_NOTE = ('%d MiB floor = reserve %d + %d per lane; GATE_MEMAVAIL_MIB=<MiB> '
+              'declares what this box may lend'
+              % (SINGLE_LANE_FLOOR_MIB, RESERVE_MIB, LANE_CHARGE_MIB))
+
+
+def insufficient_memory(memory_mib):
+    """The refusal, naming the floor, the formula and the override in one line.
+
+    Until 2026-09-10 it said only `insufficient memory for a bounded lane`, and
+    the skiff's operator -- who had already granted 3072 MiB by hand -- had no
+    way to learn that 3584 was the number or where it came from.
+    """
+    return RuntimeError('gate-refused: insufficient memory for a bounded lane '
+                        '-- %d MiB available, %s' % (memory_mib, FLOOR_NOTE))
+
+
 def derived_width(cpus, memory_mib):
-    allowance = (memory_mib - 2048) // 1536
+    allowance = (memory_mib - RESERVE_MIB) // LANE_CHARGE_MIB
     if allowance < 1:
-        raise RuntimeError('gate-refused: insufficient memory for a bounded lane')
+        raise insufficient_memory(memory_mib)
     return min(max(1, cpus // 2), allowance)
 
 
@@ -195,19 +218,83 @@ def admission_mode():
     return ':abstract-socket' if backend() == ABSTRACT else ':path-socket'
 
 
-def slot_root():
-    """The per-user runtime directory holding pathname slots.
+# ---------------------------------------------------------------------------
+# WHERE THE PATHNAME SLOTS LIVE, and the 104-byte cliff they fell off
+#
+# `struct sockaddr_un.sun_path` is 104 bytes on darwin and 108 on linux, NUL
+# included. It is not advisory and it is not negotiable: bind() answers ENAMETOOLONG.
+#
+# On 2026-09-10 the skiff refused `AF_UNIX path too long` in 163 ms and took
+# `make test` with it. macOS hands every login a per-user TMPDIR of the shape
+#     /var/folders/wc/2c5b8h1s7dncqxwf1p1z0z_r0000gn/T/
+# which is 63 bytes before this module appends `clj-surgeon-gate/` and a leaf
+# `clj-surgeon-gate-admission`. That is 106 bytes and it never had a chance.
+# The `/var/tmp` fallback fits, but only a box with NO TMPDIR ever reached it,
+# and macOS always sets one.
+#
+# So the root is chosen by whether it FITS, and darwin is short by default.
+# `/tmp/csg-<uid>` is 12 or 13 bytes; on macOS `/tmp` is a symlink to
+# `/private/tmp` and is DISK-BACKED, so the suite's no-RAM-temp rule is not
+# bent here -- and this directory holds SOCKETS ONLY. Scratch files still
+# belong under TMPDIR, where the tmp-hygiene ratchet can see them.
+SUN_PATH_MAX = 104
 
-    Never a shared world-writable root: another user must not be able to
-    pre-create a slot name and lock the gate out.
+# Stay clear of the smaller cap and its terminating NUL. A gate that binds at
+# byte 103 is a gate that breaks on the next slot-name change.
+SUN_PATH_BUDGET = 100
+
+# The longest name this module will ever bind, so the fit is decided ONCE,
+# against the real worst case, instead of per-slot and by luck.
+#
+# THE WORST CASE IS NOT A SLOT NAME. It is the `.pending-<32 hex>` private name
+# that `_claim_path` binds BEFORE linking a slot into place -- 41 bytes against
+# a slot leaf's 26. Sizing this to the slot names alone reproduces the skiff
+# bug exactly: `/var/folders/../T/clj-surgeon-gate` (65 bytes) holds
+# `clj-surgeon-gate-admission` at 92 and blows sun_path at 107 on the private
+# name, which is where bind() actually said `AF_UNIX path too long`. The fit
+# check has to cover every name the module binds, not the names it advertises.
+PENDING_PREFIX = '.pending-'
+LONGEST_LEAF = max(len('%s-admission' % SLOT_NAMESPACE),
+                   len('%s-slot-%d' % (SLOT_NAMESPACE, MAX_SLOTS - 1)),
+                   len(PENDING_PREFIX) + 32)
+
+
+def root_fits(root):
+    """True when EVERY leaf this module can ask for fits under `root`."""
+    return len(str(root)) + 1 + LONGEST_LEAF <= SUN_PATH_BUDGET
+
+
+def short_slot_root(uid):
+    """The short per-user root. Sockets only; never a scratch directory."""
+    return Path('/tmp') / ('csg-%d' % uid)
+
+
+def slot_root_for(platform, tmpdir, uid, declared=None):
+    """The root, from the box's facts. PURE, so darwin is decided in a witness.
+
+    Order: an explicit CLJ_SURGEON_GATE_ROOT always wins -- an operator who
+    names a directory gets that directory, and a refusal if it cannot hold a
+    slot, never a silent relocation to somewhere they did not name. Otherwise
+    darwin goes short by construction, and every other platform goes short only
+    when its own answer would not fit.
+
+    Never a shared world-writable root: `_ensure_root` proves ownership and
+    mode, because /tmp is world-writable and sticky and another user must not
+    be able to pre-create a slot name and lock the gate out.
     """
-    declared = os.environ.get('CLJ_SURGEON_GATE_ROOT')
     if declared:
         return Path(declared)
-    tmp = os.environ.get('TMPDIR')
-    if tmp:
-        return Path(tmp) / 'clj-surgeon-gate'
-    return Path('/var/tmp') / ('clj-surgeon-gate-%d' % os.getuid())
+    if platform == 'darwin':
+        return short_slot_root(uid)
+    candidate = Path(tmpdir) / 'clj-surgeon-gate' if tmpdir else \
+        Path('/var/tmp') / ('clj-surgeon-gate-%d' % uid)
+    return candidate if root_fits(candidate) else short_slot_root(uid)
+
+
+def slot_root():
+    """The per-user runtime directory holding pathname slots."""
+    return slot_root_for(sys.platform, os.environ.get('TMPDIR'), os.getuid(),
+                         os.environ.get('CLJ_SURGEON_GATE_ROOT'))
 
 
 # The root inode this PROCESS published its first slot under. It is the root's
@@ -223,7 +310,18 @@ def _ensure_root():
     """Create the root and return (path, inode), refusing a replaced root."""
     root = slot_root()
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
-    inode = os.stat(root).st_ino
+    stat = os.stat(root)
+    # /tmp is world-writable and sticky, so the short root has to PROVE it is
+    # ours rather than assume it. mkdir(mode=) applies only when it creates,
+    # and umask can narrow it, so neither owner nor mode is established by the
+    # call above. A root somebody else owns is a typed refusal, never a bind.
+    if stat.st_uid != os.getuid():
+        raise RuntimeError('gate-refused: the gate root %s is owned by uid %d, '
+                           'not by this user (%d)'
+                           % (root, stat.st_uid, os.getuid()))
+    if stat.st_mode & 0o077:
+        os.chmod(root, 0o700)
+    inode = stat.st_ino
     known = _ROOT_IDENTITY.get(str(root))
     if known is None:
         _ROOT_IDENTITY[str(root)] = inode
@@ -249,7 +347,19 @@ def slot_name(namespace, suffix):
     leaf = '%s-%s' % (namespace, suffix)
     if backend() == ABSTRACT:
         return b'\0' + leaf.encode('utf-8')
-    return str(_ensure_root()[0] / leaf)
+    path = str(_ensure_root()[0] / leaf)
+    # The cap is checked HERE, once, against the path actually about to be
+    # bound. A caller may name any root it likes with CLJ_SURGEON_GATE_ROOT,
+    # and a namespace of any length: the skiff learned about sun_path from a
+    # bare `AF_UNIX path too long` out of bind(), which named neither the path
+    # nor the limit nor who chose them.
+    if len(path.encode('utf-8')) > SUN_PATH_BUDGET:
+        raise RuntimeError('gate-refused: the slot path is %d bytes, over the '
+                           '%d-byte AF_UNIX budget (sun_path is %d on darwin): '
+                           '%s -- set CLJ_SURGEON_GATE_ROOT to a shorter '
+                           'directory' % (len(path.encode('utf-8')),
+                                          SUN_PATH_BUDGET, SUN_PATH_MAX, path))
+    return path
 
 
 class _PathSlot(socket.socket):
@@ -313,7 +423,14 @@ def _claim_path(path):
     """
     root, root_inode = _ensure_root()
     target = Path(path)
-    private = root / ('.pending-%s' % uuid.uuid4().hex)
+    private = root / ('%s%s' % (PENDING_PREFIX, uuid.uuid4().hex))
+    if len(str(private).encode('utf-8')) > SUN_PATH_BUDGET:
+        raise RuntimeError('gate-refused: the private publication path is %d '
+                           'bytes, over the %d-byte AF_UNIX budget (sun_path '
+                           'is %d on darwin): %s -- set CLJ_SURGEON_GATE_ROOT '
+                           'to a shorter directory'
+                           % (len(str(private).encode('utf-8')),
+                              SUN_PATH_BUDGET, SUN_PATH_MAX, private))
     sock = _PathSlot(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         sock.bind(str(private))
@@ -405,7 +522,7 @@ def try_acquire(namespace=None, read_capacity=capacity):
         current = read_capacity()
         width = current['width']
         if width < 1:
-            raise RuntimeError('gate-refused: insufficient memory for a bounded lane')
+            raise insufficient_memory(current['memory-mib'])
         free = []
         occupied = 0
         try:
@@ -431,8 +548,24 @@ def try_acquire(namespace=None, read_capacity=capacity):
 
 
 def main(argv):
+    # The coordinator asks for the root so the LANDING RECEIPT can name the
+    # directory the slots were published under. One implementation answers; the
+    # receipt does not get a second opinion about its own semaphore.
+    if argv[:1] == ['--print-root']:
+        # `abstract` is the honest answer on linux: there IS no directory, and
+        # printing one would invite a reader to go looking for it.
+        print('abstract' if backend() == ABSTRACT else slot_root())
+        return
+    if argv[:1] == ['--print-slot-budget']:
+        # Worst case, budget, cap. The preflight prints these; it does not
+        # recompute them, because a second implementation of the arithmetic is
+        # how the memory reader came to disagree with its own preflight.
+        print('%d %d %d' % (len(str(slot_root())) + 1 + LONGEST_LEAF,
+                            SUN_PATH_BUDGET, SUN_PATH_MAX))
+        return
     if len(argv) < 2 or argv[0] != '--':
-        raise RuntimeError('usage: gate_slot.py -- COMMAND [ARG ...]')
+        raise RuntimeError('usage: gate_slot.py -- COMMAND [ARG ...]\n'
+                           '       gate_slot.py --print-root')
     while True:
         slot = try_acquire()
         if slot is not None:
