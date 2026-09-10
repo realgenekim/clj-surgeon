@@ -1,0 +1,138 @@
+;; Declared-volatile fields for the byte-parity harness (bin/parity-run).
+;;
+;; THE CONTRACT: every field in a receipt is compared BYTE FOR BYTE between the
+;; two builds unless it is named here.  Nothing is normalised because it is
+;; "probably fine"; a field earns a place on this list only by naming the
+;; physical reason two runs of the SAME build cannot agree on it.  Adding a
+;; field here weakens the assurance, so each entry carries :reason and the
+;; :evidence that it really is run-to-run volatile (the stable-vs-stable
+;; control in bin/parity-run is what produces that evidence).
+;;
+;; :match  — :key       normalise the value at any map key with this name
+;;           :path-in   normalise absolute temp/fixture paths appearing ANYWHERE
+;;                      in a string value (the run root differs by construction)
+;; :to     — the canonical token substituted before comparison.
+{:version 1
+ :fields
+ [{:key :elapsed_ms
+   :match :key
+   :to "<ELAPSED>"
+   :reason "Wall clock of the operation. MCP-OP-TIME-001 stamps it from System/nanoTime inside the finalizer; two runs of one build never agree."
+   :evidence "differs stable-vs-stable"}
+  {:key :started_at
+   :match :key
+   :to "<TIME>"
+   :reason "Wall-clock start stamp."
+   :evidence "differs stable-vs-stable"}
+  {:key :finished_at
+   :match :key
+   :to "<TIME>"
+   :reason "Wall-clock finish stamp."
+   :evidence "differs stable-vs-stable"}
+  {:key :timestamp
+   :match :key
+   :to "<TIME>"
+   :reason "Wall-clock stamp."
+   :evidence "differs stable-vs-stable"}
+  {:key :run_id
+   :match :key
+   :to "<RUN-ID>"
+   :reason "Per-invocation identity, minted fresh on every call by construction."
+   :evidence "differs stable-vs-stable"}
+  {:key :receipt_path
+   :match :key
+   :to "<RECEIPT-PATH>"
+   :reason "Absolute path into the per-run fixture, which differs by construction because each build gets its own fresh copy. The receipt's CONTENT is compared; only its location is normalised."
+   :evidence "contains the run root"}
+  {:key :details_path
+   :match :key
+   :to "<DETAILS-PATH>"
+   :reason "Same as :receipt_path: an absolute path into the per-run fixture."
+   :evidence "contains the run root"}
+  {:key :workspace_root
+   :match :key
+   :to "<WORKSPACE>"
+   :reason "The fresh fixture copy, different for each build by construction. The request is otherwise identical, so this is the only intended input difference."
+   :evidence "set by the harness"}
+  {:key :duration_ms
+   :match :key
+   :to "<ELAPSED>"
+   :reason "Per-check wall clock inside a verification profile result."
+   :evidence "differs stable-vs-stable"}
+  {:key :ms
+   :match :key
+   :to "<ELAPSED>"
+   :reason "Per-check wall clock inside a verification profile result."
+   :evidence "differs stable-vs-stable"}
+  {:key :commit
+   :match :key
+   :to "<COMMIT>"
+   :reason "The git commit the operation created in the fixture. Two fresh fixtures produce different commit SHAs because the committer timestamp differs; the TREE those commits point at is compared byte for byte by the tree manifest, which is the stronger check."
+   :evidence "differs stable-vs-stable"}
+  {:key :commit_sha
+   :match :key
+   :to "<COMMIT>"
+   :reason "As :commit."
+   :evidence "differs stable-vs-stable"}
+  {:key :head
+   :match :key
+   :to "<COMMIT>"
+   :reason "As :commit."
+   :evidence "differs stable-vs-stable"}
+  {:key :receipt_id
+   :match :key
+   :to "<RECEIPT-ID>"
+   :reason "A fresh UUID minted per invocation."
+   :evidence "stable-vs-stable RED0: A=07ea8bd9-… B=88a643b0-…"}
+  {:key :receipt_hash
+   :match :key
+   :to "<RECEIPT-HASH>"
+   :reason "A hash OVER the published receipt document, which itself contains :receipt_id and the absolute receipt path. It is volatile BY CONSTRUCTION and is therefore NOT a parity signal. The parity signals for this operation are :map_hash, :snapshot_hash and :candidate_hash — content hashes of the split plan, the pre-state and the emitted result — and those are compared byte for byte and are NOT on this list."
+   :evidence "stable-vs-stable RED0: A=201e212d… B=ec94af23…, while map_hash/snapshot_hash/candidate_hash agreed"}
+  {:key :closure_receipt
+   :match :key
+   :to "<CLOSURE-RECEIPT-PATH>"
+   :reason "Absolute path into the per-run receipt store; the path embeds :receipt_id."
+   :evidence "stable-vs-stable RED0"}
+  {:key :undo_receipt
+   :match :key
+   :to "<UNDO-RECEIPT-PATH>"
+   :reason "Absolute path into the per-run receipt store; the path embeds :receipt_id."
+   :evidence "stable-vs-stable RED0"}
+  {:key :id
+   :match :key-under
+   :under :telemetry
+   :to "<TELEMETRY-ID>"
+   :reason "The telemetry ledger's own row id, a fresh UUID per call. Scoped to the :telemetry map on purpose: a blanket rule on :id would silently normalise domain identity elsewhere in a receipt."
+   :evidence "alias_migration probe, 2026-09-10"}
+  {:key :wall_ms
+   :match :key-under
+   :under :telemetry
+   :to "<ELAPSED>"
+   :reason "The telemetry row's own wall clock."
+   :evidence "alias_migration probe, 2026-09-10"}
+  {:match :regex
+   :pattern "/var/tmp/forge/[a-z-]+-receipts/[0-9a-f]{8,}/[0-9a-f-]{8,}"
+   :to "<RECEIPT-STORE-PATH>"
+   :reason "The receipt store path as it appears INSIDE string values (notably the :undo_command argv vector). Its directory is content-addressed over data that includes the per-run workspace, and its basename is the receipt UUID. Only the LOCATION is normalised; the receipt's own content is read from disk and compared field by field."
+   :evidence "stable-vs-stable RED0: [:undo_command 4] differed"}
+  {:match :path-in
+   :to "<RUN-ROOT>"
+   :reason "Any absolute path under the harness run root that appears inside a string value (refusal texts, next_call examples, check command lines). The run root is the ONLY input that differs between the two builds; leaving it unnormalised would make every receipt differ for a reason that is not the build."
+   :evidence "set by the harness"}]
+
+ ;; Paths never compared in the TREE manifest, with the same burden of proof.
+ :tree-excludes
+ [{:glob ".git/**"
+   :reason "Object store and refs: commit SHAs embed a committer timestamp, so two runs differ here even when every tracked byte agrees. The working tree is what the operation writes and what the manifest hashes."}
+  {:glob ".cpcache/**"
+   :reason "Clojure classpath cache, written by the verification profile's own JVM. Contains absolute paths and mtimes; not an artifact of the operation."}
+  {:glob ".clj-surgeon.edn"
+   :reason "The harness writes this profile file itself and binds the oracle's argument to the per-build fixture path, so it differs by construction. It is an INPUT, not an output."}
+  {:glob ".clj-surgeon/**"
+   :reason "Receipt and detail directory. Compared separately and field by field as the receipt, after declared normalisation; hashing it here would double-count and would fail on the paths already normalised above."}
+  {:glob "00SERVER-LOGS.txt"
+   :reason "The application's own runtime log, APPENDED TO by `bin/kaocha unit` — a command in the split-unit verification profile, not an emission of the operation under test. Every appended line carries a wall-clock timestamp and a temp-store path, so two runs can never agree. The tracked bytes are untouched: `git diff --numstat` reported 2515/0 and 2517/0 (additions only, zero deletions) on the two RED0 sides."
+   :evidence "stable-vs-stable RED0"}
+  {:glob "**/.nrepl-port"
+   :reason "Written by a verification JVM if one starts; a port number, not an operation artifact."}]}
