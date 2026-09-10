@@ -106,9 +106,8 @@ HASH_A="$(source_hash "$BUILD_A")"; HASH_B="$(source_hash "$BUILD_B")"
 # each exclusion carrying its own reason in that file.
 tree_manifest() { # <fixture> <out>
   ( cd "$1" && find . -type f \
-      -not -path './.git/*' -not -path './.cpcache/*' \
-      -not -path './.clj-surgeon/*' -not -name '.clj-surgeon.edn' \
-      -not -name '.nrepl-port' -not -name '00SERVER-LOGS.txt' -print0 \
+      -not -path './.git/*' -not -name '.clj-surgeon.edn' \
+      -not -name '00SERVER-LOGS.txt' -print0 \
     | LC_ALL=C sort -z \
     | xargs -0 -r sha256sum ) > "$2"
 }
@@ -346,7 +345,7 @@ run_specimen() { # <name>
     fi
   done
   log "$name compare"
-  bb "$HERE/bin/parity/compare.clj" "$sdir/A" "$sdir/B" "$DECL" > "$sdir/compare.txt" 2>&1
+  bb "$HERE/bin/parity/compare.clj" "$sdir/A" "$sdir/B" "$DECL" "$name" > "$sdir/compare.txt" 2>&1
   ok=$?
   sed 's/^/    /' "$sdir/compare.txt" | tee -a "$RUN_DIR/harness.log"
   return $ok
@@ -359,11 +358,14 @@ for s in "${WANTED[@]}"; do
     log "SPECIMEN $s NOT IMPLEMENTED — skipped (recorded as unretrieved)"
     echo "$s NOT-IMPLEMENTED" >> "$RUN_DIR/verdicts.txt"; STATUS=2; continue
   fi
-  if run_specimen "$s"; then
-    log "SPECIMEN $s: PARITY"; echo "$s PARITY" >> "$RUN_DIR/verdicts.txt"
-  else
-    log "SPECIMEN $s: DIVERGENCE"; echo "$s DIVERGENCE" >> "$RUN_DIR/verdicts.txt"; STATUS=1
-  fi
+  run_specimen "$s"; rc=$?
+  case $rc in
+    0) log "SPECIMEN $s: PARITY"; echo "$s PARITY" >> "$RUN_DIR/verdicts.txt" ;;
+    1) log "SPECIMEN $s: DIVERGENCE"; echo "$s DIVERGENCE" >> "$RUN_DIR/verdicts.txt"; STATUS=1 ;;
+    2) log "SPECIMEN $s: REFUSED — the declaration or the capture is not fit to compare; this is NOT a parity verdict"
+       echo "$s REFUSED" >> "$RUN_DIR/verdicts.txt"; STATUS=2 ;;
+    *) log "SPECIMEN $s: FIXTURE/HARNESS FAILURE rc=$rc"; echo "$s FAILED" >> "$RUN_DIR/verdicts.txt"; STATUS=3 ;;
+  esac
 done
 
 log "footprint: builds $(du -sh "$PARITY_ROOT/builds" 2>/dev/null | cut -f1), live fixtures $(du -sh "$PARITY_ROOT/fx" 2>/dev/null | cut -f1), evidence $(du -sh "$PARITY_ROOT/runs" 2>/dev/null | cut -f1)"

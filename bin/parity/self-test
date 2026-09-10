@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# self-test — the executable witnesses for the two contracts bin/parity/compare.clj
+# enforces. Both were written because a fence review produced a FALSE PARITY on a
+# fresh control; each case below is that control, made permanent.
+#
+#   bin/parity/self-test [<stored-run-dir>]
+#
+# Default subject: a stored stable-vs-stable split pair (kilobytes; no operation
+# is re-executed). Exit 0 = every witness held.
+set -uo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SUBJECT="${1:-/var/tmp/forge/parity/runs/OBS-stable-vs-stable/split}"
+WORK="${PARITY_ROOT:-/var/tmp/forge/parity}/self-test.$$"
+mkdir -p "$WORK"; trap 'rm -rf "$WORK"' EXIT
+PASS=0; FAIL=0
+
+run() { bb "$HERE/compare.clj" "$1" "$2" "$3" "${4:-split}" 2>&1; }
+
+check() { # <name> <expected-verdict> <expected-substring> <output> <rc>
+  local name="$1" want="$2" needle="$3" out="$4" rc="$5" got
+  got="$(printf '%s' "$out" | head -1 | awk '{print $1}')"
+  if [ "$got" = "$want" ] && printf '%s' "$out" | grep -qF -- "$needle"; then
+    echo "  PASS  $name  ($got)"; PASS=$((PASS+1))
+  else
+    echo "  FAIL  $name — wanted $want containing '$needle', got:"; printf '%s\n' "$out" | sed 's/^/          /' | head -6
+    FAIL=$((FAIL+1))
+  fi
+}
+
+[ -d "$SUBJECT/A" ] || { echo "no stored run at $SUBJECT — run bin/parity-run once first"; exit 2; }
+
+echo "PARITY-FENCE-001 — the declaration cannot be widened silently"
+
+# baseline: the real declaration compares this pair cleanly
+OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$HERE/volatile-fields.edn")"; RC=$?
+check "the shipped declaration is accepted and the stored pair is PARITY" PARITY "PARITY" "$OUT" $RC
+
+# 1a. an undocumented rule — no :reason, no :evidence — must REFUSE, naming it.
+python3 - "$HERE/volatile-fields.edn" "$WORK/undocumented.edn" <<'PY'
+import sys
+s=open(sys.argv[1]).read()
+s=s.replace(' :fields\n [', ' :fields\n [{:key :unobserved_guard :match :key :to "<UNOBSERVED>"}\n  ',1)
+open(sys.argv[2],'w').write(s)
+PY
+OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$WORK/undocumented.edn")"; RC=$?
+check "a rule with no :reason and no :evidence refuses the run" REFUSED ":unobserved_guard" "$OUT" $RC
+
+# 1b. a rule with a reason but an observation nobody made must still REFUSE.
+python3 - "$HERE/volatile-fields.edn" "$WORK/unobserved.edn" <<'PY'
+import sys
+s=open(sys.argv[1]).read()
+s=s.replace(' :fields\n [', ' :fields\n [{:key :unobserved_guard :match :key :to "<UNOBSERVED>"\n   :reason "sounds plausible"\n   :evidence {:run "NO-SUCH-RUN" :specimen :split :path [:unobserved_guard]}}\n  ',1)
+open(sys.argv[2],'w').write(s)
+PY
+OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$WORK/unobserved.edn")"; RC=$?
+check "a rule naming an observation nobody made refuses the run" REFUSED "not recorded in" "$OUT" $RC
+
+# 1c. the same gate covers tree exclusions.
+python3 - "$HERE/volatile-fields.edn" "$WORK/badexclude.edn" <<'PY'
+import sys
+s=open(sys.argv[1]).read()
+s=s.replace(' :tree-excludes\n', ' :tree-excludes\n', 1)
+i=s.index('[{:glob ".git/**"')
+s=s[:i]+'[{:glob "src/**"}\n  '+s[i+1:]
+open(sys.argv[2],'w').write(s)
+PY
+OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$WORK/badexclude.edn")"; RC=$?
+check "a tree exclusion with no evidence refuses the run" REFUSED "src/**" "$OUT" $RC
+
+echo "PARITY-FENCE-002 — absence is a value"
+
+# 2a. Sol's control: the receipt captured on A, moved aside on B.
+rm -rf "$WORK/one-sided"; mkdir -p "$WORK/one-sided"
+cp -r "$SUBJECT/A" "$WORK/one-sided/A"; cp -r "$SUBJECT/B" "$WORK/one-sided/B"
+mv "$WORK/one-sided/B/receipt.edn" "$WORK/one-sided/B/receipt.edn.aside"
+OUT="$(run "$WORK/one-sided/A" "$WORK/one-sided/B" "$HERE/volatile-fields.edn")"; RC=$?
+check "a receipt present on A and missing on B is a DIVERGENCE" DIVERGENCE "MISSING on B" "$OUT" $RC
+
+# 2b. absent on BOTH sides, for a specimen that declares it publishes one.
+rm -rf "$WORK/both"; mkdir -p "$WORK/both"
+cp -r "$SUBJECT/A" "$WORK/both/A"; cp -r "$SUBJECT/B" "$WORK/both/B"
+# both the receipt AND the published path: this is the shape of an operation that
+# publishes no receipt file at all, which is what :expects-receipt false describes.
+rm -f "$WORK/both/A/receipt.edn" "$WORK/both/B/receipt.edn" \
+      "$WORK/both/A/receipt-path.txt" "$WORK/both/B/receipt-path.txt"
+OUT="$(run "$WORK/both/A" "$WORK/both/B" "$HERE/volatile-fields.edn" split)"; RC=$?
+check "a receipt missing on BOTH sides where the specimen expects one is a DIVERGENCE" DIVERGENCE "MISSING on both sides" "$OUT" $RC
+
+# 2c. the same absence, for a specimen that declares it publishes none, is parity.
+OUT="$(run "$WORK/both/A" "$WORK/both/B" "$HERE/volatile-fields.edn" fanout)"; RC=$?
+check "the same absence is PARITY where the specimen declares :expects-receipt false" PARITY "PARITY" "$OUT" $RC
+
+# 2d. a specimen nobody declared cannot have its absence accepted.
+OUT="$(run "$WORK/both/A" "$WORK/both/B" "$HERE/volatile-fields.edn" undeclared)"; RC=$?
+check "an undeclared specimen refuses rather than accepting absence" REFUSED "does not declare :expects-receipt" "$OUT" $RC
+
+# 2e. a published receipt_path naming a file nobody captured.
+rm -rf "$WORK/orphan"; mkdir -p "$WORK/orphan"
+cp -r "$SUBJECT/A" "$WORK/orphan/A"; cp -r "$SUBJECT/B" "$WORK/orphan/B"
+rm -f "$WORK/orphan/B/receipt.edn"
+OUT="$(run "$WORK/orphan/A" "$WORK/orphan/B" "$HERE/volatile-fields.edn")"; RC=$?
+check "a published receipt_path with no captured receipt is reported" DIVERGENCE "published receipt_path" "$OUT" $RC
+
+# 2f. an artifact the harness always writes, missing on both sides, is a capture failure.
+rm -rf "$WORK/nocapture"; mkdir -p "$WORK/nocapture"
+cp -r "$SUBJECT/A" "$WORK/nocapture/A"; cp -r "$SUBJECT/B" "$WORK/nocapture/B"
+rm -f "$WORK/nocapture/A/exit.txt" "$WORK/nocapture/B/exit.txt"
+OUT="$(run "$WORK/nocapture/A" "$WORK/nocapture/B" "$HERE/volatile-fields.edn")"; RC=$?
+check "a required artifact captured on neither side refuses rather than passing" REFUSED "captured on NEITHER side" "$OUT" $RC
+
+echo
+echo "self-test: $PASS passed, $FAIL failed"
+[ "$FAIL" = 0 ]
