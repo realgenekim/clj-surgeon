@@ -2,9 +2,10 @@
 
 **2026-09-10 · forge@anvil · branch `fable/parity-harness` in `/home/forge/src/clj-surgeon-parity`
 (created from tag `stable/2026-09-10`, HEAD proved = `59d8bc0cad8886a028c24e8ffd52e4e5d82185c1`).
-Seven commits, authored `forge-anvil`. Nothing pushed.
-Sol's fence review returned NO-GO on `d1343a87`; both findings are fixed, witnessed, and every
-verdict below was re-measured under the fenced comparator.**
+Eight commits, authored `forge-anvil`. Nothing pushed.
+Sol's fence review returned NO-GO twice — on `d1343a87` and again on `4b594926`. All four
+findings are fixed, each with a permanent witness, and every verdict below was re-measured under
+the fences that resulted.**
 
 ## The verdict
 
@@ -171,9 +172,51 @@ are on no normalisation rule and a one-character plant in `:candidate_hash` retu
 holds (`/proc` cwd, private port in argv, no reference to the installed launcher or 7906); the
 port policy refuses 7888/7890/7894/7895 and all of 8300–8339.
 
-**All verdicts in this report were re-measured under the fenced comparator** — stable-vs-stable
-PARITY on all three specimens, both planted builds still stopping with the field named, the
-require reorder still PARITY, and the candidate verdict unchanged.
+### Round 2 — the fence found two more, and they were the same disease one level down
+
+**PARITY-FENCE-003 (CRITICAL) — provenance was not bound to a run.** Round 1 proved only that a
+rule's `{:run :specimen :path}` triple *occurred* in the checked-in evidence file. Sol added a row
+for `RUN-THAT-NEVER-HAPPENED`, cited it from a new `:candidate_hash` rule, planted a differing
+candidate hash — and got `PARITY`. The widening alone suppressed a real content-hash difference.
+
+The lesson sits one level below round 1's: **a checked-in row asserting its own provenance is an
+assertion, not evidence.** Round 1 made the declaration answerable to an observation; round 2
+makes the observation answerable to bytes.
+
+- `observe-volatility.clj` now **retains what it compared** — the captured receipt objects and the
+  unexcluded tree manifests — under `bin/parity/evidence/<run>/<specimen>/`, with a `capture.edn`
+  naming the stable build sha, the generator's own source digest, a sha256 per retained file, and
+  a digest over that set (776 KB checked in).
+- `observed-volatility.edn` carries the stable build, the generator's source digest, and a digest
+  over its own rows.
+- `compare.clj`, before honouring any rule: recomputes every file digest, the capture digest and
+  the evidence file's own digest; checks that the generator in this tree is the one that produced
+  the file; and **re-derives the difference from the retained bytes**, requiring the cited path to
+  actually appear in it. A rule citing a run with no retained capture **refuses, naming the run**.
+
+Sol's forgery now refuses *even when the forger repairs the file digest* — because there are no
+bytes behind `RUN-THAT-NEVER-HAPPENED`. That is the witness.
+
+**PARITY-FENCE-004 (HIGH) — `:expects-receipt false` was one-way and could lie.** It was consulted
+only when the receipt was absent on both sides, so a specimen declaring `false` while both sides
+published receipts had them silently compared. The declaration is now a **two-way contract**:
+expected present and absent → DIVERGENCE; expected **absent and present** → DIVERGENCE naming the
+declaration; undeclared → refuses in both directions. The `alias` and `fanout` declarations were
+re-verified against a real run — neither operation publishes a top-level `receipt_path`, so
+`:expects-receipt false` is correct for both, and `split` publishes one.
+
+That finding also exposed a circular check: `parity-run` wrote `receipt-path.txt` only when the
+named file existed, so its published-path witness could never see a path that named nothing. It
+now records the published path **whenever one is published**.
+
+**`bin/parity/self-test`: 15 witnesses, 15 passing**, including all four of Sol's controls
+verbatim, plus a tampered retained capture and a hand-edited evidence file.
+
+**Every verdict in this report was re-measured under the round-2 fences** — stable-vs-stable
+PARITY on split, alias and fanout; planted CLI receipt byte DIVERGENCE naming
+`[:verification_complete_definition]`; planted MCP receipt byte DIVERGENCE naming
+`[:structured :details_retention]`; behaviour-neutral require reorder still PARITY; the candidate
+with its artifact root pinned still PARITY on all three.
 
 ## A second, unplanned result: the specimens reproduce across days and builds
 
@@ -244,8 +287,9 @@ its own footprint. `PARITY_KEEP_FIXTURES=1` keeps them for the case that needs t
 | comparator | `…/bin/parity/compare.clj` (replays over stored snapshots; no re-execution) |
 | normalisation declaration | `…/bin/parity/volatile-fields.edn` |
 | generated evidence for every rule | `…/bin/parity/observed-volatility.edn` (+ its generator `observe-volatility.clj`) |
+| the retained bytes that evidence was derived from | `…/bin/parity/evidence/OBS2-provenance/<specimen>/{A,B}/` + `capture.edn` (776 KB) |
 | per-specimen presence expectations | `…/bin/parity/specimens.edn` |
-| witnesses for both fences (10/10) | `…/bin/parity/self-test` |
+| witnesses for all four fences (15/15) | `…/bin/parity/self-test` |
 | MCP client | `…/bin/parity/mcp-call.py` |
 | run evidence (16 specimen runs) | `/var/tmp/forge/parity/runs/<run-id>/<specimen>/{A,B}/` |
 | recovered specimen provenance | `/var/tmp/forge/plan2/cellC/recovered/specimens.md` |
