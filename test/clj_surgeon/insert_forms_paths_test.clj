@@ -4,7 +4,7 @@
    [clj-surgeon.insert-forms :as insert]
    [clj-surgeon.insert-forms-support :as h]
    [clojure.java.io :as io]
-   [clojure.test :refer [deftest is testing]])
+   [clojure.test :refer [deftest is]])
   (:import
    (java.nio.file Files)))
 
