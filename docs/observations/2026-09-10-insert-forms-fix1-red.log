@@ -1,0 +1,18 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/insert-fx
+
+Testing clj-surgeon.insert-forms-candidate-test
+
+FAIL in (insert-forms-candidate-structure-refuses) (insert_forms_candidate_test.clj:16)
+expected: (= :candidate-structure-mismatch (:error-type result))
+  actual: (not (= :candidate-structure-mismatch nil))
+
+FAIL in (insert-forms-candidate-structure-refuses) (insert_forms_candidate_test.clj:17)
+expected: (= "refused" (:state result))
+  actual: (not (= "refused" "committed"))
+
+FAIL in (insert-forms-candidate-structure-refuses) (insert_forms_candidate_test.clj:18)
+expected: (= h/source (slurp file))
+  actual: (not (= "(defn a [] 1)\n(defn ab [] 2)\n" "(defn a [] 1\n(defn b [] 3)\n)\n(defn ab [] 2)\n"))
+
+Ran 2 tests containing 9 assertions.
+3 failures, 0 errors.
