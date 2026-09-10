@@ -12,6 +12,13 @@
 ;; INTENT-TEST: INSERT-FORMS-011
 (deftest insert-forms-reader-safety-and-limits
 
+  (h/with-file h/source
+    (fn [_ file req]
+      (let [huge (assoc-in req [:anchor :owner :name] (apply str (repeat 2097153 "a")))
+            result (insert/execute! huge)]
+        (is (= :limit-exceeded (:error-type result)))
+        (is (= h/source (slurp file))))))
+  (is (= :invalid-request (:error-type (insert/read-request "{:value #inst \"2026-01-01\"}"))))
   (doseq [s ["#=(throw (Exception.)) (defn a [] 1)" "#?(:clj (defn a [] 1))"
              "\ufeff(defn a [] 1)"]]
     (h/refused s (h/request s) :unsupported-source))
