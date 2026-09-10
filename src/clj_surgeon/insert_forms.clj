@@ -157,6 +157,8 @@
                         (let [source (read-bounded file :source)
                               result (plan source request)]
                           (reset! completed (if (:ok result) (commit-plan! request file source result hooks) result))))))
+                  (catch java.nio.file.InvalidPathException e
+                    (p/refusal (ex-info "Invalid filesystem path." {:error-type :invalid-path :at [:file]})))
                   (catch Exception e
                     (cond
                       (:mutation_attempted @completed)

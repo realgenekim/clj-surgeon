@@ -68,7 +68,8 @@
                                                            (contains? #{\( \) \[ \] \{ \} \" \;} (.charAt s j)))))
                                            (recur (inc j)) j))]
                                (recur end :code depth nil literals))
-                    (and (= c \#) (or (#{\= \?} next-c)
+                    (and (= c \#) (or (and (= kind :request) (not (#{\{ \:} next-c)))
+                                       (#{\= \?} next-c)
                                       (and (= next-c \_) (not= kind :source))))
                     (refuse! unsupported [kind] "Unsupported reader syntax.")
                     (#{\( \[ \{} c)
@@ -99,6 +100,7 @@
 (defn positive! [x at]
   (when-not (and (integer? x) (pos? x)) (refuse! :invalid-request at "Positive integer required.")))
 (defn validate! [r]
+  (bounded! (pr-str r) :request)
   (closed! r [:version :workspace_root :file :guard :anchor :payload] [] [] :invalid-request)
   (when-not (and (= 1 (:version r)) (integer? (:version r))
                  (string? (:workspace_root r)) (string? (:file r)))
@@ -112,7 +114,9 @@
                    (integer? (:expect anchor))
                    (#{"def" "defn" "defn-" "deftest" "ns"} (get-in anchor [:owner :kind]))
                    (string? (get-in anchor [:owner :name]))
-                   (not (str/blank? (get-in anchor [:owner :name]))))
+                   (try (let [text (get-in anchor [:owner :name]) value (edn/read-string text)]
+                          (and (symbol? value) (= text (str value))))
+                        (catch Exception _ false)))
       (refuse! :invalid-request [:anchor] "Unsupported scope, owner, or expectation."))
     (if body?
       (let [b (:boundary anchor) after? (= "after-child" (:position b))]
