@@ -349,5 +349,144 @@ class PortabilityTest(unittest.TestCase):
                 child.stdout.close()
 
 
+# The exact per-user TMPDIR shape macOS hands every login. 46 bytes of random
+# directory before this module appends anything.
+DARWIN_TMPDIR = '/var/folders/wc/2c5b8h1s7dncqxwf1p1z0z_r0000gn/T/'
+
+
+class SunPathBudgetTest(unittest.TestCase):
+    """TEST-ISO-015 -- the 104-byte cliff the skiff fell off on 2026-09-10.
+
+    `AF_UNIX path too long`, stage exit 1 in 163 ms, `make test` refused. No
+    Mac is reachable from the box that runs this suite, so the darwin choice is
+    driven here as a PURE decision over the box's facts, and the linux
+    equivalent -- a TMPDIR long enough to overflow the same cap -- is driven
+    all the way to a real bind.
+    """
+
+    def setUp(self):
+        slot.forget_root_identity()
+        self.addCleanup(slot.forget_root_identity)
+
+    def test_the_macos_tmpdir_really_does_overflow_and_on_the_private_name(self):
+        """The RED fact, pinned so the fix cannot be mistaken for decoration.
+
+        And pinned at the RIGHT name. The slot leaves under the macOS TMPDIR
+        are 92 bytes -- comfortably inside sun_path -- so a fit check sized to
+        them says the skiff was fine. What bind() actually refused is the
+        `.pending-<32 hex>` private name `_claim_path` binds before it links a
+        slot into place: 107 bytes, three over the cap. A budget derived from
+        the names a module ADVERTISES rather than the names it BINDS reproduces
+        the original defect exactly.
+        """
+        overflowed = Path(DARWIN_TMPDIR) / 'clj-surgeon-gate'
+        leaf = overflowed / ('%s-admission' % slot.SLOT_NAMESPACE)
+        private = overflowed / (slot.PENDING_PREFIX + 'f' * 32)
+        self.assertLess(len(str(leaf)), slot.SUN_PATH_MAX,
+                        'the slot leaf fits, which is why this hid')
+        self.assertGreater(len(str(private)), slot.SUN_PATH_MAX,
+                           'the private publication name is what overflowed')
+        self.assertFalse(slot.root_fits(overflowed))
+
+    def test_darwin_chooses_the_short_root_and_every_leaf_fits(self):
+        root = slot.slot_root_for('darwin', DARWIN_TMPDIR, 501)
+        self.assertEqual(Path('/tmp/csg-501'), root)
+        self.assertTrue(slot.root_fits(root))
+        for suffix in ['admission'] + ['slot-%d' % i for i in range(slot.MAX_SLOTS)]:
+            leaf = str(root / ('%s-%s' % (slot.SLOT_NAMESPACE, suffix)))
+            self.assertLess(len(leaf), slot.SUN_PATH_BUDGET, leaf)
+
+    def test_an_operator_named_root_is_honoured_not_relocated(self):
+        self.assertEqual(Path('/var/tmp/mine'),
+                         slot.slot_root_for('darwin', DARWIN_TMPDIR, 501, '/var/tmp/mine'))
+
+    def test_a_short_linux_tmpdir_keeps_the_root_it_had(self):
+        self.assertEqual(Path('/var/tmp/forge/clj-surgeon-gate'),
+                         slot.slot_root_for('linux', '/var/tmp/forge', 1002))
+
+    def test_a_120_byte_tmpdir_binds_a_real_slot_under_100_bytes(self):
+        """The brief's linux witness, driven to an actual bind().
+
+        A pure length assertion would pass against a module that still handed
+        bind() the long path -- the cap is enforced by the KERNEL, so the
+        witness has to reach it.
+        """
+        long_tmpdir = Path('/var/tmp/forge') / ('t' * (120 - len('/var/tmp/forge/')))
+        self.assertEqual(120, len(str(long_tmpdir)))
+        chosen = slot.slot_root_for('linux', str(long_tmpdir), os.getuid())
+        self.assertEqual(slot.short_slot_root(os.getuid()), chosen)
+
+        namespace = unique_namespace()
+        previous = {key: os.environ.get(key)
+                    for key in ('TMPDIR', 'GATE_SLOT_BACKEND', 'CLJ_SURGEON_GATE_ROOT')}
+        os.environ['TMPDIR'] = str(long_tmpdir)
+        os.environ['GATE_SLOT_BACKEND'] = 'path-socket'
+        os.environ.pop('CLJ_SURGEON_GATE_ROOT', None)
+        try:
+            name = slot.slot_name(namespace, 'slot-0')
+            self.assertLess(len(name.encode('utf-8')), slot.SUN_PATH_BUDGET, name)
+            sock = slot.claim(name)
+            self.assertIsNotNone(sock, 'the chosen path did not bind')
+            try:
+                self.assertIsNone(slot.claim(name), 'a bound slot must read as taken')
+            finally:
+                sock.close()
+            root = slot.slot_root()
+            self.assertEqual(0o700, os.stat(root).st_mode & 0o777,
+                             'the socket root must not be readable by the box')
+        finally:
+            for key, value in previous.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+            slot.forget_root_identity()
+
+    def test_a_path_over_the_budget_is_a_TYPED_refusal_not_an_OSError(self):
+        """The skiff got `AF_UNIX path too long` straight out of bind(): no
+        path, no limit, and no statement of who chose the directory."""
+        root = Path('/var/tmp/forge') / ('r' * 90)
+        previous = os.environ.get('CLJ_SURGEON_GATE_ROOT')
+        os.environ['CLJ_SURGEON_GATE_ROOT'] = str(root)
+        os.environ['GATE_SLOT_BACKEND'] = 'path-socket'
+        try:
+            with self.assertRaises(RuntimeError) as caught:
+                slot.slot_name(unique_namespace(), 'admission')
+            message = str(caught.exception)
+            self.assertIn('over the 100-byte AF_UNIX budget', message)
+            self.assertIn('sun_path is 104 on darwin', message)
+            self.assertIn('CLJ_SURGEON_GATE_ROOT', message)
+        finally:
+            if previous is None:
+                os.environ.pop('CLJ_SURGEON_GATE_ROOT', None)
+            else:
+                os.environ['CLJ_SURGEON_GATE_ROOT'] = previous
+            os.environ.pop('GATE_SLOT_BACKEND', None)
+            slot.forget_root_identity()
+            if root.exists():
+                root.rmdir()
+
+    def test_the_root_is_narrowed_to_0700_even_when_it_was_already_wide(self):
+        """/tmp is world-writable and sticky. `mkdir(mode=)` applies only when
+        it CREATES, and umask can narrow it, so neither owner nor mode is
+        established by that call."""
+        root = Path('/var/tmp/forge') / ('gate-mode-%s' % uuid.uuid4().hex)
+        root.mkdir(mode=0o777)
+        os.chmod(root, 0o777)
+        previous = os.environ.get('CLJ_SURGEON_GATE_ROOT')
+        os.environ['CLJ_SURGEON_GATE_ROOT'] = str(root)
+        try:
+            slot.forget_root_identity()
+            self.assertEqual(root, Path(slot._ensure_root()[0]))
+            self.assertEqual(0o700, os.stat(root).st_mode & 0o777)
+        finally:
+            if previous is None:
+                os.environ.pop('CLJ_SURGEON_GATE_ROOT', None)
+            else:
+                os.environ['CLJ_SURGEON_GATE_ROOT'] = previous
+            slot.forget_root_identity()
+            root.rmdir()
+
+
 if __name__ == '__main__':
     unittest.main()

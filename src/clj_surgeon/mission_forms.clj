@@ -1,6 +1,7 @@
 (ns clj-surgeon.mission-forms
   "Pure owner-keyed candidate lowering. Never evaluates candidate forms or writes files."
   (:require
+   [clj-surgeon.jvm-error :as jvm]
    [clj-surgeon.mission-candidate :as candidate]
    [clj-surgeon.mission-forms-source :as source]
    [rewrite-clj.node :as node]
@@ -156,7 +157,10 @@
                        :after (reconcile-comments before (:form r) original replacement)})))
                 replacements)]
           (candidate/compile-candidate basis changes)))
-      (catch StackOverflowError _ (refusal :candidate-parser-depth))
+      ;; `Error` + a class-name test: see clj-surgeon.jvm-error -- bb
+      ;; v1.12.209 cannot resolve `StackOverflowError` at analysis time.
+      (catch Error error
+        (if (jvm/stack-overflow? error) (refusal :candidate-parser-depth) (throw error)))
       (catch Exception e
         (refusal (or (:error-type (ex-data e)) :candidate-unparseable)
                  (dissoc (ex-data e) :error-type))))))

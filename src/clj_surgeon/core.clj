@@ -8,6 +8,7 @@
      bb -m ns-surgeon.core :op :mv :file src/my/ns.clj :form my-fn :before other-fn
      bb -m ns-surgeon.core :op :mv :file src/my/ns.clj :form my-fn :before other-fn :dry-run true"
   (:require
+   [clj-surgeon.jvm-error :as jvm]
    [clj-surgeon.receipt-artifacts :as artifacts]
    [babashka.fs :as fs]
    [babashka.process]
@@ -652,12 +653,21 @@
                  :file file
                  :error (ex-message e))
           {:file file :error (str (ex-message e))})))
-    (catch StackOverflowError _
+    (catch Error error
       ;; @spec MCP-OP-MEM-005
       ;; The estimator is an ESTIMATE, and this catch is what makes the
       ;; scan-kill class closed WITHOUT depending on it being complete. An
       ;; Error is not an Exception, so before this one overflowing file killed
       ;; the whole pmap scan and no file's outline came back at all.
+      ;;
+      ;; `Error` + a class-name test, never `catch StackOverflowError`. THIS
+      ;; LINE is the one babashka v1.12.209 refused to analyse on the skiff
+      ;; (2026-09-10, core.clj:646:3, `Unable to resolve classname:
+      ;; StackOverflowError`), and because SCI fails at ANALYSIS time it took
+      ;; all 49 bb namespaces down before a test ran. Fully qualifying does not
+      ;; help: the class is absent from that build's map, not unqualified. See
+      ;; clj-surgeon.jvm-error.
+      (when-not (jvm/stack-overflow? error) (throw error))
       (let [r (admission/stack-overflow-refusal file)]
         (assoc (select-keys r [:refusal :reason :limit :observed :remedy])
                :file file

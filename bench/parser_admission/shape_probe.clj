@@ -12,7 +12,8 @@
   JIT-compiled ones, so the SAME file at the SAME -Xmx either throws
   StackOverflowError (cold) or completes while consuming hundreds of MB (warm).
   Both branches are measured, because a caller cannot choose which one it gets."
-  (:require [clj-surgeon.outline :as outline]
+  (:require [clj-surgeon.jvm-error :as jvm]
+            [clj-surgeon.outline :as outline]
             [clj-surgeon.parse-admission :as admission]))
 
 (def ^:private warmup-source-path "src/clj_surgeon/mcp_hot_verify.clj")
@@ -59,10 +60,14 @@
                     (let [forms (count (:forms (aget box 0)))]
                       (aset box 0 nil)
                       {:outcome :completed :forms forms})
-                    (catch OutOfMemoryError _
-                      (aset box 0 nil) (System/gc) {:outcome :out-of-memory})
-                    (catch StackOverflowError _
-                      (aset box 0 nil) (System/gc) {:outcome :stack-overflow})
+                    ;; `Error` + class-name tests: babashka v1.12.209's SCI
+                    ;; resolves neither classname in any spelling, and it fails
+                    ;; at ANALYSIS time. See clj-surgeon.jvm-error.
+                    (catch Error error
+                      (aset box 0 nil) (System/gc)
+                      (cond (jvm/out-of-memory? error) {:outcome :out-of-memory}
+                            (jvm/stack-overflow? error) {:outcome :stack-overflow}
+                            :else (throw error)))
                     (catch clojure.lang.ExceptionInfo e
                       (aset box 0 nil)
                       (if (= :parser_admission_refused (:refusal (ex-data e)))

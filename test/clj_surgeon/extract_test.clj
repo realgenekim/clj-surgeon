@@ -1,5 +1,6 @@
 (ns clj-surgeon.extract-test
   (:require
+   [clj-surgeon.artifact-boundary-support :as boundary]
    [clj-surgeon.extract :as extract]
    [clj-surgeon.file-ops :as file-ops]
    [clojure.java.io :as io]
@@ -449,7 +450,7 @@
                                       :to (.getPath target)
                                       :receipt-out (.getPath receipt)})
             receipt (io/file (:receipt-file result))]
-        (is (str/starts-with? (:receipt-file result) "/var/tmp/forge/extract-receipts/"))
+        (is (boundary/published-under-root? "extract" (:receipt-file result)))
         (is (.exists target))
         (is (.exists receipt))
         (let [undo (extract/undo! {:receipt (.getPath receipt)})]

@@ -1,2 +1,11 @@
+;; `min-bb-version` is the OLDEST babashka this tree is witnessed against, and
+;; it is not decoration: on 2026-09-10 the skiff's bb v1.12.209 could not
+;; ANALYSE `src/clj_surgeon/core.clj` -- its SCI has no `StackOverflowError` in
+;; any spelling -- and all 49 bb test namespaces died before a test ran. The
+;; code no longer names a class SCI may not have (see clj-surgeon.jvm-error),
+;; and the whole bb inventory is loaded against this exact version. babashka
+;; itself warns when it is older; `bin/install-preflight` says so louder,
+;; because a warning inside a suite that then fails is a warning nobody reads.
 {:paths ["src" "test"]
+ :min-bb-version "1.12.209"
  :bbin/bin {clj-surgeon {:main-opts ["-m" "clj-surgeon.core"]}}}
