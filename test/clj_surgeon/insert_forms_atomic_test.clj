@@ -3,10 +3,8 @@
   (:require
    [clj-surgeon.insert-forms :as insert]
    [clj-surgeon.insert-forms-support :as h]
-   [clojure.java.io :as io]
-   [clojure.test :refer [deftest is testing]])
-  (:import
-   (java.nio.file Files)))
+   [clojure.edn :as edn]
+   [clojure.test :refer [deftest is]]))
 
 ;; @spec INSERT-FORMS-014
 ;; INTENT-TEST: INSERT-FORMS-014
@@ -27,4 +25,8 @@
               result (insert/execute! req {stage hook})]
           (is (= state (:state result)) (pr-str result))
           (is (= kind (:error-type result)))
+          (let [detail (edn/read-string (slurp (:receipt_details_path result)))]
+            (is (= (:state result) (get-in detail [:receipt :state])))
+            (is (= (:next_action result) (get-in detail [:receipt :next_action])))
+            (is (= (h/sha (slurp file)) (:observed_source_hash detail))))
           (is (= (if unchanged h/source external) (slurp file))))))))
