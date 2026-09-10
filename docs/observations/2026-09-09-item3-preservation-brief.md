@@ -43,7 +43,7 @@ under a hard-stop list.
 | after Sol's round 3 (every table entry carries a falsifier) | 103/141 | 32/64 |
 | after Sol's round 4 (resolution precedes every table) | 102/141 | 32/64 |
 
-Sol reviewed the prototype twelve times and broke it twelve times — sixteen planted specimens, and every finding
+Sol reviewed the prototype thirteen times and broke it thirteen times — sixteen planted specimens, and every finding
 after round 5 was one class: **a private inventory kept beside the analyzer's.** The earlier ones
 were the same shape too: a *bare symbol* that was not the Var the canonicaliser
 assumed. Round 1: a local destructured binding replaced by a moved Var of the same name. Round 2: the same
@@ -53,6 +53,21 @@ three more, and this time the leak was not in the rule but in the **tables the r
 declared non-binding when `clojure.test/are` binds its argv; a merged def-head index letting a candidate
 `defn` overwrite a base `defmacro`; and an uppercase require alias slipping past the "that's a Java class"
 heuristic because the heuristic ran before alias resolution.
+
+Round 13 is the one I would put on the wall. Round 12 exported the refusal enumeration and left
+`file-refusal` an independent `cond` of eight literal kind strings — **two tables that agreed today**. Sol
+inserted a valid-input branch, `declaration-present`, touched neither exported collection nor the test, and
+the suite stayed green while printing "7 kinds | 7 specimens". The enumeration was documentation, not
+authority.
+
+`refusal-kinds` is now an ordered vector of `{:kind :defensive? :reason :predicate :detail}` and
+`file-refusal` is one `(some …)` over it with **no other branch**, so a kind string can exist nowhere but as
+a table row. **Order is precedence**, documented at the table: the first matching predicate decides, so a
+file satisfying two rules has exactly one answer. R8 gained a **source-shape check** — `file-refusal` may
+contain no `cond`/`case` and no literal kind string — and a **generated drift control** that injects Sol's
+exact branch into a copy and requires the check to fail on it. I then ran that injection against the *real*
+file rather than trusting the copy: it fails, and passes again on revert. A check that cannot fail is not a
+check.
 
 Round 12 caught the ratchet lying about itself. `file-refusal` named **eight** refusal kinds; R8 generated
 specimens for **three** — and printed `R8 refusal specimens: 3` directly above `PASS`. Five branches of a
@@ -159,7 +174,7 @@ resolved through the file's own namespace — refer, then alias, then a definiti
 core default, and only when nothing shadows it — before any table is consulted.
 
 **Round 3 cost nothing on Cell C**; **round 4 cost one more body**; **round 5 cost three more**, 102 → 99;
-**rounds 7 through 12 cost nothing on Cell C, which is `.clj` only with no reader conditionals** — stated rather
+**rounds 7 through 13 cost nothing on Cell C, which is `.clj` only with no reader conditionals** — stated rather
 than implied, with the evidence carried by four `.cljc` replay rows instead; **round 6 cost none but changed the
 denominator** — the owner inventory is kondo's now, so Cell C reads
 713 base / 720 candidate owners instead of the scanner's 678 / 685, with 8 forward declarations and 8
@@ -1254,7 +1269,11 @@ constants are unevaluated, so a symbol there is a literal. All are frozen now.
   is the rung that would have caught PB-FENCE-009 before it shipped, and it means a new table entry cannot
   arrive without proof that it speaks for a Var rather than a spelling.
 - **R4** requires each of the historic false-certification classes to name a planted replay row.
-- **R8** iterates the single refusal enumeration: **7 kinds, 7 generated specimens**, each asserting the
+- **R8** iterates the single refusal **table, which is also the dispatch**: `file-refusal` is one `(some …)`
+  over it with no branch of its own, so a kind cannot exist outside a row. Beyond the specimens, R8 reads
+  the source to assert `file-refusal` contains no `cond`/`case` and no literal kind string, and generates a
+  drift control that injects a literal branch into a copy and requires that assertion to fail on it. It also
+  iterates the enumeration: **7 kinds, 7 generated specimens**, each asserting the
   file is refused, the kind is exactly the expected one, sixteen counters that would describe it are zero,
   and its path appears nowhere outside the refusal rows. A kind with no specimen fails; so does a specimen
   for a kind not in the enumeration. One further kind is **defensive** — no valid input triggers it — and
@@ -1558,6 +1577,7 @@ It is the document that must exist before the slice can.
 | **A stated evidence boundary that the implementation does not enforce is worse than none**, because the report repeats it. | The brief reads the object database, never the filesystem; symlinks, non-blobs and oversized blobs are counted as refused entries and named. The permanent `symlink-escape` row is the witness. |
 | **A headline a reviewer can consume and stop on defeats a checker whose real value is in section B.** | Every obligation is hoisted above section A into a hard-stop block, the summary carries `clear`, and the exit code is 3 when not clear. The null change is the only clear row in the portfolio. |
 | **A builder cannot review his own oracle, and one round of outside review is not enough either.** Round 1 found four findings; the round-2 probe reproduced the same false-certification class one abstraction level out. | Sol's three specimens are permanent replay rows. §9.9 requires the falsifier's specimens be planted by someone who did not build the checker, and §12 now names the next unseen classes to probe rather than declaring the set complete. |
+| **An enumeration beside a hand-written `cond` is documentation, not authority — and it will drift.** Round 12's exported kinds and the real dispatch agreed on the day they were written; a branch added to the dispatch left the test green. | The table IS the dispatch: `file-refusal` is `(some (fn [{:keys [kind predicate detail]}] …) refusal-kinds)` and nothing else, so a kind can only exist as a row. R8 asserts the shape by reading the source and proves the assertion can fail by injecting a branch into a copy — and I ran that injection against the real file too, because a drift control verified only against its own mutation is the same mistake one level up. |
 | **A ratchet that counts its own specimens without comparing that count to anything is a number, not a test.** R8 printed "refusal specimens: 3" above PASS while `file-refusal` had eight kinds. | The kinds are one enumeration and the test iterates it in both directions. Building the five missing specimens immediately found a real defect in the `unreported-branch-def` check — which is the whole argument for generating a specimen per branch rather than per bug. |
 | **A correct refusal printed beside a false explanation is still a false explanation.** Round 10 hard-stopped the two-`ns` file and then published `dynamic_requires` and `undefined_alias_sites` derived from a span the resolver contradicts — under a header that tells the reviewer every entry needs a human. | A refused file contributes one reconciliation row and one hard-stop line and nothing else. The refusal is applied by **removing the path from the indexes every derivation reads**, not by teaching each counter to skip it — a counter added later inherits the refusal for free. Ratchet **R8** generates one specimen per refusal kind and asserts sixteen counters are zero and the path appears nowhere else in the markdown. |
 | **"That was the last one" is a claim, and I had not tested it.** After round 9 I wrote that the alias map was the last private inventory. Two remained: the `ns`-span filter took only the first `ns` form, and `sc/children` still rediscovered `declare` positions — a private read that suppressed a hard stop. | The invariant is a TEST now (**R7**), not a sentence in a commit message: the brief's source is read, every `sc/…` call extracted, and the set must equal a 14-entry allowlist that states what each entry reads. An unlisted read fails the build; so does an allowlist entry nothing calls. |
