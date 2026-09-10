@@ -1,0 +1,17 @@
+{:run "OBS2-provenance",
+ :specimen :alias,
+ :stable-build "59d8bc0cad8886a028c24e8ffd52e4e5d82185c1",
+ :generator-sha256
+ "cafd7820188ecf656ab26514f3b4840381d8888fa70b4efa6824b24a8ecf2c6d",
+ :files
+ {"A/full-tree-manifest.txt"
+  "df519c2f0a136508c367b7bb4df5154e38ad86b88f2d07ff9523c77e224e9d09",
+  "A/stdout.edn"
+  "91a9599131a89966c46f9adda0f4bd25ded0c500f76baf8d36e621765dffc0c4",
+  "B/full-tree-manifest.txt"
+  "2784cf52890b44a3ac40eb876963cbc3147e7e8cfa6f3049d75f63b8f7e2b408",
+  "B/stdout.edn"
+  "7976c0e01edbc493cc079ea6584e22991a445274e4281de2fe8ffffafd344380"},
+ :capture-digest
+ "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9",
+ :created "2026-09-10T17:22:09.164429152Z"}

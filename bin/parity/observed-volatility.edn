@@ -1,0 +1,70 @@
+{;; observed-volatility.edn — the only admissible source of evidence for a rule in
+ ;; volatile-fields.edn. GENERATED, never written:
+ ;;
+ ;;   bin/parity/observe-volatility.clj <run-dir> <run-id> <specimen> <stable-sha> \
+ ;;                                     bin/parity/evidence [fxA fxB]
+ ;;
+ ;; Every row is a path that DIFFERED between two runs of ONE build, and the bytes
+ ;; it was derived from are retained under bin/parity/evidence/<run>/<specimen>/.
+ ;; bin/parity/compare.clj re-opens those bytes, recomputes every digest, and
+ ;; RE-DERIVES the difference before honouring any rule that cites a row. A row whose
+ ;; run has no retained capture refuses, naming the run: a checked-in row asserting
+ ;; its own provenance is an assertion, not evidence.
+ :stable-build "59d8bc0cad8886a028c24e8ffd52e4e5d82185c1"
+ :evidence-root "evidence"
+ :generator-sha256 "cafd7820188ecf656ab26514f3b4840381d8888fa70b4efa6824b24a8ecf2c6d"
+ :file-digest "867039db307c50bdb56809b9af2921e319b749dea04e3f3de0027dff546497cf"
+ :observations
+ [
+  {:run "OBS2-provenance", :specimen :split, :path [:checks 0 :duration_ms], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:checks 1 :duration_ms], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:checks 2 :duration_ms], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:checks 3 :command 0], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:checks 3 :duration_ms], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:checks 4 :command 2], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:checks 4 :duration_ms], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:checks 5 :duration_ms], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:closure_receipt], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:details_path], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:elapsed_ms], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:receipt_hash], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:receipt_id], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:receipt_path], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:undo_command 4], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:undo_receipt], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:workspace_root], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path [:workspace_status :command 2], :source "stdout.edn", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.clj-surgeon.edn"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/index"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/logs/HEAD"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/logs/refs/heads/master"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/objects/30/e3be47ed819996d9a2eca5c91d64a11937df9c"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/objects/43/b78f9c2df9e2f412f0efd3db94b251b296412e"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/objects/5c/4c3f7f3ccdae708ffd91a05086417b13ce3c04"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/objects/7f/8f7465d573819389ce3e994aafc67f73e746e6"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/objects/83/330610b28747b55a47458ed7f882283a579a85"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/objects/b9/fe9d05e289997821a3a170edf28eb305ef766a"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/.git/refs/heads/master"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :split, :path ["tree" "/00SERVER-LOGS.txt"], :source "full-tree-manifest.txt", :capture-digest "216f8135614f4ae94b408a3f67b2df0bd85738d55c8ab5baefb6d4a1c55d1a2f"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:structured :details_path], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:structured :elapsed_ms], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:structured :receipt_hash], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:structured :telemetry :id], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:structured :telemetry :wall_ms], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:structured :undo_receipt], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:structured :workspace_root], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:structured :workspace_status :command 2], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path [:text 0], :source "stdout.edn", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path ["tree" "/.git/index"], :source "full-tree-manifest.txt", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path ["tree" "/.git/logs/HEAD"], :source "full-tree-manifest.txt", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path ["tree" "/.git/logs/refs/heads/master"], :source "full-tree-manifest.txt", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path ["tree" "/.git/objects/08/c91717d2a4be9e2034611412874f61591271d2"], :source "full-tree-manifest.txt", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path ["tree" "/.git/objects/a6/c806ec91631a153ac92f6ccc4591dd6a96f0f6"], :source "full-tree-manifest.txt", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :alias, :path ["tree" "/.git/refs/heads/master"], :source "full-tree-manifest.txt", :capture-digest "655151041b4a0226978d8b7d8d1da6aa021a73ccdf0ef2a5157c226a301ad3f9"}
+  {:run "OBS2-provenance", :specimen :fanout, :path [:structured :elapsed_ms], :source "stdout.edn", :capture-digest "4da6dd3e7fe8965bfb792dfa1d971db5642a81cf2eab9f0ccfecf550cc4f91f7"}
+  {:run "OBS2-provenance", :specimen :fanout, :path [:structured :receipt_hash], :source "stdout.edn", :capture-digest "4da6dd3e7fe8965bfb792dfa1d971db5642a81cf2eab9f0ccfecf550cc4f91f7"}
+  {:run "OBS2-provenance", :specimen :fanout, :path [:structured :undo_receipt], :source "stdout.edn", :capture-digest "4da6dd3e7fe8965bfb792dfa1d971db5642a81cf2eab9f0ccfecf550cc4f91f7"}
+  {:run "OBS2-provenance", :specimen :fanout, :path [:structured :workspace_root], :source "stdout.edn", :capture-digest "4da6dd3e7fe8965bfb792dfa1d971db5642a81cf2eab9f0ccfecf550cc4f91f7"}
+  {:run "OBS2-provenance", :specimen :fanout, :path [:structured :workspace_status :command 2], :source "stdout.edn", :capture-digest "4da6dd3e7fe8965bfb792dfa1d971db5642a81cf2eab9f0ccfecf550cc4f91f7"}
+  {:run "OBS2-provenance", :specimen :fanout, :path [:text 0], :source "stdout.edn", :capture-digest "4da6dd3e7fe8965bfb792dfa1d971db5642a81cf2eab9f0ccfecf550cc4f91f7"}
+]}
