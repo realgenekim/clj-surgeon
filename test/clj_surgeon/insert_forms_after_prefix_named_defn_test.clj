@@ -1,17 +1,17 @@
 (ns clj-surgeon.insert-forms-after-prefix-named-defn-test
   {:lane :fast}
   (:require
-   [clj-surgeon.insert-forms :as insert]
    [clj-surgeon.insert-forms-support :as h]
-   [clojure.java.io :as io]
-   [clojure.test :refer [deftest is testing]])
-  (:import
-   (java.nio.file Files)))
+   [clojure.test :refer [deftest]]))
 
 ;; @spec INSERT-FORMS-001
 ;; INTENT-TEST: INSERT-FORMS-001
 (deftest insert-forms-after-prefix-named-defn
 
+  (let [f (h/fixtures) s (str (:defn-text f) "\n(def untouched :keep)\n")
+        req (-> (h/request s) (assoc-in [:anchor :owner :name] (:defn-name f))
+                (assoc :payload {:text "(defn witnessed [] :ok)" :forms 1}))]
+    (h/accepted s req (str (:defn-text f) "\n(defn witnessed [] :ok)\n\n(def untouched :keep)\n")))
   (let [s "^:private\n    (defn a [] 1)\n"]
     (h/accepted s (assoc-in (h/request s) [:anchor :position] "before")
                 "(defn b [] 3)\n^:private\n    (defn a [] 1)\n"))
