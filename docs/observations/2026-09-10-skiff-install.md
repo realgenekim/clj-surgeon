@@ -1,6 +1,6 @@
 # Surgeon on the skiff: `make install` on a clean system
 
-**Branch** `fable/skiff-install` (4 commits), worktree
+**Branch** `fable/skiff-install` (5 commits), worktree
 `/home/forge/src/clj-surgeon-skiff`, base proven `HEAD = origin/MCP/main =
 3ea3803ea2e303a961a3edc1d76b8095ab5ff4f7`. Author `forge-anvil`, Gene + Fable
 trailers, **nothing pushed**. 1,126 insertions / 51 deletions across 16 files.
@@ -8,6 +8,57 @@ trailers, **nothing pushed**. 1,126 insertions / 51 deletions across 16 files.
 Gene, verbatim: *"Confirm will be usable and performant on skiff. Use max two
 hours to get make install on clean system to work well with clj codebase with
 all wins we've earned."*
+
+---
+
+## Sol's fence review: NO-GO on `3585c7e5`, three findings, all fixed in `064bc8bc`
+
+Sol was right on all three, and **001 was a fail-open I wrote into a gate whose
+entire job is to fail closed.** That deserves the top of this report, not a
+footnote.
+
+**001 — my darwin mount parser could prove the wrong filesystem.** It split each
+line on the last literal ` on `, so a mount point *containing* those bytes —
+`/dev/ram on /private/var/folders/evil on ram (tmpfs, local)` — was discarded as
+malformed, and the surviving `/` row then answered `"apfs"` for a target that was
+really on tmpfs. Crafted mount text could make the ratchet **prove real disk**.
+Discarding a row you do not understand is the bug: *the row you cannot read is
+exactly the row that may be covering your target.* The grammar is anchored at
+both ends now, and **any** unparseable line poisons the whole table to
+`:unknown`. Sol's table is a permanent fixture asserting the answer is never
+`"apfs"`; a second fixture puts parentheses inside a mount point.
+
+Sol also caught the second half, which was worse because it was a **false claim
+rather than a bug**: I ran `mount` by bare name through `PATH` and wrote in the
+docstring that this made it non-redirectable. He replaced it with a shim printing
+`/dev/fake on / (apfs, local)` and `base-refusal` returned `nil`. It is named by
+absolute path now, and the docstring says what is true: PATH cannot redirect it,
+forging it needs write access to `/sbin`, and it is **not** unforgeable —
+nothing reachable from bb is. I had overclaimed, and the fix is the honest
+sentence as much as the code.
+
+**002 — the derived lock had no repository key.** Keyed by scratch root and UID
+alone, two checkouts of *different* repositories collided. Keyed by the
+repository's root commit now. The rule: two checkouts of ONE repo **share** the
+lock (a heap witness in a worktree measuring the neighbour JVM in the main
+checkout is the real collision); two DIFFERENT repos **do not** (another
+project's suite is not ours to block). Non-git trees fall back to a path hash —
+distinct by construction, the safe direction. Witnessed across four trees.
+
+**003 — I called swipl "gate stage one". It is not.** `print-gate-stages` puts
+`mcp-test` fourth of seven and the oracle runs inside it as a phase-1 pool job.
+Rather than only correcting the words, `make test` now refuses at the gate
+**entrance** (`gate-prerequisites`), so the sentence became *true* instead of
+merely accurate — a box without swipl no longer pays three stages to find out.
+The same entrance refuses a RAM-backed temp base. Neither is skippable.
+
+Sol's checks **(b)–(f) held**, including confirmation that the path-socket
+guarantee behaves exactly as documented — same-process replacement detected,
+deletion-plus-independent-coordinator able to split — and that the receipt does
+not overclaim the Linux guarantee. One thing he flagged that I did **not**
+change: `GATE_MEMAVAIL_MIB` is trusted as operator authority and is not validated
+against physical memory. That is deliberate (it exists precisely for a box whose
+memory the gate cannot read), but it is an unvalidated input and worth saying.
 
 ---
 
@@ -35,19 +86,21 @@ is on Linux — as a system source, not a seam, so the MCP-OP-TMPHYG-011 propert
 
 ```
 landing-gate: {:state :passed, :landing? true, :problems [],
-               :capacity {:cpus 16, :memory-mib 24366, :lanes 8,
+               :capacity {:cpus 16, :memory-mib 24024, :lanes 8,
                           :admission :abstract-socket, :heap-mib 512,
                           :reserve-mib 2048, :lane-charge-mib 1536},
-               :wall-ms 166431,
-               :git-head "3585c7e59880f64f53ce6d416ea4a6d3265fd84c", ...}
+               :wall-ms 168095,
+               :git-head "064bc8bcdfc5441ac3b8fea7106822f6042c12e8", ...}
 ```
 
-All 7 stages exit 0: `admit-transaction-recovery-battery` 10.3 s, `battery-fresh`
-1.9 s, `alias-migration-test` 85.5 s, `mcp-test` 95.8 s, `test-bb` 80.8 s,
-`repository-hygiene` 1.8 s, `intent-audit` 1.9 s. Pool makespan 150.2 s over 8
-lanes. **`:git-head` equals the branch tip**, so the green is bound to this exact
-commit and not to a stale tree. (An earlier green at `83cf6bc2` measured 170.4 s;
-two runs, same verdict.)
+All 7 stages exit 0: `admit-transaction-recovery-battery` 10.6 s, `battery-fresh`
+1.9 s, `alias-migration-test` 83.7 s, `mcp-test` 95.8 s, `test-bb` 80.5 s,
+`repository-hygiene` 1.9 s, `intent-audit` 2.0 s. Pool makespan 151.5 s over 8
+lanes. **`:git-head` equals the branch tip `064bc8bc`** — the post-fence commit —
+so the green is bound to the code Sol reviewed *plus* the three fixes, not to a
+stale tree. Three greens now at `83cf6bc2` (170.4 s), `3585c7e5` (166.4 s) and
+`064bc8bc` (168.1 s); same verdict each time, and the last was run at box load
+~17 from other seats.
 
 `make landing-gate-prewarm` also verified: `:state :passed`, `:prewarm? true`,
 `:landing? false` — correctly *not* a landing — `:problems []`, 153.0 s.
@@ -303,6 +356,10 @@ and that Homebrew's `clojure`/`bb`/`swipl` behave as their Linux builds do.
 | 8 | `mktemp -d -t` (BSD takes a bare prefix) | 3 gate scripts | yes | explicit template |
 | 9 | bare `timeout` | `tmp_leak_ratchet_test.sh` | yes | `timeout`/`gtimeout`, degrades |
 | 10 | swipl absence unreadable | `Makefile:206` | yes | named refusal + remedy, **no bypass** |
+| 13 | **parser could PROVE the wrong fs** (Sol 001) | `tmp_leak_support.clj` | yes | anchored grammar; any unparseable row ⇒ whole table `:unknown` |
+| 14 | `mount` via bare `PATH` was forgeable, and the docstring denied it (Sol 001) | `tmp_leak_support.clj` | yes | absolute `/sbin/mount`; claim corrected to what is true |
+| 15 | lock collides across different repos (Sol 002) | `Makefile` | yes | keyed by repository root commit |
+| 16 | "swipl is gate stage one" — false (Sol 003) | Makefile, preflight, skiff.md | yes | claim corrected **and** made true via `gate-prerequisites` |
 | 11 | `head -1` reports `JAVA_TOOL_OPTIONS` as the Java version | preflight | yes | filtered, and the variable reported |
 | 12 | memory-test temp roots pinned to `/home/forge/tmp` | 2 memory test ns | yes | derived |
 
@@ -322,6 +379,11 @@ installed user touches.
    raw `vm_stat` output and it is a five-minute fix with a real witness.
 3. Whether `install` should imply `install-with-analyzer` on a box with no
    `~/bin/clj-kondo` is a doctrine question I left alone.
+4. **`GATE_MEMAVAIL_MIB` is unvalidated** (Sol's note under check (c)): a huge
+   declaration is accepted as operator authority and never checked against
+   physical memory. It is capped in effect by the `cpus/2` half-width, but the
+   receipt records the declared figure. Deliberate — the override exists for a
+   box whose memory the gate cannot read — but it is an unvalidated input.
 
 **Boundaries honoured:** no push, no `pkill`/`pgrep -f` (I used one `pgrep -f`
 by reflex, caught it, and recovered the pid via `ps` — recorded here rather than
