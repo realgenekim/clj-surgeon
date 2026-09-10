@@ -1,0 +1,374 @@
+#!/usr/bin/env bash
+# parity-run — byte-parity harness: run the retained specimen operations on TWO
+# builds of clj-surgeon and prove the outputs are identical.
+#
+#   bin/parity-run <BUILD_A> <BUILD_B> [--specimens split,alias,fanout] [--run-id ID]
+#
+# A BUILD is either
+#   sha:<git-ref>   a ref in /home/forge/src/clj-surgeon, exported to an isolated
+#                   source tree under $PARITY_ROOT/builds/<label>
+#   dir:<path>      an existing source tree, used verbatim.  This is how a
+#                   PLANTED difference is fed to the harness (the red control).
+#
+# The installed launcher (~/bin/clj-surgeon) is NEVER used: each build is driven
+# as `bb --classpath <build>/src -m clj-surgeon.core`, which is byte-for-byte the
+# same executor `make prepare-cli-package` copies into
+# ~/.local/share/clj-surgeon/versions/<commit>/cli-<hash>/src.
+#
+# For each specimen and each build the harness materialises a FRESH copy of the
+# specimen fixture, sends the identical frozen request, and captures:
+#   exit code, stdout, stderr, the receipt file, and a sha256 manifest of the
+#   whole resulting tree.
+# bin/parity/compare.clj then compares all four, normalising ONLY the fields
+# declared in bin/parity/volatile-fields.edn.
+#
+# Exit 0 = parity on every specimen.  Exit 1 = at least one divergence, named.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PARITY_ROOT="${PARITY_ROOT:-/var/tmp/forge/parity}"
+CLJ_SURGEON_REPO="${CLJ_SURGEON_REPO:-/home/forge/src/clj-surgeon}"
+CFP_REPO="${CFP_REPO:-/home/forge/src/curtaincall-cfp}"
+DECL="$HERE/bin/parity/volatile-fields.edn"
+SPECIMENS="split"
+RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+JVM_XMX="${JVM_XMX:-1g}"
+# Fixtures are the whole footprint: one curtaincall-cfp copy is 1.9 GB and a
+# three-specimen run makes six.  The captured EVIDENCE — the sha256 tree
+# manifest, the receipt, stdout/stderr, the exit code — is what the comparator
+# reads, and it is kilobytes.  So a fixture is deleted the moment its evidence
+# is captured, and at most ONE is live at a time.  Set PARITY_KEEP_FIXTURES=1
+# to keep them when a divergence needs the actual bytes inspected by hand.
+KEEP_FIXTURES="${PARITY_KEEP_FIXTURES:-0}"
+
+usage() { sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 2; }
+[ $# -ge 2 ] || usage
+BUILD_A_REF="$1"; BUILD_B_REF="$2"; shift 2
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --specimens) SPECIMENS="$2"; shift 2 ;;
+    --run-id)    RUN_ID="$2"; shift 2 ;;
+    *) echo "unknown argument: $1" >&2; usage ;;
+  esac
+done
+
+# NEVER /tmp on this seat: it is a RAM-backed tmpfs (inb-9483a4).
+case "$PARITY_ROOT" in /var/tmp/forge*) ;; *) echo "PARITY_ROOT must live under /var/tmp/forge" >&2; exit 2 ;; esac
+export TMPDIR="$PARITY_ROOT/tmp"; mkdir -p "$TMPDIR"
+RUN_DIR="$PARITY_ROOT/runs/$RUN_ID"; mkdir -p "$RUN_DIR"
+
+log() { printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*" | tee -a "$RUN_DIR/harness.log"; }
+
+# --- build materialisation -------------------------------------------------
+# source-hash uses the same recipe as the Makefile's CLI_SOURCE_HASH, so the
+# report can say which executor bytes each side actually ran.
+source_hash() {
+  ( cd "$1" && { find src -type f -print; printf '%s\n' bb.edn deps.edn; } \
+      | LC_ALL=C sort | while IFS= read -r f; do sha256sum "$f" 2>/dev/null; done \
+      | sha256sum | awk '{print $1}' )
+}
+
+materialise_build() { # <ref> <slot>  -> echoes build dir
+  local ref="$1" slot="$2" kind="${1%%:*}" val="${1#*:}"
+  case "$kind" in
+    dir)
+      [ -d "$val" ] || { echo "no such build dir: $val" >&2; exit 2; }
+      echo "$val" ;;
+    sha)
+      local sha; sha="$(git -C "$CLJ_SURGEON_REPO" rev-parse "$val^{commit}")" || exit 2
+      local dir="$PARITY_ROOT/builds/$sha"
+      if [ ! -d "$dir" ]; then
+        mkdir -p "$dir"
+        git -C "$CLJ_SURGEON_REPO" archive "$sha" | tar -x -C "$dir" || exit 2
+      fi
+      echo "$dir" ;;
+    *) echo "build ref must be sha:<ref> or dir:<path> (got $ref)" >&2; exit 2 ;;
+  esac
+}
+
+BUILD_A="$(materialise_build "$BUILD_A_REF" A)" || exit 2
+BUILD_B="$(materialise_build "$BUILD_B_REF" B)" || exit 2
+HASH_A="$(source_hash "$BUILD_A")"; HASH_B="$(source_hash "$BUILD_B")"
+
+{
+  echo "run_id        $RUN_ID"
+  echo "build_A_ref   $BUILD_A_REF"
+  echo "build_A_dir   $BUILD_A"
+  echo "build_A_hash  $HASH_A"
+  echo "build_B_ref   $BUILD_B_REF"
+  echo "build_B_dir   $BUILD_B"
+  echo "build_B_hash  $HASH_B"
+  echo "specimens     $SPECIMENS"
+} | tee "$RUN_DIR/builds.txt"
+
+# --- capture ---------------------------------------------------------------
+# The tree manifest deliberately excludes only what volatile-fields.edn declares,
+# each exclusion carrying its own reason in that file.
+tree_manifest() { # <fixture> <out>
+  ( cd "$1" && find . -type f \
+      -not -path './.git/*' -not -name '.clj-surgeon.edn' \
+      -not -name '00SERVER-LOGS.txt' -print0 \
+    | LC_ALL=C sort -z \
+    | xargs -0 -r sha256sum ) > "$2"
+}
+
+capture() { # <outdir> <fixture> <exit> <wall>
+  local out="$1" fx="$2"
+  echo "$fx" > "$out/fixture-root.txt"
+  tree_manifest "$fx" "$out/tree-manifest.txt"
+  # the receipt the operation names, copied next to the run for field comparison
+  local rp
+  rp="$(bb -e '(try (let [m (clojure.edn/read-string (slurp (first *command-line-args*)))] (println (or (:receipt_path m) (get-in m [:structured :receipt_path]) ""))) (catch Exception _ (println "")))' "$out/stdout.edn" 2>/dev/null | tail -1)"
+  if [ -n "$rp" ] && [ -f "$rp" ]; then cp "$rp" "$out/receipt.edn"; echo "$rp" > "$out/receipt-path.txt"; fi
+}
+
+# --- specimen: namespace split (exact Cell C contract) ---------------------
+# curtaincall-cfp views.clj at d9205abc, the frozen 20-destination request
+# retained at /var/tmp/forge/plan2/cellC/D8-request.edn (all six retained M/D
+# request files are byte-identical once workspace_root is removed).
+SPLIT_REQUEST="${SPLIT_REQUEST:-/var/tmp/forge/plan2/cellC/D8-request.edn}"
+SPLIT_BASE_SHA="${SPLIT_BASE_SHA:-d9205abc}"
+SPLIT_ORACLE="${SPLIT_ORACLE:-/var/tmp/forge/plan2/cellC/cc-oracle.py}"
+
+specimen_split_materialise() { # <fixture>
+  local fx="$1"
+  rm -rf "$fx"; mkdir -p "$fx"
+  git -C "$CFP_REPO" archive "$SPLIT_BASE_SHA" | tar -x -C "$fx" || return 1
+  # The cell's verification profile is untracked in the fixture and names its own
+  # workspace; rebind it to this copy.  Declared as a tree-exclude: it is an input.
+  printf '{:verification-profiles {"split-unit" {:commands [["bin/kaocha" "unit" "--fail-fast"] ["python3" "%s" "%s"]]}}}\n' \
+    "$SPLIT_ORACLE" "$fx" > "$fx/.clj-surgeon.edn"
+  ( cd "$fx" && git init -q && git add -A \
+    && GIT_AUTHOR_NAME=forge-anvil GIT_AUTHOR_EMAIL=forge-anvil@anvil \
+       GIT_COMMITTER_NAME=forge-anvil GIT_COMMITTER_EMAIL=forge-anvil@anvil \
+       git commit -q -m "parity fixture base $SPLIT_BASE_SHA" )
+}
+
+specimen_split_run() { # <build> <fixture> <outdir>
+  local build="$1" fx="$2" out="$3"
+  python3 - "$fx" "$SPLIT_REQUEST" > "$out/request.edn" <<'PY'
+import sys
+src = open(sys.argv[2]).read()
+# the retained request pins the cell's own workspace; every other byte is frozen
+import re
+sys.stdout.write(re.sub(r'"/home/forge/src/cc-split-[A-Z0-9]+"', '"%s"' % sys.argv[1], src, count=1))
+PY
+  local cpr="$PARITY_ROOT/cp/$(basename "$build")"
+  mkdir -p "$(dirname "$cpr")"; printf '%s\n' "$build/" > "$cpr"
+  local s=$(date +%s)
+  ( cd "$fx" && CLJ_SURGEON_CONTROL_PLANE_ROOT_FILE="$cpr" BABASHKA_PRELOADS= \
+      bb --classpath "$build/src" -m clj-surgeon.core \
+         :op :split-ns! :request-file "$out/request.edn" ) \
+      > "$out/stdout.edn" 2> "$out/stderr.txt"
+  local rc=$?
+  echo "$rc" > "$out/exit.txt"; echo "$(( $(date +%s) - s ))" > "$out/wall.txt"
+  return 0
+}
+
+
+# --- MCP-backed specimens ---------------------------------------------------
+# alias_migration and apply_clojure_changes have NO CLI op (`:op :alias-migration`
+# answers {:error "Unknown op"}), so parity on them requires driving a server
+# built from each side's own source tree.  One server per build, on a private
+# loopback port; never 7888/7890/7894/7895 and never the 8300-8339 block.
+MCP_PORT_A="${MCP_PORT_A:-7951}"
+MCP_PORT_B="${MCP_PORT_B:-7952}"
+declare -A MCP_PID=()
+declare -A MCP_JAVA=()
+declare -A MCP_PORT_OF=()
+
+mcp_url() { local slot="$1" p; [ "$slot" = A ] && p="$MCP_PORT_A" || p="$MCP_PORT_B"; echo "http://127.0.0.1:$p/mcp"; }
+
+port_listening() { (echo > "/dev/tcp/127.0.0.1/$1") >/dev/null 2>&1; }
+
+# Bind the proof to its subject.  A health check only proves that SOMETHING is
+# listening; it cannot tell this build's server from a stale one left behind by an
+# earlier run.  That is not hypothetical: on 2026-09-10 a leaked pair of servers
+# from the previous run answered /healthz in 1s and the harness reported PARITY
+# for a build whose planted defect had never executed.  So: refuse a port that is
+# already in use, and after the server answers, prove a java process exists whose
+# WORKING DIRECTORY is this build and whose argv names this port.
+mcp_identify() { # <build> <port> -> echoes the pid, or nothing
+  local build="$1" port="$2" pid cwd
+  for pid in $(pgrep -u "$(id -u)" java 2>/dev/null); do
+    cwd="$(readlink "/proc/$pid/cwd" 2>/dev/null)" || continue
+    [ "$cwd" = "$build" ] || continue
+    tr '\0' '\n' < "/proc/$pid/cmdline" 2>/dev/null | grep -qx "$port" || continue
+    echo "$pid"; return 0
+  done
+  return 1
+}
+
+mcp_start() { # <build> <slot>
+  local build="$1" slot="$2" port
+  [ "$slot" = A ] && port="$MCP_PORT_A" || port="$MCP_PORT_B"
+  case "$port" in 7888|7890|7894|7895|83[0-3][0-9]) log "REFUSING reserved port $port"; return 2 ;; esac
+  [ -n "${MCP_PID[$slot]:-}" ] && return 0
+  if port_listening "$port"; then
+    log "REFUSING to start mcp/$slot: port $port is ALREADY IN USE. A stale server would answer for this build and the run would report a parity verdict it never measured."
+    return 2
+  fi
+  local state="$RUN_DIR/mcp-$slot"; mkdir -p "$state/telemetry"
+  ( cd "$build" && MCP_STATE_DIR="$state" \
+      clojure -J-Xms64m -J-Xmx"$JVM_XMX" -X:clj-surgeon/mcp \
+        :port "$port" :nrepl-port :none :telemetry :metrics \
+        :telemetry-dir "\"$state/telemetry\"" :log-file "\"$state/server.log\"" \
+        :port-file "\"$state/nrepl-port\"" \
+        > "$state/stdout.log" 2>&1 ) &
+  local wrapper=$!
+  local health="http://127.0.0.1:$port/healthz" i ready=0
+  for i in $(seq 1 180); do
+    curl -fsS --max-time 2 "$health" >/dev/null 2>&1 && { ready=1; break; }
+    kill -0 "$wrapper" 2>/dev/null || { log "mcp/$slot DIED during startup"; tail -20 "$state/stdout.log" | sed 's/^/      /' | tee -a "$RUN_DIR/harness.log"; return 3; }
+    sleep 1
+  done
+  [ "$ready" = 1 ] || { log "mcp/$slot NEVER became ready on $port"; return 3; }
+  local jpid
+  jpid="$(mcp_identify "$build" "$port")" || {
+    log "mcp/$slot answered on $port but NO java process has cwd=$build — refusing to attribute this port to this build"
+    kill "$wrapper" 2>/dev/null; return 3; }
+  MCP_PID[$slot]="$wrapper"; MCP_JAVA[$slot]="$jpid"; MCP_PORT_OF[$slot]="$port"
+  echo "$jpid $build $port" > "$state/identity.txt"
+  log "mcp/$slot ready on $port after ${i}s (java pid $jpid, cwd proved = $(basename "$build"))"
+  return 0
+}
+
+mcp_stop_all() {
+  local slot i
+  for slot in "${!MCP_PID[@]}"; do
+    kill "${MCP_JAVA[$slot]:-}" 2>/dev/null
+    kill "${MCP_PID[$slot]}" 2>/dev/null
+    local port="${MCP_PORT_OF[$slot]:-}"
+    for i in $(seq 1 30); do port_listening "$port" || break; sleep 1; done
+    if [ -n "$port" ] && port_listening "$port"; then
+      log "mcp/$slot LEAKED: port $port is still listening after stop — the next run must refuse it"
+    else
+      log "mcp/$slot stopped, port $port free"
+    fi
+  done
+  MCP_PID=(); MCP_JAVA=(); MCP_PORT_OF=()
+}
+trap mcp_stop_all EXIT
+
+mcp_run() { # <build> <slot> <fixture> <outdir> <tool> <request.json>
+  local build="$1" slot="$2" fx="$3" out="$4" tool="$5" req="$6"
+  mcp_start "$build" "$slot" || { echo "server-unavailable" > "$out/exit.txt"; echo 0 > "$out/wall.txt"; return 0; }
+  local s=$(date +%s)
+  python3 "$HERE/bin/parity/mcp-call.py" "$(mcp_url "$slot")" "$tool" "$req" \
+    > "$out/stdout.json" 2> "$out/stderr.txt"
+  local rc=$?
+  echo "$rc" > "$out/exit.txt"; echo "$(( $(date +%s) - s ))" > "$out/wall.txt"
+  bb -e '(require (quote [cheshire.core :as j])) (prn (j/parse-string (slurp (first *command-line-args*)) true))' \
+     "$out/stdout.json" > "$out/stdout.edn" 2>/dev/null
+  return 0
+}
+
+# --- specimen: alias migration (row-2 entrance) -----------------------------
+# marvin-voice-remote mjson centralisation, 9 files / 21 sites.  Fixture base is
+# the retained entrance seed (only surviving holder is the /var/tmp seed repo).
+ALIAS_SEED_REPO="${ALIAS_SEED_REPO:-/var/tmp/forge/row2/seed-repo}"
+ALIAS_SEED_SHA="${ALIAS_SEED_SHA:-31ff5b9d8608d5c0a141b9de70bfac409ee716e6}"
+
+specimen_alias_materialise() {
+  local fx="$1"; rm -rf "$fx"; mkdir -p "$fx"
+  git -C "$ALIAS_SEED_REPO" archive "$ALIAS_SEED_SHA" | tar -x -C "$fx" || return 1
+  ( cd "$fx" && git init -q && git add -A \
+    && GIT_AUTHOR_NAME=forge-anvil GIT_AUTHOR_EMAIL=forge-anvil@anvil \
+       GIT_COMMITTER_NAME=forge-anvil GIT_COMMITTER_EMAIL=forge-anvil@anvil \
+       git commit -q -m "parity fixture base $ALIAS_SEED_SHA" )
+}
+
+specimen_alias_run() { # <build> <fixture> <outdir> <slot>
+  local build="$1" fx="$2" out="$3" slot="$4"
+  python3 - "$fx" > "$out/request.json" <<'PY'
+import json, sys
+# The row-2 entrance never persisted a wire payload; this is the request
+# bin/alias-migrate composes from the verbatim invocation retained in the cell
+# transcripts:  make alias-migrate FROM=clojure.data.json/write-str
+#   TO=marvin-voice-remote.json/write ALIASES=json,mjson,m-json,json-policy
+#   SCOPE=src EXPECT_FILES=9
+print(json.dumps({
+ "workspace_root": sys.argv[1],
+ "from": {"lib": "clojure.data.json", "var": "write-str"},
+ "to": {"lib": "marvin-voice-remote.json", "var": "write",
+        "alias_policy": ["json", "mjson", "m-json", "json-policy"]},
+ "scope": {"paths": ["src"], "exclude": ["src/marvin_voice_remote/json.clj"]},
+ "expect": {"files": 9}}, indent=1))
+PY
+  mcp_run "$build" "$slot" "$fx" "$out" alias_migration "$out/request.json"
+}
+
+# --- specimen: apply_clojure_changes fan-out (pair-1 task A, 3 sites) -------
+FANOUT_SHA="${FANOUT_SHA:-92a7ca14}"
+FANOUT_REQUEST="${FANOUT_REQUEST:-/home/forge/src/clj-surgeon-records/docs/observations/2026-09-07-pair-1/A-T1/request-4.json}"
+
+specimen_fanout_materialise() {
+  local fx="$1"; rm -rf "$fx"; mkdir -p "$fx"
+  git -C "$CFP_REPO" archive "$FANOUT_SHA" | tar -x -C "$fx" || return 1
+  ( cd "$fx" && git init -q && git add -A \
+    && GIT_AUTHOR_NAME=forge-anvil GIT_AUTHOR_EMAIL=forge-anvil@anvil \
+       GIT_COMMITTER_NAME=forge-anvil GIT_COMMITTER_EMAIL=forge-anvil@anvil \
+       git commit -q -m "parity fixture base $FANOUT_SHA" )
+}
+
+specimen_fanout_run() { # <build> <fixture> <outdir> <slot>
+  local build="$1" fx="$2" out="$3" slot="$4"
+  python3 - "$fx" "$FANOUT_REQUEST" > "$out/request.json" <<'PY'
+import json, sys
+r = json.load(open(sys.argv[2]))
+r["workspace_root"] = sys.argv[1]
+print(json.dumps(r, indent=1))
+PY
+  mcp_run "$build" "$slot" "$fx" "$out" apply_clojure_changes "$out/request.json"
+}
+
+# --- specimen dispatch -----------------------------------------------------
+run_specimen() { # <name>
+  local name="$1" ok=0
+  local sdir="$RUN_DIR/$name"; mkdir -p "$sdir/A" "$sdir/B"
+  local i
+  for i in A B; do
+    local build fx
+    [ "$i" = A ] && build="$BUILD_A" || build="$BUILD_B"
+    fx="$PARITY_ROOT/fx/$RUN_ID-$name-$i"
+    log "$name/$i materialise fixture"
+    "specimen_${name}_materialise" "$fx" || { log "$name/$i FIXTURE FAILED"; return 3; }
+    log "$name/$i run ($(basename "$build"))"
+    "specimen_${name}_run" "$build" "$fx" "$sdir/$i" "$i"
+    capture "$sdir/$i" "$fx"
+    local fxsize; fxsize="$(du -sh "$fx" 2>/dev/null | cut -f1)"
+    log "$name/$i exit=$(cat "$sdir/$i/exit.txt") wall=$(cat "$sdir/$i/wall.txt")s fixture=$fxsize"
+    if [ "$KEEP_FIXTURES" = 1 ]; then
+      log "$name/$i fixture KEPT at $fx ($fxsize)"
+    else
+      rm -rf "$fx"
+    fi
+  done
+  log "$name compare"
+  bb "$HERE/bin/parity/compare.clj" "$sdir/A" "$sdir/B" "$DECL" "$name" > "$sdir/compare.txt" 2>&1
+  ok=$?
+  sed 's/^/    /' "$sdir/compare.txt" | tee -a "$RUN_DIR/harness.log"
+  return $ok
+}
+
+STATUS=0
+IFS=, read -r -a WANTED <<< "$SPECIMENS"
+for s in "${WANTED[@]}"; do
+  if ! declare -F "specimen_${s}_run" >/dev/null; then
+    log "SPECIMEN $s NOT IMPLEMENTED — skipped (recorded as unretrieved)"
+    echo "$s NOT-IMPLEMENTED" >> "$RUN_DIR/verdicts.txt"; STATUS=2; continue
+  fi
+  run_specimen "$s"; rc=$?
+  case $rc in
+    0) log "SPECIMEN $s: PARITY"; echo "$s PARITY" >> "$RUN_DIR/verdicts.txt" ;;
+    1) log "SPECIMEN $s: DIVERGENCE"; echo "$s DIVERGENCE" >> "$RUN_DIR/verdicts.txt"; STATUS=1 ;;
+    2) log "SPECIMEN $s: REFUSED — the declaration or the capture is not fit to compare; this is NOT a parity verdict"
+       echo "$s REFUSED" >> "$RUN_DIR/verdicts.txt"; STATUS=2 ;;
+    *) log "SPECIMEN $s: FIXTURE/HARNESS FAILURE rc=$rc"; echo "$s FAILED" >> "$RUN_DIR/verdicts.txt"; STATUS=3 ;;
+  esac
+done
+
+log "footprint: builds $(du -sh "$PARITY_ROOT/builds" 2>/dev/null | cut -f1), live fixtures $(du -sh "$PARITY_ROOT/fx" 2>/dev/null | cut -f1), evidence $(du -sh "$PARITY_ROOT/runs" 2>/dev/null | cut -f1)"
+log "run dir $RUN_DIR"
+cat "$RUN_DIR/verdicts.txt" 2>/dev/null
+exit $STATUS

@@ -1,0 +1,14 @@
+;; Per-specimen expectations the comparator needs in order to treat ABSENCE as a
+;; value rather than as a skipped comparison.
+;;
+;; :expects-receipt — does this operation publish a `receipt_path` the harness
+;;   follows and captures?  When true, a receipt missing on both sides is a
+;;   divergence (the operation stopped publishing one).  When false, absence on
+;;   both sides is the predicted state.  A specimen with NO entry here refuses:
+;;   absence can only be accepted where it was predicted.
+{:split  {:expects-receipt true
+          :note "namespace_split publishes :receipt_path; the harness copies that file next to the run."}
+ :alias  {:expects-receipt false
+          :note "alias_migration publishes :details_path and :undo_receipt but no top-level :receipt_path, so there is no receipt file to capture. Its receipt object is compared in full as stdout.edn."}
+ :fanout {:expects-receipt false
+          :note "apply_clojure_changes publishes :undo_receipt but no top-level :receipt_path. Its receipt object is compared in full as stdout.edn."}}
