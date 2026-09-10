@@ -12,6 +12,9 @@
 ;; INTENT-TEST: INSERT-FORMS-001
 (deftest insert-forms-after-prefix-named-defn
 
+  (let [s "^:private\n    (defn a [] 1)\n"]
+    (h/accepted s (assoc-in (h/request s) [:anchor :position] "before")
+                "(defn b [] 3)\n^:private\n    (defn a [] 1)\n"))
   (h/accepted h/source (h/request h/source)
               "(defn a [] 1)\n(defn b [] 3)\n\n(defn ab [] 2)\n")
   (h/accepted h/source (assoc-in (h/request h/source) [:anchor :position] "before")
