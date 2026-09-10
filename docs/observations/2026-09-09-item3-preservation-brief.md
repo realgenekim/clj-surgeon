@@ -43,7 +43,7 @@ under a hard-stop list.
 | after Sol's round 3 (every table entry carries a falsifier) | 103/141 | 32/64 |
 | after Sol's round 4 (resolution precedes every table) | 102/141 | 32/64 |
 
-Sol reviewed the prototype eleven times and broke it eleven times — sixteen planted specimens, and every finding
+Sol reviewed the prototype twelve times and broke it twelve times — sixteen planted specimens, and every finding
 after round 5 was one class: **a private inventory kept beside the analyzer's.** The earlier ones
 were the same shape too: a *bare symbol* that was not the Var the canonicaliser
 assumed. Round 1: a local destructured binding replaced by a moved Var of the same name. Round 2: the same
@@ -54,7 +54,23 @@ declared non-binding when `clojure.test/are` binds its argv; a merged def-head i
 `defn` overwrite a base `defmacro`; and an uppercase require alias slipping past the "that's a Java class"
 heuristic because the heuristic ran before alias resolution.
 
-Round 11 was the smallest finding and the sharpest one. Round 10's refusal of a two-`ns` file was correct —
+Round 12 caught the ratchet lying about itself. `file-refusal` named **eight** refusal kinds; R8 generated
+specimens for **three** — and printed `R8 refusal specimens: 3` directly above `PASS`. Five branches of a
+fail-closed boundary could break while the test stayed green, and the headline claimed the coverage. A
+number nobody compares with anything is not a ratchet.
+
+The kinds are **one enumeration** now, and R8 iterates it in both directions: a kind with no generated
+specimen fails, and a generator for a kind not in the enumeration fails. Five new specimens were built, each
+constructed to trigger exactly its kind — and building them **found a real defect**: the
+`unreported-branch-def` check compared a *count* of branch definitions against a count of lang-tagged
+definitions, and in a `.cljc` every definition carries a `:lang`, so a file's ordinary defs masked a missing
+one. It compares *names* now. The eighth kind, `unplaced-definition`, is not triggerable by any valid input
+— the scanner enumerates every top-level datum, so reaching it needs a scanner defect, not an input — so it
+moves to a `defensive-refusal-kinds` map **with that reason in the source**, which R8 requires. The guard
+stays in `file-refusal`: deleting a fail-closed branch to make a test green is how a boundary stops being
+one.
+
+Round 11 was the smallest finding before it, and just as sharp. Round 10's refusal of a two-`ns` file was correct —
 and the brief printed the false explanations **beside** it anyway: `dynamic_requires=4`, calling the second
 live namespace's static requires "a comment, a REPL block or a runtime call, never load order", and
 `undefined_alias_sites=2` on the very call sites those requires define. Under a header that says every listed
@@ -143,7 +159,7 @@ resolved through the file's own namespace — refer, then alias, then a definiti
 core default, and only when nothing shadows it — before any table is consulted.
 
 **Round 3 cost nothing on Cell C**; **round 4 cost one more body**; **round 5 cost three more**, 102 → 99;
-**rounds 7 through 11 cost nothing on Cell C, which is `.clj` only with no reader conditionals** — stated rather
+**rounds 7 through 12 cost nothing on Cell C, which is `.clj` only with no reader conditionals** — stated rather
 than implied, with the evidence carried by four `.cljc` replay rows instead; **round 6 cost none but changed the
 denominator** — the owner inventory is kondo's now, so Cell C reads
 713 base / 720 candidate owners instead of the scanner's 678 / 685, with 8 forward declarations and 8
@@ -1237,7 +1253,12 @@ constants are unevaluated, so a symbol there is a literal. All are frozen now.
   `unmodelled`, with a matching control requiring the head to keep its meaning when nothing shadows it. This
   is the rung that would have caught PB-FENCE-009 before it shipped, and it means a new table entry cannot
   arrive without proof that it speaks for a Var rather than a spelling.
-- **R4** requires each of the seven historic false-certification classes to name a planted replay row.
+- **R4** requires each of the historic false-certification classes to name a planted replay row.
+- **R8** iterates the single refusal enumeration: **7 kinds, 7 generated specimens**, each asserting the
+  file is refused, the kind is exactly the expected one, sixteen counters that would describe it are zero,
+  and its path appears nowhere outside the refusal rows. A kind with no specimen fails; so does a specimen
+  for a kind not in the enumeration. One further kind is **defensive** — no valid input triggers it — and
+  carries its reason in the source, which R8 also requires.
 
 `frozen-heads` needs no witness, and that asymmetry is the design: **freezing is the absence of a claim**, so
 anything unproved goes there. `are`, `condp`, `cond->`, `while`, `assert`, `comment`, `time`, `delay`,
@@ -1537,6 +1558,7 @@ It is the document that must exist before the slice can.
 | **A stated evidence boundary that the implementation does not enforce is worse than none**, because the report repeats it. | The brief reads the object database, never the filesystem; symlinks, non-blobs and oversized blobs are counted as refused entries and named. The permanent `symlink-escape` row is the witness. |
 | **A headline a reviewer can consume and stop on defeats a checker whose real value is in section B.** | Every obligation is hoisted above section A into a hard-stop block, the summary carries `clear`, and the exit code is 3 when not clear. The null change is the only clear row in the portfolio. |
 | **A builder cannot review his own oracle, and one round of outside review is not enough either.** Round 1 found four findings; the round-2 probe reproduced the same false-certification class one abstraction level out. | Sol's three specimens are permanent replay rows. §9.9 requires the falsifier's specimens be planted by someone who did not build the checker, and §12 now names the next unseen classes to probe rather than declaring the set complete. |
+| **A ratchet that counts its own specimens without comparing that count to anything is a number, not a test.** R8 printed "refusal specimens: 3" above PASS while `file-refusal` had eight kinds. | The kinds are one enumeration and the test iterates it in both directions. Building the five missing specimens immediately found a real defect in the `unreported-branch-def` check — which is the whole argument for generating a specimen per branch rather than per bug. |
 | **A correct refusal printed beside a false explanation is still a false explanation.** Round 10 hard-stopped the two-`ns` file and then published `dynamic_requires` and `undefined_alias_sites` derived from a span the resolver contradicts — under a header that tells the reviewer every entry needs a human. | A refused file contributes one reconciliation row and one hard-stop line and nothing else. The refusal is applied by **removing the path from the indexes every derivation reads**, not by teaching each counter to skip it — a counter added later inherits the refusal for free. Ratchet **R8** generates one specimen per refusal kind and asserts sixteen counters are zero and the path appears nowhere else in the markdown. |
 | **"That was the last one" is a claim, and I had not tested it.** After round 9 I wrote that the alias map was the last private inventory. Two remained: the `ns`-span filter took only the first `ns` form, and `sc/children` still rediscovered `declare` positions — a private read that suppressed a hard stop. | The invariant is a TEST now (**R7**), not a sentence in a commit message: the brief's source is read, every `sc/…` call extracted, and the set must equal a 14-entry allowlist that states what each entry reads. An unlisted read fails the build; so does an allowlist entry nothing calls. |
 | **A rule written against one file type is a rule about that file type.** "Refuse a file with ≠1 namespace definition" was written against `.clj`; clj-kondo reports one definition per elaborated platform, so it refused every `.cljc` row in the portfolio. | Count distinct namespace names, not definitions. Caught by rerunning the whole replay after the repair instead of the two fixtures the repair was written against — which is what a permanent row set is for. |
