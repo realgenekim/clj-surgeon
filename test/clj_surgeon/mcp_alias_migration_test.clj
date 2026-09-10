@@ -1102,10 +1102,19 @@
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- namespace-source-path
+  "Almost every reachable clj-surgeon namespace lives under src/. A shared
+   support namespace can legitimately live under test/ instead (e.g.
+   clj-surgeon.tmp-leak-support, required from src/clj_surgeon/receipt_artifacts.clj
+   and src/clj_surgeon/memory_battery_runner.clj alike) -- this returns
+   whichever actually exists, preferring src/ when both would (they never do
+   in this tree; a namespace has exactly one source file)."
   [namespace-name]
-  (str "src/"
-       (str/replace (str/replace (str namespace-name) "." "/") "-" "_")
-       ".clj"))
+  (let [relative (str (str/replace (str/replace (str namespace-name) "." "/") "-" "_")
+                      ".clj")
+        src-path (str "src/" relative)]
+    (if (.exists (io/file src-path))
+      src-path
+      (str "test/" relative))))
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- required-clj-surgeon-namespaces
@@ -5908,7 +5917,13 @@
     "alias-migration-walk-too-large" "ambiguous-change-subject"
     "ambiguous-form" "ambiguous-match" "analyzer-authority-unverified"
     "analyzer-mission-budget-exhausted" "analyzer-mission-expired"
-    "apply-failed" "atomic-write-failed" "basis-coverage-mismatch"
+    "apply-failed"
+    ;; SPF-001 (2026-09-10, fence NO-GO on bac7ba22): validate-artifact-root!
+    ;; fails closed on the selected artifact root before any receipt writer
+    ;; trusts it -- 149 -> 153.
+    "artifact-root-blank" "artifact-root-not-owned" "artifact-root-ram-backed"
+    "artifact-root-relative"
+    "atomic-write-failed" "basis-coverage-mismatch"
     "basis-edit-address-drift" "basis-edit-covers-owner"
     "basis-workspace-mismatch" "change-buffer-budget-exceeded"
     "clj-kondo-admission-unavailable" "clj-kondo-executable-unavailable"
@@ -5985,7 +6000,7 @@
   ;; could see. Both directions are asserted — a kind that appears and a kind
   ;; that vanishes are each a change to what a text-reading client is promised.
   (let [kinds (set (refusal-kinds-in-source))]
-    (is (= 149 (count kinds))
+    (is (= 153 (count kinds))
         (str "the entrance's refusal enumeration changed size: "
              (count kinds) " kinds"))
     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))
@@ -7320,3 +7335,63 @@
                   (System/getenv "XDG_STATE_HOME"))
       (is (str/starts-with? root (System/getProperty "user.home"))
           "with no override, resolves under the invoking user's own home"))))
+
+;; RATCHET (2026-09-10, SPF-001, Sol's fence NO-GO on bac7ba22):
+;; default-artifact-root only SELECTED a candidate (CLJ_SURGEON_ARTIFACT_ROOT,
+;; XDG_STATE_HOME) with no validation -- blank, relative, RAM-backed, and
+;; another user's path were all silently accepted, and the writer's only
+;; guard checked containment inside the CURRENT workspace, never the root's
+;; own safety. validate-artifact-root! is the one place that decides whether
+;; a selected root is safe to write to; every failure below is a typed
+;; ex-info naming :error-type and the offending :root.
+(deftest artifact-root-refuses-blank
+  (let [error (try (artifacts/validate-artifact-root! "") nil
+                    (catch clojure.lang.ExceptionInfo e e))]
+    (is (some? error))
+    (is (= :artifact-root-blank (:error-type (ex-data error))))))
+
+(deftest artifact-root-refuses-relative
+  (let [error (try (artifacts/validate-artifact-root! "relative/state/path") nil
+                    (catch clojure.lang.ExceptionInfo e e))]
+    (is (some? error))
+    (is (= :artifact-root-relative (:error-type (ex-data error))))))
+
+(deftest artifact-root-refuses-ram-backed
+  ;; Matches the fence's own probe: XDG_STATE_HOME=/tmp produced
+  ;; /tmp/clj-surgeon/artifacts, and base-refusal on that is :ram-path-prefix.
+  (let [error (try (artifacts/validate-artifact-root!
+                      "/tmp/clj-surgeon-spf001-ram-witness") nil
+                    (catch clojure.lang.ExceptionInfo e e))]
+    (is (some? error))
+    (is (= :artifact-root-ram-backed (:error-type (ex-data error))))))
+
+(deftest artifact-root-refuses-another-users-path
+  ;; No sudo on this seat, so /root is guaranteed unwritable and not owned by
+  ;; the invoking user -- the same class the fence flagged with
+  ;; /home/someone-else/state.
+  (let [error (try (artifacts/validate-artifact-root!
+                      "/root/clj-surgeon-spf001-foreign-witness") nil
+                    (catch clojure.lang.ExceptionInfo e e))]
+    (is (some? error))
+    (is (= :artifact-root-not-owned (:error-type (ex-data error))))))
+
+(deftest artifact-root-accepts-a-path-under-home
+  (let [root (str (System/getProperty "user.home")
+                   "/.local/state/clj-surgeon/spf001-home-witness")]
+    (is (= root (artifacts/validate-artifact-root! root)))))
+
+(deftest artifact-root-retains-the-controlled-parity-harness-override
+  ;; The fence's explicit non-negotiable: CLJ_SURGEON_ARTIFACT_ROOT pointed at
+  ;; a real-disk path THIS invocation owns (the stable build's own literal,
+  ;; /var/tmp/forge) must still be accepted, not swept up by the new refusal.
+  (is (= "/var/tmp/forge" (artifacts/validate-artifact-root! "/var/tmp/forge"))))
+
+(deftest artifact-root-is-validated-before-every-receipt-directory-is-computed
+  (let [root (temp-dir)]
+    (try
+      (binding [artifacts/*artifact-root* "relative/not-a-real-root"]
+        (let [error (try (artifacts/directory "edit-clojure" (str root)) nil
+                          (catch clojure.lang.ExceptionInfo e e))]
+          (is (some? error))
+          (is (= :artifact-root-relative (:error-type (ex-data error))))))
+      (finally (delete-tree! root)))))

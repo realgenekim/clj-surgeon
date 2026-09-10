@@ -46,4 +46,33 @@ grep -Fq 'process-env/run-bounded!' src/clj_surgeon/binding_rename.clj
 grep -Fq 'process-env/run-bounded!' src/clj_surgeon/mcp_cold_verify.clj
 grep -Fq 'process-env/run-bounded!' test/clj_surgeon/analyzer_contract_test.clj
 
+# SPF-002: direct-shell mode builds `args.pressure_status` from
+# CLJ_SURGEON_PRESSURE_STATUS and never routes through mcp_process.clj, so the
+# PYTHON DEFAULT (with no override at all -- neither args nor the env var) is
+# its own live contract, not dead duplication of the Clojure one.
+default_status=$(env -u CLJ_SURGEON_PRESSURE_STATUS python3 -c '
+import importlib.util
+from types import SimpleNamespace
+spec = importlib.util.spec_from_file_location(
+    "clj_kondo_admission", "resources/clj-kondo-admission.py")
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+print(mod.pressure_status_path(SimpleNamespace(pressure_status=None)))
+')
+
+case "$default_status" in
+  */.local/state/clj-surgeon/pressure-status.json) ;;
+  *)
+    echo "SPF-002 regression: Python fallback pressure_status_path defaulted to unexpected path: $default_status" >&2
+    exit 1
+    ;;
+esac
+
+case "$default_status" in
+  *diagnose-skiff-cpu-memory*)
+    echo "SPF-002 regression: the old seat-named monitor path survived in the Python default: $default_status" >&2
+    exit 1
+    ;;
+esac
+
 echo "clj-kondo admission path regression passed"
