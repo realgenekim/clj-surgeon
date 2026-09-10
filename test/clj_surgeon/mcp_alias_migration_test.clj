@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-alias-migration-test
   {:lane :battery}
   (:require
+   [clj-surgeon.artifact-boundary-support :as boundary]
    [cheshire.core :as json]
    [clj-surgeon.alias-migration :as planner]
    [clj-surgeon.alias-migration-fixture :as fixture]
@@ -49,7 +50,7 @@
         (is (= " M src/app.clj\n" (:out status)))
         (is (= ["src/app.clj"] (:workspace_clean_except result)))
         (doseq [k [:details_path :undo_receipt]]
-          (is (str/starts-with? (get result k "") "/var/tmp/forge/alias-migration-receipts/") (pr-str result))
+          (is (boundary/published-under-root? "alias-migration" (get result k "")) (pr-str result))
           (when-let [path (get result k)]
             (when (.isAbsolute (io/file path))
               (Files/deleteIfExists (.toPath (io/file path)))))))
@@ -3446,8 +3447,8 @@
                   :new_file "src/acid/fanout/event_store.clj"}
                  (dissoc (:lib_renamed result) :retired_to)))
           (testing "retired_to names an absolute external artifact"
-            (is (str/starts-with? (:retired_to (:lib_renamed result))
-                  "/var/tmp/forge/alias-migration-receipts/"))
+            (is (boundary/published-under-root? "alias-migration"
+                  (:retired_to (:lib_renamed result))))
             (is (.exists (io/file (:retired_to (:lib_renamed result)))))))
 
         (testing "the non-Git receipt still excludes per-file edit payloads"
@@ -7071,7 +7072,7 @@
                  :scope {:paths ["src"]} :expect {:files 1}})]
         (is (:committed r) (pr-str r))
         (is (= ["src/app.clj" "src/new/lib.clj" "src/old/lib.clj"] (:workspace_clean_except r)))
-        (is (str/starts-with? (get-in r [:lib_renamed :retired_to] "") "/var/tmp/forge/alias-migration-receipts/"))
+        (is (boundary/published-under-root? "alias-migration" (get-in r [:lib_renamed :retired_to] "")))
         (is (not (.exists (io/file root ".clj-surgeon")))))
       (finally (delete-tree! root)))))
 
@@ -7085,7 +7086,7 @@
      (let [r ((resolve 'clj-surgeon.require-change-io/execute!) config request)]
        (is (= "committed" (:state r)) (pr-str r))
        (doseq [key [:undo_receipt :details_path]]
-         (is (str/starts-with? (get r key "") "/var/tmp/forge/require-change-receipts/")))
+         (is (boundary/published-under-root? "require-change" (get r key ""))))
        (is (not (.exists (io/file root "receipts")))))))
   ((resolve 'clj-surgeon.namespace-split-test/with-paper-workspace)
    (fn [root request]
@@ -7098,7 +7099,7 @@
                    :verification-profiles {"unit" {:commands [["/bin/true"]]}}} request)]
            (is (= "committed" (:state r)) (pr-str r))
            (doseq [key [:undo_receipt :details_path]]
-             (is (str/starts-with? (get r key "") "/var/tmp/forge/namespace-split-receipts/")))
+             (is (boundary/published-under-root? "namespace-split" (get r key ""))))
            (is (not (.exists (io/file root "receipts"))))))))))
 
 ;; @spec ALIAS-MIGRATION-002

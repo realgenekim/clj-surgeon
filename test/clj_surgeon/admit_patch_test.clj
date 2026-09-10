@@ -5,6 +5,7 @@
   those pairs with `diff -u`, so every hunk header in this file is arithmetic
   a patch producer actually emitted rather than a hand-counted guess."
   (:require
+   [clj-surgeon.artifact-boundary-support :as boundary]
    [cheshire.core :as json]
    [clj-surgeon.form-identity :as form-identity]
    [clj-surgeon.mcp-admit-tool :as admit]
@@ -2253,7 +2254,7 @@
             (is (= expected (:lock_scope result))
                 "the guarantee a commit actually had is on the receipt")
             (if state-dir?
-              (is (str/starts-with? (:lock_path result) "/var/tmp/forge/workspace-lock-receipts/"))
+              (is (boundary/published-under-root? "workspace-lock" (:lock_path result)))
               (is (nil? (:lock_path result))
                   "no cross-process lock means no lock path to name")))
           (finally (delete-tree! root))))))

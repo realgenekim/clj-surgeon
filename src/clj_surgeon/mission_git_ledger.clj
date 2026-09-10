@@ -1,6 +1,7 @@
 (ns clj-surgeon.mission-git-ledger
   "Saved owner_forms receipt to Git. No caller-supplied proof authority."
   (:require
+   [clj-surgeon.jvm-error :as jvm]
    [clj-surgeon.mission :as mission]
    [clj-surgeon.mission-git :as git]
    [clojure.edn :as edn]
@@ -89,7 +90,11 @@
                 :git-ledger-file-count)
       (require! (git/valid-provenance? provenance) :git-ledger-invalid-provenance)
       {:ok true :provenance provenance})
-    (catch StackOverflowError _ (git/refuse :git-ledger-depth))
+    ;; `Error` + a class-name test, never `catch StackOverflowError`: bb
+    ;; v1.12.209's SCI cannot resolve that classname in any spelling, and it
+    ;; fails at ANALYSIS time -- see clj-surgeon.jvm-error.
+    (catch Error error
+      (if (jvm/stack-overflow? error) (git/refuse :git-ledger-depth) (throw error)))
     (catch Exception e (git/refuse (or (:error-type (ex-data e)) :git-ledger-invalid)))))
 
 (defn artifact [path]
@@ -252,7 +257,8 @@
                            (catch Throwable _ {:ok false :git-ref-updated :unknown
                                                :error-type :git-publication-boundary-uncertain}))]
           (record-publication-result! opts saved intent outcome))))
-    (catch StackOverflowError _ (git/refuse :git-ledger-depth))
+    (catch Error error
+      (if (jvm/stack-overflow? error) (git/refuse :git-ledger-depth) (throw error)))
     (catch Exception e (git/refuse (or (:error-type (ex-data e)) :git-ledger-invalid)))))
 
 (defn commit!

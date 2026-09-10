@@ -37,6 +37,7 @@
     profile's capability is a fact about the registry, not about a request"
   {:lane :battery}
   (:require
+   [clj-surgeon.artifact-boundary-support :as boundary]
    [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.helper-extraction-fixture :as fixture]
    [clj-surgeon.mcp-helper-extraction :as mcp-helper]
@@ -638,7 +639,7 @@
         (is (string? details)
             (str "the boundary publishes a details_path: " (pr-str receipt)))
         (when (string? details)
-          (is (str/starts-with? details "/var/tmp/forge/helper-extraction-receipts/")
+          (is (boundary/published-under-root? "helper-extraction" details)
               "under the kernel receipt directory it was configured with")
           (is (not (str/includes? details "/acid/"))
               "and never inside the workspace tree it just mutated"))
@@ -1295,7 +1296,7 @@
                 (let [details-path (:details_path result)
                       details (read-details details-path)]
                   (is (string? details-path))
-                  (is (str/starts-with? (str details-path) "/var/tmp/forge/helper-extraction-receipts/")
+                  (is (boundary/published-under-root? "helper-extraction" (str details-path))
                       "under the local-state receipt directory")
                   (is (not (str/starts-with? (str details-path) (str root)))
                       "and never inside the workspace it mutated")

@@ -1,6 +1,7 @@
 (ns clj-surgeon.mission-typist-executor-test
   {:lane :battery}
   (:require
+   [clj-surgeon.artifact-boundary-support :as boundary]
    [clj-surgeon.receipt-artifacts :as artifacts]
    [cheshire.core :as json]
    [clj-surgeon.mission :as mission]
@@ -9,7 +10,6 @@
    [clj-surgeon.mission-typist-test :as facts]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
-   [clojure.string :as str]
    [clojure.test :refer [deftest is]]))
 
 (def source "(ns fixture.core)\n\n(defn old-name [] 1)\n")
@@ -52,7 +52,10 @@
         (with-redefs [executor/request-candidates! (fn [_] [{:usable true :content (json/generate-string replacements)}])]
           (let [result (executor/execute! request {:plan plan :receipt-dir (str (io/file root "receipts"))})]
             (is (:committed result) (pr-str result))
-            (is (str/starts-with? (:undo_receipt result) "/var/tmp/forge/typist-receipts/"))
+            ;; Canonical on BOTH sides: darwin resolves /var/tmp through a
+            ;; symlink and the writer canonicalizes, so a literal prefix is
+            ;; the skiff's alias-lane failure in another namespace.
+            (is (boundary/published-under-root? "typist" (:undo_receipt result)))
             (is (= 1 (:match-count result)))
             (is (= :complete (get-in result [:format :status])))
             (is (number? (get-in result [:format :elapsed_ms])))

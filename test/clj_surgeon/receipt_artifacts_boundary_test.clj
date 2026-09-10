@@ -5,6 +5,7 @@
   required here, so baseline execution cannot fail merely loading new code."
   {:lane :battery}
   (:require
+   [clj-surgeon.artifact-boundary-support :as boundary]
    [clj-surgeon.core :as core]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-admit-tool :as admit]
@@ -12,6 +13,7 @@
    [clj-surgeon.mcp-extraction :as kernel]
    [clj-surgeon.mcp-namespace-split-test :as split-boundary-fixture]
    [clj-surgeon.namespace-split-io :as split]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.namespace-split-test :as split-fixture]
    [clj-surgeon.require-change-boundary-test :as require-fixture]
    [clj-surgeon.require-change-io :as require-change]
@@ -20,7 +22,7 @@
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :as t :refer [deftest is]]))
+   [clojure.test :as t :refer [deftest is testing]]))
 
 (defn- remove-tree! [root]
   (when (.exists (io/file root))
@@ -34,8 +36,9 @@
 (defn- assert-artifact! [verb path]
   (is (string? path) (str verb " must return its artifact path"))
   (when (string? path)
-    (is (str/starts-with? path (str "/var/tmp/forge/" verb "-receipts/"))
-        (str verb " published at " path))
+    (is (boundary/published-under-root? verb path)
+        (str verb " published at " path " -- outside "
+             (boundary/verb-receipt-root verb)))
     (is (.isAbsolute (io/file path)))
     (is (.isFile (io/file path)) (str "published artifact exists: " path))))
 
@@ -62,6 +65,75 @@
       (finally
         (doseq [result @observed key keys :let [path (get result key)] :when path]
           (.delete (io/file path)))))))
+
+;; @spec ALIAS-MIGRATION-001
+;; The skiff's alias lane, exit 39, three FAILs in this namespace: receipts
+;; published at `/private/var/tmp/forge/...` while the assertion demanded a
+;; literal `/var/tmp/forge/` prefix. darwin canonicalizes `/var/tmp` through a
+;; symlink; the writer already canonicalizes (it has to, to prove the receipt
+;; directory does not resolve inside the workspace) and the check did not.
+;;
+;; No Mac is reachable from here, so the symlink is MADE. This is the darwin
+;; topology exactly: a declared root that is a symlink to where the bytes
+;; actually land.
+(deftest the-artifact-boundary-canonicalizes-both-sides
+  (with-workspace
+    (fn [base]
+      (let [real (io/file base "private-real")
+            link (io/file base "declared-link")
+            workspace (io/file base "ws")]
+        (.mkdirs real)
+        (.mkdirs workspace)
+        (java.nio.file.Files/createSymbolicLink
+          (.toPath link) (.toPath real)
+          (make-array java.nio.file.attribute.FileAttribute 0))
+        (binding [artifacts/*artifact-root* (str link)]
+          (let [dir (artifacts/directory "edit-clojure" (str workspace))
+                published (io/file dir "undo.edn")]
+            (.mkdirs (io/file dir))
+            (spit published "{}")
+            (testing "the RED fact: the writer's answer is NOT under the declared root"
+              (is (str/starts-with? dir (str real)))
+              (is (not (str/starts-with?
+                         dir (str link java.io.File/separator "edit-clojure-receipts")))
+                  "a literal starts-with against the declared root is what failed on darwin"))
+            (testing "canonical on both sides accepts it"
+              (is (boundary/published-under-root? "edit-clojure" (str published))))
+            (testing "and still refuses a genuine escape"
+              (is (not (boundary/published-under-root? "edit-clojure" (str workspace "/undo.edn"))))
+              (is (not (boundary/published-under-root? "namespace-split" (str published)))
+                  "another verb's directory is not this verb's"))))))))
+
+;; @spec ALIAS-MIGRATION-001
+;; THE CLASS, not the instance. The skiff found this comparison written out
+;; longhand in THREE namespaces and failed on the one whose lane it reached
+;; first. A literal receipt root in a test is a darwin failure waiting for the
+;; next lane to run, so no test source may carry one: every witness asks
+;; `clj-surgeon.artifact-boundary-support`, which canonicalizes both sides.
+(deftest no-witness-compares-an-artifact-path-against-a-literal-root
+  ;; A COMPARISON against a literal root, not a literal anywhere: a fixture
+  ;; that merely NAMES a receipt path is data, and forbidding data would make
+  ;; this scanner wrong in the direction that gets scanners switched off.
+  (let [pattern #"(?:starts-with\?|startsWith|includes\?)[^)]{0,160}\"/(?:private/)?var/tmp/[^\"]*-receipts/"
+        offenders (vec (sort (for [file (file-seq (io/file "test"))
+                                   :when (and (.isFile ^java.io.File file)
+                                              (re-find #"\.cljc?$" (.getName ^java.io.File file))
+                                              (not= "receipt_artifacts_boundary_test.clj"
+                                                    (.getName ^java.io.File file)))
+                                   :let [hit (re-find pattern (slurp file))]
+                                   :when hit]
+                               (str file " :: " hit))))]
+    (is (= [] offenders)
+        (str "a literal receipt root canonicalizes differently on darwin "
+             "(/var/tmp -> /private/var/tmp) and the writer canonicalizes, so "
+             "this comparison is red on macOS and green here. Use "
+             "clj-surgeon.artifact-boundary-support/published-under-root?"))
+    ;; The scanner watched going red, on its own text rather than on a file.
+    (is (re-find pattern "(is (.startsWith p \"/var/tmp/forge/edit-clojure-receipts/\"))"))
+    (is (re-find pattern "(str/starts-with? p \"/private/var/tmp/forge/typist-receipts/\"))"))
+    (is (not (re-find pattern "(boundary/published-under-root? \"typist\" p)")))
+    (is (not (re-find pattern "{:details_path \"/var/tmp/forge/require-change-receipts/d.edn\"}"))
+        "a fixture VALUE is data, not a comparison")))
 
 ;; @spec ALIAS-MIGRATION-001
 (deftest helper-extraction-publishes-external-detail-and-inverse

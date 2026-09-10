@@ -6,7 +6,8 @@
 
 ;; The sole BB inventory; the shared coordinator reads this EDN vector.
 (def namespaces
-  '[clj-surgeon.tmp-leak-support-test
+  '[clj-surgeon.jvm-error-test
+    clj-surgeon.tmp-leak-support-test
     clj-surgeon.forms-test
     clj-surgeon.alias-migration-test
     clj-surgeon.agent-routing-test

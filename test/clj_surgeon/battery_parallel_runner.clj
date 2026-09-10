@@ -49,6 +49,7 @@
    battery namespace degrades the makespan rather than the verdict."
   (:require
    [babashka.process :as proc]
+   [clj-surgeon.gate-memory :as mem]
    [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.ns-isolation :as iso]
    [clojure.edn :as edn]
@@ -546,20 +547,32 @@
   (if (namespace sel) (symbol (namespace sel)) sel))
 
 ;; @spec TEST-ISO-015 -- pure admission decisions, shared by every gate entrance.
+;;
+;; The floor, the formula and the override are read from
+;; `clj-surgeon.gate-memory` so that the refusal, `bin/install-preflight` and
+;; docs/install/skiff.md cannot drift apart. On 2026-09-10 the skiff's operator
+;; declared GATE_MEMAVAIL_MIB=3072 -- an honest grant, larger than a whole lane
+;; charge -- and was bounced by `{:memory-mib 3072 :required-mib 3584}` with no
+;; statement anywhere of where 3584 came from or of how much to grant instead.
 (defn gate-width [cpus memory-mib]
-  (let [by-memory (quot (- memory-mib 2048) 1536)]
+  (let [by-memory (quot (- memory-mib mem/reserve-mib) mem/lane-charge-mib)]
     (when (< by-memory 1)
-      (throw (ex-info "gate-refused: insufficient memory for a bounded lane"
-                      {:memory-mib memory-mib :required-mib 3584})))
+      (throw (ex-info (format "gate-refused: insufficient memory for a bounded lane -- %d MiB available, %s"
+                              memory-mib mem/floor-note)
+                      {:memory-mib memory-mib
+                       :required-mib mem/single-lane-floor-mib
+                       :reserve-mib mem/reserve-mib
+                       :lane-charge-mib mem/lane-charge-mib
+                       :remedy (str "grant at least " mem/single-lane-floor-mib
+                                    " with GATE_MEMAVAIL_MIB")})))
     (max 1 (min (max 1 (quot cpus 2)) by-memory))))
 
 (defn- shell-out
   "Trimmed stdout of a command, or nil when it does not exist or fails.
    A missing binary is a normal answer on a foreign platform, not an error."
   [& argv]
-  (try (let [{:keys [exit out]} @(proc/process {:out :string :err :string} argv)]
-         (when (zero? exit) (str/trim out)))
-       (catch Exception _ nil)))
+  (let [{:keys [exit out]} (apply mem/shell-result argv)]
+    (when (= 0 exit) out)))
 
 (defn machine-cpus
   "The CPU count the gate divides. `nproc` is GNU coreutils and is absent on
@@ -570,46 +583,31 @@
       (some-> (shell-out "sysctl" "-n" "hw.ncpu") parse-long)
       (.availableProcessors (Runtime/getRuntime))))
 
-(defn- linux-memory-available-mib []
-  (when (.exists (io/file "/proc/meminfo"))
-    (some-> (re-find #"MemAvailable:\s+(\d+)"
-                     ;; JDK buffered slurp calls available(), which procfs
-                     ;; rejects on this host. NIO reads it directly.
-                     (java.nio.file.Files/readString
-                       (java.nio.file.Paths/get "/proc/meminfo" (make-array String 0))))
-            second parse-long (quot 1024))))
-
-(defn- darwin-memory-available-mib
-  "free + inactive + speculative + purgeable pages, capped by hw.memsize.
-   `MemAvailable` has no darwin equivalent; vm_stat's reclaimable classes are
-   the closest honest analogue -- pages the VM can hand a new JVM without
-   swapping. The cap keeps a misparse from inventing capacity."
-  []
-  (when-let [stat (shell-out "vm_stat")]
-    (let [page (or (some-> (re-find #"page size of (\d+) bytes" stat) second parse-long) 4096)
-          total (some-> (shell-out "sysctl" "-n" "hw.memsize") parse-long)
-          pages (keep (fn [label]
-                        (some-> (re-find (re-pattern (str "(?m)^" label ":\\s+(\\d+)")) stat)
-                                second parse-long))
-                      ["Pages free" "Pages inactive" "Pages speculative" "Pages purgeable"])]
-      (when (seq pages)
-        (quot (cond-> (* (reduce + pages) page) total (min total))
-              (* 1024 1024))))))
-
+;; @spec TEST-ISO-015 -- ONE reader, and this is the call the gate makes.
+;;
+;; The reader itself lives in `clj-surgeon.gate-memory` so that
+;; `bin/install-preflight` can execute THE SAME CODE without loading this
+;; coordinator. Before 2026-09-10 the preflight decided for itself that darwin
+;; memory was readable (`command -v vm_stat`) and printed a source; the gate's
+;; reader then refused on the same box minutes later. A preflight that prints a
+;; source the gate cannot use is the defect, and it can only be closed by there
+;; being one implementation to be green about.
 (defn machine-memory-available-mib
-  "Available MiB, or a typed refusal naming the documented override.
-   GATE_MEMAVAIL_MIB is honoured FIRST on every platform: a box whose memory the
-   gate cannot read may declare it rather than be locked out of its own suite."
+  "Available MiB, or a typed refusal naming the step that could not answer and
+   the documented override."
   []
-  (if-let [declared (System/getenv "GATE_MEMAVAIL_MIB")]
-    (or (parse-long (str/trim declared))
-        (throw (ex-info "gate-refused: GATE_MEMAVAIL_MIB is not an integer MiB count"
-                        {:value declared})))
-    (or (linux-memory-available-mib)
-        (darwin-memory-available-mib)
-        (throw (ex-info "gate-refused: available memory is unknown"
-                        {:os (System/getProperty "os.name")
-                         :remedy "set GATE_MEMAVAIL_MIB to the MiB this box may lend the gate"})))))
+  (mem/available-mib))
+
+(defn gate-slot-root
+  "The directory the box-wide semaphore publishes its slots under, or
+   \"abstract\" on a platform with an abstract Unix namespace -- ASKED OF
+   `test/gate_slot.py`, which is the module that chooses it. The landing
+   receipt carries it because the skiff's `AF_UNIX path too long` named
+   neither the path nor the limit nor who picked them, and a receipt that
+   cannot say where its own semaphore lives cannot be used to diagnose one."
+  []
+  (let [{:keys [exit out]} (mem/shell-result "python3" "-B" "test/gate_slot.py" "--print-root")]
+    (if (= 0 exit) out (str "unknown (" (pr-str exit) ")"))))
 
 (defn gate-admission-mode
   "The guarantee level of the box-wide slot semaphore, carried in the landing
@@ -630,7 +628,10 @@
         memory (machine-memory-available-mib)]
     {:cpus cpus :memory-mib memory :lanes (gate-width cpus memory)
      :admission (gate-admission-mode)
-     :heap-mib 512 :reserve-mib 2048 :lane-charge-mib 1536}))
+     :heap-mib 512
+     :reserve-mib mem/reserve-mib
+     :lane-charge-mib mem/lane-charge-mib
+     :floor-mib mem/single-lane-floor-mib}))
 
 (defn census-problems [expected observed]
   (cond-> []
@@ -775,6 +776,14 @@
         required-suites (vec (keep :suite manifest))
         capacity (update (machine-capacity) :lanes min
                          (reduce + (map (comp count suite-namespaces) required-suites)))
+        ;; BEFORE any stage: what this box was measured to have, what the gate
+        ;; will spend it on, and the floor -- so the arithmetic behind a later
+        ;; refusal is already on the screen the operator kept.
+        capacity (assoc capacity :slot-root (gate-slot-root))
+        _ (println (format "gate-capacity: %d MiB available, %d cpus, %d lane(s); slots %s %s; %s"
+                           (:memory-mib capacity) (:cpus capacity) (:lanes capacity)
+                           (name (:admission capacity)) (:slot-root capacity)
+                           mem/floor-note))
         _ (when debug? (println "SERIAL/NOT-A-GATE: debugging only; no landing receipt"))
         _ (doseq [s required-suites]
             (io/delete-file (io/file work-dir s "receipt.edn") true))
