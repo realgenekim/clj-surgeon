@@ -4,7 +4,7 @@ finding `SQUEEZE-RECORDS-REF-LEASE-001` · builder/recorder: forge@anvil Opus on
 spec: Astra's consult `/home/forge/src/clj-surgeon-records/docs/observations/2026-09-10-astra-squeeze.md`
 · workflow: tighten-the-loop (SKILL.md + CHANGE-RULE.md) · steward: Astra · supervisor: forge@anvil
 
-**Block clock: 00:00 = 2026-09-10T03:33:10Z. Four-hour box closes 07:33:10Z. This file written 2026-09-10T07:45:48Z — parked-pending-delivery-qualification.**
+**Block clock: 00:00 = 2026-09-10T03:33:10Z. Four-hour box closes 07:33:10Z. This file written 2026-09-10T09:10:57Z — PARKED.**
 
 ## Headline
 
@@ -46,6 +46,19 @@ spec: Astra's consult `/home/forge/src/clj-surgeon-records/docs/observations/202
 | 20–35 | faithful red re-run + one matched pair under the corrected recorder | **done 07:36:50Z**, Δ = 660.190 s |
 | 25–45 | every corpus the installer's way, scratch DEST+FIXTURES, real lease free | **done 07:43:58Z**, `INSTALL OK v3.9`, 235 rows, 0 mismatches |
 | 45–60 | report section, manifest, close readback | **done 07:45Z**; installed hashes re-verified unchanged |
+
+### P4 round (Astra's refusal), 07:56:30Z – 09:11:30Z box
+
+| Minute | Deliverable | State |
+|---|---|---|
+| 00–03 | `records-push` v3.10: destination constant cross-checked against the bound conf, pre-rebase branch/root/origin validation, marker must name its origin and be untracked, `--add/--message` inside the lock, bound blob in readback, attempt evidence on every exit path | **done 07:58:08Z**, matrix 19/19 |
+| 03 | freeze v3.10 and **start P8 immediately** so the seat is not left with nothing | **done 07:59:13Z** |
+| 03–08 | `records-lane.conf` as the one bound source; all three adapters + `tighten` rebound and their commits handed to the publisher; sentinel/canary/seat-receipt terminals repaired | **done 08:00:16Z** |
+| 08–10 | matrix rows 19–22 (concurrent `--add` publishers, bound-record readback, marker identity, pre-rebase branch refusal) | **done 08:04:03Z**, 23/23 |
+| 08 | Astra's terminal control table re-run against the repaired bytes | **done 08:04:21Z**, 10/10 |
+| 08–16 | every corpus the installer's way, scratch DEST, real lease free | **done 08:11:36Z**, `INSTALL OK v3.10`, 239 rows, 0 mismatches |
+| 16 | bundle + MANIFEST committed and fast-forward pushed to `fork` | **done 08:12:26Z**, `c26fe7b` |
+| 16–75 | P7 attempted and **abandoned with a reason**; P8 left running and reported incomplete; report written | **done**; the delivery **parks** |
 ## What was asked, and what the number to beat is
 
 Astra's consult picked candidate **(e)**: make a records-only publication to `records/MCP-main`
@@ -781,6 +794,197 @@ outside `/var/tmp/forge` are the five bundle files and `MANIFEST.txt` on the ski
 `anvil/nrepl-test-alias`, committed as `forge-anvil <forge-anvil@anvil>` and fast-forward pushed to
 `fork`.
 
+---
+
+# P4 round (Astra's refusal) — `/var/tmp/forge/ship-v3.8-delivery/` v3.10
+
+Spec: `/var/tmp/forge/plan2/cellC/astra-squeeze-p4-report.md` — **DO-NOT-INSTALL** on the v3.9 bytes.
+Box: 75 min, opened 2026-09-10T07:56:30Z, closes 09:11:30Z. **Nothing was installed.**
+
+## (1) The principal blocker: a terminal that could not fail — closed
+
+Astra executed the delivery's own terminal fragments and measured `VERDICT=OK PUBRC=3 → exit 0`.
+`run_split` and `run_alias` assigned `PUBRC=$?` and **never read it**, so a green run with a failed
+publication exited 0 while its own line printed `published=committed+PUBLISH-FAILED(...)`. **The
+previous report, MANIFEST and commit message claimed the opposite. They were wrong.**
+
+Her control table, re-run against the repaired bytes, plus the canary and seat-receipt cases she
+named (`/var/tmp/forge/squeeze/out/p4-terminal-check.txt`) — **10 controls, 10 passes**:
+
+```
+== verb-sentinel run_split/run_alias terminal (identical in both) ==
+VERDICT=OK PUBRC=3  (Astra measured 0 on the old bytes)     actual=3  required=3  PASS
+VERDICT=OK PUBRC=0  positive control                        actual=0  required=0  PASS
+VERDICT=SUSPEND PUBRC=0  failed-oracle control              actual=1  required=1  PASS
+VERDICT=SUSPEND PUBRC=3  worker verdict wins, still nonzero actual=1  required=1  PASS
+== canary-cell terminal ==
+GRADE=PASS RC=0 PUBRC=4 PUBLISHED=committed (ADD-FAILED overwrite) actual=3 required=3 PASS
+GRADE=PASS RC=17 publication OK (child exit ignored before) actual=1  required=1  PASS
+GRADE=PASS RC=0 PUBRC=0  positive control                   actual=0  required=0  PASS
+== seat-receipt terminal ==
+PUBRC=3 on_loop=true                                        actual=3  required=3  PASS
+--no-push, on_loop=true  (labelled, not durable success)    actual=0  required=0  PASS
+publication OK but on_loop=false                            actual=1  required=1  PASS
+```
+
+The worker's own verdict is evaluated **first and independently** in every case: a publication
+failure never upgrades a grade, and a green grade never hides one. `publish()` now requires **both**
+a successful child exit and a valid `RECORDS-PUSH OK` terminal line, not an `OK` first line alone.
+Canary's terminal reads the publisher's **status** and the child's own `RC`, not substrings of a
+display string — the two paths Astra showed could exit 0.
+
+## (2) One lock holder — closed
+
+The adapters appended, staged and committed in the **shared** records checkout outside the
+publisher's per-checkout lock, so an adapter's commit could land inside another publication's
+rebase. `records-push` gained `--add <path> --message <msg>`: staging, committing, refreshing,
+rebasing, pushing and readback now happen **inside its own lock**, with one owner. The adapters no
+longer touch the index at all.
+
+`--add` also **binds the named blob**. Astra: "An immutable `TIP` … does not prove that this
+adapter's intended blob was included." The readback now requires that every `--add` path resolve, on
+the **remote** ref, to the exact blob bound before the push.
+
+## (3) One bound source — closed
+
+`records-lane.conf` is a new installed target. The records root and the publisher path are read from
+it, resolved **beside the running program** (`$(dirname "$0")/records-lane.conf`), so no adapter
+hardcodes either and a scratch DEST genuinely exercises their dependency resolution — Astra's exact
+objection ("adapters themselves hardcode `/home/forge/bin/records-push`, so a scratch target
+directory is not by itself proof of their final dependency resolution"). The destination ref is
+deliberately **not** taken from the file: it stays a constant in `records-push`, and a disagreement
+between the two **refuses** (exit 13) rather than widens.
+
+Her root/origin findings are closed with it: the effective checkout root is resolved (not the path
+spelling), the origin's **fetch and every push URL** must equal the bound expectation, and a
+recorder's fixture marker must **name** the origin it authorizes and be **untracked** — v3.9
+accepted any file, and the recorder committed its own marker into the published tree.
+`records-push` also validates branch/root/origin **before** the first `pull --rebase`; v3.9 rebased
+first, so a wrong branch could be fast-forwarded, or return exit 3 instead of exit 6.
+
+## The matrix: 23 rows, 0 mismatches
+
+Rows 19–22 are new:
+
+```
+PASS  19-two-concurrent---add-publishers-from-one-checkout-serialize-and-BOTH-records-land
+PASS  20-a-publication-whose-BOUND-RECORD-is-not-on-the-remote-is-UNVERIFIED-never-OK
+PASS  21-a-fixture-marker-must-NAME-its-origin-and-must-not-ride-the-publication
+PASS  22-a-wrong-local-branch-refuses-BEFORE-the-first-rebase-and-its-tip-is-untouched
+records-push v3.8 fixtures: 23 rows, mismatches: 0
+```
+
+Row 19 is the concurrency half of P7 **at the publication entrance**, which is now the adapters'
+entire footprint in the checkout: two publishers with different records, an externally held lock,
+both waiting ≥2 s, both exit 0, both bound blobs confirmed on the remote, neither record lost.
+
+## Every corpus, the installer's way, real lease free
+
+```
+REAL LEASE FREE at 2026-09-10T08:04:33Z
+   run-land-auto 19/0    run-ship-v3 22/0     run-ship-v3.3 13/0   run-ship-v3.6 9/0
+   run-land-publication-truth 12/0  run-ship-v3.1 13/0  run-ship-v3.4 14/0  run-ship-v3.7 73/0
+   run-ship-v2 28/0      run-ship-v3.2 8/0    run-ship-v3.5 5/0    run-records-push-v3.8 23/0
+INSTALL OK v3.10 stamp=20260910T080434Z files='ship land fence-run receipt-chain land-auto records-push records-lane.conf seat-receipt canary-cell verb-sentinel tighten ship-fix-block-spec.md run-bg sol-yolo gate-envelope.clj gate-consume.clj mutate.clj'
+ACCEPTANCE9 EXIT=0 at 2026-09-10T08:11:36Z
+```
+
+**239 rows across twelve sets, 0 mismatches, seventeen targets, exit 0**, scratch DEST, `~/bin` not
+written.
+
+## Bundle
+
+```
+c26fe7b forge-anvil <forge-anvil@anvil> :: tighten bundle: one lock holder, one bound source, and terminals that actually fail
+To https://github.com/marvin-openclaw777/claude-skills.git
+   731723d..c26fe7b  anvil/nrepl-test-alias -> anvil/nrepl-test-alias
+```
+
+Fast-forward, never forced. `MANIFEST.txt` gains `records-lane.conf`, refreshes five rows, and
+**states plainly that its previous claim about nonzero sentinel outcomes was false** — Astra found
+that claim contradicted by the bytes it described.
+
+## (4) P7 — NOT CLOSED. This is the honest stop.
+
+The coordinator's instruction was explicit: if an item cannot be closed in the box, say which.
+**P7 (adapter-entrance behaviour with recorder-controlled children) is not closed.**
+
+What was closed: the adapters' entire footprint inside the records checkout is now a single
+`records-push --add` call, and that call's behaviour **is** qualified — rows 19–22 plus the ten
+terminal controls cover concurrency, bound-blob readback, refusal exits and every terminal path
+Astra named.
+
+What was not, and why: driving each adapter through its **real** entrance needs a harness for its
+children, and those children are not cheap. A bounded probe of `seat-receipt` against an isolated
+root and a failing stub publisher was killed at **100 s without reaching publication**: it runs
+`make check-agent-routing` (300 s cap), two corpus jobs (900 s caps each), a `git fetch` (180 s cap)
+and a maven JVM (300 s cap, ~40 s of start alone), and it **hardcodes `export PATH=/home/forge/bin:…`
+at line 33**, so a recorder cannot inject stub children by PATH at all. `canary-cell` spends a full
+cold-start cell; `verb-sentinel` runs two real verbs. Astra's P7 list — exit 17, assertion-red,
+stale candidate, pending proof, missing observer, unchanged retry, no-push/dry-run, concurrent
+adapter writers, at three entrances, old and new — is its own instrument, not a row in this fixture.
+
+**A finding for whoever builds it:** that hardcoded `export PATH` is itself an obstacle to
+qualification. An adapter that cannot have its children substituted cannot be behaviourally
+qualified without running them for real. That is a change to make *before* the P7 harness, not
+inside it.
+
+## (5) P8 — NOT CLOSED. The arithmetic does not fit the box.
+
+P8's protocol is six sequential controls plus three counterbalanced pairs plus an idle pair. Nine of
+those arms carry a **registered 660-second lease lifetime**, which is the measurement, not a poll —
+it is not compressible. That is **≈99 minutes of protocol wall in a 75-minute box**, before the
+repair work the same box had to contain.
+
+It was started anyway, the moment the helper was frozen, so the seat is not left with nothing:
+
+```
+P8 START 2026-09-10T07:59:13Z  helper=962f1b7497a38676 (v3.10, frozen)  recorder=64c509c6cc4332fa
+```
+
+Its state at block close is reported below. Whatever is incomplete stays incomplete: the earlier
+one-pair result is **not** substituted for it, and the old epoch's controls are not reused. A
+changed composition does not inherit a timing claim by name.
+
+## Obligations after the P4 round
+
+| # | State |
+|---|---|
+| **P4(1)** sentinel terminal | **closed** — 10/10 controls, worker verdict preserved independently |
+| **P4(2)** checkout exclusion | **closed** — one lock holder via `--add`; bound blob in readback; row 19 |
+| **P4(3)** root/remote/subject binding | **closed for root, origin and publisher path** via `records-lane.conf`, effective-root resolution, fetch+push URL equality, marker naming and untracked-ness, and pre-rebase branch validation. **The intended-subject half remains partial**: the artifact guard is still a denylist of code-bearing paths plus the bound `--add` blobs, so an unrelated *records* path outside that list can still ride a publication, and an intermediate code change reverted in a later commit still has no final diff. Astra's §2.3 is therefore **narrowed, not closed**. |
+| **P7** adapter-entrance behaviour | **NOT CLOSED** — see above |
+| **P8** final performance qualification | **NOT CLOSED** — see above |
+| P3 field transfer | untested; nothing installed, nothing published to the real remote |
+| P4-steward | a new steward ruling naming these exact bytes is required; this round is the builder's response to a refusal, not a qualification |
+| P5, P6, P9 | unchanged |
+
+**Verdict: the delivery parks.** Three of five items are closed with witnesses; P4(3) is narrowed;
+P7 and P8 are not closed and the report says so rather than relabelling them. No install, no
+publication to the real remote, no merge, no force push. `~/bin` was read but never written — the
+seven installed hashes in Astra's frozen table still verify.
+
+## P8 status at block close — INCOMPLETE, by arithmetic
+
+```
+P8 START 2026-09-10T07:59:13Z helper=962f1b7497a38676 recorder=64c509c6cc4332fa
+```
+
+Started 07:59:13Z against the frozen v3.10 helper. Protocol wall ~99 min; box 75 min.
+
+| arm | t0→t1 (s) | reported lease wait | exit | visibility | code refs moved | lease alive at readback |
+|---|---:|---:|---|---|---|---|
+| P8-CTL-old-1 | 660.350 | 660 | 0 | confirmed | no | no |
+| P8-CTL-old-2 | 660.360 | 660 | 0 | confirmed | no | no |
+| P8-CTL-old-3 | 660.370 | 660 | 0 | confirmed | no | no |
+| P8-CTL-old-4 | 660.360 | 660 | 0 | confirmed | no | no |
+| P8-CTL-old-5 | 660.360 | 660 | 0 | confirmed | no | no |
+| P8-CTL-old-6 | 660.360 | 660 | 0 | confirmed | no | no |
+
+`P8 controls so far: n=6/6  median=660.360 s  range=660.350-660.370 s  sd=0.006 s`
+
+**Not a result.** The three counterbalanced pairs and the idle pair have not run. The controls above are reported as progress, not as a qualification, and the earlier single pair (delta 660.190 s, v3.9 helper) is NOT substituted for them. P8 stays open against the v3.10 helper hash `962f1b7497a38676…`.
+
 ## Terminal receipt
 
 ```text
@@ -794,8 +998,9 @@ accepted=3/3 failures=0 censored=0 code_ref_violations=0
 lease_wait_old_s=660.417(reported 660 in every control) lease_wait_new_s=0
 field_request_to_visibility_s=unknown-with-reason (no install and no real-remote publication is permitted from this seat in this block)
 ship_seconds_saved=0-claimed transfer=untested
-build_wall_s=829 (00:00 block open -> 03:46:59Z candidate frozen) measurement_wall_s=5578 (6 controls 03:35:42-04:41:46Z + 3 pairs + idle pair 04:42:05-05:15:02Z) block_wall_s=15159 outcome=parked-pending-delivery-qualification
-delivery=/var/tmp/forge/ship-v3.8-delivery records_push=72c8e4f13d6e8ee67e78a48281bb5f90c48434b9f657faba6790dd5cafd54e9a matrix=19/19 install=INSTALL OK v3.9 (235 rows, 0 mismatches, scratch DEST, real lease free, NOT installed) pair9_delta_s=660.190 bundle=731723d pushed to fork:anvil/nrepl-test-alias
-pending=P1 CLOSED (three adapters routed through records-push, source-scan ratchet red-first) · P2 CLOSED (records-push bundled + MANIFEST) · P3 real-remote second encounter untested · P4 steward pass over the DELIVERY tree still required · P5 the lock is per-checkout, not per-repository · P7 adapter behaviour cases · P8 fresh six-control/three-pair qualification of the final frozen composition · P9 bundle rows are ahead of the installed programs until the owner installs · P6 ship-v3.7 was staged past its last install, so install.sh from ship-v3.8 prints INSTALL NOT PROVEN for inherited reasons (the proven minimal composition is retained at /var/tmp/forge/squeeze/min-src)
+build_wall_s=829 (00:00 block open -> 03:46:59Z candidate frozen) measurement_wall_s=5578 (6 controls 03:35:42-04:41:46Z + 3 pairs + idle pair 04:42:05-05:15:02Z) block_wall_s=20267 outcome=PARKED
+delivery=/var/tmp/forge/ship-v3.8-delivery records_push=962f1b7497a38676675267d32f0abbc7e01097e086cd52e44c4a32ddd3314de2 (v3.10) matrix=23/23 terminal_controls=10/10 install=INSTALL OK v3.10 (239 rows, 0 mismatches, 17 targets, scratch DEST, real lease free, NOT installed) bundle=c26fe7b pushed to fork:anvil/nrepl-test-alias (fast-forward, never forced)
+p4_1_sentinel_terminal=CLOSED p4_2_one_lock_holder=CLOSED p4_3_binding=CLOSED-for-root/origin/publisher, NARROWED-for-intended-subject P7_adapter_entrance=NOT-CLOSED (each adapter is a multi-minute daily job with heavyweight children and a hardcoded export PATH; a probe was killed at 100 s without reaching publication) P8_final_qualification=NOT-CLOSED (~99 min protocol wall in a 75 min box; started 07:59:13Z, 5/6 controls at close, no pairs) outcome=PARKED
+pending=P7 adapter-entrance behaviour NOT CLOSED · P8 final performance qualification NOT CLOSED · P4(3) intended-subject binding NARROWED not closed · P1 routing CLOSED · P2 bundling CLOSED · P3 real-remote second encounter untested · P4 steward pass over the DELIVERY tree still required · P5 the lock is per-checkout, not per-repository · P7 adapter behaviour cases · P8 fresh six-control/three-pair qualification of the final frozen composition · P9 bundle rows are ahead of the installed programs until the owner installs · P6 ship-v3.7 was staged past its last install, so install.sh from ship-v3.8 prints INSTALL NOT PROVEN for inherited reasons (the proven minimal composition is retained at /var/tmp/forge/squeeze/min-src)
 evidence=/var/tmp/forge/squeeze/out/*.record.txt + *.helper.txt (verbatim) + seal/ + this report
 ```
