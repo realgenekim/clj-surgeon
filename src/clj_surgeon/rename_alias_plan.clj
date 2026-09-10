@@ -11,12 +11,13 @@
 
 (defn refuse [e] (assoc (p/refusal e) :operation "rename_alias" :version 1))
 (defn simple-symbol? [s]
-  (and (string? s) (not (#{"nil" "true" "false" "&" "_"} s))
-       (not (re-find #"[\s/:,\[\]{}()'`~@^;\"\\#]" s))
+  (and (string? s)
        (try (let [v (edn/read-string s)] (and (symbol? v) (nil? (namespace v)) (= s (str v))))
             (catch Exception _ false))))
-(defn lib? [s]
-  (and (string? s) (simple-symbol? s)))
+(defn alias? [s]
+  (and (simple-symbol? s) (not (#{"nil" "true" "false" "&" "_"} s))
+       (not (re-find #"[\s/:,\[\]{}()'`~@^;\"\\#]" s))))
+(defn lib? [s] (simple-symbol? s))
 (defn nonnegative! [n at]
   (when-not (and (integer? n) (<= 0 n)) (p/refuse! :invalid-request at "Nonnegative integer required.")))
 
@@ -26,7 +27,7 @@
   (p/request-shape! r) (p/bounded! (pr-str r) :request)
   (p/closed! r [:version :workspace_root :scope :lib :old_alias :new_alias :expect :guards] [] [] :invalid-request)
   (when-not (and (= 1 (:version r)) (integer? (:version r)) (string? (:workspace_root r))
-                 (lib? (:lib r)) (simple-symbol? (:old_alias r)) (simple-symbol? (:new_alias r))
+                 (lib? (:lib r)) (alias? (:old_alias r)) (alias? (:new_alias r))
                  (not= (:old_alias r) (:new_alias r)))
     (p/refuse! :invalid-request [] "Version 1, string root, library and distinct simple aliases required."))
   (when (= (:lib r) (:old_alias r))
@@ -182,7 +183,7 @@
   (try (p/lexical! source :source) (p/newline-style source)
        (annotate (p/tree source :source) source)
        (catch Exception e (throw (ex-info (.getMessage e) (assoc (ex-data e) :file file))))))
-(defn binding! [{:keys [owner bindings] :as ns-data} root r file]
+(defn binding! [{:keys [bindings effective-references] :as ns-data} r file]
   (let [duplicates (concat (filter #(> (val %) 1) (frequencies (map :lib bindings)))
                            (filter #(> (val %) 1) (frequencies (keep :alias bindings))))
         old (first (filter #(= (:alias %) (:old_alias r)) bindings))
@@ -193,13 +194,15 @@
       (p/refuse! :ambiguous-alias-binding [:source file :ns] "Duplicate library or alias bindings." {:file file :bindings binding-sites}))
     (when (and (not selected?) (not (get-in r [:scope :repository])))
       (p/refuse! (if old :alias-library-mismatch :old-alias-absent) [:source file :ns] "Requested library and old alias must be bound." {:file file}))
-    (when selected?
-      (when (some #(= (:alias %) (:new_alias r)) bindings)
-        (p/refuse! :alias-collision [:new_alias] "New alias is already bound." {:file file :bindings binding-sites}))
-      (let [capture (references root owner (:new_alias r) file)]
-        (when (seq capture) (p/refuse! :new-alias-capture [:new_alias] "New alias would capture existing syntax." {:file file :sites capture}))))
-    (assoc ns-data :selected? selected? :old old
-           :references (let [refs (references root owner (:old_alias r) file)] (if selected? refs [])))))
+    (assoc ns-data :selected? selected? :old old :binding-sites binding-sites
+           :references (if selected? effective-references []))))
+(defn collision! [{:keys [owner bindings binding-sites selected?]} root r file]
+  (when selected?
+    (when (some #(= (:alias %) (:new_alias r)) bindings)
+      (p/refuse! :alias-collision [:new_alias] "New alias is already bound." {:file file :bindings binding-sites}))
+    (let [capture (references root owner (:new_alias r) file)]
+      (when (seq capture)
+        (p/refuse! :new-alias-capture [:new_alias] "New alias would capture existing syntax." {:file file :sites capture})))))
 (defn splice [source edits new]
   (reduce (fn [s {:keys [start end]}] (str (subs s 0 start) new (subs s end))) source (reverse (sort-by :start edits))))
 (defn form-proof [before after]
@@ -287,9 +290,13 @@
       (guards! sources request)
       (let [roots (into (sorted-map) (map (fn [[f s]] [f (source! s f)]) sources))
             namespaces (into (sorted-map) (map (fn [[f root]] [f (namespace! root f)]) roots))
-            infos (into (sorted-map) (map (fn [[f ns]] [f (binding! ns (roots f) request f)]) namespaces))
+            safe-namespaces (into (sorted-map)
+                                  (map (fn [[f ns]] [f (assoc ns :effective-references
+                                                               (references (roots f) (:owner ns) (:old_alias request) f))]) namespaces))
+            infos (into (sorted-map) (map (fn [[f ns]] [f (binding! ns request f)]) safe-namespaces))
             selected (filterv #(get-in infos [% :selected?]) paths)]
         (when (empty? selected) (p/refuse! :old-alias-absent [:scope] "No matching library alias found."))
+        (doseq [[f info] infos] (collision! info (roots f) request f))
         (count! sources infos request)
         (let [plans (into (sorted-map) (for [f selected] [f (candidate! (sources f) (roots f) (infos f) request f)]))
               per-file (mapv (fn [f]

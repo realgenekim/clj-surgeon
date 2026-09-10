@@ -5,24 +5,26 @@
 
 (defn intervals [s old new]
   (let [tree (o/inventory s)]
-    (letfn [(walk [x in-ns? tag-name?]
+    (letfn [(walk [x in-ns? tag-name? declaration?]
               (let [text (:text x) children (o/code x)
                     ns? (or in-ns? (and (= :list (:tag x)) (= "ns" (o/operator x))))
+                    declaration? (or declaration? (and ns? (= :list (:tag x))
+                                                       (#{":require" ":import" ":refer-clojure" ":gen-class"} (:text (first children)))))
                     prefix (cond
-                             (and (= :token (:tag x)) (not ns?) (not tag-name?)
+                             (and (= :token (:tag x)) (not declaration?) (not tag-name?)
                                   (str/starts-with? text (str old "/"))) 0
-                             (and (#{:token :keyword} (:tag x)) (not ns?) (str/starts-with? text (str "::" old "/"))) 2
+                             (and (#{:token :keyword} (:tag x)) (not declaration?) (str/starts-with? text (str "::" old "/"))) 2
                              (and (= :namespaced-map (:tag x)) (str/starts-with? text (str "#::" old "{"))) 3)
-                    binding (when (and ns? (= :vector (:tag x)))
+                    binding (when (and ns? declaration? (= :vector (:tag x)))
                               (for [[a b] (partition 2 1 children)
                                     :when (and (#{":as" ":as-alias"} (:text a)) (= old (:text b)))]
                                 [(:start b) (:end b) new]))]
                 (if (= :uneval (:tag x)) []
                     (concat binding
                             (when prefix [[(+ (:start x) prefix) (+ (:start x) prefix (count old)) new]])
-                            (mapcat (fn [i c] (walk c ns? (and (= :reader-macro (:tag x)) (zero? i))))
+                            (mapcat (fn [i c] (walk c ns? (and (= :reader-macro (:tag x)) (zero? i)) declaration?))
                                     (range) children)))))]
-      (vec (sort-by first (walk tree false false))))))
+      (vec (sort-by first (walk tree false false false))))))
 (defn verify [a b request detail]
   (try
     (let [spans (intervals a (:old_alias request) (:new_alias request))

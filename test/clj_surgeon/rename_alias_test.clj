@@ -72,6 +72,8 @@
 ;; @spec RENAME-ALIAS-003
 ;; INTENT-TEST: RENAME-ALIAS-003
 (deftest rename-alias-reader-roles
+  (accept "(ns ^{:tag events/T} demo (:require [example.events :as events]))"
+          "(ns ^{:tag ev/T} demo (:require [example.events :as ev]))" 1)
   (doseq [[a b n] [["[::events/kw :events/kw ::kw]" "[::ev/kw :events/kw ::kw]" 1]
                     ["['events/x #'events/y `events/z]" "['ev/x #'ev/y `ev/z]" 3]
                     ["`[events/x ~events/y ~@events/z]" "`[ev/x ~ev/y ~@ev/z]" 3]
@@ -124,6 +126,9 @@
   (let [sources {"a.clj" "(ns a (:require [example.events :as events] [other :as ev]))"
                  "b.clj" (str header "(require 'other)")}]
     (refuse sources (request sources 0) :unsupported-namespace-mutation))
+  (accept "(ns demo (:require [_ :as events]))" "(ns demo (:require [_ :as ev]))" 0 {:lib "_"})
+  (accept "(ns demo (:require [example.events :as events :refer [x'] :rename {x' y'}]))"
+          "(ns demo (:require [example.events :as ev :refer [x'] :rename {x' y'}]))" 0)
   (doseq [alias ["nil" "true" "false" "&" "_" "a/b" "a b" ":x" "#x" "" "a]" "a\nb"]]
     (rejected header :invalid-request {:new_alias alias}))
   (rejected header :invalid-request {:new_alias "events"})
@@ -234,6 +239,22 @@
 ;; @spec RENAME-ALIAS-010
 ;; INTENT-TEST: RENAME-ALIAS-010
 (deftest rename-alias-receipt-oracle
+  (let [source (str header (str/join " " (repeat 30 "events/x")))]
+    (h/with-file source
+      (fn [dir target _]
+        (let [req (assoc (request {file source} 31) :workspace_root (.getCanonicalPath dir))
+              r (sut/execute! req)
+              detail (edn/read-string (slurp (:receipt_details_path r)))
+              evidence (:write_refusal_evidence r)]
+          (is (= :expect-count-mismatch (:error-type r)))
+          (is (= source (slurp target)))
+          (is (= 30 (:actual_count r) (:available_count evidence)))
+          (is (<= (:returned_count evidence) 10))
+          (is (= 30 (+ (:returned_count evidence) (:omitted_count evidence))))
+          (is (= 30 (count (get-in detail [:receipt :write_refusal_evidence :items]))))
+          (is (false? (:authority evidence)))
+          (is (false? (:write_authority evidence)))
+          (is (< (o/width (sut/receipt-text r)) 4097))))))
   (let [a (str header "; neighbor\n#_events/x\n(def x events/x)\n(def x 2)\n")
         r (sut/plan {file a} (request {file a} 1)) detail (first (get-in r [:detail :per_file]))]
     (is (:ok r))
