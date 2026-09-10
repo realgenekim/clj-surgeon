@@ -1,0 +1,267 @@
+#!/usr/bin/env bash
+# self-test — the executable witnesses for the two contracts bin/parity/compare.clj
+# enforces. Both were written because a fence review produced a FALSE PARITY on a
+# fresh control; each case below is that control, made permanent.
+#
+#   bin/parity/self-test [<stored-run-dir>]
+#
+# Default subject: a stored stable-vs-stable split pair (kilobytes; no operation
+# is re-executed). Exit 0 = every witness held.
+set -uo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SUBJECT="${1:-/var/tmp/forge/parity/runs/OBS3-commit-bound/split}"
+WORK="${PARITY_ROOT:-/var/tmp/forge/parity}/self-test.$$"
+mkdir -p "$WORK"; trap 'rm -rf "$WORK"' EXIT
+PASS=0; FAIL=0
+
+run() { bb "$HERE/compare.clj" "$1" "$2" "$3" "${4:-split}" 2>&1; }
+
+check() { # <name> <expected-verdict> <expected-substring> <output> <rc>
+  local name="$1" want="$2" needle="$3" out="$4" rc="$5" got
+  got="$(printf '%s' "$out" | head -1 | awk '{print $1}')"
+  if [ "$got" = "$want" ] && printf '%s' "$out" | grep -qF -- "$needle"; then
+    echo "  PASS  $name  ($got)"; PASS=$((PASS+1))
+  else
+    echo "  FAIL  $name — wanted $want containing '$needle', got:"; printf '%s\n' "$out" | sed 's/^/          /' | head -6
+    FAIL=$((FAIL+1))
+  fi
+}
+
+[ -d "$SUBJECT/A" ] || { echo "no stored run at $SUBJECT — run bin/parity-run once first"; exit 2; }
+
+echo "PARITY-FENCE-001 — the declaration cannot be widened silently"
+
+# baseline: the real declaration compares this pair cleanly
+OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$HERE/volatile-fields.edn")"; RC=$?
+check "the shipped declaration is accepted and the stored pair is PARITY" PARITY "PARITY" "$OUT" $RC
+
+# 1a. an undocumented rule — no :reason, no :evidence — must REFUSE, naming it.
+python3 - "$HERE/volatile-fields.edn" "$WORK/undocumented.edn" <<'PY'
+import sys
+s=open(sys.argv[1]).read()
+s=s.replace(' :fields\n [', ' :fields\n [{:key :unobserved_guard :match :key :to "<UNOBSERVED>"}\n  ',1)
+open(sys.argv[2],'w').write(s)
+PY
+OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$WORK/undocumented.edn")"; RC=$?
+check "a rule with no :reason and no :evidence refuses the run" REFUSED ":unobserved_guard" "$OUT" $RC
+
+# 1b. a rule with a reason but an observation nobody made must still REFUSE.
+python3 - "$HERE/volatile-fields.edn" "$WORK/unobserved.edn" <<'PY'
+import sys
+s=open(sys.argv[1]).read()
+s=s.replace(' :fields\n [', ' :fields\n [{:key :unobserved_guard :match :key :to "<UNOBSERVED>"\n   :reason "sounds plausible"\n   :evidence {:run "NO-SUCH-RUN" :specimen :split :path [:unobserved_guard]}}\n  ',1)
+open(sys.argv[2],'w').write(s)
+PY
+OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$WORK/unobserved.edn")"; RC=$?
+check "a rule naming an observation nobody made refuses the run" REFUSED "not recorded in" "$OUT" $RC
+
+# 1c. the same gate covers tree exclusions.
+python3 - "$HERE/volatile-fields.edn" "$WORK/badexclude.edn" <<'PY'
+import sys
+s=open(sys.argv[1]).read()
+s=s.replace(' :tree-excludes\n', ' :tree-excludes\n', 1)
+i=s.index('[{:glob ".git/**"')
+s=s[:i]+'[{:glob "src/**"}\n  '+s[i+1:]
+open(sys.argv[2],'w').write(s)
+PY
+OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$WORK/badexclude.edn")"; RC=$?
+check "a tree exclusion with no evidence refuses the run" REFUSED "src/**" "$OUT" $RC
+
+echo "PARITY-FENCE-002 — absence is a value"
+
+# 2a. Sol's control: the receipt captured on A, moved aside on B.
+rm -rf "$WORK/one-sided"; mkdir -p "$WORK/one-sided"
+cp -r "$SUBJECT/A" "$WORK/one-sided/A"; cp -r "$SUBJECT/B" "$WORK/one-sided/B"
+mv "$WORK/one-sided/B/receipt.edn" "$WORK/one-sided/B/receipt.edn.aside"
+OUT="$(run "$WORK/one-sided/A" "$WORK/one-sided/B" "$HERE/volatile-fields.edn")"; RC=$?
+check "a receipt present on A and missing on B is a DIVERGENCE" DIVERGENCE "MISSING on B" "$OUT" $RC
+
+# 2b. absent on BOTH sides, for a specimen that declares it publishes one.
+rm -rf "$WORK/both"; mkdir -p "$WORK/both"
+cp -r "$SUBJECT/A" "$WORK/both/A"; cp -r "$SUBJECT/B" "$WORK/both/B"
+# both the receipt AND the published path: this is the shape of an operation that
+# publishes no receipt file at all, which is what :expects-receipt false describes.
+rm -f "$WORK/both/A/receipt.edn" "$WORK/both/B/receipt.edn" \
+      "$WORK/both/A/receipt-path.txt" "$WORK/both/B/receipt-path.txt"
+OUT="$(run "$WORK/both/A" "$WORK/both/B" "$HERE/volatile-fields.edn" split)"; RC=$?
+check "a receipt missing on BOTH sides where the specimen expects one is a DIVERGENCE" DIVERGENCE "MISSING on both sides" "$OUT" $RC
+
+# 2c. the same absence, for a specimen that declares it publishes none, is parity.
+OUT="$(run "$WORK/both/A" "$WORK/both/B" "$HERE/volatile-fields.edn" fanout)"; RC=$?
+check "the same absence is PARITY where the specimen declares :expects-receipt false" PARITY "PARITY" "$OUT" $RC
+
+# 2d. a specimen nobody declared cannot have its absence accepted.
+OUT="$(run "$WORK/both/A" "$WORK/both/B" "$HERE/volatile-fields.edn" undeclared)"; RC=$?
+check "an undeclared specimen refuses rather than accepting absence" REFUSED "does not declare :expects-receipt" "$OUT" $RC
+
+# 2e. a published receipt_path naming a file nobody captured.
+rm -rf "$WORK/orphan"; mkdir -p "$WORK/orphan"
+cp -r "$SUBJECT/A" "$WORK/orphan/A"; cp -r "$SUBJECT/B" "$WORK/orphan/B"
+rm -f "$WORK/orphan/B/receipt.edn"
+OUT="$(run "$WORK/orphan/A" "$WORK/orphan/B" "$HERE/volatile-fields.edn")"; RC=$?
+check "a published receipt_path with no captured receipt is reported" DIVERGENCE "published receipt_path" "$OUT" $RC
+
+# 2f. an artifact the harness always writes, missing on both sides, is a capture failure.
+rm -rf "$WORK/nocapture"; mkdir -p "$WORK/nocapture"
+cp -r "$SUBJECT/A" "$WORK/nocapture/A"; cp -r "$SUBJECT/B" "$WORK/nocapture/B"
+rm -f "$WORK/nocapture/A/exit.txt" "$WORK/nocapture/B/exit.txt"
+OUT="$(run "$WORK/nocapture/A" "$WORK/nocapture/B" "$HERE/volatile-fields.edn")"; RC=$?
+check "a required artifact captured on neither side refuses rather than passing" REFUSED "captured on NEITHER side" "$OUT" $RC
+
+echo "PARITY-FENCE-003 — an observation must be backed by retained bytes"
+
+# 3a. Sol's round-2 control, made permanent: invent an observation for a run that
+# never happened, cite it from a new rule, and (unlike a careless forger) repair
+# the file digest so the refusal has to come from the MISSING CAPTURE itself.
+mkdir -p "$WORK/forge"
+python3 - "$HERE/observed-volatility.edn" "$WORK/forge/observed-volatility.edn" <<'PY'
+import sys, re
+s = open(sys.argv[1]).read()
+row = '{:run "RUN-THAT-NEVER-HAPPENED", :specimen :split, :path [:candidate_hash], :source "stdout.edn", :capture-digest "0000"}'
+s = s.replace(' :observations\n [', ' :observations\n [' + row + '\n  ', 1)
+open(sys.argv[2], 'w').write(s)
+PY
+cp "$HERE/observe-volatility.clj" "$WORK/forge/observe-volatility.clj"
+cp "$HERE/specimens.edn" "$WORK/forge/specimens.edn"
+# a forger who knows the digest is checked simply recomputes it
+bb -e '
+(require (quote [clojure.edn :as edn]))
+(defn sha256 [^String s] (let [d (java.security.MessageDigest/getInstance "SHA-256")]
+  (apply str (map #(format "%02x" %) (.digest d (.getBytes s "UTF-8"))))))
+(let [f (first *command-line-args*) doc (edn/read-string (slurp f))
+      d (sha256 (pr-str (mapv #(into (sorted-map) %) (:observations doc))))]
+  (spit f (clojure.string/replace (slurp f) (re-pattern (str ":file-digest \"" (:file-digest doc) "\"")) (str ":file-digest \"" d "\""))))' "$WORK/forge/observed-volatility.edn"
+cp "$HERE/compare.clj" "$WORK/forge/compare.clj"
+python3 - "$HERE/volatile-fields.edn" "$WORK/forge/volatile-fields.edn" <<'PY'
+import sys
+s = open(sys.argv[1]).read()
+rule = ('{:key :candidate_hash :match :key :to "<CANDIDATE-HASH>"\n'
+        '   :reason "invented"\n'
+        '   :evidence {:run "RUN-THAT-NEVER-HAPPENED" :specimen :split :path [:candidate_hash]}}\n  ')
+s = s.replace(' :fields\n [', ' :fields\n [' + rule, 1)
+open(sys.argv[2], 'w').write(s)
+PY
+OUT="$(bb "$WORK/forge/compare.clj" "$SUBJECT/A" "$SUBJECT/B" "$WORK/forge/volatile-fields.edn" split 2>&1)"; RC=$?
+check "a rule citing a run with no retained capture refuses, naming the run" REFUSED "RUN-THAT-NEVER-HAPPENED" "$OUT" $RC
+
+# 3b. a hand edit that does NOT repair the digest is caught by the digest.
+python3 - "$HERE/observed-volatility.edn" "$WORK/forge/tampered.edn" <<'PY'
+import sys
+s = open(sys.argv[1]).read()
+row = '{:run "RUN-THAT-NEVER-HAPPENED", :specimen :split, :path [:candidate_hash], :source "stdout.edn", :capture-digest "0000"}'
+s = s.replace(' :observations\n [', ' :observations\n [' + row + '\n  ', 1)
+open(sys.argv[2], 'w').write(s)
+PY
+cp "$WORK/forge/tampered.edn" "$WORK/forge/observed-volatility.edn"
+OUT="$(bb "$WORK/forge/compare.clj" "$SUBJECT/A" "$SUBJECT/B" "$HERE/volatile-fields.edn" split 2>&1)"; RC=$?
+check "a hand-edited evidence file fails its own digest" REFUSED "edited by hand after generation" "$OUT" $RC
+
+# 3c. the retained bytes ARE the evidence: corrupt one and every rule citing it refuses.
+rm -rf "$WORK/evidence"; cp -r "$HERE/evidence" "$WORK/evidence"
+echo "corrupted" >> "$WORK/evidence/OBS3-commit-bound/split/A/stdout.edn"
+python3 - "$HERE/observed-volatility.edn" "$WORK/tampered-bytes.edn" "$WORK/evidence" <<'PY'
+import sys
+s = open(sys.argv[1]).read()
+s = s.replace(':evidence-root "evidence"', ':evidence-root "%s"' % sys.argv[3])
+open(sys.argv[2], 'w').write(s)
+PY
+OUT="$(PARITY_EVIDENCE_FILE="$WORK/tampered-bytes.edn" run "$SUBJECT/A" "$SUBJECT/B" "$HERE/volatile-fields.edn")"; RC=$?
+check "a retained capture that no longer hashes to its record refuses" REFUSED "does not hash to what capture.edn records" "$OUT" $RC
+
+echo "PARITY-FENCE-004 — :expects-receipt is a two-way contract"
+
+# 4a. Sol's control: a pair that DOES carry receipts, compared as a specimen that
+# declares it publishes none, must not be silently compared to parity.
+OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$HERE/volatile-fields.edn" fanout)"; RC=$?
+check "receipts present where the specimen declares :expects-receipt false is a DIVERGENCE" DIVERGENCE "declares :expects-receipt false" "$OUT" $RC
+
+# 4b. a receipt present for a specimen nobody declared refuses.
+OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$HERE/volatile-fields.edn" undeclared)"; RC=$?
+check "a receipt present for an undeclared specimen refuses" REFUSED "does not declare :expects-receipt" "$OUT" $RC
+
+
+echo "PARITY-FENCE-005 — a rule is authorised by replay, not by citation"
+
+# 5a. Sol's round-3 control, made permanent: a :candidate_hash rule whose evidence
+# cites the GENUINE retained [:elapsed_ms] observation. Every digest and
+# retained-byte check passes; the replay is what refuses.
+python3 - "$HERE/volatile-fields.edn" "$WORK/laundered.edn" <<'PY'
+import sys
+s = open(sys.argv[1]).read()
+rule = ('{:key :candidate_hash :match :key :to "<CANDIDATE-HASH>"\n'
+        '   :reason "claims wall-clock volatility"\n'
+        '   :evidence {:run "OBS3-commit-bound" :specimen :split :path [:elapsed_ms]}}\n  ')
+s = s.replace(' :fields\n [', ' :fields\n [' + rule, 1)
+open(sys.argv[2], 'w').write(s)
+PY
+OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$WORK/laundered.edn")"; RC=$?
+check "a rule laundering an unrelated observation refuses, naming rule and path" REFUSED ":candidate_hash" "$OUT" $RC
+
+# 5b. and it says WHY: the selector does not select the path it cites.
+check "the refusal names the selector mismatch" REFUSED "does not select its evidence path" "$OUT" $RC
+
+# 5c. a rule that explains nothing new — a second copy of one already in the list,
+# citing the same observation — is not NECESSARY for it, and cannot be paid for by it.
+bb -e '
+(require (quote [clojure.edn :as edn]))
+(let [[src dst] *command-line-args*
+      d (edn/read-string (slurp src))
+      dup (first (filter #(= :elapsed_ms (:key %)) (:fields d)))]
+  (spit dst (pr-str (update d :fields #(vec (cons (assoc dup :to "<DUP>") %))))))' \
+  "$HERE/volatile-fields.edn" "$WORK/redundant.edn"
+OUT="$(run "$SUBJECT/A" "$SUBJECT/B" "$WORK/redundant.edn")"; RC=$?
+check "a duplicated rule is not necessary for its own evidence and refuses" REFUSED "not necessary for its own evidence" "$OUT" $RC
+
+echo "PARITY-FENCE-006 — provenance is bound to a commit, not to the file beside it"
+
+# 6a. Sol's control: refresh the generator digest in the evidence document, as a
+# forger who knows the digest is checked would. The comparator runs from the real
+# tree, so the commit binding is live — the generator blob at :source-commit no
+# longer hashes to the refreshed value, and it refuses.
+bb -e '
+(require (quote [clojure.string :as s]))
+(defn sha256 [^String x] (let [d (java.security.MessageDigest/getInstance "SHA-256")]
+  (apply str (map #(format "%02x" %) (.digest d (.getBytes x "UTF-8"))))))
+(let [[src dst] *command-line-args*]
+  (spit dst (s/replace (slurp src) #":generator-sha256 \"[0-9a-f]+\""
+                       (str ":generator-sha256 \"" (sha256 "a modified generator") "\""))))' \
+  "$HERE/observed-volatility.edn" "$WORK/regen.edn"
+OUT="$(PARITY_EVIDENCE_FILE="$WORK/regen.edn" run "$SUBJECT/A" "$SUBJECT/B" "$HERE/volatile-fields.edn")"; RC=$?
+check "a refreshed generator digest refuses against the blob at its own commit" REFUSED "generator blob" "$OUT" $RC
+
+# 6b. rebinding the stable build to something that is not a commit refuses too.
+sed 's/:stable-build "[0-9a-f]*"/:stable-build "NOT-A-COMMIT"/' "$HERE/observed-volatility.edn" > "$WORK/nocommit.edn"
+OUT="$(PARITY_EVIDENCE_FILE="$WORK/nocommit.edn" run "$SUBJECT/A" "$SUBJECT/B" "$HERE/volatile-fields.edn")"; RC=$?
+check "a :stable-build that is not a commit refuses" REFUSED "NOT-A-COMMIT" "$OUT" $RC
+
+echo "PARITY-FENCE-007 — the child cannot resolve the installed launcher"
+
+LAUNCHER="$(command -v clj-surgeon 2>/dev/null || echo /usr/local/bin/clj-surgeon)"
+LDIR="$(dirname "$LAUNCHER")"
+CHILD_PATH_FILE="${PARITY_ROOT:-/var/tmp/forge/parity}/childbin/.PATH"
+if [ ! -f "$CHILD_PATH_FILE" ]; then
+  echo "  FAIL  no child PATH was recorded at $CHILD_PATH_FILE — run bin/parity-run once"; FAIL=$((FAIL+1))
+else
+  CHILD_PATH="$(cat "$CHILD_PATH_FILE")"
+  echo "  ....  child PATH under test: $CHILD_PATH"
+  case ":$CHILD_PATH:" in
+    *":$LDIR:"*) echo "  FAIL  the child PATH contains the launcher directory $LDIR"; FAIL=$((FAIL+1)) ;;
+    *)           echo "  PASS  the child PATH excludes the launcher directory $LDIR"; PASS=$((PASS+1)) ;;
+  esac
+  if PATH="$CHILD_PATH" command -v clj-surgeon >/dev/null 2>&1; then
+    echo "  FAIL  clj-surgeon resolves under the child PATH"; FAIL=$((FAIL+1))
+  else
+    echo "  PASS  clj-surgeon does not resolve under the child PATH"; PASS=$((PASS+1))
+  fi
+  for t in bb clojure java git python3 sh; do
+    if PATH="$CHILD_PATH" command -v "$t" >/dev/null 2>&1; then
+      PASS=$((PASS+1)); echo "  PASS  the child PATH still provides $t"
+    else
+      FAIL=$((FAIL+1)); echo "  FAIL  the child PATH does not provide $t"
+    fi
+  done
+fi
+
+echo
+echo "self-test: $PASS passed, $FAIL failed"
+[ "$FAIL" = 0 ]

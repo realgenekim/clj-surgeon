@@ -1,0 +1,18 @@
+{:run "OBS3-commit-bound",
+ :specimen :alias,
+ :stable-build "59d8bc0cad8886a028c24e8ffd52e4e5d82185c1",
+ :source-commit "9353347616a2daa7006ff60545a557129c4c905f",
+ :generator-sha256
+ "752c5559fbf42ce690d03d0e37b29c0323253dbd78a0886ca77ce38101aab70e",
+ :files
+ {"A/full-tree-manifest.txt"
+  "37bcb143042490466783784d08dafb6ae8781d3551f2626661b9a2bb691f9f9e",
+  "A/stdout.edn"
+  "15c11a7d1c58e3ca04cd44618c5c4afc0fa4e1b0f3e1a5fd9aa3fcc72a3a2f25",
+  "B/full-tree-manifest.txt"
+  "0761846498882406ee6c779638b9949ecfa50e3c47cd3239ecfdca9be36edad5",
+  "B/stdout.edn"
+  "361c7e2039003ad682ed752b6ff0199edb37f21d5938cd57785c1477ee1f389e"},
+ :capture-digest
+ "312046758086260a2b8bff4df9114888e950ae76381c91d7ed1055116564e2f2",
+ :created "2026-09-10T17:57:44.110046047Z"}
