@@ -119,8 +119,13 @@
             b (workspace/receipt-dir (.getPath root-b))]
         (is (= a1 a2) "one canonical workspace has one receipt directory")
         (is (not= a1 b) "different workspaces cannot share default receipts")
-        ;; Canonical on BOTH sides -- see clj-surgeon.artifact-boundary-support.
-        (is (boundary/published-under-root? "edit-clojure" a1)))
+        ;; `under-root?`, not `published-under-root?`: `receipt-dir` COMPUTES
+        ;; where receipts would go and writes nothing, so there is no
+        ;; publication to witness here -- only placement. SKF-001 made
+        ;; `published-under-root?` fail closed on a path that does not exist,
+        ;; which is right, and which is what surfaced that this call site had
+        ;; been asking the wrong question since the migration.
+        (is (boundary/under-root? "edit-clojure" a1)))
       (finally
         (delete-tree! root-a)
         (delete-tree! root-b)))))

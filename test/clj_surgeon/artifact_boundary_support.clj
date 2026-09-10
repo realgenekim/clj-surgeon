@@ -48,8 +48,25 @@
   [verb]
   (canonical (io/file artifacts/*artifact-root* (str verb "-receipts"))))
 
+(defn under-root?
+  "Is `path` LEXICALLY inside `verb`'s receipt root, canonical on both sides?
+
+   For a path that has been COMPUTED and not yet written -- `receipt-dir`
+   answering where a workspace's receipts would go, for instance. It answers
+   the placement question and nothing else.
+
+   NOT a publication witness. `published-under-root?` is, and it fails closed
+   on a path that does not exist, which is SKF-001's whole point. The two
+   questions were one function until Sol's review separated them, and the name
+   is the fence: a witness that wants to know a receipt was WRITTEN must not be
+   able to reach the version that cannot tell."
+  [verb path]
+  (str/starts-with? (canonical path)
+                    (str (verb-receipt-root verb) java.io.File/separator)))
+
 (defn published-under-root?
-  "Is `path` inside `verb`'s receipt root? Canonical on BOTH sides."
+  "Is `path` a receipt that EXISTS inside `verb`'s receipt root? Canonical on
+   BOTH sides, and both sides must resolve -- see SKF-001."
   [verb path]
   ;; A publication witness must never accept a plausible future pathname.
   ;; Apply `toRealPath` to both the artifact and its declared root before the
