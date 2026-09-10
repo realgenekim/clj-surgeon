@@ -109,6 +109,32 @@
           {:receipt_persistence_failed true})))
     outcome))
 
+;; @spec INSERT-FORMS-024
+;; INTENT: INSERT-FORMS-024
+(defn recovery-status
+  "Classify a durable planned receipt before considering replay.
+
+  After establishing that the original publisher has stopped, read its durable
+  detail as EDN, resolve the request's target inside its canonical workspace,
+  and freshly hash the complete target bytes. Pass the detail and that digest
+  here. Compare result_hash FIRST: :published means the intended bytes already
+  landed, so never replay. A source_hash match means :not-published; reconsider
+  the request and guard against a fresh read before retrying. Any other digest
+  means :target-changed: preserve those bytes and reconcile manually, never
+  replay or apply the inverse blindly. A missing/unreadable target also requires
+  manual recovery. These verdicts describe bytes, not application behavior.
+
+  Retain the durable receipt as evidence. Once the publisher is stopped and the
+  outcome reconciled, its exact receipt_details_path + .candidate seed may be
+  removed; never clean up another transaction's staging files. This reader
+  performs no writes, retries, receipt finalization, or automatic cleanup."
+  [detail target-hash]
+  (let [{:keys [result_hash source_hash]} (:receipt detail)]
+    (cond
+      (and (string? result_hash) (= target-hash result_hash)) :published
+      (and (string? source_hash) (= target-hash source_hash)) :not-published
+      :else :target-changed)))
+
 ;; @spec INSERT-FORMS-014
 ;; INTENT: INSERT-FORMS-014
 (defn commit-plan! [request file source result hooks]
