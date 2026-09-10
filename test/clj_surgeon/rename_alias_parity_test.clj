@@ -81,8 +81,7 @@
         (let [req (assoc (rh/request {rh/file (slurp file)} 1) :workspace_root (.getCanonicalPath dir))
               request-file (io/file dir "failure.edn")
               _ (spit request-file (pr-str req))
-              driver (str "(require '[clj-surgeon.core :as core] '[clj-surgeon.rename-alias :as insert]
-   [clj-surgeon.rename-alias-test :as rh] '[clojure.java.io :as io]) "
+              driver (str "(require '[clj-surgeon.core :as core] '[clj-surgeon.rename-alias :as insert] '[clojure.java.io :as io]) "
                           "(let [execute insert/execute!] (with-redefs [insert/execute! (fn [r] (execute r {"
                           (pr-str stage) " (fn [] "
                           (when (= stage :external-after-write)

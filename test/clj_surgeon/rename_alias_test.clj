@@ -5,8 +5,9 @@
             [clj-surgeon.insert-forms-support :as h]
             [clj-surgeon.insert-forms-oracle :as o]
             [clojure.java.io :as io]
+            [clojure.edn :as edn]
             [clojure.string :as str]
-            [clojure.test :refer [deftest is testing]]))
+            [clojure.test :refer [deftest is]]))
 
 (def header "(ns demo (:require [example.events :as events]))\n")
 (def file "src/example.clj")
@@ -48,7 +49,16 @@
       (when b
         (is (= "02332a74caf1ead4d70c555b530230b8b03aebc306bd72f5d129f111c876da0c" (h/sha b)))
         (is (= [4 153 1112] (keep-indexed #(when (not= %2 (nth (str/split-lines b) %1)) (inc %1)) (str/split-lines a))))
-        (is (= 29 (count (re-seq #"events/" b)))))
+        (is (= 29 (count (re-seq #"events/" b))))
+        (let [strings (fn [s] (map :text (filter #(and (= :token (:tag %)) (str/starts-with? (:text %) "\""))
+                                               (tree-seq (comp seq :entries) :entries (o/inventory s)))))
+              routes (filter #(str/includes? % "events/") (strings b))]
+          (is (= 29 (count routes)))
+          (is (= 22 (count (distinct (map :text
+                                           (filter #(and (= :list (:tag %)) (= "str" (o/operator %))
+                                                         (str/includes? (or (:text (second (o/code %))) "") "events/"))
+                                                   (tree-seq (comp seq :entries) :entries (o/inventory b))))))))
+          (is (= (frequencies (strings a)) (frequencies (strings b))))))
       (is (= 3 (get-in r [:receipt :forms_changed])))
       (is (= 32 (get-in r [:receipt :other_forms_checked]))))))
 
@@ -69,7 +79,8 @@
                     ["(let [{::events/keys [x]} m] x)" "(let [{::ev/keys [x]} m] x)" 1]
                     ["[#::events{:x events/y} #:events{:x events/y}]" "[#::ev{:x ev/y} #:events{:x ev/y}]" 3]
                     ["#events/tag [events/x ::events/k]" "#events/tag [ev/x ::ev/k]" 2]
-                    ["(comment events/x)" "(comment ev/x)" 1]]]
+                    ["(comment events/x)" "(comment ev/x)" 1]
+                    ["(quote (alias events/x))" "(quote (alias ev/x))" 1]]]
     (accept (str header a) (str (str/replace header ":as events" ":as ev") b) n)))
 
 ;; @spec RENAME-ALIAS-004
@@ -107,6 +118,14 @@
              "(ns demo (:require [example.events :as events :refer :all :rename {x y}]))"
              (str header "(let [ev 1] [ev :ev/x #_ev/x])")]]
     (accept s (str/replace s #":as(-alias)? events" ":as$1 ev") 0))
+  (let [sources {"a.clj" "(ns a (:require [example.events :as events] [other :as ev]))"
+                 "b.clj" "(ns b)"}]
+    (refuse sources (request sources 0) :old-alias-absent))
+  (let [sources {"a.clj" "(ns a (:require [example.events :as events] [other :as ev]))"
+                 "b.clj" (str header "(require 'other)")}]
+    (refuse sources (request sources 0) :unsupported-namespace-mutation))
+  (doseq [alias ["nil" "true" "false" "&" "_" "a/b" "a b" ":x" "#x" "" "a]" "a\nb"]]
+    (rejected header :invalid-request {:new_alias alias}))
   (rejected header :invalid-request {:new_alias "events"})
   (rejected "(ns demo (:require [events :as events]))" :ambiguous-alias-namespace {:lib "events"}))
 
@@ -115,7 +134,11 @@
 (deftest rename-alias-scope-guards-counts
   (let [a (str header "events/x events/y") sources {file a "src/b.clj" "(ns b)"}
         req (assoc (request sources 2) :scope {:repository true :expect_files 2})]
-    (is (:ok (sut/plan sources req)))
+    (let [r (sut/plan sources req)]
+      (is (:ok r))
+      (is (= ["src/b.clj" file] (mapv :file (get-in r [:detail :per_file]))))
+      (is (= 0 (:references_changed (first (get-in r [:detail :per_file])))))
+      (is (= 1 (get-in r [:detail :per_file 0 :preservation :other_forms_checked]))))
     (refuse sources (assoc-in req [:scope :expect_files] 1) :scope-file-count-mismatch)
     (refuse sources (update req :guards dissoc "src/b.clj") :invalid-guard)
     (refuse sources (assoc-in req [:guards file :sha256] (apply str (repeat 64 "0"))) :source-hash-mismatch)
@@ -126,6 +149,14 @@
   (let [req (request {file header} 0)
         receipt {:version 1 :read_complete true :workspace_root "/fixture" :file file :sha256 (h/sha header)}]
     (is (:ok (sut/plan {file header} (assoc-in req [:guards file] {:read_receipt receipt})))))
+  (h/with-file header
+    (fn [dir target _]
+      (let [req (assoc (request {file header} 0) :workspace_root (.getCanonicalPath dir)
+                       :scope {:repository true :expect_files 1})
+            r (sut/execute! req {:before-recheck #(spit (io/file dir "extra.clj") "(ns extra)")})]
+        (is (= :scope-changed-before-commit (:error-type r)))
+        (is (= false (:mutation_attempted r)))
+        (is (= header (slurp target))))))
   (doseq [scope [{:file file :expect_files 1} {:paths [file] :expect_files 1} {:repository true :expect_files 1}]]
     (is (:ok (sut/plan {file header} (assoc (request {file header} 0) :scope scope))))))
 
@@ -146,7 +177,29 @@
     (rejected s kind))
   (accept (str (str/replace header "\n" "\r\n") "[\"λ\"\t events/x]\r\n")
           (str (str/replace (str/replace header "\n" "\r\n") ":as events" ":as ev") "[\"λ\"\t ev/x]\r\n") 1)
-  (refuse {"src/x.cljc" header} (request {"src/x.cljc" header} 0) :unsupported-source))
+  (refuse {"src/x.cljc" header} (request {"src/x.cljc" header} 0) :unsupported-source)
+  (doseq [path ["../outside.clj" "/absolute.clj" "src/./x.clj" "src//x.clj"]]
+    (refuse {path header} (request {path header} 0) :invalid-path))
+  (rejected (str header (apply str (repeat 513 "[")) "1" (apply str (repeat 513 "]"))) :limit-exceeded)
+  (rejected (str header "\"" (apply str (repeat 8388608 "a")) "\"") :limit-exceeded)
+  (h/with-file header
+    (fn [dir target _]
+      (let [req (assoc (request {file header} 0) :workspace_root (.getCanonicalPath dir))
+            link (io/file dir "src/link.clj")]
+        (java.nio.file.Files/createSymbolicLink (.toPath link) (.toPath target) (make-array java.nio.file.attribute.FileAttribute 0))
+        (let [r (sut/execute! (assoc req :scope {:file "src/link.clj" :expect_files 1} :guards {"src/link.clj" {:sha256 (h/sha header)}}))]
+          (is (= :invalid-path (:error-type r)))
+          (is (= header (slurp target))))
+        (java.nio.file.Files/delete (.toPath link))
+        (java.nio.file.Files/createLink (.toPath link) (.toPath target))
+        (let [r (sut/execute! req)]
+          (is (= :invalid-path (:error-type r)))
+          (is (= header (slurp target))))
+        (java.nio.file.Files/delete (.toPath link))
+        (java.nio.file.Files/write (.toPath target) (byte-array [(unchecked-byte 255)]) (make-array java.nio.file.OpenOption 0))
+        (let [r (sut/execute! req)]
+          (is (= :unsupported-source (:error-type r)))
+          (is (= [-1] (vec (java.nio.file.Files/readAllBytes (.toPath target))))))))))
 
 ;; @spec RENAME-ALIAS-009
 ;; INTENT-TEST: RENAME-ALIAS-009
@@ -166,6 +219,11 @@
               r (sut/execute! req hooks)]
           (is (= wanted (:state r)) (pr-str r))
           (is (not (true? (:committed r))))
+          (when-let [path (:receipt_details_path r)]
+            (let [text (slurp path) detail (edn/read-string text)]
+              (is (= (:receipt_hash r) (h/sha text)))
+              (is (= #{file "src/b.clj"} (set (keys (get-in r [:transaction :file_states])))))
+              (is (map? (sut/recovery-status detail {file (h/sha (slurp target)) "src/b.clj" (h/sha (slurp second-file))})))))
           (when (#{"failed" "rolled-back"} wanted)
             (is (= source (slurp target) (slurp second-file))))
           (when (= stage :before-recheck)
@@ -185,6 +243,19 @@
     (is (true? (get-in detail [:preservation :other_forms_unchanged])))
     (doseq [f (get-in detail [:preservation :other_forms])]
       (is (= (:before_sha256 f) (:after_sha256 f))))
+    (when-let [b (get-in r [:candidates file])]
+      (let [req (request {file a} 1)]
+        (is (:ok (oracle/verify a b req detail)))
+        (doseq [bad [(str/replace b "; neighbor" "; corrupted")
+                     (str/replace b "#_events/x" "#_ev/x")
+                     (str/replace b "(def x 2)" "(def x 3)")
+                     (str/replace b "(def x ev/x)" "(def x events/x)")]]
+          (is (false? (:ok (oracle/verify a bad req detail)))))
+        (doseq [bad [(assoc detail :result_hash (apply str (repeat 64 "0")))
+                     (assoc detail :references_changed 31)
+                     (assoc detail :inverse_splices [])
+                     (assoc-in detail [:preservation :other_forms] [])]]
+          (is (false? (:ok (oracle/verify a b req bad)))))))
     (is (not (contains? (:receipt r) :terminal_response)))
     (is (false? (get-in r [:receipt :verification_complete])))
     (is (= 4 (count (remove #(#{:whitespace :newline :comment :comma} (:tag %)) (:entries (o/inventory a))))))))
