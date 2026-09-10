@@ -4,7 +4,7 @@ finding `SQUEEZE-RECORDS-REF-LEASE-001` · builder/recorder: forge@anvil Opus on
 spec: Astra's consult `/home/forge/src/clj-surgeon-records/docs/observations/2026-09-10-astra-squeeze.md`
 · workflow: tighten-the-loop (SKILL.md + CHANGE-RULE.md) · steward: Astra · supervisor: forge@anvil
 
-**Block clock: 00:00 = 2026-09-10T03:33:10Z. Four-hour box closes 07:33:10Z. This file written 2026-09-10T07:05:49Z — parked.**
+**Block clock: 00:00 = 2026-09-10T03:33:10Z. Four-hour box closes 07:33:10Z. This file written 2026-09-10T07:45:48Z — parked-pending-delivery-qualification.**
 
 ## Headline
 
@@ -20,6 +20,8 @@ spec: Astra's consult `/home/forge/src/clj-surgeon-records/docs/observations/202
 
 **This is a local-fixture win.** Real transfer is `transfer=untested`: this seat may not install, may not publish to the real remote, and does not merge. The network term is bounded separately at roughly 1.5-3 s. No ship acceleration is claimed and none was measured.
 
+**Delivery round (Astra's steward ruling, second 60-minute box).** The NO-GO was on the v3.8 bytes: an env var could redefine the approved destination. `/var/tmp/forge/ship-v3.8-delivery/` is built from the installed epoch (15/15 carried files hash-equal to `~/bin`), closes that escape and the named contract gaps, and **fixes P1 in the same delivery** -- the three adapters that pushed records commits onto the CODE ref now route through `records-push`, with a red-first source scan as the ratchet. 19/19 matrix rows; `INSTALL OK v3.9` over 235 rows with 0 mismatches against a scratch DEST with the real lease free; one matched pair at delta 660.190 s under a corrected monotonic recorder; the bundle committed and fast-forward pushed to `fork`. **Still not installed**; P3/P4/P7/P8 remain open.
+
 **Delivery is blocked by something else.** `bash /var/tmp/forge/ship-v3.8/install.sh` prints `INSTALL NOT PROVEN` -- with byte-identical mismatch counts to a v3.7 baseline control, i.e. inherited and not caused by this change. The same records change on the *installed* epoch produces `INSTALL OK v3.8` over 228 fixture rows with 0 mismatches.
 
 ## Block table (Astra's 00:00–04:00 rows)
@@ -32,6 +34,18 @@ spec: Astra's consult `/home/forge/src/clj-surgeon-records/docs/observations/202
 | 02:15–03:15 | 05:48–06:48 | independent acceptance the installer's way against a scratch DEST + FIXTURES; boundary and delivery-copy checks | **done.** Run A (candidate as staged) `INSTALL NOT PROVEN`; run B (v3.7 baseline) byte-identical mismatch counts; run C (records change on the installed epoch) **`INSTALL OK v3.8`**, 228 rows, 0 mismatches, real lease free. Delivered bytes then re-exercised at the consumer. Delivery-copy check: P1, P2. |
 | 03:15–04:00 | 06:48–07:33 | result, manifest, block close, readback | **done.** Field-lease observer ran read-only 05:25:30Z→block close and saw no further real ship. Final report, terminal receipt and manifest written; installed bytes re-verified unchanged at close. |
 
+
+### Delivery round (Astra's steward ruling), 07:16:31Z – 08:16:31Z box
+
+| Minute | Deliverable | State |
+|---|---|---|
+| 00–05 | delivery tree built FROM `min-src`; every carried file hashed against the installed bytes | **done 07:16:31Z**, 15/15 SAME, only `records-push` differs |
+| 05–15 | close the `RECORDS_APPROVED_DEST` escape and the named contract gaps; route the three adapters + `tighten` | **done 07:19:19Z** |
+| 15–25 | matrix rows 12–18 (override, root, forced rejection+retry, persistent rejection, lock timeout, non-`src/` code paths, source scan) | **done 07:22:22Z**, 19/19 green; row 18 red-first against the un-fixed bundle |
+| 15–20 | bundle copies + MANIFEST committed and pushed to `fork` on `anvil/nrepl-test-alias` | **done 07:23:19Z**, `731723d`, fast-forward |
+| 20–35 | faithful red re-run + one matched pair under the corrected recorder | **done 07:36:50Z**, Δ = 660.190 s |
+| 25–45 | every corpus the installer's way, scratch DEST+FIXTURES, real lease free | **done 07:43:58Z**, `INSTALL OK v3.9`, 235 rows, 0 mismatches |
+| 45–60 | report section, manifest, close readback | **done 07:45Z**; installed hashes re-verified unchanged |
 ## What was asked, and what the number to beat is
 
 Astra's consult picked candidate **(e)**: make a records-only publication to `records/MCP-main`
@@ -527,6 +541,246 @@ Retained evidence (append-only, nothing rewritten): `/var/tmp/forge/squeeze/out/
 per arm), `*.helper.txt` (verbatim helper output), `controls.log`, `pairs.log`,
 `acceptance.log`, `fx-v3.log`; sealed inputs in `/var/tmp/forge/squeeze/seal/`.
 
+---
+
+# Delivery round (Astra's steward ruling) — `/var/tmp/forge/ship-v3.8-delivery/`
+
+Spec: `/var/tmp/forge/plan2/cellC/astra-squeeze-steward-report.md`. Ruling: **NO-GO on the v3.8
+bytes**; build the delivery from the installed-epoch composition, close the destination escape and
+the named contract gaps, and **fix P1 in the same delivery**. Timebox 60 min, opened
+2026-09-10T07:16:31Z. **Nothing was installed.**
+
+## The base: built FROM `min-src`, every carried file equal to the installed bytes
+
+```
+FILE                       COPY-SOURCE        INSTALLED          MATCH
+ship                       e95ea5e60d130c56   e95ea5e60d130c56   SAME
+land                       647a734413567a86   647a734413567a86   SAME
+fence-run                  cc09e618af202f4b   cc09e618af202f4b   SAME
+receipt-chain              fedf998c2bb635cd   fedf998c2bb635cd   SAME
+land-auto                  edcac9bdc9725ba9   edcac9bdc9725ba9   SAME
+run-bg                     45c3d1dd5ed5f120   45c3d1dd5ed5f120   SAME
+sol-yolo                   44401a573e08d4f3   44401a573e08d4f3   SAME
+gate-envelope.clj          034b5afed6023b29   034b5afed6023b29   SAME
+gate-consume.clj           6448222daab675d9   6448222daab675d9   SAME
+mutate.clj                 cb28ac1a416bdee4   cb28ac1a416bdee4   SAME
+ship-fix-block-spec.md     864632b6bee6ebbb   864632b6bee6ebbb   SAME
+seat-receipt               2a9694eec4fd6dbc   2a9694eec4fd6dbc   SAME
+canary-cell                b7bc9c6bddf3589e   b7bc9c6bddf3589e   SAME
+verb-sentinel              7955d1fdc1f3c49d   7955d1fdc1f3c49d   SAME
+tighten                    ceac37f31552eff0   ceac37f31552eff0   SAME
+records-push               693239e0c4b55d3b   55e25d68b3300df8   DIFFERS(the change)
+```
+
+The four adapters were copied **from `/home/forge/bin`** into the delivery set, so the delivery
+starts from the installed programs and not from a package copy. `install.sh`'s `SRC` default was
+repointed to the delivery tree (Astra's "command trap": `min-src/install.sh` still defaulted `SRC`
+to `ship-v3.8`, so running it bare selected the wrong source).
+
+## The destination escape is closed
+
+v3.8 read the approved ref from `RECORDS_APPROVED_DEST`, so the value being checked and the value
+being checked *against* both came from the caller. Astra's probe turned exit 7 into exit 2. On the
+delivery bytes, re-run verbatim:
+
+```
+[RECORDS_DEST=MCP/main]                                   exit=7  REFUSED reason=forbidden-destination dest=MCP/main approved=records/MCP-main
+[RECORDS_DEST=MCP/main RECORDS_APPROVED_DEST=MCP/main]    exit=7  REFUSED reason=forbidden-destination dest=MCP/main approved=records/MCP-main
+[RECORDS_DEST=main    RECORDS_APPROVED_DEST=main]         exit=7  REFUSED reason=forbidden-destination dest=main    approved=records/MCP-main
+```
+
+`APPROVED` is now a shell **constant**. There is no override; `RECORDS_DEST` may only *repeat* the
+bound value. Row 12 asserts all six spellings, the literal exit, unchanged code refs, **and that no
+lock file was created** — the refusal precedes every mutation.
+
+## The rest of Astra's publication-contract corrections
+
+| Her finding | v3.9 |
+|---|---|
+| `RECORDS_REPO` accepted any checkout with the right branch name; no approved root | root bound to `/home/forge/src/clj-surgeon-records`, or a **recorder-owned** fixture root declared by a marker *file* (`.records-fixture-origin`) — never an env var a caller can set. Exit 11. Row 13. |
+| branch checked *before* the lock; not revalidated after a rebase | branch **and** pending artifact set are validated under the lock, and revalidated after **every** rebase |
+| failed fetch / failed `git diff` silently produced empty results | both are typed refusals (`remote-base-unresolved`, `delta-uncomputable`, exit 12) |
+| a `src/`-only guard lets `Makefile`, scripts and tests through | the pending publication may not touch `src test bin dev deps.edn bb.edn Makefile`. Exit 8. Row 17 exercises all four spellings. |
+| pushes mutable `HEAD` although it records `TIP` | pushes `TIP:refs/heads/records/MCP-main` — the validated object id, never `--force` |
+| row 05 pushed the other writer's commit *before* calling the candidate, so the retry loop was never exercised | **Row 14**: a `pre-receive` hook advances the records ref *itself* and declines the first push, so the remote genuinely moves between refresh and push. The helper is rejected, rebases, revalidates and succeeds with `attempts=2`; both blobs survive. |
+| `lastout` overwrote the attempt history on success | every attempt is appended and printed as `RECORDS-PUSH ATTEMPTS …`. **Row 15** forces a permanent rejection: exit 5 with all three attempts retained. |
+| exits 9 and 10 existed in code but no row asserted them | **Row 16** (lock held past its bound → exit 9); rows 06/07/08/09/10 now assert their **literal** exits |
+
+## P1 — the three adapters, fixed in this delivery
+
+`seat-receipt:236-238`, `canary-cell:133-134` and `verb-sentinel:93-94` each published a records
+commit with `git push origin HEAD:MCP/main` — onto the **code** ref, bypassing the entrance and
+violating decision 1a. All three now call `/home/forge/bin/records-push`. Astra's warning that "a
+literal two-line replacement is insufficient if failure disappears in the wrapper" is addressed:
+
+- **seat-receipt** — `CARRIED` counted against `origin/MCP/main`, the *code* trunk, not the
+  publication base; it now counts against `origin/records/MCP-main` after a fresh fetch. A failed or
+  unverified publication exits 3. `--no-push` is labelled `unpublished(--no-push)`, never durable
+  success. The tripwire text no longer says the records live on `MCP/main`.
+- **canary-cell** — `git add` and `git commit` failures are now checked instead of falling through
+  to publication. Publication is attempted even when the file is `unchanged`, because `unchanged` is
+  a local content state and not proof a previous attempt reached the remote. The grade is preserved
+  first and a publication failure never upgrades it; a green grade no longer hides a failed push.
+- **verb-sentinel** — `publish()` used to `echo committed+PUSH-FAILED` and **return the exit status
+  of `echo`**, so a failed publication reached a green run. It now returns the helper's status, and
+  both callers (`run_split`, `run_alias`) capture it.
+- **tighten** — the binding block advertised `:ref "records/MCP-main -> origin MCP/main" :push
+  "HEAD:MCP/main"`. It now names `refs/heads/records/MCP-main`, the origin, the bound publisher and
+  its live sha256, and `<validated-object-id>:refs/heads/records/MCP-main (never HEAD, never
+  MCP/main, never --force)`. A `records-push` command row was added.
+
+`install.sh`'s target set grew from twelve files to sixteen: the four adapters are now installed
+targets, because the previous installer could not deliver this fix at all.
+
+**Row 18 is the ratchet**: a source scan asserting no executable `git push` to a code ref outside
+`records-push`, across the delivery set **and** the tighten bundle, refusing if it scanned fewer
+than eight scripts (a scan that looks nowhere finds nothing). It was **red first** — against the
+un-fixed bundle copies:
+
+```
+FAIL 18-no-executable-git-push-to-a-CODE-ref-outside-records-push(21-scripts-scanned) ::
+  canary-cell:134:   /usr/bin/git push -q origin HEAD:MCP/main … PUBLISHED="$PUBLISHED+pushed"
+  seat-receipt:237:  if /usr/bin/git push -q origin HEAD:MCP/main … PUBLISHED="$PUBLISHED+pushed(carried=$CARRIED)"
+  verb-sentinel:94:  /usr/bin/git push -q origin HEAD:MCP/main … echo committed+pushed
+```
+
+It is a source-scanning control and can only see what it can spell. It is **not** a substitute for
+the adapter behaviour cases in Astra's section 3, which remain pending (P7 below).
+
+## P2 — `records-push` now ships in the bundle
+
+Committed on the skills branch `anvil/nrepl-test-alias`, author `forge-anvil <forge-anvil@anvil>`,
+with the `Co-Authored-By: Gene Kim` trailer, and pushed to `fork` as a fast-forward — **never
+forced**:
+
+```
+731723d forge-anvil <forge-anvil@anvil> :: tighten bundle: route every records publisher through records-push (P1), and ship records-push (P2)
+To https://github.com/marvin-openclaw777/claude-skills.git
+   573cad8..731723d  anvil/nrepl-test-alias -> anvil/nrepl-test-alias
+```
+
+`MANIFEST.txt` gains a `records-push` row, refreshes the four changed rows, and carries a header
+note that these rows are **ahead of** the installed programs until the owner installs — the opposite
+of that file's usual staleness direction.
+
+## The faithful red, re-run against the delivery composition's old epoch
+
+A changed composition cannot inherit the old candidate's red by name, so it was re-executed with the
+corrected recorder (`harness9.sh`, `CLOCK_MONOTONIC`):
+
+```
+label=RED9-v37-heldlease helper_sha=55e25d68b3300df8  lease_life_s=20 poll=1 cap=3
+exit=4  visibility=unconfirmed  code_refs_moved=no  clock=CLOCK_MONOTONIC(/proc/uptime)
+receipt=RECORDS-PUSH HELD reason=ship-lease-live waited=3s (records NOT pushed; rerun later)
+```
+
+## One matched pair, under the corrected protocol
+
+Astra's three protocol objections are fixed in `harness9.sh` (a **new** file — the frozen v1
+`harness.sh` and its evidence are untouched):
+
+- the elapsed clock is `CLOCK_MONOTONIC` (`/proc/uptime`), not `date +%s.%N`;
+- `t1` is stamped **after** the code-ref comparison, so the endpoint covers the complete consumer
+  check, not just blob reachability;
+- the recorder **no longer kills the lease holder** after readback. v1 recorded
+  `lease_start_to_release_s=0.149` against a registered 660 s; the holder now runs its full
+  registered lifetime in its private directory.
+
+```
+| arm | helper | t0→t1 (s) | helper terminal (s) | lease alive at readback | exit | visibility | code refs moved | receipt |
+|-----|--------|----------:|--------------------:|---|---|---|---|---|
+| PAIR9-old | 55e25d68 (v3.7) | 660.340 | 660.310 | no (it expired) | 0 | confirmed | no | RECORDS-PUSH OK tip=4106ccb waited=660s |
+| PAIR9-new | 72c8e4f1 (v3.9) |   0.150 |   0.110 | **yes**          | 0 | confirmed | no | RECORDS-PUSH OK tip=588492c waited_lock=0.0s waited_lease=0 visible=0.0s attempts=1 |
+```
+
+`pair9: T_old=660.340 s  T_new=0.150 s  delta=660.190 s`
+
+One pair is one pair. It corroborates the three-pair result under a stricter protocol; it does not
+replace Astra's required fresh six-control/three-pair qualification of the **final** frozen
+composition, which is scheduled, not claimed (P8).
+
+**An honest red on the way there:** the first `PAIR9-new` attempt returned
+`exit=11 REFUSED reason=unapproved-root`, because the recorder had not yet written the fixture-root
+marker. That is the new root binding working on the recorder itself. The record is retained; the arm
+was re-run after the recorder was corrected, not after the guard was relaxed.
+
+## Independent acceptance — the installer's own way, scratch DEST, real lease free
+
+```
+REAL LEASE FREE at 2026-09-10T07:37:05Z
+   run-land-auto: 19 rows, mismatches: 0            run-ship-v3.3: 13 rows, mismatches: 0
+   run-land-publication-truth: 12 rows, mismatches: 0  run-ship-v3.4: 14 rows, mismatches: 0
+   run-ship-v2: 28 rows, mismatches: 0              run-ship-v3.5: 5 rows, mismatches: 0
+   run-ship-v3: 22 rows, mismatches: 0              run-ship-v3.6: 9 rows, mismatches: 0
+   run-ship-v3.1: 13 rows, mismatches: 0            run-ship-v3.7: 73 rows, mismatches: 0
+   run-ship-v3.2: 8 rows, mismatches: 0             run-records-push-v3.8: 19 rows, mismatches: 0
+INSTALL OK v3.9 stamp=20260910T073705Z files='ship land fence-run receipt-chain land-auto records-push seat-receipt canary-cell verb-sentinel tighten ship-fix-block-spec.md run-bg sol-yolo gate-envelope.clj gate-consume.clj mutate.clj' — every fixture green against the installed bytes.
+ACCEPTANCE9 EXIT=0
+```
+
+**235 fixture rows across twelve sets, 0 mismatches, sixteen installed targets, exit 0.** The exact
+command (DEST is a scratch directory; `~/bin` was not written):
+
+```sh
+SRC=/var/tmp/forge/ship-v3.8-delivery \
+DEST=/var/tmp/forge/squeeze/deliv-dest \
+FIXTURES=/var/tmp/forge/squeeze/deliv-fixtures \
+bash /var/tmp/forge/ship-v3.8-delivery/install.sh
+```
+
+Two earlier attempts are retained and are not failures of the candidate: one was `INSTALL REFUSED
+reason=target-scripts-are-running procs= 2182094:ship 2183518:ship 2185914:ship` — the installer's
+own live-process gate catching fixture ships from a manual run seconds earlier — and one was
+`INSTALL NOT PROVEN` with `run-ship-v3: 22 rows, mismatches: 2`, the new root binding correctly
+refusing that fixture's records checkout until the fixture declared itself a recorder-owned root.
+
+**Nothing was installed.** The command the owner would run — **not run here, and not this seat's
+call** — names its source explicitly, because `SRC` defaulting to the wrong tree is the trap Astra
+flagged:
+
+```sh
+SRC=/var/tmp/forge/ship-v3.8-delivery DEST=/home/forge/bin \
+FIXTURES=/var/tmp/forge/tighten/fixtures SHIP_LEASE=/var/tmp/forge/ship/.lease \
+bash /var/tmp/forge/ship-v3.8-delivery/install.sh
+```
+
+## Delivery-round manifest
+
+| artifact | sha256 |
+|---|---|
+| `/var/tmp/forge/ship-v3.8-delivery/records-push` | `72c8e4f13d6e8ee67e78a48281bb5f90c48434b9f657faba6790dd5cafd54e9a` |
+| `/var/tmp/forge/ship-v3.8-delivery/seat-receipt` | `3c13238191dbcbc47c396c22718d892bb2595c6e68065e6fdde9177d1d311093` |
+| `/var/tmp/forge/ship-v3.8-delivery/canary-cell` | `e98bfaf473a83a4fe7bab358837af9d782907840b3945ee8cbd84f39f205151b` |
+| `/var/tmp/forge/ship-v3.8-delivery/verb-sentinel` | `12220e9029056a2af729e2b672961ff500417cdb30092619189dccfcfaa6fd32` |
+| `/var/tmp/forge/ship-v3.8-delivery/tighten` | `5099e429e970c4ce8a1e34287e5fdc05fbfd0a79ea2f1dd5f0b23dba4efddbfe` |
+| `/var/tmp/forge/ship-v3.8-delivery/install.sh` | `e76bc8e86f978ee6ee2d659ff1d33c3362ad35c96a900e6bdaee26850f845b18` |
+| `/var/tmp/forge/ship-v3.8-delivery/fixtures/run-records-push-v3.8.sh` | `be07c23c5cf5d055f7d94878fe70e76cb719e0c7b316e14758f5d5f4ef3dcebb` |
+| `/var/tmp/forge/ship-v3.8-delivery/fixtures/run-ship-v3.sh` | `35535beb314ee0877019277a5db641a658987c59b0f1906cea8a80af020d9594` |
+| `/var/tmp/forge/squeeze/harness9.sh` | `4f8021267a8f35ae7a4ecf356467225bf1461e77b0144cdad28d11b2d7fbe1ac` |
+| skills commit on `anvil/nrepl-test-alias`, pushed to `fork` | `731723d7755546dba615a5465718f8bfbc422a32` |
+
+## Obligations after the delivery round
+
+| # | State |
+|---|---|
+| **P1** wrong-destination adapters | **closed in this delivery**, with the source-scan ratchet red-first. Behavioural adapter qualification is P7. |
+| **P2** `records-push` absent from the bundle | **closed**: bundled, MANIFEST row added, committed and pushed to `fork` on `anvil/nrepl-test-alias`. |
+| **P3** real transfer | still `transfer=untested`. Nothing was installed and nothing was published to the real remote. Astra's step 6 stands: after qualified installation, one already-useful publication through a corrected installed adapter during an *independently occurring* real ship. No manufactured ship; read-only network probes are not a substitute. |
+| **P4** independent qualification | Astra's steward report is independent scrutiny of the **previous** bytes. It does not certify this composition. A steward pass over the delivery tree is required before installation. |
+| **P5** lock scope | unchanged and unclaimed: the lock is per **checkout**. Two different worktrees of the same records repository still do not serialize. |
+| **P6** the uninstalled v3.7 remainder | remains parked with its owner and is deliberately **excluded**: the delivery is built from the installed epoch. |
+| **P7** *new* — adapter behaviour cases | Astra's section 3 requires each adapter exercised through its real entrance with isolated records roots, real private remotes and recorder-controlled child fixtures: named-blob readback under a live code lease, child exit 17 / assertion-red / pending-proof staying failed, unchanged-file retry after a prior rejection, `--no-push`/dry-run semantics, and two concurrent adapter publications sharing a checkout. Row 18 is a source scan and does **not** cover these. It also does not prove the adapters' *file writers* obey the same checkout exclusion as the publisher — Astra's explicit warning about a lock handoff. |
+| **P8** *new* — final performance qualification | The measured Δ belongs to the v3.9 helper under the corrected recorder from **one** pair (660.190 s). Astra requires six fresh controls, three counterbalanced pairs and an idle pair against the **final frozen** composition. That does not fit this 60-minute box, so it is scheduled, not claimed, and the old clock is not extended. |
+| **P9** *new* — bundle-ahead-of-installed | `/home/forge/bin` still carries the previous bytes while the bundle rows are the new ones. That inversion is documented in the MANIFEST header and closes the moment the owner installs — but until then a seat that copies from the bundle gets a `records-push` its `~/bin` adapters do not yet call.
+
+## What this round did NOT do
+
+No install. No publication to the real remote. No merge. No force push. `~/bin` was read but never
+written — the seven installed hashes in Astra's frozen table still verify. The only mutations
+outside `/var/tmp/forge` are the five bundle files and `MANIFEST.txt` on the skills branch
+`anvil/nrepl-test-alias`, committed as `forge-anvil <forge-anvil@anvil>` and fast-forward pushed to
+`fork`.
+
 ## Terminal receipt
 
 ```text
@@ -540,7 +794,8 @@ accepted=3/3 failures=0 censored=0 code_ref_violations=0
 lease_wait_old_s=660.417(reported 660 in every control) lease_wait_new_s=0
 field_request_to_visibility_s=unknown-with-reason (no install and no real-remote publication is permitted from this seat in this block)
 ship_seconds_saved=0-claimed transfer=untested
-build_wall_s=829 (00:00 block open -> 03:46:59Z candidate frozen) measurement_wall_s=5578 (6 controls 03:35:42-04:41:46Z + 3 pairs + idle pair 04:42:05-05:15:02Z) block_wall_s=12759 outcome=parked
-pending=P1 wrong-destination adapters in ~/bin (seat-receipt/canary-cell/verb-sentinel/tighten) · P2 records-push absent from the tighten bundle · P3 real-remote second encounter untested · P4 independent qualification · P5 the lock is per-checkout, not per-repository · P6 ship-v3.7 was staged past its last install, so install.sh from ship-v3.8 prints INSTALL NOT PROVEN for inherited reasons (the proven minimal composition is retained at /var/tmp/forge/squeeze/min-src)
+build_wall_s=829 (00:00 block open -> 03:46:59Z candidate frozen) measurement_wall_s=5578 (6 controls 03:35:42-04:41:46Z + 3 pairs + idle pair 04:42:05-05:15:02Z) block_wall_s=15159 outcome=parked-pending-delivery-qualification
+delivery=/var/tmp/forge/ship-v3.8-delivery records_push=72c8e4f13d6e8ee67e78a48281bb5f90c48434b9f657faba6790dd5cafd54e9a matrix=19/19 install=INSTALL OK v3.9 (235 rows, 0 mismatches, scratch DEST, real lease free, NOT installed) pair9_delta_s=660.190 bundle=731723d pushed to fork:anvil/nrepl-test-alias
+pending=P1 CLOSED (three adapters routed through records-push, source-scan ratchet red-first) · P2 CLOSED (records-push bundled + MANIFEST) · P3 real-remote second encounter untested · P4 steward pass over the DELIVERY tree still required · P5 the lock is per-checkout, not per-repository · P7 adapter behaviour cases · P8 fresh six-control/three-pair qualification of the final frozen composition · P9 bundle rows are ahead of the installed programs until the owner installs · P6 ship-v3.7 was staged past its last install, so install.sh from ship-v3.8 prints INSTALL NOT PROVEN for inherited reasons (the proven minimal composition is retained at /var/tmp/forge/squeeze/min-src)
 evidence=/var/tmp/forge/squeeze/out/*.record.txt + *.helper.txt (verbatim) + seal/ + this report
 ```
