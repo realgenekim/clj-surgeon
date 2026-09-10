@@ -171,18 +171,21 @@
                       start (if (= :forms (n/tag node)) 0 (+ (nth ls (dec row)) (dec col)))
                       end (if (= :forms (n/tag node)) (count source) (+ (nth ls (dec end-row)) (dec end-col)))]
                   {:tag (n/tag node) :start start :end end :line row
-                   :raw (subs source start end)
+                   :source source
                    :children (when (n/inner? node) (mapv wrap (n/children node)))}))]
         (wrap root)))
     (catch Exception e
       (refuse! (case kind :source :source-parse-error :payload :payload-parse-error :candidate-parse-error)
                [kind] (.getMessage e)
                {:line (or (:row (ex-data e)) 1) :column (or (:col (ex-data e)) 1)}))))
+(defn raw [node]
+  (when node (subs (:source node) (:start node) (:end node))))
+
 (def trivia-tags #{:whitespace :newline :comment :comma :uneval})
 (defn effective [node] (filterv #(not (trivia-tags (:tag %))) (:children node)))
 (defn unwrap [node]
   (if (#{:meta :meta*} (:tag node)) (recur (last (effective node))) node))
-(defn head [node] (:raw (first (effective (unwrap node)))))
+(defn head [node] (raw (first (effective (unwrap node)))))
 (def canonical {"clojure.core/def" "def" "clojure.core/defn" "defn"
                 "clojure.core/defn-" "defn-" "clojure.core/ns" "ns"
                 "clojure.test/deftest" "deftest" "clojure.test/testing" "testing"})
@@ -190,7 +193,7 @@
 (defn owner? [node owner]
   (let [form (unwrap node)]
     (and (= :list (:tag form)) (= (:kind owner) (kind form))
-         (= (:name owner) (:raw (unwrap (second (effective form))))))))
+         (= (:name owner) (raw (unwrap (second (effective form))))))))
 
 ;; @spec INSERT-FORMS-006
 ;; INTENT: INSERT-FORMS-006
@@ -217,7 +220,7 @@
                     {:container form :body (subvec children 2) :header (second children)})
       ("defn" "defn-")
       (let [tail (subvec children 2)
-            tail (if (str/starts-with? (or (:raw (first tail)) "") "\"") (subvec tail 1) tail)
+            tail (if (str/starts-with? (or (raw (first tail)) "") "\"") (subvec tail 1) tail)
             tail (if (= :map (:tag (first tail))) (subvec tail 1) tail)]
         (cond
           (= :vector (:tag (first tail)))
@@ -254,8 +257,8 @@
                          (let [match (one! (filterv (fn [node]
                                                       (let [cs (effective node) label (second cs)]
                                                         (and (= :list (:tag node)) (= "testing" (kind node))
-                                                             (str/starts-with? (or (:raw label) "") "\"")
-                                                             (= (:label segment) (edn/read-string (:raw label)))))) body)
+                                                             (str/starts-with? (or (raw label) "") "\"")
+                                                             (= (:label segment) (edn/read-string (raw label)))))) body)
                                            [:anchor :testing_path i])]
                            {:container match :body (subvec (effective match) 2) :header (second (effective match))}))
                        (body-of owner anchor) (map-indexed vector (:testing_path anchor)))
@@ -298,18 +301,20 @@
                      (count indentation)))
         m (if (seq measured) (apply min measured) 0)]
     (apply str
-           (for [[p s] entries]
-             (let [s (if (or (inside? p) (str/blank? s)) s
+           (for [[p original-line] entries]
+             (let [s original-line
+                   original-length (count s)
+                   s (if (or (inside? p) (str/blank? s)) s
                          (str (apply str (repeat c " ")) (subs s m)))
                    ending (re-find #"(?:\r\n|\n|\r)$" s)
-                   end-index (+ p (- (count (second (first (filter #(= p (first %)) entries)))) (count (or ending ""))))]
+                   end-index (+ p (- original-length (count (or ending ""))))]
                (if (and ending (not (inside? end-index)))
                  (str (subs s 0 (- (count s) (count ending))) newline) s))))))
 (defn spellings [root]
   (if (:children root)
-    (if (#{:string :multi-line :regex} (:tag root)) [(:raw root)]
+    (if (#{:string :multi-line :regex} (:tag root)) [(raw root)]
         (mapcat spellings (:children root)))
-    (when-not (trivia-tags (:tag root)) [(:raw root)])))
+    (when-not (trivia-tags (:tag root)) [(raw root)])))
 (defn root-inventory [root]
   (filterv #(not (#{:whitespace :newline :comment :comma} (:tag %))) (:children root)))
 
@@ -329,7 +334,7 @@
         retained (if top? (filterv #(not (some #{%} inserted-roots)) future) future)
         entries (mapv (fn [i a b]
                         {:before_index (inc i) :after_index (inc (.indexOf future b))
-                         :before_sha256 (sha (:raw a)) :after_sha256 (sha (:raw b))})
+                         :before_sha256 (sha (raw a)) :after_sha256 (sha (raw b))})
                       (range) originals retained)
         owner-index (.indexOf originals (:owner selection))
         other (if top? entries (vec (concat (take owner-index entries) (drop (inc owner-index) entries))))]
