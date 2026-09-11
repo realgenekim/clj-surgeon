@@ -181,13 +181,22 @@
    :owner "insert-forms"
    :witness "insert-forms-layout-literal-preservation"
    :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
-  {:type :unsupported-source :class :semantic
-   :native_failure "Lossy decoding can replace malformed UTF-8 bytes before an edit. This legacy type also includes capability-only BOM, conditional and extension refusals."
-   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
-   :native_method "Strictly decode and preserve disk bytes. For the capability-only variants sharing this legacy type, choose a deliberate native interval with the unsupported policy resolved."
-   :minimal_reproducer "The disk file contains byte 0xff; strict decoding must refuse without replacement."
+  {:type :unsupported-source :class :capability
+   :native_failure :none
+   :promise "Source outside the declared syntax, extension or newline capability refuses."
+   :native_method "Resolve the unsupported policy and choose a deliberate native interval."
+   :minimal_reproducer "Source has a leading BOM, a reader conditional, or a .cljc extension."
    :existing_check "unsupported-source"
    :owner "insert-forms"
    :witness "bounded-input-path-encoding"
-   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+   :retirement_condition "Admit a capability only with exact-byte acceptance evidence."}
+  {:type :malformed-utf8 :class :semantic
+   :native_failure "Lossy decoding can replace malformed UTF-8 bytes before an edit."
+   :promise "Malformed UTF-8 refuses without replacing original bytes."
+   :native_method "Strictly decode and preserve disk bytes."
+   :minimal_reproducer "The disk file contains byte 0xff."
+   :existing_check "malformed-utf8"
+   :owner "insert-forms"
+   :witness "bounded-input-path-encoding"
+   :retirement_condition "Retire only with an equivalent strict-decoding witness."}
  ]}

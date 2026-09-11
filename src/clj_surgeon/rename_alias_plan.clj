@@ -12,7 +12,7 @@
 
 (defn remedy [{:keys [error-type] :as data}]
   (case error-type
-    (:invalid-request :invalid-path :invalid-guard :unsupported-source
+    (:invalid-request :invalid-path :invalid-guard :unsupported-source :malformed-utf8
      :limit-exceeded :source-hash-mismatch :source-changed-before-commit
      :source-parse-error :candidate-parse-error :candidate-structure-mismatch
      :io-error :commit-outcome-unknown) (p/remedy data)

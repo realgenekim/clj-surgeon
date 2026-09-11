@@ -45,6 +45,7 @@
     :invalid-request (str "Follow the closed request schema at " (pr-str at) ".")
     :invalid-path "Choose a singly-linked regular .clj file inside the canonical workspace."
     :invalid-guard "Supply exactly one guard: sha256 or a complete path-bound read_receipt."
+    :malformed-utf8 "Repair the malformed UTF-8 bytes, then capture a fresh guard."
     :unsupported-source "Choose supported .clj source in UTF-8, with uniform LF or CRLF and no unsupported reader syntax."
     :unsupported-payload-syntax "Remove reader-discard, reader-eval, reader conditionals or BOM from the payload."
     :limit-exceeded "Reduce the input or projected receipt to the reported limit."
@@ -81,7 +82,7 @@
                     (.onMalformedInput CodingErrorAction/REPORT)
                     (.onUnmappableCharacter CodingErrorAction/REPORT))
            (ByteBuffer/wrap bs)))
-    (catch Exception _ (refuse! (if (= kind :request) :invalid-request :unsupported-source)
+    (catch Exception _ (refuse! (if (= kind :request) :invalid-request :malformed-utf8)
                          [kind] "Strict UTF-8 required."))))
 
 (defn complete-expression [stack]

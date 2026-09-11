@@ -7,6 +7,7 @@
             [clj-surgeon.insert-forms-support]
             [clojure.java.io]
             [clojure.edn]
+            [clojure.string]
 )
   (:import (java.nio.file Files)))
 
@@ -38,11 +39,16 @@
                             :workspace_root (.getCanonicalPath dir))]
           (doseq [[execute request] [[clj-surgeon.insert-forms/execute! insertion]
                                      [clj-surgeon.rename-alias/execute! rename]]]
-            (is (= [:unsupported-source [-1]]
+            (is (= [:malformed-utf8 [-1]]
                    [(:error-type (execute request))
                     (vec (java.nio.file.Files/readAllBytes (.toPath file)))])))))))
   (doseq [verb ["insert-forms" "rename-alias"]]
     (let [rows (:refusals (clojure.edn/read-string (slurp (str "docs/intent/" verb "/refusals.edn"))))]
+      (is (= {:unsupported-source [:capability :none]
+              :malformed-utf8 [:semantic "Lossy decoding can replace malformed UTF-8 bytes before an edit."]}
+             (into {} (for [{:keys [type class native_failure]} rows
+                            :when (#{:unsupported-source :malformed-utf8} type)]
+                        [type [class native_failure]]))) verb)
       (is (= (remedy-vocabulary verb) (set (map :type rows))) (str verb " refusal vocabulary must be complete"))
       (is (and (seq rows) (= (count rows) (count (set (map :type rows))))
                (every? (fn [row]

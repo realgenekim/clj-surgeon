@@ -71,3 +71,11 @@ The frozen contract is normative; IDs are permanent. Each boundary retains the f
 - [x] **RENAME-ALIAS-016**: When repository scope selects namespaces, eligibility shall ignore non-Clojure symlinks and skipped-file duplicate bindings; namespace-mutation tripwires shall apply only to selected namespaces outside comment-macro ancestry, while alias references inside comment bodies remain selected.
 
   Witnesses: `rename-alias-scope`, `rename-alias-scope`, `rename-alias-scope`, `rename-alias-scope`. Fable's one-paragraph §3 amendment authorizes the mutation exception; selected code symlinks still refuse and selected duplicate bindings remain ambiguous.
+
+Refusal vocabulary contract: `bounded-input-path-encoding` requires the registry key
+set to equal the rename remedy case constants, including shared transport failures.
+BOM, conditional, extension and newline exclusions are `:unsupported-source`
+capabilities (`native_failure :none`); malformed disk UTF-8 is `:malformed-utf8`,
+a semantic refusal witnessed through both disk entrances in the shared group.
+The column-one address witness pins `(line, column, preorder)` to `(1, 1, 0)`
+and `(2, 1, 9)`. Consumed alias tokens are single-line: `end_line` is parser `end-row`.

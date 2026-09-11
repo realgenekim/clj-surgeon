@@ -105,3 +105,9 @@ IDs are permanent. The September 11 witness map consolidates the original mechan
 - [x] **INSERT-FORMS-024**: When recovering a planned receipt, the recovery reader shall classify the target by comparing its digest with result_hash before source_hash.
 
   Witness: `insert-forms-publication-evidence`. Misreading: planned means no write and permits blind replay. Boundary: candidate present, original present, and unrelated bytes are distinct verdicts.
+
+Refusal vocabulary contract: `bounded-input-path-encoding` requires the registry key
+set to equal the planner remedy case constants, including payload parsing and
+transport failures. Capability-only source exclusions use `:unsupported-source`
+with class `:capability` and `native_failure :none`; strict decoding failures use
+`:malformed-utf8` with class `:semantic`, leaving disk bytes unchanged.
