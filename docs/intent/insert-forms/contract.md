@@ -353,3 +353,7 @@ e4-matched-arms.md` demonstrates the need for independent preservation evidence.
 Terminal law: trunk `docs/intent/mcp-operation-contract/mcp-operation-contract-design.md`
 “Exact Terminal Response” and `src/clj_surgeon/mcp_tool.clj` `exact-terminal-response`.
 No code or speed claim follows from this document; builder review/implementation gates remain.
+
+### clj-splice port (2026-09-11)
+
+Nested and literal intervals now come from clj-splice, with Surgeon retaining owner, body, header and layout policy. Mixed LF/CRLF is admitted: inserted separators use the first source newline (LF if absent), and every original byte is preserved. CRLF inside literals remains literal data. Bare CR, BOM and measured tab indentation admission remain deferred. The bounded lexical/shape preflight remains until rewrite-clj provides a parser-level resource budget; spans supplies literal discovery for indentation.
