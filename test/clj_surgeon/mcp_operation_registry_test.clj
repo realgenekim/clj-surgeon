@@ -65,6 +65,10 @@
     :verification-failed 'clj-surgeon.mcp-namespace-split-test/failing-proof-restores-the-entire-file-set
     :typed-refusal 'clj-surgeon.mcp-namespace-split-test/refused-callback-is-actionable-and-preserves-bytes
     :read 'clj-surgeon.mcp-namespace-split-test/plan-only-captures-once-and-never-publishes}
+   "rename_alias"
+   {:committed 'clj-surgeon.rename-alias-parity-test/rename-alias-cli-mcp-parity
+    :typed-refusal 'clj-surgeon.rename-alias-parity-test/rename-alias-cli-mcp-parity
+    :verification-failed 'clj-surgeon.rename-alias-test/rename-alias-transaction-faults}
    "insert_forms"
    {:committed 'clj-surgeon.insert-forms-parity-test/insert-forms-cli-mcp-parity
     :typed-refusal 'clj-surgeon.insert-forms-parity-test/insert-forms-cli-mcp-parity

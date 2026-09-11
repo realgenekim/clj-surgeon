@@ -256,14 +256,18 @@
 (defn tree [source kind]
   (try
     (let [root (parser/parse-string-all source) ls (starts source)]
-      (letfn [(wrap [node]
+      (letfn [(wrap [node parent-start]
                 (let [{:keys [row col end-row end-col]} (meta node)
-                      start (if (= :forms (n/tag node)) 0 (+ (nth ls (dec row)) (dec col)))
-                      end (if (= :forms (n/tag node)) (count source) (+ (nth ls (dec end-row)) (dec end-col)))]
+                      start (cond (= :forms (n/tag node)) 0
+                                  (= :map-qualifier (n/tag node)) (inc parent-start)
+                                  :else (+ (nth ls (dec row)) (dec col)))
+                      end (cond (= :forms (n/tag node)) (count source)
+                                (= :map-qualifier (n/tag node)) (+ start (count (n/string node)))
+                                :else (+ (nth ls (dec end-row)) (dec end-col)))]
                   {:tag (n/tag node) :start start :end end :line row
                    :source source
-                   :children (when (n/inner? node) (mapv wrap (n/children node)))}))]
-        (wrap root)))
+                   :children (when (n/inner? node) (mapv #(wrap % start) (n/children node)))}))]
+        (wrap root 0)))
     (catch Exception e
       (refuse! (case kind :source :source-parse-error :payload :payload-parse-error :candidate-parse-error)
                [kind] (.getMessage e)

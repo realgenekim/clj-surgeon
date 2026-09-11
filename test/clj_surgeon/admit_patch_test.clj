@@ -584,7 +584,7 @@
     (is (= 1 (count (filter #{"admit_clojure_patch"} names))))
     (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
             "transform_clojure" "relation_census" "alias_migration"
-            "helper_extraction" "namespace_split" "insert_forms"
+            "helper_extraction" "namespace_split" "insert_forms" "rename_alias"
             "admit_clojure_patch" "feature_thread" "require_change"]
            names)))
   (let [registered (into {} (map (juxt :name identity))
