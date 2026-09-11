@@ -2350,8 +2350,8 @@
                              content
                              (str/join "\n" content))
                       sentence (:error structured)]
-                  (if (= "insert_forms" (:name tool))
-                    (do (is (false? error?) "insertion domain refusals are ordinary tool results")
+                  (if (contains? #{"insert_forms" "rename_alias"} (:name tool))
+                    (do (is (false? error?) "request-file verbs publish domain refusals as ordinary tool results")
                         (is (= "refused" (:state structured))))
                     (is error? "the request must refuse"))
                   (is (false? (:ok structured)))
