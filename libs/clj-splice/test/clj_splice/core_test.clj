@@ -19,8 +19,9 @@
               "\uFEFF(ns x)" "'x `x ~x @x #tag [1]"])
 (defn corpus []
   (mapv slurp (sort-by str (filter #(.endsWith (.getName %) ".clj")
-                                  (file-seq (io/file "test/fixtures"))))))
+                                  (file-seq (io/file (io/resource "clj_splice/fixtures")))))))
 
+;; INTENT-TEST: SPLICE-001
 ;; @spec SPLICE-001
 (deftest original-intervals
   (let [source "\"é😀\" (def x 1)" inv (s/spans source)
@@ -29,7 +30,7 @@
            ((juxt :start :end :row :col :sha256) form)))
     (is (= "\"é😀\" ; hi\n(def x 1)" (s/splice source [9 9] "; hi\n"))))
   (doseq [source samples]
-    (let [{:keys [nodes roots gaps effective-count] :as inv} (s/spans source)
+    (let [{:keys [nodes roots gaps] :as inv} (s/spans source)
           parts (concat (mapcat vector (butlast gaps) (map nodes roots)) [(last gaps)])]
       (is (= [source inv]
              [(apply str (map #(slice source %) parts)) (s/recount source)]) source)))
@@ -49,8 +50,13 @@
     (is (= [[:string "\"a\r\nb\""] [:regex "#\"[()]\""]]
            (mapv #(vector (:literal %) (slice source %)) (filter :literal (:nodes inv)))))))
 
+;; INTENT-TEST: SPLICE-002
 ;; @spec SPLICE-002
 (deftest interval-boundaries
+  (is (= "a😀b" (s/splice "é😀z" [[[6 7] "b"] [[0 2] "a"]])))
+  (is (= :clj-splice/invalid-interval
+         (try (s/splice "abcd" [[[0 2] "x"] [[1 3] "y"]]) nil
+              (catch Exception e (:clj-splice/category (ex-data e))))))
   (doseq [[interval replacement expected] [[[0 0] "x" "xé😀z"] [[2 6] "a" "éaz"]
                                            [[7 7] "!" "é😀z!"] [[0 7] "" ""]]]
     (is (= expected (s/splice "é😀z" interval replacement))))
@@ -80,10 +86,17 @@
                          (update :start - 9) (update :end - 9)) (:roots after))])))))
 
 (deftest public-fence-and-runtime-pin
+  (let [ids (set (map (comp name :id) (read-string (slurp (io/resource "clj_splice/intents.edn")))))
+        code (slurp (io/resource "clj_splice/core.clj"))
+        tests (slurp (io/resource "clj_splice/core_test.clj"))]
+    (is (= [ids ids]
+           [(set (map second (re-seq #"(?m)^;; INTENT: (SPLICE-[0-9]+)" code)))
+            (set (map second (re-seq #"(?m)^;; INTENT-TEST: (SPLICE-[0-9]+)" tests)))])))
   (is (= '#{spans splice recount} (set (keys (ns-publics 'clj-splice.core)))))
   (if-let [bb (System/getProperty "babashka.version")]
-    ;; This release embeds rewrite-clj 1.2.55; never reload parser deftypes in SCI.
-    (is (= "1.13.219" bb))
+    ;; Release pins: 1.12.209 embeds 1.2.50; 1.13.219 embeds 1.2.55.
+    ;; Never reload parser deftypes in SCI.
+    (is (contains? #{"1.12.209" "1.13.219"} bb))
     (is (= "1.2.50" (get-in (read-string (slurp "deps.edn"))
                             [:deps 'rewrite-clj/rewrite-clj :mvn/version])))))
 

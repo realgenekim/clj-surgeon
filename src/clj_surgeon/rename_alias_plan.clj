@@ -120,7 +120,7 @@
 ;; @spec RENAME-ALIAS-014
 ;; INTENT: RENAME-ALIAS-014
 (defn site [node prefix alias role context file]
-  (let [source (:source node) start (+ (:start node) prefix)]
+  (let [start (+ (:start node) prefix)]
     (merge (select-keys node [:form_index :line :end_line :address])
            {:file file :scope_kind "root" :role role :context context
             :offset (get (:utf16->byte node) start) :length (alength (p/bytes alias))
@@ -199,8 +199,7 @@
       (when (seq capture)
         (p/refuse! :new-alias-capture [:new_alias] "New alias would capture existing syntax." {:file file :sites capture})))))
 (defn splice [source edits new]
-  (reduce (fn [s {:keys [offset length]}] (splice/splice s [offset (+ offset length)] new))
-          source (reverse (sort-by :offset edits))))
+  (splice/splice source (mapv (fn [{:keys [offset length]}] [[offset (+ offset length)] new]) edits)))
 (defn form-evidence
   "Namespace-independent form digests, partitioned by declared change ordinals."
   [before after changed-indices]

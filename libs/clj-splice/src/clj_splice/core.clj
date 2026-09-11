@@ -46,6 +46,7 @@
 
 (def ^:private trivia #{:whitespace :newline :comment :comma})
 
+;; INTENT: SPLICE-001
 ;; @spec SPLICE-001: intervals and gaps describe original bytes, never rendering.
 (defn spans
   "Return source once, a node table keyed by preorder ID, physical/effective root
@@ -97,19 +98,37 @@
                {:source source :nodes nodes :roots roots :effective-roots effective
                 :effective-count (count effective) :gaps gaps})))))
 
-;; @spec SPLICE-002: only the authorized half-open byte interval changes.
+(defn- splice-edits [source edits]
+  (let [index (index-source source) size (alength ^bytes (:bytes index))
+        _ (doseq [[interval replacement] edits]
+            (when-not (and (vector? interval) (= 2 (count interval))
+                           (every? integer? interval) (<= 0 (first interval) (second interval) size))
+              (fail! :clj-splice/invalid-interval {:interval interval :size size}))
+            (index-source replacement))
+        edits (sort-by (comp first first) edits)
+        wanted (set (mapcat first edits))
+        endpoints (into {} (keep-indexed (fn [i b] (when (and b (wanted b)) [b i]))
+                                         (:utf16->byte index)))]
+    (loop [pending edits previous 0 parts []]
+      (if-let [[[start end] replacement] (first pending)]
+        (do
+          (when-not (and (integer? start) (integer? end) (<= 0 start end size)
+                         (<= previous start))
+            (fail! :clj-splice/invalid-interval {:start start :end end :size size}))
+          (let [a (get endpoints start) b (get endpoints end)]
+            (when-not (and a b) (fail! :clj-splice/encoding-boundary {:start start :end end}))
+            (recur (next pending) end
+                   (conj parts (subs source (if (zero? previous) 0 (endpoints previous)) a) replacement))))
+        (apply str (conj parts (subs source (if (zero? previous) 0 (endpoints previous)))))))))
+
+;; INTENT: SPLICE-002
+;; @spec SPLICE-002: only the authorized half-open byte intervals change.
 (defn splice
   "Replace [start,end) in source using UTF-8 byte coordinates. Equal endpoints
-  insert. Bounds and Unicode scalar boundaries are mandatory for both endpoints."
-  [source [start end] replacement]
-  (let [index (index-source source) _ (index-source replacement)
-        size (alength ^bytes (:bytes index))]
-    (when-not (and (integer? start) (integer? end) (<= 0 start end size))
-      (fail! :clj-splice/invalid-interval {:start start :end end :size size}))
-    (let [endpoints (into {} (keep-indexed (fn [i b] (when (or (= b start) (= b end)) [b i])) (:utf16->byte index)))
-          a (get endpoints start) b (get endpoints end)]
-      (when-not (and a b) (fail! :clj-splice/encoding-boundary {:start start :end end}))
-      (str (subs source 0 a) replacement (subs source b)))))
+  insert. The two-argument batch accepts [[interval replacement] ...] against one
+  snapshot; intervals must not overlap. All endpoints must be scalar boundaries."
+  ([source interval replacement] (splice-edits source [[interval replacement]]))
+  ([source edits] (splice-edits source edits)))
 
 (defn recount
   "Parse candidate once, returning the same syntax projection as spans."
