@@ -53,6 +53,20 @@
 ;; INTENT-TEST: SPLICE-002
 ;; @spec SPLICE-002
 (deftest interval-boundaries
+  ;; Opus M2: boundary insertions are disjoint; interior points overlap.
+  (is (= ["01234YXabcdef" "01234YXabcdef" "012AB3456789abcdef" "012BA3456789abcdef"]
+         (mapv #(s/splice "0123456789abcdef" %)
+               [[[[5 10] "X"] [[5 5] "Y"]]
+                [[[5 5] "Y"] [[5 10] "X"]]
+                [[[3 3] "A"] [[3 3] "B"]]
+                [[[3 3] "B"] [[3 3] "A"]]])))
+  (is (= (repeat 4 :clj-splice/invalid-interval)
+         (mapv #(try (s/splice "0123456789abcdef" %) nil
+                     (catch Exception e (:clj-splice/category (ex-data e))))
+               [[[[5 10] "X"] [[6 6] "Y"]]
+                [[[6 6] "Y"] [[5 10] "X"]]
+                [[[5 10] "X"] [[7 12] "Y"]]
+                [[[7 12] "Y"] [[5 10] "X"]]])))
   (is (= "a😀b" (s/splice "é😀z" [[[6 7] "b"] [[0 2] "a"]])))
   (is (= :clj-splice/invalid-interval
          (try (s/splice "abcd" [[[0 2] "x"] [[1 3] "y"]]) nil

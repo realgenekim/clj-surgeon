@@ -105,7 +105,10 @@
                            (every? integer? interval) (<= 0 (first interval) (second interval) size))
               (fail! :clj-splice/invalid-interval {:interval interval :size size}))
             (index-source replacement))
-        edits (sort-by (comp first first) edits)
+        edits (->> edits
+                   (map-indexed (fn [i [[start end] :as edit]] [[start end i] edit]))
+                   (sort-by first)
+                   (map second))
         wanted (set (mapcat first edits))
         endpoints (into {} (keep-indexed (fn [i b] (when (and b (wanted b)) [b i]))
                                          (:utf16->byte index)))]
@@ -126,7 +129,11 @@
 (defn splice
   "Replace [start,end) in source using UTF-8 byte coordinates. Equal endpoints
   insert. The two-argument batch accepts [[interval replacement] ...] against one
-  snapshot; intervals must not overlap. All endpoints must be scalar boundaries."
+  snapshot, sorted by (start, end, argument-index). Equal points insert in argument
+  order. A pair overlaps exactly when end > other.start and start < other.end;
+  overlap refuses regardless of argument order. Points at interval boundaries
+  are allowed; points strictly inside intervals refuse. All endpoints must be
+  scalar boundaries."
   ([source interval replacement] (splice-edits source [[interval replacement]]))
   ([source edits] (splice-edits source edits)))
 
