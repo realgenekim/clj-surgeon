@@ -1,7 +1,8 @@
 {:paths ["src"]
 
  :deps
- {org.clojure/clojure {:mvn/version "1.12.1"}
+ {clj-splice/clj-splice {:local/root "libs/clj-splice"}
+  org.clojure/clojure {:mvn/version "1.12.1"}
   cheshire/cheshire {:mvn/version "5.13.0"}
   com.climate/claypoole {:mvn/version "1.1.4"}
   org.babashka/sci {:mvn/version "0.10.47"}

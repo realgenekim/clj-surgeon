@@ -66,3 +66,7 @@ It does not replay, finalize, or clean up automatically. The six new regression
 witnesses are INSERT-FORMS-019 through INSERT-FORMS-024. Final validation for this
 round is the complete insert suite, census regeneration and diff review, test-fast,
 and lint 0/0; landing-gate-prewarm belongs to the ship's fast lane.
+
+### clj-splice port (2026-09-11)
+
+Nested and literal intervals now come from clj-splice, with Surgeon retaining owner, body, header and layout policy. Mixed LF/CRLF is admitted: inserted separators use the first source newline (LF if absent), and every original byte is preserved. CRLF inside literals remains literal data. Bare CR, BOM and measured tab indentation admission remain deferred. The bounded lexical/shape preflight remains until rewrite-clj provides a parser-level resource budget; spans supplies literal discovery for indentation.

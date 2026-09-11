@@ -25,18 +25,17 @@
   {:scope "body" :owner {:kind kind :name name} :expect 1 :boundary boundary})
 (defn accepted [s req expected]
   (let [result (insert/plan s req)]
-    (is (= true (:ok result)) (pr-str result))
-    (is (= expected (:candidate result)))
-    (when (:ok result)
-      (is (= true (:ok (oracle/verify s (:candidate result) req (:receipt result))))))
+    (is (= [true expected true]
+           [(:ok result) (:candidate result)
+            (when (:ok result) (:ok (oracle/verify s (:candidate result) req (:receipt result))))])
+        (pr-str result))
     result))
 (defn refused [s req kind]
   (let [result (insert/plan s req)]
-    (is (= kind (:error-type result)) (pr-str result))
-    (is (= {:state "refused" :committed false :mutation_attempted false
-            :source_unchanged true}
-           (select-keys result [:state :committed :mutation_attempted :source_unchanged])))
-    (is (= s (or (:candidate result) s)))
+    (is (= [kind {:state "refused" :committed false :mutation_attempted false :source_unchanged true} s]
+           [(:error-type result)
+            (select-keys result [:state :committed :mutation_attempted :source_unchanged])
+            (or (:candidate result) s)]) (pr-str result))
     result))
 (defn with-file [s f]
   (let [dir (.toFile (Files/createTempDirectory

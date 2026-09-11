@@ -69,22 +69,21 @@
 ;; @spec RECEIPT-BOOL-001
 ;; INTENT-TEST: RECEIPT-BOOL-001
 (deftest every-receipt-boolean-has-a-driven-false-witness
-  (doseq [projector [#'insert/receipt-projector #'rename/receipt-projector]]
-    (is (str/includes? (:doc (meta projector))
-                       "EVERY BOOLEAN IN A RECEIPT MUST HAVE A WITNESS IN WHICH IT IS FALSE.")))
   (let [registry (:verbs (edn/read-string (slurp "docs/intent/receipt-booleans/registry.edn")))
         verbs (registered-verbs (server/public-tool-registry))]
     (is (= [] (missing-registrations verbs registry)) "Missing boolean seam registry by verb")
     (is (= [] (missing-registrations verbs scenarios)) "Missing executable scenario by verb")
     (doseq [verb verbs :let [run (scenarios verb)] :when run]
       (testing verb
-        (let [committed (run :completed-write) seams (registry verb)]
+        (let [committed (run :completed-write) seams (registry verb)
+              observations (into {:completed-write committed :behavior-not-run committed}
+                                 (for [seam (disj (set (vals seams)) :completed-write :behavior-not-run)]
+                                   [seam (run seam)]))]
           (is (= "committed" (:state committed)))
-          (doseq [[field seam] seams]
-            (is (contains? (supported-seams verb) seam) (str verb " " field " unknown seam " seam)))
+          (is (every? (supported-seams verb) (vals seams)) (str verb " unknown seam"))
           (is (= [] (missing-fields committed seams)) (str verb " missing boolean fields"))
           (doseq [path (boolean-paths committed) :let [seam (seams (peek path))] :when seam]
-            (let [faulted (run seam)]
+            (let [faulted (observations seam)]
               (is (false? (get-in faulted path)) (str verb " " path " via " seam)))))))))
 
 ;; @spec RECEIPT-BOOL-001

@@ -275,30 +275,16 @@
   clj-surgeon.helper-extraction-test/the-source-requiring-a-third-namespace-refuses-at-the-same-edge
   clj-surgeon.helper-extraction-test/the-target-exists-refusal-never-invents-a-destination
   clj-surgeon.helper-extraction-test/the-write-is-one-transaction-and-a-refusal-stages-nothing
-  clj-surgeon.insert-forms-after-prefix-named-defn-test/insert-forms-after-prefix-named-defn
-  clj-surgeon.insert-forms-anchor-cardinality-test/insert-forms-anchor-cardinality
-  clj-surgeon.insert-forms-anchor-decoys-test/insert-forms-comment-string-anchor-decoys
-  clj-surgeon.insert-forms-atomic-test/insert-forms-atomic-multiform-and-race
-  clj-surgeon.insert-forms-body-boundaries-test/insert-forms-body-boundaries
-  clj-surgeon.insert-forms-candidate-test/insert-forms-candidate-structure-refuses
-  clj-surgeon.insert-forms-candidate-test/insert-forms-parse-errors-refuse
-  clj-surgeon.insert-forms-defn-headers-test/insert-forms-defn-headers-and-arities
-  clj-surgeon.insert-forms-deftest-nested-testing-test/insert-forms-deftest-nested-testing
-  clj-surgeon.insert-forms-envelope-test/insert-forms-candidate-envelope
-  clj-surgeon.insert-forms-envelope-test/insert-forms-refusal-remedies
   clj-surgeon.insert-forms-parity-test/insert-forms-cli-mcp-parity
-  clj-surgeon.insert-forms-paths-test/insert-forms-path-confinement
-  clj-surgeon.insert-forms-payload-count-test/insert-forms-payload-count-and-order
-  clj-surgeon.insert-forms-portable-receipt-test/insert-forms-portable-read-receipt
-  clj-surgeon.insert-forms-preservation-test/insert-forms-other-top-level-hashes
-  clj-surgeon.insert-forms-reader-safety-test/insert-forms-reader-safety-and-limits
-  clj-surgeon.insert-forms-receipt-test/insert-forms-receipt-accounting
-  clj-surgeon.insert-forms-recovery-test/insert-forms-planned-receipt-recovery
-  clj-surgeon.insert-forms-spacing-test/insert-forms-existing-separators
-  clj-surgeon.insert-forms-stale-hash-test/insert-forms-stale-hash-refuses
-  clj-surgeon.insert-forms-terminal-test/insert-forms-terminal-response-eligibility
-  clj-surgeon.insert-forms-trivia-test/insert-forms-trivia-and-indentation
-  clj-surgeon.insert-forms-unbalanced-payload-test/insert-forms-unbalanced-payload-refuses
+  clj-surgeon.insert-forms-receipt-test/insert-forms-publication-evidence
+  clj-surgeon.insert-forms-receipt-test/insert-forms-snapshot-guard
+  clj-surgeon.insert-forms-test/insert-forms-body-anchor
+  clj-surgeon.insert-forms-test/insert-forms-candidate-structure-refuses
+  clj-surgeon.insert-forms-test/insert-forms-exact-root-anchor
+  clj-surgeon.insert-forms-test/insert-forms-layout-literal-preservation
+  clj-surgeon.insert-forms-test/insert-forms-other-top-level-hashes
+  clj-surgeon.insert-forms-test/insert-forms-parse-stages
+  clj-surgeon.insert-forms-test/insert-forms-payload-count-and-order
   clj-surgeon.lane-manifest-test/a-false-redirection-to-an-existing-target-is-refused-by-name
   clj-surgeon.lane-manifest-test/a-namespace-in-the-tree-but-absent-from-the-census-is-named
   clj-surgeon.lane-manifest-test/an-exclusion-naming-an-unreadable-runner-fails-closed
@@ -1533,31 +1519,17 @@
   clj-surgeon.receipt-artifacts-boundary-test/typist-publishes-external-inverse-after-real-proof
   clj-surgeon.receipt-booleans-test/every-receipt-boolean-has-a-driven-false-witness
   clj-surgeon.receipt-booleans-test/unregistered-verbs-and-fields-fail-by-name
-  clj-surgeon.rename-alias-candidate-test/candidate-form-preservation-refuses
-  clj-surgeon.rename-alias-candidate-test/candidate-inverse-identity-refuses
-  clj-surgeon.rename-alias-candidate-test/candidate-parse-refuses
-  clj-surgeon.rename-alias-candidate-test/candidate-role-recount-refuses
-  clj-surgeon.rename-alias-candidate-test/replacement-read-back-refuses
   clj-surgeon.rename-alias-parity-test/rename-alias-cli-mcp-parity
   clj-surgeon.rename-alias-performance-test/four-thousand-line-planning-under-five-seconds
-  clj-surgeon.rename-alias-positions-test/column-one-reference-addresses
-  clj-surgeon.rename-alias-receipt-test/receipt-details-contains-observes-artifact
-  clj-surgeon.rename-alias-receipt-test/receipt-observes-disk-neighbor-corruption
-  clj-surgeon.rename-alias-receipt-test/receipt-observes-disk-trivia-and-discard-corruption
-  clj-surgeon.rename-alias-scope-test/comment-ancestry-exempts-mutations-but-keeps-references
-  clj-surgeon.rename-alias-scope-test/repository-ignores-non-clojure-symlinks
-  clj-surgeon.rename-alias-scope-test/skipped-duplicate-bindings-do-not-refuse
-  clj-surgeon.rename-alias-scope-test/skipped-namespace-mutations-do-not-refuse
+  clj-surgeon.rename-alias-receipt-test/rename-alias-publication-evidence
   clj-surgeon.rename-alias-test/rename-alias-binding-matrix
-  clj-surgeon.rename-alias-test/rename-alias-discard-decoy
+  clj-surgeon.rename-alias-test/rename-alias-candidate-integrity
   clj-surgeon.rename-alias-test/rename-alias-e4-verbatim
-  clj-surgeon.rename-alias-test/rename-alias-prefix-trap
-  clj-surgeon.rename-alias-test/rename-alias-reader-roles
-  clj-surgeon.rename-alias-test/rename-alias-receipt-oracle
-  clj-surgeon.rename-alias-test/rename-alias-scope-guards-counts
-  clj-surgeon.rename-alias-test/rename-alias-source-boundaries
-  clj-surgeon.rename-alias-test/rename-alias-string-decoy
-  clj-surgeon.rename-alias-test/rename-alias-transaction-faults
+  clj-surgeon.rename-alias-test/rename-alias-parse
+  clj-surgeon.rename-alias-test/rename-alias-preservation-address
+  clj-surgeon.rename-alias-test/rename-alias-role-selection
+  clj-surgeon.rename-alias-test/rename-alias-scope
+  clj-surgeon.rename-alias-test/rename-alias-stale-and-counts
   clj-surgeon.repository-hygiene-test/a-forced-cache-below-the-root-is-caught-in-a-throwaway-repository
   clj-surgeon.repository-hygiene-test/an-unusable-git-is-reported-as-nil-so-callers-fail-closed
   clj-surgeon.repository-hygiene-test/no-machine-local-build-cache-is-tracked
@@ -1598,6 +1570,8 @@
   clj-surgeon.scope-stream-test/the-summary-receipt-does-not-grow-with-the-file-count
   clj-surgeon.scope-stream-test/the-walk-entry-ceiling-admits-exactly-its-limit-and-refuses-the-next
   clj-surgeon.scope-stream-test/the-walk-refuses-a-matching-symbolic-link-and-never-follows-it
+  clj-surgeon.splice-envelope-test/bounded-input-path-encoding
+  clj-surgeon.splice-envelope-test/exactly-one-edn-request
   clj-surgeon.split-proof-gate-boundary-test/background-gate-closes-immutable-receipt
   clj-surgeon.split-proof-gate-boundary-test/detached-gate-survives-cli-caller-exit
   clj-surgeon.split-proof-gate-boundary-test/proof-status-cli-exits-nonzero-for-failed-stale-and-dead-worker

@@ -1110,11 +1110,15 @@ txn-kernel-warning-check:
 # It now means the JVM FAST LANE. The babashka lane is unchanged in content
 # and moved to `make test-bb`; `make test` runs both. Docs written before
 # this date that say "make test-fast (647 tests)" are quoting the bb lane.
-test-fast:
+test-fast: test-clj-splice-bb
 	@# @spec TEST-ISO-001
 	@# @spec MCP-OP-TMPHYG-001
 	@# @spec MCP-OP-TMPHYG-002
 	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite fast
+
+.PHONY: test-clj-splice-bb
+test-clj-splice-bb:
+	cd libs/clj-splice && bb -e '(System/setProperty "java.io.tmpdir" (or (System/getenv "TMPDIR") (throw (ex-info "TMPDIR required" {})))) (require (quote clj-splice.test-runner)) (clj-splice.test-runner/-main)'
 
 test-integration:
 	@# @spec TEST-ISO-001

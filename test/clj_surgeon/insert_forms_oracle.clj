@@ -106,7 +106,7 @@
         target-column (+ (.codePointCount ^String source line-start start)
                          (if (and (not= :forms (get-in destination [:container :tag]))
                                   (empty? (:children destination))) 2 0))
-        newline (if (str/includes? source "\r\n") "\r\n" "\n")
+        newline (or (first (re-seq #"\r\n|\n" source)) "\n")
         literal-spans (for [entry (tree-seq (comp seq :entries) :entries (inventory payload))
                             :when (or (str/starts-with? (:text entry) "\"")
                                       (str/starts-with? (:text entry) "#\""))]
