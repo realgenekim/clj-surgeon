@@ -20,3 +20,12 @@ The independent oracle reuses the insertion oracle's independent inventory and
 hashing; its role selection is separately authored. Both share rewrite-clj,
 which remains a shared-parser limitation. Implementation gates are the focused
 witnesses, make test-fast, serialized lint 0/0 and an E4 request-to-oracle replay.
+
+Fix round 1 replaces plan-derived receipt claims with a projector over fresh disk
+observations. Declared site ordinals partition changed and protected root forms;
+raw CST form hashes remain independent of namespace resolution. Candidate-role,
+form-preservation, inverse and disk-read guards each have an injected-fault witness
+that fails when that guard alone is deleted. The shared
+[receipt boolean registry](../receipt-booleans/registry.edn) prevents a future
+versioned verb or nested boolean field from escaping false-witness coverage.
+Section 3 carries Fable's selected-namespace/comment-ancestry amendment.

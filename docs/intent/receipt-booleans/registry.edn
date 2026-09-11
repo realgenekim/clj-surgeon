@@ -1,4 +1,14 @@
 {:intent "RECEIPT-BOOL-001"
+ :id :RECEIPT-BOOL-001
+ :status :active
+ :ears "When a versioned write verb publishes receipt booleans, the test suite shall require an executable false witness for each field."
+ :misreadings ["An always-true computed expression counts as evidence."
+               "A field missing from a failure receipt is a false witness."
+               "A new verb can omit registration because the old two still pass."
+               "Already-false fields need no scenario."]
+ :boundaries ["Returned receipt and durable per-file evidence" "New verbs" "New nested fields" "Post-write external mutation"]
+ :tests [every-receipt-boolean-has-a-driven-false-witness unregistered-verbs-and-fields-fail-by-name]
+ :rationale "Opus found the same unwitnessed receipt-boolean class in insertion and alias rename, 2026-09-11."
  :rule "EVERY BOOLEAN IN A RECEIPT MUST HAVE A WITNESS IN WHICH IT IS FALSE."
  :verbs
  {"insert_forms"

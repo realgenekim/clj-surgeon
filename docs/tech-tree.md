@@ -703,3 +703,15 @@ zero isolation violations; serialized lint has zero errors/warnings.
 failures, the 20-line seam map, final E4 wall and remaining judgment boundaries:
 `/var/tmp/forge/rename-fx/astra-build-report.md`. No push, landing-gate-prewarm,
 behavioral proof or automatic routing admission.
+
+### 2026-09-11 — rename_alias Opus fix round 1
+
+Four previously unwitnessed guards now have independently deletion-tested fault
+seams. Receipt preservation uses declared change ordinals and observed disk hashes;
+the versioned-write boolean ratchet also exposed and corrected insertion's missing
+false observation fields. Binary-search line lookup fixes column-one evidence and
+reduces the generated 4,000-line planner run from 8.026 s to 1.474 s under a 1 GiB
+heap on this host. This is a regression bound, not a matched-native speed claim.
+Selected namespaces now own collision/mutation eligibility, with Fable's one-paragraph
+comment-ancestry amendment. Report: `/var/tmp/forge/rename-fx/astra-fix1-report.md`.
+No routing admission or Sol approval is implied.
