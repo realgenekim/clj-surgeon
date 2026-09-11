@@ -143,3 +143,21 @@ OBSERVED PRODUCERS ["run-bg/v3.9","ship/v3.9"]
 ```
 
 The board read the ledger, not the run log or resume note. The log is only an artifact pointer/digest in the already recorded terminal event. Raw proof artifacts and the executable proof script are under `/var/tmp/forge/ship-v3.9-fx/done/`.
+
+## Fix 1 — foreign-user Codex refusal (2026-09-11)
+
+The reported refusal on another UID's `codex --yolo` (PID 4010083) was unwarranted: `native_failure = none`. In `install.sh`, the `astra-or-ship` basename check now requires `os.stat(p).st_uid == os.getuid()` before matching argv[0..2]. Only the guarded alternate process-table fixture may override that owner from the first `Uid:` value in `status`, since fixture directories share the runner's UID. Real `/proc` uses directory ownership and does not read `environ` or `status`. The existing exact `$DEST/$f` argv-boundary check is unchanged.
+
+`test/install.sh` adds three named witnesses:
+
+- `same-uid-codex`: directory owned by the installing UID, `/opt/bin/codex --yolo` → REFUSED (exit 2).
+- `foreign-uid-codex`: same fixture directory ownership, `status` carrying a different UID, `codex --yolo` → INSTALL OK (exit 0), including installed-byte witnesses.
+- `same-uid-dest-ship`: same UID, `$DEST/ship` at argv[3] → REFUSED (exit 2) by the unchanged destination-path check, with no `astra-or-ship` match.
+
+`bash -n install.sh test/install.sh`, staged manifest verification, and the full `bash test/run.sh` passed (exit 0). All existing witnesses remain green. Transcript: `/var/tmp/forge/ship-v3.9-fx/fix1-tests.log`; artifacts: `/var/tmp/forge/ship-v3.9-fx/witness.GH8yWx0I`.
+
+`MANIFEST.staged.sha256` retains the unchanged installed-payload hashes and adds explicitly informational SHA-256 comments for `install.sh` and `test/install.sh`. These source-only files are not installed payloads, so those comments are not entries checked by `sha256sum -c`. Only `install.sh`, `test/install.sh`, `MANIFEST.staged.sha256`, and this report changed. The real install remains Fable's act:
+
+```sh
+env -u INSTALL_PROC_ROOT SRC=/var/tmp/forge/ship-v3.9 DEST=/home/forge/bin bash /var/tmp/forge/ship-v3.9/install.sh
+```
