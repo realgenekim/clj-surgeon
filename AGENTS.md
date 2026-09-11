@@ -49,7 +49,7 @@ Paths in scope:
 
 ## Linked-Intent Development (MANDATORY)
 
-Consult the `linked-intent-dev` skill for changes in the scoped paths. Walk
+Consult the `linked-intent-testing` skill for changes in the scoped paths. Walk
 each change through the arrow of intent in one direction:
 
 ```text

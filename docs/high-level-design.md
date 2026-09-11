@@ -1408,3 +1408,7 @@ complete guarded snapshot and reader-role prefix edits for a fixed library.
 It shares insertion's parsing, guards, publication and receipt seams. The
 [rename design](intent/rename-alias/design.md) owns the RED-first requirements
 and the exact E4 preservation specimen; no behavioral or routing admission follows.
+
+The stable CLI ships its local runtime dependency closure in an immutable copied
+package. The [package design](intent/cli-package/design.md) owns installed
+splice-verb availability and dependency-sensitive package identity.
