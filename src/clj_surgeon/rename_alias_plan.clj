@@ -121,12 +121,18 @@
   (into {} (for [[i loc] (map-indexed vector (take-while (complement z/end?) (iterate z/next (z/of-string source {:track-position? true}))))
                  :let [m (meta (z/node loc))] :when (:row m)]
              [[(:row m) (:col m) (n/tag (z/node loc))] i])))
+(defn line-index [starts position]
+  (loop [lo 0 hi (count starts)]
+    (if (< lo hi)
+      (let [mid (quot (+ lo hi) 2)]
+        (if (<= (nth starts mid) position) (recur (inc mid) hi) (recur lo mid)))
+      (max 0 (dec lo)))))
 (defn annotate [root source]
   (let [ad (addresses source) starts (p/starts source)]
     (letfn [(walk [x index]
-              (let [line (inc (count (filter #(<= % (:start x)) (rest starts))))
+              (let [line (inc (line-index starts (:start x)))
                     col (inc (- (:start x) (nth starts (dec line))))]
-                (assoc x :form_index index :line line :end_line (inc (count (filter #(< % (:end x)) (rest starts))))
+                (assoc x :form_index index :line line :end_line (inc (line-index starts (max (:start x) (dec (:end x)))))
                        :address {:preorder (get ad [line col (:tag x)])}
                        :children (mapv #(walk % index) (:children x)))))]
       (assoc root :children

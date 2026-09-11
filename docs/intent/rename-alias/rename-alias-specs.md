@@ -63,3 +63,7 @@ The frozen contract is normative; IDs are permanent. Each boundary retains the f
 - [x] **RENAME-ALIAS-014**: When a site begins at column one, its line and preorder shall identify that node, including the first line and refusal evidence.
 
   Witness: `column-one-reference-addresses`. Line starts are inclusive; end offsets remain exclusive.
+
+- [x] **RENAME-ALIAS-015**: When planning the generated 4,000-line ordinary-form fixture under a 1 GiB heap, the planner shall complete in under five seconds. Line lookup shall use binary search over cached line starts.
+
+  Witness: `four-thousand-line-planning-under-five-seconds` (battery lane; machine wall bound, no native-control claim).
