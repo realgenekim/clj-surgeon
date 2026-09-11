@@ -762,3 +762,7 @@ B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa;
 - Night's records: 2026-09-11-gene-report-morning.md (read first), cohort v2, gate-vs-prompt Claude + Codex reports, refusals rule + Astra review, clj-splice proposal/review/build/red-team/fix1, captains log through 08:1xZ.
 - Next (see the Gene report §4): long-context replication; Codex arm N + cost ratio + reproduce the .codex/config.toml delivery failure; ship v3.8 list + catalog registry before a third verb; upstream issue on Gene's word.
 - Discrepancy to settle: memory codex-seats-need-repo-level-mcp-config says repo-level .codex/config.toml delivers MCP; the Codex experiment's probes found it did not under codex exec with an isolated CODEX_HOME; MCP was delivered via CODEX_HOME instead.
+
+## STATE 2026-09-11T12:47Z — plan of record replaced: 2026-09-11-system-plan-of-record.md (three vertical blocks); Block 1 launching
+- Trunk eae1e432 = stable/2026-09-11.2 unchanged. Nothing else in flight. Gene: "Let's do it!!" on the tower; both answers in records; reconciliation adopted Astra's corrections (ledger observes, work protocol, stop-by-authority, executable resource contract, vertical slices) and kept Fable's five refusals.
+- Block 1 (run lifecycle + status slice) = ship v3.8 staged set, Astra building under /var/tmp/forge/ship-v3.8 (never installed by chaining; install then read INSTALL OK). Blocks 2 and 3 follow. Product measures ride the new spine after.
