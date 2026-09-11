@@ -59,3 +59,7 @@ The frozen contract is normative; IDs are permanent. Each boundary retains the f
 - [x] **RENAME-ALIAS-013**: When a receipt is projected, preservation shall compare every form outside the declared change set against namespace-independent hashes of read-back disk bytes; per-file and summary read-back hashes shall hash that same observation, and detail-section claims shall come from the published artifact. Every boolean in a receipt must have a witness in which it is false.
 
   Witnesses: `receipt-observes-disk-neighbor-corruption`, `receipt-observes-disk-trivia-and-discard-corruption`, `receipt-details-contains-observes-artifact`. A corrupted observation is retained in a recovery receipt, never promoted to committed proof or overwritten.
+
+- [x] **RENAME-ALIAS-014**: When a site begins at column one, its line and preorder shall identify that node, including the first line and refusal evidence.
+
+  Witness: `column-one-reference-addresses`. Line starts are inclusive; end offsets remain exclusive.

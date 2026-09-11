@@ -96,6 +96,7 @@
   {;; ---- :fast (49) ----
    'clj-surgeon.rename-alias-candidate-test :fast
    'clj-surgeon.rename-alias-receipt-test :fast
+   'clj-surgeon.rename-alias-positions-test :fast
    'clj-surgeon.rename-alias-test :fast
    'clj-surgeon.rename-alias-parity-test :battery
    'clj-surgeon.insert-forms-after-prefix-named-defn-test :fast

@@ -124,7 +124,7 @@
 (defn annotate [root source]
   (let [ad (addresses source) starts (p/starts source)]
     (letfn [(walk [x index]
-              (let [line (inc (count (filter #(< % (:start x)) (rest starts))))
+              (let [line (inc (count (filter #(<= % (:start x)) (rest starts))))
                     col (inc (- (:start x) (nth starts (dec line))))]
                 (assoc x :form_index index :line line :end_line (inc (count (filter #(< % (:end x)) (rest starts))))
                        :address {:preorder (get ad [line col (:tag x)])}
