@@ -756,3 +756,9 @@ B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa;
 - Next feature, before any third verb: the ship v3.8 list (inb-7f191b, inb-e0f549 manifest self-reference; inb-6fd761 branch-name checkout; inb-d6a0c3 orphaned reviewer; inb-5e5724; inb-78d458) and the catalog registry (inb-f29131). Seat memory: prewarm the exact tip before the first ship of a new tool/op.
 - Awaiting mayor: skiff install receipts (inb-8818c3, inb-436738, inb-f3bd1d superseded by inb-568532), skiff seat-prompt exception (inb-a14fd6), skiff census (inb-9be58c), CC prod promotion (inb-e7c772), Buster benchmark (inb-8bd9ad). Awaiting Gene: D1–D8 (inb-8c982e).
 - Parked with DoD: item 1, item 3, parity harness, squeeze delivery, public-candidate publication.
+
+## STATE 2026-09-11T08:05Z — trunk eae1e432 = stable/2026-09-11.2 (clj-splice + both verbs); nothing in flight; Gene report written
+- Trunk MCP/main = eae1e432. 7906 server pid 1696030 on it; CLI installed from it. Mayor asked: inb-ece087. Sublime state 9.
+- Night's records: 2026-09-11-gene-report-morning.md (read first), cohort v2, gate-vs-prompt Claude + Codex reports, refusals rule + Astra review, clj-splice proposal/review/build/red-team/fix1, captains log through 08:1xZ.
+- Next (see the Gene report §4): long-context replication; Codex arm N + cost ratio + reproduce the .codex/config.toml delivery failure; ship v3.8 list + catalog registry before a third verb; upstream issue on Gene's word.
+- Discrepancy to settle: memory codex-seats-need-repo-level-mcp-config says repo-level .codex/config.toml delivers MCP; the Codex experiment's probes found it did not under codex exec with an isolated CODEX_HOME; MCP was delivered via CODEX_HOME instead.
