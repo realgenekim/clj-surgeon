@@ -135,6 +135,26 @@
       (and (string? source_hash) (= target-hash source_hash)) :not-published
       :else :target-changed)))
 
+;; @spec RECEIPT-BOOL-001
+;; INTENT: RECEIPT-BOOL-001
+(defn receipt-projector
+  "EVERY BOOLEAN IN A RECEIPT MUST HAVE A WITNESS IN WHICH IT IS FALSE.
+   Recompute preservation and write verification from the observed disk text."
+  [request result observed]
+  (let [receipt (:receipt result)
+        roots (try (p/root-inventory (p/tree observed :candidate)) (catch Exception _ []))
+        entries (get-in result [:detail :preservation_entries])
+        owner-index (get-in result [:detail :resolved_anchor :owner :root_index])
+        other (if (= "top-level" (get-in request [:anchor :scope])) entries
+                  (remove #(= owner-index (:before_index %)) entries))
+        hash (when observed (p/sha observed))
+        unchanged (every? (fn [entry]
+                            (when-let [node (get roots (dec (:after_index entry)))]
+                              (= (:before_sha256 entry) (p/sha (p/raw node))))) other)]
+    {:preservation (assoc (:preservation receipt) :other_forms_unchanged (boolean unchanged))
+     :write_verified (= (:result_hash receipt) hash)
+     :read_back_hashes {(:file request) hash}}))
+
 ;; @spec INSERT-FORMS-014
 ;; INTENT: INSERT-FORMS-014
 (defn commit-plan! [request file source result hooks]
@@ -179,19 +199,23 @@
                        (p/refuse! :source-changed-before-commit [:guard] "Final source recheck differs."))
                      (reset! attempted true)
                      (file-ops/publish-prepared! path @stage)
-                     (hook! :external-after-write))))})]
-        (cond
-          (:ok outcome)
-          (merge {:state "committed" :committed true :mutation_attempted true :source_unchanged false :ok true}
-                 (:receipt result) @detail
-                 {:write_verified true :read_back_hashes {(:file request) (p/sha candidate)}})
-          (not @attempted)
-          (merge (p/refusal (ex-info (or (:error outcome) "Source changed before publication.")
-                              {:error-type :source-changed-before-commit :at [:guard]
-                               :expected (p/sha source) :actual (journal/sha256-file file)})) @detail)
-          (:rolled-back outcome)
-          (failed "rolled-back" true true :io-error (:error outcome) @detail)
-          :else (failed "recovery-required" true nil :commit-outcome-unknown (:error outcome) @detail)))
+                     (hook! :external-after-write))))})
+            observed (try (read-bounded file :candidate) (catch Exception _ nil))
+            facts (receipt-projector request result observed)]
+        (merge
+          (cond
+            (and (:ok outcome) (:write_verified facts))
+            (merge {:state "committed" :committed true :mutation_attempted true :source_unchanged false :ok true}
+                   (:receipt result) @detail
+                   {:write_verified true :read_back_hashes {(:file request) (p/sha candidate)}})
+            (not @attempted)
+            (merge (p/refusal (ex-info (or (:error outcome) "Source changed before publication.")
+                                {:error-type :source-changed-before-commit :at [:guard]
+                                 :expected (p/sha source) :actual (journal/sha256-file file)})) @detail)
+            (:rolled-back outcome)
+            (failed "rolled-back" true true :io-error (:error outcome) @detail)
+            :else (failed "recovery-required" true nil :commit-outcome-unknown (or (:error outcome) "Final disk observation differs.") @detail))
+          facts))
       (catch Exception e
         (cond
           @attempted (failed "recovery-required" true nil :commit-outcome-unknown (.getMessage e) @detail)
