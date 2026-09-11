@@ -1,0 +1,13 @@
+{:intent "RECEIPT-BOOL-001"
+ :rule "EVERY BOOLEAN IN A RECEIPT MUST HAVE A WITNESS IN WHICH IT IS FALSE."
+ :verbs
+ {"insert_forms"
+  {:committed :stage-failure :ok :stage-failure :mutation_attempted :stage-failure
+   :source_unchanged :completed-write :verification_complete :behavior-not-run
+   :write_verified :neighbor-corruption :other_forms_unchanged :neighbor-corruption}
+  "rename_alias"
+  {:committed :stage-failure :ok :stage-failure :mutation_attempted :stage-failure
+   :source_unchanged :completed-write :verification_complete :behavior-not-run
+   :write_verified :neighbor-corruption :other_forms_unchanged :neighbor-corruption
+   :partial_write :completed-write :gaps_unchanged :trivia-corruption
+   :discards_unchanged :discard-corruption}}}
