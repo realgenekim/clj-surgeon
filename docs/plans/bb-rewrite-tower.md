@@ -29,10 +29,11 @@ Expected verdicts are literals, independent of the runtime selector.
 
 Validation: bb library, twenty verb groups, new test-fast, final-tip prewarm,
 lint through ~/bin/clj-kondo and census diff. Resource-blocked checks remain
-OWED rather than being bypassed. In particular the base coordinator invokes
-Python for kernel slot admission, which the brief forbids; do not remove the
-admission fence merely to obtain a timing. The before coordinator measurement
-is OWED unless an authorized compatible entrance exists.
+OWED rather than being bypassed. The explicit authorization for Make entrances
+covers their existing kernel-slot helper. Do not remove that admission fence
+merely to obtain a timing. No Python implementation is added. The original JVM
+coordinator is measured from an owned detached eae1e432 worktree; the candidate
+coordinator runs under bb.
 
 Meter: five real edit-to-verdict observations each for focused cold JVM,
 focused cold bb and warm probe on the same portable namespace. Shell date

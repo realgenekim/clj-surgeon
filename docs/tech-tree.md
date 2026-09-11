@@ -1,5 +1,15 @@
 # clj-surgeon tech tree
 
+Block A, bb-rewrite-tower-local (2026-09-11): **BUILDING** babashka-first hybrid.
+The [inventory](plans/bb-first-inventory.md) separates runtime from cadence;
+execution overturned two load-only portable classifications. The bb coordinator
+retains the existing admission fence and JVM-only workers. The [inner meter](plans/edit-to-probe.md)
+observed medians 3.135 s cold JVM, 0.0459 s cold bb, 0.3539 s warm probe on
+forms-test. This is an ordered comment-edit measurement, not performance admission.
+Red, fixed and stale-generation probes retain pending cold proof. Installed
+eae1e432's launcher omitted clj-splice; dogfood used the worktree request-file
+CLI after that process-local repair failed. No automatic routing admission.
+
 *A living map: every capability shape we have tried or could try, its status, the receipt
 that set the status, and the live backlog of experiments. Opened 2026-09-02T12:15:40Z on Gene's request.
 Rules: a status changes only with a receipt (captain's log entry with commit timestamp, or a
