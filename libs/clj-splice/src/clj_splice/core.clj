@@ -138,6 +138,8 @@
   ([source edits] (splice-edits source edits)))
 
 (defn recount
-  "Parse candidate once, returning the same syntax projection as spans."
+  "Parse candidate once; return spans restricted to the structural projection:
+  :nodes, :roots, :effective-roots, :effective-count and :gaps.
+  Source and coordinate-index tables are omitted; node coordinates are retained."
   [candidate]
-  (spans candidate))
+  (select-keys (spans candidate) [:nodes :roots :effective-roots :effective-count :gaps]))

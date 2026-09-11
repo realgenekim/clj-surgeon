@@ -18,8 +18,10 @@
               "#?(:clj 1)" "#?@(:clj [1])" "#\"[()]\" \\(" "^:m (def x 1)"
               "\uFEFF(ns x)" "'x `x ~x @x #tag [1]"])
 (defn corpus []
-  (mapv slurp (sort-by str (filter #(.endsWith (.getName %) ".clj")
-                                  (file-seq (io/file (io/resource "clj_splice/fixtures")))))))
+  (mapv slurp (sort-by str (filter #(.endsWith (.getName %) ".clj.txt")
+                                  (file-seq (io/file (-> (io/resource "clj_splice/core_test.clj") io/file
+                                                         .getParentFile .getParentFile .getParentFile)
+                                                     "fixtures"))))))
 
 ;; INTENT-TEST: SPLICE-001
 ;; @spec SPLICE-001
@@ -32,7 +34,7 @@
   (doseq [source samples]
     (let [{:keys [nodes roots gaps] :as inv} (s/spans source)
           parts (concat (mapcat vector (butlast gaps) (map nodes roots)) [(last gaps)])]
-      (is (= [source inv]
+      (is (= [source (select-keys inv [:nodes :roots :effective-roots :effective-count :gaps])]
              [(apply str (map #(slice source %) parts)) (s/recount source)]) source)))
   (let [inv (s/spans "#_#_1 2 3")]
     (is (= [2 1 ["3"]] [(count (:roots inv)) (:effective-count inv)
