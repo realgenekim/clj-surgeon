@@ -1,15 +1,18 @@
 (ns clj-surgeon.rename-alias
   "Closed-snapshot shell over the shared insertion and transaction entrances."
-  (:require [clj-surgeon.insert-forms :as insert]
-            [clj-surgeon.insert-forms-plan :as p]
-            [clj-surgeon.rename-alias-plan :as planner]
-            [clj-surgeon.intent-transaction :as transaction]
-            [clj-surgeon.file-ops :as file-ops]
-            [clj-surgeon.receipt-artifacts :as artifacts]
-            [clj-surgeon.txn-journal :as journal]
-            [clojure.java.io :as io])
-  (:import [java.nio.file Files LinkOption]
-           [java.util UUID]))
+  (:require
+   [clj-surgeon.file-ops :as file-ops]
+   [clj-surgeon.insert-forms :as insert]
+   [clj-surgeon.insert-forms-plan :as p]
+   [clj-surgeon.intent-transaction :as transaction]
+   [clj-surgeon.receipt-artifacts :as artifacts]
+   [clj-surgeon.rename-alias-plan :as planner]
+   [clj-surgeon.txn-journal :as journal]
+   [clojure.edn :as edn]
+   [clojure.java.io :as io])
+  (:import
+   (java.nio.file Files LinkOption)
+   (java.util UUID)))
 
 (def plan planner/plan)
 (def receipt-text insert/receipt-text)
@@ -17,7 +20,7 @@
   (let [r (insert/read-request text)] (if (:error-type r) (assoc r :operation "rename_alias" :version 1) r)))
 (defn failure [attempted kind message]
   (assoc (insert/failed (if attempted "recovery-required" "failed") attempted (when-not attempted true)
-                       (if attempted :commit-outcome-unknown kind) message {})
+           (if attempted :commit-outcome-unknown kind) message {})
          :operation "rename_alias" :version 1 :at []
          :remedy (if attempted "Inspect the durable journal and fresh file hashes; never replay or overwrite external bytes."
                      "Repair the I/O failure and reconsider the guarded request.")))
@@ -64,12 +67,42 @@
      :pending_files (vec (remove (set replaced) (keys candidates)))
      :unresolved_files (vec (filter #(#{"unknown" "external"} (get-in states [% :state])) (keys states)))
      :file_states states}))
+(defn detail-sections [detail]
+  (let [present (set (mapcat keys (filter map? (tree-seq coll? seq detail))))]
+    (mapv name (filter present [:per_file :sites :preservation :inverse_splices]))))
+
+;; @spec RENAME-ALIAS-013
+;; INTENT: RENAME-ALIAS-013
+(defn receipt-projector
+  "EVERY BOOLEAN IN A RECEIPT MUST HAVE A WITNESS IN WHICH IT IS FALSE.
+   Project read-back facts from observed disk text and declared change ordinals;
+   candidate hashes are expectations, never observations."
+  [sources result disk]
+  (let [per-file
+        (mapv (fn [entry]
+                (let [f (:file entry) observed (get disk f)
+                      indices (set (map :form_index (:sites entry)))
+                      proof (try (planner/form-evidence (p/tree (sources f) :source)
+                                                        (p/tree observed :candidate) indices)
+                                 (catch Exception _
+                                   {:preservation {:other_forms_checked (get-in entry [:preservation :other_forms_checked])
+                                                   :other_forms_unchanged false :gaps_unchanged false :discards_unchanged false}}))]
+                  (merge entry proof {:read_back_hash (when observed (p/sha observed))})))
+              (get-in result [:detail :per_file]))
+        hashes (into {} (map (juxt :file :read_back_hash)) per-file)]
+    {:per_file per-file
+     :facts {:read_back_hashes (select-keys hashes (keys (:candidates result)))
+             :other_forms_checked (reduce + (map #(get-in % [:preservation :other_forms_checked]) per-file))
+             :other_forms_unchanged (every? #(get-in % [:preservation :other_forms_unchanged]) per-file)
+             :write_verified (every? #(= (:result_hash %) (:read_back_hash %)) per-file)}}))
+
 (defn write-detail! [path detail]
   (let [text (str (pr-str detail) "\n")]
     (io/make-parents path) (file-ops/atomic-write! path text)
     (when-not (= (p/sha text) (journal/sha256-file path))
       (throw (java.io.IOException. "Durable receipt read-back differs.")))
-    {:receipt_details_path path :receipt_hash (p/sha text)}))
+    {:receipt_details_path path :receipt_hash (p/sha text)
+     :details_contains (detail-sections (edn/read-string (slurp path :encoding "UTF-8")))}))
 (defn trim-summary [r]
   (let [r (if-let [e (:write_refusal_evidence r)]
             (assoc r :write_refusal_evidence
@@ -82,7 +115,7 @@
     (if (< (alength (p/bytes (pr-str r))) 3800) r
         (let [sections [:paths :per_file_counts :expected_count :actual_count :mismatched_files :read_back_hashes :transaction]
               r (reduce (fn [r k] (if (and (> (alength (p/bytes (pr-str r))) 3500) (coll? (get r k)))
-                                     (-> r (dissoc k) (update :details_contains (fnil conj []) (name k))) r)) r sections)]
+                                    (-> r (dissoc k) (update :details_contains (fnil conj []) (name k))) r)) r sections)]
           (if (> (alength (p/bytes (pr-str r))) 3800)
             (-> r (dissoc :write_refusal_evidence) (update :details_contains (fnil conj []) "write_refusal_evidence")) r)))))
 (defn persist-refusal! [r result]
@@ -110,7 +143,7 @@
         hook! (fn [k] (when-let [f (hooks k)] (f)))
         status #(transaction-status r sources candidates @replaced @restored)
         detail (atom (assoc (:detail result) :receipt (assoc (:receipt result) :state "planned" :committed false
-                                                            :mutation_attempted false :source_unchanged true :next_action "await-publication")))
+                                                        :mutation_attempted false :source_unchanged true :next_action "await-publication")))
         persist! (fn [receipt]
                    (swap! detail assoc :receipt receipt :transaction (status))
                    (reset! artifact (write-detail! path @detail)))
@@ -149,42 +182,43 @@
                      (swap! restored conj f)
                      (persist! (assoc (:receipt @detail) :state "rolling-back" :mutation_attempted true)))
                    (let [target (target! r f)]
-                       (when-not (and (= (identities f) (journal/path-identity target)) (= (p/sha (sources f)) (journal/sha256-file target)))
-                         (p/refuse! :source-changed-before-commit [:guards f] "Final target identity or digest differs."))
-                       (when (= 1 (count @replaced)) (hook! :second-replacement))
-                       (persist! (assoc (:receipt @detail) :state "publishing" :mutation_attempted true :source_unchanged nil :replacement_attempt f))
-                       (reset! attempted true)
-                       (file-ops/publish-prepared! target (@stages f))
-                       (hook! :external-after-write)
-                       (when (compare-and-set! read-hook-fired false true) (hook! :read-back))
-                       (when-not (= (p/sha text) (journal/sha256-file (target! r f)))
-                         (throw (java.io.IOException. "Replacement read-back differs.")))
-                       (swap! replaced conj f)
-                       (persist! (assoc (:receipt @detail) :state "publishing" :mutation_attempted true :source_unchanged false))
-                       (when (= (count @replaced) (count candidates))
-                         (recheck! r paths (merge sources candidates)
-                                   (merge identities (into {} (map (fn [p] [p (journal/path-identity (target! r p))]) (keys candidates)))))))))})
+                     (when-not (and (= (identities f) (journal/path-identity target)) (= (p/sha (sources f)) (journal/sha256-file target)))
+                       (p/refuse! :source-changed-before-commit [:guards f] "Final target identity or digest differs."))
+                     (when (= 1 (count @replaced)) (hook! :second-replacement))
+                     (persist! (assoc (:receipt @detail) :state "publishing" :mutation_attempted true :source_unchanged nil :replacement_attempt f))
+                     (reset! attempted true)
+                     (file-ops/publish-prepared! target (@stages f))
+                     (hook! :external-after-write)
+                     (when (compare-and-set! read-hook-fired false true) (hook! :read-back))
+                     (when-not (= (p/sha text) (journal/sha256-file (target! r f)))
+                       (throw (java.io.IOException. "Replacement read-back differs.")))
+                     (swap! replaced conj f)
+                     (persist! (assoc (:receipt @detail) :state "publishing" :mutation_attempted true :source_unchanged false))
+                     (when (= (count @replaced) (count candidates))
+                       (recheck! r paths (merge sources candidates)
+                                 (merge identities (into {} (map (fn [p] [p (journal/path-identity (target! r p))]) (keys candidates)))))))))})
+            disk (into {} (for [f paths] [f (try (read-source f) (catch Exception _ nil))]))
+            projected (receipt-projector sources result disk)
+            _ (swap! detail assoc :per_file (:per_file projected))
             snapshot (status)
             complete? (every? (fn [[f state]] (= (:state state) (if (contains? candidates f) "candidate" "original"))) (:file_states snapshot))
             receipt (cond
-                      (and (:ok outcome) complete?)
+                      (and (:ok outcome) complete? (get-in projected [:facts :write_verified]))
                       (merge {:state "committed" :committed true :mutation_attempted true :source_unchanged false :ok true}
-                             (:receipt result) {:write_verified true :read_back_hashes (into {} (map (fn [[f s]] [f (p/sha s)]) candidates))})
+                             (:receipt result) (:facts projected))
                       (not @attempted)
                       (planner/refuse (ex-info (:error outcome) {:error-type :source-changed-before-commit :at [:guards]}))
                       (:rolled-back outcome)
                       (assoc (failure true :io-error (:error outcome)) :state "rolled-back" :committed false :source_unchanged true
                              :error-type :io-error :next_action "retry-after-repair")
                       :else (failure true :commit-outcome-unknown (or (:error outcome) "Final snapshot changed.")))
-            receipt (assoc receipt :transaction snapshot :details_contains ["per_file" "sites" "preservation" "inverse_splices"])]
-        (when (:ok receipt)
-          (swap! detail update :per_file #(mapv (fn [x] (assoc x :read_back_hash (:result_hash x))) %)))
+            receipt (merge receipt (:facts projected) {:transaction snapshot})]
         (hook! :receipt-finalize)
         (persist! receipt)
         (trim-summary (merge receipt @artifact)))
       (catch Exception e
         (let [receipt (merge (if (and (not @attempted) (:error-type (ex-data e))) (planner/refuse e)
-                                (failure @attempted :io-error (.getMessage e)))
+                               (failure @attempted :io-error (.getMessage e)))
                              {:transaction (status)} @artifact)]
           (try (persist! receipt) (merge receipt @artifact)
                (catch Exception _ (assoc receipt :receipt_persistence_failed true)))))

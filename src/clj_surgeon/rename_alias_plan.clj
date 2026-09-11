@@ -206,22 +206,35 @@
         (p/refuse! :new-alias-capture [:new_alias] "New alias would capture existing syntax." {:file file :sites capture})))))
 (defn splice [source edits new]
   (reduce (fn [s {:keys [start end]}] (str (subs s 0 start) new (subs s end))) source (reverse (sort-by :start edits))))
-(defn form-proof [before after]
+(defn form-evidence
+  "Namespace-independent form digests, partitioned by declared change ordinals."
+  [before after changed-indices]
   (let [aa (p/root-inventory before) bb (p/root-inventory after)
-        rows (mapv (fn [i a b] {:before_index (inc i) :after_index (inc i)
-                                :before_sha256 (p/sha (p/raw a)) :after_sha256 (p/sha (p/raw b))}) (range) aa bb)
-        other (filterv #(= (:before_sha256 %) (:after_sha256 %)) rows)
-        changed (filterv #(not= (:before_sha256 %) (:after_sha256 %)) rows)
-        spans (fn [root tags] (map p/raw (filter #(tags (:tag %)) (tree-seq (comp seq :children) :children root))))
+        rows (mapv (fn [i a]
+                     {:before_index (inc i) :after_index (inc i)
+                      :before_sha256 (p/sha (p/raw a))
+                      :after_sha256 (when-let [b (get bb i)] (p/sha (p/raw b)))}) (range) aa)
+        other (filterv #(not (contains? changed-indices (:before_index %))) rows)
+        changed (filterv #(contains? changed-indices (:before_index %)) rows)
+        spans (fn [root tags] (mapv p/raw (filter #(tags (:tag %)) (tree-seq (comp seq :children) :children root))))
         gaps-a (spans before #{:whitespace :newline :comma :comment}) gaps-b (spans after #{:whitespace :newline :comma :comment})
         discards-a (spans before #{:uneval}) discards-b (spans after #{:uneval})
-        hashes (fn [a b] (mapv (fn [i x y] {:ordinal (inc i) :before_sha256 (p/sha x) :after_sha256 (p/sha y)}) (range) a b))]
-    (when-not (and (= (count aa) (count bb)) (= gaps-a gaps-b) (= discards-a discards-b))
-      (p/refuse! :candidate-structure-mismatch [:candidate] "Root/trivia/discard preservation failed."))
+        hashes (fn [a b] (mapv (fn [i] {:ordinal (inc i)
+                                        :before_sha256 (when-let [x (get a i)] (p/sha x))
+                                        :after_sha256 (when-let [y (get b i)] (p/sha y))})
+                               (range (max (count a) (count b)))))]
     {:forms_changed (count changed) :changed_forms changed
-     :preservation {:other_forms_checked (count other) :other_forms_unchanged (every? #(= (:before_sha256 %) (:after_sha256 %)) other)
+     :preservation {:other_forms_checked (count other)
+                    :other_forms_unchanged (and (= (count aa) (count bb))
+                                             (every? #(= (:before_sha256 %) (:after_sha256 %)) other))
                     :other_forms other :gaps_unchanged (= gaps-a gaps-b) :discards_unchanged (= discards-a discards-b)
                     :gaps (hashes gaps-a gaps-b) :discards (hashes discards-a discards-b)}}))
+(defn form-proof [before after changed-indices]
+  (let [evidence (form-evidence before after changed-indices)
+        preservation (:preservation evidence)]
+    (when-not (every? true? (map preservation [:other_forms_unchanged :gaps_unchanged :discards_unchanged]))
+      (p/refuse! :candidate-structure-mismatch [:candidate] "Root/trivia/discard preservation failed."))
+    evidence))
 (defn inverse-splices [source edits new]
   (loop [xs (sort-by :start edits) delta 0 result []]
     (if-let [x (first xs)]
@@ -261,7 +274,7 @@
       (when-not (= (p/sha source) (p/sha restored))
         (p/refuse! :candidate-structure-mismatch [:candidate file] "Inverse did not restore exact original bytes."))
       {:candidate candidate :sites sites
-       :detail (merge (form-proof root (*preservation-tree* after))
+       :detail (merge (form-proof root (*preservation-tree* after) (set (map :form_index sites)))
                       {:file file :references_changed (count refs) :bindings_changed 1
                        :source_hash (p/sha source) :result_hash (p/sha candidate)
                        :source_size (alength (p/bytes source)) :result_size (alength (p/bytes candidate))
@@ -307,7 +320,7 @@
         (let [plans (into (sorted-map) (for [f selected] [f (candidate! (sources f) (roots f) (infos f) request f)]))
               per-file (mapv (fn [f]
                                (or (get-in plans [f :detail])
-                                   (merge (form-proof (roots f) (roots f))
+                                   (merge (form-proof (roots f) (roots f) #{})
                                           {:file f :references_changed 0 :bindings_changed 0
                                            :source_hash (p/sha (sources f)) :result_hash (p/sha (sources f))
                                            :source_size (alength (p/bytes (sources f))) :result_size (alength (p/bytes (sources f)))

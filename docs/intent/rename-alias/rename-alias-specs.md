@@ -55,3 +55,7 @@ The frozen contract is normative; IDs are permanent. Each boundary retains the f
 - [x] **RENAME-ALIAS-012**: When candidate roles, preservation, inverse identity, parsing, or replacement read-back disagree, the operation shall report the exact candidate or I/O refusal and preserve or restore original disk bytes.
 
   Witnesses: `candidate-role-recount-refuses`, `candidate-form-preservation-refuses`, `candidate-inverse-identity-refuses`, `candidate-parse-refuses`, `replacement-read-back-refuses`. Each load-bearing guard is independently deletion-tested; faults enter through injected functions, never source edits inside a witness.
+
+- [x] **RENAME-ALIAS-013**: When a receipt is projected, preservation shall compare every form outside the declared change set against namespace-independent hashes of read-back disk bytes; per-file and summary read-back hashes shall hash that same observation, and detail-section claims shall come from the published artifact. Every boolean in a receipt must have a witness in which it is false.
+
+  Witnesses: `receipt-observes-disk-neighbor-corruption`, `receipt-observes-disk-trivia-and-discard-corruption`, `receipt-details-contains-observes-artifact`. A corrupted observation is retained in a recovery receipt, never promoted to committed proof or overwritten.
