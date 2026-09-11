@@ -226,11 +226,11 @@
    :owner "rename-alias"
    :witness "rename-alias-binding-matrix"
    :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
-  {:type :unsupported-source :class :capability
-   :native_failure :none
+  {:type :unsupported-source :class :semantic
+   :native_failure "Lossy decoding can replace malformed UTF-8 bytes before an edit. This legacy type also includes capability-only BOM, conditional and extension refusals."
    :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
-   :native_method "Use a deliberate native edit; strict UTF-8 decoding remains a separate required boundary witness under the same legacy type."
-   :minimal_reproducer "A leading BOM token or #?(:clj 1)."
+   :native_method "Strictly decode and preserve disk bytes. For the capability-only variants sharing this legacy type, choose a deliberate native interval with the unsupported policy resolved."
+   :minimal_reproducer "The disk file contains byte 0xff; strict decoding must refuse without replacement."
    :existing_check "unsupported-source"
    :owner "rename-alias"
    :witness "bounded-input-path-encoding"
