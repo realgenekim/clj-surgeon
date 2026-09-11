@@ -1,0 +1,12 @@
+;; gate-v2.edn -- the repository's OWN narrowest test entrance that EXISTS and
+;; RUNS at this task's :sha. Supersedes the :gate in meta.edn, which named an
+;; entrance (:clj-surgeon/test-deps + mcp-test-runner --ns) that postdates
+;; several of these commits. meta.edn is NOT edited: the cohort is running.
+{:task "R-04-namespace-split-require-cheshire"
+ :sha "a9da43441234f0f815ab9c9393ae03dda7fa82f4"
+ :gate-cmd "sh -c 'TMPDIR=${TMPDIR:-/var/tmp/forge}; o=$(mktemp $TMPDIR/gate.XXXXXX); clojure -J-Xmx1g -M:clj-surgeon/test-deps -m clj-surgeon.mcp-test-runner --ns clj-surgeon.namespace-split-test >\"$o\" 2>&1; rc=$?; cat \"$o\"; s=$(grep -cE \"^Ran [0-9]+ tests\" \"$o\"); f=$(grep -E \"^[0-9]+ failures?, [0-9]+ errors?\" \"$o\" | tail -1); rm -f \"$o\"; if [ \"$s\" != 0 ]; then case \"$f\" in \"0 failures, 0 errors\"*) exit 0;; *) exit 1;; esac; fi; exit $rc'"
+ :why "Unchanged from meta.edn: this commit has :clj-surgeon/test-deps, --ns, and the namespace is lane-declared. Restated with exit normalisation only."
+ :supersedes "clojure -J-Xmx1g -M:clj-surgeon/test-deps -m clj-surgeon.mcp-test-runner --ns clj-surgeon.namespace-split-test"
+ :old-exit 0
+ :proven-runnable? true
+ :captured-at "2026-09-11T00:13:30Z"}

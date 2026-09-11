@@ -1,0 +1,12 @@
+;; gate-v2.edn -- the repository's OWN narrowest test entrance that EXISTS and
+;; RUNS at this task's :sha. Supersedes the :gate in meta.edn, which named an
+;; entrance (:clj-surgeon/test-deps + mcp-test-runner --ns) that postdates
+;; several of these commits. meta.edn is NOT edited: the cohort is running.
+{:task "R-01-core-discovery-require-edn"
+ :sha "077f5a64dfc0b124a6326de37d27e1b1d3178057"
+ :gate-cmd "sh -c 'TMPDIR=${TMPDIR:-/var/tmp/forge}; o=$(mktemp $TMPDIR/gate.XXXXXX); bb test/run_all.clj >\"$o\" 2>&1; rc=$?; cat \"$o\"; s=$(grep -cE \"^Ran [0-9]+ tests\" \"$o\"); f=$(grep -E \"^[0-9]+ failures?, [0-9]+ errors?\" \"$o\" | tail -1); rm -f \"$o\"; if [ \"$s\" != 0 ]; then case \"$f\" in \"0 failures, 0 errors\"*) exit 0;; *) exit 1;; esac; fi; exit $rc'"
+ :why "clj-surgeon.core-discovery-test is not in the JVM mcp-test-runner list at this commit; it is in test/run_all.clj, the repository babashka suite (the same entrance the historical sessions used). Narrowest entrance that exists and covers the namespace."
+ :supersedes "clojure -J-Xmx1g -M:clj-surgeon/test-deps -m clj-surgeon.mcp-test-runner --ns clj-surgeon.core-discovery-test"
+ :old-exit 1
+ :proven-runnable? true
+ :captured-at "2026-09-11T00:15:53Z"}

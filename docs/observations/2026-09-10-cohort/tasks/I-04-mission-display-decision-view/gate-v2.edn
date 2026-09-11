@@ -1,0 +1,12 @@
+;; gate-v2.edn -- the repository's OWN narrowest test entrance that EXISTS and
+;; RUNS at this task's :sha. Supersedes the :gate in meta.edn, which named an
+;; entrance (:clj-surgeon/test-deps + mcp-test-runner --ns) that postdates
+;; several of these commits. meta.edn is NOT edited: the cohort is running.
+{:task "I-04-mission-display-decision-view"
+ :sha "2bbcc530df8270e52f800896ea5cf586e4bb9a37"
+ :gate-cmd "sh -c 'TMPDIR=${TMPDIR:-/var/tmp/forge}; o=$(mktemp $TMPDIR/gate.XXXXXX); clojure -J-Xmx1g -M:clj-surgeon/test-deps -e \"(require (quote clojure.test) (quote clj-surgeon.mission-display-test)) (let [r (clojure.test/run-tests (quote clj-surgeon.mission-display-test))] (shutdown-agents) (System/exit (if (zero? (+ (:fail r) (:error r))) 0 1)))\" >\"$o\" 2>&1; rc=$?; cat \"$o\"; s=$(grep -cE \"^Ran [0-9]+ tests\" \"$o\"); f=$(grep -E \"^[0-9]+ failures?, [0-9]+ errors?\" \"$o\" | tail -1); rm -f \"$o\"; if [ \"$s\" != 0 ]; then case \"$f\" in \"0 failures, 0 errors\"*) exit 0;; *) exit 1;; esac; fi; exit $rc'"
+ :why "clj-surgeon.mission-display-test carries no lane declaration at this commit, so the lane runner refuses it (exit 96). Caller-named entry point over :clj-surgeon/test-deps, as the repository own comment prescribes."
+ :supersedes "clojure -J-Xmx1g -M:clj-surgeon/test-deps -m clj-surgeon.mcp-test-runner --ns clj-surgeon.mission-display-test"
+ :old-exit 96
+ :proven-runnable? true
+ :captured-at "2026-09-11T00:14:02Z"}

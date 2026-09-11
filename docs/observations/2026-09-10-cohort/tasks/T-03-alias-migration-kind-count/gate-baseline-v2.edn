@@ -1,0 +1,45 @@
+;; gate-baseline-v2.edn -- the repository's OWN failures at :sha on the
+;; UNTOUCHED tree, under gate-v2.edn's command. A run's gate is GREEN when
+;; its failing set is a SUBSET of this one (no NEW failures), RED otherwise.
+{:task "T-03-alias-migration-kind-count"
+ :sha "827a751add48fbb8da364fbbf74544e1cf485d99"
+ :gate-cmd "sh -c 'TMPDIR=${TMPDIR:-/var/tmp/forge}; o=$(mktemp $TMPDIR/gate.XXXXXX); clojure -J-Xmx1g -M:clj-surgeon/test-deps -m clj-surgeon.mcp-test-runner --ns clj-surgeon.mcp-alias-migration-test >\"$o\" 2>&1; rc=$?; cat \"$o\"; s=$(grep -cE \"^Ran [0-9]+ tests\" \"$o\"); f=$(grep -E \"^[0-9]+ failures?, [0-9]+ errors?\" \"$o\" | tail -1); rm -f \"$o\"; if [ \"$s\" != 0 ]; then case \"$f\" in \"0 failures, 0 errors\"*) exit 0;; *) exit 1;; esac; fi; exit $rc'"
+ :runnable? true
+ :exit 1
+ :wall-seconds 77
+ :ran 137
+ :assertions 3164
+ :fail-count 135
+ :error-count 9
+ :summary "Ran 137 tests containing 3164 assertions. 135 failures, 9 errors"
+ :failing-set [
+  "a-control-directory-outside-the-workspace-is-not-called-the-workspaces"
+  "a-control-directory-outside-the-workspace-root-is-still-refused"
+  "a-lib-only-migration-rewrites-every-var-and-renames-the-namespace"
+  "a-mid-migration-refusal-sends-the-caller-to-the-receipt-not-a-retry"
+  "an-absolute-receipt-directory-outside-the-workspace-stays-legal"
+  "a-partial-rollback-counts-the-files-it-left-migrated"
+  "a-post-write-refusal-says-a-mutation-was-attempted"
+  "a-post-write-refusal-whose-rollback-failed-reports-a-migrated-tree"
+  "a-post-write-refusal-whose-rollback-succeeded-reports-a-restored-tree"
+  "a-pre-write-refusal-still-says-no-mutation-was-attempted"
+  "a-receipt-directory-inside-a-control-directory-refuses-before-any-write"
+  "a-receipt-directory-that-climbs-past-its-nearest-existing-ancestor-refuses"
+  "a-receipt-resolved-onto-a-name-without-edn-is-refused-not-reported-ok"
+  "a-recorded-document-whose-marker-is-gone-is-no-longer-this-writers-to-delete"
+  "a-recorded-document-whose-run-id-no-longer-names-it-is-left-alone"
+  "a-refusal-never-reads-the-undos-rolled-back-key-as-the-migrations"
+  "a-relative-receipt-directory-that-escapes-through-a-link-refuses"
+  "a-rollback-with-no-per-file-answer-still-over-states-the-migration"
+  "a-rolled-back-retire-failure-deletes-its-undo-receipt"
+  "detail-pruning-deletes-only-documents-it-can-prove-it-wrote"
+  "detail-retention-is-published-as-best-effort-because-peers-are-pruned"
+  "one-call-migrates-the-whole-fan-out-and-returns-one-constant-receipt"
+  "per-run-detail-files-are-retained-to-a-documented-bound"
+  "receipt-and-detail-namespaces-are-proved-disjoint-by-a-typed-guard"
+  "the-receipt-detail-collision-is-re-proved-after-the-directory-exists"
+  "the-receipt-detail-collision-normalises-a-remainder-that-does-not-exist"
+  "the-receipt-detail-collision-sees-through-a-symlinked-twin"
+  "the-refusal-enumeration-is-pinned-in-count-and-in-membership"
+ ]
+ :captured-at "2026-09-11T00:10:44Z"}

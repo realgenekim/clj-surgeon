@@ -1,0 +1,17 @@
+;; gate-baseline-v2.edn -- the repository's OWN failures at :sha on the
+;; UNTOUCHED tree, under gate-v2.edn's command. A run's gate is GREEN when
+;; its failing set is a SUBSET of this one (no NEW failures), RED otherwise.
+{:task "R-01-core-discovery-require-edn"
+ :sha "077f5a64dfc0b124a6326de37d27e1b1d3178057"
+ :gate-cmd "sh -c 'TMPDIR=${TMPDIR:-/var/tmp/forge}; o=$(mktemp $TMPDIR/gate.XXXXXX); bb test/run_all.clj >\"$o\" 2>&1; rc=$?; cat \"$o\"; s=$(grep -cE \"^Ran [0-9]+ tests\" \"$o\"); f=$(grep -E \"^[0-9]+ failures?, [0-9]+ errors?\" \"$o\" | tail -1); rm -f \"$o\"; if [ \"$s\" != 0 ]; then case \"$f\" in \"0 failures, 0 errors\"*) exit 0;; *) exit 1;; esac; fi; exit $rc'"
+ :runnable? true
+ :exit 0
+ :wall-seconds 106
+ :ran 806
+ :assertions 6688
+ :fail-count 0
+ :error-count 0
+ :summary "Ran 806 tests containing 6688 assertions. 0 failures, 0 errors"
+ :failing-set [
+ ]
+ :captured-at "2026-09-11T00:15:53Z"}

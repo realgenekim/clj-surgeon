@@ -299,3 +299,67 @@ tasks/<ID>/                   task.md meta.edn expected-output.clj
                               wrong-output.clj oracle.sh oracle-proof.log
                               oracle-notes.md pre-edit.clj reconstruction.json
 ```
+
+---
+
+## 9. Correction: the gate commands (added after the coordinator's baseline run)
+
+**I got the gates wrong, and the coordinator's baseline caught it.** I read
+`deps.edn` and `test/clj_surgeon/mcp_test_runner.clj` at **HEAD** and named that
+entrance in all twelve `meta.edn` files, without checking that it existed at
+each task's own `:sha`. It did not. Eight of twelve were unrunnable: `:clj-surgeon/test-deps`
+and the runner's `--ns` flag postdate the September 2–4 commits (at those shas
+`-main` is `[& _]` over a fixed namespace list), and `clj-surgeon.mission-test`
+/ `clj-surgeon.mission-display-test` carry no lane declaration at their shas, so
+the lane runner correctly refuses them with exit 96. This is the
+"source text is not execution" failure in its purest form: I verified an
+entrance by reading a file from the wrong snapshot.
+
+`meta.edn` and every other frozen task file are **unchanged** — the cohort is
+running and reads them (all 84 still verify against `tasks-frozen.sha256`). The
+correction lives beside them in **`tasks/<id>/gate-v2.edn`** (command + one-line
+`:why` + what it supersedes) and **`tasks/<id>/gate-baseline-v2.edn`** (the
+failing set at `:sha`). Every one was proven by running it on the untouched tree
+in a fresh detached worktree at that commit, one JVM at a time, `-J-Xmx1g`,
+under `/var/tmp/forge`; all worktrees were removed afterwards
+(`curation/gate_v2.sh`, logs in `curation/gate-v2-<id>.log`).
+
+**All twelve are now runnable** (a parseable `Ran N tests` line and exit 0 or 1):
+
+| task | old exit | new command | new exit | baseline failing |
+|---|---:|---|---:|---:|
+| T-01 | 1 | `-M:clj-surgeon/mcp-test` (suite) | 1 | 3 of 381 |
+| T-02 | 1 | `-M:clj-surgeon/mcp-test` (suite) | 0 | 0 of 493 |
+| T-03 | 145 | unchanged, `--ns mcp-alias-migration-test` | 1 | 28 of 137 |
+| T-04 | 0 | unchanged, `--ns lane-manifest-test` | 0 | 0 of 25 |
+| R-01 | 1 | `bb test/run_all.clj` | 0 | 0 of 806 |
+| R-02 | 1 | `bb test/run_all.clj` | 0 | 0 of 654 |
+| R-03 | 0 | unchanged, `--ns mcp-workspace-test` | 0 | 0 of 5 |
+| R-04 | 0 | unchanged, `--ns namespace-split-test` | 0 | 0 of 35 |
+| I-01 | 96 | `-M:clj-surgeon/test-deps -e (run-tests mission-test)` | 0 | 0 of 7 |
+| I-02 | 96 | `-M:clj-surgeon/test-deps -e (run-tests mission-test)` | 0 | 0 of 17 |
+| I-03 | 1 | `-M:clj-surgeon/memory-test` | 0 | 0 of 2 |
+| I-04 | 96 | `-M:clj-surgeon/test-deps -e (run-tests mission-display-test)` | 0 | 0 of 7 |
+
+Three things the scorer must carry forward:
+
+1. **The subset rule is not optional for T-01 and T-03.** T-01's `:sha` is a
+   commit literally titled *"red: outline read-path allocation and parse-count
+   witnesses"* — `outline-of-one-file-allocates-within-its-ceiling`, the very
+   test T-01 asks a caller to annotate, is **already failing** at baseline.
+   T-03 is red in 28 of 137. Score both as *no new failing test names*, never
+   as absolute green.
+2. **Exit codes are normalised by the printed summary, not by magnitude.** The
+   repository's runners `System/exit` with their own `(fail + error)` COUNT,
+   which for T-03 is 145 and collides with the signal range. Every `gate-v2`
+   command therefore wraps the repository command in a `sh -c` that reads
+   clojure.test's own summary: clean → 0, failures → 1, no summary at all
+   (crash, refusal, kill) → the raw exit code. **Nothing about what runs
+   changes**; only how the run reports itself.
+3. **Two of these gates are suites, not namespaces.** T-01 and T-02 run 381 and
+   493 tests because their commits offered no per-namespace entrance at all,
+   and R-01/R-02 run the 806/654-test babashka suite because their namespaces
+   live in `test/run_all.clj` rather than the JVM runner. Their baselines are
+   correspondingly broad, so a NEW failure anywhere in those suites will be
+   attributed to the task. That is a real sensitivity difference between tasks,
+   and it belongs in the write-up beside the results.

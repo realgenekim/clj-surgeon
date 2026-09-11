@@ -1,0 +1,20 @@
+;; gate-baseline-v2.edn -- the repository's OWN failures at :sha on the
+;; UNTOUCHED tree, under gate-v2.edn's command. A run's gate is GREEN when
+;; its failing set is a SUBSET of this one (no NEW failures), RED otherwise.
+{:task "T-01-outline-memory-spec-marker"
+ :sha "a8452157be7073a8f6b165a17dce6b316a14a9c2"
+ :gate-cmd "sh -c 'TMPDIR=${TMPDIR:-/var/tmp/forge}; o=$(mktemp $TMPDIR/gate.XXXXXX); clojure -J-Xmx1g -M:clj-surgeon/mcp-test >\"$o\" 2>&1; rc=$?; cat \"$o\"; s=$(grep -cE \"^Ran [0-9]+ tests\" \"$o\"); f=$(grep -E \"^[0-9]+ failures?, [0-9]+ errors?\" \"$o\" | tail -1); rm -f \"$o\"; if [ \"$s\" != 0 ]; then case \"$f\" in \"0 failures, 0 errors\"*) exit 0;; *) exit 1;; esac; fi; exit $rc'"
+ :runnable? true
+ :exit 1
+ :wall-seconds 56
+ :ran 381
+ :assertions 3953
+ :fail-count 3
+ :error-count 0
+ :summary "Ran 381 tests containing 3953 assertions. 3 failures, 0 errors"
+ :failing-set [
+  "exact-profile-compilation-is-project-owned-and-snapshot-bound"
+  "outline-of-one-file-allocates-within-its-ceiling"
+  "outline-parses-each-file-exactly-once"
+ ]
+ :captured-at "2026-09-11T00:11:44Z"}
