@@ -733,3 +733,16 @@ These are capability/correctness receipts, not native-control speed or routing
 admission. Normal fast/prewarm coordination conflicts with this seat's one-JVM/no-
 server execution fence; no landing gate or ship claim follows. Evidence and the
 named deletion map: /var/tmp/forge/splice-fx/astra-build-report.md and witness-map.md.
+
+### 2026-09-11T05:46:14.400103+00:00 — clj-splice fix round 1
+
+Opus GO-WITH-FIX exposed a missing payload-refusal row, argument-order-dependent
+interval acceptance, and an address witness that did not pin preorder values.
+The branch now compares both refusal registries to code remedy vocabulary, sorts
+batch intervals by start/end/argument index, and pins column-one addresses.
+Malformed UTF-8 is distinct from capability-only source refusals; recount returns
+only structural keys; frozen corpora are data outside source paths. Six RED logs
+and focused green receipts: `/var/tmp/forge/splice-fx/fix1-*.log`.
+Executed budget: rename 211 + insert 171 + shared/library 135 = 517 (ceiling 580).
+Final gate receipts and limitations belong to `/var/tmp/forge/splice-fx/astra-fix1-report.md`.
+This is correctness evidence on a branch, with no new performance or routing claim.

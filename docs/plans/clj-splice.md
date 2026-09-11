@@ -28,3 +28,7 @@ Frozen Opus before/after corpora (copied byte-for-byte; includes E4):
 | `test-fixtures/clj-splice/insert-f2-B.clj` | `3102fc3f1184b9c156cf6f2d3715d2ee245113ac8f6bbf00ce923355089d6944` | `/var/tmp/forge/insert-fx/redteam/bfix/f2/B.clj` |
 | `test-fixtures/clj-splice/insert-f3-A.clj` | `11b6f6a38a9028a188689f138e5287c5b41629c16c18914ac785b6014c573556` | `/var/tmp/forge/insert-fx/redteam/bfix/f3/A.clj` |
 | `test-fixtures/clj-splice/insert-f3-B.clj` | `6b2ce64aa334d655de87bf224265821b1bed33096900c24a80a16d9e4b070bda` | `/var/tmp/forge/insert-fx/redteam/bfix/f3/B.clj` |
+
+## Fix round 1 after Opus
+
+Contract (Opus M1–M3): refusal registries equal the remedy case vocabulary of each verb, including transport failures. Missing rows must fail the shared envelope group. Batch edits sort by start/end/argument index; strict pair overlap refuses, boundary points are legal, equal points preserve argument order. Column-one reference addresses pin line/column/preorder to 1/1/0 and 2/1/9. End-line adjustment is unreachable for consumed alias-reference tokens (single-line); remove it. Low fixes split malformed UTF-8 from capability-only unsupported source, restrict recount to structural keys, and move frozen data outside source roots. Witnesses stay in existing groups. RED logs precede each fix; final JVM/both bb library, 20 verb groups, test-fast, one prewarm, lint and census review required. No push.
