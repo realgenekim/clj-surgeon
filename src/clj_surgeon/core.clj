@@ -2169,6 +2169,17 @@
                             "Schema and example: docs/intent/insert-forms/contract.md."]
                     :examples ["clj-surgeon :insert-forms! :request-file insert.edn"
                                "clj-surgeon :op :insert-forms! :request-file insert.edn"] :category :write}
+    ;; @spec RENAME-ALIAS-011
+    ;; INTENT: RENAME-ALIAS-011
+    :rename-alias! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.rename-alias/cli!) opts))
+                    :desc "Rename a fixed library alias and its reader-role references across guarded files."
+                    :args {:request-file {:desc "Required: bounded EDN request containing version, workspace_root, scope, lib, old_alias, new_alias, expect, guards."}}
+                    :workflow ["Exactly one EDN map, no tags or trailing values. No preview, profile, formatter or automatic retry."
+                            "Inspect state, committed, mutation_attempted, source_unchanged first. Exit 0: committed and write_verified; 2: no-write refusal; 1: I/O, rollback or recovery failure."
+                            "verification_complete=false: only parse and byte preservation, never application behavior. Never blindly replay recovery-required."
+                            "Schema and example: docs/intent/rename-alias/contract.md."]
+                    :examples ["clj-surgeon :rename-alias! :request-file insert.edn"
+                               "clj-surgeon :op :rename-alias! :request-file insert.edn"] :category :write}
     ;; @spec NS-SPLIT-014
     ;; @spec NS-SPLIT-041
     :split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))
@@ -2931,7 +2942,7 @@
       ;; exit that OWNS the answer and this function does not own theirs.
       (= :unknown-operation (:error-type result)) (print-launcher-refusal! result)
       ;; @spec INSERT-FORMS-018
-      (= :insert-forms! canonical)
+      (#{:insert-forms! :rename-alias!} canonical)
       (do (print ((requiring-resolve 'clj-surgeon.insert-forms/receipt-text) result)) (flush))
       ;; @spec NS-SPLIT-057: nested pretty-print indentation is outside the data bound.
       (= :split-ns! canonical)
@@ -3108,7 +3119,7 @@
    list, and the refusal is generic for the same reason the collapse was: this
    fn builds the map before anything knows which op it is for."
   [args]
-  (let [args (if (= ":insert-forms!" (first args)) (cons ":op" args) args)
+  (let [args (if (#{":insert-forms!" ":rename-alias!"} (first args)) (cons ":op" args) args)
         help-flags #{"--help" "-h"}
         has-help?  (some help-flags args)
         kv-args    (remove help-flags args)]
@@ -3287,18 +3298,19 @@
       (when (and (map? result) (:error result))
         ;; @spec INSERT-FORMS-018
         ;; INTENT: INSERT-FORMS-018
-        (System/exit (if (and (= "insert_forms" (:operation result))
+        (System/exit (if (and (#{"insert_forms" "rename_alias"} (:operation result))
                               (= "refused" (:state result))) 2 1))))
     (catch Throwable t
-      (if (or (= ":insert-forms!" (first args))
-              (= [":op" ":insert-forms!"] (vec (take 2 args))))
+      (if (or (#{":insert-forms!" ":rename-alias!"} (first args))
+              (#{[":op" ":insert-forms!"] [":op" ":rename-alias!"]} (vec (take 2 args))))
         (let [parse-error? (#{:invalid-arguments :duplicate-argument :argument-nesting-too-deep} (:error-type (ex-data t)))
               receipt (if parse-error?
                         ((requiring-resolve 'clj-surgeon.insert-forms-plan/refusal)
                          (ex-info (.getMessage t) {:error-type :invalid-request :at []}))
                         ((requiring-resolve 'clj-surgeon.insert-forms/failed)
                          "recovery-required" true nil :commit-outcome-unknown (.getMessage t) {}))]
-          (print ((requiring-resolve 'clj-surgeon.insert-forms/receipt-text) receipt))
+          (print ((requiring-resolve 'clj-surgeon.insert-forms/receipt-text)
+                  (if (some #{":rename-alias!"} (take 2 args)) (assoc receipt :operation "rename_alias") receipt)))
           (flush)
           (System/exit (if parse-error? 2 1)))
         (do (print-launcher-refusal! (launcher-throwable-refusal t))

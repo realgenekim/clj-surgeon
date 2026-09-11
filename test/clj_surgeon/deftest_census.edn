@@ -1531,6 +1531,33 @@
   clj-surgeon.receipt-artifacts-boundary-test/standalone-require-change-publishes-external-detail-and-inverse
   clj-surgeon.receipt-artifacts-boundary-test/the-artifact-boundary-canonicalizes-both-sides
   clj-surgeon.receipt-artifacts-boundary-test/typist-publishes-external-inverse-after-real-proof
+  clj-surgeon.receipt-booleans-test/every-receipt-boolean-has-a-driven-false-witness
+  clj-surgeon.receipt-booleans-test/unregistered-verbs-and-fields-fail-by-name
+  clj-surgeon.rename-alias-candidate-test/candidate-form-preservation-refuses
+  clj-surgeon.rename-alias-candidate-test/candidate-inverse-identity-refuses
+  clj-surgeon.rename-alias-candidate-test/candidate-parse-refuses
+  clj-surgeon.rename-alias-candidate-test/candidate-role-recount-refuses
+  clj-surgeon.rename-alias-candidate-test/replacement-read-back-refuses
+  clj-surgeon.rename-alias-parity-test/rename-alias-cli-mcp-parity
+  clj-surgeon.rename-alias-performance-test/four-thousand-line-planning-under-five-seconds
+  clj-surgeon.rename-alias-positions-test/column-one-reference-addresses
+  clj-surgeon.rename-alias-receipt-test/receipt-details-contains-observes-artifact
+  clj-surgeon.rename-alias-receipt-test/receipt-observes-disk-neighbor-corruption
+  clj-surgeon.rename-alias-receipt-test/receipt-observes-disk-trivia-and-discard-corruption
+  clj-surgeon.rename-alias-scope-test/comment-ancestry-exempts-mutations-but-keeps-references
+  clj-surgeon.rename-alias-scope-test/repository-ignores-non-clojure-symlinks
+  clj-surgeon.rename-alias-scope-test/skipped-duplicate-bindings-do-not-refuse
+  clj-surgeon.rename-alias-scope-test/skipped-namespace-mutations-do-not-refuse
+  clj-surgeon.rename-alias-test/rename-alias-binding-matrix
+  clj-surgeon.rename-alias-test/rename-alias-discard-decoy
+  clj-surgeon.rename-alias-test/rename-alias-e4-verbatim
+  clj-surgeon.rename-alias-test/rename-alias-prefix-trap
+  clj-surgeon.rename-alias-test/rename-alias-reader-roles
+  clj-surgeon.rename-alias-test/rename-alias-receipt-oracle
+  clj-surgeon.rename-alias-test/rename-alias-scope-guards-counts
+  clj-surgeon.rename-alias-test/rename-alias-source-boundaries
+  clj-surgeon.rename-alias-test/rename-alias-string-decoy
+  clj-surgeon.rename-alias-test/rename-alias-transaction-faults
   clj-surgeon.repository-hygiene-test/a-forced-cache-below-the-root-is-caught-in-a-throwaway-repository
   clj-surgeon.repository-hygiene-test/an-unusable-git-is-reported-as-nil-so-callers-fail-closed
   clj-surgeon.repository-hygiene-test/no-machine-local-build-cache-is-tracked

@@ -18,13 +18,17 @@
 (defn inventory [s]
   (let [line-offsets (vec (cons 0 (map inc (keep-indexed #(when (= %2 \newline) %1) s))))
         coordinate (fn [row col] (+ (get line-offsets (dec row)) (dec col)))]
-    (letfn [(entry [n]
+    (letfn [(entry [n parent-start]
               (let [{:keys [row col end-row end-col]} (meta n)
-                    start (if (= :forms (node/tag n)) 0 (coordinate row col))
-                    end (if (= :forms (node/tag n)) (count s) (coordinate end-row end-col))]
+                    start (cond (= :forms (node/tag n)) 0
+                                (= :map-qualifier (node/tag n)) (inc parent-start)
+                                :else (coordinate row col))
+                    end (cond (= :forms (node/tag n)) (count s)
+                              (= :map-qualifier (node/tag n)) (+ start (count (node/string n)))
+                              :else (coordinate end-row end-col))]
                 {:node n :tag (node/tag n) :start start :end end :text (subs s start end)
-                 :entries (when (node/inner? n) (mapv entry (node/children n)))}))]
-      (entry (parser/parse-string-all s)))))
+                 :entries (when (node/inner? n) (mapv #(entry % start) (node/children n)))}))]
+      (entry (parser/parse-string-all s) 0))))
 (defn code [entry]
   (vec (remove #(#{:newline :whitespace :comma :comment :uneval} (:tag %)) (:entries entry))))
 (defn metadata-value [entry]
