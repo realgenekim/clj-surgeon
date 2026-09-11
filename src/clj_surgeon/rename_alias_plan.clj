@@ -10,7 +10,25 @@
    [clj-splice.core :as splice]
    [clj-surgeon.splice-projection :as projection]))
 
-(defn refuse [e] (assoc (p/refusal e) :operation "rename_alias" :version 1))
+(defn remedy [{:keys [error-type] :as data}]
+  (case error-type
+    (:invalid-request :invalid-path :invalid-guard :unsupported-source
+     :limit-exceeded :source-hash-mismatch :source-changed-before-commit
+     :source-parse-error :candidate-parse-error :candidate-structure-mismatch
+     :io-error :commit-outcome-unknown) (p/remedy data)
+    (:alias-collision :new-alias-capture) "Choose a fresh alias absent from bindings and references."
+    (:alias-library-mismatch :old-alias-absent) "Supply the library and alias bound in the selected namespace."
+    (:ambiguous-alias-binding :ambiguous-alias-namespace) "Resolve the ambiguous library or alias binding before retrying."
+    (:multiple-ns-forms :ns-not-found :unsupported-ns-shape :unsupported-libspec)
+    "Choose source with one supported static namespace declaration and require binding."
+    :unsupported-namespace-mutation "Resolve runtime namespace mutations before renaming."
+    (:scope-changed-before-commit :scope-file-count-mismatch) "Refresh the scope and its expected file count."
+    :expect-count-mismatch "Review the reported references and supply their intended count."
+    (p/remedy data)))
+
+(defn refuse [e]
+  (assoc (p/refusal e) :operation "rename_alias" :version 1 :remedy (remedy (ex-data e))))
+
 (defn simple-symbol? [s]
   (and (string? s)
        (try (let [v (edn/read-string s)] (and (symbol? v) (nil? (namespace v)) (= s (str v))))

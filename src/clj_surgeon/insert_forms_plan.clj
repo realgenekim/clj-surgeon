@@ -40,6 +40,8 @@
 ;; INTENT: INSERT-FORMS-022
 (defn remedy [{:keys [error-type candidates at]}]
   (case error-type
+    :io-error "Repair the I/O failure and reconsider the guarded request."
+    :commit-outcome-unknown "Inspect the durable journal and fresh file hashes before recovery."
     :invalid-request (str "Follow the closed request schema at " (pr-str at) ".")
     :invalid-path "Choose a singly-linked regular .clj file inside the canonical workspace."
     :invalid-guard "Supply exactly one guard: sha256 or a complete path-bound read_receipt."

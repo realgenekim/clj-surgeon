@@ -19,6 +19,14 @@
 ;; @spec INSERT-FORMS-015
 ;; INTENT-TEST: INSERT-FORMS-015
 
+(defn remedy-vocabulary [verb]
+  ;; Read code as data, never eval; case constants include grouped clauses.
+  (let [path (str "src/clj_surgeon/" (clojure.string/replace verb "-" "_") "_plan.clj")
+        forms (binding [*read-eval* false] (read-string (str "[" (slurp path) "]")))
+        remedy (first (filter #(and (seq? %) (= 'defn (first %)) (= 'remedy (second %))) forms))
+        dispatch (first (filter #(and (seq? %) (= 'case (first %))) (tree-seq coll? seq remedy)))]
+    (set (mapcat #(if (seq? %) % [%]) (take-nth 2 (butlast (drop 2 dispatch)))))))
+
 (deftest bounded-input-path-encoding
   (testing "Strict decoding is shared; both disk entrances retain their stage"
     (clj-surgeon.insert-forms-support/with-file clj-surgeon.rename-alias-test/header
@@ -35,6 +43,7 @@
                     (vec (java.nio.file.Files/readAllBytes (.toPath file)))])))))))
   (doseq [verb ["insert-forms" "rename-alias"]]
     (let [rows (:refusals (clojure.edn/read-string (slurp (str "docs/intent/" verb "/refusals.edn"))))]
+      (is (= (remedy-vocabulary verb) (set (map :type rows))) (str verb " refusal vocabulary must be complete"))
       (is (and (seq rows) (= (count rows) (count (set (map :type rows))))
                (every? (fn [row]
                          (and (every? #(contains? row %) [:promise :native_failure :native_method

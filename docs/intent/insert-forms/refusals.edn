@@ -109,6 +109,15 @@
    :owner "insert-forms"
    :witness "bounded-input-path-encoding"
    :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :payload-parse-error :class :semantic
+   :native_failure "An unbalanced payload can corrupt the source when inserted without parsing."
+   :promise "Malformed payload syntax refuses before publication."
+   :native_method "Parse the complete payload before selecting an insertion interval."
+   :minimal_reproducer "Payload text is (def x with forms 1."
+   :existing_check "payload-parse-error"
+   :owner "insert-forms"
+   :witness "insert-forms-parse-stages"
+   :retirement_condition "Retire only with an equivalent malformed-payload witness."}
   {:type :payload-form-count-mismatch :class :semantic
    :native_failure "Malformed or discarded payload content changes the promised insertion count."
    :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
