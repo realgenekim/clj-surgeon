@@ -376,16 +376,16 @@
     (is (= 4 (count (remove #(#{:whitespace :newline :comment :comma} (:tag %)) (:entries (clj-surgeon.insert-forms-oracle/inventory a))))))))
   (testing "column-one-reference-addresses"
   ;; Line 1 exercises the traversal directly: an executable file must start with ns.
-  (doseq [[source line] [["events/x" 1] [(str clj-surgeon.rename-alias-test/header "events/x\n") 2]]]
+  (doseq [[source line preorder] [["events/x" 1 0] [(str clj-surgeon.rename-alias-test/header "events/x\n") 2 9]]]
     (let [root (clj-surgeon.rename-alias-plan/source! source clj-surgeon.rename-alias-test/file)
           site (first (clj-surgeon.rename-alias-plan/references root nil "events" clj-surgeon.rename-alias-test/file))]
-      (is (= line (:line site)))
-      (is (= line (:end_line site)))
-      (is (integer? (get-in site [:address :preorder])))))
+      (is (= [line 1 line preorder]
+             [(:line site) (:col (first (filter #(= (:start site) (:start %)) (:children root))))
+              (:end_line site) (get-in site [:address :preorder])]))))
   (let [source (str clj-surgeon.rename-alias-test/header "events/x\n")
         result (clj-surgeon.rename-alias-plan/plan {clj-surgeon.rename-alias-test/file source} (clj-surgeon.rename-alias-test/request {clj-surgeon.rename-alias-test/file source} 0))
         site (first (get-in result [:write_refusal_evidence :items]))]
     (is (= :expect-count-mismatch (:error-type result)))
     (is (= 2 (:line site)))
-    (is (integer? (get-in site [:address :preorder])))))
+    (is (= 9 (get-in site [:address :preorder])))))
 )

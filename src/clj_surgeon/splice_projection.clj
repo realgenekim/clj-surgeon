@@ -14,12 +14,11 @@
         addresses (into {} (map-indexed (fn [i n] [(:id n) i])
                                         (remove #(trivia (:tag %)) (rest nodes))))]
     (letfn [(project [id ordinal]
-              (let [{:keys [children utf16-start utf16-end row end-row end-col] :as n} (nodes id)]
+              (let [{:keys [children utf16-start utf16-end row end-row] :as n} (nodes id)]
                 (assoc n :byte-start (:start n) :byte-end (:end n)
                        :start utf16-start :end utf16-end :source source
                        :utf16->byte utf16->byte :form_index ordinal :line row
-                       :end_line (when end-row (if (and (= 1 end-col) (> end-row (or row 0)))
-                                                 (dec end-row) end-row))
+                       :end_line end-row
                        :address {:preorder (when row (addresses id))}
                        :children (mapv #(project % ordinal) children))))]
       (assoc (project 0 0) :inventory inventory
