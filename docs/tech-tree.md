@@ -715,3 +715,21 @@ heap on this host. This is a regression bound, not a matched-native speed claim.
 Selected namespaces now own collision/mutation eligibility, with Fable's one-paragraph
 comment-ancestry amendment. Report: `/var/tmp/forge/rename-fx/astra-fix1-report.md`.
 No routing admission or Sol approval is implied.
+
+### 2026-09-11 — clj-splice shared byte inventory
+
+The approved three-function library now supplies original UTF-8 spans, interval
+replacement and shared-parser recount. Both verbs use its nested syntax inventory;
+Surgeon retains alias roles, owner/body/layout policy and compatibility addresses.
+Mixed LF/CRLF insertion preserves old bytes, using the first newline for added
+separators. Resource preflight remains because rewrite-clj exposes no parser budget.
+
+Consolidation preserves ten witness groups per verb: rename 215 expanded assertions,
+insertion 171, shared envelope/booleans/library 129, total 515. Each count is from
+an executed final-snapshot run. The library passes 57 assertions with identical
+projection hashes on JVM rewrite-clj 1.2.50, bb 1.12.209 (1.2.50), and bb 1.13.219
+(1.2.55). E4 remains 02332a74; insertion also reconstructs that exact frozen file.
+These are capability/correctness receipts, not native-control speed or routing
+admission. Normal fast/prewarm coordination conflicts with this seat's one-JVM/no-
+server execution fence; no landing gate or ship claim follows. Evidence and the
+named deletion map: /var/tmp/forge/splice-fx/astra-build-report.md and witness-map.md.

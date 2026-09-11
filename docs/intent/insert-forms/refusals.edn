@@ -1,0 +1,184 @@
+{:version 1
+ :operation "insert_forms"
+ :refusals [
+  {:type :anchor-ambiguous :class :semantic
+   :native_failure "A multi-arity function has more than one plausible body."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Select the intended arity explicitly."
+   :minimal_reproducer "defn a with [] and [x] arities, but no arity selection."
+   :existing_check "anchor-ambiguous"
+   :owner "insert-forms"
+   :witness "insert-forms-exact-root-anchor"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :anchor-index-out-of-range :class :semantic
+   :native_failure "An out-of-range child index can silently place text at a different boundary."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Count direct effective children and validate the boundary."
+   :minimal_reproducer "after-child 3 in a body containing one expression."
+   :existing_check "anchor-index-out-of-range"
+   :owner "insert-forms"
+   :witness "insert-forms-exact-root-anchor"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :anchor-multiple-matches :class :semantic
+   :native_failure "A name-only edit can change either of two distinct owners."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Disambiguate the intended owner before editing."
+   :minimal_reproducer "Two root defn a forms."
+   :existing_check "anchor-multiple-matches"
+   :owner "insert-forms"
+   :witness "insert-forms-exact-root-anchor"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :anchor-not-found :class :semantic
+   :native_failure "A name found only inside a string can be edited as if it were code."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Find exactly one real supported root/body anchor."
+   :minimal_reproducer "Only string \"(defn a [] 1)\" mentions the requested owner."
+   :existing_check "anchor-not-found"
+   :owner "insert-forms"
+   :witness "insert-forms-exact-root-anchor"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :candidate-parse-error :class :semantic
+   :native_failure "The generated replacement can leave unbalanced source."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Parse the full candidate before publication."
+   :minimal_reproducer "Inject candidate text \"(\"."
+   :existing_check "candidate-parse-error"
+   :owner "insert-forms"
+   :witness "insert-forms-parse-stages"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :candidate-structure-mismatch :class :semantic
+   :native_failure "A parse-valid edit can select the wrong body, rename the wrong role, or alter protected bytes."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Compare intended roles/placement and raw protected intervals, then check the inverse."
+   :minimal_reproducer "Inject wrong insertion offset or erase candidate alias roles."
+   :existing_check "candidate-structure-mismatch"
+   :owner "insert-forms"
+   :witness "insert-forms-candidate-structure-refuses"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :commit-outcome-unknown :class :semantic
+   :native_failure "Foreign bytes after replacement can be overwritten during blind rollback."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Preserve foreign bytes and retain the durable recovery identity."
+   :minimal_reproducer "Write foreign text after publication."
+   :existing_check "commit-outcome-unknown"
+   :owner "insert-forms"
+   :witness "insert-forms-publication-evidence"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :invalid-guard :class :protocol
+   :native_failure :none
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Obtain one complete path-bound guard."
+   :minimal_reproducer "Guard omits both :sha256 and :read_receipt."
+   :existing_check "invalid-guard"
+   :owner "insert-forms"
+   :witness "insert-forms-snapshot-guard"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :invalid-path :class :semantic
+   :native_failure "Editing a linked or escaped target can alter a different file than the authorized path."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Resolve the target identity and confinement before writing."
+   :minimal_reproducer "src/link.clj is a symlink to the guarded file."
+   :existing_check "invalid-path"
+   :owner "insert-forms"
+   :witness "bounded-input-path-encoding"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :invalid-request :class :protocol
+   :native_failure :none
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Reject before interpretation; native text editing has no request envelope."
+   :minimal_reproducer "A closed version-1 request with an extra :preview key."
+   :existing_check "invalid-request"
+   :owner "insert-forms"
+   :witness "bounded-input-path-encoding"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :io-error :class :semantic
+   :native_failure "A partial publication or unverifiable read-back can be reported as a successful write."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Observe disk hashes; restore owned bytes or report recovery honestly."
+   :minimal_reproducer "Inject staging or replacement read-back failure."
+   :existing_check "io-error"
+   :owner "insert-forms"
+   :witness "insert-forms-publication-evidence"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :limit-exceeded :class :resource
+   :native_failure :none
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Use a bounded smaller input or native patch; no parser budget exists."
+   :minimal_reproducer "A payload with 513 nested reader prefixes."
+   :existing_check "limit-exceeded"
+   :owner "insert-forms"
+   :witness "bounded-input-path-encoding"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :payload-form-count-mismatch :class :semantic
+   :native_failure "Malformed or discarded payload content changes the promised insertion count."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Count full effective payload forms and preserve their order."
+   :minimal_reproducer "payload {:text \"1 2\" :forms 1}."
+   :existing_check "payload-form-count-mismatch"
+   :owner "insert-forms"
+   :witness "insert-forms-payload-count-and-order"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :source-changed-before-commit :class :semantic
+   :native_failure "A concurrent write between plan and publication is overwritten."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Recheck identity and digest immediately before replacement."
+   :minimal_reproducer "Change target bytes in :before-recheck."
+   :existing_check "source-changed-before-commit"
+   :owner "insert-forms"
+   :witness "insert-forms-snapshot-guard"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :source-hash-mismatch :class :semantic
+   :native_failure "A stale patch overwrites a comment byte changed after inspection."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Compare the complete current bytes to the captured hash."
+   :minimal_reproducer "Capture a hash, append a comment, then submit the old hash."
+   :existing_check "source-hash-mismatch"
+   :owner "insert-forms"
+   :witness "insert-forms-snapshot-guard"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :source-parse-error :class :semantic
+   :native_failure "A broken source parse cannot establish the declared syntax anchor or count."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Repair syntax, capture a fresh snapshot, then edit."
+   :minimal_reproducer "Source is an unmatched opening parenthesis."
+   :existing_check "source-parse-error"
+   :owner "insert-forms"
+   :witness "insert-forms-parse-stages"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :unsupported-indentation :class :capability
+   :native_failure :none
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Choose spacing explicitly in a native patch."
+   :minimal_reproducer "Payload has measured leading tab indentation."
+   :existing_check "unsupported-indentation"
+   :owner "insert-forms"
+   :witness "insert-forms-layout-literal-preservation"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :unsupported-owner-shape :class :capability
+   :native_failure :none
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Inspect and choose the exact interval natively."
+   :minimal_reproducer "Anchor names an arbitrary macro body."
+   :existing_check "unsupported-owner-shape"
+   :owner "insert-forms"
+   :witness "insert-forms-body-anchor"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :unsupported-payload-syntax :class :capability
+   :native_failure :none
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Use a deliberate native patch when the v1 payload contract does not apply."
+   :minimal_reproducer "Payload is #_1."
+   :existing_check "unsupported-payload-syntax"
+   :owner "insert-forms"
+   :witness "insert-forms-layout-literal-preservation"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :unsupported-source :class :capability
+   :native_failure :none
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Use a deliberate native edit; strict UTF-8 decoding remains a separate required boundary witness under the same legacy type."
+   :minimal_reproducer "A leading BOM token or #?(:clj 1)."
+   :existing_check "unsupported-source"
+   :owner "insert-forms"
+   :witness "bounded-input-path-encoding"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+ ]}

@@ -351,22 +351,22 @@ Every refusal witness asserts exact error type AND all target bytes unchanged:
 - `rename-alias-e4-verbatim`: exact blob, 35 forms, 3 changed lines/forms (ns line 4,
   agenda-days line 153, schedule-page line 1112), 2 references, 29 unchanged route
   literals/22 templates, exact result hash; 31→2 refusal then corrected success.
-- `rename-alias-prefix-trap`: old ev, event/x untouched; arbitrary local Var names.
-- `rename-alias-reader-roles`: keyword alias/literal keyword, syntax quote/unquote,
+- `rename-alias-role-selection`: old ev, event/x untouched; arbitrary local Var names.
+- `rename-alias-role-selection`: keyword alias/literal keyword, syntax quote/unquote,
   ordinary/Var quote, metadata, destructuring, namespaced maps, tagged payload/tag.
-- `rename-alias-string-decoy`: strings/docstrings/escaped/multiline, regex, character,
+- `rename-alias-role-selection`: strings/docstrings/escaped/multiline, regex, character,
   semicolon comments untouched; comment-macro references renamed.
-- `rename-alias-discard-decoy`: nested #_, discarded ns/symbol/keyword preserved,
+- `rename-alias-role-selection`: nested #_, discarded ns/symbol/keyword preserved,
   zero count; malformed discard and global unsupported syntax refuse.
 - `rename-alias-binding-matrix`: collision/duplicate/capture/absent/wrong lib, :as-alias,
   :refer/:rename interactions, same-named locals, unused alias, no-op refusal.
-- `rename-alias-scope-guards-counts`: all scopes, skips, counts, membership drift,
+- `rename-alias-stale-and-counts`: all scopes, skips, counts, membership drift,
   complete true sites, hash/read-receipt guards and no automatic stale retry.
-- `rename-alias-source-boundaries`: absent/multiple/misplaced ns, CLJC/conditionals,
+- `rename-alias-parse`: absent/multiple/misplaced ns, CLJC/conditionals,
   dynamic ns, unknown libspecs, UTF-8/CRLF/BOM/limits and path confinement.
-- `rename-alias-transaction-faults`: stage/second-file replacement/read-back/restore/
+- `rename-alias-publication-evidence`: stage/second-file replacement/read-back/restore/
   receipt failures, external writes and crash recovery; truthful per-file/partial status.
-- `rename-alias-receipt-oracle`: form/gap hashes, addresses, bounded/full detail and
+- `rename-alias-preservation-address`: form/gap hashes, addresses, bounded/full detail and
   terminal omission; corrupt routes/comments/neighbors, miss a site, forge a digest.
 - `rename-alias-cli-mcp-parity`: actual request-file shorthand/:op, global/op help,
   parsing, stdout, exits, success/refusal/recovery against identical snapshots.
