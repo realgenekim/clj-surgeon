@@ -67,3 +67,7 @@ The frozen contract is normative; IDs are permanent. Each boundary retains the f
 - [x] **RENAME-ALIAS-015**: When planning the generated 4,000-line ordinary-form fixture under a 1 GiB heap, the planner shall complete in under five seconds. Line lookup shall use binary search over cached line starts.
 
   Witness: `four-thousand-line-planning-under-five-seconds` (battery lane; machine wall bound, no native-control claim).
+
+- [x] **RENAME-ALIAS-016**: When repository scope selects namespaces, eligibility shall ignore non-Clojure symlinks and skipped-file duplicate bindings; namespace-mutation tripwires shall apply only to selected namespaces outside comment-macro ancestry, while alias references inside comment bodies remain selected.
+
+  Witnesses: `repository-ignores-non-clojure-symlinks`, `comment-ancestry-exempts-mutations-but-keeps-references`, `skipped-namespace-mutations-do-not-refuse`, `skipped-duplicate-bindings-do-not-refuse`. Fable's one-paragraph §3 amendment authorizes the mutation exception; selected code symlinks still refuse and selected duplicate bindings remain ambiguous.

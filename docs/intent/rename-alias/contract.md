@@ -131,10 +131,15 @@ Effective new_alias/x, ::new_alias/x or #::new_alias{} without a binding =>
 keywords, tag names and discards do not trigger capture. Explicit-scope missing old
 => :old-alias-absent; old bound to another lib => `:alias-library-mismatch`.
 
-Refuse effective core in-ns/alias/ns-unalias/runtime require forms outside ns:
-`:unsupported-namespace-mutation`. Recognize unqualified/clojure.core heads outside
-ordinary quote; this is a conservative syntactic tripwire. Computed/macro-hidden
-namespace mutation and runtime alias manipulation are outside the guarantee.
+Refuse effective core in-ns/alias/ns-unalias/runtime require forms outside ns
+only in SELECTED namespaces: `:unsupported-namespace-mutation`. Recognize
+unqualified/clojure.core heads outside ordinary quote, ignoring forms whose
+ancestry includes `comment` or `clojure.core/comment`; alias-reference traversal
+continues inside those bodies, so `(comment (events/x))` still counts and is
+rewritten as code syntax under §2. This is a conservative syntactic tripwire;
+computed/macro-hidden namespace mutation and runtime alias manipulation remain
+outside the guarantee. (Fable amendment, 2026-09-11.)
+
 .cljs/.cljc, #?/#?@ and reader-eval refuse `:unsupported-source` before any write;
 no platform branch selection in v1. Parse failure => `:source-parse-error` with
 file/line/column. Path/encoding/limit/schema errors reuse insertion types/remedies.

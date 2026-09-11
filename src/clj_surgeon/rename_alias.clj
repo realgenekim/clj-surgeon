@@ -41,7 +41,7 @@
                                    (let [path (.toPath f) relative (str (.relativize root path))]
                                      (cond
                                        (= ".git" (.getName f)) []
-                                       (Files/isSymbolicLink path) (p/refuse! :invalid-path [:scope] "Repository scope contains a symlink." {:file relative})
+                                       (Files/isSymbolicLink path) (if (re-find #"\.clj[sc]?$" (.getName f)) [relative] [])
                                        (.isDirectory f) (visit f)
                                        (re-find #"\.clj[sc]?$" (.getName f)) [relative]
                                        :else [])))

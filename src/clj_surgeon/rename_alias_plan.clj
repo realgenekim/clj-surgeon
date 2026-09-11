@@ -121,12 +121,16 @@
   (into {} (for [[i loc] (map-indexed vector (take-while (complement z/end?) (iterate z/next (z/of-string source {:track-position? true}))))
                  :let [m (meta (z/node loc))] :when (:row m)]
              [[(:row m) (:col m) (n/tag (z/node loc))] i])))
+;; @spec RENAME-ALIAS-015
+;; INTENT: RENAME-ALIAS-015
 (defn line-index [starts position]
   (loop [lo 0 hi (count starts)]
     (if (< lo hi)
       (let [mid (quot (+ lo hi) 2)]
         (if (<= (nth starts mid) position) (recur (inc mid) hi) (recur lo mid)))
       (max 0 (dec lo)))))
+;; @spec RENAME-ALIAS-014
+;; INTENT: RENAME-ALIAS-014
 (defn annotate [root source]
   (let [ad (addresses source) starts (p/starts source)]
     (letfn [(walk [x index]
@@ -155,11 +159,13 @@
 ;; INTENT: RENAME-ALIAS-003
 ;; INTENT: RENAME-ALIAS-004
 ;; INTENT: RENAME-ALIAS-005
+;; @spec RENAME-ALIAS-016
+;; INTENT: RENAME-ALIAS-016
 (defn references [root owner alias file]
   (let [declarations (set (map :start (filter #(and (= :list (:tag %))
                                                  (#{":require" ":import" ":refer-clojure" ":gen-class"} (p/head %)))
                                         (p/effective (p/unwrap owner)))))]
-    (letfn [(walk [x contexts tag?]
+    (letfn [(walk [x contexts tag? commented?]
               (let [tag (:tag x) text (p/raw x)
                     contexts (if (and (= :list tag) (#{"quote" "clojure.core/quote"} (p/head x)))
                                (conj contexts "quote")
@@ -168,6 +174,7 @@
                                  :syntax-quote (conj contexts "syntax-quote")
                                  (:unquote :unquote-splicing) (vec (remove #{"syntax-quote"} contexts))
                                  (:meta :meta*) (conj contexts "metadata") contexts))
+                    commented? (or commented? (and (= :list tag) (#{"comment" "clojure.core/comment"} (p/head x))))
                     context (peek contexts) children (p/effective x)
                     prefix (cond
                              (and (not tag?) (= :token tag) (str/starts-with? text (str alias "/"))) [0 "symbol"]
@@ -176,12 +183,12 @@
                 (cond
                   (= :uneval tag) []
                   (declarations (:start x)) []
-                  (and (= :list tag) (not= "quote" context)
+                  (and (= :list tag) (not commented?) (not= "quote" context)
                        (#{"in-ns" "alias" "ns-unalias" "require" "clojure.core/in-ns" "clojure.core/alias" "clojure.core/ns-unalias" "clojure.core/require"} (p/head x)))
                   (p/refuse! :unsupported-namespace-mutation [:source file] "Runtime namespace mutation is unsupported." {:file file :line (:line x)})
                   :else (concat (when prefix [(site x (first prefix) alias (second prefix) context file)])
-                                (mapcat (fn [i c] (walk c contexts (and (= :reader-macro tag) (zero? i)))) (range) children)))))]
-      (vec (mapcat #(walk % ["ordinary"] false) (:children root))))))
+                                (mapcat (fn [i c] (walk c contexts (and (= :reader-macro tag) (zero? i)) commented?)) (range) children)))))]
+      (vec (mapcat #(walk % ["ordinary"] false false) (:children root))))))
 
 ;; @spec RENAME-ALIAS-008
 ;; INTENT: RENAME-ALIAS-008
@@ -190,14 +197,17 @@
   (try (p/lexical! source :source) (p/newline-style source)
        (annotate (p/tree source :source) source)
        (catch Exception e (throw (ex-info (.getMessage e) (assoc (ex-data e) :file file))))))
+(defn selected-binding [bindings r]
+  (first (filter #(and (= (:alias %) (:old_alias r)) (= (:lib %) (:lib r))) bindings)))
 (defn binding! [{:keys [bindings effective-references] :as ns-data} r file]
   (let [duplicates (concat (filter #(> (val %) 1) (frequencies (map :lib bindings)))
                            (filter #(> (val %) 1) (frequencies (keep :alias bindings))))
-        old (first (filter #(= (:alias %) (:old_alias r)) bindings))
-        selected? (= (:lib r) (:lib old))
+        selected (selected-binding bindings r)
+        old (or selected (first (filter #(= (:alias %) (:old_alias r)) bindings)))
+        selected? (boolean selected)
         binding-sites (mapv (fn [b] (merge (select-keys b [:lib :alias])
                                       (when (:binding b) {:site (select-keys (:binding b) [:line :address :form_index :start :end])}))) bindings)]
-    (when (seq duplicates)
+    (when (and selected? (seq duplicates))
       (p/refuse! :ambiguous-alias-binding [:source file :ns] "Duplicate library or alias bindings." {:file file :bindings binding-sites}))
     (when (and (not selected?) (not (get-in r [:scope :repository])))
       (p/refuse! (if old :alias-library-mismatch :old-alias-absent) [:source file :ns] "Requested library and old alias must be bound." {:file file}))
@@ -258,6 +268,8 @@
 (def ^:dynamic *preservation-tree* identity)
 (def ^:dynamic *inverse-evidence* identity)
 
+;; @spec RENAME-ALIAS-012
+;; INTENT: RENAME-ALIAS-012
 (defn candidate! [source root info r file]
   (let [refs (:references info) binding (site (get-in info [:old :binding]) 0 (:old_alias r) "binding" "ordinary" file)
         sites (vec (sort-by :start (conj refs binding))) candidate (*candidate-text* (splice source sites (:new_alias r)))
@@ -317,7 +329,8 @@
             namespaces (into (sorted-map) (map (fn [[f root]] [f (namespace! root f)]) roots))
             safe-namespaces (into (sorted-map)
                                   (map (fn [[f ns]] [f (assoc ns :effective-references
-                                                         (references (roots f) (:owner ns) (:old_alias request) f))]) namespaces))
+                                                         (if (selected-binding (:bindings ns) request)
+                                                           (references (roots f) (:owner ns) (:old_alias request) f) []))]) namespaces))
             infos (into (sorted-map) (map (fn [[f ns]] [f (binding! ns request f)]) safe-namespaces))
             selected (filterv #(get-in infos [% :selected?]) paths)]
         (when (empty? selected) (p/refuse! :old-alias-absent [:scope] "No matching library alias found."))
