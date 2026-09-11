@@ -746,3 +746,13 @@ and focused green receipts: `/var/tmp/forge/splice-fx/fix1-*.log`.
 Executed budget: rename 211 + insert 171 + shared/library 135 = 517 (ceiling 580).
 Final gate receipts and limitations belong to `/var/tmp/forge/splice-fx/astra-fix1-report.md`.
 This is correctness evidence on a branch, with no new performance or routing claim.
+
+### 2026-09-11T14:38:18.580348+00:00 — installed CLI dependency closure
+
+The stable eae1e432 launcher could list forms but failed to load either splice
+verb because its copied classpath omitted clj-splice. A fixture-installed launcher
+now witnesses both typed empty-request refusals outside the checkout, and a
+library-only edit changes the package hash. The package copies and names the
+library source; Babashka supplies its external runtime dependencies. Twenty verb
+groups pass (382 assertions). This is a packaging correctness fix, with no catalog
+or routing change. Receipts: `/var/tmp/forge/clifix-fx/report.md`.
