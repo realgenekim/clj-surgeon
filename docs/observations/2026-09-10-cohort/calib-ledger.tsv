@@ -1,0 +1,13 @@
+run_id	task	intent	arm	caller	oracle	gate	gate_green_defect	final_mechanism	mechanisms_seen	wall_s	refusals	diff_read	added	deleted	files	target_sha12	launched_at	num_turns	tool_calls	oracle_reason	outcome	tool_errors
+calib-claude-sonnet-5-01	example-R-e4	R	N	claude-sonnet-5	pass	green	no	editor	editor	17.73	0	yes	3	3	1	02332a74caf1	2026-09-10T23:48:25Z	7	6	PASS (12 checks)	completed	0
+calib-claude-sonnet-5-03	example-R-e4	R	N	claude-sonnet-5	pass	green	no	editor	editor	19.69	0	yes	3	3	1	02332a74caf1	2026-09-10T23:48:25Z	7	6	PASS (12 checks)	completed	0
+calib-claude-sonnet-5-02	example-R-e4	R	N	claude-sonnet-5	pass	green	no	editor	editor	20.93	0	yes	3	3	1	02332a74caf1	2026-09-10T23:48:25Z	9	8	PASS (12 checks)	completed	0
+calib-claude-sonnet-5-04	example-R-e4	R	N	claude-sonnet-5	pass	green	no	editor	editor	23.26	0	yes	3	3	1	02332a74caf1	2026-09-10T23:48:26Z	8	7	PASS (12 checks)	completed	0
+calib-claude-sonnet-5-05	example-R-e4	R	N	claude-sonnet-5	pass	green	no	editor	editor	24.77	0	yes	3	3	1	02332a74caf1	2026-09-10T23:49:09Z	10	9	PASS (12 checks)	completed	0
+calib-claude-sonnet-5-06	example-R-e4	R	N	claude-sonnet-5	pass	green	no	editor	editor	28.28	0	yes	3	3	1	02332a74caf1	2026-09-10T23:49:12Z	8	7	PASS (12 checks)	completed	0
+calib-claude-opus-5-01	example-R-e4	R	N	claude-opus-5	pass	green	no	editor	editor	33.68	0	yes	3	3	1	02332a74caf1	2026-09-10T23:49:14Z	10	9	PASS (12 checks)	completed	0
+calib-claude-opus-5-02	example-R-e4	R	N	claude-opus-5	pass	green	no	editor	editor	36.32	0	yes	3	3	1	02332a74caf1	2026-09-10T23:49:16Z	10	9	PASS (12 checks)	completed	0
+calib-claude-opus-5-03	example-R-e4	R	N	claude-opus-5	pass	green	no	editor	editor	30.75	0	yes	3	3	1	02332a74caf1	2026-09-10T23:49:58Z	10	9	PASS (12 checks)	completed	0
+calib-claude-opus-5-04	example-R-e4	R	N	claude-opus-5	pass	green	no	editor	editor	33.34	0	yes	3	3	1	02332a74caf1	2026-09-10T23:50:06Z	10	9	PASS (12 checks)	completed	0
+calib-claude-opus-5-06	example-R-e4	R	N	claude-opus-5	pass	green	no	editor	editor	32.83	0	yes	3	3	1	02332a74caf1	2026-09-10T23:50:17Z	9	8	PASS (12 checks)	completed	0
+calib-claude-opus-5-05	example-R-e4	R	N	claude-opus-5	pass	green	no	program	editor,program	37.73	0	no	3	3	1	02332a74caf1	2026-09-10T23:50:13Z	11	10	PASS (12 checks)	completed	0
