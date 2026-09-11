@@ -1,0 +1,3 @@
+{:paths ["src" "test"]
+ :min-bb-version "1.13.219"
+ :tasks {test {:task (exec 'clj-splice.test-runner/run)}}}
