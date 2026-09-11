@@ -1,0 +1,34 @@
+{:schema "brief/v1"
+ :owner {:worktree "/var/tmp/forge/ship-v3.11" :branch "block3" :base "4ab97c9614624ae1b12de7925671eafd1d35e440"}
+ :subject "4ab97c9614624ae1b12de7925671eafd1d35e440"
+ :rules-profile :standard-anvil
+ :seat "Astra"
+ :runner :codex
+ :inputs {"plan" "/home/forge/src/clj-surgeon-records/docs/observations/2026-09-11-system-plan-of-record.md"
+          "astra-vision" "/home/forge/src/clj-surgeon-records/docs/observations/2026-09-11-astra-vision.md"
+          "sublime-integration" "/home/forge/src/clj-surgeon-records/docs/observations/2026-09-11-sublime-integration.md"
+          "astra-sublime" "/home/forge/src/clj-surgeon-records/docs/observations/2026-09-11-astra-sublime.md"
+          "block2-report" "/home/forge/src/clj-surgeon-records/docs/observations/2026-09-11-block2-report-astra.md"
+          "preregistration" "/home/forge/src/clj-surgeon-records/docs/observations/2026-09-11-gate-vs-prompt-preregistration.md"
+          "amendment" "/home/forge/src/clj-surgeon-records/docs/observations/2026-09-11-gate-vs-prompt-amendment-1.md"
+          "claude-report" "/home/forge/src/clj-surgeon-records/docs/observations/2026-09-11-gate-vs-prompt-report-claude.md"
+          "codex-report" "/home/forge/src/clj-surgeon-records/docs/observations/2026-09-11-gate-vs-prompt-report-codex.md"
+          "cohort-apparatus-readme" "/var/tmp/forge/cohort-fx/apparatus/README.md"
+          "refusals-rule" "/home/forge/src/clj-surgeon-records/docs/observations/2026-09-11-refusals-astra-review.md"
+          "sublime-skill" "/home/forge/.claude/skills/sublime-every-day/SKILL.md"
+          "tighten-skill" "/home/forge/.claude/skills/tighten-the-loop/SKILL.md"}
+ :skills [{:name "linked-intent-testing" :path "/home/forge/opt/claude-skills/linked-intent-testing/SKILL.md" :repair-path "/home/forge/opt/claude-skills/linked-intent-testing/SKILL.md"}]
+ :order [{:step 1 :what "Bet registry + fold: freeze the two pre-registrations' bettor tables as registry.edn under lib/bets/ (Fable's 145ef7d2 bets, Astra's amendment bets, Astra's Codex bets) and write `measure fold <registry> <ledger-or-report>` that scores each bet against measured values from the Claude and Codex reports (the numbers are in those records; parse their tables) and emits bets.edn with held/missed per cell. Witness: the known outcome (Astra 11/12 on Claude; M-L held on Codex; Fable's H bets missed) reproduces from the reports alone." :deliverable "/var/tmp/forge/ship-v3.11/lib/bets/registry.edn"}
+         {:step 2 :what "The second-encounter register: `measure encounter register <finding-id> <witness> <delivery> <trigger>` writes an owed obligation to the ledger; `measure encounter score <id> <later-run-id>` marks transfer proven/untested with the later run's acceptance. Seed it with the two encounters the log already shows: prewarm-before-first-ship applied on clj-splice and on the CLI fix (one-launch landings) as transfer=proven-retroactively (flagged unregistered), and the receipt-boolean class (two builds) as registered with trigger = the next verb build." :deliverable "/var/tmp/forge/ship-v3.11/lib/encounters.py"}
+         {:step 3 :what "The four meters as folds over the ledger: `board --meters` prints inner (edit→probe verdicts from measure runs), routine (findings→final-batch wall per landed packet with tails and continuing ages), daily (recurrence-free accepted second encounters / eligible, transfer=untested visible), fleet (observed / registered-active seats with missingness rows: forge@anvil, skiff) — each with coverage and unknown when the recorder is absent; independence stated as self-issued." :deliverable "/var/tmp/forge/ship-v3.11/lib/meters.clj"}
+         {:step 4 :what "The cohort apparatus becomes the `measure cohort <plan.edn>` verb: wraps /var/tmp/forge/cohort-fx/apparatus (tasks, arms, oracles, run-one, report) with a frozen plan (tasks digest, arms digest, seed, callers, deadline), pre-registration id, and writes every run as ledger events with fixture:false and the packet manifest; the report tables are a fold. Do not re-run any cohort; witness with the existing 120+156+130 run artefacts by re-folding one table byte-identically." :deliverable "/var/tmp/forge/ship-v3.11/measure"}
+         {:step 5 :what "The morning-report facts as a fold: `board --report` emits the four-section skeleton (vs-native table from measure runs, wins/losses from landed/refused ledger rows, learnings→ratchets from refusal registry + witness map, next from OWED) as facts only; prose remains Fable's. Witness: regenerate today's numbers (three landings, launches per landing, median walls) from the ledger and match the captains log." :deliverable "/var/tmp/forge/ship-v3.11/lib/report.clj"}
+         {:step 6 :what "A v1 receipt VIEW: `board --receipt <date>` folds the seat-receipt facts already in the ledger (package hashes, prompt hash, client/JVM, headroom, assignments, attempts, clocks, denominator) into the SEAT-RECEIPT.md shape with participation marked self-issued and every missing field named unknown; it must REFUSE to render observed status from self-issued or replayed evidence." :deliverable "/var/tmp/forge/ship-v3.11/lib/receipt.clj"}
+         {:step 7 :what "Witnesses for all of the above in test/ (duplicate ingestion, scorer revision, missing evidence, a reopened finding, a second encounter scored from a later run) and test/run.sh green with isolated ledgers; install.sh extended; REPORT.md + report.edn." :deliverable "/var/tmp/forge/ship-v3.11/REPORT.md"}]
+ :stop [{:what "any change to the RUN line, JSON handle, SHIP status line, INSTALL OK literal, or a v3.10 refusal's meaning" :owner "Fable"}
+        {:what "spending model launches beyond two" :owner "Fable"}
+        {:what "product work in any repository worktree, publishing, servers, forbidden ports 7888/7890/7894/7895/8300-8339" :owner "Gene"}]
+ :deliverable {:path "/var/tmp/forge/ship-v3.11/REPORT.md" :report "/var/tmp/forge/ship-v3.11/report.edn" :required-fields [:verdict :findings :measurements :commits :least_sure :disagreements :owed]}
+ :budget {:jvms 1 :minutes 180 :one-at-a-time true :wait true}
+ :diff-plan ["measure" "board" "lib/bets/registry.edn" "lib/encounters.py" "lib/meters.clj" "lib/report.clj" "lib/receipt.clj" "test/" "install.sh" "REPORT.md"]
+ :checks [{:name "witness-suite" :argv ["bash" "test/run.sh"] :jvms 0 :owner "Astra"}]}
