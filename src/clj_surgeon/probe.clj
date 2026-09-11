@@ -21,6 +21,8 @@
    :fingerprint (fingerprint root)})
 
 (defn refusal [kind message]
+  ;; forwarded-refusal-kind: callers supply literal kinds or forward the
+  ;; original exception kind; this constructor does not manufacture names.
   {:state :probe-refused :error-type kind :error message
    :verification_complete false :proof_pending [cold-gate]})
 

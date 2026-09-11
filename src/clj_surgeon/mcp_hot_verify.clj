@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-hot-verify
   "Reload namespaces and run exact focused test Vars in one configured app JVM."
   (:require
+   [clj-surgeon.probe :as probe]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.set :as set]
@@ -238,7 +239,6 @@
     (let [started (System/nanoTime)
           fingerprint (requiring-resolve 'clj-surgeon.probe/fingerprint)
           problem (requiring-resolve 'clj-surgeon.probe/request-problem)
-          refusal (requiring-resolve 'clj-surgeon.probe/refusal)
           verdict (requiring-resolve 'clj-surgeon.probe/verdict)
           reloaded (atom [])
           elapsed #(/ (double (- (System/nanoTime) started)) 1000000.0)]
@@ -256,6 +256,8 @@
                             (run-tests target))]
               (verdict @reloaded summary (elapsed)))))
         (catch Exception e
+          ;; forwarded-refusal-kind: relay probe-reload-order's ex-data;
+          ;; its two literal kinds are enumerated in this namespace.
           (if-let [kind (:error-type (ex-data e))]
-            (assoc (refusal kind (.getMessage e)) :elapsed_ms (elapsed))
+            (assoc (probe/refusal kind (.getMessage e)) :elapsed_ms (elapsed))
             (assoc (verdict @reloaded {:error 1} (elapsed)) :error (.getMessage e))))))))

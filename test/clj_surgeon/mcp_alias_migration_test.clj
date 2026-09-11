@@ -5990,6 +5990,11 @@
     ;; the source rather than pinned here — a tag that never reaches a caller
     ;; is not a refusal kind.
     "hot-verification-timeout" "hot-verification-transport-closed"
+    ;; The namespace-level reachability census includes the probe-only path
+    ;; added to mcp-hot-verify; these are real literals, not internal tags.
+    "probe-namespace-not-found" "probe-source-too-large"
+    "invalid-probe-request" "stale-probe-image" "probe-message-too-large"
+    "invalid-probe-port" "probe-connection-failed"
     ;; Row-2 external artifact containment adds these reachable typed refusals.
     "receipt-dir-escapes" "receipt-dir-inside-workspace"})
 
@@ -6000,7 +6005,7 @@
   ;; could see. Both directions are asserted — a kind that appears and a kind
   ;; that vanishes are each a change to what a text-reading client is promised.
   (let [kinds (set (refusal-kinds-in-source))]
-    (is (= 153 (count kinds))
+    (is (= 160 (count kinds))
         (str "the entrance's refusal enumeration changed size: "
              (count kinds) " kinds"))
     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))

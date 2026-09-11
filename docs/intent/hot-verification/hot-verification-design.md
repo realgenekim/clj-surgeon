@@ -7,6 +7,11 @@ one image with test dependencies and writes `.clj-surgeon/probe.edn`.
 image identity and calls the hot-verification implementation through `/probe`.
 The existing nREPL verification profile remains available for its existing callers.
 
+The probe refusal constructor is a static namespace dependency, so the
+namespace-level alias-migration refusal census can follow it. Its seven new
+literal kinds are pinned alongside existing kinds; forwarding markers describe
+actual forwarding, and do not exempt an unresolved constructor call.
+
 `clj-surgeon.mcp-hot-verify/verify!` sends one `eval` to the application nREPL
 and reports the focused test summary it evaluates in that JVM.
 
