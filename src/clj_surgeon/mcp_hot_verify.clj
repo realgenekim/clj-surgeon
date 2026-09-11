@@ -196,3 +196,66 @@
                :error (.getMessage error)
                :elapsed_ms (/ (double (- (System/nanoTime) started))
                               1000000.0)})))))))
+;; @spec BB-PROBE-003 -- one reload/test transaction in the warm MCP image.
+(defn probe-reload-order [root target]
+  (let [of-string (requiring-resolve 'rewrite-clj.zip/of-string)
+        find-value (requiring-resolve 'rewrite-clj.zip/find-value)
+        next-node (requiring-resolve 'rewrite-clj.zip/next)
+        up (requiring-resolve 'rewrite-clj.zip/up)
+        sexpr (requiring-resolve 'rewrite-clj.zip/sexpr)
+        visited (atom #{})
+        ordered (atom [])
+        locate (fn [n]
+                 (let [rel (str (str/replace (str/replace (str n) "-" "_") "." "/") ".clj")]
+                   (some (fn [dir]
+                           (let [f (.getCanonicalFile (io/file root dir rel))]
+                             (when (and (.isFile f)
+                                        (str/starts-with? (.getPath f) (str root java.io.File/separator))) f)))
+                         ["src" "test" "libs/clj-splice/src"])))]
+    (letfn [(visit [n]
+              (when-not (@visited n)
+                (swap! visited conj n)
+                (when-let [f (locate n)]
+                  (when (> (.length f) 8388608)
+                    (throw (ex-info "Reload source exceeds 8 MiB" {:error-type :probe-source-too-large})))
+                  (let [form (some-> (of-string (slurp f)) (find-value next-node 'ns) up sexpr)
+                        deps (for [clause (drop 2 form)
+                                   :when (and (seq? clause) (= :require (first clause)))
+                                   lib (rest clause)
+                                   :let [n (if (symbol? lib) lib (first lib))]
+                                   :when (symbol? n)] n)]
+                    (doseq [dep deps] (visit dep))
+                    (swap! ordered conj n)))))]
+      (when-not (locate target)
+        (throw (ex-info "Test namespace is not a local .clj source" {:error-type :probe-namespace-not-found})))
+      (visit target)
+      @ordered)))
+
+;; @spec BB-PROBE-001
+;; @spec BB-PROBE-002
+(defn probe! [image request]
+  (locking image
+    (let [started (System/nanoTime)
+          fingerprint (requiring-resolve 'clj-surgeon.probe/fingerprint)
+          problem (requiring-resolve 'clj-surgeon.probe/request-problem)
+          refusal (requiring-resolve 'clj-surgeon.probe/refusal)
+          verdict (requiring-resolve 'clj-surgeon.probe/verdict)
+          reloaded (atom [])
+          elapsed #(/ (double (- (System/nanoTime) started)) 1000000.0)]
+      (try
+        (if-let [error (problem image (fingerprint (:root image)) request)]
+          (assoc error :elapsed_ms (elapsed))
+          (let [target (symbol (:ns request))
+                order (probe-reload-order (:root image) target)]
+            (doseq [n order]
+              (require n :reload)
+              (swap! reloaded conj (str n)))
+            (require 'clojure.test)
+            (let [run-tests (requiring-resolve 'clojure.test/run-tests)
+                  summary (binding [*out* (java.io.StringWriter.) *err* (java.io.StringWriter.)]
+                            (run-tests target))]
+              (verdict @reloaded summary (elapsed)))))
+        (catch Exception e
+          (if-let [kind (:error-type (ex-data e))]
+            (assoc (refusal kind (.getMessage e)) :elapsed_ms (elapsed))
+            (assoc (verdict @reloaded {:error 1} (elapsed)) :error (.getMessage e))))))))

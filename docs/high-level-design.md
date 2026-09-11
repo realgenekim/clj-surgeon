@@ -1350,6 +1350,8 @@ the shrinking [per-ID debt ledger](intent/unlinked-spec-ids.edn).
 - [Shell argv safety](intent/shell-argv-safety/shell-argv-safety-design.md)
 - [Read request normalization](intent/read-request-normalization/read-request-normalization-design.md)
 - [Hot verification](intent/hot-verification/hot-verification-design.md)
+- [Babashka warm probe](intent/hot-verification/bb-probe-specs.md): a generation-bound
+  inner-loop verdict from the one MCP JVM, always pending cold proof.
 
 ### Partial extraction and facts for native callers (B07)
 

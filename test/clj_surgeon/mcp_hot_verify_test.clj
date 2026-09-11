@@ -77,7 +77,16 @@
            {:port-file ".nrepl-port" :reload [] :tests ["missing-slash"]}
            {:port-file ".nrepl-port" :reload [] :tests [] :timeout-ms 1}]]
     (testing (pr-str profile)
-      (is (false? (hot-verify/valid-profile? profile))))))
+      (is (false? (hot-verify/valid-profile? profile)))))
+  ;; @spec BB-PROBE-003
+  (testing "local dependency reload order and missing namespace refusal"
+    (let [root (.getCanonicalPath (io/file "."))]
+      (is (= '[clj-surgeon.fields clj-surgeon.forms clj-surgeon.forms-test]
+             (hot-verify/probe-reload-order root 'clj-surgeon.forms-test)))
+      (is (= :probe-namespace-not-found
+             (try (hot-verify/probe-reload-order root 'absent.probe-test)
+                  (catch Exception e (:error-type (ex-data e))))))))
+  )
 
 ;; --- Hot verification terminates on a terminal status, not on its ceiling ---
 ;; Requirements: docs/intent/hot-verification/hot-verification-specs.md

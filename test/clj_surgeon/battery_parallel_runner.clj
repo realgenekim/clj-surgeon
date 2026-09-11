@@ -455,7 +455,7 @@
                     :dir (or checkout-root (System/getProperty "user.dir"))}
                    (slot-command (cond target ["make" "--no-print-directory" target]
                                    (= :bb runtime)
-                                   (into ["bb" "-Xmx512m" "test/run_all.clj" "--emit-edn" (str out-path) "--ns"] (map str namespaces))
+                                   (into ["bb" "-Xmx1g" "test/run_all.clj" "--emit-edn" (str out-path) "--ns"] (map str namespaces))
                                    :else (lane-command java-opts out-path namespaces))))
           exit (deref (future (:exit @p)) lane-timeout-ms ::timeout)
           timed-out? (= ::timeout exit)]
@@ -660,7 +660,7 @@
 (defn suite-namespaces [suite]
   (case suite
     "battery" (lm/namespaces-for :battery)
-    "fast" (lm/namespaces-for :fast)
+    "fast" (vec (sort (set (concat (bb-namespaces) (lm/namespaces-for :fast)))))
     "mcp" (vec (mapcat lm/namespaces-for [:fast :integration]))
     "bb" (bb-namespaces)
     "alias" '[clj-surgeon.mcp-alias-migration-test clj-surgeon.receipt-artifacts-boundary-test]
@@ -1004,7 +1004,15 @@
                                       (gate-phases inventory lm/manifest))
                 :else [(partition-lanes units walls var-walls lanes-n)])
         plan (vec (mapcat (fn [phase groups]
-                            (map (fn [namespaces] {:phase phase :namespaces namespaces}) groups))
+                            (mapcat (fn [namespaces]
+                                      (for [[[runtime _home] selected]
+                                            (group-by #(vector (if (= suite "bb") :bb
+                                                        (if (contains? #{"fast" "mcp"} suite)
+                                                          (or (get lm/namespace-runtimes %)
+                                                              (throw (ex-info (str "runtime-unclassified: " %) {:namespace %})))
+                                                          :jvm))
+                                                               (contains? #{:fast :integration} (lm/lane-of %))) namespaces)]
+                                        {:phase phase :namespaces (vec selected) :runtime runtime})) groups))
                     (range) waves))]
     (println (format "battery-parallel: %d namespace(s) in %d unit(s) over %d lane(s); floor is %s at %d ms"
                      (count battery-namespaces) (count units) lanes-n
@@ -1041,7 +1049,7 @@
        :plan (mapv (fn [i entry]
                      (assoc entry :index i :java-opts java-opts :suite suite
                             :estimated-ms (unit-cost walls var-walls (:namespaces entry))
-                            :work-dir work-dir :runtime (if (= suite "bb") :bb :jvm)))
+                            :work-dir work-dir))
                    (range) (remove (comp empty? :namespaces) plan))})))
 
 (defn finish-suite!
@@ -1102,7 +1110,7 @@
                         (count broken) (count missing) (count census-errors)
                         (count prereq-failures) skipped-red
                         (if changed? 1 0))
-            receipt {:suite suite :runtime (if (= suite "bb") :bb :jvm)
+            receipt {:suite suite :runtime (cond (= suite "bb") :bb (contains? #{"fast" "mcp"} suite) :hybrid :else :jvm)
                      :state (if (zero? failures) :passed :failed) :debug debug? :run-id run-id
                      :source-digest digest :capacity capacity :lane-count lanes-n :process-count (count lanes)
                      :phase-count (count waves)

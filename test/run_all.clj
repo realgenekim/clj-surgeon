@@ -1,6 +1,7 @@
 (ns run-all
   (:require
    [clj-surgeon.namespace-execution :as execution]
+   [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.test :as t]))
 
@@ -62,17 +63,22 @@
       emit? (= "--emit-edn" (first args))
       output (when emit? (second args))
       selected (if emit? (mapv symbol (drop 3 args)) namespaces)
-      {:keys [refused root]} (tmp-leak/secure-tmpdir! {:bb-script *file* :bb-heap-mib 512} args)]
+      {:keys [refused root]} (tmp-leak/secure-tmpdir! {:bb-script *file* :bb-heap-mib 1024
+                                                    :isolate-home? (every? #(contains? #{:fast :integration} (lm/lane-of %)) selected)} args)]
   (when refused (System/exit 97))
   (when-not (and (seq selected)
               (= (count selected) (count (set selected)))
-              (every? (set namespaces) selected)
+              (every? #(= :bb (get lm/namespace-runtimes %)) selected)
               (or (not emit?) (= "--ns" (nth args 2 nil))))
     (binding [*out* *err*] (println "bb-lane-refused: invalid or missing namespace selection"))
     (System/exit 96))
   (when-not emit? (println "SERIAL/NOT-A-GATE: direct Babashka diagnostic"))
   (let [before (tmp-leak/tmp-entries)
-        _ (doseq [n selected] (require n))
+        _ (doseq [n selected]
+            (try (require n)
+                 (catch Throwable e
+                   (throw (ex-info (str "bb-portable-load-failed: " n)
+                                   {:namespace n :error-type :bb-portable-load-failed} e)))))
         runs (mapv (fn [n]
                      (let [start (System/nanoTime)
                            facts (execution/run-observed n nil #(t/test-ns n))]

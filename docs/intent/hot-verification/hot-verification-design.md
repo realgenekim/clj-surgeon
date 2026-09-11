@@ -1,5 +1,12 @@
 # Hot-Verification Response-Stream Design
 
+The [bb probe requirements](bb-probe-specs.md) add an explicitly non-proof
+inner loop to the existing warm MCP HTTP image. `make warm PORT=9107` starts
+one image with test dependencies and writes `.clj-surgeon/probe.edn`.
+`clj-surgeon :probe :ns clj-surgeon.forms-test` uses that descriptor, validates
+image identity and calls the hot-verification implementation through `/probe`.
+The existing nREPL verification profile remains available for its existing callers.
+
 `clj-surgeon.mcp-hot-verify/verify!` sends one `eval` to the application nREPL
 and reports the focused test summary it evaluates in that JVM.
 

@@ -206,6 +206,21 @@
           (.write (json/generate-string readiness))
           (.flush))))))
 
+;; @spec BB-PROBE-002 -- only the explicitly started warm image has this route.
+(defn- probe-servlet [image]
+  (proxy [HttpServlet] []
+    (doPost [^HttpServletRequest request ^HttpServletResponse response]
+      (let [read-bounded (requiring-resolve 'clj-surgeon.probe/read-bounded)
+            result (try
+                     (with-open [reader (.getReader request)]
+                       (hot-verify/probe! image (read-bounded reader 8192)))
+                     (catch Exception e
+                       ((requiring-resolve 'clj-surgeon.probe/refusal)
+                        :invalid-probe-request (.getMessage e))))]
+        (.setContentType response "application/edn")
+        (.setCharacterEncoding response "UTF-8")
+        (doto (.getWriter response) (.write (pr-str result)) (.flush))))))
+
 (defn- configure-logging!
   [log-file]
   (mcp-logging/configure-logging!
@@ -225,7 +240,7 @@
   "Start one nonblocking, loopback-only, repository-scoped MCP server."
   [{:keys [project-dir receipt-dir telemetry-dir run-id port ready-file
            nrepl-port port-file log-file cclsp-url verification-profiles
-           focused-test
+           focused-test probe-image-file
            semantic-resolver verify! read-source write-source!]
     telemetry-mode :telemetry}]
   (let [project-dir (str (or project-dir (System/getProperty "user.dir")))
@@ -272,9 +287,12 @@
                 (.build))
         _registered (mcp-server/register-live-server! mcp)
         jetty (Server. (InetSocketAddress. host port))
-        context (ServletContextHandler. "/")]
+        context (ServletContextHandler. "/")
+        probe-image (when probe-image-file
+                      ((requiring-resolve 'clj-surgeon.probe/image-identity) project-dir))]
     (.addServlet context transport endpoint)
     (.addServlet context (health-servlet) "/healthz")
+    (when probe-image (.addServlet context (probe-servlet probe-image) "/probe"))
     (.addFilter context (origin-filter) "/*"
                 (EnumSet/of DispatcherType/REQUEST))
     (.setHandler jetty context)
@@ -295,6 +313,8 @@
                        :verification-profile-source
                        (:source verification-selection)}]
         (write-ready-file! ready-file readiness)
+        (when probe-image
+          (write-ready-file! probe-image-file {:image probe-image :port actual-port}))
         (telemetry/emit!
           telemetry-state :server.start
           (cond->

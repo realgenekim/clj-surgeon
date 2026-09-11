@@ -16,7 +16,28 @@
     (is (= :ls (core/resolve-op :ls)))
     (is (= :ls-tree (core/resolve-op :ls-tree)))
     (is (= :extract (core/resolve-op :extract)))
-    (is (= :cljc-merge (core/resolve-op :cljc-merge)))))
+    (is (= :cljc-merge (core/resolve-op :cljc-merge))))
+  ;; @spec BB-PROBE-001
+  ;; @spec BB-PROBE-002
+  (testing "warm probe identity and non-proof verdict contract"
+    (let [verdict (requiring-resolve 'clj-surgeon.probe/verdict)
+          problem (requiring-resolve 'clj-surgeon.probe/request-problem)
+          image {:root "/owned" :generation "g1" :fingerprint "cp1"}
+          request {:ns "example-test" :image image}]
+      (is (= :probe (core/resolve-op :probe)))
+      (is (= {:state :probe-passed :verification_complete false :proof_pending [:landing-gate]
+              :reloaded ["example-test"] :tests 2 :assertions 3 :failures 0 :elapsed_ms 12.5}
+             (verdict ["example-test"] {:test 2 :pass 3 :fail 0 :error 0} 12.5)))
+      (doseq [summary [{:test 1 :fail 1} {:test 1 :error 1} {:test 0 :pass 0}]]
+        (is (= :probe-failed (:state (verdict [] summary 0)))))
+      (is (nil? (problem image "cp1" request)))
+      (doseq [k [:root :generation :fingerprint]]
+        (is (= :stale-probe-image (:error-type (problem image "cp1" (assoc-in request [:image k] "changed"))))))
+      (is (= :stale-probe-image (:error-type (problem image "cp2" request))))
+      (doseq [n ["x) (evil" "" "ns/var" nil]]
+        (is (= :invalid-probe-request (:error-type (problem image "cp1" (assoc request :ns n))))))
+      (is (= :invalid-probe-request (:error-type (problem image "cp1" (assoc request :unknown true)))))))
+  )
 
 (deftest resolve-op-aliases
   (testing "aliases resolve to canonical"
@@ -103,7 +124,7 @@
 
 (deftest registry-has-all-ops
   (testing "registry contains every canonical op"
-    (let [expected #{:insert-forms! :rename-alias! :ls :ls-tree :show-form :mv :declares :deps :topo
+    (let [expected #{:probe :insert-forms! :rename-alias! :ls :ls-tree :show-form :mv :declares :deps :topo
                      :ls-extract :ls-deps
                      :rename-ns :rename-ns!
                      :fix-declares :fix-declares!

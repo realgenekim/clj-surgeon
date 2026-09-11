@@ -99,7 +99,7 @@ help:
 	@echo "  make test                      PARALLEL LANDING GATE: automatic bounded lanes, recovery, freshness, suites, hygiene, audit"
 	@echo "  make test-full                 Run all tests: analyzer, recovery battery, mcp-test, test-battery, smoke, memory battery, bench tail (CI/nightly)"
 	@echo "  make test-serial               SERIAL/NOT-A-GATE debugging; never landing evidence"
-	@echo "  make test-fast                 JVM FAST lane via the shared parallel coordinator"
+	@echo "  make test-fast                 bb portable + JVM-only fast namespaces via the shared coordinator"
 	@echo "  make test-integration          JVM INTEGRATION lane (ephemeral ports, in-process servers)"
 	@echo "  make test-battery              JVM BATTERY lane (cold child JVMs; minutes-scale). BATTERY_LANES=N runs it over N JVM lanes"
 	@echo "  make test-battery-serial       the same lane in ONE JVM -- the control the parallel lane is compared against"
@@ -364,6 +364,13 @@ admit-analyzer-memory-self-test:
 
 mcp-smoke:
 	bb test/mcp_stdio_smoke.clj
+
+.PHONY: warm
+PORT ?= 9107
+warm:
+	@test "$(PORT)" -gt 9000 && test "$(PORT)" -lt 65536
+	@mkdir -p .clj-surgeon
+	clojure -J-Xmx1g -M:clj-surgeon/test-deps -e '(require (quote clj-surgeon.mcp-http-server)) (clj-surgeon.mcp-http-server/start {:port $(PORT) :nrepl-port :none :probe-image-file ".clj-surgeon/probe.edn" :log-file "$(TMPDIR)/warm.log"})'
 
 mcp-serve:
 	JAVA_HOME="$(MCP_JAVA_HOME)" JAVA_CMD="$(MCP_JAVA_CMD)" clojure $(MCP_JAVA_OPTS) -X:clj-surgeon/mcp :telemetry :full
@@ -1107,14 +1114,14 @@ txn-kernel-warning-check:
 #
 # RENAME, 2026-09-04, stated loudly because a silent one is the memory-red
 # collision all over again: `test-fast` USED TO MEAN `bb test/run_all.clj`.
-# It now means the JVM FAST LANE. The babashka lane is unchanged in content
+# It now means the hybrid FAST LANE. The babashka lane is unchanged in content
 # and moved to `make test-bb`; `make test` runs both. Docs written before
 # this date that say "make test-fast (647 tests)" are quoting the bb lane.
 test-fast: test-clj-splice-bb
 	@# @spec TEST-ISO-001
 	@# @spec MCP-OP-TMPHYG-001
 	@# @spec MCP-OP-TMPHYG-002
-	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite fast
+	bb -Xmx1g -Djava.io.tmpdir="$(TMPDIR)" -m clj-surgeon.battery-parallel-runner --suite fast
 
 .PHONY: test-clj-splice-bb
 test-clj-splice-bb:
@@ -1195,7 +1202,7 @@ battery-fresh:
 test-bb:
 	@# @spec MCP-OP-TMPHYG-001
 	@# @spec MCP-OP-TMPHYG-002
-	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite bb
+	bb -Xmx1g -Djava.io.tmpdir="$(TMPDIR)" -m clj-surgeon.battery-parallel-runner --suite bb
 
 test-bb-serial:
 	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite bb --debug-serial true
@@ -1243,7 +1250,7 @@ landing-gate: gate-prerequisites
 .PHONY: landing-gate-prewarm print-gate-stages intent-audit
 
 landing-gate-prewarm: gate-prerequisites
-	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite gate --prewarm true
+	bb -Xmx1g -Djava.io.tmpdir="$(TMPDIR)" -m clj-surgeon.battery-parallel-runner --suite gate --prewarm true
 
 print-gate-stages:
 	@bb --classpath src:test -m clj-surgeon.battery-parallel-runner --print-gate-stages true

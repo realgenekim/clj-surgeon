@@ -161,7 +161,16 @@
       (is (empty? missing)
           (str "lane manifest names " (count missing)
                " namespace(s) with no test source file on disk: "
-               (str/join ", " missing))))))
+               (str/join ", " missing)))))
+  ;; @spec TEST-ISO-001 -- an explicit runtime for every namespace, independent of cadence.
+  (testing "every discovered test namespace has a closed runtime declaration"
+    (let [runtimes @(requiring-resolve 'clj-surgeon.lane-manifest/namespace-runtimes)]
+      (is (= 159 (count runtimes)))
+      (is (= (set (keys @on-disk)) (set (keys runtimes))))
+      (is (= #{:bb :jvm} (set (vals runtimes))))
+      (is (= :bb (get runtimes 'clj-surgeon.forms-test)))
+      (is (= :jvm (get runtimes 'clj-surgeon.mcp-http-server-test)))))
+  )
 
 (deftest every-test-namespace-on-disk-is-accounted-for
   (testing "disk -> manifest: a new test namespace cannot silently never run"
@@ -272,7 +281,7 @@
     ;; -- which is also the pin that catches someone changing an alias's
     ;; :main-opts without changing what the gate is understood to cover.
     (let [ctx (rm/repo-context)]
-      (is (= (set (lm/namespaces-for :fast))
+      (is (= (into (set (lm/namespaces-for :fast)) (:namespaces (rm/resolve-runner "make test-bb" ctx)))
              (:namespaces (rm/resolve-runner "make test-fast" ctx))))
       (is (= (into (set (lm/namespaces-for :fast)) (lm/namespaces-for :integration))
              (:namespaces (rm/resolve-runner "make mcp-test" ctx))))
@@ -963,7 +972,7 @@
    "test/clj_surgeon/mcp_tool_test.clj"
    {1395 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count (1380 -> 1381 on 2026-09-06: the `cheshire.core` require the next_call REPLAY witnesses need moved the whole namespace down one line -- the pin costing one number is the point; 1381 -> 1394 on 2026-09-07 when the expect-guard witness was inserted above it)"}
    "test/clj_surgeon/mcp_hot_verify_test.clj"
-   {244 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
+   {253 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
 
 (deftest every-sleep-on-the-merge-gate-is-declared-with-its-reason
   (let [sources (fn [lane]
