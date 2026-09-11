@@ -51,3 +51,7 @@ The frozen contract is normative; IDs are permanent. Each boundary retains the f
 - [x] **RENAME-ALIAS-011**: When either request-file CLI spelling or MCP is invoked, the entrance shall expose the same domain result and mutation state.
 
   Witness: `rename-alias-cli-mcp-parity`. Misreading: Turn a domain refusal into a transport error or report exit zero without a verified commit. Boundary: Closed bounded EDN, help, stdout, 0/2/1 exits, success/refusal/recovery parity and terminal omission.
+
+- [x] **RENAME-ALIAS-012**: When candidate roles, preservation, inverse identity, parsing, or replacement read-back disagree, the operation shall report the exact candidate or I/O refusal and preserve or restore original disk bytes.
+
+  Witnesses: `candidate-role-recount-refuses`, `candidate-form-preservation-refuses`, `candidate-inverse-identity-refuses`, `candidate-parse-refuses`, `replacement-read-back-refuses`. Each load-bearing guard is independently deletion-tested; faults enter through injected functions, never source edits inside a witness.

@@ -1,13 +1,14 @@
 (ns clj-surgeon.rename-alias-plan
   "Pure closed-snapshot alias prefix planning; no reader evaluation or reprinting."
   (:refer-clojure :exclude [simple-symbol?])
-  (:require [clj-surgeon.insert-forms-plan :as p]
-            [clj-surgeon.mcp-write-refusal :as refusal]
-            [clojure.edn :as edn]
-            [clojure.string :as str]
-            [clojure.walk :as walk]
-            [rewrite-clj.zip :as z]
-            [rewrite-clj.node :as n]))
+  (:require
+   [clj-surgeon.insert-forms-plan :as p]
+   [clj-surgeon.mcp-write-refusal :as refusal]
+   [clojure.edn :as edn]
+   [clojure.string :as str]
+   [clojure.walk :as walk]
+   [rewrite-clj.node :as n]
+   [rewrite-clj.zip :as z]))
 
 (defn refuse [e] (assoc (p/refusal e) :operation "rename_alias" :version 1))
 (defn simple-symbol? [s]
@@ -150,31 +151,31 @@
 ;; INTENT: RENAME-ALIAS-005
 (defn references [root owner alias file]
   (let [declarations (set (map :start (filter #(and (= :list (:tag %))
-                                                   (#{":require" ":import" ":refer-clojure" ":gen-class"} (p/head %)))
-                                             (p/effective (p/unwrap owner)))))]
-  (letfn [(walk [x contexts tag?]
-            (let [tag (:tag x) text (p/raw x)
-                  contexts (if (and (= :list tag) (#{"quote" "clojure.core/quote"} (p/head x)))
-                             (conj contexts "quote")
-                             (case tag
-                             (:quote :var) (conj contexts "quote")
-                             :syntax-quote (conj contexts "syntax-quote")
-                             (:unquote :unquote-splicing) (vec (remove #{"syntax-quote"} contexts))
-                             (:meta :meta*) (conj contexts "metadata") contexts))
-                  context (peek contexts) children (p/effective x)
-                  prefix (cond
-                           (and (not tag?) (= :token tag) (str/starts-with? text (str alias "/"))) [0 "symbol"]
-                           (and (= :token tag) (str/starts-with? text (str "::" alias "/"))) [2 "auto-keyword"]
-                           (and (= :namespaced-map tag) (re-find (re-pattern (str "^#::" (java.util.regex.Pattern/quote alias) "(?=[{\\s,])")) text)) [3 "auto-map"])]
-              (cond
-                (= :uneval tag) []
-                (declarations (:start x)) []
-                (and (= :list tag) (not= "quote" context)
-                     (#{"in-ns" "alias" "ns-unalias" "require" "clojure.core/in-ns" "clojure.core/alias" "clojure.core/ns-unalias" "clojure.core/require"} (p/head x)))
-                (p/refuse! :unsupported-namespace-mutation [:source file] "Runtime namespace mutation is unsupported." {:file file :line (:line x)})
-                :else (concat (when prefix [(site x (first prefix) alias (second prefix) context file)])
-                              (mapcat (fn [i c] (walk c contexts (and (= :reader-macro tag) (zero? i)))) (range) children)))))]
-    (vec (mapcat #(walk % ["ordinary"] false) (:children root))))))
+                                                 (#{":require" ":import" ":refer-clojure" ":gen-class"} (p/head %)))
+                                        (p/effective (p/unwrap owner)))))]
+    (letfn [(walk [x contexts tag?]
+              (let [tag (:tag x) text (p/raw x)
+                    contexts (if (and (= :list tag) (#{"quote" "clojure.core/quote"} (p/head x)))
+                               (conj contexts "quote")
+                               (case tag
+                                 (:quote :var) (conj contexts "quote")
+                                 :syntax-quote (conj contexts "syntax-quote")
+                                 (:unquote :unquote-splicing) (vec (remove #{"syntax-quote"} contexts))
+                                 (:meta :meta*) (conj contexts "metadata") contexts))
+                    context (peek contexts) children (p/effective x)
+                    prefix (cond
+                             (and (not tag?) (= :token tag) (str/starts-with? text (str alias "/"))) [0 "symbol"]
+                             (and (= :token tag) (str/starts-with? text (str "::" alias "/"))) [2 "auto-keyword"]
+                             (and (= :namespaced-map tag) (re-find (re-pattern (str "^#::" (java.util.regex.Pattern/quote alias) "(?=[{\\s,])")) text)) [3 "auto-map"])]
+                (cond
+                  (= :uneval tag) []
+                  (declarations (:start x)) []
+                  (and (= :list tag) (not= "quote" context)
+                       (#{"in-ns" "alias" "ns-unalias" "require" "clojure.core/in-ns" "clojure.core/alias" "clojure.core/ns-unalias" "clojure.core/require"} (p/head x)))
+                  (p/refuse! :unsupported-namespace-mutation [:source file] "Runtime namespace mutation is unsupported." {:file file :line (:line x)})
+                  :else (concat (when prefix [(site x (first prefix) alias (second prefix) context file)])
+                                (mapcat (fn [i c] (walk c contexts (and (= :reader-macro tag) (zero? i)))) (range) children)))))]
+      (vec (mapcat #(walk % ["ordinary"] false) (:children root))))))
 
 ;; @spec RENAME-ALIAS-008
 ;; INTENT: RENAME-ALIAS-008
@@ -189,7 +190,7 @@
         old (first (filter #(= (:alias %) (:old_alias r)) bindings))
         selected? (= (:lib r) (:lib old))
         binding-sites (mapv (fn [b] (merge (select-keys b [:lib :alias])
-                                          (when (:binding b) {:site (select-keys (:binding b) [:line :address :form_index :start :end])}))) bindings)]
+                                      (when (:binding b) {:site (select-keys (:binding b) [:line :address :form_index :start :end])}))) bindings)]
     (when (seq duplicates)
       (p/refuse! :ambiguous-alias-binding [:source file :ns] "Duplicate library or alias bindings." {:file file :bindings binding-sites}))
     (when (and (not selected?) (not (get-in r [:scope :repository])))
@@ -208,7 +209,7 @@
 (defn form-proof [before after]
   (let [aa (p/root-inventory before) bb (p/root-inventory after)
         rows (mapv (fn [i a b] {:before_index (inc i) :after_index (inc i)
-                                 :before_sha256 (p/sha (p/raw a)) :after_sha256 (p/sha (p/raw b))}) (range) aa bb)
+                                :before_sha256 (p/sha (p/raw a)) :after_sha256 (p/sha (p/raw b))}) (range) aa bb)
         other (filterv #(= (:before_sha256 %) (:after_sha256 %)) rows)
         changed (filterv #(not= (:before_sha256 %) (:after_sha256 %)) rows)
         spans (fn [root tags] (map p/raw (filter #(tags (:tag %)) (tree-seq (comp seq :children) :children root))))
@@ -233,12 +234,17 @@
 ;; @spec RENAME-ALIAS-010
 ;; INTENT: RENAME-ALIAS-001
 ;; INTENT: RENAME-ALIAS-010
+(def ^:dynamic *candidate-text* identity)
+(def ^:dynamic *candidate-roles* identity)
+(def ^:dynamic *preservation-tree* identity)
+(def ^:dynamic *inverse-evidence* identity)
+
 (defn candidate! [source root info r file]
   (let [refs (:references info) binding (site (get-in info [:old :binding]) 0 (:old_alias r) "binding" "ordinary" file)
-        sites (vec (sort-by :start (conj refs binding))) candidate (splice source sites (:new_alias r))
+        sites (vec (sort-by :start (conj refs binding))) candidate (*candidate-text* (splice source sites (:new_alias r)))
         after (try (source! candidate file)
                    (catch Exception e (p/refuse! :candidate-parse-error [:candidate file] (.getMessage e) (select-keys (ex-data e) [:line :column]))))
-        new-ns (namespace! after file) new-refs (references after (:owner new-ns) (:new_alias r) file)
+        new-ns (namespace! after file) new-refs (*candidate-roles* (references after (:owner new-ns) (:new_alias r) file))
         old-refs (references after (:owner new-ns) (:old_alias r) file)
         expected-offsets (loop [xs sites delta 0 out []]
                            (if-let [x (first xs)]
@@ -247,7 +253,7 @@
     (when-not (and (empty? old-refs) (= expected-offsets (mapv (juxt :start :role) new-refs))
                    (= 1 (count (filter #(and (= (:lib r) (:lib %)) (= (:new_alias r) (:alias %))) (:bindings new-ns)))))
       (p/refuse! :candidate-structure-mismatch [:candidate file] "Candidate alias roles differ from planned roles."))
-    (let [inverse (inverse-splices source sites (:new_alias r))
+    (let [inverse (*inverse-evidence* (inverse-splices source sites (:new_alias r)))
           restored (reduce (fn [bs {:keys [result_offset before after]}]
                              (let [prefix (java.util.Arrays/copyOfRange bs 0 (int result_offset))
                                    suffix (java.util.Arrays/copyOfRange bs (int (+ result_offset (alength (p/bytes after)))) (alength bs))]
@@ -255,7 +261,7 @@
       (when-not (= (p/sha source) (p/sha restored))
         (p/refuse! :candidate-structure-mismatch [:candidate file] "Inverse did not restore exact original bytes."))
       {:candidate candidate :sites sites
-       :detail (merge (form-proof root after)
+       :detail (merge (form-proof root (*preservation-tree* after))
                       {:file file :references_changed (count refs) :bindings_changed 1
                        :source_hash (p/sha source) :result_hash (p/sha candidate)
                        :source_size (alength (p/bytes source)) :result_size (alength (p/bytes candidate))
@@ -277,8 +283,8 @@
         (p/refuse! :expect-count-mismatch [:expect :references] (str "Expected " expected " alias references; found " actual ".")
                    (cond-> {:expected_count expected :actual_count actual :per_file_counts counts
                             :write_refusal_evidence (merge e {:family "generic-count-mismatch" :failed_stage "intent-compilation"
-                                                            :authority false :write_authority false :items items
-                                                            :available_count (count items) :returned_count (count items) :omitted_count 0 :truncated false})}
+                                                              :authority false :write_authority false :items items
+                                                              :available_count (count items) :returned_count (count items) :omitted_count 0 :truncated false})}
                      (map? actual) (assoc :mismatched_files (vec (filter #(not= (get expected %) (get actual %)) (keys counts))))))))))
 (defn plan [sources request]
   (try
@@ -292,7 +298,7 @@
             namespaces (into (sorted-map) (map (fn [[f root]] [f (namespace! root f)]) roots))
             safe-namespaces (into (sorted-map)
                                   (map (fn [[f ns]] [f (assoc ns :effective-references
-                                                               (references (roots f) (:owner ns) (:old_alias request) f))]) namespaces))
+                                                         (references (roots f) (:owner ns) (:old_alias request) f))]) namespaces))
             infos (into (sorted-map) (map (fn [[f ns]] [f (binding! ns request f)]) safe-namespaces))
             selected (filterv #(get-in infos [% :selected?]) paths)]
         (when (empty? selected) (p/refuse! :old-alias-absent [:scope] "No matching library alias found."))
@@ -315,5 +321,5 @@
                        :concurrency "cooperative-lock+final-recheck" :next_action "none"}]
           {:ok true :candidates (into {} (map (fn [[f p]] [f (:candidate p)]) plans))
            :receipt receipt :detail {:request request :inspected paths :selected selected :skipped (vec (remove (set selected) paths))
-                                    :per_file per-file :sites (vec (mapcat :sites per-file))}})))
+                                     :per_file per-file :sites (vec (mapcat :sites per-file))}})))
     (catch Exception e (refuse (if (:error-type (ex-data e)) e (ex-info (.getMessage e) {:error-type :invalid-request :at []}))))))
