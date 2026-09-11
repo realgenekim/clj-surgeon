@@ -7,8 +7,8 @@
    [clojure.edn :as edn]
    [clojure.string :as str]
    [clojure.walk :as walk]
-   [rewrite-clj.node :as n]
-   [rewrite-clj.zip :as z]))
+   [clj-splice.core :as splice]
+   [clj-surgeon.splice-projection :as projection]))
 
 (defn refuse [e] (assoc (p/refusal e) :operation "rename_alias" :version 1))
 (defn simple-symbol? [s]
@@ -117,38 +117,13 @@
                                (when (= ":require" (p/raw head)) (map #(libspec! % file) libs)))) tail)]
       {:owner owner :bindings (vec bindings)})))
 
-(defn addresses [source]
-  (into {} (for [[i loc] (map-indexed vector (take-while (complement z/end?) (iterate z/next (z/of-string source {:track-position? true}))))
-                 :let [m (meta (z/node loc))] :when (:row m)]
-             [[(:row m) (:col m) (n/tag (z/node loc))] i])))
-;; @spec RENAME-ALIAS-015
-;; INTENT: RENAME-ALIAS-015
-(defn line-index [starts position]
-  (loop [lo 0 hi (count starts)]
-    (if (< lo hi)
-      (let [mid (quot (+ lo hi) 2)]
-        (if (<= (nth starts mid) position) (recur (inc mid) hi) (recur lo mid)))
-      (max 0 (dec lo)))))
 ;; @spec RENAME-ALIAS-014
 ;; INTENT: RENAME-ALIAS-014
-(defn annotate [root source]
-  (let [ad (addresses source) starts (p/starts source)]
-    (letfn [(walk [x index]
-              (let [line (inc (line-index starts (:start x)))
-                    col (inc (- (:start x) (nth starts (dec line))))]
-                (assoc x :form_index index :line line :end_line (inc (line-index starts (max (:start x) (dec (:end x)))))
-                       :address {:preorder (get ad [line col (:tag x)])}
-                       :children (mapv #(walk % index) (:children x)))))]
-      (assoc root :children
-             (loop [xs (:children root) ordinal 0 result []]
-               (if-let [x (first xs)]
-                 (let [index (if (#{:whitespace :newline :comma :comment} (:tag x)) ordinal (inc ordinal))]
-                   (recur (next xs) index (conj result (walk x index)))) result))))))
 (defn site [node prefix alias role context file]
   (let [source (:source node) start (+ (:start node) prefix)]
     (merge (select-keys node [:form_index :line :end_line :address])
            {:file file :scope_kind "root" :role role :context context
-            :offset (alength (p/bytes (subs source 0 start))) :length (alength (p/bytes alias))
+            :offset (get (:utf16->byte node) start) :length (alength (p/bytes alias))
             :start start :end (+ start (count alias))})))
 
 ;; @spec RENAME-ALIAS-002
@@ -195,7 +170,10 @@
 (defn source! [source file]
   (when-not (str/ends-with? file ".clj") (p/refuse! :unsupported-source [:source file] "Only .clj files supported."))
   (try (p/lexical! source :source) (p/newline-style source)
-       (annotate (p/tree source :source) source)
+       (try (projection/tree source)
+            (catch Exception e
+              (p/refuse! :source-parse-error [:source] (.getMessage e)
+                         {:line (or (:row (ex-data e)) 1) :column (or (:col (ex-data e)) 1)})))
        (catch Exception e (throw (ex-info (.getMessage e) (assoc (ex-data e) :file file))))))
 (defn selected-binding [bindings r]
   (first (filter #(and (= (:alias %) (:old_alias r)) (= (:lib %) (:lib r))) bindings)))
@@ -221,7 +199,8 @@
       (when (seq capture)
         (p/refuse! :new-alias-capture [:new_alias] "New alias would capture existing syntax." {:file file :sites capture})))))
 (defn splice [source edits new]
-  (reduce (fn [s {:keys [start end]}] (str (subs s 0 start) new (subs s end))) source (reverse (sort-by :start edits))))
+  (reduce (fn [s {:keys [offset length]}] (splice/splice s [offset (+ offset length)] new))
+          source (reverse (sort-by :offset edits))))
 (defn form-evidence
   "Namespace-independent form digests, partitioned by declared change ordinals."
   [before after changed-indices]
