@@ -1,0 +1,12 @@
+[{:id :SPLICE-001 :status :active
+  :ears "When Unicode source is parsed, spans and recount shall describe the original UTF-8 intervals and their effective-root projection."
+  :misreadings ["Parser rendering preserves CRLF bytes." "UTF-16 columns count Unicode scalars." "A physical discard is an effective form." "N gaps suffice for N roots."]
+  :boundaries ["Empty source" "Unicode surrogate pairs" "Normalized newlines" "Synthetic prefixes" "Final trivia"]
+  :tests [original-intervals literal-and-synthetic-coordinates frozen-corpus-properties]
+  :rationale "September 11 review's executed Unicode witness and Opus frozen corpora."}
+ {:id :SPLICE-002 :status :active
+  :ears "When valid nonoverlapping byte intervals are replaced, splice shall preserve every original byte outside those intervals."
+  :misreadings ["A UTF-8 continuation byte is a valid endpoint." "Insertion requires a whole-form interval." "Each batch edit uses the prior edit's coordinates." "Equal starts alone imply overlap."]
+  :boundaries ["Equal endpoints" "Whole-source deletion" "Non-ASCII replacement" "Overlapping batch" "Equal-start boundary point" "Equal points in argument order" "Malformed Unicode"]
+  :tests [interval-boundaries frozen-corpus-properties]
+  :rationale "Alias prefixes need subtoken intervals, insertion needs empty intervals, and original bytes remain authoritative."}]

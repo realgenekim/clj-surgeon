@@ -68,11 +68,11 @@
    "rename_alias"
    {:committed 'clj-surgeon.rename-alias-parity-test/rename-alias-cli-mcp-parity
     :typed-refusal 'clj-surgeon.rename-alias-parity-test/rename-alias-cli-mcp-parity
-    :verification-failed 'clj-surgeon.rename-alias-test/rename-alias-transaction-faults}
+    :verification-failed 'clj-surgeon.rename-alias-receipt-test/rename-alias-publication-evidence}
    "insert_forms"
    {:committed 'clj-surgeon.insert-forms-parity-test/insert-forms-cli-mcp-parity
     :typed-refusal 'clj-surgeon.insert-forms-parity-test/insert-forms-cli-mcp-parity
-    :verification-failed 'clj-surgeon.insert-forms-atomic-test/insert-forms-atomic-multiform-and-race}
+    :verification-failed 'clj-surgeon.insert-forms-receipt-test/insert-forms-publication-evidence}
    "require_change"
    {:committed 'clj-surgeon.require-change-boundary-test/standalone-mcp-commits-and-retains-undo
     :verification-failed 'clj-surgeon.require-change-boundary-test/failing-proof-rolls-back-all-files

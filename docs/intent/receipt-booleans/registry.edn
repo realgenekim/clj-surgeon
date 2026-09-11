@@ -9,7 +9,7 @@
  :boundaries ["Returned receipt and durable per-file evidence" "New verbs" "New nested fields" "Post-write external mutation"]
  :tests [every-receipt-boolean-has-a-driven-false-witness unregistered-verbs-and-fields-fail-by-name]
  :rationale "Opus found the same unwitnessed receipt-boolean class in insertion and alias rename, 2026-09-11."
- :rule "EVERY BOOLEAN IN A RECEIPT MUST HAVE A WITNESS IN WHICH IT IS FALSE."
+ :rule "Every boolean path discovered in committed receipts needs an observed literal-false witness. Failure-only fields are covered by publication/recovery groups, not this discovery claim."
  :verbs
  {"insert_forms"
   {:committed :stage-failure :ok :stage-failure :mutation_attempted :stage-failure

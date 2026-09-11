@@ -94,35 +94,14 @@
   "test namespace -> lane. THE authority. Adding a JVM test namespace without
    adding it here fails `clj-surgeon.lane-manifest-test` by name."
   {;; ---- :fast (49) ----
-   'clj-surgeon.rename-alias-candidate-test :fast
    'clj-surgeon.rename-alias-receipt-test :fast
-   'clj-surgeon.rename-alias-positions-test :fast
    'clj-surgeon.receipt-booleans-test :fast
+   'clj-surgeon.insert-forms-test :fast
+   'clj-surgeon.splice-envelope-test :fast
    'clj-surgeon.rename-alias-performance-test :battery
-   'clj-surgeon.rename-alias-scope-test :fast
    'clj-surgeon.rename-alias-test :fast
    'clj-surgeon.rename-alias-parity-test :battery
-   'clj-surgeon.insert-forms-after-prefix-named-defn-test :fast
-   'clj-surgeon.insert-forms-deftest-nested-testing-test :fast
-   'clj-surgeon.insert-forms-unbalanced-payload-test :fast
-   'clj-surgeon.insert-forms-stale-hash-test :fast
-   'clj-surgeon.insert-forms-anchor-decoys-test :fast
-   'clj-surgeon.insert-forms-anchor-cardinality-test :fast
-   'clj-surgeon.insert-forms-body-boundaries-test :fast
-   'clj-surgeon.insert-forms-defn-headers-test :fast
-   'clj-surgeon.insert-forms-payload-count-test :fast
-   'clj-surgeon.insert-forms-trivia-test :fast
-   'clj-surgeon.insert-forms-reader-safety-test :fast
-   'clj-surgeon.insert-forms-portable-receipt-test :fast
-   'clj-surgeon.insert-forms-preservation-test :fast
-   'clj-surgeon.insert-forms-atomic-test :fast
-   'clj-surgeon.insert-forms-paths-test :fast
    'clj-surgeon.insert-forms-receipt-test :fast
-   'clj-surgeon.insert-forms-terminal-test :fast
-   'clj-surgeon.insert-forms-candidate-test :fast
-   'clj-surgeon.insert-forms-spacing-test :fast
-   'clj-surgeon.insert-forms-envelope-test :fast
-   'clj-surgeon.insert-forms-recovery-test :fast
    'clj-surgeon.insert-forms-parity-test :battery
    'clj-surgeon.mission-usage-test :fast
    'clj-surgeon.mission-git-test :fast

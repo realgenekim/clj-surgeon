@@ -251,7 +251,7 @@
                       (:mutation_attempted @completed)
                       (failed "recovery-required" true nil :commit-outcome-unknown (.getMessage e)
                               (select-keys @completed [:receipt_details_path :receipt_hash]))
-                      (#{:invalid-request :invalid-path :unsupported-source :limit-exceeded}
+                      (#{:invalid-request :invalid-path :unsupported-source :malformed-utf8 :limit-exceeded}
                        (:error-type (ex-data e)))
                       (p/refusal e)
                       :else (failed "failed" false true :io-error (.getMessage e) {}))))]

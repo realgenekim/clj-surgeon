@@ -567,35 +567,14 @@
    recover. Keyed by namespace name, so two branches adopting different
    namespaces merge without touching the same line."
   '#{clj-surgeon.receipt-booleans-test ; Cross-verb false-boolean receipt ratchet.
-     clj-surgeon.rename-alias-candidate-test ; Four independent guard-deletion witnesses.
      clj-surgeon.rename-alias-receipt-test ; Disk-derived receipt evidence.
-     clj-surgeon.rename-alias-positions-test ; Column-one site addresses.
+     clj-surgeon.insert-forms-test ; Consolidated span witnesses.
+     clj-surgeon.splice-envelope-test ; Shared envelope witnesses.
      clj-surgeon.rename-alias-performance-test ; Generated 4000-line planner bound.
-     clj-surgeon.rename-alias-scope-test ; Selected-namespace eligibility and comment ancestry.
      clj-surgeon.rename-alias-test ; Fixed alias reader roles, E4 and transaction contract.
      clj-surgeon.rename-alias-parity-test ; Actual request-file transport parity.
-     clj-surgeon.insert-forms-after-prefix-named-defn-test ; insert_forms v1 contract witness.
-     clj-surgeon.insert-forms-anchor-cardinality-test ; insert_forms v1 contract witness.
-     clj-surgeon.insert-forms-anchor-decoys-test ; insert_forms v1 contract witness.
-     clj-surgeon.insert-forms-atomic-test ; insert_forms v1 contract witness.
-     clj-surgeon.insert-forms-body-boundaries-test ; insert_forms v1 contract witness.
-     clj-surgeon.insert-forms-defn-headers-test ; insert_forms v1 contract witness.
-     clj-surgeon.insert-forms-deftest-nested-testing-test ; insert_forms v1 contract witness.
-     clj-surgeon.insert-forms-candidate-test ; Opus F1: structure guard deletion and parse refusal regressions.
-     clj-surgeon.insert-forms-envelope-test ; Opus F3: candidate identity and per-type remedies.
-     clj-surgeon.insert-forms-spacing-test ; Fable F2 ruling: existing separators and body closers.
-     clj-surgeon.insert-forms-recovery-test ; Planned durable receipt crash-window classification.
      clj-surgeon.insert-forms-parity-test ; insert_forms v1 contract witness.
-     clj-surgeon.insert-forms-paths-test ; insert_forms v1 contract witness.
-     clj-surgeon.insert-forms-payload-count-test ; insert_forms v1 contract witness.
-     clj-surgeon.insert-forms-portable-receipt-test ; insert_forms v1 contract witness.
-     clj-surgeon.insert-forms-preservation-test ; insert_forms v1 contract witness.
-     clj-surgeon.insert-forms-reader-safety-test ; insert_forms v1 contract witness.
      clj-surgeon.insert-forms-receipt-test ; insert_forms v1 contract witness.
-     clj-surgeon.insert-forms-stale-hash-test ; insert_forms v1 contract witness.
-     clj-surgeon.insert-forms-terminal-test ; insert_forms v1 contract witness.
-     clj-surgeon.insert-forms-trivia-test ; insert_forms v1 contract witness.
-     clj-surgeon.insert-forms-unbalanced-payload-test ; insert_forms v1 contract witness.
      clj-surgeon.receipt-artifacts-boundary-test ; Sol r10 + two Row 5 real-process witnesses (battery).
      clj-surgeon.namespace-split-test ; Batch 5 adds six ns/footprint/lint/encoding witnesses; derived by deftest-count.
      clj-surgeon.namespace-split-warm-test ; Batch 5 adds executed load/failed destination facts to the real nREPL matrix.

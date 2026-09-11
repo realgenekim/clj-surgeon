@@ -1,0 +1,4 @@
+;; Frozen fixtures are data under fixtures/, outside these source paths.
+{:paths ["src" "test"]
+ :min-bb-version "1.12.209"
+ :tasks {test {:task (exec 'clj-splice.test-runner/run)}}}

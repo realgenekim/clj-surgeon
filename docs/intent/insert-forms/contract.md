@@ -298,26 +298,26 @@ This is preservation/placement acceptance, not proof of application behavior.
 Names below are literal required `deftest` names; use table-driven pure fixtures for
 variants. Every refusal witness asserts exact error type AND unchanged target bytes.
 
-- `insert-forms-after-prefix-named-defn` — a versus ab; before/after variants.
-- `insert-forms-deftest-nested-testing` — outer/inner path, sibling repeated labels.
-- `insert-forms-unbalanced-payload-refuses` — extra close, missing close, malformed tail.
-- `insert-forms-stale-hash-refuses` — one changed comment byte is sufficient.
-- `insert-forms-comment-string-anchor-decoys` — line comment, string, comment macro,
+- `insert-forms-exact-root-anchor` — a versus ab; before/after variants.
+- `insert-forms-body-anchor` — outer/inner path, sibling repeated labels.
+- `insert-forms-parse-stages` — extra close, missing close, malformed tail.
+- `insert-forms-snapshot-guard` — one changed comment byte is sufficient.
+- `insert-forms-exact-root-anchor` — line comment, string, comment macro,
   quote and #_ decoys; real anchor selected, decoys-only yields not-found.
-- `insert-forms-anchor-cardinality` — absent, duplicated owner, repeated testing label.
-- `insert-forms-body-boundaries` — first/last/N, empty, N=0/out-of-range, nested counts.
-- `insert-forms-defn-headers-and-arities` — metadata/doc/attrs/prepost/multi-arity.
+- `insert-forms-exact-root-anchor` — absent, duplicated owner, repeated testing label.
+- `insert-forms-body-anchor` — first/last/N, empty, N=0/out-of-range, nested counts.
+- `insert-forms-body-anchor` — metadata/doc/attrs/prepost/multi-arity.
 - `insert-forms-payload-count-and-order` — one/many/zero, comments-only, discard refusal.
-- `insert-forms-trivia-and-indentation` — trailing/standalone/payload comments, BOF/EOF,
+- `insert-forms-layout-literal-preservation` — trailing/standalone/payload comments, BOF/EOF,
   no final newline, empty body, blank lines, CRLF, tabs, Unicode, multiline literals.
-- `insert-forms-reader-safety-and-limits` — no eval/data-reader execution; all bounds.
-- `insert-forms-portable-read-receipt` — valid projection, wrong root/path, false/missing.
+- `bounded-input-path-encoding` — no eval/data-reader execution; all bounds.
+- `insert-forms-snapshot-guard` — valid projection, wrong root/path, false/missing.
 - `insert-forms-other-top-level-hashes` — independent oracle plus deliberate corruptions.
-- `insert-forms-atomic-multiform-and-race` — injected staging/recheck/read-back failures,
+- `insert-forms-publication-evidence` — injected staging/recheck/read-back failures,
   restored failure and intervening external write requiring recovery (filesystem test).
-- `insert-forms-path-confinement` — traversal/symlink/hardlink/missing (filesystem test).
-- `insert-forms-receipt-accounting` — golden §5, detail inventory, bounded summary.
-- `insert-forms-terminal-response-eligibility` — no v1 result emits exact-success text.
+- `bounded-input-path-encoding` — traversal/symlink/hardlink/missing (filesystem test).
+- `insert-forms-publication-evidence` — golden §5, detail inventory, bounded summary.
+- `insert-forms-publication-evidence` — no v1 result emits exact-success text.
 - `insert-forms-cli-mcp-parity` — actual request-file invocation, shorthand and :op,
   global/op help, EDN-only stdout, all exit classes, malformed/trailing EDN (boundary test).
 
@@ -353,3 +353,7 @@ e4-matched-arms.md` demonstrates the need for independent preservation evidence.
 Terminal law: trunk `docs/intent/mcp-operation-contract/mcp-operation-contract-design.md`
 “Exact Terminal Response” and `src/clj_surgeon/mcp_tool.clj` `exact-terminal-response`.
 No code or speed claim follows from this document; builder review/implementation gates remain.
+
+### clj-splice port (2026-09-11)
+
+Nested and literal intervals now come from clj-splice, with Surgeon retaining owner, body, header and layout policy. Mixed LF/CRLF is admitted: inserted separators use the first source newline (LF if absent), and every original byte is preserved. CRLF inside literals remains literal data. Bare CR, BOM and measured tab indentation admission remain deferred. The bounded lexical/shape preflight remains until rewrite-clj provides a parser-level resource budget; spans supplies literal discovery for indentation.

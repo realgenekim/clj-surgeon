@@ -1,0 +1,247 @@
+{:version 1
+ :operation "rename_alias"
+ :refusals [
+  {:type :alias-collision :class :semantic
+   :native_failure "A new alias already bound to another library retargets uses."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Inspect the full selected namespace alias table."
+   :minimal_reproducer "Selected :as events and another lib :as ev."
+   :existing_check "alias-collision"
+   :owner "rename-alias"
+   :witness "rename-alias-binding-matrix"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :alias-library-mismatch :class :semantic
+   :native_failure "Renaming an alias belonging to another library changes the wrong binding."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Match both library and old alias."
+   :minimal_reproducer "[other :as events], request lib example.events."
+   :existing_check "alias-library-mismatch"
+   :owner "rename-alias"
+   :witness "rename-alias-binding-matrix"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :ambiguous-alias-binding :class :semantic
+   :native_failure "Duplicate bindings make which alias declaration is authoritative ambiguous."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Resolve duplicate alias/library declarations first."
+   :minimal_reproducer "Two libraries both :as events."
+   :existing_check "ambiguous-alias-binding"
+   :owner "rename-alias"
+   :witness "rename-alias-binding-matrix"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :ambiguous-alias-namespace :class :semantic
+   :native_failure "Alias spelling equal to the full namespace makes qualified roles indistinguishable syntactically."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Use semantic evidence or edit exact verified references natively."
+   :minimal_reproducer "[events :as events]."
+   :existing_check "ambiguous-alias-namespace"
+   :owner "rename-alias"
+   :witness "rename-alias-binding-matrix"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :candidate-parse-error :class :semantic
+   :native_failure "The generated replacement can leave unbalanced source."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Parse the full candidate before publication."
+   :minimal_reproducer "Inject candidate text \"(\"."
+   :existing_check "candidate-parse-error"
+   :owner "rename-alias"
+   :witness "rename-alias-parse"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :candidate-structure-mismatch :class :semantic
+   :native_failure "A parse-valid edit can select the wrong body, rename the wrong role, or alter protected bytes."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Compare intended roles/placement and raw protected intervals, then check the inverse."
+   :minimal_reproducer "Inject wrong insertion offset or erase candidate alias roles."
+   :existing_check "candidate-structure-mismatch"
+   :owner "rename-alias"
+   :witness "rename-alias-candidate-integrity"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :commit-outcome-unknown :class :semantic
+   :native_failure "Foreign bytes after replacement can be overwritten during blind rollback."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Preserve foreign bytes and retain the durable recovery identity."
+   :minimal_reproducer "Write foreign text after publication."
+   :existing_check "commit-outcome-unknown"
+   :owner "rename-alias"
+   :witness "rename-alias-publication-evidence"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :expect-count-mismatch :class :semantic
+   :native_failure "Textual prefix matches count route strings as alias references."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Count qualified syntax roles against the complete scope."
+   :minimal_reproducer "E4 expects 31 textual occurrences but has two eligible references."
+   :existing_check "expect-count-mismatch"
+   :owner "rename-alias"
+   :witness "rename-alias-e4-verbatim"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :invalid-guard :class :protocol
+   :native_failure :none
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Obtain one complete path-bound guard."
+   :minimal_reproducer "Guard omits both :sha256 and :read_receipt."
+   :existing_check "invalid-guard"
+   :owner "rename-alias"
+   :witness "rename-alias-stale-and-counts"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :invalid-path :class :semantic
+   :native_failure "Editing a linked or escaped target can alter a different file than the authorized path."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Resolve the target identity and confinement before writing."
+   :minimal_reproducer "src/link.clj is a symlink to the guarded file."
+   :existing_check "invalid-path"
+   :owner "rename-alias"
+   :witness "bounded-input-path-encoding"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :invalid-request :class :protocol
+   :native_failure :none
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Reject before interpretation; native text editing has no request envelope."
+   :minimal_reproducer "A closed version-1 request with an extra :preview key."
+   :existing_check "invalid-request"
+   :owner "rename-alias"
+   :witness "bounded-input-path-encoding"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :io-error :class :semantic
+   :native_failure "A partial publication or unverifiable read-back can be reported as a successful write."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Observe disk hashes; restore owned bytes or report recovery honestly."
+   :minimal_reproducer "Inject staging or replacement read-back failure."
+   :existing_check "io-error"
+   :owner "rename-alias"
+   :witness "rename-alias-publication-evidence"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :limit-exceeded :class :resource
+   :native_failure :none
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Use a bounded smaller input or native patch; no parser budget exists."
+   :minimal_reproducer "A payload with 513 nested reader prefixes."
+   :existing_check "limit-exceeded"
+   :owner "rename-alias"
+   :witness "bounded-input-path-encoding"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :multiple-ns-forms :class :capability
+   :native_failure :none
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Establish the runtime namespace context before a native edit."
+   :minimal_reproducer "(ns a) (ns b)."
+   :existing_check "multiple-ns-forms"
+   :owner "rename-alias"
+   :witness "rename-alias-binding-matrix"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :new-alias-capture :class :semantic
+   :native_failure "Introducing ev captures existing ev/x or ::ev/x syntax."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Check the candidate alias against all eligible syntax roles."
+   :minimal_reproducer "An unbound ev/x alongside the selected events alias."
+   :existing_check "new-alias-capture"
+   :owner "rename-alias"
+   :witness "rename-alias-binding-matrix"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :ns-not-found :class :capability
+   :native_failure :none
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Use a native edit with explicit namespace context."
+   :minimal_reproducer "(def x 1) without ns."
+   :existing_check "ns-not-found"
+   :owner "rename-alias"
+   :witness "rename-alias-binding-matrix"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :old-alias-absent :class :semantic
+   :native_failure "An absent binding can lead to renaming unrelated qualified text."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Find the selected library and alias binding first."
+   :minimal_reproducer "(ns demo) with request old_alias events."
+   :existing_check "old-alias-absent"
+   :owner "rename-alias"
+   :witness "rename-alias-binding-matrix"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :scope-changed-before-commit :class :semantic
+   :native_failure "A new eligible file appearing after planning escapes the promised repository operation."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Recheck exact scope membership before publication."
+   :minimal_reproducer "Create extra.clj in :before-recheck."
+   :existing_check "scope-changed-before-commit"
+   :owner "rename-alias"
+   :witness "rename-alias-stale-and-counts"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :scope-file-count-mismatch :class :semantic
+   :native_failure "A silently incomplete file inventory omits intended edits."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Freeze the complete eligible file inventory."
+   :minimal_reproducer "Scope has two files but expect_files is one."
+   :existing_check "scope-file-count-mismatch"
+   :owner "rename-alias"
+   :witness "rename-alias-binding-matrix"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :source-changed-before-commit :class :semantic
+   :native_failure "A concurrent write between plan and publication is overwritten."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Recheck identity and digest immediately before replacement."
+   :minimal_reproducer "Change target bytes in :before-recheck."
+   :existing_check "source-changed-before-commit"
+   :owner "rename-alias"
+   :witness "rename-alias-stale-and-counts"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :source-hash-mismatch :class :semantic
+   :native_failure "A stale patch overwrites a comment byte changed after inspection."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Compare the complete current bytes to the captured hash."
+   :minimal_reproducer "Capture a hash, append a comment, then submit the old hash."
+   :existing_check "source-hash-mismatch"
+   :owner "rename-alias"
+   :witness "rename-alias-stale-and-counts"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :source-parse-error :class :semantic
+   :native_failure "A broken source parse cannot establish the declared syntax anchor or count."
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Repair syntax, capture a fresh snapshot, then edit."
+   :minimal_reproducer "Source is an unmatched opening parenthesis."
+   :existing_check "source-parse-error"
+   :owner "rename-alias"
+   :witness "rename-alias-parse"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :unsupported-libspec :class :capability
+   :native_failure :none
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Resolve the libspec explicitly before a native edit."
+   :minimal_reproducer "[lib :as events :as another]."
+   :existing_check "unsupported-libspec"
+   :owner "rename-alias"
+   :witness "rename-alias-binding-matrix"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :unsupported-namespace-mutation :class :capability
+   :native_failure :none
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Inspect runtime alias changes; macro-hidden mutation remains outside the guarantee."
+   :minimal_reproducer "(alias ...), outside quote/comment in the selected namespace."
+   :existing_check "unsupported-namespace-mutation"
+   :owner "rename-alias"
+   :witness "rename-alias-binding-matrix"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :unsupported-ns-shape :class :capability
+   :native_failure :none
+   :promise "Only the declared guarded syntax change may be published; evidence must describe observed bytes."
+   :native_method "Resolve non-static namespace setup explicitly."
+   :minimal_reproducer "(ns demo (:use foo))."
+   :existing_check "unsupported-ns-shape"
+   :owner "rename-alias"
+   :witness "rename-alias-binding-matrix"
+   :retirement_condition "Retire only after the same promise has a named replacement witness; capability admissions require exact-byte acceptance evidence."}
+  {:type :unsupported-source :class :capability
+   :native_failure :none
+   :promise "Source outside the declared syntax, extension or newline capability refuses."
+   :native_method "Resolve the unsupported policy and choose a deliberate native interval."
+   :minimal_reproducer "Source has a leading BOM, a reader conditional, or a .cljc extension."
+   :existing_check "unsupported-source"
+   :owner "rename-alias"
+   :witness "bounded-input-path-encoding"
+   :retirement_condition "Admit a capability only with exact-byte acceptance evidence."}
+  {:type :malformed-utf8 :class :semantic
+   :native_failure "Lossy decoding can replace malformed UTF-8 bytes before an edit."
+   :promise "Malformed UTF-8 refuses without replacing original bytes."
+   :native_method "Strictly decode and preserve disk bytes."
+   :minimal_reproducer "The disk file contains byte 0xff."
+   :existing_check "malformed-utf8"
+   :owner "rename-alias"
+   :witness "bounded-input-path-encoding"
+   :retirement_condition "Retire only with an equivalent strict-decoding witness."}
+ ]}

@@ -4,8 +4,8 @@
   (:require
    [clojure.edn :as edn]
    [clojure.string :as str]
-   [rewrite-clj.node :as n]
-   [rewrite-clj.parser :as parser])
+   [clj-splice.core :as splice]
+   [clj-surgeon.splice-projection :as projection])
   (:import
    (java.io PushbackReader StringReader)
    (java.nio ByteBuffer)
@@ -40,9 +40,12 @@
 ;; INTENT: INSERT-FORMS-022
 (defn remedy [{:keys [error-type candidates at]}]
   (case error-type
+    :io-error "Repair the I/O failure and reconsider the guarded request."
+    :commit-outcome-unknown "Inspect the durable journal and fresh file hashes before recovery."
     :invalid-request (str "Follow the closed request schema at " (pr-str at) ".")
     :invalid-path "Choose a singly-linked regular .clj file inside the canonical workspace."
     :invalid-guard "Supply exactly one guard: sha256 or a complete path-bound read_receipt."
+    :malformed-utf8 "Repair the malformed UTF-8 bytes, then capture a fresh guard."
     :unsupported-source "Choose supported .clj source in UTF-8, with uniform LF or CRLF and no unsupported reader syntax."
     :unsupported-payload-syntax "Remove reader-discard, reader-eval, reader conditionals or BOM from the payload."
     :limit-exceeded "Reduce the input or projected receipt to the reported limit."
@@ -79,7 +82,7 @@
                     (.onMalformedInput CodingErrorAction/REPORT)
                     (.onUnmappableCharacter CodingErrorAction/REPORT))
            (ByteBuffer/wrap bs)))
-    (catch Exception _ (refuse! (if (= kind :request) :invalid-request :unsupported-source)
+    (catch Exception _ (refuse! (if (= kind :request) :invalid-request :malformed-utf8)
                          [kind] "Strict UTF-8 required."))))
 
 (defn complete-expression [stack]
@@ -255,19 +258,7 @@
 ;; INTENT: INSERT-FORMS-020
 (defn tree [source kind]
   (try
-    (let [root (parser/parse-string-all source) ls (starts source)]
-      (letfn [(wrap [node parent-start]
-                (let [{:keys [row col end-row end-col]} (meta node)
-                      start (cond (= :forms (n/tag node)) 0
-                                  (= :map-qualifier (n/tag node)) (inc parent-start)
-                                  :else (+ (nth ls (dec row)) (dec col)))
-                      end (cond (= :forms (n/tag node)) (count source)
-                                (= :map-qualifier (n/tag node)) (+ start (count (n/string node)))
-                                :else (+ (nth ls (dec end-row)) (dec end-col)))]
-                  {:tag (n/tag node) :start start :end end :line row
-                   :source source
-                   :children (when (n/inner? node) (mapv #(wrap % start) (n/children node)))}))]
-        (wrap root 0)))
+    (projection/tree source)
     (catch Exception e
       (refuse! (case kind :source :source-parse-error :payload :payload-parse-error :candidate-parse-error)
                [kind] (.getMessage e)
@@ -390,11 +381,16 @@
     (if (nil? left) 0
         (if-let [comment (re-find #"\A[ \t,]*;[^\r\n]*(?:\r\n|\n|\z)" (subs source p))]
           (+ p (count comment)) p))))
-(defn newline-style [source]
-  (let [crlf (count (re-seq #"\r\n" source)) lf (count (re-seq #"\n" source))]
-    (when (or (not= (count (re-seq #"\r" source)) crlf) (and (pos? crlf) (not= crlf lf)))
-      (refuse! :unsupported-source [:source] "Mixed or bare-CR source newlines are unsupported."))
-    (if (pos? crlf) "\r\n" "\n")))
+(defn newline-style
+  ([source] (newline-style source false))
+  ([source mixed?]
+   (let [crlf (count (re-seq #"\r\n" source)) lf (count (re-seq #"\n" source))]
+     (when (or (not= (count (re-seq #"\r" source)) crlf)
+               (and (not mixed?) (pos? crlf) (not= crlf lf)))
+       (refuse! :unsupported-source [:source] "Unsupported source newline policy."))
+     ;; Inserted separators use the first original newline; old bytes never move
+     ;; through rendering or newline normalization.
+     (or (re-find #"\r\n|\n" source) "\n"))))
 
 ;; @spec INSERT-FORMS-021
 ;; INTENT: INSERT-FORMS-021
@@ -403,7 +399,7 @@
         ;; The comment's newline is part of the gap, including for a tail at EOF.
         base (if (and (:left selection) (pos? base)
                       (= \newline (nth source (dec base))))
-               (- base (count newline)) base)
+               (- base (if (and (> base 1) (= \return (nth source (- base 2)))) 2 1)) base)
         gap (if (:left selection) (re-find #"\A[ \t,\r\n]*" (subs source base)) "")
         lines (count (re-seq #"\n" gap))
         consumed (if (pos? lines) gap "")
@@ -578,9 +574,12 @@
     (bounded! source :source)
     (guard! source r)
     (lexical! source :source)
-    (let [newline (newline-style source) payload (get-in r [:payload :text])
-          literals (lexical! payload :payload) before (tree source :source)
-          payload-root (tree payload :payload) count-forms (count (effective payload-root))]
+    (let [newline (newline-style source true) payload (get-in r [:payload :text])
+          _ (lexical! payload :payload) before (tree source :source)
+          payload-root (tree payload :payload)
+          literals (mapv (juxt :utf16-start :utf16-end)
+                         (filter :literal (get-in payload-root [:inventory :nodes])))
+          count-forms (count (effective payload-root))]
       (when-not (= count-forms (get-in r [:payload :forms]))
         (refuse! :payload-form-count-mismatch [:payload :forms] "Payload form count differs."
                  {:expected (get-in r [:payload :forms]) :actual count-forms}))
@@ -593,7 +592,9 @@
             p (:offset layout) inserted (:inserted layout)
             _ (when (> (+ (alength (bytes source)) (alength (bytes inserted))) (:candidate limits))
                 (refuse! :limit-exceeded [:candidate] "Candidate exceeds 16 MiB before materialization."))
-            candidate (*candidate-text* (str (subs source 0 p) inserted (subs source p))) after (tree candidate :candidate)]
+            byte-offset (get (:utf16->byte before) p)
+            candidate (*candidate-text* (splice/splice source [byte-offset byte-offset] inserted))
+            after (tree candidate :candidate)]
         (merge {:ok true :candidate candidate :offset p :inserted inserted}
                (facts source candidate inserted p c r before after selection adjusted-root))))
     (catch Exception e
