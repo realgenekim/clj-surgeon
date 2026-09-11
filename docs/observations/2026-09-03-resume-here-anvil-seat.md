@@ -779,5 +779,5 @@ B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa;
 
 ## STATE 2026-09-11T21:51Z — ship v3.10 (Block 2) INSTALLED and PROVEN; trunk a15531ee = stable/2026-09-11.3; next = first real packet through run build, then Block 3
 - ~/bin == ship v3.10 staged set by digest; ~/bin/INSTALL.PROVEN=true stamp=20260911T213626Z; backups under /var/tmp/forge/ship/backups/<stamp>; rollback verb: install.sh --rollback <stamp>. Verbs: run build <brief.edn> (schemas at ~/bin/schemas/), run check <owed-id>, run build --delta, measure, board, await, run-bg NAME [--] CMD.
-- Scoped circuits on the installed bytes: refresh in progress (circuits.sh needs WITNESS_SOURCE=/var/tmp/forge/ship-v3.10/test). Until they pass, the live-model packet round-trip proof is pending; everything else is witnessed.
+- Scoped circuits on the installed bytes: PASSED (fresh claude c92dc3fa, codex bdaec8aa; current proof green). Block 2 DONE.
 - Records: 2026-09-11-block2-report-astra.md (build + fix rounds 1–2), -block2-opus-redteam.md (NO-GO), -block2-opus-redteam-2.md (GO-WITH-FIX). Memory: never-reverse-a-written-invariant-in-a-brief.
