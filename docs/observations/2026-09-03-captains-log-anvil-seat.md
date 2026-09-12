@@ -5295,3 +5295,36 @@ mandated skill is a stop, not a guess. I applied the same one-line fix on the br
 Ratchet worth writing: a branch cut before a plate fix inherits the stale plate. The
 prewarm-before-ship rule would have caught it at landing; the builder caught it at read
 time, which is cheaper. Block B tally: ten launches, one build, one red-team, nine stops.
+
+## 2026-09-12T09:10:25Z — block B attempt 10: GO-WITH-REVIEW; fast makespan 83 s → 23.9 s; ceiling re-derived and ratified
+
+Astra fixed all five red-team items in 55 minutes. Tip b2049db5, pushed to origin
+bb-rewrite-tower. Report: `2026-09-12-bbtower-block-b-attempt10-report.md`.
+
+| Meter | Block A | Attempt 8 | Attempt 10 | Budget |
+|---|---:|---:|---:|---:|
+| Fast coordinator makespan (what the fleet pays) | 83.2 s | 83.1 s | 23.9 s | — |
+| Fast lane cadence sum | 68.2 s | 36.9 s | 42.7 s | 60 s |
+| Integration sum | 758 s | 58.8 s | 59.3 s | 240 s |
+| Final prewarm | fail | pass | pass, 390 s, landing? false | — |
+
+The makespan is the honest number and attempt 8 had not moved it: the 47 unassigned
+namespaces were running unbudgeted inside the fast entrance. Now every fast-entrance
+namespace has a cadence (33 fast, 14 battery by measured wall, no overrides), the fast
+selection no longer unions the historical bb inventory, and missing budgets refuse
+before launch.
+
+Fixes, each with a red and a green log: refusal completeness now extracts every kind
+spelling (direct, requiring-resolve, keyword :kind, map field) and a servlet plant goes
+red by file and kind; probe carries no verification booleans (a constant false is not a
+driven seam), witnessed for absence; `bb test/run_all.clj` 96 → exit 0 with 829 tests and
+the diagnostic is now a gate stage; the ceiling is re-derived from a shipped-runtime run.
+
+RATIFIED: the :bb lane ceiling is 374,149 ms = ceil(240,989 x 60,000 / 38,646), from the
+calibration receipt in attempt10/ceiling-run; replaces the withdrawn 399,155.
+
+One prewarm repair used: outline-corpus-integration-test at 21,033 ms bb against a 20,000
+ms namespace budget; re-measured 20,859 bb / 8,306 JVM, the 2x rule sent it to the JVM.
+
+Next: an independent verification of the five fixes at the tip, then landing through the
+ship path. Go-with-fix is not go; go-with-review is not either.
