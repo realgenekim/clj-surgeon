@@ -212,47 +212,53 @@
 
 ;; @spec TEST-ISO-016 -- paired namespace walls on the same box, not startup.
 (def runtime-measurements
-  (let [root "docs/observations/2026-09-12-bbtower-block-b/attempt7/"]
-    (into {}
-          (map (fn [[n jvm-ms bb-ms]]
-                 [n {:jvm-ms jvm-ms :bb-ms bb-ms :ratio (/ (double bb-ms) jvm-ms)
-                     :jvm-log (str root "a-base/receipt.edn")
-                     :bb-log (str root "c-subject/receipt.edn")}]))
-          '[[clj-surgeon.battery-ledger-test 194 3]
-            [clj-surgeon.battery-parallel-test 339 50]
-            [clj-surgeon.fast-lane-isolation-test 228 8]
-            [clj-surgeon.helper-extraction-test 1439 788]
-            [clj-surgeon.insert-forms-test 2017 5222]
-            [clj-surgeon.lane-manifest-test 1525 1039]
-            [clj-surgeon.mcp-compact-edit-fields-test 128 2]
-            [clj-surgeon.mcp-contract-test 204 12]
-            [clj-surgeon.mcp-extraction-test 341 32]
-            [clj-surgeon.mcp-inspect-contract-test 324 288]
-            [clj-surgeon.mcp-intent-contract-test 352 226]
-            [clj-surgeon.mcp-paths-test 104 0]
-            [clj-surgeon.mcp-program-tool-test 249 12]
-            [clj-surgeon.mcp-read-request-normalization-test 105 2]
-            [clj-surgeon.mcp-recovery-test 251 5]
-            [clj-surgeon.mcp-schema-test 123 9]
-            [clj-surgeon.mcp-telemetry-test 120 5]
-            [clj-surgeon.mcp-workspace-test 108 21]
-            [clj-surgeon.mission-candidate-test 109 7]
-            [clj-surgeon.mission-forms-source-test 219 10]
-            [clj-surgeon.mission-forms-test 127 3]
-            [clj-surgeon.mission-git-test 100 0]
-            [clj-surgeon.mission-plain-forms-test 124 25]
-            [clj-surgeon.mission-typist-test 114 7]
-            [clj-surgeon.mission-usage-test 145 4]
-            [clj-surgeon.namespace-split-test 696 744]
-            [clj-surgeon.outline-differential-test 114 12]
-            [clj-surgeon.quoted-var-refs-test 211 12]
-            [clj-surgeon.rename-alias-receipt-test 414 1553]
-            [clj-surgeon.rename-alias-test 3265 6478]
-            [clj-surgeon.require-change-test 149 42]
-            [clj-surgeon.splice-envelope-test 834 28591]
-            [clj-surgeon.split-proof-gate-test 114 2]
-            [clj-surgeon.telemetry-events-test 242 36]
-            [clj-surgeon.workspace-onboarding-test 240 111]])))
+  (merge
+    {'clj-surgeon.intent-transaction-test
+     {:jvm-ms 4709 :bb-ms 4905 :ratio (/ 4905.0 4709)
+      :jvm-log "docs/observations/2026-09-12-bbtower-block-b/attempt8/intent-jvm.log"
+      :bb-log "docs/observations/2026-09-12-bbtower-block-b/attempt8/intent-bb.log"
+      :contract-failure "Shared CLI workspace_status.unexpected_paths is unbounded; attempt8/owed.md. Runtime comparison found no bb-only leak."}}
+    (let [root "docs/observations/2026-09-12-bbtower-block-b/attempt7/"]
+      (into {}
+            (map (fn [[n jvm-ms bb-ms]]
+                   [n {:jvm-ms jvm-ms :bb-ms bb-ms :ratio (/ (double bb-ms) jvm-ms)
+                       :jvm-log (str root "a-base/receipt.edn")
+                       :bb-log (str root "c-subject/receipt.edn")}]))
+            '[[clj-surgeon.battery-ledger-test 194 3]
+              [clj-surgeon.battery-parallel-test 339 50]
+              [clj-surgeon.fast-lane-isolation-test 228 8]
+              [clj-surgeon.helper-extraction-test 1439 788]
+              [clj-surgeon.insert-forms-test 2017 5222]
+              [clj-surgeon.lane-manifest-test 1525 1039]
+              [clj-surgeon.mcp-compact-edit-fields-test 128 2]
+              [clj-surgeon.mcp-contract-test 204 12]
+              [clj-surgeon.mcp-extraction-test 341 32]
+              [clj-surgeon.mcp-inspect-contract-test 324 288]
+              [clj-surgeon.mcp-intent-contract-test 352 226]
+              [clj-surgeon.mcp-paths-test 104 0]
+              [clj-surgeon.mcp-program-tool-test 249 12]
+              [clj-surgeon.mcp-read-request-normalization-test 105 2]
+              [clj-surgeon.mcp-recovery-test 251 5]
+              [clj-surgeon.mcp-schema-test 123 9]
+              [clj-surgeon.mcp-telemetry-test 120 5]
+              [clj-surgeon.mcp-workspace-test 108 21]
+              [clj-surgeon.mission-candidate-test 109 7]
+              [clj-surgeon.mission-forms-source-test 219 10]
+              [clj-surgeon.mission-forms-test 127 3]
+              [clj-surgeon.mission-git-test 100 0]
+              [clj-surgeon.mission-plain-forms-test 124 25]
+              [clj-surgeon.mission-typist-test 114 7]
+              [clj-surgeon.mission-usage-test 145 4]
+              [clj-surgeon.namespace-split-test 696 744]
+              [clj-surgeon.outline-differential-test 114 12]
+              [clj-surgeon.quoted-var-refs-test 211 12]
+              [clj-surgeon.rename-alias-receipt-test 414 1553]
+              [clj-surgeon.rename-alias-test 3265 6478]
+              [clj-surgeon.require-change-test 149 42]
+              [clj-surgeon.splice-envelope-test 834 28591]
+              [clj-surgeon.split-proof-gate-test 114 2]
+              [clj-surgeon.telemetry-events-test 242 36]
+              [clj-surgeon.workspace-onboarding-test 240 111]]))))
 
 ;; @spec TEST-ISO-016
 (defn measured-runtime [portable-runtime measurement]

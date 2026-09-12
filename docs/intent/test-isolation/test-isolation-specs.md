@@ -21,6 +21,12 @@ status: "round four implemented 2026-09-04 (002/003/004/005/007/010 runtime witn
   one ms beyond twice the JVM wall is not. Cadence, membership and the
   60,000/240,000 ms fast/integration ceilings do not change.
   *Witness:* `clj-surgeon.lane-manifest-test/every-manifest-entry-exists-on-disk`.
+  The original library-test inventory retains its runner, counters, temp
+  guard and cadence when a member selects JVM. Runtime selection does not
+  require inventing a JVM lane for that member. Both runtime workers reject
+  a selection assigned to the other runtime; the coordinator splits them
+  before launch. Witness: `battery-parallel-test/the-inventory-is-the-lane-manifests-battery-lane`
+  and the real hybrid fast run.
 
 Gene, filing the spike (2026-09-04): *"I think a spike to clean up JVM test
 suite and speed it up and ensure pure and at least tests that don't interfere

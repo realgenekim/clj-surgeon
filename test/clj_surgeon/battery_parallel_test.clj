@@ -30,6 +30,12 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest the-inventory-is-the-lane-manifests-battery-lane
+  ;; @spec TEST-ISO-016 -- changing runtime preserves the original runner inventory.
+  (is (= ["clojure" "-J-Xmx512m" "-M:clj-surgeon/test-deps" "-m" "run-all"
+          "--emit-edn" "receipt.edn" "--ns" "clj-surgeon.intent-transaction-test"]
+         (bp/lane-command "-J-Xmx512m" "receipt.edn" '[clj-surgeon.intent-transaction-test])))
+  (is (= "clj-surgeon.mcp-test-runner"
+         (nth (bp/lane-command "-J-Xmx512m" "receipt.edn" '[clj-surgeon.splice-envelope-test]) 4)))
   (testing "the scheduler reads the manifest, so a namespace added there is run"
     ;; A hard-coded inventory is how a namespace joins the manifest and
     ;; silently stops being run: the gate stays green while covering less.
@@ -605,7 +611,7 @@
              (select-keys (ex-data error) [:source :step :reason])))))
   (testing "the preflight line is the reader's own answer, never a source name"
     (with-redefs [mem/available-mib (fn [] (throw (ex-info "gate-refused: available memory is unknown"
-                                                          {:step "vm_stat"})))]
+                                                    {:step "vm_stat"})))]
       (let [line (mem/preflight-line)]
         (is (str/starts-with? line "REFUSED gate-refused: available memory is unknown"))
         (is (str/includes? line ":step \"vm_stat\""))))

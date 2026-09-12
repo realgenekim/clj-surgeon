@@ -434,7 +434,8 @@
    rest-of-argv shape is untouched."
   [java-opts out-path namespaces]
   (into (into ["clojure"] (remove str/blank? (str/split (or java-opts "") #"\s+")))
-        (concat ["-M:clj-surgeon/test-deps" "-m" "clj-surgeon.mcp-test-runner"
+        (concat ["-M:clj-surgeon/test-deps" "-m"
+                 (if (every? lm/lane-of namespaces) "clj-surgeon.mcp-test-runner" "run-all")
                  "--emit-edn" (str out-path) "--ns"]
                 (map str namespaces))))
 
@@ -1006,11 +1007,10 @@
         plan (vec (mapcat (fn [phase groups]
                             (mapcat (fn [namespaces]
                                       (for [[[runtime _home] selected]
-                                            (group-by #(vector (if (= suite "bb") :bb
-                                                        (if (contains? #{"fast" "mcp"} suite)
-                                                          (or (get lm/namespace-runtimes %)
-                                                              (throw (ex-info (str "runtime-unclassified: " %) {:namespace %})))
-                                                          :jvm))
+                                            (group-by #(vector (if (contains? #{"bb" "fast" "mcp"} suite)
+                                                                 (or (get lm/namespace-runtimes %)
+                                                                     (throw (ex-info (str "runtime-unclassified: " %) {:namespace %})))
+                                                                 :jvm)
                                                                (contains? #{:fast :integration} (lm/lane-of %))) namespaces)]
                                         {:phase phase :namespaces (vec selected) :runtime runtime})) groups))
                     (range) waves))]
