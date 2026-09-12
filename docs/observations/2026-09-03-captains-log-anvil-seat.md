@@ -5496,3 +5496,14 @@ alias lanes failed. Two causes, both real, neither the block's code:
 
 The v3.12 install stands (PROVEN). Each of these was found by a gate refusing, not by a
 green that lied.
+
+## 2026-09-12T11:18:19Z — v3.12 round 3 built (f8e4515): check-only state root and report delivery; suite + install running outside
+
+Packet b9ec38de (Astra, 9 min): check-only packets on a clj-surgeon worktree (origin
+basename, or worktree basename when no origin) get exactly the passwd home's
+.local/state/clj-surgeon as an added write root, created when absent, recorded in
+environment.edn and the sealed manifest; build packets keep the old envelope; a red
+check-only packet still writes report.edn with :verdict :fail and its check row.
+Blocked in-packet on the same two: N1 and circuits. Report published as
+`2026-09-12-block4-round3-report-astra.md`. Outside: test/run.sh with fresh circuits on
+f8e4515, then install.sh gated on "PASS all witnesses" and a clean tree.
