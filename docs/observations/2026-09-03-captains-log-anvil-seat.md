@@ -5909,3 +5909,15 @@ limit makes the namespace bb-ineligible, assigned JVM, reason recorded and print
 gate refusal; "never silently pinned" meant never without the reason. Attempt 23 (Astra,
 pid 2803847) encodes the three states, classifies the nine, fixes the three real defects
 red-first, re-folds the census, then battery and prewarm.
+
+## 2026-09-12T20:17:39Z — attempt 23 GO under the corrected rule: 99 portable, 10 bb-ineligible, 0 refused; eleventh check-only prewarm at 3b6d5357
+
+Tip 3b6d5357, pushed; report published as `2026-09-12-bbtower-block-b-attempt23-report.md`
+with the final census. TEST-ISO-016 now has three states (portable / bb-ineligible with a
+registered capability reason / refused), the JVM as reference. The strict CLJC split
+emitter now emits one ordinary reader conditional per original body form (JVM-readable;
+witnesses on both platforms and either empty side); the round-trip oracle normalises
+gensyms narrowly; prune-test's fixtures follow the TMPDIR policy, after which prune
+exposed the same SCI lock-release limit as recovery, so it is bb-ineligible with the
+reason (10, not the predicted 9). One fast run, one counted battery, one real prewarm,
+all green, no repair. Packet 09273506 is the eleventh check-only prewarm; ship round 4.
