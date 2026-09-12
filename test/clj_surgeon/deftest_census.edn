@@ -2556,6 +2556,7 @@
   clj-surgeon.xray-test/compact-evidence-preserves-provenance-without-repeating-source
   clj-surgeon.xray-test/computed-xray-can-start-at-an-unnamed-owner-containing-a-line
   clj-surgeon.xray-test/computed-xray-canonicalizes-map-shaped-syntax-without-evaluation
+  clj-surgeon.xray-test/evaluation-preserves-typed-refusals-and-untyped-cause-messages
   clj-surgeon.xray-test/expect-count-refines-cardinality-without-changing-analyzer-input
   clj-surgeon.xray-test/literal-xray-can-refuse-on-an-exact-match-count
   clj-surgeon.xray-test/literal-xray-can-start-at-an-unnamed-owner-containing-a-line

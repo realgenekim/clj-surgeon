@@ -368,6 +368,8 @@
                               :allowed-capabilities allowed-capabilities
                               :allowed-forms expression-reference
                               :remedy "Use one pure Clojure expression. A thread-first form and the allowed builders must return one query vector."}
+                       (and cause (= :evaluation-failed reason))
+                       (assoc :cause-message (ex-message cause))
                        symbol (assoc :symbol symbol
                                      :remedy (str "Use one pure Clojure expression. A thread-first form and the allowed builders must return one query vector. "
                                                   "Do not execute " symbol
@@ -388,6 +390,8 @@
                               :allowed-forms xray-expression-reference
                               :usage "clj-surgeon :op :xray :file FILE :expr EXPR"
                               :remedy "Return a path, or end with analyze; add expect-count for exact cardinality."}
+                       (and cause (= :evaluation-failed reason))
+                       (assoc :cause-message (ex-message cause))
                        symbol (assoc :symbol symbol
                                      :remedy (str "Return a path, or end with analyze; add expect-count for exact cardinality. "
                                                   "Do not execute " symbol
@@ -417,23 +421,27 @@
                              {:symbol symbol})))
         (:val (sci/eval-string+ context expression {:ns user-ns})))
       (catch Exception exception
-        (if (#{:invalid-edit-expression :invalid-xray-expression}
-             (:error-type (ex-data exception)))
-          (throw exception)
-          (invalid! expression
-                    (cond
-                      (#{:invalid-xray-path :invalid-xray-analyzer}
-                       (:error-type (ex-data exception)))
-                      (:error-type (ex-data exception))
+        ;; JVM SCI adds an untyped :sci/error wrapper around host refusals.
+        ;; Preserve the original expression refusal, including its cause/data.
+        (let [causes (take-while some? (iterate ex-cause exception))
+              typed (some #(when (:error-type (ex-data %)) %) causes)
+              error-type (:error-type (ex-data typed))]
+          (if (#{:invalid-edit-expression :invalid-xray-expression} error-type)
+            (throw typed)
+            (invalid! expression
+                      (cond
+                        (#{:invalid-xray-path :invalid-xray-analyzer} error-type)
+                        error-type
 
-                      (or (str/includes? (.getMessage exception)
-                                         "is not allowed")
-                          (str/includes? (.getMessage exception)
-                                         "Unable to resolve symbol"))
-                      :disallowed-symbol
+                        (some (fn [cause]
+                                (some #(str/includes? (or (ex-message cause) "") %)
+                                      ["is not allowed" "Unable to resolve symbol"
+                                       "Could not resolve symbol"]))
+                              causes)
+                        :disallowed-symbol
 
-                      :else :evaluation-failed)
-                    exception))))))
+                        :else :evaluation-failed)
+                      (or typed exception))))))))
 
 (defn- zipper-children
   [zloc]
