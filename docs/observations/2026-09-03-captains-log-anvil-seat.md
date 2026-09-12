@@ -6012,3 +6012,18 @@ for promoting self-report or a disclaimed mechanism into fact (#16, #19, #33, #5
 promotion queue of ten with reasons; two the miner would have cut that Astra keeps. The
 pipeline Gene asked for now exists in the records lane: mine under the receipt rule → attack
 receipt by receipt → promote with Gene. Published: wiki-llm/candidates-…, review-astra-….
+
+## 2026-09-12T21:09:24Z — attempt 24 GO: the probe reloads the complete closure through the shared ns parser; twelfth check-only prewarm at cc50aa2b
+
+Tip cc50aa2b (product 5674f516), pushed; report published as
+`2026-09-12-bbtower-block-b-attempt24-report.md`. Red first (92fe4252): Sol's temporary
+project returned [demo.probe-test] where [foo.bar demo.probe-test] was expected. Fix: the
+probe discovers dependencies through the repository's shared form-identity ns parser
+(recursive prefix lists, vector libspecs, bare symbols, string libraries, require/macro/use,
+JVM and default reader branches, spliced conditionals; discarded forms ignored; a quoted ns
+cannot hide the real one); an unclassified require form refuses :probe-require-unparsed
+with :form and :file before any reload, registered with the native failure it prevents;
+:closure-expected in the receipt. The stronger witness loads a dependency at value 1,
+writes value 2 on disk, and sees the probe FAIL its old-value assertion: stale-image
+behaviour witnessed, not only graph shape. Final prewarm green. Packet 5aeb8910 is the
+twelfth check-only prewarm; ship round 5 follows.
