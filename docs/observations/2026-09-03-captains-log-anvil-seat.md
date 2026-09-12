@@ -5798,3 +5798,18 @@ PASSED with apparatus 69.2%, over the 50% tripwire. The daily unit has not been 
 four days while I ran the loop by hand. Filed inb-f346bc (class oracle first) and
 inb-bc3098 (red packet seeds the brief) with their counterexamples. Running seat-receipt
 now; no new apparatus after block B lands until a vs-native table exists.
+
+## 2026-09-12T17:23:26Z — attempt 20 PASS: six-run variance rule, probe bound, spec witness; ninth check-only prewarm at 7085efa9
+
+Tip 7085efa9 (product 09588a14), pushed; report published as
+`2026-09-12-bbtower-block-b-attempt20-report.md` with runtime-table.md and
+reassignments.md. 38 paired namespaces × 6 JVM + 6 bb runs, serial, one process at a
+time: 456 controls; fold.clj derives the table and the manifest patch from receipts and
+replays byte-identical. Rule now: (mean_bb + 2·sd_bb) / max(1, mean_jvm − 2·sd_jvm) ≤ 2.0.
+Exactly one assignment flips: rename-alias-test, JVM 3,203 ± 151 ms vs bb 6,265 ± 75 ms,
+conservative ratio 2.21, to the JVM. Sol was right by 52 ms and a standard deviation. The
+manifest witness fails by name for undersampled or over-ratio bb assignments; the ceiling
+replay now reads runtime membership from the calibration receipt itself (343,102 ms
+unchanged). Probe servlet bounds its encoded verdict at 16,384 bytes with a typed
+:truncated field; spec-vs-receipt witness added. One test-fast, one wrapper diagnostic,
+one real prewarm, all green. Packet a2847800 is the ninth check-only prewarm; then ship.
