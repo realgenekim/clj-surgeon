@@ -25,6 +25,7 @@
    [clj-surgeon.bb-ceiling :as ceiling]
    [clj-surgeon.ns-isolation :as iso]
    [clj-surgeon.spawn-ledger :as spawn]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
@@ -463,7 +464,16 @@
 ;; @spec TEST-ISO-007
 (deftest bb-ceiling-reproduces-from-calibration-under-shipped-manifest
   (is (= (:ceiling-ms (ceiling/from-file ceiling/calibration-receipt))
-         (:bb iso/lane-budget-ms))))
+         (:bb iso/lane-budget-ms)))
+  (let [receipt (edn/read-string (slurp ceiling/calibration-receipt))
+        expected {:bb-runtime-sum-ms 240989 :fast-cadence-sum-ms 42143 :ceiling-ms 343102}
+        runtimes (ns-resolve 'clj-surgeon.lane-manifest 'namespace-runtimes)]
+    (is (= expected (ceiling/derive receipt)))
+    (with-redefs-fn {runtimes (zipmap (keys @runtimes) (repeat :jvm))}
+      #(is (= expected (ceiling/derive receipt))
+           "A new runtime policy cannot relabel historical calibration walls"))
+    (is (thrown? AssertionError (ceiling/derive (update receipt :lanes conj (first (:lanes receipt))))))
+    (is (thrown? AssertionError (ceiling/derive (assoc-in receipt [:lanes 0 :runtime] :unknown))))))
 
 ;; @spec TEST-ISO-007
 (deftest spec-bb-boundary-equals-registered-ceiling

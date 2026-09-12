@@ -1,5 +1,5 @@
 (ns clj-surgeon.bb-ceiling
-  "Reproduce TEST-ISO-007 from one receipt and the shipped lane manifest."
+  "Reproduce TEST-ISO-007 from recorded runtimes and unchanged lane cadence."
   (:refer-clojure :exclude [derive])
   (:require
    [clj-surgeon.lane-manifest :as lm]
@@ -12,6 +12,13 @@
 (defn derive [receipt]
   (assert (= :passed (:state receipt)) "Calibration receipt must have passed")
   (let [runs (:runs receipt)
+        runtime-entries (vec (for [lane (:lanes receipt) n (:namespaces lane)]
+                               [n (:runtime lane)]))
+        runtimes (into {} runtime-entries)
+        _ (assert (and (= (count runtime-entries) (count runtimes))
+                       (= (set (keys runtimes)) (set (map :namespace runs)))
+                       (every? #{:bb :jvm} (vals runtimes)))
+                  "Calibration requires one recorded execution runtime per namespace")
         _ (assert (and (seq runs)
                        (= (count runs) (count (set (map :namespace runs))))
                        (every? #(and (lm/lane-of (:namespace %))
@@ -19,7 +26,7 @@
                                      (integer? (:elapsed-ms %))
                                      (<= 0 (:elapsed-ms %))) runs))
                   "Calibration requires unique, measured, shipped-classified namespaces")
-        bb (reduce + 0 (map :elapsed-ms (filter #(= :bb (lm/namespace-runtimes (:namespace %))) runs)))
+        bb (reduce + 0 (map :elapsed-ms (filter #(= :bb (runtimes (:namespace %))) runs)))
         fast (reduce + 0 (map :elapsed-ms (filter #(= :fast (lm/lane-of (:namespace %))) runs)))]
     (assert (pos? fast) "Calibration fast-cadence sum must be positive")
     {:bb-runtime-sum-ms bb

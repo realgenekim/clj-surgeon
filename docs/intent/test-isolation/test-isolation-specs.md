@@ -7,18 +7,24 @@ status: "round four implemented 2026-09-04 (002/003/004/005/007/010 runtime witn
 # JVM Test-Suite Isolation Specifications
 
 - [x] **TEST-ISO-016**: A namespace shall run on bb only when it is
-  bb-portable AND its measured bb namespace wall is at most 2.0 times its
-  measured JVM namespace wall on the same box. Record both walls, their
-  ratio and log paths beside the assignment; otherwise select JVM. Existing
+  bb-portable AND its conservative paired namespace-wall ratio is at most
+  2.0. Measure at least six identical controls per runtime on the same box,
+  one suite at a time. Use sample standard deviations (n-1) and the ratio
+  (mean_bb + 2 * sd_bb) / max(1 ms, mean_jvm - 2 * sd_jvm).
+  Record n, every wall, mean, sd, conservative ratio and receipt paths beside
+  each paired assignment in the manifest; otherwise select JVM. Existing
   assignments without paired receipts remain unchanged and are explicitly
   unmeasured. A known runtime contract failure may select JVM with its
-  paired walls and defect recorded. "bb-first" means bb where bb is not
-  slower, never bb at any price; 2.0 is the declared admission tolerance.
-  The initial application covers every bb-assigned member of the original
-  61 fast namespaces using attempt7/a-base and attempt7/c-subject receipts.
-  A bb assignment with a recorded ratio above 2.0 shall fail by namespace
-  name, independently of the selection function. At 2.0 bb is eligible;
-  one ms beyond twice the JVM wall is not. Cadence, membership and the
+  paired controls and defect recorded. The declared bb admission tolerance
+  is 2.0 after the conservative variance adjustment.
+  Attempt20 replaces the single observations for all 35 bb-portable members
+  of the original fast set and every additional paired namespace moved by
+  the rule. Receipts and their fold script live under attempt20/.
+  Any recorded sample smaller than six, or a bb assignment with a recorded
+  conservative ratio above 2.0, shall fail by namespace name independently
+  of the selection function. The witness recomputes mean and sd from the
+  receipts. At conservative ratio 2.0 bb is eligible; any excess is not.
+  Failed test samples cannot certify bb portability. Cadence, membership and the
   60,000/240,000 ms fast/integration ceilings do not change.
   *Witness:* `clj-surgeon.lane-manifest-test/every-manifest-entry-exists-on-disk`.
   The original library-test inventory retains its runner, counters, temp
@@ -270,13 +276,15 @@ it); the battery lane to 007 alone (it exists to launch cold child JVMs).
   The shipped-map run records a serial bb-runtime namespace sum of 240,989 ms
   and a fast-cadence sum of 42,143 ms in the same run (makespan 82,910 ms).
   Definition: ceiling = ceil(bb_runtime_sum * 60,000 / fast_cadence_sum).
-  Both sums fold ONE calibration receipt under the SHIPPED lane manifest at
-  the tip, never frozen maps. Thus ceil(240,989 * 60,000 / 42,143) = 343,102 ms.
+  Both sums fold ONE calibration receipt: execution runtimes come from its
+  recorded lanes, and cadence comes from the unchanged cadence manifest.
+  A later TEST-ISO-016 assignment must not relabel historical execution walls.
+  Thus ceil(240,989 * 60,000 / 42,143) = 343,102 ms; no budget is recalibrated.
   Reproduce with `bb test/clj_surgeon/bb_ceiling.clj
   docs/observations/2026-09-12-bbtower-block-b/attempt10/ceiling-run/receipt.edn`.
   The script prints both sums and the ceiling; the calibration witness calls
   that same computation and requires equality with the registered constant.
-  A manifest change must therefore reproduce and reconcile the declaration.
+  A cadence change must therefore reproduce and reconcile the declaration.
   This replaces attempt8's pre-escape derivation, and remains a NEW declaration,
   not restoration of any base budget. Fable's ratification remains required.
   Charge each bb-runtime namespace once, independently of its cadence lane.

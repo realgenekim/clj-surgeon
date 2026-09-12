@@ -179,27 +179,69 @@
       (is (= #{:bb :jvm} (set (vals runtimes))))
       (is (= :bb (get runtimes 'clj-surgeon.forms-test)))
       (is (= :jvm (get runtimes 'clj-surgeon.mcp-http-server-test)))))
-  ;; @spec TEST-ISO-016 -- independent oracle rejects a planted slow bb entry by name.
-  (testing "paired walls govern runtime, while unmeasured assignments stay put"
-    (let [bad-bb (fn [runtimes measurements]
-                   (set (for [[n {:keys [ratio]}] measurements
-                              :when (and (= :bb (get runtimes n)) (> ratio 2.0))]
-                          n)))
-          slow 'clj-surgeon.splice-envelope-test]
-      (is (empty? (bad-bb lm/namespace-runtimes lm/runtime-measurements))
-          (str "TEST-ISO-016: " (bad-bb lm/namespace-runtimes lm/runtime-measurements)))
-      (is (= #{slow} (bad-bb (assoc lm/namespace-runtimes slow :bb)
-                       lm/runtime-measurements)))
-      (is (= :bb (lm/measured-runtime :bb {:jvm-ms 100 :bb-ms 200})))
-      (is (= :jvm (lm/measured-runtime :bb {:jvm-ms 100 :bb-ms 201})))
-      (is (= :jvm (lm/measured-runtime :jvm {:jvm-ms 100 :bb-ms 1})))
-      (is (= :jvm (lm/measured-runtime :bb {:jvm-ms 100 :bb-ms 1 :contract-failure "defect"})))
+  ;; @spec TEST-ISO-016 -- independent sample oracle, including planted defects.
+  (testing "six controls and conservative two-sd clearance govern paired assignments"
+    (let [bad (fn [runtimes measurements]
+                (set (for [[n {:keys [jvm bb conservative-ratio] :as m}] measurements
+                           :when (or (< (:n m 0) 6)
+                                     (some #(or (< (:n % 0) 6) (< (count (:walls-ms %)) 6)) [jvm bb])
+                                     (and (= :bb (get runtimes n))
+                                          (> (or conservative-ratio ##Inf) 2.0)))]
+                       n)))
+          sample (fn [wall] {:n 6 :walls-ms (vec (repeat 6 wall)) :mean-ms (double wall) :sd-ms 0.0})
+          at {:n 6 :jvm (sample 100) :bb (sample 200) :conservative-ratio 2.0}
+          slow (assoc at :bb (sample 201) :conservative-ratio 2.01)
+          name 'fixture/runtime-test
+          stats (fn [walls]
+                  (let [n (count walls)
+                        mean (/ (double (reduce + walls)) n)]
+                    [mean (Math/sqrt (/ (reduce + (map #(Math/pow (- % mean) 2) walls)) (dec n)))]))]
+      (let [paired (set (:paired (edn/read-string
+                                   (slurp "docs/observations/2026-09-12-bbtower-block-b/attempt20/baseline.edn"))))
+            actual (set (keys lm/runtime-measurements))]
+        (is (= paired actual)
+            (str "TEST-ISO-016 paired scope changed: missing " (remove actual paired)
+                 "; added " (remove paired actual))))
+      (is (empty? (bad lm/namespace-runtimes lm/runtime-measurements))
+          (str "TEST-ISO-016: " (bad lm/namespace-runtimes lm/runtime-measurements)))
+      (is (= #{name} (bad {name :bb} {name slow})))
+      (doseq [runtime [:bb :jvm]
+              short [(assoc at :n 5)
+                     (assoc-in at [:jvm :n] 5)
+                     (assoc-in at [:bb :walls-ms] [200 200 200 200 200])]]
+        (is (= #{name} (bad {name runtime} {name short})))
+        (is (= :jvm (lm/measured-runtime :bb short))))
+      (is (= :bb (lm/measured-runtime :bb at)))
+      (is (= :jvm (lm/measured-runtime :bb slow)))
+      (is (= :jvm (lm/measured-runtime :jvm at)))
+      (is (= :jvm (lm/measured-runtime :bb (assoc at :contract-failure "defect"))))
+      (is (= :jvm (lm/measured-runtime :bb (assoc-in at [:bb :sd-ms] 1.0))))
+      (is (= :jvm (lm/measured-runtime :bb (assoc-in at [:jvm :sd-ms] 1.0))))
+      (is (= :bb (lm/measured-runtime :bb
+                   (assoc at :jvm (assoc (sample 1) :sd-ms 2.0) :bb (sample 2)))))
       (is (= :bb (lm/measured-runtime :bb nil)))
       (doseq [[n runtime] lm/unmeasured-runtimes]
         (is (= runtime (lm/portability-runtimes n)) (str n)))
-      (doseq [[n {:keys [jvm-ms bb-ms ratio jvm-log bb-log]}] lm/runtime-measurements]
-        (is (= ratio (/ (double bb-ms) jvm-ms)) (str n))
-        (is (and (seq jvm-log) (seq bb-log)) (str n))))))
+      (doseq [[n {:keys [jvm bb conservative-ratio] :as measurement}] lm/runtime-measurements]
+        (is (= (:runtime measurement) (lm/namespace-runtimes n)) (str n " recorded assignment"))
+        (doseq [[runtime arm] [[:jvm jvm] [:bb bb]]]
+          (let [rows (mapv #(edn/read-string (slurp %)) (:logs arm))
+                walls (mapv :elapsed-ms rows)
+                [mean sd] (stats walls)]
+            (is (= (:n arm) (count rows) (count (:walls-ms arm))) (str n " " runtime))
+            (is (= (count rows) (count (set (:logs arm))) (count (set (map :tmpdir rows))))
+                (str n " " runtime " requires distinct run receipts"))
+            (is (= walls (:walls-ms arm)) (str n " " runtime " receipt walls"))
+            (is (every? #(= [n runtime] [(:namespace %) (:runtime %)]) rows) (str n))
+            (when (= :bb (lm/namespace-runtimes n))
+              (is (every? #(and (pos? (get-in % [:result :test] 0))
+                                (zero? (+ (get-in % [:result :fail] 0) (get-in % [:result :error] 0)))) rows)
+                  (str n " cannot use failed controls to certify bb")))
+            (is (< (Math/abs (- mean (:mean-ms arm))) 1e-9) (str n " mean"))
+            (is (< (Math/abs (- sd (:sd-ms arm))) 1e-9) (str n " sd"))))
+        (is (= conservative-ratio
+               (/ (+ (:mean-ms bb) (* 2 (:sd-ms bb)))
+                  (max 1.0 (- (:mean-ms jvm) (* 2 (:sd-ms jvm)))))) (str n))))))
 
 (deftest every-test-namespace-on-disk-is-accounted-for
   (testing "disk -> manifest: a new test namespace cannot silently never run"
