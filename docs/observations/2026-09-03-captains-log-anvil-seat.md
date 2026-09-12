@@ -5853,3 +5853,15 @@ test paths resolving outside test/ are also rejected; BB-PROBE-003 registered, t
 spec/receipt witness covers the new refusal key set; the regression observes zero
 require :reload calls for Sol's case. Packet 298cf243 is the tenth check-only prewarm;
 ship round 3 follows.
+
+## 2026-09-12T18:23:26Z — ship round 3 SEALED: candidate 49527185 (357a2b79 onto a15531ee)
+
+Tenth check-only prewarm (packet 298cf243) exit 0 at 357a2b79, receipt bound. Ship run
+20260912T182108Z admitted, sealed 49527185 (tree 569a46ff), Sol fence review on the
+round-3 brief (F3 answered by attempt21/), battery on fable/battery-receipt-357a2b79,
+cold fast lane on the sealed candidate. Gene asked whether the reviews were hysterical;
+answered in chat: four findings, two correctness holes (an unbounded probe response; a
+warm shared server executing production code on request), one violation of his own
+six-run doctrine that flipped an assignment when measured, one spec lying about a
+receipt. Each cheaper than the incident it prevents. The overboard part was my loop
+shape, already filed.
