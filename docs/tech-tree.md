@@ -1,5 +1,13 @@
 # clj-surgeon tech tree
 
+Block B attempt 18 (2026-09-12): the whole restricted gate exposed a helper
+fixture rooted outside the packet and a hygiene witness registering Git
+worktrees in the external common directory, alongside three oracle scratch
+defaults. Repairs inherit the existing temp roots and keep clone metadata
+inside owned scratch. The device-only `/dev/null` exception matches packet.py.
+Evidence, census and final verification status:
+`docs/observations/2026-09-12-bbtower-block-b/attempt18/REPORT.md`.
+
 Block B attempt 13 (2026-09-12): descendant temp-root repair. The CLI-shaped bb
 child reproduced `/tmp` despite TMPDIR; formatter staging ignored the selected
 root and typist discarded its failure evidence. Product launchers now pass the
