@@ -254,14 +254,18 @@ it); the battery lane to 007 alone (it exists to launch cold child JVMs).
   (at the ceiling passes, one ms past it refuses),
   `.../the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays`.
 
-  NEW bb runtime-lane budget (attempt8, 2026-09-12): **399,155 ms**.
-  The step-2 run records a serial bb-runtime namespace sum of 245,773 ms
-  and an original-fast sum of 36,944 ms. The fast ceiling is still 60,000:
-  margin = 60,000 / 36,944 - 1 = 0.6240796881766999. The new ceiling is
-  ceil(245,773 * 60,000 / 36,944) = 399,155 ms, rounded up to a whole ms.
-  Evidence: attempt8/test-fast.log and attempt8/test-fast/receipt.edn under
-  docs/observations/2026-09-12-bbtower-block-b/. This is a NEW declaration,
-  not restoration of any base budget; Fable ratifies it in review.
+  NEW bb runtime-lane budget, recomputed in attempt10: **374,149 ms**.
+  The shipped-map run records a serial bb-runtime namespace sum of 240,989 ms
+  and a fast-cadence sum of 38,646 ms in the same run (makespan 82,910 ms).
+  Ceiling = ceil(240,989 * 60,000 / 38,646) = 374,149 ms.
+  The receipt, frozen runtime/cadence maps and reproduced input lines are in
+  [attempt10/ceiling-derivation.log](../../observations/2026-09-12-bbtower-block-b/attempt10/ceiling-derivation.log),
+  with the original bb-runtime line in attempt10/ceiling-run.log and namespace
+  facts in attempt10/ceiling-run/receipt.edn. No runtime entry is patched during
+  derivation. These maps precede the subsequent cadence repair; replay uses
+  the frozen maps so later lane moves cannot rewrite the inputs.
+  This replaces attempt8's pre-escape derivation, and remains a NEW declaration,
+  not restoration of any base budget. Fable's ratification remains required.
   Charge each bb-runtime namespace once, independently of its cadence lane.
   The original fast set remains independently charged even when executed by
   bb, so these overlapping sums must not be added. Report the bb sum and bb

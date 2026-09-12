@@ -462,12 +462,12 @@
 ;; @spec TEST-ISO-007
 (deftest the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays
   (testing "NEW bb runtime ceiling: exact boundary and one ms beyond"
-    (is (= 399155 (:bb iso/lane-budget-ms)))
-    (is (nil? (iso/lane-budget-violation :bb 399155)))
-    (let [v (iso/lane-budget-violation :bb 399156)]
+    (is (= 374149 (:bb iso/lane-budget-ms)))
+    (is (nil? (iso/lane-budget-violation :bb 374149)))
+    (let [v (iso/lane-budget-violation :bb 374150)]
       (is (some? v))
-      (is (str/includes? (iso/message v) "bb lane took 399156 ms"))
-      (is (str/includes? (iso/message v) "399155 ms"))))
+      (is (str/includes? (iso/message v) "bb lane took 374150 ms"))
+      (is (str/includes? (iso/message v) "374149 ms"))))
   (testing "the fast lane's ceiling is the 60 s the partition exists to buy"
     (is (= 60000 (get iso/lane-budget-ms :fast))))
   (testing "at the ceiling passes; past it refuses, naming the lane and both numbers"
