@@ -5990,6 +5990,16 @@
     ;; the source rather than pinned here — a tag that never reaches a caller
     ;; is not a refusal kind.
     "hot-verification-timeout" "hot-verification-transport-closed"
+    ;; The namespace-level reachability census includes the probe-only path
+    ;; added to mcp-hot-verify; these are real literals, not internal tags.
+    "probe-namespace-not-found" "probe-source-too-large"
+    "probe-target-not-a-test-namespace"
+    ;; BB-PROBE-003: never omit an unclassified dependency from a warm reload.
+    "probe-require-unparsed" "probe-dependency-unresolved"
+    "invalid-probe-request" "stale-probe-image" "probe-message-too-large"
+    "invalid-probe-port" "probe-connection-failed"
+    ;; BB-PROBE-004: oversized HTTP verdicts retain bounded truncation facts.
+    "probe-response-truncated"
     ;; Row-2 external artifact containment adds these reachable typed refusals.
     "receipt-dir-escapes" "receipt-dir-inside-workspace"})
 
@@ -6000,7 +6010,7 @@
   ;; could see. Both directions are asserted — a kind that appears and a kind
   ;; that vanishes are each a change to what a text-reading client is promised.
   (let [kinds (set (refusal-kinds-in-source))]
-    (is (= 153 (count kinds))
+    (is (= 164 (count kinds))
         (str "the entrance's refusal enumeration changed size: "
              (count kinds) " kinds"))
     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))
@@ -7435,8 +7445,8 @@
   ;; findmnt/mounts-table classification of the symlink's TARGET can.
   (let [run-user (io/file "/run/user" (str (.trim (:out (shell/sh "id" "-u")))))]
     (when (.isDirectory run-user)
-      (let [link-parent (io/file (System/getProperty "user.home")
-                                  ".local/state" (str "spf004-tmpfs-link-" (System/nanoTime)))
+      (let [link-parent (io/file (artifacts/default-artifact-root)
+                                  (str "spf004-tmpfs-link-" (System/nanoTime)))
             link (io/file link-parent "artifacts")
             probe (str link "/probe")]
         (try

@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.move-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.syntax-var-refs-test

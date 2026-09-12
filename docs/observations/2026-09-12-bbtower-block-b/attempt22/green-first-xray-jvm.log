@@ -1,0 +1,12 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.xray-test
+
+FAIL in (cli-xray-refuses-unsafe-input-before-file-io) (xray_test.clj:691)
+unsafe expression
+expected: (< (count (:out run)) 1024)
+  actual: (not (< 1034 1024))
+
+Ran 27 tests containing 467 assertions.
+1 failures, 0 errors.
+{:test 27, :pass 466, :fail 1, :error 0, :type :summary}

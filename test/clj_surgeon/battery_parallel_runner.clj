@@ -195,8 +195,9 @@
      * `mcp-alias-migration-test`'s dot-slash-src strings are scope arguments
        inside a per-test temp workspace, not paths into this repository.
      * every other battery namespace takes its scratch space from its own
-       temp root, and TEST-ISO-006 gives each lane child a private
-       `java.io.tmpdir` of its own.
+       temp root. JVM children inherit TEST-ISO-006's temp configuration;
+       bb children receive an explicit `java.io.tmpdir` from disk-backed
+       TMPDIR (or /var/tmp), since bb ignores JAVA_TOOL_OPTIONS.
 
    The mechanism ships anyway, exercised by its own witness, because the next
    prerequisite must have a place to be DECLARED rather than discovered when a
@@ -434,12 +435,27 @@
    rest-of-argv shape is untouched."
   [java-opts out-path namespaces]
   (into (into ["clojure"] (remove str/blank? (str/split (or java-opts "") #"\s+")))
-        (concat ["-M:clj-surgeon/test-deps" "-m" "clj-surgeon.mcp-test-runner"
+        (concat ["-M:clj-surgeon/test-deps" "-m"
+                 (if (some #(and (= :jvm (get lm/namespace-runtimes %))
+                                 (nil? (lm/lane-of %))) namespaces)
+                   "run-all" "clj-surgeon.mcp-test-runner")
                  "--emit-edn" (str out-path) "--ns"]
                 (map str namespaces))))
 
 (defn slot-command [argv]
   (into ["python3" "-B" (.getCanonicalPath (io/file "test/gate_slot.py")) "--"] argv))
+
+(defn bb-lane-command
+  "The bb child command; mirror Makefile SELF_TEST_TMP's fallback policy."
+  [tmpdir out-path namespaces]
+  (let [tmpdir (if (or (str/blank? tmpdir)
+                     (some #(or (= tmpdir %) (str/starts-with? tmpdir (str % "/")))
+                           ["/tmp" "/dev/shm"]))
+                 "/var/tmp"
+                 tmpdir)]
+    (into ["bb" "-Xmx1g" (str "-Djava.io.tmpdir=" tmpdir)
+           "test/run_all.clj" "--emit-edn" (str out-path) "--ns"]
+          (map str namespaces))))
 
 (defn- run-lane!
   [{:keys [index namespaces java-opts work-dir runtime phase suite target checkout-root]}]
@@ -455,12 +471,12 @@
                     :dir (or checkout-root (System/getProperty "user.dir"))}
                    (slot-command (cond target ["make" "--no-print-directory" target]
                                    (= :bb runtime)
-                                   (into ["bb" "-Xmx512m" "test/run_all.clj" "--emit-edn" (str out-path) "--ns"] (map str namespaces))
+                                   (bb-lane-command (System/getenv "TMPDIR") out-path namespaces)
                                    :else (lane-command java-opts out-path namespaces))))
           exit (deref (future (:exit @p)) lane-timeout-ms ::timeout)
           timed-out? (= ::timeout exit)]
       (when timed-out? (proc/destroy-tree p) (try @p (catch Exception _ nil)))
-      {:index index :suite suite :started-ms started :completed-ms (System/currentTimeMillis)
+      {:index index :suite suite :runtime runtime :started-ms started :completed-ms (System/currentTimeMillis)
        :phase phase
        :namespaces (vec namespaces)
        :exit (if timed-out? :timeout exit)
@@ -733,6 +749,7 @@
    {:target "alias-migration-test" :kind :suite :suite "alias"}
    {:target "mcp-test" :kind :suite :suite "mcp"}
    {:target "test-bb" :kind :suite :suite "bb"}
+   {:target "test-bb-diagnostic" :kind :after}
    {:target "repository-hygiene" :kind :after}
    {:target "intent-audit" :kind :audit}])
 
@@ -884,12 +901,34 @@
     (vec (keep (fn [n] (when-let [rs (seq (get by-ns n))] (merge-shard-runs n rs)))
                battery-namespaces))))
 
+(defn run-measurements
+  "@spec TEST-ISO-007 -- actual runtime and cadence sums, independent of scheduling."
+  [runs lanes wall-ms]
+  (let [runtime-of (into {} (for [lane lanes n (:namespaces lane)]
+                              [(selector-namespace n) (:runtime lane)]))
+        sums (fn [key-fn]
+               (into {} (for [[k rs] (group-by key-fn runs)]
+                          [k (reduce + (map :elapsed-ms rs))])))]
+    {:makespan-ms wall-ms
+     :lane-sums-ms (sums (comp lm/lane-of :namespace))
+     :runtime-sums-ms (sums (comp runtime-of :namespace))}))
+
 (defn report!
   "Prints the union summary, the per-namespace walls, the schedule and the
    isolation verdict. Returns the isolation violation count."
   ([runs lanes wall-ms] (report! runs lanes wall-ms true))
   ([runs lanes wall-ms isolation?]
-   (let [vs (into (vec (mapcat :violations runs))
+   (let [bb-members (set (mapcat :namespaces (filter #(= :bb (:runtime %)) lanes)))
+         bb-runs (filter #(bb-members (:namespace %)) runs)
+         bb-sum (reduce + (map :elapsed-ms bb-runs))
+         bb-lanes (filter #(= :bb (:runtime %)) lanes)
+         bb-span (when (seq bb-lanes)
+                   (- (apply max (map :completed-ms bb-lanes))
+                      (apply min (map :started-ms bb-lanes))))
+         vs (into (cond-> (vec (distinct (concat (mapcat :violations runs)
+                                           (keep #(namespace-budget-violation (:namespace %) (:elapsed-ms %)) bb-runs))))
+                    (iso/lane-budget-violation :bb bb-sum)
+                    (conj (iso/lane-budget-violation :bb bb-sum)))
                   ;; @spec TEST-ISO-007 -- the LANE budget, over the union.
                   ;; The sum of the namespaces' walls is what a serial run
                   ;; would have paid, so this is the same number the serial
@@ -899,6 +938,12 @@
                           (iso/lane-budget-violation lane (reduce + (map :elapsed-ms rs))))
                         (when isolation? (group-by (comp lm/lane-of :namespace) runs))))]
      (binding [*out* *err*]
+       (println (format "makespan: %d ms" wall-ms))
+       (doseq [[lane sum] (sort-by (comp str key) (:lane-sums-ms (run-measurements runs lanes wall-ms)))]
+         (println (format "cadence %s: serial-equivalent %d ms; budget %s ms"
+                          lane sum (get iso/lane-budget-ms lane "missing"))))
+       (println (format "bb-runtime: serial-equivalent %d ms; budget %d ms; makespan %s ms"
+                        bb-sum (:bb iso/lane-budget-ms) (or bb-span "unmeasured")))
        (println (format "\nnamespace walls (%d, slowest first, serial-equivalent total %d ms):"
                         (count runs) (reduce + (map :elapsed-ms runs))))
        (doseq [r (sort-by (comp - :elapsed-ms) runs)]
@@ -947,6 +992,11 @@
 
 ;; ---------------------------------------------------------------------------
 
+(defn unbudgeted-members
+  "@spec TEST-ISO-007 -- absent cadence is a named refusal, never an exemption."
+  [inventory]
+  (filterv #(not (pos-int? (get iso/lane-default-budget-ms (lm/lane-of %)))) inventory))
+
 (defn prepare-suite!
   [opts]
   (let [suite (get opts "--suite" "battery")
@@ -955,6 +1005,9 @@
         _ (when (and (not battery?) (contains? opts "--lanes"))
             (throw (ex-info "gate-refused: width is automatic; use --debug-serial true for diagnostics" {})))
         inventory (suite-namespaces suite)
+        _ (when-let [missing (seq (unbudgeted-members inventory))]
+            (throw (ex-info (str "gate-refused: namespaces without cadence budgets " (pr-str missing))
+                            {:error-type :unbudgeted-namespaces :namespaces (vec missing)})))
         run-id (or (::run-id opts) (System/getenv "CLJ_SURGEON_GATE_RUN_ID") (str (java.util.UUID/randomUUID)))
         _ (when-not (re-matches #"[A-Za-z0-9-]+" run-id)
             (throw (ex-info "gate-refused: invalid run identity" {})))
@@ -1004,7 +1057,14 @@
                                       (gate-phases inventory lm/manifest))
                 :else [(partition-lanes units walls var-walls lanes-n)])
         plan (vec (mapcat (fn [phase groups]
-                            (map (fn [namespaces] {:phase phase :namespaces namespaces}) groups))
+                            (mapcat (fn [namespaces]
+                                      (for [[[runtime _home] selected]
+                                            (group-by #(vector (if (contains? #{"bb" "fast" "mcp"} suite)
+                                                                 (or (get lm/namespace-runtimes %)
+                                                                     (throw (ex-info (str "runtime-unclassified: " %) {:namespace %})))
+                                                                 :jvm)
+                                                               (contains? #{:fast :integration} (lm/lane-of %))) namespaces)]
+                                        {:phase phase :namespaces (vec selected) :runtime runtime})) groups))
                     (range) waves))]
     (println (format "battery-parallel: %d namespace(s) in %d unit(s) over %d lane(s); floor is %s at %d ms"
                      (count battery-namespaces) (count units) lanes-n
@@ -1041,7 +1101,7 @@
        :plan (mapv (fn [i entry]
                      (assoc entry :index i :java-opts java-opts :suite suite
                             :estimated-ms (unit-cost walls var-walls (:namespaces entry))
-                            :work-dir work-dir :runtime (if (= suite "bb") :bb :jvm)))
+                            :work-dir work-dir))
                    (range) (remove (comp empty? :namespaces) plan))})))
 
 (defn finish-suite!
@@ -1102,7 +1162,7 @@
                         (count broken) (count missing) (count census-errors)
                         (count prereq-failures) skipped-red
                         (if changed? 1 0))
-            receipt {:suite suite :runtime (if (= suite "bb") :bb :jvm)
+            receipt {:suite suite :runtime (cond (= suite "bb") :bb (contains? #{"fast" "mcp"} suite) :hybrid :else :jvm)
                      :state (if (zero? failures) :passed :failed) :debug debug? :run-id run-id
                      :source-digest digest :capacity capacity :lane-count lanes-n :process-count (count lanes)
                      :phase-count (count waves)
@@ -1110,6 +1170,7 @@
                                         :expected-count (count battery-namespaces) :observed-count (count runs)}
                      :lanes (mapv #(dissoc % :emitted) lanes) :runs runs :result result
                      :isolation-failures iso-fail :leak-failures leak-fail
+                     :measurements (run-measurements runs lanes wall-ms)
                      :wall-ms wall-ms :problems (vec (concat broken census-errors
                                                        (when changed? [:tree-changed-during-suite])))}]
         (spit (io/file work-dir "receipt.edn") (pr-str receipt))

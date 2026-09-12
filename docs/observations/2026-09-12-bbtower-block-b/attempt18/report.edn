@@ -1,0 +1,95 @@
+{:attempt 18
+ :verdict :pass
+ :recorded-at "2026-09-12T14:03:26.345284+00:00"
+ :branch "bb-rewrite-tower-local"
+ :start-head "172a068553ba38048ae602bc99ed85b7cacb6b48"
+ :source-commit "30808abc354493f876bc7af3857ae4e5fe5cfe0a"
+ :source-digest "b57f4e1d55ed702f29bf8d8ae33aa3e114b1e88bc5a21208dff643431af61544"
+ :commits [{:sha "30808abc354493f876bc7af3857ae4e5fe5cfe0a"
+            :purpose :fixture-repairs}
+           {:sha :containing-commit :purpose :attempt18-evidence-last}]
+ :findings
+ [{:kind :device-parity :file "restricted-gate.py"
+   :device "/dev/null" :access :write-file
+   :reference "/home/forge/bin/lib/packet.py:78-82"
+   :directory-roots 3 :uuid-tmpdir true :truncate-mediated true
+   :minimum-landlock-abi 3 :removed-env ["_JAVA_OPTIONS"]
+   :java-tool-options "-Xmx1g -Djava.io.tmpdir=<packet-tmpdir>"}
+  {:kind :outside-envelope-fixture :file "test/oracles/test_cell_b_oracle.py"
+   :repair :tmpdir :evidence "diagnostic-run/lane-0.err" :errors 12}
+  {:kind :outside-envelope-fixture :file "test/oracles/namespace_split_papercut_oracle.py"
+   :repair :tmpdir :evidence "static-red.log"}
+  {:kind :outside-envelope-fixture :file "test/oracles/cell_b_oracle.sh"
+   :repair :tmpdir :evidence "static-red.log"}
+  {:kind :outside-envelope-fixture :file "test/clj_surgeon/mcp_helper_extraction_test.clj"
+   :repair :java-io-tmpdir :evidence "diagnostic-run/alias/lane-0.out"
+   :failing-namespace clj-surgeon.receipt-artifacts-boundary-test}
+  {:kind :outside-envelope-git-metadata :file "test/clj_kondo_admission_path_test.sh"
+   :repair :owned-shared-clone-at-exact-head :evidence "unreached-red.log"}
+  {:kind :observer-contamination :evidence "prewarm-repair.md"
+   :repair :archive-before-gate :code-change false
+   :violations 176 :unique-created-files 44 :observing-namespaces 4}]
+ :measurements
+ {:diagnostic {:command "restricted-gate.py -- make landing-gate-prewarm"
+               :counted-prewarm false :exit 2 :wall-seconds 126.6481672860682
+               :log "envelope-red.log" :artifacts "diagnostic-run/"}
+  :static-red {:exit 1 :tests 2 :failures 1 :errors 1 :log "static-red.log"}
+  :unreached-census {:exit 2 :wall-seconds 316.195281105116
+                    :failed-targets ["clj-kondo-admission-path-self-test"]
+                    :log "unreached-red.log"}
+  :focused-green {:exit 0 :wall-seconds 6.398247377946973
+                  :log "focused-green.log"}
+  :helper-green {:exit 0 :tests 24 :assertions 202 :failures 0 :errors 0
+                 :wall-seconds 10.946637454908341 :log "helper-green.log"}
+  :lint {:exit 0 :errors 0 :warnings 0 :log "lint.log"
+         :entrance "~/bin/clj-kondo"}
+  :envelope-green {:exit 0 :state :passed :problems [] :stages 7
+                   :gate-wall-ms 390645 :wrapper-wall-seconds 392.7211568816565
+                   :fast-sum-ms 44289 :integration-sum-ms 67530 :bb-runtime-sum-ms 237192
+                   :log "envelope-green.log" :receipt "envelope-green-receipt.edn"
+                   :artifacts "envelope-green-run/" :existing-slot-skips 3}
+  :test-fast {:invocations 1 :exit 0 :tests 1243 :assertions 11778
+              :failures 0 :errors 0 :isolation-violations 0
+              :fast-sum-ms 44734 :fast-ceiling-ms 60000 :makespan-ms 24134
+              :log "test-fast.log" :artifacts "test-fast-run/"}
+  :counted-prewarm-1 {:exit 2 :operator-contaminated true
+                      :isolation-violations 176 :log "prewarm-1.log"
+                      :artifacts "prewarm-1-run/"
+                      :fast-sum-ms 42993 :integration-sum-ms 67025
+                      :bb-runtime-sum-ms 233973}
+  :counted-prewarm-final
+  {:exit 0 :state :passed :prewarm? true :landing? false :problems []
+   :run-id "155a0aec-7e51-42a0-9ba5-64d325031378"
+   :started-at "2026-09-12T13:56:09.374168828Z"
+   :completed-at "2026-09-12T14:02:35.379045064Z"
+   :wall-ms 386004 :stages 7 :isolation-failures 0
+   :fast-sum-ms 45629 :fast-ceiling-ms 60000
+   :integration-sum-ms 67783 :integration-ceiling-ms 240000
+   :bb-runtime-sum-ms 235333 :bb-runtime-ceiling-ms 343102
+   :tests {:alias {:tests 182 :assertions 3641}
+           :mcp {:tests 1411 :assertions 15576}
+           :bb {:tests 899 :assertions 7984}
+           :bb-diagnostic {:tests 830 :assertions 7283}}
+   :existing-slot-skips 2 :log "prewarm-final.log"
+   :receipt "prewarm-final-receipt.edn" :artifacts "prewarm-final-run/"}}
+ :counted-prewarm-invocations 2
+ :counted-repairs 1
+ :whole-wrapper-gate-invocations 2
+ :verbatim-gate-transcript "gate.md"
+ :gate-transcript-composition ["prewarm-1.log" "prewarm-final.log"]
+ :envelope-census "envelope-census.md"
+ :dogfood {:table "REPORT.md" :surgeon-mutations 0 :route :native
+           :source-files ["restricted-gate.py" "static-probes.py"
+                          "test/oracles/test_cell_b_oracle.py"
+                          "test/oracles/namespace_split_papercut_oracle.py"
+                          "test/oracles/cell_b_oracle.sh"
+                          "test/clj_surgeon/mcp_helper_extraction_test.clj"
+                          "test/clj_kondo_admission_path_test.sh"
+                          "docs/tech-tree.md"]}
+ :cleanup {:owned-packet-directories-removed 6 :log "cleanup.log"}
+ :least_sure ["Filesystem-envelope proof is not a real packet attestation."
+              "Prewarm is not landing authority; final receipt has :landing? false."]
+ :disagreements ["No policy disagreement. The first counted prewarm failure was caused by the agent copying evidence during the run."]
+ :owed ["Fable independent review and any outstanding original-block ratifications."
+        "A future actual landing/battery decision remains external."]
+ :attempt18-execution-owed []}

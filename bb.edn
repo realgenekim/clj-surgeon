@@ -6,6 +6,6 @@
 ;; and the whole bb inventory is loaded against this exact version. babashka
 ;; itself warns when it is older; `bin/install-preflight` says so louder,
 ;; because a warning inside a suite that then fails is a warning nobody reads.
-{:paths ["src" "test" "libs/clj-splice/src"]
+{:paths ["src" "test" "libs/clj-splice/src" "dev/experiments"]
  :min-bb-version "1.12.209"
  :bbin/bin {clj-surgeon {:main-opts ["-m" "clj-surgeon.core"]}}}

@@ -1,4 +1,5 @@
 (ns clj-surgeon.structural-lens-test
+  {:lane :fast}
   (:require
    [clj-surgeon.structural-lens :as lens]
    [clojure.edn :as edn]
@@ -358,7 +359,6 @@
     (is (nil? (:actual-form-count result)))
     (is (str/includes? (:error result) ":expect"))
     (is (nil? (:ok result)))))
-
 
 ;; @spec MCP-OP-MATCH-001
 (deftest reader-form-bodies-preserve-concrete-match-evidence

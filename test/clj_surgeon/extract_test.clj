@@ -1,4 +1,5 @@
 (ns clj-surgeon.extract-test
+  {:lane :battery}
   (:require
    [clj-surgeon.artifact-boundary-support :as boundary]
    [clj-surgeon.extract :as extract]
@@ -475,13 +476,13 @@
                                       :receipt-out (.getPath receipt)})
             receipt (io/file (:receipt-file result))
             extracted-source (slurp source)
-              changed-target (str (slurp target) "\n;; user change\n")]
-          (spit target changed-target)
-          (let [undo (extract/undo! {:receipt (.getPath receipt)})]
-            (is (= :stale-extraction-result (:error-type undo)))
-            (is (true? (:source-unchanged undo)))
-            (is (= extracted-source (slurp source)))
-            (is (= changed-target (slurp target)))))
+            changed-target (str (slurp target) "\n;; user change\n")]
+        (spit target changed-target)
+        (let [undo (extract/undo! {:receipt (.getPath receipt)})]
+          (is (= :stale-extraction-result (:error-type undo)))
+          (is (true? (:source-unchanged undo)))
+          (is (= extracted-source (slurp source)))
+          (is (= changed-target (slurp target)))))
       (finally (delete-recursive! root)))))
 
 (deftest test-execute-refuses-a-source-that-changed-after-planning

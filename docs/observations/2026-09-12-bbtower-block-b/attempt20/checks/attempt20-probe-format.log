@@ -1,0 +1,10 @@
+standard-clj fix v0.29.0
+
+F /src/clj_surgeon/core.clj [39.31ms]
+✓ /src/clj_surgeon/mcp_http_server.clj [8.1ms]
+F /src/clj_surgeon/probe.clj [1.28ms]
+F /test/clj_surgeon/help_test.clj [7.33ms]
+F /test/clj_surgeon/mcp_alias_migration_test.clj [70.89ms]
+F /test/clj_surgeon/mcp_http_server_test.clj [17.12ms]
+
+All 6 files formatted with Standard Clojure Style 👍 [156.92ms]

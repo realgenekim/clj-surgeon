@@ -1,0 +1,78 @@
+{:findings
+ [{:severity :blocker,
+   :file "test/clj_surgeon/tmp_leak_support.clj",
+   :line 398,
+   :reproduction
+   "Read admission-evidence.edn or run bb docs/observations/2026-09-12-bbtower-block-b/attempt2/record.clj from the subject root. No JVM is launched. The JVM worker starts an isolation JVM and blocks on its exit; base additionally retains its JVM coordinator.",
+   :exact_output
+   "390:            (let [child (atom nil)\n391:                  _ (register-root-sweep! root child)\n392:                  cmd (reexec-child-command target root args)\n393:                  proc (apply proc/process\n394:                              {:inherit true\n395:                               :extra-env (child-environment root isolate-home?)}\n396:                              cmd)\n397:                  _ (reset! child proc)\n398:                  exit (:exit @proc)]\n399:              (sweep-root! root)\n400:              (System/exit exit))))))))"}],
+ :schema "report/v1",
+ :least_sure
+ ["No fresh runtime observation establishes the slowdown cause; contention, heap, width and startup remain hypotheses."
+  "The minimum JVM allowance for all battery descendants has not been enumerated; two is only the demonstrated worker lower bound."],
+ :measurements
+ [{:name "Historical base receipt, not fresh arm a",
+   :before
+   {:namespace-count 61,
+    :sum-ms 39890,
+    :makespan-ms 28728,
+    :process-count 8,
+    :receipt "/var/tmp/forge/bbtower-fx/fast-before-receipt.edn"},
+   :after nil,
+   :receipt
+   "docs/observations/2026-09-12-bbtower-block-b/attempt2/admission-evidence.edn"}
+  {:name "Fresh matched a/b/c sums, makespans and ten largest deltas",
+   :before nil,
+   :after nil,
+   :receipt
+   "docs/observations/2026-09-12-bbtower-block-b/attempt2/slowdown.md"}
+  {:name "Step 2 fast and bb sums; step 3 new bb ceiling",
+   :before {:fast-budget-ms 60000, :bb-budget nil},
+   :after nil,
+   :receipt
+   "docs/observations/2026-09-12-bbtower-block-b/attempt2/slowdown.md"}
+  {:name "Feature-thread bb/JVM walls and integration sum",
+   :before {:integration-budget-ms 240000},
+   :after nil,
+   :receipt
+   "docs/observations/2026-09-12-bbtower-block-b/attempt2/REPORT.md"}
+  {:name "Prewarm attempts and emitted census/budget lines",
+   :before 0,
+   :after 0,
+   :receipt
+   "docs/observations/2026-09-12-bbtower-block-b/attempt2/gate.md"}],
+ :disagreements
+ ["The sealed one-JVM peak conflicts with the required unchanged coordinator/worker/isolation launch topology. One admitted suite is not one live JVM."],
+ :commits [],
+ :verdict :blocked,
+ :owed
+ [{:what
+   "Step 1 matched a/b/c measurements, top deltas and supported cause",
+   :owner "Fable",
+   :unblock
+   "Fable must authorize and reseal either a peak-JVM allowance covering coordinators, waiting isolation parents and children, or a revised matched launcher protocol preserving isolation with one live JVM. A worker-width limit alone is insufficient."}
+  {:what
+   "Steps 2–3 coordinator fix, one test-fast run, measured bb ceiling and boundary witnesses",
+   :owner "Astra",
+   :unblock
+   "Resume after step 1 admission is resolved; use its measured cause. Fable ratifies the new bb ceiling."}
+  {:what
+   "Step 4 probe refusals, completeness and boolean false seams; encounter score",
+   :owner "Astra",
+   :unblock
+   "Resume the frozen numbered task order after steps 1–3. Encounter entrance has not been invoked."}
+  {:what
+   "Step 5 feature-thread bb/JVM meter, runtime witness and one test-integration run",
+   :owner "Astra",
+   :unblock "Resolve JVM admission and complete preceding steps."}
+  {:what
+   "Step 6 final-tip prewarm, bounded repair/final prewarm, verbatim gate lines; manifest battery obligation",
+   :owner "Astra",
+   :unblock
+   "Resolve admission for every descendant and complete implementation. Zero prewarm attempts have been consumed."}
+  {:what "Independent acceptance and bb ceiling ratification",
+   :owner "Fable",
+   :unblock
+   "Review the completed implementation and actual measured evidence externally."}],
+ :manifest_id
+ "4bd681b0898afdb09881555c1be0398fb84c55964345672d79c32797adcf2936"}

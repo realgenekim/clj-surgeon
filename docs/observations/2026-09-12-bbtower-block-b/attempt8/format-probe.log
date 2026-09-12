@@ -1,0 +1,6 @@
+standard-clj fix v0.29.0
+
+F /test/clj_surgeon/receipt_booleans_test.clj [8.18ms]
+F /test/clj_surgeon/splice_envelope_test.clj [6.15ms]
+
+All 2 files formatted with Standard Clojure Style 👍 [21.84ms]

@@ -1,4 +1,5 @@
 (ns clj-surgeon.insertion-gap-test
+  {:lane :fast}
   (:require
    [clj-surgeon.intent-transaction :as transaction]
    [clojure.string :as str]

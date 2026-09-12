@@ -1,0 +1,455 @@
+cd libs/clj-splice && bb -e '(System/setProperty "java.io.tmpdir" (or (System/getenv "TMPDIR") (throw (ex-info "TMPDIR required" {})))) (require (quote clj-splice.test-runner)) (clj-splice.test-runner/-main)'
+
+Testing clj-splice.core-test
+
+Ran 5 tests containing 59 assertions.
+0 failures, 0 errors.
+projection-sha256 eb7f6099906935cd68d29b6a7c99b96a4e129fee2ef9b4640f4b70e76260b622
+bb -Xmx1g -Djava.io.tmpdir="/var/tmp/forge/bbtower-fx" -m clj-surgeon.battery-parallel-runner --suite fast
+battery-parallel: 94 namespace(s) in 94 unit(s) over 8 lane(s); floor is clj-surgeon.mcp-compact-relations-test at 8806 ms
+  process 0 phase 0 (est 2186 ms): clj-surgeon.splice-envelope-test clj-surgeon.insert-forms-receipt-test clj-surgeon.mcp-expect-guard-test clj-surgeon.mcp-combinable-transaction-test clj-surgeon.mcp-write-refusal-test
+  process 1 phase 0 (est 2269 ms): clj-surgeon.outline-test clj-surgeon.helper-extraction-test clj-surgeon.mcp-inspect-contract-test clj-surgeon.workspace-onboarding-test clj-surgeon.require-change-test clj-surgeon.structural-lens-test clj-surgeon.worktree-lifecycle-io-test clj-surgeon.move-test clj-surgeon.mcp-contract-test clj-surgeon.extract-header-test clj-surgeon.mcp-telemetry-test clj-surgeon.outline-differential-test clj-surgeon.mcp-compact-edit-fields-test clj-surgeon.file-ops-test
+  process 2 phase 0 (est 2243 ms): clj-surgeon.lane-manifest-test clj-surgeon.namespace-split-test clj-surgeon.alias-migration-test clj-surgeon.cljc-existing-ops-test clj-surgeon.recovery-test clj-surgeon.memory-battery-test clj-surgeon.insertion-gap-test clj-surgeon.mcp-program-tool-test clj-surgeon.worktree-lifecycle-test clj-surgeon.cljc.require-ops-test clj-surgeon.mission-usage-test clj-surgeon.failure-report-test clj-surgeon.split-proof-gate-test
+  process 3 phase 0 (est 2213 ms): clj-surgeon.ns-isolation-test clj-surgeon.rename-alias-receipt-test clj-surgeon.mcp-change-buffer-test clj-surgeon.mcp-prepared-request-test clj-surgeon.mcp-compact-edit-test clj-surgeon.mcp-semantic-client-test
+  process 4 phase 0 (est 2483 ms): clj-surgeon.mcp-inspect-tool-test clj-surgeon.mcp-compact-location-test clj-surgeon.mcp-create-files-test clj-surgeon.mcp-operation-async-test
+  process 5 phase 0 (est 1972 ms): clj-surgeon.operation-algebra-test clj-surgeon.analyze-test clj-surgeon.move-dependency-test clj-surgeon.ls-tree-test clj-surgeon.jvm-error-test clj-surgeon.outermost-test clj-surgeon.mcp-workspace-test clj-surgeon.relation-census-test clj-surgeon.mission-forms-source-test clj-surgeon.syntax-var-refs-test clj-surgeon.mcp-recovery-test clj-surgeon.cljc.analyze-test clj-surgeon.mcp-read-request-normalization-test
+  process 6 phase 0 (est 4037 ms): clj-surgeon.insert-forms-test clj-surgeon.outline-memory-test clj-surgeon.receipt-booleans-test clj-surgeon.mcp-extraction-plan-test clj-surgeon.mcp-relation-census-round20-test clj-surgeon.mcp-formatter-test
+  process 7 phase 0 (est 418 ms): clj-surgeon.mcp-intent-contract-test clj-surgeon.agent-routing-test clj-surgeon.telemetry-events-test clj-surgeon.fix-declares-test clj-surgeon.owner-hypotheses-test clj-surgeon.cljc.split-test clj-surgeon.fast-lane-isolation-test clj-surgeon.cljc.merge-test clj-surgeon.mcp-schema-test clj-surgeon.mission-forms-test clj-surgeon.diagnostic-delta-test clj-surgeon.mcp-paths-test clj-surgeon.mission-git-test clj-surgeon.worktree-lifecycle-cli-test
+  process 8 phase 0 (est 4264 ms): clj-surgeon.mcp-namespace-split-test clj-surgeon.scope-stream-test clj-surgeon.census-pool-test clj-surgeon.mcp-prepared-confirmation-test clj-surgeon.mcp-operation-test clj-surgeon.mission-candidate-race-test
+  process 9 phase 0 (est 192 ms): clj-surgeon.battery-parallel-test clj-surgeon.mcp-extraction-test clj-surgeon.edit-dsl-test clj-surgeon.mission-plain-forms-test clj-surgeon.quoted-var-refs-test clj-surgeon.mission-typist-test clj-surgeon.rename-test clj-surgeon.battery-ledger-test clj-surgeon.forms-test clj-surgeon.mission-candidate-test
+  process 10 phase 0 (est 4473 ms): clj-surgeon.mcp-operation-registry-test
+  process 11 phase 0 (est 6587 ms): clj-surgeon.rename-alias-test
+  process 12 phase 0 (est 8806 ms): clj-surgeon.mcp-compact-relations-test
+
+========== lane 0 (clj-surgeon.splice-envelope-test clj-surgeon.insert-forms-receipt-test clj-surgeon.mcp-expect-guard-test clj-surgeon.mcp-combinable-transaction-test clj-surgeon.mcp-write-refusal-test) exit 0, 17747 ms ==========
+lanes: --ns -- 5 namespace(s), home-isolated true
+
+Testing clj-surgeon.splice-envelope-test
+
+Testing clj-surgeon.insert-forms-receipt-test
+
+Testing clj-surgeon.mcp-expect-guard-test
+
+Testing clj-surgeon.mcp-combinable-transaction-test
+
+Testing clj-surgeon.mcp-write-refusal-test
+---------- lane 0 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+namespace walls (5, slowest first, total 2245 ms):
+      1049 ms  clj-surgeon.splice-envelope-test
+       643 ms  clj-surgeon.insert-forms-receipt-test
+       255 ms  clj-surgeon.mcp-expect-guard-test
+       157 ms  clj-surgeon.mcp-combinable-transaction-test
+       141 ms  clj-surgeon.mcp-write-refusal-test
+
+========== lane 1 (clj-surgeon.outline-test clj-surgeon.helper-extraction-test clj-surgeon.mcp-inspect-contract-test clj-surgeon.workspace-onboarding-test clj-surgeon.require-change-test clj-surgeon.structural-lens-test clj-surgeon.worktree-lifecycle-io-test clj-surgeon.move-test clj-surgeon.mcp-contract-test clj-surgeon.extract-header-test clj-surgeon.mcp-telemetry-test clj-surgeon.outline-differential-test clj-surgeon.mcp-compact-edit-fields-test clj-surgeon.file-ops-test) exit 0, 2989 ms ==========
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.helper-extraction-test
+
+Testing clj-surgeon.mcp-inspect-contract-test
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.require-change-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.move-test
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.mcp-compact-edit-fields-test
+
+Testing clj-surgeon.file-ops-test
+
+========== lane 2 (clj-surgeon.lane-manifest-test clj-surgeon.namespace-split-test clj-surgeon.alias-migration-test clj-surgeon.cljc-existing-ops-test clj-surgeon.recovery-test clj-surgeon.memory-battery-test clj-surgeon.insertion-gap-test clj-surgeon.mcp-program-tool-test clj-surgeon.worktree-lifecycle-test clj-surgeon.cljc.require-ops-test clj-surgeon.mission-usage-test clj-surgeon.failure-report-test clj-surgeon.split-proof-gate-test) exit 0, 3338 ms ==========
+
+Testing clj-surgeon.lane-manifest-test
+
+Testing clj-surgeon.namespace-split-test
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.mcp-program-tool-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.mission-usage-test
+
+Testing clj-surgeon.failure-report-test
+
+Testing clj-surgeon.split-proof-gate-test
+
+========== lane 3 (clj-surgeon.ns-isolation-test clj-surgeon.rename-alias-receipt-test clj-surgeon.mcp-change-buffer-test clj-surgeon.mcp-prepared-request-test clj-surgeon.mcp-compact-edit-test clj-surgeon.mcp-semantic-client-test) exit 0, 17894 ms ==========
+lanes: --ns -- 6 namespace(s), home-isolated true
+
+Testing clj-surgeon.ns-isolation-test
+
+Testing clj-surgeon.rename-alias-receipt-test
+
+Testing clj-surgeon.mcp-change-buffer-test
+
+Testing clj-surgeon.mcp-prepared-request-test
+
+Testing clj-surgeon.mcp-compact-edit-test
+
+Testing clj-surgeon.mcp-semantic-client-test
+---------- lane 3 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+namespace walls (6, slowest first, total 2506 ms):
+       879 ms  clj-surgeon.ns-isolation-test
+       717 ms  clj-surgeon.rename-alias-receipt-test
+       460 ms  clj-surgeon.mcp-change-buffer-test
+       235 ms  clj-surgeon.mcp-prepared-request-test
+       109 ms  clj-surgeon.mcp-compact-edit-test
+       106 ms  clj-surgeon.mcp-semantic-client-test
+
+========== lane 4 (clj-surgeon.mcp-inspect-tool-test clj-surgeon.mcp-compact-location-test clj-surgeon.mcp-create-files-test clj-surgeon.mcp-operation-async-test) exit 0, 18604 ms ==========
+lanes: --ns -- 4 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-inspect-tool-test
+
+Testing clj-surgeon.mcp-compact-location-test
+
+Testing clj-surgeon.mcp-create-files-test
+
+Testing clj-surgeon.mcp-operation-async-test
+---------- lane 4 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+namespace walls (4, slowest first, total 3070 ms):
+      2281 ms  clj-surgeon.mcp-inspect-tool-test
+       405 ms  clj-surgeon.mcp-compact-location-test
+       276 ms  clj-surgeon.mcp-create-files-test
+       108 ms  clj-surgeon.mcp-operation-async-test
+
+========== lane 5 (clj-surgeon.operation-algebra-test clj-surgeon.analyze-test clj-surgeon.move-dependency-test clj-surgeon.ls-tree-test clj-surgeon.jvm-error-test clj-surgeon.outermost-test clj-surgeon.mcp-workspace-test clj-surgeon.relation-census-test clj-surgeon.mission-forms-source-test clj-surgeon.syntax-var-refs-test clj-surgeon.mcp-recovery-test clj-surgeon.cljc.analyze-test clj-surgeon.mcp-read-request-normalization-test) exit 0, 2816 ms ==========
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.mcp-workspace-test
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.mission-forms-source-test
+
+Testing clj-surgeon.syntax-var-refs-test
+
+Testing clj-surgeon.mcp-recovery-test
+
+Testing clj-surgeon.cljc.analyze-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test
+
+========== lane 6 (clj-surgeon.insert-forms-test clj-surgeon.outline-memory-test clj-surgeon.receipt-booleans-test clj-surgeon.mcp-extraction-plan-test clj-surgeon.mcp-relation-census-round20-test clj-surgeon.mcp-formatter-test) exit 0, 21247 ms ==========
+lanes: --ns -- 6 namespace(s), home-isolated true
+
+Testing clj-surgeon.insert-forms-test
+
+Testing clj-surgeon.outline-memory-test
+
+Testing clj-surgeon.receipt-booleans-test
+
+Testing clj-surgeon.mcp-extraction-plan-test
+
+Testing clj-surgeon.mcp-relation-census-round20-test
+WORKSPACE-PARITY-ENUMERATION:
+  unresolvable-root-escaping-link      expected invalid-workspace-root   tool "invalid-workspace-root" cli "invalid-workspace-root" scanned 0  agree true
+  unresolvable-root-outside-absolute   expected invalid-workspace-root   tool "invalid-workspace-root" cli "invalid-workspace-root" scanned 0  agree true
+ROOT-SHAPE-PARITY-ENUMERATION:
+  plain            expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  trailing-slash   expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  double-slash     expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  dot              expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  dotdot           expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  dir-is-a-file    expected invalid-workspace-root   tool "invalid-workspace-root" cli "invalid-workspace-root" scanned 0  agree true
+
+Testing clj-surgeon.mcp-formatter-test
+---------- lane 6 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+namespace walls (6, slowest first, total 3163 ms):
+      2020 ms  clj-surgeon.insert-forms-test
+       421 ms  clj-surgeon.outline-memory-test
+       336 ms  clj-surgeon.receipt-booleans-test
+       151 ms  clj-surgeon.mcp-extraction-plan-test
+       134 ms  clj-surgeon.mcp-relation-census-round20-test
+       101 ms  clj-surgeon.mcp-formatter-test
+
+========== lane 7 (clj-surgeon.mcp-intent-contract-test clj-surgeon.agent-routing-test clj-surgeon.telemetry-events-test clj-surgeon.fix-declares-test clj-surgeon.owner-hypotheses-test clj-surgeon.cljc.split-test clj-surgeon.fast-lane-isolation-test clj-surgeon.cljc.merge-test clj-surgeon.mcp-schema-test clj-surgeon.mission-forms-test clj-surgeon.diagnostic-delta-test clj-surgeon.mcp-paths-test clj-surgeon.mission-git-test clj-surgeon.worktree-lifecycle-cli-test) exit 1, 1156 ms ==========
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+FAIL in (no-fast-lane-namespace-roots-a-fixture-outside-its-own-tmpdir) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/fast_lane_isolation_test.clj:109)
+1 fast-lane namespace(s) rooting fixtures outside this run's own java.io.tmpdir subtree. The lane's rule is that it reads nothing outside its own temp root, and a seat-absolute root is also shared by every clone the concurrency battery runs at once: clj-surgeon.memory-battery-test -- the seat's shared /home/<user>/tmp ("\"/home/forge/tmp")
+expected: (empty? offenders)
+  actual: (not (empty? ("clj-surgeon.memory-battery-test -- the seat's shared /home/<user>/tmp (\"\\\"/home/forge/tmp\")")))
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.mission-forms-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.mission-git-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test
+
+========== lane 8 (clj-surgeon.mcp-namespace-split-test clj-surgeon.scope-stream-test clj-surgeon.census-pool-test clj-surgeon.mcp-prepared-confirmation-test clj-surgeon.mcp-operation-test clj-surgeon.mission-candidate-race-test) exit 0, 19971 ms ==========
+lanes: --ns -- 6 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-namespace-split-test
+
+Testing clj-surgeon.scope-stream-test
+
+Testing clj-surgeon.census-pool-test
+
+Testing clj-surgeon.mcp-prepared-confirmation-test
+
+Testing clj-surgeon.mcp-operation-test
+
+Testing clj-surgeon.mission-candidate-race-test
+---------- lane 8 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+namespace walls (6, slowest first, total 4261 ms):
+      3111 ms  clj-surgeon.mcp-namespace-split-test
+       362 ms  clj-surgeon.census-pool-test
+       335 ms  clj-surgeon.scope-stream-test
+       210 ms  clj-surgeon.mcp-prepared-confirmation-test
+       125 ms  clj-surgeon.mission-candidate-race-test
+       118 ms  clj-surgeon.mcp-operation-test
+
+========== lane 9 (clj-surgeon.battery-parallel-test clj-surgeon.mcp-extraction-test clj-surgeon.edit-dsl-test clj-surgeon.mission-plain-forms-test clj-surgeon.quoted-var-refs-test clj-surgeon.mission-typist-test clj-surgeon.rename-test clj-surgeon.battery-ledger-test clj-surgeon.forms-test clj-surgeon.mission-candidate-test) exit 0, 731 ms ==========
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.mcp-extraction-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.mission-plain-forms-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.mission-typist-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.battery-ledger-test
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.mission-candidate-test
+
+========== lane 10 (clj-surgeon.mcp-operation-registry-test) exit 0, 21279 ms ==========
+lanes: --ns -- 1 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-operation-registry-test
+---------- lane 10 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+namespace walls (1, slowest first, total 4179 ms):
+      4179 ms  clj-surgeon.mcp-operation-registry-test
+
+========== lane 11 (clj-surgeon.rename-alias-test) exit 0, 7335 ms ==========
+
+Testing clj-surgeon.rename-alias-test
+
+========== lane 12 (clj-surgeon.mcp-compact-relations-test) exit 0, 23885 ms ==========
+lanes: --ns -- 1 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-compact-relations-test
+---------- lane 12 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+namespace walls (1, slowest first, total 8378 ms):
+      8378 ms  clj-surgeon.mcp-compact-relations-test
+
+Ran 1238 tests containing 11703 assertions.
+1 failures, 0 errors.
+0 preconditions skipped.
+0 preconditions failed.
+makespan: 23939 ms
+cadence :fast: serial-equivalent 42653 ms; budget 60000 ms
+bb-runtime: serial-equivalent 14851 ms; budget 374149 ms; makespan 12043 ms
+
+namespace walls (94, slowest first, serial-equivalent total 42653 ms):
+      8378 ms  clj-surgeon.mcp-compact-relations-test
+      6984 ms  clj-surgeon.rename-alias-test
+      4179 ms  clj-surgeon.mcp-operation-registry-test
+      3111 ms  clj-surgeon.mcp-namespace-split-test
+      2281 ms  clj-surgeon.mcp-inspect-tool-test
+      2020 ms  clj-surgeon.insert-forms-test
+      1317 ms  clj-surgeon.lane-manifest-test
+      1049 ms  clj-surgeon.splice-envelope-test
+       912 ms  clj-surgeon.namespace-split-test
+       907 ms  clj-surgeon.outline-test
+       879 ms  clj-surgeon.ns-isolation-test
+       857 ms  clj-surgeon.helper-extraction-test
+       829 ms  clj-surgeon.operation-algebra-test
+       717 ms  clj-surgeon.rename-alias-receipt-test
+       675 ms  clj-surgeon.analyze-test
+       643 ms  clj-surgeon.insert-forms-receipt-test
+       460 ms  clj-surgeon.mcp-change-buffer-test
+       421 ms  clj-surgeon.outline-memory-test
+       405 ms  clj-surgeon.mcp-compact-location-test
+       362 ms  clj-surgeon.census-pool-test
+       336 ms  clj-surgeon.receipt-booleans-test
+       335 ms  clj-surgeon.scope-stream-test
+       304 ms  clj-surgeon.mcp-inspect-contract-test
+       276 ms  clj-surgeon.mcp-create-files-test
+       274 ms  clj-surgeon.mcp-intent-contract-test
+       255 ms  clj-surgeon.mcp-expect-guard-test
+       235 ms  clj-surgeon.mcp-prepared-request-test
+       216 ms  clj-surgeon.ls-tree-test
+       210 ms  clj-surgeon.mcp-prepared-confirmation-test
+       161 ms  clj-surgeon.alias-migration-test
+       157 ms  clj-surgeon.mcp-combinable-transaction-test
+       151 ms  clj-surgeon.mcp-extraction-plan-test
+       142 ms  clj-surgeon.jvm-error-test
+       141 ms  clj-surgeon.mcp-write-refusal-test
+       134 ms  clj-surgeon.mcp-relation-census-round20-test
+       125 ms  clj-surgeon.mission-candidate-race-test
+       118 ms  clj-surgeon.mcp-operation-test
+       115 ms  clj-surgeon.workspace-onboarding-test
+       109 ms  clj-surgeon.mcp-compact-edit-test
+       108 ms  clj-surgeon.mcp-operation-async-test
+       106 ms  clj-surgeon.mcp-semantic-client-test
+       101 ms  clj-surgeon.mcp-formatter-test
+        93 ms  clj-surgeon.mcp-extraction-test
+        84 ms  clj-surgeon.cljc-existing-ops-test
+        84 ms  clj-surgeon.require-change-test
+        81 ms  clj-surgeon.structural-lens-test
+        80 ms  clj-surgeon.mcp-workspace-test
+        65 ms  clj-surgeon.telemetry-events-test
+        62 ms  clj-surgeon.move-dependency-test
+        59 ms  clj-surgeon.relation-census-test
+        51 ms  clj-surgeon.recovery-test
+        49 ms  clj-surgeon.battery-parallel-test
+        39 ms  clj-surgeon.agent-routing-test
+        33 ms  clj-surgeon.fix-declares-test
+        30 ms  clj-surgeon.outermost-test
+        28 ms  clj-surgeon.owner-hypotheses-test
+        26 ms  clj-surgeon.mission-forms-source-test
+        25 ms  clj-surgeon.memory-battery-test
+        25 ms  clj-surgeon.worktree-lifecycle-io-test
+        24 ms  clj-surgeon.mission-plain-forms-test
+        22 ms  clj-surgeon.move-test
+        21 ms  clj-surgeon.mcp-program-tool-test
+        19 ms  clj-surgeon.fast-lane-isolation-test
+        15 ms  clj-surgeon.edit-dsl-test
+        12 ms  clj-surgeon.cljc.split-test
+        11 ms  clj-surgeon.cljc.merge-test
+        11 ms  clj-surgeon.insertion-gap-test
+        11 ms  clj-surgeon.mcp-contract-test
+        11 ms  clj-surgeon.mcp-schema-test
+        11 ms  clj-surgeon.worktree-lifecycle-test
+        10 ms  clj-surgeon.syntax-var-refs-test
+         9 ms  clj-surgeon.mission-typist-test
+         8 ms  clj-surgeon.quoted-var-refs-test
+         7 ms  clj-surgeon.mcp-read-request-normalization-test
+         5 ms  clj-surgeon.cljc.analyze-test
+         5 ms  clj-surgeon.mission-forms-test
+         4 ms  clj-surgeon.mcp-telemetry-test
+         4 ms  clj-surgeon.outline-differential-test
+         4 ms  clj-surgeon.rename-test
+         3 ms  clj-surgeon.battery-ledger-test
+         3 ms  clj-surgeon.cljc.require-ops-test
+         3 ms  clj-surgeon.extract-header-test
+         3 ms  clj-surgeon.mcp-recovery-test
+         2 ms  clj-surgeon.forms-test
+         2 ms  clj-surgeon.mission-usage-test
+         2 ms  clj-surgeon.split-proof-gate-test
+         1 ms  clj-surgeon.mcp-compact-edit-fields-test
+         1 ms  clj-surgeon.mission-candidate-test
+         0 ms  clj-surgeon.diagnostic-delta-test
+         0 ms  clj-surgeon.failure-report-test
+         0 ms  clj-surgeon.file-ops-test
+         0 ms  clj-surgeon.mcp-paths-test
+         0 ms  clj-surgeon.mission-git-test
+         0 ms  clj-surgeon.worktree-lifecycle-cli-test
+
+lanes (13), makespan 23939 ms:
+  lane 0     17747 ms  exit 0  clj-surgeon.splice-envelope-test clj-surgeon.insert-forms-receipt-test clj-surgeon.mcp-expect-guard-test clj-surgeon.mcp-combinable-transaction-test clj-surgeon.mcp-write-refusal-test
+  lane 1      2989 ms  exit 0  clj-surgeon.outline-test clj-surgeon.helper-extraction-test clj-surgeon.mcp-inspect-contract-test clj-surgeon.workspace-onboarding-test clj-surgeon.require-change-test clj-surgeon.structural-lens-test clj-surgeon.worktree-lifecycle-io-test clj-surgeon.move-test clj-surgeon.mcp-contract-test clj-surgeon.extract-header-test clj-surgeon.mcp-telemetry-test clj-surgeon.outline-differential-test clj-surgeon.mcp-compact-edit-fields-test clj-surgeon.file-ops-test
+  lane 2      3338 ms  exit 0  clj-surgeon.lane-manifest-test clj-surgeon.namespace-split-test clj-surgeon.alias-migration-test clj-surgeon.cljc-existing-ops-test clj-surgeon.recovery-test clj-surgeon.memory-battery-test clj-surgeon.insertion-gap-test clj-surgeon.mcp-program-tool-test clj-surgeon.worktree-lifecycle-test clj-surgeon.cljc.require-ops-test clj-surgeon.mission-usage-test clj-surgeon.failure-report-test clj-surgeon.split-proof-gate-test
+  lane 3     17894 ms  exit 0  clj-surgeon.ns-isolation-test clj-surgeon.rename-alias-receipt-test clj-surgeon.mcp-change-buffer-test clj-surgeon.mcp-prepared-request-test clj-surgeon.mcp-compact-edit-test clj-surgeon.mcp-semantic-client-test
+  lane 4     18604 ms  exit 0  clj-surgeon.mcp-inspect-tool-test clj-surgeon.mcp-compact-location-test clj-surgeon.mcp-create-files-test clj-surgeon.mcp-operation-async-test
+  lane 5      2816 ms  exit 0  clj-surgeon.operation-algebra-test clj-surgeon.analyze-test clj-surgeon.move-dependency-test clj-surgeon.ls-tree-test clj-surgeon.jvm-error-test clj-surgeon.outermost-test clj-surgeon.mcp-workspace-test clj-surgeon.relation-census-test clj-surgeon.mission-forms-source-test clj-surgeon.syntax-var-refs-test clj-surgeon.mcp-recovery-test clj-surgeon.cljc.analyze-test clj-surgeon.mcp-read-request-normalization-test
+  lane 6     21247 ms  exit 0  clj-surgeon.insert-forms-test clj-surgeon.outline-memory-test clj-surgeon.receipt-booleans-test clj-surgeon.mcp-extraction-plan-test clj-surgeon.mcp-relation-census-round20-test clj-surgeon.mcp-formatter-test
+  lane 7      1156 ms  exit 1  clj-surgeon.mcp-intent-contract-test clj-surgeon.agent-routing-test clj-surgeon.telemetry-events-test clj-surgeon.fix-declares-test clj-surgeon.owner-hypotheses-test clj-surgeon.cljc.split-test clj-surgeon.fast-lane-isolation-test clj-surgeon.cljc.merge-test clj-surgeon.mcp-schema-test clj-surgeon.mission-forms-test clj-surgeon.diagnostic-delta-test clj-surgeon.mcp-paths-test clj-surgeon.mission-git-test clj-surgeon.worktree-lifecycle-cli-test
+  lane 8     19971 ms  exit 0  clj-surgeon.mcp-namespace-split-test clj-surgeon.scope-stream-test clj-surgeon.census-pool-test clj-surgeon.mcp-prepared-confirmation-test clj-surgeon.mcp-operation-test clj-surgeon.mission-candidate-race-test
+  lane 9       731 ms  exit 0  clj-surgeon.battery-parallel-test clj-surgeon.mcp-extraction-test clj-surgeon.edit-dsl-test clj-surgeon.mission-plain-forms-test clj-surgeon.quoted-var-refs-test clj-surgeon.mission-typist-test clj-surgeon.rename-test clj-surgeon.battery-ledger-test clj-surgeon.forms-test clj-surgeon.mission-candidate-test
+  lane 10     21279 ms  exit 0  clj-surgeon.mcp-operation-registry-test
+  lane 11      7335 ms  exit 0  clj-surgeon.rename-alias-test
+  lane 12     23885 ms  exit 0  clj-surgeon.mcp-compact-relations-test
+
+test-isolation: 0 violations across 94 namespace(s) (TEST-ISO-002/003/004/005/007/010)
+
+BATTERY-LANE: 1 lane failure(s):
+   lane 7 exited 1 (log target/gate-parallel/0fa96806-ea4b-48d4-a664-a97a78319459/fast/lane-7.out)
+battery-parallel: makespan 23939 ms over 8 lane(s); serial-equivalent 42653 ms; skipped 0
+gate-refused: gate-refused: suite failed {:suite "fast", :problems ["lane 7 exited 1 (log target/gate-parallel/0fa96806-ea4b-48d4-a664-a97a78319459/fast/lane-7.out)"], :result {:test 1238, :pass 11702, :fail 1, :error 0}}
+make: *** [Makefile:1125: test-fast] Error 1
+
+make-test-fast: command-wall-ms 1610282278625057053; exit 2

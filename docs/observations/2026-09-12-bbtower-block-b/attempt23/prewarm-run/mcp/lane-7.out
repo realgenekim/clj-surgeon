@@ -1,0 +1,18 @@
+
+Testing clj-surgeon.helper-extraction-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.battery-ledger-test
+
+Testing clj-surgeon.mission-usage-test

@@ -1,0 +1,20 @@
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.cljc.analyze-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

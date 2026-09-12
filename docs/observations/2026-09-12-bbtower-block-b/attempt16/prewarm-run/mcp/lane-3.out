@@ -1,0 +1,11 @@
+lanes: --ns -- 5 namespace(s), home-isolated true
+
+Testing clj-surgeon.ns-isolation-test
+
+Testing clj-surgeon.scope-stream-test
+
+Testing clj-surgeon.mcp-expect-guard-test
+
+Testing clj-surgeon.mcp-compact-edit-test
+
+Testing clj-surgeon.mcp-operation-test

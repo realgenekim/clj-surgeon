@@ -1,0 +1,11 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+namespace walls (7, slowest first, total 4856 ms):
+      3187 ms  clj-surgeon.mcp-namespace-split-test
+       866 ms  clj-surgeon.ns-isolation-test
+       286 ms  clj-surgeon.mcp-compact-location-test
+       145 ms  clj-surgeon.mcp-relation-census-round20-test
+       140 ms  clj-surgeon.mcp-write-refusal-test
+       122 ms  clj-surgeon.mcp-compact-edit-test
+       110 ms  clj-surgeon.mcp-formatter-test

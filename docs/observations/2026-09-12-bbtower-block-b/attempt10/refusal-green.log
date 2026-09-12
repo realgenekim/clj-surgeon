@@ -1,0 +1,6 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.splice-envelope-test
+
+Ran 2 tests containing 63 assertions.
+0 failures, 0 errors.

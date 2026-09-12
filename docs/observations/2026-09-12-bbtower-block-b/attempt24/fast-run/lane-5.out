@@ -1,0 +1,26 @@
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.mcp-extraction-test
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.mcp-program-tool-test
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.mission-forms-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.mission-git-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

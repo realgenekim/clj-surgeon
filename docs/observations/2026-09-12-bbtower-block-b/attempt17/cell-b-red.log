@@ -1,0 +1,225 @@
+{"command": ["python3", "-B", "-m", "unittest", "discover", "-s", "test/oracles", "-p", "test_cell_b_oracle.py"], "writable_roots": ["/home/forge/src/clj-surgeon-bbtower", "/var/tmp/forge/bbtower-fx/packets/8ecce48b-1dcb-4f5a-bdfc-afff3e404317/tmp", "/home/forge/.local/state/clj-surgeon"], "started": 1789219922.337706, "diagnostic": true}
+/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt17/restricted-gate.py:32: DeprecationWarning: Due to '_pack_', the 'Rule' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+  class Rule(ctypes.Structure):
+EEEEEEEEEEEE
+======================================================================
+ERROR: test_analyzer_failure_is_not_clean (test_cell_b_oracle.CellBLintCaseWitness.test_analyzer_failure_is_not_clean)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 53, in test_analyzer_failure_is_not_clean
+    self.assertNotEqual(0, lint_check("", 127))
+                           ~~~~~~~~~~^^^^^^^^^
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 15, in lint_check
+    with tempfile.TemporaryDirectory(dir="/var/tmp", prefix="b07-lint-") as tmp:
+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 907, in __init__
+    self.name = mkdtemp(suffix, prefix, dir)
+                ~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 381, in mkdtemp
+    _os.mkdir(file, 0o700)
+    ~~~~~~~~~^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/var/tmp/b07-lint-emrow1la'
+
+======================================================================
+ERROR: test_baseline_is_exact_and_multiplicity_is_preserved (test_cell_b_oracle.CellBLintCaseWitness.test_baseline_is_exact_and_multiplicity_is_preserved)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 59, in test_baseline_is_exact_and_multiplicity_is_preserved
+    self.assertEqual(0, lint_check(moved, baseline=old, baseline_rc=3))
+                        ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 15, in lint_check
+    with tempfile.TemporaryDirectory(dir="/var/tmp", prefix="b07-lint-") as tmp:
+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 907, in __init__
+    self.name = mkdtemp(suffix, prefix, dir)
+                ~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 381, in mkdtemp
+    _os.mkdir(file, 0o700)
+    ~~~~~~~~~^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/var/tmp/b07-lint-hwrgojh9'
+
+======================================================================
+ERROR: test_unresolved_all_cases_fail (test_cell_b_oracle.CellBLintCaseWitness.test_unresolved_all_cases_fail) (word='unresolved', category='var')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 49, in test_unresolved_all_cases_fail
+    self.assertNotEqual(0, lint_check(f"src/example.clj:2:4: error: {word} {category}: broken"))
+                           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 15, in lint_check
+    with tempfile.TemporaryDirectory(dir="/var/tmp", prefix="b07-lint-") as tmp:
+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 907, in __init__
+    self.name = mkdtemp(suffix, prefix, dir)
+                ~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 381, in mkdtemp
+    _os.mkdir(file, 0o700)
+    ~~~~~~~~~^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/var/tmp/b07-lint-nmdrglp1'
+
+======================================================================
+ERROR: test_unresolved_all_cases_fail (test_cell_b_oracle.CellBLintCaseWitness.test_unresolved_all_cases_fail) (word='Unresolved', category='var')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 49, in test_unresolved_all_cases_fail
+    self.assertNotEqual(0, lint_check(f"src/example.clj:2:4: error: {word} {category}: broken"))
+                           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 15, in lint_check
+    with tempfile.TemporaryDirectory(dir="/var/tmp", prefix="b07-lint-") as tmp:
+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 907, in __init__
+    self.name = mkdtemp(suffix, prefix, dir)
+                ~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 381, in mkdtemp
+    _os.mkdir(file, 0o700)
+    ~~~~~~~~~^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/var/tmp/b07-lint-32hpvk4j'
+
+======================================================================
+ERROR: test_unresolved_all_cases_fail (test_cell_b_oracle.CellBLintCaseWitness.test_unresolved_all_cases_fail) (word='UNRESOLVED', category='var')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 49, in test_unresolved_all_cases_fail
+    self.assertNotEqual(0, lint_check(f"src/example.clj:2:4: error: {word} {category}: broken"))
+                           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 15, in lint_check
+    with tempfile.TemporaryDirectory(dir="/var/tmp", prefix="b07-lint-") as tmp:
+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 907, in __init__
+    self.name = mkdtemp(suffix, prefix, dir)
+                ~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 381, in mkdtemp
+    _os.mkdir(file, 0o700)
+    ~~~~~~~~~^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/var/tmp/b07-lint-f1v2ych5'
+
+======================================================================
+ERROR: test_unresolved_all_cases_fail (test_cell_b_oracle.CellBLintCaseWitness.test_unresolved_all_cases_fail) (word='unresolved', category='namespace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 49, in test_unresolved_all_cases_fail
+    self.assertNotEqual(0, lint_check(f"src/example.clj:2:4: error: {word} {category}: broken"))
+                           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 15, in lint_check
+    with tempfile.TemporaryDirectory(dir="/var/tmp", prefix="b07-lint-") as tmp:
+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 907, in __init__
+    self.name = mkdtemp(suffix, prefix, dir)
+                ~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 381, in mkdtemp
+    _os.mkdir(file, 0o700)
+    ~~~~~~~~~^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/var/tmp/b07-lint-jz9b0stt'
+
+======================================================================
+ERROR: test_unresolved_all_cases_fail (test_cell_b_oracle.CellBLintCaseWitness.test_unresolved_all_cases_fail) (word='Unresolved', category='namespace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 49, in test_unresolved_all_cases_fail
+    self.assertNotEqual(0, lint_check(f"src/example.clj:2:4: error: {word} {category}: broken"))
+                           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 15, in lint_check
+    with tempfile.TemporaryDirectory(dir="/var/tmp", prefix="b07-lint-") as tmp:
+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 907, in __init__
+    self.name = mkdtemp(suffix, prefix, dir)
+                ~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 381, in mkdtemp
+    _os.mkdir(file, 0o700)
+    ~~~~~~~~~^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/var/tmp/b07-lint-vjnejsn2'
+
+======================================================================
+ERROR: test_unresolved_all_cases_fail (test_cell_b_oracle.CellBLintCaseWitness.test_unresolved_all_cases_fail) (word='UNRESOLVED', category='namespace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 49, in test_unresolved_all_cases_fail
+    self.assertNotEqual(0, lint_check(f"src/example.clj:2:4: error: {word} {category}: broken"))
+                           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 15, in lint_check
+    with tempfile.TemporaryDirectory(dir="/var/tmp", prefix="b07-lint-") as tmp:
+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 907, in __init__
+    self.name = mkdtemp(suffix, prefix, dir)
+                ~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 381, in mkdtemp
+    _os.mkdir(file, 0o700)
+    ~~~~~~~~~^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/var/tmp/b07-lint-0h2zbzwn'
+
+======================================================================
+ERROR: test_unresolved_all_cases_fail (test_cell_b_oracle.CellBLintCaseWitness.test_unresolved_all_cases_fail) (word='unresolved', category='symbol')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 49, in test_unresolved_all_cases_fail
+    self.assertNotEqual(0, lint_check(f"src/example.clj:2:4: error: {word} {category}: broken"))
+                           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 15, in lint_check
+    with tempfile.TemporaryDirectory(dir="/var/tmp", prefix="b07-lint-") as tmp:
+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 907, in __init__
+    self.name = mkdtemp(suffix, prefix, dir)
+                ~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 381, in mkdtemp
+    _os.mkdir(file, 0o700)
+    ~~~~~~~~~^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/var/tmp/b07-lint-0o9vouq7'
+
+======================================================================
+ERROR: test_unresolved_all_cases_fail (test_cell_b_oracle.CellBLintCaseWitness.test_unresolved_all_cases_fail) (word='Unresolved', category='symbol')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 49, in test_unresolved_all_cases_fail
+    self.assertNotEqual(0, lint_check(f"src/example.clj:2:4: error: {word} {category}: broken"))
+                           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 15, in lint_check
+    with tempfile.TemporaryDirectory(dir="/var/tmp", prefix="b07-lint-") as tmp:
+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 907, in __init__
+    self.name = mkdtemp(suffix, prefix, dir)
+                ~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 381, in mkdtemp
+    _os.mkdir(file, 0o700)
+    ~~~~~~~~~^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/var/tmp/b07-lint-o81l776y'
+
+======================================================================
+ERROR: test_unresolved_all_cases_fail (test_cell_b_oracle.CellBLintCaseWitness.test_unresolved_all_cases_fail) (word='UNRESOLVED', category='symbol')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 49, in test_unresolved_all_cases_fail
+    self.assertNotEqual(0, lint_check(f"src/example.clj:2:4: error: {word} {category}: broken"))
+                           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 15, in lint_check
+    with tempfile.TemporaryDirectory(dir="/var/tmp", prefix="b07-lint-") as tmp:
+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 907, in __init__
+    self.name = mkdtemp(suffix, prefix, dir)
+                ~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 381, in mkdtemp
+    _os.mkdir(file, 0o700)
+    ~~~~~~~~~^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/var/tmp/b07-lint-c4duk_9a'
+
+======================================================================
+ERROR: test_unresolved_all_cases_fail (test_cell_b_oracle.CellBLintCaseWitness.test_unresolved_all_cases_fail)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 50, in test_unresolved_all_cases_fail
+    self.assertEqual(0, lint_check("linting took 1ms, errors: 0, warnings: 0", 0))
+                        ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_cell_b_oracle.py", line 15, in lint_check
+    with tempfile.TemporaryDirectory(dir="/var/tmp", prefix="b07-lint-") as tmp:
+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 907, in __init__
+    self.name = mkdtemp(suffix, prefix, dir)
+                ~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 381, in mkdtemp
+    _os.mkdir(file, 0o700)
+    ~~~~~~~~~^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/var/tmp/b07-lint-a88kltm8'
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.006s
+
+FAILED (errors=12)
+{"exit": 1, "wall_seconds": 0.06402725586667657}

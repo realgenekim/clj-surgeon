@@ -1,7 +1,9 @@
 (ns clj-surgeon.analyze-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [clj-surgeon.analyze :as a]
-            [clojure.string :as str]))
+  {:lane :fast}
+  (:require
+   [clj-surgeon.analyze :as a]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]))
 
 ;; ============================================================
 ;; Test fixtures: small Clojure snippets as strings (no files!)

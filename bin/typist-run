@@ -288,6 +288,8 @@ class _GuardedPopen(_real_subprocess_popen):
     def __init__(self, cmd, *args, **kwargs):
         guard_spawn(cmd, shell=kwargs.get("shell", False)
                     or (len(args) >= 7 and args[6]))
+        if isinstance(cmd, (list, tuple)) and cmd and os.path.basename(cmd[0]) == "bb":
+            cmd = [cmd[0], *bb_command(*cmd[1:])[1:]]
         super().__init__(cmd, *args, **kwargs)
 
 
@@ -1274,15 +1276,24 @@ def materialize_fixture(force=False):
     return man
 
 
+def bb_command(*args):
+    """Keep native-image scratch under the same disk TMPDIR as the parent."""
+    root = os.environ.get("TMPDIR", "")
+    if not root.strip() or any(root == p or root.startswith(p + "/")
+                               for p in ("/tmp", "/dev/shm")):
+        root = "/var/tmp"
+    return ["bb", "-Djava.io.tmpdir=" + root, *args]
+
+
 def resolve_gate_commands():
     """The verification profile the ledger resolves for this workspace, read
     from the PREIMAGE `.clj-surgeon.edn` at plan time (mission/resolve-verification
     copies the commands once, at plan time, and the mission carries them)."""
     r2 = subprocess.run(
-        ["bb", "-e",
+        bb_command("-e",
          '(require (quote [cheshire.core :as j])) '
          '(println (j/generate-string (:commands (get (:verification-profiles '
-         '(clojure.edn/read-string (slurp ".clj-surgeon.edn"))) "%s"))))' % PROFILE],
+         '(clojure.edn/read-string (slurp ".clj-surgeon.edn"))) "%s"))))' % PROFILE),
         cwd=PREIMAGE, capture_output=True, text=True, timeout=120)
     if r2.returncode != 0:
         die("typist-run: cannot serialize verification profile: %s" % r2.stderr.strip(), 5)
@@ -1967,7 +1978,7 @@ def run_acceptance(workdir, manifest, timeout=300):
     if untouched:
         return False, ("authorized file(s) byte-identical to the preimage: %s"
                        % ",".join(untouched))
-    r = subprocess.run(["bb", "-cp", "src", "-e", ACCEPT_EXPR], cwd=workdir,
+    r = subprocess.run(bb_command("-cp", "src", "-e", ACCEPT_EXPR), cwd=workdir,
                        capture_output=True, text=True, timeout=timeout)
     if r.returncode != 0 or "ACCEPT-OK" not in r.stdout:
         tail = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()

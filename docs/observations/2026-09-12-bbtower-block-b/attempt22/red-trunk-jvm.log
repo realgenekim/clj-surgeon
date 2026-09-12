@@ -1,0 +1,28 @@
+Sat Sep 12 18:34:31 UTC 2026
+a15531ee56255bd128ee378f55d7080c01c093c5
+JAVA_TOOL_OPTIONS='-Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx' clojure -M:clj-surgeon/test-deps -e <expression below>
+(require 'clj-surgeon.xray-test)(let [r (clojure.test/run-tests 'clj-surgeon.xray-test)] (prn r) (shutdown-agents) (System/exit (+ (:fail r) (:error r))))
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.xray-test
+
+FAIL in (sci-compiles-one-capability-limited-xray-program) (xray_test.clj:127)
+(-> (form 'data) (replace :changed) (xray identity))
+expected: (= reason (:reason error))
+  actual: (not (= :invalid-xray-path :evaluation-failed))
+
+FAIL in (sci-compiles-one-capability-limited-xray-program) (xray_test.clj:127)
+(-> (form 'data) (xray :callable-keyword))
+expected: (= reason (:reason error))
+  actual: (not (= :invalid-xray-analyzer :evaluation-failed))
+
+FAIL in (sci-compiles-one-capability-limited-xray-program) (xray_test.clj:127)
+(spit "/tmp/xray-must-not-write" "bad")
+expected: (= reason (:reason error))
+  actual: (not (= :disallowed-symbol :evaluation-failed))
+
+Ran 26 tests containing 456 assertions.
+3 failures, 0 errors.
+{:test 26, :pass 453, :fail 3, :error 0, :type :summary}
+EXIT=3

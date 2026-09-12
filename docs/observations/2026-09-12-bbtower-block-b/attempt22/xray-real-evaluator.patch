@@ -1,0 +1,21 @@
+*** Begin Patch
+*** Update File: /home/forge/src/clj-surgeon-bbtower/src/clj_surgeon/edit_dsl.clj
+@@
+-          (if (#{:invalid-edit-expression :invalid-xray-expression} error-type)
++          (if (and typed (not (#{:invalid-xray-path :invalid-xray-analyzer} error-type)))
+*** Update File: /home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/xray_test.clj
+@@
+-  (doseq [error-type [:invalid-xray-expression :invalid-edit-expression]
++  (doseq [error-type [:invalid-xray-expression :invalid-edit-expression :invalid-xray-cardinality]
+@@
+-  (let [cause (IllegalArgumentException. "field evaluation failure")
++  (doseq [error-type [:invalid-xray-expression :invalid-edit-expression :invalid-xray-cardinality]]
++    (let [refusal (ex-info "typed builder refusal" {:error-type error-type :reason :field-refusal})
++          bindings-var (ns-resolve 'clj-surgeon.edit-dsl 'sci-bindings)
++          caught (with-redefs-fn
++                   {bindings-var (assoc (var-get bindings-var) 'form (fn [_] (throw refusal)))}
++                   #(try (dsl/compile-xray "(form 'data)") (catch Exception e e)))]
++      (is (identical? refusal caught))
++      (is (= (ex-data refusal) (ex-data caught)))))
++  (let [cause (IllegalArgumentException. "field evaluation failure")
+*** End Patch

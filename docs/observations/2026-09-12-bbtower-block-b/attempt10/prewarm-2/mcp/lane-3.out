@@ -1,0 +1,9 @@
+lanes: --ns -- 4 namespace(s), home-isolated true
+
+Testing clj-surgeon.receipt-booleans-test
+
+Testing clj-surgeon.census-pool-test
+
+Testing clj-surgeon.mcp-create-files-test
+
+Testing clj-surgeon.mcp-operation-test

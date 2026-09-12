@@ -1,0 +1,5 @@
+lanes: --ns -- 2 namespace(s), home-isolated true
+
+Testing clj-surgeon.splice-envelope-test
+
+Testing clj-surgeon.receipt-booleans-test

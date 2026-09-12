@@ -1,0 +1,5 @@
+lanes: --ns -- 2 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-inspect-tool-test
+
+Testing clj-surgeon.receipt-booleans-test

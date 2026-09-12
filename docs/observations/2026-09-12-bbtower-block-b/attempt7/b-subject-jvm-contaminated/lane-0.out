@@ -1,0 +1,48 @@
+lanes: --ns -- 16 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-inspect-tool-test
+
+Testing clj-surgeon.lane-manifest-test
+
+Testing clj-surgeon.ns-isolation-test
+
+FAIL in (a-clean-namespace-produces-no-violations-at-all) (ns_isolation_test.clj:549)
+the fixture accuses a namespace that did nothing; the probe is observing its own work: ["TEST-ISO-003 VIOLATION in clj-surgeon.planted-test -- working tree: docs/observations/2026-09-12-bbtower-block-b/attempt7/b-subject-jvm/lane-2.out was modified in the repository working tree"]
+expected: (empty? vs)
+  actual: (not (empty? [{:intent "TEST-ISO-003", :namespace clj-surgeon.planted-test, :resource "working tree", :detail "docs/observations/2026-09-12-bbtower-block-b/attempt7/b-subject-jvm/lane-2.out was modified in the repository working tree"}]))
+
+Testing clj-surgeon.mcp-compact-location-test
+
+Testing clj-surgeon.mcp-prepared-request-test
+
+Testing clj-surgeon.census-pool-test
+
+Testing clj-surgeon.mcp-relation-census-round20-test
+WORKSPACE-PARITY-ENUMERATION:
+  unresolvable-root-escaping-link      expected invalid-workspace-root   tool "invalid-workspace-root" cli "invalid-workspace-root" scanned 0  agree true
+  unresolvable-root-outside-absolute   expected invalid-workspace-root   tool "invalid-workspace-root" cli "invalid-workspace-root" scanned 0  agree true
+ROOT-SHAPE-PARITY-ENUMERATION:
+  plain            expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  trailing-slash   expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  double-slash     expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  dot              expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  dotdot           expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  dir-is-a-file    expected invalid-workspace-root   tool "invalid-workspace-root" cli "invalid-workspace-root" scanned 0  agree true
+
+Testing clj-surgeon.mcp-prepared-confirmation-test
+
+Testing clj-surgeon.mcp-extraction-plan-test
+
+Testing clj-surgeon.mcp-semantic-client-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.mcp-program-tool-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.mcp-recovery-test
+
+Testing clj-surgeon.battery-ledger-test
+
+Testing clj-surgeon.mission-usage-test

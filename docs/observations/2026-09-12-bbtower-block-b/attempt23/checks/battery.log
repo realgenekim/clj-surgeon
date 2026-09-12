@@ -1,0 +1,356 @@
+STARTED=2026-09-12T20:04:42Z
+af4e0aa203ee0698c573330e74ae82921e3b3c59
+TMPDIR=/var/tmp/forge/bbtower-fx JAVA_TOOL_OPTIONS=-Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx make test-battery
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+battery-parallel: 53 namespace(s) in 65 unit(s) over 8 lane(s); floor is clj-surgeon.reader-eval-fence-test/no-real-launcher-follows-a-build-file-path-out-of-the-tree at 132339 ms
+  process 0 phase 0 (est 123898 ms): clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-jvm-deps-edn clj-surgeon.mcp-relation-census-launcher-test clj-surgeon.mission-git-fence-test clj-surgeon.mission-git-identity-test clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-bb-project-clj clj-surgeon.reader-eval-fence-test/build-file-matrix-covers-the-frozen-launcher-pairs
+  process 1 phase 0 (est 124071 ms): clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-jvm-bb-edn clj-surgeon.mcp-relation-census-test clj-surgeon.extract-test clj-surgeon.core-discovery-test clj-surgeon.receipt-artifacts-boundary-test clj-surgeon.parser-admission-test clj-surgeon.edn-config-integration-test clj-surgeon.mission-git-submodule-test clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-bb-deps-edn clj-surgeon.mcp-inspect-cold-job-test
+  process 2 phase 0 (est 123910 ms): clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-jvm-project-clj clj-surgeon.mission-run-test clj-surgeon.show-form-test clj-surgeon.split-proof-gate-boundary-test clj-surgeon.xray-test clj-surgeon.mission-typist-executor-test clj-surgeon.mission-git-boundary-test clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-bb-bb-edn
+  process 3 phase 0 (est 123919 ms): clj-surgeon.reader-eval-fence-test/a-non-string-paths-entry-never-reaches-io-file clj-surgeon.mcp-prepared-wire-test clj-surgeon.cli-dispatch-test clj-surgeon.edit-test clj-surgeon.mission-display-test clj-surgeon.mcp-helper-extraction-test clj-surgeon.insert-forms-parity-test clj-surgeon.mcp-feature-thread-sed-test clj-surgeon.mission-fallback-test clj-surgeon.mission-phase-events-test
+  process 4 phase 0 (est 123901 ms): clj-surgeon.reader-eval-fence-test/the-fence-does-not-refuse-an-ordinary-path-under-a-symlinked-root clj-surgeon.mission-publication-test clj-surgeon.mission-commit-cli-test clj-surgeon.admit-patch-test clj-surgeon.reader-eval-fence-test/a-deeply-nested-build-file-is-refused-typed-not-overflowed clj-surgeon.rename-alias-performance-test clj-surgeon.require-change-boundary-test clj-surgeon.mcp-cold-verify-test clj-surgeon.mission-git-process-test clj-surgeon.repository-hygiene-test clj-surgeon.reader-eval-fence-test/the-oracle-names-every-evaluator-it-claims-to-fence
+  process 5 phase 0 (est 123918 ms): clj-surgeon.mcp-alias-migration-test clj-surgeon.txn-journal-test clj-surgeon.tmp-leak-support-test clj-surgeon.intent-transaction-test clj-surgeon.lens-query-test clj-surgeon.reader-eval-fence-test/no-source-in-this-repository-calls-the-evaluating-reader clj-surgeon.partition-all-test clj-surgeon.mission-git-ledger-test clj-surgeon.mission-provider-fallback-events-test
+  process 6 phase 0 (est 124062 ms): clj-surgeon.install-test clj-surgeon.mcp-process-test clj-surgeon.help-test clj-surgeon.mission-events-test clj-surgeon.rename-alias-parity-test clj-surgeon.cell-b-oracle-test clj-surgeon.mission-test clj-surgeon.platform-selector-test clj-surgeon.mission-typist-executor-admission-test clj-surgeon.mission-usage-executor-test
+  process 7 phase 0 (est 132339 ms): clj-surgeon.reader-eval-fence-test/no-real-launcher-follows-a-build-file-path-out-of-the-tree
+
+========== lane 0 (clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-jvm-deps-edn clj-surgeon.mcp-relation-census-launcher-test clj-surgeon.mission-git-fence-test clj-surgeon.mission-git-identity-test clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-bb-project-clj clj-surgeon.reader-eval-fence-test/build-file-matrix-covers-the-frozen-launcher-pairs) exit 0, 163532 ms ==========
+lanes: --ns -- 6 namespace(s), home-isolated false
+
+Testing clj-surgeon.reader-eval-fence-test
+
+Testing clj-surgeon.mcp-relation-census-launcher-test
+
+Testing clj-surgeon.mission-git-fence-test
+
+Testing clj-surgeon.mission-git-identity-test
+---------- lane 0 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+namespace walls (4, slowest first, total 149679 ms):
+     79646 ms  clj-surgeon.mcp-relation-census-launcher-test
+     69012 ms  clj-surgeon.reader-eval-fence-test
+       511 ms  clj-surgeon.mission-git-fence-test
+       510 ms  clj-surgeon.mission-git-identity-test
+
+========== lane 1 (clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-jvm-bb-edn clj-surgeon.mcp-relation-census-test clj-surgeon.extract-test clj-surgeon.core-discovery-test clj-surgeon.receipt-artifacts-boundary-test clj-surgeon.parser-admission-test clj-surgeon.edn-config-integration-test clj-surgeon.mission-git-submodule-test clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-bb-deps-edn clj-surgeon.mcp-inspect-cold-job-test) exit 0, 151653 ms ==========
+lanes: --ns -- 10 namespace(s), home-isolated false
+
+Testing clj-surgeon.reader-eval-fence-test
+
+Testing clj-surgeon.mcp-relation-census-test
+PARITY-ENUMERATION:
+  missing              expected not-found                    tool "not-found"                  cli :not-found                   agree true
+  denied-file          expected permission-denied            tool "permission-denied"          cli :permission-denied           agree true
+  denied-parent        expected parent-denied                tool "parent-denied"              cli :parent-denied               agree true
+  dir-named-clj        expected not-a-regular-file           tool "not-a-regular-file"         cli :not-a-regular-file          agree true
+  fifo                 expected not-a-regular-file           tool "not-a-regular-file"         cli :not-a-regular-file          agree true
+  symlink-loop         expected not-found                    tool "not-found"                  cli :not-found                   agree true
+  name-too-long        expected not-found                    tool "not-found"                  cli :not-found                   agree true
+  enotdir-component    expected not-found                    tool "not-found"                  cli :not-found                   agree true
+  escape               expected outside-project              tool "outside-project"            cli :outside-project             agree true
+  wrong-extension      expected not-a-relative-source-path   tool "not-a-relative-source-path" cli :not-a-relative-source-path  agree true
+
+Testing clj-surgeon.extract-test
+
+Testing clj-surgeon.core-discovery-test
+
+Testing clj-surgeon.receipt-artifacts-boundary-test
+
+Testing clj-surgeon.parser-admission-test
+
+Testing clj-surgeon.edn-config-integration-test
+
+Testing clj-surgeon.mission-git-submodule-test
+
+Testing clj-surgeon.mcp-inspect-cold-job-test
+---------- lane 1 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+clj-surgeon: skipping project discovery; not an existing directory: "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037391-712b8abb/andon-shell-safety4971507521055361259/H; touch /var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037391-712b8abb/andon-shell-safety4971507521055361259/PWNED-SEMICOLON ; echo z"
+clj-surgeon: skipping project discovery; not an existing directory: "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037391-712b8abb/andon-shell-safety2368676015079497879/H$(touch /var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037391-712b8abb/andon-shell-safety2368676015079497879/PWNED-SUBST)"
+
+namespace walls (9, slowest first, total 133421 ms):
+     68483 ms  clj-surgeon.reader-eval-fence-test
+     47475 ms  clj-surgeon.mcp-relation-census-test
+      6817 ms  clj-surgeon.extract-test
+      4792 ms  clj-surgeon.core-discovery-test
+      3263 ms  clj-surgeon.receipt-artifacts-boundary-test
+      1235 ms  clj-surgeon.parser-admission-test
+       736 ms  clj-surgeon.edn-config-integration-test
+       433 ms  clj-surgeon.mission-git-submodule-test
+       187 ms  clj-surgeon.mcp-inspect-cold-job-test
+
+========== lane 2 (clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-jvm-project-clj clj-surgeon.mission-run-test clj-surgeon.show-form-test clj-surgeon.split-proof-gate-boundary-test clj-surgeon.xray-test clj-surgeon.mission-typist-executor-test clj-surgeon.mission-git-boundary-test clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-bb-bb-edn) exit 0, 161222 ms ==========
+lanes: --ns -- 8 namespace(s), home-isolated false
+
+Testing clj-surgeon.reader-eval-fence-test
+
+Testing clj-surgeon.mission-run-test
+proposal-display-bytes {:compact 1336, :full 33671}
+
+Testing clj-surgeon.show-form-test
+
+Testing clj-surgeon.split-proof-gate-boundary-test
+
+Testing clj-surgeon.xray-test
+
+Testing clj-surgeon.mission-typist-executor-test
+
+Testing clj-surgeon.mission-git-boundary-test
+---------- lane 2 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+namespace walls (7, slowest first, total 144095 ms):
+     68447 ms  clj-surgeon.reader-eval-fence-test
+     53708 ms  clj-surgeon.mission-run-test
+     13808 ms  clj-surgeon.show-form-test
+      4727 ms  clj-surgeon.split-proof-gate-boundary-test
+      1765 ms  clj-surgeon.xray-test
+      1110 ms  clj-surgeon.mission-typist-executor-test
+       530 ms  clj-surgeon.mission-git-boundary-test
+
+========== lane 3 (clj-surgeon.reader-eval-fence-test/a-non-string-paths-entry-never-reaches-io-file clj-surgeon.mcp-prepared-wire-test clj-surgeon.cli-dispatch-test clj-surgeon.edit-test clj-surgeon.mission-display-test clj-surgeon.mcp-helper-extraction-test clj-surgeon.insert-forms-parity-test clj-surgeon.mcp-feature-thread-sed-test clj-surgeon.mission-fallback-test clj-surgeon.mission-phase-events-test) exit 0, 155191 ms ==========
+lanes: --ns -- 10 namespace(s), home-isolated false
+
+Testing clj-surgeon.reader-eval-fence-test
+
+Testing clj-surgeon.mcp-prepared-wire-test
+
+Testing clj-surgeon.cli-dispatch-test
+
+Testing clj-surgeon.edit-test
+
+Testing clj-surgeon.mission-display-test
+
+Testing clj-surgeon.mcp-helper-extraction-test
+
+Testing clj-surgeon.insert-forms-parity-test
+
+Testing clj-surgeon.mcp-feature-thread-sed-test
+
+Testing clj-surgeon.mission-fallback-test
+
+Testing clj-surgeon.mission-phase-events-test
+---------- lane 3 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+prepared-wire-teardown: stderr-reader-failed -- ExceptionInfo: stderr reader died
+prepared-wire-teardown: stderr-reader-failed -- ExceptionInfo: stderr reader died
+
+namespace walls (10, slowest first, total 135318 ms):
+     68224 ms  clj-surgeon.reader-eval-fence-test
+     26885 ms  clj-surgeon.mcp-prepared-wire-test
+     17718 ms  clj-surgeon.cli-dispatch-test
+      8855 ms  clj-surgeon.mission-display-test
+      7408 ms  clj-surgeon.edit-test
+      2997 ms  clj-surgeon.mcp-helper-extraction-test
+      1612 ms  clj-surgeon.insert-forms-parity-test
+       815 ms  clj-surgeon.mcp-feature-thread-sed-test
+       600 ms  clj-surgeon.mission-fallback-test
+       204 ms  clj-surgeon.mission-phase-events-test
+
+========== lane 4 (clj-surgeon.reader-eval-fence-test/the-fence-does-not-refuse-an-ordinary-path-under-a-symlinked-root clj-surgeon.mission-publication-test clj-surgeon.mission-commit-cli-test clj-surgeon.admit-patch-test clj-surgeon.reader-eval-fence-test/a-deeply-nested-build-file-is-refused-typed-not-overflowed clj-surgeon.rename-alias-performance-test clj-surgeon.require-change-boundary-test clj-surgeon.mcp-cold-verify-test clj-surgeon.mission-git-process-test clj-surgeon.repository-hygiene-test clj-surgeon.reader-eval-fence-test/the-oracle-names-every-evaluator-it-claims-to-fence) exit 0, 161188 ms ==========
+lanes: --ns -- 11 namespace(s), home-isolated false
+
+Testing clj-surgeon.reader-eval-fence-test
+
+Testing clj-surgeon.mission-publication-test
+
+Testing clj-surgeon.mission-commit-cli-test
+
+Testing clj-surgeon.admit-patch-test
+
+Testing clj-surgeon.rename-alias-performance-test
+4000-line planner seconds: 1.486800319
+
+Testing clj-surgeon.require-change-boundary-test
+
+Testing clj-surgeon.mcp-cold-verify-test
+
+Testing clj-surgeon.mission-git-process-test
+
+Testing clj-surgeon.repository-hygiene-test
+---------- lane 4 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+namespace walls (9, slowest first, total 138180 ms):
+     74466 ms  clj-surgeon.reader-eval-fence-test
+     26592 ms  clj-surgeon.mission-publication-test
+     23299 ms  clj-surgeon.mission-commit-cli-test
+      9158 ms  clj-surgeon.admit-patch-test
+      1686 ms  clj-surgeon.rename-alias-performance-test
+      1463 ms  clj-surgeon.require-change-boundary-test
+       803 ms  clj-surgeon.mcp-cold-verify-test
+       467 ms  clj-surgeon.mission-git-process-test
+       246 ms  clj-surgeon.repository-hygiene-test
+
+========== lane 5 (clj-surgeon.mcp-alias-migration-test clj-surgeon.txn-journal-test clj-surgeon.tmp-leak-support-test clj-surgeon.intent-transaction-test clj-surgeon.lens-query-test clj-surgeon.reader-eval-fence-test/no-source-in-this-repository-calls-the-evaluating-reader clj-surgeon.partition-all-test clj-surgeon.mission-git-ledger-test clj-surgeon.mission-provider-fallback-events-test) exit 0, 150566 ms ==========
+lanes: --ns -- 9 namespace(s), home-isolated false
+
+Testing clj-surgeon.mcp-alias-migration-test
+
+Testing clj-surgeon.txn-journal-test
+
+Testing clj-surgeon.tmp-leak-support-test
+
+Testing clj-surgeon.intent-transaction-test
+
+Testing clj-surgeon.lens-query-test
+
+Testing clj-surgeon.reader-eval-fence-test
+
+Testing clj-surgeon.partition-all-test
+
+Testing clj-surgeon.mission-git-ledger-test
+
+Testing clj-surgeon.mission-provider-fallback-events-test
+---------- lane 5 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+tmp-refused: refusing to delete /var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037393-6e5b0b82/tmp-leak-sweep-guard-6389474442231531529/other-seat-precious-fixture -- it is not a private per-run root (its name must start with clj-surgeon-suite-). Sweeping a shared base would destroy another tenant's working set.
+
+namespace walls (9, slowest first, total 126546 ms):
+     74728 ms  clj-surgeon.mcp-alias-migration-test
+     24749 ms  clj-surgeon.txn-journal-test
+     15746 ms  clj-surgeon.tmp-leak-support-test
+      5442 ms  clj-surgeon.intent-transaction-test
+      2779 ms  clj-surgeon.lens-query-test
+      1400 ms  clj-surgeon.reader-eval-fence-test
+       949 ms  clj-surgeon.mission-git-ledger-test
+       563 ms  clj-surgeon.partition-all-test
+       190 ms  clj-surgeon.mission-provider-fallback-events-test
+
+========== lane 6 (clj-surgeon.install-test clj-surgeon.mcp-process-test clj-surgeon.help-test clj-surgeon.mission-events-test clj-surgeon.rename-alias-parity-test clj-surgeon.cell-b-oracle-test clj-surgeon.mission-test clj-surgeon.platform-selector-test clj-surgeon.mission-typist-executor-admission-test clj-surgeon.mission-usage-executor-test) exit 0, 146099 ms ==========
+lanes: --ns -- 10 namespace(s), home-isolated false
+
+Testing clj-surgeon.install-test
+Installed stable CLI /var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/bin with spaces/clj-surgeon from commit af4e0aa203ee0698c573330e74ae82921e3b3c59, source hash 4e17f933b55652a0d4aca9cd744634e54b44583ba3119a841805773ede79ed00
+Receipt: /var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/bin with spaces/clj-surgeon.receipt.edn
+ 
+:insert-forms! {:proc #object[java.lang.ProcessImpl 0x1978c926 "Process[pid=3050049, exitValue=2]"], :exit 2, :in #object[java.lang.ProcessImpl$ProcessPipeOutputStream 0x18f4f7aa "java.lang.ProcessImpl$ProcessPipeOutputStream@18f4f7aa"], :out "{:state \"refused\", :committed false, :mutation_attempted false, :source_unchanged true, :at [], :elapsed_ms 2.222472, :error \"Closed map has missing or unsupported fields.\", :error-type :invalid-request, :next_action \"revise-request\", :ok false, :operation \"insert_forms\", :remedy \"Follow the closed request schema at [].\"}\n", :err "", :prev nil, :cmd ["/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/bin with spaces/clj-surgeon" ":op" ":insert-forms!" ":request-file" "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/empty.edn"]}
+:rename-alias! {:proc #object[java.lang.ProcessImpl 0x5000a828 "Process[pid=3050053, exitValue=2]"], :exit 2, :in #object[java.lang.ProcessImpl$ProcessPipeOutputStream 0x6f764c25 "java.lang.ProcessImpl$ProcessPipeOutputStream@6f764c25"], :out "{:state \"refused\", :committed false, :mutation_attempted false, :source_unchanged true, :at [], :elapsed_ms 2.263502, :error \"Closed map has missing or unsupported fields.\", :error-type :invalid-request, :next_action \"revise-request\", :ok false, :operation \"rename_alias\", :remedy \"Follow the closed request schema at [].\", :version 1}\n", :err "", :prev nil, :cmd ["/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/bin with spaces/clj-surgeon" ":op" ":rename-alias!" ":request-file" "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/empty.edn"]}
+:ls {:proc #object[java.lang.ProcessImpl 0x595de4fa "Process[pid=3050101, exitValue=0]"], :exit 0, :in #object[java.lang.ProcessImpl$ProcessPipeOutputStream 0x25c7b8fa "java.lang.ProcessImpl$ProcessPipeOutputStream@25c7b8fa"], :out "{:ns sample,\n :file\n \"/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/sample.clj\",\n :lines 2,\n :form-count 1,\n :forms\n [{:type defn,\n   :platforms [:clj],\n   :line 2,\n   :end-line 2,\n   :name answer,\n   :args \"[]\"}],\n :requires [],\n :forward-refs []}\n", :err "", :prev nil, :cmd ["/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/bin with spaces/clj-surgeon" ":op" ":ls" ":file" "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/sample.clj"]}
+
+Testing clj-surgeon.mcp-process-test
+
+Testing clj-surgeon.help-test
+
+Testing clj-surgeon.mission-events-test
+
+Testing clj-surgeon.rename-alias-parity-test
+
+Testing clj-surgeon.cell-b-oracle-test
+
+Testing clj-surgeon.mission-test
+
+Testing clj-surgeon.platform-selector-test
+
+Testing clj-surgeon.mission-typist-executor-admission-test
+
+Testing clj-surgeon.mission-usage-executor-test
+---------- lane 6 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+namespace walls (10, slowest first, total 128441 ms):
+     89577 ms  clj-surgeon.install-test
+     14996 ms  clj-surgeon.mcp-process-test
+      9938 ms  clj-surgeon.help-test
+      7926 ms  clj-surgeon.mission-events-test
+      2078 ms  clj-surgeon.rename-alias-parity-test
+      1811 ms  clj-surgeon.cell-b-oracle-test
+      1246 ms  clj-surgeon.mission-test
+       489 ms  clj-surgeon.platform-selector-test
+       195 ms  clj-surgeon.mission-usage-executor-test
+       185 ms  clj-surgeon.mission-typist-executor-admission-test
+
+========== lane 7 (clj-surgeon.reader-eval-fence-test/no-real-launcher-follows-a-build-file-path-out-of-the-tree) exit 0, 144179 ms ==========
+lanes: --ns -- 1 namespace(s), home-isolated false
+
+Testing clj-surgeon.reader-eval-fence-test
+---------- lane 7 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+namespace walls (1, slowest first, total 135167 ms):
+    135167 ms  clj-surgeon.reader-eval-fence-test
+
+Ran 1166 tests containing 18472 assertions.
+0 failures, 0 errors.
+0 preconditions skipped.
+0 preconditions failed.
+makespan: 163586 ms
+cadence :battery: serial-equivalent 1090847 ms; budget 1800000 ms
+bb-runtime: serial-equivalent 0 ms; budget 343102 ms; makespan unmeasured ms
+
+namespace walls (53, slowest first, serial-equivalent total 1090847 ms):
+    485199 ms  clj-surgeon.reader-eval-fence-test
+     89577 ms  clj-surgeon.install-test
+     79646 ms  clj-surgeon.mcp-relation-census-launcher-test
+     74728 ms  clj-surgeon.mcp-alias-migration-test
+     53708 ms  clj-surgeon.mission-run-test
+     47475 ms  clj-surgeon.mcp-relation-census-test
+     26885 ms  clj-surgeon.mcp-prepared-wire-test
+     26592 ms  clj-surgeon.mission-publication-test
+     24749 ms  clj-surgeon.txn-journal-test
+     23299 ms  clj-surgeon.mission-commit-cli-test
+     17718 ms  clj-surgeon.cli-dispatch-test
+     15746 ms  clj-surgeon.tmp-leak-support-test
+     14996 ms  clj-surgeon.mcp-process-test
+     13808 ms  clj-surgeon.show-form-test
+      9938 ms  clj-surgeon.help-test
+      9158 ms  clj-surgeon.admit-patch-test
+      8855 ms  clj-surgeon.mission-display-test
+      7926 ms  clj-surgeon.mission-events-test
+      7408 ms  clj-surgeon.edit-test
+      6817 ms  clj-surgeon.extract-test
+      5442 ms  clj-surgeon.intent-transaction-test
+      4792 ms  clj-surgeon.core-discovery-test
+      4727 ms  clj-surgeon.split-proof-gate-boundary-test
+      3263 ms  clj-surgeon.receipt-artifacts-boundary-test
+      2997 ms  clj-surgeon.mcp-helper-extraction-test
+      2779 ms  clj-surgeon.lens-query-test
+      2078 ms  clj-surgeon.rename-alias-parity-test
+      1811 ms  clj-surgeon.cell-b-oracle-test
+      1765 ms  clj-surgeon.xray-test
+      1686 ms  clj-surgeon.rename-alias-performance-test
+      1612 ms  clj-surgeon.insert-forms-parity-test
+      1463 ms  clj-surgeon.require-change-boundary-test
+      1246 ms  clj-surgeon.mission-test
+      1235 ms  clj-surgeon.parser-admission-test
+      1110 ms  clj-surgeon.mission-typist-executor-test
+       949 ms  clj-surgeon.mission-git-ledger-test
+       815 ms  clj-surgeon.mcp-feature-thread-sed-test
+       803 ms  clj-surgeon.mcp-cold-verify-test
+       736 ms  clj-surgeon.edn-config-integration-test
+       600 ms  clj-surgeon.mission-fallback-test
+       563 ms  clj-surgeon.partition-all-test
+       530 ms  clj-surgeon.mission-git-boundary-test
+       511 ms  clj-surgeon.mission-git-fence-test
+       510 ms  clj-surgeon.mission-git-identity-test
+       489 ms  clj-surgeon.platform-selector-test
+       467 ms  clj-surgeon.mission-git-process-test
+       433 ms  clj-surgeon.mission-git-submodule-test
+       246 ms  clj-surgeon.repository-hygiene-test
+       204 ms  clj-surgeon.mission-phase-events-test
+       195 ms  clj-surgeon.mission-usage-executor-test
+       190 ms  clj-surgeon.mission-provider-fallback-events-test
+       187 ms  clj-surgeon.mcp-inspect-cold-job-test
+       185 ms  clj-surgeon.mission-typist-executor-admission-test
+
+lanes (8), makespan 163586 ms:
+  lane 0    163532 ms  exit 0  clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-jvm-deps-edn clj-surgeon.mcp-relation-census-launcher-test clj-surgeon.mission-git-fence-test clj-surgeon.mission-git-identity-test clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-bb-project-clj clj-surgeon.reader-eval-fence-test/build-file-matrix-covers-the-frozen-launcher-pairs
+  lane 1    151653 ms  exit 0  clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-jvm-bb-edn clj-surgeon.mcp-relation-census-test clj-surgeon.extract-test clj-surgeon.core-discovery-test clj-surgeon.receipt-artifacts-boundary-test clj-surgeon.parser-admission-test clj-surgeon.edn-config-integration-test clj-surgeon.mission-git-submodule-test clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-bb-deps-edn clj-surgeon.mcp-inspect-cold-job-test
+  lane 2    161222 ms  exit 0  clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-jvm-project-clj clj-surgeon.mission-run-test clj-surgeon.show-form-test clj-surgeon.split-proof-gate-boundary-test clj-surgeon.xray-test clj-surgeon.mission-typist-executor-test clj-surgeon.mission-git-boundary-test clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-bb-bb-edn
+  lane 3    155191 ms  exit 0  clj-surgeon.reader-eval-fence-test/a-non-string-paths-entry-never-reaches-io-file clj-surgeon.mcp-prepared-wire-test clj-surgeon.cli-dispatch-test clj-surgeon.edit-test clj-surgeon.mission-display-test clj-surgeon.mcp-helper-extraction-test clj-surgeon.insert-forms-parity-test clj-surgeon.mcp-feature-thread-sed-test clj-surgeon.mission-fallback-test clj-surgeon.mission-phase-events-test
+  lane 4    161188 ms  exit 0  clj-surgeon.reader-eval-fence-test/the-fence-does-not-refuse-an-ordinary-path-under-a-symlinked-root clj-surgeon.mission-publication-test clj-surgeon.mission-commit-cli-test clj-surgeon.admit-patch-test clj-surgeon.reader-eval-fence-test/a-deeply-nested-build-file-is-refused-typed-not-overflowed clj-surgeon.rename-alias-performance-test clj-surgeon.require-change-boundary-test clj-surgeon.mcp-cold-verify-test clj-surgeon.mission-git-process-test clj-surgeon.repository-hygiene-test clj-surgeon.reader-eval-fence-test/the-oracle-names-every-evaluator-it-claims-to-fence
+  lane 5    150566 ms  exit 0  clj-surgeon.mcp-alias-migration-test clj-surgeon.txn-journal-test clj-surgeon.tmp-leak-support-test clj-surgeon.intent-transaction-test clj-surgeon.lens-query-test clj-surgeon.reader-eval-fence-test/no-source-in-this-repository-calls-the-evaluating-reader clj-surgeon.partition-all-test clj-surgeon.mission-git-ledger-test clj-surgeon.mission-provider-fallback-events-test
+  lane 6    146099 ms  exit 0  clj-surgeon.install-test clj-surgeon.mcp-process-test clj-surgeon.help-test clj-surgeon.mission-events-test clj-surgeon.rename-alias-parity-test clj-surgeon.cell-b-oracle-test clj-surgeon.mission-test clj-surgeon.platform-selector-test clj-surgeon.mission-typist-executor-admission-test clj-surgeon.mission-usage-executor-test
+  lane 7    144179 ms  exit 0  clj-surgeon.reader-eval-fence-test/no-real-launcher-follows-a-build-file-path-out-of-the-tree
+
+test-isolation: 0 violations across 53 namespace(s) (TEST-ISO-002/003/004/005/007/010)
+battery-parallel: makespan 163586 ms over 8 lane(s); serial-equivalent 1090847 ms; skipped 0
+battery-ledger: appended {:sha "af4e0aa203ee0698c573330e74ae82921e3b3c59", :started "2026-09-12T20:04:44Z", :wall_s 166, :verdict :pass, :host "anvil-server", :lanes 8, :skipped 0}
+EXIT=0 WALL_S=168

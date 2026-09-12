@@ -1,4 +1,5 @@
 (ns clj-surgeon.alias-migration-test
+  {:lane :fast}
   (:require
    [clj-surgeon.alias-migration :as alias-migration]
    [clj-surgeon.alias-migration-fixture :as fixture]

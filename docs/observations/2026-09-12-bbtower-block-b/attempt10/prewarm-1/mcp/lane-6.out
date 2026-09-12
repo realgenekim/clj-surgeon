@@ -1,0 +1,22 @@
+
+Testing clj-surgeon.cljc.analyze-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.move-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.namespace-split-test
+
+Testing clj-surgeon.battery-ledger-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.mission-usage-test
+
+Testing clj-surgeon.mission-candidate-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.mission-git-test

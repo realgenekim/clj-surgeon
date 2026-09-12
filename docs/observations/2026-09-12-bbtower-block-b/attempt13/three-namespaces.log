@@ -1,0 +1,20 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/attempt13-empty.KbDc3z
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/attempt13-empty.KbDc3z
+lanes: --ns -- 3 namespace(s), home-isolated false
+
+Testing clj-surgeon.cli-dispatch-test
+
+Testing clj-surgeon.mission-typist-executor-test
+
+Testing clj-surgeon.mcp-alias-migration-test
+
+namespace walls (3, slowest first, total 88523 ms):
+     71532 ms  clj-surgeon.mcp-alias-migration-test
+     13260 ms  clj-surgeon.cli-dispatch-test
+      3731 ms  clj-surgeon.mission-typist-executor-test
+SERIAL/NOT-A-GATE: direct namespace runner; use make test for landing
+
+Ran 202 tests containing 3827 assertions.
+0 failures, 0 errors.
+
+test-isolation: 0 violations across 3 namespace(s) (TEST-ISO-002/003/004/005/007/010)

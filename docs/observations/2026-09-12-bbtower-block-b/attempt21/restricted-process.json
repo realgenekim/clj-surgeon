@@ -1,0 +1,14 @@
+{
+  "command": [
+    "python3",
+    "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt18/restricted-gate.py",
+    "--",
+    "make",
+    "landing-gate-prewarm"
+  ],
+  "started": "2026-09-12T17:53:07.915697+00:00",
+  "exit": 0,
+  "wall_seconds": 400.35777170257643,
+  "diagnostic": true,
+  "run_id": "7802acf6-cf01-4652-b97c-88cec7cd1212"
+}

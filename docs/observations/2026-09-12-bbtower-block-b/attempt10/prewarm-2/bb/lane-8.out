@@ -1,0 +1,14 @@
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.syntax-var-refs-test

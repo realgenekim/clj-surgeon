@@ -1,0 +1,155 @@
+{:findings
+ {:f1 :six-run-conservative-runtime-rule,
+  :f2 :complete-bounded-probe-edn,
+  :spec-receipt :executed-key-set-witness},
+ :fast
+ {:state :passed,
+  :result {:test 1243, :pass 12317, :fail 0, :error 0},
+  :measurements
+  {:makespan-ms 25952,
+   :lane-sums-ms {:fast 44924},
+   :runtime-sums-ms {:bb 7455, :jvm 37469}},
+  :leak-failures 0,
+  :problems [],
+  :receipt "fast-run/receipt.edn",
+  :exit 0},
+ :restricted-diagnostic
+ {:receipt "restricted-receipt.edn",
+  :suites
+  [{:suite "alias",
+    :state :passed,
+    :result {:test 182, :pass 3648, :fail 0, :error 0},
+    :measurements
+    {:makespan-ms 91200,
+     :lane-sums-ms {:battery 83210},
+     :runtime-sums-ms {:jvm 83210}},
+    :leak-failures 0}
+   {:suite "mcp",
+    :state :passed,
+    :result {:test 1414, :pass 16173, :fail 0, :error 0},
+    :measurements
+    {:makespan-ms 91581,
+     :lane-sums-ms {:fast 43611, :integration 66588},
+     :runtime-sums-ms {:bb 8008, :jvm 102191}},
+    :leak-failures 0}
+   {:suite "bb",
+    :state :passed,
+    :result {:test 901, :pass 7998, :fail 0, :error 0},
+    :measurements
+    {:makespan-ms 91494,
+     :lane-sums-ms {:fast 3527, :battery 244026},
+     :runtime-sums-ms {:bb 241042, :jvm 6511}},
+    :leak-failures 0}],
+  :stages
+  [{:target "admit-transaction-recovery-battery",
+    :exit 0,
+    :wall-ms 11172}
+   {:target "alias-migration-test", :exit 0, :wall-ms 91200}
+   {:target "mcp-test", :exit 0, :wall-ms 91581}
+   {:target "test-bb", :exit 0, :wall-ms 91494}
+   {:target "test-bb-diagnostic", :exit 0, :wall-ms 224369}
+   {:target "repository-hygiene", :exit 0, :wall-ms 2021}
+   {:target "intent-audit", :exit 0, :wall-ms 2163}],
+  :landing? false,
+  :problems [],
+  :state :passed,
+  :wall-ms 396675,
+  :source-digest
+  "23390c9bfa92b3095f591e3d6473f4b11057cde9cd8c6cb4ad087dcaeeebe297",
+  :prewarm? true,
+  :run-id "489d4c5b-bd8c-4f91-99fa-bd7334996dbf",
+  :git-head "09588a14a784e220907462f46676900402bc80aa"},
+ :least_sure
+ ["Six controls describe this box and snapshot; future drift needs new controls."
+  "The bounded projection assumes the production verdict's closed scalar fields."],
+ :measurements
+ {:namespaces 38,
+  :samples 456,
+  :table "runtime-table.edn",
+  :processes "measurement-processes.jsonl",
+  :reassignments
+  {clj-surgeon.rename-alias-test
+   {:n 6,
+    :jvm
+    {:n 6,
+     :walls-ms [3299 3121 3025 3332 3377 3064],
+     :mean-ms 3203.0,
+     :sd-ms 150.9052682976973,
+     :logs
+     ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-jvm-1.edn"
+      "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-jvm-2.edn"
+      "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-jvm-3.edn"
+      "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-jvm-4.edn"
+      "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-jvm-5.edn"
+      "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-jvm-6.edn"]},
+    :bb
+    {:n 6,
+     :walls-ms [6163 6188 6348 6285 6331 6277],
+     :mean-ms 6265.333333333333,
+     :sd-ms 74.99511095175916,
+     :logs
+     ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-bb-1.edn"
+      "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-bb-2.edn"
+      "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-bb-3.edn"
+      "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-bb-4.edn"
+      "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-bb-5.edn"
+      "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-bb-6.edn"]},
+    :conservative-ratio 2.211273560778874,
+    :runtime :jvm,
+    :previous-runtime :bb}}},
+ :real-prewarm
+ {:receipt "prewarm-receipt.edn",
+  :suites
+  [{:suite "alias",
+    :state :passed,
+    :result {:test 182, :pass 3648, :fail 0, :error 0},
+    :measurements
+    {:makespan-ms 87959,
+     :lane-sums-ms {:battery 80653},
+     :runtime-sums-ms {:jvm 80653}},
+    :leak-failures 0}
+   {:suite "mcp",
+    :state :passed,
+    :result {:test 1414, :pass 16173, :fail 0, :error 0},
+    :measurements
+    {:makespan-ms 91087,
+     :lane-sums-ms {:fast 45275, :integration 67216},
+     :runtime-sums-ms {:bb 8092, :jvm 104399}},
+    :leak-failures 0}
+   {:suite "bb",
+    :state :passed,
+    :result {:test 901, :pass 7998, :fail 0, :error 0},
+    :measurements
+    {:makespan-ms 90742,
+     :lane-sums-ms {:fast 3640, :battery 242958},
+     :runtime-sums-ms {:bb 240259, :jvm 6339}},
+    :leak-failures 0}],
+  :stages
+  [{:target "admit-transaction-recovery-battery",
+    :exit 0,
+    :wall-ms 11019}
+   {:target "alias-migration-test", :exit 0, :wall-ms 87959}
+   {:target "mcp-test", :exit 0, :wall-ms 91087}
+   {:target "test-bb", :exit 0, :wall-ms 90742}
+   {:target "test-bb-diagnostic", :exit 0, :wall-ms 224615}
+   {:target "repository-hygiene", :exit 0, :wall-ms 2087}
+   {:target "intent-audit", :exit 0, :wall-ms 2142}],
+  :landing? false,
+  :problems [],
+  :state :passed,
+  :wall-ms 397327,
+  :source-digest
+  "23390c9bfa92b3095f591e3d6473f4b11057cde9cd8c6cb4ad087dcaeeebe297",
+  :prewarm? true,
+  :run-id "6d3a79ba-885f-47d7-9eaa-aa20ba626062",
+  :git-head "09588a14a784e220907462f46676900402bc80aa"},
+ :disagreements [],
+ :commits
+ ["8a742959553da31925354823d2a467c19ef0e967"
+  "ae7b76bcc2463054f5c6a3f020a9e43cbc9ff8b6"
+  "09588a14a784e220907462f46676900402bc80aa"],
+ :verdict :pass,
+ :owed
+ ["Independent fence review and any landing authorization remain outside this build."
+  "Prior intent-transaction contract escape is retained; successful controls do not retire it."],
+ :gate-log "gate.md"}

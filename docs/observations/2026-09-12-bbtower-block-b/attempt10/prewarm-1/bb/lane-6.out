@@ -1,0 +1,22 @@
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.syntax-var-refs-test
+
+Testing clj-surgeon.failure-report-test

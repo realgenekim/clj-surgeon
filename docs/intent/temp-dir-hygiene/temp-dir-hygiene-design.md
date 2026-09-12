@@ -8,6 +8,16 @@ status: "implemented 2026-09-04; round two after independent review; inb-9483a4"
 
 ## Context
 
+Attempt 13 extends the existing descendant-root promise to product launchers.
+The shared process adapter selects TMPDIR before constructing bb argv and
+publishes that root to TMPDIR/TMP/TEMP. Generated stable and checkout CLI
+launchers apply the same policy before bb starts. Formatter staging selects
+an explicit base rather than relying on the host JVM's cached temp property;
+its refusal preserves native exception/process evidence through the typist
+adapter. The artifact refusal fixture places its symlink parent beneath the
+configured product artifact root. This preserves the tmpfs refusal oracle
+while keeping fixture writes inside the product's state envelope.
+
 Anvil's `/tmp` filled to 96% of its inodes from 82,210 leaked test-fixture
 directories — 19,292 of them `clj-surgeon-change-buffer-*` from this repo's
 `mcp_change_buffer_test.clj` — while bytes sat at 44%: the filesystem died on
@@ -215,8 +225,17 @@ No direct npx/standard-clojure-style or formatter API invocation was found in
 recursive test/bench shell gates. The format-extraction configuration self-test
 exits before benchmark execution. Arbitrary benchmark agent commands are not
 covered by this test-runner invariant. Tests that deliberately replace a whole
-subprocess environment must state that exception; production formatter behavior
-and all temporary-root/sweep protections remain unchanged.
+subprocess environment must state that exception. Production subprocesses now
+receive npm cache/log locations beneath the selected root (attempt 14); the
+compile-cache rule remains test-only. Temporary-root/sweep protections remain.
+
+The formatter resolves the default standard-clj command before staging; PATH
+wins over checkout node_modules/.bin, with npx as the final fallback. Custom
+commands are preserved. The shared launcher overrides inherited npm locations,
+so fallback cannot silently restore home writes. Resolved execution avoids npm
+entirely. Receipts retain the expanded command and resolution boolean, including
+native failures and typist publication. The read-only cache field witness and
+selection/environment tests distinguish these independent guarantees.
 
 The runner witnesses exercise inheritance and stripped-environment refusal.
 They require no package installation or formatter package availability; direct

@@ -1,0 +1,14 @@
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.failure-report-test

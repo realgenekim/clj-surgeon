@@ -98,11 +98,15 @@ esac
 # reproduce the failure -- it only shows up as a NEW file in a tree that had
 # none, which is exactly what ship's fast lane runs against (`make
 # landing-gate-prewarm` in a fresh disposable worktree). So this proves the
-# fix the same way: a REAL fresh worktree of the committed HEAD, the exact
+# fix the same way: a REAL fresh checkout of the committed HEAD, the exact
 # suspect command, and an untracked/modified-file diff that must be empty.
+# Attempt18: a linked worktree writes registration into the source common
+# Git directory, which may be outside the packet. Own the clone's Git state
+# under TMPDIR too; shared objects are read-only and HEAD remains exact.
 hygiene_worktree=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-kondo-hygiene.XXXXXX")
-trap 'rm -rf "$test_root"; git worktree remove --force "$hygiene_worktree" 2>/dev/null || true; rm -rf "$hygiene_worktree"; git worktree prune -q 2>/dev/null || true' EXIT HUP INT TERM
-git worktree add -q --detach "$hygiene_worktree" HEAD
+trap 'rm -rf "$test_root" "$hygiene_worktree"' EXIT HUP INT TERM
+git clone -q --shared --no-checkout . "$hygiene_worktree"
+git -C "$hygiene_worktree" checkout -q --detach "$(git rev-parse HEAD)"
 before_status=$(cd "$hygiene_worktree" && git status --porcelain --ignored)
 (
   cd "$hygiene_worktree"
@@ -121,7 +125,7 @@ print(mod.pressure_status_path(SimpleNamespace(pressure_status=None)))
 after_status=$(cd "$hygiene_worktree" && git status --porcelain --ignored)
 
 if [ "$before_status" != "$after_status" ]; then
-  echo "clj-kondo admission path hygiene regression: the Python fallback witness dirtied a fresh worktree of HEAD" >&2
+  echo "clj-kondo admission path hygiene regression: the Python fallback witness dirtied a fresh checkout of HEAD" >&2
   echo "before: $before_status" >&2
   echo "after:  $after_status" >&2
   exit 1

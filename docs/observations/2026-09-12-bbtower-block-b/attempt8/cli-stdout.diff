@@ -1,0 +1,11 @@
+--- /var/tmp/forge/bbtower-fx/attempt8/cli-bb.stdout	2026-09-12 07:09:49.838773486 +0000
++++ /var/tmp/forge/bbtower-fx/attempt8/cli-jvm.stdout	2026-09-12 07:10:54.230800226 +0000
+@@ -22,7 +22,7 @@
+    "docs/observations/2026-09-12-bbtower-block-b/attempt8/reassignments.md"]},
+  :committed true,
+  :receipt-file
+- "/var/tmp/forge/bbtower-fx/attempt8/artifacts/change-receipts/680eef19039297b7cc3bf1f6d6b4209cae5decae4a9a6d8791e069e136ae8627/93ce378b-2350-4719-95ed-e20ef1841a93.edn",
++ "/var/tmp/forge/bbtower-fx/attempt8/artifacts/change-receipts/680eef19039297b7cc3bf1f6d6b4209cae5decae4a9a6d8791e069e136ae8627/a9a3b22c-94d6-4fc1-83bd-65d737a4245c.edn",
+  :ok true,
+  :transaction-version 1,
+  :verified

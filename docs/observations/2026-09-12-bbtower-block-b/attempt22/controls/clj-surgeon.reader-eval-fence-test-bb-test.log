@@ -1,0 +1,54 @@
+
+Testing clj-surgeon.reader-eval-fence-test
+
+FAIL in (a-deeply-nested-build-file-is-refused-typed-not-overflowed) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/reader_eval_fence_test.clj:341)
+jvm
+the refusal is not the TYPED one; it took the last-resort Throwable exit — exit 1, output "Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx\nError: Could not find or load main class clojure.main\nCaused by: java.lang.ClassNotFoundException: clojure.main\n"
+expected: (str/includes? text "build-file-nesting-too-deep")
+  actual: (not (str/includes? "Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx\nError: Could not find or load main class clojure.main\nCaused by: java.lang.ClassNotFoundException: clojure.main\n" "build-file-nesting-too-deep"))
+
+FAIL in (a-deeply-nested-build-file-is-refused-typed-not-overflowed) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/reader_eval_fence_test.clj:341)
+jvm
+the refusal must name the build file it refused
+expected: (str/includes? text "deps.edn")
+  actual: (not (str/includes? "Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx\nError: Could not find or load main class clojure.main\nCaused by: java.lang.ClassNotFoundException: clojure.main\n" "deps.edn"))
+
+FAIL in (the-fence-does-not-refuse-an-ordinary-path-under-a-symlinked-root) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/reader_eval_fence_test.clj:301)
+jvm
+an ordinary :paths entry was refused under a SYMLINKED root — the fence measured the entry against the resolved target while resolving the entry under the link. exit 1, stdout ""
+expected: (str/includes? out "core.clj")
+  actual: (not (str/includes? "" "core.clj"))
+
+FAIL in (no-real-launcher-evaluates-discovered-jvm-bb-edn) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/reader_eval_fence_test.clj:125)
+:jvm / bb.edn
+the op must still list the tree once the reader is inert
+expected: (or (str/includes? out "a.clj") (str/includes? out "total"))
+  actual: false
+
+FAIL in (no-real-launcher-follows-a-build-file-path-out-of-the-tree) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/reader_eval_fence_test.clj:207)
+:jvm / deps.edn / relative
+the refusal did not name the entry the caller spelled ("../escaping-paths-fence1958838962350231981-outside") — stdout ""
+expected: (str/includes? out spelled)
+  actual: (not (str/includes? "" "../escaping-paths-fence1958838962350231981-outside"))
+
+FAIL in (no-real-launcher-follows-a-build-file-path-out-of-the-tree) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/reader_eval_fence_test.clj:207)
+:jvm / deps.edn / absolute
+the refusal did not name the entry the caller spelled ("/var/tmp/forge/bbtower-fx/clj-surgeon-suite-2193370-792ed062/escaping-paths-fence7778863027653376299-outside") — stdout ""
+expected: (str/includes? out spelled)
+  actual: (not (str/includes? "" "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-2193370-792ed062/escaping-paths-fence7778863027653376299-outside"))
+
+FAIL in (no-real-launcher-evaluates-discovered-jvm-deps-edn) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/reader_eval_fence_test.clj:121)
+:jvm / deps.edn
+the op must still list the tree once the reader is inert
+expected: (or (str/includes? out "a.clj") (str/includes? out "total"))
+  actual: false
+
+FAIL in (no-real-launcher-evaluates-discovered-jvm-project-clj) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/reader_eval_fence_test.clj:129)
+:jvm / project.clj
+the op must still list the tree once the reader is inert
+expected: (or (str/includes? out "a.clj") (str/includes? out "total"))
+  actual: false
+
+Ran 13 tests containing 77 assertions.
+8 failures, 0 errors.
+{:namespace clj-surgeon.reader-eval-fence-test, :runtime :bb, :mode "test", :started-at "2026-09-12T19:22:50.211754822Z", :elapsed-ms 4450, :status :test-failed, :result {:test 13, :pass 69, :fail 8, :error 0, :type :summary}}

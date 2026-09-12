@@ -1,0 +1,17 @@
+lanes: --ns -- 8 namespace(s), home-isolated true
+
+Testing clj-surgeon.helper-extraction-test
+
+Testing clj-surgeon.mcp-compact-location-test
+
+Testing clj-surgeon.mcp-inspect-contract-test
+
+Testing clj-surgeon.mcp-prepared-confirmation-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.mission-plain-forms-test
+
+Testing clj-surgeon.receipt-booleans-test
+
+Testing clj-surgeon.workspace-onboarding-test

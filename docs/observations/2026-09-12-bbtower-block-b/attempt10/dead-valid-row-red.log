@@ -1,0 +1,7 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+FAIL in (bounded-input-path-encoding) (splice_envelope_test.clj:85)
+probe refusal vocabulary must be complete
+expected: (= (remedy-vocabulary verb) (set (map :type rows)))
+  actual: (not (= #{:invalid-probe-port :probe-namespace-not-found :probe-connection-failed :stale-probe-image :invalid-probe-request :probe-message-too-large :probe-source-too-large} #{:invalid-probe-port :probe-namespace-not-found :probe-connection-failed :stale-probe-image :invalid-probe-request :probe-message-too-large :probe-source-too-large :probe-registered-but-never-emitted}))
+{:test 1, :pass 48, :fail 1, :error 0}

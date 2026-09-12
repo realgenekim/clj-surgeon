@@ -1,0 +1,15 @@
+lanes: --ns -- 7 namespace(s), home-isolated true
+
+Testing clj-surgeon.lane-manifest-test
+
+Testing clj-surgeon.mcp-create-files-test
+
+Testing clj-surgeon.mcp-namespace-split-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test
+
+Testing clj-surgeon.mission-candidate-race-test
+
+Testing clj-surgeon.namespace-split-test
+
+Testing clj-surgeon.require-change-test

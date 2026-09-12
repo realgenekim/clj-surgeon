@@ -1,0 +1,35 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.ns-isolation-test
+
+FAIL in (the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays) (ns_isolation_test.clj:481)
+NEW bb runtime ceiling: exact boundary and one ms beyond
+expected: (= 343102 (:bb iso/lane-budget-ms))
+  actual: (not (= 343102 343103))
+
+FAIL in (the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays) (ns_isolation_test.clj:484)
+NEW bb runtime ceiling: exact boundary and one ms beyond
+expected: (some? v)
+  actual: (not (some? nil))
+
+FAIL in (the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays) (ns_isolation_test.clj:485)
+NEW bb runtime ceiling: exact boundary and one ms beyond
+expected: (str/includes? (iso/message v) "bb lane took 343103 ms")
+  actual: (not (str/includes? "null VIOLATION in null -- null: null" "bb lane took 343103 ms"))
+
+FAIL in (the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays) (ns_isolation_test.clj:486)
+NEW bb runtime ceiling: exact boundary and one ms beyond
+expected: (str/includes? (iso/message v) "343102 ms")
+  actual: (not (str/includes? "null VIOLATION in null -- null: null" "343102 ms"))
+
+FAIL in (spec-bb-boundary-equals-registered-ceiling) (ns_isolation_test.clj:474)
+TEST-ISO-007 spec bb boundary disagrees with registered ceiling
+expected: (= [(:bb iso/lane-budget-ms) (inc (:bb iso/lane-budget-ms))] (mapv parse-ms (rest (first boundaries))))
+  actual: (not (= [343103 343104] [343102 343103]))
+
+FAIL in (bb-ceiling-reproduces-from-calibration-under-shipped-manifest) (ns_isolation_test.clj:465)
+expected: (= (:ceiling-ms (ceiling/from-file ceiling/calibration-receipt)) (:bb iso/lane-budget-ms))
+  actual: (not (= 343102 343103))
+
+Ran 27 tests containing 163 assertions.
+6 failures, 0 errors.

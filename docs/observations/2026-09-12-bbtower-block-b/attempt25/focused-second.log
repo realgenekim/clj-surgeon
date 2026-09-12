@@ -1,0 +1,150 @@
+
+Testing clj-surgeon.mcp-hot-verify-test
+
+Testing clj-surgeon.forms-test
+
+Ran 24 tests containing 94 assertions.
+0 failures, 0 errors.
+
+FAIL in (probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload) (mcp_hot_verify_test.clj:194)
+expected: (= :probe-failed (:state receipt))
+  actual: (not (= :probe-failed :probe-refused))
+
+FAIL in (probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload) (mcp_hot_verify_test.clj:195)
+expected: (= [1 1 1] ((juxt :tests :assertions :failures) receipt))
+  actual: (not (= [1 1 1] [nil nil nil]))
+
+FAIL in (probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload) (mcp_hot_verify_test.clj:196)
+expected: (= 2 (:closure-expected receipt))
+  actual: (not (= 2 nil))
+
+FAIL in (probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload) (mcp_hot_verify_test.clj:197)
+expected: (= ["probe-fixture.dependency" "probe-fixture.check-test"] (:reloaded receipt))
+  actual: (not (= ["probe-fixture.dependency" "probe-fixture.check-test"] []))
+
+FAIL in (probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload) (mcp_hot_verify_test.clj:202)
+expected: (= :probe-require-unparsed (:error-type receipt))
+  actual: (not (= :probe-require-unparsed :probe-namespace-not-found))
+
+FAIL in (probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload) (mcp_hot_verify_test.clj:203)
+expected: (= "{:unknown foo}" (:form receipt))
+  actual: (not (= "{:unknown foo}" nil))
+
+FAIL in (probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload) (mcp_hot_verify_test.clj:204)
+expected: (= (.getCanonicalPath dependency) (:file receipt))
+  actual: (not (= "/var/tmp/forge/bbtower-fx/probe-stale-16641329469210770281/src/probe_fixture/dependency.clj" nil))
+:sol-round5 {:state :probe-refused, :error-type :probe-namespace-not-found, :error Test namespace is not a local .clj source, :proof_pending [:landing-gate], :reloaded [], :elapsed_ms 2.536694} :loaded-value 1 :disk-value 2
+
+FAIL in (probe-reloads-image-classpath-experiment-dependency) (mcp_hot_verify_test.clj:57)
+expected: (= :probe-failed (:state receipt))
+  actual: (not (= :probe-failed :probe-refused))
+
+FAIL in (probe-reloads-image-classpath-experiment-dependency) (mcp_hot_verify_test.clj:58)
+expected: (= 1 (:failures receipt))
+  actual: (not (= 1 nil))
+
+FAIL in (probe-reloads-image-classpath-experiment-dependency) (mcp_hot_verify_test.clj:59)
+expected: (= ["sol-round5.dependency" "sol-round5.probe-test"] (:reloaded receipt))
+  actual: (not (= ["sol-round5.dependency" "sol-round5.probe-test"] []))
+
+FAIL in (probe-reloads-image-classpath-experiment-dependency) (mcp_hot_verify_test.clj:60)
+expected: (= 2 (var-get (resolve (quote sol-round5.dependency/value))))
+  actual: (not (= 2 1))
+
+FAIL in (probe-reloads-image-classpath-experiment-dependency) (mcp_hot_verify_test.clj:61)
+expected: (= 2 (:closure-expected receipt))
+  actual: (not (= 2 nil))
+
+FAIL in (probe-reloads-image-classpath-experiment-dependency) (mcp_hot_verify_test.clj:63)
+expected: (= 1 (:external receipt))
+  actual: (not (= 1 nil))
+
+FAIL in (probe-reloads-image-classpath-experiment-dependency) (mcp_hot_verify_test.clj:64)
+expected: (= (->> (str/split (System/getProperty "java.class.path") (re-pattern (java.util.regex.Pattern/quote java.io.File/pathSeparator))) (map io/file) (filter (fn* [p1__12749#] (.isDirectory p1__12749#))) (mapv (fn* [p1__12750#] (.getCanonicalPath p1__12750#)))) (:roots receipt))
+  actual: (not (= ["/home/forge/src/clj-surgeon-bbtower/test" "/home/forge/src/clj-surgeon-bbtower/dev/experiments" "/home/forge/src/clj-surgeon-bbtower/src" "/home/forge/src/clj-surgeon-bbtower/libs/clj-splice/src" "/home/forge/.gitlibs/libs/io.github.bhauman/clojure-mcp/35a660be1236ea2d15e3e68593fa74054e0aca4e/src" "/home/forge/.gitlibs/libs/io.github.bhauman/clojure-mcp/35a660be1236ea2d15e3e68593fa74054e0aca4e/resources" "/var/tmp/forge/bbtower-fx/probe-classpath-11306574489909933839/test" "/var/tmp/forge/bbtower-fx/probe-classpath-11306574489909933839/dev/experiments"] nil))
+
+FAIL in (probe-refuses-dependencies-outside-image-roots) (mcp_hot_verify_test.clj:109)
+:outside
+expected: (= :probe-dependency-unresolved (:error-type receipt))
+  actual: (not (= :probe-dependency-unresolved :probe-namespace-not-found))
+
+FAIL in (probe-refuses-dependencies-outside-image-roots) (mcp_hot_verify_test.clj:110)
+expected: (= (quote sol-unresolved.dependency) (:ns receipt))
+  actual: (not (= sol-unresolved.dependency nil))
+
+FAIL in (probe-refuses-dependencies-outside-image-roots) (mcp_hot_verify_test.clj:111)
+expected: (= (when (= :outside case) (str (.toURL (.toURI dependency)))) (:resolved-to receipt))
+  actual: (not (= "file:/var/tmp/forge/bbtower-fx/probe-unresolved-5481857386725786460/outside/sol_unresolved/dependency.clj" nil))
+
+FAIL in (probe-refuses-dependencies-outside-image-roots) (mcp_hot_verify_test.clj:113)
+expected: (= (hot-verify/probe-source-roots) (:roots receipt))
+  actual: (not (= ["/home/forge/src/clj-surgeon-bbtower/test" "/home/forge/src/clj-surgeon-bbtower/dev/experiments" "/home/forge/src/clj-surgeon-bbtower/src" "/home/forge/src/clj-surgeon-bbtower/libs/clj-splice/src" "/home/forge/.gitlibs/libs/io.github.bhauman/clojure-mcp/35a660be1236ea2d15e3e68593fa74054e0aca4e/src" "/home/forge/.gitlibs/libs/io.github.bhauman/clojure-mcp/35a660be1236ea2d15e3e68593fa74054e0aca4e/resources" "/var/tmp/forge/bbtower-fx/probe-unresolved-5481857386725786460/test"] nil))
+
+FAIL in (probe-refuses-dependencies-outside-image-roots) (mcp_hot_verify_test.clj:109)
+:missing
+expected: (= :probe-dependency-unresolved (:error-type receipt))
+  actual: (not (= :probe-dependency-unresolved :probe-namespace-not-found))
+
+FAIL in (probe-refuses-dependencies-outside-image-roots) (mcp_hot_verify_test.clj:110)
+expected: (= (quote sol-unresolved.dependency) (:ns receipt))
+  actual: (not (= sol-unresolved.dependency nil))
+
+FAIL in (probe-refuses-dependencies-outside-image-roots) (mcp_hot_verify_test.clj:113)
+expected: (= (hot-verify/probe-source-roots) (:roots receipt))
+  actual: (not (= ["/home/forge/src/clj-surgeon-bbtower/test" "/home/forge/src/clj-surgeon-bbtower/dev/experiments" "/home/forge/src/clj-surgeon-bbtower/src" "/home/forge/src/clj-surgeon-bbtower/libs/clj-splice/src" "/home/forge/.gitlibs/libs/io.github.bhauman/clojure-mcp/35a660be1236ea2d15e3e68593fa74054e0aca4e/src" "/home/forge/.gitlibs/libs/io.github.bhauman/clojure-mcp/35a660be1236ea2d15e3e68593fa74054e0aca4e/resources" "/var/tmp/forge/bbtower-fx/probe-unresolved-5481857386725786460/test"] nil))
+
+ERROR in (probe-reloads-prefix-list-dependency) (mcp_hot_verify.clj:264)
+expected: (= (quote [foo.bar demo.probe-test]) (hot-verify/probe-reload-order (.getCanonicalPath root) (quote demo.probe-test)))
+  actual: clojure.lang.ExceptionInfo: Test namespace is not a local .clj source
+{:error-type :probe-namespace-not-found}
+ at clj_surgeon.mcp_hot_verify$probe_reload_order.invokeStatic (mcp_hot_verify.clj:264)
+    clj_surgeon.mcp_hot_verify$probe_reload_order.invoke (mcp_hot_verify.clj:229)
+    clj_surgeon.mcp_hot_verify_test$fn__12931$fn__12932.invoke (mcp_hot_verify_test.clj:135)
+    clj_surgeon.mcp_hot_verify_test$with_image_roots$fn__12744.invoke (mcp_hot_verify_test.clj:23)
+    clojure.lang.AFn.applyToHelper (AFn.java:152)
+    clojure.lang.AFn.applyTo (AFn.java:144)
+    clojure.core$apply.invokeStatic (core.clj:667)
+    clojure.core$with_bindings_STAR_.invokeStatic (core.clj:1990)
+    clojure.core$with_bindings_STAR_.doInvoke (core.clj:1990)
+    clojure.lang.RestFn.invoke (RestFn.java:428)
+    clj_surgeon.mcp_hot_verify_test$with_image_roots.invokeStatic (mcp_hot_verify_test.clj:23)
+    clj_surgeon.mcp_hot_verify_test$with_image_roots.invoke (mcp_hot_verify_test.clj:15)
+    clj_surgeon.mcp_hot_verify_test$fn__12931.invokeStatic (mcp_hot_verify_test.clj:133)
+    clj_surgeon.mcp_hot_verify_test/fn (mcp_hot_verify_test.clj:123)
+    clojure.test$test_var$fn__9898.invoke (test.clj:717)
+    clojure.test$test_var.invokeStatic (test.clj:717)
+    clojure.test$test_var.invoke (test.clj:708)
+    clojure.test$test_vars$fn__9924$fn__9929.invoke (test.clj:735)
+    clojure.test$default_fixture.invokeStatic (test.clj:687)
+    clojure.test$default_fixture.invoke (test.clj:683)
+    clojure.test$test_vars$fn__9924.invoke (test.clj:735)
+    clojure.test$default_fixture.invokeStatic (test.clj:687)
+    clojure.test$default_fixture.invoke (test.clj:683)
+    clojure.test$test_vars.invokeStatic (test.clj:731)
+    clojure.test$test_all_vars.invokeStatic (test.clj:737)
+    clojure.test$test_ns.invokeStatic (test.clj:758)
+    clojure.test$test_ns.invoke (test.clj:743)
+    clojure.core$map$fn__5956.invoke (core.clj:2772)
+    clojure.lang.LazySeq.force (LazySeq.java:50)
+    clojure.lang.LazySeq.realize (LazySeq.java:89)
+    clojure.lang.LazySeq.seq (LazySeq.java:106)
+    clojure.lang.Cons.next (Cons.java:41)
+    clojure.lang.RT.boundedLength (RT.java:1810)
+    clojure.lang.RestFn.applyTo (RestFn.java:133)
+    clojure.core$apply.invokeStatic (core.clj:669)
+    clojure.test$run_tests.invokeStatic (test.clj:768)
+    clojure.test$run_tests.doInvoke (test.clj:768)
+    clojure.lang.RestFn.invoke (RestFn.java:411)
+    user$eval13490.invokeStatic (NO_SOURCE_FILE:1)
+    user$eval13490.invoke (NO_SOURCE_FILE:1)
+    clojure.lang.Compiler.eval (Compiler.java:7739)
+    clojure.lang.Compiler.eval (Compiler.java:7729)
+    nrepl.middleware.interruptible_eval$evaluator$run__1435$fn__1446.invoke (interruptible_eval.clj:106)
+    nrepl.middleware.interruptible_eval$evaluator$run__1435.invoke (interruptible_eval.clj:101)
+    nrepl.middleware.session$session_exec$session_loop__1519.invoke (session.clj:230)
+    nrepl.SessionThread.run (SessionThread.java:21)
+
+Ran 20 tests containing 158 assertions.
+21 failures, 1 errors.
+=> {:test 20, :pass 136, :fail 21, :error 1, :type :summary}
+*======== user | clj ========*

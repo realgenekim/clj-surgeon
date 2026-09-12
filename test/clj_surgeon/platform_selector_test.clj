@@ -1,4 +1,5 @@
 (ns clj-surgeon.platform-selector-test
+  {:lane :battery}
   (:require
    [babashka.fs :as fs]
    [babashka.process :as proc]

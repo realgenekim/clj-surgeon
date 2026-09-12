@@ -1,0 +1,16 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.memory.oom-reproduction-test
+CONTROL scope: {:root /var/tmp/forge/bbtower-fx/clj-surgeon-suite-1963321-f615f0c8/clj-surgeon-memory-control-1789240248027, :files 8, :bytes 4196920}
+CONTROL receipt: {:arm :frozen-read, :files 8, :bytes 4196920, :result-hash-count 8, :tree-hash f1ff28cb792b72d27c6b91e884a55487ef9fb435b28f807bbd4724859c637ae6, :memory {:xmx-mb 256.0, :heap-used-start-mb 36.612396240234375, :heap-used-peak-mb 252.94872283935547, :heap-used-end-mb 13.343238830566406, :heap-after-gc-peak-mb 219.64535522460938, :heap-retained-peak-mb 0.0, :wall-ms 2557}}
+RED scope: {:root /var/tmp/forge/bbtower-fx/clj-surgeon-suite-1963321-f615f0c8/clj-surgeon-memory-frozen-1789240252588, :files 600, :bytes 314772270}
+RED exit: 3
+RED err: Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+RED out: Terminating due to java.lang.OutOfMemoryError: Java heap space
+
+
+Ran 2 tests containing 7 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.memory.oom-reproduction-test, :runtime :jvm, :mode "test", :started-at "2026-09-12T19:10:55.487447274Z", :elapsed-ms 7516, :status :passed, :result {:test 2, :pass 7, :fail 0, :error 0, :type :summary}}

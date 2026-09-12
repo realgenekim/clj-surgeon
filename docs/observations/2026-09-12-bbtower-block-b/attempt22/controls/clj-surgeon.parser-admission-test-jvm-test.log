@@ -1,0 +1,8 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.parser-admission-test
+
+Ran 22 tests containing 145 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.parser-admission-test, :runtime :jvm, :mode "test", :started-at "2026-09-12T19:13:34.996641141Z", :elapsed-ms 4384, :status :passed, :result {:test 22, :pass 145, :fail 0, :error 0, :type :summary}}

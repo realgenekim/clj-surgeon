@@ -1,0 +1,26 @@
+
+Testing clj-surgeon.lane-manifest-test
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.helper-extraction-test
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.mission-plain-forms-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.mcp-compact-edit-fields-test

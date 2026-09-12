@@ -1,0 +1,3 @@
+Sat Sep 12 12:13:06 UTC 2026
+86d98e4afd8ab3d12cb5a3e6bd2e2710d655def6
+TMPDIR=/var/tmp/forge/bbtower-fx JAVA_TOOL_OPTIONS='-Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx' make landing-gate-prewarm

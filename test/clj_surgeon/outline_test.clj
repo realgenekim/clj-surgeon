@@ -1,7 +1,9 @@
 (ns clj-surgeon.outline-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [clj-surgeon.outline :as outline]
-            [clojure.string :as str]))
+  {:lane :fast}
+  (:require
+   [clj-surgeon.outline :as outline]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]))
 
 (def simple-ns
   "(ns my.app
@@ -73,7 +75,7 @@
          (outline/string-symbols-for-form
            {:source "(defn plain [] 1)" :line 20 :name 'plain})))
   (let [declarations (str/join ";" (map #(str "var symbol" % "=0")
-                                         (range 513)))
+                                     (range 513)))
         result (outline/string-symbols-for-form
                  {:source (str "(defn many [] \"" declarations "\")")
                   :line 1
@@ -234,7 +236,7 @@
 (deftest test-meta-tagged-arglist
   (testing "outer meta on arglist (^String [a]) is stripped — arglist is [a]"
     (let [result (outline-from-string
-                  "(ns my.x)
+                   "(ns my.x)
                    (defn outer-hint
                      \"doc\"
                      ^String [a b]
@@ -244,7 +246,7 @@
           "function-level return-type hint must not appear in :args")))
   (testing "param meta inside arglist ([^String s]) is preserved"
     (let [result (outline-from-string
-                  "(ns my.x)
+                   "(ns my.x)
                    (defn inner-hint
                      \"doc\"
                      [^String s x]
@@ -254,7 +256,7 @@
           "parameter-level hint must remain attached to the param")))
   (testing "both outer and param meta together"
     (let [result (outline-from-string
-                  "(ns my.x)
+                   "(ns my.x)
                    (defn both
                      \"doc\"
                      ^Long [^String s ^Integer i]
@@ -264,7 +266,7 @@
           "outer hint stripped, param hints kept")))
   (testing "no meta — baseline still works"
     (let [result (outline-from-string
-                  "(ns my.x) (defn plain [a b] a)")
+                   "(ns my.x) (defn plain [a b] a)")
           form (first (filter #(= 'plain (:name %)) (:forms result)))]
       (is (= "[a b]" (:args form))))))
 
@@ -275,14 +277,14 @@
 (deftest test-deftest-classification
   (testing "plain deftest is recognized as a defining form"
     (let [result (outline-from-string
-                  "(ns my.tests (:require [clojure.test :refer [deftest is]]))
+                   "(ns my.tests (:require [clojure.test :refer [deftest is]]))
                    (deftest plain (is true))")
           form (first (filter #(= 'deftest (:type %)) (:forms result)))]
       (is (some? form))
       (is (= 'plain (:name form)))))
   (testing "deftest with metadata between symbol and name (e.g. ^:integration)"
     (let [result (outline-from-string
-                  "(ns my.tests (:require [clojure.test :refer [deftest is]]))
+                   "(ns my.tests (:require [clojure.test :refer [deftest is]]))
                    (deftest ^:integration tagged (is true))")
           form (first (filter #(= 'deftest (:type %)) (:forms result)))]
       (is (some? form))
@@ -290,7 +292,7 @@
           "deftest with ^:integration meta on name should resolve to 'tagged'")))
   (testing "deftest counted in :form-count"
     (let [result (outline-from-string
-                  "(ns my.tests (:require [clojure.test :refer [deftest is]]))
+                   "(ns my.tests (:require [clojure.test :refer [deftest is]]))
                    (deftest a (is true))
                    (deftest ^:slow b (is true))")]
       (is (= 2 (:form-count result))))))

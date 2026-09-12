@@ -1,0 +1,43 @@
+commit 84a0833c477a6713d5dfd78c783608649c12f650
+Author:     forge-anvil <forge-anvil@anvil>
+AuthorDate: Sat Sep 12 14:29:05 2026 +0000
+Commit:     forge-anvil <forge-anvil@anvil>
+CommitDate: Sat Sep 12 14:29:05 2026 +0000
+
+    test: register merged trunk installed-CLI witnesses in branch census
+
+diff --git a/docs/tech-tree.md b/docs/tech-tree.md
+index 964d5051..24517d40 100644
+--- a/docs/tech-tree.md
++++ b/docs/tech-tree.md
+@@ -843,3 +843,13 @@ Both real command paths format the multiline fixture successfully with the
+ inherited cache/log locations unwritable. This is a write-location correction,
+ not a performance comparison. Final suite/gate evidence and remaining limits:
+ [attempt14](observations/2026-09-12-bbtower-block-b/attempt14/REPORT.md).
++
++### 2026-09-12 — bb tower attempt 19, trunk dependency closure merge
++
++The stable launcher now combines trunk's bundled clj-splice classpath with the
++branch's explicit java.io.tmpdir policy. The installed splice and package-hash
++witnesses pass, as does the branch's generated-launcher matrix. The once-only
++fast run and restricted diagnostic exposed two trunk test names missing from
++the branch's derived deftest census; regeneration adds exactly those names and
++removes none. Final prewarm evidence and retained red results:
++[attempt19](observations/2026-09-12-bbtower-block-b/attempt19/REPORT.md).
+diff --git a/test/clj_surgeon/deftest_census.edn b/test/clj_surgeon/deftest_census.edn
+index 1ca7c074..b93ee7a9 100644
+--- a/test/clj_surgeon/deftest_census.edn
++++ b/test/clj_surgeon/deftest_census.edn
+@@ -706,10 +706,12 @@
+   clj-surgeon.insertion-gap-test/nested-insertion-uses-anchor-line-indentation-after-earlier-blank-line
+   clj-surgeon.insertion-gap-test/subform-comment-gap-still-refuses
+   clj-surgeon.install-test/benchmark-agent-skill-targets-are-bounded-and-composable
++  clj-surgeon.install-test/cli-package-identity-covers-bundled-splice-source
+   clj-surgeon.install-test/development-install-is-explicitly-branch-coupled
+   clj-surgeon.install-test/install-cli-default-is-relative-to-home
+   clj-surgeon.install-test/install-cli-supports-a-custom-path-with-spaces
+   clj-surgeon.install-test/install-help-makes-both-destinations-explicit
++  clj-surgeon.install-test/installed-cli-loads-splice-verbs-outside-the-checkout
+   clj-surgeon.install-test/installers-refuse-unrelated-destinations-without-changing-them
+   clj-surgeon.install-test/mcp-reload-manifest-covers-the-routed-runtime
+   clj-surgeon.install-test/repository-agent-skill-entrances-do-not-drift

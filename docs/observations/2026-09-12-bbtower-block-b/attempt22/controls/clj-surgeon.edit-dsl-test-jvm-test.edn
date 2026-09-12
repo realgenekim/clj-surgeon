@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.edit-dsl-test, :runtime :jvm, :mode "test", :started-at "2026-09-12T18:40:59.338574164Z", :elapsed-ms 2764, :status :passed, :result {:test 28, :pass 419, :fail 0, :error 0, :type :summary}}

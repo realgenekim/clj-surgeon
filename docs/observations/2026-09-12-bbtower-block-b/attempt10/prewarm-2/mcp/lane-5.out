@@ -1,0 +1,20 @@
+
+Testing clj-surgeon.namespace-split-test
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.mcp-extraction-test
+
+Testing clj-surgeon.mission-plain-forms-test
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.syntax-var-refs-test
+
+Testing clj-surgeon.mission-candidate-test

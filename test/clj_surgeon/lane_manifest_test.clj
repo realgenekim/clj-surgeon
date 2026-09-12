@@ -21,7 +21,9 @@
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing use-fixtures]]))
+   [clojure.test :refer [deftest is testing use-fixtures]]
+   [rewrite-clj.node :as node]
+   [rewrite-clj.parser :as parser]))
 
 ;; RATCHET (2026-09-04, inb-9483a4): every fixture directory this namespace
 ;; creates is tracked and swept, on failure as well as on success.
@@ -156,12 +158,154 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest every-manifest-entry-exists-on-disk
+  (testing "Every historical bb member has a budgeted cadence; fast excludes battery"
+    (let [bb-namespaces (requiring-resolve 'clj-surgeon.battery-parallel-runner/bb-namespaces)
+          suite-namespaces (requiring-resolve 'clj-surgeon.battery-parallel-runner/suite-namespaces)
+          defaults @(requiring-resolve 'clj-surgeon.ns-isolation/lane-default-budget-ms)]
+      (is (= (set (lm/namespaces-for :fast)) (set (suite-namespaces "fast"))))
+      (doseq [n (bb-namespaces)]
+        (is (pos-int? (get defaults (lm/lane-of n))) (str n " requires a cadence budget")))))
   (testing "manifest -> disk: no phantom entries"
     (let [missing (sort (remove @on-disk (keys lm/manifest)))]
       (is (empty? missing)
           (str "lane manifest names " (count missing)
                " namespace(s) with no test source file on disk: "
-               (str/join ", " missing))))))
+               (str/join ", " missing)))))
+  ;; @spec TEST-ISO-001 -- an explicit runtime for every namespace, independent of cadence.
+  (testing "every discovered test namespace has a closed runtime declaration"
+    (let [runtimes @(requiring-resolve 'clj-surgeon.lane-manifest/namespace-runtimes)]
+      (is (= 159 (count runtimes)))
+      (is (= (set (keys @on-disk)) (set (keys runtimes))))
+      (is (= #{:bb :jvm} (set (vals runtimes))))
+      (is (= :bb (get runtimes 'clj-surgeon.forms-test)))
+      (is (= :jvm (get runtimes 'clj-surgeon.mcp-http-server-test)))))
+  ;; @spec TEST-ISO-016 -- independent sample oracle, including planted defects.
+  (testing "six controls and conservative two-sd clearance govern paired assignments"
+    (let [bad (fn [runtimes measurements]
+                (set (for [[n {:keys [jvm bb conservative-ratio] :as m}] measurements
+                           :when (or (< (:n m 0) 6)
+                                     (some #(or (< (:n % 0) 6) (< (count (:walls-ms %)) 6)) [jvm bb])
+                                     (and (= :bb (get runtimes n))
+                                          (> (or conservative-ratio ##Inf) 2.0)))]
+                       n)))
+          sample (fn [wall] {:n 6 :walls-ms (vec (repeat 6 wall)) :mean-ms (double wall) :sd-ms 0.0})
+          at {:n 6 :jvm (sample 100) :bb (sample 200) :conservative-ratio 2.0}
+          slow (assoc at :bb (sample 201) :conservative-ratio 2.01)
+          name 'fixture/runtime-test
+          stats (fn [walls]
+                  (let [n (count walls)
+                        mean (/ (double (reduce + walls)) n)]
+                    [mean (Math/sqrt (/ (reduce + (map #(Math/pow (- % mean) 2) walls)) (dec n)))]))]
+      (let [paired (set (:paired (edn/read-string
+                                   (slurp "docs/observations/2026-09-12-bbtower-block-b/attempt20/baseline.edn"))))
+            actual (set (keys lm/runtime-measurements))]
+        (is (= paired actual)
+            (str "TEST-ISO-016 paired scope changed: missing " (remove actual paired)
+                 "; added " (remove paired actual))))
+      (is (empty? (bad lm/namespace-runtimes lm/runtime-measurements))
+          (str "TEST-ISO-016: " (bad lm/namespace-runtimes lm/runtime-measurements)))
+      (is (= #{name} (bad {name :bb} {name slow})))
+      (doseq [runtime [:bb :jvm]
+              short [(assoc at :n 5)
+                     (assoc-in at [:jvm :n] 5)
+                     (assoc-in at [:bb :walls-ms] [200 200 200 200 200])]]
+        (is (= #{name} (bad {name runtime} {name short})))
+        (is (= :jvm (lm/measured-runtime :bb short))))
+      (is (= :bb (lm/measured-runtime :bb at)))
+      (is (= :jvm (lm/measured-runtime :bb slow)))
+      (is (= :jvm (lm/measured-runtime :jvm at)))
+      (is (= :jvm (lm/measured-runtime :bb (assoc at :contract-failure "defect"))))
+      (is (= :jvm (lm/measured-runtime :bb (assoc-in at [:bb :sd-ms] 1.0))))
+      (is (= :jvm (lm/measured-runtime :bb (assoc-in at [:jvm :sd-ms] 1.0))))
+      (is (= :bb (lm/measured-runtime :bb
+                   (assoc at :jvm (assoc (sample 1) :sd-ms 2.0) :bb (sample 2)))))
+      (is (= :bb (lm/measured-runtime :bb nil)))
+      (doseq [[n runtime] lm/unmeasured-runtimes]
+        (is (= runtime (if (lm/bb-ineligibilities n) :jvm (lm/portability-runtimes n))) (str n)))
+      (doseq [[n {:keys [jvm bb conservative-ratio] :as measurement}] lm/runtime-measurements]
+        (is (= (if (lm/bb-ineligibilities n) :jvm (:runtime measurement))
+               (lm/namespace-runtimes n)) (str n " assignment after capability admission"))
+        (doseq [[runtime arm] [[:jvm jvm] [:bb bb]]]
+          (let [rows (mapv #(edn/read-string (slurp %)) (:logs arm))
+                walls (mapv :elapsed-ms rows)
+                [mean sd] (stats walls)]
+            (is (= (:n arm) (count rows) (count (:walls-ms arm))) (str n " " runtime))
+            (is (= (count rows) (count (set (:logs arm))) (count (set (map :tmpdir rows))))
+                (str n " " runtime " requires distinct run receipts"))
+            (is (= walls (:walls-ms arm)) (str n " " runtime " receipt walls"))
+            (is (every? #(= [n runtime] [(:namespace %) (:runtime %)]) rows) (str n))
+            (when (= :bb (lm/namespace-runtimes n))
+              (is (every? #(and (pos? (get-in % [:result :test] 0))
+                                (zero? (+ (get-in % [:result :fail] 0) (get-in % [:result :error] 0)))) rows)
+                  (str n " cannot use failed controls to certify bb")))
+            (is (< (Math/abs (- mean (:mean-ms arm))) 1e-9) (str n " mean"))
+            (is (< (Math/abs (- sd (:sd-ms arm))) 1e-9) (str n " sd"))))
+        (is (= conservative-ratio
+               (/ (+ (:mean-ms bb) (* 2 (:sd-ms bb)))
+                  (max 1.0 (- (:mean-ms jvm) (* 2 (:sd-ms jvm)))))) (str n))))))
+
+(deftest runtime-portability-controls-cover-every-assignment
+  ;; @spec TEST-ISO-016 -- all cadences, independently of the 38 cost pairs.
+  (let [n 'fixture/runtime-test
+        passing (fn [runtime] {:namespace n :runtime runtime :status :passed :exit 0
+                               :result {:test 1 :fail 0 :error 0}})
+        controls {:jvm (passing :jvm) :bb (passing :bb)}]
+    (is (nil? (lm/portability-refusal n controls)))
+    (let [failed (assoc (passing :bb) :status :test-failed :exit 1
+                        :result {:test 1 :fail 0 :error 1})
+          limited (assoc controls :bb failed)
+          registration {:reasons #{:sci-host-interop} :detail "FileLockImpl.release refused"}]
+      (is (= :portable (:state (lm/portability-state n controls nil))))
+      (is (= :bb-ineligible (:state (lm/portability-state n limited registration))))
+      (doseq [bad [nil {} (assoc registration :reasons #{:unknown})
+                   (assoc registration :reasons #{}) (assoc registration :detail "")]]
+        (is (= :refused (:state (lm/portability-state n limited bad)))))
+      (doseq [bb [(passing :bb) failed]]
+        (is (= :refused (:state (lm/portability-state n
+                                  {:jvm (assoc (passing :jvm) :exit 1) :bb bb}
+                                  registration)))))
+      (doseq [bad [nil (assoc failed :namespace 'wrong/test)
+                   (assoc failed :runtime :jvm) (assoc failed :exit nil)]]
+        (is (= :refused (:state (lm/portability-state n (assoc controls :bb bad) registration))))))
+    (doseq [runtime [:jvm :bb]
+            bad [nil
+                 (assoc (passing runtime) :status :test-failed)
+                 (assoc (passing runtime) :exit 1)
+                 (assoc-in (passing runtime) [:result :fail] 1)
+                 (assoc-in (passing runtime) [:result :error] 1)
+                 (assoc-in (passing runtime) [:result :test] 0)
+                 (assoc (passing runtime) :namespace 'wrong/test)
+                 (assoc (passing runtime) :runtime :wrong)]]
+      (let [refusal (lm/portability-refusal n (assoc controls runtime bad))]
+        (is (= :non-portable-namespace (:error-type refusal)))
+        (is (= n (:namespace refusal)))
+        (is (contains? (:controls refusal) runtime))))
+    (is (= :bb-load-incompatible
+           (:reason (lm/portability-refusal n
+                      {:bb-load {:status :load-failed :mode "load" :namespace n
+                                 :runtime :bb :exit 1 :message "unsupported class"}})))))
+  (is (= (set (keys lm/namespace-runtimes))
+         (set (keys lm/namespace-runtime-controls))))
+  (doseq [[n paths] lm/namespace-runtime-controls]
+    (let [controls (into {}
+                         (for [[runtime path] paths
+                               :when (.isFile (io/file path))]
+                           [runtime (assoc (edn/read-string (slurp path)) :receipt path)]))
+          refusal (lm/portability-refusal n controls)
+          state (lm/portability-state n controls (lm/bb-ineligibilities n))
+          unsupported-jvm-only? (and (= :bb-load-incompatible (:reason refusal))
+                                     (= :jvm (lm/namespace-runtimes n))
+                                     (= :jvm (lm/portability-runtimes n))
+                                     (= n (get-in controls [:bb-load :namespace]))
+                                     (= :bb (get-in controls [:bb-load :runtime]))
+                                     (not (str/blank? (get-in controls [:bb-load :message]))))]
+      (when (= :bb-ineligible (:state state))
+        (println "BB-INELIGIBLE" n ":jvm" (pr-str (select-keys state [:reasons :detail :probe])))
+        (is (= :jvm (lm/namespace-runtimes n)) (str n)))
+      (when unsupported-jvm-only?
+        (println "BB-LOAD-EXCLUDED" n (pr-str (:control refusal))))
+      (is (or (nil? refusal) unsupported-jvm-only?)
+          (pr-str refusal)))))
 
 (deftest every-test-namespace-on-disk-is-accounted-for
   (testing "disk -> manifest: a new test namespace cannot silently never run"
@@ -393,14 +537,27 @@
    #"\bsh/sh\b"])
 
 (deftest no-fast-lane-namespace-spells-a-child-process
-  (let [offenders
+  (let [code-spellings (fn [source]
+                         (->> (tree-seq node/inner? node/children (parser/parse-string-all source))
+                              (filter #(= :token (node/tag %)))
+                              (map node/string)
+                              (remove #(re-find #"^#?\"" %))
+                              (str/join " ")))
+        offenders
         (sort-by first
                  (for [[s lane] lm/manifest
                        :when (= :fast lane)
-                       :let [src (slurp (:file (get @on-disk s)))]
+                       :let [raw (slurp (:file (get @on-disk s)))
+                             src (if (some #(re-find % raw) spawn-spellings)
+                                   (code-spellings raw) raw)]
                        re spawn-spellings
                        :when (re-find re src)]
                    [s (str re)]))]
+    (testing "SCI rejection fixture strings are data; real require and call forms stay visible"
+      (is (not (some #(re-find % (code-spellings "(def rejected \"(require 'clojure.java.shell)\")")) spawn-spellings)))
+      (doseq [source ["(ns example (:require [clojure.java.shell :as sh]))"
+                      "(proc/process [\"bb\"])" "(ProcessBuilder. argv)"]]
+        (is (some #(re-find % (code-spellings source)) spawn-spellings) source)))
     (is (empty? offenders)
         (str "fast-lane namespace(s) spelling a child-process launcher -- the "
              "fast lane's rule is NO child process (move it to :battery): "
@@ -566,7 +723,55 @@
    `census-ledger-path`; what stays here is the REASON, which no derivation can
    recover. Keyed by namespace name, so two branches adopting different
    namespaces merge without touching the same line."
-  '#{clj-surgeon.receipt-booleans-test ; Cross-verb false-boolean receipt ratchet.
+  '#{;; Former bb-only members: measured cadence adoption, attempt10/lane-moves.md.
+     clj-surgeon.agent-routing-test
+     clj-surgeon.alias-migration-test
+     clj-surgeon.analyze-test
+     clj-surgeon.cli-dispatch-test
+     clj-surgeon.cljc-existing-ops-test
+     clj-surgeon.cljc.analyze-test
+     clj-surgeon.cljc.merge-test
+     clj-surgeon.cljc.require-ops-test
+     clj-surgeon.cljc.split-test
+     clj-surgeon.diagnostic-delta-test
+     clj-surgeon.edit-dsl-test
+     clj-surgeon.edit-test
+     clj-surgeon.edn-config-integration-test
+     clj-surgeon.extract-header-test
+     clj-surgeon.extract-test
+     clj-surgeon.failure-report-test
+     clj-surgeon.file-ops-test
+     clj-surgeon.fix-declares-test
+     clj-surgeon.forms-test
+     clj-surgeon.help-test
+     clj-surgeon.insertion-gap-test
+     clj-surgeon.install-test
+     clj-surgeon.intent-transaction-test
+     clj-surgeon.jvm-error-test
+     clj-surgeon.lens-query-test
+     clj-surgeon.ls-tree-test
+     clj-surgeon.memory-battery-test
+     clj-surgeon.move-dependency-test
+     clj-surgeon.move-test
+     clj-surgeon.operation-algebra-test
+     clj-surgeon.outermost-test
+     clj-surgeon.outline-test
+     clj-surgeon.owner-hypotheses-test
+     clj-surgeon.parser-admission-test
+     clj-surgeon.partition-all-test
+     clj-surgeon.platform-selector-test
+     clj-surgeon.recovery-test
+     clj-surgeon.relation-census-test
+     clj-surgeon.rename-test
+     clj-surgeon.show-form-test
+     clj-surgeon.structural-lens-test
+     clj-surgeon.syntax-var-refs-test
+     clj-surgeon.tmp-leak-support-test
+     clj-surgeon.worktree-lifecycle-cli-test
+     clj-surgeon.worktree-lifecycle-io-test
+     clj-surgeon.worktree-lifecycle-test
+     clj-surgeon.xray-test
+     clj-surgeon.receipt-booleans-test ; Cross-verb false-boolean receipt ratchet.
      clj-surgeon.rename-alias-receipt-test ; Disk-derived receipt evidence.
      clj-surgeon.insert-forms-test ; Consolidated span witnesses.
      clj-surgeon.splice-envelope-test ; Shared envelope witnesses.
@@ -963,7 +1168,7 @@
    "test/clj_surgeon/mcp_tool_test.clj"
    {1395 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count (1380 -> 1381 on 2026-09-06: the `cheshire.core` require the next_call REPLAY witnesses need moved the whole namespace down one line -- the pin costing one number is the point; 1381 -> 1394 on 2026-09-07 when the expect-guard witness was inserted above it)"}
    "test/clj_surgeon/mcp_hot_verify_test.clj"
-   {244 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
+   {497 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
 
 (deftest every-sleep-on-the-merge-gate-is-declared-with-its-reason
   (let [sources (fn [lane]

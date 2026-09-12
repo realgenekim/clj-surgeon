@@ -50,8 +50,27 @@ required), `[x]` implemented (implementation and test witnesses required),
   watches. The test re-exec child shall also receive the fixed string
   `NODE_DISABLE_COMPILE_CACHE=1`, overriding an unset/0 parent setting; a
   re-exec child lacking that exact value shall refuse before running tests.
-  Normal descendants inherit this test-only policy. Production formatter
-  invocations outside this test boundary keep their existing cache behavior.
+  Normal descendants inherit this test-only compile-cache policy.
+  All product subprocesses override `npm_config_cache` and
+  `npm_config_logs_dir` with `<selected-root>/npm-cache` and
+  `<selected-root>/npm-logs`, including production formatter invocations.
+  The default formatter prefers executable `standard-clj` on PATH, then
+  checkout `node_modules/.bin/standard-clj`, otherwise the original npx command.
+  Custom formatter argv remains exact. Each invocation retains
+  `:formatter {:command <expanded-argv> :resolved? <boolean>}` on success
+  and failure, including through the typist receipt's `:format` field.
+
+  Attempt 13 clarifies the subprocess boundary: each product-owned bb launch,
+  including CLI launchers and formatter/proof commands, supplies an explicit
+  startup `-Djava.io.tmpdir`. Select nonblank TMPDIR unchanged unless equal to
+  or below `/tmp` or `/dev/shm`; otherwise select `/var/tmp`. Keep spaces in
+  one argv element. Formatter staging uses that same selection even when the
+  host JVM temp property disagrees. A formatter refusal retains its native
+  error, staged path and process evidence through the typist boundary.
+  State-root fixtures stage beneath the product artifact root, never beside
+  the clj-surgeon state directory. Witnesses: cli-child-honours-tmpdir-at-startup,
+  formatter-refusal-retains-native-diagnostics, and the existing real typist
+  proof and tmpfs-under-home artifact refusal.
 
 - [x] **MCP-OP-TMPHYG-007**: When a test-runner process is terminated in a
   way the VM can observe — an external `timeout`'s SIGTERM, a Ctrl-C — before

@@ -1,0 +1,3 @@
+{:label "fast", :log "docs/observations/2026-09-12-bbtower-block-b/attempt25/checks/fast.log", :started "2026-09-12T21:38:28Z", :wall-s 32, :exit 0}
+{:label "restricted", :log "docs/observations/2026-09-12-bbtower-block-b/attempt25/checks/restricted.log", :started "2026-09-12T21:39:22Z", :wall-s 412, :exit 0}
+{:label "prewarm", :log "docs/observations/2026-09-12-bbtower-block-b/attempt25/checks/prewarm.log", :started "2026-09-12T21:46:41Z", :wall-s 403, :exit 0}

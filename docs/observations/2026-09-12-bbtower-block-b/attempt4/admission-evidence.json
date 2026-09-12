@@ -1,0 +1,19 @@
+{
+  "recorded_utc": "2026-09-12T06:31:43.471114+00:00",
+  "manifest_id": "ce99e35ffc7e4d4492da8b0cf56df0e9d7e5cb7bfb1342577c07b39e58858597",
+  "write_roots": [
+    "/home/forge/src/clj-surgeon-bbtower",
+    "/var/tmp/forge/packets/5402914d-ae9e-40f7-9347-9f9129535b4e/tmp",
+    "/var/tmp/forge/packets/5402914d-ae9e-40f7-9347-9f9129535b4e/codex-home",
+    "/var/tmp/forge/packets/5402914d-ae9e-40f7-9347-9f9129535b4e/claude-home",
+    "/home/forge/src/clj-surgeon/.git/worktrees/clj-surgeon-bbtower",
+    "/home/forge/src/clj-surgeon/.git/objects"
+  ],
+  "head": "8217165b14a697df8446b164e4599065eea7943f",
+  "git_common_dir": "/home/forge/src/clj-surgeon/.git",
+  "git_dir": "/home/forge/src/clj-surgeon/.git/worktrees/clj-surgeon-bbtower",
+  "base_checkout_exists": false,
+  "registration_exists": false,
+  "jvm_launches": 0,
+  "prewarm_attempts": 0
+}

@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.extract-test
+
+Testing clj-surgeon.intent-transaction-test
+
+FAIL in (change-cli-dogfoods-one-shot-multi-file-apply-and-exact-undo) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/intent_transaction_test.clj:2160)
+expected: (< (count out) (count (slurp receipt-file)))
+  actual: (not (< 11804 3660))
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.xray-test

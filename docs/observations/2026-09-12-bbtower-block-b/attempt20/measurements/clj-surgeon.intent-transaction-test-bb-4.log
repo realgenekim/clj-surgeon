@@ -1,0 +1,6 @@
+
+Testing clj-surgeon.intent-transaction-test
+
+Ran 69 tests containing 701 assertions.
+0 failures, 0 errors.
+{:runtime :bb, :namespace clj-surgeon.intent-transaction-test, :elapsed-ms 5025, :result {:test 69, :pass 701, :fail 0, :error 0, :type :summary}, :tmpdir "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-1304660-233780ab", :home "/home/forge"}

@@ -1,0 +1,16 @@
+lanes: --ns -- 8 namespace(s), home-isolated false
+
+Testing clj-surgeon.reader-eval-fence-test
+
+Testing clj-surgeon.mission-run-test
+proposal-display-bytes {:compact 1336, :full 33671}
+
+Testing clj-surgeon.show-form-test
+
+Testing clj-surgeon.split-proof-gate-boundary-test
+
+Testing clj-surgeon.xray-test
+
+Testing clj-surgeon.mission-typist-executor-test
+
+Testing clj-surgeon.mission-git-boundary-test

@@ -13,9 +13,10 @@
    Symbol-collision rules (override the default reader-conditional split with a
    project-supplied rewrite — e.g. RPC-style rename-and-tag) live in a sibling
    namespace and consume the same body-pairing data structure."
-  (:require [rewrite-clj.zip :as z]
-            [rewrite-clj.node :as n]
-            [clojure.string :as str]))
+  (:require
+   [clojure.string :as str]
+   [rewrite-clj.node :as n]
+   [rewrite-clj.zip :as z]))
 
 ;; ============================================================
 ;; ns / require parsing
@@ -227,25 +228,11 @@
          "   :cljs " cljs-s ")")))
 
 (defn- emit-strict-body-split
-  "Fallback when body-form counts don't align: dump each side's entire body
-   into a single splicing reader conditional. The output is mechanically
-   correct — semantically equivalent to the two original files — but the LLM
-   may want to refactor to per-form `#?(:clj X :cljs Y)` afterwards."
+  "Fallback for unequal counts: one non-splicing conditional per body form.
+   Top-level #?@ is illegal on the JVM. Keep each platform's source and order."
   [clj-bodies cljs-bodies]
-  (let [clj-block  (str/join "\n\n             " clj-bodies)
-        cljs-block (str/join "\n\n             " cljs-bodies)]
-    (cond
-      (and (seq clj-bodies) (seq cljs-bodies))
-      [(str "#?@(:clj  [" clj-block "]\n"
-            "    :cljs [" cljs-block "])")]
-
-      (seq clj-bodies)
-      [(str "#?@(:clj [" clj-block "])")]
-
-      (seq cljs-bodies)
-      [(str "#?@(:cljs [" cljs-block "])")]
-
-      :else [])))
+  (into (mapv #(str "#?(:clj " % ")") clj-bodies)
+        (map #(str "#?(:cljs " % ")") cljs-bodies)))
 
 (defn- emit-bodies [clj-bodies cljs-bodies]
   (if (= (count clj-bodies) (count cljs-bodies))

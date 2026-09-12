@@ -1,0 +1,42 @@
+{:attempt 12
+ :recorded-at "2026-09-12 11:21:00 UTC"
+ :verdict :pass-with-repair
+ :branch "bb-rewrite-tower-local"
+ :base "da247b05d4169b4704e60d081bbe158d096ac34b"
+ :verified-source-tip "843c79104ddcd77f204190ee693747f05413fa8f"
+ :findings
+ ["BB children ignored TMPDIR and selected /tmp in all eight red cases."
+  "One bb launch site now passes java.io.tmpdir with SELF_TEST_TMP fallback semantics."
+  "Initial witness placement violated fast purity and lacked census registration; repaired without removing any witness."
+  "XDG-aware artifact publication failures are separate from bb temp selection."
+  "No newly visible /tmp entries after final prewarm."]
+ :measurements
+ {:red {:test 1 :pass 16 :fail 8 :error 0 :log "red.log"}
+  :initial-green {:tests 41 :assertions 291 :fail 0 :error 0 :log "green.log"}
+  :test-fast {:invocations 1 :exit 2 :tests 1241 :assertions 11775
+              :fail 2 :error 0 :fast-sum-ms 42891 :fast-ceiling-ms 60000
+              :log "test-fast.log" :receipt "fast-receipt.edn"}
+  :repair-pure {:tests 68 :assertions 799 :fail 0 :error 0 :log "repair-pure.log"}
+  :repair-boundary {:tests 1 :assertions 24 :fail 0 :error 0 :log "repair-boundary.log"}
+  :prewarm {:invocations 1 :exit 0 :state :passed :problems [] :landing? false
+            :run-id "a6d7952d-420e-4190-bb66-b050feb26336"
+            :wall-ms 391681 :fast-sum-ms 44420 :fast-ceiling-ms 60000
+            :integration-sum-ms 68293 :integration-ceiling-ms 240000
+            :bb-sum-ms 238097 :bb-ceiling-ms 343102 :bb-makespan-ms 87700
+            :alias-sum-ms 83311 :alias-ceiling-ms 1800000
+            :log "gate.log" :verbatim "gate.md" :receipt "gate-receipt.edn"}
+  :tmp {:new-final-entries 0 :new-final-clj-surgeon-entries 0
+        :before "tmp-before.txt" :before-gate "tmp-before-gate.txt"
+        :after "tmp-after.txt" :new-all "tmp-new-all.txt" :new-gate "tmp-new-gate.txt"
+        :proof-scope :endpoint-listings}}
+ :commits [{:kind :red :sha "7abd2bb21dd4e0a44b4df12838ad067c760d5459"}
+           {:kind :green :sha "7e63d53d2c004df2dd4a42f8c9871490c9afe385"}
+           {:kind :repair :sha "843c79104ddcd77f204190ee693747f05413fa8f"}]
+ :source-edit-table "commands.md"
+ :write-audit "write-audit.md"
+ :least_sure ["Static write inventory does not enumerate all conditional third-party writes."
+              "Endpoint ls comparisons cannot prove absence of transient files."
+              "Literal TMPDIR policy matches Makefile; no new mount/symlink validation."]
+ :disagreements ["The once-only test-fast failed; repaired fast coverage passed in final prewarm."]
+ :owed ["Fable external-state/write-envelope follow-up."
+        "Independent review and packet/landing decision; prewarm is not battery freshness."]}

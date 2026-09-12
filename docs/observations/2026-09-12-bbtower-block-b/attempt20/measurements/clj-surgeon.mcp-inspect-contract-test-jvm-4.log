@@ -1,0 +1,8 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.mcp-inspect-contract-test
+
+Ran 28 tests containing 339 assertions.
+0 failures, 0 errors.
+{:runtime :jvm, :namespace clj-surgeon.mcp-inspect-contract-test, :elapsed-ms 297, :result {:test 28, :pass 339, :fail 0, :error 0, :type :summary}, :tmpdir "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-2801340-715a2be1", :home "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-2801340-715a2be1/home"}

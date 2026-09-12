@@ -1,7 +1,9 @@
 (ns clj-surgeon.cljc.analyze-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [clj-surgeon.cljc.analyze :as ana]
-            [clj-surgeon.cljc.merge :as m]))
+  {:lane :fast}
+  (:require
+   [clj-surgeon.cljc.analyze :as ana]
+   [clj-surgeon.cljc.merge :as m]
+   [clojure.test :refer [deftest is testing]]))
 
 (defn- read-fixture [path]
   (slurp (str "test-fixtures/cljc/merge/" path)))

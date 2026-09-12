@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.move-dependency-test, :runtime :bb, :mode "test", :started-at "2026-09-12T19:12:06.188259835Z", :elapsed-ms 145, :status :passed, :result {:test 23, :pass 100, :fail 0, :error 0, :type :summary}}

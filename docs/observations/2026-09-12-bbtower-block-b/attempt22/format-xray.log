@@ -1,0 +1,12 @@
+standard-clj fix v0.29.0
+
+✓ /src/clj_surgeon/edit_dsl.clj [18.19ms]
+F /test/clj_surgeon/xray_test.clj [15.53ms]
+
+All 2 files formatted with Standard Clojure Style 👍 [42.45ms]
+standard-clj fix v0.29.0
+
+✓ /src/clj_surgeon/edit_dsl.clj [16.75ms]
+✓ /test/clj_surgeon/xray_test.clj [13.87ms]
+
+All 2 files formatted with Standard Clojure Style 👍 [38.74ms]

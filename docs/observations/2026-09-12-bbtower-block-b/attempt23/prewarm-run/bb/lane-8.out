@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

@@ -1,0 +1,24 @@
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

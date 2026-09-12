@@ -1,0 +1,22 @@
+
+Testing clj-surgeon.helper-extraction-test
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.mcp-inspect-contract-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.move-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.cljc.analyze-test
+
+Testing clj-surgeon.mcp-compact-edit-fields-test

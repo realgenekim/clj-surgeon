@@ -1,0 +1,13 @@
+lanes: --ns -- 6 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-namespace-split-test
+
+Testing clj-surgeon.rename-alias-receipt-test
+
+Testing clj-surgeon.mcp-create-files-test
+
+Testing clj-surgeon.mcp-expect-guard-test
+
+Testing clj-surgeon.mcp-extraction-plan-test
+
+Testing clj-surgeon.mcp-compact-edit-test

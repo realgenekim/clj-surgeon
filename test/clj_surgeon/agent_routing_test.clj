@@ -1,4 +1,5 @@
 (ns clj-surgeon.agent-routing-test
+  {:lane :fast}
   (:require
    [babashka.fs :as fs]
    [clj-surgeon.agent-routing :as routing]

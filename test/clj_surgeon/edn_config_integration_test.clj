@@ -29,6 +29,7 @@
    to a babashka SCI update, the subprocess tests will still pass
    (and tell us the tool actually works — the nesting is our test
    infrastructure's problem, not the user's)."
+  {:lane :battery}
   (:require
    [babashka.process :as proc]
    [clj-surgeon.forms :as forms]

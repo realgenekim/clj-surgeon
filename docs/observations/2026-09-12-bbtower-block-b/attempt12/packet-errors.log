@@ -1,0 +1,7 @@
+target/gate-prewarm/3f55e7ca-01d5-47ab-99d7-47a9addd8c30/alias/lane-0.out:143:  actual: java.lang.IllegalArgumentException: Cannot open <nil> as a Reader.
+target/gate-prewarm/3f55e7ca-01d5-47ab-99d7-47a9addd8c30/alias/lane-0.out:780:  actual: java.lang.IllegalArgumentException: Cannot open <nil> as a Reader.
+target/gate-prewarm/3f55e7ca-01d5-47ab-99d7-47a9addd8c30/bb/lane-1.out:8:  actual: java.lang.IllegalArgumentException: Cannot open <nil> as a Reader.
+target/gate-prewarm/3f55e7ca-01d5-47ab-99d7-47a9addd8c30/alias/lane-1.out:8:  actual: java.io.FileNotFoundException: /home/forge/.local/state/clj-surgeon/artifacts/alias-migration-receipts/f0f1737b83f4b4ceb75fa3272ed6988730676aae6690acc8b4e70d12ce827969/peer-0.edn (No such file or directory)
+target/gate-prewarm/3f55e7ca-01d5-47ab-99d7-47a9addd8c30/alias/lane-1.out:651:  actual: java.lang.IllegalArgumentException: Cannot open <nil> as a Reader.
+target/gate-prewarm/3f55e7ca-01d5-47ab-99d7-47a9addd8c30/alias/lane-1.out:1196:  actual: java.io.FileNotFoundException: /home/forge/.local/state/clj-surgeon/artifacts/alias-migration-receipts/6da5ae92feaa4c0464920b0bef70eb84e809fd66ad7333a2ee83e64586a96777/retired/src/acid/fanout (No such file or directory)
+target/gate-prewarm/3f55e7ca-01d5-47ab-99d7-47a9addd8c30/alias/lane-1.out:2041:  actual: java.io.FileNotFoundException: /home/forge/.local/state/clj-surgeon/artifacts/alias-migration-receipts/1ce87ff8f1289bf5f84c7726b19c80dedee465fa7789ccfed87466040100c626/detail-caller-0.edn (No such file or directory)

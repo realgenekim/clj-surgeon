@@ -5,7 +5,9 @@
   required here, so baseline execution cannot fail merely loading new code."
   {:lane :battery}
   (:require
+   [babashka.process :as proc]
    [clj-surgeon.artifact-boundary-support :as boundary]
+   [clj-surgeon.battery-parallel-runner :as bp]
    [clj-surgeon.core :as core]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-admit-tool :as admit]
@@ -13,8 +15,8 @@
    [clj-surgeon.mcp-extraction :as kernel]
    [clj-surgeon.mcp-namespace-split-test :as split-boundary-fixture]
    [clj-surgeon.namespace-split-io :as split]
-   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.namespace-split-test :as split-fixture]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.require-change-boundary-test :as require-fixture]
    [clj-surgeon.require-change-io :as require-change]
    [clj-surgeon.txn-journal :as journal]
@@ -23,6 +25,28 @@
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :as t :refer [deftest is testing]]))
+
+(deftest bb-lane-child-honours-disk-tmpdir
+  ;; Packet 28bbdab4 at da247b05: bb File.createTempFile ignored TMPDIR.
+  ;; Launch the runner's actual bb prefix, replacing only the test payload
+  ;; with a property probe so even the red witness writes nothing to /tmp.
+  (doseq [[tmpdir expected] [["/var/tmp/forge/bbtower-fx" "/var/tmp/forge/bbtower-fx"]
+                             [nil "/var/tmp"] ["" "/var/tmp"]
+                             ["/tmp" "/var/tmp"] ["/tmp/nested" "/var/tmp"]
+                             ["/dev/shm" "/var/tmp"] ["/dev/shm/nested" "/var/tmp"]
+                             ["/var/tmp/space dir" "/var/tmp/space dir"]]]
+    (testing (str "TMPDIR=" (pr-str tmpdir))
+      (let [command (bp/bb-lane-command tmpdir "receipt.edn" '[clj-surgeon.a-test])
+            prefix (take-while #(not= "test/run_all.clj" %) command)
+            env (cond-> (dissoc (into {} (System/getenv)) "TMPDIR")
+                  (some? tmpdir) (assoc "TMPDIR" tmpdir))
+            result @(proc/process (into (vec prefix)
+                                        ["-e" "(print (System/getProperty \"java.io.tmpdir\"))"])
+                                  {:env env :out :string :err :string})]
+        (is (= ["test/run_all.clj" "--emit-edn" "receipt.edn" "--ns" "clj-surgeon.a-test"]
+               (vec (drop (count prefix) command))))
+        (is (= 0 (:exit result)) (:err result))
+        (is (= expected (:out result)))))))
 
 (defn- remove-tree! [root]
   (when (.exists (io/file root))

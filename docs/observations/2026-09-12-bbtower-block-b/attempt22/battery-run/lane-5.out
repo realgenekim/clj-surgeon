@@ -1,0 +1,18 @@
+lanes: --ns -- 9 namespace(s), home-isolated false
+
+Testing clj-surgeon.edn-config-integration-test
+
+Testing clj-surgeon.platform-selector-test
+
+Testing clj-surgeon.mcp-prepared-wire-test
+
+Testing clj-surgeon.core-discovery-test
+
+Testing clj-surgeon.rename-alias-performance-test
+4000-line planner seconds: 1.73595072
+
+Testing clj-surgeon.require-change-boundary-test
+
+Testing clj-surgeon.mission-git-fence-test
+
+Testing clj-surgeon.reader-eval-fence-test

@@ -1,0 +1,72 @@
+{:attempt 24
+ :verdict :go
+ :scope :branch-handoff
+ :completed-at "2026-09-12T21:05:24.796957263Z"
+ :tested-sha "c53fd9c59b44e3e72b4c9fd9ee4203d7018de01d"
+ :source-digest "60b573b5d2693d14703925855429ab0733ad0d264647346b22a58538cf2c5384"
+ :findings
+ [{:id :sol-round4-f1 :state :repaired
+   :red "red.log"
+   :expected [foo.bar demo.probe-test] :old-actual [demo.probe-test]
+   :mechanism "Extend and reuse form-identity namespace parsing; unknown require forms refuse before any reload."
+   :refusal :probe-require-unparsed :fields [:form :file]
+   :receipt-field :closure-expected}
+  {:id :test-registration :state :repaired
+   :evidence "checks/fast.log"
+   :repair "Derived census adds four named witnesses, removes none; existing sleep anchor moves 288 to 384."
+   :witness "census-repair.log"}
+  {:id :legacy-receipt-oracle :state :repaired
+   :evidence "restricted-gate.md"
+   :repair "Expected receipt includes literal closure-expected 1."
+   :witness "help-repair.log"}
+  {:id :observer-working-tree-writes :state :repaired
+   :evidence "prewarm-first-gate.md" :violations 4
+   :files ["restricted-summary.edn" "source.patch"]
+   :repair "Freeze workspace writes during the final prewarm; no source or isolation-rule change."
+   :witness "gate.md"}]
+ :measurements
+ {:focused {:tests 210 :assertions 4861 :failures 0 :errors 0 :log "focused-all.log"}
+  :sol-nine {:tests 9 :assertions 1135 :failures 0 :errors 0 :log "sol-nine.log"}
+  :refusal-census {:tests 1 :assertions 4 :registered-kinds 163 :log "refusal-census.log"}
+  :registration-repair {:tests 2 :assertions 9 :log "census-repair.log"}
+  :help-repair {:tests 1 :assertions 23 :log "help-repair.log"}
+  :real-probe {:reloaded ["clj-surgeon.fields" "clj-surgeon.forms" "clj-surgeon.forms-test"]
+               :closure-expected 3 :tests 24 :assertions 94 :failures 0
+               :elapsed-ms 82.17618 :log "real-probe-receipt.log"}
+  :fast {:exit 2 :wall-s 29 :tests 1244 :assertions 12560 :failures 3 :errors 0
+         :fast-sum-ms 45425 :fast-ceiling-ms 60000
+         :log "checks/fast.log" :receipt "fast-run/receipt.edn"}
+  :restricted {:diagnostic true :exit 2 :wall-s 172 :diagnostic-wall-s 171.65125091467053
+               :fast-sum-ms 46281 :integration-sum-ms 67183 :bb-runtime-sum-ms 243172
+               :source-digest "b672e951a0267f91c58fef48598c78cbcb83d15b36e6f363f09d4578e4b941df"
+               :aggregate-receipt-emitted false :log "restricted-gate.md"
+               :receipts "restricted-run/" :summary "restricted-summary.edn"}
+  :prewarm-first {:exit 2 :wall-s 172 :test-failures 0 :test-errors 0 :isolation-failures 4
+                  :fast-sum-ms 45031 :integration-sum-ms 67598 :bb-runtime-sum-ms 243350
+                  :source-digest "60b573b5d2693d14703925855429ab0733ad0d264647346b22a58538cf2c5384"
+                  :aggregate-receipt-emitted false :log "prewarm-first-gate.md"
+                  :receipts "prewarm-first-run/" :summary "prewarm-first-summary.edn"}
+  :prewarm-final {:state :passed :exit 0 :wall-s 400 :coordinator-wall-ms 398053
+                  :fast-sum-ms 46547 :fast-ceiling-ms 60000
+                  :integration-sum-ms 67157 :integration-ceiling-ms 240000
+                  :bb-runtime-sum-ms 242146 :bb-ceiling-ms 343102
+                  :post-pool-bb-diagnostic-ms 224319
+                  :suites {:mcp {:tests 1420 :assertions 16487}
+                           :bb {:tests 902 :assertions 8029}
+                           :alias {:tests 182 :assertions 3662}}
+                  :test-failures 0 :test-errors 0 :isolation-failures 0 :leak-failures 0
+                  :problems [] :all-required-stages-exit-zero true
+                  :log "gate.md" :receipt "prewarm.edn" :receipts "prewarm-final-run/"}}
+ :run-counts {:standalone-fast 1 :restricted-diagnostic 1 :real-prewarm 2}
+ :commits ["c40cb1acc19912d11b2a1d000104dede4e62943f"
+           "92fe425256561d36dbbe7307d0667798c473464d"
+           "5674f516133717a0dd33f7418bf0109c5f1168cd"
+           "58b33e652b5200232f5c4521b5202051e5a1b7eb"
+           "c53fd9c59b44e3e72b4c9fd9ee4203d7018de01d"]
+ :evidence-commit :this-commit
+ :dogfood "dogfood.md"
+ :least_sure ["Independent fence review of the expanded shared parser remains external."
+              "Historical fold and ceiling measurements were not repeated; no performance claim is made."]
+ :disagreements ["The existing shared parser needed extension for the full requested grammar; it was reused and extended, not duplicated."]
+ :owed ["Independent Fable/Sol fence review and branch shipping decision."]
+ :pushed false}

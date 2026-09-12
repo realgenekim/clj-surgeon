@@ -1,0 +1,52 @@
+.......s...s.EE....E
+======================================================================
+ERROR: test_a_120_byte_tmpdir_binds_a_real_slot_under_100_bytes (test_gate_slot.SunPathBudgetTest.test_a_120_byte_tmpdir_binds_a_real_slot_under_100_bytes)
+The brief's linux witness, driven to an actual bind().
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_gate_slot.py", line 428, in test_a_120_byte_tmpdir_binds_a_real_slot_under_100_bytes
+    sock = slot.claim(name)
+  File "/home/forge/src/clj-surgeon-bbtower/test/gate_slot.py", line 488, in claim
+    return _claim_path(name)
+  File "/home/forge/src/clj-surgeon-bbtower/test/gate_slot.py", line 436, in _claim_path
+    sock.bind(str(private))
+    ~~~~~~~~~^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied
+
+======================================================================
+ERROR: test_a_path_over_the_budget_is_a_TYPED_refusal_not_an_OSError (test_gate_slot.SunPathBudgetTest.test_a_path_over_the_budget_is_a_TYPED_refusal_not_an_OSError)
+The skiff got `AF_UNIX path too long` straight out of bind(): no
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_gate_slot.py", line 454, in test_a_path_over_the_budget_is_a_TYPED_refusal_not_an_OSError
+    slot.slot_name(unique_namespace(), 'admission')
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/forge/src/clj-surgeon-bbtower/test/gate_slot.py", line 350, in slot_name
+    path = str(_ensure_root()[0] / leaf)
+               ~~~~~~~~~~~~^^
+  File "/home/forge/src/clj-surgeon-bbtower/test/gate_slot.py", line 312, in _ensure_root
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/pathlib/__init__.py", line 1012, in mkdir
+    os.mkdir(self, mode)
+    ~~~~~~~~^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/var/tmp/forge/rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr'
+
+======================================================================
+ERROR: test_the_root_is_narrowed_to_0700_even_when_it_was_already_wide (test_gate_slot.SunPathBudgetTest.test_the_root_is_narrowed_to_0700_even_when_it_was_already_wide)
+/tmp is world-writable and sticky. `mkdir(mode=)` applies only when
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_gate_slot.py", line 474, in test_the_root_is_narrowed_to_0700_even_when_it_was_already_wide
+    root.mkdir(mode=0o777)
+    ~~~~~~~~~~^^^^^^^^^^^^
+  File "/usr/lib/python3.14/pathlib/__init__.py", line 1012, in mkdir
+    os.mkdir(self, mode)
+    ~~~~~~~~^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/var/tmp/forge/gate-mode-5d6542443ebb4c0fa4d762ddc993d9a6'
+
+----------------------------------------------------------------------
+Ran 20 tests in 0.376s
+
+FAILED (errors=3, skipped=2)
+make[1]: *** [Makefile:315: mcp-test-checks] Error 1

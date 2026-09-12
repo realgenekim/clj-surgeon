@@ -1,0 +1,12 @@
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.syntax-var-refs-test

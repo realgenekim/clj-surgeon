@@ -1,0 +1,25 @@
+lanes: --ns -- 7 namespace(s), home-isolated true
+
+Testing clj-surgeon.rename-alias-receipt-test
+
+Testing clj-surgeon.insert-forms-receipt-test
+
+Testing clj-surgeon.outline-memory-test
+
+Testing clj-surgeon.census-pool-test
+
+Testing clj-surgeon.mcp-combinable-transaction-test
+
+Testing clj-surgeon.mcp-relation-census-round20-test
+WORKSPACE-PARITY-ENUMERATION:
+  unresolvable-root-escaping-link      expected invalid-workspace-root   tool "invalid-workspace-root" cli "invalid-workspace-root" scanned 0  agree true
+  unresolvable-root-outside-absolute   expected invalid-workspace-root   tool "invalid-workspace-root" cli "invalid-workspace-root" scanned 0  agree true
+ROOT-SHAPE-PARITY-ENUMERATION:
+  plain            expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  trailing-slash   expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  double-slash     expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  dot              expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  dotdot           expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  dir-is-a-file    expected invalid-workspace-root   tool "invalid-workspace-root" cli "invalid-workspace-root" scanned 0  agree true
+
+Testing clj-surgeon.mcp-compact-edit-test

@@ -1,0 +1,6 @@
+
+Testing clj-surgeon.fix-declares-test
+
+Ran 13 tests containing 40 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.fix-declares-test, :runtime :bb, :mode "test", :started-at "2026-09-12T18:41:55.825047829Z", :elapsed-ms 99, :status :passed, :result {:test 13, :pass 40, :fail 0, :error 0, :type :summary}}

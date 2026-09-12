@@ -1,0 +1,18 @@
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.mission-usage-test
+
+Testing clj-surgeon.split-proof-gate-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.mission-candidate-test

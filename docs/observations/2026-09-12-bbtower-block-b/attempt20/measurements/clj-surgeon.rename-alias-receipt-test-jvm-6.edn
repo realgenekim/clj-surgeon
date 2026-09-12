@@ -1,0 +1,1 @@
+{:runtime :jvm, :namespace clj-surgeon.rename-alias-receipt-test, :elapsed-ms 516, :result {:test 1, :pass 59, :fail 0, :error 0, :type :summary}, :tmpdir "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3022133-7b521858", :home "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3022133-7b521858/home"}
