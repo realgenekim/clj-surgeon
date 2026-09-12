@@ -355,6 +355,79 @@
    'expect-count expect-count
    'analyze analyze})
 
+;; @spec DATACODE-SCI-001
+(defn sandbox-symbol-decision
+  "One allowlist decision as data. Lexical identities never become capabilities."
+  [sym locals]
+  (let [space (namespace sym)
+        unqualified (symbol (name sym))
+        allowed? (or (contains? locals sym)
+                     (and (nil? space) (some #{sym} sci-allowed-symbols))
+                     (and (= "clojure.core" space)
+                          (some #{unqualified} (concat pure-core-symbols macro-expansion-symbols)))
+                     (and (= "user" space) (contains? sci-bindings unqualified)))]
+    (when-not allowed?
+      {:sandbox/decision :deny :symbol sym})))
+
+(defn- sandbox-admission
+  "Analyze only trusted macro expansions; never evaluate the submitted form.
+   SCI remains the evaluator and the capability fence. The private expansion
+   context is never used to evaluate a user's expression or returned analyzer."
+  [form]
+  (let [ctx (sci/init {:namespaces {'user sci-bindings}
+                       :classes {'IllegalArgumentException IllegalArgumentException}
+                       :allow (conj sci-allowed-symbols 'macroexpand)})]
+    (letfn [(walk-many [xs locals] (some #(walk % locals) xs))
+            (bindings [pairs locals body]
+              (if (seq pairs)
+                (or (walk (second pairs) locals)
+                    (bindings (nnext pairs) (conj locals (first pairs)) body))
+                (walk-many body locals)))
+            (fn-body [parts locals]
+              (let [[locals parts] (if (symbol? (first parts))
+                                     [(conj locals (first parts)) (next parts)] [locals parts])
+                    arities (if (vector? (first parts)) [parts] parts)]
+                (some (fn [[args & body]]
+                        (when (vector? args)
+                          (walk-many body (into locals (remove #{'&} args))))) arities)))
+            (walk [node locals]
+              (cond
+                (symbol? node) (sandbox-symbol-decision node locals)
+                (seq? node)
+                (let [head (first node)
+                      bare (when (symbol? head) (symbol (name head)))
+                      denial (when (symbol? head) (sandbox-symbol-decision head locals))]
+                  (or denial
+                      (cond
+                        (and (symbol? head) (not (contains? locals head))
+                             (= 'quote bare)) nil
+                        (and (symbol? head) (not (contains? locals head))
+                             (= 'fn* bare)) (fn-body (next node) locals)
+                        (and (symbol? head) (not (contains? locals head))
+                             (#{'let* 'loop*} bare))
+                        (when (and (vector? (second node)) (even? (count (second node))))
+                          (bindings (second node) locals (nnext node)))
+                        (and (symbol? head) (not (contains? locals head))
+                             (#{'case 'case*} bare))
+                        (let [clauses (nnext node)]
+                          (or (walk (second node) locals)
+                              (walk-many (take-nth 2 (next clauses)) locals)
+                              (when (odd? (count clauses))
+                                (walk (last clauses) locals))))
+                        (and (symbol? head) (not (contains? locals head))
+                             (= 'new bare)) (walk-many (nnext node) locals)
+                        :else
+                        (let [macro-var (when (and (symbol? head) (not (contains? locals head)))
+                                          (sci/resolve ctx head))]
+                          (if (:macro (meta macro-var))
+                            (walk (sci/eval-form ctx (list 'macroexpand (list 'quote node))) locals)
+                            (walk-many node locals))))))
+                (coll? node) (walk-many node locals)
+                :else nil))]
+      (or (when-let [sym (forbidden-source-symbol form)]
+            {:sandbox/decision :deny :symbol sym})
+          (walk form #{})))))
+
 (defn- invalid-expression!
   ([expression reason]
    (invalid-expression! expression reason nil))
@@ -415,15 +488,14 @@
         (when (or (= :sci.core/eof form)
                   (not= :sci.core/eof trailing))
           (invalid! expression :expected-one-form))
-        (when-let [symbol (forbidden-source-symbol form)]
-          (invalid! expression :disallowed-symbol
-                    (ex-info "Capability-internal or host-interop symbol used as executable source"
-                             {:symbol symbol})))
+        (when-let [decision (sandbox-admission form)]
+          (throw (ex-info "Sandbox symbol admission refused" decision)))
         (:val (sci/eval-string+ context expression {:ns user-ns})))
       (catch Exception exception
         ;; JVM SCI adds an untyped :sci/error wrapper around host refusals.
         ;; Preserve the original expression refusal, including its cause/data.
         (let [causes (take-while some? (iterate ex-cause exception))
+              denial (some #(when (= :deny (:sandbox/decision (ex-data %))) %) causes)
               typed (some #(when (:error-type (ex-data %)) %) causes)
               error-type (:error-type (ex-data typed))]
           (if (and typed (not (#{:invalid-xray-path :invalid-xray-analyzer} error-type)))
@@ -433,15 +505,11 @@
                         (#{:invalid-xray-path :invalid-xray-analyzer} error-type)
                         error-type
 
-                        (some (fn [cause]
-                                (some #(str/includes? (or (ex-message cause) "") %)
-                                      ["is not allowed" "Unable to resolve symbol"
-                                       "Could not resolve symbol"]))
-                              causes)
+                        denial
                         :disallowed-symbol
 
                         :else :evaluation-failed)
-                      (or typed exception))))))))
+                      (or denial typed exception))))))))
 
 (defn- zipper-children
   [zloc]

@@ -6,6 +6,8 @@ prefix: MCP-OP
  #MCP Operation Contract Specifications
 
 This file is the stable intent registry for the MCP operation-contract leaf.
+
+- [x] **DATACODE-SCI-001**: When sandbox symbol admission denies executable syntax, the sandbox shall produce a `:sandbox/decision :deny` value that determines refusal classification independently of exception wording on JVM and Babashka. Lexical locals and quoted/case constants retain their existing meaning; typed host refusals remain typed. The private trusted-macro expansion context never evaluates the submitted expression or its returned analyzer.
 IDs are never reused. The status marker records whether the current code and
 tests witness the requirement.
 
