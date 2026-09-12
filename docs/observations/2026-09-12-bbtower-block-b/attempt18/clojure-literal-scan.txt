@@ -1,0 +1,141 @@
+test/clj_surgeon/split_proof_gate_test.clj:50:                   :java_tmpdir "/var/tmp/<owned-temp-directory>"}]
+test/clj_surgeon/split_proof_gate_test.clj:54:      (is (false? (safe? "/tmp/forge/sol")))
+test/clj_surgeon/mcp_hot_verify_test.clj:75:           {:port-file "/tmp/port" :reload [] :tests []}
+test/clj_surgeon/parser_admission_test.clj:344:    (doseq [p ["'" "`" "~" "~@" "@" "#'" "#_" "#=" "#?" "#?@"]]
+test/clj_surgeon/mission_commit_cli_test.clj:54:                    "--spec-file" "/var/tmp/forge/no-such-commit-override.edn")]
+test/clj_surgeon/edit_dsl_test.clj:231:  (doseq [expression ["(spit \"/tmp/clj-surgeon-must-not-write\" \"bad\")"
+test/clj_surgeon/edit_dsl_test.clj:245:                      "#=(spit \"/tmp/clj-surgeon-must-not-write\" \"bad\")"]]
+test/clj_surgeon/edit_dsl_test.clj:455:  (let [path (str "/tmp/clj-surgeon-must-not-write-" (random-uuid))
+test/clj_surgeon/edit_dsl_test.clj:513:  (let [expression "(spit \"/tmp/no\" \"bad\")"
+test/clj_surgeon/mcp_telemetry_test.clj:146:        (telemetry/start! {:mode :everything :directory "/tmp"}))))
+test/clj_surgeon/memory/oom_reproduction_test.clj:37:                                 "/var/tmp")))
+test/clj_surgeon/receipt_artifacts_boundary_test.clj:33:  (doseq [[tmpdir expected] [["/var/tmp/forge/bbtower-fx" "/var/tmp/forge/bbtower-fx"]
+test/clj_surgeon/receipt_artifacts_boundary_test.clj:34:                             [nil "/var/tmp"] ["" "/var/tmp"]
+test/clj_surgeon/receipt_artifacts_boundary_test.clj:35:                             ["/tmp" "/var/tmp"] ["/tmp/nested" "/var/tmp"]
+test/clj_surgeon/receipt_artifacts_boundary_test.clj:36:                             ["/dev/shm" "/var/tmp"] ["/dev/shm/nested" "/var/tmp"]
+test/clj_surgeon/receipt_artifacts_boundary_test.clj:37:                             ["/var/tmp/space dir" "/var/tmp/space dir"]]]
+test/clj_surgeon/receipt_artifacts_boundary_test.clj:166:    (is (re-find pattern "(is (.startsWith p \"/var/tmp/forge/edit-clojure-receipts/\"))"))
+test/clj_surgeon/receipt_artifacts_boundary_test.clj:169:    (is (not (re-find pattern "{:details_path \"/var/tmp/forge/require-change-receipts/d.edn\"}"))
+test/clj_surgeon/memory/journal_green_test.clj:50:                                 "/var/tmp")))
+test/clj_surgeon/tmp_leak_support_test.clj:50:    (is (true? (tmp-leak/literal-ram-path? "/tmp")))
+test/clj_surgeon/tmp_leak_support_test.clj:51:    (is (true? (tmp-leak/literal-ram-path? "/tmp/clj-surgeon-suite-1-abc")))
+test/clj_surgeon/tmp_leak_support_test.clj:55:    (is (false? (tmp-leak/literal-ram-path? "/var/tmp/forge")))
+test/clj_surgeon/tmp_leak_support_test.clj:56:    (is (false? (tmp-leak/literal-ram-path? "/var/tmpfsish")))))
+test/clj_surgeon/tmp_leak_support_test.clj:82:    (is (false? (tmp-leak/own-isolated-root? "/var/tmp/forge")))
+test/clj_surgeon/tmp_leak_support_test.clj:83:    (is (false? (tmp-leak/own-isolated-root? "/var/tmp/forge/other-seat-fixture"))))
+test/clj_surgeon/tmp_leak_support_test.clj:85:    (is (true? (tmp-leak/own-isolated-root? "/var/tmp/forge/clj-surgeon-suite-42-deadbeef")))))
+test/clj_surgeon/tmp_leak_support_test.clj:115:      (doseq [ram ["/tmp" "/tmp/x" "/dev/shm" "/dev/shm/y"]]
+test/clj_surgeon/tmp_leak_support_test.clj:117:          (is (= "/var/tmp" got)
+test/clj_surgeon/tmp_leak_support_test.clj:119:      (is (= "/var/tmp" (self-test-tmp ""))
+test/clj_surgeon/tmp_leak_support_test.clj:121:      (is (= "/var/tmp/forge" (self-test-tmp "/var/tmp/forge"))
+test/clj_surgeon/tmp_leak_support_test.clj:156:        disk "/var/tmp/forge"]
+test/clj_surgeon/tmp_leak_support_test.clj:215:    (let [env (#'tmp-leak/child-environment "/var/tmp/clj-surgeon-suite-42-node" isolate-home?)]
+test/clj_surgeon/tmp_leak_support_test.clj:217:      (is (= "/var/tmp/clj-surgeon-suite-42-node" (get env "TMPDIR")))
+test/clj_surgeon/tmp_leak_support_test.clj:218:      (is (= isolate-home? (contains? env "HOME"))))))
+test/clj_surgeon/tmp_leak_support_test.clj:320:    (let [message (tmp-leak/refusal-message (tmp-leak/base-refusal "/tmp"))]
+test/clj_surgeon/tmp_leak_support_test.clj:321:      (is (not (clojure.string/includes? message "/var/tmp/forge"))
+test/clj_surgeon/mcp_extraction_plan_test.clj:23:(def source-path "/tmp/sample-project/src/sample/core.clj")
+test/clj_surgeon/mcp_extraction_plan_test.clj:24:(def target-path "/tmp/sample-project/src/sample/moved.clj")
+test/clj_surgeon/mcp_extraction_plan_test.clj:25:(def caller-path "/tmp/sample-project/src/sample/caller.clj")
+test/clj_surgeon/mcp_extraction_plan_test.clj:28:  {:workspace-root "/tmp/sample-project"
+test/clj_surgeon/mcp_extraction_plan_test.clj:86:    (is (= {:workspace_root "/tmp/sample-project"
+test/clj_surgeon/tmp_leak_support.clj:304:     isolate-home? (assoc "HOME" (str (isolated-home root))))))
+test/clj_surgeon/tmp_leak_support.clj:362:                            (canonical (System/getProperty "user.home"))))
+test/clj_surgeon/tmp_leak_support.clj:367:                                           (pr-str (System/getProperty "user.home"))
+test/clj_surgeon/mission_display_test.clj:131:  (let [r (shell/sh "bin/mission" "show" "M-1" "--state-home" "/var/tmp/forge/astra-live-real1-fx/state")]
+test/clj_surgeon/mission_display_test.clj:137:        (is (= value ((requiring-resolve 'clj-surgeon.mission-cli/show) {:id "M-1" :state-home "/var/tmp/forge/astra-live-real1-fx/state"})))
+test/clj_surgeon/mcp_alias_migration_test.clj:7181:                                 :details_path "/var/tmp/forge/require-change-receipts/detail.edn"
+test/clj_surgeon/mcp_alias_migration_test.clj:7291:      (mcp-tool/handle-alias-migration nil {:workspace_root "/var/tmp/forge/rows-sublime/no-such-workspace"}
+test/clj_surgeon/mcp_alias_migration_test.clj:7325:;; used to default to the literal "/var/tmp/forge" -- unwritable, or worse
+test/clj_surgeon/mcp_alias_migration_test.clj:7334:    (is (not= "/var/tmp/forge" root)
+test/clj_surgeon/mcp_alias_migration_test.clj:7341:      (is (str/starts-with? root (System/getProperty "user.home"))
+test/clj_surgeon/mcp_alias_migration_test.clj:7368:                      "/tmp/clj-surgeon-spf001-ram-witness") nil
+test/clj_surgeon/mcp_alias_migration_test.clj:7389:  (let [home (io/file (System/getProperty "user.home"))
+test/clj_surgeon/mcp_alias_migration_test.clj:7400:  (let [root (str (System/getProperty "user.home")
+test/clj_surgeon/mcp_alias_migration_test.clj:7408:  (is (= "/var/tmp/forge" (artifacts/validate-artifact-root! "/var/tmp/forge"))))
+test/clj_surgeon/mcp_alias_migration_test.clj:7425:  (let [probe (str "/tmp/clj-surgeon-spf004-probe-" (System/nanoTime))]
+test/clj_surgeon/mission_provider_fallback_events_test.clj:27:  {:root "/var/tmp/forge" :route {:k 1 :provider {:id :openrouter}}
+test/clj_surgeon/mcp_contract_test.clj:312:                                     "/tmp/a.clj")
+test/clj_surgeon/mcp_contract_test.clj:428:           [:absolute-file (assoc-in valid-request ["changes" 0 "files"] ["/tmp/a.clj"])
+test/clj_surgeon/mission_test.clj:30:  (or (System/getenv "CLJ_SURGEON_MISSION_TMP") "/var/tmp/forge/mission-fx"))
+test/clj_surgeon/mcp_inspect_contract_test.clj:186:            (assoc-in forms-request ["requests" 0 "file"] "/tmp/a.clj")
+test/clj_surgeon/ls_tree_test.clj:207:                   :root "/tmp/myapp"
+test/clj_surgeon/ls_tree_test.clj:208:                   :outlines [["/tmp/myapp/src/core.clj"
+test/clj_surgeon/ls_tree_test.clj:213:        result (core/format-ls-tree-text projects "/tmp")]
+test/clj_surgeon/ls_tree_test.clj:241:                   :root "/tmp/proj"
+test/clj_surgeon/ls_tree_test.clj:242:                   :outlines [["/tmp/proj/src/core.clj"
+test/clj_surgeon/ls_tree_test.clj:247:        result (core/format-ls-tree-edn projects "/tmp")]
+test/clj_surgeon/split_proof_gate_boundary_test.clj:53:                            (is (.startsWith ^String (:java_tmpdir c) "/var/tmp/"))
+test/clj_surgeon/mcp_compact_relations_test.clj:1329:      (doseq [forbidden ["/home/" "/var/" "/tmp" "file:" ".git"
+test/clj_surgeon/mcp_feature_thread_test.clj:391:                  :scope {:workspace_root "/var/tmp/forge/no-such-root-9f3c"}})]
+test/clj_surgeon/mcp_feature_thread_test.clj:1788:                      :config (escaping-conventions "~/outside/*.clj")
+test/clj_surgeon/mcp_cold_verify_test.clj:39:                   "/tmp/cold-undo.edn" "receipt-hash")))
+test/clj_surgeon/mcp_cold_verify_test.clj:42:          (is (= "/tmp/cold-undo.edn" (:undo_receipt result)))
+test/clj_surgeon/workspace_onboarding_test.clj:24:                 {:workspace "/tmp/a workspace"
+test/clj_surgeon/workspace_onboarding_test.clj:26:                  :kondo-config-dir "/tmp/repository/.clj-kondo"})
+test/clj_surgeon/workspace_onboarding_test.clj:29:    (is (= "/tmp/a workspace" (:rootDir server)))
+test/clj_surgeon/workspace_onboarding_test.clj:35:    (is (= "/tmp/repository/.clj-kondo"
+test/clj_surgeon/workspace_onboarding_test.clj:151:                    "OLD_ROOT = \"/tmp/old\"\n\n"
+test/clj_surgeon/battery_parallel_test.clj:29:  (doseq [[tmpdir expected] [["/var/tmp/forge/bbtower-fx" "/var/tmp/forge/bbtower-fx"]
+test/clj_surgeon/battery_parallel_test.clj:30:                             [nil "/var/tmp"] ["" "/var/tmp"]
+test/clj_surgeon/battery_parallel_test.clj:31:                             ["/tmp" "/var/tmp"] ["/tmp/nested" "/var/tmp"]
+test/clj_surgeon/battery_parallel_test.clj:32:                             ["/dev/shm" "/var/tmp"] ["/dev/shm/nested" "/var/tmp"]
+test/clj_surgeon/battery_parallel_test.clj:33:                             ["/var/tmp/space dir" "/var/tmp/space dir"]]]
+test/clj_surgeon/battery_parallel_test.clj:111:        lane {:index 3 :namespaces asked :exit 0 :log "/tmp/lane-3.out"
+test/clj_surgeon/battery_parallel_test.clj:120:    (is (str/includes? msg "/tmp/lane-3.out")
+test/clj_surgeon/battery_parallel_test.clj:303:  (let [cmd (bp/lane-command "-J-Xmx512m" "/tmp/out.edn" '[clj-surgeon.a-test clj-surgeon.b-test])]
+test/clj_surgeon/battery_parallel_test.clj:305:            "clj-surgeon.mcp-test-runner" "--emit-edn" "/tmp/out.edn" "--ns"
+test/clj_surgeon/battery_parallel_runner.clj:453:                           ["/tmp" "/dev/shm"]))
+test/clj_surgeon/battery_parallel_runner.clj:454:                 "/var/tmp"
+test/clj_surgeon/extract_test.clj:109:           (#'extract/file-path->ns-name "/tmp/project/src/my/app.clj"))))
+test/clj_surgeon/extract_test.clj:125:           (#'extract/file-path->ns-name "/tmp/no-project/src/myapp/core.clj"
+test/clj_surgeon/fast_lane_isolation_test.clj:47:  (let [home (io/file (prop "user.home"))
+test/clj_surgeon/fast_lane_isolation_test.clj:68:    (is (= (.getCanonicalPath (io/file (prop "user.home")))
+test/clj_surgeon/fast_lane_isolation_test.clj:69:           (.getCanonicalPath (io/file (or (System/getenv "HOME") "/nonexistent"))))
+test/clj_surgeon/fast_lane_isolation_test.clj:70:        (str "user.home=" (prop "user.home") " but $HOME=" (System/getenv "HOME")
+test/clj_surgeon/mcp_formatter_test.clj:10:   `\"/tmp\"` arguments below are project-root STRINGS handed to an injected
+test/clj_surgeon/mcp_formatter_test.clj:76:                        "/tmp" ["format"] {"a.clj" "(ns a)"}))))
+test/clj_surgeon/mcp_formatter_test.clj:85:                     "/tmp" ["format" "{files}"] {"a.clj" "(ns a)"}
+test/clj_surgeon/mcp_relation_census_test.clj:1224:  "/tmp/clj-surgeon-census-not-decodable/root\ufffd")
+test/clj_surgeon/mcp_relation_census_test.clj:4019:        absolute "/tmp/census15-fx/nope.clj"]
+test/clj_surgeon/mcp_relation_census_test.clj:4979:;;   error = "/tmp/census17-sol-fx/workspace/src/app/loopa.clj: Too many levels
+test/clj_surgeon/mcp_process_test.clj:48:  ;; RATCHET (2026-09-04): was a hard-coded "/tmp/..." string; the seat
+test/clj_surgeon/mcp_process_test.clj:191:                       (str (System/getProperty "user.home") "/bin")))
+test/clj_surgeon/mcp_process_test.clj:214:  (doseq [[input expected] [[nil "/var/tmp"] ["" "/var/tmp"] ["  " "/var/tmp"]
+test/clj_surgeon/mcp_process_test.clj:215:                            ["/tmp" "/var/tmp"] ["/tmp/x" "/var/tmp"]
+test/clj_surgeon/mcp_process_test.clj:216:                            ["/dev/shm" "/var/tmp"] ["/dev/shm/x" "/var/tmp"]
+test/clj_surgeon/mcp_process_test.clj:217:                            ["/var/tmp/with spaces" "/var/tmp/with spaces"]
+test/clj_surgeon/mcp_process_test.clj:218:                            ["/tmp-safe" "/tmp-safe"]]]
+test/clj_surgeon/mcp_process_test.clj:220:  (with-redefs [process/selected-temp-root (constantly "/var/tmp/with spaces")]
+test/clj_surgeon/mcp_process_test.clj:242:                   (run-admitted [analyzer "0.08"] "/tmp" rendezvous-timeout-ms))))
+test/clj_surgeon/mcp_process_test.clj:299:    (spit lock-path "{:pid 999999 :cwd \"/tmp/dead-owner\"}")
+test/clj_surgeon/mcp_process_test.clj:318:                "/tmp"
+test/clj_surgeon/mcp_process_test.clj:338:            successor (run-admitted [analyzer "0"] "/tmp" rendezvous-timeout-ms)]
+test/clj_surgeon/mcp_process_test.clj:374:        owner (start-process "/tmp" [(str shim) (str (/ owner-hold-ms 1000.0))]
+test/clj_surgeon/mcp_process_test.clj:380:      (let [waiter (start-process "/tmp" [(str shim) "0"] waiter-environment)]
+test/clj_surgeon/mcp_process_test.clj:418:      (let [result (run-admitted ["clj-kondo"] "/tmp" rendezvous-timeout-ms)]
+test/clj_surgeon/mcp_process_test.clj:431:             "/tmp/project"
+test/clj_surgeon/mcp_process_test.clj:445:                  :cwd "/tmp"
+test/clj_surgeon/mcp_process_test.clj:493:                                "/tmp" rendezvous-timeout-ms)))]
+test/clj_surgeon/mcp_process_test.clj:509:                      :cwd "/tmp"
+test/clj_surgeon/mcp_process_test.clj:598:                                       (run-admitted [analyzer] "/tmp" rendezvous-timeout-ms))
+test/clj_surgeon/mcp_process_test.clj:601:                  (run-admitted [analyzer] "/tmp" rendezvous-timeout-ms)
+test/clj_surgeon/mcp_process_test.clj:625:   "--mission-cwd" "/tmp"
+test/clj_surgeon/mcp_process_test.clj:626:   "--mission-command-cwd" "/tmp"
+test/clj_surgeon/mcp_process_test.clj:639:                        "/tmp"
+test/clj_surgeon/mcp_process_test.clj:649:                        "/tmp"
+test/clj_surgeon/mcp_process_test.clj:662:                           "/tmp"
+test/clj_surgeon/mcp_process_test.clj:691:        result (apply shell/sh (concat command [:dir "/tmp"]))]
+test/clj_surgeon/xray_test.clj:121:           ["(spit \"/tmp/xray-must-not-write\" \"bad\")" :disallowed-symbol]]]
+test/clj_surgeon/mcp_namespace_split_test.clj:76:                       :java_tmpdir "/var/tmp/<owned-temp-directory>"}
+test/clj_surgeon/mcp_namespace_split_test.clj:84:                                  :java_tmpdir "/tmp"
+test/clj_surgeon/mcp_namespace_split_test.clj:232:        (doseq [path ["profile.edn" (str inside) "/var/tmp/forge/rows-sublime/no-such-profile.edn"]]
+test/clj_surgeon/mcp_namespace_split_test.clj:243:      (boundary/cli! {:op :split-ns! :request fixture/request :profile-file "/var/tmp/proof.edn"})
+test/clj_surgeon/mcp_namespace_split_test.clj:244:      (is (= "/var/tmp/proof.edn" (get-in @seen [:verification :profile-file])))
+test/clj_surgeon/mcp_inspect_tool_test.clj:1094:            "{:paths [\"src\" \"../escape\" \"/tmp/absolute\"] :aliases {:test {:extra-paths [\"test\"]}}}\n")
+test/clj_surgeon/mcp_tool_test.clj:1177:                  :undo_receipt "/tmp/receipt.edn"
+test/clj_surgeon/mcp_tool_test.clj:1186:                                 :cwd "/tmp/workspace"
+test/clj_surgeon/mcp_tool_test.clj:1260:                    :undo_receipt "/tmp/receipt.edn"
+test/clj_surgeon/mcp_tool_test.clj:1269:                                   :cwd "/tmp/workspace"
+test/clj_surgeon/mcp_tool_test.clj:2586:              :details_path "/tmp/details.edn"}
+test/clj_surgeon/mcp_tool_test.clj:2643:               :details_path "/tmp/d.edn"

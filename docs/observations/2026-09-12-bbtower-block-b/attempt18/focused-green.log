@@ -1,0 +1,18 @@
+{"command": ["bash", "-c", "python3 -B docs/observations/2026-09-12-bbtower-block-b/attempt18/static-probes.py && python3 -B -m unittest discover -s test/oracles -p test_cell_b_oracle.py && make --no-print-directory clj-kondo-admission-path-self-test"], "writable_roots": ["/home/forge/src/clj-surgeon-bbtower", "/var/tmp/forge/bbtower-fx/packets/46825359-73af-4d39-84c9-09ae15ecef90/tmp", "/home/forge/.local/state/clj-surgeon"], "writable_devices": ["/dev/null"], "started": 1789220654.2938466, "diagnostic": true}
+/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt18/restricted-gate.py:35: DeprecationWarning: Due to '_pack_', the 'Rule' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+  class Rule(ctypes.Structure):
+test_cell_b_shell_default (__main__.ScratchWriters.test_cell_b_shell_default) ... ok
+test_papercut_baseline_mirror (__main__.ScratchWriters.test_papercut_baseline_mirror) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.008s
+
+OK
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.923s
+
+OK
+Installed analyzer gate /var/tmp/forge/bbtower-fx/packets/46825359-73af-4d39-84c9-09ae15ecef90/tmp/clj-surgeon-kondo-path.yeUkhZ/home/bin/clj-kondo-admission and shell entrance /var/tmp/forge/bbtower-fx/packets/46825359-73af-4d39-84c9-09ae15ecef90/tmp/clj-surgeon-kondo-path.yeUkhZ/home/bin/clj-kondo
+clj-kondo admission path regression passed
+{"exit": 0, "wall_seconds": 6.398247377946973}

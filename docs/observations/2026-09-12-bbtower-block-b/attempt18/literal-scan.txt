@@ -1,0 +1,20 @@
+test/oracles/test_cell_b_oracle.py:15:    with tempfile.TemporaryDirectory(dir="/var/tmp", prefix="b07-lint-") as tmp:
+test/oracles/test_gate_slot.py:72:    path = Path(tmpdir).resolve() if tmpdir else Path('/var/tmp')
+test/oracles/test_gate_slot.py:74:           for root in (Path('/tmp'), Path('/dev/shm'))):
+test/oracles/test_gate_slot.py:75:        return Path('/var/tmp')
+test/oracles/test_gate_slot.py:387:        for supplied, expected in [(None, '/var/tmp'), ('', '/var/tmp'),
+test/oracles/test_gate_slot.py:388:                                   ('/tmp', '/var/tmp'), ('/tmp/seat', '/var/tmp'),
+test/oracles/test_gate_slot.py:389:                                   ('/dev/shm/seat', '/var/tmp'),
+test/oracles/test_gate_slot.py:390:                                   ('/var/tmp/seat', '/var/tmp/seat'),
+test/oracles/test_gate_slot.py:391:                                   ('/tmp-seat', '/tmp-seat')]:
+test/oracles/test_gate_slot.py:417:        self.assertEqual(Path('/tmp/csg-501'), root)
+test/oracles/test_gate_slot.py:424:        self.assertEqual(Path('/var/tmp/mine'),
+test/oracles/test_gate_slot.py:425:                         slot.slot_root_for('darwin', DARWIN_TMPDIR, 501, '/var/tmp/mine'))
+test/oracles/test_gate_slot.py:428:        self.assertEqual(Path('/var/tmp/forge/clj-surgeon-gate'),
+test/oracles/test_gate_slot.py:429:                         slot.slot_root_for('linux', '/var/tmp/forge', 1002))
+test/oracles/test_gate_slot.py:483:        # Bind inside this test's writable envelope, never the shared /tmp root.
+test/oracles/test_gate_slot.py:547:        """/tmp is world-writable and sticky. `mkdir(mode=)` applies only when
+test/oracles/namespace_split_papercut_oracle.py:29:mirror under /var/tmp, deleted after the analyzer returns.  The
+test/oracles/namespace_split_papercut_oracle.py:52:   Runs `~/bin/clj-kondo --lint <views dir> <server.clj> <test dir>
+test/oracles/namespace_split_papercut_oracle.py:130:KONDO = os.path.expanduser("~/bin/clj-kondo")
+test/oracles/namespace_split_papercut_oracle.py:478:    with tempfile.TemporaryDirectory(prefix="split-oracle-", dir="/var/tmp") as mirror:

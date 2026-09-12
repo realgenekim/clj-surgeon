@@ -1,0 +1,24 @@
+
+Testing clj-surgeon.helper-extraction-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.split-proof-gate-test

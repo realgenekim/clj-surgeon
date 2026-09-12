@@ -1,0 +1,5 @@
+standard-clj fix v0.29.0
+
+F /test/clj_surgeon/mcp_helper_extraction_test.clj [37.48ms]
+
+1 file formatted with Standard Clojure Style 👍 [45.11ms]
