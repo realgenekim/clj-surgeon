@@ -1,0 +1,30 @@
+{
+  "recorded_utc": "2026-09-12T06:28:25.465957+00:00",
+  "subject": "e43e38cc6af383eaebac759cbaa7f229b22ee322",
+  "manifest_id": "0d0ceaeddc85f35573a6ca6e2a2e08fd2a1594d062a5e97e89b4c42e57f6df67",
+  "write_roots": [
+    "/home/forge/src/clj-surgeon-bbtower",
+    "/var/tmp/forge/packets/3c45c1c3-78ce-45f9-b5c9-a3500162425e/tmp",
+    "/var/tmp/forge/packets/3c45c1c3-78ce-45f9-b5c9-a3500162425e/codex-home",
+    "/var/tmp/forge/packets/3c45c1c3-78ce-45f9-b5c9-a3500162425e/claude-home",
+    "/home/forge/src/clj-surgeon/.git/worktrees/clj-surgeon-bbtower",
+    "/home/forge/src/clj-surgeon/.git/objects"
+  ],
+  "probe": {
+    "operation": "pathlib.Path(path).mkdir()",
+    "path": "/var/tmp/forge/bbtower-fx/attempt3-admission-3c45c1c3",
+    "observed_output": "fixture-root mkdir: PermissionError(13, 'Permission denied')",
+    "created": false,
+    "jvms": 0
+  },
+  "sha256": {
+    "/var/tmp/forge/packets/3c45c1c3-78ce-45f9-b5c9-a3500162425e/context-pack.md": "a1a8d75ebd0bfa82ab1029708ce772b02e763afc69bd027d12838311d1fca4f1",
+    "/var/tmp/forge/packets/3c45c1c3-78ce-45f9-b5c9-a3500162425e/environment.edn": "98a3cb0ae090a4f6196a74bd36c2eafddac720236181cac5c1bf56ef9af0081e",
+    "/var/tmp/forge/packets/3c45c1c3-78ce-45f9-b5c9-a3500162425e/manifest.edn": "0d0ceaeddc85f35573a6ca6e2a2e08fd2a1594d062a5e97e89b4c42e57f6df67"
+  },
+  "source": {
+    "file": "/home/forge/bin/lib/packet.py",
+    "line": 166,
+    "text": " c['write_roots']=[str(w),str(tmp),str(home),str(claudehome),str(gitdir.resolve()),str(objects.resolve())]"
+  }
+}
