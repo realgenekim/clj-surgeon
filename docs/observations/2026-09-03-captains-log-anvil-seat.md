@@ -5450,3 +5450,24 @@ Outside the sandbox now: full test/run.sh on a51f202 with PYTHONDONTWRITEBYTECOD
 tracked pyc files drift when a test imports them; the drift rule would refuse the install).
 Then RUN_SCOPED_CIRCUITS=1 install.sh, whose circuit index is content-addressed by the
 installed closure, so no index needs setting aside this time.
+
+## 2026-09-12T11:01:34Z — Block 4 INSTALLED and PROVEN: ship v3.12 INSTALL OK at 10:46:24Z; first check-only prewarm packet running
+
+Outside the sandbox on a51f202: test/run.sh exit 0, 114 PASS, two fresh scoped circuits
+(claude 1d46d90d, codex eb0c6fc6), the real-JVM worker-options witness green, N1 green.
+Tree clean (PYTHONDONTWRITEBYTECODE=1 kept the tracked pyc files still). Then install.sh
+with RUN_SCOPED_CIRCUITS=1 and the same witness root so the content-addressed circuit
+index was reused: INSTALL OK stamp=20260912T104624Z, PROVEN=true, backup under
+/var/tmp/forge/ship/backups/20260912T104624Z; ~/bin/lib/packet.py digest equals the staged
+bytes. Rollback verb unchanged: install.sh --rollback <stamp>.
+
+What v3.12 changes on this seat: packets no longer override a worker's -Xmx or tmpdir
+(JAVA_TOOL_OPTIONS only); the seat's independent reviewer can be named to a live ship when
+it resolves under ~/bin; a brief with an empty :order and a :checks list is a CHECK-ONLY
+packet that runs the check under lease and Landlock and emits the admission event;
+measurement events carry per-process epochs; the fixture-in-production oracle keys on
+epoch and event id, never on history run ids alone.
+
+First use, immediately: packet 28bbdab4, check-only, subject da247b05 (block B tip),
+:checks [make landing-gate-prewarm]. If it goes green, the ship's prewarm-required
+admission can be satisfied for the first time by the seat's own tooling.
