@@ -6289,3 +6289,12 @@ FIRST, committed red, in a cadence the gate runs; then a pre-parse nesting bound
 typed refusal and a Throwable boundary with a second typed kind; evidence stays
 uncommitted under attempt26/ (rule 2). The management change worked on its first use:
 Sol named the class, the oracle, and left no patch, so this is one round instead of four.
+
+## 2026-09-12T23:37:28Z — attempt 26 refused by the Codex content filter; routed to Opus
+
+Astra's session died in 40 s: "This content was flagged for possible cybersecurity risk"
+on a brief that asks for a nesting-depth fuzz of our own servlet and a typed refusal. The
+sol-live-on-anvil-seat memory already says the filter refuses symlink/confinement fixtures
+and Opus takes those; this is the same class (crash-shaped inputs). Opus is building
+attempt 26 in the bbtower worktree on bb-rewrite-tower-land-local from df86ecda, same
+brief, evidence uncommitted. Data-not-code round 6 waits until it releases the box.
