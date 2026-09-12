@@ -6270,3 +6270,22 @@ Seventeenth check-only prewarm (packet 72940e5e) exit 0 at df86ecda, receipt bou
 round-7 closure delivered: the counted battery alone, receipt df86ecda, battery-fresh OK),
 battery on fable/battery-receipt-df86ecda (pre-created), fast lane beside. Code byte-identical
 to the candidate he reviewed in round 7. Data-not-code round 6 waits for the box.
+
+## 2026-09-12T23:35:59Z — Sol round 8 NO-GO, and the first verdict that names its CLASS; attempt 26 builds the oracle first
+
+Verdict 8 published. The round-7 closure HELD: battery-fresh OK at 8c542ede, code
+byte-identical to the reviewed candidate; CLJC, fold, ceiling, accounting and landing
+coverage all held again. New F1, written under the fence rule installed an hour ago:
+"CLASS: bounded, malformed EDN request shapes whose parser throws a Throwable outside
+Exception. The required class oracle is a depth/prefix fuzz over every EDN container shape
+at the 8,192-character servlet boundary." 8,192 nested brackets through the servlet:
+StackOverflowError escaped, zero wire bytes; all four container shapes overflow through
+read-bounded; the servlet catches only Exception. A real hole: a request that kills the
+shared warm image's thread and a client that reads zero bytes as a verdict.
+
+Attempt 26 (Astra, pid 3808907), branched from the receipt commit df86ecda as
+bb-rewrite-tower-land-local so the battery receipt stays an ancestor: the fuzz oracle
+FIRST, committed red, in a cadence the gate runs; then a pre-parse nesting bound with a
+typed refusal and a Throwable boundary with a second typed kind; evidence stays
+uncommitted under attempt26/ (rule 2). The management change worked on its first use:
+Sol named the class, the oracle, and left no patch, so this is one round instead of four.
