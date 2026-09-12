@@ -435,7 +435,46 @@ class SunPathBudgetTest(unittest.TestCase):
         bind() the long path -- the cap is enforced by the KERNEL, so the
         witness has to reach it.
         """
-        short_root = self.scratch_root()
+        # Packet run5 at f19a6a44: writable TMPDIR alone is insufficient;
+        # the private publication leaf must also fit the 100-byte budget.
+        spelling = slot.short_slot_root(os.getuid()).name
+        candidates = []
+        declared = os.environ.get('CLJ_SURGEON_GATE_ROOT')
+        if declared:
+            candidates.append(('CLJ_SURGEON_GATE_ROOT', Path(declared)))
+        candidates.extend([
+            ('policy TMPDIR', scratch_base(os.environ.get('TMPDIR')) / spelling),
+            ('policy fallback', scratch_base(None) / spelling)])
+        observations = []
+        short_root = None
+        for label, candidate in candidates:
+            length = len(str(candidate).encode('utf-8'))
+            created = False
+            try:
+                try:
+                    candidate.mkdir(mode=0o700)
+                    created = True
+                except FileExistsError:
+                    pass
+                # os.access cannot witness Landlock write restrictions.
+                with tempfile.TemporaryFile(dir=candidate):
+                    pass
+                writable = True
+            except OSError:
+                writable = False
+            if created:
+                self.addCleanup(candidate.rmdir)
+            total = length + 1 + slot.LONGEST_LEAF
+            observations.append('%s=%s root_bytes=%d sun_path_bytes=%d writable=%s'
+                                % (label, candidate, length, total, writable))
+            if writable and total <= slot.SUN_PATH_BUDGET:
+                short_root = candidate
+                print('sun_path witness selected: ' + observations[-1], flush=True)
+                break
+        if short_root is None:
+            raise unittest.SkipTest(
+                'no writable root short enough for a 100-byte sun_path under this envelope; '
+                + '; '.join(observations))
         padding = 120 - len(str(short_root).encode('utf-8')) - 1
         self.assertGreater(padding, 0, 'TMPDIR must leave room for a 120-byte witness')
         long_tmpdir = short_root / ('t' * padding)
@@ -449,7 +488,7 @@ class SunPathBudgetTest(unittest.TestCase):
         chosen = slot.slot_root_for('linux', str(long_tmpdir), os.getuid())
         self.assertEqual(slot.short_slot_root(os.getuid()), chosen)
 
-        namespace = uuid.uuid4().hex  # Private root already isolates this witness.
+        namespace = uuid.uuid4().hex  # Unique even when the short root is shared.
         previous = {key: os.environ.get(key)
                     for key in ('TMPDIR', 'GATE_SLOT_BACKEND', 'CLJ_SURGEON_GATE_ROOT')}
         os.environ['TMPDIR'] = str(long_tmpdir)
@@ -467,6 +506,7 @@ class SunPathBudgetTest(unittest.TestCase):
             root = slot.slot_root()
             self.assertEqual(0o700, os.stat(root).st_mode & 0o777,
                              'the socket root must not be readable by the box')
+            print('sun_path witness branch: real bind; root=%s' % root, flush=True)
         finally:
             for key, value in previous.items():
                 if value is None:
