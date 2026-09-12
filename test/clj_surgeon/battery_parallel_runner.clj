@@ -435,7 +435,9 @@
   [java-opts out-path namespaces]
   (into (into ["clojure"] (remove str/blank? (str/split (or java-opts "") #"\s+")))
         (concat ["-M:clj-surgeon/test-deps" "-m"
-                 (if (every? lm/lane-of namespaces) "clj-surgeon.mcp-test-runner" "run-all")
+                 (if (some #(and (= :jvm (get lm/namespace-runtimes %))
+                                 (nil? (lm/lane-of %))) namespaces)
+                   "run-all" "clj-surgeon.mcp-test-runner")
                  "--emit-edn" (str out-path) "--ns"]
                 (map str namespaces))))
 
@@ -461,7 +463,7 @@
           exit (deref (future (:exit @p)) lane-timeout-ms ::timeout)
           timed-out? (= ::timeout exit)]
       (when timed-out? (proc/destroy-tree p) (try @p (catch Exception _ nil)))
-      {:index index :suite suite :started-ms started :completed-ms (System/currentTimeMillis)
+      {:index index :suite suite :runtime runtime :started-ms started :completed-ms (System/currentTimeMillis)
        :phase phase
        :namespaces (vec namespaces)
        :exit (if timed-out? :timeout exit)
@@ -890,7 +892,15 @@
    isolation verdict. Returns the isolation violation count."
   ([runs lanes wall-ms] (report! runs lanes wall-ms true))
   ([runs lanes wall-ms isolation?]
-   (let [vs (into (vec (mapcat :violations runs))
+   (let [bb-runs (filter #(= :bb (get lm/namespace-runtimes (:namespace %))) runs)
+         bb-sum (reduce + (map :elapsed-ms bb-runs))
+         bb-lanes (filter #(= :bb (:runtime %)) lanes)
+         bb-span (when (seq bb-lanes)
+                   (- (apply max (map :completed-ms bb-lanes))
+                      (apply min (map :started-ms bb-lanes))))
+         vs (into (cond-> (vec (mapcat :violations runs))
+                    (iso/lane-budget-violation :bb bb-sum)
+                    (conj (iso/lane-budget-violation :bb bb-sum)))
                   ;; @spec TEST-ISO-007 -- the LANE budget, over the union.
                   ;; The sum of the namespaces' walls is what a serial run
                   ;; would have paid, so this is the same number the serial
@@ -900,6 +910,8 @@
                           (iso/lane-budget-violation lane (reduce + (map :elapsed-ms rs))))
                         (when isolation? (group-by (comp lm/lane-of :namespace) runs))))]
      (binding [*out* *err*]
+       (println (format "bb-runtime: serial-equivalent %d ms; budget %d ms; makespan %s ms"
+                        bb-sum (:bb iso/lane-budget-ms) (or bb-span "unmeasured")))
        (println (format "\nnamespace walls (%d, slowest first, serial-equivalent total %d ms):"
                         (count runs) (reduce + (map :elapsed-ms runs))))
        (doseq [r (sort-by (comp - :elapsed-ms) runs)]

@@ -143,13 +143,30 @@
         "the report reads the same whichever lane a namespace landed in")))
 
 (deftest the-lane-budget-is-folded-over-the-union-not-per-lane
+  (testing "NEW bb budget is enforced even without JVM isolation; span is separate"
+    (with-redefs [lm/namespace-runtimes {'example.bb-test :bb}]
+      (doseq [[wall expected] [[399155 0] [399156 1]]]
+        (let [result (atom nil)
+              out (with-out-str
+                    (binding [*err* *out*]
+                      (reset! result
+                              (bp/report! [{:namespace 'example.bb-test :elapsed-ms wall :violations []}]
+                                          [{:index 0 :runtime :bb :started-ms 100 :completed-ms 120
+                                            :wall-ms 20 :exit 0 :namespaces ['example.bb-test]}]
+                                          25 false))))]
+          (is (= expected @result))
+          (is (str/includes? out (str "bb-runtime: serial-equivalent " wall " ms; budget 399155 ms; makespan 20 ms")))
+          (when (pos? expected)
+            (is (str/includes? out "bb lane took 399156 ms, over its 399155 ms budget")))))))
   ;; @spec TEST-ISO-007 -- the number the fleet pays is the SUM of the
   ;; namespaces' walls. A child holding a slice would report a five-minute
   ;; lane as forty seconds, which is a budget that can never fire.
   (let [runs (mapv (fn [i] {:namespace (nth (lm/namespaces-for :battery) i)
                             :elapsed-ms 1000000 :counters {} :violations []})
                    (range 3))
-        out (with-out-str (binding [*err* *out*] (bp/report! runs [] 12345)))]
+        out (with-out-str (binding [*err* *out*]
+                            (with-redefs [lm/namespace-runtimes {}]
+                              (bp/report! runs [] 12345))))]
     (is (str/includes? out "TEST-ISOLATION: 1 violation")
         "3 x 1 000 000 ms is over the battery lane's 1 800 000 ms budget")
     (is (str/includes? out "3000000 ms, over its 1800000 ms budget"))

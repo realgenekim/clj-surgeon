@@ -254,6 +254,23 @@ it); the battery lane to 007 alone (it exists to launch cold child JVMs).
   (at the ceiling passes, one ms past it refuses),
   `.../the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays`.
 
+  NEW bb runtime-lane budget (attempt8, 2026-09-12): **399,155 ms**.
+  The step-2 run records a serial bb-runtime namespace sum of 245,773 ms
+  and an original-fast sum of 36,944 ms. The fast ceiling is still 60,000:
+  margin = 60,000 / 36,944 - 1 = 0.6240796881766999. The new ceiling is
+  ceil(245,773 * 60,000 / 36,944) = 399,155 ms, rounded up to a whole ms.
+  Evidence: attempt8/test-fast.log and attempt8/test-fast/receipt.edn under
+  docs/observations/2026-09-12-bbtower-block-b/. This is a NEW declaration,
+  not restoration of any base budget; Fable ratifies it in review.
+  Charge each bb-runtime namespace once, independently of its cadence lane.
+  The original fast set remains independently charged even when executed by
+  bb, so these overlapping sums must not be added. Report the bb sum and bb
+  process-span makespan separately. Both hybrid and standalone bb suites
+  enforce the bb ceiling, including when JVM isolation is disabled.
+  At 399,155 ms accept; at 399,156 ms refuse naming bb and both numbers.
+  Witnesses: the lane-total witness above and
+  `battery-parallel-test/the-lane-budget-is-folded-over-the-union-not-per-lane`.
+
   Round-two gate margin (2026-09-09): compact-relations has an explicit
   18,000 ms namespace override, about twice its measured 8,836 ms under
   eight-worker contention (the four-worker fence measured 8,002/8,000 ms).
