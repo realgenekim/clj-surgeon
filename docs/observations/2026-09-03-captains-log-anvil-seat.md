@@ -5626,3 +5626,17 @@ the same way. Attempt 15 (Astra, pid 2465104): the oracle derives its roots from
 TMPDIR policy with the sun_path byte arithmetic kept exact; a census of every remaining
 /var/tmp/forge literal the gate executes, each kept or changed with a reason (negative
 paths and policy-fallback assertions stay); then test-fast and the prewarm.
+
+## 2026-09-12T13:12:26Z — attempt 15 PASS: gate-slot oracle inside the temp policy; fifth check-only prewarm running at f19a6a44
+
+Tip f19a6a44 (source 0d92fe92), pushed; report published as
+`2026-09-12-bbtower-block-b-attempt15-report.md` with the literal census beside it. Astra
+built a Landlock wrapper of its own for the red (every path outside a fresh TMPDIR
+read-only) and reproduced the three PermissionErrors exactly; the third was not the
+literal at all but the production short-root selection binding under /tmp/csg-<uid>,
+which only a real bind shows. The repaired oracle builds its exact 120-byte path under
+the policy TMPDIR and binds through a private short root; kernel bind, occupied-slot
+refusal, byte budget, directory mode and cleanup all still exercised, plus a policy
+table for empty, RAM-root, disk-root and prefix-boundary inputs. One test-fast, one
+prewarm (13:00:31 to 13:06:56Z, seven stages, no repair). Packet 2c4325e5 is the fifth
+check-only prewarm.
