@@ -7,7 +7,6 @@
    in the fast lane, with no JVM launched and no minutes spent."
   {:lane :fast}
   (:require
-   [babashka.process :as proc]
    [clj-surgeon.battery-parallel-runner :as bp]
    [clj-surgeon.gate-memory :as mem]
    [clj-surgeon.lane-manifest :as lm]
@@ -26,27 +25,16 @@
 
 (def ^:private units (mapv vector (sort (keys walls))))
 
-(deftest bb-lane-child-honours-disk-tmpdir
-  ;; Packet 28bbdab4 at da247b05: bb File.createTempFile ignored TMPDIR.
-  ;; Launch the runner's actual bb prefix, replacing only the test payload
-  ;; with a property probe so even the red witness writes nothing to /tmp.
+(deftest bb-lane-command-honours-disk-tmpdir
   (doseq [[tmpdir expected] [["/var/tmp/forge/bbtower-fx" "/var/tmp/forge/bbtower-fx"]
                              [nil "/var/tmp"] ["" "/var/tmp"]
                              ["/tmp" "/var/tmp"] ["/tmp/nested" "/var/tmp"]
                              ["/dev/shm" "/var/tmp"] ["/dev/shm/nested" "/var/tmp"]
                              ["/var/tmp/space dir" "/var/tmp/space dir"]]]
     (testing (str "TMPDIR=" (pr-str tmpdir))
-      (let [command (bp/bb-lane-command tmpdir "receipt.edn" '[clj-surgeon.a-test])
-            prefix (take-while #(not= "test/run_all.clj" %) command)
-            env (cond-> (dissoc (into {} (System/getenv)) "TMPDIR")
-                  (some? tmpdir) (assoc "TMPDIR" tmpdir))
-            result @(proc/process (into (vec prefix)
-                                        ["-e" "(print (System/getProperty \"java.io.tmpdir\"))"])
-                                  {:env env :out :string :err :string})]
-        (is (= ["test/run_all.clj" "--emit-edn" "receipt.edn" "--ns" "clj-surgeon.a-test"]
-               (vec (drop (count prefix) command))))
-        (is (= 0 (:exit result)) (:err result))
-        (is (= expected (:out result)))))))
+      (is (= ["bb" "-Xmx1g" (str "-Djava.io.tmpdir=" expected)
+              "test/run_all.clj" "--emit-edn" "receipt.edn" "--ns" "clj-surgeon.a-test"]
+             (bp/bb-lane-command tmpdir "receipt.edn" '[clj-surgeon.a-test]))))))
 
 ;; ---------------------------------------------------------------------------
 ;; clause 1 -- the inventory is the gate's own membership

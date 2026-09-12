@@ -294,6 +294,7 @@
   clj-surgeon.battery-parallel-test/a-serial-group-is-never-split-across-lanes
   clj-surgeon.battery-parallel-test/a-sharded-namespace-is-folded-back-into-one-run-before-any-fold
   clj-surgeon.battery-parallel-test/an-unmeasured-namespace-is-scheduled-first-and-still-runs
+  clj-surgeon.battery-parallel-test/bb-lane-command-honours-disk-tmpdir
   clj-surgeon.battery-parallel-test/darwin-memory-reader-is-the-documented-arithmetic
   clj-surgeon.battery-parallel-test/emit-edn-is-stripped-from-argv-wherever-it-appears
   clj-surgeon.battery-parallel-test/every-deftest-of-a-sharded-namespace-lands-in-exactly-one-shard
@@ -2211,6 +2212,7 @@
   clj-surgeon.reader-eval-fence-test/the-oracle-names-every-evaluator-it-claims-to-fence
   clj-surgeon.receipt-artifacts-boundary-test/admit-focused-runner-publishes-an-external-report
   clj-surgeon.receipt-artifacts-boundary-test/advisory-lock-creates-only-an-external-lock-file
+  clj-surgeon.receipt-artifacts-boundary-test/bb-lane-child-honours-disk-tmpdir
   clj-surgeon.receipt-artifacts-boundary-test/cli-change-publishes-external-inverse
   clj-surgeon.receipt-artifacts-boundary-test/cold-proof-publication-is-external-and-workspace-isolated
   clj-surgeon.receipt-artifacts-boundary-test/compact-edit-publishes-external-inverse
