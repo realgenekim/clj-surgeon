@@ -5615,3 +5615,14 @@ and :resolved? in the formatter receipt, carried into the typist's :format recei
 first: with a mode-0555 npm cache the original npx exited 1 with EACCES on _cacache; after
 the fix both the resolved binary and the real npx fallback formatted a multiline source
 under the same read-only inherited paths. Packet ff810b2e is the fourth check-only prewarm.
+
+## 2026-09-12T12:53:53Z — fourth check-only prewarm: all three suites green inside the envelope; one oracle node left; attempt 15 running
+
+Packet ff810b2e at 2f7b4cf8: alias, mcp and bb suites all PASSED under Landlock for the
+first time. The gate then failed in the prerequisite-ordered nodes: the gate-slot oracle
+(test/oracles/test_gate_slot.py) hard-codes /var/tmp/forge as its root and long-path base
+at lines 404 and 414, three PermissionErrors. Same class as the previous thirteen, found
+the same way. Attempt 15 (Astra, pid 2465104): the oracle derives its roots from the
+TMPDIR policy with the sun_path byte arithmetic kept exact; a census of every remaining
+/var/tmp/forge literal the gate executes, each kept or changed with a reason (negative
+paths and policy-fallback assertions stay); then test-fast and the prewarm.
