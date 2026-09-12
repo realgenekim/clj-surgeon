@@ -444,6 +444,12 @@
 (defn slot-command [argv]
   (into ["python3" "-B" (.getCanonicalPath (io/file "test/gate_slot.py")) "--"] argv))
 
+(defn bb-lane-command
+  "The bb child command; tmpdir is the coordinator's TMPDIR."
+  [_tmpdir out-path namespaces]
+  (into ["bb" "-Xmx1g" "test/run_all.clj" "--emit-edn" (str out-path) "--ns"]
+        (map str namespaces)))
+
 (defn- run-lane!
   [{:keys [index namespaces java-opts work-dir runtime phase suite target checkout-root]}]
   (let [out-path (io/file work-dir (format "lane-%d.edn" index))
@@ -458,7 +464,7 @@
                     :dir (or checkout-root (System/getProperty "user.dir"))}
                    (slot-command (cond target ["make" "--no-print-directory" target]
                                    (= :bb runtime)
-                                   (into ["bb" "-Xmx1g" "test/run_all.clj" "--emit-edn" (str out-path) "--ns"] (map str namespaces))
+                                   (bb-lane-command (System/getenv "TMPDIR") out-path namespaces)
                                    :else (lane-command java-opts out-path namespaces))))
           exit (deref (future (:exit @p)) lane-timeout-ms ::timeout)
           timed-out? (= ::timeout exit)]
