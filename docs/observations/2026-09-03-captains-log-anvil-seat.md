@@ -5282,3 +5282,16 @@ Five fixes before landing (go-with-fix is not go):
 
 Attempt 9 (Astra, pid 592255) is on all five. My ratification of 399,155 ms is withdrawn
 pending the recomputed value.
+
+## 2026-09-12T08:16:03Z — attempt 9 stopped on a stale skill name; attempt 10 running
+
+Astra's attempt 9 read the red-team, then stopped in eight minutes before touching source:
+AGENTS.md on this branch still said "consult the linked-intent-dev skill", a name that
+exists nowhere on the box. Trunk fixed that line in 87a2653a (a15531ee), after this branch
+was cut from eae1e432. The stop was correct under the seat's skill-loading rule: a missing
+mandated skill is a stop, not a guess. I applied the same one-line fix on the branch
+(dcd6d26b, byte-identical to trunk's line) and relaunched as attempt 10 (pid 661030).
+
+Ratchet worth writing: a branch cut before a plate fix inherits the stale plate. The
+prewarm-before-ship rule would have caught it at landing; the builder caught it at read
+time, which is cheaper. Block B tally: ten launches, one build, one red-team, nine stops.
