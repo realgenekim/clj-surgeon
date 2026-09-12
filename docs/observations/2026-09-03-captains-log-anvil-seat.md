@@ -5436,3 +5436,17 @@ and a leaked fixture event still carries its journaled epoch and event id. The o
 run-ID-only negative witness is replaced by two stronger ones (epoch leak caught; event-id
 leak caught). Delta 2 is packet eab27f63 (Astra verified); it also commits the round-1
 delta, which had left the tree uncommitted.
+
+## 2026-09-12T10:27:45Z — Block 4 delta 2 committed (a51f202); verifying outside the sandbox before install
+
+Packet eab27f63 applied the ratified oracle change and committed both delta rounds as four
+named commits (per-process epochs; fixture observation identity distinct from imported
+history identity; the qualification evidence; the report). Its own check stays red only on
+N1 (a direct child of /var/tmp/forge/packets, Landlock-denied inside any packet) and on
+scoped circuits (fresh model launches owed for the new byte closure). Report published as
+`2026-09-12-block4-delta2-report-astra.md`.
+
+Outside the sandbox now: full test/run.sh on a51f202 with PYTHONDONTWRITEBYTECODE=1 (the
+tracked pyc files drift when a test imports them; the drift rule would refuse the install).
+Then RUN_SCOPED_CIRCUITS=1 install.sh, whose circuit index is content-addressed by the
+installed closure, so no index needs setting aside this time.
