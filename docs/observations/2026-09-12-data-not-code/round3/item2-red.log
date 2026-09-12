@@ -1,0 +1,731 @@
+
+FAIL in (sandbox-refusal-classification-is-data-not-prose) (xray_test.clj:177)
+{:expression "(form 'data)", :error-type :invalid-xray-expression, :allowed-forms ["A path returns literal evidence." "(expect-count path n)" "(analyze path pure-function)" "(form name)" "(form name platform)" "(line positive-line)" "(match path pattern)" "(where path predicates)" "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)" "(initializer path)" "(span path n)" "(partition-all path n)"], :remedy "Return a path, or end with analyze; add expect-count for exact cardinality. Do not execute spit; quote it when it is Clojure data, or use a terminating pure collection operation for computation.", :symbol spit, :allowed-capabilities [:pure-control :collection-construction :collection-navigation :collection-transformation :higher-order-functions :predicates :numbers-and-strings :metadata :structural-builders], :reason :evaluation-failed, :allowed-symbol-count 238, :usage "clj-surgeon :op :xray :file FILE :expr EXPR", :cause-message "wording changed completely"}
+expected: (= :disallowed-symbol (:reason r))
+  actual: (not (= :disallowed-symbol :evaluation-failed))
+
+FAIL in (sandbox-refusal-classification-is-data-not-prose) (xray_test.clj:177)
+{:expression "(form 'data)", :error-type :invalid-xray-expression, :allowed-forms ["A path returns literal evidence." "(expect-count path n)" "(analyze path pure-function)" "(form name)" "(form name platform)" "(line positive-line)" "(match path pattern)" "(where path predicates)" "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)" "(initializer path)" "(span path n)" "(partition-all path n)"], :remedy "Return a path, or end with analyze; add expect-count for exact cardinality.", :allowed-capabilities [:pure-control :collection-construction :collection-navigation :collection-transformation :higher-order-functions :predicates :numbers-and-strings :metadata :structural-builders], :reason :evaluation-failed, :allowed-symbol-count 238, :usage "clj-surgeon :op :xray :file FILE :expr EXPR", :cause-message "runtime wrapper"}
+expected: (= :disallowed-symbol (:reason r))
+  actual: (not (= :disallowed-symbol :evaluation-failed))
+
+FAIL in (sandbox-refusal-classification-is-data-not-prose) (xray_test.clj:178)
+expected: (= (quote spit) (:symbol r))
+  actual: (not (= spit nil))
+
+FAIL in (sandbox-refusal-classification-is-data-not-prose) (xray_test.clj:177)
+{:expression "(form 'data)", :error-type :invalid-xray-expression, :allowed-forms ["A path returns literal evidence." "(expect-count path n)" "(analyze path pure-function)" "(form name)" "(form name platform)" "(line positive-line)" "(match path pattern)" "(where path predicates)" "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)" "(initializer path)" "(span path n)" "(partition-all path n)"], :remedy "Return a path, or end with analyze; add expect-count for exact cardinality. Do not execute spit; quote it when it is Clojure data, or use a terminating pure collection operation for computation.", :symbol spit, :allowed-capabilities [:pure-control :collection-construction :collection-navigation :collection-transformation :higher-order-functions :predicates :numbers-and-strings :metadata :structural-builders], :reason :evaluation-failed, :allowed-symbol-count 238, :usage "clj-surgeon :op :xray :file FILE :expr EXPR", :cause-message ""}
+expected: (= :disallowed-symbol (:reason r))
+  actual: (not (= :disallowed-symbol :evaluation-failed))
+
+FAIL in (sandbox-refusal-classification-is-data-not-prose) (xray_test.clj:177)
+{:expression "(form 'data)", :error-type :invalid-xray-expression, :allowed-forms ["A path returns literal evidence." "(expect-count path n)" "(analyze path pure-function)" "(form name)" "(form name platform)" "(line positive-line)" "(match path pattern)" "(where path predicates)" "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)" "(initializer path)" "(span path n)" "(partition-all path n)"], :remedy "Return a path, or end with analyze; add expect-count for exact cardinality.", :allowed-capabilities [:pure-control :collection-construction :collection-navigation :collection-transformation :higher-order-functions :predicates :numbers-and-strings :metadata :structural-builders], :reason :evaluation-failed, :allowed-symbol-count 238, :usage "clj-surgeon :op :xray :file FILE :expr EXPR", :cause-message "runtime wrapper"}
+expected: (= :disallowed-symbol (:reason r))
+  actual: (not (= :disallowed-symbol :evaluation-failed))
+
+FAIL in (sandbox-refusal-classification-is-data-not-prose) (xray_test.clj:178)
+expected: (= (quote spit) (:symbol r))
+  actual: (not (= spit nil))
+
+FAIL in (sandbox-refusal-classification-is-data-not-prose) (xray_test.clj:177)
+{:expression "(form 'data)", :error-type :invalid-xray-expression, :allowed-forms ["A path returns literal evidence." "(expect-count path n)" "(analyze path pure-function)" "(form name)" "(form name platform)" "(line positive-line)" "(match path pattern)" "(where path predicates)" "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)" "(initializer path)" "(span path n)" "(partition-all path n)"], :remedy "Return a path, or end with analyze; add expect-count for exact cardinality. Do not execute spit; quote it when it is Clojure data, or use a terminating pure collection operation for computation.", :symbol spit, :allowed-capabilities [:pure-control :collection-construction :collection-navigation :collection-transformation :higher-order-functions :predicates :numbers-and-strings :metadata :structural-builders], :reason :evaluation-failed, :allowed-symbol-count 238, :usage "clj-surgeon :op :xray :file FILE :expr EXPR", :cause-message "une permission refusee"}
+expected: (= :disallowed-symbol (:reason r))
+  actual: (not (= :disallowed-symbol :evaluation-failed))
+
+FAIL in (sandbox-refusal-classification-is-data-not-prose) (xray_test.clj:177)
+{:expression "(form 'data)", :error-type :invalid-xray-expression, :allowed-forms ["A path returns literal evidence." "(expect-count path n)" "(analyze path pure-function)" "(form name)" "(form name platform)" "(line positive-line)" "(match path pattern)" "(where path predicates)" "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)" "(initializer path)" "(span path n)" "(partition-all path n)"], :remedy "Return a path, or end with analyze; add expect-count for exact cardinality.", :allowed-capabilities [:pure-control :collection-construction :collection-navigation :collection-transformation :higher-order-functions :predicates :numbers-and-strings :metadata :structural-builders], :reason :evaluation-failed, :allowed-symbol-count 238, :usage "clj-surgeon :op :xray :file FILE :expr EXPR", :cause-message "runtime wrapper"}
+expected: (= :disallowed-symbol (:reason r))
+  actual: (not (= :disallowed-symbol :evaluation-failed))
+
+FAIL in (sandbox-refusal-classification-is-data-not-prose) (xray_test.clj:178)
+expected: (= (quote spit) (:symbol r))
+  actual: (not (= spit nil))
+
+FAIL in (sandbox-refusal-classification-is-data-not-prose) (xray_test.clj:185)
+the sandbox produces a denial value before presentation
+expected: (some (fn* [p1__117223#] (= :deny (:sandbox/decision (ex-data p1__117223#)))) causes)
+  actual: (not (some #object[clj_surgeon.xray_test$fn__117224$fn__117311$fn__117312 0x103993ab "clj_surgeon.xray_test$fn__117224$fn__117311$fn__117312@103993ab"] (#error {
+ :cause "Could not resolve symbol: spit"
+ :data {:type :sci/error, :line 1, :column 1, :file nil, :phase "analysis"}
+ :via
+ [{:type clojure.lang.ExceptionInfo
+   :message "Invalid Clojure xray expression"
+   :data {:error-type :invalid-xray-expression, :reason :disallowed-symbol, :expression "(spit \"unused\" \"bytes\")", :allowed-symbol-count 238, :allowed-capabilities [:pure-control :collection-construction :collection-navigation :collection-transformation :higher-order-functions :predicates :numbers-and-strings :metadata :structural-builders], :allowed-forms ["A path returns literal evidence." "(expect-count path n)" "(analyze path pure-function)" "(form name)" "(form name platform)" "(line positive-line)" "(match path pattern)" "(where path predicates)" "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)" "(initializer path)" "(span path n)" "(partition-all path n)"], :usage "clj-surgeon :op :xray :file FILE :expr EXPR", :remedy "Return a path, or end with analyze; add expect-count for exact cardinality."}
+   :at [clj_surgeon.edit_dsl$invalid_xray_expression_BANG_ invokeStatic "edit_dsl.clj" 384]}
+  {:type clojure.lang.ExceptionInfo
+   :message "Could not resolve symbol: spit"
+   :data {:type :sci/error, :line 1, :column 1, :message "Could not resolve symbol: spit", :sci.impl/callstack #object[clojure.lang.Volatile 0x7f609c1a {:status :ready, :val ({:line 1, :column 1, :ns #object[sci.lang.Namespace 0x7630cbaf "user"], :file nil})}], :file nil, :phase "analysis"}
+   :at [sci.impl.utils$rethrow_with_location_of_node invokeStatic "utils.cljc" 148]}
+  {:type clojure.lang.ExceptionInfo
+   :message "Could not resolve symbol: spit"
+   :data {:type :sci/error, :line 1, :column 1, :file nil, :phase "analysis"}
+   :at [sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]}]
+ :trace
+ [[sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]
+  [sci.impl.utils$throw_error_with_location invoke "utils.cljc" 41]
+  [sci.impl.resolve$throw_error_with_location invokeStatic "resolve.cljc" 12]
+  [sci.impl.resolve$throw_error_with_location invoke "resolve.cljc" 11]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 282]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 276]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1508]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.interpreter$eval_form_STAR_ invokeStatic "interpreter.cljc" 38]
+  [sci.impl.interpreter$eval_form_STAR_ invoke "interpreter.cljc" 16]
+  [sci.impl.interpreter$eval_form invokeStatic "interpreter.cljc" 64]
+  [sci.impl.interpreter$eval_form invoke "interpreter.cljc" 62]
+  [sci.impl.interpreter$eval_string_STAR_ invokeStatic "interpreter.cljc" 81]
+  [sci.impl.interpreter$eval_string_STAR_ invoke "interpreter.cljc" 68]
+  [sci.core$eval_string_PLUS_ invokeStatic "core.cljc" 294]
+  [sci.core$eval_string_PLUS_ invoke "core.cljc" 281]
+  [clj_surgeon.edit_dsl$evaluate_expression invokeStatic "edit_dsl.clj" 422]
+  [clj_surgeon.edit_dsl$evaluate_expression invoke "edit_dsl.clj" 401]
+  [clj_surgeon.edit_dsl$compile_xray invokeStatic "edit_dsl.clj" 546]
+  [clj_surgeon.edit_dsl$compile_xray invoke "edit_dsl.clj" 543]
+  [clj_surgeon.xray_test$fn__117224$fn__117305 invoke "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invokeStatic "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invoke "xray_test.clj" 168]
+  [clojure.test$test_var$fn__9898 invoke "test.clj" 717]
+  [clojure.test$test_var invokeStatic "test.clj" 717]
+  [clojure.test$test_var invoke "test.clj" 708]
+  [clojure.test$test_vars$fn__9924$fn__9929 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars$fn__9924 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars invokeStatic "test.clj" 731]
+  [clojure.test$test_vars invoke "test.clj" 723]
+  [user$eval118377 invokeStatic "NO_SOURCE_FILE" 1]
+  [user$eval118377 invoke "NO_SOURCE_FILE" 1]
+  [clojure.lang.Compiler eval "Compiler.java" 7739]
+  [clojure.lang.Compiler eval "Compiler.java" 7729]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435$fn__1446 invoke "interruptible_eval.clj" 106]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435 invoke "interruptible_eval.clj" 101]
+  [nrepl.middleware.session$session_exec$session_loop__1519 invoke "session.clj" 230]
+  [nrepl.SessionThread run "SessionThread.java" 21]]} #error {
+ :cause "Could not resolve symbol: spit"
+ :data {:type :sci/error, :line 1, :column 1, :file nil, :phase "analysis"}
+ :via
+ [{:type clojure.lang.ExceptionInfo
+   :message "Could not resolve symbol: spit"
+   :data {:type :sci/error, :line 1, :column 1, :message "Could not resolve symbol: spit", :sci.impl/callstack #object[clojure.lang.Volatile 0x7f609c1a {:status :ready, :val ({:line 1, :column 1, :ns #object[sci.lang.Namespace 0x7630cbaf "user"], :file nil})}], :file nil, :phase "analysis"}
+   :at [sci.impl.utils$rethrow_with_location_of_node invokeStatic "utils.cljc" 148]}
+  {:type clojure.lang.ExceptionInfo
+   :message "Could not resolve symbol: spit"
+   :data {:type :sci/error, :line 1, :column 1, :file nil, :phase "analysis"}
+   :at [sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]}]
+ :trace
+ [[sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]
+  [sci.impl.utils$throw_error_with_location invoke "utils.cljc" 41]
+  [sci.impl.resolve$throw_error_with_location invokeStatic "resolve.cljc" 12]
+  [sci.impl.resolve$throw_error_with_location invoke "resolve.cljc" 11]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 282]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 276]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1508]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.interpreter$eval_form_STAR_ invokeStatic "interpreter.cljc" 38]
+  [sci.impl.interpreter$eval_form_STAR_ invoke "interpreter.cljc" 16]
+  [sci.impl.interpreter$eval_form invokeStatic "interpreter.cljc" 64]
+  [sci.impl.interpreter$eval_form invoke "interpreter.cljc" 62]
+  [sci.impl.interpreter$eval_string_STAR_ invokeStatic "interpreter.cljc" 81]
+  [sci.impl.interpreter$eval_string_STAR_ invoke "interpreter.cljc" 68]
+  [sci.core$eval_string_PLUS_ invokeStatic "core.cljc" 294]
+  [sci.core$eval_string_PLUS_ invoke "core.cljc" 281]
+  [clj_surgeon.edit_dsl$evaluate_expression invokeStatic "edit_dsl.clj" 422]
+  [clj_surgeon.edit_dsl$evaluate_expression invoke "edit_dsl.clj" 401]
+  [clj_surgeon.edit_dsl$compile_xray invokeStatic "edit_dsl.clj" 546]
+  [clj_surgeon.edit_dsl$compile_xray invoke "edit_dsl.clj" 543]
+  [clj_surgeon.xray_test$fn__117224$fn__117305 invoke "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invokeStatic "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invoke "xray_test.clj" 168]
+  [clojure.test$test_var$fn__9898 invoke "test.clj" 717]
+  [clojure.test$test_var invokeStatic "test.clj" 717]
+  [clojure.test$test_var invoke "test.clj" 708]
+  [clojure.test$test_vars$fn__9924$fn__9929 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars$fn__9924 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars invokeStatic "test.clj" 731]
+  [clojure.test$test_vars invoke "test.clj" 723]
+  [user$eval118377 invokeStatic "NO_SOURCE_FILE" 1]
+  [user$eval118377 invoke "NO_SOURCE_FILE" 1]
+  [clojure.lang.Compiler eval "Compiler.java" 7739]
+  [clojure.lang.Compiler eval "Compiler.java" 7729]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435$fn__1446 invoke "interruptible_eval.clj" 106]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435 invoke "interruptible_eval.clj" 101]
+  [nrepl.middleware.session$session_exec$session_loop__1519 invoke "session.clj" 230]
+  [nrepl.SessionThread run "SessionThread.java" 21]]} #error {
+ :cause "Could not resolve symbol: spit"
+ :data {:type :sci/error, :line 1, :column 1, :file nil, :phase "analysis"}
+ :via
+ [{:type clojure.lang.ExceptionInfo
+   :message "Could not resolve symbol: spit"
+   :data {:type :sci/error, :line 1, :column 1, :file nil, :phase "analysis"}
+   :at [sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]}]
+ :trace
+ [[sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]
+  [sci.impl.utils$throw_error_with_location invoke "utils.cljc" 41]
+  [sci.impl.resolve$throw_error_with_location invokeStatic "resolve.cljc" 12]
+  [sci.impl.resolve$throw_error_with_location invoke "resolve.cljc" 11]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 282]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 276]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1508]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.interpreter$eval_form_STAR_ invokeStatic "interpreter.cljc" 38]
+  [sci.impl.interpreter$eval_form_STAR_ invoke "interpreter.cljc" 16]
+  [sci.impl.interpreter$eval_form invokeStatic "interpreter.cljc" 64]
+  [sci.impl.interpreter$eval_form invoke "interpreter.cljc" 62]
+  [sci.impl.interpreter$eval_string_STAR_ invokeStatic "interpreter.cljc" 81]
+  [sci.impl.interpreter$eval_string_STAR_ invoke "interpreter.cljc" 68]
+  [sci.core$eval_string_PLUS_ invokeStatic "core.cljc" 294]
+  [sci.core$eval_string_PLUS_ invoke "core.cljc" 281]
+  [clj_surgeon.edit_dsl$evaluate_expression invokeStatic "edit_dsl.clj" 422]
+  [clj_surgeon.edit_dsl$evaluate_expression invoke "edit_dsl.clj" 401]
+  [clj_surgeon.edit_dsl$compile_xray invokeStatic "edit_dsl.clj" 546]
+  [clj_surgeon.edit_dsl$compile_xray invoke "edit_dsl.clj" 543]
+  [clj_surgeon.xray_test$fn__117224$fn__117305 invoke "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invokeStatic "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invoke "xray_test.clj" 168]
+  [clojure.test$test_var$fn__9898 invoke "test.clj" 717]
+  [clojure.test$test_var invokeStatic "test.clj" 717]
+  [clojure.test$test_var invoke "test.clj" 708]
+  [clojure.test$test_vars$fn__9924$fn__9929 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars$fn__9924 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars invokeStatic "test.clj" 731]
+  [clojure.test$test_vars invoke "test.clj" 723]
+  [user$eval118377 invokeStatic "NO_SOURCE_FILE" 1]
+  [user$eval118377 invoke "NO_SOURCE_FILE" 1]
+  [clojure.lang.Compiler eval "Compiler.java" 7739]
+  [clojure.lang.Compiler eval "Compiler.java" 7729]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435$fn__1446 invoke "interruptible_eval.clj" 106]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435 invoke "interruptible_eval.clj" 101]
+  [nrepl.middleware.session$session_exec$session_loop__1519 invoke "session.clj" 230]
+  [nrepl.SessionThread run "SessionThread.java" 21]]})))
+
+FAIL in (sandbox-refusal-classification-is-data-not-prose) (xray_test.clj:185)
+the sandbox produces a denial value before presentation
+expected: (some (fn* [p1__117223#] (= :deny (:sandbox/decision (ex-data p1__117223#)))) causes)
+  actual: (not (some #object[clj_surgeon.xray_test$fn__117224$fn__117311$fn__117312 0x6dfe9fe2 "clj_surgeon.xray_test$fn__117224$fn__117311$fn__117312@6dfe9fe2"] (#error {
+ :cause "Could not resolve symbol: unknown-function"
+ :data {:type :sci/error, :line 1, :column 1, :file nil, :phase "analysis"}
+ :via
+ [{:type clojure.lang.ExceptionInfo
+   :message "Invalid Clojure xray expression"
+   :data {:error-type :invalid-xray-expression, :reason :disallowed-symbol, :expression "(unknown-function 1)", :allowed-symbol-count 238, :allowed-capabilities [:pure-control :collection-construction :collection-navigation :collection-transformation :higher-order-functions :predicates :numbers-and-strings :metadata :structural-builders], :allowed-forms ["A path returns literal evidence." "(expect-count path n)" "(analyze path pure-function)" "(form name)" "(form name platform)" "(line positive-line)" "(match path pattern)" "(where path predicates)" "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)" "(initializer path)" "(span path n)" "(partition-all path n)"], :usage "clj-surgeon :op :xray :file FILE :expr EXPR", :remedy "Return a path, or end with analyze; add expect-count for exact cardinality."}
+   :at [clj_surgeon.edit_dsl$invalid_xray_expression_BANG_ invokeStatic "edit_dsl.clj" 384]}
+  {:type clojure.lang.ExceptionInfo
+   :message "Could not resolve symbol: unknown-function"
+   :data {:type :sci/error, :line 1, :column 1, :message "Could not resolve symbol: unknown-function", :sci.impl/callstack #object[clojure.lang.Volatile 0x3106ed3d {:status :ready, :val ({:line 1, :column 1, :ns #object[sci.lang.Namespace 0x4afd374b "user"], :file nil})}], :file nil, :phase "analysis"}
+   :at [sci.impl.utils$rethrow_with_location_of_node invokeStatic "utils.cljc" 148]}
+  {:type clojure.lang.ExceptionInfo
+   :message "Could not resolve symbol: unknown-function"
+   :data {:type :sci/error, :line 1, :column 1, :file nil, :phase "analysis"}
+   :at [sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]}]
+ :trace
+ [[sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]
+  [sci.impl.utils$throw_error_with_location invoke "utils.cljc" 41]
+  [sci.impl.resolve$throw_error_with_location invokeStatic "resolve.cljc" 12]
+  [sci.impl.resolve$throw_error_with_location invoke "resolve.cljc" 11]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 282]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 276]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1508]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.interpreter$eval_form_STAR_ invokeStatic "interpreter.cljc" 38]
+  [sci.impl.interpreter$eval_form_STAR_ invoke "interpreter.cljc" 16]
+  [sci.impl.interpreter$eval_form invokeStatic "interpreter.cljc" 64]
+  [sci.impl.interpreter$eval_form invoke "interpreter.cljc" 62]
+  [sci.impl.interpreter$eval_string_STAR_ invokeStatic "interpreter.cljc" 81]
+  [sci.impl.interpreter$eval_string_STAR_ invoke "interpreter.cljc" 68]
+  [sci.core$eval_string_PLUS_ invokeStatic "core.cljc" 294]
+  [sci.core$eval_string_PLUS_ invoke "core.cljc" 281]
+  [clj_surgeon.edit_dsl$evaluate_expression invokeStatic "edit_dsl.clj" 422]
+  [clj_surgeon.edit_dsl$evaluate_expression invoke "edit_dsl.clj" 401]
+  [clj_surgeon.edit_dsl$compile_xray invokeStatic "edit_dsl.clj" 546]
+  [clj_surgeon.edit_dsl$compile_xray invoke "edit_dsl.clj" 543]
+  [clj_surgeon.xray_test$fn__117224$fn__117305 invoke "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invokeStatic "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invoke "xray_test.clj" 168]
+  [clojure.test$test_var$fn__9898 invoke "test.clj" 717]
+  [clojure.test$test_var invokeStatic "test.clj" 717]
+  [clojure.test$test_var invoke "test.clj" 708]
+  [clojure.test$test_vars$fn__9924$fn__9929 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars$fn__9924 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars invokeStatic "test.clj" 731]
+  [clojure.test$test_vars invoke "test.clj" 723]
+  [user$eval118377 invokeStatic "NO_SOURCE_FILE" 1]
+  [user$eval118377 invoke "NO_SOURCE_FILE" 1]
+  [clojure.lang.Compiler eval "Compiler.java" 7739]
+  [clojure.lang.Compiler eval "Compiler.java" 7729]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435$fn__1446 invoke "interruptible_eval.clj" 106]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435 invoke "interruptible_eval.clj" 101]
+  [nrepl.middleware.session$session_exec$session_loop__1519 invoke "session.clj" 230]
+  [nrepl.SessionThread run "SessionThread.java" 21]]} #error {
+ :cause "Could not resolve symbol: unknown-function"
+ :data {:type :sci/error, :line 1, :column 1, :file nil, :phase "analysis"}
+ :via
+ [{:type clojure.lang.ExceptionInfo
+   :message "Could not resolve symbol: unknown-function"
+   :data {:type :sci/error, :line 1, :column 1, :message "Could not resolve symbol: unknown-function", :sci.impl/callstack #object[clojure.lang.Volatile 0x3106ed3d {:status :ready, :val ({:line 1, :column 1, :ns #object[sci.lang.Namespace 0x4afd374b "user"], :file nil})}], :file nil, :phase "analysis"}
+   :at [sci.impl.utils$rethrow_with_location_of_node invokeStatic "utils.cljc" 148]}
+  {:type clojure.lang.ExceptionInfo
+   :message "Could not resolve symbol: unknown-function"
+   :data {:type :sci/error, :line 1, :column 1, :file nil, :phase "analysis"}
+   :at [sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]}]
+ :trace
+ [[sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]
+  [sci.impl.utils$throw_error_with_location invoke "utils.cljc" 41]
+  [sci.impl.resolve$throw_error_with_location invokeStatic "resolve.cljc" 12]
+  [sci.impl.resolve$throw_error_with_location invoke "resolve.cljc" 11]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 282]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 276]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1508]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.interpreter$eval_form_STAR_ invokeStatic "interpreter.cljc" 38]
+  [sci.impl.interpreter$eval_form_STAR_ invoke "interpreter.cljc" 16]
+  [sci.impl.interpreter$eval_form invokeStatic "interpreter.cljc" 64]
+  [sci.impl.interpreter$eval_form invoke "interpreter.cljc" 62]
+  [sci.impl.interpreter$eval_string_STAR_ invokeStatic "interpreter.cljc" 81]
+  [sci.impl.interpreter$eval_string_STAR_ invoke "interpreter.cljc" 68]
+  [sci.core$eval_string_PLUS_ invokeStatic "core.cljc" 294]
+  [sci.core$eval_string_PLUS_ invoke "core.cljc" 281]
+  [clj_surgeon.edit_dsl$evaluate_expression invokeStatic "edit_dsl.clj" 422]
+  [clj_surgeon.edit_dsl$evaluate_expression invoke "edit_dsl.clj" 401]
+  [clj_surgeon.edit_dsl$compile_xray invokeStatic "edit_dsl.clj" 546]
+  [clj_surgeon.edit_dsl$compile_xray invoke "edit_dsl.clj" 543]
+  [clj_surgeon.xray_test$fn__117224$fn__117305 invoke "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invokeStatic "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invoke "xray_test.clj" 168]
+  [clojure.test$test_var$fn__9898 invoke "test.clj" 717]
+  [clojure.test$test_var invokeStatic "test.clj" 717]
+  [clojure.test$test_var invoke "test.clj" 708]
+  [clojure.test$test_vars$fn__9924$fn__9929 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars$fn__9924 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars invokeStatic "test.clj" 731]
+  [clojure.test$test_vars invoke "test.clj" 723]
+  [user$eval118377 invokeStatic "NO_SOURCE_FILE" 1]
+  [user$eval118377 invoke "NO_SOURCE_FILE" 1]
+  [clojure.lang.Compiler eval "Compiler.java" 7739]
+  [clojure.lang.Compiler eval "Compiler.java" 7729]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435$fn__1446 invoke "interruptible_eval.clj" 106]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435 invoke "interruptible_eval.clj" 101]
+  [nrepl.middleware.session$session_exec$session_loop__1519 invoke "session.clj" 230]
+  [nrepl.SessionThread run "SessionThread.java" 21]]} #error {
+ :cause "Could not resolve symbol: unknown-function"
+ :data {:type :sci/error, :line 1, :column 1, :file nil, :phase "analysis"}
+ :via
+ [{:type clojure.lang.ExceptionInfo
+   :message "Could not resolve symbol: unknown-function"
+   :data {:type :sci/error, :line 1, :column 1, :file nil, :phase "analysis"}
+   :at [sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]}]
+ :trace
+ [[sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]
+  [sci.impl.utils$throw_error_with_location invoke "utils.cljc" 41]
+  [sci.impl.resolve$throw_error_with_location invokeStatic "resolve.cljc" 12]
+  [sci.impl.resolve$throw_error_with_location invoke "resolve.cljc" 11]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 282]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 276]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1508]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.interpreter$eval_form_STAR_ invokeStatic "interpreter.cljc" 38]
+  [sci.impl.interpreter$eval_form_STAR_ invoke "interpreter.cljc" 16]
+  [sci.impl.interpreter$eval_form invokeStatic "interpreter.cljc" 64]
+  [sci.impl.interpreter$eval_form invoke "interpreter.cljc" 62]
+  [sci.impl.interpreter$eval_string_STAR_ invokeStatic "interpreter.cljc" 81]
+  [sci.impl.interpreter$eval_string_STAR_ invoke "interpreter.cljc" 68]
+  [sci.core$eval_string_PLUS_ invokeStatic "core.cljc" 294]
+  [sci.core$eval_string_PLUS_ invoke "core.cljc" 281]
+  [clj_surgeon.edit_dsl$evaluate_expression invokeStatic "edit_dsl.clj" 422]
+  [clj_surgeon.edit_dsl$evaluate_expression invoke "edit_dsl.clj" 401]
+  [clj_surgeon.edit_dsl$compile_xray invokeStatic "edit_dsl.clj" 546]
+  [clj_surgeon.edit_dsl$compile_xray invoke "edit_dsl.clj" 543]
+  [clj_surgeon.xray_test$fn__117224$fn__117305 invoke "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invokeStatic "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invoke "xray_test.clj" 168]
+  [clojure.test$test_var$fn__9898 invoke "test.clj" 717]
+  [clojure.test$test_var invokeStatic "test.clj" 717]
+  [clojure.test$test_var invoke "test.clj" 708]
+  [clojure.test$test_vars$fn__9924$fn__9929 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars$fn__9924 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars invokeStatic "test.clj" 731]
+  [clojure.test$test_vars invoke "test.clj" 723]
+  [user$eval118377 invokeStatic "NO_SOURCE_FILE" 1]
+  [user$eval118377 invoke "NO_SOURCE_FILE" 1]
+  [clojure.lang.Compiler eval "Compiler.java" 7739]
+  [clojure.lang.Compiler eval "Compiler.java" 7729]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435$fn__1446 invoke "interruptible_eval.clj" 106]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435 invoke "interruptible_eval.clj" 101]
+  [nrepl.middleware.session$session_exec$session_loop__1519 invoke "session.clj" 230]
+  [nrepl.SessionThread run "SessionThread.java" 21]]})))
+
+FAIL in (sandbox-refusal-classification-is-data-not-prose) (xray_test.clj:185)
+the sandbox produces a denial value before presentation
+expected: (some (fn* [p1__117223#] (= :deny (:sandbox/decision (ex-data p1__117223#)))) causes)
+  actual: (not (some #object[clj_surgeon.xray_test$fn__117224$fn__117311$fn__117312 0x3ae0f008 "clj_surgeon.xray_test$fn__117224$fn__117311$fn__117312@3ae0f008"] (#error {
+ :cause "Could not resolve symbol: System/exit"
+ :data {:type :sci/error, :line 1, :column 18, :file nil, :phase "analysis"}
+ :via
+ [{:type clojure.lang.ExceptionInfo
+   :message "Invalid Clojure xray expression"
+   :data {:error-type :invalid-xray-expression, :reason :disallowed-symbol, :expression "(-> (form 'data) (analyze (fn [_] (System/exit 1))))", :allowed-symbol-count 238, :allowed-capabilities [:pure-control :collection-construction :collection-navigation :collection-transformation :higher-order-functions :predicates :numbers-and-strings :metadata :structural-builders], :allowed-forms ["A path returns literal evidence." "(expect-count path n)" "(analyze path pure-function)" "(form name)" "(form name platform)" "(line positive-line)" "(match path pattern)" "(where path predicates)" "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)" "(initializer path)" "(span path n)" "(partition-all path n)"], :usage "clj-surgeon :op :xray :file FILE :expr EXPR", :remedy "Return a path, or end with analyze; add expect-count for exact cardinality."}
+   :at [clj_surgeon.edit_dsl$invalid_xray_expression_BANG_ invokeStatic "edit_dsl.clj" 384]}
+  {:type clojure.lang.ExceptionInfo
+   :message "Could not resolve symbol: System/exit"
+   :data {:type :sci/error, :line 1, :column 35, :message "Could not resolve symbol: System/exit", :sci.impl/callstack #object[clojure.lang.Volatile 0x23f86939 {:status :ready, :val ({:line 1, :column 1, :ns #object[sci.lang.Namespace 0x2511177e "user"], :file nil} {:line 1, :column 1, :ns #object[sci.lang.Namespace 0x2511177e "user"], :file nil, :sci.impl/f-meta {:ns #object[sci.lang.Namespace 0x316ea5ac "clojure.core"], :macro true, :sci/built-in true, :name ->, :doc "Threads the expr through the forms. Inserts x as the\n  second item in the first form, making a list of it if it is not a\n  list already. If there are more forms, inserts the first form as the\n  second item in second form, etc.", :arglists ([x & forms])}} {:line 1, :column 18, :ns #object[sci.lang.Namespace 0x2511177e "user"], :file nil} {:line 1, :column 18, :ns #object[sci.lang.Namespace 0x2511177e "user"], :file nil, :sci.impl/f-meta nil} {:line 1, :column 27, :ns #object[sci.lang.Namespace 0x2511177e "user"], :file nil} {:line 1, :column 27, :ns #object[sci.lang.Namespace 0x2511177e "user"], :file nil, :sci.impl/f-meta {:ns #object[sci.lang.Namespace 0x316ea5ac "clojure.core"], :macro true, :sci/built-in true, :name fn, :doc "params => positional-params*, or positional-params* & rest-param\n  positional-param => binding-form\n  rest-param => binding-form\n  binding-form => name, or destructuring-form\n\n  Defines a function.\n\n  See https://clojure.org/reference/special_forms#fn for more information", :arglists ([& sigs])}} {:line 1, :column 27, :ns #object[sci.lang.Namespace 0x2511177e "user"], :file nil} {:line 1, :column 35, :ns #object[sci.lang.Namespace 0x2511177e "user"], :file nil})}], :file nil, :phase "analysis"}
+   :at [sci.impl.utils$rethrow_with_location_of_node invokeStatic "utils.cljc" 148]}
+  {:type clojure.lang.ExceptionInfo
+   :message "Could not resolve symbol: System/exit"
+   :data {:type :sci/error, :line 1, :column 18, :file nil, :phase "analysis"}
+   :at [sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]}]
+ :trace
+ [[sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]
+  [sci.impl.utils$throw_error_with_location invoke "utils.cljc" 41]
+  [sci.impl.resolve$throw_error_with_location invokeStatic "resolve.cljc" 12]
+  [sci.impl.resolve$throw_error_with_location invoke "resolve.cljc" 11]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 282]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 276]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1508]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1817]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze_children_tail invokeStatic "analyzer.cljc" 107]
+  [sci.impl.analyzer$analyze_children_tail invoke "analyzer.cljc" 103]
+  [sci.impl.analyzer$return_do invokeStatic "analyzer.cljc" 119]
+  [sci.impl.analyzer$return_do invoke "analyzer.cljc" 110]
+  [sci.impl.analyzer$expand_fn_args_PLUS_body invokeStatic "analyzer.cljc" 335]
+  [sci.impl.analyzer$expand_fn_args_PLUS_body invoke "analyzer.cljc" 313]
+  [sci.impl.analyzer$analyze_fn_STAR_$fn__75176 invoke "analyzer.cljc" 419]
+  [clojure.lang.PersistentList reduce "PersistentList.java" 143]
+  [clojure.core$reduce invokeStatic "core.clj" 6964]
+  [clojure.core$reduce invoke "core.clj" 6947]
+  [sci.impl.analyzer$analyze_fn_STAR_ invokeStatic "analyzer.cljc" 415]
+  [sci.impl.analyzer$analyze_fn_STAR_ invoke "analyzer.cljc" 389]
+  [sci.impl.analyzer$dispatch_special invokeStatic "analyzer.cljc" 1443]
+  [sci.impl.analyzer$dispatch_special invoke "analyzer.cljc" 1439]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1594]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1612]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1817]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze_children$fn__75097 invoke "analyzer.cljc" 307]
+  [clojure.core$mapv$fn__8569 invoke "core.clj" 7059]
+  [clojure.core.protocols$fn__8279 invokeStatic "protocols.clj" 167]
+  [clojure.core.protocols$fn__8279 invoke "protocols.clj" 123]
+  [clojure.core.protocols$fn__8233$G__8228__8242 invoke "protocols.clj" 19]
+  [clojure.core.protocols$seq_reduce invokeStatic "protocols.clj" 31]
+  [clojure.core.protocols$fn__8266 invokeStatic "protocols.clj" 74]
+  [clojure.core.protocols$fn__8266 invoke "protocols.clj" 74]
+  [clojure.core.protocols$fn__8207$G__8202__8220 invoke "protocols.clj" 13]
+  [clojure.core$reduce invokeStatic "core.clj" 6965]
+  [clojure.core$mapv invokeStatic "core.clj" 7050]
+  [clojure.core$mapv invoke "core.clj" 7050]
+  [sci.impl.analyzer$analyze_children invokeStatic "analyzer.cljc" 307]
+  [sci.impl.analyzer$analyze_children invoke "analyzer.cljc" 306]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1654]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1612]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.interpreter$eval_form_STAR_ invokeStatic "interpreter.cljc" 38]
+  [sci.impl.interpreter$eval_form_STAR_ invoke "interpreter.cljc" 16]
+  [sci.impl.interpreter$eval_form invokeStatic "interpreter.cljc" 64]
+  [sci.impl.interpreter$eval_form invoke "interpreter.cljc" 62]
+  [sci.impl.interpreter$eval_string_STAR_ invokeStatic "interpreter.cljc" 81]
+  [sci.impl.interpreter$eval_string_STAR_ invoke "interpreter.cljc" 68]
+  [sci.core$eval_string_PLUS_ invokeStatic "core.cljc" 294]
+  [sci.core$eval_string_PLUS_ invoke "core.cljc" 281]
+  [clj_surgeon.edit_dsl$evaluate_expression invokeStatic "edit_dsl.clj" 422]
+  [clj_surgeon.edit_dsl$evaluate_expression invoke "edit_dsl.clj" 401]
+  [clj_surgeon.edit_dsl$compile_xray invokeStatic "edit_dsl.clj" 546]
+  [clj_surgeon.edit_dsl$compile_xray invoke "edit_dsl.clj" 543]
+  [clj_surgeon.xray_test$fn__117224$fn__117305 invoke "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invokeStatic "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invoke "xray_test.clj" 168]
+  [clojure.test$test_var$fn__9898 invoke "test.clj" 717]
+  [clojure.test$test_var invokeStatic "test.clj" 717]
+  [clojure.test$test_var invoke "test.clj" 708]
+  [clojure.test$test_vars$fn__9924$fn__9929 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars$fn__9924 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars invokeStatic "test.clj" 731]
+  [clojure.test$test_vars invoke "test.clj" 723]
+  [user$eval118377 invokeStatic "NO_SOURCE_FILE" 1]
+  [user$eval118377 invoke "NO_SOURCE_FILE" 1]
+  [clojure.lang.Compiler eval "Compiler.java" 7739]
+  [clojure.lang.Compiler eval "Compiler.java" 7729]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435$fn__1446 invoke "interruptible_eval.clj" 106]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435 invoke "interruptible_eval.clj" 101]
+  [nrepl.middleware.session$session_exec$session_loop__1519 invoke "session.clj" 230]
+  [nrepl.SessionThread run "SessionThread.java" 21]]} #error {
+ :cause "Could not resolve symbol: System/exit"
+ :data {:type :sci/error, :line 1, :column 18, :file nil, :phase "analysis"}
+ :via
+ [{:type clojure.lang.ExceptionInfo
+   :message "Could not resolve symbol: System/exit"
+   :data {:type :sci/error, :line 1, :column 35, :message "Could not resolve symbol: System/exit", :sci.impl/callstack #object[clojure.lang.Volatile 0x23f86939 {:status :ready, :val ({:line 1, :column 1, :ns #object[sci.lang.Namespace 0x2511177e "user"], :file nil} {:line 1, :column 1, :ns #object[sci.lang.Namespace 0x2511177e "user"], :file nil, :sci.impl/f-meta {:ns #object[sci.lang.Namespace 0x316ea5ac "clojure.core"], :macro true, :sci/built-in true, :name ->, :doc "Threads the expr through the forms. Inserts x as the\n  second item in the first form, making a list of it if it is not a\n  list already. If there are more forms, inserts the first form as the\n  second item in second form, etc.", :arglists ([x & forms])}} {:line 1, :column 18, :ns #object[sci.lang.Namespace 0x2511177e "user"], :file nil} {:line 1, :column 18, :ns #object[sci.lang.Namespace 0x2511177e "user"], :file nil, :sci.impl/f-meta nil} {:line 1, :column 27, :ns #object[sci.lang.Namespace 0x2511177e "user"], :file nil} {:line 1, :column 27, :ns #object[sci.lang.Namespace 0x2511177e "user"], :file nil, :sci.impl/f-meta {:ns #object[sci.lang.Namespace 0x316ea5ac "clojure.core"], :macro true, :sci/built-in true, :name fn, :doc "params => positional-params*, or positional-params* & rest-param\n  positional-param => binding-form\n  rest-param => binding-form\n  binding-form => name, or destructuring-form\n\n  Defines a function.\n\n  See https://clojure.org/reference/special_forms#fn for more information", :arglists ([& sigs])}} {:line 1, :column 27, :ns #object[sci.lang.Namespace 0x2511177e "user"], :file nil} {:line 1, :column 35, :ns #object[sci.lang.Namespace 0x2511177e "user"], :file nil})}], :file nil, :phase "analysis"}
+   :at [sci.impl.utils$rethrow_with_location_of_node invokeStatic "utils.cljc" 148]}
+  {:type clojure.lang.ExceptionInfo
+   :message "Could not resolve symbol: System/exit"
+   :data {:type :sci/error, :line 1, :column 18, :file nil, :phase "analysis"}
+   :at [sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]}]
+ :trace
+ [[sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]
+  [sci.impl.utils$throw_error_with_location invoke "utils.cljc" 41]
+  [sci.impl.resolve$throw_error_with_location invokeStatic "resolve.cljc" 12]
+  [sci.impl.resolve$throw_error_with_location invoke "resolve.cljc" 11]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 282]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 276]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1508]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1817]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze_children_tail invokeStatic "analyzer.cljc" 107]
+  [sci.impl.analyzer$analyze_children_tail invoke "analyzer.cljc" 103]
+  [sci.impl.analyzer$return_do invokeStatic "analyzer.cljc" 119]
+  [sci.impl.analyzer$return_do invoke "analyzer.cljc" 110]
+  [sci.impl.analyzer$expand_fn_args_PLUS_body invokeStatic "analyzer.cljc" 335]
+  [sci.impl.analyzer$expand_fn_args_PLUS_body invoke "analyzer.cljc" 313]
+  [sci.impl.analyzer$analyze_fn_STAR_$fn__75176 invoke "analyzer.cljc" 419]
+  [clojure.lang.PersistentList reduce "PersistentList.java" 143]
+  [clojure.core$reduce invokeStatic "core.clj" 6964]
+  [clojure.core$reduce invoke "core.clj" 6947]
+  [sci.impl.analyzer$analyze_fn_STAR_ invokeStatic "analyzer.cljc" 415]
+  [sci.impl.analyzer$analyze_fn_STAR_ invoke "analyzer.cljc" 389]
+  [sci.impl.analyzer$dispatch_special invokeStatic "analyzer.cljc" 1443]
+  [sci.impl.analyzer$dispatch_special invoke "analyzer.cljc" 1439]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1594]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1612]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1817]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze_children$fn__75097 invoke "analyzer.cljc" 307]
+  [clojure.core$mapv$fn__8569 invoke "core.clj" 7059]
+  [clojure.core.protocols$fn__8279 invokeStatic "protocols.clj" 167]
+  [clojure.core.protocols$fn__8279 invoke "protocols.clj" 123]
+  [clojure.core.protocols$fn__8233$G__8228__8242 invoke "protocols.clj" 19]
+  [clojure.core.protocols$seq_reduce invokeStatic "protocols.clj" 31]
+  [clojure.core.protocols$fn__8266 invokeStatic "protocols.clj" 74]
+  [clojure.core.protocols$fn__8266 invoke "protocols.clj" 74]
+  [clojure.core.protocols$fn__8207$G__8202__8220 invoke "protocols.clj" 13]
+  [clojure.core$reduce invokeStatic "core.clj" 6965]
+  [clojure.core$mapv invokeStatic "core.clj" 7050]
+  [clojure.core$mapv invoke "core.clj" 7050]
+  [sci.impl.analyzer$analyze_children invokeStatic "analyzer.cljc" 307]
+  [sci.impl.analyzer$analyze_children invoke "analyzer.cljc" 306]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1654]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1612]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.interpreter$eval_form_STAR_ invokeStatic "interpreter.cljc" 38]
+  [sci.impl.interpreter$eval_form_STAR_ invoke "interpreter.cljc" 16]
+  [sci.impl.interpreter$eval_form invokeStatic "interpreter.cljc" 64]
+  [sci.impl.interpreter$eval_form invoke "interpreter.cljc" 62]
+  [sci.impl.interpreter$eval_string_STAR_ invokeStatic "interpreter.cljc" 81]
+  [sci.impl.interpreter$eval_string_STAR_ invoke "interpreter.cljc" 68]
+  [sci.core$eval_string_PLUS_ invokeStatic "core.cljc" 294]
+  [sci.core$eval_string_PLUS_ invoke "core.cljc" 281]
+  [clj_surgeon.edit_dsl$evaluate_expression invokeStatic "edit_dsl.clj" 422]
+  [clj_surgeon.edit_dsl$evaluate_expression invoke "edit_dsl.clj" 401]
+  [clj_surgeon.edit_dsl$compile_xray invokeStatic "edit_dsl.clj" 546]
+  [clj_surgeon.edit_dsl$compile_xray invoke "edit_dsl.clj" 543]
+  [clj_surgeon.xray_test$fn__117224$fn__117305 invoke "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invokeStatic "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invoke "xray_test.clj" 168]
+  [clojure.test$test_var$fn__9898 invoke "test.clj" 717]
+  [clojure.test$test_var invokeStatic "test.clj" 717]
+  [clojure.test$test_var invoke "test.clj" 708]
+  [clojure.test$test_vars$fn__9924$fn__9929 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars$fn__9924 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars invokeStatic "test.clj" 731]
+  [clojure.test$test_vars invoke "test.clj" 723]
+  [user$eval118377 invokeStatic "NO_SOURCE_FILE" 1]
+  [user$eval118377 invoke "NO_SOURCE_FILE" 1]
+  [clojure.lang.Compiler eval "Compiler.java" 7739]
+  [clojure.lang.Compiler eval "Compiler.java" 7729]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435$fn__1446 invoke "interruptible_eval.clj" 106]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435 invoke "interruptible_eval.clj" 101]
+  [nrepl.middleware.session$session_exec$session_loop__1519 invoke "session.clj" 230]
+  [nrepl.SessionThread run "SessionThread.java" 21]]} #error {
+ :cause "Could not resolve symbol: System/exit"
+ :data {:type :sci/error, :line 1, :column 18, :file nil, :phase "analysis"}
+ :via
+ [{:type clojure.lang.ExceptionInfo
+   :message "Could not resolve symbol: System/exit"
+   :data {:type :sci/error, :line 1, :column 18, :file nil, :phase "analysis"}
+   :at [sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]}]
+ :trace
+ [[sci.impl.utils$throw_error_with_location invokeStatic "utils.cljc" 46]
+  [sci.impl.utils$throw_error_with_location invoke "utils.cljc" 41]
+  [sci.impl.resolve$throw_error_with_location invokeStatic "resolve.cljc" 12]
+  [sci.impl.resolve$throw_error_with_location invoke "resolve.cljc" 11]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 282]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.resolve$resolve_symbol invokeStatic "resolve.cljc" 276]
+  [sci.impl.resolve$resolve_symbol invoke "resolve.cljc" 274]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1508]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1817]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze_children_tail invokeStatic "analyzer.cljc" 107]
+  [sci.impl.analyzer$analyze_children_tail invoke "analyzer.cljc" 103]
+  [sci.impl.analyzer$return_do invokeStatic "analyzer.cljc" 119]
+  [sci.impl.analyzer$return_do invoke "analyzer.cljc" 110]
+  [sci.impl.analyzer$expand_fn_args_PLUS_body invokeStatic "analyzer.cljc" 335]
+  [sci.impl.analyzer$expand_fn_args_PLUS_body invoke "analyzer.cljc" 313]
+  [sci.impl.analyzer$analyze_fn_STAR_$fn__75176 invoke "analyzer.cljc" 419]
+  [clojure.lang.PersistentList reduce "PersistentList.java" 143]
+  [clojure.core$reduce invokeStatic "core.clj" 6964]
+  [clojure.core$reduce invoke "core.clj" 6947]
+  [sci.impl.analyzer$analyze_fn_STAR_ invokeStatic "analyzer.cljc" 415]
+  [sci.impl.analyzer$analyze_fn_STAR_ invoke "analyzer.cljc" 389]
+  [sci.impl.analyzer$dispatch_special invokeStatic "analyzer.cljc" 1443]
+  [sci.impl.analyzer$dispatch_special invoke "analyzer.cljc" 1439]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1594]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1612]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1817]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze_children$fn__75097 invoke "analyzer.cljc" 307]
+  [clojure.core$mapv$fn__8569 invoke "core.clj" 7059]
+  [clojure.core.protocols$fn__8279 invokeStatic "protocols.clj" 167]
+  [clojure.core.protocols$fn__8279 invoke "protocols.clj" 123]
+  [clojure.core.protocols$fn__8233$G__8228__8242 invoke "protocols.clj" 19]
+  [clojure.core.protocols$seq_reduce invokeStatic "protocols.clj" 31]
+  [clojure.core.protocols$fn__8266 invokeStatic "protocols.clj" 74]
+  [clojure.core.protocols$fn__8266 invoke "protocols.clj" 74]
+  [clojure.core.protocols$fn__8207$G__8202__8220 invoke "protocols.clj" 13]
+  [clojure.core$reduce invokeStatic "core.clj" 6965]
+  [clojure.core$mapv invokeStatic "core.clj" 7050]
+  [clojure.core$mapv invoke "core.clj" 7050]
+  [sci.impl.analyzer$analyze_children invokeStatic "analyzer.cljc" 307]
+  [sci.impl.analyzer$analyze_children invoke "analyzer.cljc" 306]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1654]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.analyzer$analyze_call invokeStatic "analyzer.cljc" 1612]
+  [sci.impl.analyzer$analyze_call invoke "analyzer.cljc" 1495]
+  [sci.impl.analyzer$analyze invokeStatic "analyzer.cljc" 1854]
+  [sci.impl.analyzer$analyze invoke "analyzer.cljc" 1815]
+  [sci.impl.interpreter$eval_form_STAR_ invokeStatic "interpreter.cljc" 38]
+  [sci.impl.interpreter$eval_form_STAR_ invoke "interpreter.cljc" 16]
+  [sci.impl.interpreter$eval_form invokeStatic "interpreter.cljc" 64]
+  [sci.impl.interpreter$eval_form invoke "interpreter.cljc" 62]
+  [sci.impl.interpreter$eval_string_STAR_ invokeStatic "interpreter.cljc" 81]
+  [sci.impl.interpreter$eval_string_STAR_ invoke "interpreter.cljc" 68]
+  [sci.core$eval_string_PLUS_ invokeStatic "core.cljc" 294]
+  [sci.core$eval_string_PLUS_ invoke "core.cljc" 281]
+  [clj_surgeon.edit_dsl$evaluate_expression invokeStatic "edit_dsl.clj" 422]
+  [clj_surgeon.edit_dsl$evaluate_expression invoke "edit_dsl.clj" 401]
+  [clj_surgeon.edit_dsl$compile_xray invokeStatic "edit_dsl.clj" 546]
+  [clj_surgeon.edit_dsl$compile_xray invoke "edit_dsl.clj" 543]
+  [clj_surgeon.xray_test$fn__117224$fn__117305 invoke "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invokeStatic "xray_test.clj" 182]
+  [clj_surgeon.xray_test$fn__117224 invoke "xray_test.clj" 168]
+  [clojure.test$test_var$fn__9898 invoke "test.clj" 717]
+  [clojure.test$test_var invokeStatic "test.clj" 717]
+  [clojure.test$test_var invoke "test.clj" 708]
+  [clojure.test$test_vars$fn__9924$fn__9929 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars$fn__9924 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars invokeStatic "test.clj" 731]
+  [clojure.test$test_vars invoke "test.clj" 723]
+  [user$eval118377 invokeStatic "NO_SOURCE_FILE" 1]
+  [user$eval118377 invoke "NO_SOURCE_FILE" 1]
+  [clojure.lang.Compiler eval "Compiler.java" 7739]
+  [clojure.lang.Compiler eval "Compiler.java" 7729]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435$fn__1446 invoke "interruptible_eval.clj" 106]
+  [nrepl.middleware.interruptible_eval$evaluator$run__1435 invoke "interruptible_eval.clj" 101]
+  [nrepl.middleware.session$session_exec$session_loop__1519 invoke "session.clj" 230]
+  [nrepl.SessionThread run "SessionThread.java" 21]]})))
+
+FAIL in (sandbox-refusal-classification-is-data-not-prose) (xray_test.clj:190)
+English-looking runtime failures cannot impersonate a capability denial
+expected: (= :evaluation-failed (:reason r))
+  actual: (not (= :evaluation-failed :disallowed-symbol))
+{:test 1, :pass 17, :fail 13, :error 0}
+=> nil
+*======== user | clj ========*
