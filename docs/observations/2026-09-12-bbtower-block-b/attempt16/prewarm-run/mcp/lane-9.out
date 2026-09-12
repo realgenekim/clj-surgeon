@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.mcp-extraction-test
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.mcp-program-tool-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.mission-usage-test
+
+Testing clj-surgeon.mission-forms-test

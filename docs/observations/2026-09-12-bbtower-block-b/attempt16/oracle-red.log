@@ -1,0 +1,49 @@
+Only writable root: /var/tmp/forge/packets/0123456789ab-0123-0123-0123-0123456789ab/tmp
+test_capacity_boundaries (test_gate_slot.GateSlotTest.test_capacity_boundaries) ... ok
+test_exec_inherits_the_slot_and_exit_releases_it (test_gate_slot.GateSlotTest.test_exec_inherits_the_slot_and_exit_releases_it) ... ok
+test_killed_owner_and_failed_exec_release_slots (test_gate_slot.GateSlotTest.test_killed_owner_and_failed_exec_release_slots)
+Sol's witness (3): a holder killed with SIGKILL frees its slot within ... ok
+test_live_recompute_and_high_slot_shrink (test_gate_slot.GateSlotTest.test_live_recompute_and_high_slot_shrink) ... ok
+test_three_independent_callers_share_one_bound (test_gate_slot.GateSlotTest.test_three_independent_callers_share_one_bound)
+Width two, three coordinators that share nothing: admitted, admitted, ... ok
+test_two_independent_coordinators_cannot_split_the_semaphore (test_gate_slot.GateSlotTest.test_two_independent_coordinators_cannot_split_the_semaphore)
+Sol GATE-LANES-FENCE-001-R3, adapted to a mechanism with no root. ... ok
+test_unknown_capacity_refuses_and_does_not_leak_admission (test_gate_slot.GateSlotTest.test_unknown_capacity_refuses_and_does_not_leak_admission) ... ok
+test_a_dead_holders_entry_is_reclaimed_not_leaked (test_gate_slot.PortabilityTest.test_a_dead_holders_entry_is_reclaimed_not_leaked)
+No kernel reaper removes a pathname socket, so the NEXT acquirer ... skipped 'path-socket backend only'
+test_backend_follows_the_platform_and_names_its_guarantee (test_gate_slot.PortabilityTest.test_backend_follows_the_platform_and_names_its_guarantee) ... ok
+test_capacity_is_readable_on_this_platform (test_gate_slot.PortabilityTest.test_capacity_is_readable_on_this_platform) ... ok
+test_declared_memory_overrides_and_refuses_garbage (test_gate_slot.PortabilityTest.test_declared_memory_overrides_and_refuses_garbage) ... ok
+test_replaced_root_is_a_typed_refusal_not_a_silent_split (test_gate_slot.PortabilityTest.test_replaced_root_is_a_typed_refusal_not_a_silent_split)
+R3 on darwin cannot be made unrepresentable, so it is DETECTED. ... skipped 'path-socket backend only'
+test_unknown_backend_is_a_typed_refusal (test_gate_slot.PortabilityTest.test_unknown_backend_is_a_typed_refusal) ... ok
+test_a_120_byte_tmpdir_binds_a_real_slot_under_100_bytes (test_gate_slot.SunPathBudgetTest.test_a_120_byte_tmpdir_binds_a_real_slot_under_100_bytes)
+The brief's linux witness, driven to an actual bind(). ... FAIL
+test_a_path_over_the_budget_is_a_TYPED_refusal_not_an_OSError (test_gate_slot.SunPathBudgetTest.test_a_path_over_the_budget_is_a_TYPED_refusal_not_an_OSError)
+The skiff got `AF_UNIX path too long` straight out of bind(): no ... ok
+test_a_short_linux_tmpdir_keeps_the_root_it_had (test_gate_slot.SunPathBudgetTest.test_a_short_linux_tmpdir_keeps_the_root_it_had) ... ok
+test_an_operator_named_root_is_honoured_not_relocated (test_gate_slot.SunPathBudgetTest.test_an_operator_named_root_is_honoured_not_relocated) ... ok
+test_darwin_chooses_the_short_root_and_every_leaf_fits (test_gate_slot.SunPathBudgetTest.test_darwin_chooses_the_short_root_and_every_leaf_fits) ... ok
+test_scratch_base_follows_disk_temp_policy (test_gate_slot.SunPathBudgetTest.test_scratch_base_follows_disk_temp_policy) ... ok
+test_the_macos_tmpdir_really_does_overflow_and_on_the_private_name (test_gate_slot.SunPathBudgetTest.test_the_macos_tmpdir_really_does_overflow_and_on_the_private_name)
+The RED fact, pinned so the fix cannot be mistaken for decoration. ... ok
+test_the_root_is_narrowed_to_0700_even_when_it_was_already_wide (test_gate_slot.SunPathBudgetTest.test_the_root_is_narrowed_to_0700_even_when_it_was_already_wide)
+/tmp is world-writable and sticky. `mkdir(mode=)` applies only when ... ok
+
+======================================================================
+FAIL: test_a_120_byte_tmpdir_binds_a_real_slot_under_100_bytes (test_gate_slot.SunPathBudgetTest.test_a_120_byte_tmpdir_binds_a_real_slot_under_100_bytes)
+The brief's linux witness, driven to an actual bind().
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_gate_slot.py", line 445, in test_a_120_byte_tmpdir_binds_a_real_slot_under_100_bytes
+    self.assertLessEqual(len(str(short_root).encode('utf-8')) + 1
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         + slot.LONGEST_LEAF, slot.SUN_PATH_BUDGET)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 121 not less than or equal to 100
+
+----------------------------------------------------------------------
+Ran 21 tests in 0.318s
+
+FAILED (failures=1, skipped=2)
+exit: 1
