@@ -5970,3 +5970,23 @@ tasks, NATIVE cold focused run vs PROBE warm image, n=3 per cell, complete wall,
 first-attempt success, refusal rate). Fable's bets, on record before any run: PROBE
 median wall ≤ 0.5× NATIVE on the three bb-portable namespaces and ≤ 0.3× on the three
 JVM-only; first-attempt success equal; PROBE refusal rate ≥ NATIVE. Astra adds her row.
+
+## 2026-09-12T20:35:01Z — ship round 4 sealed (e3ffc6a7); data-not-code rounds 1–2 stopped correctly twice; round 3 building; wiki-llm opened
+
+Eleventh check-only prewarm (packet 09273506) exit 0 at 3b6d5357; ship run 20260912T202735Z
+sealed candidate e3ffc6a7, Sol reviewing the round-4 brief, battery and fast lane beside it.
+
+Data-not-code: round 1 STOP-CONTRACT (no launcher supplies a destination envelope; the
+consult did not define authority when none is supplied) — right; I defined it: a trusted
+context key :destination-envelope {:id :roots :source}, computed once per launcher from the
+declared places, policy-default when absent, never unbounded, request fields refused,
+concrete final target admitted before creation, :envelope-id printed in receipts. Round 2
+REVIEW-REQUIRED (AGENTS.md phase stop) with envelope-design.md; reviewed and approved with
+the final-target strengthening; round 3 (pid 3757527) builds all phases.
+
+wiki-llm opened in the records lane (Gene: "will become basis of all the patterns and anti
+patterns for sublime vs unsublime"): first page has 13 anti-patterns and 6 sublime patterns
+from today, each with its receipt. Critique of the commit-mining idea given in chat: yes
+under three constraints (receipts not commit messages; every entry names its meter
+movement; the wiki is the promotion ladder's middle rung, not a fifth store). An Opus
+miner is reading the last ten days of observation records under those rules.
