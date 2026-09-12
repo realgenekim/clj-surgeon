@@ -5089,3 +5089,26 @@ Two admission lessons from the launch itself: `run build` refuses the reviewer-c
 override as a fixture key (drop it; only ship needs it), and run-bg takes the name first,
 no "launch" word. The packet also refused a branch-attached owner until the worktree was
 detached at the tip.
+
+## 2026-09-12T06:20:41Z — block B attempt 1 blocked on my premise; attempt 2 launched on the corrected one
+
+Packet 75bd44e8 refused in 18 minutes without running a JVM, and it was right to. My brief
+said block A's union of the bb lane into test-fast caused the 68,210 ms fast-lane refusal.
+Astra re-folded the retained log: the refusal charges exactly the original 61 JVM-fast
+members, the same set at base and subject. The bb-only members add nothing to that sum.
+The base also has no bb lane budget at all (its bb runner ran with isolation disabled),
+so "restore the pre-existing bb ceiling" named a thing that never existed. Third finding:
+the probe verb has no refusals.edn and no receipt-boolean registration; block A shipped
+a verb without the two registries the native-parity rule requires.
+
+Corrected brief (packet 59902da0, Astra verified): locate the slowdown by matched
+measurement of the same 61 members under base coordinator, subject coordinator with bb
+children off, and subject as shipped; fix the cause without touching budgets; register a
+NEW :bb ceiling from measurement and say it is new; build probe's refusals.edn and
+receipt-boolean seams (the registered second encounter of that class); measure
+feature-thread on both runtimes; one prewarm plus one repair. Attempt 1 report is
+published as `2026-09-12-bbtower-block-b-attempt1-blocked.md`.
+
+The premise error is the same shape as the arm N "died at 9/26" misread: I stated a cause
+from a summary number without folding the rows. Both times the builder's first act was to
+fold the rows and refuse.
