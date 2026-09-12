@@ -1,0 +1,18 @@
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.mcp-extraction-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test
