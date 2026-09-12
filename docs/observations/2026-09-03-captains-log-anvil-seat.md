@@ -6250,3 +6250,15 @@ own concurrency. The ledger row is consumed by battery-fresh, so it belongs on t
 carried as 76af5782 (one line), pushed. Sixteenth check-only prewarm (packet d0eed9b4) at
 76af5782; ship round 8 follows. Data-not-code round 6 launches when the prewarm finishes;
 never two suites at once again.
+
+## 2026-09-12T23:07:28Z — battery-fresh is ancestry, not a row: the receipt commit itself must be the tip; prewarm 16 at 76af5782 was wasted
+
+At 76af5782 (branch tip + the copied :pass row) `battery_ledger.clj check` says REFUSED
+(not-an-ancestor): the receipt names candidate 8c542ede, which the branch does not
+descend from. Correct: a receipt is bound to the tree it ran on, so copying its row onto a
+sibling proves nothing. At df86ecda (8c542ede + the row, what receipt-chain committed)
+the check says OK, 1 commit behind, 0.1 h old, and trunk is an ancestor. So the landing
+tip is df86ecda, pushed as origin/bb-rewrite-tower-land (a NEW name; never a force push
+over bb-rewrite-tower). Prewarm 16 at 76af5782 (running) is wasted; prewarm 17 at df86ecda
+follows it on the lease, then ship round 8 with the Sol brief rewritten for the closure.
+Lesson for the wiki: the receipt's identity is the candidate's ancestry; a row is not a receipt.
