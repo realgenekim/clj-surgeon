@@ -2,17 +2,13 @@
   {:lane :fast}
   (:require
    [clj-surgeon.cljc.merge :as m]
+   [clj-surgeon.cljc.merge-test :as oracle]
    [clj-surgeon.cljc.split :as s]
    [clj-surgeon.core :as core]
-   [clojure.test :refer [deftest is testing]]
-   [clojure.tools.reader :as r]
-   [clojure.tools.reader.reader-types :as rt]))
+   [clojure.test :refer [deftest is testing]]))
 
 (defn- parse-forms [src]
-  (let [rdr (rt/string-push-back-reader src)]
-    (->> (repeatedly #(r/read {:eof ::end :read-cond :preserve} rdr))
-         (take-while #(not= ::end %))
-         vec)))
+  (oracle/parse-forms src))
 
 (defn- normalize-ns-form
   "Within an ns form, replace the :require sub-form's contents with a set of
@@ -84,7 +80,14 @@
 
 (deftest round-trip-unmatched-counts
   (testing "Asymmetric body-form counts round-trip via the strict-split fallback"
-    (check-round-trip "unmatched-counts")))
+    (check-round-trip "unmatched-counts"))
+  (testing "Oracle preserves argument identity while ignoring fresh reader IDs"
+    (is (= (parse-forms "#(vector %1 %2 %1)")
+           (parse-forms "#(vector %1 %2 %1)")))
+    (is (not= (parse-forms "#(vector %1 %2 %1)")
+              (parse-forms "#(vector %1 %2 %2)")))
+    (is (not= (parse-forms "(vector named-a named-b)")
+              (parse-forms "(vector named-a named-a)")))))
 
 ;; ============================================================
 ;; Double round trip: split → merge → split → merge converges.
