@@ -5589,3 +5589,17 @@ witness read the live checkout's status, which this attempt's own untracked obse
 files had grown (isolated). "TMP-UNKNOWN" is honest: no Landlock claim, only a read-only
 tmp stand-in; the check-only packet is the Landlock claim, and it is running now
 (packet 53079781).
+
+## 2026-09-12T12:26:37Z — third check-only prewarm: one red lane left, and it is npx writing to the home; attempt 14 running
+
+Packet 53079781 at c2ec3039: mcp suite passed, bb suite passed, alias suite one lane red.
+The typist formatter runs `npx @chrisoakman/standard-clojure-style fix` (mcp_formatter.clj:10)
+and npx writes its cache and logs under the real home, which no write envelope covers.
+Attempt 13's refusal repair paid for itself at once: the refusal now quotes npm's EACCES
+on ~/.npm/_cacache, where the previous run said only "typist-formatter-failed".
+Attempt 14 (Astra, pid 1882294): npm cache and logs directed into the selected temp
+root; a resolved binary preferred over npx; the invocation path recorded in the receipt;
+red-first with a read-only stand-in; then test-fast and the prewarm.
+
+Count so far: 13 out-of-envelope writers found by refusals in four check-only runs, each
+one a place a hand-run gate had been writing without anyone knowing.
