@@ -1,0 +1,71 @@
+=> nil
+*======== user | clj ========*
+=> nil
+*======== user | clj ========*
+
+FAIL in (runtime-evidence-binds-statistics-to-receipt-files) (lane_manifest_test.clj:302)
+nil
+expected: (= kind (:error-type r))
+  actual: (not (= :invalid-runtime-evidence nil))
+
+FAIL in (runtime-evidence-binds-statistics-to-receipt-files) (lane_manifest_test.clj:303)
+nil
+expected: (= n (:namespace r))
+  actual: (not (= clj-surgeon.battery-ledger-test nil))
+
+FAIL in (runtime-evidence-binds-statistics-to-receipt-files) (lane_manifest_test.clj:304)
+nil
+expected: (= field (:field r))
+  actual: (not (= [:bb :walls-ms] nil))
+
+FAIL in (runtime-evidence-binds-statistics-to-receipt-files) (lane_manifest_test.clj:304)
+{:error-type :invalid-runtime-evidence, :namespace clj-surgeon.battery-ledger-test}
+expected: (= field (:field r))
+  actual: (not (= :runtime nil))
+
+FAIL in (runtime-evidence-binds-statistics-to-receipt-files) (lane_manifest_test.clj:302)
+nil
+expected: (= kind (:error-type r))
+  actual: (not (= :missing-evidence-receipts nil))
+
+FAIL in (runtime-evidence-binds-statistics-to-receipt-files) (lane_manifest_test.clj:303)
+nil
+expected: (= n (:namespace r))
+  actual: (not (= clj-surgeon.battery-ledger-test nil))
+
+FAIL in (runtime-evidence-binds-statistics-to-receipt-files) (lane_manifest_test.clj:304)
+nil
+expected: (= field (:field r))
+  actual: (not (= [:bb :logs] nil))
+
+FAIL in (destination-envelope-policy-witness-assertion-count) (receipt_artifacts_boundary_test.clj:200)
+DATACODE-ENV-002: policy witness must execute all 12 assertions {:test 1, :pass 11, :fail 0, :error 0}
+expected: (= 12 (+ (:pass counts) (:fail counts) (:error counts)))
+  actual: (not (= 12 11))
+
+FAIL in (destination-envelope-refuses-hard-linked-final-ledger) (receipt_artifacts_boundary_test.clj:218)
+nil
+expected: (= :write-outside-envelope (:error-type r))
+  actual: (not (= :write-outside-envelope nil))
+
+FAIL in (destination-envelope-refuses-hard-linked-final-ledger) (receipt_artifacts_boundary_test.clj:219)
+expected: (= :hard-link (:reason r))
+  actual: (not (= :hard-link nil))
+
+FAIL in (destination-envelope-refuses-hard-linked-final-ledger) (receipt_artifacts_boundary_test.clj:220)
+expected: (= :telemetry-append (:effect r))
+  actual: (not (= :telemetry-append nil))
+
+FAIL in (destination-envelope-refuses-hard-linked-final-ledger) (receipt_artifacts_boundary_test.clj:221)
+expected: (= (str ledger) (:path r))
+  actual: (not (= "/var/tmp/forge/datacode-fx/receipt-publication-11339906240047017711/allowed/alias-migration-receipts/ledger.edn" nil))
+
+FAIL in (destination-envelope-refuses-hard-linked-final-ledger) (receipt_artifacts_boundary_test.clj:222)
+expected: (string? (:envelope-id r))
+  actual: (not (string? nil))
+
+FAIL in (destination-envelope-refuses-hard-linked-final-ledger) (receipt_artifacts_boundary_test.clj:223)
+expected: (= "sentinel" (slurp outside))
+  actual: (not (= "sentinel" "sentinel{:witness true, :envelope-id \"31629693af6f6d09b6176971df712985a625cdd03afe414867d860483e427307\"}\n"))
+=> nil
+*======== user | clj ========*

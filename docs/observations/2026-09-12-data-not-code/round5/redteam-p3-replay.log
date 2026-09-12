@@ -1,0 +1,8 @@
+subject row: clj-surgeon.mcp-recovery-test
+A1 nonexistent-receipt-paths -> :missing-evidence-receipts
+A2 one-log-dropped -> :invalid-runtime-evidence
+A3 mean-only-altered -> :invalid-runtime-evidence
+A4 forged-consistent-row (walls 6ms -> 9000ms, runtime bb -> jvm, receipts UNCHANGED) -> :invalid-runtime-evidence  new-ratio= 58.372637553359816
+B cross-check rows-vs-receipts: rows= 38  receipts-checked= 456  disagreements= 0
+P3DONE
+{:error-type :invalid-runtime-evidence, :namespace clj-surgeon.mcp-recovery-test, :field [:bb :walls-ms]}

@@ -54,6 +54,7 @@
    merge gate."
   (:require
    [clojure.edn :as edn]
+   [clojure.java.io :as io]
    [clojure.string :as str]))
 
 (def lanes
@@ -263,52 +264,93 @@
 
 ;; @spec TEST-ISO-016 -- paired namespace walls on the same box, not startup.
 ;; @spec DATACODE-ROWS-001
+(defn validate-runtime-row!
+  "Pure comparison with opened receipt data; statistics derive only from receipts."
+  [n row receipts]
+  (let [bad! (fn [field]
+               (throw (ex-info "Runtime evidence disagrees with its receipts or policy"
+                               {:error-type :invalid-runtime-evidence
+                                :namespace n :field field})))
+        near? #(and (number? %1) (Double/isFinite (double %1))
+                    (< (Math/abs (- (double %1) (double %2))) 1e-9))]
+    (when-not (symbol? n) (bad! :namespace))
+    (when-not (and (integer? (:n row)) (<= 6 (:n row))) (bad! :n))
+    (when-not (#{:portable :contract-failed :unverified} (:portability-state row))
+      (bad! :portability-state))
+    (let [stats
+          (into {}
+                (for [runtime [:jvm :bb]
+                      :let [samples (get receipts runtime)
+                            walls (mapv :elapsed-ms samples)
+                            sample-n (count samples)
+                            arm (get row runtime)]]
+                  (do
+                    (doseq [receipt samples]
+                      (when-not (= n (:namespace receipt)) (bad! [runtime :namespace]))
+                      (when-not (= runtime (:runtime receipt)) (bad! [runtime :runtime])))
+                    (when-not (= (:n row) sample-n) (bad! :n))
+                    (when-not (= sample-n (:n arm)) (bad! [runtime :n]))
+                    (when-not (and (vector? (:walls-ms arm))
+                                   (= walls (:walls-ms arm))
+                                   (every? #(and (number? %) (Double/isFinite (double %))
+                                                 (not (neg? %))) walls))
+                      (bad! [runtime :walls-ms]))
+                    (let [mean (/ (double (reduce + walls)) sample-n)
+                          sd (Math/sqrt (/ (reduce + (map #(let [d (- % mean)] (* d d)) walls))
+                                           (dec sample-n)))]
+                      (when-not (near? (:mean-ms arm) mean) (bad! [runtime :mean-ms]))
+                      (when-not (near? (:sd-ms arm) sd) (bad! [runtime :sd-ms]))
+                      [runtime {:mean-ms mean :sd-ms sd}]))))
+          {:keys [jvm bb]} stats
+          ratio (/ (+ (:mean-ms bb) (* 2 (:sd-ms bb)))
+                   (max 1.0 (- (:mean-ms jvm) (* 2 (:sd-ms jvm)))))
+          expected (if (and (= :portable (:portability-state row))
+                            (nil? (:contract-failure row)) (empty? (:failed-samples row))
+                            (<= ratio 2.0)) :bb :jvm)]
+      (when-not (near? (:conservative-ratio row) ratio) (bad! :conservative-ratio))
+      (when-not (= (:runtime row) expected) (bad! :runtime)))))
+
+  ;; @spec DATACODE-ROWS-001
 (defn validate-runtime-evidence!
-  "Validate measured values and receipt identities without reading files."
+  "Open every cited receipt, then bind measured rows to their actual evidence."
   [rows]
   (when-not (and (map? rows) (seq rows))
     (throw (ex-info "Runtime evidence must contain namespace rows"
                     {:error-type :invalid-runtime-evidence})))
   (doseq [[n row] rows]
-    (doseq [runtime [:jvm :bb]
-            :let [{:keys [logs]} (get row runtime)]]
-      (when-not (and (vector? logs) (seq logs)
-                     (every? #(and (string? %) (not (str/blank? %))) logs)
-                     (= (count logs) (count (distinct logs))))
-        (throw (ex-info "Runtime evidence requires distinct receipt paths"
-                        {:error-type :missing-evidence-receipts :namespace n :runtime runtime}))))
-    (let [bad! #(throw (ex-info "Runtime evidence disagrees with its samples or policy"
-                                {:error-type :invalid-runtime-evidence :namespace n}))
-          near? #(and (number? %1) (Double/isFinite (double %1))
-                      (< (Math/abs (- (double %1) (double %2))) 1e-9))]
-      (when-not (and (symbol? n) (integer? (:n row)) (<= 6 (:n row))
-                     (#{:portable :contract-failed :unverified} (:portability-state row)))
-        (bad!))
-      (doseq [runtime [:jvm :bb]
-              :let [{:keys [walls-ms mean-ms sd-ms logs] sample-n :n} (get row runtime)]]
-        (when-not (and (vector? walls-ms) (= (:n row) sample-n (count walls-ms) (count logs))
-                       (every? #(and (number? %) (Double/isFinite (double %)) (not (neg? %))) walls-ms))
-          (bad!))
-        (let [mean (/ (double (reduce + walls-ms)) sample-n)
-              sd (Math/sqrt (/ (reduce + (map #(let [d (- % mean)] (* d d)) walls-ms)) (dec sample-n)))]
-          (when-not (and (near? mean-ms mean) (near? sd-ms sd)) (bad!))))
-      (let [{:keys [jvm bb conservative-ratio runtime portability-state]} row
-            ratio (/ (+ (:mean-ms bb) (* 2 (:sd-ms bb)))
-                     (max 1.0 (- (:mean-ms jvm) (* 2 (:sd-ms jvm)))))
-            expected (if (and (= :portable portability-state)
-                           (nil? (:contract-failure row)) (empty? (:failed-samples row))
-                           (<= ratio 2.0)) :bb :jvm)]
-        (when-not (and (near? conservative-ratio ratio) (= runtime expected)) (bad!)))))
+    (let [receipts
+          (into {}
+                (for [runtime [:jvm :bb]
+                      :let [logs (get-in row [runtime :logs])
+                            context {:namespace n :runtime runtime :field [runtime :logs]}]]
+                  (do
+                    (when-not (and (vector? logs) (seq logs)
+                                   (every? #(and (string? %) (not (str/blank? %))) logs)
+                                   (= (count logs) (count (distinct logs))))
+                      (throw (ex-info "Runtime evidence requires distinct receipt paths"
+                                      (assoc context :error-type :missing-evidence-receipts))))
+                    [runtime
+                     (mapv (fn [path]
+                             (when-not (.isFile (io/file path))
+                               (throw (ex-info "Runtime evidence receipt file is missing"
+                                               (assoc context :error-type :missing-evidence-receipts
+                                                      :path path))))
+                             (try (edn/read-string (slurp path))
+                                  (catch Exception e
+                                    (throw (ex-info "Runtime evidence receipt cannot be read"
+                                                    (assoc context :error-type :invalid-runtime-evidence
+                                                           :path path) e))))) logs)])))]
+      (validate-runtime-row! n row receipts)))
   rows)
 
 (def runtime-evidence-path
   "docs/observations/2026-09-12-data-not-code/round3/runtime-rows.edn")
 
-;; @spec DATACODE-ROWS-001
+  ;; @spec DATACODE-ROWS-001
 (def runtime-measurements
   (validate-runtime-evidence! (edn/read-string (slurp runtime-evidence-path))))
 
-;; @spec TEST-ISO-016
+  ;; @spec TEST-ISO-016
 (defn measured-runtime [portable-runtime measurement]
   (if (and (= :bb portable-runtime)
            (or (nil? measurement)
@@ -328,7 +370,7 @@
   #{:sci-host-interop :native-image-reflection
     :bb-classpath-missing/nrepl.core :bb-hosted-jvm-launcher})
 
-;; @spec TEST-ISO-016 -- exact limitations from attempt22's complete controls.
+  ;; @spec TEST-ISO-016 -- exact limitations from attempt22's complete controls.
 (def bb-ineligibilities
   {'clj-surgeon.mcp-cold-verify-test
    {:reasons #{:sci-host-interop} :detail "SCI refuses FileLockImpl.close in admission-timeout witness"}
@@ -365,7 +407,7 @@
 (def unmeasured-runtimes
   (apply dissoc namespace-runtimes (keys runtime-measurements)))
 
-;; @spec TEST-ISO-016 -- correctness controls cover every assignment/cadence.
+  ;; @spec TEST-ISO-016 -- correctness controls cover every assignment/cadence.
 (def namespace-runtime-controls
   (into (sorted-map)
         (for [n (keys namespace-runtimes)]
@@ -382,7 +424,7 @@
                                    "/controls/"
                                    n "-" suffix ".control.edn")]))])))
 
-;; @spec TEST-ISO-016 -- a passing assignment cannot hide a failed control.
+  ;; @spec TEST-ISO-016 -- a passing assignment cannot hide a failed control.
 (defn portability-state
   [namespace-name {:keys [jvm bb]} registration]
   (let [passes? (fn [runtime row]

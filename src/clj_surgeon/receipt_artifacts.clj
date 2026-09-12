@@ -122,12 +122,16 @@
   ([requested] (admit-target! requested :receipt-publish))
   ([requested effect]
    (let [{:keys [id roots]} (validated-envelope! (current-envelope))
-         resolved (resolved-target requested)]
-     (when-not (some #(.startsWith resolved (resolved-target %)) roots)
+         resolved (resolved-target requested)
+         hard-link? (and (Files/isRegularFile resolved (make-array java.nio.file.LinkOption 0))
+                         (> (long (Files/getAttribute resolved "unix:nlink"
+                                                      (make-array java.nio.file.LinkOption 0))) 1))]
+     (when (or hard-link? (not (some #(.startsWith resolved (resolved-target %)) roots)))
        (throw (ex-info "Artifact write is outside the destination envelope"
-                       {:error-type :write-outside-envelope :effect effect
-                        :path (str requested) :resolved-path (str resolved)
-                        :envelope-id id :roots roots})))
+                       (cond-> {:error-type :write-outside-envelope :effect effect
+                                :path (str requested) :resolved-path (str resolved)
+                                :envelope-id id :roots roots}
+                         hard-link? (assoc :reason :hard-link)))))
      (str resolved))))
 
 ;; @spec DATACODE-ENV-004

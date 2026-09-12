@@ -916,3 +916,20 @@ with 422,819 ms gate wall. Source-edit accounting and limitations:
 Coverage is the shared artifact boundary, not every writer or filesystem race.
 The six-task probe comparison is preregistered only; no performance or routing
 admission follows from these correctness checks.
+
+### 2026-09-12T22:25:51.055430+00:00 — data-not-code round 5, receipt and inode ratchets
+
+Opus found that a consistent evidence-row forgery bypassed receipt-string
+validation and changed runtime selection. The validator now opens the cited
+receipts and derives statistics from their walls. Named negatives bind receipt
+identity, sample counts, each statistic and selected runtime. All 456 shipped
+receipts remain admitted. A policy-function rename now fails its resolution
+guard and assertion-count pin. Final files with multiple hard links refuse
+before telemetry APPEND can change an outside inode.
+
+Coverage remains the shared artifact boundary and inventoried consumers. The
+telemetry and HTTP readiness writers and the user.home/passwd-home mismatch
+remain explicitly owed. The six probe/native patches and common timestamp
+runner are frozen without executing the experiment. This is correctness work,
+with no routing admission or speed claim. Final gate evidence and limits:
+[round 5 report](observations/2026-09-12-data-not-code/round5/REPORT.md).

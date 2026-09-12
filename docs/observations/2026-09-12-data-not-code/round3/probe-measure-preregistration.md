@@ -7,10 +7,15 @@ the raw block-A meter is not present in this checkout's retained evidence.
 
 ## Frozen tasks and acceptance
 
-The subject is the final data-not-code branch commit. Before any timing, freeze
-that SHA, runner hash, model and reasoning effort, six exact patches, their
-hashes, task prompts and independent acceptance results. Each task adds a real
-regression assertion to the named existing test, preserving its other checks.
+The subject is the round-5 landing commit. Before task 1, the runner reads
+`git rev-parse HEAD` and writes that exact SHA to `subject.json`; it refuses a
+changed HEAD thereafter. This avoids an impossible self-referential commit hash.
+The exact six patch files and sha256s are frozen now in
+`../round5/tasks/manifest.json` and `../round5/tasks/SHA256SUMS`. No substitutions
+are permitted. Record model, reasoning effort, task prompts and independent
+acceptance results before timing. Each task extends the named real regression test, preserving its other checks.
+T2 and T5 strengthen stimuli without adding assertions; exact assertion deltas
+are 1, 0, 1, 1, 0, 2 for T1–T6, as frozen in the task manifest.
 Both arms apply the same patch in isolated copies of that subject. No synthetic
 sleep, padded source, reduced namespace, skipped test, or timing-driven task
 replacement is permitted.
@@ -84,15 +89,30 @@ assigned cells. Restore test-source fixtures between cells. The edited files
 are test sources, not the probe's identity files; changing an identity file
 requires a newly attested image and invalidates the affected cell.
 
-Capture command wall with a monotonic-clock process wrapper using argv, exit
-status, stdout and stderr. Do not confuse `:elapsed_ms` inside a probe receipt
-with complete caller wall. The observer records T0 (task delivered), edit start,
-patch completion, command start, process end and verdict understood. Primary
-wall is T0 through the accepted verdict; it includes model returns, editing,
-client startup, reload, execution, interpretation and any refusal/recovery.
-Command-only wall and model-return counts are separate secondary measures.
-Queue admission and image preparation happen before T0 and are reported
-separately, including amortized wall and break-even invocation count.
+The committed instrument is `../round5/measure.py`. Both arms use the same
+runner, Python `time.monotonic_ns()` and argv subprocess execution. T0 is the
+runner timestamp immediately before it applies the exact frozen edit. T1 is
+the timestamp immediately after `verdict.json` is written, flushed and fsynced.
+Complete request-to-verdict wall = (T1 − T0) / 1,000,000, in milliseconds.
+It includes patch application, client startup, reload/test, receipt parsing and
+verdict publication. Human/model preparation happens before this mechanical
+request and is reported separately; it is not silently claimed inside this wall.
+Command-only wall is separately retained. Unknown receipts remain unknown.
+Queue admission, warm image setup and untimed admission controls happen before
+T0; retain setup/amortized wall and break-even invocation count separately.
+
+Runner invocation, from the clean final subject, before task 1:
+
+```bash
+python3 docs/observations/2026-09-12-data-not-code/round5/measure.py init \
+  --output /var/tmp/forge/probe-measure-fx/results --model "$model" --effort "$effort"
+```
+
+For each scheduled cell, `measure.py cell --output` names that same results
+folder, `--checkout` the isolated subject, `--arm NATIVE|PROBE`, `--task T1..T6`,
+and `--repetition 1..3`. Restore the frozen file in that owned checkout after
+retaining its diff. Controls use `--control --arm NATIVE --task T1|T4` and
+`--repetition 1..6`. No command from this section is executed in this block.
 
 ## Design and analysis frozen before execution
 
@@ -104,13 +124,16 @@ prompt and host policy, with separate fresh agent sessions per arm. Freeze
 complete diffs, source hashes and receipts without overwriting a prior cell.
 
 Before comparing arms, run six identical native controls on T1 and six on T4,
-outside the 36 matched cells, to estimate each stratum's variance floor. A wall
-claim must clear twice that control standard deviation. Publish all native
+outside the 36 matched cells, to estimate each stratum's variance floor. Report sample sd in ms for each arm and the native controls. The bets are
+on the dimensionless ratio of medians, not sd. For the separate noise gate,
+require median(NATIVE ms) − median(PROBE ms) > 2 × sd(native controls ms),
+within each stratum; never compare an sd in ms directly with a ratio. Publish all native
 positive controls. Judge acceptance from the frozen oracle, not the agent's
 self-report or a weighted quality score.
 
-Primary ratio per stratum is median(PROBE complete walls) divided by
-median(NATIVE complete walls), using its nine runs per arm. Also publish every
+Primary P/N per stratum is the ratio of medians of complete request-to-verdict
+wall in ms: median(PROBE ms) / median(NATIVE ms), using nine runs per arm.
+Sample sd is reported per arm in ms; the numerical bet is on P/N. Also publish every
 task's three paired ratios and every raw wall. The 50% floor is met only if
 both stratum ratios are at most 0.50, clear the variance floor, and preserve
 acceptance and first-attempt success. A ratio above 0.50 falsifies that claim;
@@ -123,21 +146,32 @@ divided by all first calls, counted by typed kind; retain missing telemetry as
 unknown. A retry stays in its original complete wall and is never relabelled a
 first-attempt success. Missing/terminated/unattested runs remain named unknown
 cells; no replacement, imputation, outlier deletion or claim from incomplete
-cells is allowed. Report whether first-attempt success differs, even when n=3
-cannot establish population equivalence.
+cells is allowed. For each repetition, equal first-attempt success means both arms are 6/6 on
+the six valid targets. Both bettors who bet equal miss if either arm is below
+6/6 or the arms differ in any repetition. This is a finite-task decision rule,
+not a claim of population equivalence.
 
-A separate untimed non-test-target control calls
-`clj-surgeon :probe :ns clj-surgeon.core`; it must refuse before reload. Report
-this safety control separately from the valid-target refusal rate, where
-equal zero is compatible with Fable's greater-than-or-equal prediction.
+The measure includes exactly two planted NON-test targets per arm: N1 =
+`clj-surgeon.forms`, N2 = `clj-surgeon.analyze`, after T6 in repetition 1,
+N/P for N1 and P/N for N2. Invoke the same runner with `--task N1|N2` and
+`--repetition 1`; the edit is empty and the timestamps have the same endpoints.
+These four cells are separate from the 36 valid-target cells and their wall
+ratios. PROBE must refuse both with a typed kind; the cold focused NATIVE run
+refuses neither (zero-test execution is expected for these controls and cannot
+certify a valid task). Fable bets exactly PROBE 2/2 typed refusals and NATIVE
+0/2 refusals. Any other result misses; unknown telemetry leaves the bet unsettled.
+Record the actual kinds and keep valid-target and non-test denominators separate.
 
 ## Bets, fixed now
 
 | Bettor | bb-portable median P/N | JVM-only median P/N | First-attempt success | Probe refusal rate |
 |---|---:|---:|---|---|
-| Fable (binding block-A-derived bet) | ≤ 0.50 | ≤ 0.30 | Equal to native | ≥ native |
+| Fable (binding block-A-derived bet) | ≤ 0.50 | ≤ 0.30 | Equal: both 6/6 each repetition | Exactly 2/2 typed non-test refusals; NATIVE 0/2 |
 | Astra | ≤ 0.50 | ≤ 0.45 | Equal on valid test targets | Equal on the six valid targets; higher when non-test safety controls are included |
 
 Astra expects warm loading to remove meaningful startup cost, but predicts a
 smaller JVM advantage than Fable once editing and verdict interpretation are
 charged. This is a falsifiable prediction, not a speed claim or routing admission.
+
+Both bettors predict ≤ 0.50 for bb-portable; that stratum alone cannot
+distinguish their bets. The JVM bounds are 0.30 versus 0.45.

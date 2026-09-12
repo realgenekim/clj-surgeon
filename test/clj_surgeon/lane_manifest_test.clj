@@ -277,6 +277,49 @@
     (is (not (str/includes? source "*** Begin Patch"))
         "the statistical fold must not manufacture source edits")))
 
+;; @spec DATACODE-ROWS-001
+(deftest runtime-evidence-binds-statistics-to-receipt-files
+  ;; Opus F1: internally consistent 6ms -> 9000ms forgery, receipts untouched.
+  (let [n 'clj-surgeon.battery-ledger-test
+        row (get lm/runtime-measurements n)
+        forged (-> row
+                   (assoc :runtime :jvm)
+                   (assoc-in [:bb :walls-ms] (vec (repeat 6 9000)))
+                   (assoc-in [:bb :mean-ms] 9000.0)
+                   (assoc-in [:bb :sd-ms] 0.0)
+                   (assoc :conservative-ratio
+                          (/ 9000.0 (- (get-in row [:jvm :mean-ms])
+                                       (* 2 (get-in row [:jvm :sd-ms]))))))]
+    (is (= lm/runtime-measurements (lm/validate-runtime-evidence! lm/runtime-measurements))
+        "all 38 shipped rows / 456 receipts remain admitted")
+    (doseq [[candidate kind field]
+            [[forged :invalid-runtime-evidence [:bb :walls-ms]]
+             [(assoc row :runtime :jvm) :invalid-runtime-evidence :runtime]
+             [(assoc-in row [:bb :logs 0] "docs/no-such-datacode-receipt.edn")
+              :missing-evidence-receipts [:bb :logs]]]]
+      (let [r (try (lm/validate-runtime-evidence! {n candidate}) nil
+                   (catch clojure.lang.ExceptionInfo e (ex-data e)))]
+        (is (= kind (:error-type r)) (pr-str r))
+        (is (= n (:namespace r)) (pr-str r))
+        (is (= field (:field r)) (pr-str r))))
+    (let [receipts (into {} (for [rt [:jvm :bb]]
+                              [rt (mapv #(edn/read-string (slurp %))
+                                        (get-in row [rt :logs]))]))]
+      (doseq [[candidate evidence field]
+              [[(update-in row [:bb :mean-ms] inc) receipts [:bb :mean-ms]]
+               [(update-in row [:bb :sd-ms] inc) receipts [:bb :sd-ms]]
+               [(update row :conservative-ratio inc) receipts :conservative-ratio]
+               [(update row :n inc) receipts :n]
+               [(update-in row [:bb :n] inc) receipts [:bb :n]]
+               [row (assoc-in receipts [:bb 0 :namespace] 'wrong.test) [:bb :namespace]]
+               [row (assoc-in receipts [:bb 0 :runtime] :jvm) [:bb :runtime]]
+               [row (assoc-in receipts [:bb 0 :elapsed-ms] 9000) [:bb :walls-ms]]]]
+        (let [r (try (lm/validate-runtime-row! n candidate evidence) nil
+                     (catch clojure.lang.ExceptionInfo e (ex-data e)))]
+          (is (= :invalid-runtime-evidence (:error-type r)) (pr-str r))
+          (is (= n (:namespace r)) (pr-str r))
+          (is (= field (:field r)) (pr-str r)))))))
+
 (deftest runtime-portability-controls-cover-every-assignment
   ;; @spec TEST-ISO-016 -- all cadences, independently of the 38 cost pairs.
   (let [n 'fixture/runtime-test

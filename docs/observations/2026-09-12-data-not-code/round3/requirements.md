@@ -9,7 +9,9 @@ remaining requirements, red, implementation, green and gate phases for items
 
 - DATACODE-ENV-001: When a shared artifact consumer chooses a final target,
   it shall refuse a resolved destination outside the trusted envelope before
-  creating any directory or publishing any bytes.
+  creating any directory or publishing any bytes. A final file with link count
+  greater than one shall refuse with the same kind and `:reason :hard-link`,
+  before APPEND can change an outside inode.
 - DATACODE-ENV-002: When no launcher value is supplied, admission shall use
   the bounded policy default (disk temp, passwd seat state, startup workspace).
 - DATACODE-ENV-003: When a request carries destination authority, its decoder
@@ -33,7 +35,11 @@ Landlock is unchanged.
   use refusal data independently of exception prose on JVM and Babashka.
   Witnesses: three existing xray cases plus changed presentation text.
 - DATACODE-ROWS-001: When the statistical fold publishes namespace evidence,
-  it shall refuse missing receipts. The manifest shall consume those exact
+  it shall open every cited receipt and refuse missing files. It shall bind each
+  receipt's namespace, runtime and elapsed wall to the row, recompute n, mean,
+  sample sd and conservative ratio from those receipt walls, and refuse any
+  statistic or selected-runtime disagreement naming the namespace and field.
+  The manifest shall consume those exact
   validated rows; declared policy remains policy. Existing statistical oracles
   retain their expected values.
 - DATACODE-SLEEP-001: When checking temporal exemptions, the checker shall

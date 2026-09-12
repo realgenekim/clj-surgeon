@@ -171,12 +171,14 @@
     (is (= :unknown-arguments
            (:error-type (transaction/execute-change!
                           {:destination-envelope (:destination-envelope context)})))))
-  (when-let [policy (ns-resolve 'clj-surgeon.receipt-artifacts 'policy-envelope-roots)]
-    (is (= ["/var/tmp" "/home/seat/.local/state/clj-surgeon" "/work"]
-           (policy {:tmpdir "/tmp/unsafe" :home "/home/seat" :workspace "/work"})))
-    (is (= ["/disk/tmp" "/disk/artifacts" "/work"]
-           (policy {:tmpdir "/disk/tmp" :home "/home/seat" :workspace "/work"
-                    :artifact-root "/disk/artifacts"}))))
+  (let [policy (ns-resolve 'clj-surgeon.receipt-artifacts 'policy-envelope-roots)]
+    (is (some? policy) "DATACODE-ENV-002: the policy-root function exists")
+    (when policy
+      (is (= ["/var/tmp" "/home/seat/.local/state/clj-surgeon" "/work"]
+             (policy {:tmpdir "/tmp/unsafe" :home "/home/seat" :workspace "/work"})))
+      (is (= ["/disk/tmp" "/disk/artifacts" "/work"]
+             (policy {:tmpdir "/disk/tmp" :home "/home/seat" :workspace "/work"
+                      :artifact-root "/disk/artifacts"})))))
   (testing "missing launcher authority uses the bounded default; startup authority is retained"
     (with-redefs-fn
       {(ns-resolve 'clj-surgeon.receipt-artifacts 'launcher-envelope) (atom nil)}
@@ -189,6 +191,38 @@
            (is (= narrow (artifacts/initialize-envelope! "/work" narrow)))
            (is (= narrow (artifacts/current-envelope)))
            (is (= narrow (artifacts/initialize-envelope! "/different-workspace"))))))))
+
+;; @spec DATACODE-ENV-002
+(deftest destination-envelope-policy-witness-assertion-count
+  ;; Opus F2: a missing Var used to silently drop two literal-root assertions.
+  (let [counts (binding [clojure.test/*report-counters*
+                         (ref clojure.test/*initial-report-counters*)]
+                 (clojure.test/test-var #'destination-envelope-is-trusted-context-only)
+                 @clojure.test/*report-counters*)]
+    (is (= 12 (+ (:pass counts) (:fail counts) (:error counts)))
+        (str "DATACODE-ENV-002: policy witness must execute all 12 assertions " counts))))
+
+;; @spec DATACODE-ENV-001
+(deftest destination-envelope-refuses-hard-linked-final-ledger
+  ;; Opus F3: APPEND follows a hard link even with NOFOLLOW_LINKS.
+  (with-workspace
+    (fn [base]
+      (let [allowed (io/file base "allowed")
+            outside (io/file base "outside.edn")
+            dir (io/file allowed "alias-migration-receipts")
+            ledger (io/file dir "ledger.edn")]
+        (.mkdirs dir)
+        (spit outside "sentinel")
+        (java.nio.file.Files/createLink (.toPath ledger) (.toPath outside))
+        (with-envelope [allowed]
+          #(binding [artifacts/*artifact-root* (str allowed)]
+             (let [r (refusal-data (fn [] (migration/append-telemetry! {:witness true})))]
+               (is (= :write-outside-envelope (:error-type r)) (pr-str r))
+               (is (= :hard-link (:reason r)))
+               (is (= :telemetry-append (:effect r)))
+               (is (= (str ledger) (:path r)))
+               (is (string? (:envelope-id r)))
+               (is (= "sentinel" (slurp outside))))))))))
 
 ;; @spec DATACODE-ENV-001
 ;; @spec DATACODE-ENV-004

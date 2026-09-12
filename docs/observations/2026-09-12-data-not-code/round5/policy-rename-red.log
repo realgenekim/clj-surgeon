@@ -1,0 +1,18 @@
+
+FAIL in (destination-envelope-is-trusted-context-only) (receipt_artifacts_boundary_test.clj:175)
+DATACODE-ENV-002: the policy-root function exists
+expected: (some? policy)
+  actual: (not (some? nil))
+
+FAIL in (destination-envelope-policy-witness-assertion-count destination-envelope-is-trusted-context-only) (receipt_artifacts_boundary_test.clj:175)
+DATACODE-ENV-002: the policy-root function exists
+expected: (some? policy)
+  actual: (not (some? nil))
+
+FAIL in (destination-envelope-policy-witness-assertion-count) (receipt_artifacts_boundary_test.clj:202)
+DATACODE-ENV-002: policy witness must execute all 12 assertions {:test 1, :pass 9, :fail 1, :error 0}
+expected: (= 12 (+ (:pass counts) (:fail counts) (:error counts)))
+  actual: (not (= 12 10))
+{:test 2, :pass 9, :fail 2, :error 0}
+=> nil
+*======== user | clj ========*

@@ -1,0 +1,8 @@
+standard-clj fix v0.29.0
+
+✓ /src/clj_surgeon/receipt_artifacts.clj [17.69ms]
+F /test/clj_surgeon/lane_manifest.clj [18.44ms]
+✓ /test/clj_surgeon/lane_manifest_test.clj [30.95ms]
+✓ /test/clj_surgeon/receipt_artifacts_boundary_test.clj [9.81ms]
+
+All 4 files formatted with Standard Clojure Style 👍 [85.02ms]

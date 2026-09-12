@@ -1,0 +1,122 @@
+{:findings
+ ["F1: opened receipt data binds namespace/runtime/walls; n, mean, sample sd, ratio and runtime policy are checked by named field; 38 rows / 456 receipts pass."
+  "Original Opus p3.clj replay: clj-surgeon.mcp-recovery-test forgery refuses :invalid-runtime-evidence at [:bb :walls-ms]; missing files refuse :missing-evidence-receipts; all 456 receipts agree. See redteam-p3-replay.log."
+  "F2: policy Var guard and 12-assertion witness pin fail on actual definition/call rename."
+  "F3: unix:nlink > 1 final file refuses :write-outside-envelope with :reason :hard-link before ledger APPEND."
+  "Coverage remains shared artifact boundary and inventoried consumers; telemetry and HTTP ready writers remain uncovered."
+  "Preregistration freezes six patch hashes and a common monotonic runner; no experiment was run."],
+ :least_sure
+ ["Darwin has not been exercised; final-file detection uses unix:nlink."
+  "Measurement runner is statically checked only, with no arm run; warm identity and acceptance admission remain required before measuring."
+  "Admission/publication TOCTOU is outside the contract; opening receipts does not cryptographically attest their provenance."],
+ :measurements
+ {:focused_jvm {:tests 62, :assertions 1659, :fail 0, :error 0},
+  :prewarm_initial
+  {:argv ["make" "landing-gate-prewarm"],
+   :exit 2,
+   :wall_ms 204170.225277},
+  :prewarm
+  {:pool
+   {:target "runtime-pool",
+    :exit 0,
+    :wall-ms 178505,
+    :phases
+    [{:phase 0, :process-count 15, :wall-ms 31673}
+     {:phase 1, :process-count 23, :wall-ms 146775}],
+    :preparation
+    {:command
+     ["clojure"
+      "-J-Xms64m"
+      "-J-Xmx512m"
+      "-Spath"
+      "-M:clj-surgeon/test-deps"],
+     :exit 0,
+     :wall-ms 56},
+    :peak-worker-count 8,
+    :shell-checks
+    {:namespaces [],
+     :index 0,
+     :exit 0,
+     :started-ms 1789252288975,
+     :phase 1,
+     :err-log
+     "target/gate-prewarm/98b812b5-386a-45a8-b26d-c5388d2337df/lane-0.err",
+     :runtime nil,
+     :wall-ms 146774,
+     :suite "shell",
+     :completed-ms 1789252435749,
+     :log
+     "target/gate-prewarm/98b812b5-386a-45a8-b26d-c5388d2337df/lane-0.out"}},
+   :stages
+   [{:target "admit-transaction-recovery-battery",
+     :exit 0,
+     :wall-ms 11155}
+    {:target "alias-migration-test", :exit 0, :wall-ms 90916}
+    {:target "mcp-test", :exit 0, :wall-ms 115124}
+    {:target "test-bb", :exit 0, :wall-ms 92074}
+    {:target "test-bb-diagnostic", :exit 0, :wall-ms 241696}
+    {:target "repository-hygiene", :exit 0, :wall-ms 2076}
+    {:target "intent-audit", :exit 0, :wall-ms 2188}],
+   :landing? false,
+   :problems [],
+   :capacity
+   {:lanes 8,
+    :memory-mib 24519,
+    :admission "abstract-socket",
+    :lane-charge-mib 1536,
+    :reserve-mib 2048,
+    :slot-root "abstract",
+    :floor-mib 3584,
+    :heap-mib 512,
+    :cpus 16},
+   :started-at "2026-09-12T22:30:45.761433502Z",
+   :state "passed",
+   :git-tree "249dd3d3c498e5a96d21b4d7e1c64b15b65cc406",
+   :wall-ms 436264,
+   :completed-at "2026-09-12T22:38:02.026062998Z",
+   :source-digest
+   "44e8998d7eca6d1379aaff333e336c82d06d178ab01b46359592afcb3ffb87ce",
+   :prewarm? true,
+   :run-id "98b812b5-386a-45a8-b26d-c5388d2337df",
+   :git-head "4658dc124ee243300d19861402b2696ae1046321"},
+  :test_fast
+  {:tests 1247,
+   :assertions 12666,
+   :isolation_violations 0,
+   :skipped 0,
+   :command
+   {:argv ["make" "test-fast"], :exit 0, :wall_ms 31283.778069}},
+  :red_failures 14,
+  :lint
+  {:errors 0,
+   :warnings 0,
+   :baseline_errors 0,
+   :baseline_warnings 0,
+   :scope
+   "four changed production/test Clojure files; evidence scripts separately green"},
+  :focused_bb {:tests 31, :assertions 1391, :fail 0, :error 0},
+  :focused_new {:tests 3, :assertions 42, :fail 0, :error 0},
+  :preregistration_run false,
+  :census {:added 3, :removed 0},
+  :prewarm_command
+  {:argv ["make" "landing-gate-prewarm"],
+   :exit 0,
+   :wall_ms 438474.367078}},
+ :disagreements
+ ["No contract disagreement. Latest commit-last instruction supersedes earlier intermediate-red-commit wording; logs retain the red sequence."
+  "Two delimiter errors and one evidence-script lint warning were repaired and retained; they are not green receipts."
+  "First prewarm correctly refused two concurrent agent documentation writes; final retry runs with no concurrent repository edits."],
+ :commits
+ {:base "4658dc124ee243300d19861402b2696ae1046321",
+  :landing
+  "the commit containing this report; resolved by git log -1 --format=%H -- this file",
+  :pushed false},
+ :verdict "PASS",
+ :owed
+ ["src/clj_surgeon/mcp_telemetry.clj:70-78"
+  "src/clj_surgeon/mcp_http_server.clj:234-240"
+  "telemetry user.home (mcp_telemetry.clj:17-20) versus envelope passwd home (receipt_artifacts.clj:62-71)"
+  "Independent review of round 5; Darwin controls; future preregistered measurement, separately authorized."],
+ :base "4658dc124ee243300d19861402b2696ae1046321",
+ :branch "fable/data-not-code-local",
+ :recorded_at "2026-09-12T22:38:47.340851+00:00"}
