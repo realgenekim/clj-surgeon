@@ -217,7 +217,11 @@
      {:jvm-ms 4709 :bb-ms 4905 :ratio (/ 4905.0 4709)
       :jvm-log "docs/observations/2026-09-12-bbtower-block-b/attempt8/intent-jvm.log"
       :bb-log "docs/observations/2026-09-12-bbtower-block-b/attempt8/intent-bb.log"
-      :contract-failure "Shared CLI workspace_status.unexpected_paths is unbounded; attempt8/owed.md. Runtime comparison found no bb-only leak."}}
+      :contract-failure "Shared CLI workspace_status.unexpected_paths is unbounded; attempt8/owed.md. Runtime comparison found no bb-only leak."}
+     'clj-surgeon.mcp-feature-thread-test
+     {:jvm-ms 43280 :bb-ms 728265 :ratio (/ 728265.0 43280)
+      :jvm-log "docs/observations/2026-09-12-bbtower-block-b/attempt8/feature-jvm.log"
+      :bb-log "docs/observations/2026-09-12-bbtower-block-b/attempt8/feature-bb.log"}}
     (let [root "docs/observations/2026-09-12-bbtower-block-b/attempt7/"]
       (into {}
             (map (fn [[n jvm-ms bb-ms]]

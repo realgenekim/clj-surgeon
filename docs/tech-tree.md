@@ -746,6 +746,27 @@ named deletion map: /var/tmp/forge/splice-fx/astra-build-report.md and witness-m
 
 ### 2026-09-12 — bb tower block B, runtime cost found; fast stop honored
 
+Attempt8 applies the authorized TEST-ISO-016 paired-wall rule to all 35
+bb-assigned original-fast members. Three move to JVM; rename-alias remains
+bb because 6,478 / 3,265 is within 2.0. The first measured fast sum falls to
+36,944 ms without changing its 60,000 ms budget. The NEW bb runtime ceiling
+is 399,155 ms, derived from the measured 245,773 ms bb sum and the fast
+lane's proportional margin; it is not a restored budget.
+
+Finding: clj-splice's envelope test is 34x slower under bb than the JVM:
+834 ms JVM versus 28,591 ms bb in attempt7. That bounds where the
+babashka-first plan can put heavy rewrite-clj work. This is a finding, not
+a decision. At the attempt8 measurement tip, feature-thread passes the same
+69 tests / 2,265 assertions on both runtimes, taking 43,280 ms JVM and
+728,265 ms bb; the runtime rule selects JVM.
+
+The supposed bb-only CLI output leak reproduces on both runtimes when the
+workspace contains many untracked paths. The shared output bound remains
+owed; intent-transaction uses the authorized JVM contract escape with
+paired walls recorded. Probe now has seven native-failure refusal rows and
+the third-verb receipt-boolean false seam. Final gates, repairs, uncertainties
+and independent-review debt: [attempt8 report](observations/2026-09-12-bbtower-block-b/attempt8/REPORT.md).
+
 The matched base/JVM, subject/JVM-only and subject/hybrid observations charge
 the same original fast membership. The dominant increase is splice-envelope's
 Babashka execution time, rather than a demonstrated coordinator contention
