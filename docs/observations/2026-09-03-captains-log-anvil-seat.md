@@ -6027,3 +6027,12 @@ with :form and :file before any reload, registered with the native failure it pr
 writes value 2 on disk, and sees the probe FAIL its old-value assertion: stale-image
 behaviour witnessed, not only graph shape. Final prewarm green. Packet 5aeb8910 is the
 twelfth check-only prewarm; ship round 5 follows.
+
+## 2026-09-12T21:12:17Z — Gene decisions: "1b. 2b" (card inb-901cc3)
+
+Gene, verbatim: "Gene decision skill use" then "1b. 2b". Decision 1: the week's vs-native table
+is the preregistered probe measure (six edit→verdict tasks, native cold run vs warm probe,
+n=3, bets on record); the spent cohorts (long-context attempt 5, arm N attempt 3) wait on
+its result. Decision 2: the data-not-code block is next; tower block C exists only on a
+measured probe win. Decision 3 (wiki promotion of Astra's top five) not answered; left open,
+nothing promoted. Order after block B lands: probe measure → data-not-code landing → decide.
