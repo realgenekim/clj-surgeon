@@ -6262,3 +6262,11 @@ tip is df86ecda, pushed as origin/bb-rewrite-tower-land (a NEW name; never a for
 over bb-rewrite-tower). Prewarm 16 at 76af5782 (running) is wasted; prewarm 17 at df86ecda
 follows it on the lease, then ship round 8 with the Sol brief rewritten for the closure.
 Lesson for the wiki: the receipt's identity is the candidate's ancestry; a row is not a receipt.
+
+## 2026-09-12T23:28:04Z — ship round 8 SEALED: candidate ea5e5ed0 from the receipt commit df86ecda
+
+Seventeenth check-only prewarm (packet 72940e5e) exit 0 at df86ecda, receipt bound. Ship run
+20260912T232610Z admitted, sealed ea5e5ed0 (tree 68ad258b), Sol on the round-8 brief (his
+round-7 closure delivered: the counted battery alone, receipt df86ecda, battery-fresh OK),
+battery on fable/battery-receipt-df86ecda (pre-created), fast lane beside. Code byte-identical
+to the candidate he reviewed in round 7. Data-not-code round 6 waits for the box.
