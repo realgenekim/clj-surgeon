@@ -744,6 +744,18 @@ admission. Normal fast/prewarm coordination conflicts with this seat's one-JVM/n
 server execution fence; no landing gate or ship claim follows. Evidence and the
 named deletion map: /var/tmp/forge/splice-fx/astra-build-report.md and witness-map.md.
 
+### 2026-09-12 — bb tower block B, runtime cost found; fast stop honored
+
+The matched base/JVM, subject/JVM-only and subject/hybrid observations charge
+the same original fast membership. The dominant increase is splice-envelope's
+Babashka execution time, rather than a demonstrated coordinator contention
+effect. The required `make test-fast` still exceeds its unchanged lane ceiling;
+block B stops before budget registration, probe-contract work, runtime assignment
+and prewarm. No production coordinator fix or runtime reclassification is claimed.
+The report retains the initial log-placement contamination, corrected measurements,
+an independent CLI-output assertion failure, and the limits of the single-sample
+comparison. [Attempt 7 evidence](observations/2026-09-12-bbtower-block-b/attempt7/REPORT.md).
+
 ### 2026-09-11T05:46:14.400103+00:00 — clj-splice fix round 1
 
 Opus GO-WITH-FIX exposed a missing payload-refusal row, argument-order-dependent
