@@ -1,10 +1,10 @@
 (ns clj-surgeon.require-change-io
   "Explicit-file capture and shared failure-atomic publication/proof/inverse."
   (:require
-   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.mcp-extraction :as kernel]
    [clj-surgeon.mcp-paths :as paths]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.require-change :as change]
    [clj-surgeon.synchronous-verification :as proof]
    [clojure.edn :as edn]
@@ -63,8 +63,10 @@
                      spec)])))
 
 (defn- save! [dir name data]
-  (.mkdirs (io/file dir))
-  (let [path (str (io/file dir name))] (file-ops/atomic-write! path (pr-str data)) path))
+  (let [path (artifacts/admit-target! (io/file dir name))]
+    (.mkdirs (io/file dir))
+    (file-ops/atomic-write! path (pr-str (artifacts/receipt-evidence data)))
+    path))
 
 (defn- absolute-compiled [root compiled]
   (let [absolute #(into (sorted-map) (map (fn [[f s]] [(str (.resolve root f)) s])) %)]

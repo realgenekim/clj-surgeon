@@ -29,6 +29,7 @@
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    ;; `clojure.edn`, and NOT `clojure.core/read-string`, at every site in this
    ;; namespace that reads a file back. These files are the tool's OWN journal,
    ;; lock and sidecar records, so the caller cannot name them today — and
@@ -42,7 +43,7 @@
    [clojure.string :as str])
   (:import
    (java.io File FileOutputStream)
-   (java.nio.file Files LinkOption StandardCopyOption CopyOption)
+   (java.nio.file CopyOption Files LinkOption StandardCopyOption)
    (java.nio.file.attribute BasicFileAttributes FileTime PosixFilePermissions)
    (java.security MessageDigest)))
 
@@ -325,7 +326,7 @@
 
 (defn- write-state!
   [txn status extra]
-  (spit (io/file (:dir txn) "state.edn")
+  (spit (artifacts/admitted-file (:dir txn) "state.edn")
         (pr-str (merge {:txid (:txid txn)
                         :workspace-root (:workspace-root txn)
                         :status status}
@@ -335,7 +336,7 @@
 
 (defn- lock-file
   ^File [transactions-dir]
-  (io/file transactions-dir "LOCK"))
+  (artifacts/admitted-file transactions-dir "LOCK"))
 
 (def ^:private lock-format
   "The LOCK payload's format version. 1 was pid-only and is unverifiable; 2
@@ -1625,8 +1626,11 @@
       (refusal :txn-workspace-refused (:error resolved) {})
       (let [root (:workspace-root resolved)
             transactions (workspace/transactions-dir root state-home)
-            _ (.mkdirs (io/file transactions))
             txid (or txid (new-txid))
+            _ (doseq [tail ["objects" "staging" "manifest.tsv" "journal.log" "state.edn" "lease.edn"]]
+                (artifacts/admitted-file transactions txid tail))
+            _ (artifacts/admitted-file transactions "LOCK")
+            _ (.mkdirs (io/file transactions))
             lock (acquire-lock! transactions txid opts)]
         (if-not (:ok lock)
           lock
@@ -1641,30 +1645,30 @@
             (.mkdirs objects)
             (.mkdirs staging)
             (let [txn (cond-> {:txid txid
-                       :workspace-root root
-                       ;; resolved once: confinement must not cost a realpath
-                       ;; syscall per pinned file
-                       :real-root (mcp-paths/real-root root)
-                       :transactions-dir transactions
-                       :dir (.getCanonicalPath dir)
-                       :objects-dir (.getCanonicalPath objects)
-                       :staging-dir (.getCanonicalPath staging)
-                       :manifest-path (.getCanonicalPath (io/file dir "manifest.tsv"))
-                       :limits limits
-                       :state (atom
-                                {:manifest-stream (FileOutputStream.
-                                                    (io/file dir "manifest.tsv") true)
-                                 :journal-stream (FileOutputStream.
-                                                   (io/file dir "journal.log") true)
-                                 :membership-digest (MessageDigest/getInstance "SHA-256")
-                                 :read-set-count 0
-                                 :last-path nil
-                                 :sealed? false
-                                 :journal-bytes 0
-                                 :pinned {}
-                                 :staged {}
-                                 :written []
-                                 :scope-walk scope-walk})}
+                               :workspace-root root
+                               ;; resolved once: confinement must not cost a realpath
+                               ;; syscall per pinned file
+                               :real-root (mcp-paths/real-root root)
+                               :transactions-dir transactions
+                               :dir (.getCanonicalPath dir)
+                               :objects-dir (.getCanonicalPath objects)
+                               :staging-dir (.getCanonicalPath staging)
+                               :manifest-path (.getCanonicalPath (io/file dir "manifest.tsv"))
+                               :limits limits
+                               :state (atom
+                                        {:manifest-stream (FileOutputStream.
+                                                            (io/file dir "manifest.tsv") true)
+                                         :journal-stream (FileOutputStream.
+                                                           (io/file dir "journal.log") true)
+                                         :membership-digest (MessageDigest/getInstance "SHA-256")
+                                         :read-set-count 0
+                                         :last-path nil
+                                         :sealed? false
+                                         :journal-bytes 0
+                                         :pinned {}
+                                         :staged {}
+                                         :written []
+                                         :scope-walk scope-walk})}
                         (:lock-broken lock)
                         (assoc :lock-broken (:lock-broken lock))
 
@@ -1675,7 +1679,7 @@
               (when-let [broken (:lock-broken lock)]
                 ;; the break is durable evidence, not only a return value
                 (append-journal! txn (str "lock-broken\t" (:pid broken) "\t"
-                                         (name (:cause broken)))))
+                                       (name (:cause broken)))))
               (when-let [displaced (:lock-break-displaced lock)]
                 ;; so is a claim this acquisition moved and could not put back
                 (append-journal! txn (str "lock-displaced\t" (:tombstone displaced) "\t"
@@ -1946,7 +1950,7 @@
         (if-not (:ok admitted)
           admitted
           (let [digest (sha256-file path)
-                object (io/file (:objects-dir txn) digest)
+                object (artifacts/admitted-file (:objects-dir txn) digest)
                 identity (path-identity path)]
             (when-not (.exists object)
               (copy-file! file object))
@@ -1988,7 +1992,7 @@
         (if-not (:ok admitted)
           admitted
           (let [path-id (format "%08d" (count staged))
-                staging (io/file (:staging-dir txn) (str path-id ".new"))]
+                staging (artifacts/admitted-file (:staging-dir txn) (str path-id ".new"))]
             (with-open [out (FileOutputStream. staging)]
               (.write out (.getBytes ^String content "UTF-8"))
               (sync-stream! out))
@@ -2146,7 +2150,7 @@
    restoration that did NOT verify has left the tree in a state only this
    journal can describe. The lease is the refcount a quota sweep must consult."
   [txn status]
-  (spit (io/file (:dir txn) "lease.edn")
+  (spit (artifacts/admitted-file (:dir txn) "lease.edn")
         (pr-str {:txid (:txid txn)
                  :status status
                  :receipt-refs (if (= :committed status) 1 0)
@@ -2334,28 +2338,28 @@
          :or {prepare-fn prepare-publish!
               publish-fn publish-prepared!}}]
    (try
-    (let [state (:state txn)
-         staged (:staged @state)
-         pinned (:pinned @state)
-         unpinned (first (sort (remove #(contains? pinned %) (keys staged))))]
-     (cond
-       unpinned
-       (do (finish! txn :rolled-back)
-           (refusal :txn-unpinned-write
-                    (str "No durable pre-image was pinned for " unpinned)
-                    {:path unpinned :files-written 0 :next_call nil
-                     :remedy "Pin every write-set path before commit; rollback bytes must be durable first."}))
+     (let [state (:state txn)
+           staged (:staged @state)
+           pinned (:pinned @state)
+           unpinned (first (sort (remove #(contains? pinned %) (keys staged))))]
+       (cond
+         unpinned
+         (do (finish! txn :rolled-back)
+             (refusal :txn-unpinned-write
+                      (str "No durable pre-image was pinned for " unpinned)
+                      {:path unpinned :files-written 0 :next_call nil
+                       :remedy "Pin every write-set path before commit; rollback bytes must be durable first."}))
 
-       :else
-       (let [validation (revalidate! txn)]
-         (if-not (:ok validation)
-           (do (finish! txn :rolled-back)
-               (assoc validation :files-written 0))
-           (let [paths (sort (keys staged))]
-             (append-journal! txn (str "commit-begin\t" (count paths)))
-             (loop [remaining paths written 0 window-ns 0 rereads 0]
-               (if (empty? remaining)
-                 (let [finished (finish! txn :committed)]
+         :else
+         (let [validation (revalidate! txn)]
+           (if-not (:ok validation)
+             (do (finish! txn :rolled-back)
+                 (assoc validation :files-written 0))
+             (let [paths (sort (keys staged))]
+               (append-journal! txn (str "commit-begin\t" (count paths)))
+               (loop [remaining paths written 0 window-ns 0 rereads 0]
+                 (if (empty? remaining)
+                   (let [finished (finish! txn :committed)]
                      {:ok true
                       :committed true
                       :retained (:retained finished)
@@ -2370,73 +2374,73 @@
                                  :staged-files (count staged)
                                  :staged-files-max (get-in txn [:limits :max-staged-files])}
                       :isolation compact-isolation})
-                 (let [path (first remaining)
-                       {:keys [result-hash staging]} (get staged path)
-                       h0 (get-in pinned [path :sha256])
-                       _ (when before-publish (before-publish path))
-                       outcome (publish-one! txn path
-                                             {:h0 h0
-                                              :identity0 (get-in pinned [path :identity])
-                                              :staging staging
-                                              :prepare-fn prepare-fn
-                                              :publish-fn publish-fn
-                                              :before-recheck before-recheck
-                                              :in-commit-window in-commit-window})]
-                   (cond
-                     (:conflict-refusal outcome)
-                     (let [restored (rollback-written! txn)]
-                       (finish! txn :rolled-back restored)
-                       (merge (:conflict-refusal outcome)
-                              {:files-written written
-                               :rolled-back (every? #(= :verified (:status %)) restored)
-                               :recovery restored}))
-
-                     (:failed outcome)
-                     (let [^Exception cause (:failed outcome)
-                           restored (rollback-written! txn)]
-                       (finish! txn :rolled-back restored)
-                       (refusal :txn-write-failed
-                                (str "Writing " path " failed: " (.getMessage cause))
-                                {:path path
-                                 :files-written written
-                                 :cause-error-type (:error-type (ex-data cause))
+                   (let [path (first remaining)
+                         {:keys [result-hash staging]} (get staged path)
+                         h0 (get-in pinned [path :sha256])
+                         _ (when before-publish (before-publish path))
+                         outcome (publish-one! txn path
+                                               {:h0 h0
+                                                :identity0 (get-in pinned [path :identity])
+                                                :staging staging
+                                                :prepare-fn prepare-fn
+                                                :publish-fn publish-fn
+                                                :before-recheck before-recheck
+                                                :in-commit-window in-commit-window})]
+                     (cond
+                       (:conflict-refusal outcome)
+                       (let [restored (rollback-written! txn)]
+                         (finish! txn :rolled-back restored)
+                         (merge (:conflict-refusal outcome)
+                                {:files-written written
                                  :rolled-back (every? #(= :verified (:status %)) restored)
-                                 :recovery restored
-                                 :next_call nil}))
+                                 :recovery restored}))
 
-                     :else
-                     (do
-                       (swap! state update :written conj path)
-                       ;; H1: what this commit LEFT BEHIND. `undo!` rechecks
-                       ;; the target against it before republishing H0, so a
-                       ;; write that landed after the commit is refused rather
-                       ;; than clobbered.
-                       (append-journal! txn (str "write-done\t" path "\t" result-hash
-                                                 "\t" (identity-token (path-identity path))))
-                       (when after-publish (after-publish path))
-                       (let [actual (sha256-file path)]
-                         (if (= actual result-hash)
-                           (recur (rest remaining) (inc written)
-                                  (max window-ns (long (:window-ns outcome 0)))
-                                  (if (:reread? outcome) (inc rereads) rereads))
-                           (let [restored (rollback-written! txn)]
-                             (finish! txn :rolled-back restored)
-                             (refusal :txn-read-back-mismatch
-                                      (str "The bytes read back from " path
-                                           " are not the bytes this transaction wrote")
-                                      {:path path
-                                       :expected-hash result-hash
-                                       :actual-hash actual
-                                       :files-written (inc written)
-                                       :rolled-back (every? #(= :verified (:status %)) restored)
-                                       :recovery restored
-                                       :next_call nil
-                                       :remedy "Another writer that does not hold the project lock raced this rename; the contract detects that rather than preventing it."}))))))))))))))
-    ;; EVERY exception path ends the transaction; the throw itself is
-    ;; re-raised rather than converted into a receipt.
-    (catch Throwable cause
-      (finish-after-throw! txn)
-      (throw cause)))))
+                       (:failed outcome)
+                       (let [^Exception cause (:failed outcome)
+                             restored (rollback-written! txn)]
+                         (finish! txn :rolled-back restored)
+                         (refusal :txn-write-failed
+                                  (str "Writing " path " failed: " (.getMessage cause))
+                                  {:path path
+                                   :files-written written
+                                   :cause-error-type (:error-type (ex-data cause))
+                                   :rolled-back (every? #(= :verified (:status %)) restored)
+                                   :recovery restored
+                                   :next_call nil}))
+
+                       :else
+                       (do
+                         (swap! state update :written conj path)
+                         ;; H1: what this commit LEFT BEHIND. `undo!` rechecks
+                         ;; the target against it before republishing H0, so a
+                         ;; write that landed after the commit is refused rather
+                         ;; than clobbered.
+                         (append-journal! txn (str "write-done\t" path "\t" result-hash
+                                                   "\t" (identity-token (path-identity path))))
+                         (when after-publish (after-publish path))
+                         (let [actual (sha256-file path)]
+                           (if (= actual result-hash)
+                             (recur (rest remaining) (inc written)
+                                    (max window-ns (long (:window-ns outcome 0)))
+                                    (if (:reread? outcome) (inc rereads) rereads))
+                             (let [restored (rollback-written! txn)]
+                               (finish! txn :rolled-back restored)
+                               (refusal :txn-read-back-mismatch
+                                        (str "The bytes read back from " path
+                                             " are not the bytes this transaction wrote")
+                                        {:path path
+                                         :expected-hash result-hash
+                                         :actual-hash actual
+                                         :files-written (inc written)
+                                         :rolled-back (every? #(= :verified (:status %)) restored)
+                                         :recovery restored
+                                         :next_call nil
+                                         :remedy "Another writer that does not hold the project lock raced this rename; the contract detects that rather than preventing it."}))))))))))))))
+     ;; EVERY exception path ends the transaction; the throw itself is
+     ;; re-raised rather than converted into a receipt.
+     (catch Throwable cause
+       (finish-after-throw! txn)
+       (throw cause)))))
 
 ;; ---------------------------------------------------------------- recovery
 
@@ -2822,8 +2826,8 @@
      (if-not lease
        (refusal :txn-journal-missing (str "No retained journal for " txid)
                 {:txid txid :next_call nil})
-       (do (spit file (pr-str (assoc lease :receipt-refs 0
-                                     :released-at (str (java.time.Instant/now)))))
+       (do (spit (artifacts/admitted-file file) (pr-str (assoc lease :receipt-refs 0
+                                                          :released-at (str (java.time.Instant/now)))))
            {:ok true :txid txid :receipt-refs 0})))))
 
 (defn- resolve-interrupted-break!
@@ -2989,14 +2993,14 @@
                                         (.getCanonicalPath d)
                                         {:transactions-dir transactions})
                                status (if (:ok result) :rolled-back :restore-failed)]
-                           (spit (io/file d "state.edn")
+                           (spit (artifacts/admitted-file d "state.edn")
                                  (pr-str {:txid (.getName d) :status status
                                           :retained (not (:ok result))
                                           :restore-failed (not (:ok result))
                                           :recovered-at (str (java.time.Instant/now))}))
                            (if (:ok result)
                              (delete-tree! d)
-                             (spit (io/file d "lease.edn")
+                             (spit (artifacts/admitted-file d "lease.edn")
                                    (pr-str {:txid (.getName d)
                                             :status :restore-failed
                                             :receipt-refs 0

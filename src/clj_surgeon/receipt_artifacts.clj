@@ -2,6 +2,7 @@
   "External verb bookkeeping and measured post-write workspace evidence."
   (:require
    [clj-surgeon.path-classification :as pc]
+   [clj-surgeon.operation-algebra :as algebra]
    [clojure.java.io :as io]
    [clojure.java.shell :as shell]
    [clojure.string :as str])
@@ -34,6 +35,113 @@
       (str (System/getProperty "user.home") "/.local/state/clj-surgeon/artifacts")))
 
 (def ^:dynamic *artifact-root* (default-artifact-root))
+
+;; @spec DATACODE-ENV-002
+(defn policy-envelope-roots [{:keys [tmpdir home workspace artifact-root]}]
+  [(if (and (not (str/blank? tmpdir))
+            (.isAbsolute (io/file tmpdir))
+            (not (pc/literal-ram-path? tmpdir))) tmpdir "/var/tmp")
+   (or artifact-root (str home "/.local/state/clj-surgeon"))
+   (str (.getAbsoluteFile (io/file workspace)))])
+
+(defn- data-hash [value]
+  (apply str (map #(format "%02x" (bit-and 255 %))
+                  (.digest (MessageDigest/getInstance "SHA-256")
+                           (.getBytes (pr-str value) "UTF-8")))))
+
+(defn destination-envelope [roots source]
+  {:id (data-hash roots)
+   :roots roots :source source})
+
+(defn- validated-envelope! [envelope]
+  (when-not (algebra/valid-destination-envelope? envelope)
+    (throw (ex-info "Invalid destination envelope"
+                    {:error-type :invalid-operation-context})))
+  envelope)
+
+(defn- passwd-home []
+  (let [username (System/getProperty "user.name")
+        entry (some #(let [fields (str/split % #":")]
+                       (when (= username (first fields)) (nth fields 5 nil)))
+                    (str/split-lines (slurp "/etc/passwd")))]
+    (or entry
+        (let [{:keys [exit out]} (shell/sh "getent" "passwd" username)]
+          (when (zero? exit) (nth (str/split (str/trim out) #":") 5 nil)))
+        (throw (ex-info "Cannot determine invoking user's passwd home"
+                        {:error-type :invalid-operation-context})))))
+
+(defn- default-envelope [workspace source]
+  (destination-envelope
+    (policy-envelope-roots {:tmpdir (System/getenv "TMPDIR")
+                            :home (passwd-home) :workspace workspace
+                            :artifact-root (System/getenv "CLJ_SURGEON_ARTIFACT_ROOT")})
+    source))
+
+(defonce ^:private policy-default
+  (default-envelope (System/getProperty "user.dir") :policy-default))
+(defonce ^:private launcher-envelope (atom nil))
+(def ^:dynamic *destination-envelope* nil)
+
+;; @spec DATACODE-ENV-002, DATACODE-ENV-003
+(defn initialize-envelope!
+  "Launcher-only initialization. Later workspace requests cannot widen it."
+  ([workspace] (initialize-envelope! workspace nil))
+  ([workspace supplied]
+   (or @launcher-envelope
+       (let [envelope (validated-envelope! (or supplied (default-envelope workspace :launcher)))]
+         (compare-and-set! launcher-envelope nil envelope)
+         @launcher-envelope))))
+
+(defn current-envelope []
+  (or *destination-envelope* @launcher-envelope policy-default))
+
+(defn resolved-target
+  "Resolve existing ancestors (including dangling links), retaining absent tail."
+  [requested]
+  (letfn [(resolve-path [^java.nio.file.Path path depth]
+            (when (> depth 128)
+              (throw (ex-info "Artifact path has cyclic or excessive symlinks"
+                              {:error-type :artifact-path-unresolvable :path (str requested)})))
+            (cond
+              (Files/isSymbolicLink path)
+              (let [link (Files/readSymbolicLink path)]
+                (resolve-path (if (.isAbsolute link) link (.resolve (.getParent path) link))
+                              (inc depth)))
+              (Files/exists path (make-array java.nio.file.LinkOption 0))
+              (.toRealPath path (make-array java.nio.file.LinkOption 0))
+              :else
+              (if-let [parent (.getParent path)]
+                (.normalize (.resolve (resolve-path parent (inc depth)) (.getFileName path)))
+                (throw (ex-info "Artifact path cannot be resolved"
+                                {:error-type :artifact-path-unresolvable :path (str requested)})))))]
+    (resolve-path (.toAbsolutePath (.toPath (io/file (str requested)))) 0)))
+
+;; @spec DATACODE-ENV-001
+(defn admit-target!
+  "Admit the final directory OR file before any creation/publication. No I/O writes."
+  ([requested] (admit-target! requested :receipt-publish))
+  ([requested effect]
+   (let [{:keys [id roots]} (validated-envelope! (current-envelope))
+         resolved (resolved-target requested)]
+     (when-not (some #(.startsWith resolved (resolved-target %)) roots)
+       (throw (ex-info "Artifact write is outside the destination envelope"
+                       {:error-type :write-outside-envelope :effect effect
+                        :path (str requested) :resolved-path (str resolved)
+                        :envelope-id id :roots roots})))
+     (str resolved))))
+
+;; @spec DATACODE-ENV-004
+(defn receipt-evidence [receipt]
+  (let [receipt (assoc receipt :envelope-id (:id (current-envelope)))]
+    (cond-> receipt
+      (:receipt-hash receipt)
+      (assoc :receipt-hash
+             (data-hash (dissoc receipt :receipt-hash))))))
+
+(defn admitted-file
+  "Construct and admit one concrete artifact filename."
+  [& parts]
+  (io/file (admit-target! (apply io/file parts))))
 
 (defn- owned-by-invoking-user?
   "True when the NEAREST EXISTING ANCESTOR of `path` is owned by the invoking
@@ -152,7 +260,7 @@
   (let [root (.getCanonicalFile (io/file (str workspace)))
         digest (.digest (MessageDigest/getInstance "SHA-256") (.getBytes (str root) "UTF-8"))
         identity (apply str (map #(format "%02x" (bit-and 255 %)) digest))
-        dir (.getCanonicalFile (io/file *artifact-root* (str verb "-receipts") identity))]
+        dir (io/file (admit-target! (io/file *artifact-root* (str verb "-receipts") identity)))]
     (when (.startsWith (.toPath dir) (.toPath root))
       (throw (ex-info "Receipt directory resolves inside the workspace"
                       {:error-type :receipt-dir-inside-workspace :receipt-dir (str dir)})))
@@ -161,7 +269,7 @@
 ;; @spec ALIAS-MIGRATION-001
 (defn target [verb workspace relative]
   (let [base (.toPath (io/file (directory verb workspace)))
-        file (.getCanonicalFile (io/file (str base) relative))]
+        file (io/file (admit-target! (io/file (str base) relative)))]
     (when-not (.startsWith (.toPath file) base)
       (throw (ex-info "Artifact descendant escapes its receipt directory"
                       {:error-type :receipt-dir-escapes :path (str file)})))
@@ -203,7 +311,8 @@
                                             (map #(relative (io/file repository %))
                                                  (porcelain-paths (:out result)))))))
             proven? (and (zero? (:exit result)) (empty? unexpected))]
-        (cond-> {:workspace_status {:checked true :command command :exit (:exit result)
+        (cond-> {:envelope-id (:id (current-envelope))
+                 :workspace_status {:checked true :command command :exit (:exit result)
                                     :clean_except_proven proven? :unexpected_paths unexpected}}
           proven? (assoc :workspace_clean_except (vec (sort allowed)))
           (not (zero? (:exit result))) (assoc-in [:workspace_status :error] (:err result))))

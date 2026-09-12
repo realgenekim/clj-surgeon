@@ -12,12 +12,12 @@
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-admit-tool :as admit]
    [clj-surgeon.mcp-alias-migration :as migration]
-   [clj-surgeon.operation-algebra :as algebra]
    [clj-surgeon.mcp-cold-verify]
    [clj-surgeon.mcp-extraction :as kernel]
    [clj-surgeon.mcp-namespace-split-test :as split-boundary-fixture]
    [clj-surgeon.namespace-split-io :as split]
    [clj-surgeon.namespace-split-test :as split-fixture]
+   [clj-surgeon.operation-algebra :as algebra]
    [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.require-change-boundary-test :as require-fixture]
    [clj-surgeon.require-change-io :as require-change]
@@ -158,7 +158,7 @@
 (deftest destination-envelope-is-trusted-context-only
   (let [context {:operation :change :operation-version 1 :entrance :cli
                  :policy :cli-legacy :lifecycle :commit
-                 :destination-envelope {:id (apply str (repeat 64 "a"))
+                 :destination-envelope {:id "92973cc3973923e812d4f77d80bfb4ea1a518b32890bff2d0462de570ba683a9"
                                         :roots ["/var/tmp/owned"] :source :launcher}}
         r (algebra/derive-capabilities (algebra/change-entry identity) context)]
     (is (:ok r) (pr-str r))
@@ -172,6 +172,29 @@
     (is (= ["/disk/tmp" "/disk/artifacts" "/work"]
            (policy {:tmpdir "/disk/tmp" :home "/home/seat" :workspace "/work"
                     :artifact-root "/disk/artifacts"})))))
+
+;; @spec DATACODE-ENV-001, DATACODE-ENV-004
+(deftest destination-envelope-final-filename-consumer-matrix
+  ;; Real publication seams, independent of the path constructor they use.
+  (with-workspace
+    (fn [base]
+      (let [allowed (io/file base "allowed") outside (io/file base "kept.edn")]
+        (.mkdirs allowed)
+        (spit outside "sentinel")
+        (java.nio.file.Files/createSymbolicLink
+          (.toPath (io/file allowed "detail.edn")) (.toPath outside)
+          (make-array java.nio.file.attribute.FileAttribute 0))
+        (doseq [[owner args]
+                [['clj-surgeon.require-change-io/save! [(str allowed) "detail.edn" {}]]
+                 ['clj-surgeon.namespace-split-io/save! [(str allowed) "detail.edn" {}]]
+                 ['clj-surgeon.rename-alias/write-detail! [(str (io/file allowed "detail.edn")) {}]]
+                 ['clj-surgeon.mcp-cold-verify/publish!
+                  [{:receipt-file (str (io/file allowed "detail.edn")) :job "verify/test"}]]]]
+          (require (symbol (namespace owner)))
+          (with-envelope [allowed]
+            #(let [r (refusal-data (fn [] (apply (resolve owner) args)))]
+               (is (= :write-outside-envelope (:error-type r)) (str owner " " r))
+               (is (= "sentinel" (slurp outside)) (str owner " changed outside bytes")))))))))
 
 (defn- assert-artifact! [verb path]
   (is (string? path) (str verb " must return its artifact path"))

@@ -1,0 +1,11 @@
+{:verb :shared-artifact-boundary
+ :refusals
+ [{:type :write-outside-envelope :class :authority
+   :native_failure "An owned disk-backed artifact destination outside invocation authority can be created or overwritten, including through a final-file symlink."
+   :promise "Admit the fully resolved final destination before directory creation or publication."
+   :native_method "Resolve existing ancestors with absent suffix retained; compare path components with trusted startup roots."
+   :minimal_reproducer "Publish an inverse receipt to an owned outside sentinel under a narrower trusted envelope."
+   :existing_check "receipt-artifacts/admit-target!"
+   :owner "receipt-artifacts"
+   :witness "receipt-artifacts-boundary-test/destination-envelope-guards-real-publication"
+   :retirement_condition "A replacement proves the same final-target boundary across all listed artifact consumers."}]}

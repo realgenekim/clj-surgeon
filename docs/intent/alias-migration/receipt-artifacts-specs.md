@@ -1,5 +1,13 @@
 # Receipt artifact isolation
 
+The launcher contract and final-target strengthening are approved in
+[round 3](../../observations/2026-09-12-data-not-code/round3/requirements.md).
+
+- [x] **DATACODE-ENV-001**: When a shared artifact consumer chooses a final directory or file target, it shall refuse a resolved destination outside the trusted envelope before creating directories or publishing bytes. Existing ancestors and symlinks are resolved with absent suffixes retained; parent admission alone does not admit filenames.
+- [x] **DATACODE-ENV-002**: When no launcher envelope is supplied, admission shall use the bounded startup policy default: disk-policy temp root, passwd user's seat state root (or startup artifact override), and invocation workspace.
+- [x] **DATACODE-ENV-003**: When request data carries destination authority, the decoder shall refuse that field as unknown. Trusted narrower context remains narrower; later request workspaces cannot widen startup roots.
+- [x] **DATACODE-ENV-004**: When artifact publication succeeds, the receipt shall expose the admitting envelope ID. Hashed inverse receipts retain a valid hash over their augmented data.
+
 - [x] **ALIAS-MIGRATION-001**: When a Surgeon verb publishes receipt, detail or undo artifacts, it shall place them under `<artifact-root>/<verb>-receipts/` outside the workspace and report their absolute paths, where `<artifact-root>` is derived per invoking user (`CLJ_SURGEON_ARTIFACT_ROOT`, else `$XDG_STATE_HOME/clj-surgeon/artifacts`, else `$HOME/.local/state/clj-surgeon/artifacts`) and validated before any write: non-blank, absolute, owned by the invoking user or under `$HOME`, and real disk (never RAM-backed) per `clj-surgeon.receipt-artifacts/validate-artifact-root!`.
 - [x] **ALIAS-MIGRATION-002**: When a verb completes a write in a Git workspace, its receipt shall publish `workspace_clean_except` only after post-write `git status --porcelain --untracked-files=all` proves there are no changed paths outside the verb's changed-file set; failed or unavailable proof shall be explicit and shall preserve the actual commit state.
 - [x] **ALIAS-MIGRATION-003**: When `make test` or `make landing-gate` runs, it shall execute the complete `clj-surgeon.mcp-alias-migration-test` and `clj-surgeon.receipt-artifacts-boundary-test` namespaces and propagate any failure; a battery freshness receipt shall not replace that execution.

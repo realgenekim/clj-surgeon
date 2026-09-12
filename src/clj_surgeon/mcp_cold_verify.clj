@@ -6,6 +6,7 @@
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-process :as process-env]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clojure.java.io :as io])
   (:import
    (java.util UUID)))
@@ -41,7 +42,7 @@
 
 (defn- receipt-file
   [project-root job]
-  (io/file (job-directory project-root) (str (subs job (count "verify/")) ".edn")))
+  (io/file (artifacts/admit-target! (io/file (job-directory project-root) (str (subs job (count "verify/")) ".edn")))))
 
 (defn- public-job
   [job]
@@ -51,9 +52,9 @@
 
 (defn- publish!
   [job]
-  (let [file (:receipt-file job)]
+  (let [file (artifacts/admit-target! (:receipt-file job))]
     (.mkdirs (.getParentFile (io/file file)))
-    (file-ops/atomic-write! file (pr-str (public-job job)))))
+    (file-ops/atomic-write! file (pr-str (artifacts/receipt-evidence (public-job job))))))
 
 (defn- prune-jobs!
   []

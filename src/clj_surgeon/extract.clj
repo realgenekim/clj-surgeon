@@ -13,7 +13,6 @@
 
    ALL PLANNING IS PURE. Only execute! writes files."
   (:require
-   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.analyze :as analyze]
    [clj-surgeon.cljc.require-ops :as require-ops]
    [clj-surgeon.extract-header :as extract-header]
@@ -21,6 +20,7 @@
    [clj-surgeon.forms :as forms]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.quoted-var-refs :as quoted-var-refs]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -260,7 +260,8 @@
 (defn- publish-receipt!
   [receipt-out receipt]
   (when receipt-out
-    (let [receipt-file (io/file receipt-out)]
+    (let [receipt-file (artifacts/admitted-file receipt-out)
+          receipt (artifacts/receipt-evidence receipt)]
       (.mkdirs (.getParentFile (.getAbsoluteFile receipt-file)))
       (file-ops/atomic-write! receipt-file (pr-str receipt))
       (when-not (= receipt (edn/read-string (slurp receipt-file)))
@@ -400,13 +401,13 @@
             (if (some? caller-candidates)
               (vec (sort caller-candidates))
               (->> captured-sources
-                 (remove #(= (str file) (str (key %))))
-                 (filter (fn [[_ content]]
-                           (some #(str/includes? content (str %))
-                                 extracted-names)))
-                 (map (comp str key))
-                 sort
-                 vec))
+                (remove #(= (str file) (str (key %))))
+                (filter (fn [[_ content]]
+                          (some #(str/includes? content (str %))
+                                extracted-names)))
+                (map (comp str key))
+                sort
+                vec))
             subjects (mapv #(str source-ns "/" %) (sort extracted-names))
             quoted-proof (quoted-var-refs/scan-sources
                            captured-sources subjects)]
@@ -520,8 +521,8 @@
    source and removes the newly-created target."
   [{:keys [file to receipt-out] :as opts}]
   (let [receipt-out (when receipt-out
-                      (str (io/file (artifacts/directory "extract" (or (:workspace_root opts) (System/getProperty "user.dir")))
-                                    (str (java.util.UUID/randomUUID) ".edn"))))
+                      (artifacts/target "extract" (or (:workspace_root opts) (System/getProperty "user.dir"))
+                                        (str (java.util.UUID/randomUUID) ".edn")))
         p (plan opts)]
     (if (:error p)
       p

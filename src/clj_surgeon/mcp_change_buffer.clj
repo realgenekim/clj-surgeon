@@ -1,16 +1,16 @@
 (ns clj-surgeon.mcp-change-buffer
   "Proof-carrying semantic selection followed by one addressed transaction."
   (:require
-   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.diagnostic-delta :as diagnostic-delta]
    [clj-surgeon.file-ops :as file-ops]
-   [clj-surgeon.verification-process :as verification-process]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-hot-verify :as hot-verify]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.outline :as outline]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.structural-lens :as structural-lens]
+   [clj-surgeon.verification-process :as verification-process]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.set :as set]
@@ -1568,8 +1568,8 @@
 (defn- publish-receipt!
   [receipt-dir receipt]
   (let [directory (io/file receipt-dir)
-        _ (.mkdirs directory)
-        path (str (io/file directory (str (UUID/randomUUID) ".edn")))]
+        path (artifacts/admit-target! (io/file directory (str (UUID/randomUUID) ".edn")))
+        _ (.mkdirs directory)]
     (file-ops/atomic-write! path (pr-str receipt))
     path))
 
@@ -1648,7 +1648,7 @@
                        :source-unchanged true}
                       (if-not (:ok committed)
                         committed
-                        (let [receipt (transaction/build-receipt compiled)
+                        (let [receipt (artifacts/receipt-evidence (transaction/build-receipt compiled))
                               files (mapv :file (:files compiled))
                               verification (if verify!
                                              (verify! project-root profile

@@ -222,7 +222,6 @@
       text
       (str/replace text separator "/"))))
 
-
 ;; @spec MCP-OP-ALIAS-061
 (def refused-code-point-types
   "Unicode general categories no `scope.paths` entry may carry.
@@ -1200,72 +1199,72 @@
                       (get-in request [:from :lib])
                       " is not known, because no file was read.")
                  (cond->
-                  {:paths given
-                   :files_matched 0
-                   :source_files_under_root source-files
-                   :source_roots roots
-                   :roots_listed roots-listed
-                   :suggested_paths paths
-                   :expected_files expected
-                   :next_call next-call
-                   :expect_files_unchanged_reason
-                   planner/expect-files-unchanged-reason
-                   :remedy
-                   (cond
-                    ;; @spec MCP-OP-ALIAS-058
-                    ;; no source anywhere under the root: there is nothing to
-                    ;; derive a spelling from, and saying so is the honest
-                    ;; answer rather than a fabricated remedy
-                    (zero? roots)
-                    (str "This project root holds no .clj, .cljs or .cljc file "
-                         "at all, so no spelling of scope.paths can select one. "
-                         "Check workspace_root before correcting scope.paths.")
+                   {:paths given
+                    :files_matched 0
+                    :source_files_under_root source-files
+                    :source_roots roots
+                    :roots_listed roots-listed
+                    :suggested_paths paths
+                    :expected_files expected
+                    :next_call next-call
+                    :expect_files_unchanged_reason
+                    planner/expect-files-unchanged-reason
+                    :remedy
+                    (cond
+                      ;; @spec MCP-OP-ALIAS-058
+                      ;; no source anywhere under the root: there is nothing to
+                      ;; derive a spelling from, and saying so is the honest
+                      ;; answer rather than a fabricated remedy
+                      (zero? roots)
+                      (str "This project root holds no .clj, .cljs or .cljc file "
+                           "at all, so no spelling of scope.paths can select one. "
+                           "Check workspace_root before correcting scope.paths.")
 
-                    ;; @spec MCP-OP-ALIAS-058
-                    ;; no listing fits the ceiling — a request already carrying
-                    ;; enough exclusions that even ["**"] is past it. A remedy
-                    ;; may name a next_call only when the receipt carries one:
-                    ;; the round-11 receipt said "Resend the next_call" two
-                    ;; lines above "next_call · none"
-                    (nil? next-call)
-                    (str "No next_call is composed: the shortest call this "
-                         "remedy can compose is " next-call-characters
-                         " characters, past the "
-                         planner/max-next-call-characters
-                         "-character next_call ceiling, so there is no call to "
-                         "resend. Spell scope.paths yourself. This tree's "
-                         (count (root-sizes suggestion)) " largest of " roots
-                         " top-level source roots, each with the number of "
-                         "sources it holds, are "
-                         (pr-str (root-sizes suggestion)) "; "
-                         (pr-str completing-scope-path)
-                         " on its own selects every one of the " source-files
-                         " sources the walk saw. expect.files declared "
-                         expected
-                         " and is left as declared, because no file was read.")
+                      ;; @spec MCP-OP-ALIAS-058
+                      ;; no listing fits the ceiling — a request already carrying
+                      ;; enough exclusions that even ["**"] is past it. A remedy
+                      ;; may name a next_call only when the receipt carries one:
+                      ;; the round-11 receipt said "Resend the next_call" two
+                      ;; lines above "next_call · none"
+                      (nil? next-call)
+                      (str "No next_call is composed: the shortest call this "
+                           "remedy can compose is " next-call-characters
+                           " characters, past the "
+                           planner/max-next-call-characters
+                           "-character next_call ceiling, so there is no call to "
+                           "resend. Spell scope.paths yourself. This tree's "
+                           (count (root-sizes suggestion)) " largest of " roots
+                           " top-level source roots, each with the number of "
+                           "sources it holds, are "
+                           (pr-str (root-sizes suggestion)) "; "
+                           (pr-str completing-scope-path)
+                           " on its own selects every one of the " source-files
+                           " sources the walk saw. expect.files declared "
+                           expected
+                           " and is left as declared, because no file was read.")
 
-                    ;; @spec MCP-OP-ALIAS-058
-                    ;; the listing is a bounded SAMPLE and the selection is
-                    ;; complete; both facts are stated, because a remedy that
-                    ;; names six of nine roots and calls them "the source roots
-                    ;; this tree actually holds" selected a sixth of the tree
-                    truncated?
-                    (str "Resend the next_call: it replaces scope.paths with "
-                         (pr-str paths) " — the " roots-listed " largest of "
-                         "this tree's " roots " top-level source roots, "
-                         "completed by " (pr-str completing-scope-path)
-                         " so it still selects every one of the " source-files
-                         " sources the walk saw. expect.files declared "
-                         expected
-                         " and is left as declared, because no file was read.")
+                      ;; @spec MCP-OP-ALIAS-058
+                      ;; the listing is a bounded SAMPLE and the selection is
+                      ;; complete; both facts are stated, because a remedy that
+                      ;; names six of nine roots and calls them "the source roots
+                      ;; this tree actually holds" selected a sixth of the tree
+                      truncated?
+                      (str "Resend the next_call: it replaces scope.paths with "
+                           (pr-str paths) " — the " roots-listed " largest of "
+                           "this tree's " roots " top-level source roots, "
+                           "completed by " (pr-str completing-scope-path)
+                           " so it still selects every one of the " source-files
+                           " sources the walk saw. expect.files declared "
+                           expected
+                           " and is left as declared, because no file was read.")
 
-                    :else
-                    (str "Resend the next_call: it replaces scope.paths with "
-                         (pr-str paths) ", every one of the " roots
-                         " source roots this tree holds, selecting all "
-                         source-files " of its sources. expect.files declared "
-                         expected
-                         " and is left as declared, because no file was read."))}
+                      :else
+                      (str "Resend the next_call: it replaces scope.paths with "
+                           (pr-str paths) ", every one of the " roots
+                           " source roots this tree holds, selecting all "
+                           source-files " of its sources. expect.files declared "
+                           expected
+                           " and is left as declared, because no file was read."))}
 
                    ;; @spec MCP-OP-ALIAS-058
                    ;; the roots and their weights ride the receipt only where
@@ -1631,7 +1630,7 @@
   "Record exactly the documents this writer still owns in this directory."
   [^java.io.File directory names]
   (file-ops/atomic-write!
-    (.getPath (io/file directory detail-manifest-name))
+    (artifacts/admit-target! (io/file directory detail-manifest-name))
     (pr-str {:version 1
              :writer detail-writer-marker
              :documents (vec (sort names))})))
@@ -1819,6 +1818,7 @@
   this call brought into being. `File/delete` never removes a non-empty
   directory, so a peer that filled one in between keeps it."
   [^java.io.File receipt-file]
+  (artifacts/admit-target! receipt-file)
   (let [path (.toPath (.getAbsoluteFile receipt-file))
         chain (loop [candidate path
                      acc ()]
@@ -2049,7 +2049,8 @@
   [^Path root plan]
   (let [directory (detail-directory (str root))
         file-name (str detail-document-prefix (UUID/randomUUID) ".edn")
-        target (io/file directory file-name)]
+        target (io/file (artifacts/admit-target! (io/file directory file-name)))
+        _ (artifacts/admit-target! (io/file directory detail-manifest-name))]
     (.mkdirs directory)
     (file-ops/atomic-write!
       (.getPath target)
@@ -2820,9 +2821,11 @@
   (artifacts/writable-root!)
   (let [dir (io/file artifacts/*artifact-root* (str "alias-migration" "-receipts"))
         ledger (io/file dir "ledger.edn")]
-    (.mkdirs dir)
+    (artifacts/admit-target! dir :alias-migration-telemetry)
+    (artifacts/admit-target! ledger :alias-migration-telemetry)
     (when-not (= (.getCanonicalFile ledger) (.getAbsoluteFile ledger))
       (throw (ex-info "Telemetry ledger must not traverse a symlink" {})))
+    (.mkdirs dir)
     (locking telemetry-lock
       (with-open [channel (java.nio.channels.FileChannel/open
                             (.toPath ledger)
@@ -2832,7 +2835,7 @@
                                          java.nio.file.StandardOpenOption/APPEND
                                          LinkOption/NOFOLLOW_LINKS]))
                   _guard (.lock channel)]
-        (let [buffer (java.nio.ByteBuffer/wrap (.getBytes (str (pr-str row) "\n") "UTF-8"))]
+        (let [buffer (java.nio.ByteBuffer/wrap (.getBytes (str (pr-str (artifacts/receipt-evidence row)) "\n") "UTF-8"))]
           (while (.hasRemaining buffer) (.write channel buffer)))
         (.force channel false)))
     (str ledger)))
