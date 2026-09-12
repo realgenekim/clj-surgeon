@@ -1,0 +1,11 @@
+{
+  "command": [
+    "make",
+    "landing-gate-prewarm"
+  ],
+  "started": "2026-09-12T17:59:54.612808+00:00",
+  "exit": 0,
+  "wall_seconds": 399.3488807431422,
+  "diagnostic": false,
+  "run_id": "525d00e7-d937-4f0a-9792-17fc5cbecec2"
+}

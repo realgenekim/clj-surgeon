@@ -1,0 +1,18 @@
+
+Testing clj-surgeon.lane-manifest-test
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test
+
+Testing clj-surgeon.mission-forms-test

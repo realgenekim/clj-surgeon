@@ -1,0 +1,18 @@
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.mcp-extraction-test
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.mission-candidate-test

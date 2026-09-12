@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

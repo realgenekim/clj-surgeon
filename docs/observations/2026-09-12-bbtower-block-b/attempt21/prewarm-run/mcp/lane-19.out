@@ -1,0 +1,8 @@
+lanes: --ns -- 1 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-hot-verify-test
+
+Testing clj-surgeon.forms-test
+
+Ran 24 tests containing 94 assertions.
+0 failures, 0 errors.
