@@ -5951,3 +5951,22 @@ Reconciled plan of record (after block B lands, before any new apparatus, and on
 small product blocks): (1) envelope admission at the artifact boundary; (2) refusal
 classification as a value; (3) fold consumer reads evidence rows, no source patch;
 (4) sleep pins as identities. Filed as one plan item.
+
+## 2026-09-12T20:25:45Z — Gene: "Go! Estimate impact on sublime score" — data-not-code block launched; bets on record
+
+Estimate given in chat: trunk 9 stays 9 (self-issued ceiling); window 7 → 8 only through
+the paired vs-native measure; index 4 → 5 on block B landing, → 6 with the envelope
+refusal (a typed refusal in the op itself) AND the probe measure scored. The code alone
+is worth zero on the meters and is still worth doing: it removes the two defect classes
+paid for today.
+
+Worktree /home/forge/src/clj-surgeon-datacode, branch fable/data-not-code-local off the
+block B tip 3b6d5357 (block B lands separately). Astra (pid 3519039) on the four items
+red-first: envelope admission at receipt_artifacts.clj's boundary with
+:write-outside-envelope; refusal classification as a value at edit_dsl.clj:426; the fold
+hands the manifest evidence rows, not a source patch; sleep pins keyed by owner test var,
+occurrence and temporal purpose; plus a PREREGISTERED probe measure (six edit→verdict
+tasks, NATIVE cold focused run vs PROBE warm image, n=3 per cell, complete wall,
+first-attempt success, refusal rate). Fable's bets, on record before any run: PROBE
+median wall ≤ 0.5× NATIVE on the three bb-portable namespaces and ≤ 0.3× on the three
+JVM-only; first-attempt success equal; PROBE refusal rate ≥ NATIVE. Astra adds her row.
