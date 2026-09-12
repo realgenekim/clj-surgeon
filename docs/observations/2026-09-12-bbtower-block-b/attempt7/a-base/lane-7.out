@@ -1,0 +1,17 @@
+lanes: --ns -- 8 namespace(s), home-isolated true
+
+Testing clj-surgeon.battery-ledger-test
+
+Testing clj-surgeon.mcp-change-buffer-test
+
+Testing clj-surgeon.mcp-expect-guard-test
+
+Testing clj-surgeon.mcp-operation-async-test
+
+Testing clj-surgeon.mcp-recovery-test
+
+Testing clj-surgeon.mission-candidate-test
+
+Testing clj-surgeon.ns-isolation-test
+
+Testing clj-surgeon.scope-stream-test
