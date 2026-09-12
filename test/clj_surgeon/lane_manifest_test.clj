@@ -23,7 +23,8 @@
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing use-fixtures]]
    [rewrite-clj.node :as node]
-   [rewrite-clj.parser :as parser]))
+   [rewrite-clj.parser :as parser]
+   [rewrite-clj.zip :as z]))
 
 ;; RATCHET (2026-09-04, inb-9483a4): every fixture directory this namespace
 ;; creates is tracked and swept, on failure as well as on success.
@@ -1190,17 +1191,65 @@
 ;; ---------------------------------------------------------------------------
 
 (def ^:private declared-merge-gate-sleeps
-  "file -> {line -> why}. The line is deliberately part of the key: moving one
-   of these is an edit worth re-reading, and the pin costs one number."
-  {"test/clj_surgeon/census_pool_test.clj"
-   {19 "bounded poll -- succeeds the instant every worker thread is dead, fails after 100 tries"
-    38 "the ONLY fixed sleep left on the gate: 5 ms inside the work fn to force the pool to spread work across more than one thread. It backs `(> (count @threads) 1)`, which is a claim about scheduling and cannot be made without one."}
-   "test/clj_surgeon/scope_stream_test.clj"
-   {105 "bounded poll -- System/gc then re-check reachability, succeeds immediately, fails at gc-deadline-ms (round three's fix for the two fixed `Thread/sleep 100` assertions)"}
-   "test/clj_surgeon/mcp_tool_test.clj"
-   {1395 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count (1380 -> 1381 on 2026-09-06: the `cheshire.core` require the next_call REPLAY witnesses need moved the whole namespace down one line -- the pin costing one number is the point; 1381 -> 1394 on 2026-09-07 when the expect-guard witness was inserted above it)"}
-   "test/clj_surgeon/mcp_hot_verify_test.clj"
-   {288 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
+  "Test Var, ordinal and declared temporal purpose are identity; lines are observations."
+  [{:owner 'clj-surgeon.census-pool-test/the-pool-is-bounded-and-outlives-nothing
+    :ordinal 1 :purpose :poll :call '(Thread/sleep 20)
+    :reason "Bounded worker-death poll; succeeds immediately, fails after 100 attempts."}
+   {:owner 'clj-surgeon.census-pool-test/the-pool-is-bounded-and-outlives-nothing
+    :ordinal 2 :purpose :spaced-stimulus :call '(Thread/sleep 5)
+    :reason "Spread work across threads to witness the scheduling assertion."}
+   {:owner 'clj-surgeon.scope-stream-test/the-reader-drops-each-source-when-its-callback-returns
+    :ordinal 1 :purpose :poll :call '(Thread/sleep 10)
+    :reason "Bounded collection-pressure poll for weak-reference release."}
+   {:owner 'clj-surgeon.mcp-tool-test/direct-change-returns-after-hot-proof-and-publishes-a-cold-job
+    :ordinal 1 :purpose :poll :call '(Thread/sleep 10)
+    :reason "Poll the verification job until complete or the attempt ceiling."}
+   {:owner 'clj-surgeon.mcp-hot-verify-test/hot-verification-deadline-is-not-reset-by-non-terminal-responses
+    :ordinal 1 :purpose :spaced-stimulus :call '(Thread/sleep 50)
+    :reason "Pump responses within the fixed verification deadline to prove it never resets."}])
+
+;; @spec DATACODE-SLEEP-001
+(defn sleep-sites [file source]
+  (let [start (z/of-string source {:track-position? true})
+        lib (second (z/sexpr start))
+        ancestors (fn [loc] (take-while some? (iterate z/up loc)))
+        quoted? (fn [loc]
+                  (some #(or (#{:quote :syntax-quote :uneval} (z/tag %))
+                             (and (= :list (z/tag %))
+                                  (#{'quote 'clojure.core/quote} (first (z/sexpr %)))))
+                        (rest (ancestors loc))))
+        sites (for [loc (take-while #(not (z/end? %)) (iterate z/next start))
+                    :when (= :list (z/tag loc))
+                    :when (and (#{'Thread/sleep 'java.lang.Thread/sleep} (some-> loc z/down z/sexpr))
+                               (not (quoted? loc)))
+                    :let [form (z/sexpr loc)
+                          top (last (take-while #(not= :forms (z/tag %)) (ancestors loc)))
+                          owner-form (z/sexpr top) owner-name (second owner-form)]]
+                {:owner (symbol (str lib) (str owner-name))
+                 :test-owner? (= 'deftest (first owner-form))
+                 :purpose (:temporal-purpose (meta (first form)))
+                 :call form :file file :line (first (z/position loc))})]
+    (:rows (reduce (fn [{:keys [counts rows]} site]
+                     (let [owner (:owner site) ordinal (inc (get counts owner 0))]
+                       {:counts (assoc counts owner ordinal)
+                        :rows (conj rows (assoc site :ordinal ordinal))}))
+                   {:counts {} :rows []} sites))))
+
+;; @spec DATACODE-SLEEP-001
+(defn sleep-pin-violations [pins sites]
+  (let [identity-key (juxt :owner :ordinal)
+        expected (into {} (map (juxt identity-key identity)) pins)
+        actual (into {} (map (juxt identity-key identity)) sites)]
+    (vec (for [key (sort-by pr-str (into (set (keys expected)) (keys actual)))
+               :let [pin (expected key) site (actual key)
+                     reason (cond (nil? pin) :undeclared
+                                  (nil? site) :missing
+                                  (not (:test-owner? site)) :not-a-test-owner
+                                  (not= (:purpose pin) (:purpose site)) :purpose-changed
+                                  (not= (:call pin) (:call site)) :call-changed)]
+               :when reason]
+           {:owner (first key) :ordinal (second key) :reason reason
+            :expected pin :actual site}))))
 
 ;; @spec DATACODE-SLEEP-001
 (deftest sleep-pins-survive-line-movement-and-refuse-purpose-drift
@@ -1224,48 +1273,28 @@
                  [:cardinality (str/replace source "sleep 10)" "sleep 10) (Thread/sleep 10)")]]]
           (let [errors (check pins (scan "fixture.clj" changed))]
             (is (seq errors) (str "changed " reason " must refuse"))
-            (is (some #(= 'fixture/waits (:owner %)) errors) (pr-str errors))))))))
+            (is (some #(= 'fixture/waits (:owner %)) errors) (pr-str errors)))))))
+  (when-let [scan (ns-resolve 'clj-surgeon.lane-manifest-test 'sleep-sites)]
+    (let [file "test/clj_surgeon/census_pool_test.clj"
+          source (slurp file)
+          pins (filter #(= "clj-surgeon.census-pool-test" (namespace (:owner %)))
+                       declared-merge-gate-sleeps)
+          check (ns-resolve 'clj-surgeon.lane-manifest-test 'sleep-pin-violations)]
+      (is (= [] (check pins (scan file source))))
+      (is (= [] (check pins (scan file (str "; unrelated fixture line\n" source)))))
+      (let [errors (check pins (scan file (str/replace source ":poll" ":spaced-stimulus")))]
+        (is (= [:purpose-changed] (mapv :reason errors)))
+        (is (= ['clj-surgeon.census-pool-test/the-pool-is-bounded-and-outlives-nothing]
+               (mapv :owner errors)))))))
 
 (deftest every-sleep-on-the-merge-gate-is-declared-with-its-reason
-  (let [sources (fn [lane]
-                  (for [n (lm/namespaces-for lane)]
-                    (:file (get @on-disk n))))
-        ;; A CALL, not a mention. The first cut matched its own regex literal
-        ;; (this very line) and a docstring that quotes the old fixed-sleep
-        ;; shape it replaced -- a scanner that cannot tell code from prose
-        ;; about code reports its own text and teaches people to ignore it.
-        ;; So: a literal argument must follow, and a line whose first
-        ;; non-blank character starts a comment is prose.
-        sleep-call #"\(Thread/sleep\s+[0-9(]"
-        found (for [path (concat (sources :fast) (sources :integration))
-                    :let [lines (str/split-lines (slurp (io/file path)))]
-                    [i line] (map-indexed vector lines)
-                    :when (re-find sleep-call line)
-                    ;; prose, two ways: a `;` comment, and a backtick-quoted
-                    ;; CITATION of the shape inside a docstring -- which is how
-                    ;; scope-stream-test records the fixed sleep it REPLACED.
-                    ;; Quoting a defect in the note explaining its removal must
-                    ;; not read as committing it.
-                    :when (not (str/starts-with? (str/triml line) ";"))
-                    :when (not (re-find #"`\(Thread/sleep" line))]
-                [path (inc i) (str/trim line)])
-        undeclared (remove (fn [[path line _]]
-                             (get-in declared-merge-gate-sleeps [path line]))
-                           found)
-        stale (for [[path lines] declared-merge-gate-sleeps
-                    [line _] lines
-                    :when (not (some (fn [[p l _]] (and (= p path) (= l line))) found))]
-                (str path ":" line))]
-    (is (empty? undeclared)
-        (str (count undeclared) " undeclared Thread/sleep site(s) in the "
-             "merge-gate lanes. A sleep is an assertion about a clock: make it "
-             "a bounded poll that succeeds on the CONDITION and fails at a "
-             "named deadline, then declare it in "
-             "`declared-merge-gate-sleeps` with the reason it must wait: "
-             (str/join "; " (map (fn [[p l s]] (str p ":" l " -- " s)) undeclared))))
-    (is (empty? stale)
-        (str "declared sleep site(s) that are no longer there -- delete the "
-             "line from the pin: " (str/join ", " stale)))))
+  (let [files (for [lane [:fast :integration] n (lm/namespaces-for lane)]
+                (:file (get @on-disk n)))
+        sites (mapcat #(let [source (slurp %)]
+                         (when (str/includes? source "Thread/sleep")
+                           (sleep-sites % source))) files)
+        errors (sleep-pin-violations declared-merge-gate-sleeps sites)]
+    (is (= [] errors) (pr-str errors))))
 
 ;; ---------------------------------------------------------------------------
 ;; @spec TEST-ISO-001 -- ROUND FIVE: the rename scanner's REACH, pinned.

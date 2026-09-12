@@ -1,0 +1,5 @@
+test/clj_surgeon/mcp_tool_test.clj:2309:3: info: Single argument to str already is a string
+test/clj_surgeon/scope_stream_test.clj:16:25: warning: Unused import LinkOption
+test/clj_surgeon/scope_stream_test.clj:16:36: warning: Unused import Path
+test/clj_surgeon/scope_stream_test.clj:16:41: warning: Unused import Paths
+linting took 187ms, errors: 0, warnings: 3

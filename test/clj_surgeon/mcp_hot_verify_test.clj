@@ -1,4 +1,5 @@
-(ns ^{:lane :integration} clj-surgeon.mcp-hot-verify-test
+(ns clj-surgeon.mcp-hot-verify-test
+  {:lane :integration}
   (:require
    [clj-surgeon.mcp-hot-verify :as hot-verify]
    [clj-surgeon.probe :as probe]
@@ -285,7 +286,7 @@
                 (future
                   (try
                     (dotimes [n 200]
-                      (Thread/sleep 50)
+                      (^{:temporal-purpose :spaced-stimulus} Thread/sleep 50)
                       (transport/send transport {:id id :out (str "tick " n)}))
                     (catch Exception _ nil)))))
       (fn [project-root port-file]
