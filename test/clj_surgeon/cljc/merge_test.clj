@@ -1,9 +1,11 @@
 (ns clj-surgeon.cljc.merge-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [clojure.string :as str]
-            [clojure.tools.reader :as r]
-            [clojure.tools.reader.reader-types :as rt]
-            [clj-surgeon.cljc.merge :as m]))
+  {:lane :fast}
+  (:require
+   [clj-surgeon.cljc.merge :as m]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]
+   [clojure.tools.reader :as r]
+   [clojure.tools.reader.reader-types :as rt]))
 
 (defn- parse-forms
   "Parse a CLJC source string into a vector of forms with reader conditionals

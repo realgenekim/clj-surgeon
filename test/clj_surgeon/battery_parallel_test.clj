@@ -31,7 +31,7 @@
 
 (deftest the-inventory-is-the-lane-manifests-battery-lane
   ;; @spec TEST-ISO-016 -- changing runtime preserves the original runner inventory.
-  (is (= ["clojure" "-J-Xmx512m" "-M:clj-surgeon/test-deps" "-m" "run-all"
+  (is (= ["clojure" "-J-Xmx512m" "-M:clj-surgeon/test-deps" "-m" "clj-surgeon.mcp-test-runner"
           "--emit-edn" "receipt.edn" "--ns" "clj-surgeon.intent-transaction-test"]
          (bp/lane-command "-J-Xmx512m" "receipt.edn" '[clj-surgeon.intent-transaction-test])))
   (is (= "clj-surgeon.mcp-test-runner"
@@ -143,6 +143,31 @@
         "the report reads the same whichever lane a namespace landed in")))
 
 (deftest the-lane-budget-is-folded-over-the-union-not-per-lane
+  (testing "Unknown cadence refuses by name; declared runtime cannot rewrite executed runtime"
+    (with-redefs [lm/manifest {'example.fast :fast}
+                  lm/namespace-runtimes {'example.fast :bb}]
+      (is (= ['missing] (bp/unbudgeted-members ['example.fast 'missing])))
+      (is (= {:makespan-ms 12 :lane-sums-ms {:fast 8} :runtime-sums-ms {:jvm 8}}
+             (bp/run-measurements [{:namespace 'example.fast :elapsed-ms 8}]
+                                  [{:runtime :jvm :namespaces ['example.fast]}] 12)))
+      (with-redefs [iso/lane-default-budget-ms {}]
+        (is (= ['example.fast] (bp/unbudgeted-members ['example.fast]))))))
+  (testing "A bb child cannot omit its namespace budget verdict"
+    (with-redefs [lm/manifest {'example.fast :fast}]
+      (doseq [[wall expected] [[8000 0] [8001 1]]]
+        (let [result (atom nil)
+              out (with-out-str
+                    (binding [*err* *out*]
+                      (reset! result
+                              (bp/report! [{:namespace 'example.fast :elapsed-ms wall :violations []}]
+                                          [{:index 0 :runtime :bb :started-ms 0 :completed-ms wall
+                                            :wall-ms wall :exit 0 :namespaces ['example.fast]}]
+                                          wall))))]
+          (is (= expected @result))
+          (is (str/starts-with? out (str "makespan: " wall " ms")))
+          (when (pos? expected)
+            (is (str/includes? out "example.fast"))
+            (is (str/includes? out "8001 ms, over its 8000 ms budget")))))))
   (testing "NEW bb budget is enforced even without JVM isolation; span is separate"
     (with-redefs [lm/namespace-runtimes {'example.bb-test :bb}]
       (doseq [[wall expected] [[374149 0] [374150 1]]]

@@ -1,4 +1,5 @@
 (ns clj-surgeon.syntax-var-refs-test
+  {:lane :fast}
   (:require
    [clj-surgeon.syntax-var-refs :as syntax-var-refs]
    [clojure.test :refer [deftest is testing]]))

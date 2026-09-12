@@ -1,4 +1,5 @@
 (ns clj-surgeon.intent-transaction-test
+  {:lane :battery}
   (:require
    [babashka.fs :as fs]
    [babashka.process :as proc]

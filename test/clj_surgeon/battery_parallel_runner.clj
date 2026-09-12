@@ -663,7 +663,7 @@
 (defn suite-namespaces [suite]
   (case suite
     "battery" (lm/namespaces-for :battery)
-    "fast" (vec (sort (set (concat (bb-namespaces) (lm/namespaces-for :fast)))))
+    "fast" (lm/namespaces-for :fast)
     "mcp" (vec (mapcat lm/namespaces-for [:fast :integration]))
     "bb" (bb-namespaces)
     "alias" '[clj-surgeon.mcp-alias-migration-test clj-surgeon.receipt-artifacts-boundary-test]
@@ -888,18 +888,32 @@
     (vec (keep (fn [n] (when-let [rs (seq (get by-ns n))] (merge-shard-runs n rs)))
                battery-namespaces))))
 
+(defn run-measurements
+  "@spec TEST-ISO-007 -- actual runtime and cadence sums, independent of scheduling."
+  [runs lanes wall-ms]
+  (let [runtime-of (into {} (for [lane lanes n (:namespaces lane)]
+                              [(selector-namespace n) (:runtime lane)]))
+        sums (fn [key-fn]
+               (into {} (for [[k rs] (group-by key-fn runs)]
+                          [k (reduce + (map :elapsed-ms rs))])))]
+    {:makespan-ms wall-ms
+     :lane-sums-ms (sums (comp lm/lane-of :namespace))
+     :runtime-sums-ms (sums (comp runtime-of :namespace))}))
+
 (defn report!
   "Prints the union summary, the per-namespace walls, the schedule and the
    isolation verdict. Returns the isolation violation count."
   ([runs lanes wall-ms] (report! runs lanes wall-ms true))
   ([runs lanes wall-ms isolation?]
-   (let [bb-runs (filter #(= :bb (get lm/namespace-runtimes (:namespace %))) runs)
+   (let [bb-members (set (mapcat :namespaces (filter #(= :bb (:runtime %)) lanes)))
+         bb-runs (filter #(bb-members (:namespace %)) runs)
          bb-sum (reduce + (map :elapsed-ms bb-runs))
          bb-lanes (filter #(= :bb (:runtime %)) lanes)
          bb-span (when (seq bb-lanes)
                    (- (apply max (map :completed-ms bb-lanes))
                       (apply min (map :started-ms bb-lanes))))
-         vs (into (cond-> (vec (mapcat :violations runs))
+         vs (into (cond-> (vec (distinct (concat (mapcat :violations runs)
+                                           (keep #(namespace-budget-violation (:namespace %) (:elapsed-ms %)) bb-runs))))
                     (iso/lane-budget-violation :bb bb-sum)
                     (conj (iso/lane-budget-violation :bb bb-sum)))
                   ;; @spec TEST-ISO-007 -- the LANE budget, over the union.
@@ -911,6 +925,10 @@
                           (iso/lane-budget-violation lane (reduce + (map :elapsed-ms rs))))
                         (when isolation? (group-by (comp lm/lane-of :namespace) runs))))]
      (binding [*out* *err*]
+       (println (format "makespan: %d ms" wall-ms))
+       (doseq [[lane sum] (sort-by (comp str key) (:lane-sums-ms (run-measurements runs lanes wall-ms)))]
+         (println (format "cadence %s: serial-equivalent %d ms; budget %s ms"
+                          lane sum (get iso/lane-budget-ms lane "missing"))))
        (println (format "bb-runtime: serial-equivalent %d ms; budget %d ms; makespan %s ms"
                         bb-sum (:bb iso/lane-budget-ms) (or bb-span "unmeasured")))
        (println (format "\nnamespace walls (%d, slowest first, serial-equivalent total %d ms):"
@@ -961,6 +979,11 @@
 
 ;; ---------------------------------------------------------------------------
 
+(defn unbudgeted-members
+  "@spec TEST-ISO-007 -- absent cadence is a named refusal, never an exemption."
+  [inventory]
+  (filterv #(not (pos-int? (get iso/lane-default-budget-ms (lm/lane-of %)))) inventory))
+
 (defn prepare-suite!
   [opts]
   (let [suite (get opts "--suite" "battery")
@@ -969,6 +992,9 @@
         _ (when (and (not battery?) (contains? opts "--lanes"))
             (throw (ex-info "gate-refused: width is automatic; use --debug-serial true for diagnostics" {})))
         inventory (suite-namespaces suite)
+        _ (when-let [missing (seq (unbudgeted-members inventory))]
+            (throw (ex-info (str "gate-refused: namespaces without cadence budgets " (pr-str missing))
+                            {:error-type :unbudgeted-namespaces :namespaces (vec missing)})))
         run-id (or (::run-id opts) (System/getenv "CLJ_SURGEON_GATE_RUN_ID") (str (java.util.UUID/randomUUID)))
         _ (when-not (re-matches #"[A-Za-z0-9-]+" run-id)
             (throw (ex-info "gate-refused: invalid run identity" {})))
@@ -1131,6 +1157,7 @@
                                         :expected-count (count battery-namespaces) :observed-count (count runs)}
                      :lanes (mapv #(dissoc % :emitted) lanes) :runs runs :result result
                      :isolation-failures iso-fail :leak-failures leak-fail
+                     :measurements (run-measurements runs lanes wall-ms)
                      :wall-ms wall-ms :problems (vec (concat broken census-errors
                                                        (when changed? [:tree-changed-during-suite])))}]
         (spit (io/file work-dir "receipt.edn") (pr-str receipt))

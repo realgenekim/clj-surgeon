@@ -93,7 +93,57 @@
 (def manifest
   "test namespace -> lane. THE authority. Adding a JVM test namespace without
    adding it here fails `clj-surgeon.lane-manifest-test` by name."
-  {;; ---- :fast (49) ----
+  {;; Block B: every former bb-only owner has measured cadence and budget.
+   ;; Receipt and reasons: attempt10/lane-moves.md in the block-B observations.
+   'clj-surgeon.agent-routing-test :fast
+   'clj-surgeon.alias-migration-test :fast
+   'clj-surgeon.analyze-test :fast
+   'clj-surgeon.cli-dispatch-test :battery
+   'clj-surgeon.cljc-existing-ops-test :fast
+   'clj-surgeon.cljc.analyze-test :fast
+   'clj-surgeon.cljc.merge-test :fast
+   'clj-surgeon.cljc.require-ops-test :fast
+   'clj-surgeon.cljc.split-test :fast
+   'clj-surgeon.diagnostic-delta-test :fast
+   'clj-surgeon.edit-dsl-test :fast
+   'clj-surgeon.edit-test :battery
+   'clj-surgeon.edn-config-integration-test :battery
+   'clj-surgeon.extract-header-test :fast
+   'clj-surgeon.extract-test :battery
+   'clj-surgeon.failure-report-test :fast
+   'clj-surgeon.file-ops-test :fast
+   'clj-surgeon.fix-declares-test :fast
+   'clj-surgeon.forms-test :fast
+   'clj-surgeon.help-test :battery
+   'clj-surgeon.insertion-gap-test :fast
+   'clj-surgeon.install-test :battery
+   'clj-surgeon.intent-transaction-test :battery
+   'clj-surgeon.jvm-error-test :fast
+   'clj-surgeon.lens-query-test :battery
+   'clj-surgeon.ls-tree-test :fast
+   'clj-surgeon.memory-battery-test :fast
+   'clj-surgeon.move-dependency-test :fast
+   'clj-surgeon.move-test :fast
+   'clj-surgeon.operation-algebra-test :fast
+   'clj-surgeon.outermost-test :fast
+   'clj-surgeon.outline-test :fast
+   'clj-surgeon.owner-hypotheses-test :fast
+   'clj-surgeon.parser-admission-test :battery
+   'clj-surgeon.partition-all-test :battery
+   'clj-surgeon.platform-selector-test :battery
+   'clj-surgeon.recovery-test :fast
+   'clj-surgeon.relation-census-test :fast
+   'clj-surgeon.rename-test :fast
+   'clj-surgeon.show-form-test :battery
+   'clj-surgeon.structural-lens-test :fast
+   'clj-surgeon.syntax-var-refs-test :fast
+   'clj-surgeon.tmp-leak-support-test :battery
+   'clj-surgeon.worktree-lifecycle-cli-test :fast
+   'clj-surgeon.worktree-lifecycle-io-test :fast
+   'clj-surgeon.worktree-lifecycle-test :fast
+   'clj-surgeon.xray-test :battery
+
+   ;; ---- existing cadence members ----
    'clj-surgeon.rename-alias-receipt-test :fast
    'clj-surgeon.receipt-booleans-test :fast
    'clj-surgeon.insert-forms-test :fast

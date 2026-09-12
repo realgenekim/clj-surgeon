@@ -1,5 +1,17 @@
 # clj-surgeon tech tree
 
+Block B red-team repairs (2026-09-12): **BUILDING**, branch-only. Indirect
+probe refusal literals now have per-owner coverage; probe omits its constant
+verification boolean. A shipped-map receipt derives the new bb ceiling at
+374,149 ms (Fable ratification pending). The no-argument bb diagnostic passed
+829 tests and is a required landing/prewarm stage. The 47 previously unbudgeted
+bb inventory members have measured cadence; 33 join fast and 14 battery.
+Parent-side bb namespace budgeting, cadence-only fast selection, actual-runtime
+sums and makespan-first reports have targeted negative witnesses. Final suite
+and prewarm evidence is recorded in
+[attempt10](observations/2026-09-12-bbtower-block-b/attempt10/REPORT.md).
+This is contract repair, not performance admission or a runtime speedup claim.
+
 Block A, bb-rewrite-tower-local (2026-09-11): **BUILDING** babashka-first hybrid.
 The [inventory](plans/bb-first-inventory.md) separates runtime from cadence;
 execution overturned two load-only portable classifications. The bb coordinator

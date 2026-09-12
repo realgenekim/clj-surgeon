@@ -1,4 +1,5 @@
 (ns clj-surgeon.file-ops-test
+  {:lane :fast}
   (:require
    [babashka.fs :as fs]
    [clj-surgeon.file-ops :as file-ops]

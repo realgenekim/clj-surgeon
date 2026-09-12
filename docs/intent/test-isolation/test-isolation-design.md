@@ -30,6 +30,21 @@ obvious reading:
 
 ## The partition
 
+Block B's hybrid runtime union had admitted 47 namespaces without any cadence
+or per-namespace budget. Runtime portability must not select cadence. The fast
+entrance now selects only the complete fast manifest. Each historical bb
+inventory member also has manifest and ns-metadata cadence, backed by the
+attempt10 measured table. Real subprocess witnesses belong in battery even
+when cheap; the 71-second parser corpus belongs there by measured cost. Small
+pure witnesses remain fast. No tests or runtime assignments are removed.
+
+The coordinator enforces bb namespace budgets from child wall facts in addition
+to aggregate budgets; an empty child violations vector is not a budget verdict.
+It prints makespan first, then cadence and runtime sums, charging actual child
+runtimes. Fast membership, missing budgets and bb boundary violations receive
+independent negative witnesses. A literal rejected by the SCI fence is not a
+process launch: the supporting source scan reads forms and ignores strings.
+
 TEST-ISO-014 removes the 204–206 s serial loop inside the discovered-build-file
 reader-eval witness. Six named deftests call the unchanged single-pair launch
 body. A coverage witness observes the arguments from the loaded test bodies

@@ -1,4 +1,5 @@
 (ns clj-surgeon.recovery-test
+  {:lane :fast}
   (:require
    [clj-surgeon.mcp-workspace :as mcp-workspace]
    [clj-surgeon.recovery :as recovery]

@@ -21,7 +21,9 @@
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing use-fixtures]]))
+   [clojure.test :refer [deftest is testing use-fixtures]]
+   [rewrite-clj.node :as node]
+   [rewrite-clj.parser :as parser]))
 
 ;; RATCHET (2026-09-04, inb-9483a4): every fixture directory this namespace
 ;; creates is tracked and swept, on failure as well as on success.
@@ -156,6 +158,13 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest every-manifest-entry-exists-on-disk
+  (testing "Every historical bb member has a budgeted cadence; fast excludes battery"
+    (let [bb-namespaces (requiring-resolve 'clj-surgeon.battery-parallel-runner/bb-namespaces)
+          suite-namespaces (requiring-resolve 'clj-surgeon.battery-parallel-runner/suite-namespaces)
+          defaults @(requiring-resolve 'clj-surgeon.ns-isolation/lane-default-budget-ms)]
+      (is (= (set (lm/namespaces-for :fast)) (set (suite-namespaces "fast"))))
+      (doseq [n (bb-namespaces)]
+        (is (pos-int? (get defaults (lm/lane-of n))) (str n " requires a cadence budget")))))
   (testing "manifest -> disk: no phantom entries"
     (let [missing (sort (remove @on-disk (keys lm/manifest)))]
       (is (empty? missing)
@@ -301,7 +310,7 @@
     ;; -- which is also the pin that catches someone changing an alias's
     ;; :main-opts without changing what the gate is understood to cover.
     (let [ctx (rm/repo-context)]
-      (is (= (into (set (lm/namespaces-for :fast)) (:namespaces (rm/resolve-runner "make test-bb" ctx)))
+      (is (= (set (lm/namespaces-for :fast))
              (:namespaces (rm/resolve-runner "make test-fast" ctx))))
       (is (= (into (set (lm/namespaces-for :fast)) (lm/namespaces-for :integration))
              (:namespaces (rm/resolve-runner "make mcp-test" ctx))))
@@ -422,14 +431,27 @@
    #"\bsh/sh\b"])
 
 (deftest no-fast-lane-namespace-spells-a-child-process
-  (let [offenders
+  (let [code-spellings (fn [source]
+                         (->> (tree-seq node/inner? node/children (parser/parse-string-all source))
+                              (filter #(= :token (node/tag %)))
+                              (map node/string)
+                              (remove #(re-find #"^#?\"" %))
+                              (str/join " ")))
+        offenders
         (sort-by first
                  (for [[s lane] lm/manifest
                        :when (= :fast lane)
-                       :let [src (slurp (:file (get @on-disk s)))]
+                       :let [raw (slurp (:file (get @on-disk s)))
+                             src (if (some #(re-find % raw) spawn-spellings)
+                                   (code-spellings raw) raw)]
                        re spawn-spellings
                        :when (re-find re src)]
                    [s (str re)]))]
+    (testing "SCI rejection fixture strings are data; real require and call forms stay visible"
+      (is (not (some #(re-find % (code-spellings "(def rejected \"(require 'clojure.java.shell)\")")) spawn-spellings)))
+      (doseq [source ["(ns example (:require [clojure.java.shell :as sh]))"
+                      "(proc/process [\"bb\"])" "(ProcessBuilder. argv)"]]
+        (is (some #(re-find % (code-spellings source)) spawn-spellings) source)))
     (is (empty? offenders)
         (str "fast-lane namespace(s) spelling a child-process launcher -- the "
              "fast lane's rule is NO child process (move it to :battery): "
@@ -595,7 +617,55 @@
    `census-ledger-path`; what stays here is the REASON, which no derivation can
    recover. Keyed by namespace name, so two branches adopting different
    namespaces merge without touching the same line."
-  '#{clj-surgeon.receipt-booleans-test ; Cross-verb false-boolean receipt ratchet.
+  '#{;; Former bb-only members: measured cadence adoption, attempt10/lane-moves.md.
+     clj-surgeon.agent-routing-test
+     clj-surgeon.alias-migration-test
+     clj-surgeon.analyze-test
+     clj-surgeon.cli-dispatch-test
+     clj-surgeon.cljc-existing-ops-test
+     clj-surgeon.cljc.analyze-test
+     clj-surgeon.cljc.merge-test
+     clj-surgeon.cljc.require-ops-test
+     clj-surgeon.cljc.split-test
+     clj-surgeon.diagnostic-delta-test
+     clj-surgeon.edit-dsl-test
+     clj-surgeon.edit-test
+     clj-surgeon.edn-config-integration-test
+     clj-surgeon.extract-header-test
+     clj-surgeon.extract-test
+     clj-surgeon.failure-report-test
+     clj-surgeon.file-ops-test
+     clj-surgeon.fix-declares-test
+     clj-surgeon.forms-test
+     clj-surgeon.help-test
+     clj-surgeon.insertion-gap-test
+     clj-surgeon.install-test
+     clj-surgeon.intent-transaction-test
+     clj-surgeon.jvm-error-test
+     clj-surgeon.lens-query-test
+     clj-surgeon.ls-tree-test
+     clj-surgeon.memory-battery-test
+     clj-surgeon.move-dependency-test
+     clj-surgeon.move-test
+     clj-surgeon.operation-algebra-test
+     clj-surgeon.outermost-test
+     clj-surgeon.outline-test
+     clj-surgeon.owner-hypotheses-test
+     clj-surgeon.parser-admission-test
+     clj-surgeon.partition-all-test
+     clj-surgeon.platform-selector-test
+     clj-surgeon.recovery-test
+     clj-surgeon.relation-census-test
+     clj-surgeon.rename-test
+     clj-surgeon.show-form-test
+     clj-surgeon.structural-lens-test
+     clj-surgeon.syntax-var-refs-test
+     clj-surgeon.tmp-leak-support-test
+     clj-surgeon.worktree-lifecycle-cli-test
+     clj-surgeon.worktree-lifecycle-io-test
+     clj-surgeon.worktree-lifecycle-test
+     clj-surgeon.xray-test
+     clj-surgeon.receipt-booleans-test ; Cross-verb false-boolean receipt ratchet.
      clj-surgeon.rename-alias-receipt-test ; Disk-derived receipt evidence.
      clj-surgeon.insert-forms-test ; Consolidated span witnesses.
      clj-surgeon.splice-envelope-test ; Shared envelope witnesses.

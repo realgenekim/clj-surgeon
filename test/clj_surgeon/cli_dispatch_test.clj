@@ -9,9 +9,10 @@
      print a clean EDN error map and never throw.
    - subprocess CLI with BARE STRING ops — the exact invocation shape that
      threw ClassCastException before ed6ad99 (`:op ls-tree`, no leading colon)."
+  {:lane :battery}
   (:require
-   [clj-surgeon.artifact-boundary-support :as boundary]
    [babashka.process :as proc]
+   [clj-surgeon.artifact-boundary-support :as boundary]
    [clj-surgeon.core :as core]
    [clj-surgeon.relation-census :as relation-census]
    [clojure.edn :as edn]

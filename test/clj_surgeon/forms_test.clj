@@ -1,7 +1,9 @@
 (ns clj-surgeon.forms-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [clojure.java.io :as io]
-            [clj-surgeon.forms :as forms]))
+  {:lane :fast}
+  (:require
+   [clj-surgeon.forms :as forms]
+   [clojure.java.io :as io]
+   [clojure.test :refer [deftest is testing]]))
 
 ;; ============================================================
 ;; classify — the heart of form classification
@@ -207,7 +209,7 @@
 
 (defn- mk-tmp-dir [name]
   (let [d (java.nio.file.Files/createTempDirectory
-           name (into-array java.nio.file.attribute.FileAttribute []))]
+            name (into-array java.nio.file.attribute.FileAttribute []))]
     (.toFile d)))
 
 (defn- spit-edn [dir filename content]

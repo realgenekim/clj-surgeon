@@ -254,6 +254,18 @@ it); the battery lane to 007 alone (it exists to launch cold child JVMs).
   (at the ceiling passes, one ms past it refuses),
   `.../the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays`.
 
+  Every namespace selected by `make test-fast`, including bb children, shall
+  carry a cadence with a per-namespace budget and contribute to its lane sum.
+  Runtime portability shall not add battery members to the fast entrance.
+  The parent shall derive bb per-namespace violations from recorded walls;
+  missing cadence or budget shall refuse by namespace before launch. The
+  report shall print makespan first, then cadence and actual-runtime sums.
+  Misreadings: nil cadence is unbounded permission; empty child violations
+  prove a bb namespace met its budget; declaring bb means it runs fast;
+  a declared bb runtime charges a namespace actually executed on the JVM.
+  Witnesses: `lane-manifest-test/every-manifest-entry-exists-on-disk`,
+  `battery-parallel-test/the-lane-budget-is-folded-over-the-union-not-per-lane`.
+
   NEW bb runtime-lane budget, recomputed in attempt10: **374,149 ms**.
   The shipped-map run records a serial bb-runtime namespace sum of 240,989 ms
   and a fast-cadence sum of 38,646 ms in the same run (makespan 82,910 ms).

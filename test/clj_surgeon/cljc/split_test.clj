@@ -1,4 +1,5 @@
 (ns clj-surgeon.cljc.split-test
+  {:lane :fast}
   (:require
    [clj-surgeon.cljc.merge :as m]
    [clj-surgeon.cljc.split :as s]

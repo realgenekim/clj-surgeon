@@ -1,4 +1,5 @@
 (ns clj-surgeon.help-test
+  {:lane :battery}
   (:require
    [babashka.process :as proc]
    [clj-surgeon.core :as core]

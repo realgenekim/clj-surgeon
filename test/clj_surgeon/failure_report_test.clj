@@ -1,4 +1,5 @@
 (ns clj-surgeon.failure-report-test
+  {:lane :fast}
   (:require
    [cheshire.core :as json]
    [clj-surgeon.failure-report :as report]
@@ -65,10 +66,10 @@
                  (make-array java.nio.file.attribute.FileAttribute 0)))]
     (try
       (let [result (report/report-failure! {:receipt private-receipt
-                                             :tool-root (.getPath root)
-                                             :runner (fn [& _]
-                                                       (throw (Exception.
-                                                                "must not run")))})]
+                                            :tool-root (.getPath root)
+                                            :runner (fn [& _]
+                                                      (throw (Exception.
+                                                               "must not run")))})]
         (is (:ok result))
         (is (false? (:reported result)))
         (is (= :local-beads-unavailable (:reason result)))
