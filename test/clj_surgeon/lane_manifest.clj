@@ -263,7 +263,11 @@
 ;; @spec TEST-ISO-016 -- paired namespace walls on the same box, not startup.
 (def runtime-measurements
   (merge
-    {'clj-surgeon.intent-transaction-test
+    {'clj-surgeon.outline-corpus-integration-test
+     {:jvm-ms 8306 :bb-ms 20859 :ratio (/ 20859.0 8306)
+      :jvm-log "docs/observations/2026-09-12-bbtower-block-b/attempt10/outline-jvm.edn"
+      :bb-log "docs/observations/2026-09-12-bbtower-block-b/attempt10/outline-bb.edn"}
+     'clj-surgeon.intent-transaction-test
      {:jvm-ms 4709 :bb-ms 4905 :ratio (/ 4905.0 4709)
       :jvm-log "docs/observations/2026-09-12-bbtower-block-b/attempt8/intent-jvm.log"
       :bb-log "docs/observations/2026-09-12-bbtower-block-b/attempt8/intent-bb.log"
