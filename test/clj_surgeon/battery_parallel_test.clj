@@ -170,7 +170,7 @@
             (is (str/includes? out "8001 ms, over its 8000 ms budget")))))))
   (testing "NEW bb budget is enforced even without JVM isolation; span is separate"
     (with-redefs [lm/namespace-runtimes {'example.bb-test :bb}]
-      (doseq [[wall expected] [[374149 0] [374150 1]]]
+      (doseq [[wall expected] [[343102 0] [343103 1]]]
         (let [result (atom nil)
               out (with-out-str
                     (binding [*err* *out*]
@@ -180,9 +180,9 @@
                                             :wall-ms 20 :exit 0 :namespaces ['example.bb-test]}]
                                           25 false))))]
           (is (= expected @result))
-          (is (str/includes? out (str "bb-runtime: serial-equivalent " wall " ms; budget 374149 ms; makespan 20 ms")))
+          (is (str/includes? out (str "bb-runtime: serial-equivalent " wall " ms; budget 343102 ms; makespan 20 ms")))
           (when (pos? expected)
-            (is (str/includes? out "bb lane took 374150 ms, over its 374149 ms budget")))))))
+            (is (str/includes? out "bb lane took 343103 ms, over its 343102 ms budget")))))))
   ;; @spec TEST-ISO-007 -- the number the fleet pays is the SUM of the
   ;; namespaces' walls. A child holding a slice would report a five-minute
   ;; lane as forty seconds, which is a budget that can never fire.

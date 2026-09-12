@@ -2082,11 +2082,13 @@
   clj-surgeon.ns-isolation-test/a-spawn-seen-by-both-observations-is-reported-once
   clj-surgeon.ns-isolation-test/a-write-outside-the-namespaces-own-tmp-subdir-fails-with-the-path
   clj-surgeon.ns-isolation-test/an-allowlisted-command-that-is-still-running-is-refused-anyway
+  clj-surgeon.ns-isolation-test/bb-ceiling-reproduces-from-calibration-under-shipped-manifest
   clj-surgeon.ns-isolation-test/compact-relations-has-a-declared-contention-margin
   clj-surgeon.ns-isolation-test/each-lane-has-its-own-default-budget-because-a-lane-is-a-cost-class
   clj-surgeon.ns-isolation-test/each-lane-is-held-only-to-the-rules-that-lane-can-keep
   clj-surgeon.ns-isolation-test/every-src-spawn-site-records-into-the-ledger
   clj-surgeon.ns-isolation-test/every-violation-names-its-intent-its-namespace-and-its-resource
+  clj-surgeon.ns-isolation-test/spec-bb-boundary-equals-registered-ceiling
   clj-surgeon.ns-isolation-test/the-allowlist-cannot-exempt-a-leaked-var-root
   clj-surgeon.ns-isolation-test/the-fixture-catches-a-real-write-outside-the-namespaces-own-subdir
   clj-surgeon.ns-isolation-test/the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays

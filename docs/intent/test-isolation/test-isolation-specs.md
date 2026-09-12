@@ -266,16 +266,17 @@ it); the battery lane to 007 alone (it exists to launch cold child JVMs).
   Witnesses: `lane-manifest-test/every-manifest-entry-exists-on-disk`,
   `battery-parallel-test/the-lane-budget-is-folded-over-the-union-not-per-lane`.
 
-  NEW bb runtime-lane budget, recomputed in attempt10: **374,149 ms**.
+  NEW bb runtime-lane budget, computed in attempt11: **343,102 ms**.
   The shipped-map run records a serial bb-runtime namespace sum of 240,989 ms
-  and a fast-cadence sum of 38,646 ms in the same run (makespan 82,910 ms).
-  Ceiling = ceil(240,989 * 60,000 / 38,646) = 374,149 ms.
-  The receipt, frozen runtime/cadence maps and reproduced input lines are in
-  [attempt10/ceiling-derivation.log](../../observations/2026-09-12-bbtower-block-b/attempt10/ceiling-derivation.log),
-  with the original bb-runtime line in attempt10/ceiling-run.log and namespace
-  facts in attempt10/ceiling-run/receipt.edn. No runtime entry is patched during
-  derivation. These maps precede the subsequent cadence repair; replay uses
-  the frozen maps so later lane moves cannot rewrite the inputs.
+  and a fast-cadence sum of 42,143 ms in the same run (makespan 82,910 ms).
+  Definition: ceiling = ceil(bb_runtime_sum * 60,000 / fast_cadence_sum).
+  Both sums fold ONE calibration receipt under the SHIPPED lane manifest at
+  the tip, never frozen maps. Thus ceil(240,989 * 60,000 / 42,143) = 343,102 ms.
+  Reproduce with `bb test/clj_surgeon/bb_ceiling.clj
+  docs/observations/2026-09-12-bbtower-block-b/attempt10/ceiling-run/receipt.edn`.
+  The script prints both sums and the ceiling; the calibration witness calls
+  that same computation and requires equality with the registered constant.
+  A manifest change must therefore reproduce and reconcile the declaration.
   This replaces attempt8's pre-escape derivation, and remains a NEW declaration,
   not restoration of any base budget. Fable's ratification remains required.
   Charge each bb-runtime namespace once, independently of its cadence lane.
@@ -283,7 +284,10 @@ it); the battery lane to 007 alone (it exists to launch cold child JVMs).
   bb, so these overlapping sums must not be added. Report the bb sum and bb
   process-span makespan separately. Both hybrid and standalone bb suites
   enforce the bb ceiling, including when JVM isolation is disabled.
-  At 399,155 ms accept; at 399,156 ms refuse naming bb and both numbers.
+  At 343,102 ms accept; at 343,103 ms refuse naming bb and both numbers.
+  Witnesses: `ns-isolation-test/bb-ceiling-reproduces-from-calibration-under-shipped-manifest`
+  and `ns-isolation-test/spec-bb-boundary-equals-registered-ceiling` fail by name
+  when either the calibration or the spec boundary disagrees with the constant.
   Witnesses: the lane-total witness above and
   `battery-parallel-test/the-lane-budget-is-folded-over-the-union-not-per-lane`.
 

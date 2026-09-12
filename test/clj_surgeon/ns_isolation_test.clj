@@ -22,6 +22,7 @@
    authoring time is not a ratchet (the marker-audit lesson)."
   {:lane :fast}
   (:require
+   [clj-surgeon.bb-ceiling :as ceiling]
    [clj-surgeon.ns-isolation :as iso]
    [clj-surgeon.spawn-ledger :as spawn]
    [clojure.java.io :as io]
@@ -460,14 +461,29 @@
                           "TEST-ISO-007"))))))
 
 ;; @spec TEST-ISO-007
+(deftest bb-ceiling-reproduces-from-calibration-under-shipped-manifest
+  (is (= (:ceiling-ms (ceiling/from-file ceiling/calibration-receipt))
+         (:bb iso/lane-budget-ms))))
+
+;; @spec TEST-ISO-007
+(deftest spec-bb-boundary-equals-registered-ceiling
+  (let [spec (slurp "docs/intent/test-isolation/test-isolation-specs.md")
+        boundaries (re-seq #"At ([0-9,]+) ms accept; at ([0-9,]+) ms refuse naming bb" spec)
+        parse-ms #(Long/parseLong (str/replace % "," ""))]
+    (is (= 1 (count boundaries)) "TEST-ISO-007 must declare exactly one bb boundary")
+    (is (= [(:bb iso/lane-budget-ms) (inc (:bb iso/lane-budget-ms))]
+           (mapv parse-ms (rest (first boundaries))))
+        "TEST-ISO-007 spec bb boundary disagrees with registered ceiling")))
+
+;; @spec TEST-ISO-007
 (deftest the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays
   (testing "NEW bb runtime ceiling: exact boundary and one ms beyond"
-    (is (= 374149 (:bb iso/lane-budget-ms)))
-    (is (nil? (iso/lane-budget-violation :bb 374149)))
-    (let [v (iso/lane-budget-violation :bb 374150)]
+    (is (= 343102 (:bb iso/lane-budget-ms)))
+    (is (nil? (iso/lane-budget-violation :bb 343102)))
+    (let [v (iso/lane-budget-violation :bb 343103)]
       (is (some? v))
-      (is (str/includes? (iso/message v) "bb lane took 374150 ms"))
-      (is (str/includes? (iso/message v) "374149 ms"))))
+      (is (str/includes? (iso/message v) "bb lane took 343103 ms"))
+      (is (str/includes? (iso/message v) "343102 ms"))))
   (testing "the fast lane's ceiling is the 60 s the partition exists to buy"
     (is (= 60000 (get iso/lane-budget-ms :fast))))
   (testing "at the ceiling passes; past it refuses, naming the lane and both numbers"
