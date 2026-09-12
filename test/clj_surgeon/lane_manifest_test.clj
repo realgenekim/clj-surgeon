@@ -258,6 +258,14 @@
         (is (= :missing-evidence-receipts (:error-type r)) (str n " " runtime))
         (is (= n (:namespace r)))))
     (is (some? evidence-path) "measured facts have a data source, not a quoted source copy")
+    (when validate
+      (let [n (first (keys rows))]
+        (doseq [bad [(update-in rows [n :jvm :mean-ms] inc)
+                     (update-in rows [n :conservative-ratio] inc)
+                     (update-in rows [n :runtime] {:bb :jvm :jvm :bb})]]
+          (is (= :invalid-runtime-evidence
+                 (:error-type (try (validate bad) nil
+                                   (catch clojure.lang.ExceptionInfo e (ex-data e)))))))))
     (when evidence-path
       (let [evidence (edn/read-string (slurp @evidence-path))]
         (is (= evidence rows))

@@ -6,6 +6,8 @@ status: "round four implemented 2026-09-04 (002/003/004/005/007/010 runtime witn
 
 # JVM Test-Suite Isolation Specifications
 
+- [x] **DATACODE-ROWS-001**: When the statistical fold publishes runtime assignments, it shall emit validated EDN namespace evidence rows containing both runtime samples, n, mean, sample sd, conservative ratio, portability state and distinct receipt paths. Missing receipts or inconsistent statistics/assignments refuse by namespace. The manifest consumes these rows directly; declared capability exclusions remain policy. The fold shall not emit a source patch.
+
 - [x] **TEST-ISO-016**: A namespace shall run on bb only when it is
   bb-portable AND its conservative paired namespace-wall ratio is at most
   2.0. Measure at least six identical controls per runtime on the same box,
