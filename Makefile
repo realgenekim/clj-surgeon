@@ -14,7 +14,8 @@ CLAUDE_SKILL_DEST := $(CLAUDE_HOME)/skills/clj-surgeon
 CODEX_GLOBAL_INSTRUCTIONS ?= $(CODEX_HOME)/AGENTS.md
 CLAUDE_GLOBAL_INSTRUCTIONS ?= $(CLAUDE_HOME)/CLAUDE.md
 SOURCE_COMMIT := $(shell git -C "$(CLJ_SURGEON_HOME)" rev-parse HEAD 2>/dev/null || printf unknown)
-CLI_SOURCE_HASH := $(shell cd "$(CLJ_SURGEON_HOME)" && { find src -type f -print; printf '%s\n' bb.edn deps.edn; } | LC_ALL=C sort | while IFS= read -r file; do shasum -a 256 "$$file"; done | shasum -a 256 | awk '{print $$1}')
+# @spec CLI-PACKAGE-002
+CLI_SOURCE_HASH := $(shell cd "$(CLJ_SURGEON_HOME)" && { find src libs/clj-splice/src -type f -print; printf '%s\n' bb.edn deps.edn libs/clj-splice/deps.edn; } | LC_ALL=C sort | while IFS= read -r file; do shasum -a 256 "$$file"; done | shasum -a 256 | awk '{print $$1}')
 SKILL_SOURCE_HASH := $(shell cd "$(SKILL_SOURCE)" && find . -type f -print | LC_ALL=C sort | while IFS= read -r file; do shasum -a 256 "$$file"; done | shasum -a 256 | awk '{print $$1}')
 VERSION_ROOT := $(INSTALL_ROOT)/versions/$(SOURCE_COMMIT)
 CLI_PACKAGE := $(VERSION_ROOT)/cli-$(CLI_SOURCE_HASH)
@@ -650,6 +651,7 @@ uninstall-mcp-codex-dev:
 	@$(MAKE) --no-print-directory mcp-stop
 	@echo "Removed the local clj-surgeon MCP registration from Codex."
 
+# @spec CLI-PACKAGE-001
 prepare-cli-package:
 	@set -eu; \
 	  package="$(CLI_PACKAGE)"; \
@@ -657,8 +659,9 @@ prepare-cli-package:
 	    mkdir -p "$(VERSION_ROOT)"; \
 	    stage="$$package.tmp.$$$$"; \
 	    trap 'chmod -R u+w "$$stage" 2>/dev/null || true; rm -rf "$$stage"' EXIT HUP INT TERM; \
-	    mkdir -p "$$stage/src"; \
+	    mkdir -p "$$stage/src" "$$stage/libs/clj-splice/src"; \
 	    cp -R "$(CLJ_SURGEON_HOME)src/." "$$stage/src/"; \
+	    cp -R "$(CLJ_SURGEON_HOME)libs/clj-splice/src/." "$$stage/libs/clj-splice/src/"; \
 	    printf '%s\n' '{:artifact :cli-runtime' ' :mode :stable-copy' ' :source-commit "$(SOURCE_COMMIT)"' ' :source-hash "$(CLI_SOURCE_HASH)"}' > "$$stage/install-receipt.edn"; \
 	    chmod -R a-w "$$stage"; \
 	    mv "$$stage" "$$package"; \
@@ -697,7 +700,7 @@ install-cli: prepare-cli-package
 	  printf '%s\n' '{:artifact :control-plane-root' ' :mode :local-pointer' ' :source-commit "$(SOURCE_COMMIT)"' ' :path "$(CLJ_SURGEON_HOME)"}' > "$$control_plane_receipt"; \
 	  stage="$$dest.tmp.$$$$"; \
 	  trap 'rm -f "$$stage" "$$control_plane_stage"' EXIT HUP INT TERM; \
-	  printf '%s\n' '#!/bin/sh' '## clj-surgeon stable launcher' 'surgeon_tmp=$${TMPDIR:-/var/tmp}' 'case "$$surgeon_tmp" in /tmp|/tmp/*|/dev/shm|/dev/shm/*) surgeon_tmp=/var/tmp ;; esac' 'case "$$surgeon_tmp" in *[![:space:]]*) ;; *) surgeon_tmp=/var/tmp ;; esac' 'export TMPDIR="$$surgeon_tmp"' 'CLJ_SURGEON_CONTROL_PLANE_ROOT_FILE="$(CONTROL_PLANE_ROOT_FILE)" exec bb "-Djava.io.tmpdir=$$surgeon_tmp" --classpath "$(CLI_PACKAGE)/src" -m clj-surgeon.core "$$@"' > "$$stage"; \
+	  printf '%s\n' '#!/bin/sh' '## clj-surgeon stable launcher' 'surgeon_tmp=$${TMPDIR:-/var/tmp}' 'case "$$surgeon_tmp" in /tmp|/tmp/*|/dev/shm|/dev/shm/*) surgeon_tmp=/var/tmp ;; esac' 'case "$$surgeon_tmp" in *[![:space:]]*) ;; *) surgeon_tmp=/var/tmp ;; esac' 'export TMPDIR="$$surgeon_tmp"' 'CLJ_SURGEON_CONTROL_PLANE_ROOT_FILE="$(CONTROL_PLANE_ROOT_FILE)" exec bb "-Djava.io.tmpdir=$$surgeon_tmp" --classpath "$(CLI_PACKAGE)/src:$(CLI_PACKAGE)/libs/clj-splice/src" -m clj-surgeon.core "$$@"' > "$$stage"; \
 	  chmod +x "$$stage"; \
 	  mv "$$stage" "$$dest"; \
 	  trap - EXIT HUP INT TERM; \

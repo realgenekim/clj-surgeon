@@ -3,6 +3,7 @@
   (:require
    [babashka.fs :as fs]
    [babashka.process :as proc]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
@@ -567,3 +568,56 @@
           (is (not= chosen (head-commit)))))
       (finally
         (delete-temp-tree tmp-dir)))))
+
+;; @spec CLI-PACKAGE-001
+(deftest installed-cli-loads-splice-verbs-outside-the-checkout
+  (let [root (fs/create-temp-dir {:prefix "clj-surgeon-installed-splice-"})
+        cli (fs/path root "bin with spaces" "clj-surgeon")
+        request (fs/path root "empty.edn")
+        source (fs/path root "sample.clj")]
+    (try
+      (spit (str request) "{}")
+      (spit (str source) "(ns sample)\n(defn answer [] 42)\n")
+      (let [installed (run-make "install-cli"
+                               (str "CLI_DEST=" cli)
+                               (str "CLAUDE_HOME=" (fs/path root "claude"))
+                               (str "INSTALL_ROOT=" (fs/path root "packages")))]
+        (println (:out installed) (:err installed))
+        (is (zero? (:exit installed)) (pr-str installed)))
+      (doseq [op [":insert-forms!" ":rename-alias!"]]
+        (let [result @(proc/process [(str cli) ":op" op ":request-file" (str request)]
+                                   {:dir (str root) :out :string :err :string})
+              receipt (try (edn/read-string (:out result)) (catch Exception _ nil))]
+          (println op (pr-str result))
+          (is (= [2 :invalid-request "refused"]
+                 [(:exit result) (:error-type receipt) (:state receipt)]) (pr-str result))
+          (is (not (str/includes? (str (:out result) (:err result)) "FileNotFoundException")))))
+      (let [result @(proc/process [(str cli) ":op" ":ls" ":file" (str source)]
+                                 {:dir (str root) :out :string :err :string})]
+        (println ":ls" (pr-str result))
+        (is (zero? (:exit result)) (pr-str result))
+        (is (str/includes? (:out result) "answer")))
+      (finally (delete-temp-tree root)))))
+
+;; @spec CLI-PACKAGE-002
+(deftest cli-package-identity-covers-bundled-splice-source
+  (let [root (fs/create-temp-dir {:prefix "clj-surgeon-package-hash-"})
+        library (fs/path root "libs/clj-splice/src/clj_splice/core.clj")]
+    (try
+      (fs/create-dirs (fs/parent library))
+      (fs/create-dirs (fs/path root "src"))
+      (spit (str (fs/path root "src/core.clj")) "(ns core)")
+      (doseq [file ["bb.edn" "deps.edn" "libs/clj-splice/deps.edn"]]
+        (spit (str (fs/path root file)) "{}"))
+      (spit (str (fs/path root "Makefile"))
+            (str (slurp "Makefile") "\nfixture-hash:\n\t@echo $(CLI_SOURCE_HASH)\n"))
+      (let [hash! (fn []
+                    (let [result @(proc/process ["make" "--silent" "fixture-hash"]
+                                                {:dir (str root) :out :string :err :string})]
+                      (is (zero? (:exit result)) (pr-str result))
+                      (str/trim (:out result))))]
+        (spit (str library) "(ns clj-splice.core)\n(def version 1)\n")
+        (let [before (hash!)]
+          (spit (str library) "(ns clj-splice.core)\n(def version 2)\n")
+          (is (not= before (hash!)) "library-only edits must select a fresh immutable package")))
+      (finally (delete-temp-tree root)))))
