@@ -1,0 +1,24 @@
+
+Testing clj-surgeon.lane-manifest-test
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.battery-ledger-test
+
+Testing clj-surgeon.mission-forms-source-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.mcp-compact-edit-fields-test

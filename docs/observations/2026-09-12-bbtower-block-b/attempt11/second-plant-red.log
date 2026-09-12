@@ -1,0 +1,21 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.splice-envelope-test
+
+FAIL in (bounded-input-path-encoding) (splice_envelope_test.clj:85)
+probe refusal vocabulary must be complete
+expected: (= (remedy-vocabulary verb) registered)
+  actual: (not (= #{:attempt11-verify-profile-unregistered :invalid-project-formatter :invalid-probe-port :probe-namespace-not-found :hot-verification-connection-failed :invalid-project-verification-profiles :probe-connection-failed :stale-probe-image :invalid-probe-request :hot-verification-timeout :probe-message-too-large :hot-verification-transport-closed :probe-source-too-large :hot-verification-path-escape :invalid-hot-verification-port :hot-verification-failed} #{:invalid-project-formatter :invalid-probe-port :probe-namespace-not-found :hot-verification-connection-failed :invalid-project-verification-profiles :probe-connection-failed :invalid-hot-verification-profile :stale-probe-image :invalid-probe-request :hot-verification-timeout :probe-message-too-large :hot-verification-transport-closed :probe-source-too-large :hot-verification-path-escape :invalid-hot-verification-port :hot-verification-failed}))
+
+FAIL in (bounded-input-path-encoding) (splice_envelope_test.clj:89)
+mcp_hot_verify.clj emits unregistered refusal kinds
+expected: (= #{} (set (remove registered kinds)))
+  actual: (not (= #{} #{:attempt11-verify-profile-unregistered}))
+
+FAIL in (bounded-input-path-encoding) (splice_envelope_test.clj:91)
+mcp_hot_verify.clj registers owner refusal kinds it never emits
+expected: (= #{} (set (remove kinds (get owner-kinds file))))
+  actual: (not (= #{} #{:invalid-hot-verification-profile}))
+
+Ran 2 tests containing 104 assertions.
+3 failures, 0 errors.

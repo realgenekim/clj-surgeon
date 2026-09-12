@@ -1,0 +1,36 @@
+clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-integration
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+lanes: integration -- 7 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-feature-thread-test
+
+Testing clj-surgeon.mcp-hot-verify-test
+
+Testing clj-surgeon.mcp-http-server-test
+clj-surgeon MCP: embedded nREPL on 45653 ( /var/tmp/forge/bbtower-fx/clj-surgeon-suite-2303495-74dc6bfb/clj-surgeon-mcp-http-test-3052676943792743661/.nrepl-port )
+
+Testing clj-surgeon.mcp-server-test
+clj-surgeon MCP: embedded nREPL on 44465 ( /var/tmp/forge/bbtower-fx/clj-surgeon-suite-2303495-74dc6bfb/clj-surgeon-mcp-server-test-8277457284922424193/.nrepl-port )
+clj-surgeon MCP: embedded nREPL on 45633 ( /var/tmp/forge/bbtower-fx/clj-surgeon-suite-2303495-74dc6bfb/clj-surgeon-mcp-server-test-32141256238783071/.nrepl-port )
+
+Testing clj-surgeon.mcp-tool-test
+
+Testing clj-surgeon.namespace-split-warm-test
+
+Testing clj-surgeon.outline-corpus-integration-test
+
+namespace walls (7, slowest first, total 57140 ms):
+     43894 ms  clj-surgeon.mcp-feature-thread-test
+      8526 ms  clj-surgeon.outline-corpus-integration-test
+      1483 ms  clj-surgeon.mcp-tool-test
+      1400 ms  clj-surgeon.mcp-http-server-test
+       978 ms  clj-surgeon.mcp-hot-verify-test
+       738 ms  clj-surgeon.namespace-split-warm-test
+       121 ms  clj-surgeon.mcp-server-test
+SERIAL/NOT-A-GATE: direct namespace runner; use make test for landing
+
+Ran 168 tests containing 3798 assertions.
+0 failures, 0 errors.
+
+test-isolation: 0 violations across 7 namespace(s) (TEST-ISO-002/003/004/005/007/010)
