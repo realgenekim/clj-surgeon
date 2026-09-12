@@ -5664,3 +5664,15 @@ creating a file, so Landlock counts; when none fits it skips by name listing eve
 candidate's bytes and writability. Red under attempt 15's wrapper with a packet-shaped
 TMPDIR, green through a qualifying candidate or the named skip. Packet cec97266 is the
 sixth check-only prewarm; if it is green, the ship launches with its receipt.
+
+## 2026-09-12T13:30:05Z — sixth check-only prewarm: gate-slot oracle green, next oracle red on the same class; attempt 17 runs the whole gate under the envelope at once
+
+Packet cec97266 at cb6330d4: three suites and the gate-slot oracle green under Landlock;
+the next node (test_cell_b_oracle.py, Makefile:322) had 12 PermissionErrors from a
+`TemporaryDirectory(dir="/var/tmp")` literal. Six packets to find six writers, one per
+run, is the wrong meter. Attempt 17 (Astra, pid 3241019): generalise attempt 15's
+Landlock wrapper to run `make landing-gate-prewarm` end to end under the exact
+check-only envelope with a packet-shaped TMPDIR, collect every red node and denied path
+in one census, fix them all by the established policy, re-run under the wrapper until
+green, then one real prewarm. The diagnostic wrapper run is not one of the two counted
+prewarms.
