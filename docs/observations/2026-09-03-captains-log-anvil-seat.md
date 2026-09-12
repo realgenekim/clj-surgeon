@@ -5526,3 +5526,15 @@ git-boundary test hard-codes the base). None honour XDG_STATE_HOME. For the chec
 prewarm: v3.12 round 3 adds the state dir as a root; the two fixture env vars can be
 pointed inside the worktree at launch; the hard-coded base is one form to fix on the
 branch. Filing "honour XDG_STATE_HOME at every site" as a product item, not this block.
+
+## 2026-09-12T11:49:21Z — ship v3.12 round 3 INSTALLED (stamp 113424Z, PROVEN); second check-only prewarm running at b45d3eb1
+
+Outside the sandbox on f8e4515: suite exit 0, 114 PASS, fresh circuits; install.sh INSTALL
+OK stamp=20260912T113424Z, PROVEN=true; ~/bin/lib/packet.py equals the staged bytes.
+Rollback: install.sh --rollback 20260912T113424Z.
+
+Packet 3932b756 is the second check-only prewarm, at the attempt-12 tip b45d3eb1. Its
+environment.edn now lists /home/forge/.local/state/clj-surgeon among the write roots;
+CLJ_SURGEON_HELPER_TMP and CLJ_SURGEON_MISSION_TMP point inside the worktree's target/fx.
+One known remaining out-of-envelope writer: mission_git_boundary_test.clj:14 hard-codes
+/var/tmp/forge as its temp base; if that is the only red lane, it is one form on the branch.
