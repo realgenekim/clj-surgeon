@@ -736,6 +736,7 @@
    {:target "alias-migration-test" :kind :suite :suite "alias"}
    {:target "mcp-test" :kind :suite :suite "mcp"}
    {:target "test-bb" :kind :suite :suite "bb"}
+   {:target "test-bb-diagnostic" :kind :after}
    {:target "repository-hygiene" :kind :after}
    {:target "intent-audit" :kind :audit}])
 

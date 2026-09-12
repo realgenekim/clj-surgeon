@@ -1208,6 +1208,11 @@ test-bb:
 test-bb-serial:
 	clojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite bb --debug-serial true
 
+.PHONY: test-bb-diagnostic
+test-bb-diagnostic:
+	@# @spec TEST-ISO-015 -- gate the documented default, including temp re-exec.
+	bb -Xmx1g -Djava.io.tmpdir="$(TMPDIR)" test/run_all.clj
+
 # ============================================================
 # TEST-ISO-009b -- THE LANDING GATE. This is the target `~/bin/land` runs.
 # ============================================================

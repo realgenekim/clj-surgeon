@@ -458,6 +458,17 @@ evidence -- so every landing pays it in full.
 
 ### TEST-ISO-015 execution — automatic complete landing gate
 
+When the documented `bb test/run_all.clj` diagnostic is invoked without
+arguments, it shall execute the historical inventory's members assigned to
+the executing runtime and return nonzero for test failures. Explicit child
+selections shall still refuse a runtime mismatch. The landing gate and its
+prewarm shall execute the actual no-argument entrance as `test-bb-diagnostic`
+after the runtime pool. Misreading: a green explicit `--ns` child selection
+proves the no-argument default; filtering deletes the JVM member from the
+coordinator's inventory; a diagnostic result authorizes landing.
+Witness: `battery-parallel-test/prewarm-membership-and-authority-are-explicit`
+and the gate's `test-bb-diagnostic` subprocess exit.
+
 Every worker shall hold an inherited flock slot under
 `/var/tmp/forge/gate-slots/` for its lifetime. Each acquisition shall recompute
 width from live MemAvailable under the shared admission lock and account for

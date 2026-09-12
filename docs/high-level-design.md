@@ -1342,6 +1342,9 @@ the shrinking [per-ID debt ledger](intent/unlinked-spec-ids.edn).
 - [Embedded elaborator](intent/embedded-elaborator/embedded-elaborator-design.md) — frozen pre-product intent, excluded from the current witness audit.
 - [Substantiation telemetry](intent/substantiation-telemetry/substantiation-telemetry-design.md) — advance ratification, excluded from the current witness audit.
 - [Test isolation and lane cadence](intent/test-isolation/test-isolation-design.md)
+  owns complete budgeted cadence membership and executable diagnostic entrances.
+  A runtime reassignment must not break a documented no-argument diagnostic;
+  the landing gate executes that entrance while retaining its diagnostic-only authority.
 - [Prepared request actions](intent/prepared-request-actions/prepared-request-actions-design.md)
 - [Temporary-directory hygiene](intent/temp-dir-hygiene/temp-dir-hygiene-design.md)
 - [Insertion boundary and gap](intent/insertion-boundary-and-gap/design.md)

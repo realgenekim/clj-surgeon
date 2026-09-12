@@ -145,7 +145,7 @@
 (deftest the-lane-budget-is-folded-over-the-union-not-per-lane
   (testing "NEW bb budget is enforced even without JVM isolation; span is separate"
     (with-redefs [lm/namespace-runtimes {'example.bb-test :bb}]
-      (doseq [[wall expected] [[399155 0] [399156 1]]]
+      (doseq [[wall expected] [[374149 0] [374150 1]]]
         (let [result (atom nil)
               out (with-out-str
                     (binding [*err* *out*]
@@ -155,9 +155,9 @@
                                             :wall-ms 20 :exit 0 :namespaces ['example.bb-test]}]
                                           25 false))))]
           (is (= expected @result))
-          (is (str/includes? out (str "bb-runtime: serial-equivalent " wall " ms; budget 399155 ms; makespan 20 ms")))
+          (is (str/includes? out (str "bb-runtime: serial-equivalent " wall " ms; budget 374149 ms; makespan 20 ms")))
           (when (pos? expected)
-            (is (str/includes? out "bb lane took 399156 ms, over its 399155 ms budget")))))))
+            (is (str/includes? out "bb lane took 374150 ms, over its 374149 ms budget")))))))
   ;; @spec TEST-ISO-007 -- the number the fleet pays is the SUM of the
   ;; namespaces' walls. A child holding a slice would report a five-minute
   ;; lane as forty seconds, which is a budget that can never fire.
@@ -662,12 +662,16 @@
 
 ;; @spec TEST-ISO-015 -- Sol GATE-LANES-FENCE-002, omitted alias/audit prewarm.
 (deftest prewarm-membership-and-authority-are-explicit
+  (let [select-default (requiring-resolve 'run-all/default-namespaces)]
+    (is (= '[a c] (select-default '[a b c] '{a :bb b :jvm c :bb} :bb)))
+    (is (= '[b] (select-default '[a b c] '{a :bb b :jvm c :bb} :jvm)))
+    (is (= [] (select-default '[unknown] {} :bb))))
   (let [stages (requiring-resolve 'clj-surgeon.battery-parallel-runner/gate-stages)
         full (stages false false)
         warm (stages false true)]
     (is (= ["admit-transaction-recovery-battery" "battery-fresh"
             "alias-migration-test" "mcp-test" "test-bb"
-            "repository-hygiene" "intent-audit"] (mapv :target full)))
+            "test-bb-diagnostic" "repository-hygiene" "intent-audit"] (mapv :target full)))
     (is (= (filterv #(not= "battery-fresh" (:target %)) full) warm))
     (is (= (count full) (count (set (map :target full)))))
     (is (= (mapv :target full) (bp/gate-targets false)))

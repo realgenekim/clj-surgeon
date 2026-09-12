@@ -58,13 +58,18 @@
     clj-surgeon.cli-dispatch-test
     clj-surgeon.core-discovery-test])
 
+;; @spec TEST-ISO-015 -- no-argument diagnostics follow runtime reassignment.
+(defn default-namespaces [inventory runtimes runtime]
+  (filterv #(= runtime (get runtimes %)) inventory))
+
 ;; @spec TEST-ISO-015 -- whole namespace children preserve fixtures/hooks.
 (defn -main [& arguments]
   (let [args (vec arguments)
         runtime (if (System/getProperty "babashka.version") :bb :jvm)
         emit? (= "--emit-edn" (first args))
         output (when emit? (second args))
-        selected (if emit? (mapv symbol (drop 3 args)) namespaces)
+        selected (if emit? (mapv symbol (drop 3 args))
+                     (default-namespaces namespaces lm/namespace-runtimes runtime))
         {:keys [refused root]} (tmp-leak/secure-tmpdir! {:bb-script "test/run_all.clj" :bb-heap-mib 1024
                                                          :main-ns "run-all"
                                                          :isolate-home? (every? #(contains? #{:fast :integration} (lm/lane-of %)) selected)} args)]

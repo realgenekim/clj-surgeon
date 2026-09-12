@@ -117,6 +117,16 @@ back to raw distance rather than granting uninspected exemptions.
 
 ## Automatic landing gate
 
+The red-team no-argument diagnostic failure (block B, 2026-09-12) exposed
+an independent entrance: explicit coordinator selections worked while
+`bb test/run_all.clj` refused the historical inventory's JVM member. Default
+diagnostic selection now intersects that inventory with the executing runtime;
+explicit selections retain their runtime guard. TEST-ISO-015 requires the
+landing gate and prewarm to run `test-bb-diagnostic` after the runtime pool.
+This stage owns the actual no-argument command because selection-only tests
+cannot prove its temp re-exec, namespace loads or exit behavior. Its success
+does not grant landing authority; the coordinator still owns that decision.
+
 Box admission and prewarm consumption use the round-three contract in the
 parallel landing gate plan. A live-memory-derived flock semaphore is shared
 across coordinators; local executor width alone grants no worker admission.
