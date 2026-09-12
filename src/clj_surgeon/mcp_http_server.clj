@@ -207,6 +207,7 @@
           (.flush))))))
 
 ;; @spec BB-PROBE-002 -- only the explicitly started warm image has this route.
+;; @spec BB-PROBE-004 -- encode and bound before obtaining the response writer.
 (defn- probe-servlet [image]
   (proxy [HttpServlet] []
     (doPost [^HttpServletRequest request ^HttpServletResponse response]
@@ -216,10 +217,11 @@
                        (hot-verify/probe! image (read-bounded reader 8192)))
                      (catch Exception e
                        ((requiring-resolve 'clj-surgeon.probe/refusal)
-                        :invalid-probe-request (.getMessage e))))]
+                        :invalid-probe-request (.getMessage e))))
+            wire ((requiring-resolve 'clj-surgeon.probe/encode-response) result)]
         (.setContentType response "application/edn")
         (.setCharacterEncoding response "UTF-8")
-        (doto (.getWriter response) (.write (pr-str result)) (.flush))))))
+        (doto (.getWriter response) (.write wire) (.flush))))))
 
 (defn- configure-logging!
   [log-file]

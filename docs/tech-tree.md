@@ -1,5 +1,14 @@
 # clj-surgeon tech tree
 
+Block B attempt 20: six controls per runtime now govern all 38 paired
+namespaces through conservative two-standard-deviation clearance. Rename-alias
+selects JVM; the historical bb ceiling replays recorded execution runtimes.
+The probe HTTP crossing bounds complete UTF-8 EDN and preserves oversized
+verdicts with explicit truncation facts. A real-probe witness compares receipt
+keys with the specification's parsed shape statement. This is branch-only
+contract repair; gate results and retained red evidence are recorded in
+`docs/observations/2026-09-12-bbtower-block-b/attempt20/REPORT.md`.
+
 Block B attempt 18 (2026-09-12): the whole restricted gate exposed a helper
 fixture rooted outside the packet and a hygiene witness registering Git
 worktrees in the external common directory, alongside three oracle scratch

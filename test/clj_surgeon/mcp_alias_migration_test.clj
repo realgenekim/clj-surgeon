@@ -5995,6 +5995,8 @@
     "probe-namespace-not-found" "probe-source-too-large"
     "invalid-probe-request" "stale-probe-image" "probe-message-too-large"
     "invalid-probe-port" "probe-connection-failed"
+    ;; BB-PROBE-004: oversized HTTP verdicts retain bounded truncation facts.
+    "probe-response-truncated"
     ;; Row-2 external artifact containment adds these reachable typed refusals.
     "receipt-dir-escapes" "receipt-dir-inside-workspace"})
 
@@ -6005,7 +6007,7 @@
   ;; could see. Both directions are asserted — a kind that appears and a kind
   ;; that vanishes are each a change to what a text-reading client is promised.
   (let [kinds (set (refusal-kinds-in-source))]
-    (is (= 160 (count kinds))
+    (is (= 161 (count kinds))
         (str "the entrance's refusal enumeration changed size: "
              (count kinds) " kinds"))
     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))

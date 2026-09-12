@@ -47,6 +47,36 @@
      :assertions (+ (:pass summary 0) failures) :failures failures
      :elapsed_ms elapsed}))
 
+;; @spec BB-PROBE-004 -- the whole UTF-8 encoding, before the servlet writer.
+(def response-byte-bound 16384)
+(def response-name-bound 64)
+
+;; @spec BB-PROBE-004
+(defn encode-response [result]
+  (let [wire (pr-str result)
+        size #(alength (.getBytes ^String % "UTF-8"))
+        encoded (size wire)]
+    (if (<= encoded response-byte-bound)
+      wire
+      (let [names (vec (:reloaded result))
+            total (count names)
+            cause (:error-type result)
+            base (cond-> (assoc (select-keys result [:state :proof_pending :tests :assertions
+                                                     :failures :elapsed_ms])
+                                :error-type :probe-response-truncated
+                                :reloaded-count total)
+                   (and (keyword? cause) (<= (size (pr-str cause)) 128)) (assoc :cause cause)
+                   (:error result) (assoc :error "Probe detail exceeded the response bound; see :truncated."))]
+        ;; The closed verdict's scalar fields fit even with an empty prefix.
+        ;; Count names only after UTF-8 encoding: one name may exceed the bound.
+        (loop [n (min response-name-bound total)]
+          (let [candidate (pr-str (assoc base :reloaded (subvec names 0 n)
+                                    :truncated {:bound response-byte-bound
+                                                :encoded encoded :omitted (- total n)}))]
+            (if (<= (size candidate) response-byte-bound)
+              candidate
+              (recur (dec n)))))))))
+
 (defn read-bounded [reader limit]
   (let [buf (char-array (inc limit))
         n (loop [offset 0]

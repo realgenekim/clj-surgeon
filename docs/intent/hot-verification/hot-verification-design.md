@@ -8,9 +8,17 @@ image identity and calls the hot-verification implementation through `/probe`.
 The existing nREPL verification profile remains available for its existing callers.
 
 The probe refusal constructor is a static namespace dependency, so the
-namespace-level alias-migration refusal census can follow it. Its seven new
+namespace-level alias-migration refusal census can follow it. Its registered
 literal kinds are pinned alongside existing kinds; forwarding markers describe
 actual forwarding, and do not exempt an unresolved constructor call.
+
+The HTTP crossing encodes the entire probe result and measures UTF-8 bytes
+before obtaining its writer. BB-PROBE-004 caps emitted EDN at 16,384 bytes.
+Oversized output preserves the verdict and counts while projecting a bounded
+prefix of reload names with typed truncation metadata. The client receives a
+complete verdict even when a reload closure is larger than its input guard.
+BB-PROBE-001's executable receipt-shape statement keeps the checked spec in
+agreement with the actual receipt; verification_complete remains absent.
 
 `clj-surgeon.mcp-hot-verify/verify!` sends one `eval` to the application nREPL
 and reports the focused test summary it evaluates in that JVM.

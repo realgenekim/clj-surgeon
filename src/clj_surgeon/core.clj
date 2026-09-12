@@ -2164,6 +2164,8 @@
             :desc "Reload and test one namespace in the warm MCP image; never cold proof."
             :args {:ns {:required true :desc "Test namespace"}
                    :image-file {:desc "Warm image descriptor; default .clj-surgeon/probe.edn"}}
+            :workflow ["Responses are complete EDN within 16,384 UTF-8 bytes. When :error-type is :probe-response-truncated, the verdict and counts remain; :reloaded is a prefix of at most 64 names and :truncated records :bound, :encoded and :omitted."
+                       "Use :state for the test outcome and :proof_pending for outstanding cold proof. verification_complete is absent."]
             :examples ["make warm PORT=9107"
                        "clj-surgeon :probe :ns clj-surgeon.forms-test"]
             :category :read}

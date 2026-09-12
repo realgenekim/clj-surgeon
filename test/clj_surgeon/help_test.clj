@@ -26,6 +26,11 @@
           image {:root "/owned" :generation "g1" :fingerprint "cp1"}
           request {:ns "example-test" :image image}]
       (is (= :probe (core/resolve-op :probe)))
+      ;; @spec BB-PROBE-004
+      (let [help (core/format-op-help :probe (get core/ops-registry :probe))]
+        (doseq [text ["16,384 UTF-8 bytes" ":probe-response-truncated"
+                      ":omitted" "verification_complete is absent"]]
+          (is (str/includes? help text))))
       (is (= {:state :probe-passed :proof_pending [:landing-gate]
               :reloaded ["example-test"] :tests 2 :assertions 3 :failures 0 :elapsed_ms 12.5}
              (verdict ["example-test"] {:test 2 :pass 3 :fail 0 :error 0} 12.5)))
