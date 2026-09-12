@@ -5126,3 +5126,16 @@ Two apparatus findings for the ledger: the brief schema's :jvms needs a stated u
 (lease vs peak), and a brief input path that does not exist refuses only after admission
 starts (my attempt-3 slip rewrote the attempt-2 input path; refused in seconds, relaunched).
 Attempt 3 is packet 3c45c1c3, Astra verified, budget 300 min.
+
+## 2026-09-12T06:30:20Z — block B attempt 3 blocked on the write envelope; attempt 4 running
+
+Packet 3c45c1c3 accepted the lease reseal and then refused at step 1 in five minutes: my
+brief put the throwaway base checkout under /var/tmp/forge/bbtower-fx, and the packet's
+Landlock envelope writes only the owner worktree, its git store, and the packet's own
+temp and client homes. Three attempts, three brief defects, all mine, all caught before a
+JVM ran: a false cause, an unstated unit, a path outside the fence. Attempt 4 (packet
+5402914d, Astra verified) puts the base checkout under the worktree's gitignored target/
+and every new log under the attempt4/ observation directory.
+
+Cost of the three refusals: 29 minutes of Astra wall, zero JVM time. The fence is doing
+what it was built to do; the brief-writer is the slow part.
