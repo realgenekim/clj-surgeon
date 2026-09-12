@@ -706,10 +706,12 @@
   clj-surgeon.insertion-gap-test/nested-insertion-uses-anchor-line-indentation-after-earlier-blank-line
   clj-surgeon.insertion-gap-test/subform-comment-gap-still-refuses
   clj-surgeon.install-test/benchmark-agent-skill-targets-are-bounded-and-composable
+  clj-surgeon.install-test/cli-package-identity-covers-bundled-splice-source
   clj-surgeon.install-test/development-install-is-explicitly-branch-coupled
   clj-surgeon.install-test/install-cli-default-is-relative-to-home
   clj-surgeon.install-test/install-cli-supports-a-custom-path-with-spaces
   clj-surgeon.install-test/install-help-makes-both-destinations-explicit
+  clj-surgeon.install-test/installed-cli-loads-splice-verbs-outside-the-checkout
   clj-surgeon.install-test/installers-refuse-unrelated-destinations-without-changing-them
   clj-surgeon.install-test/mcp-reload-manifest-covers-the-routed-runtime
   clj-surgeon.install-test/repository-agent-skill-entrances-do-not-drift

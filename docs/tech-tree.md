@@ -843,3 +843,13 @@ Both real command paths format the multiline fixture successfully with the
 inherited cache/log locations unwritable. This is a write-location correction,
 not a performance comparison. Final suite/gate evidence and remaining limits:
 [attempt14](observations/2026-09-12-bbtower-block-b/attempt14/REPORT.md).
+
+### 2026-09-12 — bb tower attempt 19, trunk dependency closure merge
+
+The stable launcher now combines trunk's bundled clj-splice classpath with the
+branch's explicit java.io.tmpdir policy. The installed splice and package-hash
+witnesses pass, as does the branch's generated-launcher matrix. The once-only
+fast run and restricted diagnostic exposed two trunk test names missing from
+the branch's derived deftest census; regeneration adds exactly those names and
+removes none. Final prewarm evidence and retained red results:
+[attempt19](observations/2026-09-12-bbtower-block-b/attempt19/REPORT.md).
