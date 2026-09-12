@@ -6162,3 +6162,18 @@ ledger row; pushed. Tooling note for ship v3.13 alongside inb-db9e78: an autofix
 a deftest must regenerate the census as part of the witness step, or the next prewarm
 refuses on bookkeeping. Fifteenth check-only prewarm (packet 353cb9ee) at a233ce66; ship
 round 7 follows. Data-not-code round 5 still building.
+
+## 2026-09-12T22:40:58Z — ship round 7 SEALED (8c542ede = a233ce66 onto a15531ee); data-not-code round 5 PASS at 7182573b; Opus verifier next
+
+Fifteenth check-only prewarm (packet 353cb9ee) exit 0 at a233ce66; ship run 20260912T223855Z
+sealed 8c542ede, Sol on the round-7 brief (nothing changed since his delta GO except the
+census line), battery and fast lane beside it, the receipt branch pre-created.
+
+Data-not-code round 5 (report published as `2026-09-12-data-not-code-round5-report-astra.md`):
+F1 the evidence-row validator opens every cited receipt, derives n/mean/sd/conservative
+ratio from the receipt walls and refuses by namespace and field (the red-team's forged row
+refused at [:bb :walls-ms]; missing files → :missing-evidence-receipts; the shipped 38 rows
+/ 456 receipts pass unchanged); F2 the policy-roots witness asserts resolution and pins its
+assertion count; F3 hard-linked final targets refused; coverage claim names the two
+uncovered writers; the preregistration made unreinterpretable. Branch pushed; an Opus
+verifier re-runs the red-team's attacks at the tip before any landing.
