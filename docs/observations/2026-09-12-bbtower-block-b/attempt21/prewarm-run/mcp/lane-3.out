@@ -1,0 +1,28 @@
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.mcp-inspect-contract-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.mcp-recovery-test
+
+Testing clj-surgeon.mcp-compact-edit-fields-test

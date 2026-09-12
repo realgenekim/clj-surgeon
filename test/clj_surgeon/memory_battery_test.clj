@@ -10,11 +10,12 @@
 
   Expected values below are hand-written literals. They are never derived from
   the code under test."
+  {:lane :fast}
   (:require
+   [clj-surgeon.memory-battery :as battery]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]
-   [clj-surgeon.memory-battery :as battery]))
+   [clojure.test :refer [deftest is testing]]))
 
 ;; ------------------------------------------------------------------
 ;; Cell fixtures — a battery observation is a flat vector of cells.

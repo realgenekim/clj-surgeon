@@ -1,0 +1,9 @@
+lanes: --ns -- 4 namespace(s), home-isolated true
+
+Testing clj-surgeon.splice-envelope-test
+
+Testing clj-surgeon.scope-stream-test
+
+Testing clj-surgeon.mcp-prepared-request-test
+
+Testing clj-surgeon.mcp-operation-async-test

@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.mcp-workspace-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+Testing clj-surgeon.mission-plain-forms-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.mcp-recovery-test

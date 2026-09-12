@@ -1,0 +1,12 @@
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.parser-admission-test
+
+Testing clj-surgeon.syntax-var-refs-test

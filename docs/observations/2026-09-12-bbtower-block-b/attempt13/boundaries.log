@@ -1,0 +1,12 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.mission-git-boundary-test
+
+Testing clj-surgeon.split-proof-gate-boundary-test
+
+Testing clj-surgeon.mcp-process-test
+
+Testing clj-surgeon.mcp-formatter-test
+
+Ran 32 tests containing 198 assertions.
+0 failures, 0 errors.

@@ -1,0 +1,1 @@
+{:command ["bb" "-Xmx1g" "-Djava.io.tmpdir=/var/tmp/forge/bbtower-fx" "docs/observations/2026-09-12-bbtower-block-b/attempt22/portability_runner.clj" "bb" "clj-surgeon.analyze-test" "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.analyze-test-bb-load.edn" "load"], :subject "4492f9dff7419fccfe7ff9dfb3407e1fe9e44a5d\n"}

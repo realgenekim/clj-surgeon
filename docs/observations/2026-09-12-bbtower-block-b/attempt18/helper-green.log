@@ -1,0 +1,18 @@
+{"command": ["clojure", "-J-Xmx1g", "-M:clj-surgeon/test-deps", "-m", "clj-surgeon.mcp-test-runner", "--ns", "clj-surgeon.receipt-artifacts-boundary-test"], "writable_roots": ["/home/forge/src/clj-surgeon-bbtower", "/var/tmp/forge/bbtower-fx/packets/bf960a43-614e-434e-9136-3fd676c7ae2d/tmp", "/home/forge/.local/state/clj-surgeon"], "writable_devices": ["/dev/null"], "started": 1789220675.303048, "diagnostic": true}
+/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt18/restricted-gate.py:35: DeprecationWarning: Due to '_pack_', the 'Rule' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+  class Rule(ctypes.Structure):
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/bf960a43-614e-434e-9136-3fd676c7ae2d/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/bf960a43-614e-434e-9136-3fd676c7ae2d/tmp
+lanes: --ns -- 1 namespace(s), home-isolated false
+
+Testing clj-surgeon.receipt-artifacts-boundary-test
+
+namespace walls (1, slowest first, total 3514 ms):
+      3514 ms  clj-surgeon.receipt-artifacts-boundary-test
+SERIAL/NOT-A-GATE: direct namespace runner; use make test for landing
+
+Ran 24 tests containing 202 assertions.
+0 failures, 0 errors.
+
+test-isolation: 0 violations across 1 namespace(s) (TEST-ISO-002/003/004/005/007/010)
+{"exit": 0, "wall_seconds": 10.946637454908341}

@@ -1,0 +1,14 @@
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.mcp-workspace-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.syntax-var-refs-test

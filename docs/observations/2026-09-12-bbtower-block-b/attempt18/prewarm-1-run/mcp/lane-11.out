@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.battery-ledger-test
+
+Testing clj-surgeon.mcp-recovery-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test

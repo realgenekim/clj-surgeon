@@ -1,0 +1,41 @@
+
+FAIL in (bb-lane-child-honours-disk-tmpdir) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:29)
+TMPDIR="/var/tmp/forge/bbtower-fx"
+expected: (= expected (:out result))
+  actual: (not (= "/var/tmp/forge/bbtower-fx" "/tmp"))
+
+FAIL in (bb-lane-child-honours-disk-tmpdir) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:29)
+TMPDIR=nil
+expected: (= expected (:out result))
+  actual: (not (= "/var/tmp" "/tmp"))
+
+FAIL in (bb-lane-child-honours-disk-tmpdir) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:29)
+TMPDIR=""
+expected: (= expected (:out result))
+  actual: (not (= "/var/tmp" "/tmp"))
+
+FAIL in (bb-lane-child-honours-disk-tmpdir) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:29)
+TMPDIR="/tmp"
+expected: (= expected (:out result))
+  actual: (not (= "/var/tmp" "/tmp"))
+
+FAIL in (bb-lane-child-honours-disk-tmpdir) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:29)
+TMPDIR="/tmp/nested"
+expected: (= expected (:out result))
+  actual: (not (= "/var/tmp" "/tmp"))
+
+FAIL in (bb-lane-child-honours-disk-tmpdir) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:29)
+TMPDIR="/dev/shm"
+expected: (= expected (:out result))
+  actual: (not (= "/var/tmp" "/tmp"))
+
+FAIL in (bb-lane-child-honours-disk-tmpdir) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:29)
+TMPDIR="/dev/shm/nested"
+expected: (= expected (:out result))
+  actual: (not (= "/var/tmp" "/tmp"))
+
+FAIL in (bb-lane-child-honours-disk-tmpdir) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:29)
+TMPDIR="/var/tmp/space dir"
+expected: (= expected (:out result))
+  actual: (not (= "/var/tmp/space dir" "/tmp"))
+{:test 1, :pass 16, :fail 8, :error 0}

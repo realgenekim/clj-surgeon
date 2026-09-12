@@ -1,0 +1,3 @@
+lanes: --ns -- 1 namespace(s), home-isolated false
+
+Testing clj-surgeon.mcp-alias-migration-test

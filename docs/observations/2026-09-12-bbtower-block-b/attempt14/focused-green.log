@@ -1,0 +1,9 @@
+
+Testing clj-surgeon.mcp-process-test
+
+Testing clj-surgeon.mcp-formatter-test
+
+Ran 26 tests containing 125 assertions.
+0 failures, 0 errors.
+=> {:test 26, :pass 125, :fail 0, :error 0, :type :summary}
+*======== user | clj ========*

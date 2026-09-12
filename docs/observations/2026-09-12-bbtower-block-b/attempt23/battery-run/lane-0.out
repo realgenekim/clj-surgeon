@@ -1,0 +1,9 @@
+lanes: --ns -- 6 namespace(s), home-isolated false
+
+Testing clj-surgeon.reader-eval-fence-test
+
+Testing clj-surgeon.mcp-relation-census-launcher-test
+
+Testing clj-surgeon.mission-git-fence-test
+
+Testing clj-surgeon.mission-git-identity-test

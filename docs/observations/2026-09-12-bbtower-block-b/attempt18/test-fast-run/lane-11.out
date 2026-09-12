@@ -1,0 +1,20 @@
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.mcp-program-tool-test
+
+Testing clj-surgeon.battery-ledger-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.cljc.analyze-test
+
+Testing clj-surgeon.worktree-lifecycle-test

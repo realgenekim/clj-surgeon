@@ -1342,6 +1342,9 @@ the shrinking [per-ID debt ledger](intent/unlinked-spec-ids.edn).
 - [Embedded elaborator](intent/embedded-elaborator/embedded-elaborator-design.md) — frozen pre-product intent, excluded from the current witness audit.
 - [Substantiation telemetry](intent/substantiation-telemetry/substantiation-telemetry-design.md) — advance ratification, excluded from the current witness audit.
 - [Test isolation and lane cadence](intent/test-isolation/test-isolation-design.md)
+  owns complete budgeted cadence membership and executable diagnostic entrances.
+  A runtime reassignment must not break a documented no-argument diagnostic;
+  the landing gate executes that entrance while retaining its diagnostic-only authority.
 - [Prepared request actions](intent/prepared-request-actions/prepared-request-actions-design.md)
 - [Temporary-directory hygiene](intent/temp-dir-hygiene/temp-dir-hygiene-design.md)
 - [Insertion boundary and gap](intent/insertion-boundary-and-gap/design.md)
@@ -1350,6 +1353,14 @@ the shrinking [per-ID debt ledger](intent/unlinked-spec-ids.edn).
 - [Shell argv safety](intent/shell-argv-safety/shell-argv-safety-design.md)
 - [Read request normalization](intent/read-request-normalization/read-request-normalization-design.md)
 - [Hot verification](intent/hot-verification/hot-verification-design.md)
+- [Babashka warm probe](intent/hot-verification/bb-probe-specs.md): a generation-bound
+  inner-loop verdict from the one MCP JVM, always pending cold proof. The server
+  authorizes requested targets under the test root before dependency traversal;
+  production dependencies remain eligible for an authorized test's reload. It
+  computes that closure through the shared namespace parser, refusing unknown
+  require forms before reload and reporting the expected closure count. It
+  bounds complete encoded output; oversized reload inventories degrade to a
+  prefix with explicit truncation facts while retaining the verdict and counts.
 
 ### Partial extraction and facts for native callers (B07)
 

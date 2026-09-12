@@ -1,0 +1,24 @@
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.mission-plain-forms-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.failure-report-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.mission-git-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

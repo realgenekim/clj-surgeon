@@ -1,4 +1,5 @@
 """Cell B A8 regression: exercise the actual shell oracle's lint check."""
+import os
 import pathlib
 import subprocess
 import unittest
@@ -12,7 +13,7 @@ def lint_check(output, rc=3, baseline="linting took 1ms, errors: 0, warnings: 0"
     fragment = fragment[fragment.index('\n') + 1:]
     import tempfile
     import shlex
-    with tempfile.TemporaryDirectory(dir="/var/tmp", prefix="b07-lint-") as tmp:
+    with tempfile.TemporaryDirectory(dir=os.environ.get("TMPDIR") or "/var/tmp", prefix="b07-lint-") as tmp:
         root = pathlib.Path(tmp, "root")
         root.mkdir()
         subprocess.run(["git", "init", "-q", str(root)], check=True)

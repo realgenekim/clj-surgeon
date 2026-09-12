@@ -1,0 +1,7 @@
+NOTE: Picked up JDK_JAVA_OPTIONS: 
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/packets/35dc856c-986f-4921-b4d2-29bb3ff5afba/tmp
+Picked up _JAVA_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/packets/35dc856c-986f-4921-b4d2-29bb3ff5afba/tmp
+NOTE: Picked up JDK_JAVA_OPTIONS: 
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/packets/35dc856c-986f-4921-b4d2-29bb3ff5afba/tmp
+Picked up _JAVA_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/packets/35dc856c-986f-4921-b4d2-29bb3ff5afba/tmp
+tmp-refused: java.io.tmpdir base=/var/tmp/forge/packets/35dc856c-986f-4921-b4d2-29bb3ff5afba/tmp was handed a re-exec sentinel it does not own: it names root="/var/tmp/forge/packets/35dc856c-986f-4921-b4d2-29bb3ff5afba/tmp/clj-surgeon-suite-3008531-11cfd59e" but this process's java.io.tmpdir is "/var/tmp/forge/packets/35dc856c-986f-4921-b4d2-29bb3ff5afba/tmp". Refusing to treat a shared base as a private run root. Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.

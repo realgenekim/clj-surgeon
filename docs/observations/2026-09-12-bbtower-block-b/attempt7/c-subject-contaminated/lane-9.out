@@ -1,0 +1,22 @@
+
+Testing clj-surgeon.tmp-leak-support-test
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.partition-all-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.forms-test

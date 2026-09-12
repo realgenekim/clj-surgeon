@@ -64,6 +64,7 @@
    under 8 s can still sum to five minutes, and the number the fleet actually
    pays is the sum."
   {:fast 60000
+   :bb 343102
    :integration 240000
    :battery 1800000})
 

@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.outline-memory-test, :runtime :bb, :mode "load", :started-at "2026-09-12T19:13:15.582222246Z", :elapsed-ms 19, :status :load-failed, :message "Unable to resolve symbol: java.lang.management.ManagementFactory/getThreadMXBean", :causes ["Unable to resolve symbol: java.lang.management.ManagementFactory/getThreadMXBean"]}

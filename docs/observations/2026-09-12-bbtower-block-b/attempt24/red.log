@@ -1,0 +1,6 @@
+
+FAIL in (probe-reloads-prefix-list-dependency) (mcp_hot_verify_test.clj:25)
+expected: (= (quote [foo.bar demo.probe-test]) (hot-verify/probe-reload-order (.getCanonicalPath root) (quote demo.probe-test)))
+  actual: (not (= [foo.bar demo.probe-test] [demo.probe-test]))
+=> nil
+*======== user | clj ========*

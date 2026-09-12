@@ -1,0 +1,7 @@
+lanes: --ns -- 3 namespace(s), home-isolated true
+
+Testing clj-surgeon.rename-alias-test
+
+Testing clj-surgeon.mcp-compact-edit-test
+
+Testing clj-surgeon.mcp-operation-async-test

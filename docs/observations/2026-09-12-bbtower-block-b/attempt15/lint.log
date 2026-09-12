@@ -1,0 +1,4 @@
+test/clj_surgeon/mission_git_identity_test.clj:36:19: error: Unresolved symbol: root
+test/clj_surgeon/mission_git_ledger_test.clj:69:19: error: Unresolved symbol: root
+test/clj_surgeon/mission_git_process_test.clj:13:19: error: Unresolved symbol: root
+linting took 22ms, errors: 3, warnings: 0

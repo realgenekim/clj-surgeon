@@ -1,8 +1,8 @@
 (ns clj-surgeon.mcp-process
   "Shared process environment for repository-owned formatter and verification commands."
   (:require
-   [clj-surgeon.spawn-ledger :as spawn]
    [cheshire.core :as json]
+   [clj-surgeon.spawn-ledger :as spawn]
    [clojure.java.io :as io]
    [clojure.string :as str])
   (:import
@@ -11,6 +11,31 @@
 (def ^:dynamic *clj-kondo-lock-path*
   "Override only for isolated tests. The default lock is shared across projects."
   nil)
+
+;; @spec MCP-OP-TMPHYG-005
+(defn selected-temp-root
+  "Mirror SELF_TEST_TMP: preserve a disk TMPDIR, otherwise use /var/tmp."
+  ([] (selected-temp-root (System/getenv "TMPDIR")))
+  ([tmpdir]
+   (if (or (str/blank? tmpdir)
+           (some #(or (= tmpdir %) (str/starts-with? tmpdir (str % "/")))
+                 ["/tmp" "/dev/shm"]))
+     "/var/tmp"
+     tmpdir)))
+
+;; @spec MCP-OP-TMPHYG-005
+(defn bb-command
+  "Give direct bb commands their startup temp property; other commands are exact."
+  [command]
+  (if (= "bb" (some-> command first io/file .getName))
+    (into [(first command) (str "-Djava.io.tmpdir=" (selected-temp-root))]
+          (rest command))
+    command))
+
+(defn create-temp-file!
+  "Allocate process scratch under the selected root, independent of JVM startup."
+  [prefix suffix]
+  (java.io.File/createTempFile prefix suffix (io/file (selected-temp-root))))
 
 (def ^:dynamic *clj-kondo-priority-lock-path*
   "Override only for isolated tests. This turnstile gives waiting interactive
@@ -123,7 +148,7 @@
 (defn- extract-packaged-wrapper!
   "Copy a wrapper that ships inside a jar somewhere it can be executed."
   [url]
-  (let [target (java.io.File/createTempFile "clj-kondo-admission-" ".py")]
+  (let [target (create-temp-file! "clj-kondo-admission-" ".py")]
     (.deleteOnExit target)
     (with-open [source (io/input-stream url)]
       (io/copy source target))
@@ -250,12 +275,12 @@
   ;; @spec MCP-OP-ANALYZER-001
   ;; @spec MCP-OP-ANALYZER-002
   (if-not (clj-kondo-command? command)
-    {:command command
+    {:command (bb-command command)
      :admission {:status :not-required}}
     (let [gate (clj-kondo-admission-path)
           analyzer (resolve-clj-kondo-analyzer (first command) gate)
           mission (claim-analyzer-mission-launch! cwd)
-          evidence-file (java.io.File/createTempFile
+          evidence-file (create-temp-file!
                           "clj-surgeon-kondo-admission-" ".json")]
       (.delete evidence-file)
       (when-not (and (.isFile (io/file gate)) (.canExecute (io/file gate)))
@@ -358,15 +383,19 @@
 ;; @spec MCP-OP-TMPHYG-005
 (defn configure-environment!
   "Give one ProcessBuilder environment the same paved local tool entrance --
-   and this process's own temp directory.
+   and the selected disk temp directory.
 
    TMPDIR matters because `-Djava.io.tmpdir` is a JVM-internal property no
    child PROCESS inherits: without it a subprocess that picks its own temp
-   location writes wherever the ambient environment points, outside any
-   isolated per-run root and invisible to the test suites' leak witness."
+   location must receive the selected root even when the JVM property disagrees.
+   Direct bb commands additionally receive a startup -D through bb-command."
   [^java.util.Map environment]
   (.put environment "PATH" (effective-path (.getOrDefault environment "PATH" "")))
-  (.put environment "TMPDIR" (System/getProperty "java.io.tmpdir"))
+  (doseq [key ["TMPDIR" "TMP" "TEMP"]]
+    (.put environment key (selected-temp-root)))
+  (doseq [[key directory] [["npm_config_cache" "npm-cache"]
+                           ["npm_config_logs_dir" "npm-logs"]]]
+    (.put environment key (str (io/file (selected-temp-root) directory))))
   environment)
 
 (defn- destroy-process-tree!
@@ -426,10 +455,10 @@
     :or {merge-error? false visible-byte-limit 65536}}]
   ;; @spec MCP-OP-ANALYZER-002
   (let [started (System/nanoTime)
-        stdout-file (java.io.File/createTempFile "clj-surgeon-process-out-" ".log")
-        stderr-file (java.io.File/createTempFile "clj-surgeon-process-err-" ".log")
+        stdout-file (create-temp-file! "clj-surgeon-process-out-" ".log")
+        stderr-file (create-temp-file! "clj-surgeon-process-err-" ".log")
         stdin-file (when (some? stdin-text)
-                     (java.io.File/createTempFile "clj-surgeon-process-in-" ".txt"))]
+                     (create-temp-file! "clj-surgeon-process-in-" ".txt"))]
     (try
       (when stdin-file
         (spit stdin-file stdin-text))

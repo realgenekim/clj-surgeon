@@ -1,0 +1,219 @@
+{:findings
+ [{:id :jvm-reference-rule,
+   :spec "TEST-ISO-016",
+   :evidence ["runtime-rule-jvm.log" "runtime-rule-bb.log"]}
+  {:id :cljc-emitter-and-oracle-repaired,
+   :evidence ["red-jvm.log" "fresh-final.log"]}
+  {:id :prune-tmpdir-repaired, :evidence "source.patch"}
+  {:id :git-2.53.0-admitted-after-compatibility-matrix,
+   :evidence
+   ["git-version.log" "prune-before-git-admission/" "fresh-final.log"]}
+  {:id :prune-is-tenth-bb-ineligible,
+   :reason :sci-host-interop,
+   :evidence
+   ["recovery-lock-probe.log"
+    "controls/clj-surgeon.worktree-lifecycle-prune-test-bb-test.log"]}],
+ :block :B,
+ :tests-deleted-or-skipped false,
+ :least_sure
+ ["Fifty frozen initial-load exclusions have no complete JVM controls in this census; no passing-control claim is made for them."
+  "Mixed frozen/fresh controls are not a new all-namespace final-snapshot census or performance measurement."],
+ :evidence-commit :this-commit,
+ :measurements
+ {:census
+  {:portable 99, :bb-ineligible 10, :refused 0, :bb-load-excluded 50},
+  :census-evidence "census.edn",
+  :fresh-controls
+  [{:namespace clj-surgeon.cljc.merge-test,
+    :runtime :jvm,
+    :subject "70b5db1182d8e26427ceb64e288ef7a3ea12d183",
+    :status :passed,
+    :exit 0,
+    :result {:test 14, :pass 26, :fail 0, :error 0, :type :summary},
+    :elapsed-ms 1122,
+    :receipt
+    "docs/observations/2026-09-12-bbtower-block-b/attempt23/controls/clj-surgeon.cljc.merge-test-jvm-test.edn"}
+   {:namespace clj-surgeon.cljc.merge-test,
+    :runtime :bb,
+    :subject "70b5db1182d8e26427ceb64e288ef7a3ea12d183",
+    :status :passed,
+    :exit 0,
+    :result {:test 14, :pass 26, :fail 0, :error 0, :type :summary},
+    :elapsed-ms 20,
+    :receipt
+    "docs/observations/2026-09-12-bbtower-block-b/attempt23/controls/clj-surgeon.cljc.merge-test-bb-test.edn"}
+   {:namespace clj-surgeon.cljc.split-test,
+    :runtime :jvm,
+    :subject "70b5db1182d8e26427ceb64e288ef7a3ea12d183",
+    :status :passed,
+    :exit 0,
+    :result {:test 11, :pass 35, :fail 0, :error 0, :type :summary},
+    :elapsed-ms 3412,
+    :receipt
+    "docs/observations/2026-09-12-bbtower-block-b/attempt23/controls/clj-surgeon.cljc.split-test-jvm-test.edn"}
+   {:namespace clj-surgeon.cljc.split-test,
+    :runtime :bb,
+    :subject "70b5db1182d8e26427ceb64e288ef7a3ea12d183",
+    :status :passed,
+    :exit 0,
+    :result {:test 11, :pass 35, :fail 0, :error 0, :type :summary},
+    :elapsed-ms 276,
+    :receipt
+    "docs/observations/2026-09-12-bbtower-block-b/attempt23/controls/clj-surgeon.cljc.split-test-bb-test.edn"}
+   {:namespace clj-surgeon.worktree-lifecycle-prune-test,
+    :runtime :jvm,
+    :subject "70b5db1182d8e26427ceb64e288ef7a3ea12d183",
+    :status :passed,
+    :exit 0,
+    :result {:test 24, :pass 82, :fail 0, :error 0, :type :summary},
+    :elapsed-ms 2029,
+    :receipt
+    "docs/observations/2026-09-12-bbtower-block-b/attempt23/controls/clj-surgeon.worktree-lifecycle-prune-test-jvm-test.edn"}
+   {:namespace clj-surgeon.worktree-lifecycle-prune-test,
+    :runtime :bb,
+    :subject "70b5db1182d8e26427ceb64e288ef7a3ea12d183",
+    :status :test-failed,
+    :exit 1,
+    :result {:test 24, :pass 62, :fail 20, :error 0, :type :summary},
+    :elapsed-ms 1895,
+    :receipt
+    "docs/observations/2026-09-12-bbtower-block-b/attempt23/controls/clj-surgeon.worktree-lifecycle-prune-test-bb-test.edn"}],
+  :checks
+  [{:task "test-fast",
+    :label "fast",
+    :log
+    "docs/observations/2026-09-12-bbtower-block-b/attempt23/checks/fast.log",
+    :started "2026-09-12T20:03:51Z",
+    :wall-s 30,
+    :exit 0}
+   {:task "test-battery",
+    :label "battery",
+    :log
+    "docs/observations/2026-09-12-bbtower-block-b/attempt23/checks/battery.log",
+    :started "2026-09-12T20:04:42Z",
+    :wall-s 168,
+    :exit 0}
+   {:task "landing-gate-prewarm",
+    :label "prewarm",
+    :log
+    "docs/observations/2026-09-12-bbtower-block-b/attempt23/checks/prewarm.log",
+    :started "2026-09-12T20:07:59Z",
+    :wall-s 401,
+    :exit 0}],
+  :fast
+  {:counts {:test 1244, :pass 12560, :fail 0, :error 0},
+   :budget-lines
+   ["cadence :fast: serial-equivalent 47382 ms; budget 60000 ms"
+    "bb-runtime: serial-equivalent 7987 ms; budget 343102 ms; makespan 21838 ms"]},
+  :battery
+  {:counts {:test 1166, :pass 18472, :fail 0, :error 0},
+   :budget-lines
+   ["cadence :battery: serial-equivalent 1090847 ms; budget 1800000 ms"
+    "bb-runtime: serial-equivalent 0 ms; budget 343102 ms; makespan unmeasured ms"]},
+  :prewarm
+  {:receipt "prewarm.edn",
+   :transcript "gate.md",
+   :digest "gate.sha256",
+   :budget-lines
+   ["cadence :battery: serial-equivalent 82726 ms; budget 1800000 ms"
+    "bb-runtime: serial-equivalent 0 ms; budget 343102 ms; makespan unmeasured ms"
+    "cadence :fast: serial-equivalent 44879 ms; budget 60000 ms"
+    "cadence :integration: serial-equivalent 69205 ms; budget 240000 ms"
+    "bb-runtime: serial-equivalent 7451 ms; budget 343102 ms; makespan 22975 ms"
+    "cadence :battery: serial-equivalent 243841 ms; budget 1800000 ms"
+    "cadence :fast: serial-equivalent 3555 ms; budget 60000 ms"
+    "bb-runtime: serial-equivalent 241400 ms; budget 343102 ms; makespan 91986 ms"],
+   :result
+   {:stages
+    [{:target "admit-transaction-recovery-battery",
+      :exit 0,
+      :wall-ms 11229}
+     {:target "alias-migration-test", :exit 0, :wall-ms 90575}
+     {:target "mcp-test", :exit 0, :wall-ms 93601}
+     {:target "test-bb", :exit 0, :wall-ms 91986}
+     {:target "test-bb-diagnostic", :exit 0, :wall-ms 225230}
+     {:target "repository-hygiene", :exit 0, :wall-ms 2096}
+     {:target "intent-audit", :exit 0, :wall-ms 2163}],
+    :problems [],
+    :started-at "2026-09-12T20:08:01.894005125Z",
+    :state :passed,
+    :git-tree "5ac37b5a124d0896f3985c5acae03b49118b8cc4",
+    :wall-ms 398680,
+    :completed-at "2026-09-12T20:14:40.574314457Z",
+    :source-digest
+    "5b4bec7ad7b9e764f741fe7b4d3c0f333ace3af844494638e8da4608d68fc085",
+    :git-head "6171998361d9be01c719185ea9974841801e9a34"}}},
+ :dogfood "dogfood.md",
+ :disagreements
+ [{:expected {:portable 100, :bb-ineligible 9, :refused 0},
+   :observed {:portable 99, :bb-ineligible 10, :refused 0},
+   :reason
+   "TMPDIR repair exposed exact Git admission, then shared SCI FileLockImpl.release refusal in prune; corrected rule requires tenth ineligibility."}],
+ :pushed false,
+ :generated "2026-09-12T20:16:07.293400243Z",
+ :prewarm-repairs 0,
+ :commands "commands.md",
+ :commits
+ ["a269922cb86365e4394e639958c979d97bdae90c Apply JVM-reference portability ruling with named bb capability exclusions"
+  "b8a9f60b346f4c004f09e95d36e090f29ca786ae Emit JVM-readable strict CLJC splits and repair reader and temp fixtures"
+  "70b5db1182d8e26427ceb64e288ef7a3ea12d183 Admit witnessed Git 2.53 prune behavior and narrow gensym normalization"
+  "af4e0aa203ee0698c573330e74ae82921e3b3c59 Record prune bb ineligibility exposed by reference-runtime repairs"
+  "6171998361d9be01c719185ea9974841801e9a34 Record attempt23 passing counted battery and namespace walls"],
+ :verdict :go,
+ :owed
+ ["Fable independent branch review, including the witnessed Git admission and observed census split; no merge or push authorized."],
+ :prewarm-attempts 1,
+ :ineligible
+ [{:namespace clj-surgeon.mcp-cold-verify-test,
+   :assignment :jvm,
+   :reasons #{:sci-host-interop},
+   :detail
+   "SCI refuses FileLockImpl.close in admission-timeout witness"}
+  {:namespace clj-surgeon.mcp-namespace-split-test,
+   :assignment :jvm,
+   :reasons #{:bb-classpath-missing/nrepl.core},
+   :detail
+   "Late helper-extraction requiring-resolve needs absent nrepl.core"}
+  {:namespace clj-surgeon.mcp-relation-census-launcher-test,
+   :assignment :jvm,
+   :reasons #{:bb-hosted-jvm-launcher :native-image-reflection},
+   :detail
+   "java.class.path lacks JVM test dependencies; native image refuses StackOverflowError constructor"}
+  {:namespace clj-surgeon.memory.journal-green-test,
+   :assignment :jvm,
+   :reasons #{:bb-hosted-jvm-launcher},
+   :detail "Child Java resolves to nonexistent bin/java under bb"}
+  {:namespace clj-surgeon.memory.oom-reproduction-test,
+   :assignment :jvm,
+   :reasons #{:bb-hosted-jvm-launcher},
+   :detail "Child Java resolves to nonexistent bin/java under bb"}
+  {:namespace clj-surgeon.mission-display-test,
+   :assignment :jvm,
+   :reasons #{:bb-classpath-missing/nrepl.core},
+   :detail "Late mission CLI resolution needs absent nrepl.core"}
+  {:namespace clj-surgeon.ns-isolation-test,
+   :assignment :jvm,
+   :reasons #{:native-image-reflection},
+   :detail "Native image cannot invoke sci.lang.Var.getRawRoot"}
+  {:namespace clj-surgeon.reader-eval-fence-test,
+   :assignment :jvm,
+   :reasons #{:bb-hosted-jvm-launcher},
+   :detail
+   "bb-hosted JVM launcher throws ClassNotFoundException: clojure.main"}
+  {:namespace clj-surgeon.worktree-lifecycle-prune-test,
+   :assignment :jvm,
+   :reasons #{:sci-host-interop},
+   :detail
+   "After TMPDIR and witnessed Git admission repairs, SCI refuses shared FileLockImpl.release; prune replay retains its lock",
+   :probe
+   "docs/observations/2026-09-12-bbtower-block-b/attempt23/recovery-lock-probe.log"}
+  {:namespace clj-surgeon.worktree-lifecycle-recovery-test,
+   :assignment :jvm,
+   :reasons #{:sci-host-interop},
+   :detail
+   "SCI refuses FileLockImpl.release; replay retains the lock and reports lifecycle-target-locked",
+   :probe
+   "docs/observations/2026-09-12-bbtower-block-b/attempt23/recovery-lock-probe.log"}],
+ :budgets-changed false,
+ :attempt 23,
+ :performance-claim false}

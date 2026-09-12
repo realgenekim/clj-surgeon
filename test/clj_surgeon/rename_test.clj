@@ -1,8 +1,10 @@
 (ns clj-surgeon.rename-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [clj-surgeon.rename :as rename]
-            [clojure.java.io :as io]
-            [clojure.string :as str]))
+  {:lane :fast}
+  (:require
+   [clj-surgeon.rename :as rename]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]))
 
 ;; ============================================================
 ;; Pure function tests (no I/O)

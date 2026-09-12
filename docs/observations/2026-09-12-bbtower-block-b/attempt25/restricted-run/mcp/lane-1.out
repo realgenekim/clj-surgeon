@@ -1,0 +1,9 @@
+lanes: --ns -- 4 namespace(s), home-isolated true
+
+Testing clj-surgeon.insert-forms-receipt-test
+
+Testing clj-surgeon.census-pool-test
+
+Testing clj-surgeon.mcp-extraction-plan-test
+
+Testing clj-surgeon.mission-candidate-race-test

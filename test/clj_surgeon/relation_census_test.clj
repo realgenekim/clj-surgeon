@@ -5,6 +5,7 @@
    curtaincall-cfp-lens `src/cfp_scheduler_killer/folds.clj` at commit
    963875358a37c48ab6175ea1bea22633e4fd0306. Provenance is recorded in the
    fixture's own docstring."
+  {:lane :fast}
   (:require
    [clj-surgeon.relation-census :as census]
    [clojure.test :refer [deftest is testing]]))

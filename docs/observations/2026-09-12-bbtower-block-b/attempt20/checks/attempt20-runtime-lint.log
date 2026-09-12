@@ -1,0 +1,2 @@
+test/clj_surgeon/ns_isolation_test.clj:467:18: warning: Unresolved namespace clojure.edn. Are you missing a require?
+linting took 113ms, errors: 0, warnings: 1

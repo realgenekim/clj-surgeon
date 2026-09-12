@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.require-change-test, :runtime :jvm, :mode "test", :started-at "2026-09-12T19:24:06.644815433Z", :elapsed-ms 3390, :status :passed, :result {:test 9, :pass 120, :fail 0, :error 0, :type :summary}}

@@ -1,0 +1,83 @@
+test/performance_regression_sentinel_intent_test.sh:17:tmp_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-sentinel-intent.XXXXXX")
+test/direct_cclsp_client_audit_test.sh:5:fixture=$(mktemp -d "${TMPDIR:-/var/tmp}/direct-cclsp-audit.XXXXXX")
+test/tmp_leak_ratchet_test.sh:4:# Drives the REAL temp-dir hygiene mechanism in SUBPROCESSES, because
+test/tmp_leak_ratchet_test.sh:10:# java.io.tmpdir under /tmp when findmnt could not answer).
+test/tmp_leak_ratchet_test.sh:20:FX=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-tmpleak-witness.XXXXXX")
+test/tmp_leak_ratchet_test.sh:91:# 3a. The original mistake: TMPDIR=/tmp, findmnt present and answering.
+test/tmp_leak_ratchet_test.sh:92:run_probe tmpfs-literal TMPDIR=/tmp
+test/tmp_leak_ratchet_test.sh:93:[ "$PROBE_EXIT" -eq 97 ] || fail "3a: TMPDIR=/tmp must exit 97, got $PROBE_EXIT"
+test/tmp_leak_ratchet_test.sh:94:grep -q 'tmp-refused:' "$FX/tmpfs-literal.out" \
+test/tmp_leak_ratchet_test.sh:96:grep -q 'clj-surgeon-suite-' "$FX/tmpfs-literal.out" \
+test/tmp_leak_ratchet_test.sh:101:run_probe arm-b TMPDIR=/tmp PATH="$FX/shim:$PATH"
+test/tmp_leak_ratchet_test.sh:102:[ "$PROBE_EXIT" -eq 97 ] || fail "3b (arm B): findmnt unavailable + TMPDIR=/tmp must exit 97, got $PROBE_EXIT"
+test/tmp_leak_ratchet_test.sh:108:# 3f. Neither mount source can answer AND the base is /tmp: only the literal
+test/tmp_leak_ratchet_test.sh:110:# mounts table still answers "tmpfs" for /tmp when findmnt is shimmed away.)
+test/tmp_leak_ratchet_test.sh:111:run_probe name-only TMPDIR=/tmp PATH="$FX/shim:$PATH" \
+test/tmp_leak_ratchet_test.sh:113:[ "$PROBE_EXIT" -eq 97 ] || fail "3f: /tmp must be refused BY NAME when no mount source can answer, got $PROBE_EXIT"
+test/tmp_leak_ratchet_test.sh:232:env -u NODE_DISABLE_COMPILE_CACHE TMPDIR="$FX/realdisk" bb test/tmp_leak_probe.clj alpha beta --node-cache-env >"$FX/bb-args.out" 2>&1
+test/tmp_leak_ratchet_test.sh:259:  bb "-Djava.io.tmpdir=$NODE_ROOT" test/tmp_leak_probe.clj > "$FX/node-cache-refusal.out" 2>&1
+test/tmp_leak_ratchet_test.sh:276:# subprocess that picks its own temp location (mktemp -d, tempfile.mkdtemp)
+test/tmp_leak_ratchet_test.sh:299:# 7a. A killed parent. ~/bin/suite-run jobs are routinely wrapped in
+test/tmp_leak_ratchet_test.sh:371:  run_bounded 45 env TMPDIR=/tmp java -cp "$CP" clojure.main -m "$ns" >"$out_file" 2>&1
+test/tmp_leak_ratchet_test.sh:377:    || fail "9: $ns ran (exit $rc) with TMPDIR=/tmp instead of refusing"
+test/tmp_leak_ratchet_test.sh:387:# MCP-OP-TMPHYG-010: no gate writes to a hard-coded /tmp path
+test/tmp_leak_ratchet_test.sh:393:# Prose mentions of /tmp are not matches; only a literal /tmp/<name> used as a
+test/tmp_leak_ratchet_test.sh:395:# round two: that shape takes /tmp whenever TMPDIR is unset, which is every
+test/tmp_leak_ratchet_test.sh:396:# shell without seat-tmp-guard.sh. Default to /var/tmp instead.
+test/tmp_leak_ratchet_test.sh:406:hardcoded=$(grep -nE '(^|[^A-Za-z0-9_.-])/tmp/[A-Za-z0-9_.]|TMPDIR:-/tmp\}' Makefile test/*.sh bench/*.sh || true)
+test/tmp_leak_ratchet_test.sh:409:  fail "10: hard-coded /tmp write targets remain in Makefile / test / bench shell gates"
+test/tmp_leak_ratchet_test.sh:417:# their harnesses. Its default was `$(or $(TMPDIR),/var/tmp)`, which is right
+test/tmp_leak_ratchet_test.sh:419:# layer propagated /tmp happily and only the Clojure layer refused, so a
+test/tmp_leak_ratchet_test.sh:432:# file for a hard-coded /tmp/<name> write target, and a literal RAM subpath
+test/tmp_leak_ratchet_test.sh:435:ram_tmp_root=/tmp
+test/tmp_leak_ratchet_test.sh:442:    /tmp|/tmp/*|/dev/shm|/dev/shm/*)
+test/tmp_leak_ratchet_test.sh:449:[ "$got" = "/var/tmp" ] \
+test/tmp_leak_ratchet_test.sh:450:  || fail "11: an unset TMPDIR must default SELF_TEST_TMP to /var/tmp, got $got"
+test/tmp_leak_ratchet_test.sh:457:got=$(self_test_tmp "/var/tmp/forge")
+test/tmp_leak_ratchet_test.sh:458:echo "--- SELF_TEST_TMP with TMPDIR=/var/tmp/forge -> $got ---"
+test/tmp_leak_ratchet_test.sh:459:[ "$got" = "/var/tmp/forge" ] \
+test/tmp_leak_ratchet_test.sh:460:  || fail "11: a real-disk TMPDIR (/var/tmp/forge) must be honoured, got $got"
+test/repository_hygiene_gate_self_test.sh:25:  directory=$(mktemp -d)
+test/repository_hygiene_gate_self_test.sh:53:outside=$(mktemp -d)
+test/repository_hygiene_gate_self_test.sh:62:stubbed=$(mktemp -d)
+test/clj_kondo_admission_path_test.sh:4:test_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-kondo-path.XXXXXX")
+test/clj_kondo_admission_path_test.sh:16:  HOME="$test_home" \
+test/clj_kondo_admission_path_test.sh:23:HOME="$test_home" \
+test/clj_kondo_admission_path_test.sh:103:hygiene_worktree=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-kondo-hygiene.XXXXXX")
+test/mcp_heap_config_test.sh:13:if [ -n "${JAVA_HOME:-}" ]; then
+test/mcp_heap_config_test.sh:14:  expected_java="$JAVA_HOME/bin/java"
+test/mcp_heap_config_test.sh:24:lifecycle_state_dir="${TMPDIR:-/var/tmp}/clj-surgeon-mcp-lifecycle-test"
+test/mcp_heap_config_test.sh:52:  MCP_JAVA_HOME='/opt/test-java' \
+test/mcp_heap_config_test.sh:55:printf '%s\n' "$override_output" | grep -Fq -- 'JAVA_HOME="/opt/test-java"'
+test/mcp_heap_config_test.sh:66:# re-execs itself into a child JVM, and round one of the temp-dir hygiene
+test/oracles/cell_b_oracle.sh:3:# Run from the ROOT of the worktree under test:  bash /var/tmp/forge/plan2/cellB/oracle.sh
+test/oracles/cell_b_oracle.sh:8:#   ORACLE_TMP    scratch dir (default: /var/tmp/forge/plan2/cellB/run-$$)
+test/oracles/cell_b_oracle.sh:14:TMP="${ORACLE_TMP:-/var/tmp/forge/plan2/cellB/run-$$}"
+test/oracles/cell_b_oracle.sh:15:KONDO="${KONDO:-$HOME/bin/clj-kondo}"
+test/oracles/cell_b_oracle.sh:206:BASELINE_TREE="$(mktemp -d "$TMP/a8-base.XXXXXX")"
+test/oracles/test_cell_b_oracle.py:15:    with tempfile.TemporaryDirectory(dir="/var/tmp", prefix="b07-lint-") as tmp:
+test/admit_transaction_recovery_battery.clj:42:(defn- temp-dir
+test/admit_transaction_recovery_battery.clj:44:  (.toFile (Files/createTempDirectory
+test/admit_transaction_recovery_battery.clj:61:  (let [root (temp-dir)
+test/oracles/test_gate_slot.py:72:    path = Path(tmpdir).resolve() if tmpdir else Path('/var/tmp')
+test/oracles/test_gate_slot.py:74:           for root in (Path('/tmp'), Path('/dev/shm'))):
+test/oracles/test_gate_slot.py:75:        return Path('/var/tmp')
+test/oracles/test_gate_slot.py:387:        for supplied, expected in [(None, '/var/tmp'), ('', '/var/tmp'),
+test/oracles/test_gate_slot.py:388:                                   ('/tmp', '/var/tmp'), ('/tmp/seat', '/var/tmp'),
+test/oracles/test_gate_slot.py:389:                                   ('/dev/shm/seat', '/var/tmp'),
+test/oracles/test_gate_slot.py:390:                                   ('/var/tmp/seat', '/var/tmp/seat'),
+test/oracles/test_gate_slot.py:391:                                   ('/tmp-seat', '/tmp-seat')]:
+test/oracles/test_gate_slot.py:417:        self.assertEqual(Path('/tmp/csg-501'), root)
+test/oracles/test_gate_slot.py:424:        self.assertEqual(Path('/var/tmp/mine'),
+test/oracles/test_gate_slot.py:425:                         slot.slot_root_for('darwin', DARWIN_TMPDIR, 501, '/var/tmp/mine'))
+test/oracles/test_gate_slot.py:428:        self.assertEqual(Path('/var/tmp/forge/clj-surgeon-gate'),
+test/oracles/test_gate_slot.py:429:                         slot.slot_root_for('linux', '/var/tmp/forge', 1002))
+test/oracles/test_gate_slot.py:483:        # Bind inside this test's writable envelope, never the shared /tmp root.
+test/oracles/test_gate_slot.py:547:        """/tmp is world-writable and sticky. `mkdir(mode=)` applies only when
+test/cclsp_start_test.sh:4:test_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-cclsp-start.XXXXXX")
+test/cclsp_start_test.sh:57:  CCLSP_HOME="$cclsp_home" \
+test/oracles/namespace_split_papercut_oracle.py:29:mirror under /var/tmp, deleted after the analyzer returns.  The
+test/oracles/namespace_split_papercut_oracle.py:52:   Runs `~/bin/clj-kondo --lint <views dir> <server.clj> <test dir>
+test/oracles/namespace_split_papercut_oracle.py:130:KONDO = os.path.expanduser("~/bin/clj-kondo")
+test/oracles/namespace_split_papercut_oracle.py:478:    with tempfile.TemporaryDirectory(prefix="split-oracle-", dir="/var/tmp") as mirror:
+test/run_all.clj:84:    (let [before (tmp-leak/tmp-entries)

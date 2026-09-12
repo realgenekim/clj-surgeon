@@ -1,0 +1,7 @@
+lanes: --ns -- 3 namespace(s), home-isolated true
+
+Testing clj-surgeon.ns-isolation-test
+
+Testing clj-surgeon.outline-memory-test
+
+Testing clj-surgeon.mcp-change-buffer-test

@@ -1,0 +1,20 @@
+
+FAIL in (the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/ns_isolation_test.clj:463)
+NEW bb runtime ceiling: exact boundary and one ms beyond
+expected: (= 399155 (:bb iso/lane-budget-ms))
+  actual: (not (= 399155 nil))
+
+FAIL in (the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/ns_isolation_test.clj:463)
+NEW bb runtime ceiling: exact boundary and one ms beyond
+expected: (some? v)
+  actual: (not (some? nil))
+
+FAIL in (the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/ns_isolation_test.clj:463)
+NEW bb runtime ceiling: exact boundary and one ms beyond
+expected: (str/includes? (iso/message v) "bb lane took 399156 ms")
+  actual: (not (str/includes? "null VIOLATION in null -- null: null" "bb lane took 399156 ms"))
+
+FAIL in (the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/ns_isolation_test.clj:463)
+NEW bb runtime ceiling: exact boundary and one ms beyond
+expected: (str/includes? (iso/message v) "399155 ms")
+  actual: (not (str/includes? "null VIOLATION in null -- null: null" "399155 ms"))

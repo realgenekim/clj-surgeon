@@ -1,0 +1,458 @@
+diff --git a/docs/intent/test-isolation/test-isolation-specs.md b/docs/intent/test-isolation/test-isolation-specs.md
+index 0f619642..ec502d21 100644
+--- a/docs/intent/test-isolation/test-isolation-specs.md
++++ b/docs/intent/test-isolation/test-isolation-specs.md
+@@ -19,13 +19,22 @@ status: "round four implemented 2026-09-04 (002/003/004/005/007/010 runtime witn
+   outside the 38 paired fast controls. A bb-portable namespace must have one
+   passing complete namespace control on BOTH JVM and bb, with command, subject,
+   result and receipt paths recorded beside its assignment. A namespace passing
+-  on only one runtime is refused by name as non-portable until fixed; selecting
+-  the passing runtime is not a portability repair. A configured-runtime load
++  on both is `:portable`. The JVM is the reference runtime; bb is an eligible
++  accelerator. A failed JVM control ALWAYS produces `:refused`. A passing JVM
++  plus a failed complete bb control is `:bb-ineligible` ONLY with an explicit
++  registration from the closed vocabulary `:sci-host-interop`,
++  `:native-image-reflection`, `:bb-classpath-missing/nrepl.core`, or
++  `:bb-hosted-jvm-launcher`. The registration records the exact reason and
++  evidence beside the assignment, which must be `:jvm`. Unknown reasons,
++  real behavior differences, missing controls and both-runtime failures refuse.
++  The witness fails by namespace only for `:refused` and prints every
++  `:bb-ineligible` namespace with its registered reasons. A configured-runtime load
+   incompatibility is explicitly accounted for with its named load refusal;
+   it is not a passing test control or evidence of bb portability.
+-  Accounting for a test failure preserves the finding; it does not turn the
+-  portability gate green. The manifest witness emits the namespace and failed
+-  runtime controls even when the current assignment uses the passing runtime.
++  These initial-load exclusions remain separately visible; they do not claim
++  passing complete controls. A registered capability limitation is not a product
++  repair or a performance measurement. An unregistered bb failure still refuses
++  even when the current assignment uses the JVM.
+   The declared bb admission tolerance
+   is 2.0 after the conservative variance adjustment.
+   Attempt20 replaces the single observations for all 35 bb-portable members
+diff --git a/docs/tech-tree.md b/docs/tech-tree.md
+index bd147116..dcafc5f0 100644
+--- a/docs/tech-tree.md
++++ b/docs/tech-tree.md
+@@ -885,3 +885,14 @@ additional CLJC reader/oracle and bb capability/dependency failures by name.
+ No runtime is moved to hide a failing control, and no budget changes.
+ Full census, individual accounts, gate outcomes and remaining work:
+ [attempt22](observations/2026-09-12-bbtower-block-b/attempt22/REPORT.md).
++
++Attempt23 applies Fable's corrected ruling: the JVM is the reference and named
++bb capability limits select JVM with reasons. The CLJC strict-split emitter now
++uses JVM-readable per-form conditionals and its oracle normalizes generated
++arguments. Prune's TMPDIR repair exposed an unregistered Git version (2.53.0,
++admitted after its real compatibility matrix passed) and then the same SCI
++FileLockImpl.release limitation as recovery. The fold is therefore 99 portable,
++10 explicitly bb-ineligible and zero refused, plus 50 unchanged initial-load
++exclusions with no claim of complete controls. Counts differ from the predicted
++100/9 for that evidenced reason. Gates and source dogfood are recorded in
++[attempt23](observations/2026-09-12-bbtower-block-b/attempt23/REPORT.md).
+diff --git a/src/clj_surgeon/cljc/merge.clj b/src/clj_surgeon/cljc/merge.clj
+index a471cd3e..3a3e49ef 100644
+--- a/src/clj_surgeon/cljc/merge.clj
++++ b/src/clj_surgeon/cljc/merge.clj
+@@ -13,9 +13,10 @@
+    Symbol-collision rules (override the default reader-conditional split with a
+    project-supplied rewrite — e.g. RPC-style rename-and-tag) live in a sibling
+    namespace and consume the same body-pairing data structure."
+-  (:require [rewrite-clj.zip :as z]
+-            [rewrite-clj.node :as n]
+-            [clojure.string :as str]))
++  (:require
++   [clojure.string :as str]
++   [rewrite-clj.node :as n]
++   [rewrite-clj.zip :as z]))
+ 
+ ;; ============================================================
+ ;; ns / require parsing
+@@ -227,25 +228,11 @@
+          "   :cljs " cljs-s ")")))
+ 
+ (defn- emit-strict-body-split
+-  "Fallback when body-form counts don't align: dump each side's entire body
+-   into a single splicing reader conditional. The output is mechanically
+-   correct — semantically equivalent to the two original files — but the LLM
+-   may want to refactor to per-form `#?(:clj X :cljs Y)` afterwards."
++  "Fallback for unequal counts: one non-splicing conditional per body form.
++   Top-level #?@ is illegal on the JVM. Keep each platform's source and order."
+   [clj-bodies cljs-bodies]
+-  (let [clj-block  (str/join "\n\n             " clj-bodies)
+-        cljs-block (str/join "\n\n             " cljs-bodies)]
+-    (cond
+-      (and (seq clj-bodies) (seq cljs-bodies))
+-      [(str "#?@(:clj  [" clj-block "]\n"
+-            "    :cljs [" cljs-block "])")]
+-
+-      (seq clj-bodies)
+-      [(str "#?@(:clj [" clj-block "])")]
+-
+-      (seq cljs-bodies)
+-      [(str "#?@(:cljs [" cljs-block "])")]
+-
+-      :else [])))
++  (into (mapv #(str "#?(:clj " % ")") clj-bodies)
++        (map #(str "#?(:cljs " % ")") cljs-bodies)))
+ 
+ (defn- emit-bodies [clj-bodies cljs-bodies]
+   (if (= (count clj-bodies) (count cljs-bodies))
+diff --git a/src/clj_surgeon/worktree_lifecycle_io.clj b/src/clj_surgeon/worktree_lifecycle_io.clj
+index 77467a1c..655b3439 100644
+--- a/src/clj_surgeon/worktree_lifecycle_io.clj
++++ b/src/clj_surgeon/worktree_lifecycle_io.clj
+@@ -1,8 +1,8 @@
+ (ns clj-surgeon.worktree-lifecycle-io
+   "Bounded Git, Supacode, plan, journal, and single-target apply adapter."
+   (:require
+-   [clj-surgeon.spawn-ledger :as spawn]
+    [cheshire.core :as json]
++   [clj-surgeon.spawn-ledger :as spawn]
+    [clj-surgeon.worktree-lifecycle :as lifecycle]
+    [clojure.edn :as edn]
+    [clojure.java.io :as io]
+@@ -601,7 +601,9 @@
+ (def supported-prune-git-versions
+   ;; The initial release gate is intentionally exact. A new version enters
+   ;; only after the compatibility matrix passes on that version.
+-  #{"git version 2.50.1 (Apple Git-155)"})
++  ;; Git 2.53.0: attempt23's JVM and bb real-git-prune compatibility controls
++  ;; prove absent-target success, four refusals, and peer preservation.
++  #{"git version 2.50.1 (Apple Git-155)" "git version 2.53.0"})
+ 
+ (defn git-version-supported? [controller]
+   ;; @spec WTL-PRUNE-006
+diff --git a/test-fixtures/cljc/merge/unmatched-counts/expected.cljc b/test-fixtures/cljc/merge/unmatched-counts/expected.cljc
+index c53a55cb..fb8916fa 100644
+--- a/test-fixtures/cljc/merge/unmatched-counts/expected.cljc
++++ b/test-fixtures/cljc/merge/unmatched-counts/expected.cljc
+@@ -1,9 +1,10 @@
+ (ns my.app.async)
+ 
+-#?@(:clj  [(defn fetch-impl [url]
+-             (slurp url))
++#?(:clj (defn fetch-impl [url]
++           (slurp url)))
+ 
+-           (defn fetch! [url]
+-             (fetch-impl url))]
+-    :cljs [(defn fetch! [url]
+-             (.then (js/fetch url) #(.text %)))])
++#?(:clj (defn fetch! [url]
++           (fetch-impl url)))
++
++#?(:cljs (defn fetch! [url]
++            (.then (js/fetch url) #(.text %))))
+diff --git a/test/clj_surgeon/cljc/merge_test.clj b/test/clj_surgeon/cljc/merge_test.clj
+index 80f8ba73..694a516d 100644
+--- a/test/clj_surgeon/cljc/merge_test.clj
++++ b/test/clj_surgeon/cljc/merge_test.clj
+@@ -5,9 +5,29 @@
+    [clojure.string :as str]
+    [clojure.test :refer [deftest is testing]]
+    [clojure.tools.reader :as r]
+-   [clojure.tools.reader.reader-types :as rt]))
+-
+-(defn- parse-forms
++   [clojure.tools.reader.reader-types :as rt]
++   [clojure.walk :as walk]))
++
++(defn normalize-generated-symbols
++  "Alpha-normalize reader-generated symbols, retaining distinct identities.
++   ReaderConditional is opaque to clojure.walk, so recurse into its form."
++  [forms]
++  (let [names (atom {})]
++    (letfn [(normalize [form]
++              (cond
++                (reader-conditional? form)
++                (reader-conditional (normalize (:form form)) (:splicing? form))
++                (and (symbol? form)
++                     (nil? (namespace form))
++                     (re-matches #"(?:p\d+__\d+#|rest__\d+#|.+__\d+__auto__)" (name form)))
++                (or (@names form)
++                    (let [canonical (symbol (str "reader-generated-" (count @names)))]
++                      (swap! names assoc form canonical)
++                      canonical))
++                :else (walk/walk normalize identity form)))]
++      (normalize forms))))
++
++(defn parse-forms
+   "Parse a CLJC source string into a vector of forms with reader conditionals
+    preserved as ReaderConditional records. Two sources that differ only in
+    whitespace/formatting produce equal vectors."
+@@ -15,7 +35,8 @@
+   (let [rdr (rt/string-push-back-reader src)]
+     (->> (repeatedly #(r/read {:eof ::end :read-cond :preserve} rdr))
+          (take-while #(not= ::end %))
+-         vec)))
++         vec
++         normalize-generated-symbols)))
+ 
+ (defn- read-fixture [path]
+   (slurp (str "test-fixtures/cljc/merge/" path)))
+@@ -118,13 +139,23 @@
+ (deftest unmatched-body-counts-emit-strict-split
+   (testing "When CLJ and CLJS have different numbers of body forms, the merge
+             falls back to a strict reader-conditional split: each side's full
+-            body wrapped in its own #?@(:clj [...]) / #?@(:cljs [...]) branch.
+-            The output is mechanically correct; the LLM can refactor it later."
++            body form wrapped in its own non-splicing platform branch."
+     (let [{:keys [expected got]} (check-merge "unmatched-counts")]
+-      (is (= expected got)))))
++      (is (= expected got))))
++  (testing "JVM reader consumes every platform, including empty and unequal bodies"
++    (doseq [[clj-src cljs-src] [["(ns foo) (def a 1) (def b 2)" "(ns foo) (def c 3)"]
++                                ["(ns foo) (def a 1)" "(ns foo)"]
++                                ["(ns foo)" "(ns foo) (def c 3)"]]]
++      (let [merged (m/merge-files clj-src cljs-src)]
++        (doseq [[platform original] [[:clj clj-src] [:cljs cljs-src]]]
++          (let [rdr (rt/string-push-back-reader merged)
++                forms (->> (repeatedly #(r/read {:eof ::end :read-cond :allow
++                                                 :features #{platform}} rdr))
++                           (take-while #(not= ::end %)) vec)]
++            (is (= (parse-forms original) forms))))))))
+ 
+ (deftest only-clj-has-body-emits-clj-only-splice
+-  (testing "If CLJS has no body forms at all, output uses just #?@(:clj [...])."
++  (testing "If CLJS has no body forms at all, output uses just #?(:clj ...)."
+     (let [src (m/merge-files "(ns foo) (def a 1)" "(ns foo)")]
+-      (is (str/includes? src "#?@(:clj"))
++      (is (str/includes? src "#?(:clj"))
+       (is (not (str/includes? src ":cljs"))))))
+diff --git a/test/clj_surgeon/cljc/split_test.clj b/test/clj_surgeon/cljc/split_test.clj
+index 2b3eb19e..c746ffff 100644
+--- a/test/clj_surgeon/cljc/split_test.clj
++++ b/test/clj_surgeon/cljc/split_test.clj
+@@ -2,17 +2,13 @@
+   {:lane :fast}
+   (:require
+    [clj-surgeon.cljc.merge :as m]
++   [clj-surgeon.cljc.merge-test :as oracle]
+    [clj-surgeon.cljc.split :as s]
+    [clj-surgeon.core :as core]
+-   [clojure.test :refer [deftest is testing]]
+-   [clojure.tools.reader :as r]
+-   [clojure.tools.reader.reader-types :as rt]))
++   [clojure.test :refer [deftest is testing]]))
+ 
+ (defn- parse-forms [src]
+-  (let [rdr (rt/string-push-back-reader src)]
+-    (->> (repeatedly #(r/read {:eof ::end :read-cond :preserve} rdr))
+-         (take-while #(not= ::end %))
+-         vec)))
++  (oracle/parse-forms src))
+ 
+ (defn- normalize-ns-form
+   "Within an ns form, replace the :require sub-form's contents with a set of
+@@ -84,7 +80,16 @@
+ 
+ (deftest round-trip-unmatched-counts
+   (testing "Asymmetric body-form counts round-trip via the strict-split fallback"
+-    (check-round-trip "unmatched-counts")))
++    (check-round-trip "unmatched-counts"))
++  (testing "Oracle preserves argument identity while ignoring fresh reader IDs"
++    (is (= (parse-forms "#(vector %1 %2 %1)")
++           (parse-forms "#(vector %1 %2 %1)")))
++    (is (not= (parse-forms "#(vector %1 %2 %1)")
++              (parse-forms "#(vector %1 %2 %2)")))
++    (is (not= (parse-forms "(vector named-a named-b)")
++              (parse-forms "(vector named-a named-a)")))
++    (is (not= (parse-forms "(vector user__123 user__456)")
++              (parse-forms "(vector user__123 user__789)")))))
+ 
+ ;; ============================================================
+ ;; Double round trip: split → merge → split → merge converges.
+diff --git a/test/clj_surgeon/lane_manifest.clj b/test/clj_surgeon/lane_manifest.clj
+index c11f40b5..619fb07e 100644
+--- a/test/clj_surgeon/lane_manifest.clj
++++ b/test/clj_surgeon/lane_manifest.clj
+@@ -839,9 +839,42 @@
+     :bb
+     :jvm))
+ 
++(def bb-capability-vocabulary
++  #{:sci-host-interop :native-image-reflection
++    :bb-classpath-missing/nrepl.core :bb-hosted-jvm-launcher})
++
++;; @spec TEST-ISO-016 -- exact limitations from attempt22's complete controls.
++(def bb-ineligibilities
++  {'clj-surgeon.mcp-cold-verify-test
++   {:reasons #{:sci-host-interop} :detail "SCI refuses FileLockImpl.close in admission-timeout witness"}
++   'clj-surgeon.mcp-namespace-split-test
++   {:reasons #{:bb-classpath-missing/nrepl.core} :detail "Late helper-extraction requiring-resolve needs absent nrepl.core"}
++   'clj-surgeon.mcp-relation-census-launcher-test
++   {:reasons #{:bb-hosted-jvm-launcher :native-image-reflection}
++    :detail "java.class.path lacks JVM test dependencies; native image refuses StackOverflowError constructor"}
++   'clj-surgeon.memory.journal-green-test
++   {:reasons #{:bb-hosted-jvm-launcher} :detail "Child Java resolves to nonexistent bin/java under bb"}
++   'clj-surgeon.memory.oom-reproduction-test
++   {:reasons #{:bb-hosted-jvm-launcher} :detail "Child Java resolves to nonexistent bin/java under bb"}
++   'clj-surgeon.mission-display-test
++   {:reasons #{:bb-classpath-missing/nrepl.core} :detail "Late mission CLI resolution needs absent nrepl.core"}
++   'clj-surgeon.ns-isolation-test
++   {:reasons #{:native-image-reflection} :detail "Native image cannot invoke sci.lang.Var.getRawRoot"}
++   'clj-surgeon.reader-eval-fence-test
++   {:reasons #{:bb-hosted-jvm-launcher} :detail "bb-hosted JVM launcher throws ClassNotFoundException: clojure.main"}
++   'clj-surgeon.worktree-lifecycle-prune-test
++   {:reasons #{:sci-host-interop}
++    :detail "After TMPDIR and witnessed Git admission repairs, SCI refuses shared FileLockImpl.release; prune replay retains its lock"
++    :probe "docs/observations/2026-09-12-bbtower-block-b/attempt23/recovery-lock-probe.log"}
++   'clj-surgeon.worktree-lifecycle-recovery-test
++   {:reasons #{:sci-host-interop}
++    :detail "SCI refuses FileLockImpl.release; replay retains the lock and reports lifecycle-target-locked"
++    :probe "docs/observations/2026-09-12-bbtower-block-b/attempt23/recovery-lock-probe.log"}})
++
+ (def namespace-runtimes
+   (into {} (map (fn [[n runtime]]
+-                  [n (measured-runtime runtime (get runtime-measurements n))]))
++                  [n (if (contains? bb-ineligibilities n) :jvm
++                         (measured-runtime runtime (get runtime-measurements n)))]))
+         portability-runtimes))
+ 
+ (def unmeasured-runtimes
+@@ -855,12 +888,18 @@
+                    (for [[runtime suffix] [[:jvm "jvm-test"]
+                                            [:bb "bb-test"]
+                                            [:bb-load "bb-load"]]]
+-                     [runtime (str "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/"
++                     [runtime (str "docs/observations/2026-09-12-bbtower-block-b/"
++                                   (if (and (not= runtime :bb-load)
++                                            (#{'clj-surgeon.cljc.merge-test
++                                               'clj-surgeon.cljc.split-test
++                                               'clj-surgeon.worktree-lifecycle-prune-test} n))
++                                     "attempt23" "attempt22")
++                                   "/controls/"
+                                    n "-" suffix ".control.edn")]))])))
+ 
+ ;; @spec TEST-ISO-016 -- a passing assignment cannot hide a failed control.
+-(defn portability-refusal
+-  [namespace-name {:keys [jvm bb bb-load]}]
++(defn portability-state
++  [namespace-name {:keys [jvm bb]} registration]
+   (let [passes? (fn [runtime row]
+                   (let [{:keys [test fail error]} (:result row)]
+                     (and (= namespace-name (:namespace row))
+@@ -873,20 +912,29 @@
+                            :when (not (passes? runtime row))]
+                        [runtime (select-keys row [:status :result :receipt])]))]
+     (cond
+-      (and (= :load-failed (:status bb-load))
+-           (= "load" (:mode bb-load))
+-           (= namespace-name (:namespace bb-load))
+-           (= :bb (:runtime bb-load))
++      (empty? failed) {:state :portable :namespace namespace-name}
++      (and (not (contains? failed :jvm))
++           (= namespace-name (:namespace bb)) (= :bb (:runtime bb))
++           (= :test-failed (:status bb)) (= 1 (:exit bb))
++           (pos-int? (get-in bb [:result :test]))
++           (some pos-int? [(get-in bb [:result :fail]) (get-in bb [:result :error])])
++           (seq (:reasons registration))
++           (every? bb-capability-vocabulary (:reasons registration))
++           (not (clojure.string/blank? (:detail registration))))
++      (merge registration {:state :bb-ineligible :namespace namespace-name :runtime :jvm})
++      :else {:state :refused :error-type :non-portable-namespace :namespace namespace-name
++             :reason :runtime-control-failed :controls failed})))
++
++(defn portability-refusal [namespace-name {:keys [bb-load jvm bb] :as controls}]
++  (if (and (nil? jvm) (nil? bb)
++           (= :load-failed (:status bb-load)) (= "load" (:mode bb-load))
++           (= namespace-name (:namespace bb-load)) (= :bb (:runtime bb-load))
+            (integer? (:exit bb-load)) (not (zero? (:exit bb-load))))
+-      {:error-type :non-portable-namespace :namespace namespace-name
+-       :reason :bb-load-incompatible
+-       :control (select-keys bb-load [:status :message :causes :receipt])}
+-
+-      (seq failed)
+-      {:error-type :non-portable-namespace :namespace namespace-name
+-       :reason :runtime-control-failed :controls failed}
+-
+-      :else nil)))
++    {:error-type :non-portable-namespace :namespace namespace-name
++     :reason :bb-load-incompatible
++     :control (select-keys bb-load [:status :message :causes :receipt])}
++    (let [state (portability-state namespace-name controls (bb-ineligibilities namespace-name))]
++      (when (= :refused (:state state)) state))))
+ 
+ (def excluded
+   "Test namespaces that are on disk and in NO JVM lane, each with the reason
+diff --git a/test/clj_surgeon/lane_manifest_test.clj b/test/clj_surgeon/lane_manifest_test.clj
+index 5282647e..fd1ac6b4 100644
+--- a/test/clj_surgeon/lane_manifest_test.clj
++++ b/test/clj_surgeon/lane_manifest_test.clj
+@@ -221,9 +221,10 @@
+                    (assoc at :jvm (assoc (sample 1) :sd-ms 2.0) :bb (sample 2)))))
+       (is (= :bb (lm/measured-runtime :bb nil)))
+       (doseq [[n runtime] lm/unmeasured-runtimes]
+-        (is (= runtime (lm/portability-runtimes n)) (str n)))
++        (is (= runtime (if (lm/bb-ineligibilities n) :jvm (lm/portability-runtimes n))) (str n)))
+       (doseq [[n {:keys [jvm bb conservative-ratio] :as measurement}] lm/runtime-measurements]
+-        (is (= (:runtime measurement) (lm/namespace-runtimes n)) (str n " recorded assignment"))
++        (is (= (if (lm/bb-ineligibilities n) :jvm (:runtime measurement))
++               (lm/namespace-runtimes n)) (str n " assignment after capability admission"))
+         (doseq [[runtime arm] [[:jvm jvm] [:bb bb]]]
+           (let [rows (mapv #(edn/read-string (slurp %)) (:logs arm))
+                 walls (mapv :elapsed-ms rows)
+@@ -250,6 +251,22 @@
+                                :result {:test 1 :fail 0 :error 0}})
+         controls {:jvm (passing :jvm) :bb (passing :bb)}]
+     (is (nil? (lm/portability-refusal n controls)))
++    (let [failed (assoc (passing :bb) :status :test-failed :exit 1
++                        :result {:test 1 :fail 0 :error 1})
++          limited (assoc controls :bb failed)
++          registration {:reasons #{:sci-host-interop} :detail "FileLockImpl.release refused"}]
++      (is (= :portable (:state (lm/portability-state n controls nil))))
++      (is (= :bb-ineligible (:state (lm/portability-state n limited registration))))
++      (doseq [bad [nil {} (assoc registration :reasons #{:unknown})
++                   (assoc registration :reasons #{}) (assoc registration :detail "")]]
++        (is (= :refused (:state (lm/portability-state n limited bad)))))
++      (doseq [bb [(passing :bb) failed]]
++        (is (= :refused (:state (lm/portability-state n
++                                  {:jvm (assoc (passing :jvm) :exit 1) :bb bb}
++                                  registration)))))
++      (doseq [bad [nil (assoc failed :namespace 'wrong/test)
++                   (assoc failed :runtime :jvm) (assoc failed :exit nil)]]
++        (is (= :refused (:state (lm/portability-state n (assoc controls :bb bad) registration))))))
+     (doseq [runtime [:jvm :bb]
+             bad [nil
+                  (assoc (passing runtime) :status :test-failed)
+@@ -275,12 +292,18 @@
+                                :when (.isFile (io/file path))]
+                            [runtime (assoc (edn/read-string (slurp path)) :receipt path)]))
+           refusal (lm/portability-refusal n controls)
++          state (lm/portability-state n controls (lm/bb-ineligibilities n))
+           unsupported-jvm-only? (and (= :bb-load-incompatible (:reason refusal))
+                                      (= :jvm (lm/namespace-runtimes n))
+                                      (= :jvm (lm/portability-runtimes n))
+                                      (= n (get-in controls [:bb-load :namespace]))
+                                      (= :bb (get-in controls [:bb-load :runtime]))
+                                      (not (str/blank? (get-in controls [:bb-load :message]))))]
++      (when (= :bb-ineligible (:state state))
++        (println "BB-INELIGIBLE" n ":jvm" (pr-str (select-keys state [:reasons :detail :probe])))
++        (is (= :jvm (lm/namespace-runtimes n)) (str n)))
++      (when unsupported-jvm-only?
++        (println "BB-LOAD-EXCLUDED" n (pr-str (:control refusal))))
+       (is (or (nil? refusal) unsupported-jvm-only?)
+           (pr-str refusal)))))
+ 
+diff --git a/test/clj_surgeon/worktree_lifecycle_prune_test.clj b/test/clj_surgeon/worktree_lifecycle_prune_test.clj
+index 0b87cb55..fe91bc3f 100644
+--- a/test/clj_surgeon/worktree_lifecycle_prune_test.clj
++++ b/test/clj_surgeon/worktree_lifecycle_prune_test.clj
+@@ -123,7 +123,7 @@
+   ([f] (with-missing-worktree-fixture :missing f))
+   ([path-case f]
+    (let [base (.toFile (java.nio.file.Files/createTempDirectory
+-                         (.toPath (io/file "/private/tmp"))
++                         (.toPath (io/file (System/getProperty "java.io.tmpdir")))
+                          "worktree-prune-test"
+                          (make-array java.nio.file.attribute.FileAttribute 0)))
+          repo (io/file base "repo")
+@@ -393,7 +393,7 @@
+ (deftest no-follow-path-authority-distinguishes-absence-and-links
+   ;; @spec WTL-PRUNE-002 WTL-PRUNE-006
+   (let [base (.toFile (java.nio.file.Files/createTempDirectory
+-                        (.toPath (io/file "/private/tmp"))
++                        (.toPath (io/file (System/getProperty "java.io.tmpdir")))
+                         "worktree-path-proof"
+                         (make-array java.nio.file.attribute.FileAttribute 0)))
+         target (io/file base "missing")

@@ -1,0 +1,28 @@
+
+Testing clj-surgeon.lane-manifest-test
+
+FAIL in (the-corpus-only-ever-grows-and-the-arithmetic-is-shown) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:874)
+every deftest in the tree is a named line in the ledger
+the tree and test/clj_surgeon/deftest_census.edn disagree. Declared in a lane but NOT in the ledger (2): clj-surgeon.install-test/cli-package-identity-covers-bundled-splice-source, clj-surgeon.install-test/installed-cli-loads-splice-verbs-outside-the-checkout. In the ledger but NO LONGER DECLARED (0): none. After regenerating, READ THE LEDGER DIFF before committing it. A removed name is a deleted test -- say why, or restore it. A removed AND an added name together is a rename, which the count ledger this replaced could not see. Then regenerate: CENSUS_REGENERATE=1 clojure -M:clj-surgeon/test-deps -e "(require 'clj-surgeon.lane-manifest-test 'clojure.test) (clojure.test/test-vars [#'clj-surgeon.lane-manifest-test/the-corpus-only-ever-grows-and-the-arithmetic-is-shown])"
+expected: (nil? diff)
+  actual: (not (nil? {:added [clj-surgeon.install-test/cli-package-identity-covers-bundled-splice-source clj-surgeon.install-test/installed-cli-loads-splice-verbs-outside-the-checkout], :removed []}))
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.mcp-inspect-contract-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.mission-usage-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test

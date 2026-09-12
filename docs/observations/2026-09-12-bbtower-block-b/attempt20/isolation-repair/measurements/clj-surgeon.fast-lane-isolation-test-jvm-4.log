@@ -1,0 +1,60 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+FAIL in (the-fast-lane-home-is-a-throwaway-inside-the-run-root) (fast_lane_isolation_test.clj:51)
+user.home is INSIDE this run's own temp root
+user.home is /home/forge -- a fast-lane JVM must be launched with -Duser.home inside its own run root (bbtower-fx), so that reading the seat's real home is not merely discouraged but impossible
+expected: (str/includes? (.getCanonicalPath home) root-name)
+  actual: (not (str/includes? "/home/forge" "bbtower-fx"))
+
+FAIL in (the-fast-lane-home-is-a-throwaway-inside-the-run-root) (fast_lane_isolation_test.clj:61)
+the throwaway is EMPTY of the seat's real state
+the throwaway home contains .m2 -- it is not a throwaway, it is the seat's real home
+expected: (not (.exists (io/file home tell)))
+  actual: (not (not true))
+
+FAIL in (the-fast-lane-home-is-a-throwaway-inside-the-run-root) (fast_lane_isolation_test.clj:61)
+the throwaway is EMPTY of the seat's real state
+the throwaway home contains .gitlibs -- it is not a throwaway, it is the seat's real home
+expected: (not (.exists (io/file home tell)))
+  actual: (not (not true))
+
+FAIL in (the-fast-lane-home-is-a-throwaway-inside-the-run-root) (fast_lane_isolation_test.clj:61)
+the throwaway is EMPTY of the seat's real state
+the throwaway home contains .ssh -- it is not a throwaway, it is the seat's real home
+expected: (not (.exists (io/file home tell)))
+  actual: (not (not true))
+
+FAIL in (the-fast-lane-home-is-a-throwaway-inside-the-run-root) (fast_lane_isolation_test.clj:61)
+the throwaway is EMPTY of the seat's real state
+the throwaway home contains .config -- it is not a throwaway, it is the seat's real home
+expected: (not (.exists (io/file home tell)))
+  actual: (not (not true))
+
+FAIL in (the-fast-lane-home-is-a-throwaway-inside-the-run-root) (fast_lane_isolation_test.clj:61)
+the throwaway is EMPTY of the seat's real state
+the throwaway home contains .claude -- it is not a throwaway, it is the seat's real home
+expected: (not (.exists (io/file home tell)))
+  actual: (not (not true))
+
+FAIL in (the-fast-lane-home-is-a-throwaway-inside-the-run-root) (fast_lane_isolation_test.clj:61)
+the throwaway is EMPTY of the seat's real state
+the throwaway home contains src -- it is not a throwaway, it is the seat's real home
+expected: (not (.exists (io/file home tell)))
+  actual: (not (not true))
+
+FAIL in (the-fast-lane-home-is-a-throwaway-inside-the-run-root) (fast_lane_isolation_test.clj:61)
+the throwaway is EMPTY of the seat's real state
+the throwaway home contains secrets -- it is not a throwaway, it is the seat's real home
+expected: (not (.exists (io/file home tell)))
+  actual: (not (not true))
+
+FAIL in (the-fast-lane-tmpdir-is-a-private-per-run-root) (fast_lane_isolation_test.clj:39)
+java.io.tmpdir is /var/tmp/forge/bbtower-fx -- the fast lane must run on a private per-run root named clj-surgeon-suite-<pid>-<hex>, not on a shared temp base
+expected: (str/starts-with? (.getName tmp) isolated-root-prefix)
+  actual: (not (str/starts-with? "bbtower-fx" "clj-surgeon-suite-"))
+
+Ran 4 tests containing 19 assertions.
+9 failures, 0 errors.
+{:runtime :jvm, :namespace clj-surgeon.fast-lane-isolation-test, :elapsed-ms 139, :result {:test 4, :pass 10, :fail 9, :error 0, :type :summary}}

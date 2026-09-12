@@ -1,0 +1,6 @@
+
+Testing clj-surgeon.split-proof-gate-test
+
+Ran 4 tests containing 31 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.split-proof-gate-test, :runtime :bb, :mode "test", :started-at "2026-09-12T19:25:34.741351107Z", :elapsed-ms 85, :status :passed, :result {:test 4, :pass 31, :fail 0, :error 0, :type :summary}}

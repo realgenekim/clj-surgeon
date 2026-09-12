@@ -1,0 +1,22 @@
+
+Testing clj-surgeon.helper-extraction-test
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.battery-ledger-test
+
+Testing clj-surgeon.syntax-var-refs-test

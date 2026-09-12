@@ -1,0 +1,6 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/attempt14-red/tmp
+Syntax error reading source at (docs/observations/2026-09-12-bbtower-block-b/attempt14/formatter-witness.clj:12:1).
+EOF while reading, starting at line 6
+
+Full report at:
+/var/tmp/forge/bbtower-fx/attempt14-red/tmp/clojure-11295924244220807878.edn

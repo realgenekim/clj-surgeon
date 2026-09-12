@@ -1,0 +1,7 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+clj-surgeon MCP: embedded nREPL on 39163 ( /var/tmp/forge/bbtower-fx/clj-surgeon-suite-3012433-4ad3b9d5/clj-surgeon-mcp-server-test-17060815045812818565/.nrepl-port )
+clj-surgeon MCP: embedded nREPL on 40639 ( /var/tmp/forge/bbtower-fx/clj-surgeon-suite-3012433-4ad3b9d5/clj-surgeon-mcp-server-test-1995111142620624807/.nrepl-port )
+
+namespace walls (1, slowest first, total 207 ms):
+       207 ms  clj-surgeon.mcp-server-test

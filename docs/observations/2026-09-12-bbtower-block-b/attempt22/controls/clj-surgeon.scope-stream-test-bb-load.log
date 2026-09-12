@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.scope-stream-test, :runtime :bb, :mode "load", :started-at "2026-09-12T19:24:07.206851910Z", :elapsed-ms 80, :status :load-failed, :message "Unable to resolve classname: java.nio.file.SimpleFileVisitor", :causes ["Unable to resolve classname: java.nio.file.SimpleFileVisitor"]}

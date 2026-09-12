@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Cell B independent acceptance oracle — frozen 2026-09-07 by the acceptance owner.
-# Run from the ROOT of the worktree under test:  bash /var/tmp/forge/plan2/cellB/oracle.sh
+# Run from the ROOT of the worktree under test: bash <path-to>/cell_b_oracle.sh
 # Prints PASS/FAIL per check. Exits 0 only if every check passed.
 #
 # Env:
 #   ORACLE_BASE   base sha (default: the frozen Cell B base)
-#   ORACLE_TMP    scratch dir (default: /var/tmp/forge/plan2/cellB/run-$$)
+#   ORACLE_TMP    scratch dir (default: ${TMPDIR:-/var/tmp}/cellB/run-$$)
 # No env var can skip or weaken a check.
 
 set -uo pipefail
 
 BASE="${ORACLE_BASE:-92a7ca14fd904e4d962df38614b9af3a7ef41a11}"
-TMP="${ORACLE_TMP:-/var/tmp/forge/plan2/cellB/run-$$}"
+TMP="${ORACLE_TMP:-${TMPDIR:-/var/tmp}/cellB/run-$$}"
 KONDO="${KONDO:-$HOME/bin/clj-kondo}"
 ROOT="$(pwd)"
 mkdir -p "$TMP"

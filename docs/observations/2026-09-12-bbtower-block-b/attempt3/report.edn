@@ -1,0 +1,63 @@
+{:verdict :blocked
+ :manifest_id "0d0ceaeddc85f35573a6ca6e2a2e08fd2a1594d062a5e97e89b4c42e57f6df67"
+ :findings [{:severity "blocking"
+ :file "/home/forge/bin/lib/packet.py"
+ :line 166
+ :reproduction "Within this packet, call pathlib.Path('/var/tmp/forge/bbtower-fx/attempt3-admission-3c45c1c3').mkdir(). Step 1 requires a detached base checkout beneath the same denied parent."
+ :exact_output "fixture-root mkdir: PermissionError(13, 'Permission denied')"}]
+ :measurements [{:name "a: base 61-member sum and makespan"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt3/slowdown.md"}
+ {:name "b: subject bb-disabled 61-member sum and makespan"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt3/slowdown.md"}
+ {:name "c: shipped subject 61-member sum and makespan"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt3/slowdown.md"}
+ {:name "ten largest a-to-c namespace deltas"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt3/slowdown.md"}
+ {:name "required fixture directory admission"
+ :before "named in step 1"
+ :after "fixture-root mkdir: PermissionError(13, 'Permission denied')"
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt3/admission-evidence.json"}
+ {:name "builder gate attempts"
+ :before 0
+ :after 0
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt3/gate.md"}]
+ :commits []
+ :least_sure ["Slowdown mechanism is unknown without matched a/b/c execution."
+ "No bb sum or fast margin was measured; choosing a new bb ceiling would invent its derivation."
+ "Other measurement and gate prerequisites have not been executed; correcting this first filesystem blocker does not establish their success."]
+ :disagreements ["The sealed filesystem envelope excludes the fixture path mandated by step 1. The one-suite lease clarification is accepted and is not a disagreement in this attempt."]
+ :owed [{:what "Step 1: matched a/b/c measurements, sums, makespans and ten deltas"
+ :owner "Fable"
+ :unblock "Gene or Fable authorizes an admitted fixture location, or reseals the named fixture write root and needed Git metadata; Astra then runs the frozen measurements sequentially."}
+ {:what "Step 2: evidence-based coordinator fix and one make test-fast"
+ :owner "Astra"
+ :unblock "Complete step 1; preserve membership and runtime classifications; stop if measured fast sum exceeds 60000 ms."}
+ {:what "Step 3: new bb ceiling, derivation, intent and boundary witnesses"
+ :owner "Astra"
+ :unblock "Obtain step-2 bb serial sum and fast proportional margin; implement the new declared intent."}
+ {:what "Ratify the newly derived bb ceiling"
+ :owner "Fable"
+ :unblock "Review the measured derivation and at-ceiling/one-ms-past witnesses."}
+ {:what "Step 4: probe refusal registry, completeness, receipt boolean false seams and encounter score"
+ :owner "Astra"
+ :unblock "Resume the frozen order after steps 1-3; inspect the installed encounter entrance before recording, or mark its score owed."}
+ {:what "Step 5: feature-thread bb/JVM walls in meter.tsv, supported runtime and one make test-integration"
+ :owner "Astra"
+ :unblock "Resume after step 4; retain 240000 ms integration ceiling and report namespace walls on failure."}
+ {:what "Step 6: final-tip prewarm, at most one repair and second prewarm, verbatim census/budget lines"
+ :owner "Astra"
+ :unblock "Complete preceding steps and retain no more than two prewarm attempts."}
+ {:what "Manifest obligation: make test-battery"
+ :owner "Astra"
+ :unblock "Run on the completed eligible tip under the shared lease; do not infer success from source review."}
+ {:what "Independent acceptance"
+ :owner "Fable"
+ :unblock "Review completed implementation and executed evidence externally."}]}

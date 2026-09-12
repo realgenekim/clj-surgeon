@@ -1,0 +1,18 @@
+
+Testing clj-surgeon.mcp-inspect-contract-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.move-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.split-proof-gate-test

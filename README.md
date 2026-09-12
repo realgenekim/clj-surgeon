@@ -5,6 +5,14 @@ ClojureScript, and CLJC files. It parses source with
 [rewrite-clj](https://github.com/clj-commons/rewrite-clj) and returns EDN.
 Claude Code and Codex skills teach coding agents the shortest safe commands.
 
+For a warm JVM test loop, start `make warm PORT=9107` in the worktree, then run
+`clj-surgeon :probe :ns clj-surgeon.forms-test`. The bb client reloads local
+dependencies and runs that namespace in the one MCP image. `probe-passed` is
+an inner-loop verdict: `verification_complete` stays false and `landing-gate`
+stays pending. A stale image refuses with instructions to restart it.
+See [runtime inventory](docs/plans/bb-first-inventory.md) and
+[measured edit-to-probe walls](docs/plans/edit-to-probe.md).
+
 ## Headline: one transaction is now five-times-native across agent families
 
 The current high-water mark is a real historical extraction: move 15 named

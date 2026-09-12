@@ -1,0 +1,14 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.ns-isolation-test
+
+Testing clj-surgeon.splice-envelope-test
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Ran 69 tests containing 534 assertions.
+0 failures, 0 errors.

@@ -1,0 +1,26 @@
+
+Testing clj-surgeon.lane-manifest-test
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.mcp-workspace-test
+
+Testing clj-surgeon.mcp-program-tool-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.mcp-compact-edit-fields-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

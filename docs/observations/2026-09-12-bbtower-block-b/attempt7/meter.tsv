@@ -1,0 +1,5 @@
+arm	fast_sum_ms	all_sum_ms	coordinator_makespan_ms	state	log	receipt
+a-base	36335	36335	27638	:passed	a-base.log	a-base/receipt.edn
+b-subject-jvm	37661	37661	26957	:passed	b-subject-jvm.log	b-subject-jvm/receipt.edn
+c-subject	68679	302525	82699	:failed	c-subject.log	c-subject/receipt.edn
+test-fast	68664	302378	82426	:failed	test-fast.log	test-fast/receipt.edn

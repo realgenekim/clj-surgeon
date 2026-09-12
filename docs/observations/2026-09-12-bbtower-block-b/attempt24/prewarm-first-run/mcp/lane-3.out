@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.mcp-extraction-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.syntax-var-refs-test

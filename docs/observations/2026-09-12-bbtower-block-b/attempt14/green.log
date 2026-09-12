@@ -1,0 +1,3 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/attempt14-red/tmp
+{:ok true, :formatter {:command ["/home/forge/.local/lib/node_modules/@chrisoakman/standard-clojure-style/cli.mjs" "fix" "/var/tmp/forge/bbtower-fx/attempt14-red/tmp/clj-surgeon-candidate-1559974370055141359.clj"], :resolved? true}, :status :complete, :file-count 1, :changed-file-count 1, :elapsed_ms 123.892552}
+{:ok true, :formatter {:command ["/usr/bin/npx" "@chrisoakman/standard-clojure-style" "fix" "/var/tmp/forge/bbtower-fx/attempt14-red/tmp/clj-surgeon-candidate-14262557250025246574.clj"], :resolved? false}, :status :complete, :file-count 1, :changed-file-count 1, :elapsed_ms 3092.676539}

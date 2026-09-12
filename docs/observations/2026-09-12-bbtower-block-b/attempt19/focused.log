@@ -1,0 +1,25 @@
+----- Error --------------------------------------------------------------------
+Type:     java.lang.Exception
+Message:  Unable to resolve classname: io.modelcontextprotocol.server.McpAsyncServerExchange
+Location: /home/forge/src/clj-surgeon-bbtower/src/clj_surgeon/mcp_prepared_confirmation.clj:9:3
+
+----- Context ------------------------------------------------------------------
+ 5:    [clj-surgeon.mcp-prepared-request :as prepared-request]
+ 6:    [clj-surgeon.structural-lens :as structural-lens]
+ 7:    [clojure.set :as set]
+ 8:    [clojure.string :as str])
+ 9:   (:import
+      ^--- Unable to resolve classname: io.modelcontextprotocol.server.McpAsyncServerExchange
+10:    (io.modelcontextprotocol.server McpAsyncServerExchange)
+11:    (java.util UUID)))
+12: 
+13: (def ^:private ttl-ms 300000)
+14: (def ^:private max-preview-count 3)
+
+----- Stack trace --------------------------------------------------------------
+clj-surgeon.mcp-prepared-confirmation - /home/forge/src/clj-surgeon-bbtower/src/clj_surgeon/mcp_prepared_confirmation.clj:9:3
+clj-surgeon.mcp-server                - /home/forge/src/clj-surgeon-bbtower/src/clj_surgeon/mcp_server.clj:2:3
+clj-surgeon.receipt-booleans-test     - /home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/receipt_booleans_test.clj:3:3
+clojure.core/require                  - clojure/core.clj:6070:1
+user                                  - NO_SOURCE_PATH:1:1
+

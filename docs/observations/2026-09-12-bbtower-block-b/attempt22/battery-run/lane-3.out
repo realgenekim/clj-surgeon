@@ -1,0 +1,17 @@
+lanes: --ns -- 8 namespace(s), home-isolated false
+
+Testing clj-surgeon.help-test
+
+Testing clj-surgeon.tmp-leak-support-test
+
+Testing clj-surgeon.mission-commit-cli-test
+
+Testing clj-surgeon.mission-events-test
+
+Testing clj-surgeon.rename-alias-parity-test
+
+Testing clj-surgeon.mission-git-ledger-test
+
+Testing clj-surgeon.mission-fallback-test
+
+Testing clj-surgeon.mission-typist-executor-admission-test

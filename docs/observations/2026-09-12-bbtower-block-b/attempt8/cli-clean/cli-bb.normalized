@@ -1,0 +1,36 @@
+{:intent-count 3,
+ :receipt-hash
+ "RECEIPT-HASH",
+ :inverse {:operation :undo-change!, :guarded-file-count 2},
+ :changed-file-count 2,
+ :operation :change!,
+ :workspace_status
+ {:checked true,
+  :command
+  ["git"
+   "-C"
+   "/home/forge/src/clj-surgeon-bbtower"
+   "status"
+   "--porcelain"
+   "--untracked-files=all"
+   "-z"],
+  :exit 0,
+  :clean_except_proven false,
+  :unexpected_paths
+  ["docs/observations/2026-09-12-bbtower-block-b/attempt8/cli_compare.clj"
+   "docs/observations/2026-09-12-bbtower-block-b/attempt8/namespace_wall.clj"
+   "docs/observations/2026-09-12-bbtower-block-b/attempt8/reassignments.md"]},
+ :committed true,
+ :receipt-file
+ "RECEIPT-PATH",
+ :ok true,
+ :transaction-version 1,
+ :verified
+ {:whole-files true,
+  :file-count 2,
+  :read-back-hashes
+  {"/var/tmp/forge/bbtower-fx/attempt8/cli-fixture/app_shell.clj"
+   "b70c87023465977f210ce4607bc3e3fcec4c0dae690cc315cc1ec4c1f9f9e8a0",
+   "/var/tmp/forge/bbtower-fx/attempt8/cli-fixture/source_reader.clj"
+   "90729aa7509fc517a3b104fc1a0fa6b5d96c6a51aa43db9e77360fde0523bf49"}},
+ :match-count 4}

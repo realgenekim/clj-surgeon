@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.forms-test

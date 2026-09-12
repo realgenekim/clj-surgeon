@@ -1,0 +1,1 @@
+{:runtime :jvm, :namespace clj-surgeon.mcp-schema-test, :elapsed-ms 33, :result {:test 6, :pass 33, :fail 0, :error 0, :type :summary}, :tmpdir "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-2851531-990d9245", :home "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-2851531-990d9245/home"}

@@ -1,0 +1,6 @@
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Ran 7 tests containing 31 assertions.
+0 failures, 0 errors.
+{:runtime :bb, :namespace clj-surgeon.mcp-telemetry-test, :elapsed-ms 6, :result {:test 7, :pass 31, :fail 0, :error 0, :type :summary}, :tmpdir "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-2862153-15b9a87e", :home "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-2862153-15b9a87e/home"}

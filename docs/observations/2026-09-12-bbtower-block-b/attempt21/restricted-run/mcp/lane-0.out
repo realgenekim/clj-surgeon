@@ -1,0 +1,36 @@
+
+Testing clj-surgeon.lane-manifest-test
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.namespace-split-test
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.mission-typist-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.mission-usage-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.failure-report-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.mission-git-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

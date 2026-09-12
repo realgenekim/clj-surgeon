@@ -1,0 +1,116 @@
+Makefile:23:MCP_STATE_DIR ?= $(HOME)/.local/state/clj-surgeon/mcp
+Makefile:76:MCP_DEV_STATE_DIR ?= $(HOME)/.local/state/clj-surgeon/dev-$(MCP_DEV_PORT)
+Makefile:86:CCLSP_CONFIG ?= $(HOME)/.local/state/clj-surgeon/cclsp.json
+Makefile:87:CCLSP_STATE_DIR ?= $(HOME)/.local/state/clj-surgeon/cclsp
+Makefile:632:	  grep -Fq '"rootDir" : "$(abspath $(WORKSPACE))"' "$(HOME)/.local/state/clj-surgeon/cclsp.json"; \
+resources/clj-surgeon-agent-routing.md:32:{"workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+resources/clj-surgeon-agent-routing.md:52:{"op": "alias_migration", "workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+resources/clj-surgeon-agent-routing.md:97:`/var/tmp/forge/round/r5-report.md`, and the September 8 row-1 ledger at
+resources/clj-surgeon-agent-routing.md:100:qualification. The p9–p12 September 8 regrades in `/var/tmp/forge/coldstart/ledger.txt`
+resources/clj-surgeon-agent-routing.md:112:{"workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
+resources/clj-kondo-admission.py:116:        os.path.expanduser("~/.local/state/clj-surgeon/clj-kondo-events.jsonl"),
+resources/clj-kondo-admission.py:134:    # (~/.local/state/clj-surgeon/pressure-status.json) -- direct-shell mode
+resources/clj-kondo-admission.py:139:        os.path.expanduser("~/.local/state/clj-surgeon/pressure-status.json"),
+resources/clj-kondo-admission.py:225:            os.path.expanduser("~/.local/state/clj-surgeon/clj-kondo.lock"),
+resources/clj-kondo-admission.py:234:            os.path.expanduser("~/.local/state/clj-surgeon/clj-kondo-priority.lock"),
+src/clj_surgeon/mcp_workspace.clj:81:   overrides the user home the directory hangs from, which is what test
+src/clj_surgeon/mcp_workspace.clj:88:     (str (io/file (or state-home (System/getProperty "user.home"))
+test/suite_concurrency_battery.sh:25:FX="${SUITE_BATTERY_FX:-/var/tmp/forge/suite-battery-fx}"
+test/suite_concurrency_battery.sh:29:export TMPDIR="${TMPDIR:-/var/tmp/forge}"
+src/clj_surgeon/namespace_split_io.clj:168:                     {:command [(str (System/getProperty "user.home") "/bin/clj-kondo") "--lint" (str temp)
+test/oracles/test_gate_slot.py:404:        self.assertEqual(Path('/var/tmp/forge/clj-surgeon-gate'),
+test/oracles/test_gate_slot.py:405:                         slot.slot_root_for('linux', '/var/tmp/forge', 1002))
+test/oracles/test_gate_slot.py:414:        long_tmpdir = Path('/var/tmp/forge') / ('t' * (120 - len('/var/tmp/forge/')))
+test/oracles/test_gate_slot.py:448:        root = Path('/var/tmp/forge') / ('r' * 90)
+test/oracles/test_gate_slot.py:473:        root = Path('/var/tmp/forge') / ('gate-mode-%s' % uuid.uuid4().hex)
+src/clj_surgeon/receipt_artifacts.clj:22:     $XDG_STATE_HOME/clj-surgeon/artifacts
+src/clj_surgeon/receipt_artifacts.clj:23:     $HOME/.local/state/clj-surgeon/artifacts
+src/clj_surgeon/receipt_artifacts.clj:32:      (some-> (System/getenv "XDG_STATE_HOME")
+src/clj_surgeon/receipt_artifacts.clj:34:      (str (System/getProperty "user.home") "/.local/state/clj-surgeon/artifacts")))
+src/clj_surgeon/receipt_artifacts.clj:42:   /var/tmp/forge -- a scratch directory THIS invocation already owns under a
+src/clj_surgeon/receipt_artifacts.clj:57:    (let [home (.getCanonicalPath (io/file (System/getProperty "user.home")))
+src/clj_surgeon/receipt_artifacts.clj:66:   and XDG_STATE_HOME unvalidated -- blank, relative, RAM-backed and another
+src/clj_surgeon/receipt_artifacts.clj:99:   case /var/tmp/forge, which already exists on every box that runs this
+src/clj_surgeon/receipt_artifacts.clj:103:        checked-vars ["CLJ_SURGEON_ARTIFACT_ROOT" "XDG_STATE_HOME"]]
+src/clj_surgeon/mcp_server.clj:23:  (str (io/file (System/getProperty "user.home")
+test/oracles/cell_b_oracle.sh:3:# Run from the ROOT of the worktree under test:  bash /var/tmp/forge/plan2/cellB/oracle.sh
+test/oracles/cell_b_oracle.sh:8:#   ORACLE_TMP    scratch dir (default: /var/tmp/forge/plan2/cellB/run-$$)
+test/oracles/cell_b_oracle.sh:14:TMP="${ORACLE_TMP:-/var/tmp/forge/plan2/cellB/run-$$}"
+test/oracles/b07_split_adapter.clj:6:(System/setProperty "java.io.tmpdir" (or (System/getenv "TMPDIR") "/var/tmp/forge"))
+bin/typist-run-test:26:  (1) key paths are fixed; the only seam is --keys-dir, fenced to /var/tmp/forge
+bin/typist-run-test:30:      under /var/tmp/forge or the worktree, and arm NW refuses outright unless
+bin/typist-run-test:31:      its warm workspace is under /var/tmp/forge (it runs codex unsandboxed,
+bin/typist-run-test:56:FENCE = "/var/tmp/forge"
+bin/typist-run-test:66:# lives under /var/tmp/forge the NW refusal never fired and this "offline"
+bin/typist-run-test:121:# produced -- not whatever else happens to sit in /var/tmp/forge/typist-real-fx.
+bin/typist-run-test:327:                       run_dir="/var/tmp/forge/typist-real-fx")
+bin/typist-run-test:528:    check("the offline PATH shim is installed under /var/tmp/forge",
+src/clj_surgeon/mcp_alias_migration.clj:1481:  `/var/tmp/forge/alias-migration-receipts/`. They are diagnostic, not transactional — the
+bin/typist-run:26:    seam is --keys-dir, refused unless it resolves under /var/tmp/forge/, and
+bin/typist-run:47:/var/tmp/forge/typist-fx/bench-<epoch>.edn. A provider with no key, or one whose
+bin/typist-run:122:# fence admits the worktree. On a checkout that lives inside /var/tmp/forge
+bin/typist-run:235:    base = "/var/tmp/forge"
+bin/typist-run:362:FX = os.environ.get("TYPIST_FX", "/var/tmp/forge/typist-fx")
+bin/typist-run:366:# caller-controlled key. The only seam is --keys-dir, fenced to /var/tmp/forge.
+bin/typist-run:369:TEST_KEYS_FENCE = "/var/tmp/forge"
+bin/typist-run:922:        "preimage": "/var/tmp/forge/typist-real-fx/preimage",
+bin/typist-run:935:        "preimage": "/var/tmp/forge/typist-real-fx/preimage-real-2",
+bin/typist-run:949:        "preimage": "/var/tmp/forge/typist-real-fx/preimage-real-2j",
+bin/typist-run:1045:# it writes only beneath /var/tmp/forge or the worktree: `TYPIST_FX` was read
+bin/typist-run:1060:# workspace resolves under /var/tmp/forge, so the blast radius of a
+bin/typist-run:1065:WRITE_FENCES = (os.path.realpath("/var/tmp/forge"), REPO_ROOT)
+bin/typist-run:1070:    fence. realpath, so a SYMLINK planted under /var/tmp/forge that points at
+bin/typist-run:1111:    claim containment we lack: the workspace must be under /var/tmp/forge --
+bin/typist-run:2232:    fenced to /var/tmp/forge) may redirect it, and only for the offline tests."""
+bin/typist-run:2723:# /var/tmp/forge/typist-real-fx. Recorded in every receipt as :sandbox "bypass",
+bin/typist-run:2731:# arm NW unless the warm workspace resolves under /var/tmp/forge: the fence we
+bin/typist-run:2898:COST_REPORT_DEFAULT_FX = ["/var/tmp/forge/typist-fx",
+bin/typist-run:2899:                          "/var/tmp/forge/typist-real-fx"]
+bin/typist-run:3147:                         "unless DIR resolves under /var/tmp/forge/. There is "
+src/clj_surgeon/mission.clj:174:  the root, SHA-256 of that path, under `<home>/.local/state/clj-surgeon/
+src/clj_surgeon/mission.clj:184:    (str (io/file (or state-home (System/getProperty "user.home"))
+src/clj_surgeon/mission.clj:893:         "  bin/mission run --spec-file owner-forms.edn --state-home H --receipt-dir /var/tmp/forge/typist-receipts\n"
+src/clj_surgeon/mission.clj:894:         "Structured stdin: bin/mission run --spec-file - --receipt-dir /var/tmp/forge/typist-receipts < owner-forms.edn\n"
+src/clj_surgeon/mission.clj:922:      "  bin/mission apply M-1 --workspace $WS --state-home $H --receipt-dir /var/tmp/forge/typist-receipts\n"
+src/clj_surgeon/core.clj:2213:                                  "Split undo/detail artifacts live outside workspace_root under /var/tmp/forge/namespace-split-receipts/. Profile commands can write logs or caches: inspect :workspace_status :unexpected_paths and :workspace_clean_except, clean generated artifacts separately, and retain final Git status. An external profile-file adds no workspace configuration."
+src/clj_surgeon/core.clj:2241:                       :examples  ["clj-surgeon :op :extract! :file src/state.clj :forms '[distill refine]' :to src/distillery.clj :receipt-out /var/tmp/forge/extract-receipts/request.edn"]
+src/clj_surgeon/core.clj:2251:                       :examples  ["clj-surgeon :op :undo-extract! :receipt /var/tmp/forge/extract-receipts/request.edn"]
+src/clj_surgeon/core.clj:2326:                       :examples  ["clj-surgeon :op :change! :spec-file - :receipt-out /var/tmp/forge/change-receipts/request.edn <<'EDN'\n{:changes [{:id :body-class :in [\"src/ui.clj\"] :forms [shell reader] :find \":body\" :do [:replace \":body.page\"] :expect {:matches 2 :each-form 1}}] :expect {:changes 1 :edits 2 :files 1}}\nEDN\n\nclj-surgeon :op :change! :spec-file - :receipt-out /var/tmp/forge/change-receipts/delete-request.edn <<'EDN'\n{:changes [{:id :obsolete :in [\"src/app.clj\"] :forms [old-handler old-test] :do [:delete true] :expect {:matches 2 :each-form 1}}] :expect {:changes 1 :edits 2 :files 1}}\nEDN"]
+src/clj_surgeon/core.clj:2337:                       :examples  ["clj-surgeon :op :undo-change! :receipt /var/tmp/forge/change-receipts/RETURNED-PATH.edn"]
+src/clj_surgeon/memory_battery_runner.clj:579:  (let [root (env "MEMBAT_ROOT" (str (System/getProperty "user.home")
+src/clj_surgeon/memory_battery_runner.clj:580:                                 "/.local/state/clj-surgeon/memory-battery"))
+src/clj_surgeon/workspace_onboarding.clj:452:                                             (System/getProperty "user.home")
+src/clj_surgeon/telemetry_events.clj:7:   /var/tmp/forge/<lane>-fx), and the usage collector reads a fixed list of
+src/clj_surgeon/telemetry_events.clj:72:   $HOME beside ~/.codex and ~/.claude, deliberately NOT under ~/.local/state,
+src/clj_surgeon/telemetry_events.clj:74:   live. Reads the `user.home` PROPERTY, not $HOME, so an isolated test JVM
+src/clj_surgeon/telemetry_events.clj:86:  (str (io/file (System/getProperty "user.home") ".clj-surgeon" "events.jsonl")))
+src/clj_surgeon/mcp_telemetry.clj:19:  (str (io/file (System/getProperty "user.home")
+test/clj_surgeon/artifact_boundary_support.clj:6:   `/private/var/tmp/forge/edit-clojure-receipts/...` while the assertion
+test/clj_surgeon/artifact_boundary_support.clj:7:   demanded a literal `/var/tmp/forge/` prefix. On darwin `/var/tmp` is a
+test/clj_surgeon/ns_isolation.clj:268:   throwaway `user.home` TEST-ISO-006 launches the JVM on: it is created by the
+test/clj_surgeon/lane_manifest.clj:31:                JVM is launched with `-Duser.home` AND `-Djava.io.tmpdir` on
+test/clj_surgeon/tmp_leak_support.clj:17:        JAVA_TOOL_OPTIONS=\"-Djava.io.tmpdir=/var/tmp/forge\" \\
+test/clj_surgeon/tmp_leak_support.clj:20:      changes it (`bb -Djava.io.tmpdir=/var/tmp/forge ...`). So
+test/clj_surgeon/tmp_leak_support.clj:76:  "The throwaway `user.home` a home-isolated run is launched on, as a child of
+test/clj_surgeon/tmp_leak_support.clj:119:              (str "was launched WITHOUT the isolated user.home this run "
+test/clj_surgeon/tmp_leak_support.clj:162:           (remove #(str/starts-with? % "-Duser.home="))
+test/clj_surgeon/tmp_leak_support.clj:177:                     [(str "-Duser.home=" (isolated-home tmp-root))])]
+test/clj_surgeon/tmp_leak_support.clj:302:     ;; property, so an isolated run that set only -Duser.home would leak
+test/clj_surgeon/tmp_leak_support.clj:362:                            (canonical (System/getProperty "user.home"))))
+test/clj_surgeon/tmp_leak_support.clj:365:                           :detail (format (str "user.home is %s but this run asked for "
+test/clj_surgeon/tmp_leak_support.clj:367:                                           (pr-str (System/getProperty "user.home"))
+test/clj_surgeon/mcp_test_runner.clj:283:        ;; @spec TEST-ISO-006 -- a run is launched on a throwaway user.home
+src/clj_surgeon/mcp_process.clj:58:      (str (System/getProperty "user.home")
+src/clj_surgeon/mcp_process.clj:59:           "/.local/state/clj-surgeon/clj-kondo.lock")))
+src/clj_surgeon/mcp_process.clj:64:      (str (System/getProperty "user.home")
+src/clj_surgeon/mcp_process.clj:65:           "/.local/state/clj-surgeon/clj-kondo-priority.lock")))
+src/clj_surgeon/mcp_process.clj:171:  (let [installed (str (System/getProperty "user.home")
+src/clj_surgeon/mcp_process.clj:187:      (str (System/getProperty "user.home")
+src/clj_surgeon/mcp_process.clj:188:           "/.local/state/clj-surgeon/clj-kondo-events.jsonl")))
+src/clj_surgeon/mcp_process.clj:193:      (str (System/getProperty "user.home")
+src/clj_surgeon/mcp_process.clj:194:           "/.local/state/clj-surgeon/pressure-status.json")))
+src/clj_surgeon/mcp_process.clj:230:                            (str (System/getProperty "user.home")
+src/clj_surgeon/mcp_process.clj:341:   (effective-path (System/getProperty "user.home") current))
+src/clj_surgeon/mcp_process.clj:342:  ([user-home current]
+src/clj_surgeon/mcp_process.clj:343:   (->> (concat [(str user-home "/bin")
+src/clj_surgeon/mcp_process.clj:344:                 (str user-home "/.local/bin")

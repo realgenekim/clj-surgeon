@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.rename-test

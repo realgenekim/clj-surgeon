@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.memory.journal-green-test, :runtime :bb, :mode "test", :started-at "2026-09-12T19:10:45.720353864Z", :elapsed-ms 1374, :status :test-failed, :result {:test 2, :pass 0, :fail 0, :error 2, :type :summary}}

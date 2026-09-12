@@ -1,0 +1,13 @@
+lanes: --ns -- 9 namespace(s), home-isolated false
+
+Testing clj-surgeon.intent-transaction-test
+
+Testing clj-surgeon.reader-eval-fence-test
+
+Testing clj-surgeon.mcp-relation-census-launcher-test
+
+Testing clj-surgeon.receipt-artifacts-boundary-test
+
+Testing clj-surgeon.mcp-feature-thread-sed-test
+
+Testing clj-surgeon.repository-hygiene-test

@@ -1,0 +1,11 @@
+standard-clj fix v0.29.0
+
+F /docs/observations/2026-09-12-bbtower-block-b/attempt23/fold_census.clj [5.25ms]
+✓ /docs/observations/2026-09-12-bbtower-block-b/attempt23/run_controls.clj [1.11ms]
+F /src/clj_surgeon/worktree_lifecycle_io.clj [27.74ms]
+✓ /test/clj_surgeon/cljc/merge_test.clj [2.28ms]
+✓ /test/clj_surgeon/cljc/split_test.clj [1.22ms]
+✓ /test/clj_surgeon/lane_manifest.clj [9.75ms]
+✓ /test/clj_surgeon/lane_manifest_test.clj [17.09ms]
+
+All 7 files formatted with Standard Clojure Style 👍 [73.47ms]

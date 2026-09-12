@@ -1,0 +1,12 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.forms-test
+
+Ran 24 tests containing 94 assertions.
+0 failures, 0 errors.
+
+Testing clj-surgeon.forms-test
+
+Ran 24 tests containing 94 assertions.
+0 failures, 0 errors.
+{:witnesses [clj-surgeon.lane-manifest-test/every-manifest-entry-exists-on-disk clj-surgeon.ns-isolation-test/bb-ceiling-reproduces-from-calibration-under-shipped-manifest clj-surgeon.ns-isolation-test/spec-bb-boundary-equals-registered-ceiling clj-surgeon.mcp-http-server-test/probe-output-degrades-without-deleting-the-verdict clj-surgeon.mcp-http-server-test/probe-servlet-bounds-the-actual-writer clj-surgeon.mcp-http-server-test/probe-spec-receipt-shape-matches-an-executed-probe clj-surgeon.mcp-hot-verify-test/probe-authorizes-the-requested-test-target-before-reload clj-surgeon.splice-envelope-test/bounded-input-path-encoding], :result {:test 8, :pass 930, :fail 0, :error 0}}

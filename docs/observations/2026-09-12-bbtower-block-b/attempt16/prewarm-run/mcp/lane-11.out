@@ -1,0 +1,18 @@
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.require-change-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.syntax-var-refs-test

@@ -11,14 +11,16 @@
    Supported platforms: :clj, :cljs, :cljc (reader conditionals).
    ClojureDart (:cljd) is not yet handled — other conditional platforms
    will need to be added to cljc/walk.clj's all-platforms-by-ext map."
-  (:require [clojure.test :refer [deftest is testing]]
-            [clj-surgeon.outline :as outline]
-            [clj-surgeon.analyze :as analyze]
-            [clj-surgeon.move :as move]
-            [clj-surgeon.extract :as extract]
-            [rewrite-clj.zip :as z]
-            [clojure.string :as str]
-            [clojure.java.io :as io]))
+  {:lane :fast}
+  (:require
+   [clj-surgeon.analyze :as analyze]
+   [clj-surgeon.extract :as extract]
+   [clj-surgeon.move :as move]
+   [clj-surgeon.outline :as outline]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]
+   [rewrite-clj.zip :as z]))
 
 ;; ============================================================
 ;; Helpers

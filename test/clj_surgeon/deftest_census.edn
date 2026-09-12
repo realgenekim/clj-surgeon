@@ -171,6 +171,103 @@
   clj-surgeon.admit-patch-test/verification-is-complete-only-when-every-check-ran-and-passed
   clj-surgeon.admit-patch-test/verification-none-runs-nothing-and-claims-nothing
   clj-surgeon.admit-patch-test/verification-runs-against-the-snapshot-before-anything-is-written
+  clj-surgeon.agent-routing-test/canonical-routing-refusals
+  clj-surgeon.agent-routing-test/doctrine-sections-are-required-in-every-block
+  clj-surgeon.agent-routing-test/informed-fanout-is-suspended
+  clj-surgeon.agent-routing-test/install-and-check-routing-end-to-end
+  clj-surgeon.agent-routing-test/install-preflights-all-targets-before-writing
+  clj-surgeon.agent-routing-test/malformed-managed-markers-refuse
+  clj-surgeon.agent-routing-test/plate-only-check-is-explicit-and-read-only
+  clj-surgeon.agent-routing-test/registry-controls-every-promise
+  clj-surgeon.agent-routing-test/routing-prep-artifacts-preserve-evidence
+  clj-surgeon.agent-routing-test/sol-r7-alias-operation
+  clj-surgeon.agent-routing-test/sol-r7-class-count
+  clj-surgeon.agent-routing-test/sol-r7-frozen-witness
+  clj-surgeon.agent-routing-test/sol-r7-readmission
+  clj-surgeon.agent-routing-test/split-baseline-exception-is-explicit
+  clj-surgeon.agent-routing-test/split-route-is-exact-contract-only
+  clj-surgeon.agent-routing-test/terminal-response-routing-is-conditional-on-complete-user-work
+  clj-surgeon.agent-routing-test/upsert-routing-block-preserves-unmanaged-bytes
+  clj-surgeon.agent-routing-test/working-tree-skill-matches-plate
+  clj-surgeon.alias-migration-test/a-local-named-like-a-policy-entry-is-not-a-collision
+  clj-surgeon.alias-migration-test/a-namespaced-keyword-through-the-alias-is-refused-typed
+  clj-surgeon.alias-migration-test/a-prefix-list-libspec-refuses-closed-and-names-the-file-and-form
+  clj-surgeon.alias-migration-test/a-qualified-symbol-in-binding-position-is-migrated
+  clj-surgeon.alias-migration-test/a-qualified-symbol-inside-a-metadata-value-is-migrated
+  clj-surgeon.alias-migration-test/a-quoted-fully-qualified-symbol-in-data-position-is-migrated
+  clj-surgeon.alias-migration-test/a-quoted-fully-qualified-symbol-keeps-full-qualification-in-lib-mode
+  clj-surgeon.alias-migration-test/a-quoted-fully-qualified-symbol-keeps-its-full-qualification
+  clj-surgeon.alias-migration-test/a-quoted-occurrence-refuses-closed-and-names-the-form
+  clj-surgeon.alias-migration-test/a-runtime-require-refuses-closed-and-names-the-file
+  clj-surgeon.alias-migration-test/a-site-in-a-non-selected-branch-keeps-the-old-require
+  clj-surgeon.alias-migration-test/a-site-in-a-non-selected-cljc-branch-refuses-closed
+  clj-surgeon.alias-migration-test/a-surviving-use-of-the-old-lib-adds-the-require-instead-of-replacing-it
+  clj-surgeon.alias-migration-test/a-syntax-quoted-reference-is-migrated-and-a-plain-quote-refuses
+  clj-surgeon.alias-migration-test/a-var-binding-vectors-left-hand-side-is-a-site-not-a-local
+  clj-surgeon.alias-migration-test/a-var-quoted-reference-is-migrated
+  clj-surgeon.alias-migration-test/acceptance-1-the-changed-file-set-equals-the-manifest-targets-exactly
+  clj-surgeon.alias-migration-test/acceptance-2-every-changed-file-equals-the-canonical-form-tree
+  clj-surgeon.alias-migration-test/acceptance-3-every-protected-decoy-region-survives-byte-identically
+  clj-surgeon.alias-migration-test/acceptance-4-every-migrated-file-binds-the-alias-it-now-uses
+  clj-surgeon.alias-migration-test/acceptance-5-every-declared-site-is-rewritten-with-the-new-var-name
+  clj-surgeon.alias-migration-test/acceptance-6-no-residue-of-the-old-lib-or-var-remains
+  clj-surgeon.alias-migration-test/ambiguous-ownership-refuses-closed-and-names-both-candidates
+  clj-surgeon.alias-migration-test/an-empty-scope-refuses-closed-and-states-the-count
+  clj-surgeon.alias-migration-test/an-exhausted-alias-policy-refuses-closed-and-names-the-collisions
+  clj-surgeon.alias-migration-test/binding-scope-plans-preserve-behavior-or-refuse-honestly
+  clj-surgeon.alias-migration-test/bystander-namespaces-are-never-planned
+  clj-surgeon.alias-migration-test/decoys-are-not-sites
+  clj-surgeon.alias-migration-test/discarded-libspec-option-values-are-not-live-import-authority
+  clj-surgeon.alias-migration-test/every-legal-spelling-of-the-var-is-discovered
+  clj-surgeon.alias-migration-test/exact-independent-binding-boundary-witnesses
+  clj-surgeon.alias-migration-test/expect-mismatch-refuses-closed-and-names-found-versus-expected
+  clj-surgeon.alias-migration-test/f1-alias-already-bound-to-the-target-namespace-is-reused
+  clj-surgeon.alias-migration-test/f1-alias-bound-to-a-different-namespace-still-refuses-and-names-it
+  clj-surgeon.alias-migration-test/f2-qualified-call-in-value-position-under-destructuring-defaults-migrates
+  clj-surgeon.alias-migration-test/f2-refusal-locator-names-a-line-not-a-docstring
+  clj-surgeon.alias-migration-test/lib-only-default-bystander-is-not-migration-authority
+  clj-surgeon.alias-migration-test/lib-only-default-refusal-keeps-no-executable-remedy
+  clj-surgeon.alias-migration-test/local-bindings-of-every-declared-shape-do-not-block-an-alias
+  clj-surgeon.alias-migration-test/metadata-named-recursive-function-refuses-without-rebinding
+  clj-surgeon.alias-migration-test/metadata-parameter-vector-preserves-local-authority-or-refuses
+  clj-surgeon.alias-migration-test/only-an-ns-level-alias-or-referred-name-is-a-collision
+  clj-surgeon.alias-migration-test/original-independent-fixtures-are-valid
+  clj-surgeon.alias-migration-test/per-file-alias-is-the-first-policy-entry-bound-to-nothing-in-that-file
+  clj-surgeon.alias-migration-test/qualified-destructuring-defaults-refuse-without-false-success
+  clj-surgeon.alias-migration-test/r2-a-referred-var-collision-falls-through-to-the-next-policy-entry
+  clj-surgeon.alias-migration-test/r2-a-referred-var-is-not-a-reusable-alias
+  clj-surgeon.alias-migration-test/r2-libspec-removal-preserves-comments-and-discard-forms
+  clj-surgeon.alias-migration-test/refer-repair-preserves-discarded-entries-and-metadata-containers
+  clj-surgeon.alias-migration-test/renamed-selected-refusal-sees-through-map-metadata
+  clj-surgeon.alias-migration-test/selected-refer-removal-preserves-comments-order-and-shadowed-forms
+  clj-surgeon.alias-migration-test/selected-refer-repair-respects-reader-branches-and-refusals
+  clj-surgeon.alias-migration-test/selected-refer-repair-retains-positive-controls-and-noop
+  clj-surgeon.alias-migration-test/selected-refer-repair-understands-metadata-symbol-identity
+  clj-surgeon.alias-migration-test/selected-renamed-refer-refuses-without-authorizing-a-different-migration
+  clj-surgeon.alias-migration-test/selected-var-migration-preserves-unrelated-referred-imports
+  clj-surgeon.alias-migration-test/totals-are-the-only-aggregate-the-planner-publishes
+  clj-surgeon.alias-migration-test/unrelated-renamed-refer-remains-at-the-old-library
+  clj-surgeon.alias-migration-test/unsupported-binding-scopes-refuse-without-changing-authority
+  clj-surgeon.alias-migration-test/with-redefs-over-several-vars-migrates-every-name
+  clj-surgeon.analyze-test/test-dep-tree-circular
+  clj-surgeon.analyze-test/test-dep-tree-leaf
+  clj-surgeon.analyze-test/test-dep-tree-real-file
+  clj-surgeon.analyze-test/test-dep-tree-simple
+  clj-surgeon.analyze-test/test-dep-tree-unrelated-excluded
+  clj-surgeon.analyze-test/test-extraction-closure
+  clj-surgeon.analyze-test/test-extraction-closure-guardrails-private
+  clj-surgeon.analyze-test/test-intra-ns-deps
+  clj-surgeon.analyze-test/test-intra-ns-deps-sees-reader-conditional-forms
+  clj-surgeon.analyze-test/test-intra-ns-deps-skips-declares
+  clj-surgeon.analyze-test/test-parse-ns-aliases
+  clj-surgeon.analyze-test/test-qualified-symbols
+  clj-surgeon.analyze-test/test-real-file-outline
+  clj-surgeon.analyze-test/test-required-aliases
+  clj-surgeon.analyze-test/test-symbols-in-form
+  clj-surgeon.analyze-test/test-topological-sort
+  clj-surgeon.analyze-test/test-topological-sort-cycles
+  clj-surgeon.analyze-test/test-topological-sort-includes-reader-conditional-defs
+  clj-surgeon.analyze-test/test-unreferenced-forms
   clj-surgeon.battery-ledger-test/a-corrupt-line-refuses-rather-than-shortening-the-ledger
   clj-surgeon.battery-ledger-test/a-failed-battery-is-still-recorded
   clj-surgeon.battery-ledger-test/a-failed-newest-receipt-refuses
@@ -197,6 +294,7 @@
   clj-surgeon.battery-parallel-test/a-serial-group-is-never-split-across-lanes
   clj-surgeon.battery-parallel-test/a-sharded-namespace-is-folded-back-into-one-run-before-any-fold
   clj-surgeon.battery-parallel-test/an-unmeasured-namespace-is-scheduled-first-and-still-runs
+  clj-surgeon.battery-parallel-test/bb-lane-command-honours-disk-tmpdir
   clj-surgeon.battery-parallel-test/darwin-memory-reader-is-the-documented-arithmetic
   clj-surgeon.battery-parallel-test/emit-edn-is-stripped-from-argv-wherever-it-appears
   clj-surgeon.battery-parallel-test/every-deftest-of-a-sharded-namespace-lands-in-exactly-one-shard
@@ -230,6 +328,105 @@
   clj-surgeon.census-pool-test/pooled-map-maps-every-input-exactly-once
   clj-surgeon.census-pool-test/the-default-pool-is-the-box
   clj-surgeon.census-pool-test/the-pool-is-bounded-and-outlives-nothing
+  clj-surgeon.cli-dispatch-test/background-proof-help-names-temp-root-requirement
+  clj-surgeon.cli-dispatch-test/change-cli-receipt-is-external-and-named
+  clj-surgeon.cli-dispatch-test/cli-bare-string-alias-dispatches
+  clj-surgeon.cli-dispatch-test/cli-bare-string-op-dispatches
+  clj-surgeon.cli-dispatch-test/cli-bare-string-op-help-resolves
+  clj-surgeon.cli-dispatch-test/cli-bare-string-unknown-op-clean-error
+  clj-surgeon.cli-dispatch-test/cli-child-honours-tmpdir-at-startup
+  clj-surgeon.cli-dispatch-test/cli-mv-refusal-is-edn-nonzero-and-preserves-source
+  clj-surgeon.cli-dispatch-test/cli-mv-with-deps-alias-executes-the-disclosed-group
+  clj-surgeon.cli-dispatch-test/cli-mv-with-deps-alias-injects-the-same-option-as-the-flag
+  clj-surgeon.cli-dispatch-test/cli-partial-retention-facts-and-publication
+  clj-surgeon.cli-dispatch-test/cli-physical-text-keeps-the-receipt-bound-and-edn-values
+  clj-surgeon.cli-dispatch-test/cli-recovery-commands-teach-the-complete-one-shot-contract
+  clj-surgeon.cli-dispatch-test/cli-relation-census-confirms-doors-against-every-scanned-file
+  clj-surgeon.cli-dispatch-test/cli-relation-census-names-the-calls-it-cannot-see-through
+  clj-surgeon.cli-dispatch-test/cli-relation-census-names-the-source-it-was-too-large-to-read
+  clj-surgeon.cli-dispatch-test/cli-relation-census-parses-threads-and-validates-doors
+  clj-surgeon.cli-dispatch-test/cli-relation-census-refuses-at-the-scanned-file-ceiling
+  clj-surgeon.cli-dispatch-test/cli-relation-census-reports-the-pool-that-ran
+  clj-surgeon.cli-dispatch-test/cli-replacement-apply-emits-a-read-back-verified-receipt
+  clj-surgeon.cli-dispatch-test/cli-structural-errors-are-edn-and-exit-nonzero
+  clj-surgeon.cli-dispatch-test/cli-up-help-discloses-development-guard
+  clj-surgeon.cli-dispatch-test/cli-up-refusal-is-nonzero-and-typed
+  clj-surgeon.cli-dispatch-test/cli-whole-split-plan-commit-and-refusal
+  clj-surgeon.cli-dispatch-test/every-registry-op-and-alias-resolves-as-bare-string
+  clj-surgeon.cli-dispatch-test/help-text-ops-all-resolve-anti-drift
+  clj-surgeon.cli-dispatch-test/run-error-lists-valid-ops
+  clj-surgeon.cli-dispatch-test/run-nil-and-junk-ops-print-error-no-throw
+  clj-surgeon.cli-dispatch-test/run-unknown-keyword-op-prints-error-map-no-throw
+  clj-surgeon.cli-dispatch-test/run-unknown-string-op-prints-error-map-no-throw
+  clj-surgeon.cli-dispatch-test/shared-receipt-encoder-loads-in-babashka
+  clj-surgeon.cli-dispatch-test/up-is-explicitly-development-only
+  clj-surgeon.cljc-existing-ops-test/test-closure-configure-logging
+  clj-surgeon.cljc-existing-ops-test/test-closure-resolve-posts
+  clj-surgeon.cljc-existing-ops-test/test-declares-in-cljc
+  clj-surgeon.cljc-existing-ops-test/test-dep-tree-configure-logging
+  clj-surgeon.cljc-existing-ops-test/test-dep-tree-resolve-posts
+  clj-surgeon.cljc-existing-ops-test/test-deps-dashboard-cljs-depends-on-shared
+  clj-surgeon.cljc-existing-ops-test/test-deps-io-independent-forms
+  clj-surgeon.cljc-existing-ops-test/test-deps-logging-cross-boundary
+  clj-surgeon.cljc-existing-ops-test/test-deps-no-platform-annotation
+  clj-surgeon.cljc-existing-ops-test/test-deps-posts-cross-boundary
+  clj-surgeon.cljc-existing-ops-test/test-extract-callers-scan-includes-cljc
+  clj-surgeon.cljc-existing-ops-test/test-extract-shared-forms-from-cljc
+  clj-surgeon.cljc-existing-ops-test/test-ls-clj-file-unchanged
+  clj-surgeon.cljc-existing-ops-test/test-ls-dashboard-cljc
+  clj-surgeon.cljc-existing-ops-test/test-ls-io-cljc
+  clj-surgeon.cljc-existing-ops-test/test-ls-logging-cljc
+  clj-surgeon.cljc-existing-ops-test/test-ls-mutations-cljc
+  clj-surgeon.cljc-existing-ops-test/test-ls-platforms-design-decision
+  clj-surgeon.cljc-existing-ops-test/test-ls-posts-cljc
+  clj-surgeon.cljc-existing-ops-test/test-ls-spliced-require-ns-detected
+  clj-surgeon.cljc-existing-ops-test/test-mv-past-reader-conditional
+  clj-surgeon.cljc-existing-ops-test/test-mv-platform-gated-form-returns-error
+  clj-surgeon.cljc-existing-ops-test/test-mv-shared-form-works
+  clj-surgeon.cljc-existing-ops-test/test-parse-ns-aliases-platform-require
+  clj-surgeon.cljc-existing-ops-test/test-parse-ns-aliases-shared-require
+  clj-surgeon.cljc-existing-ops-test/test-topo-dashboard-order
+  clj-surgeon.cljc-existing-ops-test/test-topo-logging-unified-sort
+  clj-surgeon.cljc-existing-ops-test/test-topo-posts-cross-boundary
+  clj-surgeon.cljc.analyze-test/analyze-cljc-round-trip-shape
+  clj-surgeon.cljc.analyze-test/analyze-pair-divergent-alias
+  clj-surgeon.cljc.analyze-test/analyze-pair-form-summaries
+  clj-surgeon.cljc.analyze-test/analyze-pair-refer-asymmetric
+  clj-surgeon.cljc.analyze-test/analyze-pair-shared-and-one-sided
+  clj-surgeon.cljc.merge-test/body-collision-default
+  clj-surgeon.cljc.merge-test/dom-divergent-merge
+  clj-surgeon.cljc.merge-test/identical-requires-merge
+  clj-surgeon.cljc.merge-test/missing-ns-throws
+  clj-surgeon.cljc.merge-test/no-requires-merge
+  clj-surgeon.cljc.merge-test/npm-asymmetric-merge
+  clj-surgeon.cljc.merge-test/ns-docstring-throws
+  clj-surgeon.cljc.merge-test/ns-name-mismatch-throws
+  clj-surgeon.cljc.merge-test/one-sided-clj-require
+  clj-surgeon.cljc.merge-test/one-sided-cljs-require
+  clj-surgeon.cljc.merge-test/only-clj-has-body-emits-clj-only-splice
+  clj-surgeon.cljc.merge-test/refer-asymmetric-merge
+  clj-surgeon.cljc.merge-test/unmatched-body-counts-emit-strict-split
+  clj-surgeon.cljc.merge-test/unsupported-ns-subform-throws
+  clj-surgeon.cljc.require-ops-test/add-clj-only-require
+  clj-surgeon.cljc.require-ops-test/add-cljc-require
+  clj-surgeon.cljc.require-ops-test/add-cljs-only-require
+  clj-surgeon.cljc.require-ops-test/add-npm-string-require
+  clj-surgeon.cljc.require-ops-test/add-require-to-source-without-require-form
+  clj-surgeon.cljc.require-ops-test/alias-collision-throws
+  clj-surgeon.cljc.require-ops-test/insert-into-require-can-preserve-unqualified-callers
+  clj-surgeon.cljc.require-ops-test/invalid-platform-throws
+  clj-surgeon.cljc.require-ops-test/sorted-require-insertion-preserves-existing-source-trivia
+  clj-surgeon.cljc.split-test/cli-wrapper-writes-both-requested-split-outputs
+  clj-surgeon.cljc.split-test/double-round-trip-converges
+  clj-surgeon.cljc.split-test/round-trip-collision-default
+  clj-surgeon.cljc.split-test/round-trip-dom-divergent
+  clj-surgeon.cljc.split-test/round-trip-identical-requires
+  clj-surgeon.cljc.split-test/round-trip-no-requires
+  clj-surgeon.cljc.split-test/round-trip-npm-asymmetric
+  clj-surgeon.cljc.split-test/round-trip-one-sided-clj
+  clj-surgeon.cljc.split-test/round-trip-one-sided-cljs
+  clj-surgeon.cljc.split-test/round-trip-refer-asymmetric
+  clj-surgeon.cljc.split-test/round-trip-unmatched-counts
   clj-surgeon.core-discovery-test/a-symlinked-root-is-descended-just-like-its-target
   clj-surgeon.core-discovery-test/an-empty-scan-names-what-it-searched-instead-of-throwing
   clj-surgeon.core-discovery-test/hostile-dir-never-reaches-a-shell-from-find-build-files
@@ -237,10 +434,226 @@
   clj-surgeon.core-discovery-test/no-source-file-hands-a-command-string-to-a-shell
   clj-surgeon.core-discovery-test/project-directories-containing-a-newline-are-discovered
   clj-surgeon.core-discovery-test/the-source-scan-is-not-vacuous
+  clj-surgeon.diagnostic-delta-test/diagnostic-delta-exhausts-the-pure-multiset-contract
+  clj-surgeon.diagnostic-delta-test/diagnostic-delta-is-order-independent
+  clj-surgeon.edit-dsl-test/builders-preserve-clojure-data-without-evaluation
+  clj-surgeon.edit-dsl-test/counted-builders-require-positive-integers
+  clj-surgeon.edit-dsl-test/edit-options-accept-exactly-one-authoring-surface
+  clj-surgeon.edit-dsl-test/edit-options-preserve-structured-sci-refusals
+  clj-surgeon.edit-dsl-test/every-builder-appends-one-existing-step-to-every-valid-path-shape
+  clj-surgeon.edit-dsl-test/every-builder-refuses-composition-after-a-terminal-step
+  clj-surgeon.edit-dsl-test/every-builder-refuses-invalid-paths
+  clj-surgeon.edit-dsl-test/expect-count-composes-with-terminal-transform
+  clj-surgeon.edit-dsl-test/line-refuses-values-that-cannot-identify-a-physical-source-line
+  clj-surgeon.edit-dsl-test/line-starts-a-query-at-the-top-level-form-containing-a-physical-line
+  clj-surgeon.edit-dsl-test/native-expression-compiles-to-the-existing-case-query
+  clj-surgeon.edit-dsl-test/native-expressions-retain-exact-literal-replacement-source
+  clj-surgeon.edit-dsl-test/real-program-peer-routes-compile-exactly
+  clj-surgeon.edit-dsl-test/replacement-builders-append-the-existing-terminal-steps
+  clj-surgeon.edit-dsl-test/sci-bounds-input-before-parsing
+  clj-surgeon.edit-dsl-test/sci-class-mapping-is-the-causal-constructor-capability
+  clj-surgeon.edit-dsl-test/sci-compilation-does-not-depend-on-the-callers-current-namespace
+  clj-surgeon.edit-dsl-test/sci-compiles-the-native-expression-without-host-setup
+  clj-surgeon.edit-dsl-test/sci-exposes-every-builder-and-no-unrelated-function
+  clj-surgeon.edit-dsl-test/sci-keeps-case-expansion-and-bounds-its-throw-path
+  clj-surgeon.edit-dsl-test/sci-provides-pure-clojure-for-structural-computation
+  clj-surgeon.edit-dsl-test/sci-refuses-host-interop-before-evaluation
+  clj-surgeon.edit-dsl-test/sci-requires-exactly-one-expression-and-a-query-result
+  clj-surgeon.edit-dsl-test/sci-transform-computes-from-the-selected-clojure-form
+  clj-surgeon.edit-dsl-test/sci-treats-replacement-code-as-inert-data
+  clj-surgeon.edit-dsl-test/transform-failure-is-structured-and-never-builds-a-plan
+  clj-surgeon.edit-dsl-test/transform-requires-a-function
+  clj-surgeon.edit-dsl-test/transform-runs-only-after-an-exact-selection
+  clj-surgeon.edit-test/agent-facing-surfaces-teach-the-native-edit-boundary
+  clj-surgeon.edit-test/cli-edit-plans-separately-and-existing-executor-applies
+  clj-surgeon.edit-test/cli-edit-refuses-unsafe-or-incomplete-requests-without-changing-bytes
+  clj-surgeon.edit-test/cli-expect-guarded-edit-refuses-then-applies-in-one-documented-call
+  clj-surgeon.edit-test/cli-literal-replacement-preserves-anonymous-function-spelling
+  clj-surgeon.edit-test/cli-native-edit-plan-equals-the-legacy-query-plan-and-applies
+  clj-surgeon.edit-test/cli-native-edit-refuses-before-source-or-plan-io
+  clj-surgeon.edit-test/cli-native-transform-derives-a-concrete-replayable-plan
+  clj-surgeon.edit-test/direct-edit-refuses-wrong-but-in-range-line-before-mutation
+  clj-surgeon.edit-test/direct-unnamed-roots-refuse-before-source-or-plan-io
+  clj-surgeon.edit-test/edit-help-distinguishes-the-default-plan-from-the-guarded-one-call-route
+  clj-surgeon.edit-test/edit-is-a-guarded-facade-over-the-existing-planner
+  clj-surgeon.edit-test/edit-preserves-existing-lens-refusals
+  clj-surgeon.edit-test/edit-refuses-a-plan-path-that-is-not-an-edn-artifact
+  clj-surgeon.edit-test/edit-requires-an-existing-terminal-transform
+  clj-surgeon.edit-test/expect-help-documents-the-optional-one-call-guarded-edit
+  clj-surgeon.edit-test/expect-refuses-a-computed-transform-without-reviewing-its-after-state
+  clj-surgeon.edit-test/expect-refuses-undeclared-metadata-and-accepts-declared-metadata
+  clj-surgeon.edit-test/expect-row-1-omitting-expect-is-todays-plan-only-behavior
+  clj-surgeon.edit-test/expect-row-4-mismatch-refuses-and-changes-nothing
+  clj-surgeon.edit-test/expect-row-5-unparseable-expect-refuses-before-source-or-plan-io
+  clj-surgeon.edit-test/expect-row-6-selection-refusals-keep-their-existing-error-types
+  clj-surgeon.edit-test/expect-row-7-getter-only-pipeline-keeps-the-existing-refusal
+  clj-surgeon.edit-test/expect-row-8-whitespace-matches-but-undeclared-comments-refuse
+  clj-surgeon.edit-test/expect-row-9-apply-failure-keeps-the-existing-executor-refusal
+  clj-surgeon.edit-test/expect-rows-2-and-3-matching-expect-saves-and-applies-in-one-call
+  clj-surgeon.edit-test/expect-verifies-and-repairs-a-concurrently-changed-plan-artifact
+  clj-surgeon.edit-test/expect-with-line-root-refuses-and-names-the-owner-alternative
+  clj-surgeon.edit-test/line-root-plan-only-and-expect-mismatch-never-change-source
+  clj-surgeon.edit-test/literal-replacement-preserves-multiline-layout-comments-and-reader-syntax
+  clj-surgeon.edit-test/literal-replacement-preserves-shorthand-inside-a-large-conditional
+  clj-surgeon.edit-test/matching-expect-applies-without-plan-artifact-bookkeeping
+  clj-surgeon.edit-test/parse-args-preserves-native-edit-expression-verbatim
+  clj-surgeon.edit-test/parse-args-preserves-the-expect-form-verbatim
+  clj-surgeon.edit-test/plan-only-edit-still-requires-a-plan-artifact
+  clj-surgeon.edit-test/public-positional-arguments-remain-read-only-evidence
+  clj-surgeon.edit-test/source-overrides-never-invent-spelling-for-computed-replacements
+  clj-surgeon.edn-config-integration-test/test-auto-detection-coexists-with-config
+  clj-surgeon.edn-config-integration-test/test-cli-subprocess-with-edn-config
+  clj-surgeon.edn-config-integration-test/test-cli-subprocess-without-config
+  clj-surgeon.edn-config-integration-test/test-kind-only-gets-legacy-extraction
+  clj-surgeon.edn-config-integration-test/test-metabase-macros-end-to-end
+  clj-surgeon.edn-config-integration-test/test-multi-repo-closest-config-wins
+  clj-surgeon.edn-config-integration-test/test-no-config-baseline
+  clj-surgeon.edn-config-integration-test/test-sci-fn-extracts-number
+  clj-surgeon.edn-config-integration-test/test-sci-stdlib-extractors
+  clj-surgeon.edn-config-integration-test/test-simple-kind-only-config
+  clj-surgeon.extract-header-test/alias-allocation-is-stable-and-collision-free
+  clj-surgeon.extract-header-test/callerless-extraction-needs-no-source-reference
+  clj-surgeon.extract-header-test/complete-namespace-qualifier-retains-a-libspec
+  clj-surgeon.extract-header-test/copy-all-is-a-conservative-byte-preserving-require-policy
+  clj-surgeon.extract-header-test/namespace-name-metadata-and-other-clauses-survive-header-compilation
+  clj-surgeon.extract-header-test/namespace-without-requires-compiles-without-an-empty-clause
+  clj-surgeon.extract-header-test/raw-text-lookalikes-do-not-retain-a-dependency
+  clj-surgeon.extract-header-test/refer-all-is-retained-conservatively
+  clj-surgeon.extract-header-test/source-callers-produce-one-deduplicated-sorted-refer-list
+  clj-surgeon.extract-header-test/target-header-keeps-only-proved-dependency-namespaces
+  clj-surgeon.extract-header-test/unprovable-require-shapes-refuse-without-candidates
+  clj-surgeon.extract-test/pure-compile-plan-can-promote-required-visibility-in-one-pass
+  clj-surgeon.extract-test/pure-compile-plan-separates-conservative-movement-from-minimization
+  clj-surgeon.extract-test/test-execute-adds-require-to-source
+  clj-surgeon.extract-test/test-execute-comment-header-moves-with-form
+  clj-surgeon.extract-test/test-execute-creates-new-file
+  clj-surgeon.extract-test/test-execute-creates-subdirectory
+  clj-surgeon.extract-test/test-execute-dialect-split-layout
+  clj-surgeon.extract-test/test-execute-does-not-consume-the-next-form-without-a-blank-line
+  clj-surgeon.extract-test/test-execute-refuses-a-source-that-changed-after-planning
+  clj-surgeon.extract-test/test-execute-refuses-an-existing-target-without-changing-either-file
+  clj-surgeon.extract-test/test-execute-removes-from-source
+  clj-surgeon.extract-test/test-execute-rolls-back-the-created-target-when-source-commit-fails
+  clj-surgeon.extract-test/test-execute-topological-order
+  clj-surgeon.extract-test/test-extraction-receipt-undo-restores-the-original-source
+  clj-surgeon.extract-test/test-extraction-undo-refuses-a-modified-target-before-writing
+  clj-surgeon.extract-test/test-file-path->ns-name-cljs-cljc-extensions
+  clj-surgeon.extract-test/test-file-path->ns-name-dialect-dirs
+  clj-surgeon.extract-test/test-file-path->ns-name-no-deps-edn
+  clj-surgeon.extract-test/test-file-path->ns-name-standard-layout
+  clj-surgeon.extract-test/test-plan-basic
+  clj-surgeon.extract-test/test-plan-dialect-split-layout
+  clj-surgeon.extract-test/test-plan-missing-form
+  clj-surgeon.extract-test/test-plan-omits-unused-requires
+  clj-surgeon.extract-test/test-plan-proves-quoted-var-callers-without-textual-lookalikes
+  clj-surgeon.extract-test/test-production-extraction-keeps-only-used-requires-and-avoids-alias-collision
+  clj-surgeon.extract-test/test-production-shaped-adjacent-extraction-is-parseable-and-reversible
+  clj-surgeon.extract-test/test-source-caller-gets-one-runtime-valid-refer-entry
+  clj-surgeon.extract-test/test-source-paths-from-deps-edn
+  clj-surgeon.extract-test/test-unsupported-require-minimization-refuses-before-writing
+  clj-surgeon.failure-report-test/issue-drafts-omit-source-prompts-urls-and-paths
+  clj-surgeon.failure-report-test/off-laptop-reporting-returns-data-without-writing
+  clj-surgeon.failure-report-test/report-failure-deduplicates-a-local-bead-by-fingerprint
   clj-surgeon.fast-lane-isolation-test/every-home-spelling-agrees-so-a-child-cannot-escape
   clj-surgeon.fast-lane-isolation-test/no-fast-lane-namespace-roots-a-fixture-outside-its-own-tmpdir
   clj-surgeon.fast-lane-isolation-test/the-fast-lane-home-is-a-throwaway-inside-the-run-root
   clj-surgeon.fast-lane-isolation-test/the-fast-lane-tmpdir-is-a-private-per-run-root
+  clj-surgeon.file-ops-test/atomic-write-preserves-existing-file-permissions
+  clj-surgeon.fix-declares-test/execute-reuses-the-frozen-owner-plan-after-the-first-analysis
+  clj-surgeon.fix-declares-test/planning-authority-loss-leaves-source-unchanged
+  clj-surgeon.fix-declares-test/test-execute-multiple
+  clj-surgeon.fix-declares-test/test-execute-pullable
+  clj-surgeon.fix-declares-test/test-execute-simple
+  clj-surgeon.fix-declares-test/test-execute-skips-unsafe
+  clj-surgeon.fix-declares-test/test-execute-stale-declare
+  clj-surgeon.fix-declares-test/test-no-declares
+  clj-surgeon.fix-declares-test/test-plan-mixed
+  clj-surgeon.fix-declares-test/test-plan-pullable
+  clj-surgeon.fix-declares-test/test-plan-simple
+  clj-surgeon.fix-declares-test/test-plan-unsafe
+  clj-surgeon.fix-declares-test/test-stale-declare
+  clj-surgeon.forms-test/test-classify-core-forms
+  clj-surgeon.forms-test/test-classify-deftest
+  clj-surgeon.forms-test/test-classify-explicit-aliases
+  clj-surgeon.forms-test/test-classify-namespace-qualified-auto-detection
+  clj-surgeon.forms-test/test-classify-no-false-positives-on-slash
+  clj-surgeon.forms-test/test-classify-non-defining-forms
+  clj-surgeon.forms-test/test-defining-form?
+  clj-surgeon.forms-test/test-has-arglists?
+  clj-surgeon.forms-test/test-init-from-file-closest-config-wins
+  clj-surgeon.forms-test/test-init-from-file-malformed-edn-throws
+  clj-surgeon.forms-test/test-init-from-file-no-config-yields-empty
+  clj-surgeon.forms-test/test-init-from-file-non-string-key-throws
+  clj-surgeon.forms-test/test-init-from-file-reads-real-config
+  clj-surgeon.forms-test/test-init-from-file-walks-up-from-deep-file
+  clj-surgeon.forms-test/test-precedence-core-beats-project
+  clj-surgeon.forms-test/test-precedence-explicit-beats-project
+  clj-surgeon.forms-test/test-precedence-project-beats-ns-qualified-split
+  clj-surgeon.forms-test/test-private-form-bug-regression
+  clj-surgeon.forms-test/test-private-form?
+  clj-surgeon.forms-test/test-project-aliases-classify
+  clj-surgeon.forms-test/test-project-aliases-empty-by-default
+  clj-surgeon.forms-test/test-project-aliases-still-allows-tier-4-passthrough
+  clj-surgeon.forms-test/test-spec-returns-kind-for-core-forms
+  clj-surgeon.forms-test/test-spec-returns-project-spec-with-fields
+  clj-surgeon.help-test/cat-help-documents-the-one-shot-read-contract
+  clj-surgeon.help-test/cli-alias-dispatch-works
+  clj-surgeon.help-test/cli-dash-h-flag-shows-help
+  clj-surgeon.help-test/cli-documented-string-op-dispatch-works
+  clj-surgeon.help-test/cli-help-flag-shows-help
+  clj-surgeon.help-test/cli-help-unknown-op-is-an-error
+  clj-surgeon.help-test/cli-no-args-shows-help
+  clj-surgeon.help-test/cli-normal-dispatch-works
+  clj-surgeon.help-test/cli-op-help-for-alias
+  clj-surgeon.help-test/cli-op-help-name-shows-global-help
+  clj-surgeon.help-test/cli-op-help-shows-details
+  clj-surgeon.help-test/cli-op-help-with-pair
+  clj-surgeon.help-test/cli-unknown-op-shows-error
+  clj-surgeon.help-test/cli-version-is-a-zero-exit-edn-orientation-call
+  clj-surgeon.help-test/dispatch-keyword-op-ls-tree
+  clj-surgeon.help-test/dispatch-string-op-ls-tree-documented-usage
+  clj-surgeon.help-test/dispatch-unknown-ops-return-error-maps-not-exceptions
+  clj-surgeon.help-test/edit-and-apply-help-do-not-teach-redundant-plan-rereads
+  clj-surgeon.help-test/extraction-help-teaches-the-failure-atomic-and-guarded-undo-contract
+  clj-surgeon.help-test/find-subform-help-teaches-one-shot-file-wide-structural-match
+  clj-surgeon.help-test/global-help-contains-the-preferred-caller-surface
+  clj-surgeon.help-test/global-help-excludes-aliases
+  clj-surgeon.help-test/global-help-op-names-resolve
+  clj-surgeon.help-test/lens-help-teaches-the-getter-updater-algebra-and-review-boundary
+  clj-surgeon.help-test/mv-help-documents-guard-and-dependency-alias
+  clj-surgeon.help-test/op-help-keeps-compatibility-aliases-secondary
+  clj-surgeon.help-test/op-help-shows-optional-args
+  clj-surgeon.help-test/op-help-shows-required-args
+  clj-surgeon.help-test/parse-args-basic-key-value-pairs
+  clj-surgeon.help-test/parse-args-dash-h-standalone
+  clj-surgeon.help-test/parse-args-edn-vector-arg
+  clj-surgeon.help-test/parse-args-empty
+  clj-surgeon.help-test/parse-args-help-before-op
+  clj-surgeon.help-test/parse-args-help-flag-standalone
+  clj-surgeon.help-test/parse-args-help-stripped-from-pairs
+  clj-surgeon.help-test/parse-args-help-with-op
+  clj-surgeon.help-test/parse-args-multiple-args
+  clj-surgeon.help-test/parse-args-preserves-contains-as-literal-text
+  clj-surgeon.help-test/parse-args-preserves-query-for-one-bounded-lens-parser
+  clj-surgeon.help-test/parse-args-preserves-structural-forms-for-the-lens-parser
+  clj-surgeon.help-test/parse-args-then-resolve-op-documented-usage
+  clj-surgeon.help-test/parse-args-with-deps-boolean
+  clj-surgeon.help-test/parse-val-booleans
+  clj-surgeon.help-test/parse-val-edn-maps
+  clj-surgeon.help-test/parse-val-edn-vectors
+  clj-surgeon.help-test/parse-val-keywords
+  clj-surgeon.help-test/parse-val-preserves-numeric-strings-for-operation-specific-meaning
+  clj-surgeon.help-test/parse-val-strings-pass-through
+  clj-surgeon.help-test/registry-entries-have-required-keys
+  clj-surgeon.help-test/registry-has-all-ops
+  clj-surgeon.help-test/registry-pairs-are-symmetric
+  clj-surgeon.help-test/replace-subform-apply-help-forbids-plan-editing
+  clj-surgeon.help-test/replace-subform-help-teaches-one-shot-sibling-context
+  clj-surgeon.help-test/resolve-op-aliases
+  clj-surgeon.help-test/resolve-op-canonical-ops
+  clj-surgeon.help-test/resolve-op-non-keyword-junk-is-nil-not-crash
+  clj-surgeon.help-test/resolve-op-string-ops
+  clj-surgeon.help-test/resolve-op-unknown
   clj-surgeon.helper-extraction-test/a-bare-symbol-referred-from-two-namespaces-refuses
   clj-surgeon.helper-extraction-test/a-caller-that-binds-every-policy-entry-refuses
   clj-surgeon.helper-extraction-test/a-caller-that-refers-a-retained-name-it-never-uses-is-mixed
@@ -285,6 +698,100 @@
   clj-surgeon.insert-forms-test/insert-forms-other-top-level-hashes
   clj-surgeon.insert-forms-test/insert-forms-parse-stages
   clj-surgeon.insert-forms-test/insert-forms-payload-count-and-order
+  clj-surgeon.insertion-gap-test/named-owner-insertion-accepts-mechanically-owned-comments
+  clj-surgeon.insertion-gap-test/named-owner-insertion-preserves-existing-gap-exactly-once
+  clj-surgeon.insertion-gap-test/named-owner-insertion-preserves-leading-comment-ownership
+  clj-surgeon.insertion-gap-test/named-owner-insertion-preserves-same-line-trailing-comment-ownership
+  clj-surgeon.insertion-gap-test/named-owner-insertion-refuses-unowned-detached-top-level-source
+  clj-surgeon.insertion-gap-test/nested-insertion-uses-anchor-line-indentation-after-earlier-blank-line
+  clj-surgeon.insertion-gap-test/subform-comment-gap-still-refuses
+  clj-surgeon.install-test/benchmark-agent-skill-targets-are-bounded-and-composable
+  clj-surgeon.install-test/cli-package-identity-covers-bundled-splice-source
+  clj-surgeon.install-test/development-install-is-explicitly-branch-coupled
+  clj-surgeon.install-test/install-cli-default-is-relative-to-home
+  clj-surgeon.install-test/install-cli-supports-a-custom-path-with-spaces
+  clj-surgeon.install-test/install-help-makes-both-destinations-explicit
+  clj-surgeon.install-test/installed-cli-loads-splice-verbs-outside-the-checkout
+  clj-surgeon.install-test/installers-refuse-unrelated-destinations-without-changing-them
+  clj-surgeon.install-test/mcp-reload-manifest-covers-the-routed-runtime
+  clj-surgeon.install-test/repository-agent-skill-entrances-do-not-drift
+  clj-surgeon.install-test/skill-installers-refuse-unrelated-symlinks-and-receipts
+  clj-surgeon.install-test/stable-install-isolates-cli-and-both-agent-skills
+  clj-surgeon.install-test/the-install-stamp-is-the-commit-the-test-passed-down
+  clj-surgeon.intent-transaction-test/addressed-delete-owns-only-attached-comments-and-round-trips
+  clj-surgeon.intent-transaction-test/addressed-delete-protects-the-namespace-form
+  clj-surgeon.intent-transaction-test/assoc-entry-matches-semantic-maps-and-preserves-comments
+  clj-surgeon.intent-transaction-test/assoc-entry-refuses-an-existing-key-before-producing-source
+  clj-surgeon.intent-transaction-test/assoc-entry-semantic-ancestor-selects-one-comment-bearing-map
+  clj-surgeon.intent-transaction-test/binding-rename-preserves-external-keys-across-several-owners
+  clj-surgeon.intent-transaction-test/binding-rename-refuses-comment-sensitive-destructuring
+  clj-surgeon.intent-transaction-test/binding-rename-refuses-stale-count-ambiguity-and-capture
+  clj-surgeon.intent-transaction-test/boundary-insertion-still-refuses-ambiguous-overlaps
+  clj-surgeon.intent-transaction-test/canonical-effect-identity-binds-lossless-effect-provenance
+  clj-surgeon.intent-transaction-test/canonical-effect-identity-does-not-change-receipt-or-inverse
+  clj-surgeon.intent-transaction-test/canonical-effect-identity-ignores-untouched-scoped-files
+  clj-surgeon.intent-transaction-test/canonical-effect-identity-is-exact-and-permutation-invariant
+  clj-surgeon.intent-transaction-test/canonical-effect-identity-orders-all-four-effect-permutations
+  clj-surgeon.intent-transaction-test/canonical-effect-identity-refuses-impossible-kind-evidence
+  clj-surgeon.intent-transaction-test/canonical-effect-identity-refuses-unproven-or-outside-root-input
+  clj-surgeon.intent-transaction-test/change-and-undo-help-teach-one-shot-guarded-materialization
+  clj-surgeon.intent-transaction-test/change-cli-dogfoods-one-shot-multi-file-apply-and-exact-undo
+  clj-surgeon.intent-transaction-test/change-cli-loads-one-spec-document-from-file-or-stdin
+  clj-surgeon.intent-transaction-test/change-cli-previews-real-files-and-refuses-with-nonzero-exit
+  clj-surgeon.intent-transaction-test/change-help-teaches-one-plan-materialization
+  clj-surgeon.intent-transaction-test/change-preview-canonicalizes-one-physical-file-across-intents
+  clj-surgeon.intent-transaction-test/change-preview-reads-each-file-once-and-omits-full-future-source
+  clj-surgeon.intent-transaction-test/commit-protocol-makes-rollback-failure-explicit
+  clj-surgeon.intent-transaction-test/commit-protocol-refuses-stale-source-before-any-write
+  clj-surgeon.intent-transaction-test/commit-protocol-reports-recovery-required-without-clobbering-concurrent-source
+  clj-surgeon.intent-transaction-test/commit-protocol-rolls-back-a-partial-write
+  clj-surgeon.intent-transaction-test/commit-protocol-rolls-back-after-read-back-corruption
+  clj-surgeon.intent-transaction-test/commit-protocol-updates-and-verifies-every-file
+  clj-surgeon.intent-transaction-test/compiles-one-model-plan-into-heterogeneous-edits
+  clj-surgeon.intent-transaction-test/compiles-scoped-find-replace-changes-as-one-transaction
+  clj-surgeon.intent-transaction-test/defmethod-owner-addresses-one-name-and-dispatch-without-lines
+  clj-surgeon.intent-transaction-test/defmethod-selector-scans-past-discarded-and-metadata-dispatches
+  clj-surgeon.intent-transaction-test/deletes-several-exact-owners-as-one-compiled-change
+  clj-surgeon.intent-transaction-test/durable-receipt-round-trips-and-restores-shape-changing-edits
+  clj-surgeon.intent-transaction-test/equifinal-effect-decompositions-retain-distinct-identities
+  clj-surgeon.intent-transaction-test/exact-intents-do-not-cascade-or-match-textual-lookalikes
+  clj-surgeon.intent-transaction-test/expect-matched-counts-sites-inside-one-edited-form-as-addressed
+  clj-surgeon.intent-transaction-test/expect-matched-lists-the-matched-sites-a-transaction-did-not-address
+  clj-surgeon.intent-transaction-test/expect-matched-refuses-a-pattern-that-is-not-one-complete-form
+  clj-surgeon.intent-transaction-test/expect-matched-refuses-a-stale-basis-before-any-write
+  clj-surgeon.intent-transaction-test/expect-matched-reports-zero-when-the-transaction-addressed-everything
+  clj-surgeon.intent-transaction-test/expect-matched-separates-an-unreadable-file-from-an-unusable-pattern
+  clj-surgeon.intent-transaction-test/expect-matched-separates-two-sites-that-share-one-line
+  clj-surgeon.intent-transaction-test/formatter-coalescing-keeps-logical-and-physical-counts-independent
+  clj-surgeon.intent-transaction-test/guarded-sibling-insertion-preserves-collection-style
+  clj-surgeon.intent-transaction-test/guarded-sibling-insertion-refuses-comment-bearing-or-invalid-gaps
+  clj-surgeon.intent-transaction-test/guarded-top-level-insertion-targets-one-owner-without-repeating-it
+  clj-surgeon.intent-transaction-test/independent-change-permutations-compile-and-invert-identically
+  clj-surgeon.intent-transaction-test/insertion-gap-uses-opposite-newline-style-before-space-fallback
+  clj-surgeon.intent-transaction-test/intent-order-does-not-change-compiled-future-files
+  clj-surgeon.intent-transaction-test/intents-match-only-original-snapshots-and-never-cascade
+  clj-surgeon.intent-transaction-test/inverse-refuses-stale-corrupt-and-unsupported-receipts
+  clj-surgeon.intent-transaction-test/matches-lossless-syntax-while-ignoring-whitespace
+  clj-surgeon.intent-transaction-test/metadata-reader-syntax-and-token-spelling-are-exact
+  clj-surgeon.intent-transaction-test/namespace-owner-is-an-exact-structural-scope
+  clj-surgeon.intent-transaction-test/owner-boundary-insertion-is-disjoint-from-interior-replacements
+  clj-surgeon.intent-transaction-test/public-docs-preserve-the-one-shot-transaction-contract
+  clj-surgeon.intent-transaction-test/public-mutation-boundary-refuses-before-changing-source-or-receipt
+  clj-surgeon.intent-transaction-test/real-program-ui-plan-compiles-six-coordinated-edits-once
+  clj-surgeon.intent-transaction-test/receipt-publication-failure-restores-source-and-preserves-old-receipt
+  clj-surgeon.intent-transaction-test/refuses-every-contract-error-as-data
+  clj-surgeon.intent-transaction-test/refuses-overlapping-intents-before-producing-future-source
+  clj-surgeon.intent-transaction-test/scoped-change-cli-applies-owner-guarded-edits-and-undoes-once
+  clj-surgeon.intent-transaction-test/scoped-change-cli-refuses-wrong-owner-distribution-without-writing
+  clj-surgeon.intent-transaction-test/scoped-change-guards-prove-owner-and-file-distribution
+  clj-surgeon.intent-transaction-test/scoped-changes-refuse-every-field-and-owner-error-as-data
+  clj-surgeon.intent-transaction-test/single-form-cardinality-refusals-report-syntax-units-without-source
+  clj-surgeon.intent-transaction-test/staged-future-sources-become-the-hashed-reversible-transaction
+  clj-surgeon.jvm-error-test/bb-edn-names-the-floor-the-spellings-were-measured-against
+  clj-surgeon.jvm-error-test/no-babashka-reachable-source-names-a-class-sci-lacks
+  clj-surgeon.jvm-error-test/the-closure-reaches-the-namespace-that-actually-broke
+  clj-surgeon.jvm-error-test/the-predicates-answer-a-real-overflow
+  clj-surgeon.jvm-error-test/the-scanner-can-actually-see-the-defect
   clj-surgeon.lane-manifest-test/a-false-redirection-to-an-existing-target-is-refused-by-name
   clj-surgeon.lane-manifest-test/a-namespace-in-the-tree-but-absent-from-the-census-is-named
   clj-surgeon.lane-manifest-test/an-exclusion-naming-an-unreadable-runner-fails-closed
@@ -301,6 +808,7 @@
   clj-surgeon.lane-manifest-test/loaded-namespaces-carry-their-lane-at-runtime
   clj-surgeon.lane-manifest-test/no-fast-lane-namespace-spells-a-child-process
   clj-surgeon.lane-manifest-test/no-living-prose-still-calls-the-bb-lane-by-its-old-name
+  clj-surgeon.lane-manifest-test/runtime-portability-controls-cover-every-assignment
   clj-surgeon.lane-manifest-test/the-corpus-only-ever-grows-and-the-arithmetic-is-shown
   clj-surgeon.lane-manifest-test/the-landing-gate-refuses-a-stale-battery-receipt
   clj-surgeon.lane-manifest-test/the-landing-gate-runs-both-the-merge-gate-and-the-battery-tripwire
@@ -312,6 +820,53 @@
   clj-surgeon.lane-manifest-test/the-rename-scanner-cannot-see-a-bb-less-mention-and-says-so
   clj-surgeon.lane-manifest-test/the-runner-refuses-an-undeclared-namespace
   clj-surgeon.lane-manifest-test/the-runner-resolves-a-declared-lane
+  clj-surgeon.lens-query-test/agent-facing-surfaces-teach-the-canonical-clojure-roots
+  clj-surgeon.lens-query-test/cli-lens-and-q-read-plan-and-apply-the-documented-expression
+  clj-surgeon.lens-query-test/cli-q-span-plan-applies-through-the-existing-verified-executor
+  clj-surgeon.lens-query-test/containing-line-plan-changes-only-the-exact-leaf-and-preserves-bytes
+  clj-surgeon.lens-query-test/containing-line-root-does-not-hide-ambiguity-inside-the-owner
+  clj-surgeon.lens-query-test/containing-line-root-refuses-gaps-invalid-roots-and-overlapping-owners
+  clj-surgeon.lens-query-test/containing-line-root-selects-one-unnamed-top-level-owner
+  clj-surgeon.lens-query-test/current-clj-surgeon-is-queryable-by-its-own-algebra
+  clj-surgeon.lens-query-test/duplicate-same-line-values-keep-distinct-complete-file-addresses
+  clj-surgeon.lens-query-test/initializer-selects-def-right-hand-side-without-evaluating-it
+  clj-surgeon.lens-query-test/invalid-query-matrix-refuses-with-stable-local-evidence
+  clj-surgeon.lens-query-test/invalid-span-grammar-and-replacement-arity-refuse-before-planning
+  clj-surgeon.lens-query-test/lens-expression-is-a-getter-and-a-planned-setter
+  clj-surgeon.lens-query-test/named-form-selection-sees-reader-conditional-branches
+  clj-surgeon.lens-query-test/navigation-is-semantic-composable-and-auditable
+  clj-surgeon.lens-query-test/planned-setter-refuses-zero-many-invalid-and-misplaced-transforms
+  clj-surgeon.lens-query-test/query-pipeline-addresses-general-adjacent-syntax
+  clj-surgeon.lens-query-test/reads-preserve-zero-and-many-as-bounded-evidence
+  clj-surgeon.lens-query-test/sibling-spans-address-peer-shaped-and-flattened-syntax
+  clj-surgeon.lens-query-test/span-reads-report-overlap-and-boundaries-while-plans-refuse-ambiguity
+  clj-surgeon.lens-query-test/span-updater-plans-one-slice-and-preserves-all-internal-trivia
+  clj-surgeon.ls-tree-test/test-extract-ns-requires-basic
+  clj-surgeon.ls-tree-test/test-extract-ns-requires-cljc-reader-conditional
+  clj-surgeon.ls-tree-test/test-extract-ns-requires-cljc-splicing
+  clj-surgeon.ls-tree-test/test-extract-ns-requires-nil-input
+  clj-surgeon.ls-tree-test/test-extract-ns-requires-no-ns-form
+  clj-surgeon.ls-tree-test/test-extract-ns-requires-no-require-block
+  clj-surgeon.ls-tree-test/test-extract-ns-requires-with-refer
+  clj-surgeon.ls-tree-test/test-filter-by-hits-build-file-match
+  clj-surgeon.ls-tree-test/test-filter-by-hits-mixed
+  clj-surgeon.ls-tree-test/test-filter-by-hits-no-match
+  clj-surgeon.ls-tree-test/test-filter-by-hits-source-file-match
+  clj-surgeon.ls-tree-test/test-format-file-text-basic
+  clj-surgeon.ls-tree-test/test-format-file-text-error
+  clj-surgeon.ls-tree-test/test-format-file-text-no-requires
+  clj-surgeon.ls-tree-test/test-format-file-text-single-line-form
+  clj-surgeon.ls-tree-test/test-format-ls-tree-edn
+  clj-surgeon.ls-tree-test/test-format-ls-tree-text-multi-project-headers
+  clj-surgeon.ls-tree-test/test-format-ls-tree-text-single-project
+  clj-surgeon.ls-tree-test/test-integration-no-deps-edn-fallback
+  clj-surgeon.ls-tree-test/test-integration-no-deps-edn-grep-fallback
+  clj-surgeon.ls-tree-test/test-integration-parse-error-non-fatal
+  clj-surgeon.ls-tree-test/test-integration-single-project
+  clj-surgeon.ls-tree-test/test-source-paths-bb-edn
+  clj-surgeon.ls-tree-test/test-source-paths-deps-edn
+  clj-surgeon.ls-tree-test/test-source-paths-project-clj
+  clj-surgeon.ls-tree-test/test-source-paths-unknown-file
   clj-surgeon.mcp-alias-migration-test/a-backslash-is-a-path-character-and-never-a-separator
   clj-surgeon.mcp-alias-migration-test/a-bare-directory-in-scope-paths-is-that-directorys-subtree
   clj-surgeon.mcp-alias-migration-test/a-baseline-refusal-never-prescribes-re-sending-the-same-request
@@ -717,8 +1272,10 @@
   clj-surgeon.mcp-feature-thread-test/two-definitions-of-one-seed-are-both-named
   clj-surgeon.mcp-feature-thread-test/unreadable-js-leg-is-a-typed-absence
   clj-surgeon.mcp-feature-thread-test/warm-up-meter-rounds-to-a-complete-thread
+  clj-surgeon.mcp-formatter-test/default-formatter-prefers-path-then-checkout-then-npx
   clj-surgeon.mcp-formatter-test/formatter-operates-on-staged-candidates-not-live-files
   clj-surgeon.mcp-formatter-test/formatter-refuses-invalid-command-failure-and-timeout
+  clj-surgeon.mcp-formatter-test/formatter-staging-honours-selected-root-and-cleans-up-exceptions
   clj-surgeon.mcp-formatter-test/staged-formatting-removes-only-its-redundant-post-commit-check
   clj-surgeon.mcp-helper-extraction-test/a-committed-receipt-reflects-exactly-the-profile-result-it-was-given
   clj-surgeon.mcp-helper-extraction-test/a-compiled-caller-claim-must-be-backed-by-compiles-that-happened
@@ -783,6 +1340,13 @@
   clj-surgeon.mcp-hot-verify-test/hot-verification-returns-when-done-arrives-not-when-the-ceiling-expires
   clj-surgeon.mcp-hot-verify-test/hot-verification-treats-interrupted-as-a-failure-never-a-pass
   clj-surgeon.mcp-hot-verify-test/passing-law
+  clj-surgeon.mcp-hot-verify-test/probe-authorizes-the-requested-test-target-before-reload
+  clj-surgeon.mcp-hot-verify-test/probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload
+  clj-surgeon.mcp-hot-verify-test/probe-receipt-retains-expected-closure-after-reload-failure
+  clj-surgeon.mcp-hot-verify-test/probe-refuses-dependencies-outside-image-roots
+  clj-surgeon.mcp-hot-verify-test/probe-reloads-image-classpath-experiment-dependency
+  clj-surgeon.mcp-hot-verify-test/probe-reloads-prefix-list-dependency
+  clj-surgeon.mcp-hot-verify-test/probe-require-shape-matrix
   clj-surgeon.mcp-hot-verify-test/profile-validation-is-closed-and-bounded
   clj-surgeon.mcp-http-server-test/accepts-only-non-browser-or-loopback-origins
   clj-surgeon.mcp-http-server-test/alias-migration-commits-across-the-real-http-wire
@@ -795,6 +1359,10 @@
   clj-surgeon.mcp-http-server-test/one-http-session-observes-an-nrepl-handler-redefinition
   clj-surgeon.mcp-http-server-test/one-http-session-observes-live-tool-add-replace-and-remove
   clj-surgeon.mcp-http-server-test/one-http-session-prepares-decides-and-applies-one-proof-carrying-change
+  clj-surgeon.mcp-http-server-test/probe-output-degrades-without-deleting-the-verdict
+  clj-surgeon.mcp-http-server-test/probe-servlet-bounds-the-actual-writer
+  clj-surgeon.mcp-http-server-test/probe-servlet-preserves-the-request-bound-refusal
+  clj-surgeon.mcp-http-server-test/probe-spec-receipt-shape-matches-an-executed-probe
   clj-surgeon.mcp-http-server-test/project-formatter-is-closed-data-with-one-safe-default
   clj-surgeon.mcp-http-server-test/project-verification-profiles-are-closed-data
   clj-surgeon.mcp-http-server-test/starts-on-loopback-publishes-readiness-and-stays-hot
@@ -982,6 +1550,7 @@
   clj-surgeon.mcp-process-test/admission-wrapper-accepts-cold-profile-deadlines
   clj-surgeon.mcp-process-test/admission-wrapper-records-exec-failure
   clj-surgeon.mcp-process-test/analyzer-contract-mission-admits-exactly-five-fake-children
+  clj-surgeon.mcp-process-test/bb-startup-temp-policy
   clj-surgeon.mcp-process-test/bounded-process-preserves-stdin-stdout-stderr-and-exit
   clj-surgeon.mcp-process-test/configure-environment-publishes-the-complete-path
   clj-surgeon.mcp-process-test/configure-environment-publishes-this-process-temp-directory
@@ -1200,6 +1769,37 @@
   clj-surgeon.mcp-write-refusal-test/output-budget-fails-empty-without-dynamic-authority
   clj-surgeon.mcp-write-refusal-test/public-count-refusal-carries-inert-complete-evidence
   clj-surgeon.mcp-write-refusal-test/zero-match-evidence-is-a-complete-empty-investigation
+  clj-surgeon.memory-battery-test/a-flat-battery-passes-every-line
+  clj-surgeon.memory-battery-test/a-missing-unbounded-reference-is-unmeasured-not-passed
+  clj-surgeon.memory-battery-test/a-reference-naming-the-wrong-ops-catalogue-is-refused
+  clj-surgeon.memory-battery-test/a-reference-not-anchored-to-its-own-bytes-is-refused
+  clj-surgeon.memory-battery-test/a-reference-not-attested-to-this-corpus-and-code-is-refused
+  clj-surgeon.memory-battery-test/a-result-that-differs-from-the-unbounded-reference-fails
+  clj-surgeon.memory-battery-test/a-stale-reference-does-not-silently-rebuild-under-the-default
+  clj-surgeon.memory-battery-test/an-all-green-but-unmeasured-run-is-incomplete-never-a-pass
+  clj-surgeon.memory-battery-test/any-oom-fails-the-battery
+  clj-surgeon.memory-battery-test/each-op-is-judged-independently
+  clj-surgeon.memory-battery-test/every-reported-line-names-the-corpus-it-came-from
+  clj-surgeon.memory-battery-test/exit-codes-are-the-published-contract
+  clj-surgeon.memory-battery-test/held-heap-that-scales-with-n-fails
+  clj-surgeon.memory-battery-test/makefile-target-parsing-is-exact
+  clj-surgeon.memory-battery-test/membat-reference-defaults-to-require-not-auto
+  clj-surgeon.memory-battery-test/membat-root-default-is-derived-per-user
+  clj-surgeon.memory-battery-test/peak-above-start-plus-headroom-is-a-trend-not-a-gate
+  clj-surgeon.memory-battery-test/peak-above-the-xmx-fraction-is-a-trend-too
+  clj-surgeon.memory-battery-test/peak-budget-is-the-tighter-of-start-headroom-and-the-xmx-fraction
+  clj-surgeon.memory-battery-test/peak-that-scales-with-n-is-reported-as-a-trend
+  clj-surgeon.memory-battery-test/reference-canonicalization-is-order-independent-and-value-sensitive
+  clj-surgeon.memory-battery-test/retention-that-scales-with-n-fails
+  clj-surgeon.memory-battery-test/scale-lines-with-no-large-n-cells-are-unmeasured-not-passed
+  clj-surgeon.memory-battery-test/the-accountant-reader-is-total-over-any-operation-result
+  clj-surgeon.memory-battery-test/the-adversarial-arms-are-separate-corpora-not-extra-cells
+  clj-surgeon.memory-battery-test/the-battery-is-not-reachable-from-the-ordinary-test-gates
+  clj-surgeon.memory-battery-test/the-battery-target-exists-and-carries-its-intent-id
+  clj-surgeon.memory-battery-test/the-generator-and-the-battery-agree-on-every-arm
+  clj-surgeon.memory-battery-test/the-hard-lines-stay-hard-while-the-peak-lines-do-not
+  clj-surgeon.memory-battery-test/the-leak-line-gates-persistent-growth-not-the-absolute-after-gc-heap
+  clj-surgeon.memory-battery-test/the-reserved-peak-line-is-unmeasured-without-an-admission-accountant
   clj-surgeon.mission-candidate-race-test/close-cancels-owned-waiters-and-retains-completed-result
   clj-surgeon.mission-candidate-race-test/redacts-exceptions-and-rejects-nonmap-responses
   clj-surgeon.mission-candidate-race-test/returns-completion-order-and-original-index
@@ -1367,6 +1967,7 @@
   clj-surgeon.mission-typist-executor-admission-test/spark-policy-does-not-admit-unimplemented-executor
   clj-surgeon.mission-typist-executor-test/candidate-diagnostics-survive-the-public-executor
   clj-surgeon.mission-typist-executor-test/duplicate-proof-code-is-not-independent
+  clj-surgeon.mission-typist-executor-test/formatter-refusal-retains-native-diagnostics
   clj-surgeon.mission-typist-executor-test/frozen-transport-race-through-real-proof
   clj-surgeon.mission-typist-executor-test/independent-witness-rejects-green-gate
   clj-surgeon.mission-typist-executor-test/missing-cli-destination-preserves-ready-mission-with-runnable-retry
@@ -1391,6 +1992,46 @@
   clj-surgeon.mission-usage-test/fallback-attempts-supersede-wrapper-totals
   clj-surgeon.mission-usage-test/invalid-values-remain-unknown-and-zero-is-real
   clj-surgeon.mission-usage-test/unknown-and-not-started-are-distinct
+  clj-surgeon.move-dependency-test/ambiguous-definitions-fail-closed
+  clj-surgeon.move-dependency-test/clj-surgeon-can-plan-a-guarded-move-on-its-own-real-source
+  clj-surgeon.move-dependency-test/comments-and-metadata-travel-with-expanded-moves
+  clj-surgeon.move-dependency-test/dependency-analysis-excludes-local-and-quoted-symbols
+  clj-surgeon.move-dependency-test/destructuring-default-remains-a-real-dependency
+  clj-surgeon.move-dependency-test/downward-move-that-strands-caller-refuses-with-user-diagnostic
+  clj-surgeon.move-dependency-test/eager-def-and-macro-dependencies-are-pulled-before-their-users
+  clj-surgeon.move-dependency-test/existing-declare-satisfies-dependency-at-destination
+  clj-surgeon.move-dependency-test/file-wrapper-dry-run-discloses-expanded-scope-without-writing
+  clj-surgeon.move-dependency-test/file-wrapper-refusal-preserves-bytes
+  clj-surgeon.move-dependency-test/forms-sharing-a-physical-line-fail-closed
+  clj-surgeon.move-dependency-test/issue-20-plain-move-refuses-and-recommends-mv-with-deps
+  clj-surgeon.move-dependency-test/issue-20-with-deps-moves-minimum-disclosed-closure
+  clj-surgeon.move-dependency-test/local-shadowing-and-quoted-data-are-not-dependencies
+  clj-surgeon.move-dependency-test/missing-source-and-destination-errors-remain-stable
+  clj-surgeon.move-dependency-test/no-op-is-stable-and-does-not-reformat
+  clj-surgeon.move-dependency-test/real-program-fixtures-produce-parseable-candidates
+  clj-surgeon.move-dependency-test/satisfied-dependencies-do-not-widen-the-move
+  clj-surgeon.move-dependency-test/shared-dependency-can-move-earlier-without-breaking-other-users
+  clj-surgeon.move-dependency-test/transitive-cycle-fails-closed
+  clj-surgeon.move-dependency-test/unchanged-pre-existing-forward-reference-does-not-block-safe-move
+  clj-surgeon.move-dependency-test/with-deps-does-not-move-callers-on-a-downward-move
+  clj-surgeon.move-dependency-test/writer-state-real-chain-pulls-transitive-dependencies
+  clj-surgeon.move-test/test-dry-run
+  clj-surgeon.move-test/test-move-creates-new-forward-ref
+  clj-surgeon.move-test/test-move-def-no-metadata
+  clj-surgeon.move-test/test-move-defn-with-map-meta
+  clj-surgeon.move-test/test-move-defn-with-private-meta
+  clj-surgeon.move-test/test-move-defonce-no-metadata
+  clj-surgeon.move-test/test-move-defonce-with-dynamic-meta-and-earmuffs
+  clj-surgeon.move-test/test-move-defonce-with-private-meta
+  clj-surgeon.move-test/test-move-defrecord-with-private-meta
+  clj-surgeon.move-test/test-move-error-message-still-clear-for-truly-missing-form
+  clj-surgeon.move-test/test-move-form-down
+  clj-surgeon.move-test/test-move-form-up
+  clj-surgeon.move-test/test-move-nonexistent-form
+  clj-surgeon.move-test/test-move-safe-when-deps-above
+  clj-surgeon.move-test/test-move-skips-declare
+  clj-surgeon.move-test/test-move-with-comments
+  clj-surgeon.move-test/test-move-with-declare-and-defn
   clj-surgeon.namespace-split-test/analysis-output-has-a-separate-finite-budget
   clj-surgeon.namespace-split-test/analysis-projects-the-same-compiler-without-source-bodies
   clj-surgeon.namespace-split-test/baseline-lint-is-relative-and-new-errors-block
@@ -1461,11 +2102,13 @@
   clj-surgeon.ns-isolation-test/a-spawn-seen-by-both-observations-is-reported-once
   clj-surgeon.ns-isolation-test/a-write-outside-the-namespaces-own-tmp-subdir-fails-with-the-path
   clj-surgeon.ns-isolation-test/an-allowlisted-command-that-is-still-running-is-refused-anyway
+  clj-surgeon.ns-isolation-test/bb-ceiling-reproduces-from-calibration-under-shipped-manifest
   clj-surgeon.ns-isolation-test/compact-relations-has-a-declared-contention-margin
   clj-surgeon.ns-isolation-test/each-lane-has-its-own-default-budget-because-a-lane-is-a-cost-class
   clj-surgeon.ns-isolation-test/each-lane-is-held-only-to-the-rules-that-lane-can-keep
   clj-surgeon.ns-isolation-test/every-src-spawn-site-records-into-the-ledger
   clj-surgeon.ns-isolation-test/every-violation-names-its-intent-its-namespace-and-its-resource
+  clj-surgeon.ns-isolation-test/spec-bb-boundary-equals-registered-ceiling
   clj-surgeon.ns-isolation-test/the-allowlist-cannot-exempt-a-leaked-var-root
   clj-surgeon.ns-isolation-test/the-fixture-catches-a-real-write-outside-the-namespaces-own-subdir
   clj-surgeon.ns-isolation-test/the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays
@@ -1473,6 +2116,28 @@
   clj-surgeon.ns-isolation-test/the-probe-really-reads-the-ledger-not-only-the-planted-map
   clj-surgeon.ns-isolation-test/the-spawn-allowlist-is-exact-per-namespace-and-cannot-reach-a-cold-runtime
   clj-surgeon.ns-isolation-test/the-thread-probe-sees-this-jvms-real-threads
+  clj-surgeon.operation-algebra-test/accepts-only-legal-canonical-terminal-states
+  clj-surgeon.operation-algebra-test/change-preview-compiles-once-without-copying-transaction-state
+  clj-surgeon.operation-algebra-test/classifies-every-cli-terminal-without-changing-the-legacy-result
+  clj-surgeon.operation-algebra-test/cli-registry-routes-change-lifecycles-through-the-algebra
+  clj-surgeon.operation-algebra-test/derives-capabilities-only-from-catalog-lifecycle-and-trusted-profile
+  clj-surgeon.operation-algebra-test/operation-algebra-architecture-is-transport-neutral-and-bounded
+  clj-surgeon.operation-algebra-test/public-commit-has-one-runtime-path-and-existing-undo-restores-bytes
+  clj-surgeon.operation-algebra-test/public-commit-refuses-before-effects-when-catalog-denies-authority
+  clj-surgeon.operation-algebra-test/public-commit-validates-one-canonical-terminal-before-return
+  clj-surgeon.operation-algebra-test/public-preview-enters-the-algebra-once-and-performs-no-write
+  clj-surgeon.operation-algebra-test/the-effect-inventory-attributes-each-effect-to-the-form-that-names-it
+  clj-surgeon.operation-algebra-test/trusted-adapters-select-context-without-request-authority
+  clj-surgeon.outermost-test/containment-is-structural-across-different-node-tags
+  clj-surgeon.outermost-test/disjoint-outermost-owners-still-refuse-an-ambiguous-update
+  clj-surgeon.outermost-test/invalid-outermost-grammar-and-terminal-placement-refuse
+  clj-surgeon.outermost-test/nested-case-inventory-retains-two-disjoint-outer-owners
+  clj-surgeon.outermost-test/nested-cond-inventory-is-one-exact-query-without-a-known-first-guard
+  clj-surgeon.outermost-test/operational-surfaces-preserve-the-placement-contract
+  clj-surgeon.outermost-test/outermost-composes-with-one-guarded-update
+  clj-surgeon.outermost-test/outermost-keeps-maximal-current-subtrees-in-stable-order
+  clj-surgeon.outermost-test/outermost-preserves-zero-singleton-sibling-and-deduplicated-streams
+  clj-surgeon.outermost-test/reader-conditionals-metadata-and-comments-do-not-change-ancestry
   clj-surgeon.outline-corpus-integration-test/single-parse-outline-is-byte-identical-over-the-repository
   clj-surgeon.outline-differential-test/single-parse-outline-has-reader-error-parity-on-malformed-source
   clj-surgeon.outline-differential-test/single-parse-outline-is-byte-identical-on-boundary-shapes
@@ -1482,6 +2147,70 @@
   clj-surgeon.outline-memory-test/outline-of-one-file-allocates-within-its-ceiling
   clj-surgeon.outline-memory-test/outline-parses-each-file-exactly-once
   clj-surgeon.outline-memory-test/thread-allocation-meter-is-available
+  clj-surgeon.outline-test/outline-dispatch-skips-discards-and-unwraps-metadata
+  clj-surgeon.outline-test/outline-emits-defmethod-dispatch-source-spelling
+  clj-surgeon.outline-test/string-symbols-are-optional-and-source-line-aware
+  clj-surgeon.outline-test/string-symbols-cover-the-bounded-js-declaration-grammar
+  clj-surgeon.outline-test/string-symbols-handle-no-strings-and-cap-results
+  clj-surgeon.outline-test/test-basic-outline
+  clj-surgeon.outline-test/test-clj-file-platforms-tag
+  clj-surgeon.outline-test/test-cljc-reader-conditional-forms
+  clj-surgeon.outline-test/test-deftest-classification
+  clj-surgeon.outline-test/test-empty-file
+  clj-surgeon.outline-test/test-form-boundaries-precise
+  clj-surgeon.outline-test/test-guardrails-defn
+  clj-surgeon.outline-test/test-meta-tagged-arglist
+  clj-surgeon.outline-test/test-metadata-handling
+  clj-surgeon.outline-test/test-various-def-types
+  clj-surgeon.owner-hypotheses-test/defmethod-owner-evidence-bounds-a-large-dispatch-vocabulary
+  clj-surgeon.owner-hypotheses-test/defmethod-owner-evidence-bounds-dispatch-vocabulary-characters
+  clj-surgeon.owner-hypotheses-test/defmethod-owner-evidence-escapes-a-multiline-regex-dispatch
+  clj-surgeon.owner-hypotheses-test/defmethod-owner-evidence-escapes-a-multiline-string-dispatch
+  clj-surgeon.owner-hypotheses-test/defmethod-owner-evidence-is-absent-for-non-multimethod-owners
+  clj-surgeon.owner-hypotheses-test/defmethod-owner-evidence-names-the-exact-owner-form-to-send
+  clj-surgeon.owner-hypotheses-test/hypotheses-are-bounded-deterministic-and-never-authoritative
+  clj-surgeon.owner-hypotheses-test/owner-recovery-evidence-carries-defmethod-addressing-per-failure
+  clj-surgeon.owner-hypotheses-test/owner-recovery-evidence-teaches-dispatch-for-an-ambiguous-multimethod
+  clj-surgeon.owner-hypotheses-test/ranks-each-missing-owner-over-real-unresolved-names
+  clj-surgeon.owner-hypotheses-test/strict-field-corpus-has-complete-top-ten-recall
+  clj-surgeon.parser-admission-test/a-metadata-tower-is-refused-before-it-overflows-the-reader
+  clj-surgeon.parser-admission-test/a-prefix-tower-is-refused-before-it-overflows-the-reader
+  clj-surgeon.parser-admission-test/a-refusal-names-its-limit-observed-and-remedy
+  clj-surgeon.parser-admission-test/a-refusal-reaches-no-tree-constructor
+  clj-surgeon.parser-admission-test/a-shebang-line-is-a-comment-not-structure
+  clj-surgeon.parser-admission-test/a-source-exactly-at-the-depth-ceiling-projects-identically
+  clj-surgeon.parser-admission-test/a-source-exactly-at-the-node-ceiling-projects-identically
+  clj-surgeon.parser-admission-test/admit-throws-a-typed-exception-carrying-the-refusal
+  clj-surgeon.parser-admission-test/concurrent-scans-charge-their-own-meters
+  clj-surgeon.parser-admission-test/default-ceilings-admit-every-source-in-this-repository
+  clj-surgeon.parser-admission-test/default-ceilings-refuse-the-adversarial-shapes
+  clj-surgeon.parser-admission-test/lexical-scan-balances-on-every-source-in-this-repository
+  clj-surgeon.parser-admission-test/lexical-scan-respects-strings-regexes-chars-and-comments
+  clj-surgeon.parser-admission-test/ls-tree-completes-and-counts-a-refused-file
+  clj-surgeon.parser-admission-test/ls-tree-output-is-unchanged-when-nothing-is-refused
+  clj-surgeon.parser-admission-test/ls-tree-survives-a-stack-overflow-with-the-estimator-blind
+  clj-surgeon.parser-admission-test/malformed-source-never-crashes-the-scan
+  clj-surgeon.parser-admission-test/reader-macro-prefixes-count-as-nesting
+  clj-surgeon.parser-admission-test/show-form-carries-the-typed-refusal
+  clj-surgeon.parser-admission-test/the-analyze-constructor-is-gated
+  clj-surgeon.parser-admission-test/the-scan-charges-itself-in-the-production-receipt
+  clj-surgeon.parser-admission-test/the-structural-lens-constructor-is-gated
+  clj-surgeon.partition-all-test/cli-q-returns-the-complete-case-inventory-in-one-invocation
+  clj-surgeon.partition-all-test/empty-singleton-even-and-odd-streams-have-total-results
+  clj-surgeon.partition-all-test/invalid-partition-all-grammar-refuses-with-local-evidence
+  clj-surgeon.partition-all-test/multiple-inputs-retain-distinct-overlapping-partitions
+  clj-surgeon.partition-all-test/partition-all-groups-a-semantic-sibling-suffix-with-an-explicit-tail
+  clj-surgeon.partition-all-test/partition-all-is-macro-agnostic-across-concrete-syntax-shapes
+  clj-surgeon.partition-all-test/partition-all-reuses-the-guarded-equal-arity-span-updater
+  clj-surgeon.partition-all-test/partition-results-use-the-existing-bounded-evidence-contract
+  clj-surgeon.partition-all-test/partition-updater-refuses-zero-many-and-unequal-arity
+  clj-surgeon.partition-all-test/real-program-derived-inventories-become-one-structural-read-each
+  clj-surgeon.platform-selector-test/cli-platform-selector-refusal-is-structured-edn
+  clj-surgeon.platform-selector-test/cljc-reader-conditional-selection-preserves-ambiguity-and-order
+  clj-surgeon.platform-selector-test/ordinary-form-platform-selection-is-file-aware
+  clj-surgeon.platform-selector-test/platform-selector-refuses-unknowable-file-context
+  clj-surgeon.platform-selector-test/reader-conditionals-cannot-override-a-plain-file-platform
+  clj-surgeon.platform-selector-test/xray-passes-file-context-through-literal-and-computed-reads
   clj-surgeon.quoted-var-refs-test/captured-source-scan-builds-one-context-per-candidate-not-subject
   clj-surgeon.quoted-var-refs-test/captured-source-scan-is-pure-bounded-and-deterministic
   clj-surgeon.quoted-var-refs-test/captured-source-scan-refuses-invalid-or-partial-evidence
@@ -1502,6 +2231,7 @@
   clj-surgeon.reader-eval-fence-test/the-oracle-names-every-evaluator-it-claims-to-fence
   clj-surgeon.receipt-artifacts-boundary-test/admit-focused-runner-publishes-an-external-report
   clj-surgeon.receipt-artifacts-boundary-test/advisory-lock-creates-only-an-external-lock-file
+  clj-surgeon.receipt-artifacts-boundary-test/bb-lane-child-honours-disk-tmpdir
   clj-surgeon.receipt-artifacts-boundary-test/cli-change-publishes-external-inverse
   clj-surgeon.receipt-artifacts-boundary-test/cold-proof-publication-is-external-and-workspace-isolated
   clj-surgeon.receipt-artifacts-boundary-test/compact-edit-publishes-external-inverse
@@ -1519,6 +2249,17 @@
   clj-surgeon.receipt-artifacts-boundary-test/typist-publishes-external-inverse-after-real-proof
   clj-surgeon.receipt-booleans-test/every-receipt-boolean-has-a-driven-false-witness
   clj-surgeon.receipt-booleans-test/unregistered-verbs-and-fields-fail-by-name
+  clj-surgeon.recovery-test/recover-creates-the-failure-receipt-directory
+  clj-surgeon.recovery-test/recover-fails-once-and-publishes-an-executable-report-command
+  clj-surgeon.recovery-test/recover-publishes-one-terminal-success-receipt
+  clj-surgeon.relation-census-test/a-caller-supplied-door-changes-the-classification
+  clj-surgeon.relation-census-test/a-non-write-update-fn-contributes-no-site
+  clj-surgeon.relation-census-test/a-worker-failure-names-its-file-and-publishes-no-counts
+  clj-surgeon.relation-census-test/an-unparseable-file-refuses-and-names-itself
+  clj-surgeon.relation-census-test/classifies-the-real-bytes-fold-arms-with-evidence
+  clj-surgeon.relation-census-test/discovery-recognises-only-files-that-define-arms
+  clj-surgeon.relation-census-test/the-plan-phase-answer-does-not-depend-on-the-mapper
+  clj-surgeon.relation-census-test/writes-outside-every-arm-are-counted-and-never-classified
   clj-surgeon.rename-alias-parity-test/rename-alias-cli-mcp-parity
   clj-surgeon.rename-alias-performance-test/four-thousand-line-planning-under-five-seconds
   clj-surgeon.rename-alias-receipt-test/rename-alias-publication-evidence
@@ -1530,6 +2271,13 @@
   clj-surgeon.rename-alias-test/rename-alias-role-selection
   clj-surgeon.rename-alias-test/rename-alias-scope
   clj-surgeon.rename-alias-test/rename-alias-stale-and-counts
+  clj-surgeon.rename-test/test-analyze-file
+  clj-surgeon.rename-test/test-execute-full-rename
+  clj-surgeon.rename-test/test-plan-dry-run
+  clj-surgeon.rename-test/test-rename-source-no-ns-form
+  clj-surgeon.rename-test/test-rename-source-ns-declaration
+  clj-surgeon.rename-test/test-rename-source-preserves-body
+  clj-surgeon.rename-test/test-rename-source-requires
   clj-surgeon.repository-hygiene-test/a-forced-cache-below-the-root-is-caught-in-a-throwaway-repository
   clj-surgeon.repository-hygiene-test/an-unusable-git-is-reported-as-nil-so-callers-fail-closed
   clj-surgeon.repository-hygiene-test/no-machine-local-build-cache-is-tracked
@@ -1570,6 +2318,49 @@
   clj-surgeon.scope-stream-test/the-summary-receipt-does-not-grow-with-the-file-count
   clj-surgeon.scope-stream-test/the-walk-entry-ceiling-admits-exactly-its-limit-and-refuses-the-next
   clj-surgeon.scope-stream-test/the-walk-refuses-a-matching-symbolic-link-and-never-follows-it
+  clj-surgeon.show-form-test/agent-facing-surfaces-do-not-drift
+  clj-surgeon.show-form-test/cli-cross-file-cat-loads-one-manifest-from-file-or-stdin
+  clj-surgeon.show-form-test/cli-match-form-and-grep-form-aliases-are-one-shot-structural-search
+  clj-surgeon.show-form-test/cli-selection-refusal-matrix-is-stable-edn-with-nonzero-exits
+  clj-surgeon.show-form-test/cli-show-form-refusals-and-historical-guesses-have-actionable-exits
+  clj-surgeon.show-form-test/cli-show-form-selectors-and-cat-contains-are-one-shot-edn-reads
+  clj-surgeon.show-form-test/cross-file-cat-reads-each-snapshot-once-in-manifest-order
+  clj-surgeon.show-form-test/cross-file-cat-refuses-any-failed-owner-and-the-global-source-cap
+  clj-surgeon.show-form-test/cross-file-cat-validates-the-whole-contract-before-reading
+  clj-surgeon.show-form-test/current-core-distinctive-help-phrase-is-a-one-shot-self-hosting-read
+  clj-surgeon.show-form-test/current-show-form-implementation-is-a-one-shot-batch-read
+  clj-surgeon.show-form-test/invocation-remedy-is-narrow-executable-and-space-safe
+  clj-surgeon.show-form-test/outline-source-preserves-the-existing-public-contract
+  clj-surgeon.show-form-test/pure-selection-does-not-read-the-global-project-alias-atom
+  clj-surgeon.show-form-test/read-format-is-explicit-and-cross-file-only
+  clj-surgeon.show-form-test/real-program-derived-fixture-supports-both-motivating-reads
+  clj-surgeon.show-form-test/rendered-form-remedy-survives-zsh-metacharacter-parsing
+  clj-surgeon.show-form-test/semantic-cross-file-cat-is-compact-ordered-and-explicitly-lossy
+  clj-surgeon.show-form-test/semantic-render-refuses-before-returning-malformed-or-oversized-output
+  clj-surgeon.show-form-test/show-file-refuses-an-unreadable-path-as-edn-data
+  clj-surgeon.show-form-test/show-file-snapshots-configured-project-aliases-at-the-io-boundary
+  clj-surgeon.show-form-test/show-form-accepts-the-standalone-slash-as-an-unqualified-name
+  clj-surgeon.show-form-test/show-form-bounds-ambiguous-candidate-evidence
+  clj-surgeon.show-form-test/show-form-by-contains-refuses-zero-or-many-containing-forms
+  clj-surgeon.show-form-test/show-form-by-contains-selects-one-form-with-literal-evidence
+  clj-surgeon.show-form-test/show-form-by-line-handles-unnamed-top-level-forms
+  clj-surgeon.show-form-test/show-form-by-line-selects-start-interior-end-and-attached-comment
+  clj-surgeon.show-form-test/show-form-by-name-accepts-cli-strings-and-symbols
+  clj-surgeon.show-form-test/show-form-line-selection-refuses-overlapping-reader-branch-ranges
+  clj-surgeon.show-form-test/show-form-never-chooses-among-duplicate-names
+  clj-surgeon.show-form-test/show-form-preserves-reader-conditional-platforms
+  clj-surgeon.show-form-test/show-form-refuses-absent-and-gap-selectors-with-ls-remedy
+  clj-surgeon.show-form-test/show-form-refuses-invalid-selector-contracts
+  clj-surgeon.show-form-test/show-form-refuses-invalid-source-as-edn-data
+  clj-surgeon.show-form-test/show-form-uses-project-config-name-extractors-like-outline
+  clj-surgeon.show-form-test/show-form-uses-the-source-extension-platform-for-cljs
+  clj-surgeon.show-form-test/show-forms-applies-one-platform-to-the-complete-batch
+  clj-surgeon.show-form-test/show-forms-builds-top-level-records-once
+  clj-surgeon.show-form-test/show-forms-refuses-before-returning-an-oversized-source-batch
+  clj-surgeon.show-form-test/show-forms-refuses-invalid-and-duplicate-selector-vectors
+  clj-surgeon.show-form-test/show-forms-refuses-the-complete-read-on-any-missing-or-ambiguous-name
+  clj-surgeon.show-form-test/show-forms-returns-requested-order-from-one-snapshot
+  clj-surgeon.show-form-test/top-level-form-records-are-the-shared-pure-source-of-truth
   clj-surgeon.splice-envelope-test/bounded-input-path-encoding
   clj-surgeon.splice-envelope-test/exactly-one-edn-request
   clj-surgeon.split-proof-gate-boundary-test/background-gate-closes-immutable-receipt
@@ -1579,6 +2370,30 @@
   clj-surgeon.split-proof-gate-test/background-temp-root-refuses-tmpfs-and-relative-paths
   clj-surgeon.split-proof-gate-test/receipt-ceiling-bounds-edn-and-escaped-json-independently
   clj-surgeon.split-proof-gate-test/status-retains-cold-and-trivial-proof-honesty
+  clj-surgeon.structural-lens-test/apply-rejects-invalid-plan-version-and-invalid-result-source
+  clj-surgeon.structural-lens-test/applying-a-plan-fails-closed-when-source-changed
+  clj-surgeon.structural-lens-test/every-planner-refuses-to-use-a-source-file-as-a-plan-artifact
+  clj-surgeon.structural-lens-test/execute-plan-writes-only-after-validation
+  clj-surgeon.structural-lens-test/expect-comparison-ignores-whitespace-but-preserves-source-significant-syntax
+  clj-surgeon.structural-lens-test/expect-mismatch-result-reports-both-forms-and-the-exact-source
+  clj-surgeon.structural-lens-test/file-wide-find-does-not-invent-an-owner-for-unnamed-top-level-forms
+  clj-surgeon.structural-lens-test/file-wide-find-names-each-enclosing-form-for-direct-narrowing
+  clj-surgeon.structural-lens-test/find-reports-all-ambiguity-replace-refuses-it
+  clj-surgeon.structural-lens-test/find-subforms-is-structural-scoped-and-auditable
+  clj-surgeon.structural-lens-test/match-and-replacement-require-exactly-one-complete-form
+  clj-surgeon.structural-lens-test/parse-expect-accepts-exactly-one-complete-form
+  clj-surgeon.structural-lens-test/plan-out-writes-the-complete-versioned-plan
+  clj-surgeon.structural-lens-test/reader-form-bodies-preserve-concrete-match-evidence
+  clj-surgeon.structural-lens-test/replacement-plan-is-pure-reviewable-and-replayable
+  clj-surgeon.structural-lens-test/structural-matching-ignores-formatting
+  clj-surgeon.structural-lens-test/structural-wildcard-matches-one-subtree-not-variadic-arity
+  clj-surgeon.structural-lens-test/verified-apply-receipt-is-pure-and-refuses-read-back-mismatch
+  clj-surgeon.syntax-var-refs-test/bare-symbols-become-bounded-non-authoritative-proof-gaps
+  clj-surgeon.syntax-var-refs-test/bare-symbols-never-gain-semantic-authority
+  clj-surgeon.syntax-var-refs-test/captured-source-scan-is-deterministic-and-bounded
+  clj-surgeon.syntax-var-refs-test/invalid-subject-and-parse-failure-refuse-without-evidence
+  clj-surgeon.syntax-var-refs-test/qualified-reference-evidence-is-exact-and-inert-safe
+  clj-surgeon.syntax-var-refs-test/retained-agent-routing-shape-separates-alias-evidence-from-bare-gap
   clj-surgeon.telemetry-events-test/a-healthy-line-omits-the-drop-counter
   clj-surgeon.telemetry-events-test/a-key-shaped-mission-id-is-hashed-and-never-persisted-raw
   clj-surgeon.telemetry-events-test/a-refusal-line-carries-its-error-type-and-a-null-mission
@@ -1596,6 +2411,19 @@
   clj-surgeon.telemetry-events-test/the-env-override-wins-for-the-writer
   clj-surgeon.telemetry-events-test/the-ledger-file-is-private
   clj-surgeon.telemetry-events-test/truncation-is-by-utf8-bytes-and-never-splits-a-codepoint
+  clj-surgeon.tmp-leak-support-test/a-seam-sourced-fstype-can-never-prove-real-disk
+  clj-surgeon.tmp-leak-support-test/darwin-has-a-mount-authority-of-its-own
+  clj-surgeon.tmp-leak-support-test/no-gate-names-a-hard-coded-ram-path
+  clj-surgeon.tmp-leak-support-test/only-this-namespaces-own-run-roots-are-sweepable
+  clj-surgeon.tmp-leak-support-test/ram-paths-are-refused-by-name-with-no-external-binary
+  clj-surgeon.tmp-leak-support-test/sweep-root-does-not-claim-a-delete-it-did-not-perform
+  clj-surgeon.tmp-leak-support-test/sweep-root-refuses-a-directory-it-did-not-create
+  clj-surgeon.tmp-leak-support-test/test-child-environment-fixes-node-cache-policy-in-both-home-modes
+  clj-surgeon.tmp-leak-support-test/the-base-decision-is-a-typed-refusal
+  clj-surgeon.tmp-leak-support-test/the-make-layer-does-not-propagate-a-ram-tmpdir
+  clj-surgeon.tmp-leak-support-test/tmpfs-predicate-tells-ram-from-disk
+  clj-surgeon.tmp-leak-support-test/with-temp-dir-cleans-up-on-success
+  clj-surgeon.tmp-leak-support-test/with-temp-dir-cleans-up-on-throw
   clj-surgeon.txn-journal-test/a-break-does-not-retire-the-evidence-it-just-created
   clj-surgeon.txn-journal-test/a-break-interrupted-between-the-link-and-the-unlink-is-not-a-break
   clj-surgeon.txn-journal-test/a-break-that-cannot-record-itself-does-not-happen
@@ -1692,4 +2520,69 @@
   clj-surgeon.workspace-onboarding-test/upsert-migrates-existing-canonical-tool-tables-without-duplicates
   clj-surgeon.workspace-onboarding-test/upsert-preserves-unmanaged-settings-and-is-idempotent
   clj-surgeon.workspace-onboarding-test/upsert-recovers-a-managed-block-after-an-older-tool-table
-  clj-surgeon.workspace-onboarding-test/upsert-replaces-only-the-managed-block}
+  clj-surgeon.workspace-onboarding-test/upsert-replaces-only-the-managed-block
+  clj-surgeon.worktree-lifecycle-cli-test/cli-contract-is-versioned-edn-with-typed-exits
+  clj-surgeon.worktree-lifecycle-cli-test/help-names-the-schemas-and-non-deletion-law
+  clj-surgeon.worktree-lifecycle-cli-test/make-exposes-the-paved-lifecycle-entrances
+  clj-surgeon.worktree-lifecycle-cli-test/makefile-does-not-embed-destructive-lifecycle-policy
+  clj-surgeon.worktree-lifecycle-io-test/apply-acquires-lock-and-revalidates-before-effects
+  clj-surgeon.worktree-lifecycle-io-test/failed-removal-restores-the-visible-room
+  clj-surgeon.worktree-lifecycle-io-test/final-receipt-and-parking-marker-are-separate
+  clj-surgeon.worktree-lifecycle-io-test/fixture-removal-guard-rejects-outside-common-git-directory
+  clj-surgeon.worktree-lifecycle-io-test/journal-states-are-monotone-and-explicit
+  clj-surgeon.worktree-lifecycle-io-test/post-archive-drift-restores-or-reports-partial
+  clj-surgeon.worktree-lifecycle-io-test/post-archive-gate-rechecks-non-ui-authorities
+  clj-surgeon.worktree-lifecycle-io-test/recovery-resumes-only-the-next-idempotent-transition
+  clj-surgeon.worktree-lifecycle-io-test/removal-command-is-non-force-and-controller-owned
+  clj-surgeon.worktree-lifecycle-io-test/subprocess-boundary-uses-closed-argv-and-directory
+  clj-surgeon.worktree-lifecycle-io-test/successful-removal-proves-the-planned-ui-postcondition
+  clj-surgeon.worktree-lifecycle-io-test/supacode-archive-requires-a-stable-bracket
+  clj-surgeon.worktree-lifecycle-io-test/terminal-replay-refuses-a-recreated-path
+  clj-surgeon.worktree-lifecycle-test/apply-input-and-replay-authority-are-plan-bound
+  clj-surgeon.worktree-lifecycle-test/audit-compilation-preserves-every-union-row
+  clj-surgeon.worktree-lifecycle-test/canonical-plan-bytes-are-private-and-self-hash-free
+  clj-surgeon.worktree-lifecycle-test/classification-precedence-is-closed
+  clj-surgeon.worktree-lifecycle-test/closed-snapshot-is-admitted
+  clj-surgeon.worktree-lifecycle-test/dry-run-request-and-fingerprint-are-closed
+  clj-surgeon.worktree-lifecycle-test/git-worktree-facts-remain-closed
+  clj-surgeon.worktree-lifecycle-test/handoff-never-releases-the-owner-lock
+  clj-surgeon.worktree-lifecycle-test/handoff-record-binds-the-active-owner
+  clj-surgeon.worktree-lifecycle-test/landed-seal-requires-advertised-ancestry
+  clj-surgeon.worktree-lifecycle-test/legacy-handoff-is-explicit-and-single-target
+  clj-surgeon.worktree-lifecycle-test/lifecycle-lease-is-derived-and-plan-bound
+  clj-surgeon.worktree-lifecycle-test/missing-outcome-remains-needs-seal
+  clj-surgeon.worktree-lifecycle-test/negative-seal-binds-exact-history
+  clj-surgeon.worktree-lifecycle-test/negative-seal-grammar-is-closed
+  clj-surgeon.worktree-lifecycle-test/negative-seal-retains-raw-evidence-disposition
+  clj-surgeon.worktree-lifecycle-test/parked-revision-accepts-only-identical-controller-append
+  clj-surgeon.worktree-lifecycle-test/parked-seal-binds-upstream-and-owner
+  clj-surgeon.worktree-lifecycle-test/protected-worktrees-are-active
+  clj-surgeon.worktree-lifecycle-test/supacode-identities-are-strictly-decoded
+  clj-surgeon.worktree-lifecycle-test/supacode-only-identities-are-audit-only
+  clj-surgeon.xray-test/cli-xray-computes-one-read-only-edn-result
+  clj-surgeon.xray-test/cli-xray-refuses-unsafe-input-before-file-io
+  clj-surgeon.xray-test/compact-evidence-preserves-provenance-without-repeating-source
+  clj-surgeon.xray-test/computed-xray-can-start-at-an-unnamed-owner-containing-a-line
+  clj-surgeon.xray-test/computed-xray-canonicalizes-map-shaped-syntax-without-evaluation
+  clj-surgeon.xray-test/evaluation-preserves-typed-refusals-and-untyped-cause-messages
+  clj-surgeon.xray-test/expect-count-refines-cardinality-without-changing-analyzer-input
+  clj-surgeon.xray-test/literal-xray-can-refuse-on-an-exact-match-count
+  clj-surgeon.xray-test/literal-xray-can-start-at-an-unnamed-owner-containing-a-line
+  clj-surgeon.xray-test/literal-xray-returns-full-structural-evidence
+  clj-surgeon.xray-test/one-xray-algebra-covers-literal-stable-selection-and-count-refinement
+  clj-surgeon.xray-test/parse-args-preserves-xray-expression-verbatim
+  clj-surgeon.xray-test/prepare-xray-validates-before-source-io
+  clj-surgeon.xray-test/quoted-macro-expansion-symbols-remain-searchable-structural-data
+  clj-surgeon.xray-test/real-nested-cond-xray-composes-with-outermost-and-partitions
+  clj-surgeon.xray-test/sci-compiles-one-capability-limited-xray-program
+  clj-surgeon.xray-test/sci-supports-idiomatic-pure-map-comprehension
+  clj-surgeon.xray-test/spans-and-partitions-arrive-as-vectors-of-clojure-values
+  clj-surgeon.xray-test/xray-accepts-only-concrete-bounded-edn-results
+  clj-surgeon.xray-test/xray-analysis-refusal-stays-compact-and-actionable
+  clj-surgeon.xray-test/xray-builder-is-an-ordinary-threadable-terminal
+  clj-surgeon.xray-test/xray-evaluates-zero-one-and-many-selected-values
+  clj-surgeon.xray-test/xray-help-and-agent-surfaces-teach-the-computed-read-boundary
+  clj-surgeon.xray-test/xray-one-is-threadable-and-receives-one-value-directly
+  clj-surgeon.xray-test/xray-one-refuses-zero-and-many-before-calling-the-analyzer
+  clj-surgeon.xray-test/xray-preserves-exact-query-evidence-beside-the-computed-value
+  clj-surgeon.xray-test/xray-refuses-to-compute-from-truncated-evidence}

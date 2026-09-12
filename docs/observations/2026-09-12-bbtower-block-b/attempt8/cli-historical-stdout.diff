@@ -1,0 +1,11 @@
+--- /var/tmp/forge/bbtower-fx/attempt8/cli-bb.stdout	2026-09-12 07:13:57.702094257 +0000
++++ /var/tmp/forge/bbtower-fx/attempt8/cli-jvm.stdout	2026-09-12 07:15:02.146784756 +0000
+@@ -324,7 +324,7 @@
+    "test/clj_surgeon/lane_manifest_test.clj"]},
+  :committed true,
+  :receipt-file
+- "/var/tmp/forge/bbtower-fx/attempt8/artifacts/change-receipts/680eef19039297b7cc3bf1f6d6b4209cae5decae4a9a6d8791e069e136ae8627/447d6cfc-5198-4167-9c12-2f9cd3553d5e.edn",
++ "/var/tmp/forge/bbtower-fx/attempt8/artifacts/change-receipts/680eef19039297b7cc3bf1f6d6b4209cae5decae4a9a6d8791e069e136ae8627/5df36336-5c40-4110-9109-e97f205f1f5e.edn",
+  :ok true,
+  :transaction-version 1,
+  :verified

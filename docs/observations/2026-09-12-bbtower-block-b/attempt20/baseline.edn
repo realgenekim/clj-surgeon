@@ -1,0 +1,121 @@
+{:subject "8a742959553da31925354823d2a467c19ef0e967",
+ :paired
+ [clj-surgeon.battery-ledger-test
+  clj-surgeon.battery-parallel-test
+  clj-surgeon.fast-lane-isolation-test
+  clj-surgeon.helper-extraction-test
+  clj-surgeon.insert-forms-test
+  clj-surgeon.intent-transaction-test
+  clj-surgeon.lane-manifest-test
+  clj-surgeon.mcp-compact-edit-fields-test
+  clj-surgeon.mcp-contract-test
+  clj-surgeon.mcp-extraction-test
+  clj-surgeon.mcp-feature-thread-test
+  clj-surgeon.mcp-inspect-contract-test
+  clj-surgeon.mcp-intent-contract-test
+  clj-surgeon.mcp-paths-test
+  clj-surgeon.mcp-program-tool-test
+  clj-surgeon.mcp-read-request-normalization-test
+  clj-surgeon.mcp-recovery-test
+  clj-surgeon.mcp-schema-test
+  clj-surgeon.mcp-telemetry-test
+  clj-surgeon.mcp-workspace-test
+  clj-surgeon.mission-candidate-test
+  clj-surgeon.mission-forms-source-test
+  clj-surgeon.mission-forms-test
+  clj-surgeon.mission-git-test
+  clj-surgeon.mission-plain-forms-test
+  clj-surgeon.mission-typist-test
+  clj-surgeon.mission-usage-test
+  clj-surgeon.namespace-split-test
+  clj-surgeon.outline-corpus-integration-test
+  clj-surgeon.outline-differential-test
+  clj-surgeon.quoted-var-refs-test
+  clj-surgeon.rename-alias-receipt-test
+  clj-surgeon.rename-alias-test
+  clj-surgeon.require-change-test
+  clj-surgeon.splice-envelope-test
+  clj-surgeon.split-proof-gate-test
+  clj-surgeon.telemetry-events-test
+  clj-surgeon.workspace-onboarding-test],
+ :runtimes
+ {clj-surgeon.mcp-recovery-test :bb,
+  clj-surgeon.mission-plain-forms-test :bb,
+  clj-surgeon.workspace-onboarding-test :bb,
+  clj-surgeon.mcp-paths-test :bb,
+  clj-surgeon.mission-candidate-test :bb,
+  clj-surgeon.telemetry-events-test :bb,
+  clj-surgeon.fast-lane-isolation-test :bb,
+  clj-surgeon.mcp-schema-test :bb,
+  clj-surgeon.mission-usage-test :bb,
+  clj-surgeon.mission-forms-source-test :bb,
+  clj-surgeon.mcp-telemetry-test :bb,
+  clj-surgeon.mcp-workspace-test :bb,
+  clj-surgeon.mcp-feature-thread-test :jvm,
+  clj-surgeon.mcp-extraction-test :bb,
+  clj-surgeon.namespace-split-test :bb,
+  clj-surgeon.mcp-program-tool-test :bb,
+  clj-surgeon.mcp-read-request-normalization-test :bb,
+  clj-surgeon.battery-ledger-test :bb,
+  clj-surgeon.mission-git-test :bb,
+  clj-surgeon.mission-forms-test :bb,
+  clj-surgeon.mcp-contract-test :bb,
+  clj-surgeon.insert-forms-test :jvm,
+  clj-surgeon.rename-alias-receipt-test :jvm,
+  clj-surgeon.battery-parallel-test :bb,
+  clj-surgeon.helper-extraction-test :bb,
+  clj-surgeon.split-proof-gate-test :bb,
+  clj-surgeon.outline-corpus-integration-test :jvm,
+  clj-surgeon.require-change-test :bb,
+  clj-surgeon.lane-manifest-test :bb,
+  clj-surgeon.mcp-intent-contract-test :bb,
+  clj-surgeon.mcp-compact-edit-fields-test :bb,
+  clj-surgeon.mission-typist-test :bb,
+  clj-surgeon.quoted-var-refs-test :bb,
+  clj-surgeon.rename-alias-test :bb,
+  clj-surgeon.outline-differential-test :bb,
+  clj-surgeon.splice-envelope-test :jvm,
+  clj-surgeon.mcp-inspect-contract-test :bb,
+  clj-surgeon.intent-transaction-test :jvm},
+ :portability
+ {clj-surgeon.mcp-recovery-test :bb,
+  clj-surgeon.mission-plain-forms-test :bb,
+  clj-surgeon.workspace-onboarding-test :bb,
+  clj-surgeon.mcp-paths-test :bb,
+  clj-surgeon.mission-candidate-test :bb,
+  clj-surgeon.telemetry-events-test :bb,
+  clj-surgeon.fast-lane-isolation-test :bb,
+  clj-surgeon.mcp-schema-test :bb,
+  clj-surgeon.mission-usage-test :bb,
+  clj-surgeon.mission-forms-source-test :bb,
+  clj-surgeon.mcp-telemetry-test :bb,
+  clj-surgeon.mcp-workspace-test :bb,
+  clj-surgeon.mcp-feature-thread-test :bb,
+  clj-surgeon.mcp-extraction-test :bb,
+  clj-surgeon.namespace-split-test :bb,
+  clj-surgeon.mcp-program-tool-test :bb,
+  clj-surgeon.mcp-read-request-normalization-test :bb,
+  clj-surgeon.battery-ledger-test :bb,
+  clj-surgeon.mission-git-test :bb,
+  clj-surgeon.mission-forms-test :bb,
+  clj-surgeon.mcp-contract-test :bb,
+  clj-surgeon.insert-forms-test :bb,
+  clj-surgeon.rename-alias-receipt-test :bb,
+  clj-surgeon.battery-parallel-test :bb,
+  clj-surgeon.helper-extraction-test :bb,
+  clj-surgeon.split-proof-gate-test :bb,
+  clj-surgeon.outline-corpus-integration-test :bb,
+  clj-surgeon.require-change-test :bb,
+  clj-surgeon.lane-manifest-test :bb,
+  clj-surgeon.mcp-intent-contract-test :bb,
+  clj-surgeon.mcp-compact-edit-fields-test :bb,
+  clj-surgeon.mission-typist-test :bb,
+  clj-surgeon.quoted-var-refs-test :bb,
+  clj-surgeon.rename-alias-test :bb,
+  clj-surgeon.outline-differential-test :bb,
+  clj-surgeon.splice-envelope-test :bb,
+  clj-surgeon.mcp-inspect-contract-test :bb,
+  clj-surgeon.intent-transaction-test :bb},
+ :contract-failures
+ {clj-surgeon.intent-transaction-test
+  "Shared CLI workspace_status.unexpected_paths is unbounded; attempt8/owed.md. Runtime comparison found no bb-only leak."}}

@@ -1,0 +1,20 @@
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.mcp-program-tool-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.mcp-recovery-test
+
+Testing clj-surgeon.mcp-compact-edit-fields-test
+
+Testing clj-surgeon.mission-candidate-test

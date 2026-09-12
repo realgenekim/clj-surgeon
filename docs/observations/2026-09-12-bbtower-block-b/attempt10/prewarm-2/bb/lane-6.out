@@ -1,0 +1,24 @@
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.move-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.cljc.analyze-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.failure-report-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

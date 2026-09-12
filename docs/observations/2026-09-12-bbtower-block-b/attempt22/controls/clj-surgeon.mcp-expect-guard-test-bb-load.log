@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.mcp-expect-guard-test, :runtime :bb, :mode "load", :started-at "2026-09-12T18:46:39.406852722Z", :elapsed-ms 232, :status :load-failed, :message "Could not locate nrepl/core.bb, nrepl/core.clj or nrepl/core.cljc on classpath.", :causes ["Could not locate nrepl/core.bb, nrepl/core.clj or nrepl/core.cljc on classpath."]}

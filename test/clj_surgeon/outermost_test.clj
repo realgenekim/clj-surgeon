@@ -1,4 +1,5 @@
 (ns clj-surgeon.outermost-test
+  {:lane :fast}
   (:require
    [clj-surgeon.structural-lens :as lens]
    [clojure.string :as str]

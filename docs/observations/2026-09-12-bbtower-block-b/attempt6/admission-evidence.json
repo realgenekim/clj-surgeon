@@ -1,0 +1,10 @@
+{
+  "subject": "efdced9bd47dfb1265fbf9b48515ea8f89a42dc9",
+  "base": "eae1e43280635be9b4e317e176d29476fd358702",
+  "manifest_id": "da0217373e110e79ca729d7624afc7ddb767671d89b86dad1f6ae27488a059af",
+  "context_pack_sha256": "33057b6ac915743e7fb3fde3226e92d436376c40247adadf9cabe16cade963dc",
+  "recorded_utc": "2026-09-12T06:45:33.823913+00:00",
+  "base_tracked_diff": "",
+  "subject_tracked_diff": "",
+  "worker_exit_97_count": 8
+}

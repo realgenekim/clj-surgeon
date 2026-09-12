@@ -1,0 +1,17 @@
+{:verdict :blocked
+ :starting-head "cb6330d474373dd4ca303187731d4e15ad9220ab"
+ :commits {:packet-evidence "9342bc03" :final-evidence :containing-commit}
+ :findings [{:node :require-swipl :denied-path "/dev/null"
+             :log "envelope-red.log" :stages-started 0}
+            {:node :cell-b-oracle :errors 12 :tests 3
+             :denied-path-pattern "/var/tmp/b07-lint-*" :log "cell-b-red.log"}]
+ :measurements {:diagnostic {:invocations 1 :exit 2
+                            :wall-seconds 1.9989320416934788
+                            :log "envelope-red.log"}
+                :counted-prewarms 0 :test-fast-runs 0}
+ :source-repairs []
+ :verification-complete false
+ :least_sure "Real packet device allowlist is unknown; literal envelope denies /dev/null."
+ :disagreements ["An envelope that has run shell redirects must differ from the literal three-root write allowlist."]
+ :owed [:device-envelope-clarification :whole-gate-census :source-repairs
+        :envelope-green :test-fast :real-prewarm :fable-review]}

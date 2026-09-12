@@ -1,0 +1,10 @@
+standard-clj fix v0.29.0
+
+F /src/clj_surgeon/form_identity.clj [23.19ms]
+F /src/clj_surgeon/mcp_hot_verify.clj [5.82ms]
+F /src/clj_surgeon/probe.clj [1.56ms]
+F /test/clj_surgeon/mcp_alias_migration_test.clj [93.09ms]
+F /test/clj_surgeon/mcp_hot_verify_test.clj [10.32ms]
+✓ /test/clj_surgeon/mcp_http_server_test.clj [16.43ms]
+
+All 6 files formatted with Standard Clojure Style 👍 [161.32ms]

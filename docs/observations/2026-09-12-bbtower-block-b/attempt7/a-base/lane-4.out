@@ -1,0 +1,17 @@
+lanes: --ns -- 8 namespace(s), home-isolated true
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+Testing clj-surgeon.mcp-compact-edit-test
+
+Testing clj-surgeon.mcp-formatter-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.mcp-semantic-client-test
+
+Testing clj-surgeon.mission-git-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.telemetry-events-test

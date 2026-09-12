@@ -1,0 +1,23 @@
+Fresh writable TMPDIR: /var/tmp/forge/bbtower-fx/a15-yzpc6v8s
+All other paths read-only, including /var/tmp/forge and /tmp
+/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt15/restricted-oracle.py:28: DeprecationWarning: Due to '_pack_', the 'Rule' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+  class Rule(ctypes.Structure):
+.......s...s.E.......
+======================================================================
+ERROR: test_a_120_byte_tmpdir_binds_a_real_slot_under_100_bytes (test_gate_slot.SunPathBudgetTest.test_a_120_byte_tmpdir_binds_a_real_slot_under_100_bytes)
+The brief's linux witness, driven to an actual bind().
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/test_gate_slot.py", line 459, in test_a_120_byte_tmpdir_binds_a_real_slot_under_100_bytes
+    name = slot.slot_name(namespace, 'slot-0')
+  File "/home/forge/src/clj-surgeon-bbtower/test/gate_slot.py", line 357, in slot_name
+    raise RuntimeError('gate-refused: the slot path is %d bytes, over the '
+    ...<3 lines>...
+                                      SUN_PATH_BUDGET, SUN_PATH_MAX, path))
+RuntimeError: gate-refused: the slot path is 105 bytes, over the 100-byte AF_UNIX budget (sun_path is 104 on darwin): /var/tmp/forge/bbtower-fx/a15-yzpc6v8s/gs-f7itsbi6/gate-slot-test-a651cbcfbef646789e30ce764a12b319-slot-0 -- set CLJ_SURGEON_GATE_ROOT to a shorter directory
+
+----------------------------------------------------------------------
+Ran 21 tests in 0.326s
+
+FAILED (errors=1, skipped=2)
+exit: 1
