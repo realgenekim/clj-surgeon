@@ -5885,3 +5885,27 @@ by running the test on the other runtime. That is a finding for the plan: a test
 passes on one runtime and fails on the other is not portable, and the rule must require
 passing controls on BOTH runtimes for every assigned namespace, not only the 38 paired.
 Attempt 22 fixes the JVM path (typed reasons survive), extends the rule, then prewarm.
+
+## 2026-09-12T19:53:05Z — attempt 22 NO-GO under my own rule; the census of 159 namespaces; ruling corrected; attempt 23 running
+
+Attempt 22 (tip bff549ad; report `2026-09-12-bbtower-block-b-attempt22-report.md`, census
+and findings beside it): the typed xray refusal now survives JVM evaluation (pre-existing
+on trunk, shown by hand on both runtimes at trunk and tip; the JVM SCI wrapper re-wrapped
+typed host exceptions), the counted JVM battery is GREEN, and the both-runtimes rule I
+ordered ran a complete census: 159 namespaces, 97 pass both runtimes, 50 have named bb
+initial-load incompatibilities, 12 have failing complete controls. The rule as I wrote it
+refuses all 12, so the gate is red. Correct execution of an over-broad rule.
+
+Reading the twelve: nine fail only on bb for named capability limits (SCI host interop,
+native-image reflection, nrepl.core absent from the bb classpath, bb-hosted JVM launchers);
+two fail only on the JVM (cljc merge/split: the JVM reader rejects a top-level splicing
+reader conditional the emitter produces; a round-trip oracle compares gensym'd symbols),
+which is the xray class again, a defect hidden by running the test on bb; one fails on
+both (prune-test creates fixtures under /private/tmp, a darwin path).
+
+Ruling (Fable): the JVM is the reference runtime and bb an eligible accelerator. A JVM
+control failing is always a refusal. A bb control failing for a registered capability
+limit makes the namespace bb-ineligible, assigned JVM, reason recorded and printed, not a
+gate refusal; "never silently pinned" meant never without the reason. Attempt 23 (Astra,
+pid 2803847) encodes the three states, classifies the nine, fixes the three real defects
+red-first, re-folds the census, then battery and prewarm.
