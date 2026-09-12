@@ -5553,3 +5553,23 @@ Fable-class agent, after the rule was written. The rule is right; the harness li
 contradicts it is the standing confound (2026-09-12-harness-shell-preference-line.md).
 Not dispatched further; the program stays parked. Its proposed ratchet (replay asserts
 every row name has an output file) is filed with the item.
+
+## 2026-09-12T11:52:50Z — second check-only prewarm: three red lanes left, all TMPDIR/state-root violations; attempt 13 running
+
+Packet 3932b756 at b45d3eb1 under v3.12 round 3: the JVM lanes, the fast lane, the
+integration lanes and most of the bb lane are green inside the envelope; the packet now
+writes report.edn on a red check (:verdict :fail with the check row), so the round-3 fix
+holds. Three lanes red, each a path that ignores TMPDIR or the state root:
+1. the bb CLI child wrote /tmp/namespace-split-analysis-… (namespace_split_io.clj:163
+   uses java.io.tmpdir; bb ignores JAVA_TOOL_OPTIONS): fix at the launcher for every bb
+   process the product spawns, not per call site;
+2. typist-formatter-failed with an EMPTY refusal (the formatter's temp file; and a refusal
+   that names nothing, against refusal-must-name-the-native-failure);
+3. an alias-migration fixture that builds its tmpfs-link parent as a sibling of
+   clj-surgeon under user.home/.local/state.
+Plus the mission git-boundary test's hard-coded /var/tmp/forge base. Attempt 13 (Astra,
+pid 1176893) takes all four with red-first witnesses and a /tmp before/after listing.
+
+Shape of the day: three seat-tooling rounds and thirteen branch attempts to make one
+landing gate run inside a write envelope. Every refusal was a real out-of-envelope write
+that a hand-run gate had been making silently, on a shared tmpfs, for weeks.
