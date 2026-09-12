@@ -5603,3 +5603,15 @@ red-first with a read-only stand-in; then test-fast and the prewarm.
 
 Count so far: 13 out-of-envelope writers found by refusals in four check-only runs, each
 one a place a hand-run gate had been writing without anyone knowing.
+
+## 2026-09-12T12:50:07Z — attempt 14 PASS: the formatter no longer writes to the home; fourth check-only prewarm running at 2f7b4cf8
+
+Tip 2f7b4cf8 (source tip e679393f), pushed; report published as
+`2026-09-12-bbtower-block-b-attempt14-report.md`. The product process launcher now sets
+npm's cache and log paths under the selected temp root for every child it spawns (outside
+packets too); the default formatter resolves `standard-clj` on PATH, then the checkout's
+node_modules/.bin, then falls back to npx; each invocation records the expanded command
+and :resolved? in the formatter receipt, carried into the typist's :format receipt. Red
+first: with a mode-0555 npm cache the original npx exited 1 with EACCES on _cacache; after
+the fix both the resolved binary and the real npx fallback formatted a multiline source
+under the same read-only inherited paths. Packet ff810b2e is the fourth check-only prewarm.
