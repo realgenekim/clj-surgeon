@@ -5396,3 +5396,26 @@ from the packet env, witness a 512 MiB child inside a packet, red first against 
 (3) the owed seat-executor path: a CHECK-ONLY packet (empty :order, :checks [prewarm])
 that runs the prewarm under the lease and Landlock and emits the admission event.
 Then install, circuits, a check-only prewarm packet at da247b05, and the ship again.
+
+## 2026-09-12T10:07:42Z — Block 4 round 1 delivered, validation blocked by a Block 3 ledger defect; delta round running
+
+Astra's packet 1f40753f built all three v3.12 items in 25 minutes (tip 286f3f92; report
+published as `2026-09-12-block4-report-astra.md`): _JAVA_OPTIONS and JDK_JAVA_OPTIONS
+empty in the packet env with a red-first witness; SHIP_INDEPENDENT_REVIEWER_CMD admitted
+live when it resolves under ~/bin and recorded with its sha; check-only packets (empty
+:order, :checks present) run the check under lease and Landlock with no model launch and
+emit the admission event. Two fresh scoped circuits passed (Claude 33 s, Codex 35 s).
+
+The packet's own check went red for reasons that are not the fixes. I ran the suite
+outside the sandbox: every line green except `production ledger content: fixture event in
+production`, and `packet-options.py --jvm` PASSES with a real JVM (the runtime witness the
+packet could not run, discharged). The failing line is a Block 3 defect: measure_store.py
+derives producer_epoch from its own file hash, so all 75 live ship-history imports at
+00:48Z and every fixture replay share one epoch, and the fixture-in-production oracle
+fires on live history. The oracle is right; the epoch is wrong. Delta packet ba34d331
+(Astra verified) makes measurement epochs per-run and keeps the oracle strict; the 75
+events stay as append-only history with a note.
+
+Admission facts learned by hand: the JVM-options admission accepts only the exact
+spelling -Xmx1024m (not -Xmx1g); the witness suite needs its fixture-env.sh sourced
+(ROOT, CASE, LEDGER_FIXTURE_ROOT) to run a single test by hand.
