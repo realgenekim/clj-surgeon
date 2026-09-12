@@ -6051,3 +6051,16 @@ counting refusals rewards restriction, exactly the "never pinned" failure of att
 Adopted her structure: the wiki is a view of encounter contracts consumed by the entrances
 (that is the tighten skill's second-encounter register, which exists and is unseeded), and
 the metric is repeated defects per eligible encounter at verified cost, false refusals tracked.
+
+## 2026-09-12T21:21:57Z — ship round 5 SEALED (6ebffd88 = cc50aa2b onto a15531ee); data-not-code round 3 died on transport, round 4 resuming
+
+Twelfth check-only prewarm (packet 5aeb8910) exit 0 at cc50aa2b; ship run 20260912T2119Z
+sealed candidate 6ebffd88, Sol reviewing the round-5 brief (F1 answered by attempt24/),
+battery and fast lane beside it.
+
+Data-not-code round 3 (pid 3757527) exited 1 after "Unable to verify model access… stream
+disconnected" ×5 (Codex transport, not a refusal), with items 3, 4, 5 committed (evidence
+rows consumed; sleep pins as identities; the probe measure preregistered) and items 1–2
+half-edited in the worktree. Round 4 (pid 607767) resumes from that diff; its own log
+already shows one "Unable to verify" line, so if it dies the same way the Codex seat's
+model access is the blocker (codex-auth memory: test with a live exec, which this is).
