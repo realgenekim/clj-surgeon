@@ -1341,6 +1341,10 @@
   clj-surgeon.mcp-hot-verify-test/hot-verification-treats-interrupted-as-a-failure-never-a-pass
   clj-surgeon.mcp-hot-verify-test/passing-law
   clj-surgeon.mcp-hot-verify-test/probe-authorizes-the-requested-test-target-before-reload
+  clj-surgeon.mcp-hot-verify-test/probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload
+  clj-surgeon.mcp-hot-verify-test/probe-receipt-retains-expected-closure-after-reload-failure
+  clj-surgeon.mcp-hot-verify-test/probe-reloads-prefix-list-dependency
+  clj-surgeon.mcp-hot-verify-test/probe-require-shape-matrix
   clj-surgeon.mcp-hot-verify-test/profile-validation-is-closed-and-bounded
   clj-surgeon.mcp-http-server-test/accepts-only-non-browser-or-loopback-origins
   clj-surgeon.mcp-http-server-test/alias-migration-commits-across-the-real-http-wire
