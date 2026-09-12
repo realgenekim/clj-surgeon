@@ -6000,6 +6000,10 @@
     "invalid-probe-port" "probe-connection-failed"
     ;; BB-PROBE-004: oversized HTTP verdicts retain bounded truncation facts.
     "probe-response-truncated"
+    ;; BB-PROBE-002: a bounded request is not a shallow one. The pre-parse
+    ;; nesting bound, and the Throwable boundary behind it, so that a
+    ;; StackOverflowError leaves as a named refusal instead of zero bytes.
+    "probe-request-too-deep" "probe-request-unreadable"
     ;; Row-2 external artifact containment adds these reachable typed refusals.
     "receipt-dir-escapes" "receipt-dir-inside-workspace"})
 
@@ -6010,7 +6014,7 @@
   ;; could see. Both directions are asserted — a kind that appears and a kind
   ;; that vanishes are each a change to what a text-reading client is promised.
   (let [kinds (set (refusal-kinds-in-source))]
-    (is (= 164 (count kinds))
+    (is (= 166 (count kinds))
         (str "the entrance's refusal enumeration changed size: "
              (count kinds) " kinds"))
     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))
