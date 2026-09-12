@@ -5573,3 +5573,19 @@ pid 1176893) takes all four with red-first witnesses and a /tmp before/after lis
 Shape of the day: three seat-tooling rounds and thirteen branch attempts to make one
 landing gate run inside a write envelope. Every refusal was a real out-of-envelope write
 that a hand-run gate had been making silently, on a shared tmpfs, for weeks.
+
+## 2026-09-12T12:23:22Z — attempt 13 PASS-WITH-TMP-UNKNOWN; third check-only prewarm running at c2ec3039
+
+Tip c2ec3039 (source tip 86d98e4a), pushed to origin bb-rewrite-tower; report published as
+`2026-09-12-bbtower-block-b-attempt13-report.md`. Product-owned bb commands and both
+generated CLI launchers now pass an explicit startup temp property under the attempt-12
+policy; the formatter stages under that root; typist-formatter-failed carries the native
+message, path and process evidence; the alias tmpfs fixture and the git fixtures live
+under the artifact root and TMPDIR. Red-first on the CLI child (returned /tmp) and on the
+typist refusal (evidence discarded). The three previously red namespaces ran under a fresh
+empty TMPDIR: 202 tests / 3,827 assertions, root empty afterward. test-fast once: fast
+40,285 / 60,000 ms, bb 14,434 / 343,102 ms. One prewarm repair: the CLI compact-receipt
+witness read the live checkout's status, which this attempt's own untracked observation
+files had grown (isolated). "TMP-UNKNOWN" is honest: no Landlock claim, only a read-only
+tmp stand-in; the check-only packet is the Landlock claim, and it is running now
+(packet 53079781).
