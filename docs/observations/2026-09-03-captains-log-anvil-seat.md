@@ -5153,3 +5153,21 @@ Four refusals now, every one a brief defect, every one before a JVM ran. The les
 generalizes: a packet brief must be executed in the head against the ENVELOPE, not the
 box. Anything the builder must create that touches a shared store (git registration,
 /var/tmp fixtures, ~/bin) is Fable's to create before admission.
+
+## 2026-09-12T06:42:20Z — block B attempt 5 found a real packet defect; attempt 6 running under an authorized matched environment
+
+Packet ad7e0a55 got past the base checkout and refused in six minutes on a finding that is
+not mine for once: the packet seals `_JAVA_OPTIONS=-Xmx1024m -Djava.io.tmpdir=<packet tmp>`,
+and _JAVA_OPTIONS is applied AFTER command-line flags, so the coordinator's 512 MiB
+per-worker cap and its private temp dir are silently overridden inside every packet.
+Astra proved it with two diagnostic JVMs. Filed as inb-55b884 for ship v3.12 (drop
+_JAVA_OPTIONS, keep JAVA_TOOL_OPTIONS, witness a 512 MiB child inside a packet).
+
+Resolution for this block: I authorized measurement under the sealed environment as-is.
+Arms (a), (b), (c) are matched to each other at 1 GiB, so the slowdown is located by their
+deltas; absolute sums are declared provisional and the landing gate outside the packet
+re-establishes the 60 s and 240 s verdicts before any landing. Attempt 6 is packet 35dc856c,
+Astra verified.
+
+Five refusals in 62 minutes, zero suites run. Four were my brief; one was the apparatus.
+Every one of them would have been a silent confound in a hand-run experiment.
