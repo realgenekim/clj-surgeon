@@ -885,3 +885,14 @@ additional CLJC reader/oracle and bb capability/dependency failures by name.
 No runtime is moved to hide a failing control, and no budget changes.
 Full census, individual accounts, gate outcomes and remaining work:
 [attempt22](observations/2026-09-12-bbtower-block-b/attempt22/REPORT.md).
+
+Attempt23 applies Fable's corrected ruling: the JVM is the reference and named
+bb capability limits select JVM with reasons. The CLJC strict-split emitter now
+uses JVM-readable per-form conditionals and its oracle normalizes generated
+arguments. Prune's TMPDIR repair exposed an unregistered Git version (2.53.0,
+admitted after its real compatibility matrix passed) and then the same SCI
+FileLockImpl.release limitation as recovery. The fold is therefore 99 portable,
+10 explicitly bb-ineligible and zero refused, plus 50 unchanged initial-load
+exclusions with no claim of complete controls. Counts differ from the predicted
+100/9 for that evidenced reason. Gates and source dogfood are recorded in
+[attempt23](observations/2026-09-12-bbtower-block-b/attempt23/REPORT.md).

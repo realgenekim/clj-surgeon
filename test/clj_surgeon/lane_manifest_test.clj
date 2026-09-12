@@ -223,7 +223,8 @@
       (doseq [[n runtime] lm/unmeasured-runtimes]
         (is (= runtime (if (lm/bb-ineligibilities n) :jvm (lm/portability-runtimes n))) (str n)))
       (doseq [[n {:keys [jvm bb conservative-ratio] :as measurement}] lm/runtime-measurements]
-        (is (= (:runtime measurement) (lm/namespace-runtimes n)) (str n " recorded assignment"))
+        (is (= (if (lm/bb-ineligibilities n) :jvm (:runtime measurement))
+               (lm/namespace-runtimes n)) (str n " assignment after capability admission"))
         (doseq [[runtime arm] [[:jvm jvm] [:bb bb]]]
           (let [rows (mapv #(edn/read-string (slurp %)) (:logs arm))
                 walls (mapv :elapsed-ms rows)

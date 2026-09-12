@@ -1,8 +1,8 @@
 (ns clj-surgeon.worktree-lifecycle-io
   "Bounded Git, Supacode, plan, journal, and single-target apply adapter."
   (:require
-   [clj-surgeon.spawn-ledger :as spawn]
    [cheshire.core :as json]
+   [clj-surgeon.spawn-ledger :as spawn]
    [clj-surgeon.worktree-lifecycle :as lifecycle]
    [clojure.edn :as edn]
    [clojure.java.io :as io]

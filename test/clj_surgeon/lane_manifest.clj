@@ -862,6 +862,10 @@
    {:reasons #{:native-image-reflection} :detail "Native image cannot invoke sci.lang.Var.getRawRoot"}
    'clj-surgeon.reader-eval-fence-test
    {:reasons #{:bb-hosted-jvm-launcher} :detail "bb-hosted JVM launcher throws ClassNotFoundException: clojure.main"}
+   'clj-surgeon.worktree-lifecycle-prune-test
+   {:reasons #{:sci-host-interop}
+    :detail "After TMPDIR and witnessed Git admission repairs, SCI refuses shared FileLockImpl.release; prune replay retains its lock"
+    :probe "docs/observations/2026-09-12-bbtower-block-b/attempt23/recovery-lock-probe.log"}
    'clj-surgeon.worktree-lifecycle-recovery-test
    {:reasons #{:sci-host-interop}
     :detail "SCI refuses FileLockImpl.release; replay retains the lock and reports lifecycle-target-locked"
