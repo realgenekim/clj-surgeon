@@ -5756,3 +5756,22 @@ build, one red-team, one verifier, eleven fix or merge rounds), ship v3.12 in th
 rounds and two installs, eight check-only prewarm packets, 21 out-of-envelope writers
 fixed. The ship's own three legs now decide it; GO-WITH-FIX has the seat's independent
 reviewer available for the first time.
+
+## 2026-09-12T14:59:37Z — Sol NO-GO on candidate 1c28307c; three findings accepted; attempt 20 running
+
+Ship run 20260912T145323Z: review 259 s, VERDICT no-go, status HOLD (verdict published as
+`2026-09-12-bbtower-block-b-sol-fence-verdict-1.md`). Sol pressed every area I named and
+found two blockers and a spec defect:
+1. TEST-ISO-016 sets runtime from single observations; the repository's own doctrine
+   (CLAUDE.md:146) demands six identical control runs and two standard deviations for any
+   comparison that sets policy. rename-alias-test sits 52 ms from the line on one sample.
+   Right, and I should have caught it: the rule I ratified is exactly the kind of
+   uncertified timing the doctrine forbids. Attempt 20 re-measures every paired namespace
+   n=6 per runtime and makes the rule clear 2.0 at two sd in the conservative direction.
+2. The probe servlet writes pr-str of the verdict unbounded (54,012 bytes for a
+   5,000-dependency reload against the client's 16,384-char guard). Bound at the server
+   with a typed truncation field, never a cut stream (a-bound-must-degrade-never-delete).
+3. bb-probe-specs.md still says a passed verdict carries verification_complete=false;
+   the receipt omits it. Spec fixed and a spec-vs-receipt witness added.
+Everything else held: the ceiling reproduces; runtime and cadence sums never added; the
+14 moved namespaces run in the landing manifest; no probe authorization bypass.
