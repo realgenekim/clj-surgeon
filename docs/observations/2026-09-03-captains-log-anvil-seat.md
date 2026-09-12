@@ -6064,3 +6064,15 @@ rows consumed; sleep pins as identities; the probe measure preregistered) and it
 half-edited in the worktree. Round 4 (pid 607767) resumes from that diff; its own log
 already shows one "Unable to verify" line, so if it dies the same way the Codex seat's
 model access is the blocker (codex-auth memory: test with a live exec, which this is).
+
+## 2026-09-12T21:29:05Z — Sol round 5 NO-GO on 6ebffd88: the probe's source roots are a hardcoded list; attempt 25 derives them from the image classpath
+
+Verdict published as `2026-09-12-bbtower-block-b-sol-fence-verdict-5.md`. Every prior repair
+held. F1: mcp_hot_verify.clj:225 searches src, test and libs/clj-splice/src; the test-deps
+classpath also has dev/experiments; a dependency there was silently omitted and the probe
+passed on stale code (loaded 1, disk 2). Same class as round 4, one layer up, and the same
+theme as the data-not-code consult: a literal list where a derived value belongs. Attempt 25
+(Astra, pid 788471): roots derived from the image's actual classpath, jar entries counted
+external, anything unresolvable refused with :probe-dependency-unresolved and zero reloads,
+:roots in the receipt, red first on Sol's case. Five rounds, five classes; every one a value
+that had been typed instead of derived.
