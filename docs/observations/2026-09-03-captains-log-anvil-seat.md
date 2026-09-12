@@ -5990,3 +5990,15 @@ from today, each with its receipt. Critique of the commit-mining idea given in c
 under three constraints (receipts not commit messages; every entry names its meter
 movement; the wiki is the promotion ladder's middle rung, not a fifth store). An Opus
 miner is reading the last ten days of observation records under those rules.
+
+## 2026-09-12T20:37:33Z — Sol round 4 NO-GO on e3ffc6a7: the probe drops prefix-list dependencies silently; attempt 24 running
+
+Verdict published as `2026-09-12-bbtower-block-b-sol-fence-verdict-4.md`. Every prior
+repair held again. New F1, the green-that-lies class: probe-reload-order does not traverse
+prefix-list requires, so `(:require (foo [bar :as b]))` drops foo.bar from the reload order
+and a changed dependency stays stale while the target's tests pass. Sol reproduced it in a
+temporary project: order [demo.probe-test], expected [foo.bar demo.probe-test]. Attempt 24
+(Astra, pid 3813118): reuse the repository's ns parser (no second parser), a typed
+:probe-require-unparsed refusal instead of silent omission, :closure-expected in the
+receipt, red first on Sol's case. Four fence rounds, four findings, each one a class:
+timing policy, unbounded output, unauthorized target, incomplete closure.
