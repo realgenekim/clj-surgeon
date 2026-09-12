@@ -5254,3 +5254,31 @@ receipt_booleans_test covers three verbs. The encounter-score entrance refused
 the active one. Owed to ship v3.12 with inb-55b884.
 
 Next: independent Opus red-team of the tip, then land through the ship path.
+
+## 2026-09-12T08:12:32Z — block B red-team: GO-WITH-FIX; attempt 9 running on five fixes
+
+Opus attacked tip 6e3e5535 for 17 minutes in its own worktree (report published as
+`2026-09-12-bbtower-block-b-opus-redteam.md`). Every gating witness held when its defect
+was reintroduced: the runtime rule went red naming splice-envelope-test; a one-ms change
+to the bb ceiling produced four failures; ns_isolation.clj's diff is one added line with
+:fast and :integration untouched; deftest sets are byte-identical base to tip (2,603);
+make test-fast passed at 37,321 / 60,000 ms. All 35 reassignment rows checked against the
+receipts, zero mismatches.
+
+Five fixes before landing (go-with-fix is not go):
+1. Probe refusal completeness has a blind spot: the witness only sees `(refusal ...)` heads,
+   and probe-servlet emits kinds through requiring-resolve, so a planted unregistered kind
+   stayed green. Spellings, not names (scanner-brief-names-vs-spellings, again).
+2. Probe's verification_complete is a literal false, so its "seam" is a declaration, not a
+   driven seam. A constant is not a receipt boolean: drop it or compute it.
+3. The bb ceiling's cited evidence does not reproduce its number (240,785 ms under the
+   shipped runtime map, not 245,773). Recompute from a receipt that holds the lines.
+4. `bb test/run_all.clj` exits 96 at the tip and no gate covers it.
+5. Inherited from block A: 47 of test-fast's 109 namespaces have no lane and no
+   per-namespace budget; install-test (80.6 s) and parser-admission-test (71.2 s) each
+   exceed the whole fast ceiling alone; the makespan the fleet pays is ~83 s while the
+   "fast sum" charges 61 members. Every test-fast member gets a lane and a budget; what
+   cannot fit moves by measurement.
+
+Attempt 9 (Astra, pid 592255) is on all five. My ratification of 399,155 ms is withdrawn
+pending the recomputed value.
