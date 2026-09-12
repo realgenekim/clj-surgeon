@@ -5775,3 +5775,26 @@ found two blockers and a spec defect:
    the receipt omits it. Spec fixed and a spec-vs-receipt witness added.
 Everything else held: the ceiling reproduces; runtime and cadence sums never added; the
 14 moved namespaces run in the landing manifest; no probe authorization bypass.
+
+## 2026-09-12T17:15:24Z — Gene: "Go!! You know the goal. Make sure we are tightening (skill) — critique approach of last night"
+
+Critique, against tighten-the-loop's own terms. Right: every refusal was real; nothing
+waived, relabeled, or patched into a sealed candidate; Sol's NO-GO accepted; the seat's
+tooling can now satisfy its own gate. Wrong loop shape, three ways:
+1. Friction found one instance per round through the most expensive entrance (seven
+   check-only packets, seven minutes each, plus an Astra round apiece) for one CLASS of
+   defect that the first refusal already named. The class oracle (a Landlock wrapper over
+   the whole gate) found the rest in 127 s once built, five packets late. Rule from now:
+   a refusal that names a class gets the class oracle next, never another instance.
+2. Twenty hand-written briefs, one shape with a different denied path. The skill lists
+   boilerplate briefs as a loop defect; by the Fable clause that is mine too. Ratchet: a
+   red packet's report.edn seeds the next brief.
+3. Apparatus share ~100% for the whole night; the tripwire says withdraw "sublime" and
+   select ONE bounded ratchet. I withdrew the score and selected twenty ratchets serially.
+
+The meter agrees with the critique: `tighten status` shows the last seat receipt is 99 h
+old (2026-09-08, trunk 96e9436c), 29 open friction items, and today's canary at 06:04Z
+PASSED with apparatus 69.2%, over the 50% tripwire. The daily unit has not been run for
+four days while I ran the loop by hand. Filed inb-f346bc (class oracle first) and
+inb-bc3098 (red packet seeds the brief) with their counterexamples. Running seat-receipt
+now; no new apparatus after block B lands until a vs-native table exists.
