@@ -393,6 +393,9 @@
   (.put environment "PATH" (effective-path (.getOrDefault environment "PATH" "")))
   (doseq [key ["TMPDIR" "TMP" "TEMP"]]
     (.put environment key (selected-temp-root)))
+  (doseq [[key directory] [["npm_config_cache" "npm-cache"]
+                           ["npm_config_logs_dir" "npm-logs"]]]
+    (.put environment key (str (io/file (selected-temp-root) directory))))
   environment)
 
 (defn- destroy-process-tree!

@@ -9,6 +9,18 @@
 (def default-command
   ["npx" "@chrisoakman/standard-clojure-style" "fix" "{files}"])
 
+;; @spec MCP-OP-TMPHYG-005
+(defn formatter-command
+  "Prefer an installed formatter for the default command; preserve custom argv."
+  [project-root command]
+  (if-let [binary (when (= default-command command)
+                    (or (process/resolve-executable "standard-clj")
+                        (process/resolve-executable
+                          (.getAbsolutePath
+                            (io/file project-root "node_modules" ".bin" "standard-clj")))))]
+    {:command [binary "fix" "{files}"] :resolved? true}
+    {:command command :resolved? false}))
+
 (defn verification-profiles-after-format
   "Remove the formatter's corresponding check command after formatting has
    become a mandatory pre-commit stage. Other checks and profiles are exact."
@@ -45,9 +57,11 @@
       :error "Formatter command must be a non-empty string vector containing {files}"
       :source-unchanged true}
      (let [staged-files (atom [])
-           active-path (atom (process/selected-temp-root))]
+           active-path (atom (process/selected-temp-root))
+           invocation (atom {:command command :resolved? false})]
        (try
-         (let [staged (mapv (fn [[file source]]
+         (let [_ (reset! invocation (formatter-command project-root command))
+               staged (mapv (fn [[file source]]
                               (let [temp (java.io.File/createTempFile
                                            "clj-surgeon-candidate-" (suffix file)
                                            (io/file (process/selected-temp-root)))]
@@ -57,15 +71,18 @@
                                 {:file file :temp temp}))
                         (sort-by key future-sources))
                temp-files (mapv #(str (:temp %)) staged)
+               expanded (change-buffer/expand-command (:command @invocation) temp-files)
+               _ (swap! invocation assoc :command expanded)
                result (run-process!
                         project-root
-                        (change-buffer/expand-command command temp-files))]
+                        expanded)]
            (if (and (:finished? result) (zero? (:exit result)))
              (let [formatted (into (sorted-map)
                                    (map (fn [{:keys [file temp]}]
                                           [file (slurp temp)]))
                                    staged)]
                {:ok true
+                :formatter @invocation
                 :status :complete
                 :file-count (count formatted)
                 :changed-file-count
@@ -75,12 +92,13 @@
                 :elapsed_ms (:elapsed_ms result)
                 :future-sources formatted})
              {:ok false
+              :formatter @invocation
               :error-type (if (:finished? result)
                             :formatter-failed
                             :formatter-timeout)
               :error (str "Formatter failed on staged candidate files "
                           (pr-str temp-files) ": " (:output result))
-              :command (first command)
+              :command (first (:command @invocation))
               :paths temp-files
               :exit (:exit result)
               :elapsed_ms (:elapsed_ms result)
@@ -88,9 +106,10 @@
               :source-unchanged true}))
          (catch Exception error
            {:ok false :error-type :formatter-failed
+            :formatter @invocation
             :error (str (.getName (class error)) ": " (.getMessage error)
                         " [" @active-path "]")
-            :path @active-path :command (first command)
+            :path @active-path :command (first (:command @invocation))
             :source-unchanged true})
          (finally
            (doseq [temp @staged-files]

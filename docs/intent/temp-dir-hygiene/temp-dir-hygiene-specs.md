@@ -50,8 +50,15 @@ required), `[x]` implemented (implementation and test witnesses required),
   watches. The test re-exec child shall also receive the fixed string
   `NODE_DISABLE_COMPILE_CACHE=1`, overriding an unset/0 parent setting; a
   re-exec child lacking that exact value shall refuse before running tests.
-  Normal descendants inherit this test-only policy. Production formatter
-  invocations outside this test boundary keep their existing cache behavior.
+  Normal descendants inherit this test-only compile-cache policy.
+  All product subprocesses override `npm_config_cache` and
+  `npm_config_logs_dir` with `<selected-root>/npm-cache` and
+  `<selected-root>/npm-logs`, including production formatter invocations.
+  The default formatter prefers executable `standard-clj` on PATH, then
+  checkout `node_modules/.bin/standard-clj`, otherwise the original npx command.
+  Custom formatter argv remains exact. Each invocation retains
+  `:formatter {:command <expanded-argv> :resolved? <boolean>}` on success
+  and failure, including through the typist receipt's `:format` field.
 
   Attempt 13 clarifies the subprocess boundary: each product-owned bb launch,
   including CLI launchers and formatter/proof commands, supplies an explicit

@@ -225,8 +225,17 @@ No direct npx/standard-clojure-style or formatter API invocation was found in
 recursive test/bench shell gates. The format-extraction configuration self-test
 exits before benchmark execution. Arbitrary benchmark agent commands are not
 covered by this test-runner invariant. Tests that deliberately replace a whole
-subprocess environment must state that exception; production formatter behavior
-and all temporary-root/sweep protections remain unchanged.
+subprocess environment must state that exception. Production subprocesses now
+receive npm cache/log locations beneath the selected root (attempt 14); the
+compile-cache rule remains test-only. Temporary-root/sweep protections remain.
+
+The formatter resolves the default standard-clj command before staging; PATH
+wins over checkout node_modules/.bin, with npx as the final fallback. Custom
+commands are preserved. The shared launcher overrides inherited npm locations,
+so fallback cannot silently restore home writes. Resolved execution avoids npm
+entirely. Receipts retain the expanded command and resolution boolean, including
+native failures and typist publication. The read-only cache field witness and
+selection/environment tests distinguish these independent guarantees.
 
 The runner witnesses exercise inheritance and stripped-environment refusal.
 They require no package installation or formatter package availability; direct

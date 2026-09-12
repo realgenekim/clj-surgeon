@@ -1269,6 +1269,7 @@
   clj-surgeon.mcp-feature-thread-test/two-definitions-of-one-seed-are-both-named
   clj-surgeon.mcp-feature-thread-test/unreadable-js-leg-is-a-typed-absence
   clj-surgeon.mcp-feature-thread-test/warm-up-meter-rounds-to-a-complete-thread
+  clj-surgeon.mcp-formatter-test/default-formatter-prefers-path-then-checkout-then-npx
   clj-surgeon.mcp-formatter-test/formatter-operates-on-staged-candidates-not-live-files
   clj-surgeon.mcp-formatter-test/formatter-refuses-invalid-command-failure-and-timeout
   clj-surgeon.mcp-formatter-test/formatter-staging-honours-selected-root-and-cleans-up-exceptions

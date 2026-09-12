@@ -60,6 +60,8 @@
                       "(ns app)\n\n(defn f\n  []\n  :new)\n")
                 {:finished? true :exit 0 :elapsed_ms 1.5 :output ""}))]
         (is (:ok result))
+        (is (= false (get-in result [:formatter :resolved?])))
+        (is (= "format" (get-in result [:formatter :command 0])))
         (is (= 1 (:file-count result)))
         (is (= 1 (:changed-file-count result)))
         (is (= "(ns app)\n\n(defn f\n  []\n  :new)\n"
@@ -84,6 +86,8 @@
                      (fn [_ _] process-result))]
         (is (false? (:ok result)))
         (is (= expected (:error-type result)))
+        (is (= false (get-in result [:formatter :resolved?])))
+        (is (= "format" (get-in result [:formatter :command 0])))
         (is (true? (:source-unchanged result)))))))
 
 ;; @spec MCP-OP-TMPHYG-005
@@ -101,10 +105,26 @@
                          (throw (java.io.IOException. (str "native formatter denied " @seen)))))]
           (is (false? (:ok result)))
           (is (= :formatter-failed (:error-type result)))
+          (is (= ["format" @seen] (get-in result [:formatter :command])))
           (is (= @seen (:path result)))
           (is (re-find #"native formatter denied" (:error result)))
           (is (not (.exists (io/file @seen))))))
       (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-TMPHYG-005
+(deftest default-formatter-prefers-path-then-checkout-then-npx
+  (doseq [[available expected resolved?]
+          [[{"standard-clj" "/tools/standard-clj"
+             "/repo/node_modules/.bin/standard-clj" "/repo/local"}
+            ["/tools/standard-clj" "fix" "{files}"] true]
+           [{"/repo/node_modules/.bin/standard-clj" "/repo/local"}
+            ["/repo/local" "fix" "{files}"] true]
+           [{} formatter/default-command false]]]
+    (with-redefs [process/resolve-executable available]
+      (is (= {:command expected :resolved? resolved?}
+             (formatter/formatter-command "/repo" formatter/default-command)))
+      (is (= {:command ["custom" "{files}"] :resolved? false}
+             (formatter/formatter-command "/repo" ["custom" "{files}"]))))))
 
 (deftest staged-formatting-removes-only-its-redundant-post-commit-check
   (let [profiles

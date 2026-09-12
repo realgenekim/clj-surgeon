@@ -72,6 +72,8 @@
             (is (= 1 (:match-count result)))
             (is (= :complete (get-in result [:format :status])))
             (is (number? (get-in result [:format :elapsed_ms])))
+            (is (vector? (get-in result [:format :formatter :command])))
+            (is (boolean? (get-in result [:format :formatter :resolved?])))
             (is (re-find #"new-name" (slurp file)))
             (is (= :typist-invalid-undo-hash (:error-type (executor/undo! (:undo_receipt result) "wrong-hash"))))
             (is (:ok (executor/undo! (:undo_receipt result) (:receipt_hash result))))

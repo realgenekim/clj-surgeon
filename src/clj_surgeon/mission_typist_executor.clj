@@ -165,7 +165,7 @@
     (if-not (:ok result)
       (assoc (refuse :typist-formatter-failed)
              :error (:error result) :formatter result)
-      {:ok true :format (select-keys result [:status :elapsed_ms :file-count :changed-file-count])
+      {:ok true :format (select-keys result [:status :elapsed_ms :file-count :changed-file-count :formatter])
        :replacements (mapv (fn [i r]
                              (assoc r :form (get-in result [:future-sources (str "owner-" i ".clj")])))
                        (range) replacements)})))

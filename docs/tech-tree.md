@@ -814,3 +814,14 @@ and focused green receipts: `/var/tmp/forge/splice-fx/fix1-*.log`.
 Executed budget: rename 211 + insert 171 + shared/library 135 = 517 (ceiling 580).
 Final gate receipts and limitations belong to `/var/tmp/forge/splice-fx/astra-fix1-report.md`.
 This is correctness evidence on a branch, with no new performance or routing claim.
+
+### 2026-09-12 — formatter npm home writes, bb tower attempt 14
+
+The real staged formatter failed with EACCES against a read-only npm cache.
+The shared launcher now places npm cache/logs beneath the selected temp root;
+the default formatter prefers an installed standard-clj, then checkout-local
+standard-clj, before npx. Receipts expose the actual command and resolution.
+Both real command paths format the multiline fixture successfully with the
+inherited cache/log locations unwritable. This is a write-location correction,
+not a performance comparison. Final suite/gate evidence and remaining limits:
+[attempt14](observations/2026-09-12-bbtower-block-b/attempt14/REPORT.md).
