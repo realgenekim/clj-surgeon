@@ -5352,3 +5352,23 @@ registered constant equals that computation, so it cannot drift again; the spec'
 boundary gets a witness against the constant; extraction covers every top-level form of
 every owner file. Ratchet: a number in a spec that a witness does not compute is a
 number that will be wrong by the third reading.
+
+## 2026-09-12T09:50:15Z — block B attempt 11: GO; the ceiling is now computed; ratified at 343,102 ms; shipping
+
+Astra closed the verifier's three items in 38 minutes (tip da247b05, code tip 800b756e,
+pushed to origin bb-rewrite-tower; report `2026-09-12-bbtower-block-b-attempt11-report.md`).
+The bb ceiling is a script now: `bb test/clj_surgeon/bb_ceiling.clj <receipt>` folds one
+archived calibration receipt under the shipped manifest and prints the three numbers; the
+witness asserts the registered constant equals that print, and a second witness parses the
+spec's boundary sentence against the constant. I re-ran the script on the tip myself:
+{:bb-runtime-sum-ms 240989 :fast-cadence-sum-ms 42143 :ceiling-ms 343102}, constant 343102,
+spec 343,102/343,103. RATIFIED: 343,102 ms. Third derivation, first one a witness computes.
+
+Refusal extraction now scans every top-level form of every owner file; the verifier's plant
+and a second independent plant both go red naming file and kind; nine pre-existing non-probe
+kinds in the shared owner files are registered under :owner-refusals, checked both ways.
+
+Final numbers at the tip: fast coordinator makespan 23,620 ms; fast sum 42,909 / 60,000;
+bb sum 15,455 / 343,102; integration 57,140 / 240,000; landing-gate-prewarm passed in
+384 s, seven stages, no repair. Now shipping through the ship path (Sol fence review,
+battery beside it, prewarm on the sealed candidate).
