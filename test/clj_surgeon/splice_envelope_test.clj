@@ -18,24 +18,42 @@
 ;; @spec INSERT-FORMS-015
 ;; INTENT-TEST: INSERT-FORMS-015
 
+(def probe-owners
+  {"probe.clj" nil
+   "mcp_hot_verify.clj" #{'probe! 'probe-reload-order}
+   "mcp_http_server.clj" #{'probe-servlet}})
+
+(defn refusal-spellings [forms]
+  (letfn [(literals [value]
+            (filter #(and (keyword? %) (not (#{:error-type :kind} %)))
+                    (tree-seq coll? seq value)))]
+    (set
+      (mapcat
+        (fn [node]
+          (cond
+            (map? node) (mapcat #(literals (get node %)) [:error-type :kind])
+            (seq? node)
+            (concat
+              ;; Includes ((requiring-resolve 'probe/refusal) :literal ...).
+              (when (some #(and (symbol? %) (= "refusal" (name %)))
+                          (tree-seq coll? seq (first node)))
+                (literals (second node)))
+              (mapcat (fn [[k v]] (when (= :kind k) (literals v)))
+                      (partition 2 1 node)))))
+        (tree-seq coll? seq forms)))))
+
+(defn probe-vocabulary []
+  (into {}
+        (for [[file names] probe-owners
+              :let [all (binding [*read-eval* false]
+                          (read-string (str "[" (slurp (str "src/clj_surgeon/" file)) "]")))
+                    forms (if names (filter #(and (seq? %) (names (second %))) all) all)]]
+          [file (refusal-spellings forms)])))
+
 (defn remedy-vocabulary [verb]
   ;; Read code as data, never eval; case constants include grouped clauses.
   (if (= verb "probe")
-    (let [owners {"probe.clj" nil
-                  "mcp_hot_verify.clj" #{'probe! 'probe-reload-order}
-                  "mcp_http_server.clj" #{'probe-servlet}}
-          forms (mapcat (fn [[file names]]
-                          (let [all (binding [*read-eval* false]
-                                      (read-string (str "[" (slurp (str "src/clj_surgeon/" file)) "]")))]
-                            (if names (filter #(and (seq? %) (names (second %))) all) all))) owners)]
-      (set (mapcat (fn [node]
-                     (cond
-                       (and (map? node) (keyword? (:error-type node))) [(:error-type node)]
-                       (and (seq? node) (symbol? (first node))
-                            (= "refusal" (name (first node))))
-                       (filter #(and (keyword? %) (not= :error-type %))
-                               (tree-seq coll? seq (second node)))))
-             (tree-seq coll? seq forms))))
+    (set (mapcat val (probe-vocabulary)))
     (let [path (str "src/clj_surgeon/" (clojure.string/replace verb "-" "_") "_plan.clj")
           forms (binding [*read-eval* false] (read-string (str "[" (slurp path) "]")))
           remedy (first (filter #(and (seq? %) (= 'defn (first %)) (= 'remedy (second %))) forms))
@@ -65,6 +83,11 @@
                              :when (#{:unsupported-source :malformed-utf8} type)]
                          [type [class native_failure]]))) verb))
       (is (= (remedy-vocabulary verb) (set (map :type rows))) (str verb " refusal vocabulary must be complete"))
+      (when (= verb "probe")
+        (doseq [[file kinds] (probe-vocabulary)]
+          (is (seq kinds) (str file " must contribute refusal kinds"))
+          (is (= #{} (set (remove (set (map :type rows)) kinds)))
+              (str file " emits unregistered refusal kinds"))))
       (is (and (seq rows) (= (count rows) (count (set (map :type rows))))
                (every? (fn [row]
                          (and (every? #(contains? row %) [:promise :native_failure :native_method
@@ -132,6 +155,15 @@
             (is (= clj-surgeon.insert-forms-support/source (slurp file)))))))))
 
 (deftest exactly-one-edn-request
+  (testing "Red-team servlet spelling and refusal literal families"
+    (doseq [form ['(refusal :direct "no")
+                  '(probe/refusal :direct "no")
+                  '((requiring-resolve 'clj-surgeon.probe/refusal) :direct "no")
+                  '(emit :kind :direct)
+                  '{:kind :direct}
+                  '{:error-type :direct}
+                  '(refusal (or (:error-type data) :direct) "no")]]
+      (is (= #{:direct} (refusal-spellings form)) (pr-str form))))
   (doseq [[text expected] [["{}" {}] ["{} ; final comment" {}]
                            ["{} {}" :invalid-request] ["{:a 1 :a 2}" :invalid-request]
                            ["#foo {}" :invalid-request] ["#=(throw (Exception.))" :invalid-request]

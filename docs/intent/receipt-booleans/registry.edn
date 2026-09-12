@@ -9,9 +9,10 @@
  :boundaries ["Returned receipt and durable per-file evidence" "New verbs" "New nested fields" "Post-write external mutation"]
  :tests [every-receipt-boolean-has-a-driven-false-witness unregistered-verbs-and-fields-fail-by-name]
  :rationale "Opus found the same unwitnessed receipt-boolean class in insertion and alias rename, 2026-09-11."
- :rule "Every boolean path discovered in committed write receipts or a passed probe verdict needs an observed literal-false witness. Probe's verification_complete remains false because warm success is not cold proof. Failure-only fields are covered by publication/recovery groups, not this discovery claim."
+ :rule "Every boolean path discovered in committed write receipts or a passed probe verdict needs an observed literal-false witness. Failure-only fields are covered by publication/recovery groups, not this discovery claim."
+ :probe-policy "Option (a), red-team repair 2026-09-12: probe carries no verification booleans. A warm probe never verifies cold behavior; verification_complete false was a constant, not evidence that a seam could flip. Passed, failed, empty and refused observations omit the field and retain proof_pending [:landing-gate]. The empty registration is checked, so a later boolean cannot silently escape registration."
  :verbs
- {"probe" {:verification_complete :behavior-not-run}
+ {"probe" {}
   "insert_forms"
   {:committed :stage-failure :ok :stage-failure :mutation_attempted :stage-failure
    :source_unchanged :completed-write :verification_complete :behavior-not-run

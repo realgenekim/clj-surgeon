@@ -17,7 +17,7 @@ classpath configuration and server implementation. A mismatching image refuses
 before reload or test execution. Ordinary source edits remain reloadable.
 The existing hot-verification namespace owns reload and test execution.
 
-Observable results: probe-passed or probe-failed, verification_complete false,
+Observable results: probe-passed or probe-failed, no verification booleans,
 proof_pending [landing-gate], reloaded namespaces, test/assertion/failure
 counts and elapsed_ms. Empty/missing test namespaces, malformed requests,
 unreachable servers and stale identity cannot become passing verdicts.

@@ -25,7 +25,7 @@
           image {:root "/owned" :generation "g1" :fingerprint "cp1"}
           request {:ns "example-test" :image image}]
       (is (= :probe (core/resolve-op :probe)))
-      (is (= {:state :probe-passed :verification_complete false :proof_pending [:landing-gate]
+      (is (= {:state :probe-passed :proof_pending [:landing-gate]
               :reloaded ["example-test"] :tests 2 :assertions 3 :failures 0 :elapsed_ms 12.5}
              (verdict ["example-test"] {:test 2 :pass 3 :fail 0 :error 0} 12.5)))
       (doseq [summary [{:test 1 :fail 1} {:test 1 :error 1} {:test 0 :pass 0}]]
@@ -36,8 +36,7 @@
       (is (= :stale-probe-image (:error-type (problem image "cp2" request))))
       (doseq [n ["x) (evil" "" "ns/var" nil]]
         (is (= :invalid-probe-request (:error-type (problem image "cp1" (assoc request :ns n))))))
-      (is (= :invalid-probe-request (:error-type (problem image "cp1" (assoc request :unknown true)))))))
-  )
+      (is (= :invalid-probe-request (:error-type (problem image "cp1" (assoc request :unknown true))))))))
 
 (deftest resolve-op-aliases
   (testing "aliases resolve to canonical"

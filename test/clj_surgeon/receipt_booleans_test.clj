@@ -64,7 +64,7 @@
         (insert/execute! req (if (= seam :stage-failure)
                                {:stage #(throw (java.io.IOException. "injected staging failure"))} {}))))))
 (def supported-seams
-  {"probe" #{:behavior-not-run}
+  {"probe" #{}
    "insert_forms" #{:stage-failure :completed-write :behavior-not-run :neighbor-corruption}
    "rename_alias" #{:stage-failure :completed-write :behavior-not-run :neighbor-corruption
                     :trivia-corruption :discard-corruption}})
@@ -80,6 +80,15 @@
     (is (= [] (missing-registrations verbs scenarios)) "Missing executable scenario by verb")
     (is (= #{"insert_forms" "rename_alias" "probe"} verbs))
     (is (= ["probe"] (missing-registrations verbs (dissoc registry "probe"))))
+    (testing "Warm probe observations carry no verification booleans"
+      (is (= {} (registry "probe")))
+      (doseq [receipt [(probe/verdict ["example-test"] {:test 1 :pass 1} 1)
+                       (probe/verdict ["example-test"] {:test 1 :fail 1} 1)
+                       (probe/verdict [] {} 0)
+                       (probe/request-problem {} "fingerprint" {})]]
+        (is (= [] (boolean-paths receipt)))
+        (is (= [:landing-gate] (:proof_pending receipt)))
+        (is (not (contains? receipt :verification_complete)))))
     (doseq [verb verbs :let [run (scenarios verb)] :when run]
       (testing verb
         (let [committed (run :completed-write) seams (registry verb)

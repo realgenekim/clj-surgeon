@@ -1,7 +1,8 @@
 (ns clj-surgeon.probe
   "Babashka client and closed identity contract for a warm MCP test probe."
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]))
+  (:require
+   [clojure.edn :as edn]
+   [clojure.java.io :as io]))
 ;; @spec BB-PROBE-001
 (def cold-gate :landing-gate)
 
@@ -24,7 +25,7 @@
   ;; forwarded-refusal-kind: callers supply literal kinds or forward the
   ;; original exception kind; this constructor does not manufacture names.
   {:state :probe-refused :error-type kind :error message
-   :verification_complete false :proof_pending [cold-gate]})
+   :proof_pending [cold-gate]})
 
 ;; @spec BB-PROBE-002
 (defn request-problem [image current request]
@@ -41,7 +42,7 @@
 (defn verdict [reloaded summary elapsed]
   (let [failures (+ (:fail summary 0) (:error summary 0))]
     {:state (if (and (pos? (:test summary 0)) (zero? failures)) :probe-passed :probe-failed)
-     :verification_complete false :proof_pending [cold-gate]
+     :proof_pending [cold-gate]
      :reloaded reloaded :tests (:test summary 0)
      :assertions (+ (:pass summary 0) failures) :failures failures
      :elapsed_ms elapsed}))
@@ -57,24 +58,24 @@
     (edn/read-string (String. buf 0 n))))
 
 (defn cli! [{:keys [ns image-file]}]
-    (try
-      (let [root (.getCanonicalPath (io/file "."))
-            descriptor (with-open [r (io/reader (or image-file ".clj-surgeon/probe.edn"))]
-                         (read-bounded r 8192))
-            image (:image descriptor)
-            request {:ns (str ns) :image image}
-            problem (or (when-not (= root (:root image))
-                          (refusal :stale-probe-image "Image belongs to another worktree; run make warm here."))
-                        (request-problem image (fingerprint root) request))]
-        (if problem problem
-          (let [port (:port descriptor)]
-            (when-not (and (integer? port) (< 9000 port 65536))
-              (throw (ex-info "Warm port must be above 9000" {:error-type :invalid-probe-port})))
-            (let [post (requiring-resolve 'babashka.http-client/post)
-                  response (post (str "http://127.0.0.1:" port "/probe")
-                                 {:headers {"Content-Type" "application/edn"}
-                                  :body (pr-str request) :timeout 60000 :as :stream})]
-              (with-open [r (io/reader (:body response))] (read-bounded r 16384))))))
-      (catch Exception e
-        (refusal (or (:error-type (ex-data e)) :probe-connection-failed) (.getMessage e)))
-      (finally (flush))))
+  (try
+    (let [root (.getCanonicalPath (io/file "."))
+          descriptor (with-open [r (io/reader (or image-file ".clj-surgeon/probe.edn"))]
+                       (read-bounded r 8192))
+          image (:image descriptor)
+          request {:ns (str ns) :image image}
+          problem (or (when-not (= root (:root image))
+                        (refusal :stale-probe-image "Image belongs to another worktree; run make warm here."))
+                      (request-problem image (fingerprint root) request))]
+      (if problem problem
+        (let [port (:port descriptor)]
+          (when-not (and (integer? port) (< 9000 port 65536))
+            (throw (ex-info "Warm port must be above 9000" {:error-type :invalid-probe-port})))
+          (let [post (requiring-resolve 'babashka.http-client/post)
+                response (post (str "http://127.0.0.1:" port "/probe")
+                               {:headers {"Content-Type" "application/edn"}
+                                :body (pr-str request) :timeout 60000 :as :stream})]
+            (with-open [r (io/reader (:body response))] (read-bounded r 16384))))))
+    (catch Exception e
+      (refusal (or (:error-type (ex-data e)) :probe-connection-failed) (.getMessage e)))
+    (finally (flush))))
