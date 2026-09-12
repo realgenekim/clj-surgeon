@@ -1,0 +1,6 @@
+standard-clj fix v0.29.0
+
+✓ /docs/observations/2026-09-12-bbtower-block-b/attempt8/report.clj [8.12ms]
+F /docs/observations/2026-09-12-bbtower-block-b/attempt8/verify_report.clj [4.11ms]
+
+All 2 files formatted with Standard Clojure Style 👍 [19.56ms]

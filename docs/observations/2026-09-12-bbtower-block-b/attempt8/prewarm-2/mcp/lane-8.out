@@ -1,0 +1,13 @@
+lanes: --ns -- 6 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-namespace-split-test
+
+Testing clj-surgeon.receipt-booleans-test
+
+Testing clj-surgeon.mcp-expect-guard-test
+
+Testing clj-surgeon.mcp-prepared-confirmation-test
+
+Testing clj-surgeon.mcp-operation-test
+
+Testing clj-surgeon.mcp-semantic-client-test

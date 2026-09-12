@@ -1,0 +1,1 @@
+{:original-fast-count 61, :paired-bb-count 35, :all-walls-match-receipts true, :reassigned (clj-surgeon.insert-forms-test clj-surgeon.rename-alias-receipt-test clj-surgeon.splice-envelope-test)}

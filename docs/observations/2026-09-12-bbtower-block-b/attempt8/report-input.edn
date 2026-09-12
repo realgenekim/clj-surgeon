@@ -1,0 +1,21 @@
+{:verdict :go-with-owed
+ :final-code-head "21a714165ecb2208b455455a4a1c6bbe021be00e"
+ :summary "The measured runtime rule, NEW bb ceiling, probe refusal/boolean contract, feature-thread assignment and required gates are built. Both prewarms passed on the final code commit; no prewarm repair was needed. No fast or integration budget changed. The CLI defect is shared, not bb-only; its explicitly allowed JVM escape is recorded without claiming it repairs the shared output contract. Independent acceptance remains Fable's."
+ :integration {:sum-ms 58804 :budget-ms 240000 :exit 0 :tests 168 :assertions 3798
+               :failures 0 :errors 0 :isolation-violations 0 :log "test-integration.log"}
+ :prewarm [{:attempt 1 :state :passed :exit 0 :wall-ms 167657
+            :fast-sum-ms 36503 :integration-sum-ms 77480
+            :bb-suite-runtime-sum-ms 232195 :bb-suite-makespan-ms 85586
+            :mcp-bb-runtime-sum-ms 31931 :mcp-bb-makespan-ms 43774
+            :landing? false :repair-used false
+            :log "prewarm-1.log" :receipt "prewarm-1/receipt.edn"}
+           {:attempt 2 :state :passed :exit 0 :wall-ms 169863
+            :fast-sum-ms 40886 :integration-sum-ms 78499
+            :bb-suite-runtime-sum-ms 233433 :bb-suite-makespan-ms 86168
+            :mcp-bb-runtime-sum-ms 32045 :mcp-bb-makespan-ms 45911
+            :landing? false :repair-used false
+            :log "prewarm-2.log" :receipt "prewarm-2/receipt.edn"}]
+ :owed ["Fable: ratify the NEW 399,155 ms bb ceiling and independently review/accept this branch. Neither prewarm grants landing authority."
+        "Shared CLI output defect: workspace_status.unexpected_paths is unbounded. Both runtimes reproduce it with a private historical index. The measured JVM contract escape preserves execution and does not fix that shared behavior. See owed.md and both raw stdout pairs."
+        "Encounter ledger: installed measure encounter score refused encounter-not-found receipt-booleans. Restore/identify the registered encounter and score against properly registered later acceptance; no replacement registration or acceptance was fabricated. See encounter-score.log."
+        "Performance certification, free-choice adoption and full nightly battery freshness are not claimed by this built/not-certified block or by prewarm."]}
