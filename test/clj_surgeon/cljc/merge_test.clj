@@ -18,7 +18,8 @@
                 (reader-conditional? form)
                 (reader-conditional (normalize (:form form)) (:splicing? form))
                 (and (symbol? form)
-                     (re-matches #".*__\d+(?:#|__auto__)?" (name form)))
+                     (nil? (namespace form))
+                     (re-matches #"(?:p\d+__\d+#|rest__\d+#|.+__\d+__auto__)" (name form)))
                 (or (@names form)
                     (let [canonical (symbol (str "reader-generated-" (count @names)))]
                       (swap! names assoc form canonical)

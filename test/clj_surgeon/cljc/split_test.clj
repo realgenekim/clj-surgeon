@@ -87,7 +87,9 @@
     (is (not= (parse-forms "#(vector %1 %2 %1)")
               (parse-forms "#(vector %1 %2 %2)")))
     (is (not= (parse-forms "(vector named-a named-b)")
-              (parse-forms "(vector named-a named-a)")))))
+              (parse-forms "(vector named-a named-a)")))
+    (is (not= (parse-forms "(vector user__123 user__456)")
+              (parse-forms "(vector user__123 user__789)")))))
 
 ;; ============================================================
 ;; Double round trip: split → merge → split → merge converges.
