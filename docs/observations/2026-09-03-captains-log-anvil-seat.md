@@ -6221,3 +6221,22 @@ Closure for block B: when the box is quiet (the data-not-code verifier is the on
 now), run the counted battery ALONE on candidate 8c542ede through receipt-chain, cherry-pick
 its passing ledger row (a ledger row is consumed by battery-fresh, so it belongs on the tip),
 sixteenth prewarm, ship round 8. No round 8 for a product finding: the class oracle comes first.
+
+## 2026-09-12T23:01:58Z — data-not-code verifier NO-GO: the hard-link fix broke the transaction journal's lock protocol in a battery-lane namespace no review ran; the counted block B battery runs alone
+
+Opus re-ran the red-team's attacks at 7182573b (published as
+`2026-09-12-data-not-code-opus-verify.md`): F1 fixed (the forged row refuses at
+[:bb :walls-ms]; 38/456 pass), F2 fixed (pin 12), preregistration mostly fixed; NO-GO on
+F3: refusing every final file with nlink > 1 is over-broad, the txn journal's lock protocol
+IS createLink and an interrupted break leaves LOCK and LOCK.broken.* on one inode by design;
+txn-journal-test 6 errors, invisible because it is :battery-lane and neither prewarm nor
+review runs it. That is the class "a witness namespace no gate ran" again (wiki candidate
+#9). Also: unbacked row fields steer runtime; the "evidence not attestation" sentence is
+not in the intent; my NATIVE-refusal bet was unfalsifiable by construction; the measure's
+interval narrowed while bets carried over (bias toward the tool, named). Round 6 brief
+written class-first: a diff-impact oracle (every test namespace touching a changed src
+file runs, whatever its lane) before the fixes; launches when the box is quiet.
+
+Block B: the counted battery is running ALONE on candidate 8c542ede through receipt-chain
+(pid 2985982, load 0.9 at launch) to produce the passing candidate-bound ledger receipt Sol
+requires; then sixteenth prewarm and ship round 8.
