@@ -697,7 +697,7 @@ install-cli: prepare-cli-package
 	  printf '%s\n' '{:artifact :control-plane-root' ' :mode :local-pointer' ' :source-commit "$(SOURCE_COMMIT)"' ' :path "$(CLJ_SURGEON_HOME)"}' > "$$control_plane_receipt"; \
 	  stage="$$dest.tmp.$$$$"; \
 	  trap 'rm -f "$$stage" "$$control_plane_stage"' EXIT HUP INT TERM; \
-	  printf '%s\n' '#!/bin/sh' '## clj-surgeon stable launcher' 'CLJ_SURGEON_CONTROL_PLANE_ROOT_FILE="$(CONTROL_PLANE_ROOT_FILE)" exec bb --classpath "$(CLI_PACKAGE)/src" -m clj-surgeon.core "$$@"' > "$$stage"; \
+	  printf '%s\n' '#!/bin/sh' '## clj-surgeon stable launcher' 'surgeon_tmp=$${TMPDIR:-/var/tmp}' 'case "$$surgeon_tmp" in /tmp|/tmp/*|/dev/shm|/dev/shm/*) surgeon_tmp=/var/tmp ;; esac' 'case "$$surgeon_tmp" in *[![:space:]]*) ;; *) surgeon_tmp=/var/tmp ;; esac' 'export TMPDIR="$$surgeon_tmp"' 'CLJ_SURGEON_CONTROL_PLANE_ROOT_FILE="$(CONTROL_PLANE_ROOT_FILE)" exec bb "-Djava.io.tmpdir=$$surgeon_tmp" --classpath "$(CLI_PACKAGE)/src" -m clj-surgeon.core "$$@"' > "$$stage"; \
 	  chmod +x "$$stage"; \
 	  mv "$$stage" "$$dest"; \
 	  trap - EXIT HUP INT TERM; \
@@ -783,7 +783,7 @@ install-dev-cli:
 	  if [ -e "$$receipt" ] && { [ ! -f "$$receipt" ] || ! grep -q ':artifact :cli' "$$receipt"; }; then echo "Refusing to replace unrelated receipt $$receipt"; exit 1; fi; \
 	  stage="$$dest.tmp.$$$$"; \
 	  trap 'rm -f "$$stage"' EXIT HUP INT TERM; \
-	  printf '%s\n' '#!/usr/bin/env bb' ';; clj-surgeon development launcher — branch-coupled' '(require (quote [babashka.classpath :as cp]))' '(cp/add-classpath "$(CLJ_SURGEON_HOME)src")' '(require (quote [clj-surgeon.core :as core]))' '(apply core/-main *command-line-args*)' > "$$stage"; \
+	  printf '%s\n' '#!/bin/sh' '## clj-surgeon stable launcher — branch-coupled development' 'surgeon_tmp=$${TMPDIR:-/var/tmp}' 'case "$$surgeon_tmp" in /tmp|/tmp/*|/dev/shm|/dev/shm/*) surgeon_tmp=/var/tmp ;; esac' 'case "$$surgeon_tmp" in *[![:space:]]*) ;; *) surgeon_tmp=/var/tmp ;; esac' 'export TMPDIR="$$surgeon_tmp"' 'exec bb "-Djava.io.tmpdir=$$surgeon_tmp" --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.core "$$@"' > "$$stage"; \
 	  chmod +x "$$stage"; \
 	  mv "$$stage" "$$dest"; \
 	  trap - EXIT HUP INT TERM; \

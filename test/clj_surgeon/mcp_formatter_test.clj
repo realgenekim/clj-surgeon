@@ -1,4 +1,4 @@
-(ns ^{:lane :fast} clj-surgeon.mcp-formatter-test
+(ns clj-surgeon.mcp-formatter-test
   "Boundary witnesses over `clj-surgeon.mcp-formatter`, live in production at
    `mcp-tool.clj:16,367,778,785,790` and `mcp_http_server.clj:5,40`.
 
@@ -16,8 +16,10 @@
    `lane-manifest-test/every-exclusion-names-a-runner-that-actually-exists`:
    an exclusion must now redirect to a runner that exists, so a namespace can
    no longer be declared into orphanhood."
+  {:lane :fast}
   (:require
    [clj-surgeon.mcp-formatter :as formatter]
+   [clj-surgeon.mcp-process :as process]
    [clojure.java.io :as io]
    [clojure.test :refer [deftest is testing]])
   (:import
@@ -83,6 +85,26 @@
         (is (false? (:ok result)))
         (is (= expected (:error-type result)))
         (is (true? (:source-unchanged result)))))))
+
+;; @spec MCP-OP-TMPHYG-005
+(deftest formatter-staging-honours-selected-root-and-cleans-up-exceptions
+  (let [root (temp-dir)
+        seen (atom nil)]
+    (try
+      (with-redefs [process/selected-temp-root (constantly (str root))]
+        (let [result (formatter/format-candidates!
+                       "." ["format" "{files}"] {"a.clj" "(def x 1)"}
+                       (fn [_ command]
+                         (reset! seen (second command))
+                         (is (= (.getCanonicalPath root)
+                                (.getCanonicalPath (.getParentFile (io/file @seen)))))
+                         (throw (java.io.IOException. (str "native formatter denied " @seen)))))]
+          (is (false? (:ok result)))
+          (is (= :formatter-failed (:error-type result)))
+          (is (= @seen (:path result)))
+          (is (re-find #"native formatter denied" (:error result)))
+          (is (not (.exists (io/file @seen))))))
+      (finally (delete-tree! root)))))
 
 (deftest staged-formatting-removes-only-its-redundant-post-commit-check
   (let [profiles

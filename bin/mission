@@ -13,6 +13,10 @@
 #   bin/mission ready     --workspace /path/to/workspace
 #   bin/mission list      --workspace /path/to/workspace
 set -euo pipefail
+mission_tmp=${TMPDIR:-/var/tmp}
+case "$mission_tmp" in /tmp|/tmp/*|/dev/shm|/dev/shm/*) mission_tmp=/var/tmp ;; esac
+case "$mission_tmp" in *[![:space:]]*) ;; *) mission_tmp=/var/tmp ;; esac
+export TMPDIR="$mission_tmp"
 cd "$(dirname "$0")/.."
 # NOTE: helper_extraction reaches mcp-hot-verify, which requires nrepl, so the
 # entrance needs the mcp alias's deps. The PURE core (clj-surgeon.mission) has
@@ -29,9 +33,9 @@ for arg in "$@"; do
   case "$arg" in
     --help|-h)
       if [[ "${1:-}" == run || "${1:-}" == commit ]]; then
-        exec bb --classpath src bin/mission-read.clj help "$1"
+        exec bb "-Djava.io.tmpdir=$mission_tmp" --classpath src bin/mission-read.clj help "$1"
       fi
-      exec bb --classpath src bin/mission-read.clj help ;;
+      exec bb "-Djava.io.tmpdir=$mission_tmp" --classpath src bin/mission-read.clj help ;;
   esac
 done
 # Match the Clojure parser's global option pairs when finding the command.
@@ -50,14 +54,14 @@ for ((mission_i=0; mission_i<${#mission_args[@]}; mission_i++)); do
 done
 case "$mission_verb" in
   show|list|ready|blocked|help|fallback)
-    exec bb --classpath src bin/mission-read.clj "$@" ;;
+    exec bb "-Djava.io.tmpdir=$mission_tmp" --classpath src bin/mission-read.clj "$@" ;;
   "")
-    exec bb --classpath src bin/mission-read.clj help ;;
+    exec bb "-Djava.io.tmpdir=$mission_tmp" --classpath src bin/mission-read.clj help ;;
   open|plan|propose|run|apply|resume|undo|link|commit)
     : ;;                      # a real write verb: fall through to the JVM
   *)
     # unknown verb: the same help, the same exit 2, without a JVM
-    exec bb --classpath src bin/mission-read.clj "$@" ;;
+    exec bb "-Djava.io.tmpdir=$mission_tmp" --classpath src bin/mission-read.clj "$@" ;;
 esac
 
 exec clojure -M:clj-surgeon/mcp -m clj-surgeon.mission-cli "$@"

@@ -14,6 +14,7 @@
    [babashka.process :as proc]
    [clj-surgeon.artifact-boundary-support :as boundary]
    [clj-surgeon.core :as core]
+   [clj-surgeon.mcp-process :as process]
    [clj-surgeon.relation-census :as relation-census]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -122,7 +123,17 @@
 (defn- run-cli
   [& args]
   (apply proc/shell {:out :string :err :string :continue true}
-         "bb" "-cp" project-src "-m" "clj-surgeon.core" args))
+         (process/bb-command (into ["bb" "-cp" project-src "-m" "clj-surgeon.core"] args))))
+
+;; @spec MCP-OP-TMPHYG-005
+(deftest cli-child-honours-tmpdir-at-startup
+  ;; Packet 3932b756: same bb launch boundary as run-cli, property-only red probe.
+  (let [result (apply proc/shell {:out :string :err :string :continue true}
+                      (process/bb-command
+                        ["bb" "-cp" project-src "-e"
+                         "(print (System/getProperty \"java.io.tmpdir\"))"]))]
+    (is (= 0 (:exit result)))
+    (is (= (System/getenv "TMPDIR") (:out result)))))
 
 ;; @spec NS-SPLIT-014
 ;; @spec NS-SPLIT-047

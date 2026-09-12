@@ -8,6 +8,16 @@ status: "implemented 2026-09-04; round two after independent review; inb-9483a4"
 
 ## Context
 
+Attempt 13 extends the existing descendant-root promise to product launchers.
+The shared process adapter selects TMPDIR before constructing bb argv and
+publishes that root to TMPDIR/TMP/TEMP. Generated stable and checkout CLI
+launchers apply the same policy before bb starts. Formatter staging selects
+an explicit base rather than relying on the host JVM's cached temp property;
+its refusal preserves native exception/process evidence through the typist
+adapter. The artifact refusal fixture places its symlink parent beneath the
+configured product artifact root. This preserves the tmpfs refusal oracle
+while keeping fixture writes inside the product's state envelope.
+
 Anvil's `/tmp` filled to 96% of its inodes from 82,210 leaked test-fixture
 directories — 19,292 of them `clj-surgeon-change-buffer-*` from this repo's
 `mcp_change_buffer_test.clj` — while bytes sat at 44%: the filesystem died on

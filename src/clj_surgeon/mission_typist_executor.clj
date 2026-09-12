@@ -1,10 +1,9 @@
 (ns clj-surgeon.mission-typist-executor
   "Flagged owner-forms executor. Frozen plan authority, staged proof, guarded commit."
   (:require
-   [clj-surgeon.jvm-error :as jvm]
-   [clj-surgeon.receipt-artifacts :as artifacts]
    [cheshire.core :as json]
    [clj-surgeon.file-ops :as file-ops]
+   [clj-surgeon.jvm-error :as jvm]
    [clj-surgeon.mcp-change-buffer :as buffer]
    [clj-surgeon.mcp-extraction :as extraction]
    [clj-surgeon.mcp-formatter :as formatter]
@@ -17,6 +16,7 @@
    [clj-surgeon.mission-typist :as typist]
    [clj-surgeon.mission-usage :as usage]
    [clj-surgeon.outline :as outline]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -163,7 +163,8 @@
                     (map-indexed (fn [i r] [(str "owner-" i ".clj") (:form r)])) replacements)
         result (formatter/format-candidates! root formatter/default-command files)]
     (if-not (:ok result)
-      (refuse :typist-formatter-failed)
+      (assoc (refuse :typist-formatter-failed)
+             :error (:error result) :formatter result)
       {:ok true :format (select-keys result [:status :elapsed_ms :file-count :changed-file-count])
        :replacements (mapv (fn [i r]
                              (assoc r :form (get-in result [:future-sources (str "owner-" i ".clj")])))
@@ -230,7 +231,7 @@
         _ (when-not (and (= "/usr/bin/python3" (:interpreter transport))
                          (= (:sha256 transport) (mission/sha256 (:source transport))))
             (reject! :typist-transport-identity-mismatch))
-        script (java.io.File/createTempFile "typist-client-" ".py")
+        script (process/create-temp-file! "typist-client-" ".py")
         _ (spit script (:source transport))
         generation (get-in authority [:route :generation])
         config (cond-> {:route route :prompt (get-in authority [:dossier :prompt])
@@ -317,7 +318,8 @@
                                      :output-bytes :output-truncated]) results)}))
 
 (defn verify-candidate! [authority compiled]
-  (let [dir (str (Files/createTempDirectory "typist-proof-" (make-array FileAttribute 0)))
+  (let [dir (str (Files/createTempDirectory (.toPath (io/file (process/selected-temp-root)))
+                   "typist-proof-" (make-array FileAttribute 0)))
         expected (merge (:frozen-files authority) (:future-sources compiled))]
     (try
       (materialize! dir expected (:modes authority))

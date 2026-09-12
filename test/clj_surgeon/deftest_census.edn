@@ -334,6 +334,7 @@
   clj-surgeon.cli-dispatch-test/cli-bare-string-op-dispatches
   clj-surgeon.cli-dispatch-test/cli-bare-string-op-help-resolves
   clj-surgeon.cli-dispatch-test/cli-bare-string-unknown-op-clean-error
+  clj-surgeon.cli-dispatch-test/cli-child-honours-tmpdir-at-startup
   clj-surgeon.cli-dispatch-test/cli-mv-refusal-is-edn-nonzero-and-preserves-source
   clj-surgeon.cli-dispatch-test/cli-mv-with-deps-alias-executes-the-disclosed-group
   clj-surgeon.cli-dispatch-test/cli-mv-with-deps-alias-injects-the-same-option-as-the-flag
@@ -1270,6 +1271,7 @@
   clj-surgeon.mcp-feature-thread-test/warm-up-meter-rounds-to-a-complete-thread
   clj-surgeon.mcp-formatter-test/formatter-operates-on-staged-candidates-not-live-files
   clj-surgeon.mcp-formatter-test/formatter-refuses-invalid-command-failure-and-timeout
+  clj-surgeon.mcp-formatter-test/formatter-staging-honours-selected-root-and-cleans-up-exceptions
   clj-surgeon.mcp-formatter-test/staged-formatting-removes-only-its-redundant-post-commit-check
   clj-surgeon.mcp-helper-extraction-test/a-committed-receipt-reflects-exactly-the-profile-result-it-was-given
   clj-surgeon.mcp-helper-extraction-test/a-compiled-caller-claim-must-be-backed-by-compiles-that-happened
@@ -1533,6 +1535,7 @@
   clj-surgeon.mcp-process-test/admission-wrapper-accepts-cold-profile-deadlines
   clj-surgeon.mcp-process-test/admission-wrapper-records-exec-failure
   clj-surgeon.mcp-process-test/analyzer-contract-mission-admits-exactly-five-fake-children
+  clj-surgeon.mcp-process-test/bb-startup-temp-policy
   clj-surgeon.mcp-process-test/bounded-process-preserves-stdin-stdout-stderr-and-exit
   clj-surgeon.mcp-process-test/configure-environment-publishes-the-complete-path
   clj-surgeon.mcp-process-test/configure-environment-publishes-this-process-temp-directory
@@ -1949,6 +1952,7 @@
   clj-surgeon.mission-typist-executor-admission-test/spark-policy-does-not-admit-unimplemented-executor
   clj-surgeon.mission-typist-executor-test/candidate-diagnostics-survive-the-public-executor
   clj-surgeon.mission-typist-executor-test/duplicate-proof-code-is-not-independent
+  clj-surgeon.mission-typist-executor-test/formatter-refusal-retains-native-diagnostics
   clj-surgeon.mission-typist-executor-test/frozen-transport-race-through-real-proof
   clj-surgeon.mission-typist-executor-test/independent-witness-rejects-green-gate
   clj-surgeon.mission-typist-executor-test/missing-cli-destination-preserves-ready-mission-with-runnable-retry

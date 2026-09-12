@@ -2,6 +2,7 @@
   "Format staged candidate sources before a transaction writes live files."
   (:require
    [clj-surgeon.mcp-change-buffer :as change-buffer]
+   [clj-surgeon.mcp-process :as process]
    [clojure.java.io :as io]
    [clojure.string :as str]))
 
@@ -43,14 +44,19 @@
       :error-type :invalid-formatter-command
       :error "Formatter command must be a non-empty string vector containing {files}"
       :source-unchanged true}
-     (let [staged (mapv (fn [[file source]]
-                          (let [temp (java.io.File/createTempFile
-                                       "clj-surgeon-candidate-" (suffix file))]
-                            (spit temp source)
-                            {:file file :temp temp}))
-                        (sort-by key future-sources))]
+     (let [staged-files (atom [])
+           active-path (atom (process/selected-temp-root))]
        (try
-         (let [temp-files (mapv #(str (:temp %)) staged)
+         (let [staged (mapv (fn [[file source]]
+                              (let [temp (java.io.File/createTempFile
+                                           "clj-surgeon-candidate-" (suffix file)
+                                           (io/file (process/selected-temp-root)))]
+                                (swap! staged-files conj temp)
+                                (reset! active-path (str temp))
+                                (spit temp source)
+                                {:file file :temp temp}))
+                        (sort-by key future-sources))
+               temp-files (mapv #(str (:temp %)) staged)
                result (run-process!
                         project-root
                         (change-buffer/expand-command command temp-files))]
@@ -72,12 +78,20 @@
               :error-type (if (:finished? result)
                             :formatter-failed
                             :formatter-timeout)
-              :error "Formatter failed on staged candidate files"
+              :error (str "Formatter failed on staged candidate files "
+                          (pr-str temp-files) ": " (:output result))
               :command (first command)
+              :paths temp-files
               :exit (:exit result)
               :elapsed_ms (:elapsed_ms result)
               :output (:output result)
               :source-unchanged true}))
+         (catch Exception error
+           {:ok false :error-type :formatter-failed
+            :error (str (.getName (class error)) ": " (.getMessage error)
+                        " [" @active-path "]")
+            :path @active-path :command (first command)
+            :source-unchanged true})
          (finally
-           (doseq [{:keys [temp]} staged]
+           (doseq [temp @staged-files]
              (io/delete-file temp true))))))))

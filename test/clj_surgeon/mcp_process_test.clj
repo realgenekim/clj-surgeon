@@ -198,8 +198,22 @@
 (deftest configure-environment-publishes-this-process-temp-directory
   (let [environment (java.util.HashMap. {"PATH" "/custom/bin"})]
     (process/configure-environment! environment)
-    (is (= (System/getProperty "java.io.tmpdir") (.get environment "TMPDIR"))
-        "a descendant that picks its own temp location stays where this JVM writes")))
+    (doseq [key ["TMPDIR" "TMP" "TEMP"]]
+      (is (= (process/selected-temp-root) (.get environment key))
+          "descendants inherit the selected root even if the JVM property disagrees"))))
+
+;; @spec MCP-OP-TMPHYG-005
+(deftest bb-startup-temp-policy
+  (doseq [[input expected] [[nil "/var/tmp"] ["" "/var/tmp"] ["  " "/var/tmp"]
+                           ["/tmp" "/var/tmp"] ["/tmp/x" "/var/tmp"]
+                           ["/dev/shm" "/var/tmp"] ["/dev/shm/x" "/var/tmp"]
+                           ["/var/tmp/with spaces" "/var/tmp/with spaces"]
+                           ["/tmp-safe" "/tmp-safe"]]]
+    (is (= expected (process/selected-temp-root input))))
+  (with-redefs [process/selected-temp-root (constantly "/var/tmp/with spaces")]
+    (is (= ["/usr/bin/bb" "-Djava.io.tmpdir=/var/tmp/with spaces" "-e" "nil"]
+           (process/bb-command ["/usr/bin/bb" "-e" "nil"])))
+    (is (= ["clj-kondo" "--version"] (process/bb-command ["clj-kondo" "--version"])))))
 
 (deftest recognizes-only-clj-kondo-executables
   (is (process/clj-kondo-command? ["clj-kondo" "--lint" "src"]))

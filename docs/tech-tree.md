@@ -1,5 +1,13 @@
 # clj-surgeon tech tree
 
+Block B attempt 13 (2026-09-12): descendant temp-root repair. The CLI-shaped bb
+child reproduced `/tmp` despite TMPDIR; formatter staging ignored the selected
+root and typist discarded its failure evidence. Product launchers now pass the
+startup property, process/formatter scratch uses the selected root, and the
+tmpfs refusal fixture stays beneath product state. Evidence and acceptance:
+`docs/observations/2026-09-12-bbtower-block-b/attempt13/REPORT.md`.
+No speed, packet-confinement, or landing claim follows from this repair.
+
 Block B red-team repairs (2026-09-12): **BUILDING**, branch-only. Indirect
 probe refusal literals now have per-owner coverage; probe omits its constant
 verification boolean. Attempt11 computes both calibration sums under the shipped
