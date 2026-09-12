@@ -5220,3 +5220,37 @@ JVM keeps the heavy. Attempt 8 (Astra, pid 3419101) lifts the stop with a RULE r
 than an exception: bb only when measured bb wall ≤ 2x measured JVM wall, both walls recorded
 beside the assignment with a witness; then the bb CLI output diff, the new :bb ceiling,
 the probe registries, feature-thread, and the gate.
+
+## 2026-09-12T07:53:43Z — block B attempt 8: GO-WITH-OWED; both prewarms green; bb ceiling ratified
+
+Astra's attempt 8 built everything in 50 minutes on the accepted finding. Tip 6e3e5535,
+pushed to origin bb-rewrite-tower. Report: `2026-09-12-bbtower-block-b-attempt8-report.md`.
+
+| Meter | Before (attempt 7) | After | Budget |
+|---|---:|---:|---:|
+| Fast lane, 61 original members | 68,679 ms | 36,503–40,886 ms (two prewarms) | 60,000 |
+| Integration | 758,486 ms (block A) | 58,804 ms | 240,000 |
+| feature-thread | 728,265 ms bb | 43,280 ms JVM | — |
+| Prewarm wall | — | 167.7 s / 169.9 s, both PASS, no repair | — |
+
+The rule (new intent TEST-ISO-016): a test runs on bb only when portable AND measured bb wall
+≤ 2.0x measured JVM wall, both walls recorded beside the assignment. Reassigned to JVM:
+splice-envelope (34x), insert-forms (2.6x), rename-alias-receipt (3.8x), feature-thread
+(16.8x), intent-transaction (contract escape). rename-alias stays bb at 1.98x, one hair
+under the line. All 35 bb-assigned fast members are paired with both walls.
+
+Ratified: the NEW :bb lane ceiling of 399,155 ms = ceil(245,773 x 60,000 / 36,944), the
+same 1.62x margin the fast lane carries over its measured sum. It is a new intent, not a
+restoration; nothing at the base had a bb budget.
+
+The bb CLI "leak" was not bb-only: a private historical index makes BOTH runtimes print
+26,581 chars against a 2,876-char receipt (workspace_status.unexpected_paths is unbounded).
+Normalized bytes agree across runtimes. That shared defect is filed in owed.md; a bound
+belongs in a later verb block (a-bound-must-degrade-never-delete applies).
+
+Probe now has seven native-failure refusal rows and its false verification_complete seam;
+receipt_booleans_test covers three verbs. The encounter-score entrance refused
+"encounter-not-found receipt-booleans": Block 3 seeded the class in a fixture ledger, not
+the active one. Owed to ship v3.12 with inb-55b884.
+
+Next: independent Opus red-team of the tip, then land through the ship path.
