@@ -1,0 +1,96 @@
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.worktree-lifecycle-prune-test
+
+FAIL in (temp-owned-prune-apply-recovers-every-journal-window-once) (worktree_lifecycle_prune_test.clj:584)
+:prepared must recover: {:ok false, :error-type :unsupported-git-version}
+expected: (= true (:ok replay-result))
+  actual: (not (= true false))
+
+FAIL in (temp-owned-prune-apply-recovers-every-journal-window-once) (worktree_lifecycle_prune_test.clj:586)
+expected: (false? (registration-present?))
+  actual: (not (false? true))
+
+FAIL in (temp-owned-prune-apply-recovers-every-journal-window-once) (worktree_lifecycle_prune_test.clj:584)
+:parking-intent-recorded must recover: {:ok false, :error-type :unsupported-git-version}
+expected: (= true (:ok replay-result))
+  actual: (not (= true false))
+
+FAIL in (temp-owned-prune-apply-recovers-every-journal-window-once) (worktree_lifecycle_prune_test.clj:586)
+expected: (false? (registration-present?))
+  actual: (not (false? true))
+
+FAIL in (temp-owned-prune-apply-recovers-every-journal-window-once) (worktree_lifecycle_prune_test.clj:584)
+:archive-commanded must recover: {:ok false, :error-type :unsupported-git-version}
+expected: (= true (:ok replay-result))
+  actual: (not (= true false))
+
+FAIL in (temp-owned-prune-apply-recovers-every-journal-window-once) (worktree_lifecycle_prune_test.clj:586)
+expected: (false? (registration-present?))
+  actual: (not (false? true))
+
+FAIL in (temp-owned-prune-apply-recovers-every-journal-window-once) (worktree_lifecycle_prune_test.clj:584)
+:archive-verified must recover: {:ok false, :error-type :unsupported-git-version}
+expected: (= true (:ok replay-result))
+  actual: (not (= true false))
+
+FAIL in (temp-owned-prune-apply-recovers-every-journal-window-once) (worktree_lifecycle_prune_test.clj:586)
+expected: (false? (registration-present?))
+  actual: (not (false? true))
+
+FAIL in (temp-owned-prune-apply-recovers-every-journal-window-once) (worktree_lifecycle_prune_test.clj:584)
+:remove-commanded must recover: {:ok false, :error-type :unsupported-git-version}
+expected: (= true (:ok replay-result))
+  actual: (not (= true false))
+
+FAIL in (temp-owned-prune-apply-recovers-every-journal-window-once) (worktree_lifecycle_prune_test.clj:586)
+expected: (false? (registration-present?))
+  actual: (not (false? true))
+
+FAIL in (temp-owned-prune-apply-recovers-every-journal-window-once) (worktree_lifecycle_prune_test.clj:584)
+:remove-verified must recover: {:ok false, :error-type :unsupported-git-version}
+expected: (= true (:ok replay-result))
+  actual: (not (= true false))
+
+FAIL in (temp-owned-prune-apply-recovers-every-journal-window-once) (worktree_lifecycle_prune_test.clj:586)
+expected: (false? (registration-present?))
+  actual: (not (false? true))
+
+FAIL in (temp-owned-prune-apply-recovers-every-journal-window-once) (worktree_lifecycle_prune_test.clj:584)
+:final-receipt-written must recover: {:ok false, :error-type :unsupported-git-version}
+expected: (= true (:ok replay-result))
+  actual: (not (= true false))
+
+FAIL in (temp-owned-prune-apply-recovers-every-journal-window-once) (worktree_lifecycle_prune_test.clj:586)
+expected: (false? (registration-present?))
+  actual: (not (false? true))
+
+FAIL in (temp-owned-prune-apply-recovers-every-journal-window-once) (worktree_lifecycle_prune_test.clj:584)
+:parking-completion-verified must recover: {:ok false, :error-type :unsupported-git-version}
+expected: (= true (:ok replay-result))
+  actual: (not (= true false))
+
+FAIL in (temp-owned-prune-apply-recovers-every-journal-window-once) (worktree_lifecycle_prune_test.clj:586)
+expected: (false? (registration-present?))
+  actual: (not (false? true))
+
+FAIL in (temp-owned-apply-accepts-its-own-lease-and-prunes-once) (worktree_lifecycle_prune_test.clj:558)
+{:ok false, :error-type :unsupported-git-version}
+expected: (= true (:ok result))
+  actual: (not (= true false))
+
+FAIL in (temp-owned-apply-accepts-its-own-lease-and-prunes-once) (worktree_lifecycle_prune_test.clj:559)
+expected: (= :registration-pruned (get-in result [:receipt :effect]))
+  actual: (not (= :registration-pruned nil))
+
+FAIL in (temp-owned-apply-accepts-its-own-lease-and-prunes-once) (worktree_lifecycle_prune_test.clj:560)
+expected: (false? (registration-present?))
+  actual: (not (false? true))
+
+Ran 49 tests containing 142 assertions.
+19 failures, 0 errors.
+=> {:test 49, :pass 123, :fail 19, :error 0, :type :summary}
+*======== user | clj ========*

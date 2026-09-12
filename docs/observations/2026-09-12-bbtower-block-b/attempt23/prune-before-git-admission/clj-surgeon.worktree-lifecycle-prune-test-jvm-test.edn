@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.worktree-lifecycle-prune-test, :runtime :jvm, :mode "test", :started-at "2026-09-12T20:00:59.416791961Z", :elapsed-ms 1776, :status :test-failed, :result {:test 24, :pass 63, :fail 19, :error 0, :type :summary}}

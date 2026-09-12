@@ -1,0 +1,15 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+clj-surgeon: skipping project discovery; not an existing directory: "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037391-712b8abb/andon-shell-safety4971507521055361259/H; touch /var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037391-712b8abb/andon-shell-safety4971507521055361259/PWNED-SEMICOLON ; echo z"
+clj-surgeon: skipping project discovery; not an existing directory: "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037391-712b8abb/andon-shell-safety2368676015079497879/H$(touch /var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037391-712b8abb/andon-shell-safety2368676015079497879/PWNED-SUBST)"
+
+namespace walls (9, slowest first, total 133421 ms):
+     68483 ms  clj-surgeon.reader-eval-fence-test
+     47475 ms  clj-surgeon.mcp-relation-census-test
+      6817 ms  clj-surgeon.extract-test
+      4792 ms  clj-surgeon.core-discovery-test
+      3263 ms  clj-surgeon.receipt-artifacts-boundary-test
+      1235 ms  clj-surgeon.parser-admission-test
+       736 ms  clj-surgeon.edn-config-integration-test
+       433 ms  clj-surgeon.mission-git-submodule-test
+       187 ms  clj-surgeon.mcp-inspect-cold-job-test
