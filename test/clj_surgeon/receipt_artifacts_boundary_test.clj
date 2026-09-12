@@ -11,6 +11,8 @@
    [clj-surgeon.core :as core]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-admit-tool :as admit]
+   [clj-surgeon.mcp-alias-migration :as migration]
+   [clj-surgeon.operation-algebra :as algebra]
    [clj-surgeon.mcp-cold-verify]
    [clj-surgeon.mcp-extraction :as kernel]
    [clj-surgeon.mcp-namespace-split-test :as split-boundary-fixture]
@@ -56,6 +58,120 @@
   (let [root (.toFile (java.nio.file.Files/createTempDirectory
                         "receipt-publication-" (make-array java.nio.file.attribute.FileAttribute 0)))]
     (try (f root) (finally (remove-tree! root)))))
+
+(defn- with-envelope [roots f]
+  (let [make-envelope (ns-resolve 'clj-surgeon.receipt-artifacts 'destination-envelope)
+        envelope-var (ns-resolve 'clj-surgeon.receipt-artifacts '*destination-envelope*)]
+    (is (some? make-envelope) "DATACODE-ENV: trusted envelope constructor exists")
+    (if (and make-envelope envelope-var)
+      (with-bindings {envelope-var (make-envelope (mapv str roots) :launcher)} (f))
+      (f))))
+
+(defn- refusal-data [f]
+  (try (f) nil (catch clojure.lang.ExceptionInfo e (ex-data e))))
+
+;; @spec DATACODE-ENV-001, DATACODE-ENV-003, DATACODE-ENV-004
+(deftest destination-envelope-guards-real-publication
+  (with-workspace
+    (fn [base]
+      (let [allowed (io/file base "allowed") outside (io/file base "outside")
+            source (io/file base "a.clj") before "(ns a) (def x :old)\n"
+            spec {:changes [{:id :x :in [(str source)] :forms '[x]
+                             :find ":old" :do [:replace ":new"] :expect {:matches 1}}]
+                  :expect {:changes 1 :edits 1 :files 1}}]
+        (.mkdirs allowed)
+        (.mkdirs outside)
+        (spit source before)
+        (spit (io/file outside "kept.edn") "outside sentinel")
+        (with-envelope [allowed]
+          #(doseq [destination [(io/file outside "kept.edn")
+                                 (io/file outside "absent" "tail" "undo.edn")]]
+             (spit source before)
+             (spit (io/file outside "kept.edn") "outside sentinel")
+             (let [r (transaction/execute-change!
+                       {:spec spec :receipt-out (str destination)})]
+               (is (= :write-outside-envelope (:error-type r)) (pr-str r))
+               (is (= :receipt-publish (:effect r)))
+               (is (= (str destination) (:path r)))
+               (is (= before (slurp source)))
+               (is (= "outside sentinel" (slurp (io/file outside "kept.edn"))))
+               (is (not (.exists (io/file outside "absent")))))))
+        (spit source before)
+        (with-envelope [allowed]
+          #(let [r (transaction/execute-change!
+                     {:spec spec :receipt-out (str (io/file allowed "undo.edn"))})]
+             (is (:committed r) (pr-str r))
+             (is (string? (:envelope-id r)))
+             (is (= (:envelope-id r)
+                    (:envelope-id (edn/read-string (slurp (:receipt-file r))))))))))))
+
+;; @spec DATACODE-ENV-001
+(deftest destination-envelope-resolves-ancestor-and-final-symlinks
+  (with-workspace
+    (fn [base]
+      (let [allowed (io/file base "allowed") outside (io/file base "outside")
+            workspace (io/file base "workspace")]
+        (.mkdirs allowed) (.mkdirs outside) (.mkdirs workspace)
+        (spit (io/file outside "kept.edn") "sentinel")
+        (binding [artifacts/*artifact-root* (str allowed)]
+          (let [dir (io/file (artifacts/directory "envelope" workspace))]
+            (.mkdirs dir)
+            (doseq [[name destination] [["ancestor" outside]
+                                        ["file.edn" (io/file outside "kept.edn")]]]
+              (java.nio.file.Files/createSymbolicLink
+                (.toPath (io/file dir name)) (.toPath destination)
+                (make-array java.nio.file.attribute.FileAttribute 0)))
+            (with-envelope [allowed]
+              #(doseq [tail ["ancestor/absent/undo.edn" "file.edn"]]
+                 (let [r (refusal-data (fn [] (artifacts/target "envelope" workspace tail)))]
+                   (is (= :write-outside-envelope (:error-type r)) (pr-str r))
+                   (is (= :receipt-publish (:effect r)))
+                   (is (string? (:resolved-path r))))))
+            (is (= "sentinel" (slurp (io/file outside "kept.edn"))))
+            (is (not (.exists (io/file outside "absent"))))))))))
+
+;; @spec DATACODE-ENV-001
+(deftest destination-envelope-admits-ledger-before-creation
+  (with-workspace
+    (fn [base]
+      (let [allowed (io/file base "allowed") outside (io/file base "outside")]
+        (.mkdirs allowed)
+        (with-envelope [allowed]
+          #(binding [artifacts/*artifact-root* (str outside)]
+             (let [r (refusal-data (fn [] (migration/append-telemetry! {:witness true})))]
+               (is (= :write-outside-envelope (:error-type r)) (pr-str r))
+               (is (not (.exists outside))))))
+        (.mkdirs outside)
+        (spit (io/file outside "kept.edn") "sentinel")
+        (.mkdirs (io/file allowed "alias-migration-receipts"))
+        (java.nio.file.Files/createSymbolicLink
+          (.toPath (io/file allowed "alias-migration-receipts" "ledger.edn"))
+          (.toPath (io/file outside "kept.edn"))
+          (make-array java.nio.file.attribute.FileAttribute 0))
+        (with-envelope [allowed]
+          #(binding [artifacts/*artifact-root* (str allowed)]
+             (let [r (refusal-data (fn [] (migration/append-telemetry! {:witness true})))]
+               (is (= :write-outside-envelope (:error-type r)) (pr-str r))
+               (is (= "sentinel" (slurp (io/file outside "kept.edn")))))))))))
+
+;; @spec DATACODE-ENV-002, DATACODE-ENV-003
+(deftest destination-envelope-is-trusted-context-only
+  (let [context {:operation :change :operation-version 1 :entrance :cli
+                 :policy :cli-legacy :lifecycle :commit
+                 :destination-envelope {:id (apply str (repeat 64 "a"))
+                                        :roots ["/var/tmp/owned"] :source :launcher}}
+        r (algebra/derive-capabilities (algebra/change-entry identity) context)]
+    (is (:ok r) (pr-str r))
+    (is (= (:destination-envelope context) (:destination-envelope r)))
+    (is (= :unknown-arguments
+           (:error-type (transaction/execute-change!
+                          {:destination-envelope (:destination-envelope context)})))))
+  (when-let [policy (ns-resolve 'clj-surgeon.receipt-artifacts 'policy-envelope-roots)]
+    (is (= ["/var/tmp" "/home/seat/.local/state/clj-surgeon" "/work"]
+           (policy {:tmpdir "/tmp/unsafe" :home "/home/seat" :workspace "/work"})))
+    (is (= ["/disk/tmp" "/disk/artifacts" "/work"]
+           (policy {:tmpdir "/disk/tmp" :home "/home/seat" :workspace "/work"
+                    :artifact-root "/disk/artifacts"})))))
 
 (defn- assert-artifact! [verb path]
   (is (string? path) (str verb " must return its artifact path"))
