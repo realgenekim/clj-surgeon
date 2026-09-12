@@ -1,0 +1,47 @@
+;; DAILY SEAT RECEIPT — machine-built by ~/bin/seat-receipt. Do not hand-edit.
+;; Astra's rule: a field whose source could not decide is `unknown`, never a fabricated zero.
+;;
+;; SCHEMA DIVERGENCE, DECLARED (house rules: doctrine cannot silently disagree with the prompt).
+;; The skill tighten-the-loop ships a DRAFT field contract "tighten-seat-receipt/v1"
+;; (~/.claude/skills/tighten-the-loop/SEAT-RECEIPT.md). This file implements a strict SUBSET of
+;; it — the fields the seat can actually source today — and says so rather than presenting a
+;; subset as the contract. Known gaps, each awaiting a published seat binding, NOT a fabrication:
+;;   * destination: v1 proposes docs/observations/tighten/YYYY-MM-DD/<seat-id>/<run-id>/;
+;;     this writes docs/observations/seat-receipts/<seat>/<date>.edn (the brief's path).
+;;   * absent here: session/prompt-uptake, assignment manifest, tasks/attempts/clocks,
+;;     apparatus share, friction occurrences, ratchets, transfer, owners/independence,
+;;     publication-acknowledgment envelope, per-run ids. No independent recorder exists yet, so
+;;     this receipt is SELF-BUILT by the subject's own seat — v1 forbids that, and until an
+;;     independent recorder is named the honest reading of this file is configuration evidence
+;;     plus corpora behaviour, never an accepted-work grade.
+;;   * v1 specifies no-argument jobs consuming a registered binding; these take flags.
+{:schema "tighten-seat-receipt/v0-installed-subset"
+ :contract-ref "~/.claude/skills/tighten-the-loop/SEAT-RECEIPT.md (draft v1)"
+ :recorder "self-built by the subject seat — v1 requires an independent recorder; none is named yet"
+ :seat "forge@anvil"
+ :utc "2026-09-12T17:15:30Z"
+ :date "2026-09-12"
+ :generator {:program "/home/forge/bin/seat-receipt" :sha256 "2a9694eec4fd6dbc"}
+ :packages {:routing-block-hash "unknown"
+            :routing-installed-matches-source false
+            :doctrine-commit "unknown"
+            :coldstart-md-sha256 "f74775851c3cfe7f"
+            :round-sha256 "212e3e43c1dc7be9"
+            :coldstart-sha256 "4de9a48b82a0cabe"
+            :coldstart-grade-sha256 "3bd3f9b1d6b9c149"
+            :run-bg-sha256 "cfddb181c69834c5"
+            :clj-kondo-sha256 "a8f59b7239c17422"
+            :clj-nrepl-eval "fbee42cffcfdcc12@/home/forge/.local/bin/clj-nrepl-eval"}
+ :routing-plate-source {:worktree "/home/forge/src/clj-surgeon-land" :sha "a15531ee" :matches-trunk true}
+ :trunk-sha "a15531ee"
+ :corpora {:coldstart {:rows unknown :mismatches "skipped" :wall-s 0
+                       :runner "/var/tmp/forge/coldstart/fixtures/run-fixtures.sh"}
+           :round     {:rows unknown :mismatches "skipped" :wall-s 0
+                       :runner "/var/tmp/forge/round/fixtures/run-fixtures.sh"}}
+ :headroom {:disk-remaining-g 47 :disk-floor-g 15 :inodes-remaining-pct 80}
+ :load 3.52
+ :last-pulse-age-min 5355
+ :last-landing {:sha "a15531ee" :time "2026-09-11T14:48:11Z"}
+ :open-friction-items 2
+ :on-loop false
+ :reasons ["routing-block-drift" "corpora-not-clean" ]}
