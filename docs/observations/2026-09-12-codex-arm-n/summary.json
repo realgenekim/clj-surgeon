@@ -1,0 +1,42 @@
+[
+  {
+    "model": "gpt-6-astra",
+    "n": 13,
+    "oracle_pass": 9,
+    "finished": 12,
+    "accepted": 1,
+    "surgeon_final": 0,
+    "program_final": 0,
+    "patch": 12,
+    "no_write": 1,
+    "n_accepted_median_s": 95.93,
+    "m_accepted_median_s": 89.51,
+    "caller_ratio": 0.9330762013968519,
+    "n_caller_failure_s": 2.38,
+    "m_caller_failure_s": 0,
+    "n_unaccepted_s": 1151.08,
+    "m_unaccepted_s": 580.73,
+    "n_gate_total_s": 259.22,
+    "m_gate_total_s": 424.17
+  },
+  {
+    "model": "gpt-5.6-sol",
+    "n": 13,
+    "oracle_pass": 12,
+    "finished": 13,
+    "accepted": 1,
+    "surgeon_final": 0,
+    "program_final": 0,
+    "patch": 13,
+    "no_write": 0,
+    "n_accepted_median_s": 111.03,
+    "m_accepted_median_s": 191.12,
+    "caller_ratio": 1.7213365757002612,
+    "n_caller_failure_s": 0,
+    "m_caller_failure_s": 0,
+    "n_unaccepted_s": 1554.11,
+    "m_unaccepted_s": 837.06,
+    "n_gate_total_s": 245.99,
+    "m_gate_total_s": 577.09
+  }
+]

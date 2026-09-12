@@ -5045,3 +5045,31 @@ replication, fourth in my own briefs.
 
 Arm N attempt 2 (packet 4fc6b2b2) is alive and running the remaining Codex N runs in
 foreground; ledger-derived shows 26 rows planned.
+
+## 2026-09-12T05:14:06Z — arm N attempt 2: blocked, and a correction to my own log
+
+Packet 4fc6b2b2 closed `:verdict :blocked`. Report published as
+`2026-09-12-codex-arm-n-report-attempt2.md` with paired walls, ledger and summary.
+
+Correction first: two entries up I wrote that the arm N batch "died at 9/26 at 03:29Z". It
+did not. The retained queue log ends `run-arm: done 03:49:38Z launched=26` and all 26 runs
+have result and rollout receipts. My wait loop counted rows in a ledger file the runner only
+rewrites at the end, so nine rows meant "nine written so far", not "nine survived". The
+builder's attempt 2 found the complete set and correctly refused to re-execute anything.
+
+What the 26 retained runs say, descriptively: zero Surgeon calls and zero program-final
+edits in every N run, for both models. Astra's bets: Surgeon 0/13 held, program 4/13
+missed (0), accepted 8/13 missed (1). Sol: Surgeon 0 held, program 0 held, accepted 9/13
+missed (1). Caller-wall M/N 0.93 Astra, 1.72 Sol; cost bets 1.30/1.25 both missed.
+
+Why blocked, and why the acceptance figures are not results: 24 of 26 N gates are red, and
+the gate logs show /tmp AccessDeniedException failures, an apparatus fault, not the agents'
+work. Oracle passes were 9/13 and 12/13. The retained runner also shared one CODEX_HOME
+across N runs, planted sed/python observe shims the design forbade, and never captured a
+request-to-verified clock. So the one number that survives is "Codex N, no Surgeon, no
+programs, patch every time", and the comparison it was built for needs a new authorized
+run with per-run homes, a fixed gate temp dir, and a captured verification clock.
+
+Together with the long-context result an hour earlier: two replications, both null on the
+question asked, both blocked by my apparatus rather than by the agents. That is the finding
+for the day.

@@ -1,0 +1,145 @@
+{:verdict :blocked
+ :manifest_id "162f81b2246a796ddfb7875437ded161238d807d2817fca5a4249dfd4b326b3e"
+ :findings [{:severity "high"
+ :file "/var/tmp/forge/measure-codexN/run-one.sh"
+ :line 231
+ :reproduction "Read the retained runner: all N runs resolve to one arm home, not isolated homes per run."
+ :exact_output "CODEX_HOME=\"$CODEX_HOME_BASE/$ARM\" PATH=\"$PINNED_PATH\" \\"}
+ {:severity "high"
+ :file "/var/tmp/forge/measure-codexN/run-one.sh"
+ :line 150
+ :reproduction "Compare all N manifest planted keys and neutral arm.AGENTS.md with current packet no-shim/apply_patch-only requirement."
+ :exact_output "cp \"$HERE/bin/cohort-shim.py\" \"$WT/.cohort/bin/sed\""}
+ {:severity "high"
+ :file "/var/tmp/forge/measure-codexN/runs-N/I-04-mission-display-decision-view__N__gpt-5.6-sol/gate.log"
+ :line 7
+ :reproduction "Read retained gate.log: forbidden /tmp scratch creation fails before comparable acceptance can be established."
+ :exact_output "  actual: java.nio.file.AccessDeniedException: /tmp/mission-display-' quoted-15638453567216422300"}
+ {:severity "high"
+ :file "/var/tmp/forge/measure-codexN/run-one.sh"
+ :line 256
+ :reproduction "Compare T1 with oracle invocation at line 308 and gate clock at line 325: complete-verification time was not recorded."
+ :exact_output "T1=$(date +%s.%N)"}
+ {:severity "medium"
+ :file "/var/tmp/forge/measure-codexN/queue-N.log"
+ :line 28
+ :reproduction "Compare frozen plan IDs against 26 retained result.edn files; handoff ledger contained only nine rows."
+ :exact_output "run-arm: done 2026-09-12T03:49:38Z launched=26"}]
+ :measurements [{:name "ledger rows"
+ :before 9
+ :after 26
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/inventory.json"}
+ {:name "new scored launches in attempt 2"
+ :before 0
+ :after 0
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/inventory.json"}
+ {:name "gpt-6-astra surgeon_final (before=forecast; caller ratio is proxy)"
+ :before 0
+ :after 0
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-6-astra program_final (before=forecast; caller ratio is proxy)"
+ :before 4
+ :after 0
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-6-astra accepted (before=forecast; caller ratio is proxy)"
+ :before 8
+ :after 1
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-6-astra caller_ratio (before=forecast; caller ratio is proxy)"
+ :before 1.3
+ :after 0.9330762013968519
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-6-astra n_caller_failure_s"
+ :before nil
+ :after 2.38
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-6-astra m_caller_failure_s"
+ :before nil
+ :after 0
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-6-astra n_unaccepted_s"
+ :before nil
+ :after 1151.08
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-6-astra m_unaccepted_s"
+ :before nil
+ :after 580.73
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-6-astra n_gate_total_s"
+ :before nil
+ :after 259.22
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-6-astra m_gate_total_s"
+ :before nil
+ :after 424.17
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-5.6-sol surgeon_final (before=forecast; caller ratio is proxy)"
+ :before 0
+ :after 0
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-5.6-sol program_final (before=forecast; caller ratio is proxy)"
+ :before 0
+ :after 0
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-5.6-sol accepted (before=forecast; caller ratio is proxy)"
+ :before 9
+ :after 1
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-5.6-sol caller_ratio (before=forecast; caller ratio is proxy)"
+ :before 1.25
+ :after 1.7213365757002612
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-5.6-sol n_caller_failure_s"
+ :before nil
+ :after 0
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-5.6-sol m_caller_failure_s"
+ :before nil
+ :after 0
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-5.6-sol n_unaccepted_s"
+ :before nil
+ :after 1554.11
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-5.6-sol m_unaccepted_s"
+ :before nil
+ :after 837.06
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-5.6-sol n_gate_total_s"
+ :before nil
+ :after 245.99
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "gpt-5.6-sol m_gate_total_s"
+ :before nil
+ :after 577.09
+ :receipt "/var/tmp/forge/measure-codexN/runs-N/attempt-2/summary.json"}
+ {:name "complete-verification M/N ratios"
+ :before [1.3
+ 1.25]
+ :after nil
+ :receipt "/var/tmp/forge/measure-codexN/run-one.sh"}
+ {:name "retained config delivery probe A"
+ :before nil
+ :after "delivered; typed missing-fields refusal"
+ :receipt "/var/tmp/forge/measure-codexN/repro/probeA-events.jsonl"}
+ {:name "retained config delivery probe B"
+ :before nil
+ :after "delivered; typed missing-fields refusal"
+ :receipt "/var/tmp/forge/measure-codexN/repro/probeB-events.jsonl"}
+ {:name "retained config delivery probe C"
+ :before nil
+ :after "delivered; typed missing-fields refusal"
+ :receipt "/var/tmp/forge/measure-codexN/repro/probeC-events.jsonl"}]
+ :commits []
+ :least_sure ["Historical effective CLI absence and zero-JVM concurrency cannot be established from absence of calls."
+ "No new blinded audit of all surviving producers; retained classifier labels are descriptive."
+ "Gate environmental failures prevent comparable acceptance; complete verification wall is absent."]
+ :disagreements ["Handoff says nine completed and batch died; retained files and terminal queue log show 26 completed results."
+ "Current packet requires per-run homes/no shims; retained runner and older design use per-arm home/observe shims."
+ "Caller wall in the prior report is not the complete-verification-wall estimand in the design."]
+ :owed [{:what "Authorize any new conformant N experiment and complete-verification clock; current 26 runs and three probes are spent."
+ :owner "Fable; Gene or registered owner"
+ :unblock "Explicit new authorization and sealed contract; do not rerun this cohort."}
+ {:what "Independent acceptance and required blinded audit of ambiguous retained M producers."
+ :owner "External acceptance authority / registered owner"
+ :unblock "Review retained raw receipts without caller reruns."}]}
