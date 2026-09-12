@@ -6091,3 +6091,16 @@ by test owner, call ordinal and temporal purpose, lines diagnostic only; (5) the
 probe measure preregistered, no run. Coverage stated exactly: the shared artifact boundary
 and its inventoried consumers, not every writer. Prewarm passed. Order per Gene's 2b:
 red-team now; land after block B; the probe measure runs first once block B is on trunk.
+
+## 2026-09-12T21:57:53Z — attempt 25 GO: probe roots derived from the running image's classpath; thirteenth check-only prewarm at 14644aad
+
+Tip 14644aad (product 925a40d7), pushed; report published as
+`2026-09-12-bbtower-block-b-attempt25-report.md`. Red first (3f276210) with Sol's exact
+shape: an authorized test depending on dev/experiments, value 1 loaded, 2 on disk, probe
+with valid identity → :probe-passed on old code. Fix: roots are the directories of the
+running image's java.class.path; sources resolve through RT/baseLoader, the loader require
+itself uses; local dependencies reload; distinct jar dependencies counted in :external;
+no resource or a source outside every root → :probe-dependency-unresolved {:ns :resolved-to
+:roots} with zero reloads; discovery completes before execution; receipts expose :roots.
+Restricted diagnostic and real prewarm green first time. Packet edfafdbe is the thirteenth
+check-only prewarm; ship round 6 follows.
