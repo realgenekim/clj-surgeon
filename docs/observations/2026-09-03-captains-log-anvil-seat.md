@@ -6177,3 +6177,18 @@ refused at [:bb :walls-ms]; missing files → :missing-evidence-receipts; the sh
 assertion count; F3 hard-linked final targets refused; coverage claim names the two
 uncovered writers; the preregistration made unreinterpretable. Branch pushed; an Opus
 verifier re-runs the red-team's attacks at the tip before any landing.
+
+## 2026-09-12T22:47:22Z — Gene: "Assess whether we are moving needle on sublime or is this boofarama"
+
+Answer given in chat: half and half; the work is sublime-grade, the loop shape is not.
+Needle, receipted: the seat's tooling runs this repository's gate inside a packet and
+satisfied ship admission fifteen times; the probe verb's four correctness holes (unbounded
+output, unauthorized target, incomplete closure, hardcoded roots) closed red-first with
+typed refusals; the runtime rule on 456 controls; 21 envelope writers and 3 trunk defects
+fixed; the autofix loop end to end. Thrash, mine: seven ship rounds finding one probe hole
+each where rounds 4 and 5 were one class; fifteen prewarm packets of which six were forced
+by my own evidence commits moving the tree; zero vs-native measurement in fifteen hours,
+the window at 7 by my own meter. Two rules adopted and written to memory
+(evidence-commits-move-the-tip; class-oracle-before-another-round): no evidence commits on
+the branch tip until it lands; if round 7 finds another probe hole, commission the
+closure-completeness oracle instead of a round 8.
