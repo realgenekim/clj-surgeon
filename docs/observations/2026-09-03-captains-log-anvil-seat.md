@@ -5921,3 +5921,33 @@ gensyms narrowly; prune-test's fixtures follow the TMPDIR policy, after which pr
 exposed the same SCI lock-release limit as recovery, so it is bb-ineligible with the
 reason (10, not the predicted 9). One fast run, one counted battery, one real prewarm,
 all green, no repair. Packet 09273506 is the eleventh check-only prewarm; ship round 4.
+
+## 2026-09-12T20:23:37Z — Gene: what should be data but isn't; my answer, Astra's, and the reconciled plan
+
+Mine (in chat, STE100 + storyboard): refusals thrown as exceptions; the lane manifest as a
+quoted map in source; places scattered across knobs and literals; safety = in-process
+envelope check against one places map; Hickey = every assignment, refusal, place and
+verdict a value with provenance derived by folds.
+
+Astra's (published as `2026-09-12-astra-data-not-code.md`) agrees on the disease, "facts
+coupled to incidental representation", and cuts my list where the tree disagrees:
+- refusals: too broad; probe already returns refusal values; the witnessed defect is
+  edit_dsl.clj:426 classifying by English message fragments and losing data across a
+  wrapper. Fix: refusal classification as a value independent of exception presentation.
+- manifest: the quoted map IS data and the witness already recomputes provenance from
+  receipts; the real defect is the producer handing the consumer a SOURCE PATCH
+  (attempt20/fold.clj:54). Fix the boundary: consumer reads validated evidence rows.
+- places: not 21 unguarded writers; a common artifact boundary exists
+  (receipt_artifacts.clj:63/137). Safety pick, bounded: envelope admission AT that
+  boundary, envelope from trusted launcher context, request fields cannot widen it,
+  typed :write-outside-envelope {:path :resolved-path :envelope-id}, witness with
+  absent-parent and symlink-escape cases; Landlock stays as the second predicate.
+- Hickey pick: sleep exemptions are keyed by file→LINE (lane_manifest_test.clj:1160);
+  attempt 21 had to move a pin after inserting unrelated lines. Identity = the sleep in
+  its owning test plus its temporal purpose; location derived from current source.
+- authority must still be declared; observing a write does not authorize it.
+
+Reconciled plan of record (after block B lands, before any new apparatus, and only as
+small product blocks): (1) envelope admission at the artifact boundary; (2) refusal
+classification as a value; (3) fold consumer reads evidence rows, no source patch;
+(4) sleep pins as identities. Filed as one plan item.
