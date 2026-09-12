@@ -5073,3 +5073,19 @@ run with per-run homes, a fixed gate temp dir, and a captured verification clock
 Together with the long-context result an hour earlier: two replications, both null on the
 question asked, both blocked by my apparatus rather than by the agents. That is the finding
 for the day.
+
+## 2026-09-12T06:12:32Z — bb-rewrite-tower block B launched (Gene: "Go next!")
+
+Packet 75bd44e8 (`run build`, Astra, model line verified gpt-6-astra) on the bbtower worktree
+detached at 978a0c48, base eae1e432. Brief: /var/tmp/forge/bbtower-fx/brief-blockB.edn.
+Five steps: restore the two pre-block-A lanes with their own unchanged TEST-ISO-007 budgets
+(the union summed 68,210 ms against the fast lane's 60,000 ms); measure mcp-feature-thread-test
+under bb and JVM and reclassify on the measurement (727.6 s under bb in block A); probe verb
+contract witnesses (refusals name the native failure, receipt booleans have seams); one
+landing-gate-prewarm attempt plus one repair; report. Stops: no budget raised, no test removed,
+no landing. Budget 240 min, one JVM.
+
+Two admission lessons from the launch itself: `run build` refuses the reviewer-command
+override as a fixture key (drop it; only ship needs it), and run-bg takes the name first,
+no "launch" word. The packet also refused a branch-attached owner until the worktree was
+detached at the tip.
