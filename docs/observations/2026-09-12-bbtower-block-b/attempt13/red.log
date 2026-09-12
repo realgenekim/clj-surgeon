@@ -1,0 +1,13 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+FAIL in (cli-child-honours-tmpdir-at-startup) (cli_dispatch_test.clj:136)
+expected: (= (System/getenv "TMPDIR") (:out result))
+  actual: (not (= "/var/tmp/forge/bbtower-fx" "/tmp"))
+
+FAIL in (formatter-refusal-retains-native-diagnostics) (mission_typist_executor_test.clj:26)
+expected: (= (:error failure) (:error result))
+  actual: (not (= "Permission denied: /forbidden/candidate.clj" nil))
+
+FAIL in (formatter-refusal-retains-native-diagnostics) (mission_typist_executor_test.clj:27)
+expected: (= failure (:formatter result))
+  actual: (not (= {:ok false, :error-type :formatter-failed, :error "Permission denied: /forbidden/candidate.clj", :path "/forbidden/candidate.clj", :exit 1, :output "native stderr"} nil))

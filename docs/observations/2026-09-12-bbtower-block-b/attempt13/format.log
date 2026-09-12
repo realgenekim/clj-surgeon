@@ -1,0 +1,14 @@
+standard-clj fix v0.29.0
+
+F /src/clj_surgeon/mcp_formatter.clj [6.17ms]
+F /src/clj_surgeon/mcp_process.clj [8.05ms]
+F /src/clj_surgeon/mission_typist_executor.clj [8.29ms]
+✓ /src/clj_surgeon/split_proof_gate.clj [4.54ms]
+✓ /test/clj_surgeon/cli_dispatch_test.clj [10.13ms]
+F /test/clj_surgeon/mcp_alias_migration_test.clj [64.32ms]
+F /test/clj_surgeon/mcp_formatter_test.clj [2.36ms]
+F /test/clj_surgeon/mcp_process_test.clj [7.31ms]
+F /test/clj_surgeon/mission_git_boundary_test.clj [1.36ms]
+F /test/clj_surgeon/mission_typist_executor_test.clj [18.62ms]
+
+All 10 files formatted with Standard Clojure Style 👍 [142.52ms]
