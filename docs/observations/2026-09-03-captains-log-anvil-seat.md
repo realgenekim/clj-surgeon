@@ -6129,3 +6129,23 @@ And six reinterpretable points in the preregistration, including my own refusal-
 being unfalsifiable (0 ≥ 0): replaced with two planted non-test targets per arm that PROBE
 must refuse and NATIVE cannot; subject sha and patch bytes frozen; T0/T1 instrumented.
 Round 5 (Astra, pid 1862779) on all of it, red first. Go-with-fix is not go.
+
+## 2026-09-12T22:21:52Z — round 6: Sol GO-WITH-FIX → the ship's v3 auto-fix loop ran end to end for the first time → delta GO → battery GREEN → receipt push failed on an unqualified refspec → UNVERIFIED
+
+Ship run 20260912T220734Z on candidate 1251dc76. Sol: GO-WITH-FIX, one finding, the servlet
+turned an oversized request's registered :probe-message-too-large into
+:invalid-probe-request (verdicts published as …-verdict-6-go-with-fix.md and
+…-verdict-6-delta-GO.md). Then, with no hand in it: the ship captured Sol's fix from the
+fence worktree, the seat's INDEPENDENT reviewer (admitted live under v3.12 for the first
+time) said GO, the named witness passed (mcp-http-server-test), the patch was applied to a
+fresh checkout, committed as forge-anvil with Sol as producer, pushed as tip 91538009 on
+bb-rewrite-tower, a new candidate a8cea52c sealed, the delta review to the SAME frozen
+reviewer said GO, and the battery ran GREEN (rc=0). Every step the v3 design promised on
+2026-09-08 and none had ever executed together.
+
+Then receipt-chain pushed `HEAD:fable/battery-receipt-14644aad` unqualified; the branch
+did not exist yet; git refused ("fully qualify the ref"); ship read the missing READY line
+as prewarm-died and finished UNVERIFIED, landing nothing. Fail-closed and correct. Filed
+inb-db9e78 (push HEAD:refs/heads/<branch>). Workaround tonight: the receipt branch
+pre-created at a8cea52c. The autofix moved the tip, so admission needs a fresh receipt:
+fourteenth check-only prewarm (packet da68a598) at 91538009, then ship round 7.
