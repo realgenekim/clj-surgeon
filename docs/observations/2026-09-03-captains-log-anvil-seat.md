@@ -6240,3 +6240,13 @@ file runs, whatever its lane) before the fixes; launches when the box is quiet.
 Block B: the counted battery is running ALONE on candidate 8c542ede through receipt-chain
 (pid 2985982, load 0.9 at launch) to produce the passing candidate-bound ledger receipt Sol
 requires; then sixteenth prewarm and ship round 8.
+
+## 2026-09-12T23:06:14Z — counted battery ALONE: green, receipt df86ecda; row carried to the tip 76af5782; sixteenth prewarm running
+
+receipt-chain on candidate 8c542ede with the box at load 1.1: recovery rc=0, battery rc=0
+in 167 s, RECEIPT READY df86ecda on fable/battery-receipt-a233ce66 (the branch pre-created,
+so the push that killed round 6 worked). The same battery went red twice tonight under my
+own concurrency. The ledger row is consumed by battery-fresh, so it belongs on the tip:
+carried as 76af5782 (one line), pushed. Sixteenth check-only prewarm (packet d0eed9b4) at
+76af5782; ship round 8 follows. Data-not-code round 6 launches when the prewarm finishes;
+never two suites at once again.
