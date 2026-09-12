@@ -5507,3 +5507,22 @@ check-only packet still writes report.edn with :verdict :fail and its check row.
 Blocked in-packet on the same two: N1 and circuits. Report published as
 `2026-09-12-block4-round3-report-astra.md`. Outside: test/run.sh with fresh circuits on
 f8e4515, then install.sh gated on "PASS all witnesses" and a clean tree.
+
+## 2026-09-12T11:22:56Z — attempt 12 PASS-WITH-REPAIR: bb children now honour TMPDIR; the gate's out-of-tree write audit
+
+Tip b45d3eb1 (source tip 843c7910), pushed to origin bb-rewrite-tower. Every bb lane
+child gets -Djava.io.tmpdir=<TMPDIR, or /var/tmp when TMPDIR is unset or under /tmp or
+/dev/shm>; red first (eight children returned /tmp), green, one repair (the real-child
+witness violated fast-lane purity, moved to the battery namespace the alias gate runs;
+census +2). Final prewarm passed at the repaired tip. Report published as
+`2026-09-12-bbtower-block-b-attempt12-report.md`; the audit as write-audit.md.
+
+The audit is the useful artefact: the landing gate writes, by default, to eleven places
+outside the worktree and TMPDIR. Most are per-seat state under user.home/.local/state/
+clj-surgeon (kondo locks and events, telemetry, MCP log, workspaces, artifacts, all with
+their own env override, only the artifact root honouring a common one); three are test
+fixtures under /var/tmp/forge (helper-fx and mission-fx honour an env var; the mission
+git-boundary test hard-codes the base). None honour XDG_STATE_HOME. For the check-only
+prewarm: v3.12 round 3 adds the state dir as a root; the two fixture env vars can be
+pointed inside the worktree at launch; the hard-coded base is one form to fix on the
+branch. Filing "honour XDG_STATE_HOME at every site" as a product item, not this block.
