@@ -1,0 +1,16 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.splice-envelope-test
+
+FAIL in (bounded-input-path-encoding) (splice_envelope_test.clj:85)
+probe refusal vocabulary must be complete
+expected: (= (remedy-vocabulary verb) (set (map :type rows)))
+  actual: (not (= #{:probe-servlet-unregistered-kind :invalid-probe-port :probe-namespace-not-found :probe-connection-failed :stale-probe-image :invalid-probe-request :probe-message-too-large :probe-source-too-large} #{:invalid-probe-port :probe-namespace-not-found :probe-connection-failed :stale-probe-image :invalid-probe-request :probe-message-too-large :probe-source-too-large}))
+
+FAIL in (bounded-input-path-encoding) (splice_envelope_test.clj:89)
+mcp_http_server.clj emits unregistered refusal kinds
+expected: (= #{} (set (remove (set (map :type rows)) kinds)))
+  actual: (not (= #{} #{:probe-servlet-unregistered-kind}))
+
+Ran 2 tests containing 63 assertions.
+2 failures, 0 errors.

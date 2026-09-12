@@ -1,0 +1,22 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+FAIL in (the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays) (ns_isolation_test.clj:465)
+NEW bb runtime ceiling: exact boundary and one ms beyond
+expected: (= 374149 (:bb iso/lane-budget-ms))
+  actual: (not (= 374149 399155))
+
+FAIL in (the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays) (ns_isolation_test.clj:468)
+NEW bb runtime ceiling: exact boundary and one ms beyond
+expected: (some? v)
+  actual: (not (some? nil))
+
+FAIL in (the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays) (ns_isolation_test.clj:469)
+NEW bb runtime ceiling: exact boundary and one ms beyond
+expected: (str/includes? (iso/message v) "bb lane took 374150 ms")
+  actual: (not (str/includes? "null VIOLATION in null -- null: null" "bb lane took 374150 ms"))
+
+FAIL in (the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays) (ns_isolation_test.clj:470)
+NEW bb runtime ceiling: exact boundary and one ms beyond
+expected: (str/includes? (iso/message v) "374149 ms")
+  actual: (not (str/includes? "null VIOLATION in null -- null: null" "374149 ms"))
+{:test 1, :pass 6, :fail 4, :error 0}

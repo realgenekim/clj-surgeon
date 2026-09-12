@@ -1,0 +1,21 @@
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.lane-manifest-test
+
+FAIL in (no-fast-lane-namespace-spells-a-child-process) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:433)
+SCI rejection fixture strings are data; real require and call forms stay visible
+expected: (not (some (fn* [%1] (re-find %1 (code-spellings "(def rejected \"(require 'clojure.java.shell)\")"))) spawn-spellings))
+  actual: (not (not "clojure.java.shell"))
+
+FAIL in (no-fast-lane-namespace-spells-a-child-process) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:433)
+fast-lane namespace(s) spelling a child-process launcher -- the fast lane's rule is NO child process (move it to :battery): clj-surgeon.edit-dsl-test ~ clojure\.java\.shell; clj-surgeon.lane-manifest-test ~ \bProcessBuilder\b; clj-surgeon.lane-manifest-test ~ clojure\.java\.shell; clj-surgeon.lane-manifest-test ~ \bproc/(?:process|shell|sh)\b
+expected: (empty? offenders)
+  actual: (not (empty? ([clj-surgeon.edit-dsl-test "clojure\\.java\\.shell"] [clj-surgeon.lane-manifest-test "\\bProcessBuilder\\b"] [clj-surgeon.lane-manifest-test "clojure\\.java\\.shell"] [clj-surgeon.lane-manifest-test "\\bproc/(?:process|shell|sh)\\b"])))
+
+Ran 67 tests containing 790 assertions.
+2 failures, 0 errors.

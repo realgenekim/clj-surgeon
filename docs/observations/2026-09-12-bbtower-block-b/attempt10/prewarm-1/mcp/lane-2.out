@@ -1,0 +1,22 @@
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test
+
+Testing clj-surgeon.lane-manifest-test
+
+Testing clj-surgeon.mission-forms-source-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.mission-typist-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test
+
+Testing clj-surgeon.mcp-recovery-test
+
+Testing clj-surgeon.mcp-schema-test
