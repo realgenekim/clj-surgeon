@@ -9,3 +9,8 @@ the ratchet that makes the class impossible; no entry without a counterexample w
 
 - [sublime-vs-unsublime-patterns.md](sublime-vs-unsublime-patterns.md) — the first page, from the
   bb-rewrite-tower block B landing program (2026-09-12, 23 attempts, 11 check-only packets, 3 fence rounds).
+- [candidates-2026-09-03-to-12.md](candidates-2026-09-03-to-12.md) — CANDIDATES, not promoted: 66
+  entries mined from ten days of observation records by an Opus reader under the receipt rule (the
+  header names the sixteen to cut first and the three least-sure bindings). Promotion requires one
+  adversarial pass (Sol or Astra) that tries to refute each entry against its receipt, and a diff
+  against Gene's commit-derived list. Entries #26, #42 and #9 are flagged by the miner itself.
