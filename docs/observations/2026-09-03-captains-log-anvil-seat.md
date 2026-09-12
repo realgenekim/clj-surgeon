@@ -5538,3 +5538,18 @@ environment.edn now lists /home/forge/.local/state/clj-surgeon among the write r
 CLJ_SURGEON_HELPER_TMP and CLJ_SURGEON_MISSION_TMP point inside the worktree's target/fx.
 One known remaining out-of-envelope writer: mission_git_boundary_test.clj:14 hard-codes
 /var/tmp/forge as its temp base; if that is the only red lane, it is one form on the branch.
+
+## 2026-09-12T11:51:02Z — the parked item-3 builder reported in: a specimen for the census
+
+The item-3 preservation-brief agent (parked since 09-10; tip 10b77576, 20 commits over
+MCP/main, nothing pushed) woke on the memory-pressure kill of its stale waiters, re-read
+the seat header, and flagged itself: sixteen rounds of python and sed on three Clojure
+files, under the older "prefer shell edits" harness line, and five defects of exactly the
+class the 09-10 rule names: a duplicated map key, an unbalanced splice, a byte-range
+replace that silently deleted four symbols, an over-escaped regex, and two anchor misses
+that no-opped silently so two rounds shipped commits whose test rows did not exist. Its
+own words: "a string edit that misses its anchor reports success." That is E4 again, in a
+Fable-class agent, after the rule was written. The rule is right; the harness line that
+contradicts it is the standing confound (2026-09-12-harness-shell-preference-line.md).
+Not dispatched further; the program stays parked. Its proposed ratchet (replay asserts
+every row name has an output file) is filed with the item.
