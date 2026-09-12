@@ -27,3 +27,53 @@ Attempt 2 (packet 2c9abc97) ran both delivery probes and refused admission on tw
 
 ## Amendment 3 (2026-09-12T03:54Z) — after attempt 3: run the sessions
 Attempt 3 (packet e0afd67a) passed both acceptEdits delivery probes and stopped again on two items: the corrected B (bypass mode, no copy) had no probe left under the cap, and task 13's repository gate (E4 lives in curtaincall-cfp) is absent from the composed fixture. RULINGS (Fable): delivery probes are uncapped (they are cheap and they are the admission evidence; scored sessions stay capped at 6 + 2 controls); task 13 is scored by its held-out oracle with gate = unknown (recorded, never pass); and once the probes attest the paragraph counts (B one, AC/H zero) and the memory-files condition, the scored sessions RUN — owed items are recorded in the ledger and do not block a session unless a frozen input (task, oracle, arm bundle, hook, bet registry) is missing. Bets unchanged.
+
+## Amendment 4 — scoring (written after packet 9ce4f75f reported, attempt 4)
+
+Report: `2026-09-12-longctx-report.md` (packet verdict `:fail` for complete execution;
+104 task rows, 96 completed outcomes, 8/8 sessions closed).
+
+**Measured program share, early/middle/late bins (positions 1–4 / 5–8 / 9–13):**
+
+| Arm | Sonnet | Opus |
+|---|---|---|
+| B (bypass, harness line present) | 0 / 0 / 20 | 0 / 20 / 25 |
+| AC (acceptEdits + hook allowed) | 0 / 0 / 0 | 0 / 0 / 0 |
+| H (acceptEdits + hook allowed) | 0 / 0 / 0 | 0 / 0 / 0 |
+| B control, reordered | 0 / 0 / 0 | 100 / 100 (2 tasks) / not run |
+
+Oracle-wrong-with-gates-green: 0 in every cell where outcomes are known. H hook fired: 0 times.
+
+**Bets.** Fable's late-B bets (Opus 60, Sonnet 45) missed; Astra's (Opus 50, Sonnet 40) missed.
+Both over-predicted by 25–35 points. Fable's H-sonnet share and exposure bets held (both 0);
+Astra's held too. Every other share bet missed. Gate-green-wrong bets: unscored (outcomes
+unknown because the E4 gate is unknown under amendment 3), except B-opus where both missed.
+Fable's late-B <25% bar not triggered at exactly 25.0. Astra's length-support bar (late ≥40,
+rise ≥20) missed on level, held on rise (0 → 25). Astra's bundle-suppression bar held
+(B − AC = 25 points), but see the apparatus defect below before reading that as a result.
+
+**Why the packet says fail.** The Opus reordered control died at position 6: the mechanism
+classifier returned a regex Match object for a basename reference and JSON serialization
+failed, closing the caller. Positions 7–13 never ran. The classifier is repaired in the
+delivered code; the control's 100% program figure covers 6 tasks, all program, and is
+not comparable to the 13-task fixed-order cell.
+
+**Apparatus defect found in the receipts, blocking for AC and H.** At position 13 (the E4
+task), AC-opus and H-opus each reached for Surgeon: one `mcp__clj-surgeon__edit_clojure`
+call carrying a `require_change` for `cfp-scheduler-killer.events`. The harness denied both
+calls at the permission layer (`permission_denials` in the caller result) because the
+attempt-4 brief set AC/H to `acceptEdits` and allowed the hook but did not allow the MCP
+tools. So the one time a long-context agent chose the verb that exists for E4, my brief
+refused it, and the agent finished with an editor. AC/H Surgeon adoption of 0 is therefore
+not a measurement. B is unaffected (bypass allows MCP).
+
+**What survives.** (1) In B, program writes appear late and rise 0 → 25 (Opus) and 0 → 20
+(Sonnet) across 13 tasks, on the same fixture, in one session. Direction matches the census;
+magnitude is a third of what either bettor forecast. (2) Nobody wrote a wrong file with gates
+green; the census's damage figure did not reproduce here at n=13. (3) The hook never had a
+program write to fire on in AC/H because the agents did not write programs there; whether
+that is the mode or the bundle cannot be separated from the permission defect.
+
+**Attempt 5 needs:** allow `mcp__clj-surgeon__*` in AC/H; rerun the Opus reordered control
+with the repaired classifier; E4 gate re-sealed so gate-green-wrong is scorable. Cost of
+attempt 4: eight sessions, ~4.5 h wall on the JVM lease.

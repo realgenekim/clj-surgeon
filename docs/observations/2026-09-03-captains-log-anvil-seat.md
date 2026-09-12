@@ -5025,3 +5025,23 @@ The long-context packet's Opus delivery probe attested the shell-preference para
 ## 2026-09-12T03:54Z — long-context attempt 3 blocked on the probe cap and E4's absent gate; amendment 3 says run
 
 Three packets, zero scored sessions. Each stop was a literal reading of my own brief: a probe cap I set spent on the arms that changed mode, a repository gate for the one task whose repo is not in the fixture. The packet contract is doing what it says; the brief was over-constrained by its author. Amendment 3: delivery probes uncapped, task 13 oracle-only with gate unknown, and an explicit "once the probes attest, the sessions run; owed items record, they do not block". Attempt 4 launched on the committed attempt-3 tree. The lesson for briefs: name the admission conditions and let the packet spend what those conditions cost; do not cap the evidence the packet needs to admit itself.
+
+## 2026-09-12T05:12:10Z — long-context replication reported: fail for execution, bettors over-predicted, my brief refused the one Surgeon call
+
+Packet 9ce4f75f (attempt 4) closed with `:verdict :fail`. Report published as
+`2026-09-12-longctx-report.md`; scoring in amendment 4 of the preregistration.
+
+The headline: B program share rose 0 → 25% (Opus) and 0 → 20% (Sonnet) over 13 tasks.
+Fable bet 60/45, Astra 50/40. Both missed by a wide margin, in the same direction. Zero
+wrong-with-gates-green anywhere outcomes are known. The H hook fired zero times.
+
+Two things broke, one mine. The Opus reordered control died at task 6 on a classifier
+serialization bug (repaired). And at task 13, both AC-opus and H-opus reached for
+`edit_clojure` with a `require_change`, and the harness denied it: my attempt-4 brief
+switched those arms to acceptEdits to defeat the bypass-mode paragraph injection, allowed
+the hook, and forgot the MCP tools. The only Surgeon reach in six sessions was refused by
+the apparatus. AC/H adoption is unmeasured, not zero. Fifth apparatus defect of this
+replication, fourth in my own briefs.
+
+Arm N attempt 2 (packet 4fc6b2b2) is alive and running the remaining Codex N runs in
+foreground; ledger-derived shows 26 rows planned.
