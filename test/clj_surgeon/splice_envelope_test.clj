@@ -19,9 +19,7 @@
 ;; INTENT-TEST: INSERT-FORMS-015
 
 (def probe-owners
-  {"probe.clj" nil
-   "mcp_hot_verify.clj" #{'probe! 'probe-reload-order}
-   "mcp_http_server.clj" #{'probe-servlet}})
+  ["probe.clj" "mcp_hot_verify.clj" "mcp_http_server.clj"])
 
 (defn refusal-spellings [forms]
   (letfn [(literals [value]
@@ -38,16 +36,15 @@
               (when (some #(and (symbol? %) (= "refusal" (name %)))
                           (tree-seq coll? seq (first node)))
                 (literals (second node)))
-              (mapcat (fn [[k v]] (when (= :kind k) (literals v)))
+              (mapcat (fn [[k v]] (when (#{:error-type :kind} k) (literals v)))
                       (partition 2 1 node)))))
         (tree-seq coll? seq forms)))))
 
 (defn probe-vocabulary []
   (into {}
-        (for [[file names] probe-owners
-              :let [all (binding [*read-eval* false]
-                          (read-string (str "[" (slurp (str "src/clj_surgeon/" file)) "]")))
-                    forms (if names (filter #(and (seq? %) (names (second %))) all) all)]]
+        (for [file probe-owners
+              :let [forms (binding [*read-eval* false]
+                            (read-string (str "[" (slurp (str "src/clj_surgeon/" file)) "]")))]]
           [file (refusal-spellings forms)])))
 
 (defn remedy-vocabulary [verb]
@@ -75,19 +72,24 @@
                    [(:error-type (execute request))
                     (vec (java.nio.file.Files/readAllBytes (.toPath file)))])))))))
   (doseq [verb ["insert-forms" "rename-alias" "probe"]]
-    (let [rows (:refusals (clojure.edn/read-string (slurp (str "docs/intent/" verb "/refusals.edn"))))]
+    (let [registry (clojure.edn/read-string (slurp (str "docs/intent/" verb "/refusals.edn")))
+          rows (:refusals registry)
+          owner-kinds (:owner-refusals registry)
+          registered (into (set (map :type rows)) (mapcat val owner-kinds))]
       (when-not (= verb "probe")
         (is (= {:unsupported-source [:capability :none]
                 :malformed-utf8 [:semantic "Lossy decoding can replace malformed UTF-8 bytes before an edit."]}
               (into {} (for [{:keys [type class native_failure]} rows
                              :when (#{:unsupported-source :malformed-utf8} type)]
                          [type [class native_failure]]))) verb))
-      (is (= (remedy-vocabulary verb) (set (map :type rows))) (str verb " refusal vocabulary must be complete"))
+      (is (= (remedy-vocabulary verb) registered) (str verb " refusal vocabulary must be complete"))
       (when (= verb "probe")
         (doseq [[file kinds] (probe-vocabulary)]
           (is (seq kinds) (str file " must contribute refusal kinds"))
-          (is (= #{} (set (remove (set (map :type rows)) kinds)))
-              (str file " emits unregistered refusal kinds"))))
+          (is (= #{} (set (remove registered kinds)))
+              (str file " emits unregistered refusal kinds"))
+          (is (= #{} (set (remove kinds (get owner-kinds file))))
+              (str file " registers owner refusal kinds it never emits"))))
       (is (and (seq rows) (= (count rows) (count (set (map :type rows))))
                (every? (fn [row]
                          (and (every? #(contains? row %) [:promise :native_failure :native_method
@@ -160,10 +162,16 @@
                   '(probe/refusal :direct "no")
                   '((requiring-resolve 'clj-surgeon.probe/refusal) :direct "no")
                   '(emit :kind :direct)
+                  '(assoc {} :error-type :direct)
+                  '(hash-map :error-type :direct)
                   '{:kind :direct}
                   '{:error-type :direct}
                   '(refusal (or (:error-type data) :direct) "no")]]
-      (is (= #{:direct} (refusal-spellings form)) (pr-str form))))
+      (doseq [owner [form (list 'def 'guard form)
+                     (list 'defn- 'probe-guard '[request] form)
+                     (list 'do form)
+                     (list 'defmethod 'guard :request '[request] form)]]
+        (is (= #{:direct} (refusal-spellings [owner])) (pr-str owner)))))
   (doseq [[text expected] [["{}" {}] ["{} ; final comment" {}]
                            ["{} {}" :invalid-request] ["{:a 1 :a 2}" :invalid-request]
                            ["#foo {}" :invalid-request] ["#=(throw (Exception.))" :invalid-request]

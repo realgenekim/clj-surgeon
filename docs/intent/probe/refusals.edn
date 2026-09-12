@@ -1,5 +1,17 @@
 {:version 1
  :operation "probe"
+ ;; All top-level forms of each declared owner are scanned. These existing
+ ;; non-probe kinds belong to the shared hot-verification/configuration
+ ;; owners, not the probe protocol. They remain explicitly registered and
+ ;; reverse-checked by file; this is not an exclusion from extraction.
+ :owner-refusals
+ {"mcp_hot_verify.clj"
+  #{:invalid-hot-verification-profile :hot-verification-path-escape
+    :invalid-hot-verification-port :hot-verification-transport-closed
+    :hot-verification-timeout :hot-verification-failed
+    :hot-verification-connection-failed}
+  "mcp_http_server.clj"
+  #{:invalid-project-formatter :invalid-project-verification-profiles}}
  :refusals
  [{:type :invalid-probe-request :class :protocol
    :native_failure "Malformed namespace text or extra request fields can execute an unintended REPL action."
