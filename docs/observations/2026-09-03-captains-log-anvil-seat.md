@@ -5709,3 +5709,22 @@ and final prewarm green, same source digest as the wrapper run.
 
 Twenty-one out-of-envelope writers in total across the block, none of them the block's
 own code, all found by a refusal. Packet 0836a451 is the seventh check-only prewarm.
+
+## 2026-09-12T14:22:05Z — FIRST envelope-clean prewarm: the seat's own tooling satisfied ship admission; the ship stopped on a trunk conflict; attempt 19 merges trunk
+
+Packet 0836a451 at e7cefb82: `make landing-gate-prewarm` exit 0 inside the check-only
+envelope, receipt git-head = e7cefb82, three suites :passed, landing? false. That is the
+thing Block 4 was built for: the ledger check event and the receipt the ship's admission
+demands, produced by a packet, not by hand. The packet's auto-added battery check went
+red (the nightly battery has never run under an envelope; retained, separate item).
+
+`ship e7cefb82 …` with SHIP_PREWARM_RECEIPT and, under v3.12, the seat's independent
+reviewer named: admission PASSED (prewarm-required satisfied for the first time), then
+`SHIP-STOP reason=candidate-conflicts`: trunk moved from eae1e432 to a15531ee while the
+branch lived (clj-splice CLI bundling, installed-launcher witness, the AGENTS.md skill
+name) and merge-tree reports content conflicts in Makefile and docs/tech-tree.md. A
+conflict repair is a new candidate, never the sealed one patched, so: attempt 19 (Astra,
+pid 187246) merges a15531ee into the branch semantically (the generated launcher must
+both bundle clj-splice and carry the tmpdir property; both sides' witnesses pass), then
+test-fast, the wrapper gate, one real prewarm. Then an eighth check-only prewarm at the
+merge tip, then the ship again.
