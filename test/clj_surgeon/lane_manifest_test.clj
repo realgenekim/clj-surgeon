@@ -244,6 +244,30 @@
                (/ (+ (:mean-ms bb) (* 2 (:sd-ms bb)))
                   (max 1.0 (- (:mean-ms jvm) (* 2 (:sd-ms jvm)))))) (str n))))))
 
+;; @spec DATACODE-ROWS-001
+(deftest runtime-evidence-is-consumed-and-receipts-are-required
+  (let [validate (ns-resolve 'clj-surgeon.lane-manifest 'validate-runtime-evidence!)
+        evidence-path (ns-resolve 'clj-surgeon.lane-manifest 'runtime-evidence-path)
+        rows lm/runtime-measurements]
+    (is (some? validate) "the fold and manifest share the evidence admission value")
+    (doseq [runtime [:jvm :bb]]
+      (let [n (first (keys rows))
+            missing (update-in rows [n runtime] dissoc :logs)
+            r (try ((or validate identity) missing) nil
+                   (catch clojure.lang.ExceptionInfo e (ex-data e)))]
+        (is (= :missing-evidence-receipts (:error-type r)) (str n " " runtime))
+        (is (= n (:namespace r)))))
+    (is (some? evidence-path) "measured facts have a data source, not a quoted source copy")
+    (when evidence-path
+      (let [evidence (edn/read-string (slurp @evidence-path))]
+        (is (= evidence rows))
+        (doseq [[n row] evidence]
+          (is (= (if (lm/bb-ineligibilities n) :jvm (:runtime row))
+                 (lm/namespace-runtimes n)) (str n " cannot disagree with evidence"))))))
+  (let [source (slurp "docs/observations/2026-09-12-bbtower-block-b/attempt20/fold.clj")]
+    (is (not (str/includes? source "*** Begin Patch"))
+        "the statistical fold must not manufacture source edits")))
+
 (deftest runtime-portability-controls-cover-every-assignment
   ;; @spec TEST-ISO-016 -- all cadences, independently of the 38 cost pairs.
   (let [n 'fixture/runtime-test
