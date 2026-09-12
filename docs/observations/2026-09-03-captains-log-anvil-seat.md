@@ -5691,3 +5691,21 @@ Two things to keep from this: a builder that stops to ask on an envelope fact ra
 than widen it is doing the right thing; and "exactly three roots" in a brief was wrong
 by one device, which is the kind of one-line imprecision that would have cost another
 seven-minute run if the wrapper had been the packet.
+
+## 2026-09-12T14:08:10Z — attempt 18 PASS: the whole landing gate runs green inside the check-only envelope; seventh check-only prewarm running at e7cefb82
+
+Tip e7cefb82 (source 30808abc), pushed; report published as
+`2026-09-12-bbtower-block-b-attempt18-report.md` with the envelope census beside it.
+The wrapper's only addition was WRITE_FILE on /dev/null, matching packet.py:78-82. One
+whole-gate diagnostic (exit 2 in 127 s) plus a sequential `make -k` over every
+unreached command (316 s) found the last five fixture writers: Cell B's unit fixture
+(/var/tmp/b07-lint-*), the papercut baseline mirror (/var/tmp/split-oracle-*), Cell B's
+shell default (/var/tmp/forge/plan2/cellB/run-$$), the alias receipt witness loading the
+helper fixture default, and the kondo hygiene witness registering its checkout in the
+source's shared .git (now a disposable shared clone under TMPDIR). Then the whole gate
+under the wrapper: seven stages green. test-fast once; first counted prewarm failed
+because Astra copied evidence into the tree while it ran (retained, not waived); second
+and final prewarm green, same source digest as the wrapper run.
+
+Twenty-one out-of-envelope writers in total across the block, none of them the block's
+own code, all found by a refusal. Packet 0836a451 is the seventh check-only prewarm.
