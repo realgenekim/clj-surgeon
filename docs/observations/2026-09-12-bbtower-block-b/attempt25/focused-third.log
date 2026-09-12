@@ -1,0 +1,31 @@
+
+Testing clj-surgeon.mcp-hot-verify-test
+
+Testing clj-surgeon.forms-test
+
+Ran 24 tests containing 94 assertions.
+0 failures, 0 errors.
+
+Testing probe-fixture.check-test
+
+FAIL in (probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload stale-check) (check_test.clj:1)
+expected: (= 1 d/value)
+  actual: (not (= 1 2))
+
+Ran 1 tests containing 1 assertions.
+1 failures, 0 errors.
+
+Testing sol-round5.probe-test
+
+FAIL in (probe-reloads-image-classpath-experiment-dependency stale-check) (probe_test.clj:1)
+expected: (= 1 d/value)
+  actual: (not (= 1 2))
+
+Ran 1 tests containing 1 assertions.
+1 failures, 0 errors.
+:sol-round5 {:elapsed_ms 12.943888, :reloaded [sol-round5.dependency sol-round5.probe-test], :proof_pending [:landing-gate], :tests 1, :external 1, :closure-expected 2, :state :probe-failed, :roots [/home/forge/src/clj-surgeon-bbtower/test /home/forge/src/clj-surgeon-bbtower/dev/experiments /home/forge/src/clj-surgeon-bbtower/src /home/forge/src/clj-surgeon-bbtower/libs/clj-splice/src /home/forge/.gitlibs/libs/io.github.bhauman/clojure-mcp/35a660be1236ea2d15e3e68593fa74054e0aca4e/src /home/forge/.gitlibs/libs/io.github.bhauman/clojure-mcp/35a660be1236ea2d15e3e68593fa74054e0aca4e/resources /var/tmp/forge/bbtower-fx/probe-classpath-97266014994662100/test /var/tmp/forge/bbtower-fx/probe-classpath-97266014994662100/dev/experiments], :failures 1, :assertions 1} :loaded-value 2 :disk-value 2
+
+Ran 20 tests containing 158 assertions.
+0 failures, 0 errors.
+=> {:test 20, :pass 158, :fail 0, :error 0, :type :summary}
+*======== user | clj ========*

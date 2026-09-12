@@ -1,0 +1,20 @@
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.mcp-workspace-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test

@@ -1,0 +1,55 @@
+
+Testing clj-surgeon.mcp-hot-verify-test
+
+Testing clj-surgeon.forms-test
+
+Ran 24 tests containing 94 assertions.
+0 failures, 0 errors.
+0 preconditions skipped.
+0 preconditions failed.
+
+Testing probe-fixture.check-test
+
+FAIL in (probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload stale-check) (check_test.clj:1)
+expected: (= 1 d/value)
+  actual: (not (= 1 2))
+
+Ran 1 tests containing 1 assertions.
+1 failures, 0 errors.
+0 preconditions skipped.
+0 preconditions failed.
+
+Testing sol-round5.probe-test
+
+FAIL in (probe-reloads-image-classpath-experiment-dependency stale-check) (probe_test.clj:1)
+expected: (= 1 d/value)
+  actual: (not (= 1 2))
+
+Ran 1 tests containing 1 assertions.
+1 failures, 0 errors.
+0 preconditions skipped.
+0 preconditions failed.
+:sol-round5 {:elapsed_ms 40.367047, :reloaded [sol-round5.dependency sol-round5.probe-test], :proof_pending [:landing-gate], :tests 1, :external 1, :closure-expected 2, :state :probe-failed, :roots [/home/forge/src/clj-surgeon-bbtower/test /home/forge/src/clj-surgeon-bbtower/dev/experiments /home/forge/src/clj-surgeon-bbtower/src /home/forge/src/clj-surgeon-bbtower/libs/clj-splice/src /home/forge/.gitlibs/libs/io.github.bhauman/clojure-mcp/35a660be1236ea2d15e3e68593fa74054e0aca4e/src /home/forge/.gitlibs/libs/io.github.bhauman/clojure-mcp/35a660be1236ea2d15e3e68593fa74054e0aca4e/resources /var/tmp/forge/bbtower-fx/probe-classpath-7368643961693492740/test /var/tmp/forge/bbtower-fx/probe-classpath-7368643961693492740/dev/experiments], :failures 1, :assertions 1} :loaded-value 2 :disk-value 2
+
+Testing clj-surgeon.mcp-http-server-test
+
+Testing clj-surgeon.forms-test
+
+Ran 24 tests containing 94 assertions.
+0 failures, 0 errors.
+0 preconditions skipped.
+0 preconditions failed.
+clj-surgeon MCP: embedded nREPL on 34423 ( /var/tmp/forge/bbtower-fx/clj-surgeon-mcp-http-test-16230188369110615020/.nrepl-port )
+
+Testing clj-surgeon.admit-patch-test
+
+Testing clj-surgeon.splice-envelope-test
+
+Testing clj-surgeon.receipt-booleans-test
+
+Ran 212 tests containing 4885 assertions.
+0 failures, 0 errors.
+0 preconditions skipped.
+0 preconditions failed.
+=> {:test 212, :pass 4885, :fail 0, :error 0, :type :summary}
+*======== user | clj ========*
