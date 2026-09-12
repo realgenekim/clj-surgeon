@@ -38,6 +38,23 @@ attempt10 measured table. Real subprocess witnesses belong in battery even
 when cheap; the 71-second parser corpus belongs there by measured cost. Small
 pure witnesses remain fast. No tests or runtime assignments are removed.
 
+Runtime correctness is a separate prerequisite from cost selection. Every
+assigned test namespace, including dedicated cadences and members outside the
+38 paired timing measurements, needs complete passing JVM and bb controls to
+claim bb portability. TEST-ISO-016 records command, subject, process exit and
+test counters beside the assignment. Initial load probes discover configured
+runtime incompatibilities, but successful loading cannot replace a test run:
+late dependency resolution and host-specific operations can still fail.
+
+The manifest's portability witness names each failed runtime control even if
+the current assignment happens to use the passing runtime. Explicitly accounting
+for a defect preserves it as a refusal until fixed; it does not certify the
+passing side as a portability repair. Initial bb load incompatibility is
+explicitly accounted for on existing JVM-only assignments. Cost measurements,
+cadence membership and budgets remain independent. The first complete census
+and individual defect accounts are retained in
+`docs/observations/2026-09-12-bbtower-block-b/attempt22/`.
+
 The coordinator enforces bb namespace budgets from child wall facts in addition
 to aggregate budgets; an empty child violations vector is not a budget verdict.
 It prints makespan first, then cadence and runtime sums, charging actual child

@@ -847,6 +847,47 @@
 (def unmeasured-runtimes
   (apply dissoc namespace-runtimes (keys runtime-measurements)))
 
+;; @spec TEST-ISO-016 -- correctness controls cover every assignment/cadence.
+(def namespace-runtime-controls
+  (into (sorted-map)
+        (for [n (keys namespace-runtimes)]
+          [n (into {}
+                   (for [[runtime suffix] [[:jvm "jvm-test"]
+                                           [:bb "bb-test"]
+                                           [:bb-load "bb-load"]]]
+                     [runtime (str "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/"
+                                   n "-" suffix ".control.edn")]))])))
+
+;; @spec TEST-ISO-016 -- a passing assignment cannot hide a failed control.
+(defn portability-refusal
+  [namespace-name {:keys [jvm bb bb-load]}]
+  (let [passes? (fn [runtime row]
+                  (let [{:keys [test fail error]} (:result row)]
+                    (and (= namespace-name (:namespace row))
+                         (= runtime (:runtime row))
+                         (= :passed (:status row))
+                         (= 0 (:exit row))
+                         (pos-int? test) (= 0 fail error))))
+        failed (into (sorted-map)
+                     (for [[runtime row] [[:jvm jvm] [:bb bb]]
+                           :when (not (passes? runtime row))]
+                       [runtime (select-keys row [:status :result :receipt])]))]
+    (cond
+      (and (= :load-failed (:status bb-load))
+           (= "load" (:mode bb-load))
+           (= namespace-name (:namespace bb-load))
+           (= :bb (:runtime bb-load))
+           (integer? (:exit bb-load)) (not (zero? (:exit bb-load))))
+      {:error-type :non-portable-namespace :namespace namespace-name
+       :reason :bb-load-incompatible
+       :control (select-keys bb-load [:status :message :causes :receipt])}
+
+      (seq failed)
+      {:error-type :non-portable-namespace :namespace namespace-name
+       :reason :runtime-control-failed :controls failed}
+
+      :else nil)))
+
 (def excluded
   "Test namespaces that are on disk and in NO JVM lane, each with the reason
    it is not. An entry here is a DECLARED omission; anything else on disk

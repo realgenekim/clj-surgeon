@@ -14,8 +14,19 @@ status: "round four implemented 2026-09-04 (002/003/004/005/007/010 runtime witn
   Record n, every wall, mean, sd, conservative ratio and receipt paths beside
   each paired assignment in the manifest; otherwise select JVM. Existing
   assignments without paired receipts remain unchanged and are explicitly
-  unmeasured. A known runtime contract failure may select JVM with its
-  paired controls and defect recorded. The declared bb admission tolerance
+  unmeasured for cost. Portability is a separate prerequisite for EVERY
+  namespace with a runtime assignment, at every cadence, including namespaces
+  outside the 38 paired fast controls. A bb-portable namespace must have one
+  passing complete namespace control on BOTH JVM and bb, with command, subject,
+  result and receipt paths recorded beside its assignment. A namespace passing
+  on only one runtime is refused by name as non-portable until fixed; selecting
+  the passing runtime is not a portability repair. A configured-runtime load
+  incompatibility is explicitly accounted for with its named load refusal;
+  it is not a passing test control or evidence of bb portability.
+  Accounting for a test failure preserves the finding; it does not turn the
+  portability gate green. The manifest witness emits the namespace and failed
+  runtime controls even when the current assignment uses the passing runtime.
+  The declared bb admission tolerance
   is 2.0 after the conservative variance adjustment.
   Attempt20 replaces the single observations for all 35 bb-portable members
   of the original fast set and every additional paired namespace moved by

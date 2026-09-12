@@ -869,3 +869,19 @@ fast run and restricted diagnostic exposed two trunk test names missing from
 the branch's derived deftest census; regeneration adds exactly those names and
 removes none. Final prewarm evidence and retained red results:
 [attempt19](observations/2026-09-12-bbtower-block-b/attempt19/REPORT.md).
+
+### 2026-09-12 — bb tower attempt 22, runtime correctness controls
+
+The xray battery's three JVM refusal-reason failures reproduce at both
+357a2b79 and trunk a15531ee, while bb passes both controls. SCI's JVM wrapper
+hides typed host exceptions in its cause, and uses a different unresolved-symbol
+message. The repair preserves typed refusals and untyped cause diagnostics,
+with the capability fence and CLI receipt bound still exercised.
+
+Portability evidence now covers every runtime assignment, independently of
+cadence and the 38 paired cost measurements. A complete control on each runtime
+is required; load-only success cannot certify a namespace. The census exposes
+additional CLJC reader/oracle and bb capability/dependency failures by name.
+No runtime is moved to hide a failing control, and no budget changes.
+Full census, individual accounts, gate outcomes and remaining work:
+[attempt22](observations/2026-09-12-bbtower-block-b/attempt22/REPORT.md).

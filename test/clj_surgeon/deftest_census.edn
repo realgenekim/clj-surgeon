@@ -808,6 +808,7 @@
   clj-surgeon.lane-manifest-test/loaded-namespaces-carry-their-lane-at-runtime
   clj-surgeon.lane-manifest-test/no-fast-lane-namespace-spells-a-child-process
   clj-surgeon.lane-manifest-test/no-living-prose-still-calls-the-bb-lane-by-its-old-name
+  clj-surgeon.lane-manifest-test/runtime-portability-controls-cover-every-assignment
   clj-surgeon.lane-manifest-test/the-corpus-only-ever-grows-and-the-arithmetic-is-shown
   clj-surgeon.lane-manifest-test/the-landing-gate-refuses-a-stale-battery-receipt
   clj-surgeon.lane-manifest-test/the-landing-gate-runs-both-the-merge-gate-and-the-battery-tripwire

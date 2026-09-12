@@ -1,5 +1,13 @@
 # Babashka-first inventory
 
+**Runtime correctness amendment (attempt22):** the historical load labels below
+are discovery evidence, not passing runtime controls. TEST-ISO-016 now requires
+complete passing JVM and bb controls for every bb-portable assignment at every
+cadence, including members outside the paired timing set. The current named
+control results and non-portability refusals are in
+`docs/observations/2026-09-12-bbtower-block-b/attempt22/portability-census.md`.
+Passing on one runtime cannot hide a failure on the other through reassignment.
+
 Base eae1e432; isolated bb require probes, 2026-09-11. Namespace names read with rewrite-clj, including metadata. The initial regex-based draft misread ns metadata and is superseded here. Classification names the first unavailable dependency on the current bb classpath; load success does not prove behavior. Tests mean *_test.clj, excluding executable runner/support files.
 
 Base load counts: 103 bb / 20 JVM-only source namespaces; 109 bb / 50 JVM-only test namespaces. The hybrid execution witness reclassifies two tests below: final test eligibility is 107 bb / 52 JVM-only. The new bb probe namespace raises final source counts to 104 bb / 20 JVM-only. JVM-only total: 72. Existing bb lane: 50 namespaces (brief baseline: 898 tests). The explicitly authorized Make entrances run the existing admission helper; no Python implementation was added.
