@@ -1,0 +1,6 @@
+
+FAIL in (cli-xray-refuses-unsafe-input-before-file-io) (/home/forge/src/clj-surgeon-datacode/test/clj_surgeon/xray_test.clj:715)
+unsafe expression
+expected: (< (count (:out run)) 1024)
+  actual: (not (< 1119 1024))
+{:test 70, :pass 1121, :fail 1, :error 0}

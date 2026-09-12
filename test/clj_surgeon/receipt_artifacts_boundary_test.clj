@@ -70,7 +70,9 @@
 (defn- refusal-data [f]
   (try (f) nil (catch clojure.lang.ExceptionInfo e (ex-data e))))
 
-;; @spec DATACODE-ENV-001, DATACODE-ENV-003, DATACODE-ENV-004
+;; @spec DATACODE-ENV-001
+;; @spec DATACODE-ENV-003
+;; @spec DATACODE-ENV-004
 (deftest destination-envelope-guards-real-publication
   (with-workspace
     (fn [base]
@@ -85,7 +87,7 @@
         (spit (io/file outside "kept.edn") "outside sentinel")
         (with-envelope [allowed]
           #(doseq [destination [(io/file outside "kept.edn")
-                                 (io/file outside "absent" "tail" "undo.edn")]]
+                                (io/file outside "absent" "tail" "undo.edn")]]
              (spit source before)
              (spit (io/file outside "kept.edn") "outside sentinel")
              (let [r (transaction/execute-change!
@@ -140,6 +142,7 @@
           #(binding [artifacts/*artifact-root* (str outside)]
              (let [r (refusal-data (fn [] (migration/append-telemetry! {:witness true})))]
                (is (= :write-outside-envelope (:error-type r)) (pr-str r))
+               (is (= :telemetry-append (:effect r)))
                (is (not (.exists outside))))))
         (.mkdirs outside)
         (spit (io/file outside "kept.edn") "sentinel")
@@ -152,9 +155,11 @@
           #(binding [artifacts/*artifact-root* (str allowed)]
              (let [r (refusal-data (fn [] (migration/append-telemetry! {:witness true})))]
                (is (= :write-outside-envelope (:error-type r)) (pr-str r))
+               (is (= :telemetry-append (:effect r)))
                (is (= "sentinel" (slurp (io/file outside "kept.edn")))))))))))
 
-;; @spec DATACODE-ENV-002, DATACODE-ENV-003
+;; @spec DATACODE-ENV-002
+;; @spec DATACODE-ENV-003
 (deftest destination-envelope-is-trusted-context-only
   (let [context {:operation :change :operation-version 1 :entrance :cli
                  :policy :cli-legacy :lifecycle :commit
@@ -171,9 +176,22 @@
            (policy {:tmpdir "/tmp/unsafe" :home "/home/seat" :workspace "/work"})))
     (is (= ["/disk/tmp" "/disk/artifacts" "/work"]
            (policy {:tmpdir "/disk/tmp" :home "/home/seat" :workspace "/work"
-                    :artifact-root "/disk/artifacts"})))))
+                    :artifact-root "/disk/artifacts"}))))
+  (testing "missing launcher authority uses the bounded default; startup authority is retained"
+    (with-redefs-fn
+      {(ns-resolve 'clj-surgeon.receipt-artifacts 'launcher-envelope) (atom nil)}
+      #(binding [artifacts/*destination-envelope* nil]
+         (let [default (artifacts/current-envelope)
+               narrow (artifacts/destination-envelope ["/var/tmp/owned"] :launcher)]
+           (is (= :policy-default (:source default)))
+           (is (= 3 (count (:roots default))))
+           (is (algebra/valid-destination-envelope? default))
+           (is (= narrow (artifacts/initialize-envelope! "/work" narrow)))
+           (is (= narrow (artifacts/current-envelope)))
+           (is (= narrow (artifacts/initialize-envelope! "/different-workspace"))))))))
 
-;; @spec DATACODE-ENV-001, DATACODE-ENV-004
+;; @spec DATACODE-ENV-001
+;; @spec DATACODE-ENV-004
 (deftest destination-envelope-final-filename-consumer-matrix
   ;; Real publication seams, independent of the path constructor they use.
   (with-workspace
@@ -489,7 +507,7 @@
           (spit external (pr-str {:verification-profiles {"unit" {:commands [["/bin/true"]]}}}))
           (with-redefs [split/analyze! split-boundary-fixture/analysis]
             (let [r (split/execute! {:verification-profiles {"unit" {:commands [["/bin/false"]]}}}
-                                       (assoc-in request [:verification :profile-file] (str external)))
+                      (assoc-in request [:verification :profile-file] (str external)))
                   after (set (for [f (file-seq (io/file root)) :when (.isFile f)]
                                (str (.relativize (.toPath (io/file root)) (.toPath f)))))]
               (is (:ok r) (pr-str r))
@@ -507,7 +525,7 @@
     (fn [_ request]
       (with-redefs [split/analyze! split-boundary-fixture/analysis]
         (let [r (split/execute! {:verification-profiles {"b07-cell-b" {:commands [["/bin/true"]]}}}
-                                   (assoc request :verification {:profile "b07-cell-b"}))
+                  (assoc request :verification {:profile "b07-cell-b"}))
               check (first (filter :command (:checks r)))]
           (is (= {:state "committed" :committed true :ok true :mutation_attempted true
                   :verification_complete false :proof_pending ["cold-suite"]}

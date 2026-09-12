@@ -142,20 +142,21 @@
 
 ;; @spec REQUIRE-CHANGE-012
 (defn- bound-receipt! [receipt-dir result]
-  (if (<= (count (.getBytes (pr-str result) "UTF-8")) 4096) result
-    (let [detail (save! receipt-dir (str (UUID/randomUUID) "-complete-receipt.edn") result)]
-      (-> result
-          (select-keys [:ok :operation :state :committed :mutation_attempted
-                        :source_unchanged :restored :verification_complete :counts
-                        :expected :counts_match :protected_bytes :symbol_edits
-                        :workspace_status :workspace_clean_except :details_path
-                        :elapsed_ms :undo_receipt :receipt_hash :proof_pending :error_type :collisions_resolved])
-          (cond-> (<= (count (pr-str (:alias_histogram result))) 512)
-            (assoc :alias_histogram (:alias_histogram result)))
-          (cond-> (:error result)
-            (assoc :error (subs (:error result) 0 (min 256 (count (:error result))))))
-          (assoc :receipt_details_path detail :details_elided true
-                 :next_call nil)))))
+  (let [result (artifacts/receipt-evidence result)]
+    (if (<= (count (.getBytes (pr-str result) "UTF-8")) 4096) result
+      (let [detail (save! receipt-dir (str (UUID/randomUUID) "-complete-receipt.edn") result)]
+        (-> result
+            (select-keys [:ok :operation :state :committed :mutation_attempted
+                          :source_unchanged :restored :verification_complete :counts
+                          :expected :counts_match :protected_bytes :symbol_edits
+                          :workspace_status :workspace_clean_except :details_path :envelope-id
+                          :elapsed_ms :undo_receipt :receipt_hash :proof_pending :error_type :collisions_resolved])
+            (cond-> (<= (count (pr-str (:alias_histogram result))) 512)
+              (assoc :alias_histogram (:alias_histogram result)))
+            (cond-> (:error result)
+              (assoc :error (subs (:error result) 0 (min 256 (count (:error result))))))
+            (assoc :receipt_details_path detail :details_elided true
+                   :next_call nil))))))
 
 ;; @spec REQUIRE-CHANGE-010
 ;; @spec REQUIRE-CHANGE-013

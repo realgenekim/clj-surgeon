@@ -1,8 +1,8 @@
 (ns clj-surgeon.receipt-artifacts
   "External verb bookkeeping and measured post-write workspace evidence."
   (:require
-   [clj-surgeon.path-classification :as pc]
    [clj-surgeon.operation-algebra :as algebra]
+   [clj-surgeon.path-classification :as pc]
    [clojure.java.io :as io]
    [clojure.java.shell :as shell]
    [clojure.string :as str])
@@ -140,7 +140,7 @@
 
 (defn admitted-file
   "Construct and admit one concrete artifact filename."
-  [& parts]
+  ^java.io.File [& parts]
   (io/file (admit-target! (apply io/file parts))))
 
 (defn- owned-by-invoking-user?
@@ -225,9 +225,9 @@
       ;; paths this whole repair exists to catch.
       (pc/literal-ram-path? root)
       (throw (ex-info (pc/refusal-message {:reason :ram-path-prefix :base root})
-                       {:reason :ram-path-prefix :base root
-                        :error-type :artifact-root-ram-backed
-                        :root root :checked-vars checked-vars}))
+               {:reason :ram-path-prefix :base root
+                :error-type :artifact-root-ram-backed
+                :root root :checked-vars checked-vars}))
 
       (not (or (under-home? root) (owned-by-invoking-user? root)))
       (throw (ex-info "Artifact root is outside $HOME and not owned by the invoking user"
@@ -237,8 +237,8 @@
       (let [ancestor (pc/nearest-existing-ancestor root)]
         (if-let [refusal (and ancestor (pc/base-refusal ancestor))]
           (throw (ex-info (pc/refusal-message refusal)
-                           (assoc refusal :error-type :artifact-root-ram-backed
-                                  :root root :checked-vars checked-vars)))
+                   (assoc refusal :error-type :artifact-root-ram-backed
+                          :root root :checked-vars checked-vars)))
           root)))))
 
 ;; @spec ALIAS-MIGRATION-001

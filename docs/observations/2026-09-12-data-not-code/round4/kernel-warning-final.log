@@ -1,0 +1,3 @@
+clojure -M test/kernel_warning_check.clj
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+kernel warning check: 2 namespace(s), 0 warning(s)

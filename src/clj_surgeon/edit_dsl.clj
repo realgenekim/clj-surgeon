@@ -466,9 +466,8 @@
                        (and cause (= :evaluation-failed reason))
                        (assoc :cause-message (ex-message cause))
                        symbol (assoc :symbol symbol
-                                     :remedy (str "Return a path, or end with analyze; add expect-count for exact cardinality. "
-                                                  "Do not execute " symbol
-                                                  "; quote it when it is Clojure data, or use a terminating pure collection operation for computation.")))
+                                     :remedy (str "Quote " symbol
+                                                  " as data; use pure functions with analyze for computation.")))
                      cause)))))
 
 (defn- evaluate-expression

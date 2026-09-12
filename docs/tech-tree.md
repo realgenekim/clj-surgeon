@@ -896,3 +896,23 @@ FileLockImpl.release limitation as recovery. The fold is therefore 99 portable,
 exclusions with no claim of complete controls. Counts differ from the predicted
 100/9 for that evidenced reason. Gates and source dogfood are recorded in
 [attempt23](observations/2026-09-12-bbtower-block-b/attempt23/REPORT.md).
+
+### 2026-09-12 — data-not-code, resumed transport recovery
+
+The shared artifact boundary admits final resolved destinations under immutable
+trusted startup roots; request maps cannot widen that authority. SCI symbol
+denials carry data independent of exception wording. The runtime fold publishes
+validated evidence rows consumed by the manifest, and temporal exemptions use
+test owner, call ordinal and purpose instead of line numbers.
+
+Round 4 retains the committed red-to-green sequence after a transport drop.
+It completes the architecture inventory and keeps the symbol-specific X-ray
+remedy within the existing CLI output bound. Focused JVM witnesses pass 196
+tests / 3,370 assertions; the single fast run passes 1,246 / 12,632 with zero
+isolation violations and a 41,690 ms lane sum. Seven lint warnings reproduce
+on the starting snapshot. Final prewarm passes all seven stages after one repair,
+with 422,819 ms gate wall. Source-edit accounting and limitations:
+[round 4 report](observations/2026-09-12-data-not-code/round4/REPORT.md).
+Coverage is the shared artifact boundary, not every writer or filesystem race.
+The six-task probe comparison is preregistered only; no performance or routing
+admission follows from these correctness checks.

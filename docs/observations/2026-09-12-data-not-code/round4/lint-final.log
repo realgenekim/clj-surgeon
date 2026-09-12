@@ -1,0 +1,19 @@
+src/clj_surgeon/core.clj:323:39: info: Redundant nested call: str
+src/clj_surgeon/insert_forms.clj:156:74: info: Redundant boolean coercion: expression already has type boolean
+src/clj_surgeon/mcp_alias_migration.clj:2390:35: info: Redundant nested call: str
+src/clj_surgeon/mcp_alias_migration.clj:2586:56: info: Redundant nested call: str
+src/clj_surgeon/mcp_helper_extraction.clj:893:33: info: Redundant boolean coercion: expression already has type boolean
+src/clj_surgeon/mcp_helper_extraction.clj:1041:22: info: Single argument to str already is a string
+src/clj_surgeon/mcp_helper_extraction.clj:1048:58: info: Redundant nested call: str
+src/clj_surgeon/mcp_helper_extraction.clj:1052:46: info: Single argument to str already is a string
+src/clj_surgeon/mcp_helper_extraction.clj:1056:26: info: Single argument to str already is a string
+src/clj_surgeon/txn_journal.clj:1710:45: warning: unused binding entry
+src/clj_surgeon/txn_journal.clj:2748:3: info: Redundant boolean coercion: expression already has type boolean
+src/clj_surgeon/txn_journal.clj:3017:6: warning: Redundant let expression.
+src/clj_surgeon/txn_journal.clj:3046:22: warning: redundant do
+test/clj_surgeon/mcp_tool_test.clj:2309:3: info: Single argument to str already is a string
+test/clj_surgeon/operation_algebra_test.clj:54:8: warning: Unused private var clj-surgeon.operation-algebra-test/top-level-form-source
+test/clj_surgeon/scope_stream_test.clj:16:25: warning: Unused import LinkOption
+test/clj_surgeon/scope_stream_test.clj:16:36: warning: Unused import Path
+test/clj_surgeon/scope_stream_test.clj:16:41: warning: Unused import Paths
+linting took 1177ms, errors: 0, warnings: 7
