@@ -1,0 +1,24 @@
+{
+  "name": "a-base",
+  "argv": [
+    "clojure",
+    "-J-Xms64m",
+    "-J-Xmx512m",
+    "-M:clj-surgeon/test-battery-parallel",
+    "--suite",
+    "fast",
+    "--work-dir",
+    "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt6/a-base"
+  ],
+  "cwd": "/home/forge/src/clj-surgeon-bbtower/target/base-checkout",
+  "started_utc": "2026-09-12T06:43:26.368128+00:00",
+  "environment": {
+    "JAVA_TOOL_OPTIONS": "-Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/packets/35dc856c-986f-4921-b4d2-29bb3ff5afba/tmp",
+    "_JAVA_OPTIONS": "-Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/packets/35dc856c-986f-4921-b4d2-29bb3ff5afba/tmp",
+    "JDK_JAVA_OPTIONS": "",
+    "TMPDIR": "/var/tmp/forge/packets/35dc856c-986f-4921-b4d2-29bb3ff5afba/tmp"
+  },
+  "exit": 1,
+  "elapsed_ms": 7440,
+  "completed_utc": "2026-09-12T06:43:33.808583+00:00"
+}
