@@ -217,7 +217,8 @@
                        (hot-verify/probe! image (read-bounded reader 8192)))
                      (catch Exception e
                        ((requiring-resolve 'clj-surgeon.probe/refusal)
-                        :invalid-probe-request (.getMessage e))))
+                        (or (:error-type (ex-data e)) :invalid-probe-request)
+                        (.getMessage e))))
             wire ((requiring-resolve 'clj-surgeon.probe/encode-response) result)]
         (.setContentType response "application/edn")
         (.setCharacterEncoding response "UTF-8")

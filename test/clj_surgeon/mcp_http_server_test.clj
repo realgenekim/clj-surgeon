@@ -143,6 +143,30 @@
       (is (= :probe-response-truncated (:error-type receipt)))
       (is (= 5000 (+ (count (:reloaded receipt)) (get-in receipt [:truncated :omitted] 0)))))))
 
+;; @spec BB-PROBE-002
+;; @spec BB-PROBE-004
+(deftest probe-servlet-preserves-the-request-bound-refusal
+  (let [out (java.io.StringWriter.)
+        writer (java.io.PrintWriter. out)
+        adapter (fn [interface methods]
+                  (java.lang.reflect.Proxy/newProxyInstance
+                    (.getClassLoader ^Class interface) (into-array Class [interface])
+                    (reify java.lang.reflect.InvocationHandler
+                      (invoke [_ _ method _]
+                        (get methods (.getName ^java.lang.reflect.Method method))))))
+        request (adapter jakarta.servlet.http.HttpServletRequest
+                         {"getMethod" "POST"
+                          "getReader" (java.io.BufferedReader.
+                                        (java.io.StringReader. (apply str (repeat 8193 "x"))))})
+        response (adapter jakarta.servlet.http.HttpServletResponse {"getWriter" writer})
+        servlet ((ns-resolve 'clj-surgeon.mcp-http-server 'probe-servlet) {})]
+    (.service ^jakarta.servlet.http.HttpServlet servlet
+              ^jakarta.servlet.ServletRequest request ^jakarta.servlet.ServletResponse response)
+    (let [receipt (edn/read-string (str out))]
+      (is (= :probe-refused (:state receipt)))
+      (is (= :probe-message-too-large (:error-type receipt)))
+      (is (= [:landing-gate] (:proof_pending receipt))))))
+
 ;; @spec BB-PROBE-001
 (deftest probe-spec-receipt-shape-matches-an-executed-probe
   (let [text (slurp "docs/intent/hot-verification/bb-probe-specs.md")
