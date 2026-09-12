@@ -1343,6 +1343,8 @@
   clj-surgeon.mcp-hot-verify-test/probe-authorizes-the-requested-test-target-before-reload
   clj-surgeon.mcp-hot-verify-test/probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload
   clj-surgeon.mcp-hot-verify-test/probe-receipt-retains-expected-closure-after-reload-failure
+  clj-surgeon.mcp-hot-verify-test/probe-refuses-dependencies-outside-image-roots
+  clj-surgeon.mcp-hot-verify-test/probe-reloads-image-classpath-experiment-dependency
   clj-surgeon.mcp-hot-verify-test/probe-reloads-prefix-list-dependency
   clj-surgeon.mcp-hot-verify-test/probe-require-shape-matrix
   clj-surgeon.mcp-hot-verify-test/profile-validation-is-closed-and-bounded

@@ -8,7 +8,7 @@ includes probe as the third verb, discovered from the CLI operation catalog:
 every boolean in a passed probe verdict requires a driven literal-false seam.
 A real `probe/verdict` with tests executed and no failures omits
 verification_complete; no constant boolean is fabricated by the witness.
-Receipt keys (EDN): `#{:state :proof_pending :reloaded :closure-expected :tests :assertions :failures :elapsed_ms}`
+Receipt keys (EDN): `#{:state :proof_pending :reloaded :closure-expected :roots :external :tests :assertions :failures :elapsed_ms}`
 This is the complete untruncated verdict shape for passed and failed test runs;
 a caught execution exception may additionally carry :error. The shape witness
 parses this statement and compares it to an executed successful probe receipt.
@@ -32,7 +32,16 @@ repository-relative source, authorized roots and an empty reload list.
 Target refusal keys (EDN): `#{:state :error-type :error :proof_pending :requested :source :authorized-roots :reloaded :elapsed_ms}`
 An absent local source retains `:probe-namespace-not-found`. For an authorized
 target, serially reload its local dependency closure before running that namespace;
-dependencies may resolve under `src`, `test`, and `libs/clj-splice/src`.
+Local source roots shall be derived from the image's actual `java.class.path`:
+canonical directory entries in classpath order, never a literal root list.
+Resolve each required namespace through the image classloader. A source file
+under a local classpath root enters the reload order; a jar entry is external,
+skipped and counted once per namespace in `:external`. A dependency with no
+classpath resource (including a namespace already loaded in the image), or a
+file outside every root, refuses as `:probe-dependency-unresolved` with
+`:ns`, `:resolved-to` (resource URL or nil), `:roots`, and zero reloads.
+Execution receipts list the canonical roots used in `:roots` for comparison
+with the image classpath. Discovery must finish before the first reload.
 The shared ns parser shall expand prefix lists (including nested lists), vector
 libspecs, bare symbols and strings in `:require`, `:require-macros` and `:use`,
 selecting the `:clj` reader-conditional branch (or reader default). Any dependency

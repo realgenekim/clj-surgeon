@@ -13,7 +13,15 @@
   "mcp_http_server.clj"
   #{:invalid-project-formatter :invalid-project-verification-profiles}}
  :refusals
- [{:type :probe-require-unparsed :class :semantic
+ [{:type :probe-dependency-unresolved :class :semantic
+   :native_failure "A green verdict over code the image never reloaded."
+   :promise "Every dependency resolves to a local image-classpath source or a jar before any reload."
+   :native_method "Derive directory roots from java.class.path and classify each namespace resource before reloading."
+   :minimal_reproducer "Load a dependency outside every image classpath root or remove its source after loading; probe must refuse with zero reloads."
+   :existing_check "mcp-hot-verify/probe-reload-order; BB-PROBE-003"
+   :owner "probe" :witness "mcp-hot-verify-test/probe-refuses-dependencies-outside-image-roots"
+   :retirement_condition "A replacement accounts for every resolved dependency and refuses unresolved image code before reload."}
+  {:type :probe-require-unparsed :class :semantic
    :native_failure "A probe reporting green over a dependency it never reloaded."
    :promise "Every dependency spec is classified before reload, or refused with its form and file."
    :native_method "Expand the complete local dependency closure with the shared ns parser before requiring any namespace."
