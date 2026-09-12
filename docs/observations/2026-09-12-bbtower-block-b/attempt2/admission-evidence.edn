@@ -1,0 +1,26 @@
+{:base-isolation-parent-waits
+ "390:            (let [child (atom nil)\n391:                  _ (register-root-sweep! root child)\n392:                  cmd (reexec-child-command target root args)\n393:                  proc (apply proc/process\n394:                              {:inherit true\n395:                               :extra-env (child-environment root isolate-home?)}\n396:                              cmd)\n397:                  _ (reset! child proc)\n398:                  exit (:exit @proc)]\n399:              (sweep-root! root)\n400:              (System/exit exit))))))))",
+ :sentinel nil,
+ :worker-command
+ "432: (defn lane-command\n433:   \"The child command for one lane. `--emit-edn` first so that `--ns`'s\n434:    rest-of-argv shape is untouched.\"\n435:   [java-opts out-path namespaces]\n436:   (into (into [\"clojure\"] (remove str/blank? (str/split (or java-opts \"\") #\"\\s+\")))\n437:         (concat [\"-M:clj-surgeon/test-deps\" \"-m\" \"clj-surgeon.mcp-test-runner\"\n438:                  \"--emit-edn\" (str out-path) \"--ns\"]\n439:                 (map str namespaces))))",
+ :runner-isolation-call
+ "316:         {:keys [refused root]}\n317:         (tmp-leak/secure-tmpdir! {:main-ns \"clj-surgeon.mcp-test-runner\"\n318:                                   :isolate-home? isolate-home?}\n319:                                  args)\n320:         _ (when refused (System/exit 97))",
+ :jvms-launched 0,
+ :isolation-parent-waits
+ "390:            (let [child (atom nil)\n391:                  _ (register-root-sweep! root child)\n392:                  cmd (reexec-child-command target root args)\n393:                  proc (apply proc/process\n394:                              {:inherit true\n395:                               :extra-env (child-environment root isolate-home?)}\n396:                              cmd)\n397:                  _ (reset! child proc)\n398:                  exit (:exit @proc)]\n399:              (sweep-root! root)\n400:              (System/exit exit))))))))",
+ :base-entrance
+ "1113: test-fast: test-clj-splice-bb\n1114: \t@# @spec TEST-ISO-001\n1115: \t@# @spec MCP-OP-TMPHYG-001\n1116: \t@# @spec MCP-OP-TMPHYG-002\n1117: \tclojure -J-Xms64m -J-Xmx512m -M:clj-surgeon/test-battery-parallel --suite fast",
+ :java-tool-options
+ "-Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/packets/59902da0-3f8b-4033-aa5c-c544bb06dad7/tmp",
+ :recorded-at "2026-09-12T06:23:54.873150738Z",
+ :historical-base
+ {:namespace-count 61,
+  :sum-ms 39890,
+  :makespan-ms 28728,
+  :process-count 8,
+  :receipt "/var/tmp/forge/bbtower-fx/fast-before-receipt.edn"},
+ :prewarm-attempts 0,
+ :base "eae1e43280635be9b4e317e176d29476fd358702",
+ :isolation-java-child
+ "183:       (into (into [\"java\" \"-cp\" (System/getProperty \"java.class.path\")]\n184:                   (into (conj (parent-jvm-options) (str \"-Djava.io.tmpdir=\" tmp-root))\n185:                         home-flags))\n186:             (into [\"clojure.main\" \"-m\" main-ns] args)))))\n187: ",
+ :subject "d4736b46e016b8244b4db0eea0519ae62768a622"}
