@@ -5328,3 +5328,27 @@ ms namespace budget; re-measured 20,859 bb / 8,306 JVM, the 2x rule sent it to t
 
 Next: an independent verification of the five fixes at the tip, then landing through the
 ship path. Go-with-fix is not go; go-with-review is not either.
+
+## 2026-09-12T09:32:20Z — verifier NO-GO on the ceiling's third derivation; attempt 11 makes the number computed, not typed
+
+Opus re-ran the red-team's attacks at tip b2049db5 for 21 minutes (published as
+`2026-09-12-bbtower-block-b-opus-verify.md`). Four of five fixes FIXED under attack:
+the servlet plant goes red by file and kind, probe carries no verification boolean with
+both plants red, the bb diagnostic exits 0 with 829 tests and is a gate stage, and the
+fast entrance has 94 namespaces with zero nil lanes and a 26,960 ms makespan.
+
+NO-GO on the ceiling: the numerator reproduces (240,989 ms) but the denominator was read
+from a frozen cadence map that omits 33 :fast namespaces worth 3,497 ms; the shipped-
+consistent denominator is 42,143 ms, giving 343,102 ms, not 374,149. Direction safe
+(9% looser), but this is the third time this constant has failed to reproduce from its
+own evidence. My ratification of 374,149 is withdrawn. Two new findings: the spec still
+declares the retired 399,155 boundary; and a residual completeness blind spot, a kind
+minted in any other top-level form of mcp_hot_verify.clj relays out through probe!'s
+ex-data and stays green.
+
+Attempt 11 (Astra, pid 2188243): the ceiling becomes a computation, a bb script that
+folds one calibration receipt under the SHIPPED manifest, and the witness asserts the
+registered constant equals that computation, so it cannot drift again; the spec's
+boundary gets a witness against the constant; extraction covers every top-level form of
+every owner file. Ratchet: a number in a spec that a witness does not compute is a
+number that will be wrong by the third reading.
