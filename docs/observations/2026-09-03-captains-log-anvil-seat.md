@@ -5676,3 +5676,18 @@ check-only envelope with a packet-shaped TMPDIR, collect every red node and deni
 in one census, fix them all by the established policy, re-run under the wrapper until
 green, then one real prewarm. The diagnostic wrapper run is not one of the two counted
 prewarms.
+
+## 2026-09-12T13:35:36Z — attempt 17 stopped on a question worth stopping for; attempt 18 continues it
+
+Astra's whole-gate wrapper denied /dev/null on the first run: every `>/dev/null` redirect
+in the Makefile failed, `command -v swipl` reported SWI-Prolog missing when it is
+installed, and the gate exited in two seconds before any stage. Astra did not assume a
+device exception because my brief said "exactly three roots", and asked. Answer: yes;
+packet.py's Landlock ruleset grants exactly one writable file outside the roots, the
+/dev/null device (lib/packet.py near line 78). Attempt 18 (pid 3343168) grants the same
+exception, cites the line, and finishes the whole-gate census and fixes.
+
+Two things to keep from this: a builder that stops to ask on an envelope fact rather
+than widen it is doing the right thing; and "exactly three roots" in a brief was wrong
+by one device, which is the kind of one-line imprecision that would have cost another
+seven-minute run if the wrapper had been the packet.
