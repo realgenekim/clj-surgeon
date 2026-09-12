@@ -5728,3 +5728,15 @@ pid 187246) merges a15531ee into the branch semantically (the generated launcher
 both bundle clj-splice and carry the tmpdir property; both sides' witnesses pass), then
 test-fast, the wrapper gate, one real prewarm. Then an eighth check-only prewarm at the
 merge tip, then the ship again.
+
+## 2026-09-12T14:40:35Z — attempt 19: trunk a15531ee merged, prewarm green on the merge; eighth check-only prewarm running at 07d86019
+
+Tip 07d86019 (source tip 84a0833c), pushed; report published as
+`2026-09-12-bbtower-block-b-attempt19-report.md`. Merge db318270 resolved Makefile
+semantically: the stable launcher bundles libs/clj-splice/src on its classpath AND carries
+the explicit -Djava.io.tmpdir under the TMPDIR policy; trunk's installed-launcher witness
+and the branch's launcher-check both exercise the combined result; both tech-tree entries
+kept in date order; the two merged trunk witnesses registered in the branch's census
+(the once-only test-fast and the wrapper diagnostic were red before that census repair
+and are retained red, not relabeled). One real prewarm: seven stages, 394.5 s, green.
+Packet f5b65235 is the eighth check-only prewarm; on green, ship again.
