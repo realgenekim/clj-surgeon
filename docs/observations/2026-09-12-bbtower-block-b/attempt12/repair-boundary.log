@@ -1,0 +1,2 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+{:test 1, :pass 24, :fail 0, :error 0}
