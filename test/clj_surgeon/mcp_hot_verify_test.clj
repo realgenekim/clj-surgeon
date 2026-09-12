@@ -11,6 +11,22 @@
 (deftest passing-law
   (is (= 4 (+ 2 2))))
 
+;; @spec BB-PROBE-003 -- Sol F1, round-four review of e3ffc6a7.
+(deftest probe-reloads-prefix-list-dependency
+  (let [root (.toFile (java.nio.file.Files/createTempDirectory
+                       "probe-prefix-" (make-array java.nio.file.attribute.FileAttribute 0)))
+        dependency (io/file root "src/foo/bar.clj")
+        target (io/file root "test/demo/probe_test.clj")]
+    (try
+      (io/make-parents dependency)
+      (io/make-parents target)
+      (spit dependency "(ns foo.bar) (def value 1)")
+      (spit target "(ns demo.probe-test (:require (foo [bar :as b])))")
+      (is (= '[foo.bar demo.probe-test]
+             (hot-verify/probe-reload-order (.getCanonicalPath root) 'demo.probe-test)))
+      (finally
+        (doseq [file (reverse (file-seq root))] (io/delete-file file))))))
+
 ;; @spec BB-PROBE-003 -- Sol F3, round-two review of 09486a6f.
 (deftest probe-authorizes-the-requested-test-target-before-reload
   (let [image (probe/image-identity ".")
