@@ -19,12 +19,12 @@
  :contract-ref "~/.claude/skills/tighten-the-loop/SEAT-RECEIPT.md (draft v1)"
  :recorder "self-built by the subject seat — v1 requires an independent recorder; none is named yet"
  :seat "forge@anvil"
- :utc "2026-09-12T17:15:30Z"
+ :utc "2026-09-12T17:16:16Z"
  :date "2026-09-12"
  :generator {:program "/home/forge/bin/seat-receipt" :sha256 "2a9694eec4fd6dbc"}
- :packages {:routing-block-hash "unknown"
-            :routing-installed-matches-source false
-            :doctrine-commit "unknown"
+ :packages {:routing-block-hash "67e457240c69a1c4"
+            :routing-installed-matches-source true
+            :doctrine-commit "3c2eb6a9"
             :coldstart-md-sha256 "f74775851c3cfe7f"
             :round-sha256 "212e3e43c1dc7be9"
             :coldstart-sha256 "4de9a48b82a0cabe"
@@ -39,9 +39,9 @@
            :round     {:rows unknown :mismatches "skipped" :wall-s 0
                        :runner "/var/tmp/forge/round/fixtures/run-fixtures.sh"}}
  :headroom {:disk-remaining-g 47 :disk-floor-g 15 :inodes-remaining-pct 80}
- :load 3.52
- :last-pulse-age-min 5355
+ :load 3.28
+ :last-pulse-age-min 5356
  :last-landing {:sha "a15531ee" :time "2026-09-11T14:48:11Z"}
  :open-friction-items 2
  :on-loop false
- :reasons ["routing-block-drift" "corpora-not-clean" ]}
+ :reasons ["corpora-not-clean" ]}
