@@ -5653,3 +5653,14 @@ short root from an ordered candidate list checked for writability and byte budge
 when none qualifies it raises a NAMED skip listing every candidate and its length, never
 an unrelated assertion. Tooling item filed: a short packet temp root would let this
 witness bind for real inside the envelope.
+
+## 2026-09-12T13:27:06Z — attempt 16 PASS; sixth check-only prewarm running at cb6330d4
+
+Tip cb6330d4 (source 758e8604), pushed; report published as
+`2026-09-12-bbtower-block-b-attempt16-report.md`. The sun_path witness selects the first
+writable root whose bytes fit the budget (CLJ_SURGEON_GATE_ROOT; the production csg-<uid>
+spelling under the policy TMPDIR; the same under /var/tmp), probing write authority by
+creating a file, so Landlock counts; when none fits it skips by name listing every
+candidate's bytes and writability. Red under attempt 15's wrapper with a packet-shaped
+TMPDIR, green through a qualifying candidate or the named skip. Packet cec97266 is the
+sixth check-only prewarm; if it is green, the ship launches with its receipt.
