@@ -1,0 +1,13 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+tmp-refused: refusing to delete /var/tmp/forge/bbtower-fx/clj-surgeon-suite-2383219-cef68dfb/tmp-leak-sweep-guard-3163223712782289410/other-seat-precious-fixture -- it is not a private per-run root (its name must start with clj-surgeon-suite-). Sweeping a shared base would destroy another tenant's working set.
+
+namespace walls (8, slowest first, total 52896 ms):
+     18733 ms  clj-surgeon.mission-commit-cli-test
+     14456 ms  clj-surgeon.tmp-leak-support-test
+     10395 ms  clj-surgeon.help-test
+      6155 ms  clj-surgeon.mission-events-test
+      1793 ms  clj-surgeon.rename-alias-parity-test
+       589 ms  clj-surgeon.mission-fallback-test
+       578 ms  clj-surgeon.mission-git-ledger-test
+       197 ms  clj-surgeon.mission-typist-executor-admission-test

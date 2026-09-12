@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.battery-parallel-test, :runtime :jvm, :mode "test", :started-at "2026-09-12T18:39:34.074176005Z", :elapsed-ms 1431, :status :passed, :result {:test 41, :pass 275, :fail 0, :error 0, :type :summary}}

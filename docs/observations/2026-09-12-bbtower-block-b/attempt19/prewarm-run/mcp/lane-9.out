@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.syntax-var-refs-test

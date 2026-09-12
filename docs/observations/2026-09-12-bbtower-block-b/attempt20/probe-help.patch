@@ -1,0 +1,17 @@
+*** Begin Patch
+*** Update File: /home/forge/src/clj-surgeon-bbtower/src/clj_surgeon/core.clj
+@@
+             :args {:ns {:required true :desc "Test namespace"}
+                    :image-file {:desc "Warm image descriptor; default .clj-surgeon/probe.edn"}}
++            :workflow ["Responses are complete EDN within 16,384 UTF-8 bytes. When :error-type is :probe-response-truncated, the verdict and counts remain; :reloaded is a prefix of at most 64 names and :truncated records :bound, :encoded and :omitted."
++                       "Use :state for the test outcome and :proof_pending for outstanding cold proof. verification_complete is absent."]
+             :examples ["make warm PORT=9107"
+*** Update File: /home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/help_test.clj
+@@
+       (is (= :probe (core/resolve-op :probe)))
++      ;; @spec BB-PROBE-004
++      (let [help (core/format-op-help :probe (get core/ops-registry :probe))]
++        (doseq [text ["16,384 UTF-8 bytes" ":probe-response-truncated"
++                     ":omitted" "verification_complete is absent"]]
++          (is (str/includes? help text))))
+*** End Patch

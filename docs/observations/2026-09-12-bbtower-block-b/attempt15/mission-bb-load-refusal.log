@@ -1,0 +1,27 @@
+----- Error --------------------------------------------------------------------
+Type:     java.io.FileNotFoundException
+Message:  Could not locate nrepl/core.bb, nrepl/core.clj or nrepl/core.cljc on classpath.
+Location: /home/forge/src/clj-surgeon-bbtower/src/clj_surgeon/mcp_hot_verify.clj:3:3
+
+----- Context ------------------------------------------------------------------
+1: (ns clj-surgeon.mcp-hot-verify
+2:   "Reload namespaces and run exact focused test Vars in one configured app JVM."
+3:   (:require
+     ^--- Could not locate nrepl/core.bb, nrepl/core.clj or nrepl/core.cljc on classpath.
+4:    [clj-surgeon.probe :as probe]
+5:    [clojure.edn :as edn]
+6:    [clojure.java.io :as io]
+7:    [clojure.set :as set]
+8:    [clojure.string :as str]
+
+----- Stack trace --------------------------------------------------------------
+babashka.main/exec/fn--30821/load-fn--30832 - <built-in>
+clj-surgeon.mcp-hot-verify                  - /home/forge/src/clj-surgeon-bbtower/src/clj_surgeon/mcp_hot_verify.clj:3:3
+clj-surgeon.mcp-change-buffer               - /home/forge/src/clj-surgeon-bbtower/src/clj_surgeon/mcp_change_buffer.clj:3:3
+clj-surgeon.mcp-alias-migration             - /home/forge/src/clj-surgeon-bbtower/src/clj_surgeon/mcp_alias_migration.clj:9:3
+clj-surgeon.mcp-helper-extraction           - /home/forge/src/clj-surgeon-bbtower/src/clj_surgeon/mcp_helper_extraction.clj:38:3
+clj-surgeon.mission-cli                     - /home/forge/src/clj-surgeon-bbtower/src/clj_surgeon/mission_cli.clj:25:3
+clj-surgeon.mission-git-ledger-test         - /home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mission_git_ledger_test.clj:3:3
+clojure.core/require                        - clojure/core.clj:6070:1
+user                                        - NO_SOURCE_PATH:1:1
+

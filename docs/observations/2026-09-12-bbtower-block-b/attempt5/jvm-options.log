@@ -1,0 +1,59 @@
+NOTE: Picked up JDK_JAVA_OPTIONS: 
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/packets/ad7e0a55-9a1f-4363-b5b7-1a8f5899f1c6/tmp
+Picked up _JAVA_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/packets/ad7e0a55-9a1f-4363-b5b7-1a8f5899f1c6/tmp
+Property settings:
+    file.encoding = UTF-8
+    file.separator = /
+    java.class.path = 
+    java.class.version = 65.0
+    java.home = /usr/lib/jvm/java-21-openjdk-amd64
+    java.io.tmpdir = /var/tmp/forge/packets/ad7e0a55-9a1f-4363-b5b7-1a8f5899f1c6/tmp
+    java.library.path = /usr/java/packages/lib
+        /usr/lib/x86_64-linux-gnu/jni
+        /lib/x86_64-linux-gnu
+        /usr/lib/x86_64-linux-gnu
+        /usr/lib/jni
+        /lib
+        /usr/lib
+    java.runtime.name = OpenJDK Runtime Environment
+    java.runtime.version = 21.0.12+8-1-26.04-Ubuntu
+    java.specification.name = Java Platform API Specification
+    java.specification.vendor = Oracle Corporation
+    java.specification.version = 21
+    java.vendor = Ubuntu
+    java.vendor.url = https://ubuntu.com/
+    java.vendor.url.bug = https://bugs.launchpad.net/ubuntu/+source/openjdk-21
+    java.version = 21.0.12
+    java.version.date = 2026-07-21
+    java.vm.compressedOopsMode = 32-bit
+    java.vm.info = mixed mode, sharing
+    java.vm.name = OpenJDK 64-Bit Server VM
+    java.vm.specification.name = Java Virtual Machine Specification
+    java.vm.specification.vendor = Oracle Corporation
+    java.vm.specification.version = 21
+    java.vm.vendor = Ubuntu
+    java.vm.version = 21.0.12+8-1-26.04-Ubuntu
+    jdk.debug = release
+    line.separator = \n 
+    native.encoding = UTF-8
+    os.arch = amd64
+    os.name = Linux
+    os.version = 7.0.0-22-generic
+    path.separator = :
+    stderr.encoding = UTF-8
+    stdout.encoding = UTF-8
+    sun.arch.data.model = 64
+    sun.boot.library.path = /usr/lib/jvm/java-21-openjdk-amd64/lib
+    sun.cpu.endian = little
+    sun.io.unicode.encoding = UnicodeLittle
+    sun.java.launcher = SUN_STANDARD
+    sun.jnu.encoding = UTF-8
+    sun.management.compiler = HotSpot 64-Bit Tiered Compilers
+    user.dir = /home/forge/src/clj-surgeon-bbtower
+    user.home = /home/forge
+    user.language = en
+    user.name = forge
+
+openjdk version "21.0.12" 2026-07-21
+OpenJDK Runtime Environment (build 21.0.12+8-1-26.04-Ubuntu)
+OpenJDK 64-Bit Server VM (build 21.0.12+8-1-26.04-Ubuntu, mixed mode, sharing)

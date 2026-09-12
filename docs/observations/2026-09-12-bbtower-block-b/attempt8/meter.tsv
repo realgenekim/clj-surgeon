@@ -1,0 +1,5 @@
+subject	runtime	wall_ms	log
+clj-surgeon.mcp-feature-thread-test	:jvm	43280	feature-jvm.log
+clj-surgeon.mcp-feature-thread-test	:bb	728265	feature-bb.log
+test-fast original fast	hybrid	36944	docs/observations/2026-09-12-bbtower-block-b/attempt8/test-fast/receipt.edn
+test-fast-after-cli original fast	hybrid	38898	docs/observations/2026-09-12-bbtower-block-b/attempt8/test-fast-after-cli/receipt.edn

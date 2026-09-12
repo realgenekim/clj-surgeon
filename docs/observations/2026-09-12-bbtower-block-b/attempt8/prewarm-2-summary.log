@@ -1,0 +1,4 @@
+{:state :passed, :wall-ms 169863, :git-head "21a714165ecb2208b455455a4a1c6bbe021be00e", :landing? false, :prewarm? true, :problems []}
+{:suite "alias", :state :passed, :result {:test 181, :pass 3615, :fail 0, :error 0}, :fast-sum-ms 0, :integration-sum-ms 0}
+{:suite "mcp", :state :passed, :result {:test 923, :pass 11959, :fail 0, :error 0}, :fast-sum-ms 40886, :integration-sum-ms 78499}
+{:suite "bb", :state :passed, :result {:test 898, :pass 7981, :fail 0, :error 0}, :fast-sum-ms 125, :integration-sum-ms 0}

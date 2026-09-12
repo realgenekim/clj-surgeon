@@ -1,0 +1,15 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.memory.journal-green-test
+GREEN scope: {:root /var/tmp/forge/bbtower-fx/clj-surgeon-suite-1808612-b87bb5df/clj-surgeon-green-journal-1789239751113, :files 600, :bytes 314772270}
+GREEN reference receipt: {:arm :frozen-read, :files 600, :bytes 314772270, :result-hash-count 600, :tree-hash 55423110f805a112cd6b353252ccd5183e035dfb8fe4b50da52e5f310a762440, :memory {:xmx-mb 2048.0, :heap-used-start-mb 37.40057373046875, :heap-used-peak-mb 2046.7357330322266, :heap-used-end-mb 13.364631652832031, :heap-after-gc-peak-mb 1651.2311630249023, :heap-retained-peak-mb 0.0, :wall-ms 140126}}
+GREEN journal receipt: {:tree-hash 55423110f805a112cd6b353252ccd5183e035dfb8fe4b50da52e5f310a762440, :arm :journal, :work {:walk-entries 604, :files-discovered 600, :files-read 600, :source-bytes 314772270, :largest-file-bytes 524621, :receipt-records 0, :receipt-bytes 0}, :memory {:xmx-mb 256.0, :heap-used-start-mb 93.31199645996094, :heap-used-peak-mb 253.5281753540039, :heap-used-end-mb 13.146675109863281, :heap-after-gc-peak-mb 238.53165435791016, :heap-retained-peak-mb 16.639190673828125, :wall-ms 162243}, :read-set-files 600, :commit-error nil, :committed true, :refusals [], :files 600, :reserved {:staged-files 600, :aggregate-bytes 314772270, :heap-reserved-peak-bytes 29446956, :path-list-bytes 68180, :journal-bytes-max 1073741824, :staged-files-max 2000, :aggregate-bytes-max 536870912, :journal-bytes-peak 629544540, :journal-bytes 629544540, :work-budget-bytes 201326592, :discovered-files 600, :parse-factor 56}, :files-written 600}
+GREEN err: Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+FLATNESS 60 {:xmx-mb 256.0, :heap-used-start-mb 36.592552185058594, :heap-used-peak-mb 253.3963394165039, :heap-used-end-mb 15.31170654296875, :heap-after-gc-peak-mb 236.01995849609375, :heap-retained-peak-mb 16.413848876953125, :wall-ms 17093}
+FLATNESS 600 {:xmx-mb 256.0, :heap-used-start-mb 35.853973388671875, :heap-used-peak-mb 253.8946762084961, :heap-used-end-mb 13.124862670898438, :heap-after-gc-peak-mb 241.97744750976562, :heap-retained-peak-mb 15.039833068847656, :wall-ms 162600}
+
+Ran 2 tests containing 18 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.memory.journal-green-test, :runtime :jvm, :mode "test", :started-at "2026-09-12T19:10:44.157399331Z", :elapsed-ms 494279, :status :passed, :result {:test 2, :pass 18, :fail 0, :error 0, :type :summary}}

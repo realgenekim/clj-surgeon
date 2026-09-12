@@ -1,0 +1,10 @@
+standard-clj check v0.29.0
+
+✓ /src/clj_surgeon/mcp_formatter.clj [6.44ms]
+✓ /src/clj_surgeon/mcp_process.clj [8.89ms]
+✓ /src/clj_surgeon/mission_typist_executor.clj [8.77ms]
+✓ /test/clj_surgeon/mcp_formatter_test.clj [2.1ms]
+✓ /test/clj_surgeon/mcp_process_test.clj [5.99ms]
+✓ /test/clj_surgeon/mission_typist_executor_test.clj [3.99ms]
+
+All 6 files formatted with Standard Clojure Style 👍 [45.07ms]

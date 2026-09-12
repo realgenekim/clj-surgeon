@@ -1,4 +1,5 @@
 (ns clj-surgeon.extract-header-test
+  {:lane :fast}
   (:require
    [clj-surgeon.extract-header :as header]
    [clojure.test :refer [deftest is testing]]

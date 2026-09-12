@@ -1,0 +1,6 @@
+
+Testing clj-surgeon.structural-lens-test
+
+Ran 18 tests containing 216 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.structural-lens-test, :runtime :bb, :mode "test", :started-at "2026-09-12T19:25:39.863955822Z", :elapsed-ms 129, :status :passed, :result {:test 18, :pass 216, :fail 0, :error 0, :type :summary}}

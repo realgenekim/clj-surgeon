@@ -1,0 +1,3 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+{:staged-path "/var/tmp/forge/bbtower-fx/clj-surgeon-candidate-10404162820659845506.clj", :tmpdir "/var/tmp/forge/bbtower-fx"}
+{:ok true, :status :complete, :file-count 1, :changed-file-count 0, :elapsed_ms nil, :future-sources {"a.clj" "(def x 1)"}}

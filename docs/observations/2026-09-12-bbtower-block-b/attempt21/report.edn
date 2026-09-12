@@ -1,0 +1,148 @@
+{:findings
+ [{:id :F3,
+   :status :repaired,
+   :red
+   {:state :probe-failed,
+    :reloads 36,
+    :tests 0,
+    :witness {:test 1, :pass 1, :fail 7, :error 0},
+    :log "checks/red.log"},
+   :green
+   {:kind :probe-target-not-a-test-namespace,
+    :reloads 0,
+    :authorized-roots ["test"],
+    :log "checks/focused.log"}}
+  {:id :sleep-pin,
+   :status :repaired,
+   :from-line 253,
+   :to-line 288,
+   :log "checks/sleep-pin.log"}],
+ :least_sure
+ ["Canonical-root authorization does not claim protection against concurrent filesystem replacement between discovery and reload."],
+ :current-source-digest
+ "948701180b0ae7ee10b8d5298a83458dff8c487ebb364ca335f4f91a84a086fb",
+ :measurements
+ {:focused
+  {:test 8, :pass 930, :fail 0, :error 0, :log "checks/focused.log"},
+  :fast
+  {:exit 2,
+   :makespan-ms 25785,
+   :invocations 1,
+   :sum-ms 45480,
+   :isolation-violations 0,
+   :skipped 0,
+   :fail 2,
+   :error 0,
+   :pass 12315,
+   :log "fast.log",
+   :test 1243},
+  :restricted
+  {:receipt "restricted-receipt.edn",
+   :suites
+   [{:suite "alias",
+     :state :passed,
+     :result {:test 182, :pass 3655, :fail 0, :error 0},
+     :measurements
+     {:makespan-ms 91355,
+      :lane-sums-ms {:battery 82985},
+      :runtime-sums-ms {:jvm 82985}},
+     :problems [],
+     :leak-failures 0}
+    {:suite "mcp",
+     :state :passed,
+     :result {:test 1415, :pass 16191, :fail 0, :error 0},
+     :measurements
+     {:makespan-ms 92323,
+      :lane-sums-ms {:fast 45413, :integration 69321},
+      :runtime-sums-ms {:bb 7904, :jvm 106830}},
+     :problems [],
+     :leak-failures 0}
+    {:suite "bb",
+     :state :passed,
+     :result {:test 901, :pass 7998, :fail 0, :error 0},
+     :measurements
+     {:makespan-ms 92136,
+      :lane-sums-ms {:fast 3512, :battery 244723},
+      :runtime-sums-ms {:bb 242304, :jvm 5931}},
+     :problems [],
+     :leak-failures 0}],
+   :stages
+   [{:target "admit-transaction-recovery-battery",
+     :exit 0,
+     :wall-ms 11220}
+    {:target "alias-migration-test", :exit 0, :wall-ms 91355}
+    {:target "mcp-test", :exit 0, :wall-ms 92323}
+    {:target "test-bb", :exit 0, :wall-ms 92136}
+    {:target "test-bb-diagnostic", :exit 0, :wall-ms 224562}
+    {:target "repository-hygiene", :exit 0, :wall-ms 2051}
+    {:target "intent-audit", :exit 0, :wall-ms 2189}],
+   :problems [],
+   :started-at "2026-09-12T17:53:10.073422500Z",
+   :state :passed,
+   :wall-ms 398164,
+   :completed-at "2026-09-12T17:59:48.237866939Z",
+   :source-digest
+   "948701180b0ae7ee10b8d5298a83458dff8c487ebb364ca335f4f91a84a086fb",
+   :log "restricted-gate.log",
+   :git-head "14ad99e71e47d8e204b0ce3ea555aef08cf8da38"},
+  :prewarm
+  {:receipt "prewarm-receipt.edn",
+   :suites
+   [{:suite "alias",
+     :state :passed,
+     :result {:test 182, :pass 3655, :fail 0, :error 0},
+     :measurements
+     {:makespan-ms 90051,
+      :lane-sums-ms {:battery 82201},
+      :runtime-sums-ms {:jvm 82201}},
+     :problems [],
+     :leak-failures 0}
+    {:suite "mcp",
+     :state :passed,
+     :result {:test 1415, :pass 16191, :fail 0, :error 0},
+     :measurements
+     {:makespan-ms 93698,
+      :lane-sums-ms {:fast 45531, :integration 68993},
+      :runtime-sums-ms {:bb 7852, :jvm 106672}},
+     :problems [],
+     :leak-failures 0}
+    {:suite "bb",
+     :state :passed,
+     :result {:test 901, :pass 7998, :fail 0, :error 0},
+     :measurements
+     {:makespan-ms 92269,
+      :lane-sums-ms {:fast 3523, :battery 244323},
+      :runtime-sums-ms {:bb 242145, :jvm 5701}},
+     :problems [],
+     :leak-failures 0}],
+   :stages
+   [{:target "admit-transaction-recovery-battery",
+     :exit 0,
+     :wall-ms 11010}
+    {:target "alias-migration-test", :exit 0, :wall-ms 90051}
+    {:target "mcp-test", :exit 0, :wall-ms 93698}
+    {:target "test-bb", :exit 0, :wall-ms 92269}
+    {:target "test-bb-diagnostic", :exit 0, :wall-ms 223924}
+    {:target "repository-hygiene", :exit 0, :wall-ms 2084}
+    {:target "intent-audit", :exit 0, :wall-ms 2208}],
+   :problems [],
+   :started-at "2026-09-12T17:59:56.716572837Z",
+   :state :passed,
+   :wall-ms 397215,
+   :completed-at "2026-09-12T18:06:33.932481657Z",
+   :source-digest
+   "948701180b0ae7ee10b8d5298a83458dff8c487ebb364ca335f4f91a84a086fb",
+   :log "prewarm-gate.log",
+   :git-head "14ad99e71e47d8e204b0ce3ea555aef08cf8da38"}},
+ :disagreements [],
+ :recorded-at "2026-09-12T18:06:42.371083842Z",
+ :commits
+ {:prior-evidence "404066a1",
+  :red "f5b07a9f",
+  :boundary "0e992f4f",
+  :sleep-pin "14ad99e7",
+  :evidence "The commit containing this report, committed last."},
+ :verdict :pass,
+ :gate-source-digests-agree true,
+ :owed
+ ["Independent Sol/Fable review and acceptance; no landing or certification claimed."]}

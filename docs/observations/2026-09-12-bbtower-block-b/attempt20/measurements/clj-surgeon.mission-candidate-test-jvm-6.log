@@ -1,0 +1,8 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.mission-candidate-test
+
+Ran 5 tests containing 58 assertions.
+0 failures, 0 errors.
+{:runtime :jvm, :namespace clj-surgeon.mission-candidate-test, :elapsed-ms 16, :result {:test 5, :pass 58, :fail 0, :error 0, :type :summary}, :tmpdir "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-2873202-be633c62", :home "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-2873202-be633c62/home"}

@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.mission-publication-test, :runtime :bb, :mode "load", :started-at "2026-09-12T19:11:53.533875323Z", :elapsed-ms 213, :status :load-failed, :message "Could not locate nrepl/core.bb, nrepl/core.clj or nrepl/core.cljc on classpath.", :causes ["Could not locate nrepl/core.bb, nrepl/core.clj or nrepl/core.cljc on classpath."]}

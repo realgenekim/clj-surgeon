@@ -1,0 +1,4 @@
+docs/observations/2026-09-12-bbtower-block-b/attempt20/fold.clj:30:28: warning: unused binding runtime
+docs/observations/2026-09-12-bbtower-block-b/attempt20/freeze.clj:3:12: warning: duplicate require of clojure.string
+docs/observations/2026-09-12-bbtower-block-b/attempt20/freeze.clj:4:12: warning: duplicate require of clojure.pprint
+linting took 20ms, errors: 0, warnings: 3

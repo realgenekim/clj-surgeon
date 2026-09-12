@@ -1,0 +1,8 @@
+standard-clj fix v0.29.0
+
+F /test/clj_surgeon/battery_parallel_runner.clj [26.86ms]
+F /test/clj_surgeon/battery_parallel_test.clj [11.86ms]
+F /test/clj_surgeon/lane_manifest.clj [3.14ms]
+F /test/run_all.clj [2.05ms]
+
+All 4 files formatted with Standard Clojure Style 👍 [55.71ms]

@@ -1,0 +1,26 @@
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.mcp-extraction-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.mcp-program-tool-test
+
+Testing clj-surgeon.mcp-recovery-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.cljc.analyze-test

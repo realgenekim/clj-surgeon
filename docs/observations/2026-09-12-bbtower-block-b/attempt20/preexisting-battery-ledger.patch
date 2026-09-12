@@ -1,0 +1,9 @@
+diff --git a/docs/observations/battery-ledger.edn b/docs/observations/battery-ledger.edn
+index fac4d7fc..a33f2c9a 100644
+--- a/docs/observations/battery-ledger.edn
++++ b/docs/observations/battery-ledger.edn
+@@ -62,3 +62,4 @@
+ {:sha "4acc7e50d56c4ab85d7d843ded13a72328b878ff", :started "2026-09-11T05:57:26Z", :wall_s 152, :verdict :pass, :host "anvil-server", :lanes 8, :skipped 0}
+ {:sha "582b62bc3f9ef0c2f2674c3b9cbcd4b712b74f0e", :started "2026-09-11T14:44:50Z", :wall_s 147, :verdict :pass, :host "anvil-server", :lanes 8, :skipped 0}
+ {:sha "e7cefb822954ea085fedf46ebb5eeff37e8b2574", :started "2026-09-12T14:14:13Z", :wall_s 346, :verdict :fail, :host "anvil-server", :lanes 8, :skipped 0}
++{:sha "07d860194a7fcec3ebc8d77377c4bf6cca49a42e", :started "2026-09-12T14:46:47Z", :wall_s 348, :verdict :fail, :host "anvil-server", :lanes 8, :skipped 0}

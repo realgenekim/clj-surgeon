@@ -1,0 +1,22 @@
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.helper-extraction-test
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.mcp-extraction-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.mcp-program-tool-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.forms-test

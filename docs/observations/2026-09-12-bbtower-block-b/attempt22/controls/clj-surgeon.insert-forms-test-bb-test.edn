@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.insert-forms-test, :runtime :bb, :mode "test", :started-at "2026-09-12T18:42:51.985282259Z", :elapsed-ms 5297, :status :passed, :result {:test 7, :pass 98, :fail 0, :error 0, :type :summary}}

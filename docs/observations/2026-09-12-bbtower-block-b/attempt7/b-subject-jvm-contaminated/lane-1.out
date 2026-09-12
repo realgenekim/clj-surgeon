@@ -1,0 +1,37 @@
+lanes: --ns -- 16 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-namespace-split-test
+
+Testing clj-surgeon.namespace-split-test
+
+Testing clj-surgeon.insert-forms-receipt-test
+
+Testing clj-surgeon.receipt-booleans-test
+
+Testing clj-surgeon.mcp-change-buffer-test
+
+Testing clj-surgeon.mcp-create-files-test
+
+Testing clj-surgeon.mcp-expect-guard-test
+
+Testing clj-surgeon.mcp-formatter-test
+
+Testing clj-surgeon.mission-candidate-race-test
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.mission-candidate-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.mission-git-test

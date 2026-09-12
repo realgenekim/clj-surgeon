@@ -1,0 +1,57 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.receipt-booleans-test
+
+FAIL in (every-receipt-boolean-has-a-driven-false-witness) (receipt_booleans_test.clj:84)
+Warm probe observations carry no verification booleans
+expected: (= {} (registry "probe"))
+  actual: (not (= {} {:verification_complete :behavior-not-run}))
+
+FAIL in (every-receipt-boolean-has-a-driven-false-witness) (receipt_booleans_test.clj:89)
+Warm probe observations carry no verification booleans
+expected: (= [] (boolean-paths receipt))
+  actual: (not (= [] [[:verification_complete]]))
+
+FAIL in (every-receipt-boolean-has-a-driven-false-witness) (receipt_booleans_test.clj:91)
+Warm probe observations carry no verification booleans
+expected: (not (contains? receipt :verification_complete))
+  actual: (not (not true))
+
+FAIL in (every-receipt-boolean-has-a-driven-false-witness) (receipt_booleans_test.clj:89)
+Warm probe observations carry no verification booleans
+expected: (= [] (boolean-paths receipt))
+  actual: (not (= [] [[:verification_complete]]))
+
+FAIL in (every-receipt-boolean-has-a-driven-false-witness) (receipt_booleans_test.clj:91)
+Warm probe observations carry no verification booleans
+expected: (not (contains? receipt :verification_complete))
+  actual: (not (not true))
+
+FAIL in (every-receipt-boolean-has-a-driven-false-witness) (receipt_booleans_test.clj:89)
+Warm probe observations carry no verification booleans
+expected: (= [] (boolean-paths receipt))
+  actual: (not (= [] [[:verification_complete]]))
+
+FAIL in (every-receipt-boolean-has-a-driven-false-witness) (receipt_booleans_test.clj:91)
+Warm probe observations carry no verification booleans
+expected: (not (contains? receipt :verification_complete))
+  actual: (not (not true))
+
+FAIL in (every-receipt-boolean-has-a-driven-false-witness) (receipt_booleans_test.clj:89)
+Warm probe observations carry no verification booleans
+expected: (= [] (boolean-paths receipt))
+  actual: (not (= [] [[:verification_complete]]))
+
+FAIL in (every-receipt-boolean-has-a-driven-false-witness) (receipt_booleans_test.clj:91)
+Warm probe observations carry no verification booleans
+expected: (not (contains? receipt :verification_complete))
+  actual: (not (not true))
+
+FAIL in (every-receipt-boolean-has-a-driven-false-witness) (receipt_booleans_test.clj:99)
+probe
+probe unknown seam
+expected: (every? (supported-seams verb) (vals seams))
+  actual: (not (every? #{} (:behavior-not-run)))
+
+Ran 2 tests containing 47 assertions.
+10 failures, 0 errors.

@@ -1,0 +1,14 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/attempt14-focused.VC5d2N/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/attempt14-focused.VC5d2N/tmp
+lanes: --ns -- 1 namespace(s), home-isolated false
+
+Testing clj-surgeon.receipt-artifacts-boundary-test
+
+namespace walls (1, slowest first, total 3287 ms):
+      3287 ms  clj-surgeon.receipt-artifacts-boundary-test
+SERIAL/NOT-A-GATE: direct namespace runner; use make test for landing
+
+Ran 24 tests containing 202 assertions.
+0 failures, 0 errors.
+
+test-isolation: 0 violations across 1 namespace(s) (TEST-ISO-002/003/004/005/007/010)

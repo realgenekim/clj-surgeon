@@ -1,0 +1,89 @@
+{:verdict :blocked
+ :manifest_id "ce99e35ffc7e4d4492da8b0cf56df0e9d7e5cb7bfb1342577c07b39e58858597"
+ :findings [
+{:severity "blocking"
+ :file "/home/forge/bin/lib/packet.py"
+ :line 166
+ :reproduction "Run the recorded git worktree add --detach argv in base-checkout.json under this packet Landlock envelope."
+ :exact_output "Preparing worktree (detached HEAD eae1e432)\nfatal: could not create directory of '/home/forge/src/clj-surgeon/.git/worktrees/base-checkout': Permission denied\n"}
+]
+ :measurements [
+{:name "base-checkout-registration (not a suite measurement)"
+ :before "not attempted"
+ :after "exit 128; 15 ms; no checkout created"
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt4/base-checkout.json"}
+{:name "a: base 61-member sum and makespan"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt4/slowdown.md"}
+{:name "b: subject bb-disabled 61-member sum and makespan"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt4/slowdown.md"}
+{:name "c: subject shipped 61-member sum and makespan"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt4/slowdown.md"}
+{:name "ten largest a/c per-namespace deltas"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt4/slowdown.md"}
+{:name "step-2 fast sum and bb serial sum"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt4/slowdown.md"}
+{:name "new bb ceiling and proportional derivation"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt4/slowdown.md"}
+{:name "feature-thread bb versus JVM walls"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt4/slowdown.md"}
+{:name "integration sum"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt4/slowdown.md"}
+{:name "prewarm census and budget lines"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt4/gate.md"}
+]
+ :commits [
+
+]
+ :least_sure [
+"Slowdown cause remains unknown without matched runs."
+"No bb ceiling can be derived from unmeasured step-2 walls."
+"Later suite prerequisites are untested under this Landlock envelope."
+]
+ :disagreements [
+"The checkout destination is admitted, but the required Git sibling registration is not. The claimed owner Git metadata allowance does not include the common worktrees parent."
+"The packet postprocessor requires every deliverable even after a stop; docs/intent/probe/refusals.edn remains absent because creating an unbuilt placeholder would misrepresent step 4."
+]
+ :owed [
+{:what "Step 1: admit the base Git worktree registration and complete matched a/b/c measurements, sums, makespans and ten deltas."
+ :owner "Fable"
+ :unblock "Gene or Fable reseals the necessary Git registration write access, or authorizes an owned repository for git worktree add; then Astra executes the frozen measurements."}
+{:what "Step 2: measured-cause coordinator repair and one make test-fast; unchanged 60000 ms ceiling."
+ :owner "Astra"
+ :unblock "Step 1 completes and identifies a supported cause; stop if the required fast run exceeds its ceiling."}
+{:what "Step 3: NEW bb ceiling, derivation, intent and at/over-ceiling witnesses."
+ :owner "Astra"
+ :unblock "Step 2 yields both fast and bb sums; retain unchanged fast budget and derive the same proportional margin."}
+{:what "Ratify the newly derived bb ceiling."
+ :owner "Fable"
+ :unblock "Review the measured derivation and its boundary witnesses after step 3."}
+{:what "Step 4: probe refusal registry, completeness coverage, receipt booleans and false seams; encounter score."
+ :owner "Astra"
+ :unblock "Reach step 4 in the frozen order; inspect the installed measure encounter score entrance then, recording inability as owed."}
+{:what "Step 5: feature-thread bb/JVM measurements, supported runtime witness and one make test-integration at unchanged 240000 ms."
+ :owner "Astra"
+ :unblock "Complete preceding steps; retain measured namespace walls if integration triggers its stop."}
+{:what "Step 6: final-tip prewarm, at most one repair and one final prewarm, verbatim census/budget lines; registered test-battery obligation."
+ :owner "Astra"
+ :unblock "Reach gate phase after preceding steps; serialize suites under a held lease and retain all receipts."}
+{:what "Independent acceptance."
+ :owner "Fable"
+ :unblock "Completed implementation and checks receive external review; this builder report does not certify acceptance."}
+]}

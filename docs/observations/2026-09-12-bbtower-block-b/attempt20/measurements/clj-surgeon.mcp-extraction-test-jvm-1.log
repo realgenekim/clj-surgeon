@@ -1,0 +1,8 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.mcp-extraction-test
+
+Ran 11 tests containing 70 assertions.
+0 failures, 0 errors.
+{:runtime :jvm, :namespace clj-surgeon.mcp-extraction-test, :elapsed-ms 130, :result {:test 11, :pass 70, :fail 0, :error 0, :type :summary}, :tmpdir "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-1337422-93f16658", :home "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-1337422-93f16658/home"}

@@ -1,0 +1,24 @@
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.mcp-extraction-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.mission-plain-forms-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.mission-typist-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.battery-ledger-test
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.mission-candidate-test

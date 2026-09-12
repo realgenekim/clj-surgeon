@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.mcp-operation-registry-test, :runtime :bb, :mode "load", :started-at "2026-09-12T19:00:15.956979989Z", :elapsed-ms 204, :status :load-failed, :message "Unable to resolve classname: io.modelcontextprotocol.server.McpAsyncServerExchange", :causes ["Unable to resolve classname: io.modelcontextprotocol.server.McpAsyncServerExchange"]}

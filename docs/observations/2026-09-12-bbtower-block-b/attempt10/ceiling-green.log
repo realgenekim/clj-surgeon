@@ -1,0 +1,6 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.ns-isolation-test
+
+Ran 25 tests containing 160 assertions.
+0 failures, 0 errors.

@@ -1,4 +1,4 @@
-(ns ^{:lane :fast} clj-surgeon.fast-lane-isolation-test
+(ns clj-surgeon.fast-lane-isolation-test
   "TEST-ISO-006 -- the fast lane's JVM runs on a THROWAWAY `user.home` and a
    throwaway `java.io.tmpdir`, both created per run and deleted when the run
    ends.
@@ -21,10 +21,13 @@
    that works: the parent creates the directory and RE-EXECS the suite with
    `-Duser.home=<dir>` and `HOME=<dir>` present before the child's own
    bootstrap."
+  {:lane :fast}
   (:require
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]))
+   [clojure.test :refer [deftest is testing]]
+   [rewrite-clj.node :as node]
+   [rewrite-clj.parser :as parser]))
 
 (defn- prop [k] (System/getProperty k))
 
@@ -106,7 +109,30 @@
    [#"\"/home/[a-z]+/tmp"
     "the seat's shared /home/<user>/tmp"]])
 
+(defn fixture-spellings [source]
+  ;; A comment or literal string used only for comparison cannot root a fixture.
+  ;; Preserve computed comparison arguments: those can still perform effects.
+  (letfn [(scrub [n]
+            (cond
+              (= :comment (node/tag n)) (node/token-node nil)
+              (node/inner? n)
+              (let [children (node/children n)
+                    head (first (filter #(= :token (node/tag %)) children))
+                    comparison? (and (= :list (node/tag n)) head
+                                     (#{"str/includes?" "clojure.string/includes?"} (node/string head)))]
+                (node/replace-children n
+                                       (map #(if (and comparison? (str/starts-with? (node/string %) "\""))
+                                               (node/token-node nil) (scrub %)) children)))
+              :else n))]
+    (node/string (scrub (parser/parse-string-all source)))))
+
 (deftest no-fast-lane-namespace-roots-a-fixture-outside-its-own-tmpdir
+  (testing "Negative path comparisons are inert; fixture constructors remain visible"
+    (is (not (str/includes? (fixture-spellings "; old /home/forge/tmp\n(is (not (str/includes? src \"/home/forge/tmp/membat\")))")
+               "/home/forge/tmp")))
+    (doseq [source ["(io/file \"/home/forge/tmp\")"
+                    "(str/includes? (slurp (io/file \"/home/forge/tmp\")) \"absent\")"]]
+      (is (str/includes? (fixture-spellings source) "\"/home/forge/tmp") source)))
   (let [manifest (requiring-resolve 'clj-surgeon.lane-manifest/manifest)
         namespaces-for (requiring-resolve 'clj-surgeon.lane-manifest/namespaces-for)
         source-of (fn [n]
@@ -115,7 +141,9 @@
                                              (str/replace "." "/"))
                                          ".clj")))
         offenders (for [n (namespaces-for :fast)
-                        :let [src (slurp (source-of n))]
+                        :let [raw (slurp (source-of n))
+                              src (if (some #(re-find (first %) raw) seat-absolute-fixture-shapes)
+                                    (fixture-spellings raw) raw)]
                         [re what] seat-absolute-fixture-shapes
                         :let [hit (re-find re src)]
                         :when hit

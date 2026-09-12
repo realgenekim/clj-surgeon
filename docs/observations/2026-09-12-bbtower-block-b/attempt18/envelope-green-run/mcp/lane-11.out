@@ -1,0 +1,22 @@
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.mcp-workspace-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.battery-ledger-test
+
+Testing clj-surgeon.split-proof-gate-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.failure-report-test

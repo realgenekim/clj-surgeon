@@ -1,0 +1,17 @@
+lanes: --ns -- 9 namespace(s), home-isolated false
+
+Testing clj-surgeon.extract-test
+
+Testing clj-surgeon.show-form-test
+
+Testing clj-surgeon.txn-journal-test
+
+Testing clj-surgeon.reader-eval-fence-test
+
+Testing clj-surgeon.mcp-helper-extraction-test
+
+Testing clj-surgeon.mission-test
+
+Testing clj-surgeon.mission-git-boundary-test
+
+Testing clj-surgeon.mission-phase-events-test

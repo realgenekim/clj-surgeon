@@ -1,0 +1,10 @@
+
+Testing clj-surgeon.core-discovery-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.syntax-var-refs-test
+
+Testing clj-surgeon.cljc.require-ops-test

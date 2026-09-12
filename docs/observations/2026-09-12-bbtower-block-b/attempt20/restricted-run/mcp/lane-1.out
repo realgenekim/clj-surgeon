@@ -1,0 +1,18 @@
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.require-change-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.syntax-var-refs-test
+
+Testing clj-surgeon.mission-candidate-test

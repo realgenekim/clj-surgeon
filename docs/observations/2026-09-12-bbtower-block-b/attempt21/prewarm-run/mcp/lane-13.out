@@ -1,0 +1,28 @@
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.require-change-test
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.mission-usage-test
+
+Testing clj-surgeon.mission-candidate-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.failure-report-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.mission-git-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

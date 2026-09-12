@@ -1,0 +1,16 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+WARNING: derive already refers to: #'clojure.core/derive in namespace: clj-surgeon.bb-ceiling, being replaced by: #'clj-surgeon.bb-ceiling/derive
+
+Testing clj-surgeon.ns-isolation-test
+
+FAIL in (spec-bb-boundary-equals-registered-ceiling) (ns_isolation_test.clj:474)
+TEST-ISO-007 spec bb boundary disagrees with registered ceiling
+expected: (= [(:bb iso/lane-budget-ms) (inc (:bb iso/lane-budget-ms))] (mapv parse-ms (rest (first boundaries))))
+  actual: (not (= [374149 374150] [399155 399156]))
+
+FAIL in (bb-ceiling-reproduces-from-calibration-under-shipped-manifest) (ns_isolation_test.clj:465)
+expected: (= (:ceiling-ms (ceiling/from-file ceiling/calibration-receipt)) (:bb iso/lane-budget-ms))
+  actual: (not (= 343102 374149))
+
+Ran 27 tests containing 163 assertions.
+2 failures, 0 errors.

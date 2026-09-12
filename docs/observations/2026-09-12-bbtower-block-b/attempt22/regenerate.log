@@ -1,0 +1,16 @@
+----- Error --------------------------------------------------------------------
+Type:     clojure.lang.ExceptionInfo
+Message:  Unable to resolve var: clj-surgeon.lane-manifest-test/deftest-census-never-shrinks
+Data:     {:type :sci/error, :line 1, :column 67, :file "NO_SOURCE_PATH", :phase "analysis"}
+Location: NO_SOURCE_PATH:1:67
+Phase:    analysis
+
+----- Context ------------------------------------------------------------------
+1: (require 'clj-surgeon.lane-manifest-test)(clojure.test/test-vars [#'clj-surgeon.lane-manifest-test/deftest-census-never-shrinks])
+                                                                     ^--- Unable to resolve var: clj-surgeon.lane-manifest-test/deftest-census-never-shrinks
+
+----- Stack trace --------------------------------------------------------------
+user                   - NO_SOURCE_PATH:1:67
+clojure.test/test-vars - babashka/impl/clojure/test.clj:728:1
+user                   - NO_SOURCE_PATH:1:42
+

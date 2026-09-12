@@ -1,0 +1,14 @@
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

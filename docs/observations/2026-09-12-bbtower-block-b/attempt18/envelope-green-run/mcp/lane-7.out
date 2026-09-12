@@ -1,0 +1,22 @@
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.require-change-test
+
+Testing clj-surgeon.mcp-program-tool-test
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test
+
+Testing clj-surgeon.file-ops-test

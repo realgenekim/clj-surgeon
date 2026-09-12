@@ -1,4 +1,5 @@
 (ns clj-surgeon.move-dependency-test
+  {:lane :fast}
   (:require
    [clj-surgeon.analyze :as analyze]
    [clj-surgeon.move :as move]

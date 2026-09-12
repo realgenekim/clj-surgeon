@@ -1,4 +1,5 @@
 (ns clj-surgeon.worktree-lifecycle-test
+  {:lane :fast}
   (:require
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))

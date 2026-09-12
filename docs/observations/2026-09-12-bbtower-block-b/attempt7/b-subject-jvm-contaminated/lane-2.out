@@ -1,0 +1,31 @@
+lanes: --ns -- 15 namespace(s), home-isolated true
+
+Testing clj-surgeon.rename-alias-receipt-test
+
+Testing clj-surgeon.helper-extraction-test
+
+Testing clj-surgeon.scope-stream-test
+
+Testing clj-surgeon.outline-memory-test
+
+Testing clj-surgeon.mcp-inspect-contract-test
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.mcp-compact-edit-test
+
+Testing clj-surgeon.mcp-operation-async-test
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.mcp-extraction-test
+
+Testing clj-surgeon.mission-plain-forms-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.mcp-compact-edit-fields-test
+
+Testing clj-surgeon.mission-forms-test

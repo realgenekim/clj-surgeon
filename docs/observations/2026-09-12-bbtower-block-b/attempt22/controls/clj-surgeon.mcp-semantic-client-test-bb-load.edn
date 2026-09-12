@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.mcp-semantic-client-test, :runtime :bb, :mode "load", :started-at "2026-09-12T19:02:18.348087021Z", :elapsed-ms 0, :status :load-failed, :message "Unable to resolve classname: io.modelcontextprotocol.client.McpClient", :causes ["Unable to resolve classname: io.modelcontextprotocol.client.McpClient"]}

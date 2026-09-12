@@ -1,0 +1,15 @@
+lanes: --ns -- 7 namespace(s), home-isolated true
+
+Testing clj-surgeon.insert-forms-receipt-test
+
+Testing clj-surgeon.mcp-compact-relations-test
+
+Testing clj-surgeon.mcp-inspect-tool-test
+
+Testing clj-surgeon.mcp-prepared-request-test
+
+Testing clj-surgeon.mcp-workspace-test
+
+Testing clj-surgeon.mission-typist-test
+
+Testing clj-surgeon.rename-alias-receipt-test

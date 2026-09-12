@@ -1,0 +1,6 @@
+
+Testing clj-surgeon.intent-transaction-test
+
+FAIL in (change-cli-dogfoods-one-shot-multi-file-apply-and-exact-undo) (intent_transaction_test.clj:2205)
+expected: (< (count out) (count (slurp receipt-file)))
+  actual: (not (< 3874 3646))

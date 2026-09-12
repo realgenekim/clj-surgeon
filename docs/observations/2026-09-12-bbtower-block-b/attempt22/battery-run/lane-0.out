@@ -1,0 +1,18 @@
+lanes: --ns -- 11 namespace(s), home-isolated false
+
+Testing clj-surgeon.lens-query-test
+
+Testing clj-surgeon.mcp-alias-migration-test
+
+Testing clj-surgeon.reader-eval-fence-test
+
+Testing clj-surgeon.mission-run-test
+proposal-display-bytes {:compact 1336, :full 33671}
+
+Testing clj-surgeon.split-proof-gate-boundary-test
+
+Testing clj-surgeon.mission-typist-executor-test
+
+Testing clj-surgeon.mission-git-identity-test
+
+Testing clj-surgeon.mission-provider-fallback-events-test

@@ -1,0 +1,18 @@
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.move-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.cljc.analyze-test

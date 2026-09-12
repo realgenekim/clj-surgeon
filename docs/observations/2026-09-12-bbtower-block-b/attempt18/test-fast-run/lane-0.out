@@ -1,0 +1,15 @@
+lanes: --ns -- 7 namespace(s), home-isolated true
+
+Testing clj-surgeon.splice-envelope-test
+
+Testing clj-surgeon.insert-forms-receipt-test
+
+Testing clj-surgeon.ns-isolation-test
+
+Testing clj-surgeon.mcp-expect-guard-test
+
+Testing clj-surgeon.receipt-booleans-test
+
+Testing clj-surgeon.mcp-combinable-transaction-test
+
+Testing clj-surgeon.mcp-operation-test

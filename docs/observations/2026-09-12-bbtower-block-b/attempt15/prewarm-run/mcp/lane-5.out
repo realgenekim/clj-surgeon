@@ -1,0 +1,30 @@
+
+Testing clj-surgeon.namespace-split-test
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.mcp-workspace-test
+
+Testing clj-surgeon.mission-plain-forms-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.split-proof-gate-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.mission-git-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

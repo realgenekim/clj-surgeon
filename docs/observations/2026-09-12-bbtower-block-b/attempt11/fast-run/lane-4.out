@@ -1,0 +1,9 @@
+lanes: --ns -- 4 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-inspect-tool-test
+
+Testing clj-surgeon.mcp-compact-location-test
+
+Testing clj-surgeon.mcp-create-files-test
+
+Testing clj-surgeon.mcp-operation-async-test

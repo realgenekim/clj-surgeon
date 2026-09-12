@@ -1,0 +1,3 @@
+name	started_utc	elapsed_ms	exit	class	receipt
+jvm-options	2026-09-12T06:36:56.581591+00:00	36	0	launcher-diagnostic-not-suite	/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt5/jvm-options.json
+jvm-effective-options	2026-09-12T06:37:41.980707+00:00	43	0	launcher-diagnostic-not-suite	/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt5/jvm-effective-options.json

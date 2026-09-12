@@ -1,0 +1,1 @@
+{:runtime :jvm, :namespace clj-surgeon.insert-forms-test, :elapsed-ms 1441, :result {:test 7, :pass 98, :fail 0, :error 0, :type :summary}, :tmpdir "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-1259373-09559207", :home "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-1259373-09559207/home"}

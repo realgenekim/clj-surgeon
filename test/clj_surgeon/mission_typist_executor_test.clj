@@ -1,18 +1,31 @@
 (ns clj-surgeon.mission-typist-executor-test
   {:lane :battery}
   (:require
-   [clj-surgeon.artifact-boundary-support :as boundary]
-   [clj-surgeon.receipt-artifacts :as artifacts]
    [cheshire.core :as json]
+   [clj-surgeon.artifact-boundary-support :as boundary]
+   [clj-surgeon.mcp-formatter :as formatter]
+   [clj-surgeon.mcp-process]
    [clj-surgeon.mission :as mission]
    [clj-surgeon.mission-cli :as cli]
    [clj-surgeon.mission-typist-executor :as executor]
    [clj-surgeon.mission-typist-test :as facts]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.test :refer [deftest is]]))
 
 (def source "(ns fixture.core)\n\n(defn old-name [] 1)\n")
+
+;; @spec MCP-OP-TMPHYG-005
+(deftest formatter-refusal-retains-native-diagnostics
+  (let [failure {:ok false :error-type :formatter-failed
+                 :error "Permission denied: /forbidden/candidate.clj"
+                 :path "/forbidden/candidate.clj" :exit 1 :output "native stderr"}]
+    (with-redefs [formatter/format-candidates! (fn [& _] failure)]
+      (let [result (executor/format-replacements! "." [{:form "(def x 1)"}])]
+        (is (= :typist-formatter-failed (:error-type result)))
+        (is (= (:error failure) (:error result)))
+        (is (= failure (:formatter result)))))))
 (def replacements [{:file "src/fixture/core.clj" :owner "old-name"
                     :form "(defn new-name [] 1)"}])
 (defn profile [id expression]
@@ -59,6 +72,8 @@
             (is (= 1 (:match-count result)))
             (is (= :complete (get-in result [:format :status])))
             (is (number? (get-in result [:format :elapsed_ms])))
+            (is (vector? (get-in result [:format :formatter :command])))
+            (is (boolean? (get-in result [:format :formatter :resolved?])))
             (is (re-find #"new-name" (slurp file)))
             (is (= :typist-invalid-undo-hash (:error-type (executor/undo! (:undo_receipt result) "wrong-hash"))))
             (is (:ok (executor/undo! (:undo_receipt result) (:receipt_hash result))))

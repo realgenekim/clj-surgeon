@@ -1,0 +1,6 @@
+docs/observations/2026-09-12-bbtower-block-b/attempt7/summarize.clj:3:12: warning: duplicate require of clj-surgeon.lane-manifest
+docs/observations/2026-09-12-bbtower-block-b/attempt7/summarize.clj:4:12: warning: duplicate require of clj-surgeon.battery-parallel-runner
+docs/observations/2026-09-12-bbtower-block-b/attempt7/summarize.clj:35:8: warning: unused binding a
+docs/observations/2026-09-12-bbtower-block-b/attempt7/summarize.clj:35:10: warning: unused binding b
+docs/observations/2026-09-12-bbtower-block-b/attempt7/summarize.clj:35:12: warning: unused binding c
+linting took 20ms, errors: 0, warnings: 5

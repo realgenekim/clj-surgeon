@@ -1,14 +1,17 @@
-(ns ^{:lane :integration} clj-surgeon.mcp-http-server-test
+(ns clj-surgeon.mcp-http-server-test
+  {:lane :integration}
   (:require
-   [clj-surgeon.receipt-artifacts :as artifacts]
    [cheshire.core :as json]
    [clj-surgeon.alias-migration-fixture :as fixture]
    [clj-surgeon.mcp-contract :as contract]
+   [clj-surgeon.mcp-hot-verify :as hot-verify]
    [clj-surgeon.mcp-http-server :as http-server]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-tool :as tool]
+   [clj-surgeon.probe :as probe]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -69,6 +72,118 @@
            ["http://localhost.evil.example" false]]]
     (testing (str origin)
       (is (= expected (http-server/allowed-origin? origin))))))
+
+;; @spec BB-PROBE-004
+(deftest probe-output-degrades-without-deleting-the-verdict
+  ;; Sol's sealed-candidate finding: 5,000 reload dependencies exceed the
+  ;; client's 16,384-character guard at the production HTTP crossing.
+  (let [encode (requiring-resolve 'clj-surgeon.probe/encode-response)
+        bytes #(alength (.getBytes ^String % "UTF-8"))
+        verdict #(probe/verdict % {:test 2 :pass 3 :fail 0 :error 0} 12.5)
+        empty-size (bytes (pr-str (verdict [""])))
+        at (verdict [(apply str (repeat (- 16384 empty-size) "a"))])
+        over (update-in at [:reloaded 0] str "a")]
+    (is (= 16384 (bytes (pr-str at))))
+    (is (= (pr-str at) (encode at)))
+    (is (= 16385 (bytes (pr-str over))))
+    (doseq [original [over
+                      (verdict (mapv #(str "dep." %) (range 5000)))
+                      (verdict (vec (repeat 100 (apply str (repeat 200 "λ")))))
+                      (probe/verdict (vec (repeat 5000 "failed.dep"))
+                                     {:test 2 :pass 1 :fail 1 :error 1} 4)
+                      (probe/refusal :invalid-probe-request (apply str (repeat 20000 "x")))
+                      (probe/refusal (keyword (apply str (repeat 20000 "x"))) "Oversized refusal kind")]]
+      (let [wire (encode original)
+            parsed (probe/read-bounded (java.io.StringReader. wire) 16384)
+            names (vec (:reloaded original))
+            kept (count (:reloaded parsed))]
+        (is (<= (bytes wire) 16384))
+        (is (= :probe-response-truncated (:error-type parsed)))
+        (is (= (select-keys original [:state :proof_pending :tests :assertions :failures :elapsed_ms :closure-expected])
+               (select-keys parsed [:state :proof_pending :tests :assertions :failures :elapsed_ms :closure-expected])))
+        (is (= (count names) (:reloaded-count parsed)))
+        (is (<= kept 64))
+        (is (= (subvec names 0 kept) (:reloaded parsed)))
+        (is (= {:bound 16384 :encoded (bytes (pr-str original))
+                :omitted (- (count names) kept)}
+               (:truncated parsed)))
+        (when (:error original)
+          (is (and (string? (:error parsed)) (seq (:error parsed)))
+              "The CLI's nonzero refusal exit must survive bounded error detail"))
+        (when (:error-type original)
+          (if (<= (bytes (pr-str (:error-type original))) 128)
+            (is (= (:error-type original) (:cause parsed)))
+            (is (not (contains? parsed :cause)))))))))
+
+;; @spec BB-PROBE-004
+(deftest probe-servlet-bounds-the-actual-writer
+  (let [out (java.io.StringWriter.)
+        writer (java.io.PrintWriter. out)
+        adapter (fn [interface methods]
+                  (java.lang.reflect.Proxy/newProxyInstance
+                    (.getClassLoader ^Class interface) (into-array Class [interface])
+                    (reify java.lang.reflect.InvocationHandler
+                      (invoke [_ _ method _]
+                        (get methods (.getName ^java.lang.reflect.Method method))))))
+        request (adapter jakarta.servlet.http.HttpServletRequest
+                         {"getMethod" "POST"
+                          "getReader" (java.io.BufferedReader. (java.io.StringReader. "{}"))})
+        response (adapter jakarta.servlet.http.HttpServletResponse {"getWriter" writer})
+        result (probe/verdict (mapv #(str "dep." %) (range 5000))
+                              {:test 2 :pass 3 :fail 0 :error 0} 12.5)
+        servlet ((ns-resolve 'clj-surgeon.mcp-http-server 'probe-servlet) {})]
+    (with-redefs [hot-verify/probe! (fn [_ _] result)]
+      (.service ^jakarta.servlet.http.HttpServlet servlet
+                ^jakarta.servlet.ServletRequest request ^jakarta.servlet.ServletResponse response))
+    (let [wire (str out)
+          receipt (edn/read-string wire)]
+      (is (<= (alength (.getBytes wire "UTF-8")) 16384))
+      (is (= :probe-passed (:state receipt)))
+      (is (= [2 3 0] ((juxt :tests :assertions :failures) receipt)))
+      (is (= :probe-response-truncated (:error-type receipt)))
+      (is (= 5000 (+ (count (:reloaded receipt)) (get-in receipt [:truncated :omitted] 0)))))))
+
+;; @spec BB-PROBE-002
+;; @spec BB-PROBE-004
+(deftest probe-servlet-preserves-the-request-bound-refusal
+  (let [out (java.io.StringWriter.)
+        writer (java.io.PrintWriter. out)
+        adapter (fn [interface methods]
+                  (java.lang.reflect.Proxy/newProxyInstance
+                    (.getClassLoader ^Class interface) (into-array Class [interface])
+                    (reify java.lang.reflect.InvocationHandler
+                      (invoke [_ _ method _]
+                        (get methods (.getName ^java.lang.reflect.Method method))))))
+        request (adapter jakarta.servlet.http.HttpServletRequest
+                         {"getMethod" "POST"
+                          "getReader" (java.io.BufferedReader.
+                                        (java.io.StringReader. (apply str (repeat 8193 "x"))))})
+        response (adapter jakarta.servlet.http.HttpServletResponse {"getWriter" writer})
+        servlet ((ns-resolve 'clj-surgeon.mcp-http-server 'probe-servlet) {})]
+    (.service ^jakarta.servlet.http.HttpServlet servlet
+              ^jakarta.servlet.ServletRequest request ^jakarta.servlet.ServletResponse response)
+    (let [receipt (edn/read-string (str out))]
+      (is (= :probe-refused (:state receipt)))
+      (is (= :probe-message-too-large (:error-type receipt)))
+      (is (= [:landing-gate] (:proof_pending receipt))))))
+
+;; @spec BB-PROBE-001
+(deftest probe-spec-receipt-shape-matches-an-executed-probe
+  (let [text (slurp "docs/intent/hot-verification/bb-probe-specs.md")
+        statements (re-seq #"Receipt keys \(EDN\): `([^`]+)`" text)
+        image (probe/image-identity ".")
+        receipt (hot-verify/probe! image {:ns "clj-surgeon.forms-test" :image image})]
+    (is (= :probe-passed (:state receipt)))
+    (is (pos? (:tests receipt)))
+    (is (= 1 (count statements)) "BB-PROBE-001 requires exactly one receipt-shape statement")
+    (is (= (some-> statements first second edn/read-string) (set (keys receipt)))
+        "BB-PROBE-001 spec keys disagree with the executed probe receipt")
+    ;; @spec BB-PROBE-003 -- refusal fields are also a spec/receipt contract.
+    (let [statements (re-seq #"Target refusal keys \(EDN\): `([^`]+)`" text)
+          refused (hot-verify/probe! image {:ns "clj-surgeon.core" :image image})]
+      (is (= :probe-target-not-a-test-namespace (:error-type refused)))
+      (is (= 1 (count statements)))
+      (is (= (some-> statements first second edn/read-string) (set (keys refused)))))))
 
 (deftest project-verification-profiles-are-closed-data
   ;; @spec MCP-OP-VERIFY-001

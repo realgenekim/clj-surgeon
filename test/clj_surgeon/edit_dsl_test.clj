@@ -1,4 +1,5 @@
 (ns clj-surgeon.edit-dsl-test
+  {:lane :fast}
   (:require
    [clj-surgeon.edit-dsl :as dsl]
    [clj-surgeon.structural-lens :as lens]

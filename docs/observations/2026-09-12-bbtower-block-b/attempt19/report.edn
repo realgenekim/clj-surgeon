@@ -1,0 +1,86 @@
+{:verdict :pass-with-retained-reds
+ :branch "bb-rewrite-tower-local"
+ :trunk "a15531ee"
+ :initial-tip "e7cefb822954ea085fedf46ebb5eeff37e8b2574"
+ :verified-tip "84a0833c477a6713d5dfd78c783608649c12f650"
+ :source-digest "6463611f69fb3372f043849044e9de285f64f1f4c7ce2a4bafdd9eb25212cd74"
+ :recorded-at-file "recorded-at.txt"
+ :findings
+ [{:kind :semantic-merge
+   :detail "Stable package bundles clj-splice and launcher carries explicit java.io.tmpdir under branch TMPDIR policy. Both histories and battery rows retained."
+   :evidence ["merge.patch" "focused-jvm.log" "launcher-check.log"]}
+  {:kind :integration-census-gap
+   :added [clj-surgeon.install-test/cli-package-identity-covers-bundled-splice-source
+           clj-surgeon.install-test/installed-cli-loads-splice-verbs-outside-the-checkout]
+   :removed []
+   :repair "Documented CENSUS_REGENERATE entrance; reviewed exact two-name addition."
+   :evidence ["test-fast-run/fast/lane-2.out"
+              "restricted-gate-run/mcp/lane-2.out"
+              "census-repair.log" "census-repair.patch"]}
+  {:kind :executor-selection-error
+   :detail "Initial bb focused invocation could not load JVM-only McpAsyncServerExchange; repeated focused witnesses under test-deps JVM without changing runtime assignments."
+   :evidence ["focused.log" "focused-jvm.log"]}
+  {:kind :historical-check-only-evidence
+   :detail "First check-only prewarm passing inside envelope preserved with original auto-added battery red."
+   :evidence ["prewarm-checkonly-run7/REPORT.md"
+              "prewarm-checkonly-run7/report.edn"
+              "prewarm-checkonly-run7/prewarm.log"
+              "prewarm-checkonly-run7/battery.log"
+              "prewarm-checkonly-run7/prewarm-receipt.edn"]
+   :prewarm-receipt-sha256 "26bee1e18e5c8eaed68d4613fa270073009abe099eec7419d7d339af6c5f29f5"}]
+ :measurements
+ {:focused {:exit 0 :test 34 :pass 584 :fail 0 :error 0
+            :wall-ms :unknown :log "focused-jvm.log"}
+  :launchers {:exit 0 :launchers 2 :tmpdir-cases-each 8
+              :log "launcher-check.log"}
+  :test-fast {:invocations 1 :exit 2 :test 1243 :assertions 11779
+              :fail 1 :error 0 :fast-sum-ms 46443 :fast-budget-ms 60000
+              :makespan-ms 24286 :isolation-violations 0
+              :bb-runtime-sum-ms 15203 :bb-budget-ms 343102
+              :log "test-fast.log" :receipt "test-fast-run/fast/receipt.edn"}
+  :restricted-diagnostic
+  {:invocations 1 :exit 2 :wall-seconds 169.6600949820131
+   :shell-exit 0 :alias :passed :mcp :failed :bb :passed
+   :reason :census-mismatch :final-gate-receipt :not-produced
+   :log "restricted-gate.log" :run "restricted-gate-run/"}
+  :census-repair {:exit 0 :test 1 :pass 7 :fail 0 :error 0
+                  :added 2 :removed 0 :log "census-repair.log"}
+  :prewarm
+  {:invocations 1 :repairs-during-real-prewarm 0 :retries 0
+   :exit 0 :state :passed :prewarm? true :landing? false :problems []
+   :wall-ms 394503 :run-id "da0708ea-e20b-4f46-b7e5-47e913ed59b6"
+   :completed-at "2026-09-12T14:35:42.599586661Z"
+   :stages [{:target "admit-transaction-recovery-battery" :exit 0 :wall-ms 10924}
+            {:target "alias-migration-test" :exit 0 :wall-ms 90230}
+            {:target "mcp-test" :exit 0 :wall-ms 89452}
+            {:target "test-bb" :exit 0 :wall-ms 91210}
+            {:target "test-bb-diagnostic" :exit 0 :wall-ms 223786}
+            {:target "repository-hygiene" :exit 0 :wall-ms 2060}
+            {:target "intent-audit" :exit 0 :wall-ms 2223}]
+   :alias {:test 182 :pass 3641 :fail 0 :error 0 :leak-failures 0}
+   :mcp {:test 1411 :pass 15577 :fail 0 :error 0 :leak-failures 0
+         :fast-sum-ms 45007 :fast-budget-ms 60000
+         :integration-sum-ms 66261 :integration-budget-ms 240000}
+   :bb {:test 901 :pass 7994 :fail 0 :error 0 :leak-failures 0
+        :runtime-sum-ms 239714 :runtime-budget-ms 343102}
+   :bb-diagnostic {:test 832 :pass 7293 :fail 0 :error 0}
+   :log "prewarm.log" :receipt "prewarm-receipt.edn" :run "prewarm-run/"}
+  :gate-verbatim {:file "gate.md"
+                  :concatenated-in-order ["restricted-gate.log" "prewarm.log"]}}
+ :commits
+ [{:sha "6b73b389" :intent "Preserve check-only run7 prewarm and red battery evidence"}
+  {:sha "db318270fb2cb029617e243a99e8155d931ad23e"
+   :intent "Merge trunk CLI splice bundle with branch tmpdir and gate lanes"}
+  {:sha "84a0833c477a6713d5dfd78c783608649c12f650"
+   :intent "Register both merged trunk tests in derived census"}
+  {:sha :containing-evidence-commit :intent "Attempt19 evidence committed last"}]
+ :dogfood-table "REPORT.md#dogfood"
+ :least_sure ["Repaired census was not rerun under restricted wrapper; final prewarm ran outside it."
+              "Final evidence commit is not receipt git-head; it adds observations only."
+              "No new battery certification or performance comparison."]
+ :disagreements []
+ :owed [{:owner "Fable" :what "Independent review and any further envelope/battery or landing decision"}
+        {:owner "Fable" :what "Prior packet battery-red follow-up retained in prewarm-checkonly-run7/report.edn"}]
+ :required-attempt19-execution-owed []
+ :pushed false
+ :landing-authority false}

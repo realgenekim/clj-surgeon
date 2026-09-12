@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.cljc.split-test, :runtime :jvm, :mode "test", :started-at "2026-09-12T18:40:36.789126220Z", :elapsed-ms 3463, :status :test-failed, :result {:test 11, :pass 29, :fail 1, :error 1, :type :summary}}

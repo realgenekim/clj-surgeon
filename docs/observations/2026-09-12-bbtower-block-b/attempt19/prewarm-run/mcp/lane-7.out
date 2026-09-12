@@ -1,0 +1,26 @@
+
+Testing clj-surgeon.namespace-split-test
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.mcp-workspace-test
+
+Testing clj-surgeon.mission-plain-forms-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.split-proof-gate-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.mission-forms-test

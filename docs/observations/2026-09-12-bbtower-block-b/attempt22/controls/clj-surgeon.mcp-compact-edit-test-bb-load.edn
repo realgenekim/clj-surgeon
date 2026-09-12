@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.mcp-compact-edit-test, :runtime :bb, :mode "load", :started-at "2026-09-12T18:46:31.686599654Z", :elapsed-ms 124, :status :load-failed, :message "Could not locate nrepl/core.bb, nrepl/core.clj or nrepl/core.cljc on classpath.", :causes ["Could not locate nrepl/core.bb, nrepl/core.clj or nrepl/core.cljc on classpath."]}

@@ -1,0 +1,22 @@
+
+Testing clj-surgeon.lane-manifest-test
+
+Testing clj-surgeon.namespace-split-test
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.mcp-workspace-test
+
+Testing clj-surgeon.mission-plain-forms-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.mission-candidate-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test

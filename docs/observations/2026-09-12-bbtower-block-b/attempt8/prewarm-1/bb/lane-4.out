@@ -1,0 +1,26 @@
+
+Testing clj-surgeon.help-test
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.partition-all-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.worktree-lifecycle-test

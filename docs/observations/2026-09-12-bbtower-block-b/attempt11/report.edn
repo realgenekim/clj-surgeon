@@ -1,0 +1,71 @@
+{:attempt 11
+ :verdict :go
+ :branch "bb-rewrite-tower-local"
+ :base "b2049db5148cc1020c79ecf1cbaa01dfe160514b"
+ :code-tip "800b756ec522ae43177aa82e3fe3d78c6843c325"
+ :findings
+ [{:id :computed-ceiling :status :fixed
+   :definition "ceil(bb_runtime_sum * 60000 / fast_cadence_sum), one receipt, shipped manifest"
+   :script "test/clj_surgeon/bb_ceiling.clj"
+   :witness "clj-surgeon.ns-isolation-test/bb-ceiling-reproduces-from-calibration-under-shipped-manifest"
+   :evidence "ceiling-derivation.log"}
+  {:id :stale-spec-boundary :status :fixed
+   :accept-ms 343102 :refuse-ms 343103
+   :witness "clj-surgeon.ns-isolation-test/spec-bb-boundary-equals-registered-ceiling"
+   :red "ceiling-spec-jvm-red.log" :green "restored-green.log"}
+  {:id :all-owner-forms :status :fixed
+   :files ["probe.clj" "mcp_hot_verify.clj" "mcp_http_server.clj"]
+   :named-form-filter false
+   :shared-owner-kinds-explicitly-registered 9
+   :reverse-checked-by-file true
+   :plants [{:form "probe-guard, called inside probe!"
+             :kind :hot-verify-helper-unregistered
+             :failures 2 :errors 0 :log "verifier-plant-red.log" :restored true}
+            {:form "verify!" :kind :attempt11-verify-profile-unregistered
+             :failures 3 :errors 0 :log "second-plant-red.log" :restored true}]}]
+ :measurements
+ {:calibration {:receipt "../attempt10/ceiling-run/receipt.edn"
+                :bb-runtime-sum-ms 240989 :fast-cadence-sum-ms 42143
+                :ceiling-ms 343102 :log "ceiling-derivation.log"}
+  :fast {:command "make test-fast" :runs 1 :exit 0 :makespan-ms 23620
+         :sum-ms 42909 :budget-ms 60000 :bb-sum-ms 15455
+         :bb-makespan-ms 12361 :bb-budget-ms 343102
+         :namespaces 94 :isolation-violations 0
+         :log "fast.log" :receipt "fast-run/receipt.edn"}
+  :integration {:command "make test-integration" :runs 1 :exit 0
+                :sum-ms 57140 :budget-ms 240000 :namespaces 7
+                :test 168 :assertions 3798 :fail 0 :error 0
+                :isolation-violations 0 :log "integration.log"}
+  :prewarm {:command "make landing-gate-prewarm" :attempts 1
+            :status :passed :exit 0 :wall-ms 384159 :problems []
+            :repairs 0 :retries 0 :landing-authority false
+            :mcp-fast-sum-ms 43500 :mcp-integration-sum-ms 66883
+            :mcp-bb-sum-ms 14464 :bb-pool-sum-ms 234230
+            :bb-pool-makespan-ms 85384 :diagnostic-wall-ms 217260
+            :all-seven-stages-exit-zero true
+            :receipt "prewarm-receipt.edn" :run "prewarm-run"
+            :log "prewarm-1.log" :lines "gate.md"}}
+ :verification
+ {:final-receipt {:source-digest-matches-current true :all-stages-exit-zero true
+                  :log "final-verification.log"}
+  :focused {:test 69 :assertions 534 :fail 0 :error 0 :log "restored-green.log"}
+  :old-state-red {:fail 2 :error 0 :log "ceiling-spec-jvm-red.log"}
+  :ceiling-plus-one-plant {:fail 6 :error 0 :restored true
+                           :log "ceiling-plus-one-plant-red.log"}
+  :lint {:errors 0 :warnings 0 :entrance "~/bin/clj-kondo" :log "lint.log"}
+  :format {:files 5 :log "format.log"}
+  :census {:added 2 :deleted 0 :log "census-regenerate.log"}
+  :diagnostic-not-acceptance {:runtime :bb :fail 2 :error 3
+                             :reason "JVM-only isolation witness; clean JVM repeat retained"
+                             :log "ceiling-spec-red.log"}}
+ :commits ["76627051104a423d1717b4eb39b0c34670c7ec34"
+           "800b756ec522ae43177aa82e3fe3d78c6843c325"]
+ :archive-commit :containing-commit-last
+ :dogfood "dogfood.md"
+ :least_sure ["Single-observation timing, not performance certification."
+              "Literal completeness over declared files, not arbitrary dynamic dataflow or undeclared owners."]
+ :disagreements []
+ :owed ["Fable ratification of 343102 ms."
+        "Independent acceptance; prewarm is not landing authority."
+        "Prior receipt-boolean encounter score remains owed (attempt10 encounter-not-found)."
+        "Inherited dirty-tree CLI receipt bound and verifier V5 implementation-link scope note remain outside these repairs."]}

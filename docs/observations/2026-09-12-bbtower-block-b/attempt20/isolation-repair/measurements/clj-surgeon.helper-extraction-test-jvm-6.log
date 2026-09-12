@@ -1,0 +1,7 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.helper-extraction-test
+
+Ran 34 tests containing 440 assertions.
+0 failures, 0 errors.
+{:runtime :jvm, :namespace clj-surgeon.helper-extraction-test, :elapsed-ms 787, :result {:test 34, :pass 440, :fail 0, :error 0, :type :summary}}

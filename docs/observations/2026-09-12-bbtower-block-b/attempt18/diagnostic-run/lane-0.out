@@ -1,0 +1,12 @@
+# @spec MCP-OP-ORACLE-001
+swipl -q -f test/mcp_operation_contract_oracle.pl
+mcp-operation oracle: pass; legacy counterexamples=[verification_failed,verification_pending]
+bash test/performance_regression_sentinel_intent_test.sh
+Sentinel intent witness audit passed: 50/50 requirements named
+bash test/performance_regression_sentinel_intent_self_test.sh
+Sentinel intent audit self-test passed: missing simple/multipart and unknown multipart IDs refused
+python3 -B -m unittest discover -s test/oracles -p test_gate_slot.py
+python3 -B -m unittest discover -s test/oracles -p test_namespace_split_papercut_oracle.py
+# @spec REQUIRE-CHANGE-014
+python3 -B -m unittest discover -s test/oracles -p test_require_change_oracle.py
+python3 -B -m unittest discover -s test/oracles -p test_cell_b_oracle.py

@@ -1,4 +1,5 @@
 (ns clj-surgeon.partition-all-test
+  {:lane :battery}
   (:require
    [babashka.process :as proc]
    [clj-surgeon.structural-lens :as lens]
@@ -212,12 +213,12 @@
            {:label "string size" :query [[:partition-all "2"]]}
            {:label "surplus argument" :query [[:partition-all 2 :extra]]}
            {:label "nonterminal read" :query [[:find :start]
-                                                [:partition-all 2] :right]}
+                                              [:partition-all 2] :right]}
            {:label "ordinary replace" :query [[:find :start]
-                                                [:partition-all 2]
-                                                [:replace :begin]]}
+                                              [:partition-all 2]
+                                              [:replace :begin]]}
            {:label "partition after span" :query [[:find :start] [:span 2]
-                                                    [:partition-all 2]]}]]
+                                                  [:partition-all 2]]}]]
     (testing label
       (let [result (lens/evaluate-lens shape-source
                                        {:file "shapes.clj" :query query})]

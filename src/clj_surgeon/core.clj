@@ -2160,6 +2160,15 @@
 
     ;; @spec INSERT-FORMS-018
     ;; INTENT: INSERT-FORMS-018
+    :probe {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.probe/cli!) opts))
+            :desc "Reload and test one namespace in the warm MCP image; never cold proof."
+            :args {:ns {:required true :desc "Test namespace"}
+                   :image-file {:desc "Warm image descriptor; default .clj-surgeon/probe.edn"}}
+            :workflow ["Responses are complete EDN within 16,384 UTF-8 bytes. When :error-type is :probe-response-truncated, the verdict and counts remain; :reloaded is a prefix of at most 64 names and :truncated records :bound, :encoded and :omitted."
+                       "Use :state for the test outcome and :proof_pending for outstanding cold proof. verification_complete is absent."]
+            :examples ["make warm PORT=9107"
+                       "clj-surgeon :probe :ns clj-surgeon.forms-test"]
+            :category :read}
     :insert-forms! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.insert-forms/cli!) opts))
                     :desc "Insert forms at one guarded structural boundary; preserve all original bytes."
                     :args {:request-file {:desc "Required: bounded EDN request containing version, workspace_root, file, guard, anchor, payload."}}
@@ -3119,7 +3128,7 @@
    list, and the refusal is generic for the same reason the collapse was: this
    fn builds the map before anything knows which op it is for."
   [args]
-  (let [args (if (#{":insert-forms!" ":rename-alias!"} (first args)) (cons ":op" args) args)
+  (let [args (if (#{":probe" ":insert-forms!" ":rename-alias!"} (first args)) (cons ":op" args) args)
         help-flags #{"--help" "-h"}
         has-help?  (some help-flags args)
         kv-args    (remove help-flags args)]
@@ -3295,7 +3304,7 @@
                        :error-type :unknown-operation})))
 
                 :else (run opts))))]
-      (when (and (map? result) (:error result))
+      (when (and (map? result) (or (:error result) (= :probe-failed (:state result))))
         ;; @spec INSERT-FORMS-018
         ;; INTENT: INSERT-FORMS-018
         (System/exit (if (and (#{"insert_forms" "rename_alias"} (:operation result))

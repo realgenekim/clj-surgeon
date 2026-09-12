@@ -1,0 +1,21 @@
+lanes: --ns -- 10 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-operation-registry-test
+
+Testing clj-surgeon.mcp-combinable-transaction-test
+
+Testing clj-surgeon.mcp-write-refusal-test
+
+Testing clj-surgeon.mcp-operation-test
+
+Testing clj-surgeon.mcp-workspace-test
+
+Testing clj-surgeon.require-change-test
+
+Testing clj-surgeon.mission-forms-source-test
+
+Testing clj-surgeon.mission-typist-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.split-proof-gate-test

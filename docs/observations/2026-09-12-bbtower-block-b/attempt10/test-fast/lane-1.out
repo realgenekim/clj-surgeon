@@ -1,0 +1,28 @@
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.helper-extraction-test
+
+Testing clj-surgeon.mcp-inspect-contract-test
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.require-change-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.move-test
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.mcp-compact-edit-fields-test
+
+Testing clj-surgeon.file-ops-test

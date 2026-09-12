@@ -1,0 +1,5 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/b1ecdabf-ab7d-470b-9f55-21a1585822bc/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/b1ecdabf-ab7d-470b-9f55-21a1585822bc/tmp
+
+namespace walls (1, slowest first, total 47539 ms):
+     47539 ms  clj-surgeon.mcp-feature-thread-test

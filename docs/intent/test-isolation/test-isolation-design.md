@@ -30,6 +30,38 @@ obvious reading:
 
 ## The partition
 
+Block B's hybrid runtime union had admitted 47 namespaces without any cadence
+or per-namespace budget. Runtime portability must not select cadence. The fast
+entrance now selects only the complete fast manifest. Each historical bb
+inventory member also has manifest and ns-metadata cadence, backed by the
+attempt10 measured table. Real subprocess witnesses belong in battery even
+when cheap; the 71-second parser corpus belongs there by measured cost. Small
+pure witnesses remain fast. No tests or runtime assignments are removed.
+
+Runtime correctness is a separate prerequisite from cost selection. Every
+assigned test namespace, including dedicated cadences and members outside the
+38 paired timing measurements, needs complete passing JVM and bb controls to
+claim bb portability. TEST-ISO-016 records command, subject, process exit and
+test counters beside the assignment. Initial load probes discover configured
+runtime incompatibilities, but successful loading cannot replace a test run:
+late dependency resolution and host-specific operations can still fail.
+
+The manifest's portability witness names each failed runtime control even if
+the current assignment happens to use the passing runtime. Explicitly accounting
+for a defect preserves it as a refusal until fixed; it does not certify the
+passing side as a portability repair. Initial bb load incompatibility is
+explicitly accounted for on existing JVM-only assignments. Cost measurements,
+cadence membership and budgets remain independent. The first complete census
+and individual defect accounts are retained in
+`docs/observations/2026-09-12-bbtower-block-b/attempt22/`.
+
+The coordinator enforces bb namespace budgets from child wall facts in addition
+to aggregate budgets; an empty child violations vector is not a budget verdict.
+It prints makespan first, then cadence and runtime sums, charging actual child
+runtimes. Fast membership, missing budgets and bb boundary violations receive
+independent negative witnesses. A literal rejected by the SCI fence is not a
+process launch: the supporting source scan reads forms and ignores strings.
+
 TEST-ISO-014 removes the 204–206 s serial loop inside the discovered-build-file
 reader-eval witness. Six named deftests call the unchanged single-pair launch
 body. A coverage witness observes the arguments from the loaded test bodies
@@ -116,6 +148,16 @@ The CLI reports raw, counted and excluded distances; very long histories fall
 back to raw distance rather than granting uninspected exemptions.
 
 ## Automatic landing gate
+
+The red-team no-argument diagnostic failure (block B, 2026-09-12) exposed
+an independent entrance: explicit coordinator selections worked while
+`bb test/run_all.clj` refused the historical inventory's JVM member. Default
+diagnostic selection now intersects that inventory with the executing runtime;
+explicit selections retain their runtime guard. TEST-ISO-015 requires the
+landing gate and prewarm to run `test-bb-diagnostic` after the runtime pool.
+This stage owns the actual no-argument command because selection-only tests
+cannot prove its temp re-exec, namespace loads or exit behavior. Its success
+does not grant landing authority; the coordinator still owns that decision.
 
 Box admission and prewarm consumption use the round-three contract in the
 parallel landing gate plan. A live-memory-derived flock semaphore is shared

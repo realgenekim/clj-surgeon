@@ -1,0 +1,3 @@
+test/clj_surgeon/mcp_alias_migration_test.clj:538:27: info: Single argument to str already is a string
+test/clj_surgeon/mcp_alias_migration_test.clj:6726:22: info: Redundant double coercion: expression already has type double
+linting took 332ms, errors: 0, warnings: 0

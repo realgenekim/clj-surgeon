@@ -1,0 +1,26 @@
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.split-proof-gate-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.mcp-recovery-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.failure-report-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.mission-git-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

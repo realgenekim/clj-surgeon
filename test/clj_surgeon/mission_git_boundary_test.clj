@@ -1,6 +1,7 @@
 (ns clj-surgeon.mission-git-boundary-test
   {:lane :battery}
   (:require
+   [clj-surgeon.mcp-process :as process]
    [clj-surgeon.mission-git :as g]
    [clj-surgeon.mission-git-test :as unit]
    [clojure.java.io :as io]
@@ -11,7 +12,7 @@
    (java.nio.file.attribute FileAttribute)))
 
 (defn with-repository [f]
-  (let [root (str (Files/createTempDirectory (Paths/get "/var/tmp/forge" (make-array String 0))
+  (let [root (str (Files/createTempDirectory (Paths/get (process/selected-temp-root) (make-array String 0))
                     "mission-git-" (make-array FileAttribute 0)))
         run (partial g/run-git! root)
         ;; Representative source shape from the mission-forms fixture: preserve
