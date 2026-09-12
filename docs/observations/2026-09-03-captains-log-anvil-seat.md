@@ -5838,3 +5838,18 @@ it, is exactly a refusal that names a native failure. Attempt 21 (Astra, pid 169
 authorize the target from the test inventory before traversal, typed kind
 :probe-target-not-a-test-namespace with zero reloads, registered in refusals.edn, Sol's
 case as the red witness. Round 3 of the ship after the tenth check-only prewarm.
+
+## 2026-09-12T18:08:27Z — attempt 21 PASS: the probe authorizes its target before traversal; tenth check-only prewarm at 357a2b79
+
+Tip 357a2b79 (product 0e992f4f), pushed; report published as
+`2026-09-12-bbtower-block-b-attempt21-report.md`. Red first: Sol's exact request
+(clj-surgeon.core, valid image identity) reproduced 36 reloads, zero tests, :probe-failed;
+seven assertions red, committed f5b07a9f. Fix: the requested namespace is authorized
+against the canonical test/ root before any dependency traversal; a resolved production
+target refuses with :probe-target-not-a-test-namespace carrying the symbol, the resolved
+source, the authorized roots and an EMPTY reload vector, and the message names the native
+failure (a warm image executing production code on request with no test to bound it);
+test paths resolving outside test/ are also rejected; BB-PROBE-003 registered, the
+spec/receipt witness covers the new refusal key set; the regression observes zero
+require :reload calls for Sol's case. Packet 298cf243 is the tenth check-only prewarm;
+ship round 3 follows.
