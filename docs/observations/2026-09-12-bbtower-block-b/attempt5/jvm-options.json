@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "java",
+    "-Xmx512m",
+    "-Djava.io.tmpdir=/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt5/isolated-probe",
+    "-XshowSettings:vm",
+    "-XshowSettings:properties",
+    "-version"
+  ],
+  "started": "2026-09-12T06:36:56.581591+00:00",
+  "elapsed_ms": 36,
+  "exit": 0,
+  "environment": {
+    "JAVA_TOOL_OPTIONS": "-Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/packets/ad7e0a55-9a1f-4363-b5b7-1a8f5899f1c6/tmp",
+    "_JAVA_OPTIONS": "-Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/packets/ad7e0a55-9a1f-4363-b5b7-1a8f5899f1c6/tmp",
+    "TMPDIR": "/var/tmp/forge/packets/ad7e0a55-9a1f-4363-b5b7-1a8f5899f1c6/tmp",
+    "JDK_JAVA_OPTIONS": ""
+  },
+  "stdout": "",
+  "stderr": "NOTE: Picked up JDK_JAVA_OPTIONS: \nPicked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/packets/ad7e0a55-9a1f-4363-b5b7-1a8f5899f1c6/tmp\nPicked up _JAVA_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/packets/ad7e0a55-9a1f-4363-b5b7-1a8f5899f1c6/tmp\nProperty settings:\n    file.encoding = UTF-8\n    file.separator = /\n    java.class.path = \n    java.class.version = 65.0\n    java.home = /usr/lib/jvm/java-21-openjdk-amd64\n    java.io.tmpdir = /var/tmp/forge/packets/ad7e0a55-9a1f-4363-b5b7-1a8f5899f1c6/tmp\n    java.library.path = /usr/java/packages/lib\n        /usr/lib/x86_64-linux-gnu/jni\n        /lib/x86_64-linux-gnu\n        /usr/lib/x86_64-linux-gnu\n        /usr/lib/jni\n        /lib\n        /usr/lib\n    java.runtime.name = OpenJDK Runtime Environment\n    java.runtime.version = 21.0.12+8-1-26.04-Ubuntu\n    java.specification.name = Java Platform API Specification\n    java.specification.vendor = Oracle Corporation\n    java.specification.version = 21\n    java.vendor = Ubuntu\n    java.vendor.url = https://ubuntu.com/\n    java.vendor.url.bug = https://bugs.launchpad.net/ubuntu/+source/openjdk-21\n    java.version = 21.0.12\n    java.version.date = 2026-07-21\n    java.vm.compressedOopsMode = 32-bit\n    java.vm.info = mixed mode, sharing\n    java.vm.name = OpenJDK 64-Bit Server VM\n    java.vm.specification.name = Java Virtual Machine Specification\n    java.vm.specification.vendor = Oracle Corporation\n    java.vm.specification.version = 21\n    java.vm.vendor = Ubuntu\n    java.vm.version = 21.0.12+8-1-26.04-Ubuntu\n    jdk.debug = release\n    line.separator = \\n \n    native.encoding = UTF-8\n    os.arch = amd64\n    os.name = Linux\n    os.version = 7.0.0-22-generic\n    path.separator = :\n    stderr.encoding = UTF-8\n    stdout.encoding = UTF-8\n    sun.arch.data.model = 64\n    sun.boot.library.path = /usr/lib/jvm/java-21-openjdk-amd64/lib\n    sun.cpu.endian = little\n    sun.io.unicode.encoding = UnicodeLittle\n    sun.java.launcher = SUN_STANDARD\n    sun.jnu.encoding = UTF-8\n    sun.management.compiler = HotSpot 64-Bit Tiered Compilers\n    user.dir = /home/forge/src/clj-surgeon-bbtower\n    user.home = /home/forge\n    user.language = en\n    user.name = forge\n\nopenjdk version \"21.0.12\" 2026-07-21\nOpenJDK Runtime Environment (build 21.0.12+8-1-26.04-Ubuntu)\nOpenJDK 64-Bit Server VM (build 21.0.12+8-1-26.04-Ubuntu, mixed mode, sharing)\n"
+}

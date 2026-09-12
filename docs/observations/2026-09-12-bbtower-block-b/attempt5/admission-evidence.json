@@ -1,0 +1,18 @@
+{
+  "recorded_utc": "2026-09-12T06:39:34.055950+00:00",
+  "subject": "617288424c62979308dca74f83db5e0102f6905c",
+  "base": "eae1e43280635be9b4e317e176d29476fd358702",
+  "manifest_id": "8eb28c1ea8260fd2d34b2d0b5a7f3381184b2f1f0a141468e1c537ab70d4cb42",
+  "base_clean": "",
+  "packet_environment_constructor": {
+    "file": "/home/forge/bin/lib/packet.py",
+    "line": 162,
+    "text": " c['env']={'CLAUDE_CONFIG_DIR':str(claudehome),'DISABLE_AUTOUPDATER':'1','TMPDIR':str(tmp),'TMP':str(tmp),'TEMP':str(tmp),'CODEX_HOME':str(home),'JAVA_TOOL_OPTIONS':(jto or '-Xmx1024m')+' -Djava.io.tmpdir='+str(tmp),'_JAVA_OPTIONS':(jto or '-Xmx1024m')+' -Djava.io.tmpdir='+str(tmp),'JDK_JAVA_OPTIONS':'','BABASHKA_PRELOADS':'','PACKET_CONTEXT':str(d/'context-pack.md'),'PACKET_ID':c['id']}"
+  },
+  "effective_options": "   size_t MaxHeapSize                              = 1073741824                                {product} {command line}\n    java.io.tmpdir = /var/tmp/forge/packets/ad7e0a55-9a1f-4363-b5b7-1a8f5899f1c6/tmp",
+  "suite_runs": 0,
+  "prewarm_attempts": 0,
+  "diagnostic_jvm_launches": 2,
+  "diagnostic_jvm_peak": 1,
+  "environment_correction": "Requested, not authorized or applied."
+}
