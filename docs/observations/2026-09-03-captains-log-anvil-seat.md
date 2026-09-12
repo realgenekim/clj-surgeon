@@ -6076,3 +6076,18 @@ theme as the data-not-code consult: a literal list where a derived value belongs
 external, anything unresolvable refused with :probe-dependency-unresolved and zero reloads,
 :roots in the receipt, red first on Sol's case. Five rounds, five classes; every one a value
 that had been typed instead of derived.
+
+## 2026-09-12T21:46:19Z — data-not-code block PASS at 4658dc12 (four rounds: contract stop, design review, transport drop, resume); Opus red-team next
+
+Branch fable/data-not-code pushed. Report published as
+`2026-09-12-data-not-code-report-astra.md`; the probe measure preregistration with both
+bettors' rows beside it. Delivered red-first: (1) final artifact destinations admitted under
+trusted startup authority before creation (request-carried authority refused; policy roots
+when the launcher supplies none; symlink ancestors and the telemetry ledger covered;
+receipts carry :envelope-id); (2) sandbox denial classification from :sandbox/decision
+data, never message prose, through runtime wrappers; (3) the fold publishes validated EDN
+evidence rows and the manifest consumes them, missing receipts refuse; (4) sleep identities
+by test owner, call ordinal and temporal purpose, lines diagnostic only; (5) the six-task
+probe measure preregistered, no run. Coverage stated exactly: the shared artifact boundary
+and its inventoried consumers, not every writer. Prewarm passed. Order per Gene's 2b:
+red-team now; land after block B; the probe measure runs first once block B is on trunk.
