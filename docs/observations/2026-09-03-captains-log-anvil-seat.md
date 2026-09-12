@@ -5740,3 +5740,19 @@ kept in date order; the two merged trunk witnesses registered in the branch's ce
 (the once-only test-fast and the wrapper diagnostic were red before that census repair
 and are retained red, not relabeled). One real prewarm: seven stages, 394.5 s, green.
 Packet f5b65235 is the eighth check-only prewarm; on green, ship again.
+
+## 2026-09-12T14:56:43Z — the ship SEALED: candidate 1c28307c (07d86019 onto a15531ee); Sol review, battery and fast lane running beside each other
+
+Eighth check-only prewarm (packet f5b65235) exit 0 at 07d86019, receipt git-head bound to
+the tip. `ship 07d86019 …` at 14:53:23Z: admission passed on the packet's receipt and
+ledger event; lease taken; SEALED candidate 1c28307c (tree e00b91fb); reviewers frozen to
+sol-fence; REVIEW started (verdict file clj-surgeon-fence/docs/observations/bbtower-block-b.md);
+BATTERY started (receipt-chain on fable/battery-receipt-07d86019); FASTLANE started
+(landing-gate-prewarm on the sealed candidate). This is the first ship of the day to get
+past admission, and the first ever whose prewarm receipt came from a packet.
+
+What the day cost to reach this line: block B attempts 1–19 (six packet refusals, one
+build, one red-team, one verifier, eleven fix or merge rounds), ship v3.12 in three
+rounds and two installs, eight check-only prewarm packets, 21 out-of-envelope writers
+fixed. The ship's own three legs now decide it; GO-WITH-FIX has the seat's independent
+reviewer available for the first time.
