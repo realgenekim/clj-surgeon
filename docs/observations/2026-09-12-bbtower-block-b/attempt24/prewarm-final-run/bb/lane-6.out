@@ -1,0 +1,20 @@
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.syntax-var-refs-test

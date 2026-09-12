@@ -1,0 +1,18 @@
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

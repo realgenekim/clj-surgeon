@@ -1,0 +1,645 @@
+diff --git a/docs/high-level-design.md b/docs/high-level-design.md
+index bee6ed03..266fb18e 100644
+--- a/docs/high-level-design.md
++++ b/docs/high-level-design.md
+@@ -1357,6 +1357,8 @@ the shrinking [per-ID debt ledger](intent/unlinked-spec-ids.edn).
+   inner-loop verdict from the one MCP JVM, always pending cold proof. The server
+   authorizes requested targets under the test root before dependency traversal;
+   production dependencies remain eligible for an authorized test's reload. It
++  computes that closure through the shared namespace parser, refusing unknown
++  require forms before reload and reporting the expected closure count. It
+   bounds complete encoded output; oversized reload inventories degrade to a
+   prefix with explicit truncation facts while retaining the verdict and counts.
+ 
+diff --git a/docs/intent/hot-verification/bb-probe-specs.md b/docs/intent/hot-verification/bb-probe-specs.md
+index f68ef720..69e25e88 100644
+--- a/docs/intent/hot-verification/bb-probe-specs.md
++++ b/docs/intent/hot-verification/bb-probe-specs.md
+@@ -8,7 +8,7 @@ includes probe as the third verb, discovered from the CLI operation catalog:
+ every boolean in a passed probe verdict requires a driven literal-false seam.
+ A real `probe/verdict` with tests executed and no failures omits
+ verification_complete; no constant boolean is fabricated by the witness.
+-Receipt keys (EDN): `#{:state :proof_pending :reloaded :tests :assertions :failures :elapsed_ms}`
++Receipt keys (EDN): `#{:state :proof_pending :reloaded :closure-expected :tests :assertions :failures :elapsed_ms}`
+ This is the complete untruncated verdict shape for passed and failed test runs;
+ a caught execution exception may additionally carry :error. The shape witness
+ parses this statement and compares it to an executed successful probe receipt.
+@@ -33,6 +33,16 @@ Target refusal keys (EDN): `#{:state :error-type :error :proof_pending :requeste
+ An absent local source retains `:probe-namespace-not-found`. For an authorized
+ target, serially reload its local dependency closure before running that namespace;
+ dependencies may resolve under `src`, `test`, and `libs/clj-splice/src`.
++The shared ns parser shall expand prefix lists (including nested lists), vector
++libspecs, bare symbols and strings in `:require`, `:require-macros` and `:use`,
++selecting the `:clj` reader-conditional branch (or reader default). Any dependency
++form it cannot classify shall refuse as `:probe-require-unparsed`, carrying
++`:form` and `:file`, before any reload. Successful and failed execution receipts
++shall carry `:closure-expected`, the number of namespaces in the complete local
++closure computed before reload, independently of the completed `:reloaded` list.
++Bounded HTTP projections shall retain that count. Misreading: a missing prefix
++namespace means its children are external; a green target reload proves that
++already-loaded dependencies were refreshed.
+ Oversized source retains its typed refusal. The refusal text names the prevented
+ native failure: a warm image executing production code on request, with no test
+ to bound it.
+diff --git a/docs/intent/hot-verification/hot-verification-design.md b/docs/intent/hot-verification/hot-verification-design.md
+index a8e4f121..a3528073 100644
+--- a/docs/intent/hot-verification/hot-verification-design.md
++++ b/docs/intent/hot-verification/hot-verification-design.md
+@@ -7,6 +7,15 @@ one image with test dependencies and writes `.clj-surgeon/probe.edn`.
+ image identity and calls the hot-verification implementation through `/probe`.
+ The existing nREPL verification profile remains available for its existing callers.
+ 
++Probe dependency discovery uses the shared form-identity namespace parser,
++selecting the JVM reader branch. That parser expands recursive prefix lists,
++vector libspecs, bare and string libraries, and require/macro/use clauses.
++An unclassified dependency form refuses before any reload, with the source file
++and exact form. The closure is computed completely before execution; its count
++is retained as `:closure-expected` independently of the completed reload list.
++This prevents Sol round-four F1: green tests using an already-loaded stale
++dependency silently omitted by a partial ns reader.
++
+ BB-PROBE-003 separately authorizes the requested target's canonical source under
+ the repository `test/` root before traversing dependencies. A production target
+ with a valid image identity receives `:probe-target-not-a-test-namespace` and
+diff --git a/docs/intent/probe/refusals.edn b/docs/intent/probe/refusals.edn
+index ec89ec93..a186b6b6 100644
+--- a/docs/intent/probe/refusals.edn
++++ b/docs/intent/probe/refusals.edn
+@@ -13,7 +13,15 @@
+   "mcp_http_server.clj"
+   #{:invalid-project-formatter :invalid-project-verification-profiles}}
+  :refusals
+- [{:type :invalid-probe-request :class :protocol
++ [{:type :probe-require-unparsed :class :semantic
++   :native_failure "A probe reporting green over a dependency it never reloaded."
++   :promise "Every dependency spec is classified before reload, or refused with its form and file."
++   :native_method "Expand the complete local dependency closure with the shared ns parser before requiring any namespace."
++   :minimal_reproducer "(:require (foo [bar :as b])) must include foo.bar; (:require {:unknown foo}) must refuse."
++   :existing_check "mcp-hot-verify/probe-require-libs; BB-PROBE-003"
++   :owner "probe" :witness "mcp-hot-verify-test/probe-require-shape-matrix"
++   :retirement_condition "A replacement accounts for every require form before reload and never silently omits an unclassified dependency."}
++  {:type :invalid-probe-request :class :protocol
+    :native_failure "Malformed namespace text or extra request fields can execute an unintended REPL action."
+    :promise "Only the closed namespace and image request reaches reload."
+    :native_method "Validate the namespace grammar and exact request keys before evaluation."
+diff --git a/docs/tech-tree.md b/docs/tech-tree.md
+index dcafc5f0..3f18e7e7 100644
+--- a/docs/tech-tree.md
++++ b/docs/tech-tree.md
+@@ -1,5 +1,13 @@
+ # clj-surgeon tech tree
+ 
++Probe closure repair (Sol round-four F1): the partial probe ns reader silently
++omitted prefix-list dependencies. Attempt24 commits the exact red reproduction,
++reuses and extends the shared form-identity parser, refuses unclassified require
++forms before reload, and exposes the expected closure count independently of
++completed reloads. Evidence and gate verdict live in
++`docs/observations/2026-09-12-bbtower-block-b/attempt24/REPORT.md`.
++This is a correctness repair, with no performance admission claim.
++
+ Block B attempt 21 closes Sol F3: a valid image identity no longer authorizes
+ a production probe target. The canonical target must resolve under `test/`
+ before dependency traversal, with a typed refusal and zero reloads otherwise.
+diff --git a/src/clj_surgeon/form_identity.clj b/src/clj_surgeon/form_identity.clj
+index db39952c..92a90081 100644
+--- a/src/clj_surgeon/form_identity.clj
++++ b/src/clj_surgeon/form_identity.clj
+@@ -326,7 +326,6 @@
+      :duplicates (into {} (filter (fn [[_ matches]] (< 1 (count matches)))
+                                   by-name))}))
+ 
+-
+ ;; @spec MCP-OP-ADMIT-090
+ (defn effective-count
+   "How many times one symbol is actually bound for a single reader.
+@@ -495,55 +494,98 @@
+         (recur (next remaining) aliases))
+       aliases)))
+ 
++(defn- require-children
++  "Expand reader conditionals and discards without evaluating repository code.
++  No platform means all branches, as required by the form-identity comparison."
++  [children {:keys [platform on-unparsed] :as opts}]
++  (mapcat
++    (fn [child]
++      (cond
++        (= :uneval (node/tag child)) []
++        (reader-conditional-node? child)
++        (let [body (second (significant-children child))
++              pairs (when (and body (= :list (node/tag body)))
++                      (vec (significant-children body)))
++              branches (reader-conditional-branches child)
++              selected (if platform
++                         (take 1 (filter #(contains? #{(str platform) ":default"} (first %)) branches))
++                         branches)
++              splicing? (= "?@" (node/string (first (significant-children child))))]
++          (if (and (seq pairs) (even? (count pairs))
++                   (every? #(str/starts-with? (node/string %) ":") (take-nth 2 pairs)))
++            (mapcat (fn [[_ branch]]
++                      (if splicing?
++                        (if (contains? #{:list :vector} (node/tag branch))
++                          (require-children (significant-children branch) opts)
++                          (on-unparsed (node/string child)))
++                        (require-children [branch] opts))) selected)
++            (on-unparsed (node/string child))))
++        :else [(unwrap-meta child)])) children))
++
++(defn- library-name [n]
++  (when (and n (contains? #{:token :multi-line} (node/tag n)))
++    (let [value (node/sexpr n)]
++      (when (or (symbol? value) (string? value)) (str value)))))
++
+ (defn- libspec-entries
+-  "Every library one `:require` entry names, with the symbols it refers.
+-
+-  A prefix list names one library per member: `[clojure [string :as str]
+-  [set :as set]]` is two requires, and reading only the entry's first symbol
+-  would call dropping one of them no change at all. A libspec wrapped in a
+-  reader conditional is present for that branch's platform, so its libraries
+-  count as required rather than as removed."
+-  [entry]
++  "Every library a libspec names, recursively expanding prefix members.
++  Unknown syntax is handed to the caller, never mistaken for a library."
++  [entry {:keys [on-unparsed] :as opts}]
+   (let [tag (node/tag entry)]
+     (cond
+-      (reader-conditional-node? entry)
+-      (vec (mapcat (fn [[_platform branch]] (libspec-entries branch))
+-                   (reader-conditional-branches entry)))
+-
+-      (= :vector tag)
+-      (let [children (significant-children entry)
+-            prefix (some-> (first children) node/string)
+-            rest-children (rest children)
+-            members (filter (fn [child]
+-                              (and (not (str/starts-with? (node/string child) ":"))
+-                                   (contains? #{:vector :token} (node/tag child))))
+-                            rest-children)
+-            prefix-list? (and prefix
+-                              (seq members)
+-                              (not-any? #(str/starts-with? (node/string %) ":")
+-                                        (take 1 rest-children)))]
++      (library-name entry)
++      [{:lib (library-name entry) :refers nil :aliases #{}}]
++
++      (contains? #{:vector :list} tag)
++      (let [[head & tail] (require-children (significant-children entry) opts)
++            prefix (library-name head)
++            option? #(str/starts-with? (node/string %) ":")]
+         (cond
+-          (nil? prefix) []
+-
+-          prefix-list?
+-          (vec (keep (fn [member]
+-                       (if (= :vector (node/tag member))
+-                         (let [inner (significant-children member)]
+-                           (when-let [leaf (some-> (first inner) node/string)]
+-                             {:lib (str prefix "." leaf)
+-                              :refers (refer-symbols (rest inner))
+-                              :aliases (alias-symbols (rest inner))}))
+-                         {:lib (str prefix "." (node/string member))
+-                          :refers nil
+-                          :aliases #{}}))
+-                     members))
+-
+-          :else [{:lib prefix
+-                  :refers (refer-symbols rest-children)
+-                  :aliases (alias-symbols rest-children)}]))
+-
+-      (= :token tag) [{:lib (node/string entry) :refers nil :aliases #{}}]
+-      :else [])))
++          (nil? prefix) (on-unparsed (node/string entry))
++          (and (seq tail) (not (option? (first tail))))
++          (mapv #(update % :lib (fn [lib] (str prefix "." lib)))
++                (mapcat #(libspec-entries % opts) tail))
++          (and (even? (count tail))
++               (every? option? (take-nth 2 tail)))
++          [{:lib prefix :refers (refer-symbols tail) :aliases (alias-symbols tail)}]
++          :else (on-unparsed (node/string entry))))
++
++      :else (on-unparsed (node/string entry)))))
++
++;; @spec BB-PROBE-003
++(defn ns-require-entries
++  "Ordered dependency entries from an ns node. Optional :platform selects one
++  reader branch; :clauses selects clause heads; :on-unparsed handles unknown
++  forms. The comparison caller retains its historical all-platform projection."
++  ([n] (ns-require-entries n {}))
++  ([n options]
++   (let [{:keys [clauses] :as opts}
++         (merge {:clauses #{":require" ":require-macros"}
++                 :on-unparsed (constantly [])} options)]
++     (vec
++       (mapcat
++         (fn [clause]
++           (when (and (= :list (node/tag clause))
++                      (contains? clauses (some-> (first (significant-children clause)) node/string)))
++             (mapcat (fn [entry]
++                       (if (contains? #{":reload" ":reload-all" ":verbose"} (node/string entry))
++                         []
++                         (libspec-entries entry opts)))
++                     (require-children (rest (significant-children clause)) opts))))
++         (require-children (significant-children n) opts))))))
++
++;; @spec BB-PROBE-003
++(defn source-require-entries
++  "Read the top-level ns using the same dependency parser as identity checks.
++  Quoted and discarded ns forms cannot hide the real dependency declaration."
++  [source {:keys [on-unparsed] :as opts}]
++  (let [root (parser/parse-string-all source)
++        namespaces (filter #(and (= :list (node/tag %))
++                                 (= "ns" (some-> (first (significant-children %)) node/string)))
++                           (require-children (significant-children root) opts))]
++    (if (= 1 (count namespaces))
++      (ns-require-entries (first namespaces) opts)
++      (on-unparsed source))))
+ 
+ ;; @spec MCP-OP-ADMIT-114
+ (defn ns-require-bindings
+@@ -553,28 +595,16 @@
+   the `ns` form carries a reader conditional, which is exactly the shape that
+   silently disabled the check before."
+   [n]
+-  (let [found (volatile! {})]
+-    (letfn [(walk [x]
+-              (when (node/inner? x)
+-                (when (and (= :list (node/tag x))
+-                           (contains? #{":require" ":require-macros"}
+-                                      (some-> (first (significant-children x))
+-                                              node/string)))
+-                  (doseq [entry (rest (significant-children x))
+-                          {:keys [lib refers aliases]} (libspec-entries entry)]
+-                    (vswap! found update lib
+-                            (fn [existing]
+-                              {:refers (let [seen (:refers existing)]
+-                                         (cond
+-                                           (= :all seen) :all
+-                                           (= :all refers) :all
+-                                           :else (into (or seen #{})
+-                                                       (or refers #{}))))
+-                               :aliases (into (or (:aliases existing) #{})
+-                                              (or aliases #{}))}))))
+-                (run! walk (node/children x))))]
+-      (walk n))
+-    @found))
++  (reduce (fn [found {:keys [lib refers aliases]}]
++            (update found lib
++                    (fn [existing]
++                      {:refers (let [seen (:refers existing)]
++                                 (cond
++                                   (= :all seen) :all
++                                   (= :all refers) :all
++                                   :else (into (or seen #{}) (or refers #{}))))
++                       :aliases (into (or (:aliases existing) #{}) (or aliases #{}))})))
++          {} (ns-require-entries n)))
+ 
+ ;; @spec MCP-OP-ADMIT-033
+ ;; @spec MCP-OP-ADMIT-065
+diff --git a/src/clj_surgeon/mcp_hot_verify.clj b/src/clj_surgeon/mcp_hot_verify.clj
+index aead3e9d..a7e4759e 100644
+--- a/src/clj_surgeon/mcp_hot_verify.clj
++++ b/src/clj_surgeon/mcp_hot_verify.clj
+@@ -1,6 +1,7 @@
+ (ns clj-surgeon.mcp-hot-verify
+   "Reload namespaces and run exact focused test Vars in one configured app JVM."
+   (:require
++   [clj-surgeon.form-identity :as form-identity]
+    [clj-surgeon.probe :as probe]
+    [clojure.edn :as edn]
+    [clojure.java.io :as io]
+@@ -198,33 +199,38 @@
+                :elapsed_ms (/ (double (- (System/nanoTime) started))
+                               1000000.0)})))))))
+ ;; @spec BB-PROBE-003 -- one reload/test transaction in the warm MCP image.
++(defn probe-require-libs [source file]
++  (let [unparsed (fn [form]
++                   (throw (ex-info
++                            "Refusing a probe reporting green over a dependency it never reloaded. Classify the require form before probing."
++                            {:error-type :probe-require-unparsed :form form :file file})))]
++    (try
++      (mapv (comp symbol :lib)
++            (form-identity/source-require-entries
++              source {:platform :clj :clauses #{":require" ":require-macros" ":use"}
++                      :on-unparsed unparsed}))
++      (catch Exception e
++        (if (:error-type (ex-data e)) (throw e) (unparsed source))))))
++
++;; @spec BB-PROBE-003
+ (defn probe-reload-order [root target]
+-  (let [of-string (requiring-resolve 'rewrite-clj.zip/of-string)
+-        find-value (requiring-resolve 'rewrite-clj.zip/find-value)
+-        next-node (requiring-resolve 'rewrite-clj.zip/next)
+-        up (requiring-resolve 'rewrite-clj.zip/up)
+-        sexpr (requiring-resolve 'rewrite-clj.zip/sexpr)
+-        visited (atom #{})
++  (let [visited (atom #{})
+         ordered (atom [])
+         locate (fn [n]
+-                 (let [rel (str (str/replace (str/replace (str n) "-" "_") "." "/") ".clj")]
+-                   (some (fn [dir]
+-                           (let [f (.getCanonicalFile (io/file root dir rel))]
++                 (let [rel (str/replace (str/replace (str n) "-" "_") "." "/")]
++                   (some (fn [[dir extension]]
++                           (let [f (.getCanonicalFile (io/file root dir (str rel extension)))]
+                              (when (and (.isFile f)
+                                         (str/starts-with? (.getPath f) (str root java.io.File/separator))) f)))
+-                         ["src" "test" "libs/clj-splice/src"])))]
++                         (for [dir ["src" "test" "libs/clj-splice/src"]
++                               extension [".clj" ".cljc"]] [dir extension]))))]
+     (letfn [(visit [n]
+               (when-not (@visited n)
+                 (swap! visited conj n)
+                 (when-let [f (locate n)]
+                   (when (> (.length f) 8388608)
+                     (throw (ex-info "Reload source exceeds 8 MiB" {:error-type :probe-source-too-large})))
+-                  (let [form (some-> (of-string (slurp f)) (find-value next-node 'ns) up sexpr)
+-                        deps (for [clause (drop 2 form)
+-                                   :when (and (seq? clause) (= :require (first clause)))
+-                                   lib (rest clause)
+-                                   :let [n (if (symbol? lib) lib (first lib))]
+-                                   :when (symbol? n)] n)]
++                  (let [deps (probe-require-libs (slurp f) (.getPath f))]
+                     (doseq [dep deps] (visit dep))
+                     (swap! ordered conj n)))))]
+       (let [source (locate target)
+@@ -237,11 +243,11 @@
+         (when-not (some #(.startsWith (.toPath source) (.resolve root-path ^String %))
+                         authorized-roots)
+           (throw (ex-info
+-                  "Refusing a warm image executing production code on request, with no test to bound it. Supply a namespace under the authorized test roots."
+-                  {:error-type :probe-target-not-a-test-namespace
+-                   :requested target
+-                   :source (str (.relativize root-path (.toPath source)))
+-                   :authorized-roots authorized-roots}))))
++                   "Refusing a warm image executing production code on request, with no test to bound it. Supply a namespace under the authorized test roots."
++                   {:error-type :probe-target-not-a-test-namespace
++                    :requested target
++                    :source (str (.relativize root-path (.toPath source)))
++                    :authorized-roots authorized-roots}))))
+       (visit target)
+       @ordered)))
+ 
+@@ -254,12 +260,14 @@
+           problem (requiring-resolve 'clj-surgeon.probe/request-problem)
+           verdict (requiring-resolve 'clj-surgeon.probe/verdict)
+           reloaded (atom [])
++          closure-expected (atom 0)
+           elapsed #(/ (double (- (System/nanoTime) started)) 1000000.0)]
+       (try
+         (if-let [error (problem image (fingerprint (:root image)) request)]
+           (assoc error :elapsed_ms (elapsed))
+           (let [target (symbol (:ns request))
+                 order (probe-reload-order (:root image) target)]
++            (reset! closure-expected (count order))
+             (doseq [n order]
+               (require n :reload)
+               (swap! reloaded conj (str n)))
+@@ -267,12 +275,12 @@
+             (let [run-tests (requiring-resolve 'clojure.test/run-tests)
+                   summary (binding [*out* (java.io.StringWriter.) *err* (java.io.StringWriter.)]
+                             (run-tests target))]
+-              (verdict @reloaded summary (elapsed)))))
++              (verdict @reloaded summary (elapsed) @closure-expected))))
+         (catch Exception e
+           ;; forwarded-refusal-kind: relay probe-reload-order's ex-data;
+           ;; its literal kinds are enumerated in this namespace.
+           (if-let [kind (:error-type (ex-data e))]
+             (merge (probe/refusal kind (.getMessage e))
+-                   (select-keys (ex-data e) [:requested :source :authorized-roots])
++                   (select-keys (ex-data e) [:requested :source :authorized-roots :form :file])
+                    {:reloaded @reloaded :elapsed_ms (elapsed)})
+-            (assoc (verdict @reloaded {:error 1} (elapsed)) :error (.getMessage e))))))))
++            (assoc (verdict @reloaded {:error 1} (elapsed) @closure-expected) :error (.getMessage e))))))))
+diff --git a/src/clj_surgeon/probe.clj b/src/clj_surgeon/probe.clj
+index 4f2acf66..0b5a1262 100644
+--- a/src/clj_surgeon/probe.clj
++++ b/src/clj_surgeon/probe.clj
+@@ -39,13 +39,16 @@
+     :else nil))
+ 
+ ;; @spec BB-PROBE-001
+-(defn verdict [reloaded summary elapsed]
+-  (let [failures (+ (:fail summary 0) (:error summary 0))]
+-    {:state (if (and (pos? (:test summary 0)) (zero? failures)) :probe-passed :probe-failed)
+-     :proof_pending [cold-gate]
+-     :reloaded reloaded :tests (:test summary 0)
+-     :assertions (+ (:pass summary 0) failures) :failures failures
+-     :elapsed_ms elapsed}))
++(defn verdict
++  ([reloaded summary elapsed]
++   (verdict reloaded summary elapsed (count reloaded)))
++  ([reloaded summary elapsed closure-expected]
++   (let [failures (+ (:fail summary 0) (:error summary 0))]
++     {:state (if (and (pos? (:test summary 0)) (zero? failures)) :probe-passed :probe-failed)
++      :proof_pending [cold-gate]
++      :reloaded reloaded :closure-expected closure-expected :tests (:test summary 0)
++      :assertions (+ (:pass summary 0) failures) :failures failures
++      :elapsed_ms elapsed})))
+ 
+ ;; @spec BB-PROBE-004 -- the whole UTF-8 encoding, before the servlet writer.
+ (def response-byte-bound 16384)
+@@ -62,7 +65,7 @@
+             total (count names)
+             cause (:error-type result)
+             base (cond-> (assoc (select-keys result [:state :proof_pending :tests :assertions
+-                                                     :failures :elapsed_ms])
++                                                     :failures :elapsed_ms :closure-expected])
+                                 :error-type :probe-response-truncated
+                                 :reloaded-count total)
+                    (and (keyword? cause) (<= (size (pr-str cause)) 128)) (assoc :cause cause)
+diff --git a/test/clj_surgeon/deftest_census.edn b/test/clj_surgeon/deftest_census.edn
+index ddc9b409..8ccc62ea 100644
+--- a/test/clj_surgeon/deftest_census.edn
++++ b/test/clj_surgeon/deftest_census.edn
+@@ -1341,6 +1341,10 @@
+   clj-surgeon.mcp-hot-verify-test/hot-verification-treats-interrupted-as-a-failure-never-a-pass
+   clj-surgeon.mcp-hot-verify-test/passing-law
+   clj-surgeon.mcp-hot-verify-test/probe-authorizes-the-requested-test-target-before-reload
++  clj-surgeon.mcp-hot-verify-test/probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload
++  clj-surgeon.mcp-hot-verify-test/probe-receipt-retains-expected-closure-after-reload-failure
++  clj-surgeon.mcp-hot-verify-test/probe-reloads-prefix-list-dependency
++  clj-surgeon.mcp-hot-verify-test/probe-require-shape-matrix
+   clj-surgeon.mcp-hot-verify-test/profile-validation-is-closed-and-bounded
+   clj-surgeon.mcp-http-server-test/accepts-only-non-browser-or-loopback-origins
+   clj-surgeon.mcp-http-server-test/alias-migration-commits-across-the-real-http-wire
+diff --git a/test/clj_surgeon/help_test.clj b/test/clj_surgeon/help_test.clj
+index 90457fc9..d11458fa 100644
+--- a/test/clj_surgeon/help_test.clj
++++ b/test/clj_surgeon/help_test.clj
+@@ -32,7 +32,8 @@
+                       ":omitted" "verification_complete is absent"]]
+           (is (str/includes? help text))))
+       (is (= {:state :probe-passed :proof_pending [:landing-gate]
+-              :reloaded ["example-test"] :tests 2 :assertions 3 :failures 0 :elapsed_ms 12.5}
++              :reloaded ["example-test"] :closure-expected 1
++              :tests 2 :assertions 3 :failures 0 :elapsed_ms 12.5}
+              (verdict ["example-test"] {:test 2 :pass 3 :fail 0 :error 0} 12.5)))
+       (doseq [summary [{:test 1 :fail 1} {:test 1 :error 1} {:test 0 :pass 0}]]
+         (is (= :probe-failed (:state (verdict [] summary 0)))))
+diff --git a/test/clj_surgeon/lane_manifest_test.clj b/test/clj_surgeon/lane_manifest_test.clj
+index fd1ac6b4..387452ff 100644
+--- a/test/clj_surgeon/lane_manifest_test.clj
++++ b/test/clj_surgeon/lane_manifest_test.clj
+@@ -1168,7 +1168,7 @@
+    "test/clj_surgeon/mcp_tool_test.clj"
+    {1395 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count (1380 -> 1381 on 2026-09-06: the `cheshire.core` require the next_call REPLAY witnesses need moved the whole namespace down one line -- the pin costing one number is the point; 1381 -> 1394 on 2026-09-07 when the expect-guard witness was inserted above it)"}
+    "test/clj_surgeon/mcp_hot_verify_test.clj"
+-   {288 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
++   {384 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
+ 
+ (deftest every-sleep-on-the-merge-gate-is-declared-with-its-reason
+   (let [sources (fn [lane]
+diff --git a/test/clj_surgeon/mcp_alias_migration_test.clj b/test/clj_surgeon/mcp_alias_migration_test.clj
+index 31e8006d..71bcebef 100644
+--- a/test/clj_surgeon/mcp_alias_migration_test.clj
++++ b/test/clj_surgeon/mcp_alias_migration_test.clj
+@@ -5994,6 +5994,8 @@
+     ;; added to mcp-hot-verify; these are real literals, not internal tags.
+     "probe-namespace-not-found" "probe-source-too-large"
+     "probe-target-not-a-test-namespace"
++    ;; BB-PROBE-003: never omit an unclassified dependency from a warm reload.
++    "probe-require-unparsed"
+     "invalid-probe-request" "stale-probe-image" "probe-message-too-large"
+     "invalid-probe-port" "probe-connection-failed"
+     ;; BB-PROBE-004: oversized HTTP verdicts retain bounded truncation facts.
+@@ -6008,7 +6010,7 @@
+   ;; could see. Both directions are asserted — a kind that appears and a kind
+   ;; that vanishes are each a change to what a text-reading client is promised.
+   (let [kinds (set (refusal-kinds-in-source))]
+-    (is (= 162 (count kinds))
++    (is (= 163 (count kinds))
+         (str "the entrance's refusal enumeration changed size: "
+              (count kinds) " kinds"))
+     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))
+diff --git a/test/clj_surgeon/mcp_hot_verify_test.clj b/test/clj_surgeon/mcp_hot_verify_test.clj
+index ae369992..c3669f48 100644
+--- a/test/clj_surgeon/mcp_hot_verify_test.clj
++++ b/test/clj_surgeon/mcp_hot_verify_test.clj
+@@ -1,4 +1,5 @@
+-(ns ^{:lane :integration} clj-surgeon.mcp-hot-verify-test
++(ns clj-surgeon.mcp-hot-verify-test
++  {:lane :integration}
+   (:require
+    [clj-surgeon.mcp-hot-verify :as hot-verify]
+    [clj-surgeon.probe :as probe]
+@@ -14,7 +15,7 @@
+ ;; @spec BB-PROBE-003 -- Sol F1, round-four review of e3ffc6a7.
+ (deftest probe-reloads-prefix-list-dependency
+   (let [root (.toFile (java.nio.file.Files/createTempDirectory
+-                       "probe-prefix-" (make-array java.nio.file.attribute.FileAttribute 0)))
++                        "probe-prefix-" (make-array java.nio.file.attribute.FileAttribute 0)))
+         dependency (io/file root "src/foo/bar.clj")
+         target (io/file root "test/demo/probe_test.clj")]
+     (try
+@@ -27,6 +28,86 @@
+       (finally
+         (doseq [file (reverse (file-seq root))] (io/delete-file file))))))
+ 
++;; @spec BB-PROBE-003
++(deftest probe-require-shape-matrix
++  (doseq [[source expected]
++          [["(ns demo (:require (foo [bar :as b])))" '[foo.bar]]
++           ["(ns demo (:require (foo (bar [baz :as b]))))" '[foo.bar.baz]]
++           ["(ns demo (:require [foo [bar :as b] baz]))" '[foo.bar foo.baz]]
++           ["(ns demo (:require [foo.bar :as b] foo.baz))" '[foo.bar foo.baz]]
++           ["(ns demo (:require [\"foo.bar\" :as b] \"foo.baz\"))" '[foo.bar foo.baz]]
++           ["(ns demo (:require-macros (foo [bar :as b])) (:use foo.baz))" '[foo.bar foo.baz]]
++           ["(ns demo (:require #?(:cljs [wrong.lib] :clj [foo.bar])))" '[foo.bar]]
++           ["(ns demo #?(:clj (:require foo.bar) :cljs (:require wrong.lib)))" '[foo.bar]]
++           ["(ns demo (:require #?@(:clj [foo.bar [foo.baz]] :cljs [wrong.lib])))" '[foo.bar foo.baz]]
++           ["(ns demo #?@(:clj [(:require foo.bar) (:use foo.baz)]))" '[foo.bar foo.baz]]
++           ["(ns demo (:require #?(:cljs wrong.lib :default foo.bar)))" '[foo.bar]]
++           ["(ns demo (:require #?(:cljs wrong.lib) #_[ignored.lib] foo.bar :reload))" '[foo.bar]]
++           ["(ns demo (:require ^:meta [foo.bar :as b]))" '[foo.bar]]
++           ["(ns demo (:import java.io.File))" []]
++           ["'(ns decoy) #_(ns discarded) (ns demo (:require foo.bar))" '[foo.bar]]]]
++    (is (= expected (hot-verify/probe-require-libs source "fixture.cljc")) source))
++  (doseq [form ["{:unknown foo}" "42" "[]" "[foo.bar :as]" "(foo {:unknown bar})" "#?@(:clj foo.bar)" "#?(:clj)" "#?(:clj foo.bar :cljs)"]]
++    (let [data (try
++                 (hot-verify/probe-require-libs (str "(ns demo (:require " form "))") "fixture.clj")
++                 (catch Exception e (ex-data e)))]
++      (is (= :probe-require-unparsed (:error-type data)) form)
++      (is (= "fixture.clj" (:file data)))
++      (is (string? (:form data))))))
++
++;; @spec BB-PROBE-003 -- execute the green-that-lies failure, not only its order.
++(deftest probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload
++  (let [root (.toFile (java.nio.file.Files/createTempDirectory
++                        "probe-stale-" (make-array java.nio.file.attribute.FileAttribute 0)))
++        dependency (io/file root "src/probe_fixture/dependency.clj")
++        target (io/file root "test/probe_fixture/check_test.clj")
++        loader (clojure.lang.DynamicClassLoader. (clojure.lang.RT/baseLoader))]
++    (try
++      (io/make-parents dependency)
++      (io/make-parents target)
++      (doseq [path probe/identity-files]
++        (io/make-parents (io/file root path))
++        (io/copy (io/file path) (io/file root path)))
++      (.addURL loader (.toURL (.toURI (io/file root "src"))))
++      (.addURL loader (.toURL (.toURI (io/file root "test"))))
++      (spit dependency "(ns probe-fixture.dependency) (def value 1)")
++      (spit target "(ns probe-fixture.check-test (:require [clojure.test :refer [deftest is]] (probe-fixture [dependency :as d]))) (deftest stale-check (is (= 1 d/value)))")
++      (let [image (probe/image-identity (.getCanonicalPath root))
++            request {:ns "probe-fixture.check-test" :image image}]
++        (with-bindings {clojure.lang.Compiler/LOADER loader}
++          (require 'probe-fixture.check-test :reload)
++          (is (= 1 (var-get (resolve 'probe-fixture.dependency/value))))
++          (spit dependency "(ns probe-fixture.dependency) (def value 2)")
++          (let [receipt (hot-verify/probe! image request)]
++            (is (= :probe-failed (:state receipt)))
++            (is (= [1 1 1] ((juxt :tests :assertions :failures) receipt)))
++            (is (= 2 (:closure-expected receipt)))
++            (is (= ["probe-fixture.dependency" "probe-fixture.check-test"] (:reloaded receipt))))
++          (spit dependency "(ns probe-fixture.dependency (:require {:unknown foo}))")
++          (let [reloads (atom [])
++                receipt (with-redefs [clojure.core/require (fn [& args] (swap! reloads conj args))]
++                          (hot-verify/probe! image request))]
++            (is (= :probe-require-unparsed (:error-type receipt)))
++            (is (= "{:unknown foo}" (:form receipt)))
++            (is (= (.getCanonicalPath dependency) (:file receipt)))
++            (is (= [] (:reloaded receipt)))
++            (is (= [] @reloads)))))
++      (finally
++        (doseq [n '[probe-fixture.check-test probe-fixture.dependency]]
++          (when (find-ns n) (remove-ns n))
++          (dosync (alter @#'clojure.core/*loaded-libs* disj n)))
++        (doseq [file (reverse (file-seq root))] (io/delete-file file))))))
++
++;; @spec BB-PROBE-003
++(deftest probe-receipt-retains-expected-closure-after-reload-failure
++  (let [image (probe/image-identity ".")
++        receipt (with-redefs [hot-verify/probe-reload-order (constantly '[foo.bar demo.probe-test])
++                              clojure.core/require (fn [& _] (throw (Exception. "reload failed")))]
++                  (hot-verify/probe! image {:ns "demo.probe-test" :image image}))]
++    (is (= :probe-failed (:state receipt)))
++    (is (= 2 (:closure-expected receipt)))
++    (is (= [] (:reloaded receipt)))))
++
+ ;; @spec BB-PROBE-003 -- Sol F3, round-two review of 09486a6f.
+ (deftest probe-authorizes-the-requested-test-target-before-reload
+   (let [image (probe/image-identity ".")
+@@ -136,8 +217,7 @@
+              (hot-verify/probe-reload-order root 'clj-surgeon.forms-test)))
+       (is (= :probe-namespace-not-found
+              (try (hot-verify/probe-reload-order root 'absent.probe-test)
+-                  (catch Exception e (:error-type (ex-data e))))))))
+-  )
++                  (catch Exception e (:error-type (ex-data e)))))))))
+ 
+ ;; --- Hot verification terminates on a terminal status, not on its ceiling ---
+ ;; Requirements: docs/intent/hot-verification/hot-verification-specs.md
+diff --git a/test/clj_surgeon/mcp_http_server_test.clj b/test/clj_surgeon/mcp_http_server_test.clj
+index 16fbca6a..eabd24f2 100644
+--- a/test/clj_surgeon/mcp_http_server_test.clj
++++ b/test/clj_surgeon/mcp_http_server_test.clj
+@@ -99,8 +99,8 @@
+             kept (count (:reloaded parsed))]
+         (is (<= (bytes wire) 16384))
+         (is (= :probe-response-truncated (:error-type parsed)))
+-        (is (= (select-keys original [:state :proof_pending :tests :assertions :failures :elapsed_ms])
+-               (select-keys parsed [:state :proof_pending :tests :assertions :failures :elapsed_ms])))
++        (is (= (select-keys original [:state :proof_pending :tests :assertions :failures :elapsed_ms :closure-expected])
++               (select-keys parsed [:state :proof_pending :tests :assertions :failures :elapsed_ms :closure-expected])))
+         (is (= (count names) (:reloaded-count parsed)))
+         (is (<= kept 64))
+         (is (= (subvec names 0 kept) (:reloaded parsed)))

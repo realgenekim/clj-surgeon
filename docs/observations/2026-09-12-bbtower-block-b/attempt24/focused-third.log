@@ -1,0 +1,11 @@
+
+Testing probe-fixture.check-test
+
+FAIL in (probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload stale-check) (check_test.clj:1)
+expected: (= 1 d/value)
+  actual: (not (= 1 2))
+
+Ran 1 tests containing 1 assertions.
+1 failures, 0 errors.
+=> {:test 4, :pass 46, :fail 0, :error 0}
+*======== user | clj ========*
