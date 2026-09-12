@@ -1339,6 +1339,7 @@
   clj-surgeon.mcp-hot-verify-test/hot-verification-returns-when-done-arrives-not-when-the-ceiling-expires
   clj-surgeon.mcp-hot-verify-test/hot-verification-treats-interrupted-as-a-failure-never-a-pass
   clj-surgeon.mcp-hot-verify-test/passing-law
+  clj-surgeon.mcp-hot-verify-test/probe-authorizes-the-requested-test-target-before-reload
   clj-surgeon.mcp-hot-verify-test/profile-validation-is-closed-and-bounded
   clj-surgeon.mcp-http-server-test/accepts-only-non-browser-or-loopback-origins
   clj-surgeon.mcp-http-server-test/alias-migration-commits-across-the-real-http-wire

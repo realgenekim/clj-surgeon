@@ -5993,6 +5993,7 @@
     ;; The namespace-level reachability census includes the probe-only path
     ;; added to mcp-hot-verify; these are real literals, not internal tags.
     "probe-namespace-not-found" "probe-source-too-large"
+    "probe-target-not-a-test-namespace"
     "invalid-probe-request" "stale-probe-image" "probe-message-too-large"
     "invalid-probe-port" "probe-connection-failed"
     ;; BB-PROBE-004: oversized HTTP verdicts retain bounded truncation facts.
@@ -6007,7 +6008,7 @@
   ;; could see. Both directions are asserted — a kind that appears and a kind
   ;; that vanishes are each a change to what a text-reading client is promised.
   (let [kinds (set (refusal-kinds-in-source))]
-    (is (= 161 (count kinds))
+    (is (= 162 (count kinds))
         (str "the entrance's refusal enumeration changed size: "
              (count kinds) " kinds"))
     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))

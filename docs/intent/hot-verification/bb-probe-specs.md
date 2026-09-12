@@ -23,10 +23,21 @@ fingerprint differs, the probe shall refuse as stale-probe-image before reload.
 Malformed namespace/request data shall refuse without evaluation. Misreading:
 the port or a surviving descriptor alone identifies the correct image.
 
-- [x] **BB-PROBE-003**: When an admitted probe names a local test namespace, the warm
-MCP image shall serially reload its local dependency closure before running
-that namespace. Missing source and oversized source have typed refusals.
-Misreading: start a second analysis JVM for each probe or silently run old tests.
+- [x] **BB-PROBE-003**: When an identity-admitted probe requests a namespace,
+the warm MCP image shall authorize its resolved canonical source under the
+repository's `test/` inventory root before dependency traversal or reload.
+A resolved target outside that root refuses as
+`:probe-target-not-a-test-namespace`, carrying the requested symbol, resolved
+repository-relative source, authorized roots and an empty reload list.
+Target refusal keys (EDN): `#{:state :error-type :error :proof_pending :requested :source :authorized-roots :reloaded :elapsed_ms}`
+An absent local source retains `:probe-namespace-not-found`. For an authorized
+target, serially reload its local dependency closure before running that namespace;
+dependencies may resolve under `src`, `test`, and `libs/clj-splice/src`.
+Oversized source retains its typed refusal. The refusal text names the prevented
+native failure: a warm image executing production code on request, with no test
+to bound it.
+Misreadings: image identity authorizes any production target; all dependencies
+must be tests; start a second analysis JVM for each probe or silently run old tests.
 
 - [x] **BB-PROBE-004**: When the servlet encodes a probe result larger than
 16,384 UTF-8 bytes, it shall emit a complete bounded EDN projection before

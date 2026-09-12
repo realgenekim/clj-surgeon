@@ -227,8 +227,21 @@
                                    :when (symbol? n)] n)]
                     (doseq [dep deps] (visit dep))
                     (swap! ordered conj n)))))]
-      (when-not (locate target)
-        (throw (ex-info "Test namespace is not a local .clj source" {:error-type :probe-namespace-not-found})))
+      (let [source (locate target)
+            authorized-roots ["test"]
+            root-path (.toPath (.getCanonicalFile (io/file root)))]
+        (when-not source
+          (throw (ex-info "Test namespace is not a local .clj source" {:error-type :probe-namespace-not-found})))
+        ;; Authorize the requested subject before visiting any dependency.
+        ;; Canonical source paths prevent a test-root symlink escaping to src.
+        (when-not (some #(.startsWith (.toPath source) (.resolve root-path ^String %))
+                        authorized-roots)
+          (throw (ex-info
+                  "Refusing a warm image executing production code on request, with no test to bound it. Supply a namespace under the authorized test roots."
+                  {:error-type :probe-target-not-a-test-namespace
+                   :requested target
+                   :source (str (.relativize root-path (.toPath source)))
+                   :authorized-roots authorized-roots}))))
       (visit target)
       @ordered)))
 
@@ -257,7 +270,9 @@
               (verdict @reloaded summary (elapsed)))))
         (catch Exception e
           ;; forwarded-refusal-kind: relay probe-reload-order's ex-data;
-          ;; its two literal kinds are enumerated in this namespace.
+          ;; its literal kinds are enumerated in this namespace.
           (if-let [kind (:error-type (ex-data e))]
-            (assoc (probe/refusal kind (.getMessage e)) :elapsed_ms (elapsed))
+            (merge (probe/refusal kind (.getMessage e))
+                   (select-keys (ex-data e) [:requested :source :authorized-roots])
+                   {:reloaded @reloaded :elapsed_ms (elapsed)})
             (assoc (verdict @reloaded {:error 1} (elapsed)) :error (.getMessage e))))))))

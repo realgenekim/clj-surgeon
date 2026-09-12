@@ -15,16 +15,35 @@
 (deftest probe-authorizes-the-requested-test-target-before-reload
   (let [image (probe/image-identity ".")
         request {:ns "clj-surgeon.core" :image image}
-        receipt (hot-verify/probe! image request)]
+        reloads (atom [])
+        original-require require
+        receipt (with-redefs [clojure.core/require
+                              (fn [& args]
+                                (when (some #{:reload} args)
+                                  (swap! reloads conj args))
+                                (apply original-require args))]
+                  (hot-verify/probe! image request))]
     (is (nil? (probe/request-problem image (probe/fingerprint ".") request)))
     (is (= :probe-refused (:state receipt)))
     (is (= :probe-target-not-a-test-namespace (:error-type receipt)))
     (is (= [] (:reloaded receipt)))
+    (is (= [] @reloads) "observe the reload boundary, not only receipt claims")
     (is (= 'clj-surgeon.core (:requested receipt)))
     (is (= "src/clj_surgeon/core.clj" (:source receipt)))
     (is (= ["test"] (:authorized-roots receipt)))
     (is (str/includes? (str (:error receipt))
-                       "warm image executing production code on request, with no test to bound it"))))
+                       "warm image executing production code on request, with no test to bound it"))
+    (testing "missing test source preserves the existing refusal"
+      (let [missing (hot-verify/probe! image {:ns "absent.probe-test" :image image})]
+        (is (= :probe-refused (:state missing)))
+        (is (= :probe-namespace-not-found (:error-type missing)))
+        (is (= [] (:reloaded missing)))))
+    (testing "an authorized real test reloads its production dependencies"
+      (let [accepted (hot-verify/probe! image {:ns "clj-surgeon.forms-test" :image image})]
+        (is (= :probe-passed (:state accepted)))
+        (is (= ["clj-surgeon.fields" "clj-surgeon.forms" "clj-surgeon.forms-test"]
+               (:reloaded accepted)))
+        (is (= [24 94 0] ((juxt :tests :assertions :failures) accepted)))))))
 
 (deftest closed-profile-runs-focused-laws-in-the-configured-jvm
   (let [server (nrepl-server/start-server :bind "127.0.0.1" :port 0)

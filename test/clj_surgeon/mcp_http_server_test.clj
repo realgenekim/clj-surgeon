@@ -153,7 +153,13 @@
     (is (pos? (:tests receipt)))
     (is (= 1 (count statements)) "BB-PROBE-001 requires exactly one receipt-shape statement")
     (is (= (some-> statements first second edn/read-string) (set (keys receipt)))
-        "BB-PROBE-001 spec keys disagree with the executed probe receipt")))
+        "BB-PROBE-001 spec keys disagree with the executed probe receipt")
+    ;; @spec BB-PROBE-003 -- refusal fields are also a spec/receipt contract.
+    (let [statements (re-seq #"Target refusal keys \(EDN\): `([^`]+)`" text)
+          refused (hot-verify/probe! image {:ns "clj-surgeon.core" :image image})]
+      (is (= :probe-target-not-a-test-namespace (:error-type refused)))
+      (is (= 1 (count statements)))
+      (is (= (some-> statements first second edn/read-string) (set (keys refused)))))))
 
 (deftest project-verification-profiles-are-closed-data
   ;; @spec MCP-OP-VERIFY-001

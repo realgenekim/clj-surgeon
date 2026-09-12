@@ -1355,6 +1355,8 @@ the shrinking [per-ID debt ledger](intent/unlinked-spec-ids.edn).
 - [Hot verification](intent/hot-verification/hot-verification-design.md)
 - [Babashka warm probe](intent/hot-verification/bb-probe-specs.md): a generation-bound
   inner-loop verdict from the one MCP JVM, always pending cold proof. The server
+  authorizes requested targets under the test root before dependency traversal;
+  production dependencies remain eligible for an authorized test's reload. It
   bounds complete encoded output; oversized reload inventories degrade to a
   prefix with explicit truncation facts while retaining the verdict and counts.
 

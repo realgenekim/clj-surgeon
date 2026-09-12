@@ -1,5 +1,12 @@
 # clj-surgeon tech tree
 
+Block B attempt 21 closes Sol F3: a valid image identity no longer authorizes
+a production probe target. The canonical target must resolve under `test/`
+before dependency traversal, with a typed refusal and zero reloads otherwise.
+Production dependencies of authorized tests remain supported. Red reproduces
+36 reloads and zero tests; final evidence and outstanding review are recorded in
+[attempt21](observations/2026-09-12-bbtower-block-b/attempt21/REPORT.md).
+
 Block B attempt 20: six controls per runtime now govern all 38 paired
 namespaces through conservative two-standard-deviation clearance. Rename-alias
 selects JVM; the historical bb ceiling replays recorded execution runtimes.

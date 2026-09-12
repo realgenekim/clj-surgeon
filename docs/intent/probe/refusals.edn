@@ -69,6 +69,14 @@
    :existing_check "mcp-hot-verify/probe-reload-order"
    :owner "probe" :witness "splice-envelope-test/bounded-input-path-encoding"
    :retirement_condition "A replacement preserves the pre-parse source cap."}
+  {:type :probe-target-not-a-test-namespace :class :semantic
+   :native_failure "A warm image executing production code on request, with no test to bound it."
+   :promise "Authorize the requested source under the repository test root before traversal or reload."
+   :native_method "Resolve the target and check canonical test-root membership separately from dependency discovery."
+   :minimal_reproducer "Request clj-surgeon.core with a valid live-image identity."
+   :existing_check "mcp-hot-verify/probe-reload-order; BB-PROBE-003"
+   :owner "probe" :witness "mcp-hot-verify-test/probe-authorizes-the-requested-test-target-before-reload"
+   :retirement_condition "A replacement refuses non-test targets before any reload while permitting production dependencies of tests."}
   {:type :probe-namespace-not-found :class :semantic
    :native_failure "A misspelled or nonlocal test namespace can leave an old loaded namespace as the apparent subject."
    :promise "The target must have local Clojure source before reload."

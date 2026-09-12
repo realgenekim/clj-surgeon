@@ -7,6 +7,15 @@ one image with test dependencies and writes `.clj-surgeon/probe.edn`.
 image identity and calls the hot-verification implementation through `/probe`.
 The existing nREPL verification profile remains available for its existing callers.
 
+BB-PROBE-003 separately authorizes the requested target's canonical source under
+the repository `test/` root before traversing dependencies. A production target
+with a valid image identity receives `:probe-target-not-a-test-namespace` and
+zero reloads; a missing source retains `:probe-namespace-not-found`. Authorized
+tests still reload production dependencies from `src` and `libs/clj-splice/src`.
+The target refusal identifies the requested symbol, resolved source and authorized
+roots. The executable spec/receipt witness covers that refusal shape as well as
+successful probe verdicts. This closes Sol F3 without narrowing dependency roots.
+
 The probe refusal constructor is a static namespace dependency, so the
 namespace-level alias-migration refusal census can follow it. Its registered
 literal kinds are pinned alongside existing kinds; forwarding markers describe
