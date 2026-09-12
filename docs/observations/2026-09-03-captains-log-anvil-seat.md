@@ -6111,3 +6111,21 @@ Thirteenth check-only prewarm (packet edfafdbe) exit 0 at 14644aad, receipt boun
 20260912T220734Z sealed 1251dc76, Sol reviewing the round-6 brief (round-5 F1 answered by
 attempt25/), battery and fast lane beside it. Opus red-team of the data-not-code tip
 4658dc12 running in parallel in its own worktree.
+
+## 2026-09-12T22:14:24Z — data-not-code red-team GO-WITH-FIX; round 5 running on three fixes and a tighter preregistration
+
+Opus attacked tip 4658dc12 for 23 minutes (published as `2026-09-12-data-not-code-opus-redteam.md`):
+every production plant went red by name (envelope final-filename consumers, ledger admitted
+before creation, sandbox classification is data not prose ×10); a 22-expression
+classification differential base vs tip shows zero regressions; make test-fast reproduces
+the report exactly. Three fixes: F1 the evidence-row validator checks receipt STRINGS and
+never opens a receipt, so a forged row (6 → 9000 ms, :bb → :jvm, receipts untouched) is
+accepted and changes the runtime a namespace runs on (the shipped rows are honest; the
+ratchet is missing); F2 a soft witness (unguarded when-let, assertions drop 259 → 257
+silently on a rename); F3 a hard-linked final file is admitted where a symlink is refused.
+Two uncovered writers named for the coverage claim (mcp_telemetry.clj:70-78,
+mcp_http_server.clj:234-240; telemetry resolves user.home, the envelope the passwd home).
+And six reinterpretable points in the preregistration, including my own refusal-rate bet
+being unfalsifiable (0 ≥ 0): replaced with two planted non-test targets per arm that PROBE
+must refuse and NATIVE cannot; subject sha and patch bytes frozen; T0/T1 instrumented.
+Round 5 (Astra, pid 1862779) on all of it, red first. Go-with-fix is not go.
