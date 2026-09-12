@@ -1202,6 +1202,30 @@
    "test/clj_surgeon/mcp_hot_verify_test.clj"
    {288 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
 
+;; @spec DATACODE-SLEEP-001
+(deftest sleep-pins-survive-line-movement-and-refuse-purpose-drift
+  (let [scan (ns-resolve 'clj-surgeon.lane-manifest-test 'sleep-sites)
+        check (ns-resolve 'clj-surgeon.lane-manifest-test 'sleep-pin-violations)
+        source "(ns fixture)\n(deftest waits (^{:temporal-purpose :poll} Thread/sleep 10))\n"
+        pins [{:owner 'fixture/waits :ordinal 1 :purpose :poll :call '(Thread/sleep 10)}]]
+    (is (some? scan) "sleep discovery returns owner identities")
+    (is (some? check) "pin validation is a pure relation")
+    (when (and scan check)
+      (let [before (scan "fixture.clj" source)
+            shifted (scan "fixture.clj" (str "; unrelated line\n" source))]
+        (is (= [] (check pins before)))
+        (is (= [] (check pins shifted)))
+        (is (= 2 (:line (first before))))
+        (is (= 3 (:line (first shifted))))
+        (doseq [[reason changed]
+                [[:purpose (str/replace source ":poll" ":spaced-stimulus")]
+                 [:call (str/replace source "sleep 10" "sleep 11")]
+                 [:owner (str/replace source "waits" "renamed")]
+                 [:cardinality (str/replace source "sleep 10)" "sleep 10) (Thread/sleep 10)")]]]
+          (let [errors (check pins (scan "fixture.clj" changed))]
+            (is (seq errors) (str "changed " reason " must refuse"))
+            (is (some #(= 'fixture/waits (:owner %)) errors) (pr-str errors))))))))
+
 (deftest every-sleep-on-the-merge-gate-is-declared-with-its-reason
   (let [sources (fn [lane]
                   (for [n (lm/namespaces-for lane)]
