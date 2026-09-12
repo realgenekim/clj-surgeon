@@ -1,0 +1,54 @@
+2f7b4cf8:test/clj_surgeon/artifact_boundary_support.clj:6:   `/private/var/tmp/forge/edit-clojure-receipts/...` while the assertion
+2f7b4cf8:test/clj_surgeon/artifact_boundary_support.clj:7:   demanded a literal `/var/tmp/forge/` prefix. On darwin `/var/tmp` is a
+2f7b4cf8:test/clj_surgeon/battery_parallel_test.clj:29:  (doseq [[tmpdir expected] [["/var/tmp/forge/bbtower-fx" "/var/tmp/forge/bbtower-fx"]
+2f7b4cf8:test/clj_surgeon/mcp_alias_migration_test.clj:7181:                                 :details_path "/var/tmp/forge/require-change-receipts/detail.edn"
+2f7b4cf8:test/clj_surgeon/mcp_alias_migration_test.clj:7291:      (mcp-tool/handle-alias-migration nil {:workspace_root "/var/tmp/forge/rows-sublime/no-such-workspace"}
+2f7b4cf8:test/clj_surgeon/mcp_alias_migration_test.clj:7325:;; used to default to the literal "/var/tmp/forge" -- unwritable, or worse
+2f7b4cf8:test/clj_surgeon/mcp_alias_migration_test.clj:7334:    (is (not= "/var/tmp/forge" root)
+2f7b4cf8:test/clj_surgeon/mcp_alias_migration_test.clj:7407:  ;; /var/tmp/forge) must still be accepted, not swept up by the new refusal.
+2f7b4cf8:test/clj_surgeon/mcp_alias_migration_test.clj:7408:  (is (= "/var/tmp/forge" (artifacts/validate-artifact-root! "/var/tmp/forge"))))
+2f7b4cf8:test/clj_surgeon/mcp_expect_guard_test.clj:116:;;; (2026-09-07, verdict at /var/tmp/forge/expectfix-r1-verdict.md).
+2f7b4cf8:test/clj_surgeon/mcp_expect_guard_test.clj:274:;;; /var/tmp/forge/expectfix-r2-verdict.md) found the guard counting only
+2f7b4cf8:test/clj_surgeon/mcp_feature_thread_test.clj:391:                  :scope {:workspace_root "/var/tmp/forge/no-such-root-9f3c"}})]
+2f7b4cf8:test/clj_surgeon/mcp_helper_extraction_test.clj:57:  (or (System/getenv "CLJ_SURGEON_HELPER_TMP") "/var/tmp/forge/helper-fx"))
+2f7b4cf8:test/clj_surgeon/mcp_inspect_tool_test.clj:1822:;; (/var/tmp/forge/astra-ten5b-probe.clj), which pushed a 40,254-byte response
+2f7b4cf8:test/clj_surgeon/mcp_namespace_split_test.clj:232:        (doseq [path ["profile.edn" (str inside) "/var/tmp/forge/rows-sublime/no-such-profile.edn"]]
+2f7b4cf8:test/clj_surgeon/mcp_process_test.clj:49:  ;; points java.io.tmpdir at /var/tmp/forge (or the suite's isolated
+2f7b4cf8:test/clj_surgeon/mission_commit_cli_test.clj:54:                    "--spec-file" "/var/tmp/forge/no-such-commit-override.edn")]
+2f7b4cf8:test/clj_surgeon/mission_display_test.clj:131:  (let [r (shell/sh "bin/mission" "show" "M-1" "--state-home" "/var/tmp/forge/astra-live-real1-fx/state")]
+2f7b4cf8:test/clj_surgeon/mission_display_test.clj:137:        (is (= value ((requiring-resolve 'clj-surgeon.mission-cli/show) {:id "M-1" :state-home "/var/tmp/forge/astra-live-real1-fx/state"})))
+2f7b4cf8:test/clj_surgeon/mission_git_identity_test.clj:41:                 "(require '[clj-surgeon.mission-git-process :as p] '[clojure.edn :as edn]) (print (p/run-process! \"/var/tmp/forge\" [\"bb\" \"-e\" \"(prn (into {} (filter (fn [[k _]] (.startsWith k \\\"GIT_\\\")) (System/getenv))))\"] nil 10000))")]
+2f7b4cf8:test/clj_surgeon/mission_git_ledger_test.clj:70:           (:error-type (ledger/commit! {:id "M-0001" :workspace "/var/tmp/forge"
+2f7b4cf8:test/clj_surgeon/mission_git_process_test.clj:14:        r (try (process/run-process! "/var/tmp/forge"
+2f7b4cf8:test/clj_surgeon/mission_provider_fallback_events_test.clj:27:  {:root "/var/tmp/forge" :route {:k 1 :provider {:id :openrouter}}
+2f7b4cf8:test/clj_surgeon/mission_test.clj:30:  (or (System/getenv "CLJ_SURGEON_MISSION_TMP") "/var/tmp/forge/mission-fx"))
+2f7b4cf8:test/clj_surgeon/receipt_artifacts_boundary_test.clj:33:  (doseq [[tmpdir expected] [["/var/tmp/forge/bbtower-fx" "/var/tmp/forge/bbtower-fx"]
+2f7b4cf8:test/clj_surgeon/receipt_artifacts_boundary_test.clj:95:;; published at `/private/var/tmp/forge/...` while the assertion demanded a
+2f7b4cf8:test/clj_surgeon/receipt_artifacts_boundary_test.clj:96:;; literal `/var/tmp/forge/` prefix. darwin canonicalizes `/var/tmp` through a
+2f7b4cf8:test/clj_surgeon/receipt_artifacts_boundary_test.clj:166:    (is (re-find pattern "(is (.startsWith p \"/var/tmp/forge/edit-clojure-receipts/\"))"))
+2f7b4cf8:test/clj_surgeon/receipt_artifacts_boundary_test.clj:167:    (is (re-find pattern "(str/starts-with? p \"/private/var/tmp/forge/typist-receipts/\"))"))
+2f7b4cf8:test/clj_surgeon/receipt_artifacts_boundary_test.clj:169:    (is (not (re-find pattern "{:details_path \"/var/tmp/forge/require-change-receipts/d.edn\"}"))
+2f7b4cf8:test/clj_surgeon/tmp_leak_support.clj:17:        JAVA_TOOL_OPTIONS=\"-Djava.io.tmpdir=/var/tmp/forge\" \\
+2f7b4cf8:test/clj_surgeon/tmp_leak_support.clj:20:      changes it (`bb -Djava.io.tmpdir=/var/tmp/forge ...`). So
+2f7b4cf8:test/clj_surgeon/tmp_leak_support_test.clj:55:    (is (false? (tmp-leak/literal-ram-path? "/var/tmp/forge")))
+2f7b4cf8:test/clj_surgeon/tmp_leak_support_test.clj:82:    (is (false? (tmp-leak/own-isolated-root? "/var/tmp/forge")))
+2f7b4cf8:test/clj_surgeon/tmp_leak_support_test.clj:83:    (is (false? (tmp-leak/own-isolated-root? "/var/tmp/forge/other-seat-fixture"))))
+2f7b4cf8:test/clj_surgeon/tmp_leak_support_test.clj:85:    (is (true? (tmp-leak/own-isolated-root? "/var/tmp/forge/clj-surgeon-suite-42-deadbeef")))))
+2f7b4cf8:test/clj_surgeon/tmp_leak_support_test.clj:121:      (is (= "/var/tmp/forge" (self-test-tmp "/var/tmp/forge"))
+2f7b4cf8:test/clj_surgeon/tmp_leak_support_test.clj:156:        disk "/var/tmp/forge"]
+2f7b4cf8:test/clj_surgeon/tmp_leak_support_test.clj:321:      (is (not (clojure.string/includes? message "/var/tmp/forge"))
+2f7b4cf8:test/oracles/b07_split_adapter.clj:6:(System/setProperty "java.io.tmpdir" (or (System/getenv "TMPDIR") "/var/tmp/forge"))
+2f7b4cf8:test/oracles/cell_b_oracle.sh:3:# Run from the ROOT of the worktree under test:  bash /var/tmp/forge/plan2/cellB/oracle.sh
+2f7b4cf8:test/oracles/cell_b_oracle.sh:8:#   ORACLE_TMP    scratch dir (default: /var/tmp/forge/plan2/cellB/run-$$)
+2f7b4cf8:test/oracles/cell_b_oracle.sh:14:TMP="${ORACLE_TMP:-/var/tmp/forge/plan2/cellB/run-$$}"
+2f7b4cf8:test/oracles/test_gate_slot.py:404:        self.assertEqual(Path('/var/tmp/forge/clj-surgeon-gate'),
+2f7b4cf8:test/oracles/test_gate_slot.py:405:                         slot.slot_root_for('linux', '/var/tmp/forge', 1002))
+2f7b4cf8:test/oracles/test_gate_slot.py:414:        long_tmpdir = Path('/var/tmp/forge') / ('t' * (120 - len('/var/tmp/forge/')))
+2f7b4cf8:test/oracles/test_gate_slot.py:448:        root = Path('/var/tmp/forge') / ('r' * 90)
+2f7b4cf8:test/oracles/test_gate_slot.py:473:        root = Path('/var/tmp/forge') / ('gate-mode-%s' % uuid.uuid4().hex)
+2f7b4cf8:test/suite_concurrency_battery.sh:25:FX="${SUITE_BATTERY_FX:-/var/tmp/forge/suite-battery-fx}"
+2f7b4cf8:test/suite_concurrency_battery.sh:29:export TMPDIR="${TMPDIR:-/var/tmp/forge}"
+2f7b4cf8:test/tmp_leak_ratchet_test.sh:457:got=$(self_test_tmp "/var/tmp/forge")
+2f7b4cf8:test/tmp_leak_ratchet_test.sh:458:echo "--- SELF_TEST_TMP with TMPDIR=/var/tmp/forge -> $got ---"
+2f7b4cf8:test/tmp_leak_ratchet_test.sh:459:[ "$got" = "/var/tmp/forge" ] \
+2f7b4cf8:test/tmp_leak_ratchet_test.sh:460:  || fail "11: a real-disk TMPDIR (/var/tmp/forge) must be honoured, got $got"
