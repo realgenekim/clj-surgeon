@@ -373,6 +373,7 @@ Category: measurement
 **DELETED 2026-09-12 by Astra's refutation (see review-astra-2026-09-12.md): the receipt does not support the entry.**
 
 ### 20. A broken oracle flattens every arm into a clean null
+**REFUTED 2026-09-12 by Astra's receipt-by-receipt pass (review-astra-2026-09-12.md): the cited receipt does not support the claim as written; retained for the record, NOT guidance.**
 Symptom: an instrument that fails identically on all arms produces a result that looks exactly like
 "no effect".
 Counterexample: "8 of the 12 frozen `:gate` commands do not run at their own `:sha` on the untouched
@@ -496,6 +497,7 @@ Category: measurement
 ## review
 
 ### 27. Seventeen rounds is a selection failure, not a fence failure
+**REFUTED 2026-09-12 by Astra's receipt-by-receipt pass (review-astra-2026-09-12.md): the cited receipt does not support the claim as written; retained for the record, NOT guidance.**
 Symptom: a prototype absorbs round after round of real findings, each smaller than the last, and
 nobody asks whether the claim can be certified at all.
 Counterexample: item 3 reached Sol round 17 on one branch — "Seventeen holds, every one a real edge,
@@ -601,6 +603,7 @@ Category: review
 **DELETED 2026-09-12 by Astra's refutation (see review-astra-2026-09-12.md): the receipt does not support the entry.**
 
 ### 34. A refusal that names the wrong cause
+**REFUTED 2026-09-12 by Astra's receipt-by-receipt pass (review-astra-2026-09-12.md): the cited receipt does not support the claim as written; retained for the record, NOT guidance.**
 Symptom: a typed refusal is well-formed, complete, and points at the wrong thing.
 Counterexample: `alias_migration` with `scope.paths ["src"]` refused `alias-migration-empty-scope`
 with "No namespace under scope requires acid.fanout.store" — a domain sentence — when the real
@@ -643,6 +646,7 @@ Meter: pair ratio 3.5× → 1.40× on that arm.
 Category: refusals
 
 ### 36. One refusal ends "encouraged" adoption
+**REFUTED 2026-09-12 by Astra's receipt-by-receipt pass (review-astra-2026-09-12.md): the cited receipt does not support the claim as written; retained for the record, NOT guidance.**
 Symptom: a correct refusal is the last interaction the caller has with the tool.
 Counterexample: the "Surgeon encouraged" caller D1 generated a native patch, sent it once to
 `admit_clojure_patch` with `verify=none`, was refused `verification-incomplete`, then "passed the
@@ -1036,6 +1040,7 @@ Meter: no meter movement recorded — cohort never launched.
 Category: process
 
 ### 59. A stop rule that cannot tell a bad answer from a broken instrument
+**REFUTED 2026-09-12 by Astra's receipt-by-receipt pass (review-astra-2026-09-12.md): the cited receipt does not support the claim as written; retained for the record, NOT guidance.**
 Symptom: the model does something wrong, the apparatus halts, and real data is discarded.
 Counterexample: a native control "applied the correct patch, ran 2 tests, 20 assertions green", then
 "says it acted prematurely and reverts to the original file", finishing READY instead of DONE — and

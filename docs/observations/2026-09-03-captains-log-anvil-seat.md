@@ -6036,3 +6036,18 @@ n=3, bets on record); the spent cohorts (long-context attempt 5, arm N attempt 3
 its result. Decision 2: the data-not-code block is next; tower block C exists only on a
 measured probe win. Decision 3 (wiki promotion of Astra's top five) not answered; left open,
 nothing promoted. Order after block B lands: probe measure → data-not-code landing → decide.
+
+## 2026-09-12T21:15:34Z — Gene: does the wiki stop boofarama? Mine and Astra's; her rules adopted, mine withdrawn
+
+Mine: worth it as the promotion ladder's middle rung, with deletion after two unpromoted
+encounters and refusals-created as the success metric. Astra (published as
+wiki-llm/review-astra-value-2026-09-12.md): reading may improve diagnosis, not yet a
+demonstrated way to prevent thrash; the records show existing instructions and memory did
+not prevent recurrence, and the one thing that did was a mechanism (the whole-gate wrapper),
+not reading about it. She sorted the entries into typed-refusal / executable-witness /
+mechanical-prerequisite / advice-only, found five REFUTED entries still standing as prose
+(now marked), and disagrees with both my rules: deletion discards unresolved evidence;
+counting refusals rewards restriction, exactly the "never pinned" failure of attempt 22.
+Adopted her structure: the wiki is a view of encounter contracts consumed by the entrances
+(that is the tighten skill's second-encounter register, which exists and is unseeded), and
+the metric is repeated defects per eligible encounter at verified cost, false refusals tracked.

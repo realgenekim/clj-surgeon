@@ -19,3 +19,12 @@ the ratchet that makes the class impossible; no entry without a counterexample w
   Five deleted outright (#16, #19, #33, #55, #65: self-report or a disclaimed mechanism promoted to
   fact). PROMOTION QUEUE, in Astra's order, pending Gene: #41, #43, #13, #37, #61, #1, #26, #18, #54,
   #58. WEAKENED entries keep their claim and lose the unsupported meter/ratchet line before promotion.
+- [review-astra-value-2026-09-12.md](review-astra-value-2026-09-12.md) — Astra on whether the wiki
+  stops thrash: "reading may improve diagnosis; it is not yet a demonstrated way to prevent it."
+  Her structural change, ADOPTED as this wiki's rule: the active wiki is a view of ENCOUNTER
+  CONTRACTS consumed by the work entrances — trigger/scope → bad specimen + legitimate control →
+  required check → enforcing entrance → demonstrated status → subsequent encounters. An entry with
+  no enforcing entrance is visibly pending, never active guidance; a refuted claim is marked in
+  place (#20, #27, #34, #36, #59 now carry the mark). Success metric: fewer recurring defects per
+  eligible encounter at lower verified cost, with false refusals tracked — not more refusals, not
+  fewer unpromoted entries (Fable's two management rules withdrawn).

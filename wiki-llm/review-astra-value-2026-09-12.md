@@ -1,0 +1,29 @@
+# Astra: is the wiki a way to stop future boofarama? (2026-09-12, read-only)
+
+Gene, verbatim: "And you and Astra read wiki and opine on its value as way to stop future boofarama"
+
+**Reading this wiki may improve diagnosis; it is not yet a demonstrated way to prevent boofarama.** Astra’s independent assessment agrees. We read all four pages, including the five deletion markers. No files changed.
+**1. Will a seat that reads it thrash less?**
+Possibly, but the records support a limited claim:
+- **Existing instructions did not prevent recurrence.** The item-3 builder reported sixteen rounds of Python/sed, including silent anchor misses that left claimed test rows absent. However, it reread the header afterward and reported an older contradictory harness instruction. This demonstrates failure of the instruction system—not a clean experiment showing that an unambiguous rule was read and ignored. [Item-3 account](/home/forge/src/clj-surgeon-records/docs/observations/2026-09-03-captains-log-anvil-seat.md:5542).
+- **Memory did not reliably govern decisions.** Fable explicitly reports forgetting two rules already in memory/briefs and paying a round each. The three false premises—bb union, contention, “died at 9/26”—likewise survived until someone examined the underlying rows. The records substantiate those errors; they do not independently establish exactly which memory bytes were loaded throughout the day. [Fable’s account](/home/forge/src/clj-surgeon-records/docs/observations/2026-09-11-the-system-from-the-drivers-seat.md:14), [three premises](/home/forge/src/clj-surgeon-records/wiki-llm/sublime-vs-unsublime-patterns.md:25).
+- **Prose can change behavior.** The Codex plate-only arm moved Surgeon-final tasks from zero to 4/13 for Astra and 5/13 for Sol. Accepted completions stayed 7/13 and 9/13. That supports a routing effect, not reduced defects or thrash. [Cohort](/home/forge/src/clj-surgeon-records/docs/observations/2026-09-11-gate-vs-prompt-report-codex.md:43).
+- **The stronger examples change the work itself.** The restricted-gate diagnostic plus census of unreached commands exposed several writers together, addressing expensive instance-at-a-time discovery. That is evidence for a diagnostic mechanism, not for reading about one. [Attempt 18](/home/forge/src/clj-surgeon-records/docs/observations/2026-09-12-bbtower-block-b-attempt18-report.md:23).
+The wiki also risks supplying **new false premises**. Although five entries are deleted, **#20, #27, #34, #36 and #59 remain affirmative prose despite REFUTED verdicts**. A reader must reconcile the review manually. That is precisely the bookkeeping the wiki should remove. [Earlier review](/home/forge/src/clj-surgeon-records/wiki-llm/review-astra-2026-09-12.md:3).
+**2. What can a machine enforce?**
+Numbers below refer to candidates unless marked “first page.” These are possibilities, not claims of installed enforcement.
+| Kind | Entries and enforceable obligation |
+|---|---|
+| **Typed refusal** | #4 unsafe reader input; #13 blank required cells; #28 stale-base approval; #37 authority values that do not match their evidence; #43 incomplete measurement streams; #48 terminal closure with live owned children; #63 altered staged artifacts; first-page #12 unauthorized target. |
+| **Executable witness** | #2 independent unchanged-set checks; #6 each protective layer separately; #7 inputs crossing the bound; #8 production-discovered inputs; #10 actual concurrency; #11 unexpected success fails the test; #35 replayed remedies; #38 receipt rendering completeness; #41 hard-stop ordering; #44 executed results; #45 clean-environment setup; #47 exact-launch delivery. |
+| **Mechanical prerequisites, with judgment remaining** | #9 can require the relevant witness to run; #18/#61 can record exposure and use; first-page #4/#5 can derive statistics and constants. These checks cannot establish that the chosen witness, intervention, or threshold answers the right question. |
+| **Advice at its core** | #32 reconsidering after reproduction; #51 choosing sensible constraints; #56 prioritizing paper cuts; #57 recognizing “obviously better”; first-page #3 drawing a causal conclusion. Requiring a receipt or fold cannot make the conclusion true. |
+Likewise, #1 can enforce binding preservation within a supported contract; it cannot certify arbitrary program equivalence. A “class oracle” must declare its coverage. A name list is not completeness.
+**3. The one structural change**
+**Make the active wiki a view of encounter contracts consumed by the existing work entrances.**
+Each contract should contain:
+`trigger/scope → historical bad specimen + legitimate control → required action/check → enforcing entrance → demonstrated status → subsequent encounters`
+On the next matching launch, edit, review, or landing, that entrance supplies or executes the applicable check. The prose explains why. An unimplemented contract remains visibly pending; a refuted claim cannot appear as active guidance.
+Crucially, the bad specimen must fail **and legitimate neighboring cases must pass**, through the production entrance. Otherwise this becomes another registry of impressive-looking witnesses that no gate runs.
+I disagree with both of Fable’s proposed management rules. Two encounters should trigger reassessment, not deletion of unresolved evidence. Counting promoted refusals measures output and rewards unnecessary restrictions—the first page’s “never pinned” rule already demonstrates that failure. Measure repeated defects per eligible encounter, repair rounds, and complete verified time, while tracking false refusals and uncovered encounters. [Over-broad rule](/home/forge/src/clj-surgeon-records/wiki-llm/sublime-vs-unsublime-patterns.md:70).
+**4. Verdict:** **Keep a corrected casebook tied to executable encounter contracts; success is fewer recurring defects at lower verified cost, not more refusals or fewer unpromoted entries.**
