@@ -1,0 +1,12 @@
+
+Testing sol-round5.probe-test
+
+Ran 1 tests containing 1 assertions.
+0 failures, 0 errors.
+:sol-round5 {:state :probe-passed, :proof_pending [:landing-gate], :reloaded [sol-round5.probe-test], :closure-expected 1, :tests 1, :assertions 1, :failures 0, :elapsed_ms 15.8873} :loaded-value 1 :disk-value 2
+
+FAIL in (probe-reloads-image-classpath-experiment-dependency) (mcp_hot_verify_test.clj:46)
+expected: (or (= :probe-dependency-unresolved (:error-type receipt)) (and (= :probe-failed (:state receipt)) (= 1 (:failures receipt)) (= ["sol-round5.dependency" "sol-round5.probe-test"] (:reloaded receipt)) (= 2 (var-get (resolve (quote sol-round5.dependency/value))))))
+  actual: false
+=> {:test 1, :pass 2, :fail 1, :error 0}
+*======== user | clj ========*

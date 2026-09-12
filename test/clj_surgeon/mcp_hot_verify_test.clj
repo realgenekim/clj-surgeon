@@ -12,6 +12,49 @@
 (deftest passing-law
   (is (= 4 (+ 2 2))))
 
+;; @spec BB-PROBE-003 -- Sol round-five F1: live dev/experiments was omitted.
+(deftest probe-reloads-image-classpath-experiment-dependency
+  (let [root (.toFile (java.nio.file.Files/createTempDirectory
+                        "probe-classpath-" (make-array java.nio.file.attribute.FileAttribute 0)))
+        dependency (io/file root "dev/experiments/sol_round5/dependency.clj")
+        target (io/file root "test/sol_round5/probe_test.clj")
+        original-classpath (System/getProperty "java.class.path")
+        loader (clojure.lang.DynamicClassLoader. (clojure.lang.RT/baseLoader))]
+    (try
+      (io/make-parents dependency)
+      (io/make-parents target)
+      (doseq [path probe/identity-files]
+        (io/make-parents (io/file root path))
+        (io/copy (io/file path) (io/file root path)))
+      (doseq [dir ["test" "dev/experiments"]]
+        (.addURL loader (.toURL (.toURI (io/file root dir)))))
+      (System/setProperty "java.class.path"
+                          (str original-classpath java.io.File/pathSeparator
+                               (io/file root "test") java.io.File/pathSeparator
+                               (io/file root "dev/experiments")))
+      (spit dependency "(ns sol-round5.dependency) (def value 1)")
+      (spit target "(ns sol-round5.probe-test (:require [clojure.test :refer [deftest is]] [sol-round5.dependency :as d])) (deftest stale-check (is (= 1 d/value)))")
+      (with-bindings {clojure.lang.Compiler/LOADER loader}
+        (require 'sol-round5.probe-test :reload)
+        (is (= 1 (var-get (resolve 'sol-round5.dependency/value))))
+        (let [image (probe/image-identity (.getCanonicalPath root))
+              request {:ns "sol-round5.probe-test" :image image}]
+          (is (nil? (probe/request-problem image (probe/fingerprint (:root image)) request)))
+          (spit dependency "(ns sol-round5.dependency) (def value 2)")
+          (let [receipt (hot-verify/probe! image request)]
+            (println :sol-round5 receipt :loaded-value (var-get (resolve 'sol-round5.dependency/value)) :disk-value 2)
+            (is (or (= :probe-dependency-unresolved (:error-type receipt))
+                    (and (= :probe-failed (:state receipt))
+                         (= 1 (:failures receipt))
+                         (= ["sol-round5.dependency" "sol-round5.probe-test"] (:reloaded receipt))
+                         (= 2 (var-get (resolve 'sol-round5.dependency/value)))))))))
+      (finally
+        (System/setProperty "java.class.path" original-classpath)
+        (doseq [n '[sol-round5.probe-test sol-round5.dependency]]
+          (when (find-ns n) (remove-ns n))
+          (dosync (alter @#'clojure.core/*loaded-libs* disj n)))
+        (doseq [file (reverse (file-seq root))] (io/delete-file file))))))
+
 ;; @spec BB-PROBE-003 -- Sol F1, round-four review of e3ffc6a7.
 (deftest probe-reloads-prefix-list-dependency
   (let [root (.toFile (java.nio.file.Files/createTempDirectory
