@@ -5112,3 +5112,17 @@ published as `2026-09-12-bbtower-block-b-attempt1-blocked.md`.
 The premise error is the same shape as the arm N "died at 9/26" misread: I stated a cause
 from a summary number without folding the rows. Both times the builder's first act was to
 fold the rows and refuse.
+
+## 2026-09-12T06:25:47Z — block B attempt 2 blocked on the JVM budget's meaning; attempt 3 running with the reseal
+
+Packet 59902da0 refused at step 1 in six minutes: the brief's `:budget :jvms 1` read as a
+peak process count, and the repository's coordinator starts a JVM per lane plus an
+isolation JVM per worker, so no matched measurement can run under one process. The packet
+apparatus itself schedules landing-gate-prewarm and test-battery as one-JVM checks, and
+both run parallel lanes, so the number is a LEASE (one suite at a time across seats), not
+a process cap. I resealed that as a brief claim with the evidence paths and relaunched.
+
+Two apparatus findings for the ledger: the brief schema's :jvms needs a stated unit
+(lease vs peak), and a brief input path that does not exist refuses only after admission
+starts (my attempt-3 slip rewrote the attempt-2 input path; refused in seconds, relaunched).
+Attempt 3 is packet 3c45c1c3, Astra verified, budget 300 min.
