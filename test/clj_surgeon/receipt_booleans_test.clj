@@ -1,10 +1,12 @@
 (ns clj-surgeon.receipt-booleans-test
   {:lane :fast}
   (:require
+   [clj-surgeon.core :as core]
    [clj-surgeon.insert-forms :as insert]
    [clj-surgeon.insert-forms-support :as h]
    [clj-surgeon.intent-transaction :as tx]
    [clj-surgeon.mcp-server :as server]
+   [clj-surgeon.probe :as probe]
    [clj-surgeon.rename-alias :as rename]
    [clj-surgeon.rename-alias-receipt-test :as rr]
    [clj-surgeon.rename-alias-test :as r]
@@ -21,10 +23,11 @@
               :else []))]
     (vec (visit [] value))))
 (defn registered-verbs [catalog]
-  (set (for [tool catalog
-             :when (and (contains? (:outcome-classes tool) :committed)
-                        (contains? (get-in tool [:schema :properties]) "version"))]
-         (:name tool))))
+  (cond-> (set (for [tool catalog
+                     :when (and (contains? (:outcome-classes tool) :committed)
+                                (contains? (get-in tool [:schema :properties]) "version"))]
+                 (:name tool)))
+    (contains? core/ops-registry :probe) (conj "probe")))
 (defn missing-registrations [verbs registry]
   (vec (sort (remove (set (keys registry)) verbs))))
 (defn missing-fields [receipt seams]
@@ -61,10 +64,12 @@
         (insert/execute! req (if (= seam :stage-failure)
                                {:stage #(throw (java.io.IOException. "injected staging failure"))} {}))))))
 (def supported-seams
-  {"insert_forms" #{:stage-failure :completed-write :behavior-not-run :neighbor-corruption}
+  {"probe" #{:behavior-not-run}
+   "insert_forms" #{:stage-failure :completed-write :behavior-not-run :neighbor-corruption}
    "rename_alias" #{:stage-failure :completed-write :behavior-not-run :neighbor-corruption
                     :trivia-corruption :discard-corruption}})
-(def scenarios {"insert_forms" insert-scenario "rename_alias" rename-scenario})
+(def scenarios {"insert_forms" insert-scenario "rename_alias" rename-scenario
+                "probe" (fn [_] (probe/verdict ["example-test"] {:test 1 :pass 1} 1))})
 
 ;; @spec RECEIPT-BOOL-001
 ;; INTENT-TEST: RECEIPT-BOOL-001
@@ -73,13 +78,15 @@
         verbs (registered-verbs (server/public-tool-registry))]
     (is (= [] (missing-registrations verbs registry)) "Missing boolean seam registry by verb")
     (is (= [] (missing-registrations verbs scenarios)) "Missing executable scenario by verb")
+    (is (= #{"insert_forms" "rename_alias" "probe"} verbs))
+    (is (= ["probe"] (missing-registrations verbs (dissoc registry "probe"))))
     (doseq [verb verbs :let [run (scenarios verb)] :when run]
       (testing verb
         (let [committed (run :completed-write) seams (registry verb)
               observations (into {:completed-write committed :behavior-not-run committed}
                                  (for [seam (disj (set (vals seams)) :completed-write :behavior-not-run)]
                                    [seam (run seam)]))]
-          (is (= "committed" (:state committed)))
+          (is (= (if (= verb "probe") :probe-passed "committed") (:state committed)))
           (is (every? (supported-seams verb) (vals seams)) (str verb " unknown seam"))
           (is (= [] (missing-fields committed seams)) (str verb " missing boolean fields"))
           (doseq [path (boolean-paths committed) :let [seam (seams (peek path))] :when seam]

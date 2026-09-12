@@ -1,5 +1,14 @@
 # Warm probe requirements
 
+Probe is built, not certified. `docs/intent/probe/refusals.edn` must enumerate
+the literal client/server refusal vocabulary, with the native failure each
+prevents. The shared envelope completeness witness compares the registry to
+the source vocabulary and requires native-failure records. RECEIPT-BOOL-001
+includes probe as the third verb, discovered from the CLI operation catalog:
+every boolean in a passed probe verdict requires a driven literal-false seam.
+A real `probe/verdict` with tests executed and no failures supplies
+verification_complete=false; no boolean is fabricated by the witness.
+
 - [x] **BB-PROBE-001**: When a namespace probe runs tests, it shall return a passed or
 failed inner-loop verdict with verification_complete false, pending landing-gate,
 executed test/assertion/failure counts, reloaded namespaces and elapsed_ms.

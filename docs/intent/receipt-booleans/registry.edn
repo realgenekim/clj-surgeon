@@ -1,7 +1,7 @@
 {:intent "RECEIPT-BOOL-001"
  :id :RECEIPT-BOOL-001
  :status :active
- :ears "When a versioned write verb publishes receipt booleans, the test suite shall require an executable false witness for each field."
+ :ears "When a versioned write verb or the probe CLI publishes receipt booleans, the test suite shall require an executable false witness for each field."
  :misreadings ["An always-true computed expression counts as evidence."
                "A field missing from a failure receipt is a false witness."
                "A new verb can omit registration because the old two still pass."
@@ -9,9 +9,10 @@
  :boundaries ["Returned receipt and durable per-file evidence" "New verbs" "New nested fields" "Post-write external mutation"]
  :tests [every-receipt-boolean-has-a-driven-false-witness unregistered-verbs-and-fields-fail-by-name]
  :rationale "Opus found the same unwitnessed receipt-boolean class in insertion and alias rename, 2026-09-11."
- :rule "Every boolean path discovered in committed receipts needs an observed literal-false witness. Failure-only fields are covered by publication/recovery groups, not this discovery claim."
+ :rule "Every boolean path discovered in committed write receipts or a passed probe verdict needs an observed literal-false witness. Probe's verification_complete remains false because warm success is not cold proof. Failure-only fields are covered by publication/recovery groups, not this discovery claim."
  :verbs
- {"insert_forms"
+ {"probe" {:verification_complete :behavior-not-run}
+  "insert_forms"
   {:committed :stage-failure :ok :stage-failure :mutation_attempted :stage-failure
    :source_unchanged :completed-write :verification_complete :behavior-not-run
    :write_verified :neighbor-corruption :other_forms_unchanged :neighbor-corruption}
