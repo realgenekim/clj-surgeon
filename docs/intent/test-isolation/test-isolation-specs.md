@@ -19,13 +19,22 @@ status: "round four implemented 2026-09-04 (002/003/004/005/007/010 runtime witn
   outside the 38 paired fast controls. A bb-portable namespace must have one
   passing complete namespace control on BOTH JVM and bb, with command, subject,
   result and receipt paths recorded beside its assignment. A namespace passing
-  on only one runtime is refused by name as non-portable until fixed; selecting
-  the passing runtime is not a portability repair. A configured-runtime load
+  on both is `:portable`. The JVM is the reference runtime; bb is an eligible
+  accelerator. A failed JVM control ALWAYS produces `:refused`. A passing JVM
+  plus a failed complete bb control is `:bb-ineligible` ONLY with an explicit
+  registration from the closed vocabulary `:sci-host-interop`,
+  `:native-image-reflection`, `:bb-classpath-missing/nrepl.core`, or
+  `:bb-hosted-jvm-launcher`. The registration records the exact reason and
+  evidence beside the assignment, which must be `:jvm`. Unknown reasons,
+  real behavior differences, missing controls and both-runtime failures refuse.
+  The witness fails by namespace only for `:refused` and prints every
+  `:bb-ineligible` namespace with its registered reasons. A configured-runtime load
   incompatibility is explicitly accounted for with its named load refusal;
   it is not a passing test control or evidence of bb portability.
-  Accounting for a test failure preserves the finding; it does not turn the
-  portability gate green. The manifest witness emits the namespace and failed
-  runtime controls even when the current assignment uses the passing runtime.
+  These initial-load exclusions remain separately visible; they do not claim
+  passing complete controls. A registered capability limitation is not a product
+  repair or a performance measurement. An unregistered bb failure still refuses
+  even when the current assignment uses the JVM.
   The declared bb admission tolerance
   is 2.0 after the conservative variance adjustment.
   Attempt20 replaces the single observations for all 35 bb-portable members

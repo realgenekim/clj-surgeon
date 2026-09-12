@@ -839,9 +839,38 @@
     :bb
     :jvm))
 
+(def bb-capability-vocabulary
+  #{:sci-host-interop :native-image-reflection
+    :bb-classpath-missing/nrepl.core :bb-hosted-jvm-launcher})
+
+;; @spec TEST-ISO-016 -- exact limitations from attempt22's complete controls.
+(def bb-ineligibilities
+  {'clj-surgeon.mcp-cold-verify-test
+   {:reasons #{:sci-host-interop} :detail "SCI refuses FileLockImpl.close in admission-timeout witness"}
+   'clj-surgeon.mcp-namespace-split-test
+   {:reasons #{:bb-classpath-missing/nrepl.core} :detail "Late helper-extraction requiring-resolve needs absent nrepl.core"}
+   'clj-surgeon.mcp-relation-census-launcher-test
+   {:reasons #{:bb-hosted-jvm-launcher :native-image-reflection}
+    :detail "java.class.path lacks JVM test dependencies; native image refuses StackOverflowError constructor"}
+   'clj-surgeon.memory.journal-green-test
+   {:reasons #{:bb-hosted-jvm-launcher} :detail "Child Java resolves to nonexistent bin/java under bb"}
+   'clj-surgeon.memory.oom-reproduction-test
+   {:reasons #{:bb-hosted-jvm-launcher} :detail "Child Java resolves to nonexistent bin/java under bb"}
+   'clj-surgeon.mission-display-test
+   {:reasons #{:bb-classpath-missing/nrepl.core} :detail "Late mission CLI resolution needs absent nrepl.core"}
+   'clj-surgeon.ns-isolation-test
+   {:reasons #{:native-image-reflection} :detail "Native image cannot invoke sci.lang.Var.getRawRoot"}
+   'clj-surgeon.reader-eval-fence-test
+   {:reasons #{:bb-hosted-jvm-launcher} :detail "bb-hosted JVM launcher throws ClassNotFoundException: clojure.main"}
+   'clj-surgeon.worktree-lifecycle-recovery-test
+   {:reasons #{:sci-host-interop}
+    :detail "SCI refuses FileLockImpl.release; replay retains the lock and reports lifecycle-target-locked"
+    :probe "docs/observations/2026-09-12-bbtower-block-b/attempt23/recovery-lock-probe.log"}})
+
 (def namespace-runtimes
   (into {} (map (fn [[n runtime]]
-                  [n (measured-runtime runtime (get runtime-measurements n))]))
+                  [n (if (contains? bb-ineligibilities n) :jvm
+                         (measured-runtime runtime (get runtime-measurements n)))]))
         portability-runtimes))
 
 (def unmeasured-runtimes
@@ -855,12 +884,18 @@
                    (for [[runtime suffix] [[:jvm "jvm-test"]
                                            [:bb "bb-test"]
                                            [:bb-load "bb-load"]]]
-                     [runtime (str "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/"
+                     [runtime (str "docs/observations/2026-09-12-bbtower-block-b/"
+                                   (if (and (not= runtime :bb-load)
+                                            (#{'clj-surgeon.cljc.merge-test
+                                               'clj-surgeon.cljc.split-test
+                                               'clj-surgeon.worktree-lifecycle-prune-test} n))
+                                     "attempt23" "attempt22")
+                                   "/controls/"
                                    n "-" suffix ".control.edn")]))])))
 
 ;; @spec TEST-ISO-016 -- a passing assignment cannot hide a failed control.
-(defn portability-refusal
-  [namespace-name {:keys [jvm bb bb-load]}]
+(defn portability-state
+  [namespace-name {:keys [jvm bb]} registration]
   (let [passes? (fn [runtime row]
                   (let [{:keys [test fail error]} (:result row)]
                     (and (= namespace-name (:namespace row))
@@ -873,20 +908,29 @@
                            :when (not (passes? runtime row))]
                        [runtime (select-keys row [:status :result :receipt])]))]
     (cond
-      (and (= :load-failed (:status bb-load))
-           (= "load" (:mode bb-load))
-           (= namespace-name (:namespace bb-load))
-           (= :bb (:runtime bb-load))
+      (empty? failed) {:state :portable :namespace namespace-name}
+      (and (not (contains? failed :jvm))
+           (= namespace-name (:namespace bb)) (= :bb (:runtime bb))
+           (= :test-failed (:status bb)) (= 1 (:exit bb))
+           (pos-int? (get-in bb [:result :test]))
+           (some pos-int? [(get-in bb [:result :fail]) (get-in bb [:result :error])])
+           (seq (:reasons registration))
+           (every? bb-capability-vocabulary (:reasons registration))
+           (not (clojure.string/blank? (:detail registration))))
+      (merge registration {:state :bb-ineligible :namespace namespace-name :runtime :jvm})
+      :else {:state :refused :error-type :non-portable-namespace :namespace namespace-name
+             :reason :runtime-control-failed :controls failed})))
+
+(defn portability-refusal [namespace-name {:keys [bb-load jvm bb] :as controls}]
+  (if (and (nil? jvm) (nil? bb)
+           (= :load-failed (:status bb-load)) (= "load" (:mode bb-load))
+           (= namespace-name (:namespace bb-load)) (= :bb (:runtime bb-load))
            (integer? (:exit bb-load)) (not (zero? (:exit bb-load))))
-      {:error-type :non-portable-namespace :namespace namespace-name
-       :reason :bb-load-incompatible
-       :control (select-keys bb-load [:status :message :causes :receipt])}
-
-      (seq failed)
-      {:error-type :non-portable-namespace :namespace namespace-name
-       :reason :runtime-control-failed :controls failed}
-
-      :else nil)))
+    {:error-type :non-portable-namespace :namespace namespace-name
+     :reason :bb-load-incompatible
+     :control (select-keys bb-load [:status :message :causes :receipt])}
+    (let [state (portability-state namespace-name controls (bb-ineligibilities namespace-name))]
+      (when (= :refused (:state state)) state))))
 
 (def excluded
   "Test namespaces that are on disk and in NO JVM lane, each with the reason

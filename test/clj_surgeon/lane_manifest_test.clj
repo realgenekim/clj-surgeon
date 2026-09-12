@@ -221,7 +221,7 @@
                    (assoc at :jvm (assoc (sample 1) :sd-ms 2.0) :bb (sample 2)))))
       (is (= :bb (lm/measured-runtime :bb nil)))
       (doseq [[n runtime] lm/unmeasured-runtimes]
-        (is (= runtime (lm/portability-runtimes n)) (str n)))
+        (is (= runtime (if (lm/bb-ineligibilities n) :jvm (lm/portability-runtimes n))) (str n)))
       (doseq [[n {:keys [jvm bb conservative-ratio] :as measurement}] lm/runtime-measurements]
         (is (= (:runtime measurement) (lm/namespace-runtimes n)) (str n " recorded assignment"))
         (doseq [[runtime arm] [[:jvm jvm] [:bb bb]]]
@@ -250,6 +250,22 @@
                                :result {:test 1 :fail 0 :error 0}})
         controls {:jvm (passing :jvm) :bb (passing :bb)}]
     (is (nil? (lm/portability-refusal n controls)))
+    (let [failed (assoc (passing :bb) :status :test-failed :exit 1
+                        :result {:test 1 :fail 0 :error 1})
+          limited (assoc controls :bb failed)
+          registration {:reasons #{:sci-host-interop} :detail "FileLockImpl.release refused"}]
+      (is (= :portable (:state (lm/portability-state n controls nil))))
+      (is (= :bb-ineligible (:state (lm/portability-state n limited registration))))
+      (doseq [bad [nil {} (assoc registration :reasons #{:unknown})
+                   (assoc registration :reasons #{}) (assoc registration :detail "")]]
+        (is (= :refused (:state (lm/portability-state n limited bad)))))
+      (doseq [bb [(passing :bb) failed]]
+        (is (= :refused (:state (lm/portability-state n
+                                  {:jvm (assoc (passing :jvm) :exit 1) :bb bb}
+                                  registration)))))
+      (doseq [bad [nil (assoc failed :namespace 'wrong/test)
+                   (assoc failed :runtime :jvm) (assoc failed :exit nil)]]
+        (is (= :refused (:state (lm/portability-state n (assoc controls :bb bad) registration))))))
     (doseq [runtime [:jvm :bb]
             bad [nil
                  (assoc (passing runtime) :status :test-failed)
@@ -275,12 +291,18 @@
                                :when (.isFile (io/file path))]
                            [runtime (assoc (edn/read-string (slurp path)) :receipt path)]))
           refusal (lm/portability-refusal n controls)
+          state (lm/portability-state n controls (lm/bb-ineligibilities n))
           unsupported-jvm-only? (and (= :bb-load-incompatible (:reason refusal))
                                      (= :jvm (lm/namespace-runtimes n))
                                      (= :jvm (lm/portability-runtimes n))
                                      (= n (get-in controls [:bb-load :namespace]))
                                      (= :bb (get-in controls [:bb-load :runtime]))
                                      (not (str/blank? (get-in controls [:bb-load :message]))))]
+      (when (= :bb-ineligible (:state state))
+        (println "BB-INELIGIBLE" n ":jvm" (pr-str (select-keys state [:reasons :detail :probe])))
+        (is (= :jvm (lm/namespace-runtimes n)) (str n)))
+      (when unsupported-jvm-only?
+        (println "BB-LOAD-EXCLUDED" n (pr-str (:control refusal))))
       (is (or (nil? refusal) unsupported-jvm-only?)
           (pr-str refusal)))))
 
