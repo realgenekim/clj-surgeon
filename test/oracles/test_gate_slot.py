@@ -4,8 +4,10 @@ import importlib.util
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 import time
 import unittest
+from unittest import mock
 import uuid
 
 MODULE = Path(__file__).resolve().parents[1] / 'gate_slot.py'
@@ -63,6 +65,15 @@ PLATFORM_ENV = {key: os.environ[key]
                 for key in ('GATE_SLOT_BACKEND', 'CLJ_SURGEON_GATE_ROOT',
                             'GATE_MEMAVAIL_MIB', 'TMPDIR')
                 if key in os.environ}
+
+
+def scratch_base(tmpdir):
+    """Use the gate's disk-temp policy, never the RAM-backed temp roots."""
+    path = Path(tmpdir).resolve() if tmpdir else Path('/var/tmp')
+    if any(path == root or root in path.parents
+           for root in (Path('/tmp'), Path('/dev/shm'))):
+        return Path('/var/tmp')
+    return path
 
 
 class GateSlotTest(unittest.TestCase):
@@ -368,6 +379,19 @@ class SunPathBudgetTest(unittest.TestCase):
         slot.forget_root_identity()
         self.addCleanup(slot.forget_root_identity)
 
+    def scratch_root(self):
+        return Path(self.enterContext(tempfile.TemporaryDirectory(
+            prefix='gs-', dir=scratch_base(os.environ.get('TMPDIR')))))
+
+    def test_scratch_base_follows_disk_temp_policy(self):
+        for supplied, expected in [(None, '/var/tmp'), ('', '/var/tmp'),
+                                   ('/tmp', '/var/tmp'), ('/tmp/seat', '/var/tmp'),
+                                   ('/dev/shm/seat', '/var/tmp'),
+                                   ('/var/tmp/seat', '/var/tmp/seat'),
+                                   ('/tmp-seat', '/tmp-seat')]:
+            with self.subTest(tmpdir=supplied):
+                self.assertEqual(Path(expected).resolve(), scratch_base(supplied))
+
     def test_the_macos_tmpdir_really_does_overflow_and_on_the_private_name(self):
         """The RED fact, pinned so the fix cannot be mistaken for decoration.
 
@@ -411,12 +435,21 @@ class SunPathBudgetTest(unittest.TestCase):
         bind() the long path -- the cap is enforced by the KERNEL, so the
         witness has to reach it.
         """
-        long_tmpdir = Path('/var/tmp/forge') / ('t' * (120 - len('/var/tmp/forge/')))
-        self.assertEqual(120, len(str(long_tmpdir)))
+        short_root = self.scratch_root()
+        padding = 120 - len(str(short_root).encode('utf-8')) - 1
+        self.assertGreater(padding, 0, 'TMPDIR must leave room for a 120-byte witness')
+        long_tmpdir = short_root / ('t' * padding)
+        self.assertEqual(120, len(str(long_tmpdir).encode('utf-8')))
+        # Production's short-root spelling is covered by the pure witnesses.
+        # Bind inside this test's writable envelope, never the shared /tmp root.
+        self.assertLessEqual(len(str(short_root).encode('utf-8')) + 1
+                             + slot.LONGEST_LEAF, slot.SUN_PATH_BUDGET)
+        self.enterContext(mock.patch.object(slot, 'short_slot_root',
+                                           return_value=short_root))
         chosen = slot.slot_root_for('linux', str(long_tmpdir), os.getuid())
         self.assertEqual(slot.short_slot_root(os.getuid()), chosen)
 
-        namespace = unique_namespace()
+        namespace = uuid.uuid4().hex  # Private root already isolates this witness.
         previous = {key: os.environ.get(key)
                     for key in ('TMPDIR', 'GATE_SLOT_BACKEND', 'CLJ_SURGEON_GATE_ROOT')}
         os.environ['TMPDIR'] = str(long_tmpdir)
@@ -445,8 +478,9 @@ class SunPathBudgetTest(unittest.TestCase):
     def test_a_path_over_the_budget_is_a_TYPED_refusal_not_an_OSError(self):
         """The skiff got `AF_UNIX path too long` straight out of bind(): no
         path, no limit, and no statement of who chose the directory."""
-        root = Path('/var/tmp/forge') / ('r' * 90)
+        root = self.scratch_root() / ('r' * 90)
         previous = os.environ.get('CLJ_SURGEON_GATE_ROOT')
+        previous_backend = os.environ.get('GATE_SLOT_BACKEND')
         os.environ['CLJ_SURGEON_GATE_ROOT'] = str(root)
         os.environ['GATE_SLOT_BACKEND'] = 'path-socket'
         try:
@@ -461,7 +495,10 @@ class SunPathBudgetTest(unittest.TestCase):
                 os.environ.pop('CLJ_SURGEON_GATE_ROOT', None)
             else:
                 os.environ['CLJ_SURGEON_GATE_ROOT'] = previous
-            os.environ.pop('GATE_SLOT_BACKEND', None)
+            if previous_backend is None:
+                os.environ.pop('GATE_SLOT_BACKEND', None)
+            else:
+                os.environ['GATE_SLOT_BACKEND'] = previous_backend
             slot.forget_root_identity()
             if root.exists():
                 root.rmdir()
@@ -470,8 +507,7 @@ class SunPathBudgetTest(unittest.TestCase):
         """/tmp is world-writable and sticky. `mkdir(mode=)` applies only when
         it CREATES, and umask can narrow it, so neither owner nor mode is
         established by that call."""
-        root = Path('/var/tmp/forge') / ('gate-mode-%s' % uuid.uuid4().hex)
-        root.mkdir(mode=0o777)
+        root = self.scratch_root()
         os.chmod(root, 0o777)
         previous = os.environ.get('CLJ_SURGEON_GATE_ROOT')
         os.environ['CLJ_SURGEON_GATE_ROOT'] = str(root)
