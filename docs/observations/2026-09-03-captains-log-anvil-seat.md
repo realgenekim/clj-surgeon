@@ -6192,3 +6192,32 @@ the window at 7 by my own meter. Two rules adopted and written to memory
 (evidence-commits-move-the-tip; class-oracle-before-another-round): no evidence commits on
 the branch tip until it lands; if round 7 finds another probe hole, commission the
 closure-completeness oracle instead of a round 8.
+
+## 2026-09-12T22:50:46Z — round 7 NO-GO on my own ledger row; the counted battery flaked on a timing assertion under my concurrency; management system modified
+
+Sol (verdict 7 published): every product check held (probe witnesses 7/128, lane and
+portability 30/1395, merge/split 66/336); the blocking finding is that the tip's own
+battery-ledger carries a :fail row (the check-only packet's envelope battery at 14644aad,
+which I committed "as evidence"), so battery-fresh refuses the candidate. Rule 2, evidence
+off the tip, violated by me before it was an hour old. The counted battery beside the review
+went red on ONE assertion: parser-admission-test's 20x timing ratio (refusal 1.93 ms vs 20 x
+0.084 ms) with n = 1, while two other JVM suites I had launched ran on the same box. Two
+classes, both named tonight: a timing assertion with no variance floor in a landing gate,
+and my running more than one suite at a time.
+
+Management system, per Gene's "Fantastic. Modify management system accordingly.":
+1. tighten-the-loop SKILL.md (canonical, claude-skills-nrepl bb267bf): three rules appended,
+   class first / evidence off the tip / the wiki as encounter contracts with Astra's metric.
+   The seat's push to that repo is 403 (mayor merges); routed by inbox. The skill file is
+   hash-bound: verify-binding showed the binding had ALREADY drifted since 09-08 on
+   andon-lift (nobody had run verify); new epoch 2191f20c written, BINDING-OK, 10 commands.
+2. ~/bin/ship-fix-block-spec.md (fence appendix, .bak kept): the reviewer names the CLASS
+   and the oracle that enumerates it on the finding's first line.
+3. Ship ratchets filed: inb-257a96 (receipt binds the code tree, docs excluded), inb-61761d
+   (autofix regenerates the census), inb-db9e78 (qualified refspec), inb-da1941 (short tmp).
+4. Memory: evidence-commits-move-the-tip; class-oracle-before-another-round.
+
+Closure for block B: when the box is quiet (the data-not-code verifier is the only JVM
+now), run the counted battery ALONE on candidate 8c542ede through receipt-chain, cherry-pick
+its passing ledger row (a ledger row is consumed by battery-fresh, so it belongs on the tip),
+sixteenth prewarm, ship round 8. No round 8 for a product finding: the class oracle comes first.
