@@ -5471,3 +5471,28 @@ epoch and event id, never on history run ids alone.
 First use, immediately: packet 28bbdab4, check-only, subject da247b05 (block B tip),
 :checks [make landing-gate-prewarm]. If it goes green, the ship's prewarm-required
 admission can be satisfied for the first time by the seat's own tooling.
+
+## 2026-09-12T11:06:06Z — the first check-only prewarm ran real lanes and refused on two envelope facts; two fixes in flight
+
+Packet 28bbdab4 executed `make landing-gate-prewarm` at da247b05 under the v3.12 envelope
+(JAVA_TOOL_OPTIONS only, no _JAVA_OPTIONS): the JVM lanes ran; bb lanes 0, 1, 10 and both
+alias lanes failed. Two causes, both real, neither the block's code:
+
+1. Product: the coordinator launches bb children without -Djava.io.tmpdir
+   (battery_parallel_runner.clj:461), so every bb child's temp dir is /tmp regardless of
+   TMPDIR. Landlock denied it here; outside a packet it has been writing test temp files
+   to the shared RAM tmpfs since block A (the anvil-tmp rule, violated by the tower's own
+   test runner). Astra attempt 12 (pid 49861): red-first witness, pass TMPDIR through,
+   audit every other out-of-tree write.
+2. Tooling: the product keeps per-seat state under user.home/.local/state/clj-surgeon
+   (locks, telemetry, alias receipt artifacts); user.home comes from passwd, so HOME
+   redirection does not reach it, and the envelope refused. Also the packet's own
+   report.edn write failed because the deliverable directory did not exist, so a red
+   check-only packet leaves no report. Round 3 of v3.12 (packet b9ec38de, Astra verified):
+   check-only packets on a clj-surgeon worktree get that one state dir as a write root,
+   recorded in the manifest; the deliverable dir is created; a red check still writes
+   report.edn. A delta was refused stale-session because the installed one-shot changed
+   under it; relaunched as a fresh build, which is the rule working.
+
+The v3.12 install stands (PROVEN). Each of these was found by a gate refusing, not by a
+green that lied.
