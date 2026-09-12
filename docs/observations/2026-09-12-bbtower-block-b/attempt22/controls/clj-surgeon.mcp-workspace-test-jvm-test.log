@@ -1,0 +1,8 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.mcp-workspace-test
+
+Ran 5 tests containing 34 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.mcp-workspace-test, :runtime :jvm, :mode "test", :started-at "2026-09-12T19:02:24.197144284Z", :elapsed-ms 109, :status :passed, :result {:test 5, :pass 34, :fail 0, :error 0, :type :summary}}

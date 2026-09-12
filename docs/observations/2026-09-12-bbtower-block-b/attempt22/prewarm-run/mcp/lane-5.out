@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.namespace-split-test
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.mission-forms-source-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.cljc.analyze-test

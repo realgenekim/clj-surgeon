@@ -1,0 +1,6 @@
+
+Testing clj-surgeon.mission-candidate-test
+
+Ran 5 tests containing 58 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.mission-candidate-test, :runtime :bb, :mode "test", :started-at "2026-09-12T19:11:00.464563839Z", :elapsed-ms 29, :status :passed, :result {:test 5, :pass 58, :fail 0, :error 0, :type :summary}}

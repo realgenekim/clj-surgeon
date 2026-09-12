@@ -1,0 +1,254 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+FAIL in (evaluation-preserves-typed-refusals-and-untyped-cause-messages) (xray_test.clj:145)
+expected: (identical? refusal caught)
+  actual: (not (identical? #error {
+ :cause "typed refusal"
+ :data {:error-type :invalid-xray-cardinality, :reason :field-refusal, :detail {:preserved true}}
+ :via
+ [{:type clojure.lang.ExceptionInfo
+   :message "typed refusal"
+   :data {:error-type :invalid-xray-cardinality, :reason :field-refusal, :detail {:preserved true}}
+   :at [clj_surgeon.xray_test$fn__16258 invokeStatic "xray_test.clj" 138]}]
+ :trace
+ [[clj_surgeon.xray_test$fn__16258 invokeStatic "xray_test.clj" 138]
+  [clj_surgeon.xray_test$fn__16258 invoke "xray_test.clj" 134]
+  [clojure.test$test_var$fn__9898 invoke "test.clj" 717]
+  [clojure.test$test_var invokeStatic "test.clj" 717]
+  [clojure.test$test_var invoke "test.clj" 708]
+  [clojure.test$test_vars$fn__9924$fn__9929 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars$fn__9924 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars invokeStatic "test.clj" 731]
+  [clojure.test$test_vars invoke "test.clj" 723]
+  [user$eval17387 invokeStatic "NO_SOURCE_FILE" 1]
+  [user$eval17387 invoke "NO_SOURCE_FILE" 1]
+  [clojure.lang.Compiler eval "Compiler.java" 7739]
+  [clojure.lang.Compiler eval "Compiler.java" 7694]
+  [clojure.core$eval invokeStatic "core.clj" 3232]
+  [clojure.main$eval_opt invokeStatic "main.clj" 489]
+  [clojure.main$eval_opt invoke "main.clj" 483]
+  [clojure.main$initialize invokeStatic "main.clj" 509]
+  [clojure.main$null_opt invokeStatic "main.clj" 543]
+  [clojure.main$null_opt invoke "main.clj" 540]
+  [clojure.main$main invokeStatic "main.clj" 665]
+  [clojure.main$main doInvoke "main.clj" 617]
+  [clojure.lang.RestFn applyTo "RestFn.java" 140]
+  [clojure.lang.Var applyTo "Var.java" 707]
+  [clojure.main main "main.java" 40]]} #error {
+ :cause "typed refusal"
+ :data {:error-type :invalid-xray-cardinality, :reason :field-refusal, :detail {:preserved true}}
+ :via
+ [{:type clojure.lang.ExceptionInfo
+   :message "Invalid Clojure xray expression"
+   :data {:expression "(form 'data)", :error-type :invalid-xray-expression, :allowed-forms ["A path returns literal evidence." "(expect-count path n)" "(analyze path pure-function)" "(form name)" "(form name platform)" "(line positive-line)" "(match path pattern)" "(where path predicates)" "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)" "(initializer path)" "(span path n)" "(partition-all path n)"], :remedy "Return a path, or end with analyze; add expect-count for exact cardinality.", :allowed-capabilities [:pure-control :collection-construction :collection-navigation :collection-transformation :higher-order-functions :predicates :numbers-and-strings :metadata :structural-builders], :reason :evaluation-failed, :allowed-symbol-count 238, :usage "clj-surgeon :op :xray :file FILE :expr EXPR", :cause-message "typed refusal"}
+   :at [clj_surgeon.edit_dsl$invalid_xray_expression_BANG_ invokeStatic "edit_dsl.clj" 384]}
+  {:type clojure.lang.ExceptionInfo
+   :message "typed refusal"
+   :data {:error-type :invalid-xray-cardinality, :reason :field-refusal, :detail {:preserved true}}
+   :at [clj_surgeon.xray_test$fn__16258 invokeStatic "xray_test.clj" 138]}]
+ :trace
+ [[clj_surgeon.xray_test$fn__16258 invokeStatic "xray_test.clj" 138]
+  [clj_surgeon.xray_test$fn__16258 invoke "xray_test.clj" 134]
+  [clojure.test$test_var$fn__9898 invoke "test.clj" 717]
+  [clojure.test$test_var invokeStatic "test.clj" 717]
+  [clojure.test$test_var invoke "test.clj" 708]
+  [clojure.test$test_vars$fn__9924$fn__9929 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars$fn__9924 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars invokeStatic "test.clj" 731]
+  [clojure.test$test_vars invoke "test.clj" 723]
+  [user$eval17387 invokeStatic "NO_SOURCE_FILE" 1]
+  [user$eval17387 invoke "NO_SOURCE_FILE" 1]
+  [clojure.lang.Compiler eval "Compiler.java" 7739]
+  [clojure.lang.Compiler eval "Compiler.java" 7694]
+  [clojure.core$eval invokeStatic "core.clj" 3232]
+  [clojure.main$eval_opt invokeStatic "main.clj" 489]
+  [clojure.main$eval_opt invoke "main.clj" 483]
+  [clojure.main$initialize invokeStatic "main.clj" 509]
+  [clojure.main$null_opt invokeStatic "main.clj" 543]
+  [clojure.main$null_opt invoke "main.clj" 540]
+  [clojure.main$main invokeStatic "main.clj" 665]
+  [clojure.main$main doInvoke "main.clj" 617]
+  [clojure.lang.RestFn applyTo "RestFn.java" 140]
+  [clojure.lang.Var applyTo "Var.java" 707]
+  [clojure.main main "main.java" 40]]}))
+
+FAIL in (evaluation-preserves-typed-refusals-and-untyped-cause-messages) (xray_test.clj:146)
+expected: (= (ex-data refusal) (ex-data caught))
+  actual: (not (= {:error-type :invalid-xray-cardinality, :reason :field-refusal, :detail {:preserved true}} {:expression "(form 'data)", :error-type :invalid-xray-expression, :allowed-forms ["A path returns literal evidence." "(expect-count path n)" "(analyze path pure-function)" "(form name)" "(form name platform)" "(line positive-line)" "(match path pattern)" "(where path predicates)" "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)" "(initializer path)" "(span path n)" "(partition-all path n)"], :remedy "Return a path, or end with analyze; add expect-count for exact cardinality.", :allowed-capabilities [:pure-control :collection-construction :collection-navigation :collection-transformation :higher-order-functions :predicates :numbers-and-strings :metadata :structural-builders], :reason :evaluation-failed, :allowed-symbol-count 238, :usage "clj-surgeon :op :xray :file FILE :expr EXPR", :cause-message "typed refusal"}))
+
+FAIL in (evaluation-preserves-typed-refusals-and-untyped-cause-messages) (xray_test.clj:145)
+expected: (identical? refusal caught)
+  actual: (not (identical? #error {
+ :cause "typed refusal"
+ :data {:error-type :invalid-xray-cardinality, :reason :field-refusal, :detail {:preserved true}}
+ :via
+ [{:type clojure.lang.ExceptionInfo
+   :message "typed refusal"
+   :data {:error-type :invalid-xray-cardinality, :reason :field-refusal, :detail {:preserved true}}
+   :at [clj_surgeon.xray_test$fn__16258 invokeStatic "xray_test.clj" 138]}]
+ :trace
+ [[clj_surgeon.xray_test$fn__16258 invokeStatic "xray_test.clj" 138]
+  [clj_surgeon.xray_test$fn__16258 invoke "xray_test.clj" 134]
+  [clojure.test$test_var$fn__9898 invoke "test.clj" 717]
+  [clojure.test$test_var invokeStatic "test.clj" 717]
+  [clojure.test$test_var invoke "test.clj" 708]
+  [clojure.test$test_vars$fn__9924$fn__9929 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars$fn__9924 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars invokeStatic "test.clj" 731]
+  [clojure.test$test_vars invoke "test.clj" 723]
+  [user$eval17387 invokeStatic "NO_SOURCE_FILE" 1]
+  [user$eval17387 invoke "NO_SOURCE_FILE" 1]
+  [clojure.lang.Compiler eval "Compiler.java" 7739]
+  [clojure.lang.Compiler eval "Compiler.java" 7694]
+  [clojure.core$eval invokeStatic "core.clj" 3232]
+  [clojure.main$eval_opt invokeStatic "main.clj" 489]
+  [clojure.main$eval_opt invoke "main.clj" 483]
+  [clojure.main$initialize invokeStatic "main.clj" 509]
+  [clojure.main$null_opt invokeStatic "main.clj" 543]
+  [clojure.main$null_opt invoke "main.clj" 540]
+  [clojure.main$main invokeStatic "main.clj" 665]
+  [clojure.main$main doInvoke "main.clj" 617]
+  [clojure.lang.RestFn applyTo "RestFn.java" 140]
+  [clojure.lang.Var applyTo "Var.java" 707]
+  [clojure.main main "main.java" 40]]} #error {
+ :cause "typed refusal"
+ :data {:error-type :invalid-xray-cardinality, :reason :field-refusal, :detail {:preserved true}}
+ :via
+ [{:type clojure.lang.ExceptionInfo
+   :message "Invalid Clojure xray expression"
+   :data {:expression "(form 'data)", :error-type :invalid-xray-expression, :allowed-forms ["A path returns literal evidence." "(expect-count path n)" "(analyze path pure-function)" "(form name)" "(form name platform)" "(line positive-line)" "(match path pattern)" "(where path predicates)" "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)" "(initializer path)" "(span path n)" "(partition-all path n)"], :remedy "Return a path, or end with analyze; add expect-count for exact cardinality.", :allowed-capabilities [:pure-control :collection-construction :collection-navigation :collection-transformation :higher-order-functions :predicates :numbers-and-strings :metadata :structural-builders], :reason :evaluation-failed, :allowed-symbol-count 238, :usage "clj-surgeon :op :xray :file FILE :expr EXPR", :cause-message "typed refusal"}
+   :at [clj_surgeon.edit_dsl$invalid_xray_expression_BANG_ invokeStatic "edit_dsl.clj" 384]}
+  {:type clojure.lang.ExceptionInfo
+   :message "typed refusal"
+   :data {:error-type :invalid-xray-cardinality, :reason :field-refusal, :detail {:preserved true}}
+   :at [clj_surgeon.xray_test$fn__16258 invokeStatic "xray_test.clj" 138]}]
+ :trace
+ [[clj_surgeon.xray_test$fn__16258 invokeStatic "xray_test.clj" 138]
+  [clj_surgeon.xray_test$fn__16258 invoke "xray_test.clj" 134]
+  [clojure.test$test_var$fn__9898 invoke "test.clj" 717]
+  [clojure.test$test_var invokeStatic "test.clj" 717]
+  [clojure.test$test_var invoke "test.clj" 708]
+  [clojure.test$test_vars$fn__9924$fn__9929 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars$fn__9924 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars invokeStatic "test.clj" 731]
+  [clojure.test$test_vars invoke "test.clj" 723]
+  [user$eval17387 invokeStatic "NO_SOURCE_FILE" 1]
+  [user$eval17387 invoke "NO_SOURCE_FILE" 1]
+  [clojure.lang.Compiler eval "Compiler.java" 7739]
+  [clojure.lang.Compiler eval "Compiler.java" 7694]
+  [clojure.core$eval invokeStatic "core.clj" 3232]
+  [clojure.main$eval_opt invokeStatic "main.clj" 489]
+  [clojure.main$eval_opt invoke "main.clj" 483]
+  [clojure.main$initialize invokeStatic "main.clj" 509]
+  [clojure.main$null_opt invokeStatic "main.clj" 543]
+  [clojure.main$null_opt invoke "main.clj" 540]
+  [clojure.main$main invokeStatic "main.clj" 665]
+  [clojure.main$main doInvoke "main.clj" 617]
+  [clojure.lang.RestFn applyTo "RestFn.java" 140]
+  [clojure.lang.Var applyTo "Var.java" 707]
+  [clojure.main main "main.java" 40]]}))
+
+FAIL in (evaluation-preserves-typed-refusals-and-untyped-cause-messages) (xray_test.clj:146)
+expected: (= (ex-data refusal) (ex-data caught))
+  actual: (not (= {:error-type :invalid-xray-cardinality, :reason :field-refusal, :detail {:preserved true}} {:expression "(form 'data)", :error-type :invalid-xray-expression, :allowed-forms ["A path returns literal evidence." "(expect-count path n)" "(analyze path pure-function)" "(form name)" "(form name platform)" "(line positive-line)" "(match path pattern)" "(where path predicates)" "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)" "(initializer path)" "(span path n)" "(partition-all path n)"], :remedy "Return a path, or end with analyze; add expect-count for exact cardinality.", :allowed-capabilities [:pure-control :collection-construction :collection-navigation :collection-transformation :higher-order-functions :predicates :numbers-and-strings :metadata :structural-builders], :reason :evaluation-failed, :allowed-symbol-count 238, :usage "clj-surgeon :op :xray :file FILE :expr EXPR", :cause-message "typed refusal"}))
+
+FAIL in (evaluation-preserves-typed-refusals-and-untyped-cause-messages) (xray_test.clj:153)
+expected: (identical? refusal caught)
+  actual: (not (identical? #error {
+ :cause "typed builder refusal"
+ :data {:error-type :invalid-xray-cardinality, :reason :field-refusal}
+ :via
+ [{:type clojure.lang.ExceptionInfo
+   :message "typed builder refusal"
+   :data {:error-type :invalid-xray-cardinality, :reason :field-refusal}
+   :at [clj_surgeon.xray_test$fn__16258 invokeStatic "xray_test.clj" 148]}]
+ :trace
+ [[clj_surgeon.xray_test$fn__16258 invokeStatic "xray_test.clj" 148]
+  [clj_surgeon.xray_test$fn__16258 invoke "xray_test.clj" 134]
+  [clojure.test$test_var$fn__9898 invoke "test.clj" 717]
+  [clojure.test$test_var invokeStatic "test.clj" 717]
+  [clojure.test$test_var invoke "test.clj" 708]
+  [clojure.test$test_vars$fn__9924$fn__9929 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars$fn__9924 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars invokeStatic "test.clj" 731]
+  [clojure.test$test_vars invoke "test.clj" 723]
+  [user$eval17387 invokeStatic "NO_SOURCE_FILE" 1]
+  [user$eval17387 invoke "NO_SOURCE_FILE" 1]
+  [clojure.lang.Compiler eval "Compiler.java" 7739]
+  [clojure.lang.Compiler eval "Compiler.java" 7694]
+  [clojure.core$eval invokeStatic "core.clj" 3232]
+  [clojure.main$eval_opt invokeStatic "main.clj" 489]
+  [clojure.main$eval_opt invoke "main.clj" 483]
+  [clojure.main$initialize invokeStatic "main.clj" 509]
+  [clojure.main$null_opt invokeStatic "main.clj" 543]
+  [clojure.main$null_opt invoke "main.clj" 540]
+  [clojure.main$main invokeStatic "main.clj" 665]
+  [clojure.main$main doInvoke "main.clj" 617]
+  [clojure.lang.RestFn applyTo "RestFn.java" 140]
+  [clojure.lang.Var applyTo "Var.java" 707]
+  [clojure.main main "main.java" 40]]} #error {
+ :cause "typed builder refusal"
+ :data {:error-type :invalid-xray-cardinality, :reason :field-refusal}
+ :via
+ [{:type clojure.lang.ExceptionInfo
+   :message "Invalid Clojure xray expression"
+   :data {:expression "(form 'data)", :error-type :invalid-xray-expression, :allowed-forms ["A path returns literal evidence." "(expect-count path n)" "(analyze path pure-function)" "(form name)" "(form name platform)" "(line positive-line)" "(match path pattern)" "(where path predicates)" "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)" "(initializer path)" "(span path n)" "(partition-all path n)"], :remedy "Return a path, or end with analyze; add expect-count for exact cardinality.", :allowed-capabilities [:pure-control :collection-construction :collection-navigation :collection-transformation :higher-order-functions :predicates :numbers-and-strings :metadata :structural-builders], :reason :evaluation-failed, :allowed-symbol-count 238, :usage "clj-surgeon :op :xray :file FILE :expr EXPR", :cause-message "typed builder refusal"}
+   :at [clj_surgeon.edit_dsl$invalid_xray_expression_BANG_ invokeStatic "edit_dsl.clj" 384]}
+  {:type clojure.lang.ExceptionInfo
+   :message "typed builder refusal"
+   :data {:error-type :invalid-xray-cardinality, :reason :field-refusal}
+   :at [clj_surgeon.xray_test$fn__16258 invokeStatic "xray_test.clj" 148]}]
+ :trace
+ [[clj_surgeon.xray_test$fn__16258 invokeStatic "xray_test.clj" 148]
+  [clj_surgeon.xray_test$fn__16258 invoke "xray_test.clj" 134]
+  [clojure.test$test_var$fn__9898 invoke "test.clj" 717]
+  [clojure.test$test_var invokeStatic "test.clj" 717]
+  [clojure.test$test_var invoke "test.clj" 708]
+  [clojure.test$test_vars$fn__9924$fn__9929 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars$fn__9924 invoke "test.clj" 735]
+  [clojure.test$default_fixture invokeStatic "test.clj" 687]
+  [clojure.test$default_fixture invoke "test.clj" 683]
+  [clojure.test$test_vars invokeStatic "test.clj" 731]
+  [clojure.test$test_vars invoke "test.clj" 723]
+  [user$eval17387 invokeStatic "NO_SOURCE_FILE" 1]
+  [user$eval17387 invoke "NO_SOURCE_FILE" 1]
+  [clojure.lang.Compiler eval "Compiler.java" 7739]
+  [clojure.lang.Compiler eval "Compiler.java" 7694]
+  [clojure.core$eval invokeStatic "core.clj" 3232]
+  [clojure.main$eval_opt invokeStatic "main.clj" 489]
+  [clojure.main$eval_opt invoke "main.clj" 483]
+  [clojure.main$initialize invokeStatic "main.clj" 509]
+  [clojure.main$null_opt invokeStatic "main.clj" 543]
+  [clojure.main$null_opt invoke "main.clj" 540]
+  [clojure.main$main invokeStatic "main.clj" 665]
+  [clojure.main$main doInvoke "main.clj" 617]
+  [clojure.lang.RestFn applyTo "RestFn.java" 140]
+  [clojure.lang.Var applyTo "Var.java" 707]
+  [clojure.main main "main.java" 40]]}))
+
+FAIL in (evaluation-preserves-typed-refusals-and-untyped-cause-messages) (xray_test.clj:154)
+expected: (= (ex-data refusal) (ex-data caught))
+  actual: (not (= {:error-type :invalid-xray-cardinality, :reason :field-refusal} {:expression "(form 'data)", :error-type :invalid-xray-expression, :allowed-forms ["A path returns literal evidence." "(expect-count path n)" "(analyze path pure-function)" "(form name)" "(form name platform)" "(line positive-line)" "(match path pattern)" "(where path predicates)" "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)" "(initializer path)" "(span path n)" "(partition-all path n)"], :remedy "Return a path, or end with analyze; add expect-count for exact cardinality.", :allowed-capabilities [:pure-control :collection-construction :collection-navigation :collection-transformation :higher-order-functions :predicates :numbers-and-strings :metadata :structural-builders], :reason :evaluation-failed, :allowed-symbol-count 238, :usage "clj-surgeon :op :xray :file FILE :expr EXPR", :cause-message "typed builder refusal"}))
+{:test 1, :pass 15, :fail 6, :error 0}

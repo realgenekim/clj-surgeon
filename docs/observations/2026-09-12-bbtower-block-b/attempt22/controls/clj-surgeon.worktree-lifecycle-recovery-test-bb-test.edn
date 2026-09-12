@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.worktree-lifecycle-recovery-test, :runtime :bb, :mode "test", :started-at "2026-09-12T19:26:33.368357923Z", :elapsed-ms 194, :status :test-failed, :result {:test 10, :pass 26, :fail 5, :error 9, :type :summary}}

@@ -1,0 +1,432 @@
+
+Testing clj-surgeon.mcp-relation-census-launcher-test
+
+FAIL in (no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:255)
+:jvm :keyword-at-the-launchers-exit refuses as the declared type
+:jvm :keyword-at-the-launchers-exit printed no readable refusal: ""
+expected: (map? parsed)
+  actual: (not (map? nil))
+
+FAIL in (no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:255)
+:jvm :keyword-at-the-launchers-exit refuses as the declared type
+:jvm :keyword-at-the-launchers-exit refused nil
+expected: (= error-type (:error-type parsed))
+  actual: (not (= :duplicate-argument nil))
+
+FAIL in (no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:255)
+:jvm :keyword-at-the-launchers-exit is bounded AS PRINTED
+:jvm :keyword-at-the-launchers-exit truncated nothing and said nothing: the caller's own 10,001-character argument came back whole
+expected: (str/includes? (str out) "[truncated:")
+  actual: (not (str/includes? "" "[truncated:"))
+
+FAIL in (no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:255)
+:jvm :symbol-at-the-launchers-exit refuses as the declared type
+:jvm :symbol-at-the-launchers-exit printed no readable refusal: ""
+expected: (map? parsed)
+  actual: (not (map? nil))
+
+FAIL in (no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:255)
+:jvm :symbol-at-the-launchers-exit refuses as the declared type
+:jvm :symbol-at-the-launchers-exit refused nil
+expected: (= error-type (:error-type parsed))
+  actual: (not (= :duplicate-argument nil))
+
+FAIL in (no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:255)
+:jvm :symbol-at-the-launchers-exit is bounded AS PRINTED
+:jvm :symbol-at-the-launchers-exit truncated nothing and said nothing: the caller's own 10,001-character argument came back whole
+expected: (str/includes? (str out) "[truncated:")
+  actual: (not (str/includes? "" "[truncated:"))
+
+FAIL in (no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:255)
+:jvm :keyword-vector-at-the-ops-exit refuses as the declared type
+:jvm :keyword-vector-at-the-ops-exit printed no readable refusal: ""
+expected: (map? parsed)
+  actual: (not (map? nil))
+
+FAIL in (no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:255)
+:jvm :keyword-vector-at-the-ops-exit refuses as the declared type
+:jvm :keyword-vector-at-the-ops-exit refused nil
+expected: (= error-type (:error-type parsed))
+  actual: (not (= :doors-not-a-string nil))
+
+FAIL in (no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:255)
+:jvm :keyword-vector-at-the-ops-exit is bounded AS PRINTED
+:jvm :keyword-vector-at-the-ops-exit truncated nothing and said nothing: the caller's own 10,001-character argument came back whole
+expected: (str/includes? (str out) "[truncated:")
+  actual: (not (str/includes? "" "[truncated:"))
+
+FAIL in (no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:255)
+:jvm :nested-map-at-the-ops-exit refuses as the declared type
+:jvm :nested-map-at-the-ops-exit printed no readable refusal: ""
+expected: (map? parsed)
+  actual: (not (map? nil))
+
+FAIL in (no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:255)
+:jvm :nested-map-at-the-ops-exit refuses as the declared type
+:jvm :nested-map-at-the-ops-exit refused nil
+expected: (= error-type (:error-type parsed))
+  actual: (not (= :doors-not-a-string nil))
+
+FAIL in (no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:255)
+:jvm :nested-map-at-the-ops-exit is bounded AS PRINTED
+:jvm :nested-map-at-the-ops-exit truncated nothing and said nothing: the caller's own 10,001-character argument came back whole
+expected: (str/includes? (str out) "[truncated:")
+  actual: (not (str/includes? "" "[truncated:"))
+
+FAIL in (no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:255)
+:jvm :many-small-leaves-at-the-ops-exit refuses as the declared type
+:jvm :many-small-leaves-at-the-ops-exit printed no readable refusal: ""
+expected: (map? parsed)
+  actual: (not (map? nil))
+
+FAIL in (no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:255)
+:jvm :many-small-leaves-at-the-ops-exit refuses as the declared type
+:jvm :many-small-leaves-at-the-ops-exit refused nil
+expected: (= error-type (:error-type parsed))
+  actual: (not (= :doors-not-a-string nil))
+
+FAIL in (no-refusal-either-real-launcher-prints-carries-an-unbounded-printed-value) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:255)
+:jvm :many-small-leaves-at-the-ops-exit is bounded AS PRINTED
+:jvm :many-small-leaves-at-the-ops-exit truncated nothing and said nothing: the caller's own 10,001-character argument came back whole
+expected: (str/includes? (str out) "[truncated:")
+  actual: (not (str/includes? "" "[truncated:"))
+
+FAIL in (every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:141)
+:jvm :duplicate-argument refuses as the declared type
+:jvm :duplicate-argument printed no readable refusal: ""
+expected: (map? parsed)
+  actual: (not (map? nil))
+
+FAIL in (every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:141)
+:jvm :duplicate-argument refuses as the declared type
+:jvm :duplicate-argument refused nil
+expected: (= error-type (:error-type parsed))
+  actual: (not (= :duplicate-argument nil))
+
+FAIL in (every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:141)
+:jvm :duplicate-argument is bounded at the launcher's exit
+:jvm :duplicate-argument truncated nothing and said nothing: the caller's own 10,001-character argument came back whole
+expected: (str/includes? (str out) "[truncated:")
+  actual: (not (str/includes? "" "[truncated:"))
+
+FAIL in (every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:141)
+:jvm :invalid-arguments refuses as the declared type
+:jvm :invalid-arguments printed no readable refusal: ""
+expected: (map? parsed)
+  actual: (not (map? nil))
+
+FAIL in (every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:141)
+:jvm :invalid-arguments refuses as the declared type
+:jvm :invalid-arguments refused nil
+expected: (= error-type (:error-type parsed))
+  actual: (not (= :invalid-arguments nil))
+
+FAIL in (every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:141)
+:jvm :invalid-arguments is bounded at the launcher's exit
+:jvm :invalid-arguments truncated nothing and said nothing: the caller's own 10,001-character argument came back whole
+expected: (str/includes? (str out) "[truncated:")
+  actual: (not (str/includes? "" "[truncated:"))
+
+FAIL in (every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:141)
+:jvm :unknown-operation refuses as the declared type
+:jvm :unknown-operation printed no readable refusal: ""
+expected: (map? parsed)
+  actual: (not (map? nil))
+
+FAIL in (every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:141)
+:jvm :unknown-operation refuses as the declared type
+:jvm :unknown-operation refused nil
+expected: (= error-type (:error-type parsed))
+  actual: (not (= :unknown-operation nil))
+
+FAIL in (every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:141)
+:jvm :unknown-operation is bounded at the launcher's exit
+:jvm :unknown-operation truncated nothing and said nothing: the caller's own 10,001-character argument came back whole
+expected: (str/includes? (str out) "[truncated:")
+  actual: (not (str/includes? "" "[truncated:"))
+
+FAIL in (every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:141)
+:jvm :unknown-operation-under-help refuses as the declared type
+:jvm :unknown-operation-under-help printed no readable refusal: ""
+expected: (map? parsed)
+  actual: (not (map? nil))
+
+FAIL in (every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:141)
+:jvm :unknown-operation-under-help refuses as the declared type
+:jvm :unknown-operation-under-help refused nil
+expected: (= error-type (:error-type parsed))
+  actual: (not (= :unknown-operation nil))
+
+FAIL in (every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:141)
+:jvm :unknown-operation-under-help is bounded at the launcher's exit
+:jvm :unknown-operation-under-help truncated nothing and said nothing: the caller's own 10,001-character argument came back whole
+expected: (str/includes? (str out) "[truncated:")
+  actual: (not (str/includes? "" "[truncated:"))
+
+FAIL in (every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:141)
+:jvm :argument-nesting-too-deep refuses as the declared type
+:jvm :argument-nesting-too-deep printed no readable refusal: ""
+expected: (map? parsed)
+  actual: (not (map? nil))
+
+FAIL in (every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:141)
+:jvm :argument-nesting-too-deep refuses as the declared type
+:jvm :argument-nesting-too-deep refused nil
+expected: (= error-type (:error-type parsed))
+  actual: (not (= :argument-nesting-too-deep nil))
+
+FAIL in (every-refusal-the-launcher-itself-prints-is-bounded-at-its-exit) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:141)
+:jvm :argument-nesting-too-deep is bounded at the launcher's exit
+:jvm :argument-nesting-too-deep truncated nothing and said nothing: the caller's own 10,001-character argument came back whole
+expected: (str/includes? (str out) "[truncated:")
+  actual: (not (str/includes? "" "[truncated:"))
+
+ERROR in (the-launchers-last-resort-catch-is-over-throwable) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:471)
+Uncaught exception, not in assertion.
+expected: nil
+  actual: clojure.lang.ExceptionInfo: Cannot reflectively invoke constructor 'public java.lang.StackOverflowError()'. To allow this operation, add the following to the 'reflection' section of 'reachability-metadata.json' and rebuild the native image:
+
+  {
+    "type": "java.lang.StackOverflowError",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  }
+
+The 'reachability-metadata.json' file should be located in 'META-INF/native-image/<group-id>/<artifact-id>/' of your project. For further help, see https://www.graalvm.org/latest/reference-manual/native-image/metadata/#reflection
+{:type :sci/error, :line 477, :column 23, :message "Cannot reflectively invoke constructor 'public java.lang.StackOverflowError()'. To allow this operation, add the following to the 'reflection' section of 'reachability-metadata.json' and rebuild the native image:\n\n  {\n    \"type\": \"java.lang.StackOverflowError\",\n    \"methods\": [\n      {\n        \"name\": \"<init>\",\n        \"parameterTypes\": []\n      }\n    ]\n  }\n\nThe 'reachability-metadata.json' file should be located in 'META-INF/native-image/<group-id>/<artifact-id>/' of your project. For further help, see https://www.graalvm.org/latest/reference-manual/native-image/metadata/#reflection", :sci.impl/callstack #object[clojure.lang.Volatile 0x5204337f {:status :ready, :val (#sci.impl.utils.StackFrame{:line 473, :column 5, :end-line nil, :end-column nil, :ns #object[sci.lang.Namespace 0x6695fb3 "clj-surgeon.mcp-relation-census-launcher-test"], :file "/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj", :f-meta nil, :special true} #sci.impl.utils.StackFrame{:line 477, :column 23, :end-line nil, :end-column nil, :ns #object[sci.lang.Namespace 0x6695fb3 "clj-surgeon.mcp-relation-census-launcher-test"], :file "/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj", :f-meta {:sci.impl/op :resolve-sym, :sci.impl/idx 0}, :special false})}], :file "/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj"}
+ at sci.impl.utils$rethrow_with_location_of_node.invokeStatic (utils.cljc:173)
+    sci.impl.analyzer$return_call$reify__5155.eval (analyzer.cljc:1756)
+    sci.impl.analyzer$analyze_let_STAR_$reify__4899.eval (analyzer.cljc:715)
+    sci.impl.analyzer$return_if$reify__4931.eval (analyzer.cljc:947)
+    sci.impl.analyzer$return_do$reify__4622.eval (analyzer.cljc:106)
+    sci.impl.analyzer$analyze_let_STAR_$reify__4899.eval (analyzer.cljc:717)
+    sci.impl.evaluator$eval_try_plain.invokeStatic (evaluator.cljc:140)
+    sci.impl.evaluator$eval_try.invokeStatic (evaluator.cljc:149)
+    sci.impl.analyzer$analyze_try$reify__4965.eval (analyzer.cljc:1046)
+    sci.impl.analyzer$return_do$reify__4622.eval (analyzer.cljc:106)
+    sci.impl.analyzer$analyze_let_STAR_$reify__4897.eval (analyzer.cljc:710)
+    sci.impl.analyzer$return_do$reify__4622.eval (analyzer.cljc:105)
+    sci.impl.fns$fun$arity_0__1461.invoke (fns.cljc:129)
+    babashka.impl.clojure.test$test_var_impl$fn__30077.invoke (test.clj:720)
+    babashka.impl.clojure.test$test_var_impl.invokeStatic (test.clj:720)
+    babashka.impl.clojure.test$test_var_impl.invoke (test.clj:711)
+    sci.lang.Var.invoke (lang.cljc:217)
+    babashka.impl.clojure.test$test_vars$fn__30104$fn__30109.invoke (test.clj:741)
+    babashka.impl.clojure.test$default_fixture.invokeStatic (test.clj:690)
+    babashka.impl.clojure.test$default_fixture.invoke (test.clj:686)
+    babashka.impl.clojure.test$test_vars$fn__30104.invoke (test.clj:741)
+    babashka.impl.clojure.test$default_fixture.invokeStatic (test.clj:690)
+    babashka.impl.clojure.test$default_fixture.invoke (test.clj:686)
+    babashka.impl.clojure.test$test_vars.invokeStatic (test.clj:737)
+    babashka.impl.clojure.test$test_all_vars.invokeStatic (test.clj:744)
+    babashka.impl.clojure.test$test_ns.invokeStatic (test.clj:766)
+    babashka.impl.clojure.test$run_tests$fn__30124.invoke (test.clj:783)
+    clojure.core$map$fn__5956.invoke (core.clj:2776)
+    clojure.lang.LazySeq.force (LazySeq.java:50)
+    clojure.lang.LazySeq.realize (LazySeq.java:87)
+    clojure.lang.LazySeq.seq (LazySeq.java:104)
+    clojure.lang.Cons.next (Cons.java:41)
+    clojure.lang.RT.boundedLength (RT.java:1810)
+    clojure.lang.RestFn.applyTo (RestFn.java:133)
+    clojure.core$apply.invokeStatic (core.clj:669)
+    babashka.impl.clojure.test$run_tests.invokeStatic (test.clj:776)
+    babashka.impl.clojure.test$run_tests.doInvoke (test.clj:776)
+    clojure.lang.RestFn.applyTo (RestFn.java:142)
+    clojure.core$apply.invokeStatic (core.clj:669)
+    babashka.impl.test$contextualize$fn__30140.doInvoke (test.clj:7)
+    clojure.lang.RestFn.invoke (RestFn.java:411)
+    sci.lang.Var.invoke (lang.cljc:217)
+    sci.impl.analyzer$return_call$reify__5177.eval (analyzer.cljc:1756)
+    sci.impl.analyzer$return_if$reify__4931.eval (analyzer.cljc:947)
+    sci.impl.analyzer$analyze_let_STAR_$reify__4905.eval (analyzer.cljc:758)
+    sci.impl.analyzer$return_do$reify__4622.eval (analyzer.cljc:106)
+    sci.impl.analyzer$analyze_let_STAR_$reify__4901.eval (analyzer.cljc:728)
+    sci.impl.analyzer$analyze_let_STAR_$reify__4907.eval (analyzer.cljc:785)
+    sci.impl.fns$fun$arity_0__1167.doInvoke (fns.cljc:105)
+    clojure.lang.RestFn.applyTo (RestFn.java:140)
+    clojure.core$apply.invokeStatic (core.clj:667)
+    clojure.core$apply.invoke (core.clj:662)
+    sci.lang.Var.invoke (lang.cljc:219)
+    sci.impl.analyzer$return_call$reify__5247.eval (analyzer.cljc:1756)
+    sci.impl.analyzer$return_if$reify__4931.eval (analyzer.cljc:947)
+    sci.impl.interpreter$eval_form_STAR_.invokeStatic (interpreter.cljc:60)
+    sci.impl.interpreter$eval_form.invokeStatic (interpreter.cljc:80)
+    sci.impl.interpreter$eval_string_STAR_.invokeStatic (interpreter.cljc:104)
+    sci.impl.interpreter$eval_string_STAR_.invoke (interpreter.cljc:89)
+    sci.impl.interpreter$eval_string_STAR_.invokeStatic (interpreter.cljc:91)
+    sci.core$eval_string_STAR_.invokeStatic (core.cljc:325)
+    babashka.main$exec$fn__30821$fn__30861$fn__30862.invoke (main.clj:1124)
+    babashka.main$exec$fn__30821$fn__30861.invoke (main.clj:1124)
+    babashka.main$exec$fn__30821.invoke (main.clj:1114)
+    clojure.lang.AFn.applyToHelper (AFn.java:152)
+    clojure.lang.AFn.applyTo (AFn.java:144)
+    clojure.core$apply.invokeStatic (core.clj:667)
+    clojure.core$with_bindings_STAR_.invokeStatic (core.clj:1994)
+    clojure.core$with_bindings_STAR_.doInvoke (core.clj:1994)
+    clojure.lang.RestFn.invoke (RestFn.java:428)
+    babashka.main$exec.invokeStatic (main.clj:899)
+    babashka.main$main.invokeStatic (main.clj:1378)
+    babashka.main$main.doInvoke (main.clj:1292)
+    clojure.lang.RestFn.applyTo (RestFn.java:140)
+    clojure.core$apply.invokeStatic (core.clj:667)
+    babashka.main$_main.invokeStatic (main.clj:1404)
+    babashka.main$_main.doInvoke (main.clj:1395)
+    clojure.lang.RestFn.applyTo (RestFn.java:140)
+    babashka.main.main (:-1)
+    java.lang.invoke.LambdaForm$DMH/sa346b79c.invokeStaticInit (LambdaForm$DMH:-1)
+Caused by: org.graalvm.nativeimage.MissingReflectionRegistrationError: Cannot reflectively invoke constructor 'public java.lang.StackOverflowError()'. To allow this operation, add the following to the 'reflection' section of 'reachability-metadata.json' and rebuild the native image:
+
+  {
+    "type": "java.lang.StackOverflowError",
+    "methods": [
+      {
+        "name": "<init>",
+        "parameterTypes": []
+      }
+    ]
+  }
+
+The 'reachability-metadata.json' file should be located in 'META-INF/native-image/<group-id>/<artifact-id>/' of your project. For further help, see https://www.graalvm.org/latest/reference-manual/native-image/metadata/#reflection
+ at com.oracle.svm.core.reflect.MissingReflectionRegistrationUtils.reportInvokedExecutable (MissingReflectionRegistrationUtils.java:110)
+    java.lang.reflect.Constructor.acquireConstructorAccessor (Constructor.java:89)
+    java.lang.reflect.Constructor.newInstanceWithCaller (Constructor.java:496)
+    java.lang.reflect.Constructor.newInstance (Constructor.java:483)
+    clojure.lang.Reflector.invokeConstructor (Reflector.java:323)
+    sci.impl.reflector$invoke_constructor.invokeStatic (reflector.cljc:75)
+    sci.impl.interop$invoke_constructor.invokeStatic (interop.cljc:109)
+    sci.impl.analyzer$invoke_constructor_node$reify__5027.eval (analyzer.cljc:1298)
+    sci.impl.analyzer$return_call$reify__5155.eval (analyzer.cljc:1756)
+    sci.impl.analyzer$analyze_let_STAR_$reify__4899.eval (analyzer.cljc:715)
+    sci.impl.analyzer$return_if$reify__4931.eval (analyzer.cljc:947)
+    sci.impl.analyzer$return_do$reify__4622.eval (analyzer.cljc:106)
+    sci.impl.analyzer$analyze_let_STAR_$reify__4899.eval (analyzer.cljc:717)
+    sci.impl.evaluator$eval_try_plain.invokeStatic (evaluator.cljc:140)
+    sci.impl.evaluator$eval_try.invokeStatic (evaluator.cljc:149)
+    sci.impl.analyzer$analyze_try$reify__4965.eval (analyzer.cljc:1046)
+    sci.impl.analyzer$return_do$reify__4622.eval (analyzer.cljc:106)
+    sci.impl.analyzer$analyze_let_STAR_$reify__4897.eval (analyzer.cljc:710)
+    sci.impl.analyzer$return_do$reify__4622.eval (analyzer.cljc:105)
+    sci.impl.fns$fun$arity_0__1461.invoke (fns.cljc:129)
+    babashka.impl.clojure.test$test_var_impl$fn__30077.invoke (test.clj:720)
+    babashka.impl.clojure.test$test_var_impl.invokeStatic (test.clj:720)
+    babashka.impl.clojure.test$test_var_impl.invoke (test.clj:711)
+    sci.lang.Var.invoke (lang.cljc:217)
+    babashka.impl.clojure.test$test_vars$fn__30104$fn__30109.invoke (test.clj:741)
+    babashka.impl.clojure.test$default_fixture.invokeStatic (test.clj:690)
+    babashka.impl.clojure.test$default_fixture.invoke (test.clj:686)
+    babashka.impl.clojure.test$test_vars$fn__30104.invoke (test.clj:741)
+    babashka.impl.clojure.test$default_fixture.invokeStatic (test.clj:690)
+    babashka.impl.clojure.test$default_fixture.invoke (test.clj:686)
+    babashka.impl.clojure.test$test_vars.invokeStatic (test.clj:737)
+    babashka.impl.clojure.test$test_all_vars.invokeStatic (test.clj:744)
+    babashka.impl.clojure.test$test_ns.invokeStatic (test.clj:766)
+    babashka.impl.clojure.test$run_tests$fn__30124.invoke (test.clj:783)
+    clojure.core$map$fn__5956.invoke (core.clj:2776)
+    clojure.lang.LazySeq.force (LazySeq.java:50)
+    clojure.lang.LazySeq.realize (LazySeq.java:87)
+    clojure.lang.LazySeq.seq (LazySeq.java:104)
+    clojure.lang.Cons.next (Cons.java:41)
+    clojure.lang.RT.boundedLength (RT.java:1810)
+    clojure.lang.RestFn.applyTo (RestFn.java:133)
+    clojure.core$apply.invokeStatic (core.clj:669)
+    babashka.impl.clojure.test$run_tests.invokeStatic (test.clj:776)
+    babashka.impl.clojure.test$run_tests.doInvoke (test.clj:776)
+    clojure.lang.RestFn.applyTo (RestFn.java:142)
+    clojure.core$apply.invokeStatic (core.clj:669)
+    babashka.impl.test$contextualize$fn__30140.doInvoke (test.clj:7)
+    clojure.lang.RestFn.invoke (RestFn.java:411)
+    sci.lang.Var.invoke (lang.cljc:217)
+    sci.impl.analyzer$return_call$reify__5177.eval (analyzer.cljc:1756)
+    sci.impl.analyzer$return_if$reify__4931.eval (analyzer.cljc:947)
+    sci.impl.analyzer$analyze_let_STAR_$reify__4905.eval (analyzer.cljc:758)
+    sci.impl.analyzer$return_do$reify__4622.eval (analyzer.cljc:106)
+    sci.impl.analyzer$analyze_let_STAR_$reify__4901.eval (analyzer.cljc:728)
+    sci.impl.analyzer$analyze_let_STAR_$reify__4907.eval (analyzer.cljc:785)
+    sci.impl.fns$fun$arity_0__1167.doInvoke (fns.cljc:105)
+    clojure.lang.RestFn.applyTo (RestFn.java:140)
+    clojure.core$apply.invokeStatic (core.clj:667)
+    clojure.core$apply.invoke (core.clj:662)
+    sci.lang.Var.invoke (lang.cljc:219)
+    sci.impl.analyzer$return_call$reify__5247.eval (analyzer.cljc:1756)
+    sci.impl.analyzer$return_if$reify__4931.eval (analyzer.cljc:947)
+    sci.impl.interpreter$eval_form_STAR_.invokeStatic (interpreter.cljc:60)
+    sci.impl.interpreter$eval_form.invokeStatic (interpreter.cljc:80)
+    sci.impl.interpreter$eval_string_STAR_.invokeStatic (interpreter.cljc:104)
+    sci.impl.interpreter$eval_string_STAR_.invoke (interpreter.cljc:89)
+    sci.impl.interpreter$eval_string_STAR_.invokeStatic (interpreter.cljc:91)
+    sci.core$eval_string_STAR_.invokeStatic (core.cljc:325)
+    babashka.main$exec$fn__30821$fn__30861$fn__30862.invoke (main.clj:1124)
+    babashka.main$exec$fn__30821$fn__30861.invoke (main.clj:1124)
+    babashka.main$exec$fn__30821.invoke (main.clj:1114)
+    clojure.lang.AFn.applyToHelper (AFn.java:152)
+    clojure.lang.AFn.applyTo (AFn.java:144)
+    clojure.core$apply.invokeStatic (core.clj:667)
+    clojure.core$with_bindings_STAR_.invokeStatic (core.clj:1994)
+    clojure.core$with_bindings_STAR_.doInvoke (core.clj:1994)
+    clojure.lang.RestFn.invoke (RestFn.java:428)
+    babashka.main$exec.invokeStatic (main.clj:899)
+    babashka.main$main.invokeStatic (main.clj:1378)
+    babashka.main$main.doInvoke (main.clj:1292)
+    clojure.lang.RestFn.applyTo (RestFn.java:140)
+    clojure.core$apply.invokeStatic (core.clj:667)
+    babashka.main$_main.invokeStatic (main.clj:1404)
+    babashka.main$_main.doInvoke (main.clj:1395)
+    clojure.lang.RestFn.applyTo (RestFn.java:140)
+    babashka.main.main (:-1)
+    java.lang.invoke.LambdaForm$DMH/sa346b79c.invokeStaticInit (LambdaForm$DMH:-1)
+
+FAIL in (no-census-reads-a-source-when-its-workspace-does-not-resolve) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:352)
+:jvm :escaping-symlink refuses, typed, before any read
+:jvm :escaping-symlink printed no readable receipt: ""
+expected: (map? parsed)
+  actual: (not (map? nil))
+
+FAIL in (no-census-reads-a-source-when-its-workspace-does-not-resolve) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:352)
+:jvm :escaping-symlink refuses, typed, before any read
+:jvm :escaping-symlink censused a source outside every tree the request named: {}
+expected: (false? (:ok parsed))
+  actual: (not (false? nil))
+
+FAIL in (no-census-reads-a-source-when-its-workspace-does-not-resolve) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:352)
+:jvm :escaping-symlink refuses, typed, before any read
+:jvm :escaping-symlink refused nil, not the name the MCP entrance publishes for the identical request
+expected: (= :invalid-workspace-root (:error-type parsed))
+  actual: (not (= :invalid-workspace-root nil))
+
+FAIL in (no-census-reads-a-source-when-its-workspace-does-not-resolve) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:352)
+:jvm :escaping-symlink refuses, typed, before any read
+:jvm :escaping-symlink published nil, which `cli-refusal-types` does not declare
+expected: (contains? census/cli-refusal-types (:error-type parsed))
+  actual: (not (contains? #{:file-not-a-regular-file :file-not-a-source-path :too-many-candidate-files :unknown-door-symbol :doors-not-a-string :invalid-pool-size :file-not-found :file-not-a-string :too-many-walk-entries :dir-not-a-string :census-worker-failure :dir-not-decodable :unknown-arguments :census-adapter-failure :too-many-doors :file-not-readable :no-fold-arms-found :census-resource-exhausted :unparseable-file :file-outside-workspace :invalid-workspace-root :source-too-large} nil))
+
+FAIL in (no-census-reads-a-source-when-its-workspace-does-not-resolve) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:352)
+:jvm :absolute-outside refuses, typed, before any read
+:jvm :absolute-outside printed no readable receipt: ""
+expected: (map? parsed)
+  actual: (not (map? nil))
+
+FAIL in (no-census-reads-a-source-when-its-workspace-does-not-resolve) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:352)
+:jvm :absolute-outside refuses, typed, before any read
+:jvm :absolute-outside censused a source outside every tree the request named: {}
+expected: (false? (:ok parsed))
+  actual: (not (false? nil))
+
+FAIL in (no-census-reads-a-source-when-its-workspace-does-not-resolve) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:352)
+:jvm :absolute-outside refuses, typed, before any read
+:jvm :absolute-outside refused nil, not the name the MCP entrance publishes for the identical request
+expected: (= :invalid-workspace-root (:error-type parsed))
+  actual: (not (= :invalid-workspace-root nil))
+
+FAIL in (no-census-reads-a-source-when-its-workspace-does-not-resolve) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_relation_census_launcher_test.clj:352)
+:jvm :absolute-outside refuses, typed, before any read
+:jvm :absolute-outside published nil, which `cli-refusal-types` does not declare
+expected: (contains? census/cli-refusal-types (:error-type parsed))
+  actual: (not (contains? #{:file-not-a-regular-file :file-not-a-source-path :too-many-candidate-files :unknown-door-symbol :doors-not-a-string :invalid-pool-size :file-not-found :file-not-a-string :too-many-walk-entries :dir-not-a-string :census-worker-failure :dir-not-decodable :unknown-arguments :census-adapter-failure :too-many-doors :file-not-readable :no-fold-arms-found :census-resource-exhausted :unparseable-file :file-outside-workspace :invalid-workspace-root :source-too-large} nil))
+
+Ran 5 tests containing 180 assertions.
+38 failures, 1 errors.
+{:namespace clj-surgeon.mcp-relation-census-launcher-test, :runtime :bb, :mode "test", :started-at "2026-09-12T19:02:14.923066329Z", :elapsed-ms 4319, :status :test-failed, :result {:test 5, :pass 141, :fail 38, :error 1, :type :summary}}

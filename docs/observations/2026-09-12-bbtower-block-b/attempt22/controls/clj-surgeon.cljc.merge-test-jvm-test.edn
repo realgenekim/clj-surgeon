@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.cljc.merge-test, :runtime :jvm, :mode "test", :started-at "2026-09-12T18:40:26.743448898Z", :elapsed-ms 1278, :status :test-failed, :result {:test 14, :pass 19, :fail 0, :error 1, :type :summary}}

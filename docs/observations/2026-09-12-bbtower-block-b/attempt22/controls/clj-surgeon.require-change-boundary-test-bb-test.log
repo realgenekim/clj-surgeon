@@ -1,0 +1,6 @@
+
+Testing clj-surgeon.require-change-boundary-test
+
+Ran 12 tests containing 89 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.require-change-boundary-test, :runtime :bb, :mode "test", :started-at "2026-09-12T19:24:00.663247041Z", :elapsed-ms 1522, :status :passed, :result {:test 12, :pass 89, :fail 0, :error 0, :type :summary}}

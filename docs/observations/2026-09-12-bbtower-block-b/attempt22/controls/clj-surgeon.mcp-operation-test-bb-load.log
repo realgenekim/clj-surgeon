@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.mcp-operation-test, :runtime :bb, :mode "load", :started-at "2026-09-12T19:00:16.052150027Z", :elapsed-ms 0, :status :load-failed, :message "Unable to resolve classname: java.util.Locale$Category", :causes ["Unable to resolve classname: java.util.Locale$Category"]}

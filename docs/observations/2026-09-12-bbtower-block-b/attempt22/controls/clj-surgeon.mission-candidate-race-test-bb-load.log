@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.mission-candidate-race-test, :runtime :bb, :mode "load", :started-at "2026-09-12T19:10:56.955005779Z", :elapsed-ms 0, :status :load-failed, :message "Unable to resolve classname: java.util.concurrent.ExecutorCompletionService", :causes ["Unable to resolve classname: java.util.concurrent.ExecutorCompletionService"]}

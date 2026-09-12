@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.receipt-artifacts-boundary-test, :runtime :bb, :mode "load", :started-at "2026-09-12T19:22:50.607267139Z", :elapsed-ms 296, :status :load-failed, :message "Could not locate nrepl/core.bb, nrepl/core.clj or nrepl/core.cljc on classpath.", :causes ["Could not locate nrepl/core.bb, nrepl/core.clj or nrepl/core.cljc on classpath."]}
