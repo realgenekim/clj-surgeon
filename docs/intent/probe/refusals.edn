@@ -45,6 +45,22 @@
    :existing_check "probe/request-problem and probe/cli!"
    :owner "probe" :witness "help-test/resolve-op-canonical-ops"
    :retirement_condition "A replacement proves all identity dimensions before reload."}
+  {:type :probe-request-too-deep :class :resource
+   :native_failure "A bounded but deeply nested request kills the thread of the shared warm image, and its client reads zero bytes as a verdict."
+   :promise "A request nesting deeper than the declared pre-parse bound refuses before any parse, naming the bound, the measured depth and the request bytes."
+   :native_method "Count reader-recursive openers over the request characters -- containers, tagged literals, metadata and discards, skipping strings, character literals and comments -- before clojure.edn reads anything."
+   :minimal_reproducer "POST 8,192 nested [ characters (or #_, ^, #tag, {, ( or #{ prefixes) to /probe; the reader overflows inside the 8,192-character bound."
+   :existing_check "probe/read-bounded-request and probe/request-recursion-depth; BB-PROBE-002"
+   :owner "probe" :witness "mcp-http-server-test/probe-servlet-refuses-every-nested-edn-shape-without-escaping"
+   :retirement_condition "A replacement bounds reader recursion before parsing every request shape the reader recurses through."}
+  {:type :probe-request-unreadable :class :protocol
+   :native_failure "A throwable outside Exception escapes the servlet, so the client reads zero bytes as a verdict and the warm image's request thread dies unnamed."
+   :promise "Every throwable at the request boundary leaves as one bounded typed refusal naming the throwable's class, with no stack."
+   :native_method "Catch Throwable, not Exception, at the servlet's request boundary and encode a typed refusal before obtaining the response writer."
+   :minimal_reproducer "Raise a StackOverflowError, AssertionError or bare Error while serving a probe request; the response must still be one typed EDN refusal."
+   :existing_check "probe/request-refusal at probe-servlet's Throwable boundary; BB-PROBE-002"
+   :owner "probe" :witness "mcp-http-server-test/probe-servlet-converts-any-throwable-into-a-typed-refusal"
+   :retirement_condition "A replacement converts every throwable at the HTTP request boundary into a named bounded refusal."}
   {:type :probe-message-too-large :class :resource
    :native_failure "Unbounded descriptor or HTTP response input can exhaust the caller before it reads a verdict."
    :promise "Bounds precede EDN parsing."

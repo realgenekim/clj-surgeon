@@ -20,8 +20,26 @@ Zero tests is failed. Misreading: zero failures without executed tests is proof.
 
 - [x] **BB-PROBE-002**: When worktree root, startup generation or classpath/server
 fingerprint differs, the probe shall refuse as stale-probe-image before reload.
-Malformed namespace/request data shall refuse without evaluation. Misreading:
-the port or a surviving descriptor alone identifies the correct image.
+Malformed namespace/request data shall refuse without evaluation.
+A bounded request is not a safe request: `clojure.edn`'s reader recurses per
+container AND per prefix form, so 8,192 nested `[` fits the 8,192-character
+bound and overflows the stack. Before reading any request, the server shall
+count reader-recursive openers over the request characters -- `(`, `[`, `{`
+(including `#{`), a tagged literal, `^` metadata and `#_` discard, skipping
+openers inside a string, a character literal or a comment -- and refuse a
+request deeper than the declared `probe/request-depth-bound` (64, against a
+closed request's own depth of two) as `:probe-request-too-deep`, carrying
+`:bound`, the measured `:depth` and the request `:bytes`, before any parse.
+The servlet's request boundary shall be Throwable, not Exception: a
+StackOverflowError is not an Exception, and one that escapes kills the thread
+of the shared warm image while its client reads zero bytes as a verdict.
+Any throwable at that boundary refuses as `:probe-request-unreadable`,
+carrying `:throwable-class` and no stack. Both halves hold together: the bound
+keeps the parse shallow, and the Throwable boundary holds when the bound is
+wrong. Misreadings: the port or a surviving descriptor alone identifies the
+correct image; a character bound also bounds parse depth; counting `[` alone
+enumerates the class; an escaping error is a server-side detail because the
+HTTP status still says 200.
 
 - [x] **BB-PROBE-003**: When an identity-admitted probe requests a namespace,
 the warm MCP image shall authorize its resolved canonical source under the

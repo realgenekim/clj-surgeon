@@ -211,14 +211,17 @@
 (defn- probe-servlet [image]
   (proxy [HttpServlet] []
     (doPost [^HttpServletRequest request ^HttpServletResponse response]
-      (let [read-bounded (requiring-resolve 'clj-surgeon.probe/read-bounded)
+      (let [read-request (requiring-resolve 'clj-surgeon.probe/read-bounded-request)
+            request-refusal (requiring-resolve 'clj-surgeon.probe/request-refusal)
             result (try
                      (with-open [reader (.getReader request)]
-                       (hot-verify/probe! image (read-bounded reader 8192)))
-                     (catch Exception e
-                       ((requiring-resolve 'clj-surgeon.probe/refusal)
-                        (or (:error-type (ex-data e)) :invalid-probe-request)
-                        (.getMessage e))))
+                       (hot-verify/probe! image (read-request reader 8192)))
+                     ;; @spec BB-PROBE-002 -- Throwable, not Exception. A
+                     ;; StackOverflowError from a bounded, deeply nested
+                     ;; request is not an Exception; before this boundary it
+                     ;; escaped with zero wire bytes.
+                     (catch Throwable t
+                       (request-refusal t)))
             wire ((requiring-resolve 'clj-surgeon.probe/encode-response) result)]
         (.setContentType response "application/edn")
         (.setCharacterEncoding response "UTF-8")
