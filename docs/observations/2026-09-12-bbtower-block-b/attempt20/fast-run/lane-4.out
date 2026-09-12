@@ -1,0 +1,11 @@
+lanes: --ns -- 5 namespace(s), home-isolated true
+
+Testing clj-surgeon.insert-forms-test
+
+Testing clj-surgeon.insert-forms-receipt-test
+
+Testing clj-surgeon.mcp-create-files-test
+
+Testing clj-surgeon.mcp-prepared-confirmation-test
+
+Testing clj-surgeon.mcp-operation-async-test

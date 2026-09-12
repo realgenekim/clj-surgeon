@@ -1,0 +1,20 @@
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.mcp-inspect-contract-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.mcp-workspace-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.mission-plain-forms-test
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.battery-ledger-test
+
+Testing clj-surgeon.mcp-telemetry-test

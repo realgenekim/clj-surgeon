@@ -1,0 +1,20 @@
+
+Testing clj-surgeon.namespace-split-test
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test

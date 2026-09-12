@@ -1,0 +1,8 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.telemetry-events-test
+
+Ran 17 tests containing 137 assertions.
+0 failures, 0 errors.
+{:runtime :jvm, :namespace clj-surgeon.telemetry-events-test, :elapsed-ms 145, :result {:test 17, :pass 137, :fail 0, :error 0, :type :summary}, :tmpdir "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3145584-63e4ac03", :home "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3145584-63e4ac03/home"}
