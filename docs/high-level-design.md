@@ -1357,6 +1357,8 @@ the shrinking [per-ID debt ledger](intent/unlinked-spec-ids.edn).
   inner-loop verdict from the one MCP JVM, always pending cold proof. The server
   authorizes requested targets under the test root before dependency traversal;
   production dependencies remain eligible for an authorized test's reload. It
+  computes that closure through the shared namespace parser, refusing unknown
+  require forms before reload and reporting the expected closure count. It
   bounds complete encoded output; oversized reload inventories degrade to a
   prefix with explicit truncation facts while retaining the verdict and counts.
 

@@ -5994,6 +5994,8 @@
     ;; added to mcp-hot-verify; these are real literals, not internal tags.
     "probe-namespace-not-found" "probe-source-too-large"
     "probe-target-not-a-test-namespace"
+    ;; BB-PROBE-003: never omit an unclassified dependency from a warm reload.
+    "probe-require-unparsed"
     "invalid-probe-request" "stale-probe-image" "probe-message-too-large"
     "invalid-probe-port" "probe-connection-failed"
     ;; BB-PROBE-004: oversized HTTP verdicts retain bounded truncation facts.
@@ -6008,7 +6010,7 @@
   ;; could see. Both directions are asserted — a kind that appears and a kind
   ;; that vanishes are each a change to what a text-reading client is promised.
   (let [kinds (set (refusal-kinds-in-source))]
-    (is (= 162 (count kinds))
+    (is (= 163 (count kinds))
         (str "the entrance's refusal enumeration changed size: "
              (count kinds) " kinds"))
     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))

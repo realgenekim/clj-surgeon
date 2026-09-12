@@ -13,7 +13,15 @@
   "mcp_http_server.clj"
   #{:invalid-project-formatter :invalid-project-verification-profiles}}
  :refusals
- [{:type :invalid-probe-request :class :protocol
+ [{:type :probe-require-unparsed :class :semantic
+   :native_failure "A probe reporting green over a dependency it never reloaded."
+   :promise "Every dependency spec is classified before reload, or refused with its form and file."
+   :native_method "Expand the complete local dependency closure with the shared ns parser before requiring any namespace."
+   :minimal_reproducer "(:require (foo [bar :as b])) must include foo.bar; (:require {:unknown foo}) must refuse."
+   :existing_check "mcp-hot-verify/probe-require-libs; BB-PROBE-003"
+   :owner "probe" :witness "mcp-hot-verify-test/probe-require-shape-matrix"
+   :retirement_condition "A replacement accounts for every require form before reload and never silently omits an unclassified dependency."}
+  {:type :invalid-probe-request :class :protocol
    :native_failure "Malformed namespace text or extra request fields can execute an unintended REPL action."
    :promise "Only the closed namespace and image request reaches reload."
    :native_method "Validate the namespace grammar and exact request keys before evaluation."

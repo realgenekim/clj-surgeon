@@ -8,7 +8,7 @@ includes probe as the third verb, discovered from the CLI operation catalog:
 every boolean in a passed probe verdict requires a driven literal-false seam.
 A real `probe/verdict` with tests executed and no failures omits
 verification_complete; no constant boolean is fabricated by the witness.
-Receipt keys (EDN): `#{:state :proof_pending :reloaded :tests :assertions :failures :elapsed_ms}`
+Receipt keys (EDN): `#{:state :proof_pending :reloaded :closure-expected :tests :assertions :failures :elapsed_ms}`
 This is the complete untruncated verdict shape for passed and failed test runs;
 a caught execution exception may additionally carry :error. The shape witness
 parses this statement and compares it to an executed successful probe receipt.
@@ -33,6 +33,16 @@ Target refusal keys (EDN): `#{:state :error-type :error :proof_pending :requeste
 An absent local source retains `:probe-namespace-not-found`. For an authorized
 target, serially reload its local dependency closure before running that namespace;
 dependencies may resolve under `src`, `test`, and `libs/clj-splice/src`.
+The shared ns parser shall expand prefix lists (including nested lists), vector
+libspecs, bare symbols and strings in `:require`, `:require-macros` and `:use`,
+selecting the `:clj` reader-conditional branch (or reader default). Any dependency
+form it cannot classify shall refuse as `:probe-require-unparsed`, carrying
+`:form` and `:file`, before any reload. Successful and failed execution receipts
+shall carry `:closure-expected`, the number of namespaces in the complete local
+closure computed before reload, independently of the completed `:reloaded` list.
+Bounded HTTP projections shall retain that count. Misreading: a missing prefix
+namespace means its children are external; a green target reload proves that
+already-loaded dependencies were refreshed.
 Oversized source retains its typed refusal. The refusal text names the prevented
 native failure: a warm image executing production code on request, with no test
 to bound it.

@@ -39,13 +39,16 @@
     :else nil))
 
 ;; @spec BB-PROBE-001
-(defn verdict [reloaded summary elapsed]
-  (let [failures (+ (:fail summary 0) (:error summary 0))]
-    {:state (if (and (pos? (:test summary 0)) (zero? failures)) :probe-passed :probe-failed)
-     :proof_pending [cold-gate]
-     :reloaded reloaded :tests (:test summary 0)
-     :assertions (+ (:pass summary 0) failures) :failures failures
-     :elapsed_ms elapsed}))
+(defn verdict
+  ([reloaded summary elapsed]
+   (verdict reloaded summary elapsed (count reloaded)))
+  ([reloaded summary elapsed closure-expected]
+   (let [failures (+ (:fail summary 0) (:error summary 0))]
+     {:state (if (and (pos? (:test summary 0)) (zero? failures)) :probe-passed :probe-failed)
+      :proof_pending [cold-gate]
+      :reloaded reloaded :closure-expected closure-expected :tests (:test summary 0)
+      :assertions (+ (:pass summary 0) failures) :failures failures
+      :elapsed_ms elapsed})))
 
 ;; @spec BB-PROBE-004 -- the whole UTF-8 encoding, before the servlet writer.
 (def response-byte-bound 16384)
@@ -62,7 +65,7 @@
             total (count names)
             cause (:error-type result)
             base (cond-> (assoc (select-keys result [:state :proof_pending :tests :assertions
-                                                     :failures :elapsed_ms])
+                                                     :failures :elapsed_ms :closure-expected])
                                 :error-type :probe-response-truncated
                                 :reloaded-count total)
                    (and (keyword? cause) (<= (size (pr-str cause)) 128)) (assoc :cause cause)

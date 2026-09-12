@@ -1,4 +1,5 @@
-(ns ^{:lane :integration} clj-surgeon.mcp-hot-verify-test
+(ns clj-surgeon.mcp-hot-verify-test
+  {:lane :integration}
   (:require
    [clj-surgeon.mcp-hot-verify :as hot-verify]
    [clj-surgeon.probe :as probe]
@@ -14,7 +15,7 @@
 ;; @spec BB-PROBE-003 -- Sol F1, round-four review of e3ffc6a7.
 (deftest probe-reloads-prefix-list-dependency
   (let [root (.toFile (java.nio.file.Files/createTempDirectory
-                       "probe-prefix-" (make-array java.nio.file.attribute.FileAttribute 0)))
+                        "probe-prefix-" (make-array java.nio.file.attribute.FileAttribute 0)))
         dependency (io/file root "src/foo/bar.clj")
         target (io/file root "test/demo/probe_test.clj")]
     (try
@@ -26,6 +27,86 @@
              (hot-verify/probe-reload-order (.getCanonicalPath root) 'demo.probe-test)))
       (finally
         (doseq [file (reverse (file-seq root))] (io/delete-file file))))))
+
+;; @spec BB-PROBE-003
+(deftest probe-require-shape-matrix
+  (doseq [[source expected]
+          [["(ns demo (:require (foo [bar :as b])))" '[foo.bar]]
+           ["(ns demo (:require (foo (bar [baz :as b]))))" '[foo.bar.baz]]
+           ["(ns demo (:require [foo [bar :as b] baz]))" '[foo.bar foo.baz]]
+           ["(ns demo (:require [foo.bar :as b] foo.baz))" '[foo.bar foo.baz]]
+           ["(ns demo (:require [\"foo.bar\" :as b] \"foo.baz\"))" '[foo.bar foo.baz]]
+           ["(ns demo (:require-macros (foo [bar :as b])) (:use foo.baz))" '[foo.bar foo.baz]]
+           ["(ns demo (:require #?(:cljs [wrong.lib] :clj [foo.bar])))" '[foo.bar]]
+           ["(ns demo #?(:clj (:require foo.bar) :cljs (:require wrong.lib)))" '[foo.bar]]
+           ["(ns demo (:require #?@(:clj [foo.bar [foo.baz]] :cljs [wrong.lib])))" '[foo.bar foo.baz]]
+           ["(ns demo #?@(:clj [(:require foo.bar) (:use foo.baz)]))" '[foo.bar foo.baz]]
+           ["(ns demo (:require #?(:cljs wrong.lib :default foo.bar)))" '[foo.bar]]
+           ["(ns demo (:require #?(:cljs wrong.lib) #_[ignored.lib] foo.bar :reload))" '[foo.bar]]
+           ["(ns demo (:require ^:meta [foo.bar :as b]))" '[foo.bar]]
+           ["(ns demo (:import java.io.File))" []]
+           ["'(ns decoy) #_(ns discarded) (ns demo (:require foo.bar))" '[foo.bar]]]]
+    (is (= expected (hot-verify/probe-require-libs source "fixture.cljc")) source))
+  (doseq [form ["{:unknown foo}" "42" "[]" "[foo.bar :as]" "(foo {:unknown bar})" "#?@(:clj foo.bar)" "#?(:clj)" "#?(:clj foo.bar :cljs)"]]
+    (let [data (try
+                 (hot-verify/probe-require-libs (str "(ns demo (:require " form "))") "fixture.clj")
+                 (catch Exception e (ex-data e)))]
+      (is (= :probe-require-unparsed (:error-type data)) form)
+      (is (= "fixture.clj" (:file data)))
+      (is (string? (:form data))))))
+
+;; @spec BB-PROBE-003 -- execute the green-that-lies failure, not only its order.
+(deftest probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload
+  (let [root (.toFile (java.nio.file.Files/createTempDirectory
+                        "probe-stale-" (make-array java.nio.file.attribute.FileAttribute 0)))
+        dependency (io/file root "src/probe_fixture/dependency.clj")
+        target (io/file root "test/probe_fixture/check_test.clj")
+        loader (clojure.lang.DynamicClassLoader. (clojure.lang.RT/baseLoader))]
+    (try
+      (io/make-parents dependency)
+      (io/make-parents target)
+      (doseq [path probe/identity-files]
+        (io/make-parents (io/file root path))
+        (io/copy (io/file path) (io/file root path)))
+      (.addURL loader (.toURL (.toURI (io/file root "src"))))
+      (.addURL loader (.toURL (.toURI (io/file root "test"))))
+      (spit dependency "(ns probe-fixture.dependency) (def value 1)")
+      (spit target "(ns probe-fixture.check-test (:require [clojure.test :refer [deftest is]] (probe-fixture [dependency :as d]))) (deftest stale-check (is (= 1 d/value)))")
+      (let [image (probe/image-identity (.getCanonicalPath root))
+            request {:ns "probe-fixture.check-test" :image image}]
+        (with-bindings {clojure.lang.Compiler/LOADER loader}
+          (require 'probe-fixture.check-test :reload)
+          (is (= 1 (var-get (resolve 'probe-fixture.dependency/value))))
+          (spit dependency "(ns probe-fixture.dependency) (def value 2)")
+          (let [receipt (hot-verify/probe! image request)]
+            (is (= :probe-failed (:state receipt)))
+            (is (= [1 1 1] ((juxt :tests :assertions :failures) receipt)))
+            (is (= 2 (:closure-expected receipt)))
+            (is (= ["probe-fixture.dependency" "probe-fixture.check-test"] (:reloaded receipt))))
+          (spit dependency "(ns probe-fixture.dependency (:require {:unknown foo}))")
+          (let [reloads (atom [])
+                receipt (with-redefs [clojure.core/require (fn [& args] (swap! reloads conj args))]
+                          (hot-verify/probe! image request))]
+            (is (= :probe-require-unparsed (:error-type receipt)))
+            (is (= "{:unknown foo}" (:form receipt)))
+            (is (= (.getCanonicalPath dependency) (:file receipt)))
+            (is (= [] (:reloaded receipt)))
+            (is (= [] @reloads)))))
+      (finally
+        (doseq [n '[probe-fixture.check-test probe-fixture.dependency]]
+          (when (find-ns n) (remove-ns n))
+          (dosync (alter @#'clojure.core/*loaded-libs* disj n)))
+        (doseq [file (reverse (file-seq root))] (io/delete-file file))))))
+
+;; @spec BB-PROBE-003
+(deftest probe-receipt-retains-expected-closure-after-reload-failure
+  (let [image (probe/image-identity ".")
+        receipt (with-redefs [hot-verify/probe-reload-order (constantly '[foo.bar demo.probe-test])
+                              clojure.core/require (fn [& _] (throw (Exception. "reload failed")))]
+                  (hot-verify/probe! image {:ns "demo.probe-test" :image image}))]
+    (is (= :probe-failed (:state receipt)))
+    (is (= 2 (:closure-expected receipt)))
+    (is (= [] (:reloaded receipt)))))
 
 ;; @spec BB-PROBE-003 -- Sol F3, round-two review of 09486a6f.
 (deftest probe-authorizes-the-requested-test-target-before-reload
@@ -136,8 +217,7 @@
              (hot-verify/probe-reload-order root 'clj-surgeon.forms-test)))
       (is (= :probe-namespace-not-found
              (try (hot-verify/probe-reload-order root 'absent.probe-test)
-                  (catch Exception e (:error-type (ex-data e))))))))
-  )
+                  (catch Exception e (:error-type (ex-data e)))))))))
 
 ;; --- Hot verification terminates on a terminal status, not on its ceiling ---
 ;; Requirements: docs/intent/hot-verification/hot-verification-specs.md

@@ -99,8 +99,8 @@
             kept (count (:reloaded parsed))]
         (is (<= (bytes wire) 16384))
         (is (= :probe-response-truncated (:error-type parsed)))
-        (is (= (select-keys original [:state :proof_pending :tests :assertions :failures :elapsed_ms])
-               (select-keys parsed [:state :proof_pending :tests :assertions :failures :elapsed_ms])))
+        (is (= (select-keys original [:state :proof_pending :tests :assertions :failures :elapsed_ms :closure-expected])
+               (select-keys parsed [:state :proof_pending :tests :assertions :failures :elapsed_ms :closure-expected])))
         (is (= (count names) (:reloaded-count parsed)))
         (is (<= kept 64))
         (is (= (subvec names 0 kept) (:reloaded parsed)))

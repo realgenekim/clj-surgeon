@@ -326,7 +326,6 @@
      :duplicates (into {} (filter (fn [[_ matches]] (< 1 (count matches)))
                                   by-name))}))
 
-
 ;; @spec MCP-OP-ADMIT-090
 (defn effective-count
   "How many times one symbol is actually bound for a single reader.
@@ -495,55 +494,98 @@
         (recur (next remaining) aliases))
       aliases)))
 
-(defn- libspec-entries
-  "Every library one `:require` entry names, with the symbols it refers.
+(defn- require-children
+  "Expand reader conditionals and discards without evaluating repository code.
+  No platform means all branches, as required by the form-identity comparison."
+  [children {:keys [platform on-unparsed] :as opts}]
+  (mapcat
+    (fn [child]
+      (cond
+        (= :uneval (node/tag child)) []
+        (reader-conditional-node? child)
+        (let [body (second (significant-children child))
+              pairs (when (and body (= :list (node/tag body)))
+                      (vec (significant-children body)))
+              branches (reader-conditional-branches child)
+              selected (if platform
+                         (take 1 (filter #(contains? #{(str platform) ":default"} (first %)) branches))
+                         branches)
+              splicing? (= "?@" (node/string (first (significant-children child))))]
+          (if (and (seq pairs) (even? (count pairs))
+                   (every? #(str/starts-with? (node/string %) ":") (take-nth 2 pairs)))
+            (mapcat (fn [[_ branch]]
+                      (if splicing?
+                        (if (contains? #{:list :vector} (node/tag branch))
+                          (require-children (significant-children branch) opts)
+                          (on-unparsed (node/string child)))
+                        (require-children [branch] opts))) selected)
+            (on-unparsed (node/string child))))
+        :else [(unwrap-meta child)])) children))
 
-  A prefix list names one library per member: `[clojure [string :as str]
-  [set :as set]]` is two requires, and reading only the entry's first symbol
-  would call dropping one of them no change at all. A libspec wrapped in a
-  reader conditional is present for that branch's platform, so its libraries
-  count as required rather than as removed."
-  [entry]
+(defn- library-name [n]
+  (when (and n (contains? #{:token :multi-line} (node/tag n)))
+    (let [value (node/sexpr n)]
+      (when (or (symbol? value) (string? value)) (str value)))))
+
+(defn- libspec-entries
+  "Every library a libspec names, recursively expanding prefix members.
+  Unknown syntax is handed to the caller, never mistaken for a library."
+  [entry {:keys [on-unparsed] :as opts}]
   (let [tag (node/tag entry)]
     (cond
-      (reader-conditional-node? entry)
-      (vec (mapcat (fn [[_platform branch]] (libspec-entries branch))
-                   (reader-conditional-branches entry)))
+      (library-name entry)
+      [{:lib (library-name entry) :refers nil :aliases #{}}]
 
-      (= :vector tag)
-      (let [children (significant-children entry)
-            prefix (some-> (first children) node/string)
-            rest-children (rest children)
-            members (filter (fn [child]
-                              (and (not (str/starts-with? (node/string child) ":"))
-                                   (contains? #{:vector :token} (node/tag child))))
-                            rest-children)
-            prefix-list? (and prefix
-                              (seq members)
-                              (not-any? #(str/starts-with? (node/string %) ":")
-                                        (take 1 rest-children)))]
+      (contains? #{:vector :list} tag)
+      (let [[head & tail] (require-children (significant-children entry) opts)
+            prefix (library-name head)
+            option? #(str/starts-with? (node/string %) ":")]
         (cond
-          (nil? prefix) []
+          (nil? prefix) (on-unparsed (node/string entry))
+          (and (seq tail) (not (option? (first tail))))
+          (mapv #(update % :lib (fn [lib] (str prefix "." lib)))
+                (mapcat #(libspec-entries % opts) tail))
+          (and (even? (count tail))
+               (every? option? (take-nth 2 tail)))
+          [{:lib prefix :refers (refer-symbols tail) :aliases (alias-symbols tail)}]
+          :else (on-unparsed (node/string entry))))
 
-          prefix-list?
-          (vec (keep (fn [member]
-                       (if (= :vector (node/tag member))
-                         (let [inner (significant-children member)]
-                           (when-let [leaf (some-> (first inner) node/string)]
-                             {:lib (str prefix "." leaf)
-                              :refers (refer-symbols (rest inner))
-                              :aliases (alias-symbols (rest inner))}))
-                         {:lib (str prefix "." (node/string member))
-                          :refers nil
-                          :aliases #{}}))
-                     members))
+      :else (on-unparsed (node/string entry)))))
 
-          :else [{:lib prefix
-                  :refers (refer-symbols rest-children)
-                  :aliases (alias-symbols rest-children)}]))
+;; @spec BB-PROBE-003
+(defn ns-require-entries
+  "Ordered dependency entries from an ns node. Optional :platform selects one
+  reader branch; :clauses selects clause heads; :on-unparsed handles unknown
+  forms. The comparison caller retains its historical all-platform projection."
+  ([n] (ns-require-entries n {}))
+  ([n options]
+   (let [{:keys [clauses] :as opts}
+         (merge {:clauses #{":require" ":require-macros"}
+                 :on-unparsed (constantly [])} options)]
+     (vec
+       (mapcat
+         (fn [clause]
+           (when (and (= :list (node/tag clause))
+                      (contains? clauses (some-> (first (significant-children clause)) node/string)))
+             (mapcat (fn [entry]
+                       (if (contains? #{":reload" ":reload-all" ":verbose"} (node/string entry))
+                         []
+                         (libspec-entries entry opts)))
+                     (require-children (rest (significant-children clause)) opts))))
+         (require-children (significant-children n) opts))))))
 
-      (= :token tag) [{:lib (node/string entry) :refers nil :aliases #{}}]
-      :else [])))
+;; @spec BB-PROBE-003
+(defn source-require-entries
+  "Read the top-level ns using the same dependency parser as identity checks.
+  Quoted and discarded ns forms cannot hide the real dependency declaration."
+  [source {:keys [on-unparsed] :as opts}]
+  (let [root (parser/parse-string-all source)
+        namespaces (filter #(and (= :list (node/tag %))
+                                 (= "ns" (some-> (first (significant-children %)) node/string)))
+                           (require-children (significant-children root) opts))]
+    (if (= 1 (count namespaces))
+      (ns-require-entries (first namespaces) opts)
+      (on-unparsed source))))
 
 ;; @spec MCP-OP-ADMIT-114
 (defn ns-require-bindings
@@ -553,28 +595,16 @@
   the `ns` form carries a reader conditional, which is exactly the shape that
   silently disabled the check before."
   [n]
-  (let [found (volatile! {})]
-    (letfn [(walk [x]
-              (when (node/inner? x)
-                (when (and (= :list (node/tag x))
-                           (contains? #{":require" ":require-macros"}
-                                      (some-> (first (significant-children x))
-                                              node/string)))
-                  (doseq [entry (rest (significant-children x))
-                          {:keys [lib refers aliases]} (libspec-entries entry)]
-                    (vswap! found update lib
-                            (fn [existing]
-                              {:refers (let [seen (:refers existing)]
-                                         (cond
-                                           (= :all seen) :all
-                                           (= :all refers) :all
-                                           :else (into (or seen #{})
-                                                       (or refers #{}))))
-                               :aliases (into (or (:aliases existing) #{})
-                                              (or aliases #{}))}))))
-                (run! walk (node/children x))))]
-      (walk n))
-    @found))
+  (reduce (fn [found {:keys [lib refers aliases]}]
+            (update found lib
+                    (fn [existing]
+                      {:refers (let [seen (:refers existing)]
+                                 (cond
+                                   (= :all seen) :all
+                                   (= :all refers) :all
+                                   :else (into (or seen #{}) (or refers #{}))))
+                       :aliases (into (or (:aliases existing) #{}) (or aliases #{}))})))
+          {} (ns-require-entries n)))
 
 ;; @spec MCP-OP-ADMIT-033
 ;; @spec MCP-OP-ADMIT-065
