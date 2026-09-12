@@ -1,0 +1,6 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Execution error (IllegalArgumentException) at clojure.main/main (main.java:40).
+Invalid unicode character: \u0027clj-surgeon.mcp-hot-verify-test/probe-authorizes-the-requested-test-target-before-reload
+
+Full report at:
+/var/tmp/forge/bbtower-fx/clojure-5769232286454481595.edn
