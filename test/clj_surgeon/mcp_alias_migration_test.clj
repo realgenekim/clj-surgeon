@@ -7440,8 +7440,8 @@
   ;; findmnt/mounts-table classification of the symlink's TARGET can.
   (let [run-user (io/file "/run/user" (str (.trim (:out (shell/sh "id" "-u")))))]
     (when (.isDirectory run-user)
-      (let [link-parent (io/file (System/getProperty "user.home")
-                                  ".local/state" (str "spf004-tmpfs-link-" (System/nanoTime)))
+      (let [link-parent (io/file (artifacts/default-artifact-root)
+                                  (str "spf004-tmpfs-link-" (System/nanoTime)))
             link (io/file link-parent "artifacts")
             probe (str link "/probe")]
         (try
