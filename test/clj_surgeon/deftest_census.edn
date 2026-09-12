@@ -1361,6 +1361,7 @@
   clj-surgeon.mcp-http-server-test/one-http-session-prepares-decides-and-applies-one-proof-carrying-change
   clj-surgeon.mcp-http-server-test/probe-output-degrades-without-deleting-the-verdict
   clj-surgeon.mcp-http-server-test/probe-servlet-bounds-the-actual-writer
+  clj-surgeon.mcp-http-server-test/probe-servlet-preserves-the-request-bound-refusal
   clj-surgeon.mcp-http-server-test/probe-spec-receipt-shape-matches-an-executed-probe
   clj-surgeon.mcp-http-server-test/project-formatter-is-closed-data-with-one-safe-default
   clj-surgeon.mcp-http-server-test/project-verification-profiles-are-closed-data
