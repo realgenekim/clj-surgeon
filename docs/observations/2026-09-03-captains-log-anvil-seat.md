@@ -6104,3 +6104,10 @@ no resource or a source outside every root → :probe-dependency-unresolved {:ns
 :roots} with zero reloads; discovery completes before execution; receipts expose :roots.
 Restricted diagnostic and real prewarm green first time. Packet edfafdbe is the thirteenth
 check-only prewarm; ship round 6 follows.
+
+## 2026-09-12T22:09:29Z — ship round 6 SEALED: candidate 1251dc76 (14644aad onto a15531ee)
+
+Thirteenth check-only prewarm (packet edfafdbe) exit 0 at 14644aad, receipt bound; ship run
+20260912T220734Z sealed 1251dc76, Sol reviewing the round-6 brief (round-5 F1 answered by
+attempt25/), battery and fast lane beside it. Opus red-team of the data-not-code tip
+4658dc12 running in parallel in its own worktree.
