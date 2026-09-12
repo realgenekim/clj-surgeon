@@ -5865,3 +5865,23 @@ warm shared server executing production code on request), one violation of his o
 six-run doctrine that flipped an assignment when measured, one spec lying about a
 receipt. Each cheaper than the incident it prevents. The overboard part was my loop
 shape, already filed.
+
+## 2026-09-12T18:32:58Z — round 3: Sol GO; battery RED on a TRUNK defect the branch exposed
+
+Ship run 20260912T182108Z on candidate 49527185: Sol's fence review GO, no blocking
+findings (published as `2026-09-12-bbtower-block-b-sol-fence-verdict-3-GO.md`); the
+battery beside it went RED: clj-surgeon.xray-test, three assertions in
+sci-compiles-one-capability-limited-xray-program, typed reasons (:invalid-xray-path,
+:invalid-xray-analyzer, :disallowed-symbol) coming back as :evaluation-failed. SHIP
+status=RED, nothing landed, correct.
+
+Not the branch's code: no branch commit touches the xray path, and the same three
+assertions fail on trunk a15531ee under the JVM (run by hand in the land worktree:
+26 tests, 3 failures). Trunk's manifest runs xray-test under bb, where the typed reasons
+survive; the branch's cadence rule put it in the JVM battery lane, where compile-xray's
+evaluate-expression wraps the typed exception as :evaluation-failed. So the tower's
+runtime rule exposed a JVM-side loss of a typed refusal that the nightly had been hiding
+by running the test on the other runtime. That is a finding for the plan: a test that
+passes on one runtime and fails on the other is not portable, and the rule must require
+passing controls on BOTH runtimes for every assigned namespace, not only the 38 paired.
+Attempt 22 fixes the JVM path (typed reasons survive), extends the rule, then prewarm.
