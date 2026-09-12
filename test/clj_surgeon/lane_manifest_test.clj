@@ -170,7 +170,27 @@
       (is (= #{:bb :jvm} (set (vals runtimes))))
       (is (= :bb (get runtimes 'clj-surgeon.forms-test)))
       (is (= :jvm (get runtimes 'clj-surgeon.mcp-http-server-test)))))
-  )
+  ;; @spec TEST-ISO-016 -- independent oracle rejects a planted slow bb entry by name.
+  (testing "paired walls govern runtime, while unmeasured assignments stay put"
+    (let [bad-bb (fn [runtimes measurements]
+                   (set (for [[n {:keys [ratio]}] measurements
+                              :when (and (= :bb (get runtimes n)) (> ratio 2.0))]
+                          n)))
+          slow 'clj-surgeon.splice-envelope-test]
+      (is (empty? (bad-bb lm/namespace-runtimes lm/runtime-measurements))
+          (str "TEST-ISO-016: " (bad-bb lm/namespace-runtimes lm/runtime-measurements)))
+      (is (= #{slow} (bad-bb (assoc lm/namespace-runtimes slow :bb)
+                       lm/runtime-measurements)))
+      (is (= :bb (lm/measured-runtime :bb {:jvm-ms 100 :bb-ms 200})))
+      (is (= :jvm (lm/measured-runtime :bb {:jvm-ms 100 :bb-ms 201})))
+      (is (= :jvm (lm/measured-runtime :jvm {:jvm-ms 100 :bb-ms 1})))
+      (is (= :jvm (lm/measured-runtime :bb {:jvm-ms 100 :bb-ms 1 :contract-failure "defect"})))
+      (is (= :bb (lm/measured-runtime :bb nil)))
+      (doseq [[n runtime] lm/unmeasured-runtimes]
+        (is (= runtime (lm/portability-runtimes n)) (str n)))
+      (doseq [[n {:keys [jvm-ms bb-ms ratio jvm-log bb-log]}] lm/runtime-measurements]
+        (is (= ratio (/ (double bb-ms) jvm-ms)) (str n))
+        (is (and (seq jvm-log) (seq bb-log)) (str n))))))
 
 (deftest every-test-namespace-on-disk-is-accounted-for
   (testing "disk -> manifest: a new test namespace cannot silently never run"

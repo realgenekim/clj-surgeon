@@ -6,6 +6,22 @@ status: "round four implemented 2026-09-04 (002/003/004/005/007/010 runtime witn
 
 # JVM Test-Suite Isolation Specifications
 
+- [x] **TEST-ISO-016**: A namespace shall run on bb only when it is
+  bb-portable AND its measured bb namespace wall is at most 2.0 times its
+  measured JVM namespace wall on the same box. Record both walls, their
+  ratio and log paths beside the assignment; otherwise select JVM. Existing
+  assignments without paired receipts remain unchanged and are explicitly
+  unmeasured. A known runtime contract failure may select JVM with its
+  paired walls and defect recorded. "bb-first" means bb where bb is not
+  slower, never bb at any price; 2.0 is the declared admission tolerance.
+  The initial application covers every bb-assigned member of the original
+  61 fast namespaces using attempt7/a-base and attempt7/c-subject receipts.
+  A bb assignment with a recorded ratio above 2.0 shall fail by namespace
+  name, independently of the selection function. At 2.0 bb is eligible;
+  one ms beyond twice the JVM wall is not. Cadence, membership and the
+  60,000/240,000 ms fast/integration ceilings do not change.
+  *Witness:* `clj-surgeon.lane-manifest-test/every-manifest-entry-exists-on-disk`.
+
 Gene, filing the spike (2026-09-04): *"I think a spike to clean up JVM test
 suite and speed it up and ensure pure and at least tests that don't interfere
 with each other is definitely warranted. Unacceptable that we have to gate
