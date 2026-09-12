@@ -5171,3 +5171,23 @@ Astra verified.
 
 Five refusals in 62 minutes, zero suites run. Four were my brief; one was the apparatus.
 Every one of them would have been a silent confound in a hand-run experiment.
+
+## 2026-09-12T06:48:58Z — block B attempt 6: the packet cannot run this repository's suites; block B moved outside the packet
+
+Packet 35dc856c ran the first real JVMs of block B and all eight base lanes exited 97:
+the coordinator's own worker-isolation check refuses when java.io.tmpdir is not the
+private per-worker directory, and the packet's sealed _JAVA_OPTIONS forces it to the
+packet temp dir. Zero tests ran. This is the same defect as attempt 5 (inb-55b884), now
+shown to be disqualifying rather than a confound: until ship v3.12 drops _JAVA_OPTIONS,
+no packet can run clj-surgeon's lane-isolated suites. Earlier ledger item "a packet cannot
+run its own witness suite inside Landlock" was probably this defect wearing another name.
+
+Decision: block B runs the block A way, an Astra codex session outside the packet with a
+pid-bound waiter, brief /var/tmp/forge/bbtower-fx/brief-astra-blockB.md (same steps, same
+stops, JAVA_TOOL_OPTIONS only, one suite at a time). First launch died in a second because
+run-bg detaches stdin ("No prompt provided via stdin"); relaunched through bash -c with the
+redirect inside. Session verified: model gpt-6-astra, workdir bbtower, pid 3105774.
+
+Block B ledger: six packet refusals in 68 minutes, zero suites; four brief defects (mine),
+two apparatus defects (one env override, one stdin detach in run-bg). The apparatus earned
+its keep on the fifth; the sixth is the ship v3.12 headline.
