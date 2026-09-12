@@ -5813,3 +5813,12 @@ replay now reads runtime membership from the calibration receipt itself (343,102
 unchanged). Probe servlet bounds its encoded verdict at 16,384 bytes with a typed
 :truncated field; spec-vs-receipt witness added. One test-fast, one wrapper diagnostic,
 one real prewarm, all green. Packet a2847800 is the ninth check-only prewarm; then ship.
+
+## 2026-09-12T17:39:24Z — ship round 2 SEALED: candidate 09486a6f (7085efa9 onto a15531ee); review, battery, fast lane running
+
+Ninth check-only prewarm (packet a2847800) exit 0 at 7085efa9, receipt bound to the tip.
+Ship run 20260912T173608Z admitted on it, sealed 09486a6f (tree e7c5d849), Sol fence review
+started on the round-2 brief (each of his three findings answered by its evidence path),
+battery on fable/battery-receipt-7085efa9, cold fast lane on the sealed candidate. Load
+20 on the box is those three legs; 19 GB available. This is the candidate that carries
+the six-run rule Sol asked for.
