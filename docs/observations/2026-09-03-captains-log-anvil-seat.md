@@ -5372,3 +5372,27 @@ Final numbers at the tip: fast coordinator makespan 23,620 ms; fast sum 42,909 /
 bb sum 15,455 / 343,102; integration 57,140 / 240,000; landing-gate-prewarm passed in
 384 s, seven stages, no repair. Now shipping through the ship path (Sol fence review,
 battery beside it, prewarm on the sealed candidate).
+
+## 2026-09-12T09:53:38Z — ship refused block B at admission: prewarm-required, and the seat's own tooling cannot satisfy it; Block 4 (ship v3.12) launched
+
+`ship da247b05 …` refused in one second: `prewarm-required exact-tip=da247b05`. Correct:
+the branch adds a verb (probe), so admission wants a ledger check event with argv
+[make landing-gate-prewarm], exit 0, subject tip and tree equal to the receipt's git-head
+and git-tree. The builder's prewarm passed at the code tip 800b756e, not the branch tip,
+and outside the ledger, so it cannot count. Fine. But the only entrance that emits that
+event is a packet check, and packet checks inherit the sealed _JAVA_OPTIONS (inb-55b884),
+which makes clj-surgeon's lanes exit 97. So on ship v3.11, no catalog-changing branch of
+this repository can land. Fail-closed, not false-green, so not a cord pull; a blocker.
+
+Two more admission facts from the launch: run-bg's ledger treats SHIP_INDEPENDENT_REVIEWER_CMD
+as fixture-only, so the seat's real reviewer cannot be given to a live ship (GO-WITH-FIX
+then has no independent reviewer); and the receipt binds git-head, so a docs-only commit
+after a prewarm invalidates it (the tree changes because docs are in the tree).
+
+Block 4 = ship v3.12, packet 1f40753f (Astra verified, jvms 0, 150 min), staged set
+/var/tmp/forge/ship-v3.12 from the installed v3.11 bytes b829ac14: (1) drop _JAVA_OPTIONS
+from the packet env, witness a 512 MiB child inside a packet, red first against v3.11;
+(2) SHIP_INDEPENDENT_REVIEWER_CMD as an audited live override bounded to ~/bin;
+(3) the owed seat-executor path: a CHECK-ONLY packet (empty :order, :checks [prewarm])
+that runs the prewarm under the lease and Landlock and emits the admission event.
+Then install, circuits, a check-only prewarm packet at da247b05, and the ship again.
