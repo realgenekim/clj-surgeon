@@ -5640,3 +5640,16 @@ refusal, byte budget, directory mode and cleanup all still exercised, plus a pol
 table for empty, RAM-root, disk-root and prefix-boundary inputs. One test-fast, one
 prewarm (13:00:31 to 13:06:56Z, seven stages, no repair). Packet 2c4325e5 is the fifth
 check-only prewarm.
+
+## 2026-09-12T13:15:39Z — fifth check-only prewarm: suites green, one assertion left, a byte budget; attempt 16 running
+
+Packet 2c4325e5 at f19a6a44: alias, mcp, bb all green under the envelope again; the
+gate-slot oracle's 120-byte sun_path witness failed `117 not less than or equal to 100`:
+attempt 15 derives its private short root from TMPDIR, and a packet's TMPDIR is ~55 bytes
+by construction, so root plus leaf exceeds the 100-byte socket-path budget before any
+bind. Production is unaffected (linux binds abstract sockets; the path backend's real
+short root is /tmp/csg-<uid>). Attempt 16 (Astra, pid 2920459): the witness selects its
+short root from an ordered candidate list checked for writability and byte budget, and
+when none qualifies it raises a NAMED skip listing every candidate and its length, never
+an unrelated assertion. Tooling item filed: a short packet temp root would let this
+witness bind for real inside the envelope.
