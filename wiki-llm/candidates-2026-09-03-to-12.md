@@ -329,19 +329,7 @@ Category: testing
 ## measurement
 
 ### 16. Reading the window as if it were the trunk
-Symptom: one number is asked to mean "what we have" and "how the last hours went", so ordinary
-variation in the hours reads as a regression in the product.
-Counterexample: Gene, 2026-09-10T02:05Z: *"we were at 9. we regressed? are we using astra or sol???"*
-The answer, confirmed at 11:35Z: "the state never regressed; the 9 was a reading of the earned state
-and every later reading (7, 6) was of the window — hours without a landing, review rounds. Trunk now
-holds everything from the 9 plus the skiff-ready install, so the tag carries 9."
-Why unsublime: a blended score makes a bad afternoon look like lost capability, and invites arguing
-with the meter instead of with the hours.
-Sublime counterpart: three meters, never blended, each with what it reads; the log prints the table
-(trunk/window/skills index) and says which one moved.
-Ratchet: the week table in the log (2026-09-12T01:54Z); `sublime-integration.md`'s two-meter rule.
-Meter: trunk 9 unchanged 09-09 → 09-12; window 7 → 6 → 7 → 8→9 → 9 over the same span.
-Category: measurement
+**DELETED 2026-09-12 by Astra's refutation (see review-astra-2026-09-12.md): the receipt does not support the entry.**
 
 ### 17. A meter bound to one transport
 Symptom: an adoption counter reads zero because it can only see one of the entrances.
@@ -382,23 +370,7 @@ Fable H bets missed; Astra 11/12 held.
 Category: measurement
 
 ### 19. A confound that reaches back through a week of arms
-Symptom: the harness supplies the very text one arm was defined to omit, so every registered
-comparison was between "line + exception" and "line".
-Counterexample: the long-context packet's delivery probe attested the shell-preference paragraph
-twice in the rendered instructions — "once from the CLAUDE.md copy the brief asked for, once injected
-by the harness because `--dangerously-skip-permissions` puts a session in bypass-permissions mode."
-Consequence for the week, written down at once: "the cohort (120 runs) and the gate-vs-prompt
-experiment (156 Claude runs) both launched every arm with `--dangerously-skip-permissions`, so every
-arm — B, A, C, AC, N — carried the injected paragraph … the earlier reading 'the exception line alone
-did nothing' was measured against a baseline that already contained the thing the exception
-overrides" (captain's log 2026-09-12 03:47Z; `2026-09-12-longctx-preregistration.md` Amendment 2).
-Why unsublime: the control condition was assumed rather than probed, and two completed experiments
-had to be re-read rather than re-run.
-Sublime counterpart: probe the ACTUALLY RENDERED instructions for the literal bytes under test and
-make the attested count an admission condition; record the permission mode as an arm attribute.
-Ratchet: Amendment 2's attestation condition (B exactly one, AC/H zero).
-Meter: no meter movement recorded — "the results stand as measured", the arm labels do not.
-Category: measurement
+**DELETED 2026-09-12 by Astra's refutation (see review-astra-2026-09-12.md): the receipt does not support the entry.**
 
 ### 20. A broken oracle flattens every arm into a clean null
 Symptom: an instrument that fails identically on all arms produces a result that looks exactly like
@@ -626,29 +598,7 @@ Meter: no meter movement recorded.
 Category: review
 
 ### 33. A reviewer whose filter refuses your vocabulary
-Symptom: the strongest reviewer for security-shaped work is the one that cannot read
-security-shaped briefs.
-Counterexample: 24 content-filter refusals in one night, tallied in the log — "Sol's filter refused
-three reviews in one heartbeat (feature_thread r1, tmp-leak r1, MEM-003 r4; refusals 11–13 tonight,
-all on chmod/escape/launder material)"; "census r21: Sol's filter refused (15th tonight; five
-consecutive on this lane)"; and the standing proposal, "route census and gate reviews to Opus FIRST"
-(captain's log 2026-09-04 06:43Z, 07:23Z, 07:26Z). On 2026-09-09 a gate-lanes round "died before Sol
-read a line: his model refused the brief on a content filter because the header spoke of a
-delete-root attack, inode reuse and identities leaking; empty verdict, ship stopped on
-`unrecognised-verdict`, correct. Rewritten in verification language, round 5" (07:57Z).
-Why unsublime: an unbudgeted refusal rate on one lane silently re-routes the hardest reviews to the
-second choice, and nobody notices until the tally is taken.
-Sublime counterpart: count the refusals as a first-class rate, write the brief in verification
-language, and fall back with the IDENTICAL brief so the two reviewers stay comparable.
-Ratchet: memory `sol-live-on-anvil-seat` (content filter refuses symlink/confinement fixtures → Opus
-for those); the standing refusal tally in the log.
-Meter: no meter movement recorded — refusal PRICE, not rate, is the meter named in
-`text-block-must-carry-the-structured-receipt`.
-Category: review
-
----
-
-## refusals
+**DELETED 2026-09-12 by Astra's refutation (see review-astra-2026-09-12.md): the receipt does not support the entry.**
 
 ### 34. A refusal that names the wrong cause
 Symptom: a typed refusal is well-formed, complete, and points at the wrong thing.
@@ -1031,26 +981,7 @@ Category: briefs
 ## process
 
 ### 55. Surfacing the definition is not surfacing the decision
-Symptom: the routing instruction is delivered, read, even quoted back — and no decision is made.
-Counterexample: three independent designs, one result. E6-C put "Call this FIRST, before rg…"
-into the tool's own description; a separate session quoted the sentence back verbatim; adoption was
-0/3 and 0/3, "joining E6-Lb's 0/13 for a program total of 0 of 19"
-(`docs/observations/2026-09-04-e6c-routing-plate-cohort.md`). The row-2 pilot: "PB4 noticed the boot
-block and still made no decision (19 Bash calls, zero ToolSearch, zero MCP)… the failure mode is
-NON-CONSIDERATION, not rejection" (captain's log 2026-09-08 21:51Z). And the lever that did move:
-giving Codex actual MCP access took Surgeon-final completions from 0/13 to 10/13 (gpt-6-astra) and
-4/13 (gpt-5.6-sol), while a plate alone moved them +4/+5
-(`docs/observations/2026-09-12-codex-arm-n-report.md`, 2026-09-11).
-Why unsublime: prompt levers are being bought at cohort prices against a reflex that costs no
-deliberation at all.
-Sublime counterpart: put the decision IN THE ENTRANCE — `make alias-migrate FROM= TO=` took routing
-to 4/4 (vs 6/8 free choice), with all four patches byte-identical to the routed golden; and E3 "never
-opened a boot file and found the Makefile target: 'the prescribed entrance'."
-Ratchet: memory `free-choice-routing-is-dead-route-without-asking`; `bin/alias-migrate` +
-`## Entrances` in both AGENTS.md and CLAUDE.md.
-Meter: adoption 0/13 → 0/19 flat across two independent prompt levers; entrance route 4/4; caller
-work still 115.9 s median vs ≤ 60 s preregistered — a FAIL reported as a fail.
-Category: process
+**DELETED 2026-09-12 by Astra's refutation (see review-astra-2026-09-12.md): the receipt does not support the entry.**
 
 ### 56. Paper cuts before capability
 Symptom: friction the team pays every hour is deferred behind the next feature.
@@ -1217,18 +1148,7 @@ Category: delivery
 ## memory
 
 ### 65. A pointer you must remember is not a pointer
-Symptom: the instruction to read the resume note lives only in the context that compaction eats.
-Counterexample: "on 2026-09-02 this seat compacted away 988,300 tokens. The resume note was durable on
-git and survived; the instruction to read it lived only in session context… It worked that time only
-because Gene happened to be awake to prompt for it." Gene, verbatim: *"Ensure these instructions are
-somewhere where you find it after compaction. Otherwise momento problem!!"*
-(`docs/observations/2026-09-03-resume-here-anvil-seat.md` and the repo `CLAUDE.md` header).
-Why unsublime: coherence that depends on a human being present is luck with a witness.
-Sublime counterpart: a durable resume note on a remote ref, refreshed whenever state changes
-materially, plus ONE line at the top of the file the seat re-reads at boot pointing at it.
-Ratchet: `CLAUDE.md` first-action-after-compaction block; the two resume notes.
-Meter: no meter movement recorded.
-Category: memory
+**DELETED 2026-09-12 by Astra's refutation (see review-astra-2026-09-12.md): the receipt does not support the entry.**
 
 ### 66. A seat is invisible while it is dead
 Symptom: an outage looks exactly like a busy seat from outside.

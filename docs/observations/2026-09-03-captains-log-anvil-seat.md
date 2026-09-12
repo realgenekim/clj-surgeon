@@ -6002,3 +6002,13 @@ temporary project: order [demo.probe-test], expected [foo.bar demo.probe-test]. 
 :probe-require-unparsed refusal instead of silent omission, :closure-expected in the
 receipt, red first on Sol's case. Four fence rounds, four findings, each one a class:
 timing policy, unbounded output, unauthorized target, incomplete closure.
+
+## 2026-09-12T20:59:29Z — wiki-llm: 66 candidates mined, 31 held / 26 weakened / 10 refuted under Astra's receipt-by-receipt attack
+
+Opus mined ten days of observation records into 66 entries (receipts, meters, categories;
+sixteen named to cut, three self-flagged). Astra opened every cited receipt: 31 HELD, 26
+WEAKENED (claim true, meter or ratchet line unsupported), 10 REFUTED; five deleted outright
+for promoting self-report or a disclaimed mechanism into fact (#16, #19, #33, #55, #65); a
+promotion queue of ten with reasons; two the miner would have cut that Astra keeps. The
+pipeline Gene asked for now exists in the records lane: mine under the receipt rule → attack
+receipt by receipt → promote with Gene. Published: wiki-llm/candidates-…, review-astra-….

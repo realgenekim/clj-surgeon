@@ -14,3 +14,8 @@ the ratchet that makes the class impossible; no entry without a counterexample w
   header names the sixteen to cut first and the three least-sure bindings). Promotion requires one
   adversarial pass (Sol or Astra) that tries to refute each entry against its receipt, and a diff
   against Gene's commit-derived list. Entries #26, #42 and #9 are flagged by the miner itself.
+- [review-astra-2026-09-12.md](review-astra-2026-09-12.md) — Astra's adversarial pass over the 66:
+  31 HELD, 26 WEAKENED (true, but the meter or ratchet claim is not in the receipt), 10 REFUTED.
+  Five deleted outright (#16, #19, #33, #55, #65: self-report or a disclaimed mechanism promoted to
+  fact). PROMOTION QUEUE, in Astra's order, pending Gene: #41, #43, #13, #37, #61, #1, #26, #18, #54,
+  #58. WEAKENED entries keep their claim and lose the unsupported meter/ratchet line before promotion.
