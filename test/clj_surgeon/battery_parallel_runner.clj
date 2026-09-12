@@ -195,8 +195,9 @@
      * `mcp-alias-migration-test`'s dot-slash-src strings are scope arguments
        inside a per-test temp workspace, not paths into this repository.
      * every other battery namespace takes its scratch space from its own
-       temp root, and TEST-ISO-006 gives each lane child a private
-       `java.io.tmpdir` of its own.
+       temp root. JVM children inherit TEST-ISO-006's temp configuration;
+       bb children receive an explicit `java.io.tmpdir` from disk-backed
+       TMPDIR (or /var/tmp), since bb ignores JAVA_TOOL_OPTIONS.
 
    The mechanism ships anyway, exercised by its own witness, because the next
    prerequisite must have a place to be DECLARED rather than discovered when a
@@ -445,10 +446,16 @@
   (into ["python3" "-B" (.getCanonicalPath (io/file "test/gate_slot.py")) "--"] argv))
 
 (defn bb-lane-command
-  "The bb child command; tmpdir is the coordinator's TMPDIR."
-  [_tmpdir out-path namespaces]
-  (into ["bb" "-Xmx1g" "test/run_all.clj" "--emit-edn" (str out-path) "--ns"]
-        (map str namespaces)))
+  "The bb child command; mirror Makefile SELF_TEST_TMP's fallback policy."
+  [tmpdir out-path namespaces]
+  (let [tmpdir (if (or (str/blank? tmpdir)
+                     (some #(or (= tmpdir %) (str/starts-with? tmpdir (str % "/")))
+                           ["/tmp" "/dev/shm"]))
+                 "/var/tmp"
+                 tmpdir)]
+    (into ["bb" "-Xmx1g" (str "-Djava.io.tmpdir=" tmpdir)
+           "test/run_all.clj" "--emit-edn" (str out-path) "--ns"]
+          (map str namespaces))))
 
 (defn- run-lane!
   [{:keys [index namespaces java-opts work-dir runtime phase suite target checkout-root]}]
