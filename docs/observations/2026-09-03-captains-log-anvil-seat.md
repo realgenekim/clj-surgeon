@@ -5139,3 +5139,17 @@ and every new log under the attempt4/ observation directory.
 
 Cost of the three refusals: 29 minutes of Astra wall, zero JVM time. The fence is doing
 what it was built to do; the brief-writer is the slow part.
+
+## 2026-09-12T06:34:57Z — block B attempt 4 blocked on git's own bookkeeping; attempt 5 running
+
+Packet 5402914d got past the path and refused in four minutes on the next layer down:
+`git worktree add` registers the new checkout under the SHARED repository's
+.git/worktrees, which the envelope does not cover. So I made the base checkout myself
+before launch, a --shared clone detached at eae1e432 under the worktree's gitignored
+target/, verified its HEAD, and told the brief it already exists. Attempt 5 is packet
+ad7e0a55, Astra verified.
+
+Four refusals now, every one a brief defect, every one before a JVM ran. The lesson that
+generalizes: a packet brief must be executed in the head against the ENVELOPE, not the
+box. Anything the builder must create that touches a shared store (git registration,
+/var/tmp fixtures, ~/bin) is Fable's to create before admission.
