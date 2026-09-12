@@ -5419,3 +5419,20 @@ events stay as append-only history with a note.
 Admission facts learned by hand: the JVM-options admission accepts only the exact
 spelling -Xmx1024m (not -Xmx1g); the witness suite needs its fixture-env.sh sourced
 (ROOT, CASE, LEDGER_FIXTURE_ROOT) to run a single test by hand.
+
+## 2026-09-12T10:16:35Z — Block 4 delta 1: epoch fixed, a second identity collision found; delta 2 running with a ratified oracle change
+
+Astra's delta (packet ba34d331, 10 min) made measurement epochs per-process (LEDGER_EPOCH
+or a fresh uuid; MEASURE-EPOCH-001, red then green across 15 measurement tests). The exact
+75-row history replay then had zero epoch and zero event-id overlap with live, but 75
+run-ID overlaps, because imported run IDs are derived from the source row on purpose,
+and the oracle also matches run IDs. Astra wrote the adjustment, qualified it on a
+six-case matrix, and did NOT apply it: "Gene or the registered oracle owner must
+authorize". Correct behaviour for a gate change.
+
+Ratified (Fable, as the tooling's owner): a run-ID match across DIFFERENT epochs is not
+contamination, because history run IDs are source identity, not observation identity,
+and a leaked fixture event still carries its journaled epoch and event id. The old
+run-ID-only negative witness is replaced by two stronger ones (epoch leak caught; event-id
+leak caught). Delta 2 is packet eab27f63 (Astra verified); it also commits the round-1
+delta, which had left the tree uncommitted.
