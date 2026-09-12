@@ -5191,3 +5191,32 @@ redirect inside. Session verified: model gpt-6-astra, workdir bbtower, pid 31057
 Block B ledger: six packet refusals in 68 minutes, zero suites; four brief defects (mine),
 two apparatus defects (one env override, one stdin detach in run-bg). The apparatus earned
 its keep on the fifth; the sixth is the ship v3.12 headline.
+
+## 2026-09-12T07:03:52Z — block B attempt 7: the slowdown located, and my second premise was wrong too
+
+Astra's session outside the packet ran the matched arms in 14 minutes and STOPPED at
+step 2, correctly. Report published as `2026-09-12-bbtower-block-b-attempt7-stopped.md`
+with slowdown.md and meter.tsv beside it. Branch pushed to origin bb-rewrite-tower at 61c75586.
+
+| Arm | 61 original fast members, summed ns walls | Makespan | Result |
+|---|---:|---:|---|
+| a: base coordinator, base tree | 36,335 ms | 27.6 s | pass |
+| b: subject coordinator, bb children off | 37,661 ms | 27.0 s | pass |
+| c: subject as shipped (hybrid) | 68,679 ms | 82.7 s | FAIL (60,000 budget) |
+
+So the coordinator is innocent (a ≈ b). The whole 32 s is four of the 61 members that
+block A moved to bb, where they run far slower than on the JVM: splice-envelope-test
+834 ms → 28,591 ms (34x), rename-alias-test 3,265 → 6,478, insert-forms-test 2,017 → 5,222,
+rename-alias-receipt-test 414 → 1,553. "bb-portable" is not "bb-fast". My contention
+hypothesis in the brief was wrong; Astra declined to patch the coordinator on it, and the
+brief's own stop (no runtime reclassification for speed) kept the right fix out of reach.
+Second finding: under bb, intent-transaction-test's CLI output-length witness fails
+(stdout 11,806 chars vs a 3,674-char receipt); it passes on the JVM. The bb CLI prints
+something the JVM CLI does not.
+
+Tower finding, for the plan: clj-splice's heaviest test is 34x slower under bb. That bounds
+where babashka-first can put rewrite-clj work; the bb lane is for light and portable, the
+JVM keeps the heavy. Attempt 8 (Astra, pid 3419101) lifts the stop with a RULE rather
+than an exception: bb only when measured bb wall ≤ 2x measured JVM wall, both walls recorded
+beside the assignment with a witness; then the bb CLI output diff, the new :bb ceiling,
+the probe registries, feature-thread, and the gate.
