@@ -426,7 +426,7 @@
         (let [causes (take-while some? (iterate ex-cause exception))
               typed (some #(when (:error-type (ex-data %)) %) causes)
               error-type (:error-type (ex-data typed))]
-          (if (#{:invalid-edit-expression :invalid-xray-expression} error-type)
+          (if (and typed (not (#{:invalid-xray-path :invalid-xray-analyzer} error-type)))
             (throw typed)
             (invalid! expression
                       (cond

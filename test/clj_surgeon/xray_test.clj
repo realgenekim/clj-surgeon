@@ -133,7 +133,7 @@
 
 (deftest evaluation-preserves-typed-refusals-and-untyped-cause-messages
   ;; Attempt22: JVM SCI wraps host exceptions; bb exposes them directly.
-  (doseq [error-type [:invalid-xray-expression :invalid-edit-expression]
+  (doseq [error-type [:invalid-xray-expression :invalid-edit-expression :invalid-xray-cardinality]
           wrapped? [false true]]
     (let [refusal (ex-info "typed refusal" {:error-type error-type
                                             :reason :field-refusal
@@ -142,6 +142,14 @@
           caught (with-redefs [sci/eval-string+ (fn [& _] (throw raised))]
                    (try (dsl/compile-xray "(form 'data)")
                         (catch Exception e e)))]
+      (is (identical? refusal caught))
+      (is (= (ex-data refusal) (ex-data caught)))))
+  (doseq [error-type [:invalid-xray-expression :invalid-edit-expression :invalid-xray-cardinality]]
+    (let [refusal (ex-info "typed builder refusal" {:error-type error-type :reason :field-refusal})
+          bindings-var (ns-resolve 'clj-surgeon.edit-dsl 'sci-bindings)
+          caught (with-redefs-fn
+                   {bindings-var (assoc (var-get bindings-var) 'form (fn [_] (throw refusal)))}
+                   #(try (dsl/compile-xray "(form 'data)") (catch Exception e e)))]
       (is (identical? refusal caught))
       (is (= (ex-data refusal) (ex-data caught)))))
   (let [cause (IllegalArgumentException. "field evaluation failure")
