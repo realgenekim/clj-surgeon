@@ -1119,6 +1119,7 @@ txn-kernel-warning-check:
 # this date that say "make test-fast (647 tests)" are quoting the bb lane.
 test-fast: test-clj-splice-bb
 	@# @spec TEST-ISO-001
+	@# @spec TEST-ISO-016 -- coordinator consumes measured lane-manifest runtimes.
 	@# @spec MCP-OP-TMPHYG-001
 	@# @spec MCP-OP-TMPHYG-002
 	bb -Xmx1g -Djava.io.tmpdir="$(TMPDIR)" -m clj-surgeon.battery-parallel-runner --suite fast
