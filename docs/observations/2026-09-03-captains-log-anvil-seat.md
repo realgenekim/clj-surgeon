@@ -5822,3 +5822,19 @@ started on the round-2 brief (each of his three findings answered by its evidenc
 battery on fable/battery-receipt-7085efa9, cold fast lane on the sealed candidate. Load
 20 on the box is those three legs; 19 GB available. This is the candidate that carries
 the six-run rule Sol asked for.
+
+## 2026-09-12T17:45:54Z — Sol round 2 NO-GO on 09486a6f: all three round-1 repairs held; one new finding, the probe admits production targets; attempt 21 running
+
+Ship run 20260912T173608Z: review 8 min, VERDICT no-go (published as
+`2026-09-12-bbtower-block-b-sol-fence-verdict-2.md`). Held under re-attack: the six-run
+fold replays byte-identical (38 namespaces, 456 samples), the ceiling reproduces, the 14
+demoted namespaces run in test-bb, six focused witnesses 860/0, both whole-gate receipts
+share the sealed source digest. New F3: the probe contract limits a probe to a local TEST
+namespace, but probe-reload-order searches src, test and libs without authorizing the
+requested target; Sol asked for clj-surgeon.core with a valid image identity and the warm
+image reloaded 36 namespaces, ran 0 tests, and answered :probe-failed instead of a typed
+refusal. Right: a warm image executing production code on request, with no test to bound
+it, is exactly a refusal that names a native failure. Attempt 21 (Astra, pid 169930):
+authorize the target from the test inventory before traversal, typed kind
+:probe-target-not-a-test-namespace with zero reloads, registered in refusals.edn, Sol's
+case as the red witness. Round 3 of the ship after the tenth check-only prewarm.
