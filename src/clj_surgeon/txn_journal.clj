@@ -1290,6 +1290,12 @@
     (catch Exception cause
       {:broken false :cause :break-failed :message (.getMessage cause)})))
 
+;; @spec TXN-RACE-003
+;; INTENT: TXN-RACE-003 -- two breakers sharing one txid. The name is claimed
+;; by `link(2)`'s own EEXIST, so at most one of them owns the evidence, and the
+;; claim is in two places or one but never none. The nine-way interleaving
+;; lattice in the witnesses stops each of them at an enumerated boundary and
+;; asserts the surviving bytes rather than the surviving run.
 (defn- break-by-link!
   "Claim the tombstone NAME first, and unlink the LOCK only once it is held.
 
@@ -1441,6 +1447,14 @@
     (let [line (select-keys outcome [:cause :tombstone :blocking-sidecar])]
       (assoc line :remedy (break-refusal-remedy line)))))
 
+;; @spec TXN-RACE-002
+;; INTENT: TXN-RACE-002 -- every step boundary of this protocol answers with a
+;; typed outcome. The boundary that was NOT typed is the first one, naming the
+;; LOCK: `lock-file` asks the admission boundary what the file is called, and
+;; that answer used to throw a concurrent unlink at this caller. Fixed where
+;; the window is, in `receipt-artifacts/resolved-target` (TXN-RACE-001), rather
+;; than by a `catch` here that would also swallow the envelope refusal - one of
+;; TXN-RACE-002's registered misreadings.
 (defn- break-lock!
   "Take EXACTLY the stale claim that was read out of the way, or nothing.
 

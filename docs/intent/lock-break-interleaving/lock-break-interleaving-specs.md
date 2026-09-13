@@ -16,9 +16,9 @@ and `.toRealPath` threw. Admission does not claim to prevent adversarial
 filesystem races (DATACODE-ENV-001); it does have to answer the question it was
 asked without throwing a race at its caller.
 
-- [ ] **TXN-RACE-001**: While a destination is being resolved for admission, when the path is removed between the existence check and the reading of its real path, or between the symbolic-link check and the reading of its link target, clj-surgeon shall resolve it as an absent tail under its resolved parent - the same answer it gives for a path that was already gone - rather than propagating the filesystem's exception to the caller.
-- [ ] **TXN-RACE-002**: While a stale claim is being broken, when the LOCK is removed or replaced at any enumerated step boundary of the break protocol, clj-surgeon shall return a typed break outcome carrying a cause the caller can act on rather than throwing out of the breaker.
-- [ ] **TXN-RACE-003**: While two breakers share one `:txid`, when their steps are interleaved at any enumerated boundary of the break protocol, clj-surgeon shall leave the judged claim readable on disk under exactly one name, with the tombstone name owned by at most one of them.
+- [x] **TXN-RACE-001**: While a destination is being resolved for admission, when the path is removed between the existence check and the reading of its real path, or between the symbolic-link check and the reading of its link target, clj-surgeon shall resolve it as an absent tail under its resolved parent - the same answer it gives for a path that was already gone - rather than propagating the filesystem's exception to the caller.
+- [x] **TXN-RACE-002**: While a stale claim is being broken, when the LOCK is removed or replaced at any enumerated step boundary of the break protocol, clj-surgeon shall return a typed break outcome carrying a cause the caller can act on rather than throwing out of the breaker.
+- [x] **TXN-RACE-003**: While two breakers share one `:txid`, when their steps are interleaved at any enumerated boundary of the break protocol, clj-surgeon shall leave the judged claim readable on disk under exactly one name, with the tombstone name owned by at most one of them.
 
 ## Misreadings a maintainer could implement instead
 
