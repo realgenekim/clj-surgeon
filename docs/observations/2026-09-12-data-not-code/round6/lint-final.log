@@ -1,0 +1,4 @@
+docs/observations/2026-09-12-data-not-code/round6/bb_witnesses.clj:1:12: warning: duplicate require of babashka.fs
+docs/observations/2026-09-12-data-not-code/round6/bb_witnesses.clj:3:12: warning: duplicate require of clj-surgeon.lane-manifest-test
+docs/observations/2026-09-12-data-not-code/round6/bb_witnesses.clj:4:12: warning: duplicate require of clojure.test
+linting took 150ms, errors: 0, warnings: 3

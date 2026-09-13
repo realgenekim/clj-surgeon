@@ -1121,6 +1121,8 @@ txn-kernel-warning-check:
 # and moved to `make test-bb`; `make test` runs both. Docs written before
 # this date that say "make test-fast (647 tests)" are quoting the bb lane.
 test-fast: test-clj-splice-bb
+	@# @spec DATACODE-ROWS-001 -- coordinator consumes validated manifest evidence.
+	@# @spec DATACODE-SLEEP-001 -- lane-manifest-test checks owner/ordinal/purpose pins.
 	@# @spec TEST-ISO-001
 	@# @spec TEST-ISO-016 -- coordinator consumes measured lane-manifest runtimes.
 	@# @spec MCP-OP-TMPHYG-001

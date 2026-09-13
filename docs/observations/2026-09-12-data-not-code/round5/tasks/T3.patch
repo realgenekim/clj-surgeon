@@ -1,0 +1,11 @@
+--- a/test/clj_surgeon/edit_dsl_test.clj
++++ b/test/clj_surgeon/edit_dsl_test.clj
+@@ -75,6 +75,8 @@
+            (dsl/transform (dsl/form 'f) transformer)))))
+ 
+ (deftest builders-preserve-clojure-data-without-evaluation
++  (is (= [[:form 'f] [:find 'domain/value] [:replace 'domain/value]]
++         (dsl/compile-query "(-> (form 'f) (match 'domain/value) (replace 'domain/value))")))
+   (let [effect-count (atom 0)
+         values ['symbol
+                 :keyword

@@ -4,6 +4,7 @@
    [clj-surgeon.extract :as extract]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.intent-transaction :as transaction]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.java.io :as io]
    [clojure.set :as set]
@@ -478,7 +479,7 @@
   ([compiled]
    (commit! compiled
             {:read-source slurp
-            :write-source! file-ops/atomic-write!
+             :write-source! file-ops/atomic-write!
              :read-permissions read-permissions
              :restore-permissions! restore-permissions!
              :exists? #(.exists (io/file %))
@@ -546,10 +547,10 @@
            (when-not (= (get futures file) (file-state io file))
              (throw (ex-info "Extraction read-back verification failed"
                              {:error-type :read-back-hash-mismatch :file file}))))
-         (let [receipt (build-receipt
-                         (assoc compiled
-                                :original-permissions original-permissions
-                                :created-directories @created-directories))]
+         (let [receipt (artifacts/receipt-evidence (build-receipt
+                                                     (assoc compiled
+                                                            :original-permissions original-permissions
+                                                            :created-directories @created-directories)))]
            {:ok true
             :operation :compiled-extraction
             :committed true
@@ -560,6 +561,7 @@
             :caller-proof (:caller-proof compiled)
             :format (:format compiled)
             :receipt receipt
+            :envelope-id (:envelope-id receipt)
             :receipt-hash (:receipt-hash receipt)
             :verified {:whole-files true
                        :file-count (count ordered-files)

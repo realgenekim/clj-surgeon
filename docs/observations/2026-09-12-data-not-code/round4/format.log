@@ -1,0 +1,40 @@
+standard-clj fix v0.29.0
+
+✓ /test/clj_surgeon/operation_algebra_test.clj [20.93ms]
+F /test/clj_surgeon/receipt_artifacts_boundary_test.clj [19.38ms]
+
+All 2 files formatted with Standard Clojure Style 👍 [48.51ms]
+standard-clj fix v0.29.0
+
+✓ /src/clj_surgeon/edit_dsl.clj [20.52ms]
+
+1 file formatted with Standard Clojure Style 👍 [28.81ms]
+standard-clj fix v0.29.0
+
+✓ /test/clj_surgeon/receipt_artifacts_boundary_test.clj [18.86ms]
+
+1 file formatted with Standard Clojure Style 👍 [26.32ms]
+standard-clj fix v0.29.0
+
+F /src/clj_surgeon/mcp_alias_migration.clj [33.89ms]
+F /src/clj_surgeon/receipt_artifacts.clj [5.63ms]
+F /src/clj_surgeon/require_change_io.clj [2.76ms]
+F /test/clj_surgeon/mcp_alias_migration_test.clj [84.62ms]
+✓ /test/clj_surgeon/receipt_artifacts_boundary_test.clj [19.85ms]
+
+All 5 files formatted with Standard Clojure Style 👍 [157.96ms]
+standard-clj fix v0.29.0
+
+F /test/clj_surgeon/mcp_alias_migration_test.clj [87.94ms]
+
+1 file formatted with Standard Clojure Style 👍 [96.24ms]
+standard-clj fix v0.29.0
+
+✓ /src/clj_surgeon/receipt_artifacts.clj [10.12ms]
+
+1 file formatted with Standard Clojure Style 👍 [18.24ms]
+standard-clj fix v0.29.0
+
+✓ /docs/observations/2026-09-12-data-not-code/round4/finalize-report.clj [5.26ms]
+
+1 file formatted with Standard Clojure Style 👍 [12.76ms]

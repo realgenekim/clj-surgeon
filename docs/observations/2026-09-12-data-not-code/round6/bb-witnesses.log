@@ -1,0 +1,33 @@
+----- Error --------------------------------------------------------------------
+Type:     clojure.lang.ExceptionInfo
+Message:  Unable to resolve classname: java.io.UncheckedIOException
+Data:     {:type :sci/error, :line 128, :column 1, :file "/home/forge/src/clj-surgeon-datacode/src/clj_surgeon/receipt_artifacts.clj", :phase "analysis"}
+Location: /home/forge/src/clj-surgeon-datacode/src/clj_surgeon/receipt_artifacts.clj:141:21
+Phase:    analysis
+
+----- Context ------------------------------------------------------------------
+137:             _ (when-not (and (every? integer? key) (pos-int? links))
+138:                 (throw (ex-info "Inode identity unavailable" {})))
+139:             found (atom #{})
+140:             scan! (fn [^java.nio.file.Path root depth]
+141:                     (try
+                         ^--- Unable to resolve classname: java.io.UncheckedIOException
+142:                       (with-open [stream (Files/walk root (int depth)
+143:                                            (make-array java.nio.file.FileVisitOption 0))]
+144:                         (loop [paths (iterator-seq (.iterator stream))]
+145:                           (when (and (seq paths) (< (count @found) links))
+146:                             (let [path (first paths)]
+
+----- Stack trace --------------------------------------------------------------
+clj-surgeon.receipt-artifacts/fn      - /home/forge/src/clj-surgeon-datacode/src/clj_surgeon/receipt_artifacts.clj:141:21
+clj-surgeon.receipt-artifacts         - /home/forge/src/clj-surgeon-datacode/src/clj_surgeon/receipt_artifacts.clj:140:19
+clojure.core/fn                       - clojure/core.clj:4564:1
+clj-surgeon.receipt-artifacts/let     - /home/forge/src/clj-surgeon-datacode/src/clj_surgeon/receipt_artifacts.clj:140:19
+clj-surgeon.receipt-artifacts         - /home/forge/src/clj-surgeon-datacode/src/clj_surgeon/receipt_artifacts.clj:135:7
+... (run with --debug to see elided elements)
+clojure.core/defn-                    - clojure/core.clj:4982:1
+clj-surgeon.receipt-artifacts/require - /home/forge/src/clj-surgeon-datacode/src/clj_surgeon/receipt_artifacts.clj:128:1
+clj-surgeon.receipt-artifacts         - /home/forge/src/clj-surgeon-datacode/src/clj_surgeon/receipt_artifacts.clj:128:1
+clojure.core/require                  - clojure/core.clj:6070:1
+user                                  - /home/forge/src/clj-surgeon-datacode/docs/observations/2026-09-12-data-not-code/round6/bb_witnesses.clj:1:1
+

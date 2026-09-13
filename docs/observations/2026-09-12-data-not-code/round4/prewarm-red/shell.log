@@ -1,0 +1,31 @@
+# @spec MCP-OP-ORACLE-001
+swipl -q -f test/mcp_operation_contract_oracle.pl
+mcp-operation oracle: pass; legacy counterexamples=[verification_failed,verification_pending]
+bash test/performance_regression_sentinel_intent_test.sh
+Sentinel intent witness audit passed: 50/50 requirements named
+bash test/performance_regression_sentinel_intent_self_test.sh
+Sentinel intent audit self-test passed: missing simple/multipart and unknown multipart IDs refused
+python3 -B -m unittest discover -s test/oracles -p test_gate_slot.py
+sun_path witness selected: policy TMPDIR=/var/tmp/forge/datacode-fx/csg-1011 root_bytes=35 sun_path_bytes=77 writable=True
+sun_path witness branch: real bind; root=/var/tmp/forge/datacode-fx/csg-1011
+python3 -B -m unittest discover -s test/oracles -p test_namespace_split_papercut_oracle.py
+# @spec REQUIRE-CHANGE-014
+python3 -B -m unittest discover -s test/oracles -p test_require_change_oracle.py
+python3 -B -m unittest discover -s test/oracles -p test_cell_b_oracle.py
+# @spec MCP-OP-ALIAS-053
+ok: a clean repository passes (exit 0)
+ok: a cache forced in below the root fails the gate (exit 1)
+ok: a cache forced in at the root fails the gate (exit 1)
+ok: a repository with no ignore rule fails the gate (exit 1)
+ok: a directory git cannot answer for fails the gate (exit 1)
+ok: a tree whose file inventory git cannot produce fails the gate (exit 1)
+repository hygiene gate self-test: all cases pass
+clojure -M test/kernel_warning_check.clj
+Reflection warning, clj_surgeon/txn_journal.clj:1955:23 - reference to field exists can't be resolved.
+Reflection warning, clj_surgeon/txn_journal.clj:1959:29 - reference to field getCanonicalPath can't be resolved.
+Reflection warning, clj_surgeon/txn_journal.clj:1996:29 - call to java.io.FileOutputStream ctor can't be resolved.
+Reflection warning, clj_surgeon/txn_journal.clj:2003:30 - reference to field getCanonicalPath can't be resolved.
+kernel warning check: 2 namespace(s), 4 warning(s)
+REFUSED: the transaction kernel must compile with no reflection
+         and no boxed math. Add a type hint or a `long` coercion;
+         do not widen this gate.

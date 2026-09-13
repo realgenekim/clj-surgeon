@@ -1,0 +1,7 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+
+Testing clj-surgeon.mission-run-test
+proposal-display-bytes {:compact 1171, :full 33470}
+
+Ran 11 tests containing 79 assertions.
+0 failures, 0 errors.

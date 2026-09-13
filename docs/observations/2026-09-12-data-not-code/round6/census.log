@@ -1,0 +1,2 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+CENSUS_REGENERATE=1: wrote 2590 deftests to test/clj_surgeon/deftest_census.edn

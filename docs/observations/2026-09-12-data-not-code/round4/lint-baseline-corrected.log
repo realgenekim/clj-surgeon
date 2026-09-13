@@ -1,0 +1,9 @@
+/var/tmp/forge/datacode-fx/lint-baseline/clj_surgeon/operation_algebra_test.clj:54:8: warning: Unused private var clj-surgeon.operation-algebra-test/top-level-form-source
+/var/tmp/forge/datacode-fx/lint-baseline/clj_surgeon/scope_stream_test.clj:15:25: warning: Unused import LinkOption
+/var/tmp/forge/datacode-fx/lint-baseline/clj_surgeon/scope_stream_test.clj:15:36: warning: Unused import Path
+/var/tmp/forge/datacode-fx/lint-baseline/clj_surgeon/scope_stream_test.clj:15:41: warning: Unused import Paths
+/var/tmp/forge/datacode-fx/lint-baseline/clj_surgeon/txn_journal.clj:1706:45: warning: unused binding entry
+/var/tmp/forge/datacode-fx/lint-baseline/clj_surgeon/txn_journal.clj:2744:3: info: Redundant boolean coercion: expression already has type boolean
+/var/tmp/forge/datacode-fx/lint-baseline/clj_surgeon/txn_journal.clj:3013:6: warning: Redundant let expression.
+/var/tmp/forge/datacode-fx/lint-baseline/clj_surgeon/txn_journal.clj:3042:22: warning: redundant do
+linting took 183ms, errors: 0, warnings: 7

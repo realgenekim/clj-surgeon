@@ -1,10 +1,10 @@
 (ns clj-surgeon.mcp-alias-migration-test
   {:lane :battery}
   (:require
-   [clj-surgeon.artifact-boundary-support :as boundary]
    [cheshire.core :as json]
    [clj-surgeon.alias-migration :as planner]
    [clj-surgeon.alias-migration-fixture :as fixture]
+   [clj-surgeon.artifact-boundary-support :as boundary]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-alias-migration :as alias-migration]
@@ -396,7 +396,6 @@
       (finally
         (delete-tree! workspace)))))
 
-
 ;; @spec MCP-OP-ALIAS-057
 (deftest a-bare-directory-in-scope-paths-is-that-directorys-subtree
   ;; The exact scope EVERY tool arm of the E3-P cohort sent on its FIRST call
@@ -412,7 +411,7 @@
     (try
       (testing "a directory selects exactly what its explicit glob selects"
         (is (= (alias-migration/expand-scope (.toPath (.getCanonicalFile workspace))
-                                            {:paths ["src/**"] :exclude []})
+                 {:paths ["src/**"] :exclude []})
                (alias-migration/expand-scope (.toPath (.getCanonicalFile workspace))
                                              {:paths ["src"] :exclude []}))))
       (testing "the cohort's exact first request commits in ONE call"
@@ -423,7 +422,6 @@
           (is (= 12 (:files result)))))
       (finally
         (delete-tree! workspace)))))
-
 
 ;; @spec MCP-OP-ALIAS-058
 (deftest a-scope-that-matches-no-file-names-the-spelling-not-the-domain
@@ -644,7 +642,6 @@
                [{:file "src/z.clj"
                  :source (str "(ns z)\n(def s \"" needle "\")\n")}]))))))
 
-
 ;; @spec MCP-OP-ALIAS-057
 (deftest a-directory-entry-selects-the-same-subtree-under-every-spelling
   ;; Round-10 review finding 2: the directory CHECK resolved and normalised the
@@ -692,7 +689,6 @@
           (is (:ok result) (pr-str result))))
       (finally
         (delete-tree! workspace)))))
-
 
 ;; @spec MCP-OP-ALIAS-058
 (defn- many-root-workspace!
@@ -1069,7 +1065,6 @@
       (finally
         (delete-tree! workspace)))))
 
-
 ;; @spec MCP-OP-ALIAS-006
 (deftest the-domain-refusal-fires-only-when-the-scope-matched-files
   ;; The counterpart of ALIAS-058: three files matched, none of them requires
@@ -1084,7 +1079,6 @@
             "the domain refusal fired over a scope that matched no file"))
       (finally
         (delete-tree! workspace)))))
-
 
 ;; ---------------------------------------------------------------------------
 ;; the refusal TEXT block carries what the structured refusal carries
@@ -2037,7 +2031,6 @@
                 "src/clj_surgeon/mcp_tool.clj · entrance slice"
                 (router-entrance-slice)))))
 
-
 ;; @spec MCP-OP-ALIAS-059
 (defn- literal-refusal-kinds-in-reachable-sources
   "`literal-refusal-kinds-in` over each reachable source SEPARATELY.
@@ -2528,7 +2521,6 @@
         (is (str/includes? text "source state requires structured receipt review")
             "an adapter failure asserted the source was unchanged")))))
 
-
 ;; @spec MCP-OP-ALIAS-059
 (deftest a-live-refusals-text-and-structured-receipt-do-not-disagree
   (let [workspace (workspace!)]
@@ -2634,7 +2626,6 @@
               (pr-str (:result @captured)))))
       (finally
         (delete-tree! workspace)))))
-
 
 ;; @spec MCP-OP-ALIAS-013
 (deftest an-indirect-reference-refuses-closed-and-names-the-file
@@ -4460,7 +4451,6 @@
         (delete-tree! rooted)
         (delete-tree! main)))))
 
-
 ;; @spec MCP-OP-ALIAS-056
 (deftest two-concurrent-receipt-directory-creations-record-disjoint-sets
   ;; `createDirectories` answers for a whole chain and cannot say which links
@@ -5282,7 +5272,7 @@
           (str "a site explicitly marked forwarded-refusal-kind was still "
                "named: "
                (pr-str (runtime-spelled-kind-sites
-                        "route-a-marked" route-a-marked)))))))
+                         "route-a-marked" route-a-marked)))))))
 
 ;; @spec MCP-OP-ALIAS-059
 (deftest the-forwarded-refusal-kind-marker-is-checked-and-not-merely-believed
@@ -6005,7 +5995,9 @@
     ;; StackOverflowError leaves as a named refusal instead of zero bytes.
     "probe-request-too-deep" "probe-request-unreadable"
     ;; Row-2 external artifact containment adds these reachable typed refusals.
-    "receipt-dir-escapes" "receipt-dir-inside-workspace"})
+    "receipt-dir-escapes" "receipt-dir-inside-workspace"
+    ;; DATACODE-ENV-001: resolved target admission and unresolved link refusal.
+    "write-outside-envelope" "artifact-path-unresolvable"})
 
 ;; @spec MCP-OP-ALIAS-059
 (deftest the-refusal-enumeration-is-pinned-in-count-and-in-membership
@@ -6014,7 +6006,7 @@
   ;; could see. Both directions are asserted — a kind that appears and a kind
   ;; that vanishes are each a change to what a text-reading client is promised.
   (let [kinds (set (refusal-kinds-in-source))]
-    (is (= 166 (count kinds))
+    (is (= 168 (count kinds))
         (str "the entrance's refusal enumeration changed size: "
              (count kinds) " kinds"))
     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))
@@ -6489,8 +6481,7 @@
             (str "the fact line renders " (count line) " characters"))
         (is (<= @realised (* 2 ceiling))
             (str "the renderer realised " @realised
-                 " elements to publish " ceiling " characters"))))
-    ))
+                 " elements to publish " ceiling " characters"))))))
 
 ;; @spec MCP-OP-ALIAS-059
 (deftest the-fact-renderer-survives-a-deeply-nested-value
@@ -6504,8 +6495,7 @@
         (is (str/includes? line "deep")
             (str "a deep fact is dropped rather than elided: " line))
         (is (bounded? line)
-            (str "the fact line renders " (count line) " characters"))))
-    ))
+            (str "the fact line renders " (count line) " characters"))))))
 
 ;; @spec MCP-OP-ALIAS-059
 (deftest the-fact-renderer-does-not-read-a-huge-value-whole
@@ -6572,8 +6562,8 @@
     (testing "a toString that throws does not escape the renderer"
       (let [result (try (mcp-tool/bounded-pr-str
                           (ThrowingToStringProbe.) ceiling)
-                         (catch Exception e
-                           (str "<threw " (.getSimpleName (class e)) ">")))]
+                     (catch Exception e
+                       (str "<threw " (.getSimpleName (class e)) ">")))]
         (is (not (str/starts-with? result "<threw"))
             (str "bounded-pr-str propagated the object's own toString "
                  "exception: " result))
@@ -7195,7 +7185,9 @@
         (is (= "committed" (:state compacted)))
         (is (= (:details_path receipt) (:details_path compacted)))
         (is (:details_elided compacted))
-        (is (= receipt (edn/read-string (slurp (:receipt_details_path compacted))))))
+        (is (re-matches #"[0-9a-f]{64}" (:envelope-id compacted)))
+        (is (= (assoc receipt :envelope-id (:envelope-id compacted))
+               (edn/read-string (slurp (:receipt_details_path compacted))))))
       (finally (delete-tree! root)))))
 
 ;; @spec ALIAS-MIGRATION-001
@@ -7360,13 +7352,13 @@
 ;; ex-info naming :error-type and the offending :root.
 (deftest artifact-root-refuses-blank
   (let [error (try (artifacts/validate-artifact-root! "") nil
-                    (catch clojure.lang.ExceptionInfo e e))]
+                (catch clojure.lang.ExceptionInfo e e))]
     (is (some? error))
     (is (= :artifact-root-blank (:error-type (ex-data error))))))
 
 (deftest artifact-root-refuses-relative
   (let [error (try (artifacts/validate-artifact-root! "relative/state/path") nil
-                    (catch clojure.lang.ExceptionInfo e e))]
+                (catch clojure.lang.ExceptionInfo e e))]
     (is (some? error))
     (is (= :artifact-root-relative (:error-type (ex-data error))))))
 
@@ -7374,8 +7366,8 @@
   ;; Matches the fence's own probe: XDG_STATE_HOME=/tmp produced
   ;; /tmp/clj-surgeon/artifacts, and base-refusal on that is :ram-path-prefix.
   (let [error (try (artifacts/validate-artifact-root!
-                      "/tmp/clj-surgeon-spf001-ram-witness") nil
-                    (catch clojure.lang.ExceptionInfo e e))]
+                     "/tmp/clj-surgeon-spf001-ram-witness") nil
+                (catch clojure.lang.ExceptionInfo e e))]
     (is (some? error))
     (is (= :artifact-root-ram-backed (:error-type (ex-data error))))))
 
@@ -7384,8 +7376,8 @@
   ;; the invoking user -- the same class the fence flagged with
   ;; /home/someone-else/state.
   (let [error (try (artifacts/validate-artifact-root!
-                      "/root/clj-surgeon-spf001-foreign-witness") nil
-                    (catch clojure.lang.ExceptionInfo e e))]
+                     "/root/clj-surgeon-spf001-foreign-witness") nil
+                (catch clojure.lang.ExceptionInfo e e))]
     (is (some? error))
     (is (= :artifact-root-not-owned (:error-type (ex-data error))))))
 
@@ -7407,7 +7399,7 @@
 
 (deftest artifact-root-accepts-a-path-under-home
   (let [root (str (System/getProperty "user.home")
-                   "/.local/state/clj-surgeon/spf001-home-witness")]
+               "/.local/state/clj-surgeon/spf001-home-witness")]
     (is (= root (artifacts/validate-artifact-root! root)))))
 
 (deftest artifact-root-retains-the-controlled-parity-harness-override
@@ -7421,7 +7413,7 @@
     (try
       (binding [artifacts/*artifact-root* "relative/not-a-real-root"]
         (let [error (try (artifacts/directory "edit-clojure" (str root)) nil
-                          (catch clojure.lang.ExceptionInfo e e))]
+                      (catch clojure.lang.ExceptionInfo e e))]
           (is (some? error))
           (is (= :artifact-root-relative (:error-type (ex-data error))))))
       (finally (delete-tree! root)))))
@@ -7450,7 +7442,7 @@
   (let [run-user (io/file "/run/user" (str (.trim (:out (shell/sh "id" "-u")))))]
     (when (.isDirectory run-user)
       (let [link-parent (io/file (artifacts/default-artifact-root)
-                                  (str "spf004-tmpfs-link-" (System/nanoTime)))
+                          (str "spf004-tmpfs-link-" (System/nanoTime)))
             link (io/file link-parent "artifacts")
             probe (str link "/probe")]
         (try

@@ -1,0 +1,8 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+
+Testing clj-surgeon.admit-patch-test
+
+Ran 168 tests containing 4329 assertions.
+0 failures, 0 errors.
+0 preconditions skipped.
+0 preconditions failed.

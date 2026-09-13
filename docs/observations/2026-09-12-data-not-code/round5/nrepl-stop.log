@@ -1,0 +1,31 @@
+----- Error --------------------------------------------------------------------
+Type:     java.io.EOFException
+Message:  Invalid netstring. Unexpected end of input.
+Location: /home/forge/.gitlibs/libs/org.babashka.bbin/script--693757147-https-github-com-bhauman-clojure-mcp-light-git/d341c239d4b1faa58ccefaf8bc0b1e2a312e2af4/src/clojure_mcp_light/nrepl_eval.clj:357:13
+
+----- Context ------------------------------------------------------------------
+353:                            (detect-cljs-mode conn-with-session))
+354:               eval-id (nc/next-id)]
+355:           (try
+356:             ;; Evaluate expression using messages-for-id
+357:             (let [messages (nc/messages-for-id
+                 ^--- Invalid netstring. Unexpected end of input.
+358:                             conn-with-session
+359:                             {"op" "eval"
+360:                              "code" fixed-expr
+361:                              "id" eval-id})]
+362:               (output-messages messages env-type cljs-mode?))
+
+----- Stack trace --------------------------------------------------------------
+bencode.core/throw-eof                              - <built-in>
+bencode.core/read-bencode                           - <built-in>
+clojure-mcp-light.nrepl-eval                        - /home/forge/.gitlibs/libs/org.babashka.bbin/script--693757147-https-github-com-bhauman-clojure-mcp-light-git/d341c239d4b1faa58ccefaf8bc0b1e2a312e2af4/src/clojure_mcp_light/nrepl_eval.clj:357:13
+clojure-mcp-light.nrepl-client/with-socket          - /home/forge/.gitlibs/libs/org.babashka.bbin/script--693757147-https-github-com-bhauman-clojure-mcp-light-git/d341c239d4b1faa58ccefaf8bc0b1e2a312e2af4/src/clojure_mcp_light/nrepl_client.clj:114:7
+clojure-mcp-light.nrepl-client/with-socket          - /home/forge/.gitlibs/libs/org.babashka.bbin/script--693757147-https-github-com-bhauman-clojure-mcp-light-git/d341c239d4b1faa58ccefaf8bc0b1e2a312e2af4/src/clojure_mcp_light/nrepl_client.clj:112:5
+... (run with --debug to see elided elements)
+clojure-mcp-light.nrepl-eval/eval-expr-with-timeout - /home/forge/.gitlibs/libs/org.babashka.bbin/script--693757147-https-github-com-bhauman-clojure-mcp-light-git/d341c239d4b1faa58ccefaf8bc0b1e2a312e2af4/src/clojure_mcp_light/nrepl_eval.clj:344:5
+clojure-mcp-light.nrepl-eval/eval-expr-with-timeout - /home/forge/.gitlibs/libs/org.babashka.bbin/script--693757147-https-github-com-bhauman-clojure-mcp-light-git/d341c239d4b1faa58ccefaf8bc0b1e2a312e2af4/src/clojure_mcp_light/nrepl_eval.clj:335:1
+clojure-mcp-light.nrepl-eval                        - /home/forge/.gitlibs/libs/org.babashka.bbin/script--693757147-https-github-com-bhauman-clojure-mcp-light-git/d341c239d4b1faa58ccefaf8bc0b1e2a312e2af4/src/clojure_mcp_light/nrepl_eval.clj:600:13
+clojure.core/apply                                  - clojure/core.clj:662:1
+user                                                - NO_SOURCE_PATH:1:53
+

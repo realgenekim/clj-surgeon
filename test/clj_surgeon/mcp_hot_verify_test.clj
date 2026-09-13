@@ -494,7 +494,7 @@
                 (future
                   (try
                     (dotimes [n 200]
-                      (Thread/sleep 50)
+                      (^{:temporal-purpose :spaced-stimulus} Thread/sleep 50)
                       (transport/send transport {:id id :out (str "tick " n)}))
                     (catch Exception _ nil)))))
       (fn [project-root port-file]

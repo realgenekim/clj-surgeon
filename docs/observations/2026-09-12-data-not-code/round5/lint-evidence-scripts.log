@@ -1,0 +1,2 @@
+docs/observations/2026-09-12-data-not-code/round5/focused.clj:6:7: warning: Unresolved namespace clojure.test. Are you missing a require?
+linting took 12ms, errors: 0, warnings: 1

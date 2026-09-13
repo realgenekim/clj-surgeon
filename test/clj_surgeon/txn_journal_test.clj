@@ -22,12 +22,29 @@
 
 (defn- temp-dir
   [label]
-  (let [dir (io/file (or (System/getenv "CLJ_SURGEON_MEMORY_TMP") "/home/forge/tmp")
+  (let [dir (io/file (or (System/getenv "CLJ_SURGEON_MEMORY_TMP")
+                       (System/getProperty "java.io.tmpdir"))
                      (str "clj-surgeon-txn-" label "-"
                           (System/currentTimeMillis) "-"
                           (long (rand 1000000))))]
     (.mkdirs dir)
     (.getCanonicalPath dir)))
+
+;; @spec DATACODE-ENV-002
+(deftest every-test-scratch-override-defaults-to-jvm-temp
+  ;; Round 9: the fast-lane-only census missed this battery helper. Scan all
+  ;; test sources, including excluded memory witnesses. Literal negative
+  ;; fixtures contain escaped quotes, so they do not match executable getters.
+  (let [rows (for [file (file-seq (io/file "test"))
+                   :when (and (.isFile file) (re-find #"\.(clj|cljc|cljs)$" (str file)))
+                   [_ override fallback]
+                   (re-seq #"\(or\s+\(System/getenv\s+\"(CLJ_SURGEON_[A-Z_]+_TMP)\"\)\s*(\(System/getProperty\s+\"java.io.tmpdir\"\))?"
+                           (slurp file))]
+               {:file (str file) :override override :jvm-default? (some? fallback)})]
+    (is (some #(str/ends-with? (:file %) "txn_journal_test.clj") rows)
+        "The motivating battery helper must be censused")
+    (doseq [row rows]
+      (is (:jvm-default? row) (pr-str row)))))
 
 (defn- delete-tree!
   [root]
@@ -1529,6 +1546,7 @@
                                                             :boot-id (boot-id-now)})))
                         :before-restore (fn [_]
                                           (spit lock (pr-str {:txid "C-THIRD"
+
                                                               :pid (.pid child)
                                                               :boot-id (boot-id-now)})))})
               displaced (:lock-break-displaced result)]
@@ -1544,7 +1562,6 @@
           (.destroyForcibly child)
           (.waitFor child)
           (cleanup! ws))))))
-
 
 ;; @spec MCP-OP-MEM-013
 (deftest a-broken-lock-tombstone-is-visible-counted-and-retired
@@ -2597,6 +2614,7 @@
               "one millisecond under the required age is still a refusal")
           (is (.isFile lock))
 
+
           ;; exactly at the age, with the pid dead: broken, and named
           (let [recovery (journal/recover!
                            (:root ws)
@@ -2612,7 +2630,6 @@
           (.destroyForcibly child)
           (.waitFor child)
           (cleanup! ws))))))
-
 
 ;; @spec MCP-OP-MEM-013
 (deftest a-legacy-locks-age-is-the-newest-of-its-two-stamps

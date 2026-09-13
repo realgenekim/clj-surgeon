@@ -11,11 +11,14 @@
    [clj-surgeon.core :as core]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-admit-tool :as admit]
+   [clj-surgeon.mcp-alias-migration :as migration]
    [clj-surgeon.mcp-cold-verify]
    [clj-surgeon.mcp-extraction :as kernel]
    [clj-surgeon.mcp-namespace-split-test :as split-boundary-fixture]
+   [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.namespace-split-io :as split]
    [clj-surgeon.namespace-split-test :as split-fixture]
+   [clj-surgeon.operation-algebra :as algebra]
    [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.require-change-boundary-test :as require-fixture]
    [clj-surgeon.require-change-io :as require-change]
@@ -56,6 +59,298 @@
   (let [root (.toFile (java.nio.file.Files/createTempDirectory
                         "receipt-publication-" (make-array java.nio.file.attribute.FileAttribute 0)))]
     (try (f root) (finally (remove-tree! root)))))
+
+(defn- with-envelope [roots f]
+  (let [make-envelope (ns-resolve 'clj-surgeon.receipt-artifacts 'destination-envelope)
+        envelope-var (ns-resolve 'clj-surgeon.receipt-artifacts '*destination-envelope*)]
+    (is (some? make-envelope) "DATACODE-ENV: trusted envelope constructor exists")
+    (if (and make-envelope envelope-var)
+      (with-bindings {envelope-var (make-envelope (mapv str roots) :launcher)} (f))
+      (f))))
+
+(defn- refusal-data [f]
+  (try (f) nil (catch clojure.lang.ExceptionInfo e (ex-data e))))
+
+;; @spec DATACODE-ENV-005
+(deftest state-home-substitution-is-bounded-launcher-context
+  ;; Round 9: a substitute is trusted context, but the written outside-root
+  ;; negative forbids using it to enlarge policy authority.
+  (with-workspace
+    (fn [base]
+      (let [root (doto (io/file base "workspace") .mkdirs)
+            state-home (io/file base "state-home")
+            envelope (artifacts/current-envelope)
+            invoke (ns-resolve 'clj-surgeon.receipt-artifacts 'call-with-state-home)
+            outside (io/file (.getParentFile (io/file (System/getProperty "java.io.tmpdir")))
+                      (str "datacode-outside-" (random-uuid)))]
+        (is (some? invoke) "The trusted invocation entrance must exist")
+        (when invoke
+          (invoke state-home
+                  (fn []
+                    (is (= (conj (:roots envelope) (.getCanonicalPath state-home))
+                           (:roots (artifacts/current-envelope))))
+                    (is (= :launcher (:source (artifacts/current-envelope))))))
+          (is (= envelope (invoke nil artifacts/current-envelope))))
+        (let [txn (journal/begin! (str root) {:state-home (str state-home)})]
+          (try
+            (is (some? (:state txn)))
+            (is (= (conj (:roots envelope) (.getCanonicalPath state-home))
+                   (get-in txn [:destination-envelope :roots])))
+            (is (.isFile (io/file (:manifest-path txn))))
+            (finally (when (:state txn) (journal/rollback! txn)))))
+        (is (= envelope (artifacts/current-envelope)) "Invocation roots do not leak")
+        (is (not (.exists outside)))
+        (doseq [entrance [#(workspace/state-dir (str root) (str %))
+                          #(journal/begin! (str root) {:state-home (str %)})]]
+          (let [r (refusal-data #(entrance outside))]
+            (is (= :write-outside-envelope (:error-type r)) (pr-str r))
+            (is (not (.exists outside)) "Refusal creates no substitute directory")))
+        (doseq [request [{:state-home (str state-home)}
+                         {:destination-envelope envelope}]]
+          (is (= :unknown-arguments (:error-type (transaction/execute-change! request)))))))))
+
+;; @spec DATACODE-ENV-005
+;; @spec DATACODE-ENV-003
+(deftest state-home-substitution-preserves-narrow-context-and-final-target-checks
+  (with-workspace
+    (fn [base]
+      (let [root (doto (io/file base "workspace") .mkdirs)
+            state-home (doto (io/file base "state-home") .mkdirs)
+            outside (doto (io/file base "outside") .mkdirs)
+            absent (io/file outside "absent" "state-home")]
+        (spit (io/file outside "sentinel") "unchanged")
+        (java.nio.file.Files/createSymbolicLink
+          (.toPath (io/file state-home ".local")) (.toPath outside)
+          (make-array java.nio.file.attribute.FileAttribute 0))
+        (with-envelope [state-home]
+          #(doseq [substitute [absent state-home]
+                   entrance [(fn [s] (workspace/state-dir (str root) (str s)))
+                             (fn [s] (journal/begin! (str root) {:state-home (str s)}))]]
+             (let [r (refusal-data (fn [] (entrance substitute)))]
+               (is (= :write-outside-envelope (:error-type r)) (pr-str r))
+               (is (= "unchanged" (slurp (io/file outside "sentinel"))))
+               (is (not (.exists (io/file outside "absent"))))
+               (is (not (.exists (io/file outside "state")))))))))))
+
+;; @spec DATACODE-ENV-001
+;; @spec DATACODE-ENV-003
+;; @spec DATACODE-ENV-004
+(deftest destination-envelope-guards-real-publication
+  (with-workspace
+    (fn [base]
+      (let [allowed (io/file base "allowed") outside (io/file base "outside")
+            source (io/file base "a.clj") before "(ns a) (def x :old)\n"
+            spec {:changes [{:id :x :in [(str source)] :forms '[x]
+                             :find ":old" :do [:replace ":new"] :expect {:matches 1}}]
+                  :expect {:changes 1 :edits 1 :files 1}}]
+        (.mkdirs allowed)
+        (.mkdirs outside)
+        (spit source before)
+        (spit (io/file outside "kept.edn") "outside sentinel")
+        (with-envelope [allowed]
+          #(doseq [destination [(io/file outside "kept.edn")
+                                (io/file outside "absent" "tail" "undo.edn")]]
+             (spit source before)
+             (spit (io/file outside "kept.edn") "outside sentinel")
+             (let [r (transaction/execute-change!
+                       {:spec spec :receipt-out (str destination)})]
+               (is (= :write-outside-envelope (:error-type r)) (pr-str r))
+               (is (= :receipt-publish (:effect r)))
+               (is (= (str destination) (:path r)))
+               (is (= before (slurp source)))
+               (is (= "outside sentinel" (slurp (io/file outside "kept.edn"))))
+               (is (not (.exists (io/file outside "absent")))))))
+        (spit source before)
+        (with-envelope [allowed]
+          #(let [r (transaction/execute-change!
+                     {:spec spec :receipt-out (str (io/file allowed "undo.edn"))})]
+             (is (:committed r) (pr-str r))
+             (is (string? (:envelope-id r)))
+             (is (= (:envelope-id r)
+                    (:envelope-id (edn/read-string (slurp (:receipt-file r))))))))))))
+
+;; @spec DATACODE-ENV-001
+(deftest destination-envelope-resolves-ancestor-and-final-symlinks
+  (with-workspace
+    (fn [base]
+      (let [allowed (io/file base "allowed") outside (io/file base "outside")
+            workspace (io/file base "workspace")]
+        (.mkdirs allowed) (.mkdirs outside) (.mkdirs workspace)
+        (spit (io/file outside "kept.edn") "sentinel")
+        (binding [artifacts/*artifact-root* (str allowed)]
+          (let [dir (io/file (artifacts/directory "envelope" workspace))]
+            (.mkdirs dir)
+            (doseq [[name destination] [["ancestor" outside]
+                                        ["file.edn" (io/file outside "kept.edn")]]]
+              (java.nio.file.Files/createSymbolicLink
+                (.toPath (io/file dir name)) (.toPath destination)
+                (make-array java.nio.file.attribute.FileAttribute 0)))
+            (with-envelope [allowed]
+              #(doseq [tail ["ancestor/absent/undo.edn" "file.edn"]]
+                 (let [r (refusal-data (fn [] (artifacts/target "envelope" workspace tail)))]
+                   (is (= :write-outside-envelope (:error-type r)) (pr-str r))
+                   (is (= :receipt-publish (:effect r)))
+                   (is (string? (:resolved-path r))))))
+            (is (= "sentinel" (slurp (io/file outside "kept.edn"))))
+            (is (not (.exists (io/file outside "absent"))))))))))
+
+;; @spec DATACODE-ENV-001
+(deftest destination-envelope-admits-ledger-before-creation
+  (with-workspace
+    (fn [base]
+      (let [allowed (io/file base "allowed") outside (io/file base "outside")]
+        (.mkdirs allowed)
+        (with-envelope [allowed]
+          #(binding [artifacts/*artifact-root* (str outside)]
+             (let [r (refusal-data (fn [] (migration/append-telemetry! {:witness true})))]
+               (is (= :write-outside-envelope (:error-type r)) (pr-str r))
+               (is (= :telemetry-append (:effect r)))
+               (is (not (.exists outside))))))
+        (.mkdirs outside)
+        (spit (io/file outside "kept.edn") "sentinel")
+        (.mkdirs (io/file allowed "alias-migration-receipts"))
+        (java.nio.file.Files/createSymbolicLink
+          (.toPath (io/file allowed "alias-migration-receipts" "ledger.edn"))
+          (.toPath (io/file outside "kept.edn"))
+          (make-array java.nio.file.attribute.FileAttribute 0))
+        (with-envelope [allowed]
+          #(binding [artifacts/*artifact-root* (str allowed)]
+             (let [r (refusal-data (fn [] (migration/append-telemetry! {:witness true})))]
+               (is (= :write-outside-envelope (:error-type r)) (pr-str r))
+               (is (= :telemetry-append (:effect r)))
+               (is (= "sentinel" (slurp (io/file outside "kept.edn")))))))))))
+
+;; @spec DATACODE-ENV-002
+;; @spec DATACODE-ENV-003
+(deftest destination-envelope-is-trusted-context-only
+  (let [context {:operation :change :operation-version 1 :entrance :cli
+                 :policy :cli-legacy :lifecycle :commit
+                 :destination-envelope {:id "92973cc3973923e812d4f77d80bfb4ea1a518b32890bff2d0462de570ba683a9"
+                                        :roots ["/var/tmp/owned"] :source :launcher}}
+        r (algebra/derive-capabilities (algebra/change-entry identity) context)]
+    (is (:ok r) (pr-str r))
+    (is (= (:destination-envelope context) (:destination-envelope r)))
+    (is (= :unknown-arguments
+           (:error-type (transaction/execute-change!
+                          {:destination-envelope (:destination-envelope context)})))))
+  (let [policy (ns-resolve 'clj-surgeon.receipt-artifacts 'policy-envelope-roots)]
+    (is (some? policy) "DATACODE-ENV-002: the policy-root function exists")
+    (when policy
+      (is (= ["/var/tmp" "/home/seat/.local/state/clj-surgeon" "/work"]
+             (policy {:tmpdir "/tmp/unsafe" :home "/home/seat" :workspace "/work"})))
+      (is (= ["/disk/tmp" "/disk/artifacts" "/work"]
+             (policy {:tmpdir "/disk/tmp" :home "/home/seat" :workspace "/work"
+                      :artifact-root "/disk/artifacts"})))))
+  (testing "missing launcher authority uses the bounded default; startup authority is retained"
+    (with-redefs-fn
+      {(ns-resolve 'clj-surgeon.receipt-artifacts 'launcher-envelope) (atom nil)}
+      #(binding [artifacts/*destination-envelope* nil]
+         (let [default (artifacts/current-envelope)
+               narrow (artifacts/destination-envelope ["/var/tmp/owned"] :launcher)]
+           (is (= :policy-default (:source default)))
+           (is (= 3 (count (:roots default))))
+           (is (algebra/valid-destination-envelope? default))
+           (is (= narrow (artifacts/initialize-envelope! "/work" narrow)))
+           (is (= narrow (artifacts/current-envelope)))
+           (is (= narrow (artifacts/initialize-envelope! "/different-workspace"))))))))
+
+;; @spec DATACODE-ENV-002
+(deftest destination-envelope-policy-witness-assertion-count
+  ;; Opus F2: a missing Var used to silently drop two literal-root assertions.
+  (let [counts (binding [clojure.test/*report-counters*
+                         (ref clojure.test/*initial-report-counters*)]
+                 (clojure.test/test-var #'destination-envelope-is-trusted-context-only)
+                 @clojure.test/*report-counters*)]
+    (is (= 12 (+ (:pass counts) (:fail counts) (:error counts)))
+        (str "DATACODE-ENV-002: policy witness must execute all 12 assertions " counts))))
+
+;; @spec DATACODE-ENV-001
+(deftest destination-envelope-admits-only-accounted-inode-links
+  ;; Opus round 6: journal LOCK and LOCK.broken.* deliberately share an inode.
+  (with-workspace
+    (fn [base]
+      (let [a (io/file base "a") b (io/file base "b")
+            lock (io/file a "LOCK") peer (io/file b "LOCK.broken.1")
+            outside (io/file base "outside")]
+        (.mkdirs a)
+        (.mkdirs b)
+        (spit lock "lock-owner")
+        (java.nio.file.Files/createLink (.toPath peer) (.toPath lock))
+        (with-envelope [a b]
+          #(is (= (str lock) (artifacts/admit-target! lock))
+               "all links across disjoint admitted roots are accounted for"))
+        (with-envelope [a a]
+          #(let [r (refusal-data (fn [] (artifacts/admit-target! lock)))]
+             (is (= :hard-link (:reason r)) "duplicate roots cannot count LOCK twice")))
+        (java.nio.file.Files/createSymbolicLink
+          (.toPath (io/file a "peer-alias")) (.toPath lock)
+          (make-array java.nio.file.attribute.FileAttribute 0))
+        (with-envelope [a]
+          #(is (= :hard-link (:reason (refusal-data (fn [] (artifacts/admit-target! lock)))))
+               "a symlink alias cannot stand in for an outside inode link"))
+        (java.nio.file.Files/delete (.toPath peer))
+        (java.nio.file.Files/createLink (.toPath (io/file a "LOCK.broken.1")) (.toPath lock))
+        (with-envelope [a]
+          #(is (= (str lock) (artifacts/admit-target! lock)) "journal sibling links are admitted"))
+        (with-envelope [lock]
+          #(is (= :hard-link (:reason (refusal-data (fn [] (artifacts/admit-target! lock)))))
+               "a file-sized envelope does not admit sibling links"))
+        (java.nio.file.Files/createLink (.toPath outside) (.toPath lock))
+        (with-envelope [a (io/file a ".")]
+          #(let [r (refusal-data (fn [] (artifacts/admit-target! lock)))]
+             (is (= :write-outside-envelope (:error-type r)))
+             (is (= :hard-link (:reason r)) "one outside link still refuses with inside peers present")
+             (is (= "lock-owner" (slurp outside)))))
+        (with-envelope [a]
+          #(let [r (refusal-data (fn [] (artifacts/admit-target! outside)))]
+             (is (= :write-outside-envelope (:error-type r)))
+             (is (nil? (:reason r)) "a path escape is not mislabelled as an inode escape")))))))
+
+;; @spec DATACODE-ENV-001
+(deftest destination-envelope-refuses-hard-linked-final-ledger
+  ;; Opus F3: APPEND follows a hard link even with NOFOLLOW_LINKS.
+  (with-workspace
+    (fn [base]
+      (let [allowed (io/file base "allowed")
+            outside (io/file base "outside.edn")
+            dir (io/file allowed "alias-migration-receipts")
+            ledger (io/file dir "ledger.edn")]
+        (.mkdirs dir)
+        (spit outside "sentinel")
+        (java.nio.file.Files/createLink (.toPath ledger) (.toPath outside))
+        (with-envelope [allowed]
+          #(binding [artifacts/*artifact-root* (str allowed)]
+             (let [r (refusal-data (fn [] (migration/append-telemetry! {:witness true})))]
+               (is (= :write-outside-envelope (:error-type r)) (pr-str r))
+               (is (= :hard-link (:reason r)))
+               (is (= :telemetry-append (:effect r)))
+               (is (= (str ledger) (:path r)))
+               (is (string? (:envelope-id r)))
+               (is (= "sentinel" (slurp outside))))))))))
+
+;; @spec DATACODE-ENV-001
+;; @spec DATACODE-ENV-004
+(deftest destination-envelope-final-filename-consumer-matrix
+  ;; Real publication seams, independent of the path constructor they use.
+  (with-workspace
+    (fn [base]
+      (let [allowed (io/file base "allowed") outside (io/file base "kept.edn")]
+        (.mkdirs allowed)
+        (spit outside "sentinel")
+        (java.nio.file.Files/createSymbolicLink
+          (.toPath (io/file allowed "detail.edn")) (.toPath outside)
+          (make-array java.nio.file.attribute.FileAttribute 0))
+        (doseq [[owner args]
+                [['clj-surgeon.require-change-io/save! [(str allowed) "detail.edn" {}]]
+                 ['clj-surgeon.namespace-split-io/save! [(str allowed) "detail.edn" {}]]
+                 ['clj-surgeon.rename-alias/write-detail! [(str (io/file allowed "detail.edn")) {}]]
+                 ['clj-surgeon.mcp-cold-verify/publish!
+                  [{:receipt-file (str (io/file allowed "detail.edn")) :job "verify/test"}]]]]
+          (require (symbol (namespace owner)))
+          (with-envelope [allowed]
+            #(let [r (refusal-data (fn [] (apply (resolve owner) args)))]
+               (is (= :write-outside-envelope (:error-type r)) (str owner " " r))
+               (is (= "sentinel" (slurp outside)) (str owner " changed outside bytes")))))))))
 
 (defn- assert-artifact! [verb path]
   (is (string? path) (str verb " must return its artifact path"))
@@ -350,7 +645,7 @@
           (spit external (pr-str {:verification-profiles {"unit" {:commands [["/bin/true"]]}}}))
           (with-redefs [split/analyze! split-boundary-fixture/analysis]
             (let [r (split/execute! {:verification-profiles {"unit" {:commands [["/bin/false"]]}}}
-                                       (assoc-in request [:verification :profile-file] (str external)))
+                      (assoc-in request [:verification :profile-file] (str external)))
                   after (set (for [f (file-seq (io/file root)) :when (.isFile f)]
                                (str (.relativize (.toPath (io/file root)) (.toPath f)))))]
               (is (:ok r) (pr-str r))
@@ -368,7 +663,7 @@
     (fn [_ request]
       (with-redefs [split/analyze! split-boundary-fixture/analysis]
         (let [r (split/execute! {:verification-profiles {"b07-cell-b" {:commands [["/bin/true"]]}}}
-                                   (assoc request :verification {:profile "b07-cell-b"}))
+                  (assoc request :verification {:profile "b07-cell-b"}))
               check (first (filter :command (:checks r)))]
           (is (= {:state "committed" :committed true :ok true :mutation_attempted true
                   :verification_complete false :proof_pending ["cold-suite"]}

@@ -1,0 +1,6 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+
+Testing clj-surgeon.insert-forms-parity-test
+
+Ran 1 tests containing 5 assertions.
+0 failures, 0 errors.

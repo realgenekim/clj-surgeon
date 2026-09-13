@@ -808,7 +808,12 @@
   clj-surgeon.lane-manifest-test/loaded-namespaces-carry-their-lane-at-runtime
   clj-surgeon.lane-manifest-test/no-fast-lane-namespace-spells-a-child-process
   clj-surgeon.lane-manifest-test/no-living-prose-still-calls-the-bb-lane-by-its-old-name
+  clj-surgeon.lane-manifest-test/runtime-evidence-binds-statistics-to-receipt-files
+  clj-surgeon.lane-manifest-test/runtime-evidence-is-consumed-and-receipts-are-required
   clj-surgeon.lane-manifest-test/runtime-portability-controls-cover-every-assignment
+  clj-surgeon.lane-manifest-test/runtime-receipts-must-stay-in-retained-evidence-roots
+  clj-surgeon.lane-manifest-test/runtime-steering-fields-cannot-outvote-control-receipts
+  clj-surgeon.lane-manifest-test/sleep-pins-survive-line-movement-and-refuse-purpose-drift
   clj-surgeon.lane-manifest-test/the-corpus-only-ever-grows-and-the-arithmetic-is-shown
   clj-surgeon.lane-manifest-test/the-landing-gate-refuses-a-stale-battery-receipt
   clj-surgeon.lane-manifest-test/the-landing-gate-runs-both-the-merge-gate-and-the-battery-tripwire
@@ -2239,6 +2244,14 @@
   clj-surgeon.receipt-artifacts-boundary-test/cold-proof-publication-is-external-and-workspace-isolated
   clj-surgeon.receipt-artifacts-boundary-test/compact-edit-publishes-external-inverse
   clj-surgeon.receipt-artifacts-boundary-test/default-transaction-publishes-external-journal-and-preimage
+  clj-surgeon.receipt-artifacts-boundary-test/destination-envelope-admits-ledger-before-creation
+  clj-surgeon.receipt-artifacts-boundary-test/destination-envelope-admits-only-accounted-inode-links
+  clj-surgeon.receipt-artifacts-boundary-test/destination-envelope-final-filename-consumer-matrix
+  clj-surgeon.receipt-artifacts-boundary-test/destination-envelope-guards-real-publication
+  clj-surgeon.receipt-artifacts-boundary-test/destination-envelope-is-trusted-context-only
+  clj-surgeon.receipt-artifacts-boundary-test/destination-envelope-policy-witness-assertion-count
+  clj-surgeon.receipt-artifacts-boundary-test/destination-envelope-refuses-hard-linked-final-ledger
+  clj-surgeon.receipt-artifacts-boundary-test/destination-envelope-resolves-ancestor-and-final-symlinks
   clj-surgeon.receipt-artifacts-boundary-test/external-profile-is-read-without-workspace-artifacts
   clj-surgeon.receipt-artifacts-boundary-test/general-change-publishes-external-inverse
   clj-surgeon.receipt-artifacts-boundary-test/helper-extraction-publishes-external-detail-and-inverse
@@ -2248,6 +2261,8 @@
   clj-surgeon.receipt-artifacts-boundary-test/prepared-apply-publishes-external-inverse
   clj-surgeon.receipt-artifacts-boundary-test/row5-trivial-profile-receipt-is-honest
   clj-surgeon.receipt-artifacts-boundary-test/standalone-require-change-publishes-external-detail-and-inverse
+  clj-surgeon.receipt-artifacts-boundary-test/state-home-substitution-is-bounded-launcher-context
+  clj-surgeon.receipt-artifacts-boundary-test/state-home-substitution-preserves-narrow-context-and-final-target-checks
   clj-surgeon.receipt-artifacts-boundary-test/the-artifact-boundary-canonicalizes-both-sides
   clj-surgeon.receipt-artifacts-boundary-test/typist-publishes-external-inverse-after-real-proof
   clj-surgeon.receipt-booleans-test/every-receipt-boolean-has-a-driven-false-witness
@@ -2476,6 +2491,7 @@
   clj-surgeon.txn-journal-test/contract-states-optimistic-serializability-not-snapshot-isolation
   clj-surgeon.txn-journal-test/every-lock-broken-receipt-names-the-primitive-that-took-the-claim
   clj-surgeon.txn-journal-test/every-receipt-carries-the-isolation-contract
+  clj-surgeon.txn-journal-test/every-test-scratch-override-defaults-to-jvm-temp
   clj-surgeon.txn-journal-test/finishing-a-transaction-does-not-delete-a-lock-it-no-longer-owns
   clj-surgeon.txn-journal-test/one-byte-past-the-journal-quota-refuses-with-zero-writes
   clj-surgeon.txn-journal-test/recovery-is-a-no-op-when-no-transaction-is-unfinished
@@ -2577,6 +2593,7 @@
   clj-surgeon.xray-test/prepare-xray-validates-before-source-io
   clj-surgeon.xray-test/quoted-macro-expansion-symbols-remain-searchable-structural-data
   clj-surgeon.xray-test/real-nested-cond-xray-composes-with-outermost-and-partitions
+  clj-surgeon.xray-test/sandbox-refusal-classification-is-data-not-prose
   clj-surgeon.xray-test/sci-compiles-one-capability-limited-xray-program
   clj-surgeon.xray-test/sci-supports-idiomatic-pure-map-comprehension
   clj-surgeon.xray-test/spans-and-partitions-arrive-as-vectors-of-clojure-values

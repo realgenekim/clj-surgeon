@@ -1,0 +1,45 @@
+Syntax error reading source at (clj_surgeon/lane_manifest.clj:342:89).
+Unmatched delimiter: )
+=> nil
+*======== user | clj ========*
+=> nil
+*======== user | clj ========*
+=> nil
+*======== user | clj ========*
+
+FAIL in (runtime-evidence-binds-statistics-to-receipt-files) (lane_manifest_test.clj:302)
+nil
+expected: (= kind (:error-type r))
+  actual: (not (= :invalid-runtime-evidence nil))
+
+FAIL in (runtime-evidence-binds-statistics-to-receipt-files) (lane_manifest_test.clj:303)
+nil
+expected: (= n (:namespace r))
+  actual: (not (= clj-surgeon.battery-ledger-test nil))
+
+FAIL in (runtime-evidence-binds-statistics-to-receipt-files) (lane_manifest_test.clj:304)
+nil
+expected: (= field (:field r))
+  actual: (not (= [:bb :walls-ms] nil))
+
+FAIL in (runtime-evidence-binds-statistics-to-receipt-files) (lane_manifest_test.clj:304)
+{:error-type :invalid-runtime-evidence, :namespace clj-surgeon.battery-ledger-test}
+expected: (= field (:field r))
+  actual: (not (= :runtime nil))
+
+FAIL in (runtime-evidence-binds-statistics-to-receipt-files) (lane_manifest_test.clj:302)
+nil
+expected: (= kind (:error-type r))
+  actual: (not (= :missing-evidence-receipts nil))
+
+FAIL in (runtime-evidence-binds-statistics-to-receipt-files) (lane_manifest_test.clj:303)
+nil
+expected: (= n (:namespace r))
+  actual: (not (= clj-surgeon.battery-ledger-test nil))
+
+FAIL in (runtime-evidence-binds-statistics-to-receipt-files) (lane_manifest_test.clj:304)
+nil
+expected: (= field (:field r))
+  actual: (not (= [:bb :logs] nil))
+=> nil
+*======== user | clj ========*

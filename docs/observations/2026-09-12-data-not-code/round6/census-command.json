@@ -1,0 +1,1 @@
+{"argv": ["env", "CENSUS_REGENERATE=1", "clojure", "-J-Xmx1g", "-M:clj-surgeon/test-deps", "-e", "(require 'clj-surgeon.lane-manifest-test 'clojure.test) (clojure.test/test-vars [#'clj-surgeon.lane-manifest-test/the-corpus-only-ever-grows-and-the-arithmetic-is-shown]) (shutdown-agents)"], "exit": 0, "started_utc_ns": 1789262868226646332, "wall_ms": 2722.269648}

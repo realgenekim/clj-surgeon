@@ -222,7 +222,6 @@
       text
       (str/replace text separator "/"))))
 
-
 ;; @spec MCP-OP-ALIAS-061
 (def refused-code-point-types
   "Unicode general categories no `scope.paths` entry may carry.
@@ -1200,72 +1199,72 @@
                       (get-in request [:from :lib])
                       " is not known, because no file was read.")
                  (cond->
-                  {:paths given
-                   :files_matched 0
-                   :source_files_under_root source-files
-                   :source_roots roots
-                   :roots_listed roots-listed
-                   :suggested_paths paths
-                   :expected_files expected
-                   :next_call next-call
-                   :expect_files_unchanged_reason
-                   planner/expect-files-unchanged-reason
-                   :remedy
-                   (cond
-                    ;; @spec MCP-OP-ALIAS-058
-                    ;; no source anywhere under the root: there is nothing to
-                    ;; derive a spelling from, and saying so is the honest
-                    ;; answer rather than a fabricated remedy
-                    (zero? roots)
-                    (str "This project root holds no .clj, .cljs or .cljc file "
-                         "at all, so no spelling of scope.paths can select one. "
-                         "Check workspace_root before correcting scope.paths.")
+                   {:paths given
+                    :files_matched 0
+                    :source_files_under_root source-files
+                    :source_roots roots
+                    :roots_listed roots-listed
+                    :suggested_paths paths
+                    :expected_files expected
+                    :next_call next-call
+                    :expect_files_unchanged_reason
+                    planner/expect-files-unchanged-reason
+                    :remedy
+                    (cond
+                      ;; @spec MCP-OP-ALIAS-058
+                      ;; no source anywhere under the root: there is nothing to
+                      ;; derive a spelling from, and saying so is the honest
+                      ;; answer rather than a fabricated remedy
+                      (zero? roots)
+                      (str "This project root holds no .clj, .cljs or .cljc file "
+                           "at all, so no spelling of scope.paths can select one. "
+                           "Check workspace_root before correcting scope.paths.")
 
-                    ;; @spec MCP-OP-ALIAS-058
-                    ;; no listing fits the ceiling — a request already carrying
-                    ;; enough exclusions that even ["**"] is past it. A remedy
-                    ;; may name a next_call only when the receipt carries one:
-                    ;; the round-11 receipt said "Resend the next_call" two
-                    ;; lines above "next_call · none"
-                    (nil? next-call)
-                    (str "No next_call is composed: the shortest call this "
-                         "remedy can compose is " next-call-characters
-                         " characters, past the "
-                         planner/max-next-call-characters
-                         "-character next_call ceiling, so there is no call to "
-                         "resend. Spell scope.paths yourself. This tree's "
-                         (count (root-sizes suggestion)) " largest of " roots
-                         " top-level source roots, each with the number of "
-                         "sources it holds, are "
-                         (pr-str (root-sizes suggestion)) "; "
-                         (pr-str completing-scope-path)
-                         " on its own selects every one of the " source-files
-                         " sources the walk saw. expect.files declared "
-                         expected
-                         " and is left as declared, because no file was read.")
+                      ;; @spec MCP-OP-ALIAS-058
+                      ;; no listing fits the ceiling — a request already carrying
+                      ;; enough exclusions that even ["**"] is past it. A remedy
+                      ;; may name a next_call only when the receipt carries one:
+                      ;; the round-11 receipt said "Resend the next_call" two
+                      ;; lines above "next_call · none"
+                      (nil? next-call)
+                      (str "No next_call is composed: the shortest call this "
+                           "remedy can compose is " next-call-characters
+                           " characters, past the "
+                           planner/max-next-call-characters
+                           "-character next_call ceiling, so there is no call to "
+                           "resend. Spell scope.paths yourself. This tree's "
+                           (count (root-sizes suggestion)) " largest of " roots
+                           " top-level source roots, each with the number of "
+                           "sources it holds, are "
+                           (pr-str (root-sizes suggestion)) "; "
+                           (pr-str completing-scope-path)
+                           " on its own selects every one of the " source-files
+                           " sources the walk saw. expect.files declared "
+                           expected
+                           " and is left as declared, because no file was read.")
 
-                    ;; @spec MCP-OP-ALIAS-058
-                    ;; the listing is a bounded SAMPLE and the selection is
-                    ;; complete; both facts are stated, because a remedy that
-                    ;; names six of nine roots and calls them "the source roots
-                    ;; this tree actually holds" selected a sixth of the tree
-                    truncated?
-                    (str "Resend the next_call: it replaces scope.paths with "
-                         (pr-str paths) " — the " roots-listed " largest of "
-                         "this tree's " roots " top-level source roots, "
-                         "completed by " (pr-str completing-scope-path)
-                         " so it still selects every one of the " source-files
-                         " sources the walk saw. expect.files declared "
-                         expected
-                         " and is left as declared, because no file was read.")
+                      ;; @spec MCP-OP-ALIAS-058
+                      ;; the listing is a bounded SAMPLE and the selection is
+                      ;; complete; both facts are stated, because a remedy that
+                      ;; names six of nine roots and calls them "the source roots
+                      ;; this tree actually holds" selected a sixth of the tree
+                      truncated?
+                      (str "Resend the next_call: it replaces scope.paths with "
+                           (pr-str paths) " — the " roots-listed " largest of "
+                           "this tree's " roots " top-level source roots, "
+                           "completed by " (pr-str completing-scope-path)
+                           " so it still selects every one of the " source-files
+                           " sources the walk saw. expect.files declared "
+                           expected
+                           " and is left as declared, because no file was read.")
 
-                    :else
-                    (str "Resend the next_call: it replaces scope.paths with "
-                         (pr-str paths) ", every one of the " roots
-                         " source roots this tree holds, selecting all "
-                         source-files " of its sources. expect.files declared "
-                         expected
-                         " and is left as declared, because no file was read."))}
+                      :else
+                      (str "Resend the next_call: it replaces scope.paths with "
+                           (pr-str paths) ", every one of the " roots
+                           " source roots this tree holds, selecting all "
+                           source-files " of its sources. expect.files declared "
+                           expected
+                           " and is left as declared, because no file was read."))}
 
                    ;; @spec MCP-OP-ALIAS-058
                    ;; the roots and their weights ride the receipt only where
@@ -1447,29 +1446,29 @@
   the new namespace and every rewritten caller land or refuse together."
   ([plan paths] (plan->spec plan paths nil))
   ([plan paths destination]
-  (let [changes
-        (vec (mapcat
-               (fn [file-index {:keys [file edits]}]
-                 (map-indexed
-                   (fn [edit-index {:keys [kind original replacement]}]
-                     {:id (keyword "alias-migration"
-                                   (str "f" file-index "-e" edit-index
-                                        "-" (name kind)))
-                      :in [(get paths file)]
-                      :find original
-                      :do [:replace replacement]
-                      :expect {:matches 1}})
-                   edits))
-               (range) (:files plan)))]
-    (cond-> {:changes changes
-             :expect {:changes (count changes)
-                      :edits (count changes)
-                      :files (count (:files plan))}}
-      destination
-      (assoc :create-files
-             [{:file (:path destination)
-               :content (get-in plan [:lib-rename :content])
-               :directories (mapv str (:missing-parent-directories destination))}])))))
+   (let [changes
+         (vec (mapcat
+                (fn [file-index {:keys [file edits]}]
+                  (map-indexed
+                    (fn [edit-index {:keys [kind original replacement]}]
+                      {:id (keyword "alias-migration"
+                                    (str "f" file-index "-e" edit-index
+                                         "-" (name kind)))
+                       :in [(get paths file)]
+                       :find original
+                       :do [:replace replacement]
+                       :expect {:matches 1}})
+                    edits))
+                (range) (:files plan)))]
+     (cond-> {:changes changes
+              :expect {:changes (count changes)
+                       :edits (count changes)
+                       :files (count (:files plan))}}
+       destination
+       (assoc :create-files
+              [{:file (:path destination)
+                :content (get-in plan [:lib-rename :content])
+                :directories (mapv str (:missing-parent-directories destination))}])))))
 
 ;; ---------------------------------------------------------------------------
 ;; durable per-file detail
@@ -1631,7 +1630,7 @@
   "Record exactly the documents this writer still owns in this directory."
   [^java.io.File directory names]
   (file-ops/atomic-write!
-    (.getPath (io/file directory detail-manifest-name))
+    (artifacts/admit-target! (io/file directory detail-manifest-name))
     (pr-str {:version 1
              :writer detail-writer-marker
              :documents (vec (sort names))})))
@@ -1819,6 +1818,7 @@
   this call brought into being. `File/delete` never removes a non-empty
   directory, so a peer that filled one in between keeps it."
   [^java.io.File receipt-file]
+  (artifacts/admit-target! receipt-file)
   (let [path (.toPath (.getAbsoluteFile receipt-file))
         chain (loop [candidate path
                      acc ()]
@@ -2049,7 +2049,8 @@
   [^Path root plan]
   (let [directory (detail-directory (str root))
         file-name (str detail-document-prefix (UUID/randomUUID) ".edn")
-        target (io/file directory file-name)]
+        target (io/file (artifacts/admit-target! (io/file directory file-name)))
+        _ (artifacts/admit-target! (io/file directory detail-manifest-name))]
     (.mkdirs directory)
     (file-ops/atomic-write!
       (.getPath target)
@@ -2366,312 +2367,312 @@
   ([config project-root spec files] (commit! config project-root spec files nil))
   ([{:keys [verification-profiles receipt-dir verify attempted]}
     project-root spec files retire]
-  ;; the receipt directory is NOT created here. Every refusal below decides on
-  ;; paths alone, and a refusal that first mkdirs the very directory it is
-  ;; refusing to write in has already mutated the tree it reports untouched.
-  (let [retire-source (when retire (resolve-retire-source project-root retire))
-        receipt-name (new-receipt-name)
-        ;; @spec MCP-OP-ALIAS-056
-        receipt-file (configured-receipt-file project-root receipt-dir)
-        control (receipt-dir-in-control-directory project-root receipt-dir)]
-  (cond
-    ;; @spec MCP-OP-ALIAS-054
-    ;; @spec MCP-OP-ALIAS-056
-    (receipt-dir-escapes? project-root receipt-dir)
-    {:error (str "The configured receipt directory has no identity this verb "
-                 "may use: the part of it that does not exist yet climbs above "
-                 "the nearest directory that does, or a relative receipt "
-                 "directory resolves outside the workspace root")
-     :error-type :alias-migration-receipt-dir-escapes
-     :source-unchanged true
-     :remedy (str "Configure receipt-dir as a path whose missing components "
-                  "descend from an existing directory, and whose relative form "
-                  "stays inside " (str project-root) "; a receipt directory "
-                  "outside the workspace is legal when it is named absolutely, "
-                  "and a relative path that leaves through a symlink is not "
-                  "the directory the caller asked for.")}
-
-    ;; @spec MCP-OP-ALIAS-056
-    control
-    ;; @spec MCP-OP-ALIAS-056
-    ;; not "the workspace's": the segment scan that makes this refusal
-    ;; reachable is the one for a control directory OUTSIDE the root — a
-    ;; linked worktree's real .git lives under the MAIN repository
-    {:error (str "The configured receipt directory lies inside a "
-                 control " directory, which belongs to another tool")
-     :error-type :alias-migration-receipt-dir-in-control-directory
-     :source-unchanged true
-     :control_directory control
-     :remedy (str "Configure receipt-dir outside "
-                  (str/join ", " (sort control-directories))
-                  "; a receipt published into one of these is a file the "
-                  "owning tool reads — an undo receipt in .git/refs/heads is a "
-                  "ref git cannot parse — or a file its owner deletes without "
-                  "notice.")}
-
-    ;; @spec MCP-OP-ALIAS-054
-    (receipt-detail-collision? project-root receipt-dir receipt-name)
-    {:error (str "The configured receipt directory would publish this undo "
-                 "receipt inside the detail writer's own name namespace")
-     :error-type :alias-migration-receipt-detail-collision
-     :source-unchanged true
-     :remedy (str "Configure receipt-dir outside "
-                  (.getPath (detail-directory project-root))
-                  ", or rename the detail documents; a receipt this verb may "
-                  "prune is a receipt that cannot be trusted.")}
-
-    (unknown-profile? verification-profiles verify)
-    {:error (str "Unknown verification profile: " verify)
-     :error-type :unknown-verification-profile
-     :source-unchanged true}
-
-    ;; the defining file is resolved before the transaction writes, so a path
-    ;; the retire could not honour refuses with nothing yet mutated
-    (and retire-source (not (:ok retire-source)))
-    {:error (:error retire-source)
-     ;; @spec MCP-OP-ALIAS-059
-     ;; forwarded-refusal-kind: the retire resolution's own kind, minted and
-     ;; scanned in this namespace, travels verbatim rather than being renamed
-     :error-type (:error-type retire-source)
-     :source-unchanged true}
-
-    :else
-    ;; @spec MCP-OP-ALIAS-054
-    ;; the identity proved above was proved on a path that did not exist yet,
-    ;; and a path's identity is not settled until it does: between that answer
-    ;; and this line a missing component can become a symlink to the detail
-    ;; directory. So the directory that was actually CREATED is re-proved
-    ;; before a byte is written into it, and a refusal removes only what this
-    ;; call made.
-    (let [created (create-receipt-directory! receipt-file)
-          ;; @spec MCP-OP-ALIAS-056
-          ;; resolved ONCE: every write below goes through this path and never
-          ;; through the configured one again
-          real-dir (real-directory receipt-file)
-          undo-creation! (fn [] (doseq [^Path path created]
-                                  (.delete (.toFile path))))]
+   ;; the receipt directory is NOT created here. Every refusal below decides on
+   ;; paths alone, and a refusal that first mkdirs the very directory it is
+   ;; refusing to write in has already mutated the tree it reports untouched.
+   (let [retire-source (when retire (resolve-retire-source project-root retire))
+         receipt-name (new-receipt-name)
+         ;; @spec MCP-OP-ALIAS-056
+         receipt-file (configured-receipt-file project-root receipt-dir)
+         control (receipt-dir-in-control-directory project-root receipt-dir)]
      (cond
-      (nil? real-dir)
-      (do
-        (undo-creation!)
-        {:error (str "No directory exists at the configured receipt directory "
-                     "after creation, so this verb cannot prove where a receipt "
-                     "would be published")
-         :error-type :alias-migration-receipt-dir-escapes
-         :phase "post-create"
-         :source-unchanged true
-         :remedy (str "Configure receipt-dir as a path this server may create "
-                      "a directory at; nothing occupying that name may be a "
-                      "regular file.")})
+       ;; @spec MCP-OP-ALIAS-054
+       ;; @spec MCP-OP-ALIAS-056
+       (receipt-dir-escapes? project-root receipt-dir)
+       {:error (str "The configured receipt directory has no identity this verb "
+                    "may use: the part of it that does not exist yet climbs above "
+                    "the nearest directory that does, or a relative receipt "
+                    "directory resolves outside the workspace root")
+        :error-type :alias-migration-receipt-dir-escapes
+        :source-unchanged true
+        :remedy (str "Configure receipt-dir as a path whose missing components "
+                     "descend from an existing directory, and whose relative form "
+                     "stays inside " (str project-root) "; a receipt directory "
+                     "outside the workspace is legal when it is named absolutely, "
+                     "and a relative path that leaves through a symlink is not "
+                     "the directory the caller asked for.")}
 
-      (receipt-detail-collision? project-root real-dir receipt-name)
-      (do
-        (undo-creation!)
-        {:error (str "The receipt directory that now exists is the detail "
-                     "writer's own directory; the identity checked before it "
-                     "existed is not the identity it has")
-         :error-type :alias-migration-receipt-detail-collision
-         :phase "post-create"
-         :source-unchanged true
-         :remedy (str "Configure receipt-dir outside "
-                      (.getPath (detail-directory project-root))
-                      ", and check what is creating symlinks there; a receipt "
-                      "this verb may prune is a receipt that cannot be "
-                      "trusted.")})
+       ;; @spec MCP-OP-ALIAS-056
+       control
+       ;; @spec MCP-OP-ALIAS-056
+       ;; not "the workspace's": the segment scan that makes this refusal
+       ;; reachable is the one for a control directory OUTSIDE the root — a
+       ;; linked worktree's real .git lives under the MAIN repository
+       {:error (str "The configured receipt directory lies inside a "
+                    control " directory, which belongs to another tool")
+        :error-type :alias-migration-receipt-dir-in-control-directory
+        :source-unchanged true
+        :control_directory control
+        :remedy (str "Configure receipt-dir outside "
+                     (str/join ", " (sort control-directories))
+                     "; a receipt published into one of these is a file the "
+                     "owning tool reads — an undo receipt in .git/refs/heads is a "
+                     "ref git cannot parse — or a file its owner deletes without "
+                     "notice.")}
 
-      ;; @spec MCP-OP-ALIAS-056
-      (control-directory-of project-root real-dir)
-      (do
-        (undo-creation!)
-        {:error (str "The receipt directory that now exists lies inside a "
-                     (control-directory-of project-root real-dir)
-                     " directory, which belongs to another tool")
-         :error-type :alias-migration-receipt-dir-in-control-directory
-         :phase "post-create"
-         :source-unchanged true
-         :control_directory (control-directory-of project-root real-dir)
-         :remedy (str "Configure receipt-dir outside "
-                      (str/join ", " (sort control-directories))
-                      ", and check what is creating symlinks there.")})
+       ;; @spec MCP-OP-ALIAS-054
+       (receipt-detail-collision? project-root receipt-dir receipt-name)
+       {:error (str "The configured receipt directory would publish this undo "
+                    "receipt inside the detail writer's own name namespace")
+        :error-type :alias-migration-receipt-detail-collision
+        :source-unchanged true
+        :remedy (str "Configure receipt-dir outside "
+                     (.getPath (detail-directory project-root))
+                     ", or rename the detail documents; a receipt this verb may "
+                     "prune is a receipt that cannot be trusted.")}
 
-      :else
-      (let [profile (selected-profile verification-profiles verify)
-        baseline (when profile
-                   (change-buffer/capture-verification-baseline!
-                     project-root profile verification-profiles files))]
-    (if (and baseline (not (:ok baseline)))
-      ;; @spec MCP-OP-ALIAS-028
-      ;; the cause, and the one correction the caller can execute. A baseline
-      ;; that cannot read its analyzer's answer is not transient, so the
-      ;; generic "re-send the same request" remedy is exactly wrong here: the
-      ;; E-CALLER arm re-sent it, reproduced the refusal, and succeeded only
-      ;; when it dropped `verify` — which nothing in the receipt suggested.
-      {:error "Verification baseline capture failed before the alias migration"
-       :error-type (or (:error-type baseline) :verification-baseline-failed)
-       :verification baseline
-       :verification_profile verify
-       :verification_command (some :command (remove :ok (:checks baseline)))
-       :source-unchanged true
-       :remedy (str "The migration itself is unaffected — nothing was written "
-                    "— and `verify` is opt-in. Send the next_call, which is "
-                    "this same request with the \"" verify "\" profile "
-                    "dropped, or configure a profile whose diagnostic command "
-                    "answers EDN this server can read. Re-sending this request "
-                    "unchanged reproduces this refusal.")}
-      (let [;; @spec MCP-OP-ALIAS-047
-            ;; the marker is set by the transaction's OWN write boundary, not
-            ;; by this call site. Entering `execute-mcp-change!` is not a
-            ;; mutation: spec validation, the frozen read, compilation, receipt
-            ;; staging and the whole-file hash preflight all run inside it
-            ;; before a source byte is written, and heap exhaustion in any of
-            ;; them leaves the tree exactly as the caller left it — as do the
-            ;; retire resolution, the profile check and the baseline capture
-            ;; above. The kernel calls this back immediately before its first
-            ;; write, which is the only moment at which the answer changes.
-            result (transaction/execute-mcp-change!
-                     {:spec spec
-                      ;; @spec MCP-OP-ALIAS-056
-                      ;; the PROVED path, never the configured one
-                      :receipt-out (str (.resolve real-dir ^String receipt-name))
-                      :on-write-boundary (when attempted
-                                           #(vreset! attempted true))
-                      :write-refusal-context {:operation "alias_migration"
-                                              :project-root project-root}})
-            ;; @spec MCP-OP-ALIAS-056
-            ;; resolved ONCE, before anything else touches the tree: asking
-            ;; twice would let the answer change between the test and the
-            ;; branch that reports it
-            ;; only a COMMITTED result published a receipt; a kernel result
-            ;; that did not commit has nothing to prove and nothing to undo
-            fault (when (and (not (:error result)) (:committed result))
-                    (receipt-publication-fault real-dir (:receipt-file result)))]
-        (cond
-          (:error result)
-          result
+       (unknown-profile? verification-profiles verify)
+       {:error (str "Unknown verification profile: " verify)
+        :error-type :unknown-verification-profile
+        :source-unchanged true}
 
-          ;; @spec MCP-OP-ALIAS-056
-          ;; A name is resolved on every open, so the identity proved a moment
-          ;; ago is not a guarantee about where the bytes went. Where they went
-          ;; is a fact, and it is read here from the file that now exists. A
-          ;; receipt somewhere else is rolled back, not reported as a success:
-          ;; the OS leaves the window open, and what must never happen is a
-          ;; verb reporting ok over it.
-          fault
-          (let [rollback (transaction/execute-undo!
-                           {:receipt (:receipt-file result)})
-                rolled-back? (undo-restored-the-migration? rollback)
-                ;; @spec MCP-OP-ALIAS-056
-                ;; the count the prose repeats is the MEASURED one, read back
-                ;; out of the report rather than counted off the plan twice
-                report (rollback-report rolled-back? rollback
-                                        (:receipt-file result) (count files))
-                count-migrated (:files-still-migrated report)]
-            (when rolled-back?
-              (.delete (io/file (:receipt-file result))))
-            (merge
-              {:error (str (if (= :receipt-not-undoable fault)
-                             (str "The undo receipt resolved onto a name no "
-                                  "undo can read — a published receipt must "
-                                  "still be an .edn file after resolution")
-                             (str "The undo receipt was published outside the "
-                                  "receipt directory whose identity this verb "
-                                  "proved"))
-                           "; "
-                           (rollback-sentence rolled-back?
-                                              (:receipt-file result)
-                                              count-migrated))
-               :error-type :alias-migration-receipt-published-elsewhere
-               :phase "post-write"
-               :remedy (str "Check what is replacing " (str real-dir)
-                            " while this verb runs; a receipt this verb cannot "
-                            "locate is a receipt no undo can be trusted to find."
-                            (when-not rolled-back?
-                              (str " The tree is MID-MIGRATION: undo it by hand "
-                                   "from the receipt named in receipt_file.")))}
-              report))
+       ;; the defining file is resolved before the transaction writes, so a path
+       ;; the retire could not honour refuses with nothing yet mutated
+       (and retire-source (not (:ok retire-source)))
+       {:error (:error retire-source)
+        ;; @spec MCP-OP-ALIAS-059
+        ;; forwarded-refusal-kind: the retire resolution's own kind, minted and
+        ;; scanned in this namespace, travels verbatim rather than being renamed
+        :error-type (:error-type retire-source)
+        :source-unchanged true}
 
-          :else
-          (let [retired (try
-                          (when retire
-                            (retire-file! project-root retire
-                                          (:path retire-source)))
-                          (catch Exception error
-                            {:retire-error (.getMessage error)}))]
-            (cond
-              ;; @spec MCP-OP-ALIAS-043
-              (:retire-error retired)
-              (let [rollback (transaction/execute-undo!
-                               {:receipt (:receipt-file result)})
-                    rolled-back? (undo-restored-the-migration? rollback)
-                    ;; @spec MCP-OP-ALIAS-056
-                    report (rollback-report rolled-back? rollback
-                                            (:receipt-file result)
-                                            (count files))
-                    count-migrated (:files-still-migrated report)]
-                ;; the same discipline as the verification-failure branch: an
-                ;; undo receipt for a transaction that has already been undone
-                ;; would invite a second, destructive undo
-                (when rolled-back?
-                  (.delete (io/file (:receipt-file result))))
-                (merge
-                  {:error (str "The superseded defining file could not be "
-                               "retired; "
-                               (rollback-sentence rolled-back?
-                                                  (:receipt-file result)
-                                                  count-migrated))
-                   :error-type :alias-migration-retire-failed
-                   :cause-error (:retire-error retired)}
-                  report))
+       :else
+       ;; @spec MCP-OP-ALIAS-054
+       ;; the identity proved above was proved on a path that did not exist yet,
+       ;; and a path's identity is not settled until it does: between that answer
+       ;; and this line a missing component can become a symlink to the detail
+       ;; directory. So the directory that was actually CREATED is re-proved
+       ;; before a byte is written into it, and a refusal removes only what this
+       ;; call made.
+       (let [created (create-receipt-directory! receipt-file)
+             ;; @spec MCP-OP-ALIAS-056
+             ;; resolved ONCE: every write below goes through this path and never
+             ;; through the configured one again
+             real-dir (real-directory receipt-file)
+             undo-creation! (fn [] (doseq [^Path path created]
+                                     (.delete (.toFile path))))]
+         (cond
+           (nil? real-dir)
+           (do
+             (undo-creation!)
+             {:error (str "No directory exists at the configured receipt directory "
+                          "after creation, so this verb cannot prove where a receipt "
+                          "would be published")
+              :error-type :alias-migration-receipt-dir-escapes
+              :phase "post-create"
+              :source-unchanged true
+              :remedy (str "Configure receipt-dir as a path this server may create "
+                           "a directory at; nothing occupying that name may be a "
+                           "regular file.")})
 
-              (nil? profile)
-              (cond-> result retired (assoc :retired-file retired))
+           (receipt-detail-collision? project-root real-dir receipt-name)
+           (do
+             (undo-creation!)
+             {:error (str "The receipt directory that now exists is the detail "
+                          "writer's own directory; the identity checked before it "
+                          "existed is not the identity it has")
+              :error-type :alias-migration-receipt-detail-collision
+              :phase "post-create"
+              :source-unchanged true
+              :remedy (str "Configure receipt-dir outside "
+                           (.getPath (detail-directory project-root))
+                           ", and check what is creating symlinks there; a receipt "
+                           "this verb may prune is a receipt that cannot be "
+                           "trusted.")})
 
-              :else
-              (let [verification (change-buffer/run-verification!
-                                   project-root profile verification-profiles
-                                   files baseline)]
-                (if (:ok verification)
-                  (cond-> (assoc result :verification verification)
-                    retired (assoc :retired-file retired))
-                  (let [_ (when retire
-                            (restore-retired! project-root retire
-                                              (:path retire-source)))
-                        rollback (transaction/execute-undo!
-                                   {:receipt (:receipt-file result)})
-                        rolled-back? (undo-restored-the-migration? rollback)
-                        ;; @spec MCP-OP-ALIAS-056
-                        report (rollback-report rolled-back? rollback
-                                                (:receipt-file result)
-                                                (count files))
-                        count-migrated (:files-still-migrated report)]
-                    (when rolled-back?
-                      (.delete (io/file (:receipt-file result))))
-                    (merge
-                      ;; @spec MCP-OP-ALIAS-028
-                      ;; the same rule as the baseline branch: a profile that
-                      ;; reported a failure reports it again on an identical
-                      ;; re-send, so the generic "re-send the same request"
-                      ;; remedy would be a retry loop. The rollback restored
-                      ;; the tree, so the executable correction is the same
-                      ;; request without the profile — which is what this
-                      ;; refusal's next_call carries.
-                      {:error (str "Verification failed; "
-                                   (rollback-sentence rolled-back?
-                                                      (:receipt-file result)
-                                                      count-migrated))
-                       :error-type (or (:error-type verification)
-                                       :verification-failed)
-                       :verification verification
-                       :verification_profile verify
-                       :remedy (str "The \"" verify "\" profile reported a "
-                                    "failure and the migration was rolled "
-                                    "back, so re-sending this request "
-                                    "unchanged reports it again. Send the "
-                                    "next_call — this same request with the "
-                                    "profile dropped — or correct what the "
-                                    "profile reported and send this request "
-                                    "again after that.")}
-                      report))))))))))))))))
+           ;; @spec MCP-OP-ALIAS-056
+           (control-directory-of project-root real-dir)
+           (do
+             (undo-creation!)
+             {:error (str "The receipt directory that now exists lies inside a "
+                          (control-directory-of project-root real-dir)
+                          " directory, which belongs to another tool")
+              :error-type :alias-migration-receipt-dir-in-control-directory
+              :phase "post-create"
+              :source-unchanged true
+              :control_directory (control-directory-of project-root real-dir)
+              :remedy (str "Configure receipt-dir outside "
+                           (str/join ", " (sort control-directories))
+                           ", and check what is creating symlinks there.")})
+
+           :else
+           (let [profile (selected-profile verification-profiles verify)
+                 baseline (when profile
+                            (change-buffer/capture-verification-baseline!
+                              project-root profile verification-profiles files))]
+             (if (and baseline (not (:ok baseline)))
+               ;; @spec MCP-OP-ALIAS-028
+               ;; the cause, and the one correction the caller can execute. A baseline
+               ;; that cannot read its analyzer's answer is not transient, so the
+               ;; generic "re-send the same request" remedy is exactly wrong here: the
+               ;; E-CALLER arm re-sent it, reproduced the refusal, and succeeded only
+               ;; when it dropped `verify` — which nothing in the receipt suggested.
+               {:error "Verification baseline capture failed before the alias migration"
+                :error-type (or (:error-type baseline) :verification-baseline-failed)
+                :verification baseline
+                :verification_profile verify
+                :verification_command (some :command (remove :ok (:checks baseline)))
+                :source-unchanged true
+                :remedy (str "The migration itself is unaffected — nothing was written "
+                             "— and `verify` is opt-in. Send the next_call, which is "
+                             "this same request with the \"" verify "\" profile "
+                             "dropped, or configure a profile whose diagnostic command "
+                             "answers EDN this server can read. Re-sending this request "
+                             "unchanged reproduces this refusal.")}
+               (let [;; @spec MCP-OP-ALIAS-047
+                     ;; the marker is set by the transaction's OWN write boundary, not
+                     ;; by this call site. Entering `execute-mcp-change!` is not a
+                     ;; mutation: spec validation, the frozen read, compilation, receipt
+                     ;; staging and the whole-file hash preflight all run inside it
+                     ;; before a source byte is written, and heap exhaustion in any of
+                     ;; them leaves the tree exactly as the caller left it — as do the
+                     ;; retire resolution, the profile check and the baseline capture
+                     ;; above. The kernel calls this back immediately before its first
+                     ;; write, which is the only moment at which the answer changes.
+                     result (transaction/execute-mcp-change!
+                              {:spec spec
+                               ;; @spec MCP-OP-ALIAS-056
+                               ;; the PROVED path, never the configured one
+                               :receipt-out (str (.resolve real-dir ^String receipt-name))
+                               :on-write-boundary (when attempted
+                                                    #(vreset! attempted true))
+                               :write-refusal-context {:operation "alias_migration"
+                                                       :project-root project-root}})
+                     ;; @spec MCP-OP-ALIAS-056
+                     ;; resolved ONCE, before anything else touches the tree: asking
+                     ;; twice would let the answer change between the test and the
+                     ;; branch that reports it
+                     ;; only a COMMITTED result published a receipt; a kernel result
+                     ;; that did not commit has nothing to prove and nothing to undo
+                     fault (when (and (not (:error result)) (:committed result))
+                             (receipt-publication-fault real-dir (:receipt-file result)))]
+                 (cond
+                   (:error result)
+                   result
+
+                   ;; @spec MCP-OP-ALIAS-056
+                   ;; A name is resolved on every open, so the identity proved a moment
+                   ;; ago is not a guarantee about where the bytes went. Where they went
+                   ;; is a fact, and it is read here from the file that now exists. A
+                   ;; receipt somewhere else is rolled back, not reported as a success:
+                   ;; the OS leaves the window open, and what must never happen is a
+                   ;; verb reporting ok over it.
+                   fault
+                   (let [rollback (transaction/execute-undo!
+                                    {:receipt (:receipt-file result)})
+                         rolled-back? (undo-restored-the-migration? rollback)
+                         ;; @spec MCP-OP-ALIAS-056
+                         ;; the count the prose repeats is the MEASURED one, read back
+                         ;; out of the report rather than counted off the plan twice
+                         report (rollback-report rolled-back? rollback
+                                                 (:receipt-file result) (count files))
+                         count-migrated (:files-still-migrated report)]
+                     (when rolled-back?
+                       (.delete (io/file (:receipt-file result))))
+                     (merge
+                       {:error (str (if (= :receipt-not-undoable fault)
+                                      (str "The undo receipt resolved onto a name no "
+                                           "undo can read — a published receipt must "
+                                           "still be an .edn file after resolution")
+                                      (str "The undo receipt was published outside the "
+                                           "receipt directory whose identity this verb "
+                                           "proved"))
+                                    "; "
+                                    (rollback-sentence rolled-back?
+                                                       (:receipt-file result)
+                                                       count-migrated))
+                        :error-type :alias-migration-receipt-published-elsewhere
+                        :phase "post-write"
+                        :remedy (str "Check what is replacing " (str real-dir)
+                                     " while this verb runs; a receipt this verb cannot "
+                                     "locate is a receipt no undo can be trusted to find."
+                                     (when-not rolled-back?
+                                       (str " The tree is MID-MIGRATION: undo it by hand "
+                                            "from the receipt named in receipt_file.")))}
+                       report))
+
+                   :else
+                   (let [retired (try
+                                   (when retire
+                                     (retire-file! project-root retire
+                                                   (:path retire-source)))
+                                   (catch Exception error
+                                     {:retire-error (.getMessage error)}))]
+                     (cond
+                       ;; @spec MCP-OP-ALIAS-043
+                       (:retire-error retired)
+                       (let [rollback (transaction/execute-undo!
+                                        {:receipt (:receipt-file result)})
+                             rolled-back? (undo-restored-the-migration? rollback)
+                             ;; @spec MCP-OP-ALIAS-056
+                             report (rollback-report rolled-back? rollback
+                                                     (:receipt-file result)
+                                                     (count files))
+                             count-migrated (:files-still-migrated report)]
+                         ;; the same discipline as the verification-failure branch: an
+                         ;; undo receipt for a transaction that has already been undone
+                         ;; would invite a second, destructive undo
+                         (when rolled-back?
+                           (.delete (io/file (:receipt-file result))))
+                         (merge
+                           {:error (str "The superseded defining file could not be "
+                                        "retired; "
+                                        (rollback-sentence rolled-back?
+                                                           (:receipt-file result)
+                                                           count-migrated))
+                            :error-type :alias-migration-retire-failed
+                            :cause-error (:retire-error retired)}
+                           report))
+
+                       (nil? profile)
+                       (cond-> result retired (assoc :retired-file retired))
+
+                       :else
+                       (let [verification (change-buffer/run-verification!
+                                            project-root profile verification-profiles
+                                            files baseline)]
+                         (if (:ok verification)
+                           (cond-> (assoc result :verification verification)
+                             retired (assoc :retired-file retired))
+                           (let [_ (when retire
+                                     (restore-retired! project-root retire
+                                                       (:path retire-source)))
+                                 rollback (transaction/execute-undo!
+                                            {:receipt (:receipt-file result)})
+                                 rolled-back? (undo-restored-the-migration? rollback)
+                                 ;; @spec MCP-OP-ALIAS-056
+                                 report (rollback-report rolled-back? rollback
+                                                         (:receipt-file result)
+                                                         (count files))
+                                 count-migrated (:files-still-migrated report)]
+                             (when rolled-back?
+                               (.delete (io/file (:receipt-file result))))
+                             (merge
+                               ;; @spec MCP-OP-ALIAS-028
+                               ;; the same rule as the baseline branch: a profile that
+                               ;; reported a failure reports it again on an identical
+                               ;; re-send, so the generic "re-send the same request"
+                               ;; remedy would be a retry loop. The rollback restored
+                               ;; the tree, so the executable correction is the same
+                               ;; request without the profile — which is what this
+                               ;; refusal's next_call carries.
+                               {:error (str "Verification failed; "
+                                            (rollback-sentence rolled-back?
+                                                               (:receipt-file result)
+                                                               count-migrated))
+                                :error-type (or (:error-type verification)
+                                                :verification-failed)
+                                :verification verification
+                                :verification_profile verify
+                                :remedy (str "The \"" verify "\" profile reported a "
+                                             "failure and the migration was rolled "
+                                             "back, so re-sending this request "
+                                             "unchanged reports it again. Send the "
+                                             "next_call — this same request with the "
+                                             "profile dropped — or correct what the "
+                                             "profile reported and send this request "
+                                             "again after that.")}
+                               report))))))))))))))))
 
 ;; @spec MCP-OP-ALIAS-001
 ;; @spec MCP-OP-ALIAS-005
@@ -2820,9 +2821,11 @@
   (artifacts/writable-root!)
   (let [dir (io/file artifacts/*artifact-root* (str "alias-migration" "-receipts"))
         ledger (io/file dir "ledger.edn")]
-    (.mkdirs dir)
+    (artifacts/admit-target! dir :telemetry-append)
+    (artifacts/admit-target! ledger :telemetry-append)
     (when-not (= (.getCanonicalFile ledger) (.getAbsoluteFile ledger))
       (throw (ex-info "Telemetry ledger must not traverse a symlink" {})))
+    (.mkdirs dir)
     (locking telemetry-lock
       (with-open [channel (java.nio.channels.FileChannel/open
                             (.toPath ledger)
@@ -2832,7 +2835,7 @@
                                          java.nio.file.StandardOpenOption/APPEND
                                          LinkOption/NOFOLLOW_LINKS]))
                   _guard (.lock channel)]
-        (let [buffer (java.nio.ByteBuffer/wrap (.getBytes (str (pr-str row) "\n") "UTF-8"))]
+        (let [buffer (java.nio.ByteBuffer/wrap (.getBytes (str (pr-str (artifacts/receipt-evidence row)) "\n") "UTF-8"))]
           (while (.hasRemaining buffer) (.write channel buffer)))
         (.force channel false)))
     (str ledger)))

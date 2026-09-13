@@ -1,0 +1,13 @@
+
+FAIL in (sleep-pins-survive-line-movement-and-refuse-purpose-drift) (lane_manifest_test.clj:1211)
+sleep discovery returns owner identities
+expected: (some? scan)
+  actual: (not (some? nil))
+
+FAIL in (sleep-pins-survive-line-movement-and-refuse-purpose-drift) (lane_manifest_test.clj:1212)
+pin validation is a pure relation
+expected: (some? check)
+  actual: (not (some? nil))
+{:test 1, :pass 0, :fail 2, :error 0}
+=> nil
+*======== user | clj ========*

@@ -7,7 +7,19 @@
    [clojure.set :as set]))
 
 (def ^:private context-keys
-  #{:operation :operation-version :entrance :policy :lifecycle})
+  #{:operation :operation-version :entrance :policy :lifecycle :destination-envelope})
+
+;; @spec DATACODE-ENV-003
+(defn valid-destination-envelope?
+  [{:keys [id roots source] :as envelope}]
+  (and (map? envelope)
+       (= #{:id :roots :source} (set (keys envelope)))
+       (vector? roots) (seq roots)
+       (every? #(and (string? %) (.startsWith ^String % "/")) roots)
+       (#{:launcher :policy-default} source)
+       (= id (apply str (map #(format "%02x" (bit-and 255 %))
+                            (.digest (java.security.MessageDigest/getInstance "SHA-256")
+                                     (.getBytes (pr-str roots) "UTF-8")))))))
 
 (def ^:private change-contract
   {:operation :change
@@ -67,6 +79,10 @@
       (invalid-context "Operation context contains unknown authority fields"
                        {:unknown (vec (sort unknown))})
 
+      (and (contains? context :destination-envelope)
+           (not (valid-destination-envelope? (:destination-envelope context))))
+      (invalid-context "Invalid destination envelope" {})
+
       (not= (:operation entry) (:operation context))
       (invalid-context "Operation context names an unsupported operation"
                        {:operation (:operation context)})
@@ -85,11 +101,13 @@
                        {:lifecycle (:lifecycle context)})
 
       :else
-      {:ok true
-       :capabilities (set/intersection
-                       (:maximum-effects entry)
-                       lifecycle-effects
-                       profile-effects)})))
+      (cond-> {:ok true
+               :capabilities (set/intersection
+                               (:maximum-effects entry)
+                               lifecycle-effects
+                               profile-effects)}
+        (:destination-envelope context)
+        (assoc :destination-envelope (:destination-envelope context))))))
 
 ;; @spec OP-ALG-EFFECT-001, OP-ALG-EFFECT-003
 (defn authorize-effects

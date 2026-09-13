@@ -9,6 +9,7 @@
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-tool :as mcp-tool]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clojure-mcp.logging :as mcp-logging]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -246,10 +247,11 @@
   "Start one nonblocking, loopback-only, repository-scoped MCP server."
   [{:keys [project-dir receipt-dir telemetry-dir run-id port ready-file
            nrepl-port port-file log-file cclsp-url verification-profiles
-           focused-test probe-image-file
+           focused-test probe-image-file destination-envelope
            semantic-resolver verify! read-source write-source!]
     telemetry-mode :telemetry}]
   (let [project-dir (str (or project-dir (System/getProperty "user.dir")))
+        _ (artifacts/initialize-envelope! project-dir destination-envelope)
         project-config (read-project-config project-dir)
         verification-selection
         (resolve-verification-profiles verification-profiles project-config)

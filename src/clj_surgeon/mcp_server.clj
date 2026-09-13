@@ -6,6 +6,7 @@
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-tool :as mcp-tool]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clojure-mcp.core :as mcp-core]
    [clojure-mcp.logging :as mcp-logging]
    [clojure.java.io :as io]
@@ -337,10 +338,11 @@
   :port-file      embedded nREPL discovery file (default .nrepl-port)
   :log-file       clojure-mcp diagnostic log"
   [{:keys [project-dir receipt-dir telemetry-dir run-id tool-profile nrepl-port
-           port-file log-file]
+           port-file log-file destination-envelope]
     telemetry-mode :telemetry}]
   (let [project-dir (str (normalize-option project-dir
                                            (System/getProperty "user.dir")))
+        _ (artifacts/initialize-envelope! project-dir destination-envelope)
         telemetry-state
         (telemetry/start! {:mode (normalize-option telemetry-mode :metrics)
                            :directory telemetry-dir

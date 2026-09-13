@@ -1,0 +1,10 @@
+--- a/test/clj_surgeon/census_pool_test.clj
++++ b/test/clj_surgeon/census_pool_test.clj
+@@ -20,6 +20,7 @@
+ 
+ ;; @spec MCP-OP-CENSUS-020
+ (deftest pooled-map-maps-every-input-exactly-once
++  (is (= [] ((census-pool/pooled-map 4) inc [])))
+   (let [inputs (vec (range 200))]
+     (testing "the pool computes what map computes"
+       (is (= (mapv inc inputs)

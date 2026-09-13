@@ -6,6 +6,10 @@ status: "round four implemented 2026-09-04 (002/003/004/005/007/010 runtime witn
 
 # JVM Test-Suite Isolation Specifications
 
+- [x] **DATACODE-SLEEP-001**: When validating merge-gate sleep exemptions, the checker shall identify each call by owning test Var, ordinal occurrence and explicit temporal purpose, deriving its line only for diagnostics. An unrelated line inserted into a copied source leaves acceptance unchanged; altered owner, call, cardinality or purpose refuses by owner name. Purpose is declared metadata, not inferred from prose.
+
+- [x] **DATACODE-ROWS-001**: When the statistical fold publishes runtime assignments, it shall emit validated EDN namespace evidence rows containing both runtime samples, n, mean, sample sd, conservative ratio, portability state and distinct receipt paths. The manifest opens every cited receipt, binds namespace/runtime/wall and recomputes statistics and runtime selection. Portability state, contract failure and failed samples must agree with opened timing and registered contract-control receipts; no row-only steering field is authoritative. Missing receipts or inconsistent statistics/state/assignments refuse by namespace and field. Receipt paths, including `:logs` and contract-control artifacts, must resolve inside the repository's explicit retained-evidence roots; outside paths (including `/var/tmp` and symlink escapes) refuse. The manifest consumes these validated rows directly; declared capability exclusions remain policy. The fold shall not emit a source patch. Receipts are evidence, not attestation: coordinated tampering with retained artifacts is not prevented by content consistency, and no cryptographic provenance or authorship claim follows.
+
 - [x] **TEST-ISO-016**: A namespace shall run on bb only when it is
   bb-portable AND its conservative paired namespace-wall ratio is at most
   2.0. Measure at least six identical controls per runtime on the same box,

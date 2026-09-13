@@ -69,8 +69,9 @@
 
 (defn durable-detail! [request result compiled]
   (let [path (artifacts/target "insert-forms" (:workspace_root request) (str (UUID/randomUUID) ".edn"))
-        detail (merge (:detail result) {:receipt (assoc (:receipt result) :state "planned" :next_action "await-publication")
-                                        :transaction_receipt (transaction/build-receipt compiled)})
+        detail (artifacts/receipt-evidence
+                 (merge (:detail result) {:receipt (assoc (:receipt result) :state "planned" :next_action "await-publication")
+                                          :transaction_receipt (transaction/build-receipt compiled)}))
         text (str (pr-str detail) "\n")
         summary (merge (dissoc (:receipt result) :inserted_form_ranges)
                        {:state "committed" :ok true :committed true :mutation_attempted true
@@ -85,12 +86,13 @@
     (file-ops/atomic-write! path text)
     (when-not (= (p/sha text) (journal/sha256-file path))
       (throw (java.io.IOException. "Durable receipt read-back differs.")))
-    {:receipt_details_path path :receipt_hash (p/sha text)}))
+    {:receipt_details_path path :receipt_hash (p/sha text) :envelope-id (:envelope-id detail)}))
 
 (defn finalize-detail! [file outcome]
   (if-let [path (:receipt_details_path outcome)]
     (try
-      (let [detail (edn/read-string (slurp path :encoding "UTF-8"))
+      (let [path (artifacts/admit-target! path)
+            detail (edn/read-string (slurp path :encoding "UTF-8"))
             observed (try (journal/sha256-file file) (catch Exception _ nil))
             detail (assoc detail :receipt (merge (:receipt detail)
                                             (dissoc outcome :receipt_details_path :receipt_hash))

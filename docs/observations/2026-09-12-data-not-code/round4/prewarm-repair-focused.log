@@ -1,0 +1,5 @@
+Syntax error compiling at (clj_surgeon/mcp_alias_migration_test.clj:7185:5).
+Unable to resolve symbol: finally in this context
+{:test 1, :pass 8, :fail 0, :error 0}
+=> nil
+*======== user | clj ========*

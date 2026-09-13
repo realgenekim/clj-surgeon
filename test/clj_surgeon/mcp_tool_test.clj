@@ -1,6 +1,7 @@
-(ns ^{:lane :integration} clj-surgeon.mcp-tool-test
+(ns clj-surgeon.mcp-tool-test
+  {:lane :integration}
   (:require
-   [clj-surgeon.receipt-artifacts :as artifacts]
+   [cheshire.core :as json]
    [clj-surgeon.extract :as extract]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
@@ -9,8 +10,8 @@
    [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.structural-lens :as structural-lens]
-   [cheshire.core :as json]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -1011,7 +1012,6 @@
       (finally
         (delete-tree! workspace)))))
 
-
 ;; ---------------------------------------------------------------------------
 ;; A refusal that names its own field has to reach the write surface too. The
 ;; kernel's `invalid-require-policy` branch was unreachable from
@@ -1066,7 +1066,6 @@
               (is (not (.exists (io/file workspace "receipts"))))))))
       (finally
         (delete-tree! workspace)))))
-
 
 ;; ---------------------------------------------------------------------------
 ;; edit_clojure's published schema declares neither `changes` nor
@@ -1392,7 +1391,7 @@
               (let [status (cold-verify/status (.getPath workspace) job)]
                 (if (or (:verification_complete status) (>= attempt 100))
                   status
-                  (do (Thread/sleep 10) (recur (inc attempt))))))]
+                  (do (^{:temporal-purpose :poll} Thread/sleep 10) (recur (inc attempt))))))]
         (is (:ok result))
         (is (:committed result))
         (is (false? (:verification_complete result)))

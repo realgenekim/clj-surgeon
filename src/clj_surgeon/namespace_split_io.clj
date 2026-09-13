@@ -232,8 +232,10 @@
         (assoc :created-directories (vec (distinct (mapcat #(map str (:missing-parent-directories %)) targets)))))))
 
 (defn- save! [dir name data]
-  (.mkdirs (io/file dir))
-  (let [file (str (io/file dir name))] (file-ops/atomic-write! file (pr-str data)) file))
+  (let [file (artifacts/admit-target! (io/file dir name))]
+    (.mkdirs (io/file dir))
+    (file-ops/atomic-write! file (pr-str (artifacts/receipt-evidence data)))
+    file))
 
 ;; @spec NS-SPLIT-030
 ;; INTENT: NS-SPLIT-030

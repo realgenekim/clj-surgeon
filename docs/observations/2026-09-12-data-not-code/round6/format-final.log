@@ -1,0 +1,6 @@
+standard-clj fix v0.29.0
+
+✓ /docs/observations/2026-09-12-data-not-code/round6/bb_witnesses.clj [5.05ms]
+✓ /src/clj_surgeon/receipt_artifacts.clj [7.39ms]
+
+All 2 files formatted with Standard Clojure Style 👍 [19.65ms]

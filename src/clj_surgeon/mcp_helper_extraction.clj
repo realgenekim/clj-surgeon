@@ -36,15 +36,15 @@
   and reports `rollback-failed` when the inverse does not verify; this namespace
   never restores a byte itself."
   (:require
-   [clj-surgeon.receipt-artifacts :as artifacts]
-   [clj-surgeon.file-ops :as file-ops]
-   [clj-surgeon.synchronous-verification :as synchronous]
    [clj-surgeon.extract :as extract]
+   [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.helper-extraction :as planner]
    [clj-surgeon.mcp-alias-migration :as alias-migration]
    [clj-surgeon.mcp-extraction :as extraction]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-schema :as mcp-schema]
+   [clj-surgeon.receipt-artifacts :as artifacts]
+   [clj-surgeon.synchronous-verification :as synchronous]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -554,100 +554,100 @@
   on the state of a tree this call was never going to write."
   ([params] (plan* params nil))
   ([params profiles]
-  (let [validated (validate-request params)]
-    (if-not (:ok validated)
-      validated
-      (let [request (:request validated)
-            ;; @spec MCP-OP-HELPER-011
-            ;; @spec MCP-OP-HELPER-016
-            ;; the boundary owns this refusal: the pure planner takes
-            ;; verification.profile as an opaque string, and whether a name is
-            ;; a synchronous, rollback-capable profile is a fact about the
-            ;; registry, not about the request's grammar. No weaker profile is
-            ;; ever offered as a continuation.
-            preflight (verification-preflight
-                        profiles (get-in request [:verification :profile]))
-            root-result (when-not preflight
-                          (try {:ok true :root (mcp-paths/real-root (:workspace_root request))}
-                               (catch Exception error
-                                 {:ok false :error (.getMessage error)})))]
-        (if preflight
-          preflight
-        (if-not (:ok root-result)
-          (refusal "workspace-unreadable"
-                   (str "The workspace root could not be resolved: "
-                        (:error root-result))
-                   {:workspace_root (:workspace_root request)
-                    :decision "which directory this workspace is rooted at"})
-          (let [root (:root root-result)
-                admitted (admitted-roots root)]
-            (if-not (:ok admitted)
-              admitted
-            (let [roots (:roots admitted)
-                discovery (scan root (root-globs roots))]
-            (if-not (:ok discovery)
-              (scan-refusal discovery "discovery")
-              (let [authorized (scan root (get-in request [:scope :paths]))]
-                (if-not (:ok authorized)
-                  (scan-refusal authorized "authorization")
-                  ;; @spec MCP-OP-HELPER-005
-                  ;; symlinked entries are PRUNED before the completeness and
-                  ;; read sets form, in both directions
-                  (let [walked (prune-symlinks root (:files discovery))
-                        authorized-set (set (:files (prune-symlinks
-                                                      root (:files authorized))))
-                        sources (read-sources root (:files walked)
-                                              authorized-set)]
-                    (if (map? sources)
-                      sources
-                      (let [planned (planner/plan request (mapv #(dissoc % :path) sources))]
-                        (if-not (:ok planned)
-                          planned
-                          (or (destination-limitation
-                                roots
-                                (get-in request [:from :file])
-                                (get-in planned [:plan :destination :lib])
-                                (get-in planned [:plan :destination :file]))
-                              (let [;; @spec MCP-OP-HELPER-012
-                                    ;; ONE enriched receipt, built once and
-                                    ;; used everywhere it is published.
-                                    ;;
-                                    ;; It used to be built by two `assoc-in`s
-                                    ;; inside a `->` and then COPIED to
-                                    ;; `[:plan :receipt]` from `(:receipt
-                                    ;; planned)` — the outer binding, which the
-                                    ;; thread had not touched. So the copy the
-                                    ;; terminal mapper actually reads was the
-                                    ;; planner's untouched receipt: its closure
-                                    ;; carried the planner's fixed `["src"
-                                    ;; "test"]` instead of the roots this walk
-                                    ;; admitted, and no `pruned_symlinks` at
-                                    ;; all. Every exemplar looked right because
-                                    ;; the FIXTURE supplied the field the
-                                    ;; production path was dropping.
-                                    enriched (-> (:receipt planned)
-                                                 (assoc-in [:closure :roots] roots)
-                                                 (assoc-in [:closure :pruned_symlinks]
-                                                           (count (:pruned walked))))]
-                                (-> planned
-                                  (assoc :receipt enriched)
-                                  ;; the planner's own O(1) receipt travels WITH
-                                  ;; the plan: as a SIBLING key it never reached
-                                  ;; the terminal mapper at all, which is why the
-                                  ;; wire receipt printed null helpers, null
-                                  ;; caller files and null sites
-                                  (assoc-in [:plan :receipt] enriched)
-                                  (assoc
-                                     :roots roots
-                                     :pruned_symlinks (vec (:pruned walked))
-                                     :paths (into {} (map (juxt :file :path)) sources)
-                                     ;; the FROZEN read, carried forward by the
-                                     ;; plan rather than re-slurped at write
-                                     ;; time: the kernel's stale-source gate has
-                                     ;; to see the bytes the plan was derived
-                                     ;; from, or drift between the two commits
-                                     ;; silently over a stale plan
-                                     :sources (into {} (map (juxt :path :source)) sources))))))))))))))))))))))
+   (let [validated (validate-request params)]
+     (if-not (:ok validated)
+       validated
+       (let [request (:request validated)
+             ;; @spec MCP-OP-HELPER-011
+             ;; @spec MCP-OP-HELPER-016
+             ;; the boundary owns this refusal: the pure planner takes
+             ;; verification.profile as an opaque string, and whether a name is
+             ;; a synchronous, rollback-capable profile is a fact about the
+             ;; registry, not about the request's grammar. No weaker profile is
+             ;; ever offered as a continuation.
+             preflight (verification-preflight
+                         profiles (get-in request [:verification :profile]))
+             root-result (when-not preflight
+                           (try {:ok true :root (mcp-paths/real-root (:workspace_root request))}
+                                (catch Exception error
+                                  {:ok false :error (.getMessage error)})))]
+         (if preflight
+           preflight
+           (if-not (:ok root-result)
+             (refusal "workspace-unreadable"
+                      (str "The workspace root could not be resolved: "
+                           (:error root-result))
+                      {:workspace_root (:workspace_root request)
+                       :decision "which directory this workspace is rooted at"})
+             (let [root (:root root-result)
+                   admitted (admitted-roots root)]
+               (if-not (:ok admitted)
+                 admitted
+                 (let [roots (:roots admitted)
+                       discovery (scan root (root-globs roots))]
+                   (if-not (:ok discovery)
+                     (scan-refusal discovery "discovery")
+                     (let [authorized (scan root (get-in request [:scope :paths]))]
+                       (if-not (:ok authorized)
+                         (scan-refusal authorized "authorization")
+                         ;; @spec MCP-OP-HELPER-005
+                         ;; symlinked entries are PRUNED before the completeness and
+                         ;; read sets form, in both directions
+                         (let [walked (prune-symlinks root (:files discovery))
+                               authorized-set (set (:files (prune-symlinks
+                                                             root (:files authorized))))
+                               sources (read-sources root (:files walked)
+                                                     authorized-set)]
+                           (if (map? sources)
+                             sources
+                             (let [planned (planner/plan request (mapv #(dissoc % :path) sources))]
+                               (if-not (:ok planned)
+                                 planned
+                                 (or (destination-limitation
+                                       roots
+                                       (get-in request [:from :file])
+                                       (get-in planned [:plan :destination :lib])
+                                       (get-in planned [:plan :destination :file]))
+                                     (let [;; @spec MCP-OP-HELPER-012
+                                           ;; ONE enriched receipt, built once and
+                                           ;; used everywhere it is published.
+                                           ;;
+                                           ;; It used to be built by two `assoc-in`s
+                                           ;; inside a `->` and then COPIED to
+                                           ;; `[:plan :receipt]` from `(:receipt
+                                           ;; planned)` — the outer binding, which the
+                                           ;; thread had not touched. So the copy the
+                                           ;; terminal mapper actually reads was the
+                                           ;; planner's untouched receipt: its closure
+                                           ;; carried the planner's fixed `["src"
+                                           ;; "test"]` instead of the roots this walk
+                                           ;; admitted, and no `pruned_symlinks` at
+                                           ;; all. Every exemplar looked right because
+                                           ;; the FIXTURE supplied the field the
+                                           ;; production path was dropping.
+                                           enriched (-> (:receipt planned)
+                                                        (assoc-in [:closure :roots] roots)
+                                                        (assoc-in [:closure :pruned_symlinks]
+                                                                  (count (:pruned walked))))]
+                                       (-> planned
+                                         (assoc :receipt enriched)
+                                         ;; the planner's own O(1) receipt travels WITH
+                                         ;; the plan: as a SIBLING key it never reached
+                                         ;; the terminal mapper at all, which is why the
+                                         ;; wire receipt printed null helpers, null
+                                         ;; caller files and null sites
+                                         (assoc-in [:plan :receipt] enriched)
+                                         (assoc
+                                           :roots roots
+                                           :pruned_symlinks (vec (:pruned walked))
+                                           :paths (into {} (map (juxt :file :path)) sources)
+                                           ;; the FROZEN read, carried forward by the
+                                           ;; plan rather than re-slurped at write
+                                           ;; time: the kernel's stale-source gate has
+                                           ;; to see the bytes the plan was derived
+                                           ;; from, or drift between the two commits
+                                           ;; silently over a stale plan
+                                           :sources (into {} (map (juxt :path :source)) sources))))))))))))))))))))))
 
 ;; @spec MCP-OP-HELPER-001
 ;; @spec MCP-OP-HELPER-010
@@ -1135,11 +1135,11 @@
                       ;; decided before the kernel is entered
                       receipt-decision
                       (let [receipt-dir (:dir receipt-decision)
-                            receipt-file (str (io/file receipt-dir
-                                                       (str (UUID/randomUUID) ".edn")))
-                            details-file (str (io/file receipt-dir
-                                                       (str "helper-extraction-"
-                                                            (UUID/randomUUID) ".edn")))
+                            receipt-file (artifacts/admit-target! (io/file receipt-dir
+                                                                    (str (UUID/randomUUID) ".edn")))
+                            details-file (artifacts/admit-target! (io/file receipt-dir
+                                                                    (str "helper-extraction-"
+                                                                         (UUID/randomUUID) ".edn")))
                             started (System/nanoTime)
                             elapsed #(/ (double (- (System/nanoTime) started)) 1000000.0)
                             ;; @spec MCP-OP-HELPER-008
@@ -1154,7 +1154,7 @@
                             ;; receipt `commit!` publishes, from the same
                             ;; compiled snapshot, so the authority to undo
                             ;; exists before there is anything to undo.
-                            inverse-receipt (extraction/build-receipt compiled)
+                            inverse-receipt (artifacts/receipt-evidence (extraction/build-receipt compiled))
                             committed (volatile! nil)
                             originals (:original-sources compiled)
                             created (vec (:created-files compiled))
@@ -1231,37 +1231,37 @@
                                          :cause_error cause
                                          :plan (select-keys (:plan planned)
                                                             [:destination :files :moved])})]
-                                (cond->
-                                  (terminal-receipt
-                                    {:kernel (if rolled-back?
-                                               (merge detail
-                                                {:status failed-state
-                                                :restored true
-                                                :restored_files touched
-                                                :restoration_read_back read-back
-                                                :destination_removed true
-                                                :elapsed_ms (elapsed)})
-                                               ;; @spec MCP-OP-HELPER-020
-                                               ;; the one state that keeps the
-                                               ;; linear evidence, because a
-                                               ;; human has to act on it
-                                               ;; @spec MCP-OP-HELPER-020
-                                               ;; the recovery authority stands
-                                               ;; whether or not the external
-                                               ;; artifact could be written
-                                               (merge detail
-                                                {:status :rollback-failed
-                                                :restored false
-                                                :unrestored_files touched
-                                                :recovery_required
-                                                {:receipt receipt-file
-                                                 :reason (or (:error rollback)
-                                                             "the extraction undo did not verify")
-                                                 :recovery rollback}
-                                                :elapsed_ms (elapsed)}))
-                                     :verification proof
-                                     :plan (:plan planned)})
-                                  cause (assoc :cause_error cause)))))]
+                                  (cond->
+                                    (terminal-receipt
+                                      {:kernel (if rolled-back?
+                                                 (merge detail
+                                                   {:status failed-state
+                                                    :restored true
+                                                    :restored_files touched
+                                                    :restoration_read_back read-back
+                                                    :destination_removed true
+                                                    :elapsed_ms (elapsed)})
+                                                 ;; @spec MCP-OP-HELPER-020
+                                                 ;; the one state that keeps the
+                                                 ;; linear evidence, because a
+                                                 ;; human has to act on it
+                                                 ;; @spec MCP-OP-HELPER-020
+                                                 ;; the recovery authority stands
+                                                 ;; whether or not the external
+                                                 ;; artifact could be written
+                                                 (merge detail
+                                                   {:status :rollback-failed
+                                                    :restored false
+                                                    :unrestored_files touched
+                                                    :recovery_required
+                                                    {:receipt receipt-file
+                                                     :reason (or (:error rollback)
+                                                                 "the extraction undo did not verify")
+                                                     :recovery rollback}
+                                                    :elapsed_ms (elapsed)}))
+                                       :verification proof
+                                       :plan (:plan planned)})
+                                    cause (assoc :cause_error cause)))))]
                         (try
                           ;; the kernel handoff is INSIDE the guard
                           (let [result (commit! compiled)]

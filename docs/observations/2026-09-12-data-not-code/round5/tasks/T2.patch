@@ -1,0 +1,11 @@
+--- a/test/clj_surgeon/analyze_test.clj
++++ b/test/clj_surgeon/analyze_test.clj
+@@ -105,7 +105,7 @@
+ ;; ============================================================
+ 
+ (deftest test-qualified-symbols
+-  (let [zloc (a/string->zloc "(defn foo [x] (str/join (db/query x) (local-fn x)))")]
++  (let [zloc (a/string->zloc "(defn foo [x] (str/join (db/query x) (db/fetch (local-fn x))))")]
+     (testing "extracts namespace prefixes from qualified symbols"
+       (let [quals (a/qualified-symbols zloc)]
+         (is (= #{"str" "db"} quals))))))

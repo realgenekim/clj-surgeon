@@ -8,8 +8,6 @@
      bb -m ns-surgeon.core :op :mv :file src/my/ns.clj :form my-fn :before other-fn
      bb -m ns-surgeon.core :op :mv :file src/my/ns.clj :form my-fn :before other-fn :dry-run true"
   (:require
-   [clj-surgeon.jvm-error :as jvm]
-   [clj-surgeon.receipt-artifacts :as artifacts]
    [babashka.fs :as fs]
    [babashka.process]
    [clj-surgeon.analyze :as analyze]
@@ -24,9 +22,11 @@
    [clj-surgeon.forms :as forms]
    [clj-surgeon.forward-refs :as fwd]
    [clj-surgeon.intent-transaction :as intent-transaction]
+   [clj-surgeon.jvm-error :as jvm]
    [clj-surgeon.move :as move]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.parse-admission :as admission]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.relation-census :as relation-census]
    [clj-surgeon.rename :as rename]
    [clj-surgeon.show-form :as show-form]
@@ -80,37 +80,37 @@
       (edit-dsl/evaluate-xray (slurp (:file prepared)) prepared))))
 
 (defn run-declares [{:keys [file]}]
- (named-plan-refusal
-  (fn []
-  (let [;; Get declares from the OUTLINE (not deps — deps excludes declares)
-        ol (outline/outline file)
-        declares (->> (:forms ol)
-                      (filter #(= 'declare (:type %))))
-        ;; Use topo sort to find genuine cycles
-        zloc (analyze/file->zloc file)
-        topo (analyze/topological-sort zloc)
-        truly-cyclic (set (:cycles topo))
-        ;; Also check forward-refs to see which declares are still needed
-        fwd (when (:ns ol)
-              (set (map #(str (:name %))
-                        (fwd/detect-forward-refs file (:ns ol)))))]
-    {:file file
-     :declares
-     (mapv (fn [d]
-             (let [name-str (str (:name d))
-                   has-forward-ref? (contains? fwd name-str)
-                   in-cycle? (contains? truly-cyclic name-str)]
-               {:name name-str
-                :line (:line d)
-                :needed? (or in-cycle? has-forward-ref?)}))
-           declares)
-     :summary {:total (count declares)
-               :removable (count (remove #(or (contains? truly-cyclic (str (:name %)))
-                                              (contains? fwd (str (:name %))))
-                                         declares))
-               :needed (count (filter #(or (contains? truly-cyclic (str (:name %)))
-                                           (contains? fwd (str (:name %))))
-                                      declares))}}))))
+  (named-plan-refusal
+    (fn []
+      (let [;; Get declares from the OUTLINE (not deps — deps excludes declares)
+            ol (outline/outline file)
+            declares (->> (:forms ol)
+                          (filter #(= 'declare (:type %))))
+            ;; Use topo sort to find genuine cycles
+            zloc (analyze/file->zloc file)
+            topo (analyze/topological-sort zloc)
+            truly-cyclic (set (:cycles topo))
+            ;; Also check forward-refs to see which declares are still needed
+            fwd (when (:ns ol)
+                  (set (map #(str (:name %))
+                            (fwd/detect-forward-refs file (:ns ol)))))]
+        {:file file
+         :declares
+         (mapv (fn [d]
+                 (let [name-str (str (:name d))
+                       has-forward-ref? (contains? fwd name-str)
+                       in-cycle? (contains? truly-cyclic name-str)]
+                   {:name name-str
+                    :line (:line d)
+                    :needed? (or in-cycle? has-forward-ref?)}))
+               declares)
+         :summary {:total (count declares)
+                   :removable (count (remove #(or (contains? truly-cyclic (str (:name %)))
+                                                  (contains? fwd (str (:name %))))
+                                             declares))
+                   :needed (count (filter #(or (contains? truly-cyclic (str (:name %)))
+                                               (contains? fwd (str (:name %))))
+                                          declares))}}))))
 
 (defn run-deps [{:keys [file form]}]
   (named-plan-refusal
@@ -1954,7 +1954,7 @@
                     (assoc :read-complete (empty? skipped)
                            :pool-size pool-size
                            :pool-size-requested (when (and threads
-                                                          (> threads pool-size))
+                                                        (> threads pool-size))
                                                   threads)
                            :unrecognised-calls unrecognised
                            :raw (filterv #(= :raw (:class %)) (:all-sites result))
@@ -2059,8 +2059,8 @@
   [opts]
   (let [root (System/getProperty "user.dir")
         directory (artifacts/directory "change" root)
+        path (artifacts/admit-target! (str directory "/" (java.util.UUID/randomUUID) ".edn"))
         _ (.mkdirs (java.io.File. directory))
-        path (str directory "/" (java.util.UUID/randomUUID) ".edn")
         result (intent-transaction/execute-change! (assoc opts :receipt-out path))]
     (if (:committed result)
       (merge result (artifacts/workspace-evidence root (keys (get-in result [:verified :read-back-hashes]))))
@@ -3210,6 +3210,7 @@
 
 (defn -main [& args]
   (try
+    (artifacts/initialize-envelope! (System/getProperty "user.dir"))
     (let [result
           (cond
             (empty? args)

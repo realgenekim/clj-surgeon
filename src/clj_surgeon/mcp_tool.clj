@@ -1,6 +1,5 @@
 (ns clj-surgeon.mcp-tool
   (:require
-   [clj-surgeon.receipt-artifacts :as artifacts]
    [cheshire.core :as json]
    [clj-surgeon.extract :as extract]
    [clj-surgeon.file-ops :as file-ops]
@@ -17,22 +16,23 @@
    [clj-surgeon.mcp-feature-thread :as feature-thread]
    [clj-surgeon.mcp-formatter :as formatter]
    [clj-surgeon.mcp-helper-extraction :as helper-extraction]
-   [clj-surgeon.mcp-namespace-split :as namespace-split]
    [clj-surgeon.mcp-insert-forms :as insert-forms]
-   [clj-surgeon.mcp-rename-alias :as rename-alias]
-   [clj-surgeon.mcp-require-change :as require-change]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
+   [clj-surgeon.mcp-namespace-split :as namespace-split]
    [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-prepared-confirmation :as prepared-confirmation]
    [clj-surgeon.mcp-program-tool :as program-tool]
    [clj-surgeon.mcp-relation-census :as census-tool]
+   [clj-surgeon.mcp-rename-alias :as rename-alias]
+   [clj-surgeon.mcp-require-change :as require-change]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.mcp-workspace-sources :as workspace-sources]
    [clj-surgeon.mcp-write-refusal :as write-refusal]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.java.io :as io]
    [clojure.string :as str])
@@ -915,9 +915,8 @@
               (let [directory (artifacts/directory (if extraction? "extract" "edit-clojure") project-root)
                     directory-file (io/file directory)
                     existed? (.exists directory-file)
+                    receipt (artifacts/admit-target! (io/file directory (str (UUID/randomUUID) ".edn")))
                     _ (.mkdirs directory-file)
-                    receipt (str (io/file directory
-                                          (str (UUID/randomUUID) ".edn")))
                     [result kernel-ms]
                     ;; @spec MCP-OP-VERIFY-013
                     ;; one gate for BOTH write routes, ahead of every write:
@@ -1764,7 +1763,6 @@
   composes is inlined and only a pathological one is replaced by a POINTER that
   names its length — never dropped in silence."
   1024)
-
 
 ;; @spec MCP-OP-ALIAS-059
 (defn- ceiling-writer

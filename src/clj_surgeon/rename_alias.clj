@@ -97,11 +97,13 @@
              :write_verified (every? #(= (:result_hash %) (:read_back_hash %)) per-file)}}))
 
 (defn write-detail! [path detail]
-  (let [text (str (pr-str detail) "\n")]
+  (let [path (artifacts/admit-target! path)
+        detail (artifacts/receipt-evidence detail)
+        text (str (pr-str detail) "\n")]
     (io/make-parents path) (file-ops/atomic-write! path text)
     (when-not (= (p/sha text) (journal/sha256-file path))
       (throw (java.io.IOException. "Durable receipt read-back differs.")))
-    {:receipt_details_path path :receipt_hash (p/sha text)
+    {:receipt_details_path path :receipt_hash (p/sha text) :envelope-id (:envelope-id detail)
      :details_contains (detail-sections (edn/read-string (slurp path :encoding "UTF-8")))}))
 (defn trim-summary [r]
   (let [r (if-let [e (:write_refusal_evidence r)]

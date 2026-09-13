@@ -1,0 +1,280 @@
+{
+  "subject_sha": "759974c718889c52a05a1d0746c9c21d0f00dcdb",
+  "runner_old_sha256": "1aff7c05688125126b0bee21192a4a756457747134d8a2099f98f53923a142be",
+  "runner_new_sha256": "d26701e225fb5547b31a5245c880ee61394e5b24e1319f3e742759bd728e20ae",
+  "other_assertions_unchanged": true,
+  "cleanliness_cases": [
+    {
+      "case": "clean",
+      "accepted": {
+        "PROBE": true,
+        "NATIVE": true,
+        "None": true
+      }
+    },
+    {
+      "case": "root identity directory only",
+      "accepted": {
+        "PROBE": true,
+        "NATIVE": false,
+        "None": false
+      }
+    },
+    {
+      "case": "reject amendment1-untracked",
+      "accepted": {
+        "PROBE": false,
+        "NATIVE": false,
+        "None": false
+      }
+    },
+    {
+      "case": "reject .clj-surgeon-other/file",
+      "accepted": {
+        "PROBE": false,
+        "NATIVE": false,
+        "None": false
+      }
+    },
+    {
+      "case": "reject nested/.clj-surgeon/file",
+      "accepted": {
+        "PROBE": false,
+        "NATIVE": false,
+        "None": false
+      }
+    },
+    {
+      "case": "tracked unstaged outside identity",
+      "accepted": {
+        "PROBE": false,
+        "NATIVE": false,
+        "None": false
+      }
+    },
+    {
+      "case": "tracked staged outside identity",
+      "accepted": {
+        "PROBE": false,
+        "NATIVE": false,
+        "None": false
+      }
+    },
+    {
+      "case": "root .clj-surgeon regular file",
+      "accepted": {
+        "PROBE": false,
+        "NATIVE": false,
+        "None": false
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "task": "T1",
+      "namespace": "clj-surgeon.forms-test",
+      "owner": "test-classify-namespace-qualified-auto-detection",
+      "stratum": "bb-portable",
+      "file": "test/clj_surgeon/forms_test.clj",
+      "patch": "T1.patch",
+      "sha256": "c520f91f23ad0949444f056d328aae34af96101d089ac6e8680e9164f3fb6ad4",
+      "assertion_delta": 1,
+      "before_sha256": "95403c2e08c77a2443c0d32d8d14045b6e02399f257dd408e97087aaff6fbba1",
+      "after_sha256": "f2bbca04fe9f6ea89a2e7f50c5b6af1ce10df826cb76d1dad0cc4a34074d2095",
+      "identity_gate": "passed",
+      "apply_check_exit": 0,
+      "after_identity": "passed"
+    },
+    {
+      "task": "T2",
+      "namespace": "clj-surgeon.analyze-test",
+      "owner": "test-qualified-symbols",
+      "stratum": "bb-portable",
+      "file": "test/clj_surgeon/analyze_test.clj",
+      "patch": "T2.patch",
+      "sha256": "0acef9e4a353a6c3db50f9a5a0d28bfcb4269a08eee8cf8672605c4ea1fa2c5f",
+      "assertion_delta": 0,
+      "before_sha256": "1db7cab655040779cb382682e03c9bba237eabc5acf2ca7d9af21fccf08ab6a5",
+      "after_sha256": "b3b3572f1bb9e37eb6e46f2afb04e6a57ee73077fa2220ba611fe9ecf437b42d",
+      "identity_gate": "passed",
+      "apply_check_exit": 0,
+      "after_identity": "passed"
+    },
+    {
+      "task": "T3",
+      "namespace": "clj-surgeon.edit-dsl-test",
+      "owner": "builders-preserve-clojure-data-without-evaluation",
+      "stratum": "bb-portable",
+      "file": "test/clj_surgeon/edit_dsl_test.clj",
+      "patch": "T3.patch",
+      "sha256": "3512853c3f68886d9d2dcf0f4141880ec67ab23a6312532a9daeb0443bcb2b6b",
+      "assertion_delta": 1,
+      "before_sha256": "b86dbb4c6288b1da51b2e5bb55d28c774a8544df7421c331733aa65a8249b3ba",
+      "after_sha256": "940f68d202ed90f89762ae3f354481384bddcb0048ce43e5b075f77e2c704ca7",
+      "identity_gate": "passed",
+      "apply_check_exit": 0,
+      "after_identity": "passed"
+    },
+    {
+      "task": "T4",
+      "namespace": "clj-surgeon.census-pool-test",
+      "owner": "pooled-map-maps-every-input-exactly-once",
+      "stratum": "JVM-only",
+      "file": "test/clj_surgeon/census_pool_test.clj",
+      "patch": "T4.patch",
+      "sha256": "b6c92529cd432a4a9f2e10097f8c92fbae217e0e1ef184cf46952826cf052cd7",
+      "assertion_delta": 1,
+      "before_sha256": "b843fadfd81772d81e29e5b26b2205ca566902986988eaf5fee2d902ba5d91df",
+      "after_sha256": "bef6eae95a8d2992428056fa761814f0dbd224fcd3f4ac8f5ff8d83bdc469fd2",
+      "identity_gate": "passed",
+      "apply_check_exit": 0,
+      "after_identity": "passed"
+    },
+    {
+      "task": "T5",
+      "namespace": "clj-surgeon.mcp-hot-verify-test",
+      "owner": "hot-verification-does-not-terminate-on-another-messages-done",
+      "stratum": "JVM-only",
+      "file": "test/clj_surgeon/mcp_hot_verify_test.clj",
+      "patch": "T5.patch",
+      "sha256": "4041b62cdc3c72ab2177f7434a354af512f2144d3300d69f5931e20d39c0c155",
+      "assertion_delta": 0,
+      "before_sha256": "4f0f3ff5386ee34e0ffbaf853645560aecad8ba99344fd09773c14a10a071509",
+      "after_sha256": "cce0d92f7f5e41ccd1208ddbe8f7e046fb72d12541841b214f42b2099fe4f2d5",
+      "identity_gate": "passed",
+      "apply_check_exit": 0,
+      "after_identity": "passed"
+    },
+    {
+      "task": "T6",
+      "namespace": "clj-surgeon.mcp-formatter-test",
+      "owner": "default-formatter-prefers-path-then-checkout-then-npx",
+      "stratum": "JVM-only",
+      "file": "test/clj_surgeon/mcp_formatter_test.clj",
+      "patch": "T6.patch",
+      "sha256": "b4e561f4b9e34ed9aa1fec2c114af94d0494c642e08cfd118b481c3c0152a86f",
+      "assertion_delta": 2,
+      "before_sha256": "72080596cc53799756eab71648db144c127c82ce99fa053930d3de4f13d89505",
+      "after_sha256": "bd4303ea751d0ff23f4e8e955d53a63f5b0e146431a087c6d9de526164c360ef",
+      "identity_gate": "passed",
+      "apply_check_exit": 0,
+      "after_identity": "passed"
+    }
+  ],
+  "planted_non_tests": [
+    {
+      "task": "N1",
+      "namespace": "clj-surgeon.forms",
+      "file": "src/clj_surgeon/forms.clj",
+      "sha256": "60900403624a1e02c53e3cc9cee23486f6c937ea1ae816ce059614a9dbd7956a",
+      "unchanged_from_design_subject": true,
+      "static_non_test_check": "passed"
+    },
+    {
+      "task": "N2",
+      "namespace": "clj-surgeon.analyze",
+      "file": "src/clj_surgeon/analyze.clj",
+      "sha256": "5fc406e8df045e16d2b36008dbebe6720c1d24d52394e7aae0a7812ba8d57cb9",
+      "unchanged_from_design_subject": true,
+      "static_non_test_check": "passed"
+    }
+  ],
+  "init_command": [
+    "python3",
+    "/home/forge/src/clj-surgeon-datacode/docs/observations/2026-09-12-data-not-code/round5/measure.py",
+    "init",
+    "--output",
+    "/var/tmp/forge/probe-measure-fx/amendment1-init",
+    "--model",
+    "gpt-6",
+    "--effort",
+    "high"
+  ],
+  "init_cwd": "/var/tmp/forge/datacode-fx/amendment1-subject",
+  "init_exit": 0,
+  "measured_cells_run": 0,
+  "jvms_started": 0,
+  "subject": {
+    "subject_sha": "759974c718889c52a05a1d0746c9c21d0f00dcdb",
+    "runner_sha256": "d26701e225fb5547b31a5245c880ee61394e5b24e1319f3e742759bd728e20ae",
+    "manifest_sha256": "eec5ff495c3079b8b5d5594cfde915a56352ef677b8489ae02ba58160f0a944d",
+    "model": "gpt-6",
+    "effort": "high",
+    "recorded_utc_ns": 1789260377792301612,
+    "source": "git rev-parse HEAD",
+    "tasks": [
+      {
+        "task": "T1",
+        "namespace": "clj-surgeon.forms-test",
+        "owner": "test-classify-namespace-qualified-auto-detection",
+        "stratum": "bb-portable",
+        "file": "test/clj_surgeon/forms_test.clj",
+        "patch": "T1.patch",
+        "sha256": "c520f91f23ad0949444f056d328aae34af96101d089ac6e8680e9164f3fb6ad4",
+        "assertion_delta": 1,
+        "before_sha256": "95403c2e08c77a2443c0d32d8d14045b6e02399f257dd408e97087aaff6fbba1",
+        "after_sha256": "f2bbca04fe9f6ea89a2e7f50c5b6af1ce10df826cb76d1dad0cc4a34074d2095"
+      },
+      {
+        "task": "T2",
+        "namespace": "clj-surgeon.analyze-test",
+        "owner": "test-qualified-symbols",
+        "stratum": "bb-portable",
+        "file": "test/clj_surgeon/analyze_test.clj",
+        "patch": "T2.patch",
+        "sha256": "0acef9e4a353a6c3db50f9a5a0d28bfcb4269a08eee8cf8672605c4ea1fa2c5f",
+        "assertion_delta": 0,
+        "before_sha256": "1db7cab655040779cb382682e03c9bba237eabc5acf2ca7d9af21fccf08ab6a5",
+        "after_sha256": "b3b3572f1bb9e37eb6e46f2afb04e6a57ee73077fa2220ba611fe9ecf437b42d"
+      },
+      {
+        "task": "T3",
+        "namespace": "clj-surgeon.edit-dsl-test",
+        "owner": "builders-preserve-clojure-data-without-evaluation",
+        "stratum": "bb-portable",
+        "file": "test/clj_surgeon/edit_dsl_test.clj",
+        "patch": "T3.patch",
+        "sha256": "3512853c3f68886d9d2dcf0f4141880ec67ab23a6312532a9daeb0443bcb2b6b",
+        "assertion_delta": 1,
+        "before_sha256": "b86dbb4c6288b1da51b2e5bb55d28c774a8544df7421c331733aa65a8249b3ba",
+        "after_sha256": "940f68d202ed90f89762ae3f354481384bddcb0048ce43e5b075f77e2c704ca7"
+      },
+      {
+        "task": "T4",
+        "namespace": "clj-surgeon.census-pool-test",
+        "owner": "pooled-map-maps-every-input-exactly-once",
+        "stratum": "JVM-only",
+        "file": "test/clj_surgeon/census_pool_test.clj",
+        "patch": "T4.patch",
+        "sha256": "b6c92529cd432a4a9f2e10097f8c92fbae217e0e1ef184cf46952826cf052cd7",
+        "assertion_delta": 1,
+        "before_sha256": "b843fadfd81772d81e29e5b26b2205ca566902986988eaf5fee2d902ba5d91df",
+        "after_sha256": "bef6eae95a8d2992428056fa761814f0dbd224fcd3f4ac8f5ff8d83bdc469fd2"
+      },
+      {
+        "task": "T5",
+        "namespace": "clj-surgeon.mcp-hot-verify-test",
+        "owner": "hot-verification-does-not-terminate-on-another-messages-done",
+        "stratum": "JVM-only",
+        "file": "test/clj_surgeon/mcp_hot_verify_test.clj",
+        "patch": "T5.patch",
+        "sha256": "4041b62cdc3c72ab2177f7434a354af512f2144d3300d69f5931e20d39c0c155",
+        "assertion_delta": 0,
+        "before_sha256": "4f0f3ff5386ee34e0ffbaf853645560aecad8ba99344fd09773c14a10a071509",
+        "after_sha256": "cce0d92f7f5e41ccd1208ddbe8f7e046fb72d12541841b214f42b2099fe4f2d5"
+      },
+      {
+        "task": "T6",
+        "namespace": "clj-surgeon.mcp-formatter-test",
+        "owner": "default-formatter-prefers-path-then-checkout-then-npx",
+        "stratum": "JVM-only",
+        "file": "test/clj_surgeon/mcp_formatter_test.clj",
+        "patch": "T6.patch",
+        "sha256": "b4e561f4b9e34ed9aa1fec2c114af94d0494c642e08cfd118b481c3c0152a86f",
+        "assertion_delta": 2,
+        "before_sha256": "72080596cc53799756eab71648db144c127c82ce99fa053930d3de4f13d89505",
+        "after_sha256": "bd4303ea751d0ff23f4e8e955d53a63f5b0e146431a087c6d9de526164c360ef"
+      }
+    ]
+  }
+}

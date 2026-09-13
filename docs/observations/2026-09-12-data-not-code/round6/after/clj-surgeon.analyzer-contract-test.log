@@ -1,0 +1,5 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+
+Testing clj-surgeon.analyzer-contract-test
+
+Ran 6 tests containing 25 assertions; 0 skips, 0 failures, 0 errors.

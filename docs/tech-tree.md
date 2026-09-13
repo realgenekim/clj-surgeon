@@ -912,3 +912,78 @@ FileLockImpl.release limitation as recovery. The fold is therefore 99 portable,
 exclusions with no claim of complete controls. Counts differ from the predicted
 100/9 for that evidenced reason. Gates and source dogfood are recorded in
 [attempt23](observations/2026-09-12-bbtower-block-b/attempt23/REPORT.md).
+
+### 2026-09-12 — data-not-code, resumed transport recovery
+
+The shared artifact boundary admits final resolved destinations under immutable
+trusted startup roots; request maps cannot widen that authority. SCI symbol
+denials carry data independent of exception wording. The runtime fold publishes
+validated evidence rows consumed by the manifest, and temporal exemptions use
+test owner, call ordinal and purpose instead of line numbers.
+
+Round 4 retains the committed red-to-green sequence after a transport drop.
+It completes the architecture inventory and keeps the symbol-specific X-ray
+remedy within the existing CLI output bound. Focused JVM witnesses pass 196
+tests / 3,370 assertions; the single fast run passes 1,246 / 12,632 with zero
+isolation violations and a 41,690 ms lane sum. Seven lint warnings reproduce
+on the starting snapshot. Final prewarm passes all seven stages after one repair,
+with 422,819 ms gate wall. Source-edit accounting and limitations:
+[round 4 report](observations/2026-09-12-data-not-code/round4/REPORT.md).
+Coverage is the shared artifact boundary, not every writer or filesystem race.
+The six-task probe comparison is preregistered only; no performance or routing
+admission follows from these correctness checks.
+
+### 2026-09-12T22:25:51.055430+00:00 — data-not-code round 5, receipt and inode ratchets
+
+Opus found that a consistent evidence-row forgery bypassed receipt-string
+validation and changed runtime selection. The validator now opens the cited
+receipts and derives statistics from their walls. Named negatives bind receipt
+identity, sample counts, each statistic and selected runtime. All 456 shipped
+receipts remain admitted. A policy-function rename now fails its resolution
+guard and assertion-count pin. Final files with multiple hard links refuse
+before telemetry APPEND can change an outside inode.
+
+Coverage remains the shared artifact boundary and inventoried consumers. The
+telemetry and HTTP readiness writers and the user.home/passwd-home mismatch
+remain explicitly owed. The six probe/native patches and common timestamp
+runner are frozen without executing the experiment. This is correctness work,
+with no routing admission or speed claim. Final gate evidence and limits:
+[round 5 report](observations/2026-09-12-data-not-code/round5/REPORT.md).
+
+### 2026-09-13T02:07:50Z — data-not-code round 6, witness coverage across lanes
+
+The diff-impact oracle runs every declared direct/one-intermediate test dependency
+of the 20 source files changed since 3b6d5357, regardless of cadence or runtime
+exclusion. Before fixes it found the journal's six reported hard-link errors plus
+a concurrent-breaker error. After inode-link accounting, the journal passes
+80 tests / 545 assertions and all 80 selected namespaces pass. Internal LOCK
+links are legitimate; outside or unaccounted inode links still refuse.
+
+Runtime steering fields now agree with opened timing and retained failed CLI
+controls; retained receipt paths cannot point to scratch. The canonical intent
+explicitly distinguishes evidence from attestation. Both measurement bets keep
+their numbers and name their mechanical interval and editing-exclusion bias;
+NATIVE refusal outcomes are unscored, with a secondary unbet instruction interval.
+No measurement experiment or new routing admission follows. Fast and first-attempt
+prewarm pass; exact counts, red receipts, code-edit method and limitations:
+[round 6 report](observations/2026-09-12-data-not-code/round6/REPORT.md).
+
+### 2026-09-13T04:42:47.754868+00:00 — data-not-code round 9, oracle environment parity
+
+The fixed-point oracle previously widened its environment with a fixed temp root
+and a memory-temp override. On unchanged 76cc24a4, a fresh narrow battery-shaped
+root reproduces the counted battery: txn-journal-test has 1 failure and 74
+errors; all other 81 selected namespaces pass. This supersedes any inference
+that the prior wider-environment green demonstrated the narrow battery.
+
+The launcher rejects all temp/artifact overrides, records actual envelope roots,
+and verifies the child JVM environment before loading witnesses. A whole-test
+source census found four scratch defaults to move to java.io.tmpdir. Trusted
+state-home substitution is now policy-bounded invocation context: explicit root
+registration, outside refusal, final-descendant checks and no startup widening.
+Three new witnesses went 9 failures → 38 passing assertions; the warm journal,
+workspace and boundary check passes 120 tests / 902 assertions. Lint has zero
+errors and the same four baseline warnings. The census adds three names and
+removes none. Complete narrow oracle and gate evidence, including the counted
+battery, belong in the uncommitted [round 9 report](observations/2026-09-12-data-not-code/round9/REPORT.md).
+No speed claim, new routing admission or expanded all-writers coverage follows.

@@ -1,0 +1,111 @@
+
+FAIL in (destination-envelope-admits-ledger-before-creation) (receipt_artifacts_boundary_test.clj:65)
+DATACODE-ENV: trusted envelope constructor exists
+expected: (some? make-envelope)
+  actual: (not (some? nil))
+
+FAIL in (destination-envelope-admits-ledger-before-creation) (receipt_artifacts_boundary_test.clj:142)
+nil
+expected: (= :write-outside-envelope (:error-type r))
+  actual: (not (= :write-outside-envelope nil))
+
+FAIL in (destination-envelope-admits-ledger-before-creation) (receipt_artifacts_boundary_test.clj:143)
+expected: (not (.exists outside))
+  actual: (not (not true))
+
+FAIL in (destination-envelope-admits-ledger-before-creation) (receipt_artifacts_boundary_test.clj:65)
+DATACODE-ENV: trusted envelope constructor exists
+expected: (some? make-envelope)
+  actual: (not (some? nil))
+
+FAIL in (destination-envelope-admits-ledger-before-creation) (receipt_artifacts_boundary_test.clj:154)
+{}
+expected: (= :write-outside-envelope (:error-type r))
+  actual: (not (= :write-outside-envelope nil))
+
+FAIL in (destination-envelope-is-trusted-context-only) (receipt_artifacts_boundary_test.clj:164)
+{:error "Operation context contains unknown authority fields", :error-type :invalid-operation-context, :unknown [:destination-envelope]}
+expected: (:ok r)
+  actual: nil
+
+FAIL in (destination-envelope-is-trusted-context-only) (receipt_artifacts_boundary_test.clj:165)
+expected: (= (:destination-envelope context) (:destination-envelope r))
+  actual: (not (= {:id "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", :roots ["/var/tmp/owned"], :source :launcher} nil))
+
+FAIL in (destination-envelope-resolves-ancestor-and-final-symlinks) (receipt_artifacts_boundary_test.clj:65)
+DATACODE-ENV: trusted envelope constructor exists
+expected: (some? make-envelope)
+  actual: (not (some? nil))
+
+FAIL in (destination-envelope-resolves-ancestor-and-final-symlinks) (receipt_artifacts_boundary_test.clj:127)
+{:error-type :receipt-dir-escapes, :path "/var/tmp/forge/datacode-fx/receipt-publication-6704640086076170724/outside/absent/undo.edn"}
+expected: (= :write-outside-envelope (:error-type r))
+  actual: (not (= :write-outside-envelope :receipt-dir-escapes))
+
+FAIL in (destination-envelope-resolves-ancestor-and-final-symlinks) (receipt_artifacts_boundary_test.clj:128)
+expected: (= :receipt-publish (:effect r))
+  actual: (not (= :receipt-publish nil))
+
+FAIL in (destination-envelope-resolves-ancestor-and-final-symlinks) (receipt_artifacts_boundary_test.clj:129)
+expected: (string? (:resolved-path r))
+  actual: (not (string? nil))
+
+FAIL in (destination-envelope-resolves-ancestor-and-final-symlinks) (receipt_artifacts_boundary_test.clj:127)
+{:error-type :receipt-dir-escapes, :path "/var/tmp/forge/datacode-fx/receipt-publication-6704640086076170724/outside/kept.edn"}
+expected: (= :write-outside-envelope (:error-type r))
+  actual: (not (= :write-outside-envelope :receipt-dir-escapes))
+
+FAIL in (destination-envelope-resolves-ancestor-and-final-symlinks) (receipt_artifacts_boundary_test.clj:128)
+expected: (= :receipt-publish (:effect r))
+  actual: (not (= :receipt-publish nil))
+
+FAIL in (destination-envelope-resolves-ancestor-and-final-symlinks) (receipt_artifacts_boundary_test.clj:129)
+expected: (string? (:resolved-path r))
+  actual: (not (string? nil))
+
+FAIL in (destination-envelope-guards-real-publication) (receipt_artifacts_boundary_test.clj:65)
+DATACODE-ENV: trusted envelope constructor exists
+expected: (some? make-envelope)
+  actual: (not (some? nil))
+
+FAIL in (destination-envelope-guards-real-publication) (receipt_artifacts_boundary_test.clj:93)
+{:intent-count 1, :receipt-hash "71942cdf8bdcc9a94b10916b29543a875f3e6d14f0ac18463997c9aa233bee5f", :inverse {:operation :undo-change!, :guarded-file-count 1}, :changed-file-count 1, :operation :change!, :committed true, :receipt-file "/var/tmp/forge/datacode-fx/receipt-publication-12396897395665343845/outside/kept.edn", :ok true, :change-count 1, :transaction-version 1, :verified {:whole-files true, :file-count 1, :read-back-hashes {"/var/tmp/forge/datacode-fx/receipt-publication-12396897395665343845/a.clj" "6a6fbd25332c767db3ced47babf5f5757bfe696d5a076ce863901df96c6beef5"}}, :match-count 1}
+expected: (= :write-outside-envelope (:error-type r))
+  actual: (not (= :write-outside-envelope nil))
+
+FAIL in (destination-envelope-guards-real-publication) (receipt_artifacts_boundary_test.clj:94)
+expected: (= :receipt-publish (:effect r))
+  actual: (not (= :receipt-publish nil))
+
+FAIL in (destination-envelope-guards-real-publication) (receipt_artifacts_boundary_test.clj:95)
+expected: (= (str destination) (:path r))
+  actual: (not (= "/var/tmp/forge/datacode-fx/receipt-publication-12396897395665343845/outside/kept.edn" nil))
+
+FAIL in (destination-envelope-guards-real-publication) (receipt_artifacts_boundary_test.clj:96)
+expected: (= before (slurp source))
+  actual: (not (= "(ns a) (def x :old)\n" "(ns a) (def x :new)\n"))
+
+FAIL in (destination-envelope-guards-real-publication) (receipt_artifacts_boundary_test.clj:97)
+expected: (= "outside sentinel" (slurp (io/file outside "kept.edn")))
+  actual: (not (= "outside sentinel" "{:intents [{:per-form-counts {\"/var/tmp/forge/datacode-fx/receipt-publication-12396897395665343845/a.clj\" {x 1}}, :from \":old\", :id :x, :kind :scoped-change, :intent-index 0, :files [\"/var/tmp/forge/datacode-fx/receipt-publication-12396897395665343845/a.clj\"], :operator :replace, :per-file-counts {\"/var/tmp/forge/datacode-fx/receipt-publication-12396897395665343845/a.clj\" 1}, :expected-count 1, :forms [x], :match-count 1, :to \":new\"}], :intent-count 1, :receipt-hash \"71942cdf8bdcc9a94b10916b29543a875f3e6d14f0ac18463997c9aa233bee5f\", :inverse {:operation :undo-change!, :guarded-file-count 1}, :changed-file-count 1, :operation :change!, :receipt-version 1, :files [{:file \"/var/tmp/forge/datacode-fx/receipt-publication-12396897395665343845/a.clj\", :source-hash \"62f71e8ae67bb7b70d47515ee37e11ebf45f92a28da46646aa46c2aa62d6f64f\", :result-hash \"6a6fbd25332c767db3ced47babf5f5757bfe696d5a076ce863901df96c6beef5\", :inverse-edits [{:intent-index 0, :address {:preorder 6}, :path [0 1 2], :line 1, :end-line 1, :before \":new\", :after \":old\"}]}], :transaction-version 1, :inverse-edit-count 1, :match-count 1, :diff \"--- a//var/tmp/forge/datacode-fx/receipt-publication-12396897395665343845/a.clj\\n+++ b//var/tmp/forge/datacode-fx/receipt-publication-12396897395665343845/a.clj\\n@@ intent 0 line 1 @@\\n-:old\\n+:new\\n\"}\n"))
+
+FAIL in (destination-envelope-guards-real-publication) (receipt_artifacts_boundary_test.clj:93)
+{:error "Receipt parent directory does not exist", :error-type :invalid-receipt-path, :path "/var/tmp/forge/datacode-fx/receipt-publication-12396897395665343845/outside/absent/tail/undo.edn"}
+expected: (= :write-outside-envelope (:error-type r))
+  actual: (not (= :write-outside-envelope :invalid-receipt-path))
+
+FAIL in (destination-envelope-guards-real-publication) (receipt_artifacts_boundary_test.clj:94)
+expected: (= :receipt-publish (:effect r))
+  actual: (not (= :receipt-publish nil))
+
+FAIL in (destination-envelope-guards-real-publication) (receipt_artifacts_boundary_test.clj:65)
+DATACODE-ENV: trusted envelope constructor exists
+expected: (some? make-envelope)
+  actual: (not (some? nil))
+
+FAIL in (destination-envelope-guards-real-publication) (receipt_artifacts_boundary_test.clj:104)
+expected: (string? (:envelope-id r))
+  actual: (not (string? nil))
+{:test 4, :pass 11, :fail 24, :error 0}
+=> nil
+*======== user | clj ========*
