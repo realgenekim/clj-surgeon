@@ -323,3 +323,56 @@ untouched. No push, tag, install, or main-branch operation was performed.
 | `round5/measure.py` | Admit protocol-created PROBE image directory | Native patch | None |
 | T4/T5 patch artifacts and task hashes | Re-freeze identical semantic edits on landed subject | Replay frozen patches with `git apply`; regenerate unified diff and hashes | None |
 | Preregistration and amendment receipts | Record authorized amendment and untimed gates | Native documentation/Python writes | None |
+
+## AMENDMENT 2 — 2026-09-13 05:39:04 UTC
+
+**Scope: the two planted NATIVE cells only (N1-NATIVE-1, N2-NATIVE-1).** Filed before
+any rerun. Nothing else in this document changes; the 36 valid-target cells, both PROBE
+planted cells, the bets, the noise gate and the decision rules stand as measured in
+`results-2/` and reported in `2026-09-13-probe-measure-report.md`.
+
+### Defect being amended
+
+The frozen NATIVE expression calls `clojure.test/run-tests` without requiring
+`clojure.test`. A test namespace loads it transitively; a planted non-test namespace
+(`clj-surgeon.forms`, `clj-surgeon.analyze`) does not, so both NATIVE planted cells died
+with `ClassNotFoundException … clojure.test` at `REPL:1:38`, wrote no summary map, and
+were recorded `status: unknown`. This is an instrument defect: the expression could
+never have produced the "NATIVE 0/2 refusals" the bet names, on any subject. It was
+not repaired at run time because the document forbids substitution; it is repaired here,
+by amendment, with the change frozen before execution.
+
+### The amended NATIVE expression
+
+```bash
+clojure -J-Xmx1024m -M:clj-surgeon/test-deps -e \
+  "(require 'clojure.test) (require '$task_ns) (let [r (clojure.test/run-tests '$task_ns)] (prn r) (shutdown-agents) (System/exit (if (zero? (+ (:fail r) (:error r))) 0 1)))"
+```
+
+One leading form is added; nothing else moves. For a test namespace the added require
+is a no-op on an already-loaded namespace, so the valid-target cells are NOT rerun and
+their walls are not reinterpreted.
+
+| Instrument | `measure.py` sha256 |
+|---|---|
+| After amendment 1 (`instrument-2/`) | `d26701e225fb5547b31a5245c880ee61394e5b24e1319f3e742759bd728e20ae` |
+| After amendment 2 (`instrument-3/`) | `e58dcc47503ce044df47955caddf5009b4b813fc1603396c6fec0b00db4f8230` |
+
+`diff instrument-2/measure.py instrument-3/measure.py` is four lines (one line changed).
+
+### What runs, and what settles
+
+- Subject unchanged: `759974c7` (`stable/2026-09-13.1`) in `subject-native`, clean.
+- Runner: `instrument-3/measure.py --task N1 --repetition 1 --arm NATIVE` and the same
+  for `N2`, into a fresh `results-3/` directory; `results-2/` is neither reused nor
+  overwritten. `init` is rerun into `results-3/` from the clean subject first.
+- Runs only after the in-flight data-not-code landing's battery has finished, so no
+  suite overlaps it (timing assertions flake under concurrency).
+- Expected outcome and how it settles the column: NATIVE runs both non-test namespaces,
+  `run-tests` reports `:test 0`, exits 0, and issues no typed refusal. That is the
+  "NATIVE 0/2" arm of Fable's bet and the "higher when non-test controls are included"
+  arm of Astra's. A NATIVE typed refusal, a nonzero exit, or another unknown cell
+  MISSES Fable's bet and is reported as such. No other cell's verdict is affected.
+- The rerun report is appended to `2026-09-13-probe-measure-report.md` as a dated
+  section with both cells' `stdout`, `verdict.json`, and walls; the walls are recorded
+  but are not part of any ratio.
