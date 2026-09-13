@@ -370,8 +370,7 @@ mcp-smoke:
 PORT ?= 9107
 warm:
 	@test "$(PORT)" -gt 9000 && test "$(PORT)" -lt 65536
-	@mkdir -p .clj-surgeon
-	clojure -J-Xmx1g -M:clj-surgeon/test-deps -e '(require (quote clj-surgeon.mcp-http-server)) (clj-surgeon.mcp-http-server/start {:port $(PORT) :nrepl-port :none :probe-image-file ".clj-surgeon/probe.edn" :log-file "$(TMPDIR)/warm.log"})'
+	clojure -J-Xmx1024m -M:clj-surgeon/test-deps -e '(require (quote clj-surgeon.probe-state)) (clj-surgeon.probe-state/warm! {:port $(PORT) :nrepl-port :none :log-file "$(TMPDIR)/warm.log"})'
 
 mcp-serve:
 	JAVA_HOME="$(MCP_JAVA_HOME)" JAVA_CMD="$(MCP_JAVA_CMD)" clojure $(MCP_JAVA_OPTS) -X:clj-surgeon/mcp :telemetry :full
