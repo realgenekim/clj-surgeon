@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import hashlib
 
 root = pathlib.Path.cwd()
 base = pathlib.Path('/var/tmp/forge/statehome-fx')
@@ -25,6 +26,8 @@ with tempfile.TemporaryDirectory(prefix='warm-', dir=base) as tmp:
             shutil.copy2(source, target)
     def git(*args):
         return subprocess.check_output(['git', '-C', str(checkout), *args], stderr=subprocess.STDOUT).decode()
+    fixture = checkout / 'test/clj_surgeon/state_home_fixture_test.clj'
+    fixture.write_text('(ns clj-surgeon.state-home-fixture-test (:require [clojure.test :refer [deftest is]]))\n(deftest boundary (is (= 2 (+ 1 1))))\n')
     git('init', '-q')
     git('add', '.')
     git('-c', 'user.name=State home witness', '-c', 'user.email=witness@example.invalid', 'commit', '-qm', 'fixture')
@@ -50,6 +53,19 @@ with tempfile.TemporaryDirectory(prefix='warm-', dir=base) as tmp:
                JAVA_TOOL_OPTIONS=f'-Xmx1024m -Djava.io.tmpdir={temp} -Duser.home={home}',
                CLJ_SURGEON_STATE_HOME=str(temp / 'state'),
                STATEHOME_PID=str(temp / 'pid'), STATEHOME_CP=cp)
+    mode = sys.argv[2] if len(sys.argv) > 2 else 'explicit'
+    expected_root = temp / 'state'
+    if mode not in ('explicit', 'unwritable'):
+        env.pop('CLJ_SURGEON_STATE_HOME', None)
+        env.pop('XDG_STATE_HOME', None)
+        if mode == 'xdg':
+            env['XDG_STATE_HOME'] = str(temp / 'xdg')
+            expected_root = temp / 'xdg' / 'clj-surgeon'
+        else:
+            expected_root = home / '.local' / 'state' / 'clj-surgeon'
+    if mode == 'unwritable':
+        expected_root.mkdir()
+        expected_root.chmod(0o500)
     # Choose a free allowed port without contacting any existing service.
     import socket
     port = None
@@ -67,12 +83,33 @@ with tempfile.TemporaryDirectory(prefix='warm-', dir=base) as tmp:
         process = subprocess.Popen(['make', 'warm', f'PORT={port}'], cwd=checkout, env=env,
                                    stdout=output, stderr=subprocess.STDOUT)
         try:
+            if mode == 'unwritable':
+                process.wait(timeout=120)
+                failure = log.read_text()
+                assert process.returncode != 0, failure
+                assert ':probe-state-not-writable' in failure, failure
+                assert ':errno "EACCES"' in failure, failure
+                assert ':path "' + str(expected_root) in failure, failure
+                assert git('status', '--porcelain') == ''
+                print('STATE-HOME-007: make warm refused EACCES with descriptor path; checkout clean')
+                sys.exit(0)
             deadline = time.monotonic() + 120
             while 'persistent server ready on' not in log.read_text():
                 if process.poll() is not None or time.monotonic() > deadline:
                     raise AssertionError('Warm startup failed: ' + log.read_text())
                 time.sleep(0.2)
+            descriptor = expected_root / 'workspaces' / hashlib.sha256(str(checkout.resolve()).encode()).hexdigest() / 'probe.edn'
+            assert descriptor.is_file(), 'Warm descriptor absent from independently computed state path'
+            probe = subprocess.run(
+                ['bb', f'-Djava.io.tmpdir={temp}', f'-Duser.home={home}',
+                 '--classpath', f'{checkout}/src:{checkout}/libs/clj-splice/src',
+                 '-e', "(require '[clj-surgeon.probe :as p]) (let [r (p/cli! {:ns \"clj-surgeon.state-home-fixture-test\"})] (prn r) (assert (= :probe-passed (:state r))) (assert (= 1 (:tests r))) (assert (= (first *command-line-args*) (:image-file r))))",
+                 str(descriptor)], cwd=checkout, env=env, capture_output=True, text=True, timeout=90)
+            assert probe.returncode == 0, probe.stdout + probe.stderr
+            print('STATE-HOME-002/005 live probe:', probe.stdout.strip())
         finally:
+            if mode == 'unwritable':
+                expected_root.chmod(0o700)
             if (temp / 'pid').exists():
                 pid = int((temp / 'pid').read_text())
                 try:

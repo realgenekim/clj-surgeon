@@ -116,4 +116,30 @@
    :minimal_reproducer "An admitted request naming a namespace with no local source."
    :existing_check "mcp-hot-verify/probe-reload-order"
    :owner "probe" :witness "splice-envelope-test/bounded-input-path-encoding"
-   :retirement_condition "A replacement proves local target source before test execution."}]}
+   :retirement_condition "A replacement proves local target source before test execution."} {:minimal_reproducer "Probe a fresh workspace before make warm.",
+ :witness "probe-state-test/absent-descriptor-has-provenance",
+ :promise
+ "Absence is distinct from a dead connection and includes the resolved path.",
+ :native_method
+ "Read the selected descriptor before opening transport; classify native file absence.",
+ :retirement_condition
+ "A replacement names absent descriptors and their paths before connecting.",
+ :type :probe-image-absent,
+ :existing_check "probe/cli!; STATE-HOME-006",
+ :class :filesystem,
+ :owner "probe",
+ :native_failure
+ "The descriptor does not exist at the selected workspace state path."} {:minimal_reproducer "Publish under a read-only state directory.",
+ :witness "probe-state-test/native-permission-failure-is-named",
+ :promise
+ "Publication refuses with the path and native errno category.",
+ :native_method
+ "Use NIO creation/write exceptions after envelope admission.",
+ :retirement_condition
+ "A replacement preserves named native publication failures.",
+ :type :probe-state-not-writable,
+ :existing_check "probe-state/write-image!; STATE-HOME-007",
+ :class :filesystem,
+ :owner "probe",
+ :native_failure
+ "The state destination rejects directory creation or descriptor publication."}]}

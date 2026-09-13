@@ -19,7 +19,7 @@
 ;; INTENT-TEST: INSERT-FORMS-015
 
 (def probe-owners
-  ["probe.clj" "mcp_hot_verify.clj" "mcp_http_server.clj"])
+  ["probe.clj" "mcp_hot_verify.clj" "mcp_http_server.clj" "probe_state.clj"])
 
 (defn refusal-spellings [forms]
   (letfn [(literals [value]
