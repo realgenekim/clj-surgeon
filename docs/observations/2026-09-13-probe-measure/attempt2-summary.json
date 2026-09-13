@@ -1,0 +1,992 @@
+{
+  "subject": "759974c718889c52a05a1d0746c9c21d0f00dcdb",
+  "runner_sha256": "d26701e225fb5547b31a5245c880ee61394e5b24e1319f3e742759bd728e20ae",
+  "manifest_sha256": "eec5ff495c3079b8b5d5594cfde915a56352ef677b8489ae02ba58160f0a944d",
+  "controls": {
+    "bb-portable": {
+      "task": "T1",
+      "n": 6,
+      "walls_ms": [
+        3172.390592,
+        3103.617812,
+        3105.058842,
+        3090.490308,
+        3108.269698,
+        3134.291576
+      ],
+      "median_ms": 3106.66427,
+      "sd_ms": 29.810383326350287,
+      "all_accepted": true
+    },
+    "JVM-only": {
+      "task": "T4",
+      "n": 6,
+      "walls_ms": [
+        2000.846241,
+        1999.620904,
+        1965.322055,
+        2053.770549,
+        2013.723751,
+        2027.929521
+      ],
+      "median_ms": 2007.2849959999999,
+      "sd_ms": 29.794581638054268,
+      "all_accepted": true
+    }
+  },
+  "strata": {
+    "bb-portable": {
+      "tasks": [
+        "T1",
+        "T2",
+        "T3"
+      ],
+      "n_per_arm": 9,
+      "native_walls_ms": [
+        2995.394941,
+        2961.530353,
+        2961.518024,
+        3448.534922,
+        3649.366645,
+        3644.46086,
+        3607.332609,
+        3595.469581,
+        3525.081049
+      ],
+      "probe_walls_ms": [
+        356.29472,
+        366.606662,
+        370.926679,
+        668.823444,
+        659.995989,
+        661.661316,
+        693.803291,
+        671.291025,
+        678.663009
+      ],
+      "native_median_ms": 3525.081049,
+      "probe_median_ms": 661.661316,
+      "native_sd_ms": 309.1130189144577,
+      "probe_sd_ms": 154.24432418383063,
+      "P_over_N": 0.18770102213329282,
+      "control_sd_ms": 29.810383326350287,
+      "delta_ms": 2863.4197329999997,
+      "noise_gate_threshold_ms": 59.620766652700574,
+      "clears_noise_gate": true,
+      "unknown_cells": [],
+      "all_accepted": true
+    },
+    "JVM-only": {
+      "tasks": [
+        "T4",
+        "T5",
+        "T6"
+      ],
+      "n_per_arm": 9,
+      "native_walls_ms": [
+        2067.573294,
+        2063.085485,
+        2101.275279,
+        4903.987445,
+        4808.404874,
+        4959.058409,
+        4209.748541,
+        4176.376531,
+        4233.861976
+      ],
+      "probe_walls_ms": [
+        500.545304,
+        498.934508,
+        539.07747,
+        1479.698066,
+        1499.266687,
+        1479.900911,
+        1169.671874,
+        1163.643473,
+        1182.824173
+      ],
+      "native_median_ms": 4209.748541,
+      "probe_median_ms": 1169.671874,
+      "native_sd_ms": 1271.3105895406272,
+      "probe_sd_ms": 430.4562689724255,
+      "P_over_N": 0.27784839465070554,
+      "control_sd_ms": 29.794581638054268,
+      "delta_ms": 3040.0766670000003,
+      "noise_gate_threshold_ms": 59.589163276108536,
+      "clears_noise_gate": true,
+      "unknown_cells": [],
+      "all_accepted": true
+    }
+  },
+  "per_task": {
+    "T1": {
+      "stratum": "bb-portable",
+      "namespace": "clj-surgeon.forms-test",
+      "paired": [
+        {
+          "repetition": 1,
+          "native_ms": 2995.394941,
+          "probe_ms": 356.29472,
+          "ratio": 0.11894749340834918,
+          "native_cmd_ms": 2982.191563,
+          "probe_cmd_ms": 343.855147
+        },
+        {
+          "repetition": 2,
+          "native_ms": 2961.530353,
+          "probe_ms": 366.606662,
+          "ratio": 0.12378960142300455,
+          "native_cmd_ms": 2947.268548,
+          "probe_cmd_ms": 351.426539
+        },
+        {
+          "repetition": 3,
+          "native_ms": 2961.518024,
+          "probe_ms": 370.926679,
+          "ratio": 0.12524883387304347,
+          "native_cmd_ms": 2946.612684,
+          "probe_cmd_ms": 355.98161
+        }
+      ],
+      "median_ratio": 0.12378960142300455
+    },
+    "T2": {
+      "stratum": "bb-portable",
+      "namespace": "clj-surgeon.analyze-test",
+      "paired": [
+        {
+          "repetition": 1,
+          "native_ms": 3448.534922,
+          "probe_ms": 668.823444,
+          "ratio": 0.19394422823826635,
+          "native_cmd_ms": 3434.002462,
+          "probe_cmd_ms": 655.347329
+        },
+        {
+          "repetition": 2,
+          "native_ms": 3649.366645,
+          "probe_ms": 659.995989,
+          "ratio": 0.1808522007248192,
+          "native_cmd_ms": 3636.402336,
+          "probe_cmd_ms": 646.251499
+        },
+        {
+          "repetition": 3,
+          "native_ms": 3644.46086,
+          "probe_ms": 661.661316,
+          "ratio": 0.18155259211646466,
+          "native_cmd_ms": 3630.8291,
+          "probe_cmd_ms": 647.28552
+        }
+      ],
+      "median_ratio": 0.18155259211646466
+    },
+    "T3": {
+      "stratum": "bb-portable",
+      "namespace": "clj-surgeon.edit-dsl-test",
+      "paired": [
+        {
+          "repetition": 1,
+          "native_ms": 3607.332609,
+          "probe_ms": 693.803291,
+          "ratio": 0.19233138892405358,
+          "native_cmd_ms": 3593.005746,
+          "probe_cmd_ms": 679.310981
+        },
+        {
+          "repetition": 2,
+          "native_ms": 3595.469581,
+          "probe_ms": 671.291025,
+          "ratio": 0.1867046876289509,
+          "native_cmd_ms": 3581.68428,
+          "probe_cmd_ms": 656.340399
+        },
+        {
+          "repetition": 3,
+          "native_ms": 3525.081049,
+          "probe_ms": 678.663009,
+          "ratio": 0.19252408655753436,
+          "native_cmd_ms": 3510.552043,
+          "probe_cmd_ms": 664.675395
+        }
+      ],
+      "median_ratio": 0.19233138892405358
+    },
+    "T4": {
+      "stratum": "JVM-only",
+      "namespace": "clj-surgeon.census-pool-test",
+      "paired": [
+        {
+          "repetition": 1,
+          "native_ms": 2067.573294,
+          "probe_ms": 500.545304,
+          "ratio": 0.24209313665085483,
+          "native_cmd_ms": 2054.359632,
+          "probe_cmd_ms": 486.711461
+        },
+        {
+          "repetition": 2,
+          "native_ms": 2063.085485,
+          "probe_ms": 498.934508,
+          "ratio": 0.24183898904218212,
+          "native_cmd_ms": 2049.816429,
+          "probe_cmd_ms": 486.259342
+        },
+        {
+          "repetition": 3,
+          "native_ms": 2101.275279,
+          "probe_ms": 539.07747,
+          "ratio": 0.2565477619174903,
+          "native_cmd_ms": 2087.457019,
+          "probe_cmd_ms": 524.317938
+        }
+      ],
+      "median_ratio": 0.24209313665085483
+    },
+    "T5": {
+      "stratum": "JVM-only",
+      "namespace": "clj-surgeon.mcp-hot-verify-test",
+      "paired": [
+        {
+          "repetition": 1,
+          "native_ms": 4903.987445,
+          "probe_ms": 1479.698066,
+          "ratio": 0.30173365706893646,
+          "native_cmd_ms": 4889.36594,
+          "probe_cmd_ms": 1465.2151
+        },
+        {
+          "repetition": 2,
+          "native_ms": 4808.404874,
+          "probe_ms": 1499.266687,
+          "ratio": 0.3118012576492535,
+          "native_cmd_ms": 4794.32409,
+          "probe_cmd_ms": 1486.386103
+        },
+        {
+          "repetition": 3,
+          "native_ms": 4959.058409,
+          "probe_ms": 1479.900911,
+          "ratio": 0.2984237709953539,
+          "native_cmd_ms": 4944.21986,
+          "probe_cmd_ms": 1466.268489
+        }
+      ],
+      "median_ratio": 0.30173365706893646
+    },
+    "T6": {
+      "stratum": "JVM-only",
+      "namespace": "clj-surgeon.mcp-formatter-test",
+      "paired": [
+        {
+          "repetition": 1,
+          "native_ms": 4209.748541,
+          "probe_ms": 1169.671874,
+          "ratio": 0.27784839465070554,
+          "native_cmd_ms": 4195.592975,
+          "probe_cmd_ms": 1154.859412
+        },
+        {
+          "repetition": 2,
+          "native_ms": 4176.376531,
+          "probe_ms": 1163.643473,
+          "ratio": 0.27862513457841287,
+          "native_cmd_ms": 4161.948567,
+          "probe_cmd_ms": 1148.483533
+        },
+        {
+          "repetition": 3,
+          "native_ms": 4233.861976,
+          "probe_ms": 1182.824173,
+          "ratio": 0.2793723979914644,
+          "native_cmd_ms": 4219.73139,
+          "probe_cmd_ms": 1167.227559
+        }
+      ],
+      "median_ratio": 0.27862513457841287
+    }
+  },
+  "first_attempt_success": {
+    "per_repetition": {
+      "1": {
+        "NATIVE": 6,
+        "PROBE": 6
+      },
+      "2": {
+        "NATIVE": 6,
+        "PROBE": 6
+      },
+      "3": {
+        "NATIVE": 6,
+        "PROBE": 6
+      }
+    },
+    "denominator": 6,
+    "equal_every_repetition": true,
+    "retries": 0,
+    "repairs": 0
+  },
+  "refusals": {
+    "valid_targets": {
+      "NATIVE": {
+        "refused": 0,
+        "first_calls": 18,
+        "kinds": []
+      },
+      "PROBE": {
+        "refused": 0,
+        "first_calls": 18,
+        "kinds": []
+      }
+    },
+    "non_test": {
+      "NATIVE": {
+        "cells": [
+          "unknown",
+          "unknown"
+        ],
+        "typed_refusals": 0,
+        "unknown": 2,
+        "kinds": [
+          null,
+          null
+        ],
+        "walls_ms": [
+          3205.345436,
+          3253.845479
+        ]
+      },
+      "PROBE": {
+        "cells": [
+          "refused",
+          "refused"
+        ],
+        "typed_refusals": 2,
+        "unknown": 0,
+        "kinds": [
+          "probe-target-not-a-test-namespace",
+          "probe-target-not-a-test-namespace"
+        ],
+        "walls_ms": [
+          258.042668,
+          262.886319
+        ]
+      }
+    }
+  },
+  "cells": {
+    "T1-NATIVE-1": {
+      "name": "T1-NATIVE-1",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 2995.394941,
+      "command": 2982.191563
+    },
+    "T1-NATIVE-2": {
+      "name": "T1-NATIVE-2",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 2961.530353,
+      "command": 2947.268548
+    },
+    "T1-NATIVE-3": {
+      "name": "T1-NATIVE-3",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 2961.518024,
+      "command": 2946.612684
+    },
+    "T1-PROBE-1": {
+      "name": "T1-PROBE-1",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 356.29472,
+      "command": 343.855147
+    },
+    "T1-PROBE-2": {
+      "name": "T1-PROBE-2",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 366.606662,
+      "command": 351.426539
+    },
+    "T1-PROBE-3": {
+      "name": "T1-PROBE-3",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 370.926679,
+      "command": 355.98161
+    },
+    "T2-NATIVE-1": {
+      "name": "T2-NATIVE-1",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 3448.534922,
+      "command": 3434.002462
+    },
+    "T2-NATIVE-2": {
+      "name": "T2-NATIVE-2",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 3649.366645,
+      "command": 3636.402336
+    },
+    "T2-NATIVE-3": {
+      "name": "T2-NATIVE-3",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 3644.46086,
+      "command": 3630.8291
+    },
+    "T2-PROBE-1": {
+      "name": "T2-PROBE-1",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 668.823444,
+      "command": 655.347329
+    },
+    "T2-PROBE-2": {
+      "name": "T2-PROBE-2",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 659.995989,
+      "command": 646.251499
+    },
+    "T2-PROBE-3": {
+      "name": "T2-PROBE-3",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 661.661316,
+      "command": 647.28552
+    },
+    "T3-NATIVE-1": {
+      "name": "T3-NATIVE-1",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 3607.332609,
+      "command": 3593.005746
+    },
+    "T3-NATIVE-2": {
+      "name": "T3-NATIVE-2",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 3595.469581,
+      "command": 3581.68428
+    },
+    "T3-NATIVE-3": {
+      "name": "T3-NATIVE-3",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 3525.081049,
+      "command": 3510.552043
+    },
+    "T3-PROBE-1": {
+      "name": "T3-PROBE-1",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 693.803291,
+      "command": 679.310981
+    },
+    "T3-PROBE-2": {
+      "name": "T3-PROBE-2",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 671.291025,
+      "command": 656.340399
+    },
+    "T3-PROBE-3": {
+      "name": "T3-PROBE-3",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 678.663009,
+      "command": 664.675395
+    },
+    "T4-NATIVE-1": {
+      "name": "T4-NATIVE-1",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 2067.573294,
+      "command": 2054.359632
+    },
+    "T4-NATIVE-2": {
+      "name": "T4-NATIVE-2",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 2063.085485,
+      "command": 2049.816429
+    },
+    "T4-NATIVE-3": {
+      "name": "T4-NATIVE-3",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 2101.275279,
+      "command": 2087.457019
+    },
+    "T4-PROBE-1": {
+      "name": "T4-PROBE-1",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 500.545304,
+      "command": 486.711461
+    },
+    "T4-PROBE-2": {
+      "name": "T4-PROBE-2",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 498.934508,
+      "command": 486.259342
+    },
+    "T4-PROBE-3": {
+      "name": "T4-PROBE-3",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 539.07747,
+      "command": 524.317938
+    },
+    "T5-NATIVE-1": {
+      "name": "T5-NATIVE-1",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 4903.987445,
+      "command": 4889.36594
+    },
+    "T5-NATIVE-2": {
+      "name": "T5-NATIVE-2",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 4808.404874,
+      "command": 4794.32409
+    },
+    "T5-NATIVE-3": {
+      "name": "T5-NATIVE-3",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 4959.058409,
+      "command": 4944.21986
+    },
+    "T5-PROBE-1": {
+      "name": "T5-PROBE-1",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 1479.698066,
+      "command": 1465.2151
+    },
+    "T5-PROBE-2": {
+      "name": "T5-PROBE-2",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 1499.266687,
+      "command": 1486.386103
+    },
+    "T5-PROBE-3": {
+      "name": "T5-PROBE-3",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 1479.900911,
+      "command": 1466.268489
+    },
+    "T6-NATIVE-1": {
+      "name": "T6-NATIVE-1",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 4209.748541,
+      "command": 4195.592975
+    },
+    "T6-NATIVE-2": {
+      "name": "T6-NATIVE-2",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 4176.376531,
+      "command": 4161.948567
+    },
+    "T6-NATIVE-3": {
+      "name": "T6-NATIVE-3",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 4233.861976,
+      "command": 4219.73139
+    },
+    "T6-PROBE-1": {
+      "name": "T6-PROBE-1",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 1169.671874,
+      "command": 1154.859412
+    },
+    "T6-PROBE-2": {
+      "name": "T6-PROBE-2",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 1163.643473,
+      "command": 1148.483533
+    },
+    "T6-PROBE-3": {
+      "name": "T6-PROBE-3",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 1182.824173,
+      "command": 1167.227559
+    },
+    "N1-NATIVE-1": {
+      "name": "N1-NATIVE-1",
+      "status": "unknown",
+      "kind": null,
+      "exit": null,
+      "complete": 3205.345436,
+      "command": null
+    },
+    "N1-PROBE-1": {
+      "name": "N1-PROBE-1",
+      "status": "refused",
+      "kind": "probe-target-not-a-test-namespace",
+      "exit": 1,
+      "complete": 258.042668,
+      "command": 247.115854
+    },
+    "N2-NATIVE-1": {
+      "name": "N2-NATIVE-1",
+      "status": "unknown",
+      "kind": null,
+      "exit": null,
+      "complete": 3253.845479,
+      "command": null
+    },
+    "N2-PROBE-1": {
+      "name": "N2-PROBE-1",
+      "status": "refused",
+      "kind": "probe-target-not-a-test-namespace",
+      "exit": 1,
+      "complete": 262.886319,
+      "command": 251.606536
+    }
+  },
+  "control_cells": {
+    "control-T1-NATIVE-1": {
+      "name": "control-T1-NATIVE-1",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 3172.390592,
+      "command": 3157.406225
+    },
+    "control-T1-NATIVE-2": {
+      "name": "control-T1-NATIVE-2",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 3103.617812,
+      "command": 3090.100304
+    },
+    "control-T1-NATIVE-3": {
+      "name": "control-T1-NATIVE-3",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 3105.058842,
+      "command": 3091.360073
+    },
+    "control-T1-NATIVE-4": {
+      "name": "control-T1-NATIVE-4",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 3090.490308,
+      "command": 3076.65948
+    },
+    "control-T1-NATIVE-5": {
+      "name": "control-T1-NATIVE-5",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 3108.269698,
+      "command": 3094.122396
+    },
+    "control-T1-NATIVE-6": {
+      "name": "control-T1-NATIVE-6",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 3134.291576,
+      "command": 3120.324293
+    },
+    "control-T4-NATIVE-1": {
+      "name": "control-T4-NATIVE-1",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 2000.846241,
+      "command": 1987.234633
+    },
+    "control-T4-NATIVE-2": {
+      "name": "control-T4-NATIVE-2",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 1999.620904,
+      "command": 1984.940933
+    },
+    "control-T4-NATIVE-3": {
+      "name": "control-T4-NATIVE-3",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 1965.322055,
+      "command": 1951.246341
+    },
+    "control-T4-NATIVE-4": {
+      "name": "control-T4-NATIVE-4",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 2053.770549,
+      "command": 2039.682765
+    },
+    "control-T4-NATIVE-5": {
+      "name": "control-T4-NATIVE-5",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 2013.723751,
+      "command": 1999.104651
+    },
+    "control-T4-NATIVE-6": {
+      "name": "control-T4-NATIVE-6",
+      "status": "accepted",
+      "kind": null,
+      "exit": 0,
+      "complete": 2027.929521,
+      "command": 2014.259875
+    }
+  },
+  "setup": {
+    "warm_startup_ms": 10930.465796,
+    "admission_probes": [
+      {
+        "ns": "clj-surgeon.forms-test",
+        "wall_ms": 486.395768,
+        "exit": 0
+      },
+      {
+        "ns": "clj-surgeon.analyze-test",
+        "wall_ms": 764.287908,
+        "exit": 0
+      },
+      {
+        "ns": "clj-surgeon.edit-dsl-test",
+        "wall_ms": 714.948506,
+        "exit": 0
+      },
+      {
+        "ns": "clj-surgeon.census-pool-test",
+        "wall_ms": 533.733758,
+        "exit": 0
+      },
+      {
+        "ns": "clj-surgeon.mcp-hot-verify-test",
+        "wall_ms": 1495.45365,
+        "exit": 0
+      },
+      {
+        "ns": "clj-surgeon.mcp-formatter-test",
+        "wall_ms": 1189.844439,
+        "exit": 0
+      }
+    ],
+    "admission_total_ms": 5184.664029,
+    "total_setup_ms": 16115.129825,
+    "admission_verdicts": "6/6 :probe-passed, 0 failures, exit 0",
+    "warm_java_pid": 1251694,
+    "warm_port": 19066,
+    "warm_generation": "e8f3a0d5-1303-468d-98f4-8b1c0beeff12",
+    "warm_fingerprint": "3e5a5565a6814223974419f7b0f909a45078bcc15a43b8d319b23528cb7ca7f1",
+    "warm_classpath_sha256": "2cb8f24c513991b2f493fa5c5fe5ec3ef1c90028f34e24a76bf30c7ad3d081f2",
+    "warm_head": "759974c718889c52a05a1d0746c9c21d0f00dcdb"
+  },
+  "break_even": {
+    "bb-portable": {
+      "per_invocation_saving_ms": 2863.4197329999997,
+      "break_even_startup_only": 3.8172768281331115,
+      "break_even_startup_only_ceil": 4,
+      "break_even_startup_plus_admission": 5.627931399395718,
+      "break_even_startup_plus_admission_ceil": 6
+    },
+    "JVM-only": {
+      "per_invocation_saving_ms": 3040.0766670000003,
+      "break_even_startup_only": 3.595457283906715,
+      "break_even_startup_only_ceil": 4,
+      "break_even_startup_plus_admission": 5.3008958622424105,
+      "break_even_startup_plus_admission_ceil": 6
+    }
+  },
+  "overall_all_tasks": {
+    "native_median_ms": 3601.401095,
+    "probe_median_ms": 670.0572345,
+    "P_over_N": 0.1860545984256719,
+    "n_per_arm": 18,
+    "saving_ms": 2931.3438605,
+    "break_even_startup_only_ceil": 4,
+    "break_even_startup_plus_admission_ceil": 6
+  },
+  "acceptance": {
+    "test_assertion_counts_identical_between_arms": true,
+    "per_task": {
+      "T1": [
+        24,
+        95
+      ],
+      "T2": [
+        19,
+        63
+      ],
+      "T3": [
+        28,
+        420
+      ],
+      "T4": [
+        3,
+        9
+      ],
+      "T5": [
+        20,
+        158
+      ],
+      "T6": [
+        5,
+        39
+      ]
+    },
+    "assertion_deltas_observed": {
+      "T1": 1,
+      "T2": 0,
+      "T3": 1,
+      "T4": 1,
+      "T5": 0,
+      "T6": 2
+    },
+    "assertion_deltas_frozen": {
+      "T1": 1,
+      "T2": 0,
+      "T3": 1,
+      "T4": 1,
+      "T5": 0,
+      "T6": 2
+    },
+    "assertion_deltas_match": true,
+    "zero_failures_and_errors": true,
+    "after_sha256_verified_by_instrument": true,
+    "stale_result_negative_control": {
+      "NATIVE": {
+        "falsified_exit": 1,
+        "falsified": "1 failures",
+        "restored_exit": 0,
+        "restored": "0 failures"
+      },
+      "PROBE": {
+        "falsified_exit": 1,
+        "falsified_state": "probe-failed",
+        "restored_exit": 0,
+        "restored_state": "probe-passed"
+      },
+      "verdict": "PASS - both commands report failure when falsified and pass after restoration"
+    }
+  },
+  "bets": {
+    "Fable": {
+      "bb_portable": {
+        "bound": "<= 0.50",
+        "observed": 0.18770102213329282,
+        "result": "HELD"
+      },
+      "jvm_only": {
+        "bound": "<= 0.30",
+        "observed": 0.27784839465070554,
+        "result": "HELD"
+      },
+      "first_attempt": {
+        "bet": "Equal: both 6/6 each repetition",
+        "observed": "NATIVE 6/6, PROBE 6/6 in reps 1,2,3",
+        "result": "HELD"
+      },
+      "refusal": {
+        "bet": "Exactly 2/2 typed non-test refusals; NATIVE 0/2",
+        "observed": "PROBE 2/2 typed (probe-target-not-a-test-namespace); NATIVE 0 typed refusals but both cells UNKNOWN (no verdict)",
+        "result": "UNSETTLED",
+        "rule": "preregistration: \"unknown telemetry leaves the bet unsettled\""
+      }
+    },
+    "Astra": {
+      "bb_portable": {
+        "bound": "<= 0.50",
+        "observed": 0.18770102213329282,
+        "result": "HELD"
+      },
+      "jvm_only": {
+        "bound": "<= 0.45",
+        "observed": 0.27784839465070554,
+        "result": "HELD"
+      },
+      "first_attempt": {
+        "bet": "Equal on valid test targets",
+        "observed": "both 6/6 all three repetitions",
+        "result": "HELD"
+      },
+      "refusal": {
+        "bet": "Equal on the six valid targets; higher when non-test safety controls are included",
+        "observed": "valid targets: NATIVE 0/18, PROBE 0/18 (equal); non-test: PROBE 2/2 typed, NATIVE 2 UNKNOWN cells",
+        "result": "SPLIT: equal-on-valid-targets HELD; higher-with-non-test UNSETTLED",
+        "rule": "preregistration: \"unknown telemetry leaves the bet unsettled\""
+      }
+    }
+  },
+  "fifty_percent_floor": {
+    "both_strata_at_most_0_50": true,
+    "clears_variance_floor": true,
+    "acceptance_preserved": true,
+    "first_attempt_preserved": true,
+    "result": "MET"
+  },
+  "unknown_cells": {
+    "count": 2,
+    "names": [
+      "N1-NATIVE-1",
+      "N2-NATIVE-1"
+    ],
+    "reason": "frozen NATIVE expression calls clojure.test/run-tests without requiring clojure.test; a non-test namespace does not pull it in, so the command died with ClassNotFoundException and printed no summary map. No verdict was produced; the instrument recorded status=unknown."
+  }
+}

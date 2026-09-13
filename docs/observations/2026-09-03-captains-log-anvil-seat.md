@@ -6371,3 +6371,33 @@ directory (`git status -- . ':(top,exclude).clj-surgeon/'` for the PROBE arm onl
 edit (byte diff shown), subject 759974c7, bets copied verbatim and unchanged, untimed
 identity verification of all six tasks at the subject. Preregistration with the amendment
 republished in records. Attempt 2 (Opus runner) executes it now under results-2/.
+
+## 2026-09-13T01:01:54Z — the week's first vs-native table: the warm probe at 0.19x / 0.28x native, bets held, 50% floor met
+
+Probe measure attempt 2 on the landed trunk 759974c7 (Opus runner; report published as
+`2026-09-13-probe-measure-report.md`, numbers in 2026-09-13-probe-measure/attempt2-summary.json).
+
+| Stratum | NATIVE median | PROBE median | P/N | n/arm | unknown |
+|---|---:|---:|---:|---:|---:|
+| bb-portable (T1–T3) | 3,525 ms | 662 ms | 0.19 | 9 | 0/18 |
+| JVM-only (T4–T6) | 4,210 ms | 1,170 ms | 0.28 | 9 | 0/18 |
+| NATIVE controls T1 / T4 | 3,107 / 2,007 ms | — | — | 6+6 | 0/12 |
+| Planted non-test targets | no verdict (instrument) | 260 ms, typed refusal 2/2 | — | 2 | 2/4 |
+
+Learning: the warm probe beats a cold focused JVM run 5.3x on portable namespaces and 3.6x
+on JVM-only ones, clears the noise gate (2 sd of controls ≈ 60 ms) by ~48x, keeps
+acceptance and first-attempt success at 6/6 on both arms, and repays its 16.1 s setup in
+six invocations; the saving is not a constant JVM start (1.6–3.5 s across targets), so P/N
+is a property of the target, not the verb. Caveat: six namespaces, one idle box, an image
+already populated by the untimed admission pass; per-task P/N 0.12–0.31. The stale-result
+negative control passed on both arms: no stale green from the warm image.
+
+Bets: Fable HELD, HELD (0.28 ≤ 0.30 with 0.02 to spare), HELD; refusal UNSETTLED. Astra
+HELD, HELD, HELD; refusal split. Astra's direction (smaller JVM advantage than bb) right.
+The refusal column is unsettled because the FROZEN NATIVE expression calls clojure.test
+without requiring it, so on a non-test namespace both NATIVE planted cells died with
+ClassNotFoundException and wrote status unknown; the runner did not repair the frozen
+command, and the document governs. Instrument defect for amendment 2; not the probe.
+
+52/52 cells with complete receipts: 48 accepted, 2 typed refusals, 2 unknown. The 50%
+floor is met for the day. Window 7 → 8. Index stays 5 until the envelope refusal lands.
