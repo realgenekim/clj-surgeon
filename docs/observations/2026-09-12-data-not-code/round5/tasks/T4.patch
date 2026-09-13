@@ -1,6 +1,6 @@
 --- a/test/clj_surgeon/census_pool_test.clj
 +++ b/test/clj_surgeon/census_pool_test.clj
-@@ -13,6 +13,7 @@
+@@ -20,6 +20,7 @@
  
  ;; @spec MCP-OP-CENSUS-020
  (deftest pooled-map-maps-every-input-exactly-once

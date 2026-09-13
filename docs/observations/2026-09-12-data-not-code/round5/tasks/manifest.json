@@ -42,10 +42,10 @@
     "stratum": "JVM-only",
     "file": "test/clj_surgeon/census_pool_test.clj",
     "patch": "T4.patch",
-    "sha256": "a7d596f631f00b456c960ea7da8505b120b7216100ec50b0afae7ec55f431db6",
+    "sha256": "b6c92529cd432a4a9f2e10097f8c92fbae217e0e1ef184cf46952826cf052cd7",
     "assertion_delta": 1,
-    "before_sha256": "a16fa8b69823fce53e9cdd3a534b0be38978d748043311305fb8bbdcf7e2bbe3",
-    "after_sha256": "e9955ba6b4efafac04aeb4dc2fcd1975290d37f5f7d0ee127b14a2b857c0a664"
+    "before_sha256": "b843fadfd81772d81e29e5b26b2205ca566902986988eaf5fee2d902ba5d91df",
+    "after_sha256": "bef6eae95a8d2992428056fa761814f0dbd224fcd3f4ac8f5ff8d83bdc469fd2"
   },
   {
     "task": "T5",
@@ -54,10 +54,10 @@
     "stratum": "JVM-only",
     "file": "test/clj_surgeon/mcp_hot_verify_test.clj",
     "patch": "T5.patch",
-    "sha256": "540c7ebd1af3a0fffd29dd4cdb57604e5f141a24c1a1447fad12d421123abb96",
+    "sha256": "4041b62cdc3c72ab2177f7434a354af512f2144d3300d69f5931e20d39c0c155",
     "assertion_delta": 0,
-    "before_sha256": "97e49995bb183430b0a2be20cc2244613792286836b5465dce32a70b1ef0ae9b",
-    "after_sha256": "c67e50cb4222cc62d4c2a359d08a6b4c39431045eb8159fd0650af585bab44a3"
+    "before_sha256": "4f0f3ff5386ee34e0ffbaf853645560aecad8ba99344fd09773c14a10a071509",
+    "after_sha256": "cce0d92f7f5e41ccd1208ddbe8f7e046fb72d12541841b214f42b2099fe4f2d5"
   },
   {
     "task": "T6",

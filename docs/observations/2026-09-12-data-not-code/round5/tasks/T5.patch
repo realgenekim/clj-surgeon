@@ -1,6 +1,6 @@
 --- a/test/clj_surgeon/mcp_hot_verify_test.clj
 +++ b/test/clj_surgeon/mcp_hot_verify_test.clj
-@@ -264,6 +264,7 @@
+@@ -472,6 +472,7 @@
    (with-stub-nrepl
      (fn [{:keys [transport id]}]
        (transport/send transport {:id "a-different-message" :status ["done"]})
