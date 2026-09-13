@@ -6441,3 +6441,14 @@ tests, incl. the 600-file memory-journal witness; 97 focused tests; test-fast on
 prewarm red on four builder-induced isolation violations (logs written into the tree during
 the run: my own attempt-19 class), final prewarm green. Branch pushed. Packet 3844cd7f is the
 check-only prewarm on the datacode worktree; the ship follows with the fence brief written.
+
+## 2026-09-13T03:03:44Z — data-not-code ship SEALED: candidate 6ddc3c4c (9d057f8d onto 759974c7)
+
+Check-only prewarm packet 3844cd7f exit 0 at 9d057f8d (the first on the datacode worktree;
+the check-only path works for a second worktree). Ship run 20260913T030147Z admitted,
+sealed 6ddc3c4c (tree 2077c78a), Sol on the data-not-code fence brief (five pressure points:
+envelope widening through any adapter; the hard-link claim's edge; consistent receipt+row
+forgery vs the "evidence not attestation" claim; the merge's survival of trunk's probe
+witnesses; a dependent the one-intermediate rule would miss), battery on
+fable/battery-receipt-9d057f8d (pre-created), fast lane beside. On GO and green legs this
+lands the safety pick and moves the skills'-terms index to 6.
