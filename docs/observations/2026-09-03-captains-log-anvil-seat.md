@@ -6466,3 +6466,15 @@ DATACODE-ROWS-001 states evidence-not-attestation; hard-link coverage stated as
 admission-time only with bind mounts excluded. Round 8 (Astra, pid 4111099): closure to a
 fixed point, a depth-1..8 mutation test committed red first, rerun of the enlarged set,
 gates. Two class-named verdicts in a row since the fence rule; each cost one round.
+
+## 2026-09-13T03:49:50Z — data-not-code round 8 GO-WITH-OWED: the impact oracle reaches a fixed point; prewarm packet at 76cc24a4; ship round 2 next
+
+Tip 76cc24a4, pushed; report published as `2026-09-13-data-not-code-round8-report-astra.md`.
+Red first (dff76da1): a generated depth-3 declaration chain selects nothing and fails by
+name. Green (76cc24a4): reverse closure to a fixed point over the parsed src/test graph with
+the shared libspec parser and no depth bound; depths 1–8 select their leaf, an unrelated
+namespace is excluded, and cutting each of the 36 chain edges unselects its leaf. The
+enlarged inventory is 82 namespaces, +1 exactly mcp-prepared-wire-test, 0 removed, all 82
+passed serially; prewarm green. Evidence copied, not committed. Packet 9bc6b42d is the
+check-only prewarm; the Sol brief carries the round-2 answer. Owed after landing:
+amendment 2 of the probe preregistration (the NATIVE planted-target command).
