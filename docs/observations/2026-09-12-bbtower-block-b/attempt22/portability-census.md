@@ -1,6 +1,6 @@
 # Portability census
 
-Generated 2026-09-13T18:54:56.453082887Z. Counts in cells are tests/failures/errors. All 159 assigned namespaces are listed.
+Generated 2026-09-13T20:13:56.985417234Z. Counts in cells are tests/failures/errors. All 160 assigned namespaces are listed.
 
 Commands and subjects are in controls/*.command.edn; each .edn has its adjacent .log. The configured bb runtime is load-probed first. A load incompatibility is explicitly accounted for, with no passing test or alternate-runtime claim. Every namespace that loads on bb receives a complete JVM and bb control, serially.
 

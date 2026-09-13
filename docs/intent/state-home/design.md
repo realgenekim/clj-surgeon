@@ -28,7 +28,8 @@ and each namespace it selects. No merge, push or performance claim is included.
 The registered requirements and witnesses are in [state-home-specs.md](state-home-specs.md).
 
 Round 5 closes four classes with enumerating oracles before implementation.
-Canonical root admission excludes the workspace first, then checks the existing
+The Make matrix crosses all 24 required cells with checkout, admitted external,
+and outside-envelope destinations (72 total). Canonical root admission excludes the workspace first, then checks the existing
 envelope without extending it. The same exclusion applies to the final descriptor
 destination, including explicit overrides and redirected descendants. Publication
 uses a same-directory temporary file, complete write, fsync, and atomic rename;
@@ -44,3 +45,9 @@ The second envelope-writer recurrence is invisible to the prior Landlock oracle:
 the checkout is deliberately writable. The Cartesian Make matrix is its class
 oracle. The registered red-first cycle covers all four requested classes without
 further phase approval; evidence stays in the external Round 5 report.
+
+Empty environment values fall through precedence; an empty user.home denotes
+the current directory and is subject to workspace exclusion. After both root
+and descriptor admission, startup materializes the canonical state directory
+before loading other state consumers, so a dangling configured home link has
+an admitted target. No directory is created before both checks pass.

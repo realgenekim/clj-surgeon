@@ -5988,6 +5988,10 @@
     "probe-require-unparsed" "probe-dependency-unresolved"
     "invalid-probe-request" "stale-probe-image" "probe-message-too-large"
     "invalid-probe-port" "probe-connection-failed" "probe-image-absent"
+    ;; Round 5: filesystem stages and the now explicit shared state dependency.
+    "probe-image-malformed" "probe-image-path-invalid" "probe-image-too-large"
+    "probe-image-unreadable" "probe-state-not-writable"
+    "state-root-inside-workspace" "state-root-outside-envelope"
     ;; BB-PROBE-004: oversized HTTP verdicts retain bounded truncation facts.
     "probe-response-truncated"
     ;; BB-PROBE-002: a bounded request is not a shallow one. The pre-parse
@@ -6006,7 +6010,7 @@
   ;; could see. Both directions are asserted — a kind that appears and a kind
   ;; that vanishes are each a change to what a text-reading client is promised.
   (let [kinds (set (refusal-kinds-in-source))]
-    (is (= 169 (count kinds))
+    (is (= 176 (count kinds))
         (str "the entrance's refusal enumeration changed size: "
              (count kinds) " kinds"))
     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))

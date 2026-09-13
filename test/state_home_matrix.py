@@ -17,7 +17,9 @@ import time
 def witness(source, shape, envelope, location):
     root = Path.cwd()
     with tempfile.TemporaryDirectory(prefix='state-matrix-') as tmp:
-        temp = Path(tmp).resolve()
+        container = Path(tmp).resolve()
+        temp = container / 'runtime'
+        temp.mkdir()
         checkout = temp / 'checkout'
         checkout.mkdir()
         for name in filter(None, subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')):
@@ -36,7 +38,8 @@ def witness(source, shape, envelope, location):
                       for p in sys.argv[1].split(':'))
         home = temp / 'home'
         home.mkdir()
-        selected = checkout if location == 'inside' else temp / 'external'
+        selected = (checkout if location == 'inside' else
+                    container / 'disallowed' if location == 'outside-envelope' else temp / 'external')
         if shape == 'symlink':
             link = temp / 'link'
             link.symlink_to(selected, target_is_directory=True)
@@ -63,7 +66,9 @@ def witness(source, shape, envelope, location):
                 expected /= 'clj-surgeon'
         expected = expected.resolve()
         inside = expected.is_relative_to(checkout)
-        kind = 'state-root-inside-workspace' if inside else 'state-root-outside-envelope' if envelope == 'narrow' else None
+        outside = not expected.is_relative_to(temp)
+        kind = ('state-root-inside-workspace' if inside else
+                'state-root-outside-envelope' if outside or envelope == 'narrow' else None)
         bindir = temp / 'bin'
         bindir.mkdir()
         bootstrap = temp / 'bootstrap.clj'
@@ -85,7 +90,7 @@ def witness(source, shape, envelope, location):
             sock.bind(('127.0.0.1', 0))
             port = sock.getsockname()[1]
         descriptor = expected / 'workspaces' / hashlib.sha256(str(checkout).encode()).hexdigest() / 'probe.edn'
-        log = temp / 'warm.log'
+        log = temp / 'process.log'
         with log.open('w') as output:
             process = subprocess.Popen(['make', 'warm', f'PORT={port}'], cwd=checkout, env=env,
                                        stdout=output, stderr=subprocess.STDOUT)
@@ -116,17 +121,21 @@ def witness(source, shape, envelope, location):
             assert not descriptor.exists(), facts
             assert ':' + kind in output, output
             assert process.returncode != 0, output
-            assert ':canonical-path ' in output, output
+            assert ':canonical-path ' + json.dumps(str(expected)) in output, output
         else:
-            assert not inside and descriptor.is_file(), facts
+            assert not inside and descriptor.is_file(), (facts, output)
             assert 'persistent server ready on' in output, output
 
 
 failures = []
-# Both adversarial and positive destinations: 48 cells, including all 24 required intersections.
-for cell in itertools.product(('CLJ_SURGEON_STATE_HOME', 'XDG_STATE_HOME', 'user.home'),
+# Checkout, admitted external and outside-envelope destinations: all 24 required
+# intersections at each location. The default envelope must also reject widening.
+cells = itertools.product(('CLJ_SURGEON_STATE_HOME', 'XDG_STATE_HOME', 'user.home'),
                               ('direct', 'symlink', 'relative', 'empty'),
-                              ('default', 'narrow'), ('inside', 'outside')):
+                              ('default', 'narrow'), ('inside', 'outside', 'outside-envelope'))
+if len(sys.argv) > 2:
+    cells = [tuple(sys.argv[2:])]
+for cell in cells:
     try:
         witness(*cell)
     except Exception as error:

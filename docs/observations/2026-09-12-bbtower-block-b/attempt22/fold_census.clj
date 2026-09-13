@@ -1,8 +1,10 @@
 (ns fold-census
-  (:require [babashka.fs :as fs]
-            [clj-surgeon.lane-manifest :as lm]
-            [clojure.edn :as edn]
-            [clojure.string :as str]))
+  (:require
+   [babashka.fs :as fs]
+   [clj-surgeon.lane-manifest :as lm]
+   [clj-surgeon.portability-summary :as summary]
+   [clojure.edn :as edn]
+   [clojure.string :as str]))
 
 (def root "docs/observations/2026-09-12-bbtower-block-b/attempt22")
 (doseq [entry (map edn/read-string (str/split-lines (slurp (str root "/controls/index.edn"))))
@@ -30,6 +32,7 @@
     (str "[" (status row) "](" (str/replace path (str root "/") "") ")")
     "not run"))
 
+;; @spec STATE-HOME-013
 (let [rows (for [[n runtime] (sort-by key lm/namespace-runtimes)
                  :let [p (paths n)
                        jvm (read-row (:jvm p))
@@ -49,7 +52,8 @@
   (spit (str root "/portability-controls.edn") (pr-str inventory))
   (spit (str root "/portability-census.md")
         (str "# Portability census\n\nGenerated " (java.time.Instant/now)
-             ". Counts in cells are tests/failures/errors. All 159 assigned namespaces are listed.\n\n"
+             ". Counts in cells are tests/failures/errors. "
+             (summary/population-line inventory) "\n\n"
              "Commands and subjects are in controls/*.command.edn; each .edn has its adjacent .log. "
              "The configured bb runtime is load-probed first. A load incompatibility is explicitly "
              "accounted for, with no passing test or alternate-runtime claim. Every namespace that "

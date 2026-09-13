@@ -105,4 +105,11 @@ The CLI receipt additionally carries `:image-file`, the absolute descriptor path
 it selected, including on refusal. This provenance is attached by the descriptor
 reader; the server's inner verdict shape above is unchanged. Descriptor placement,
 root precedence and native filesystem failures are specified by
-[STATE-HOME-001 through STATE-HOME-008](../state-home/design.md).
+[STATE-HOME and PROBE-RECEIPT requirements](../state-home/state-home-specs.md).
+Local descriptor failures are `probe-image-absent`, `probe-image-unreadable`
+(including directories), `probe-image-malformed`, `probe-image-too-large`, or
+`probe-image-path-invalid`. They occur before transport. Path diagnostics are
+EDN string values, capped after encoding; `diagnostic-truncation` names any
+field shortened and its original character count. A truncated path is a prefix,
+never claimed to be the complete filename. Publication failures preserve the
+previous descriptor through same-directory fsync and atomic publication.

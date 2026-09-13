@@ -805,6 +805,7 @@
   clj-surgeon.lane-manifest-test/every-test-iso-marker-in-the-tree-is-a-registered-requirement
   clj-surgeon.lane-manifest-test/every-test-namespace-on-disk-is-accounted-for
   clj-surgeon.lane-manifest-test/excluded-entries-are-real-and-carry-a-reason
+  clj-surgeon.lane-manifest-test/generated-portability-census-agrees-with-all-inventories
   clj-surgeon.lane-manifest-test/loaded-namespaces-carry-their-lane-at-runtime
   clj-surgeon.lane-manifest-test/no-fast-lane-namespace-spells-a-child-process
   clj-surgeon.lane-manifest-test/no-living-prose-still-calls-the-bb-lane-by-its-old-name
@@ -2220,10 +2221,17 @@
   clj-surgeon.platform-selector-test/reader-conditionals-cannot-override-a-plain-file-platform
   clj-surgeon.platform-selector-test/xray-passes-file-context-through-literal-and-computed-reads
   clj-surgeon.probe-state-test/absent-descriptor-has-provenance
+  clj-surgeon.probe-state-test/configured-root-cartesian-matrix
   clj-surgeon.probe-state-test/envelope-refuses-before-creation
+  clj-surgeon.probe-state-test/invalid-path-receipt-is-bounded-at-the-crossing
+  clj-surgeon.probe-state-test/local-filesystem-failures-never-connect
+  clj-surgeon.probe-state-test/native-efbig-preserves-descriptor
   clj-surgeon.probe-state-test/native-permission-failure-is-named
   clj-surgeon.probe-state-test/override-is-read-and-published
   clj-surgeon.probe-state-test/precedence-and-workspace-separation
+  clj-surgeon.probe-state-test/publication-fault-matrix
+  clj-surgeon.probe-state-test/redirected-descendants-and-overrides-refuse-before-start
+  clj-surgeon.probe-state-test/short-write-cannot-publish
   clj-surgeon.probe-state-test/warm-leaves-fresh-checkout-clean
   clj-surgeon.quoted-var-refs-test/captured-source-scan-builds-one-context-per-candidate-not-subject
   clj-surgeon.quoted-var-refs-test/captured-source-scan-is-pure-bounded-and-deterministic

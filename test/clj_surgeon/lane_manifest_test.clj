@@ -16,6 +16,7 @@
    [clj-surgeon.battery-ledger :as ledger]
    [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.mcp-test-runner :as runner]
+   [clj-surgeon.portability-summary :as summary]
    [clj-surgeon.runner-membership :as rm]
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.edn :as edn]
@@ -421,8 +422,12 @@
       (is (or (nil? refusal) unsupported-jvm-only?)
           (pr-str refusal)))))
 
+(declare derived-census)
+
 ;; @spec STATE-HOME-013
 (deftest generated-portability-census-agrees-with-all-inventories
+  (is (= "All 0 assigned namespaces are listed." (summary/population-line {})))
+  (is (= "All 2 assigned namespaces are listed." (summary/population-line {'a {} 'b {}})))
   (let [root "docs/observations/2026-09-12-bbtower-block-b/attempt22/"
         controls (edn/read-string (slurp (str root "portability-controls.edn")))
         markdown (slurp (str root "portability-census.md"))
@@ -435,6 +440,7 @@
     (is (= (count names) (count (set names))))
     (is (= (set (keys lm/manifest))
            (set (map (comp symbol namespace) census))))
+    (is (= census (derived-census)))
     (doseq [[_ n runtime cadence classification] rows]
       (let [n (symbol n)]
         (is (= (lm/namespace-runtimes n) (edn/read-string runtime)))

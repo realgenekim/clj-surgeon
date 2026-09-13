@@ -156,6 +156,55 @@
         (is (= "{:prior true}\n" (slurp path)))
         (is (= #{"probe.edn"} (set (.list dir))))))))
 
+;; @spec STATE-HOME-011
+(deftest short-write-cannot-publish
+  (with-directory
+    (fn [dir]
+      (let [path (str (io/file dir "probe.edn"))
+            seam (ns-resolve 'clj-surgeon.probe-state 'publish-stage!)]
+        (spit path "{:prior true}")
+        (is (some? seam))
+        (when seam
+          (let [original @seam
+                r (with-redefs-fn
+                    {seam (fn [stage & args]
+                            (if (= stage :write)
+                              (spit (str (first args)) "partial")
+                              (apply original stage args)))}
+                    #(try (state/write-image! path {:next true})
+                          (catch Exception e (ex-data e))))]
+            (is (= :probe-state-not-writable (:error-type r)))
+            (is (= "{:prior true}" (slurp path)))
+            (is (= #{"probe.edn"} (set (.list dir))))))))))
+
+;; @spec STATE-HOME-009
+;; @spec STATE-HOME-010
+(deftest redirected-descendants-and-overrides-refuse-before-start
+  (with-directory
+    (fn [dir]
+      (let [workspace (io/file dir "checkout")
+            root (io/file dir "state")
+            starts (atom 0)
+            resolver requiring-resolve]
+        (.mkdir workspace)
+        (.mkdir root)
+        (with-redefs [state/state-root (fn [& _] (str root))
+                      clojure.core/requiring-resolve
+                      (fn [sym]
+                        (if (= sym 'clj-surgeon.mcp-http-server/start)
+                          (fn [& _] (swap! starts inc))
+                          (resolver sym)))]
+          (doseq [override [(str (io/file workspace "probe.edn")) nil]]
+            (when-not override
+              (Files/createSymbolicLink (.toPath (io/file root "workspaces"))
+                                        (.toPath workspace) (make-array FileAttribute 0)))
+            (let [r (binding [*err* (java.io.StringWriter.)]
+                      (try (state/warm! {:project-dir (str workspace) :probe-image-file override})
+                           (catch Exception e (ex-data e))))]
+              (is (= :state-root-inside-workspace (:error-type r)))
+              (is (empty? (.list workspace)))
+              (is (zero? @starts)))))))))
+
 ;; @spec PROBE-RECEIPT-001
 ;; @spec PROBE-RECEIPT-002
 (deftest local-filesystem-failures-never-connect
@@ -191,4 +240,30 @@
               (is (< (count wire) 4096))
               (is (not (.contains wire "\n")))
               (is (= r (edn/read-string wire)))
-              (is (zero? @attempts)))))))))
+              (is (zero? @attempts))))
+          ;; Positive transport control proves the same counter is live.
+          (let [valid (io/file dir "valid.edn")]
+            (spit valid (pr-str {:image (probe/image-identity ".") :port 19099}))
+            (let [missing (str "absent-identity-" (random-uuid))
+                  r (with-redefs [probe/identity-files [missing]]
+                      (probe/cli! {:ns "fixture-test" :image-file (str valid)}))]
+              (is (= :probe-image-unreadable (:error-type r)))
+              (is (= (str (io/file (.getCanonicalPath (io/file ".")) missing)) (:path r)))
+              (is (= (str valid) (:image-file r)))
+              (is (zero? @attempts)))
+            (probe/cli! {:ns "fixture-test" :image-file (str valid)})
+            (is (= 1 @attempts))))))))
+
+;; @spec PROBE-RECEIPT-001
+;; @spec PROBE-RECEIPT-002
+(deftest invalid-path-receipt-is-bounded-at-the-crossing
+  (let [path (str (System/getProperty "java.io.tmpdir") "/" (apply str (repeat 10000 "\"\n")))
+        result (try (probe/cli! {:ns "fixture-test" :image-file path})
+                    (catch Exception e {:escaped (.getMessage e)}))
+        wire (pr-str result)]
+    (is (= :probe-image-path-invalid (:error-type result)))
+    (is (<= (alength (.getBytes wire "UTF-8")) 4096))
+    (is (= (count path) (get-in result [:diagnostic-truncation :path :characters])))
+    (is (.startsWith path (:path result)))
+    (is (= result (edn/read-string wire)))
+    (is (not (.contains wire "\n")))))

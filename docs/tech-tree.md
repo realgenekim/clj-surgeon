@@ -1004,3 +1004,20 @@ refusals, manual recovery, an editor receipt written outside the task's paths,
 and remaining verification are recorded at /var/tmp/forge/statehome-fx/REPORT.md.
 The [STATE-HOME requirements](intent/state-home/state-home-specs.md) own the
 permanent regression; other checkout-state consumers remain outside this change.
+
+### State-home Round 5: class oracles after the second envelope-writer recurrence
+
+The state-root oracle now crosses precedence, path shape and envelope against
+checkout, admitted external and outside-envelope destinations through real Make
+startup. Landlock cannot catch this member because the checkout is writable.
+Canonical admission precedes directory creation and never extends the envelope.
+The matrix also exposed dangling-home-link startup and empty-home selection.
+
+Descriptor publication uses a same-directory temporary file, fsync and atomic
+move; native EFBIG and an injectable stage matrix witness prior-byte preservation
+and cleanup. Local descriptor and identity-source reads have filesystem-typed,
+bounded receipts before transport. The portability population header derives
+from its inventory, with one cross-inventory generation witness. These extend
+existing registered battery/fast namespaces; no routing or performance claim.
+Requirements live in the state-home leaf; verification and costs remain external
+at `/var/tmp/forge/statehome-fx/REPORT.md`, Round 5.
