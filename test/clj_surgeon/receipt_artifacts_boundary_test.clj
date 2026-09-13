@@ -15,6 +15,7 @@
    [clj-surgeon.mcp-cold-verify]
    [clj-surgeon.mcp-extraction :as kernel]
    [clj-surgeon.mcp-namespace-split-test :as split-boundary-fixture]
+   [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.namespace-split-io :as split]
    [clj-surgeon.namespace-split-test :as split-fixture]
    [clj-surgeon.operation-algebra :as algebra]
@@ -69,6 +70,67 @@
 
 (defn- refusal-data [f]
   (try (f) nil (catch clojure.lang.ExceptionInfo e (ex-data e))))
+
+;; @spec DATACODE-ENV-005
+(deftest state-home-substitution-is-bounded-launcher-context
+  ;; Round 9: a substitute is trusted context, but the written outside-root
+  ;; negative forbids using it to enlarge policy authority.
+  (with-workspace
+    (fn [base]
+      (let [root (doto (io/file base "workspace") .mkdirs)
+            state-home (io/file base "state-home")
+            envelope (artifacts/current-envelope)
+            invoke (ns-resolve 'clj-surgeon.receipt-artifacts 'call-with-state-home)
+            outside (io/file (.getParentFile (io/file (System/getProperty "java.io.tmpdir")))
+                      (str "datacode-outside-" (random-uuid)))]
+        (is (some? invoke) "The trusted invocation entrance must exist")
+        (when invoke
+          (invoke state-home
+                  (fn []
+                    (is (= (conj (:roots envelope) (.getCanonicalPath state-home))
+                           (:roots (artifacts/current-envelope))))
+                    (is (= :launcher (:source (artifacts/current-envelope))))))
+          (is (= envelope (invoke nil artifacts/current-envelope))))
+        (let [txn (journal/begin! (str root) {:state-home (str state-home)})]
+          (try
+            (is (some? (:state txn)))
+            (is (= (conj (:roots envelope) (.getCanonicalPath state-home))
+                   (get-in txn [:destination-envelope :roots])))
+            (is (.isFile (io/file (:manifest-path txn))))
+            (finally (when (:state txn) (journal/rollback! txn)))))
+        (is (= envelope (artifacts/current-envelope)) "Invocation roots do not leak")
+        (is (not (.exists outside)))
+        (doseq [entrance [#(workspace/state-dir (str root) (str %))
+                          #(journal/begin! (str root) {:state-home (str %)})]]
+          (let [r (refusal-data #(entrance outside))]
+            (is (= :write-outside-envelope (:error-type r)) (pr-str r))
+            (is (not (.exists outside)) "Refusal creates no substitute directory")))
+        (doseq [request [{:state-home (str state-home)}
+                         {:destination-envelope envelope}]]
+          (is (= :unknown-arguments (:error-type (transaction/execute-change! request)))))))))
+
+;; @spec DATACODE-ENV-005
+;; @spec DATACODE-ENV-003
+(deftest state-home-substitution-preserves-narrow-context-and-final-target-checks
+  (with-workspace
+    (fn [base]
+      (let [root (doto (io/file base "workspace") .mkdirs)
+            state-home (doto (io/file base "state-home") .mkdirs)
+            outside (doto (io/file base "outside") .mkdirs)
+            absent (io/file outside "absent" "state-home")]
+        (spit (io/file outside "sentinel") "unchanged")
+        (java.nio.file.Files/createSymbolicLink
+          (.toPath (io/file state-home ".local")) (.toPath outside)
+          (make-array java.nio.file.attribute.FileAttribute 0))
+        (with-envelope [state-home]
+          #(doseq [substitute [absent state-home]
+                   entrance [(fn [s] (workspace/state-dir (str root) (str s)))
+                             (fn [s] (journal/begin! (str root) {:state-home (str s)}))]]
+             (let [r (refusal-data (fn [] (entrance substitute)))]
+               (is (= :write-outside-envelope (:error-type r)) (pr-str r))
+               (is (= "unchanged" (slurp (io/file outside "sentinel"))))
+               (is (not (.exists (io/file outside "absent"))))
+               (is (not (.exists (io/file outside "state")))))))))))
 
 ;; @spec DATACODE-ENV-001
 ;; @spec DATACODE-ENV-003
