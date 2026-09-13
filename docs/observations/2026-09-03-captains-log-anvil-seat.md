@@ -6298,3 +6298,23 @@ sol-live-on-anvil-seat memory already says the filter refuses symlink/confinemen
 and Opus takes those; this is the same class (crash-shaped inputs). Opus is building
 attempt 26 in the bbtower worktree on bb-rewrite-tower-land-local from df86ecda, same
 brief, evidence uncommitted. Data-not-code round 6 waits until it releases the box.
+
+## 2026-09-13T00:05:56Z — attempt 26 (Opus) GO: the class oracle found 13 escapes, the class was broader than reported; eighteenth prewarm at 839b7c53
+
+Report published as `2026-09-12-bbtower-block-b-attempt26-report.md` (evidence copied from the
+worktree, not committed on the branch). Oracle first, committed RED (f7bcbce7): the real
+servlet on a 512 KiB stack pinned to a thread, seven reader-recursive shapes × nine depths.
+At the tip before the fix: 10 of 49 nesting cases escaped as StackOverflowError with zero
+wire bytes, plus three through the Exception-only boundary; and the class is broader than
+Sol's report: ^metadata and #_discard overflow too and are not containers, so a fence
+counting container openers alone would have passed his reproduction and shipped the hole.
+Fix (091114e1): pre-parse reader-recursion count over the request characters (strings,
+char literals and comments skipped), bound 64, :probe-request-too-deep {:bound :depth
+:bytes}; servlet boundary widened to Throwable with :probe-request-unreadable carrying the
+class name and no stack; both registered with their native failures; BB-PROBE-002 rewritten.
+Third commit (839b7c53): the frozen refusal-kind pin refused the two new kinds, 164 → 166.
+Oracle green 3/589; test-fast 43,116 / 60,000; whole gate under the wrapper; one real prewarm
+green in 394 s, git-head 839b7c53. Owed, named by Opus: the CLIENT side of the same class
+(probe/cli! catches Exception only; read-bounded has no nesting bound) — a hostile server
+could overflow the bb client; next finding, not a regression. Eighteenth check-only prewarm
+(packet e52c0f37) at 839b7c53 on bb-rewrite-tower-land; ship round 9 follows.

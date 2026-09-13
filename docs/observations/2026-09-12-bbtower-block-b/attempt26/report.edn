@@ -1,0 +1,105 @@
+{:attempt 26
+ :block "B"
+ :branch "bb-rewrite-tower-land-local"
+ :base "df86ecda381645c870adb58da2d4ce722dccdcd9"
+ :final-commit "839b7c53457531ee749aab6182891d960403185c"
+ :verdict :go
+
+ :findings
+ [{:id :f1-class
+   :class "Bounded, malformed EDN request shapes whose parser throws a Throwable outside Exception."
+   :confirmed-at-tip true
+   :source "Sol round 8, /var/tmp/forge/ship/20260912T232610Z-df86ecda3816/verdict-1.md"
+   :evidence "docs/observations/2026-09-12-bbtower-block-b/attempt26/tip-escape-probe.log"
+   :escapes 10
+   :zero-byte-responses 10
+   :shapes-that-escaped {1024 [:discard :list :map :meta :set :tagged]
+                         2048 [:discard :list :set :vector]}
+   :broader-than-reported
+   "Sol showed containers. ^metadata and #_discard also overflow and are NOT containers: a fence counting only container openers would pass his reproduction and still ship the defect."}
+  {:id :f2-exception-boundary
+   :class "A Throwable that is not an Exception escapes the servlet with zero wire bytes."
+   :evidence "attempt26/oracle-red.log"
+   :escapes 3
+   :throwables ["java.lang.StackOverflowError" "java.lang.AssertionError" "java.lang.Error"]}
+  {:id :f3-pin-worked
+   :class "The frozen refusal-kind enumeration (MCP-OP-ALIAS-059) caught both new kinds."
+   :evidence "attempt26/restricted-gate.log"
+   :repair-text-sufficed true}]
+
+ :fix
+ {:pre-parse-bound
+  {:var "clj-surgeon.probe/request-depth-bound" :value 64
+   :fn "clj-surgeon.probe/request-recursion-depth"
+   :measure "peak container depth + cumulative prefix count (#tag, ^, #_); strings, character literals and comments skipped"
+   :refusal :probe-request-too-deep :carries [:bound :depth :bytes]}
+  :throwable-boundary
+  {:site "clj-surgeon.mcp-http-server/probe-servlet"
+   :fn "clj-surgeon.probe/request-refusal"
+   :refusal :probe-request-unreadable :carries [:throwable-class] :stack false}
+  :intents ["docs/intent/probe/refusals.edn" "docs/intent/hot-verification/bb-probe-specs.md (BB-PROBE-002)"]}
+
+ :measurements
+ {:tip-reproduction {:cases 49 :escapes 10 :zero-byte 10 :stack "-Xss512k"
+                     :log "attempt26/tip-escape-probe.log"}
+  :oracle-red {:throwables-escaped 13 :zero-byte 10 :log "attempt26/oracle-red.log"}
+  :oracle-green {:test 3 :pass 589 :fail 0 :error 0 :log "attempt26/oracle-green.log"}
+  :splice-envelope-test {:test 2 :pass 104 :fail 0 :error 0 :log "attempt26/refusal-completeness.log"}
+  :mcp-http-server-test {:test 24 :pass 841 :fail 0 :error 0 :log "attempt26/mcp-http-server-test.log"}
+  :mcp-hot-verify-test {:test 20 :pass 158 :fail 0 :error 0 :log "attempt26/mcp-hot-verify-test.log"}
+  :receipt-booleans-test {:test 2 :pass 46 :fail 0 :error 0 :log "attempt26/receipt-booleans-test.log"}
+  :test-fast {:exit 0 :tests 1244 :assertions 12560 :failures 0
+              :fast-serial-equivalent-ms 43116 :fast-budget-ms 60000
+              :makespan-ms 25225 :log "attempt26/test-fast.log"}
+  :restricted-gate {:exit 2 :diagnostic true :wall-seconds 169.36406863620505
+                    :problem "refusal enumeration pin 164 -> 166"
+                    :log "attempt26/restricted-gate.log"}
+  :landing-gate-prewarm
+  {:exit 0 :state :passed :problems [] :wall-ms 394212
+   :git-head "839b7c53457531ee749aab6182891d960403185c"
+   :attempts 1 :repairs-used 0
+   :stages [{:target "admit-transaction-recovery-battery" :exit 0 :wall-ms 11014}
+            {:target "alias-migration-test" :exit 0 :wall-ms 93510}
+            {:target "mcp-test" :exit 0 :wall-ms 92838}
+            {:target "test-bb" :exit 0 :wall-ms 89434}
+            {:target "test-bb-diagnostic" :exit 0 :wall-ms 223224}
+            {:target "repository-hygiene" :exit 0 :wall-ms 1955}
+            {:target "intent-audit" :exit 0 :wall-ms 2131}]
+   :budgets {:fast {:serial-equivalent-ms 45673 :budget-ms 60000}
+             :integration {:serial-equivalent-ms 66976 :budget-ms 240000}
+             :battery {:serial-equivalent-ms 240434 :budget-ms 1800000}
+             :bb-runtime {:serial-equivalent-ms 238142 :budget-ms 343102}}
+   :log "attempt26/prewarm-1.log"}
+  :oracle-cadence {:namespace "clj-surgeon.mcp-http-server-test" :lane :integration
+                   :cadence :merge-gate :gate-lane 19 :lane-exit 0
+                   :lane-wall-ms 16328 :namespace-wall-ms 3397
+                   :battery-only false}
+  :census {:added 3 :removed 0 :total 2586}}
+
+ :commits
+ [{:sha "f7bcbce778c8ef581dc3963c4d8ca87f481aa1c0"
+   :what "test: RED class oracle -- a Throwable escapes probe-servlet's EDN parse for every nested reader shape"
+   :files ["test/clj_surgeon/mcp_http_server_test.clj" "test/clj_surgeon/deftest_census.edn"]}
+  {:sha "091114e1f3be9d09e9030890cd136eaf41c32a1e"
+   :what "probe: bound reader recursion before the parse and widen the servlet boundary to Throwable"
+   :files ["src/clj_surgeon/probe.clj" "src/clj_surgeon/mcp_http_server.clj"
+           "docs/intent/probe/refusals.edn" "docs/intent/hot-verification/bb-probe-specs.md"]}
+  {:sha "839b7c53457531ee749aab6182891d960403185c"
+   :what "test: pin the two new probe refusal kinds in the frozen entrance enumeration (164 -> 166)"
+   :files ["test/clj_surgeon/mcp_alias_migration_test.clj"]}]
+
+ :least_sure
+ ["The depth measure is conservative: peak container depth PLUS a cumulative prefix count that is never discharged, so 65 flat #_ forms would refuse at 65 though the reader never recurses that deep. Over-refusing is a typed refusal; under-refusing is a StackOverflowError. A closed request measures 2, and a 63-deep request is witnessed as accepted into the request contract."
+  "The oracle pins the small stack to a 512 KiB THREAD rather than launching the test JVM with -Xss512k, so it is deterministic inside the gate's shared JVM. It does not prove behaviour at the gate JVM's default stack -- which is larger, i.e. weaker pressure."
+  "The bound value 64 is a judgement from the request shape's own depth (2), not a measurement of where the reader overflows (256..2048 at 512 KiB, and it moves with stack size -- which is why the bound must not be derived from it)."]
+
+ :disagreements
+ ["None with Sol's round-8 verdict; his reproduction is confirmed verbatim at the tip."]
+
+ :owed
+ [{:item "The client side of the same class: probe/cli! still catches Exception only and probe/read-bounded has no nesting bound, so a hostile or broken SERVER can overflow the babashka client with a deeply nested response."
+   :in-scope false :witnessed false}
+  {:item "docs/intent/receipt-booleans/registry.edn untouched: the two new kinds carry no receipt booleans." :in-scope true :witnessed true}
+  {:item "The oracle costs about 3.4 s of mcp-http-server-test's namespace wall (63 servlet drives, each on a fresh 512 KiB thread). Integration sits at 66,976 ms of 240,000 ms." :in-scope true :witnessed true}]
+
+ :evidence-directory-committed false}
