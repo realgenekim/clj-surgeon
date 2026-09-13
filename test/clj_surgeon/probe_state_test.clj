@@ -1,5 +1,5 @@
 (ns clj-surgeon.probe-state-test
-  {:lane :integration}
+  {:lane :battery}
   (:require
    [clj-surgeon.probe :as probe]
    [clj-surgeon.probe-state :as state]
