@@ -1,6 +1,7 @@
 (ns clj-surgeon.probe
   "Babashka client and closed identity contract for a warm MCP test probe."
   (:require
+   [clj-surgeon.probe-state :as state]
    [clojure.edn :as edn]
    [clojure.java.io :as io]))
 ;; @spec BB-PROBE-001
@@ -13,7 +14,13 @@
 (defn fingerprint [root]
   (let [md (java.security.MessageDigest/getInstance "SHA-256")]
     (doseq [path identity-files]
-      (.update md (.getBytes (str path "\u0000" (slurp (io/file root path)) "\u0000") "UTF-8")))
+      (let [file (io/file root path)
+            content (try (slurp file)
+                         (catch java.io.IOException e
+                           (throw (ex-info "Warm image identity source is unreadable"
+                                           (assoc (state/native-failure e (.getAbsolutePath file))
+                                                  :error-type :probe-image-unreadable) e))))]
+        (.update md (.getBytes (str path "\u0000" content "\u0000") "UTF-8"))))
     (format "%064x" (java.math.BigInteger. 1 (.digest md)))))
 
 (defn image-identity [root]
@@ -188,25 +195,117 @@
                       "The probe request could not be read; the reader failed outside the exception boundary.")
              :throwable-class (.getName (class t))))))
 
-(defn cli! [{:keys [ns image-file]}]
+;; @spec PROBE-RECEIPT-002
+(defn bounded-diagnostics
+  "Bound each diagnostic after EDN encoding, preserving explicit truncation facts."
+  [receipt]
+  (reduce
+    (fn [result k]
+      (let [value (get result k)
+            size #(alength (.getBytes (pr-str %) "UTF-8"))]
+        (if (and (string? value) (or (> (count value) 768) (> (size value) 768)))
+          (let [prefix (loop [n (min 768 (count value))]
+                         (let [s (subs value 0 n)]
+                           (if (<= (size s) 768) s (recur (dec n)))))]
+            (-> result
+                (assoc k prefix)
+                (assoc-in [:diagnostic-truncation k] {:characters (count value)})))
+          result)))
+    receipt [:path :image-file :error :native-message]))
+
+;; @spec PROBE-RECEIPT-001
+(defn read-image! [path]
+  (let [file (.toPath (io/file path))
+        text (do
+               (when (> (java.nio.file.Files/size file) 8192)
+                 (throw (ex-info "Warm image descriptor exceeds 8192 bytes"
+                                 {:error-type :probe-image-too-large})))
+               (with-open [r (io/reader (java.nio.file.Files/newInputStream
+                                          file (make-array java.nio.file.OpenOption 0)))]
+                 (try (read-bounded-text r 8192)
+                      (catch clojure.lang.ExceptionInfo e
+                        (throw (ex-info "Warm image descriptor exceeds read bound"
+                                        {:error-type :probe-image-too-large} e))))))]
+    (try
+      (when (> (request-recursion-depth text) request-depth-bound)
+        (throw (ex-info "Warm image descriptor exceeds nesting bound" {})))
+      (with-open [reader (java.io.PushbackReader. (java.io.StringReader. text))]
+        (let [value (edn/read {:eof ::eof} reader)]
+          (when-not (and (map? value) (map? (:image value))
+                      (= ::eof (edn/read {:eof ::eof} reader)))
+            (throw (ex-info "Expected one warm image descriptor map" {})))
+          value))
+      (catch Exception e
+        (throw (ex-info "Warm image descriptor is malformed EDN"
+                        {:error-type :probe-image-malformed} e))))))
+
+;; @spec STATE-HOME-004
+;; @spec STATE-HOME-005
+;; @spec STATE-HOME-006
+;; @spec PROBE-RECEIPT-001
+(defn local-image [override]
+  (let [attempted (volatile! (or override "."))
+        stage (volatile! :resolve)]
+    (try
+      (let [root (.getCanonicalPath (io/file "."))
+            selected (or override
+                         (str (io/file
+                                (state/state-root (System/getenv) (System/getProperty "user.home"))
+                                "workspaces"
+                                (state/workspace-key root)
+                                "probe.edn")))
+            _ (vreset! attempted selected)
+            path (state/image-file root override)
+            _ (vreset! attempted path)
+            _ (vreset! stage :read)
+            descriptor (read-image! path)]
+        {:root root :path path :descriptor descriptor})
+      (catch Exception e
+        (let [native (state/native-failure e @attempted)
+              missing? (= "java.nio.file.NoSuchFileException" (:native-class native))
+              invalid? (or (and (= :resolve @stage) (not= "EACCES" (:errno native)))
+                           (re-find #"(?i)file ?name too long|invalid (file )?path|nul character"
+                                    (or (.getMessage e) "")))
+              data (ex-data e)
+              message "Warm image descriptor could not be read; inspect the filesystem diagnostic."
+              failure (cond
+                        invalid? (refusal :probe-image-path-invalid message)
+                        missing? (refusal :probe-image-absent message)
+                        ;; forwarded-refusal-kind: relay the reader's typed filesystem refusal.
+                        (:error-type data) (refusal (:error-type data) message)
+                        :else (refusal :probe-image-unreadable message))]
+          (bounded-diagnostics
+            (merge failure native {:image-file @attempted})))))))
+
+;; @spec PROBE-RECEIPT-001
+(defn post-probe [port request]
   (try
-    (let [root (.getCanonicalPath (io/file "."))
-          descriptor (with-open [r (io/reader (or image-file ".clj-surgeon/probe.edn"))]
-                       (read-bounded r 8192))
-          image (:image descriptor)
-          request {:ns (str ns) :image image}
-          problem (or (when-not (= root (:root image))
-                        (refusal :stale-probe-image "Image belongs to another worktree; run make warm here."))
-                      (request-problem image (fingerprint root) request))]
-      (if problem problem
-        (let [port (:port descriptor)]
-          (when-not (and (integer? port) (< 9000 port 65536))
-            (throw (ex-info "Warm port must be above 9000" {:error-type :invalid-probe-port})))
-          (let [post (requiring-resolve 'babashka.http-client/post)
-                response (post (str "http://127.0.0.1:" port "/probe")
-                               {:headers {"Content-Type" "application/edn"}
-                                :body (pr-str request) :timeout 60000 :as :stream})]
-            (with-open [r (io/reader (:body response))] (read-bounded r 16384))))))
+    (let [post (requiring-resolve 'babashka.http-client/post)
+          response (post (str "http://127.0.0.1:" port "/probe")
+                         {:headers {"Content-Type" "application/edn"}
+                          :body (pr-str request) :timeout 60000 :as :stream})]
+      (with-open [r (io/reader (:body response))] (read-bounded r 16384)))
     (catch Exception e
-      (refusal (or (:error-type (ex-data e)) :probe-connection-failed) (.getMessage e)))
-    (finally (flush))))
+      (refusal (or (:error-type (ex-data e)) :probe-connection-failed) (.getMessage e)))))
+
+(defn cli! [{:keys [ns image-file]}]
+  (let [{:keys [root path descriptor] :as local} (local-image image-file)]
+    (if (:error-type local)
+      local
+      (bounded-diagnostics
+        (assoc
+          (try
+            (let [image (:image descriptor)
+                  request {:ns (str ns) :image image}
+                  problem (or (when-not (= root (:root image))
+                                (refusal :stale-probe-image "Image belongs to another worktree; run make warm here."))
+                              (request-problem image (fingerprint root) request))]
+              (if problem problem
+                (let [port (:port descriptor)]
+                  (when-not (and (integer? port) (< 9000 port 65536))
+                    (throw (ex-info "Warm port must be above 9000" {:error-type :invalid-probe-port})))
+                  (post-probe port request))))
+            (catch Exception e
+              (merge (refusal (or (:error-type (ex-data e)) :probe-image-unreadable) (.getMessage e))
+                     (select-keys (ex-data e) [:path :errno :native-class :native-message]))))
+          :image-file path)))))

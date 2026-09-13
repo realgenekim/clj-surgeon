@@ -100,3 +100,16 @@ help-test/resolve-op-canonical-ops, preserving its census identity. Live red,
 fixed, stale and wall witnesses are recorded in docs/plans/edit-to-probe.md.
 The client is babashka; the server is the repository's existing MCP JVM.
 The inventory is not a declaration that every portable namespace is safe for hot reload.
+
+The CLI receipt additionally carries `:image-file`, the absolute descriptor path
+it selected, including on refusal. This provenance is attached by the descriptor
+reader; the server's inner verdict shape above is unchanged. Descriptor placement,
+root precedence and native filesystem failures are specified by
+[STATE-HOME and PROBE-RECEIPT requirements](../state-home/state-home-specs.md).
+Local descriptor failures are `probe-image-absent`, `probe-image-unreadable`
+(including directories), `probe-image-malformed`, `probe-image-too-large`, or
+`probe-image-path-invalid`. They occur before transport. Path diagnostics are
+EDN string values, capped after encoding; `diagnostic-truncation` names any
+field shortened and its original character count. A truncated path is a prefix,
+never claimed to be the complete filename. Publication failures preserve the
+previous descriptor through same-directory fsync and atomic publication.

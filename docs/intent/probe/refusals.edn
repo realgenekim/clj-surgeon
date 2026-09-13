@@ -86,13 +86,23 @@
    :owner "probe" :witness "splice-envelope-test/bounded-input-path-encoding"
    :retirement_condition "A replacement validates the same port contract before network access."}
   {:type :probe-connection-failed :class :protocol
-   :native_failure "A missing descriptor or dead endpoint can leave the caller relying on a previous green result."
-   :promise "Connection and descriptor failures return a non-proof refusal."
+   :native_failure "A dead endpoint can leave the caller relying on a previous green result."
+   :promise "Connection failures return a non-proof refusal."
    :native_method "Check transport and descriptor success before consuming any result."
-   :minimal_reproducer "Run probe with a missing image descriptor."
+   :minimal_reproducer "Run probe with a valid image descriptor whose endpoint is no longer listening."
    :existing_check "probe/cli! exception boundary"
    :owner "probe" :witness "splice-envelope-test/bounded-input-path-encoding"
    :retirement_condition "A replacement names transport failure without returning proof."}
+  {:type :probe-image-absent
+   :class :filesystem
+   :native_failure "The descriptor does not exist at the selected workspace state path."
+   :promise "Absence is distinct from a dead connection and includes the resolved path."
+   :native_method "Read the selected descriptor before opening transport; classify native file absence."
+   :minimal_reproducer "Probe a fresh workspace before make warm."
+   :existing_check "probe/cli!; STATE-HOME-006"
+   :owner "probe"
+   :witness "probe-state-test/absent-descriptor-has-provenance"
+   :retirement_condition "A replacement names absent descriptors and their paths before connecting."}
   {:type :probe-source-too-large :class :resource
    :native_failure "Reload discovery can parse an unbounded source file and exhaust the warm image."
    :promise "A source larger than 8 MiB refuses before source parsing."
@@ -116,4 +126,74 @@
    :minimal_reproducer "An admitted request naming a namespace with no local source."
    :existing_check "mcp-hot-verify/probe-reload-order"
    :owner "probe" :witness "splice-envelope-test/bounded-input-path-encoding"
-   :retirement_condition "A replacement proves local target source before test execution."}]}
+   :retirement_condition "A replacement proves local target source before test execution."}
+  {:type :probe-state-not-writable
+   :class :filesystem
+   :native_failure "The state destination rejects directory creation or descriptor publication."
+   :promise "Publication refuses with the path and native errno category."
+   :native_method "Use the reported path and native errno to restore permissions, space or quota at an admitted state destination; retry make warm after repairing the publication failure."
+   :minimal_reproducer "Publish under a read-only state directory."
+   :existing_check "probe-state/write-image!; STATE-HOME-007"
+   :owner "probe"
+   :witness "probe-state-test/native-permission-failure-is-named"
+   :retirement_condition "A replacement preserves named native publication failures."}
+  {:type :probe-image-path-invalid
+   :class :filesystem
+   :native_failure "Descriptor path resolution fails for a NUL, overlong component, or invalid path."
+   :promise "Refuse before transport with the attempted path and bounded native diagnostic."
+   :native_method "Repair the invalid override or configured state path; remove NUL characters and shorten components, then retry probe."
+   :minimal_reproducer "Probe with a NUL or overlong image-file path."
+   :existing_check "probe/local-image; PROBE-RECEIPT-001; PROBE-RECEIPT-002"
+   :owner "probe"
+   :witness "probe-state-test/invalid-path-receipt-is-bounded-at-the-crossing"
+   :retirement_condition "A replacement classifies invalid local paths before connecting and bounds the diagnostic."}
+  {:type :probe-image-malformed
+   :class :filesystem
+   :native_failure "Descriptor EDN is malformed, too deeply nested, has trailing forms, or lacks an image map."
+   :promise "Refuse malformed local descriptors before transport."
+   :native_method "Regenerate the descriptor with make warm at an admitted state path; supply exactly one bounded EDN map containing an image map."
+   :minimal_reproducer "Probe an image-file containing an unclosed EDN map."
+   :existing_check "probe/read-image!; PROBE-RECEIPT-001"
+   :owner "probe"
+   :witness "probe-state-test/local-filesystem-failures-never-connect"
+   :retirement_condition "A replacement validates descriptor syntax and shape before connecting."}
+  {:type :probe-image-unreadable
+   :class :filesystem
+   :native_failure "Native descriptor or identity-source reads fail with access denial, a directory, or another local IO failure."
+   :promise "Local read failures retain native provenance and never become connection failures."
+   :native_method "Use the reported path and errno to restore file readability or replace a directory with the intended descriptor, then retry probe."
+   :minimal_reproducer "Probe a directory or an unreadable descriptor."
+   :existing_check "probe/local-image and probe/cli!; PROBE-RECEIPT-001"
+   :owner "probe"
+   :witness "probe-state-test/local-filesystem-failures-never-connect"
+   :retirement_condition "A replacement distinguishes native local read failures from transport failures."}
+  {:type :probe-image-too-large
+   :class :resource
+   :native_failure "An oversized local descriptor exceeds the 8192-byte size or bounded-read limit before EDN parsing."
+   :promise "Descriptor bounds are enforced before parsing or transport."
+   :native_method "Regenerate the small identity descriptor with make warm; point image-file at the descriptor rather than a source file or log."
+   :minimal_reproducer "Probe a descriptor larger than 8192 bytes."
+   :existing_check "probe/read-image!; PROBE-RECEIPT-001"
+   :owner "probe"
+   :witness "probe-state-test/local-filesystem-failures-never-connect"
+   :retirement_condition "A replacement enforces local descriptor read bounds before parsing."}
+  {:type :state-root-inside-workspace
+   :class :filesystem
+   :native_failure "The configured state root resolves into the writable checkout and would dirty it with runtime state."
+   :promise "Canonical state roots inside the workspace refuse before directory creation or publication."
+   :native_method "Choose a state root outside the canonical workspace and inside the pre-existing envelope; correct relative paths and symlink targets, then restart make warm."
+   :minimal_reproducer "Set CLJ_SURGEON_STATE_HOME to the checkout or a symlink into it and run make warm."
+   :existing_check "probe-state/admit-state-root!; STATE-HOME-009"
+   :owner "probe"
+   :witness "state-home-admission-test/configured-root-cartesian-matrix"
+   :retirement_condition "A replacement rejects every canonical in-workspace state root before writing."}
+  {:type :state-root-outside-envelope
+   :class :filesystem
+   :native_failure "The configured canonical state root lies outside the pre-existing destination envelope."
+   :promise "A configured root never widens the existing write authority."
+   :native_method "Select an external state root already admitted by the destination envelope, then restart make warm; setting the root does not authorize it."
+   :minimal_reproducer "Set CLJ_SURGEON_STATE_HOME outside an existing narrow envelope and run make warm."
+   :existing_check "probe-state/admit-state-root!; STATE-HOME-010"
+   :owner "probe"
+   :witness "state-home-admission-test/configured-root-cartesian-matrix"
+   :retirement_condition "A replacement preserves the pre-existing envelope when admitting state roots."}]}

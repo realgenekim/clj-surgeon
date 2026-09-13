@@ -322,7 +322,7 @@
                        (:source verification-selection)}]
         (write-ready-file! ready-file readiness)
         (when probe-image
-          (write-ready-file! probe-image-file {:image probe-image :port actual-port}))
+          ((requiring-resolve 'clj-surgeon.probe-state/write-image!) probe-image-file {:image probe-image :port actual-port}))
         (telemetry/emit!
           telemetry-state :server.start
           (cond->
@@ -341,10 +341,7 @@
                :nrepl nrepl
                :telemetry telemetry-state
                :ready-file ready-file))
-      (catch Exception error
-        (when nrepl (nrepl-server/stop-server nrepl))
-        (.close mcp)
-        (throw error)))))
+      (catch Exception error (.stop jetty) (when nrepl (nrepl-server/stop-server nrepl)) (.close mcp) (throw error)))))
 
 (defn stop-http-server!
   [{:keys [^Server jetty mcp nrepl telemetry ready-file]}]
