@@ -6418,3 +6418,13 @@ green. Round 7 (Astra, pid 2861818): merge trunk 759974c7 semantically, rerun th
 over both sides' changes, gates; evidence uncommitted this time.
 
 ## 2026-09-13T02:16:56Z — Gene: "Gene report" → `2026-09-13-gene-report.md` (four sections; pasted in chat)
+
+## 2026-09-13T02:40:03Z — Gene: "If this is progress, keep going! Go go go" — 7906 restarted onto trunk 759974c7
+
+Announced as inb-609ebe. Old pid 4003227 (a15531ee) stopped by exact pid; new run-bg
+srv7906d pid 3387652 from the server worktree at 759974c7, same argv as before
+(clojure -J-Xmx2g -X:clj-surgeon/mcp :port 7906 :nrepl-port :none :telemetry :full),
+"server ready" proven; initialize handshake and tools/list: 13 tools, same set. The probe
+route is not installed on 7906 (it needs :probe-image-file; the measure used its own image
+on 19066), so other seats see identical tools on newer bytes. Reversible: restart on a15531ee.
+Data-not-code round 7 (merge of trunk) still running; ship follows.
