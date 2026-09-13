@@ -59,14 +59,46 @@
                     {:error-type :invalid-operation-context})))
   envelope)
 
+(defn- safe-sh
+  "Run `shell/sh`, returning nil instead of throwing when the binary itself
+   is missing (java.io.IOException, e.g. \"Cannot run program \\\"getent\\\"\").
+   A macOS box has no `getent`; a Linux box may lack `dscl`. Either absence is
+   just \"this lookup path doesn't apply here\", not a fatal error."
+  [& args]
+  (try
+    (apply shell/sh args)
+    (catch java.io.IOException _ nil)))
+
+(defn- darwin? []
+  (str/starts-with? (System/getProperty "os.name") "Mac"))
+
+(defn- parse-dscl-home
+  "Parse the stdout of `dscl . -read /Users/<user> NFSHomeDirectory`, e.g.
+   \"NFSHomeDirectory: /Users/genekim\\n\" -> \"/Users/genekim\". Pure so it is
+   testable without shelling out; returns nil on an unrecognized shape."
+  [out]
+  (let [line (first (str/split-lines (str/trim (or out ""))))
+        [_ path] (str/split (or line "") #": " 2)]
+    (when-not (str/blank? path) path)))
+
+(defn- getent-home [username]
+  (let [{:keys [exit out]} (or (safe-sh "getent" "passwd" username) {:exit 1})]
+    (when (zero? exit) (nth (str/split (str/trim out) #":") 5 nil))))
+
+(defn- dscl-home [username]
+  (when (darwin?)
+    (let [{:keys [exit out]} (or (safe-sh "dscl" "." "-read" (str "/Users/" username) "NFSHomeDirectory")
+                                 {:exit 1})]
+      (when (zero? exit) (parse-dscl-home out)))))
+
 (defn- passwd-home []
   (let [username (System/getProperty "user.name")
         entry (some #(let [fields (str/split % #":")]
                        (when (= username (first fields)) (nth fields 5 nil)))
                     (str/split-lines (slurp "/etc/passwd")))]
     (or entry
-        (let [{:keys [exit out]} (shell/sh "getent" "passwd" username)]
-          (when (zero? exit) (nth (str/split (str/trim out) #":") 5 nil)))
+        (getent-home username)
+        (dscl-home username)
         (throw (ex-info "Cannot determine invoking user's passwd home"
                         {:error-type :invalid-operation-context})))))
 

@@ -671,3 +671,15 @@
           (is (= {:name "true" :profile "b07-cell-b" :command ["/bin/true"] :exit 0 :status "passed"}
                  (dissoc check :duration_ms)))
           (is (number? (:duration_ms check))))))))
+
+;; darwin passwd-home fallback: /etc/passwd does not list Directory-Services
+;; users and `getent` does not exist on macOS, so home resolution falls
+;; through to `dscl . -read /Users/<user> NFSHomeDirectory`. Pure parser,
+;; no shelling out required to test it.
+(deftest parse-dscl-home-reads-the-nfshomedirectory-line
+  (let [parse #'artifacts/parse-dscl-home]
+    (is (= "/Users/genekim" (parse "NFSHomeDirectory: /Users/genekim\n")))
+    (is (= "/Users/genekim" (parse "NFSHomeDirectory: /Users/genekim")))
+    (is (nil? (parse "")))
+    (is (nil? (parse nil)))
+    (is (nil? (parse "some unrelated line\n")))))
