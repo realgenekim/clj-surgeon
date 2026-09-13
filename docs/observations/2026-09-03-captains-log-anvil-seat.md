@@ -6478,3 +6478,10 @@ enlarged inventory is 82 namespaces, +1 exactly mcp-prepared-wire-test, 0 remove
 passed serially; prewarm green. Evidence copied, not committed. Packet 9bc6b42d is the
 check-only prewarm; the Sol brief carries the round-2 answer. Owed after landing:
 amendment 2 of the probe preregistration (the NATIVE planted-target command).
+
+## 2026-09-13T04:01:30Z — data-not-code ship round 2 SEALED: candidate 06dba691 (76cc24a4 onto 759974c7)
+
+Check-only prewarm packet 9bc6b42d exit 0 at 76cc24a4, receipt bound. Ship run
+20260913T035937Z sealed 06dba691 (tree 9ac1892b), Sol on the round-2 brief (his fixed-point
+class answered by round 8), battery on fable/battery-receipt-76cc24a4 (pre-created), fast
+lane beside.
