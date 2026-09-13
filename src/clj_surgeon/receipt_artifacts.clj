@@ -188,6 +188,22 @@
                            (assoc context :reason :hard-link :link-evidence evidence))))))
      (str resolved))))
 
+;; @spec DATACODE-ENV-005
+(defn call-with-state-home
+  "Register an internal state-home substitute for this invocation only.
+   The substitute must already be admitted by the current (possibly narrower)
+   envelope. This entrance does not turn a request path into authority."
+  [state-home f]
+  (let [envelope (current-envelope)]
+    (binding [*destination-envelope* envelope]
+      (if (nil? state-home)
+        (f)
+        (let [root (admit-target! state-home :state-home)
+              declared (destination-envelope
+                         (vec (distinct (conj (:roots envelope) root))) :launcher)]
+          (binding [*destination-envelope* declared]
+            (f)))))))
+
 ;; @spec DATACODE-ENV-004
 (defn receipt-evidence [receipt]
   (let [receipt (assoc receipt :envelope-id (:id (current-envelope)))]

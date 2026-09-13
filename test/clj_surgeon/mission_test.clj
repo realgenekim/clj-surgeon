@@ -27,7 +27,7 @@
    [clojure.test :refer [deftest is testing]]))
 
 (def ^:private tmp-root
-  (or (System/getenv "CLJ_SURGEON_MISSION_TMP") "/var/tmp/forge/mission-fx"))
+  (or (System/getenv "CLJ_SURGEON_MISSION_TMP") (System/getProperty "java.io.tmpdir")))
 
 (defn- delete-tree!
   [^java.io.File file]

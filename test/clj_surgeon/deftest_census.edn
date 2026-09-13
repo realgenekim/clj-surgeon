@@ -2261,6 +2261,8 @@
   clj-surgeon.receipt-artifacts-boundary-test/prepared-apply-publishes-external-inverse
   clj-surgeon.receipt-artifacts-boundary-test/row5-trivial-profile-receipt-is-honest
   clj-surgeon.receipt-artifacts-boundary-test/standalone-require-change-publishes-external-detail-and-inverse
+  clj-surgeon.receipt-artifacts-boundary-test/state-home-substitution-is-bounded-launcher-context
+  clj-surgeon.receipt-artifacts-boundary-test/state-home-substitution-preserves-narrow-context-and-final-target-checks
   clj-surgeon.receipt-artifacts-boundary-test/the-artifact-boundary-canonicalizes-both-sides
   clj-surgeon.receipt-artifacts-boundary-test/typist-publishes-external-inverse-after-real-proof
   clj-surgeon.receipt-booleans-test/every-receipt-boolean-has-a-driven-false-witness
@@ -2489,6 +2491,7 @@
   clj-surgeon.txn-journal-test/contract-states-optimistic-serializability-not-snapshot-isolation
   clj-surgeon.txn-journal-test/every-lock-broken-receipt-names-the-primitive-that-took-the-claim
   clj-surgeon.txn-journal-test/every-receipt-carries-the-isolation-contract
+  clj-surgeon.txn-journal-test/every-test-scratch-override-defaults-to-jvm-temp
   clj-surgeon.txn-journal-test/finishing-a-transaction-does-not-delete-a-lock-it-no-longer-owns
   clj-surgeon.txn-journal-test/one-byte-past-the-journal-quota-refuses-with-zero-writes
   clj-surgeon.txn-journal-test/recovery-is-a-no-op-when-no-transaction-is-unfinished

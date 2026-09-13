@@ -22,7 +22,8 @@
 
 (defn- temp-dir
   [label]
-  (let [dir (io/file (or (System/getenv "CLJ_SURGEON_MEMORY_TMP") "/home/forge/tmp")
+  (let [dir (io/file (or (System/getenv "CLJ_SURGEON_MEMORY_TMP")
+                       (System/getProperty "java.io.tmpdir"))
                      (str "clj-surgeon-txn-" label "-"
                           (System/currentTimeMillis) "-"
                           (long (rand 1000000))))]

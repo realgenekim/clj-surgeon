@@ -13,6 +13,15 @@
    :java-io-tmpdir (System/getProperty "java.io.tmpdir")
    :destination-envelope (artifacts/current-envelope)})
 
+(defn forbidden-overrides [env]
+  (sort (filter #(or (= "CLJ_SURGEON_ARTIFACT_ROOT" %)
+                     (re-matches #"CLJ_SURGEON_.*_TMP" %)) (keys env))))
+
+(defn gate-environment? [{:keys [tmpdir java-io-tmpdir destination-envelope]}]
+  (and (string? tmpdir)
+       (boolean (re-matches #"/var/tmp/forge/clj-surgeon-suite-[0-9]+-[0-9a-f]{8}" tmpdir))
+       (= tmpdir java-io-tmpdir (first (:roots destination-envelope)))))
+
 ;; Read declarations, never require the subject or consult lane selection.
 (defn declaration [file]
   (with-open [r (java.io.PushbackReader. (io/reader file))]
@@ -68,6 +77,12 @@
        (= 0 (:fail counters) (:error counters))))
 
 (when-not (= ["--self-test"] *command-line-args*)
+  ;; Direct script invocation must not bypass the launcher's environment gate.
+  (when-let [overrides (seq (forbidden-overrides (System/getenv)))]
+    (throw (ex-info "Diff-impact refused: environment overrides are set" {:overrides overrides})))
+  (when-not (gate-environment? (environment-receipt))
+    (throw (ex-info "Diff-impact refused: use test/diff-impact for a narrow gate environment"
+                    (environment-receipt))))
   (let [[base output phase] *command-line-args*]
     (when-not (and base output (#{"before" "after" "merged" "fixed-point" "list"} phase))
       (throw (ex-info "Usage: bb test/diff_impact.clj BASE OUTPUT_DIR before|after|merged|fixed-point|list" {})))
@@ -95,14 +110,16 @@
           (let [log (str output "/" phase "/" n ".log")
                 receipt (str output "/" phase "/" n ".edn")
                 code (str "(require '[clojure.test :as t] '[clj-surgeon.receipt-artifacts :as artifacts]) "
+                          "(let [environment {:tmpdir (System/getenv \"TMPDIR\") "
+                          ":java-io-tmpdir (System/getProperty \"java.io.tmpdir\") "
+                          ":destination-envelope (artifacts/current-envelope)}] "
+                          "(when-not (= " (pr-str (:environment inventory)) " environment) "
+                          "(throw (ex-info \"Diff-impact child environment differs from launcher\" environment))) "
                           "(let [r (try (require '" n ") (t/run-tests '" n ") "
                           "(catch Throwable e (.printStackTrace e) {:test 0 :pass 0 :fail 0 :error 1}))] "
-                          "(spit " (pr-str receipt) " (pr-str (assoc r :environment "
-                          "{:tmpdir (System/getenv \"TMPDIR\") "
-                          ":java-io-tmpdir (System/getProperty \"java.io.tmpdir\") "
-                          ":destination-envelope (artifacts/current-envelope)}))) "
+                          "(spit " (pr-str receipt) " (pr-str (assoc r :environment environment))) "
                           "(shutdown-agents) (System/exit (if (and (pos? (:test r)) "
-                          "(zero? (+ (:fail r) (:error r)))) 0 1)))")
+                          "(zero? (+ (:fail r) (:error r)))) 0 1))))")
                 _ (fs/create-dirs (fs/parent log))
                 _ (when (fs/exists? log) (throw (ex-info "Never overwrite a run" {:log log})))
                 start (System/nanoTime)
@@ -124,6 +141,21 @@
           (System/exit (if (every? #(zero? (:exit (read-string %))) results) 0 1)))))))
 
 (when (= ["--self-test"] *command-line-args*)
+  ;; @spec DATACODE-ENV-002 -- mutate every environment boundary independently.
+  (let [tmp "/var/tmp/forge/clj-surgeon-suite-42-deadbeef"
+        environment {:tmpdir tmp :java-io-tmpdir tmp
+                     :destination-envelope {:roots [tmp "/home/seat/.local/state/clj-surgeon" "/work"]}}]
+    (assert (gate-environment? environment))
+    (doseq [bad [(assoc environment :tmpdir "/var/tmp/forge")
+                 (assoc environment :tmpdir nil)
+                 (assoc environment :java-io-tmpdir "/var/tmp/forge")
+                 (assoc-in environment [:destination-envelope :roots 0] "/var/tmp/forge")]]
+      (assert (not (gate-environment? bad)))))
+  (doseq [name ["CLJ_SURGEON_MEMORY_TMP" "CLJ_SURGEON_FUTURE_TMP" "CLJ_SURGEON_ARTIFACT_ROOT"]
+          value ["" "/var/tmp/forge"]]
+    (assert (= [name] (forbidden-overrides {name value "TMPDIR" "/var/tmp/forge"}))))
+  (assert (empty? (forbidden-overrides {"TMPDIR" "/var/tmp/forge" "CLJ_SURGEON_EVENTS_FILE" "events"})))
+  (println "Environment self-check: broad/mismatched roots and empty/future overrides refused")
   ;; Sol F1, 2026-09-13: generate the dependency-depth class, then mutate
   ;; every edge. Fixture declarations are data; no fixture namespace is loaded.
   (doseq [depth (range 1 9)]

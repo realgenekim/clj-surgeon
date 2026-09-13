@@ -1608,6 +1608,7 @@
        (format "%08x" (long (rand Integer/MAX_VALUE)))))
 
 (defn begin!
+  ;; @spec DATACODE-ENV-005
   ;; @spec MCP-OP-MEM-007
   ;; @spec MCP-OP-MEM-012
   "Open a transaction under the workspace's own durable state directory.
@@ -1621,70 +1622,73 @@
    break acts on it, so a witness can put a live holder's claim in the way."
   ;; `:before-break` is read straight from `opts` by `acquire-lock!`
   [workspace-root {:keys [state-home txid scope-walk] :as opts}]
-  (let [resolved (workspace/canonical-root workspace-root)]
-    (if-not (:ok resolved)
-      (refusal :txn-workspace-refused (:error resolved) {})
-      (let [root (:workspace-root resolved)
-            transactions (workspace/transactions-dir root state-home)
-            txid (or txid (new-txid))
-            _ (doseq [tail ["objects" "staging" "manifest.tsv" "journal.log" "state.edn" "lease.edn"]]
-                (artifacts/admitted-file transactions txid tail))
-            _ (artifacts/admitted-file transactions "LOCK")
-            _ (.mkdirs (io/file transactions))
-            lock (acquire-lock! transactions txid opts)]
-        (if-not (:ok lock)
-          lock
-          (let [dir (io/file transactions txid)
-                objects (io/file dir "objects")
-                staging (io/file dir "staging")
-                limits (reduce-kv (fn [acc k v]
-                                    (assoc acc k (min (long (get opts k v))
-                                                      (long (get hard-limits k v)))))
-                                  {}
-                                  default-limits)]
-            (.mkdirs objects)
-            (.mkdirs staging)
-            (let [txn (cond-> {:txid txid
-                               :workspace-root root
-                               ;; resolved once: confinement must not cost a realpath
-                               ;; syscall per pinned file
-                               :real-root (mcp-paths/real-root root)
-                               :transactions-dir transactions
-                               :dir (.getCanonicalPath dir)
-                               :objects-dir (.getCanonicalPath objects)
-                               :staging-dir (.getCanonicalPath staging)
-                               :manifest-path (.getCanonicalPath (io/file dir "manifest.tsv"))
-                               :limits limits
-                               :state (atom
-                                        {:manifest-stream (FileOutputStream.
-                                                            (io/file dir "manifest.tsv") true)
-                                         :journal-stream (FileOutputStream.
-                                                           (io/file dir "journal.log") true)
-                                         :membership-digest (MessageDigest/getInstance "SHA-256")
-                                         :read-set-count 0
-                                         :last-path nil
-                                         :sealed? false
-                                         :journal-bytes 0
-                                         :pinned {}
-                                         :staged {}
-                                         :written []
-                                         :scope-walk scope-walk})}
-                        (:lock-broken lock)
-                        (assoc :lock-broken (:lock-broken lock))
+  (artifacts/call-with-state-home state-home
+    (fn []
+      (let [resolved (workspace/canonical-root workspace-root)]
+        (if-not (:ok resolved)
+          (refusal :txn-workspace-refused (:error resolved) {})
+          (let [root (:workspace-root resolved)
+                transactions (workspace/transactions-dir root state-home)
+                txid (or txid (new-txid))
+                _ (doseq [tail ["objects" "staging" "manifest.tsv" "journal.log" "state.edn" "lease.edn"]]
+                    (artifacts/admitted-file transactions txid tail))
+                _ (artifacts/admitted-file transactions "LOCK")
+                _ (.mkdirs (io/file transactions))
+                lock (acquire-lock! transactions txid opts)]
+            (if-not (:ok lock)
+              lock
+              (let [dir (io/file transactions txid)
+                    objects (io/file dir "objects")
+                    staging (io/file dir "staging")
+                    limits (reduce-kv (fn [acc k v]
+                                        (assoc acc k (min (long (get opts k v))
+                                                          (long (get hard-limits k v)))))
+                                      {}
+                                      default-limits)]
+                (.mkdirs objects)
+                (.mkdirs staging)
+                (let [txn (cond-> {:txid txid
+                                   :destination-envelope (artifacts/current-envelope)
+                                   :workspace-root root
+                                   ;; resolved once: confinement must not cost a realpath
+                                   ;; syscall per pinned file
+                                   :real-root (mcp-paths/real-root root)
+                                   :transactions-dir transactions
+                                   :dir (.getCanonicalPath dir)
+                                   :objects-dir (.getCanonicalPath objects)
+                                   :staging-dir (.getCanonicalPath staging)
+                                   :manifest-path (.getCanonicalPath (io/file dir "manifest.tsv"))
+                                   :limits limits
+                                   :state (atom
+                                            {:manifest-stream (FileOutputStream.
+                                                                (io/file dir "manifest.tsv") true)
+                                             :journal-stream (FileOutputStream.
+                                                               (io/file dir "journal.log") true)
+                                             :membership-digest (MessageDigest/getInstance "SHA-256")
+                                             :read-set-count 0
+                                             :last-path nil
+                                             :sealed? false
+                                             :journal-bytes 0
+                                             :pinned {}
+                                             :staged {}
+                                             :written []
+                                             :scope-walk scope-walk})}
+                            (:lock-broken lock)
+                            (assoc :lock-broken (:lock-broken lock))
 
-                        (:lock-break-displaced lock)
-                        (assoc :lock-break-displaced (:lock-break-displaced lock)))]
-              (write-state! txn :open {:started-at (str (java.time.Instant/now))})
-              (append-journal! txn (str "begin\t" txid))
-              (when-let [broken (:lock-broken lock)]
-                ;; the break is durable evidence, not only a return value
-                (append-journal! txn (str "lock-broken\t" (:pid broken) "\t"
-                                       (name (:cause broken)))))
-              (when-let [displaced (:lock-break-displaced lock)]
-                ;; so is a claim this acquisition moved and could not put back
-                (append-journal! txn (str "lock-displaced\t" (:tombstone displaced) "\t"
-                                          (name (:restore-cause displaced)))))
-              txn)))))))
+                            (:lock-break-displaced lock)
+                            (assoc :lock-break-displaced (:lock-break-displaced lock)))]
+                  (write-state! txn :open {:started-at (str (java.time.Instant/now))})
+                  (append-journal! txn (str "begin\t" txid))
+                  (when-let [broken (:lock-broken lock)]
+                    ;; the break is durable evidence, not only a return value
+                    (append-journal! txn (str "lock-broken\t" (:pid broken) "\t"
+                                           (name (:cause broken)))))
+                  (when-let [displaced (:lock-break-displaced lock)]
+                    ;; so is a claim this acquisition moved and could not put back
+                    (append-journal! txn (str "lock-displaced\t" (:tombstone displaced) "\t"
+                                              (name (:restore-cause displaced)))))
+                  txn)))))))))
 
 ;; -------------------------------------------------------------- read set
 

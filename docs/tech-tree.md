@@ -967,3 +967,23 @@ NATIVE refusal outcomes are unscored, with a secondary unbet instruction interva
 No measurement experiment or new routing admission follows. Fast and first-attempt
 prewarm pass; exact counts, red receipts, code-edit method and limitations:
 [round 6 report](observations/2026-09-12-data-not-code/round6/REPORT.md).
+
+### 2026-09-13T04:42:47.754868+00:00 — data-not-code round 9, oracle environment parity
+
+The fixed-point oracle previously widened its environment with a fixed temp root
+and a memory-temp override. On unchanged 76cc24a4, a fresh narrow battery-shaped
+root reproduces the counted battery: txn-journal-test has 1 failure and 74
+errors; all other 81 selected namespaces pass. This supersedes any inference
+that the prior wider-environment green demonstrated the narrow battery.
+
+The launcher rejects all temp/artifact overrides, records actual envelope roots,
+and verifies the child JVM environment before loading witnesses. A whole-test
+source census found four scratch defaults to move to java.io.tmpdir. Trusted
+state-home substitution is now policy-bounded invocation context: explicit root
+registration, outside refusal, final-descendant checks and no startup widening.
+Three new witnesses went 9 failures → 38 passing assertions; the warm journal,
+workspace and boundary check passes 120 tests / 902 assertions. Lint has zero
+errors and the same four baseline warnings. The census adds three names and
+removes none. Complete narrow oracle and gate evidence, including the counted
+battery, belong in the uncommitted [round 9 report](observations/2026-09-12-data-not-code/round9/REPORT.md).
+No speed claim, new routing admission or expanded all-writers coverage follows.
