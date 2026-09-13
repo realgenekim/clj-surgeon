@@ -1,0 +1,1 @@
+{:command ["bb" "--classpath" "src:test:dev/experiments" "docs/observations/2026-09-12-bbtower-block-b/attempt22/portability_runner.clj" "bb" "clj-surgeon.state-home-admission-test" "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.state-home-admission-test-bb-load.edn" "load"], :subject "097a7708ef9accb61d7ac192daf1b8ac80d9b22c\n"}

@@ -176,7 +176,7 @@
   ;; @spec TEST-ISO-001 -- an explicit runtime for every namespace, independent of cadence.
   (testing "every discovered test namespace has a closed runtime declaration"
     (let [runtimes @(requiring-resolve 'clj-surgeon.lane-manifest/namespace-runtimes)]
-      (is (= 160 (count runtimes)))
+      (is (= 161 (count runtimes)))
       (is (= (set (keys @on-disk)) (set (keys runtimes))))
       (is (= #{:bb :jvm} (set (vals runtimes))))
       (is (= :bb (get runtimes 'clj-surgeon.forms-test)))
@@ -971,7 +971,8 @@
      clj-surgeon.helper-extraction-test ; MCP-OP-HELPER's pure planner witnesses, enrolled into :fast when the planner went green (it requires only the planner, the fixture and clojure.test, and spawns nothing)
      clj-surgeon.telemetry-events-test ; TELEMETRY-EVENTS-001's witnesses: the box-wide JSONL ledger the public MCP fns append to as a side effect (2026-09-06, the night the hourly watch reported four figures while a dozen calls landed in launcher-chosen roots it never read)
      clj-surgeon.mcp-helper-extraction-test ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
-     clj-surgeon.probe-state-test}) ; STATE-HOME witnesses (inb-3c65d7, Round 5): :battery/:jvm owns the 72-cell real Make root/envelope matrix, native EFBIG child and writer/read boundaries; initial 48-cell packed measurement 481025 ms earns the declared namespace exception in ns-isolation; the battery lane ceiling remains 1800 s
+     clj-surgeon.state-home-admission-test
+     clj-surgeon.probe-state-test}) ; Round 7: 72 in-process admission cells in :fast; five real Make cells in :battery, plus unchanged four-mode warm witness.
 
 (def ^:private census-ledger-path
   "The deftest ledger: ONE LINE PER FULLY QUALIFIED DEFTEST NAME, sorted.

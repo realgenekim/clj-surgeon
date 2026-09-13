@@ -2221,7 +2221,7 @@
   clj-surgeon.platform-selector-test/reader-conditionals-cannot-override-a-plain-file-platform
   clj-surgeon.platform-selector-test/xray-passes-file-context-through-literal-and-computed-reads
   clj-surgeon.probe-state-test/absent-descriptor-has-provenance
-  clj-surgeon.probe-state-test/configured-root-cartesian-matrix
+  clj-surgeon.probe-state-test/configured-root-warm-cells
   clj-surgeon.probe-state-test/envelope-refuses-before-creation
   clj-surgeon.probe-state-test/invalid-path-receipt-is-bounded-at-the-crossing
   clj-surgeon.probe-state-test/local-filesystem-failures-never-connect
@@ -2402,6 +2402,7 @@
   clj-surgeon.split-proof-gate-test/background-temp-root-refuses-tmpfs-and-relative-paths
   clj-surgeon.split-proof-gate-test/receipt-ceiling-bounds-edn-and-escaped-json-independently
   clj-surgeon.split-proof-gate-test/status-retains-cold-and-trivial-proof-honesty
+  clj-surgeon.state-home-admission-test/configured-root-cartesian-matrix
   clj-surgeon.structural-lens-test/apply-rejects-invalid-plan-version-and-invalid-result-source
   clj-surgeon.structural-lens-test/applying-a-plan-fails-closed-when-source-changed
   clj-surgeon.structural-lens-test/every-planner-refuses-to-use-a-source-file-as-a-plan-artifact

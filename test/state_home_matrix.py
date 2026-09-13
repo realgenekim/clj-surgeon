@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """STATE-HOME-009/010: Sol second recurrence; writable checkout is intentional."""
+import ctypes
 import hashlib
-import itertools
 import json
 import os
 from pathlib import Path
@@ -14,9 +14,74 @@ import tempfile
 import time
 
 
+def own_orphans():
+    # Linux battery hosts: reap descendants orphaned when Make exits early.
+    if sys.platform.startswith('linux'):
+        libc = ctypes.CDLL(None, use_errno=True)
+        if libc.prctl(36, 1, 0, 0, 0) != 0:  # PR_SET_CHILD_SUBREAPER
+            raise OSError(ctypes.get_errno(), 'PR_SET_CHILD_SUBREAPER')
+
+
+def wait_group(pgid, timeout=10):
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            while os.waitpid(-pgid, os.WNOHANG)[0]:
+                pass
+        except ChildProcessError:
+            pass
+        try:
+            os.killpg(pgid, 0)
+        except ProcessLookupError:
+            return
+        if time.monotonic() >= deadline:
+            raise AssertionError(f'process group {pgid} still alive after {timeout}s')
+        time.sleep(.05)
+
+
+def stop_image(process, pidfile):
+    # The Make parent can exit before its warm JVM or git child. Own a session,
+    # stop the exact warm PID, reap Make, then prove the whole group has gone.
+    if pidfile.exists():
+        try:
+            os.kill(int(pidfile.read_text()), signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    try:
+        process.wait(timeout=10)
+        wait_group(process.pid)
+    except (subprocess.TimeoutExpired, AssertionError):
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait(timeout=10)
+        wait_group(process.pid)
+
+
+class CellDirectory:
+    def __init__(self, facts):
+        self.facts = facts
+        self.directory = tempfile.TemporaryDirectory(prefix='state-matrix-')
+
+    def __enter__(self):
+        return self.directory.name
+
+    def __exit__(self, *error):
+        try:
+            self.directory.cleanup()
+        except OSError as failure:
+            self.facts['cleanup_retry'] = str(failure)
+            time.sleep(.25)
+            self.directory.cleanup()  # A second failure propagates; never green.
+        finally:
+            print(json.dumps(self.facts), flush=True)
+
+
 def witness(source, shape, envelope, location):
     root = Path.cwd()
-    with tempfile.TemporaryDirectory(prefix='state-matrix-') as tmp:
+    facts = dict(source=source, shape=shape, envelope=envelope, location=location, cleanup_retry=None)
+    with CellDirectory(facts) as tmp:
         container = Path(tmp).resolve()
         temp = container / 'runtime'
         temp.mkdir()
@@ -80,7 +145,7 @@ def witness(source, shape, envelope, location):
         launcher = bindir / 'clojure'
         launcher.write_text('#!/bin/bash\nset -eu\necho $$ > "$MATRIX_PID"\n'
                             'while [[ "$1" != "-e" ]]; do shift; done\nshift\n'
-                            'exec java -Xmx512m -cp "$MATRIX_CP" clojure.main "$MATRIX_BOOT" "$1"\n')
+                            'exec java -Xmx1024m -cp "$MATRIX_CP" clojure.main "$MATRIX_BOOT" "$1"\n')
         launcher.chmod(0o755)
         env.update(PATH=str(bindir) + ':' + env['PATH'], TMPDIR=str(temp), TMP=str(temp), TEMP=str(temp),
                    JAVA_TOOL_OPTIONS=f'-Djava.io.tmpdir={temp} -Duser.home={home_value}',
@@ -93,7 +158,7 @@ def witness(source, shape, envelope, location):
         log = temp / 'process.log'
         with log.open('w') as output:
             process = subprocess.Popen(['make', 'warm', f'PORT={port}'], cwd=checkout, env=env,
-                                       stdout=output, stderr=subprocess.STDOUT)
+                                       stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
             try:
                 deadline = time.monotonic() + 90
                 while process.poll() is None and 'persistent server ready on' not in log.read_text():
@@ -101,21 +166,10 @@ def witness(source, shape, envelope, location):
                         raise AssertionError('timeout: ' + log.read_text())
                     time.sleep(.1)
             finally:
-                if (temp / 'pid').exists():
-                    try:
-                        os.kill(int((temp / 'pid').read_text()), signal.SIGTERM)
-                    except ProcessLookupError:
-                        pass
-                try:
-                    process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    os.kill(int((temp / 'pid').read_text()), signal.SIGKILL)
-                    process.wait(timeout=10)
+                stop_image(process, temp / 'pid')
         output = log.read_text()
         status = git('status', '--porcelain')
-        facts = dict(source=source, shape=shape, envelope=envelope, location=location,
-                     canonical=str(expected), kind=kind, status=status)
-        print(json.dumps(facts), flush=True)
+        facts.update(canonical=str(expected), kind=kind, status=status)
         assert status == '', facts
         if kind:
             assert not descriptor.exists(), facts
@@ -127,12 +181,76 @@ def witness(source, shape, envelope, location):
             assert 'persistent server ready on' in output, output
 
 
+def teardown_regression():
+    """Packet 68bacdec: Make exits while a descendant still writes .git/objects."""
+    from unittest.mock import patch
+    import contextlib
+    import io
+
+    with tempfile.TemporaryDirectory(prefix='state-teardown-') as tmp:
+        root = Path(tmp)
+        pidfile = root / 'pid'
+        # The warm stand-in owns a child writer. Terminating its exact PID
+        # leaves the writer alive; group waiting must cover its delayed write.
+        writer = 'import time, sys; from pathlib import Path; time.sleep(.3); Path(sys.argv[1]).write_text("done")'
+        code = ('import os, subprocess, sys, time; '
+                'subprocess.Popen([sys.executable, "-c", sys.argv[3], sys.argv[2]]); '
+                'open(sys.argv[1], "w").write(str(os.getpid())); time.sleep(30)')
+        process = subprocess.Popen([sys.executable, '-c', code, str(pidfile), str(root / 'objects'), writer],
+                                   start_new_session=True)
+        try:
+            deadline = time.monotonic() + 5
+            while not pidfile.exists() or not pidfile.read_text():
+                assert time.monotonic() < deadline, 'stand-in failed to start'
+                time.sleep(.01)
+            stop_image(process, pidfile)
+            assert (root / 'objects').read_text() == 'done'
+            try:
+                os.killpg(process.pid, 0)
+            except ProcessLookupError:
+                pass
+            else:
+                raise AssertionError('teardown returned with live descendants')
+        finally:
+            if process.poll() is None:
+                stop_image(process, pidfile)
+    # The first cleanup failure is a recorded retry; a second remains red.
+    for twice in (False, True):
+        facts = {}
+        directory = CellDirectory(facts)
+        cleanup = directory.directory.cleanup
+        calls = []
+        def failing_cleanup():
+            calls.append(1)
+            if len(calls) == 1 or twice:
+                raise OSError(39, 'Directory not empty')
+            cleanup()
+        try:
+            with patch.object(directory.directory, 'cleanup', failing_cleanup), contextlib.redirect_stdout(io.StringIO()):
+                try:
+                    with directory:
+                        pass
+                except OSError:
+                    assert twice
+                else:
+                    assert not twice
+            assert len(calls) == 2 and 'Directory not empty' in facts['cleanup_retry']
+        finally:
+            cleanup()
+    print('teardown-regression: descendant exit, recorded retry, repeated failure PASS', flush=True)
+
+
+own_orphans()
+teardown_regression()
 failures = []
-# Checkout, admitted external and outside-envelope destinations: all 24 required
-# intersections at each location. The default envelope must also reject widening.
-cells = itertools.product(('CLJ_SURGEON_STATE_HOME', 'XDG_STATE_HOME', 'user.home'),
-                              ('direct', 'symlink', 'relative', 'empty'),
-                              ('default', 'narrow'), ('inside', 'outside', 'outside-envelope'))
+# Boundary coverage only; the 72-class enumeration is in-process in :fast.
+# Preserve the packet 68bacdec failing cell as the inside-workspace witness.
+cells = [('user.home', 'symlink', 'narrow', 'inside'),
+         ('CLJ_SURGEON_STATE_HOME', 'relative', 'default', 'outside-envelope'),
+         ('CLJ_SURGEON_STATE_HOME', 'direct', 'default', 'outside'),
+         ('XDG_STATE_HOME', 'symlink', 'default', 'outside'),
+         ('user.home', 'relative', 'default', 'outside')]
+started = time.monotonic()
 if len(sys.argv) > 2:
     cells = [tuple(sys.argv[2:])]
 for cell in cells:
@@ -142,3 +260,7 @@ for cell in cells:
         failures.append((cell, str(error)))
         print('FAIL', cell, str(error), flush=True)
 assert not failures, failures
+
+elapsed = time.monotonic() - started
+print(json.dumps(dict(warm_cells=len(cells), elapsed_ms=round(elapsed * 1000))), flush=True)
+assert elapsed < 120, 'warm cells exceed 120s total'

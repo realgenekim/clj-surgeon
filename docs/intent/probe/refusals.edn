@@ -185,7 +185,7 @@
    :minimal_reproducer "Set CLJ_SURGEON_STATE_HOME to the checkout or a symlink into it and run make warm."
    :existing_check "probe-state/admit-state-root!; STATE-HOME-009"
    :owner "probe"
-   :witness "probe-state-test/configured-root-cartesian-matrix"
+   :witness "state-home-admission-test/configured-root-cartesian-matrix"
    :retirement_condition "A replacement rejects every canonical in-workspace state root before writing."}
   {:type :state-root-outside-envelope
    :class :filesystem
@@ -195,5 +195,5 @@
    :minimal_reproducer "Set CLJ_SURGEON_STATE_HOME outside an existing narrow envelope and run make warm."
    :existing_check "probe-state/admit-state-root!; STATE-HOME-010"
    :owner "probe"
-   :witness "probe-state-test/configured-root-cartesian-matrix"
+   :witness "state-home-admission-test/configured-root-cartesian-matrix"
    :retirement_condition "A replacement preserves the pre-existing envelope when admitting state roots."}]}

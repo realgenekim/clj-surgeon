@@ -120,12 +120,11 @@
     ;; remains: TEST-ISO-013 judges the SUM of shard walls, not the makespan,
     ;; and splitting the launches does not reduce their total namespace cost.
     clj-surgeon.reader-eval-fence-test 1000000
-    ;; STATE-HOME-009/010, Round 5: the initial 48-cell Cartesian Make oracle
-    ;; plus publication/read witnesses measured 481025 ms in one packed JVM.
-    ;; The final matrix has 72 cells, adding default-envelope refusal controls.
-    ;; As with the reader fence, declare ~2x the measured cold-start cost;
-    ;; keep the separate 1800000 ms battery lane ceiling unchanged.
-    clj-surgeon.probe-state-test 1000000})
+    ;; STATE-HOME-009/010, Round 7: the reduced namespace measured 116659 ms
+    ;; (13 tests / 201 assertions, one packed JVM). Five Make cells replace 72;
+    ;; the 72-cell admission matrix is :fast. Declare ~2x measured cost, while
+    ;; the complete battery still must fit its independent 1800000 ms ceiling.
+    clj-surgeon.probe-state-test 240000})
 
 (def mutable-global-allowlist
   "@spec TEST-ISO-005 -- vars whose deref'd value is EXPECTED to differ across

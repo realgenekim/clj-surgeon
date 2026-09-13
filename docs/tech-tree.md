@@ -1021,3 +1021,8 @@ from its inventory, with one cross-inventory generation witness. These extend
 existing registered battery/fast namespaces; no routing or performance claim.
 Requirements live in the state-home leaf; verification and costs remain external
 at `/var/tmp/forge/statehome-fx/REPORT.md`, Round 5.
+
+Round 7 state-home: packet 68bacdec battery found a kill/delete teardown race
+and 1,851,865 ms serial-equivalent budget violation. Split 72 admission classes
+into :fast and five Make boundaries into :battery; wait for process-group exit
+before cleanup. Verification and measured costs: /var/tmp/forge/statehome-fx/REPORT.md, Round 7.

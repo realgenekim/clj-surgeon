@@ -96,9 +96,11 @@
 
 ;; @spec STATE-HOME-009
 ;; @spec STATE-HOME-010
-(deftest configured-root-cartesian-matrix
+(deftest configured-root-warm-cells
   (let [r (shell/sh "python3" "test/state_home_matrix.py"
                     (System/getProperty "java.class.path"))]
+    (print (:out r))
+    (flush)
     (is (zero? (:exit r)) (str (:out r) (:err r)))))
 
 ;; @spec STATE-HOME-011
