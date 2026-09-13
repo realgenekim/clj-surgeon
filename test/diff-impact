@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
-set -eu
+set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
-export TMPDIR=/var/tmp/forge/datacode-fx
-export JAVA_TOOL_OPTIONS='-Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx'
-export CLJ_SURGEON_MEMORY_TMP="$TMPDIR"
-mkdir -p "$TMPDIR"
+# @spec DATACODE-ENV-002 -- even an empty override changes the gate contract.
+while IFS= read -r name; do
+  case "$name" in
+    CLJ_SURGEON_*_TMP|CLJ_SURGEON_ARTIFACT_ROOT)
+      echo "Diff-impact refused: environment override $name is set" >&2
+      exit 91 ;;
+  esac
+done < <(compgen -e)
 exec 9>/home/forge/tmp/suite-1.lock
 flock 9
 if compgen -G '/var/tmp/forge/jvm-lease*' >/dev/null ||
@@ -12,7 +16,21 @@ if compgen -G '/var/tmp/forge/jvm-lease*' >/dev/null ||
   echo 'Diff-impact refused: lease or receipt-chain process active' >&2
   exit 90
 fi
-lease=/var/tmp/forge/jvm-lease-datacode-round6
+lease=/var/tmp/forge/jvm-lease-datacode-$$
 printf '%s\n' "$$" > "$lease"
-trap 'rm -f "$lease"' EXIT
-bb test/diff_impact.clj "${1:-3b6d5357}" "${2:-docs/observations/2026-09-12-data-not-code/round6}" "${3:-before}"
+# Same pid/UUID root shape as tmp-leak-support/secure-tmpdir!, the battery's
+# re-exec boundary. Never inherit the caller's broad temp or Java temp option.
+run_id=$(cat /proc/sys/kernel/random/uuid)
+export TMPDIR="/var/tmp/forge/clj-surgeon-suite-$$-${run_id:0:8}"
+trap 'rm -f -- "$lease"' EXIT
+mkdir -m 700 "$TMPDIR"
+trap 'rm -rf -- "$TMPDIR"; rm -f -- "$lease"' EXIT
+export TMP="$TMPDIR" TEMP="$TMPDIR"
+export JAVA_TOOL_OPTIONS="-Xmx1024m -Djava.io.tmpdir=$TMPDIR"
+export NODE_DISABLE_COMPILE_CACHE=1
+. "$HOME/bin/seat-tmp-guard.sh"
+if [ "${1:-}" = --self-test ]; then
+  bb -Djava.io.tmpdir="$TMPDIR" test/diff_impact.clj --self-test
+else
+  bb -Djava.io.tmpdir="$TMPDIR" test/diff_impact.clj "${1:-3b6d5357}" "${2:-docs/observations/2026-09-12-data-not-code/round9}" "${3:-before}"
+fi

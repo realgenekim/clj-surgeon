@@ -4,7 +4,14 @@
          '[cheshire.core :as json]
          '[clojure.java.io :as io]
          '[clj-surgeon.form-identity :as form-identity]
+         '[clj-surgeon.receipt-artifacts :as artifacts]
          '[clojure.string :as str])
+
+;; @spec DATACODE-ENV-002
+(defn environment-receipt []
+  {:tmpdir (System/getenv "TMPDIR")
+   :java-io-tmpdir (System/getProperty "java.io.tmpdir")
+   :destination-envelope (artifacts/current-envelope)})
 
 ;; Read declarations, never require the subject or consult lane selection.
 (defn declaration [file]
@@ -77,6 +84,7 @@
           changed (set (map :namespace (filter #(changed-files (:file %)) nodes)))
           selected (impact nodes changed)
           inventory {:base base :head (str/trim (command! ["git" "rev-parse" "HEAD"]))
+                     :environment (environment-receipt)
                      :changed-files (sort changed-files) :namespaces selected}]
       (fs/create-dirs output)
       (spit (str output "/impact-" phase ".edn") (pr-str inventory))
@@ -86,17 +94,22 @@
         (doseq [{n :namespace} selected]
           (let [log (str output "/" phase "/" n ".log")
                 receipt (str output "/" phase "/" n ".edn")
-                code (str "(require '[clojure.test :as t]) "
+                code (str "(require '[clojure.test :as t] '[clj-surgeon.receipt-artifacts :as artifacts]) "
                           "(let [r (try (require '" n ") (t/run-tests '" n ") "
                           "(catch Throwable e (.printStackTrace e) {:test 0 :pass 0 :fail 0 :error 1}))] "
-                          "(spit " (pr-str receipt) " (pr-str r)) "
+                          "(spit " (pr-str receipt) " (pr-str (assoc r :environment "
+                          "{:tmpdir (System/getenv \"TMPDIR\") "
+                          ":java-io-tmpdir (System/getProperty \"java.io.tmpdir\") "
+                          ":destination-envelope (artifacts/current-envelope)}))) "
                           "(shutdown-agents) (System/exit (if (and (pos? (:test r)) "
                           "(zero? (+ (:fail r) (:error r)))) 0 1)))")
                 _ (fs/create-dirs (fs/parent log))
                 _ (when (fs/exists? log) (throw (ex-info "Never overwrite a run" {:log log})))
                 start (System/nanoTime)
                 result (with-open [out (io/writer log)]
-                         @(process/process ["clojure" "-J-Xmx1g" "-M:clj-surgeon/test-deps" "-e" code]
+                         @(process/process ["clojure" "-J-Xmx1g"
+                                            (str "-J-Djava.io.tmpdir=" (System/getenv "TMPDIR"))
+                                            "-M:clj-surgeon/test-deps" "-e" code]
                                            {:out out :err :out}))
                 counters (when (fs/exists? receipt)
                            (try (read-string (slurp receipt)) (catch Exception _ nil)))
