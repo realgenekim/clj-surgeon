@@ -6343,3 +6343,22 @@ Skills'-terms index: 4 → 5, as estimated (the landing through the check-only p
 six-run rule, receipted). Window stays 7 until the probe measure runs. Next, in Gene's
 order (1b): install the CLI from the landed trunk, warm an owned image, run the
 preregistered probe measure; then data-not-code round 6 and its landing (2b).
+
+## 2026-09-13T00:44:41Z — probe measure attempt 1 STOPPED before any cell: the frozen instrument contradicts the frozen protocol; amendment 1 in progress
+
+The Opus runner executed the preregistration as written and stopped at the exact line
+(published as `2026-09-13-probe-measure-attempt1-stopped.md`): measure.py:56 asserts a
+clean checkout, but the protocol's own `make warm PORT=19066` writes .clj-surgeon/probe.edn
+into the checkout root and that directory is not gitignored, so every PROBE cell aborts
+before T0. Second: the subject moved by Gene's order from the design-time 3b6d5357 to the
+landed 759974c7, and attempts 24–26 changed two target files, so T4 and T5 fail their
+before_sha256 gate and with them all six T4 variance-floor controls; the JVM-only stratum
+would have no noise gate. The probe verb itself answered 6/6 correctly; NATIVE runs end to
+end (one indicative run 4.4 s). Bets unsettled, rows untouched, image stopped by pid,
+lease released. No workaround was taken: the runner's stop is the preregistration working.
+
+Amendment 1 (Astra, pid 1115818), written before any measured cell: subject re-frozen at
+759974c7; the instrument's clean assertion excludes exactly .clj-surgeon/ with old and new
+sha recorded; T4/T5 re-cut with the same semantic edit and the byte diff shown; bets copied
+verbatim, unchanged. Then attempt 2 of the measure. Filed: the image writing its identity
+file into the checkout root is a "places" defect of the same class as the write audit.

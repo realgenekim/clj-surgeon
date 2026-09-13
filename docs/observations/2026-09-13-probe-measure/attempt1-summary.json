@@ -1,0 +1,101 @@
+{
+  "run_status": "STOPPED BEFORE ANY MEASURED CELL",
+  "stop_reason": "unexecutable contradiction inside the frozen instrument: measure.py line 56 requires a clean checkout; the preregistration's required warm image writes an untracked .clj-surgeon/probe.edn into that same checkout and measure.py line 88 requires that file to exist",
+  "subject_sha": "759974c718889c52a05a1d0746c9c21d0f00dcdb",
+  "subject_tag": "stable/2026-09-13.1",
+  "instrument": {
+    "measure_py_sha256": "1aff7c05688125126b0bee21192a4a756457747134d8a2099f98f53923a142be",
+    "manifest_sha256": "966c591194a3c520c6879e3a88543cc0b334466ea5bfa936e306eaca90f7f520",
+    "SHA256SUMS_sha256": "9a7d62d2936179e8c32bdc57f3545fa9e1748adcf374251376b65c11487e7661",
+    "patch_sha256_verified": true,
+    "patches": {
+      "T1": "c520f91f23ad0949444f056d328aae34af96101d089ac6e8680e9164f3fb6ad4",
+      "T2": "0acef9e4a353a6c3db50f9a5a0d28bfcb4269a08eee8cf8672605c4ea1fa2c5f",
+      "T3": "3512853c3f68886d9d2dcf0f4141880ec67ab23a6312532a9daeb0443bcb2b6b",
+      "T4": "a7d596f631f00b456c960ea7da8505b120b7216100ec50b0afae7ec55f431db6",
+      "T5": "540c7ebd1af3a0fffd29dd4cdb57604e5f141a24c1a1447fad12d421123abb96",
+      "T6": "b4e561f4b9e34ed9aa1fec2c114af94d0494c642e08cfd118b481c3c0152a86f"
+    }
+  },
+  "headline": {
+    "bb_portable": {"native_median_ms": null, "probe_median_ms": null, "p_over_n": null, "n_per_arm": 0, "unknown_cells": 18, "status": "UNKNOWN — no cell measured"},
+    "jvm_only":    {"native_median_ms": null, "probe_median_ms": null, "p_over_n": null, "n_per_arm": 0, "unknown_cells": 18, "status": "UNKNOWN — no cell measured"}
+  },
+  "cells": {
+    "planned_matched": 36, "measured": 0, "unknown": 36,
+    "planned_controls": 12, "controls_measured": 0, "controls_unknown": 12,
+    "planned_nontest": 4, "nontest_measured": 0, "nontest_unknown": 4
+  },
+  "blockers": [
+    {
+      "id": "B1",
+      "severity": "STOP — blocks every PROBE cell",
+      "exact_line": "assert not git(checkout, 'status', '--porcelain'), 'checkout must start clean'",
+      "location": "round5/measure.py line 56 (copied verbatim to instrument/measure.py)",
+      "conflicts_with": [
+        "probe-measure-preregistration.md, 'Arms and exact commands': 'In a separate owned terminal in the PROBE checkout: make warm PORT=19066'",
+        "round5/measure.py line 88: identity = checkout / '.clj-surgeon/probe.edn'; assert identity.is_file(), 'attested warm setup required before T0'"
+      ],
+      "mechanism": "Makefile target 'warm' does mkdir -p .clj-surgeon and writes .clj-surgeon/probe.edn in the checkout root. '.clj-surgeon/' is not in the subject's .gitignore at 759974c7 and never has been on any branch (git log -S'.clj-surgeon/' -- .gitignore is empty across --all). git status --porcelain therefore returns '?? .clj-surgeon/' and the clean assertion fails before T0 and before cell.mkdir().",
+      "executed_evidence": "results/apparatus/probe-cell-attempt.err — AssertionError: checkout must start clean, raised at measure.py line 56",
+      "consequence": "0 of 18 PROBE cells and 0 of 2 PROBE non-test controls can be run; no P/N ratio is computable in either stratum; no bet can be settled."
+    },
+    {
+      "id": "B2",
+      "severity": "UNKNOWN cells by the preregistration's own rule (anticipated)",
+      "detail": "T4 and T5 before_sha256 do not match the landed trunk; measure.py line 85 asserts equality, so those cells abort before T0 in BOTH arms.",
+      "T4": {"expected": "a16fa8b69823fce5...", "actual_trunk": "b843fadfd81772d8...", "file": "test/clj_surgeon/census_pool_test.clj"},
+      "T5": {"expected": "97e49995bb183430...", "actual_trunk": "4f0f3ff5386ee34e...", "file": "test/clj_surgeon/mcp_hot_verify_test.clj"},
+      "consequence": "Even with B1 resolved, the JVM-only stratum loses 2 of 3 tasks: 3 runs per arm instead of the frozen 9, and ALL SIX NATIVE T4 variance-floor controls are unknown, so the JVM-only noise gate is undefined as frozen. bb-portable (T1,T2,T3) is unaffected: 9 runs per arm and 6 T1 controls remain available."
+    }
+  ],
+  "stratum_attestation": "all six agree with clj-surgeon.lane-manifest/portability-runtimes; see results/stratum-attestation.json",
+  "setup_costs_retained": {
+    "warm_image_startup_wall_ms": 13258.284894,
+    "warm_image_command": "make warm PORT=19066",
+    "admission_probe_walls_ms": {
+      "clj-surgeon.forms-test": 482,
+      "clj-surgeon.analyze-test": 787,
+      "clj-surgeon.edit-dsl-test": 700,
+      "clj-surgeon.census-pool-test": 529,
+      "clj-surgeon.mcp-hot-verify-test": 1578,
+      "clj-surgeon.mcp-formatter-test": 1182
+    },
+    "admission_probe_total_ms": 5258,
+    "admission_probe_in_image_elapsed_ms": {
+      "clj-surgeon.forms-test": 148.097041,
+      "clj-surgeon.analyze-test": 511.686288,
+      "clj-surgeon.edit-dsl-test": 429.811683,
+      "clj-surgeon.census-pool-test": 261.948225,
+      "clj-surgeon.mcp-hot-verify-test": 1285.469405,
+      "clj-surgeon.mcp-formatter-test": 899.590124
+    },
+    "admission_probe_verdicts": "6/6 :state :probe-passed, 0 failures, exit 0",
+    "break_even_invocation_count": null,
+    "break_even_note": "not computable: requires a measured per-invocation saving from matched cells, which do not exist."
+  },
+  "indicative_only_not_a_result": {
+    "warning": "n=1 per arm, NOT preregistered cells, NOT the frozen statistic, settles NO bet",
+    "native_T1_complete_wall_ms": 4401.49918,
+    "native_T1_command_wall_ms": 4386.459039,
+    "native_T1_verdict": {"status": "accepted", "test": 24, "pass": 95, "fail": 0, "error": 0, "exit": 0},
+    "probe_T1_namespace_admission_wall_ms": 482,
+    "indicative_ratio_probe_over_native": 0.1095,
+    "indicative_break_even_invocations": 3.38,
+    "why_not_a_result": "the 482 ms probe figure is an UNPATCHED admission probe outside the runner, not a T0..T1 edit-to-verdict cell; the 4401 ms native figure is one run, not a median of nine."
+  },
+  "bets": {
+    "fable":  {"bb_portable_p_over_n": "UNSETTLED", "jvm_only_p_over_n": "UNSETTLED", "first_attempt_success": "UNSETTLED", "probe_refusal_rate": "UNSETTLED"},
+    "astra":  {"bb_portable_p_over_n": "UNSETTLED", "jvm_only_p_over_n": "UNSETTLED", "first_attempt_success": "UNSETTLED", "probe_refusal_rate": "UNSETTLED"},
+    "rule": "the preregistration states unknown telemetry leaves a bet unsettled and forbids any claim from incomplete cells; every cell is unknown, so no bet is scored HELD or MISSED"
+  },
+  "apparatus_state": {
+    "worktrees_retained": ["/var/tmp/forge/probe-measure-fx/subject-native", "/var/tmp/forge/probe-measure-fx/subject-probe"],
+    "worktrees_removed": false,
+    "worktrees_removal_reason": "the measurement did not run; the subject checkouts are needed to resume immediately once the blocker is decided",
+    "warm_image_stopped_by_pid": 1005716,
+    "suite_lease": "/home/forge/tmp/suite-1.lock held exclusively for the run, released at the end",
+    "pushed_or_committed_or_installed": "nothing",
+    "patch_or_target_edited": "nothing"
+  }
+}
