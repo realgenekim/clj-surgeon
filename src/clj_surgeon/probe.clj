@@ -189,24 +189,35 @@
              :throwable-class (.getName (class t))))))
 
 (defn cli! [{:keys [ns image-file]}]
-  (try
-    (let [root (.getCanonicalPath (io/file "."))
-          descriptor (with-open [r (io/reader (or image-file ".clj-surgeon/probe.edn"))]
-                       (read-bounded r 8192))
-          image (:image descriptor)
-          request {:ns (str ns) :image image}
-          problem (or (when-not (= root (:root image))
-                        (refusal :stale-probe-image "Image belongs to another worktree; run make warm here."))
-                      (request-problem image (fingerprint root) request))]
-      (if problem problem
-        (let [port (:port descriptor)]
-          (when-not (and (integer? port) (< 9000 port 65536))
-            (throw (ex-info "Warm port must be above 9000" {:error-type :invalid-probe-port})))
-          (let [post (requiring-resolve 'babashka.http-client/post)
-                response (post (str "http://127.0.0.1:" port "/probe")
-                               {:headers {"Content-Type" "application/edn"}
-                                :body (pr-str request) :timeout 60000 :as :stream})]
-            (with-open [r (io/reader (:body response))] (read-bounded r 16384))))))
-    (catch Exception e
-      (refusal (or (:error-type (ex-data e)) :probe-connection-failed) (.getMessage e)))
-    (finally (flush))))
+  ;; @spec STATE-HOME-004
+  ;; @spec STATE-HOME-005
+  ;; @spec STATE-HOME-006
+  (let [root (.getCanonicalPath (io/file "."))
+        path ((requiring-resolve 'clj-surgeon.probe-state/image-file) root image-file)]
+    (assoc
+      (try
+        (let [descriptor (try
+                           (with-open [r (io/reader path)] (read-bounded r 8192))
+                           (catch java.io.FileNotFoundException e
+                             (if (.exists (io/file path)) (throw e)
+                               (throw (ex-info "Warm image descriptor is absent; run make warm here."
+                                               {:error-type :probe-image-absent :path path} e)))))
+              image (:image descriptor)
+              request {:ns (str ns) :image image}
+              problem (or (when-not (= root (:root image))
+                            (refusal :stale-probe-image "Image belongs to another worktree; run make warm here."))
+                          (request-problem image (fingerprint root) request))]
+          (if problem problem
+            (let [port (:port descriptor)]
+              (when-not (and (integer? port) (< 9000 port 65536))
+                (throw (ex-info "Warm port must be above 9000" {:error-type :invalid-probe-port})))
+              (let [post (requiring-resolve 'babashka.http-client/post)
+                    response (post (str "http://127.0.0.1:" port "/probe")
+                                   {:headers {"Content-Type" "application/edn"}
+                                    :body (pr-str request) :timeout 60000 :as :stream})]
+                (with-open [r (io/reader (:body response))] (read-bounded r 16384))))))
+        (catch Exception e
+          (merge (refusal (or (:error-type (ex-data e)) :probe-connection-failed) (.getMessage e))
+                 (select-keys (ex-data e) [:path :errno :native-class :native-message])))
+        (finally (flush)))
+      :image-file path)))

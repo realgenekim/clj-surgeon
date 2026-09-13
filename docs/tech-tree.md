@@ -987,3 +987,20 @@ errors and the same four baseline warnings. The census adds three names and
 removes none. Complete narrow oracle and gate evidence, including the counted
 battery, belong in the uncommitted [round 9 report](observations/2026-09-12-data-not-code/round9/REPORT.md).
 No speed claim, new routing admission or expanded all-writers coverage follows.
+
+### Warm image state-home identity (inb-3c65d7)
+
+The actual Make warm recipe left `?? .clj-surgeon/` in a fresh committed copy.
+The state-home leaf moves only the probe identity descriptor into a per-workspace
+SHA-256 directory beneath the declared seat state root. Startup and the Babashka
+client now share resolution; the writer uses destination-envelope admission,
+and receipts name the descriptor read. Native EACCES and absent-descriptor
+boundaries have direct witnesses. The live Make/client boundary caught a JVM-only
+exception import that the initial JVM unit checks missed; the classifier now uses
+native class names without importing unavailable Babashka classes.
+
+This is a registered second encounter, not evidence of a speed win. Operator
+refusals, manual recovery, an editor receipt written outside the task's paths,
+and remaining verification are recorded at /var/tmp/forge/statehome-fx/REPORT.md.
+The [STATE-HOME requirements](intent/state-home/state-home-specs.md) own the
+permanent regression; other checkout-state consumers remain outside this change.

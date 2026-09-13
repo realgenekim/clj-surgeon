@@ -1423,3 +1423,11 @@ and the exact E4 preservation specimen; no behavioral or routing admission follo
 The stable CLI ships its local runtime dependency closure in an immutable copied
 package. The [package design](intent/cli-package/design.md) owns installed
 splice-verb availability and dependency-sensitive package identity.
+
+## Warm image identity state
+
+The warm probe's identity descriptor is per-seat state, partitioned by the SHA-256
+of the canonical workspace path. Startup and probe share the state-root resolver;
+publication admits its destination before writing, and client receipts identify
+the descriptor read. The [state-home leaf](intent/state-home/design.md) owns root
+precedence, overrides, native filesystem refusals and the clean-checkout witness.

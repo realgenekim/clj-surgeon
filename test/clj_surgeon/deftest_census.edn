@@ -2219,6 +2219,12 @@
   clj-surgeon.platform-selector-test/platform-selector-refuses-unknowable-file-context
   clj-surgeon.platform-selector-test/reader-conditionals-cannot-override-a-plain-file-platform
   clj-surgeon.platform-selector-test/xray-passes-file-context-through-literal-and-computed-reads
+  clj-surgeon.probe-state-test/absent-descriptor-has-provenance
+  clj-surgeon.probe-state-test/envelope-refuses-before-creation
+  clj-surgeon.probe-state-test/native-permission-failure-is-named
+  clj-surgeon.probe-state-test/override-is-read-and-published
+  clj-surgeon.probe-state-test/precedence-and-workspace-separation
+  clj-surgeon.probe-state-test/warm-leaves-fresh-checkout-clean
   clj-surgeon.quoted-var-refs-test/captured-source-scan-builds-one-context-per-candidate-not-subject
   clj-surgeon.quoted-var-refs-test/captured-source-scan-is-pure-bounded-and-deterministic
   clj-surgeon.quoted-var-refs-test/captured-source-scan-refuses-invalid-or-partial-evidence

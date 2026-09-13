@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.probe-state-test, :runtime :bb, :mode "test", :started-at "2026-09-13T17:44:38.978373280Z", :elapsed-ms 24655, :status :test-failed, :result {:test 6, :pass 24, :fail 4, :error 0, :type :summary}}
