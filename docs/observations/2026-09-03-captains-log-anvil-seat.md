@@ -6485,3 +6485,20 @@ Check-only prewarm packet 9bc6b42d exit 0 at 76cc24a4, receipt bound. Ship run
 20260913T035937Z sealed 06dba691 (tree 9ac1892b), Sol on the round-2 brief (his fixed-point
 class answered by round 8), battery on fable/battery-receipt-76cc24a4 (pre-created), fast
 lane beside.
+
+## 2026-09-13T04:09:04Z — data-not-code round 2: Sol GO; battery RED on the envelope refusing fixtures that write under ~/tmp; round 9 puts the oracle in the gate's environment
+
+Sol GO on 06dba691 (verdict published as …-verdict-2-GO.md). The counted battery beside it:
+74 errors, every one :write-outside-envelope from the new admission (receipt_artifacts.clj:180)
+in txn-journal-test and its lane-3 neighbours: the tests build their substitute state home
+under the LITERAL /home/forge/tmp (txn_journal_test.clj:25, or CLJ_SURGEON_MEMORY_TMP),
+outside the suite's narrow TMPDIR; envelope roots were the suite tmp, the state root and
+the receipt worktree. The new refusal is doing exactly its job on a fixture of the class
+attempts 12–18 fixed elsewhere. The sharper fact: rounds 6 and 8's diff-impact runs passed
+these tests, so the oracle ran in a wider environment than the gate's. Round 9 (Astra,
+pid 1175485), class first: the oracle refuses CLJ_SURGEON_* overrides and creates a narrow
+per-run TMPDIR exactly as suite-run does, reproduces the battery's red, then: every test
+scratch base from java.io.tmpdir; an explicitly bound state-home substitute is trusted
+launcher context and an envelope root for that invocation (my ruling); narrow oracle,
+test-fast, a counted battery alone, prewarm. Two of Sol's GOs tonight have been undone by
+the battery beside them; both times the battery was right.
