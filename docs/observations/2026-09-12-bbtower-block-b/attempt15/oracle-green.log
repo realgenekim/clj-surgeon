@@ -1,0 +1,10 @@
+Fresh writable TMPDIR: /var/tmp/forge/bbtower-fx/a15-x9byk_vx
+All other paths read-only, including /var/tmp/forge and /tmp
+/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt15/restricted-oracle.py:28: DeprecationWarning: Due to '_pack_', the 'Rule' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+  class Rule(ctypes.Structure):
+.......s...s.........
+----------------------------------------------------------------------
+Ran 21 tests in 0.333s
+
+OK (skipped=2)
+exit: 0

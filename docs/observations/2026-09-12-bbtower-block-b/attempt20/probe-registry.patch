@@ -1,0 +1,22 @@
+*** Begin Patch
+*** Update File: /home/forge/src/clj-surgeon-bbtower/docs/intent/probe/refusals.edn
+@@
+-  {:type :invalid-probe-port :class :protocol
++  {:type :probe-response-truncated :class :resource
++   :native_failure "A client can read a silently truncated EDN stream as a verdict, or lose the verdict at its read guard."
++   :promise "The server emits complete EDN within 16384 UTF-8 bytes, preserving the verdict and counts with explicit truncation facts."
++   :native_method "Encode and measure before writing; replace an oversized reload list with a fitting prefix and original-size/omitted-count metadata."
++   :minimal_reproducer "A production probe verdict with 5000 reload dependencies exceeds the client's 16384-character guard."
++   :existing_check "probe/encode-response at probe-servlet's writer boundary; BB-PROBE-004"
++   :owner "probe" :witness "mcp-http-server-test/probe-servlet-bounds-the-actual-writer"
++   :retirement_condition "A replacement bounds complete server output while preserving verdict status and counts."}
++  {:type :invalid-probe-port :class :protocol
+*** Update File: /home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/mcp_alias_migration_test.clj
+@@
+     "invalid-probe-port" "probe-connection-failed"
++    ;; BB-PROBE-004: oversized HTTP verdicts retain bounded truncation facts.
++    "probe-response-truncated"
+@@
+-    (is (= 160 (count kinds))
++    (is (= 161 (count kinds))
+*** End Patch

@@ -1,0 +1,1104 @@
+{clj-surgeon.battery-ledger-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [40 38 40 36 39 36],
+   :mean-ms 38.166666666666664,
+   :sd-ms 1.834847859269718,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-ledger-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-ledger-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-ledger-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-ledger-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-ledger-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-ledger-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [6 6 6 8 6 6],
+   :mean-ms 6.333333333333333,
+   :sd-ms 0.8164965809277259,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-ledger-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-ledger-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-ledger-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-ledger-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-ledger-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-ledger-test-bb-6.edn"]},
+  :conservative-ratio 0.23092828953497613,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.battery-parallel-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [967 967 973 1016 1014 965],
+   :mean-ms 983.6666666666666,
+   :sd-ms 24.426761280748348,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-parallel-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-parallel-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-parallel-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-parallel-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-parallel-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-parallel-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [34 39 35 34 34 35],
+   :mean-ms 35.166666666666664,
+   :sd-ms 1.9407902170679519,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-parallel-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-parallel-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-parallel-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-parallel-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-parallel-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.battery-parallel-test-bb-6.edn"]},
+  :conservative-ratio 0.04177117892173059,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.fast-lane-isolation-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [129 136 127 132 128 130],
+   :mean-ms 130.33333333333334,
+   :sd-ms 3.2659863237109037,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.fast-lane-isolation-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.fast-lane-isolation-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.fast-lane-isolation-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.fast-lane-isolation-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.fast-lane-isolation-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.fast-lane-isolation-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [46 46 46 46 49 46],
+   :mean-ms 46.5,
+   :sd-ms 1.224744871391589,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.fast-lane-isolation-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.fast-lane-isolation-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.fast-lane-isolation-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.fast-lane-isolation-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.fast-lane-isolation-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.fast-lane-isolation-test-bb-6.edn"]},
+  :conservative-ratio 0.39538733234903434,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.helper-extraction-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [785 823 811 765 845 843],
+   :mean-ms 812.0,
+   :sd-ms 31.96873472629156,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.helper-extraction-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.helper-extraction-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.helper-extraction-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.helper-extraction-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.helper-extraction-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.helper-extraction-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [815 834 818 792 837 812],
+   :mean-ms 818.0,
+   :sd-ms 16.358484037342826,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.helper-extraction-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.helper-extraction-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.helper-extraction-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.helper-extraction-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.helper-extraction-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.helper-extraction-test-bb-6.edn"]},
+  :conservative-ratio 1.1372270810732203,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.insert-forms-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [1339 1324 1362 1441 1445 1407],
+   :mean-ms 1386.3333333333333,
+   :sd-ms 52.10630160226944,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.insert-forms-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.insert-forms-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.insert-forms-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.insert-forms-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.insert-forms-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.insert-forms-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [5192 5318 5234 5166 5016 5126],
+   :mean-ms 5175.333333333333,
+   :sd-ms 101.96208445626573,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.insert-forms-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.insert-forms-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.insert-forms-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.insert-forms-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.insert-forms-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.insert-forms-test-bb-6.edn"]},
+  :conservative-ratio 4.195593578543493,
+  :runtime :jvm,
+  :previous-runtime :jvm},
+ clj-surgeon.intent-transaction-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [5046 4981 4855 4922 5011 4973],
+   :mean-ms 4964.666666666667,
+   :sd-ms 67.74265027784686,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.intent-transaction-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.intent-transaction-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.intent-transaction-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.intent-transaction-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.intent-transaction-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.intent-transaction-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [5069 5095 5104 5025 5051 5160],
+   :mean-ms 5084.0,
+   :sd-ms 47.09989384276784,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.intent-transaction-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.intent-transaction-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.intent-transaction-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.intent-transaction-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.intent-transaction-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.intent-transaction-test-bb-6.edn"]},
+  :conservative-ratio 1.0722727922425561,
+  :runtime :jvm,
+  :previous-runtime :jvm,
+  :contract-failure
+  "Shared CLI workspace_status.unexpected_paths is unbounded; attempt8/owed.md. Runtime comparison found no bb-only leak."},
+ clj-surgeon.lane-manifest-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [1165 1293 1237 1326 1212 1225],
+   :mean-ms 1243.0,
+   :sd-ms 57.9551550770076,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.lane-manifest-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.lane-manifest-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.lane-manifest-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.lane-manifest-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.lane-manifest-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.lane-manifest-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [1311 1306 1304 1285 1282 1348],
+   :mean-ms 1306.0,
+   :sd-ms 23.706539182259394,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.lane-manifest-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.lane-manifest-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.lane-manifest-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.lane-manifest-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.lane-manifest-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.lane-manifest-test-bb-6.edn"]},
+  :conservative-ratio 1.200803352703422,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mcp-compact-edit-fields-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [33 35 29 30 32 28],
+   :mean-ms 31.166666666666668,
+   :sd-ms 2.6394443859772205,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-compact-edit-fields-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-compact-edit-fields-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-compact-edit-fields-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-compact-edit-fields-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-compact-edit-fields-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-compact-edit-fields-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [7 6 6 8 6 7],
+   :mean-ms 6.666666666666667,
+   :sd-ms 0.816496580927726,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-compact-edit-fields-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-compact-edit-fields-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-compact-edit-fields-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-compact-edit-fields-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-compact-edit-fields-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-compact-edit-fields-test-bb-6.edn"]},
+  :conservative-ratio 0.32060147697023417,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mcp-contract-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [71 81 73 78 71 69],
+   :mean-ms 73.83333333333333,
+   :sd-ms 4.665476038590988,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-contract-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-contract-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-contract-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-contract-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-contract-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-contract-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [12 12 12 14 14 14],
+   :mean-ms 13.0,
+   :sd-ms 1.0954451150103321,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-contract-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-contract-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-contract-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-contract-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-contract-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-contract-test-bb-6.edn"]},
+  :conservative-ratio 0.2355089832993098,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mcp-extraction-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [130 143 145 138 135 133],
+   :mean-ms 137.33333333333334,
+   :sd-ms 5.819507424745384,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-extraction-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-extraction-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-extraction-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-extraction-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-extraction-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-extraction-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [49 51 49 48 48 48],
+   :mean-ms 48.833333333333336,
+   :sd-ms 1.169045194450012,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-extraction-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-extraction-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-extraction-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-extraction-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-extraction-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-extraction-test-bb-6.edn"]},
+  :conservative-ratio 0.4071100773644849,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mcp-feature-thread-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [42963 42677 42596 42800 42621 42999],
+   :mean-ms 42776.0,
+   :sd-ms 174.0689518552921,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-feature-thread-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-feature-thread-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-feature-thread-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-feature-thread-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-feature-thread-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-feature-thread-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [725420 726104 725937 725790 725346 726826],
+   :mean-ms 725903.8333333334,
+   :sd-ms 538.4772666201115,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-feature-thread-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-feature-thread-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-feature-thread-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-feature-thread-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-feature-thread-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-feature-thread-test-bb-6.edn"]},
+  :conservative-ratio 17.13451378286988,
+  :runtime :jvm,
+  :previous-runtime :jvm},
+ clj-surgeon.mcp-inspect-contract-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [321 323 296 297 308 311],
+   :mean-ms 309.3333333333333,
+   :sd-ms 11.465891446663301,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-inspect-contract-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-inspect-contract-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-inspect-contract-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-inspect-contract-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-inspect-contract-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-inspect-contract-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [313 290 319 299 322 303],
+   :mean-ms 307.6666666666667,
+   :sd-ms 12.420413304985734,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-inspect-contract-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-inspect-contract-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-inspect-contract-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-inspect-contract-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-inspect-contract-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-inspect-contract-test-bb-6.edn"]},
+  :conservative-ratio 1.1609835657865595,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mcp-intent-contract-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [320 305 301 290 286 279],
+   :mean-ms 296.8333333333333,
+   :sd-ms 14.851487018701754,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-intent-contract-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-intent-contract-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-intent-contract-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-intent-contract-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-intent-contract-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-intent-contract-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [249 246 251 255 269 243],
+   :mean-ms 252.16666666666666,
+   :sd-ms 9.217736526212207,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-intent-contract-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-intent-contract-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-intent-contract-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-intent-contract-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-intent-contract-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-intent-contract-test-bb-6.edn"]},
+  :conservative-ratio 1.0129965775223444,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mcp-paths-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [18 14 15 16 15 15],
+   :mean-ms 15.5,
+   :sd-ms 1.378404875209022,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-paths-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-paths-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-paths-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-paths-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-paths-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-paths-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [2 2 2 2 2 2],
+   :mean-ms 2.0,
+   :sd-ms 0.0,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-paths-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-paths-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-paths-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-paths-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-paths-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-paths-test-bb-6.edn"]},
+  :conservative-ratio 0.1569465699584616,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mcp-program-tool-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [139 171 146 164 146 133],
+   :mean-ms 149.83333333333334,
+   :sd-ms 14.688998150543375,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-program-tool-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-program-tool-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-program-tool-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-program-tool-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-program-tool-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-program-tool-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [18 22 19 20 18 20],
+   :mean-ms 19.5,
+   :sd-ms 1.51657508881031,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-program-tool-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-program-tool-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-program-tool-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-program-tool-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-program-tool-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-program-tool-test-bb-6.edn"]},
+  :conservative-ratio 0.18706643252833507,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mcp-read-request-normalization-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [33 28 29 34 28 28],
+   :mean-ms 30.0,
+   :sd-ms 2.756809750418044,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-read-request-normalization-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-read-request-normalization-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-read-request-normalization-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-read-request-normalization-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-read-request-normalization-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-read-request-normalization-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [3 3 3 4 3 5],
+   :mean-ms 3.5,
+   :sd-ms 0.8366600265340756,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-read-request-normalization-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-read-request-normalization-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-read-request-normalization-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-read-request-normalization-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-read-request-normalization-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-read-request-normalization-test-bb-6.edn"]},
+  :conservative-ratio 0.21127336697413465,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mcp-recovery-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [174 169 165 162 162 159],
+   :mean-ms 165.16666666666666,
+   :sd-ms 5.49241901776136,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-recovery-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-recovery-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-recovery-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-recovery-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-recovery-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-recovery-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [6 6 6 6 7 6],
+   :mean-ms 6.166666666666667,
+   :sd-ms 0.408248290463863,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-recovery-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-recovery-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-recovery-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-recovery-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-recovery-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-recovery-test-bb-6.edn"]},
+  :conservative-ratio 0.04529173969197451,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mcp-schema-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [33 32 34 33 31 35],
+   :mean-ms 33.0,
+   :sd-ms 1.4142135623730951,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-schema-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-schema-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-schema-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-schema-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-schema-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-schema-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [9 10 9 10 10 10],
+   :mean-ms 9.666666666666666,
+   :sd-ms 0.5163977794943223,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-schema-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-schema-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-schema-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-schema-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-schema-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-schema-test-bb-6.edn"]},
+  :conservative-ratio 0.35462063147628675,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mcp-telemetry-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [36 39 37 37 39 37],
+   :mean-ms 37.5,
+   :sd-ms 1.224744871391589,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-telemetry-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-telemetry-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-telemetry-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-telemetry-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-telemetry-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-telemetry-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [6 6 7 6 7 6],
+   :mean-ms 6.333333333333333,
+   :sd-ms 0.5163977794943223,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-telemetry-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-telemetry-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-telemetry-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-telemetry-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-telemetry-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-telemetry-test-bb-6.edn"]},
+  :conservative-ratio 0.21015753660263214,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mcp-workspace-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [33 28 31 29 30 28],
+   :mean-ms 29.833333333333332,
+   :sd-ms 1.9407902170679516,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-workspace-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-workspace-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-workspace-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-workspace-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-workspace-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-workspace-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [16 14 18 18 16 15],
+   :mean-ms 16.166666666666668,
+   :sd-ms 1.6020819787597222,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-workspace-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-workspace-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-workspace-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-workspace-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-workspace-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mcp-workspace-test-bb-6.edn"]},
+  :conservative-ratio 0.7464170416320959,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mission-candidate-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [17 17 20 19 18 16],
+   :mean-ms 17.833333333333332,
+   :sd-ms 1.4719601443879746,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-candidate-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-candidate-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-candidate-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-candidate-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-candidate-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-candidate-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [3 3 3 3 3 3],
+   :mean-ms 3.0,
+   :sd-ms 0.0,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-candidate-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-candidate-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-candidate-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-candidate-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-candidate-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-candidate-test-bb-6.edn"]},
+  :conservative-ratio 0.20148544412209776,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mission-forms-source-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [348 346 382 389 370 334],
+   :mean-ms 361.5,
+   :sd-ms 22.034064536530703,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-source-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-source-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-source-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-source-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-source-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-source-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [32 29 28 27 28 30],
+   :mean-ms 29.0,
+   :sd-ms 1.7888543819998317,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-source-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-source-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-source-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-source-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-source-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-source-test-bb-6.edn"]},
+  :conservative-ratio 0.10262897883841628,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mission-forms-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [39 37 37 39 40 39],
+   :mean-ms 38.5,
+   :sd-ms 1.224744871391589,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [6 6 6 6 6 6],
+   :mean-ms 6.0,
+   :sd-ms 0.0,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-forms-test-bb-6.edn"]},
+  :conservative-ratio 0.16643315052104932,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mission-git-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [9 14 9 10 10 9],
+   :mean-ms 10.166666666666666,
+   :sd-ms 1.9407902170679516,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-git-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-git-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-git-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-git-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-git-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-git-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [1 1 1 1 1 1],
+   :mean-ms 1.0,
+   :sd-ms 0.0,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-git-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-git-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-git-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-git-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-git-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-git-test-bb-6.edn"]},
+  :conservative-ratio 0.1591068066535244,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mission-plain-forms-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [81 94 84 92 87 92],
+   :mean-ms 88.33333333333333,
+   :sd-ms 5.163977794943222,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-plain-forms-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-plain-forms-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-plain-forms-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-plain-forms-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-plain-forms-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-plain-forms-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [44 42 44 43 47 45],
+   :mean-ms 44.166666666666664,
+   :sd-ms 1.7224014243685084,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-plain-forms-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-plain-forms-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-plain-forms-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-plain-forms-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-plain-forms-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-plain-forms-test-bb-6.edn"]},
+  :conservative-ratio 0.6103613736990519,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mission-typist-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [52 55 47 57 56 51],
+   :mean-ms 53.0,
+   :sd-ms 3.7416573867739413,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-typist-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-typist-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-typist-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-typist-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-typist-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-typist-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [25 20 21 21 21 20],
+   :mean-ms 21.333333333333332,
+   :sd-ms 1.8618986725025257,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-typist-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-typist-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-typist-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-typist-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-typist-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-typist-test-bb-6.edn"]},
+  :conservative-ratio 0.5505042942752865,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.mission-usage-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [58 50 53 61 55 52],
+   :mean-ms 54.833333333333336,
+   :sd-ms 4.070217029430577,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-usage-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-usage-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-usage-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-usage-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-usage-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-usage-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [14 14 14 14 14 14],
+   :mean-ms 14.0,
+   :sd-ms 0.0,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-usage-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-usage-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-usage-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-usage-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-usage-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.mission-usage-test-bb-6.edn"]},
+  :conservative-ratio 0.29983145654984084,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.namespace-split-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [1149 1078 1182 1187 1131 1068],
+   :mean-ms 1132.5,
+   :sd-ms 50.64681628690988,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.namespace-split-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.namespace-split-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.namespace-split-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.namespace-split-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.namespace-split-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.namespace-split-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [752 751 752 755 761 757],
+   :mean-ms 754.6666666666666,
+   :sd-ms 3.8297084310253524,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.namespace-split-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.namespace-split-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.namespace-split-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.namespace-split-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.namespace-split-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.namespace-split-test-bb-6.edn"]},
+  :conservative-ratio 0.7392565713412248,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.outline-corpus-integration-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [7952 8025 7936 8240 7817 8254],
+   :mean-ms 8037.333333333333,
+   :sd-ms 175.65154900161474,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-corpus-integration-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-corpus-integration-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-corpus-integration-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-corpus-integration-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-corpus-integration-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-corpus-integration-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [20724 20726 20889 20909 20981 20673],
+   :mean-ms 20817.0,
+   :sd-ms 125.06798151405499,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-corpus-integration-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-corpus-integration-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-corpus-integration-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-corpus-integration-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-corpus-integration-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-corpus-integration-test-bb-6.edn"]},
+  :conservative-ratio 2.7409644924618632,
+  :runtime :jvm,
+  :previous-runtime :jvm},
+ clj-surgeon.outline-differential-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [54 52 52 50 63 55],
+   :mean-ms 54.333333333333336,
+   :sd-ms 4.589843860815601,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-differential-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-differential-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-differential-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-differential-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-differential-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-differential-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [16 16 17 16 16 16],
+   :mean-ms 16.166666666666668,
+   :sd-ms 0.40824829046386296,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-differential-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-differential-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-differential-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-differential-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-differential-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.outline-differential-test-bb-6.edn"]},
+  :conservative-ratio 0.37611942551971916,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.quoted-var-refs-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [80 89 88 97 88 91],
+   :mean-ms 88.83333333333333,
+   :sd-ms 5.49241901776136,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.quoted-var-refs-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.quoted-var-refs-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.quoted-var-refs-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.quoted-var-refs-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.quoted-var-refs-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.quoted-var-refs-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [11 11 10 10 10 11],
+   :mean-ms 10.5,
+   :sd-ms 0.5477225575051661,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.quoted-var-refs-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.quoted-var-refs-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.quoted-var-refs-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.quoted-var-refs-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.quoted-var-refs-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.quoted-var-refs-test-bb-6.edn"]},
+  :conservative-ratio 0.1489488662645537,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.rename-alias-receipt-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [489 461 475 534 504 516],
+   :mean-ms 496.5,
+   :sd-ms 26.912822222873615,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-receipt-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-receipt-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-receipt-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-receipt-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-receipt-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-receipt-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [1797 1823 1762 1789 1849 1795],
+   :mean-ms 1802.5,
+   :sd-ms 29.971653274385783,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-receipt-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-receipt-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-receipt-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-receipt-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-receipt-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-receipt-test-bb-6.edn"]},
+  :conservative-ratio 4.207253668934333,
+  :runtime :jvm,
+  :previous-runtime :jvm},
+ clj-surgeon.rename-alias-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [3299 3121 3025 3332 3377 3064],
+   :mean-ms 3203.0,
+   :sd-ms 150.9052682976973,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [6163 6188 6348 6285 6331 6277],
+   :mean-ms 6265.333333333333,
+   :sd-ms 74.99511095175916,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.rename-alias-test-bb-6.edn"]},
+  :conservative-ratio 2.211273560778874,
+  :runtime :jvm,
+  :previous-runtime :bb},
+ clj-surgeon.require-change-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [154 156 163 147 151 164],
+   :mean-ms 155.83333333333334,
+   :sd-ms 6.6758270399005,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.require-change-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.require-change-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.require-change-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.require-change-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.require-change-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.require-change-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [43 42 44 42 47 43],
+   :mean-ms 43.5,
+   :sd-ms 1.8708286933869707,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.require-change-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.require-change-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.require-change-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.require-change-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.require-change-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.require-change-test-bb-6.edn"]},
+  :conservative-ratio 0.331563030659626,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.splice-envelope-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [768 760 734 742 761 752],
+   :mean-ms 752.8333333333334,
+   :sd-ms 12.812754062521714,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.splice-envelope-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.splice-envelope-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.splice-envelope-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.splice-envelope-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.splice-envelope-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.splice-envelope-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [27564 27707 27807 27528 26986 27871],
+   :mean-ms 27577.166666666668,
+   :sd-ms 318.77478988569135,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.splice-envelope-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.splice-envelope-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.splice-envelope-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.splice-envelope-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.splice-envelope-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.splice-envelope-test-bb-6.edn"]},
+  :conservative-ratio 38.798697247731994,
+  :runtime :jvm,
+  :previous-runtime :jvm},
+ clj-surgeon.split-proof-gate-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [32 30 32 27 28 24],
+   :mean-ms 28.833333333333332,
+   :sd-ms 3.125166662222459,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.split-proof-gate-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.split-proof-gate-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.split-proof-gate-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.split-proof-gate-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.split-proof-gate-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.split-proof-gate-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [7 6 6 10 6 6],
+   :mean-ms 6.833333333333333,
+   :sd-ms 1.6020819787597222,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.split-proof-gate-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.split-proof-gate-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.split-proof-gate-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.split-proof-gate-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.split-proof-gate-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.split-proof-gate-test-bb-6.edn"]},
+  :conservative-ratio 0.4444713849755184,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.telemetry-events-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [174 149 145 151 139 148],
+   :mean-ms 151.0,
+   :sd-ms 12.016655108639842,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.telemetry-events-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.telemetry-events-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.telemetry-events-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.telemetry-events-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.telemetry-events-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.telemetry-events-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [55 55 55 53 60 54],
+   :mean-ms 55.333333333333336,
+   :sd-ms 2.4221202832779936,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.telemetry-events-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.telemetry-events-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.telemetry-events-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.telemetry-events-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.telemetry-events-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.telemetry-events-test-bb-6.edn"]},
+  :conservative-ratio 0.47396347816007456,
+  :runtime :bb,
+  :previous-runtime :bb},
+ clj-surgeon.workspace-onboarding-test
+ {:n 6,
+  :jvm
+  {:n 6,
+   :walls-ms [164 174 163 169 174 161],
+   :mean-ms 167.5,
+   :sd-ms 5.683308895353129,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.workspace-onboarding-test-jvm-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.workspace-onboarding-test-jvm-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.workspace-onboarding-test-jvm-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.workspace-onboarding-test-jvm-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.workspace-onboarding-test-jvm-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.workspace-onboarding-test-jvm-6.edn"]},
+  :bb
+  {:n 6,
+   :walls-ms [112 114 113 112 112 113],
+   :mean-ms 112.66666666666667,
+   :sd-ms 0.816496580927726,
+   :logs
+   ["docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.workspace-onboarding-test-bb-1.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.workspace-onboarding-test-bb-2.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.workspace-onboarding-test-bb-3.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.workspace-onboarding-test-bb-4.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.workspace-onboarding-test-bb-5.edn"
+    "docs/observations/2026-09-12-bbtower-block-b/attempt20/measurements/clj-surgeon.workspace-onboarding-test-bb-6.edn"]},
+  :conservative-ratio 0.7320642018457376,
+  :runtime :bb,
+  :previous-runtime :bb}}

@@ -1,10 +1,12 @@
 (ns clj-surgeon.ls-tree-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [clj-surgeon.outline :as outline]
-            [clj-surgeon.core :as core]
-            [clojure.string :as str]
-            [rewrite-clj.zip :as z]
-            [babashka.fs :as fs]))
+  {:lane :fast}
+  (:require
+   [babashka.fs :as fs]
+   [clj-surgeon.core :as core]
+   [clj-surgeon.outline :as outline]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]
+   [rewrite-clj.zip :as z]))
 
 ;; ============================================================
 ;; Pure tests: extract-ns-requires (zloc in, data out)
@@ -18,7 +20,7 @@
 
 (deftest test-extract-ns-requires-basic
   (let [ns-z (ns-zloc-from-string
-              "(ns my.app
+               "(ns my.app
   (:require [clojure.string :as str]
             [clojure.set :as set]))
 (defn foo [] :ok)")]
@@ -28,7 +30,7 @@
 
 (deftest test-extract-ns-requires-with-refer
   (let [ns-z (ns-zloc-from-string
-              "(ns my.app
+               "(ns my.app
   (:require [clojure.test :refer [deftest is testing]]))
 (defn foo [] :ok)")]
     (is (= ["[clojure.test :refer [deftest is testing]]"]
@@ -36,7 +38,7 @@
 
 (deftest test-extract-ns-requires-cljc-reader-conditional
   (let [ns-z (ns-zloc-from-string
-              "(ns my.app
+               "(ns my.app
   (:require [clojure.string :as str]
             #?(:clj [clojure.java.io :as io])
             #?(:cljs [goog.string :as gstr])))
@@ -49,7 +51,7 @@
 
 (deftest test-extract-ns-requires-cljc-splicing
   (let [ns-z (ns-zloc-from-string
-              "(ns my.app
+               "(ns my.app
   (:require [clojure.string :as str]
             #?@(:clj [[clojure.java.io :as io]
                        [clojure.edn :as edn]])))
@@ -159,13 +161,13 @@
 
 (deftest test-format-file-text-basic
   (let [result (core/format-file-text
-                {:ns 'my.app
-                 :lines 50
-                 :form-count 2
-                 :requires ["[clojure.string :as str]"]
-                 :forms [{:type 'defn :name 'greet :args "[name]" :line 5 :end-line 10}
-                         {:type 'def :name 'version :line 12 :end-line 12}]}
-                "src/my/app.clj")]
+                 {:ns 'my.app
+                  :lines 50
+                  :form-count 2
+                  :requires ["[clojure.string :as str]"]
+                  :forms [{:type 'defn :name 'greet :args "[name]" :line 5 :end-line 10}
+                          {:type 'def :name 'version :line 12 :end-line 12}]}
+                 "src/my/app.clj")]
     (is (str/includes? result "src/my/app.clj  50 lines, 2 forms"))
     (is (str/includes? result "ns: my.app"))
     (is (str/includes? result "requires: [clojure.string :as str]"))
@@ -174,25 +176,25 @@
 
 (deftest test-format-file-text-no-requires
   (let [result (core/format-file-text
-                {:ns 'my.bare :lines 5 :form-count 1
-                 :requires []
-                 :forms [{:type 'def :name 'x :line 3 :end-line 3}]}
-                "bare.clj")]
+                 {:ns 'my.bare :lines 5 :form-count 1
+                  :requires []
+                  :forms [{:type 'def :name 'x :line 3 :end-line 3}]}
+                 "bare.clj")]
     (is (not (str/includes? result "requires:")))
     (is (str/includes? result "3: def x"))))
 
 (deftest test-format-file-text-error
   (let [result (core/format-file-text
-                {:lines 0 :form-count 0 :error "Unexpected EOF"}
-                "broken.clj")]
+                 {:lines 0 :form-count 0 :error "Unexpected EOF"}
+                 "broken.clj")]
     (is (str/includes? result "⚠ Unexpected EOF"))))
 
 (deftest test-format-file-text-single-line-form
   (testing "form where line == end-line shows just the line number, not a range"
     (let [result (core/format-file-text
-                  {:ns 'x :lines 5 :form-count 1 :requires []
-                   :forms [{:type 'def :name 'x :line 3 :end-line 3}]}
-                  "x.clj")]
+                   {:ns 'x :lines 5 :form-count 1 :requires []
+                    :forms [{:type 'def :name 'x :line 3 :end-line 3}]}
+                   "x.clj")]
       (is (str/includes? result "3: def x"))
       (is (not (str/includes? result "3-3:"))))))
 

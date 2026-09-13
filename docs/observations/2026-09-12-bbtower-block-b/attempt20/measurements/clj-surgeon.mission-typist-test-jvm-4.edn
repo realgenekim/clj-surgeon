@@ -1,0 +1,1 @@
+{:runtime :jvm, :namespace clj-surgeon.mission-typist-test, :elapsed-ms 57, :result {:test 6, :pass 199, :fail 0, :error 0, :type :summary}, :tmpdir "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-2905898-669b0ff8", :home "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-2905898-669b0ff8/home"}

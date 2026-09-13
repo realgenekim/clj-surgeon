@@ -8,6 +8,7 @@
    [clj-surgeon.mission-git-ledger :as ledger]
    [clj-surgeon.mission-typist-executor :as executor]
    [clj-surgeon.mission-typist-executor-test :as fixture]
+   [clj-surgeon.tmp-leak-support :refer [with-temp-dir]]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -65,10 +66,11 @@
               (is (false? (:source-mutation-attempted result))))))))))
 
 (deftest public-handler-does-not-accept-proof-overrides
-  (doseq [field [:proof :profiles :receipt :files :provenance]]
-    (is (= :git-ledger-invalid-options
-           (:error-type (ledger/commit! {:id "M-0001" :workspace "/var/tmp/forge"
-                                         field {}}))))))
+  (with-temp-dir [root "mission-ledger-"]
+    (doseq [field [:proof :profiles :receipt :files :provenance]]
+      (is (= :git-ledger-invalid-options
+             (:error-type (ledger/commit! {:id "M-0001" :workspace (str root)
+                                           field {}})))))))
 
 (deftest proof-count-is-bound-to-frozen-command-count
   (let [h (mission/sha256 "proof")

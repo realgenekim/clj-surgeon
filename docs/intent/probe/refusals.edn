@@ -1,0 +1,119 @@
+{:version 1
+ :operation "probe"
+ ;; All top-level forms of each declared owner are scanned. These existing
+ ;; non-probe kinds belong to the shared hot-verification/configuration
+ ;; owners, not the probe protocol. They remain explicitly registered and
+ ;; reverse-checked by file; this is not an exclusion from extraction.
+ :owner-refusals
+ {"mcp_hot_verify.clj"
+  #{:invalid-hot-verification-profile :hot-verification-path-escape
+    :invalid-hot-verification-port :hot-verification-transport-closed
+    :hot-verification-timeout :hot-verification-failed
+    :hot-verification-connection-failed}
+  "mcp_http_server.clj"
+  #{:invalid-project-formatter :invalid-project-verification-profiles}}
+ :refusals
+ [{:type :probe-dependency-unresolved :class :semantic
+   :native_failure "A green verdict over code the image never reloaded."
+   :promise "Every dependency resolves to a local image-classpath source or a jar before any reload."
+   :native_method "Derive directory roots from java.class.path and classify each namespace resource before reloading."
+   :minimal_reproducer "Load a dependency outside every image classpath root or remove its source after loading; probe must refuse with zero reloads."
+   :existing_check "mcp-hot-verify/probe-reload-order; BB-PROBE-003"
+   :owner "probe" :witness "mcp-hot-verify-test/probe-refuses-dependencies-outside-image-roots"
+   :retirement_condition "A replacement accounts for every resolved dependency and refuses unresolved image code before reload."}
+  {:type :probe-require-unparsed :class :semantic
+   :native_failure "A probe reporting green over a dependency it never reloaded."
+   :promise "Every dependency spec is classified before reload, or refused with its form and file."
+   :native_method "Expand the complete local dependency closure with the shared ns parser before requiring any namespace."
+   :minimal_reproducer "(:require (foo [bar :as b])) must include foo.bar; (:require {:unknown foo}) must refuse."
+   :existing_check "mcp-hot-verify/probe-require-libs; BB-PROBE-003"
+   :owner "probe" :witness "mcp-hot-verify-test/probe-require-shape-matrix"
+   :retirement_condition "A replacement accounts for every require form before reload and never silently omits an unclassified dependency."}
+  {:type :invalid-probe-request :class :protocol
+   :native_failure "Malformed namespace text or extra request fields can execute an unintended REPL action."
+   :promise "Only the closed namespace and image request reaches reload."
+   :native_method "Validate the namespace grammar and exact request keys before evaluation."
+   :minimal_reproducer "{:ns \"x) (evil\" :image {}}"
+   :existing_check "probe/request-problem and probe-servlet"
+   :owner "probe" :witness "help-test/resolve-op-canonical-ops"
+   :retirement_condition "A replacement validates the same closed request before reload."}
+  {:type :stale-probe-image :class :semantic
+   :native_failure "A surviving port can run stale tests or tests in another worktree and report green."
+   :promise "Root, generation and source/classpath fingerprint must match the live image."
+   :native_method "Compare canonical root, process generation and configuration hashes."
+   :minimal_reproducer "Change one image identity field or the current fingerprint."
+   :existing_check "probe/request-problem and probe/cli!"
+   :owner "probe" :witness "help-test/resolve-op-canonical-ops"
+   :retirement_condition "A replacement proves all identity dimensions before reload."}
+  {:type :probe-request-too-deep :class :resource
+   :native_failure "A bounded but deeply nested request kills the thread of the shared warm image, and its client reads zero bytes as a verdict."
+   :promise "A request nesting deeper than the declared pre-parse bound refuses before any parse, naming the bound, the measured depth and the request bytes."
+   :native_method "Count reader-recursive openers over the request characters -- containers, tagged literals, metadata and discards, skipping strings, character literals and comments -- before clojure.edn reads anything."
+   :minimal_reproducer "POST 8,192 nested [ characters (or #_, ^, #tag, {, ( or #{ prefixes) to /probe; the reader overflows inside the 8,192-character bound."
+   :existing_check "probe/read-bounded-request and probe/request-recursion-depth; BB-PROBE-002"
+   :owner "probe" :witness "mcp-http-server-test/probe-servlet-refuses-every-nested-edn-shape-without-escaping"
+   :retirement_condition "A replacement bounds reader recursion before parsing every request shape the reader recurses through."}
+  {:type :probe-request-unreadable :class :protocol
+   :native_failure "A throwable outside Exception escapes the servlet, so the client reads zero bytes as a verdict and the warm image's request thread dies unnamed."
+   :promise "Every throwable at the request boundary leaves as one bounded typed refusal naming the throwable's class, with no stack."
+   :native_method "Catch Throwable, not Exception, at the servlet's request boundary and encode a typed refusal before obtaining the response writer."
+   :minimal_reproducer "Raise a StackOverflowError, AssertionError or bare Error while serving a probe request; the response must still be one typed EDN refusal."
+   :existing_check "probe/request-refusal at probe-servlet's Throwable boundary; BB-PROBE-002"
+   :owner "probe" :witness "mcp-http-server-test/probe-servlet-converts-any-throwable-into-a-typed-refusal"
+   :retirement_condition "A replacement converts every throwable at the HTTP request boundary into a named bounded refusal."}
+  {:type :probe-message-too-large :class :resource
+   :native_failure "Unbounded descriptor or HTTP response input can exhaust the caller before it reads a verdict."
+   :promise "Bounds precede EDN parsing."
+   :native_method "Read at most the declared limit plus one character, then refuse."
+   :minimal_reproducer "Read a descriptor exceeding 8192 characters."
+   :existing_check "probe/read-bounded"
+   :owner "probe" :witness "splice-envelope-test/bounded-input-path-encoding"
+   :retirement_condition "A replacement preserves bounded reading before parsing."}
+  {:type :probe-response-truncated :class :resource
+   :native_failure "A client can read a silently truncated EDN stream as a verdict, or lose the verdict at its read guard."
+   :promise "The server emits complete EDN within 16384 UTF-8 bytes, preserving the verdict and counts with explicit truncation facts."
+   :native_method "Encode and measure before writing; replace an oversized reload list with a fitting prefix and original-size/omitted-count metadata."
+   :minimal_reproducer "A production probe verdict with 5000 reload dependencies exceeds the client's 16384-character guard."
+   :existing_check "probe/encode-response at probe-servlet's writer boundary; BB-PROBE-004"
+   :owner "probe" :witness "mcp-http-server-test/probe-servlet-bounds-the-actual-writer"
+   :retirement_condition "A replacement bounds complete server output while preserving verdict status and counts."}
+  {:type :invalid-probe-port :class :protocol
+   :native_failure "A malformed descriptor can direct a probe to a reserved or invalid local port."
+   :promise "Only an integer loopback warm port above 9000 and below 65536 is used."
+   :native_method "Validate the descriptor port before constructing the HTTP endpoint."
+   :minimal_reproducer "A descriptor with port 7888 or a string port."
+   :existing_check "probe/cli!"
+   :owner "probe" :witness "splice-envelope-test/bounded-input-path-encoding"
+   :retirement_condition "A replacement validates the same port contract before network access."}
+  {:type :probe-connection-failed :class :protocol
+   :native_failure "A missing descriptor or dead endpoint can leave the caller relying on a previous green result."
+   :promise "Connection and descriptor failures return a non-proof refusal."
+   :native_method "Check transport and descriptor success before consuming any result."
+   :minimal_reproducer "Run probe with a missing image descriptor."
+   :existing_check "probe/cli! exception boundary"
+   :owner "probe" :witness "splice-envelope-test/bounded-input-path-encoding"
+   :retirement_condition "A replacement names transport failure without returning proof."}
+  {:type :probe-source-too-large :class :resource
+   :native_failure "Reload discovery can parse an unbounded source file and exhaust the warm image."
+   :promise "A source larger than 8 MiB refuses before source parsing."
+   :native_method "Check source byte length before parsing the namespace dependency graph."
+   :minimal_reproducer "A local reload source larger than 8 MiB."
+   :existing_check "mcp-hot-verify/probe-reload-order"
+   :owner "probe" :witness "splice-envelope-test/bounded-input-path-encoding"
+   :retirement_condition "A replacement preserves the pre-parse source cap."}
+  {:type :probe-target-not-a-test-namespace :class :semantic
+   :native_failure "A warm image executing production code on request, with no test to bound it."
+   :promise "Authorize the requested source under the repository test root before traversal or reload."
+   :native_method "Resolve the target and check canonical test-root membership separately from dependency discovery."
+   :minimal_reproducer "Request clj-surgeon.core with a valid live-image identity."
+   :existing_check "mcp-hot-verify/probe-reload-order; BB-PROBE-003"
+   :owner "probe" :witness "mcp-hot-verify-test/probe-authorizes-the-requested-test-target-before-reload"
+   :retirement_condition "A replacement refuses non-test targets before any reload while permitting production dependencies of tests."}
+  {:type :probe-namespace-not-found :class :semantic
+   :native_failure "A misspelled or nonlocal test namespace can leave an old loaded namespace as the apparent subject."
+   :promise "The target must have local Clojure source before reload."
+   :native_method "Resolve the namespace to a local source and reject absence."
+   :minimal_reproducer "An admitted request naming a namespace with no local source."
+   :existing_check "mcp-hot-verify/probe-reload-order"
+   :owner "probe" :witness "splice-envelope-test/bounded-input-path-encoding"
+   :retirement_condition "A replacement proves local target source before test execution."}]}

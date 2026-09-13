@@ -1,0 +1,8 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.cljc.split-test
+
+Ran 11 tests containing 35 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.cljc.split-test, :runtime :jvm, :mode "test", :started-at "2026-09-12T20:01:54.068279734Z", :elapsed-ms 3412, :status :passed, :result {:test 11, :pass 35, :fail 0, :error 0, :type :summary}}

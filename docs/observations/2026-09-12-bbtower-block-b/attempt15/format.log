@@ -1,0 +1,7 @@
+standard-clj fix v0.29.0
+
+F /test/clj_surgeon/mission_git_identity_test.clj [5.73ms]
+F /test/clj_surgeon/mission_git_ledger_test.clj [2.68ms]
+F /test/clj_surgeon/mission_git_process_test.clj [2.28ms]
+
+All 3 files formatted with Standard Clojure Style 👍 [18.3ms]

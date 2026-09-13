@@ -1,0 +1,18 @@
+
+Testing clj-surgeon.namespace-split-test
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.mission-usage-test

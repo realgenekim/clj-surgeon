@@ -1,0 +1,3 @@
+dr-xr-xr-x 2 forge forge 4096 Sep 12 12:28 /var/tmp/forge/bbtower-fx/attempt14-red/cache
+drwxr-xr-x 4 forge forge 4096 Sep 12 12:33 /var/tmp/forge/bbtower-fx/attempt14-red/tmp/npm-cache
+drwxr-xr-x 2 forge forge 4096 Sep 12 12:33 /var/tmp/forge/bbtower-fx/attempt14-red/tmp/npm-logs

@@ -1,0 +1,6 @@
+
+Testing clj-surgeon.insertion-gap-test
+
+Ran 7 tests containing 19 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.insertion-gap-test, :runtime :bb, :mode "test", :started-at "2026-09-12T18:42:57.529702181Z", :elapsed-ms 119, :status :passed, :result {:test 7, :pass 19, :fail 0, :error 0, :type :summary}}

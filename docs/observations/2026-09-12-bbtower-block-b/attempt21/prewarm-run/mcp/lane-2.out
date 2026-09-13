@@ -1,0 +1,5 @@
+lanes: --ns -- 2 namespace(s), home-isolated true
+
+Testing clj-surgeon.ns-isolation-test
+
+Testing clj-surgeon.scope-stream-test

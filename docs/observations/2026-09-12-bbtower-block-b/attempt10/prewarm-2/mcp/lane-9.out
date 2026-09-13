@@ -1,0 +1,26 @@
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.mission-typist-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.mcp-recovery-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.mission-git-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

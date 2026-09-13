@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.forms-test

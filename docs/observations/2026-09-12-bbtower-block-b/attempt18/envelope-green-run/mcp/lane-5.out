@@ -1,0 +1,20 @@
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.mcp-extraction-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

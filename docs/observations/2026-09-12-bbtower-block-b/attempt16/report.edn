@@ -1,0 +1,45 @@
+{:attempt 16
+ :verdict :pass
+ :findings [{:kind :sun-path-envelope
+             :selection [:operator-root :policy-tmpdir :policy-fallback]
+             :checks [:actual-writability :utf8-byte-budget]
+             :none-qualifies :explicit-unittest-skip
+             :red-log "oracle-red-117.log"
+             :green-log "oracle-green-restricted.log"}
+            {:kind :tooling-ship-item
+             :owner :fable
+             :status :filing-owed
+             :finding "A packet TMPDIR of at most 40 bytes permits a real bind inside this host's envelope."
+             :evidence "oracle-short-restricted.log"}]
+ :measurements
+ {:oracles {:red {:tests 21 :failures 1 :skips 2 :sun-path-bytes 117
+                  :log "oracle-red-117.log"}
+            :restricted-long {:tests 21 :failures 0 :skips 3 :branch :named-skip
+                              :log "oracle-green-restricted.log"}
+            :unrestricted-long {:tests 21 :failures 0 :skips 2 :branch :real-bind
+                                :candidate :policy-fallback :sun-path-bytes 59
+                                :log "oracle-long.log"}
+            :unrestricted-short {:tests 21 :failures 0 :skips 2 :branch :real-bind
+                                 :candidate :policy-tmpdir :sun-path-bytes 80
+                                 :log "oracle-short.log"}
+            :restricted-short {:tests 21 :failures 0 :skips 2 :branch :real-bind
+                               :log "oracle-short-restricted.log"}
+            :operator {:tests 21 :failures 0 :skips 2 :branch :real-bind
+                       :candidate :operator-root :log "oracle-operator.log"}}
+  :test-fast {:runs 1 :exit 0 :namespaces 94 :isolation-violations 0
+              :sum-ms 45087 :budget-ms 60000 :makespan-ms 24689
+              :log "test-fast.log"}
+  :prewarm {:runs 1 :repairs 0 :exit 0 :state :passed :problems []
+            :prewarm? true :landing? false :wall-ms 387393
+            :fast-sum-ms 45234 :integration-sum-ms 67153 :bb-runtime-sum-ms 235793
+            :log "gate.md" :receipt "gate-receipt.edn"
+            :worker-logs "prewarm-run/"}}
+ :commits {:start "f19a6a44" :packet-evidence "a1f9aa72"
+           :source "758e860490b7d362b1788eeb901ac6ea053bf3e3"
+           :attempt-evidence :this-commit}
+ :least_sure ["Native macOS not exercised."
+              "Focused oracle, not the entire prewarm, ran under Landlock."]
+ :disagreements ["Attempt16 explicitly authorizes the envelope skip, overriding the older blanket skip stop."
+                 "Original brief's attempt1 report paths are absent in this checkout."]
+ :owed ["Fable independent review" "Fable short packet-root ship-item filing"
+        "Full landing/battery-fresh authority"]}

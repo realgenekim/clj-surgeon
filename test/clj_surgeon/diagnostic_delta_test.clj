@@ -1,4 +1,5 @@
 (ns clj-surgeon.diagnostic-delta-test
+  {:lane :fast}
   (:require
    [clj-surgeon.diagnostic-delta :as delta]
    [clojure.test :refer [deftest is testing]]))

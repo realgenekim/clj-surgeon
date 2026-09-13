@@ -1,0 +1,14 @@
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.mcp-workspace-test
+
+Testing clj-surgeon.mcp-program-tool-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test
+
+Testing clj-surgeon.mcp-paths-test

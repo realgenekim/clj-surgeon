@@ -1,0 +1,964 @@
+{"command": ["make", "landing-gate-prewarm"], "writable_roots": ["/home/forge/src/clj-surgeon-bbtower", "/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp", "/home/forge/.local/state/clj-surgeon"], "writable_devices": ["/dev/null"], "started": 1789223134.1480355, "diagnostic": true}
+/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt18/restricted-gate.py:35: DeprecationWarning: Due to '_pack_', the 'Rule' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+  class Rule(ctypes.Structure):
+bb -Xmx1g -Djava.io.tmpdir="/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp" -m clj-surgeon.battery-parallel-runner --suite gate --prewarm true
+gate-capacity: 25117 MiB available, 16 cpus, 8 lane(s); slots abstract-socket abstract; 3584 MiB floor = reserve 2048 + 1536 per lane; GATE_MEMAVAIL_MIB=<MiB> declares what this box may lend
+gate-stage: admit-transaction-recovery-battery started 2026-09-12T14:25:36.403030645Z
+java -cp "$(clojure -Spath -A:clj-surgeon/mcp-test)" clojure.main test/admit_transaction_recovery_battery.clj
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp -Xmx512m
+PASS n=8 attempts=1 kind=:transaction-recovery-required source-unchanged=false enumerated=true wall-ms=126
+PASS n=32 attempts=1 kind=:transaction-recovery-required source-unchanged=false enumerated=true wall-ms=130
+PASS n=64 attempts=1 kind=:transaction-recovery-required source-unchanged=false enumerated=true wall-ms=175
+admit-transaction-recovery-battery: 3/3 arms passed
+battery receipt · target/admit-transaction-recovery-battery-receipt.edn · verdict :passed · 3/3 arms passed · kinds #{:transaction-recovery-required}
+gate-stage: {:target "admit-transaction-recovery-battery", :exit 0, :wall-ms 11014}
+battery-parallel: 2 namespace(s) in 2 unit(s) over 2 lane(s); floor is clj-surgeon.mcp-alias-migration-test at 78570 ms
+  process 0 phase 0 (est 4429 ms): clj-surgeon.receipt-artifacts-boundary-test
+  process 1 phase 0 (est 78570 ms): clj-surgeon.mcp-alias-migration-test
+battery-parallel: 101 namespace(s) in 101 unit(s) over 8 lane(s); floor is clj-surgeon.mcp-feature-thread-test at 47743 ms
+  process 0 phase 0 (est 3732 ms): clj-surgeon.splice-envelope-test clj-surgeon.ns-isolation-test clj-surgeon.mcp-compact-location-test clj-surgeon.mcp-change-buffer-test clj-surgeon.mcp-write-refusal-test clj-surgeon.mcp-extraction-plan-test clj-surgeon.mcp-operation-test
+  process 1 phase 0 (est 975 ms): clj-surgeon.operation-algebra-test clj-surgeon.move-dependency-test clj-surgeon.edit-dsl-test clj-surgeon.mcp-extraction-test clj-surgeon.owner-hypotheses-test clj-surgeon.mcp-contract-test clj-surgeon.mcp-schema-test clj-surgeon.forms-test clj-surgeon.mcp-read-request-normalization-test
+  process 2 phase 0 (est 2937 ms): clj-surgeon.lane-manifest-test clj-surgeon.outline-test clj-surgeon.mcp-inspect-contract-test clj-surgeon.telemetry-events-test clj-surgeon.worktree-lifecycle-io-test clj-surgeon.outermost-test clj-surgeon.move-test clj-surgeon.mission-forms-source-test clj-surgeon.cljc.require-ops-test clj-surgeon.extract-header-test clj-surgeon.cljc.analyze-test
+  process 3 phase 0 (est 1770 ms): clj-surgeon.rename-alias-receipt-test clj-surgeon.outline-memory-test clj-surgeon.mcp-expect-guard-test clj-surgeon.mcp-prepared-confirmation-test clj-surgeon.mcp-operation-async-test
+  process 4 phase 0 (est 3009 ms): clj-surgeon.mcp-namespace-split-test clj-surgeon.census-pool-test clj-surgeon.mcp-prepared-request-test clj-surgeon.mcp-relation-census-round20-test clj-surgeon.mcp-semantic-client-test
+  process 5 phase 0 (est 1698 ms): clj-surgeon.helper-extraction-test clj-surgeon.analyze-test clj-surgeon.recovery-test clj-surgeon.agent-routing-test clj-surgeon.require-change-test clj-surgeon.worktree-lifecycle-test clj-surgeon.mission-typist-test clj-surgeon.battery-ledger-test clj-surgeon.mission-usage-test clj-surgeon.diagnostic-delta-test clj-surgeon.failure-report-test clj-surgeon.file-ops-test clj-surgeon.mcp-paths-test clj-surgeon.mission-git-test clj-surgeon.worktree-lifecycle-cli-test
+  process 6 phase 0 (est 3396 ms): clj-surgeon.mcp-inspect-tool-test clj-surgeon.mcp-create-files-test clj-surgeon.receipt-booleans-test clj-surgeon.mcp-combinable-transaction-test
+  process 7 phase 0 (est 1312 ms): clj-surgeon.namespace-split-test clj-surgeon.alias-migration-test clj-surgeon.ls-tree-test clj-surgeon.battery-parallel-test clj-surgeon.structural-lens-test clj-surgeon.mcp-workspace-test clj-surgeon.mission-plain-forms-test clj-surgeon.insertion-gap-test clj-surgeon.split-proof-gate-test clj-surgeon.mcp-telemetry-test clj-surgeon.mission-forms-test
+  process 8 phase 0 (est 4266 ms): clj-surgeon.insert-forms-test clj-surgeon.insert-forms-receipt-test clj-surgeon.scope-stream-test clj-surgeon.mcp-compact-edit-test clj-surgeon.mission-candidate-race-test
+  process 9 phase 0 (est 442 ms): clj-surgeon.mcp-intent-contract-test clj-surgeon.cljc-existing-ops-test clj-surgeon.relation-census-test clj-surgeon.fast-lane-isolation-test clj-surgeon.cljc.split-test clj-surgeon.quoted-var-refs-test clj-surgeon.cljc.merge-test clj-surgeon.syntax-var-refs-test
+  process 10 phase 0 (est 4392 ms): clj-surgeon.mcp-operation-registry-test clj-surgeon.mcp-formatter-test
+  process 11 phase 0 (est 316 ms): clj-surgeon.workspace-onboarding-test clj-surgeon.jvm-error-test clj-surgeon.memory-battery-test clj-surgeon.fix-declares-test clj-surgeon.mcp-program-tool-test clj-surgeon.rename-test clj-surgeon.outline-differential-test clj-surgeon.mcp-recovery-test clj-surgeon.mcp-compact-edit-fields-test clj-surgeon.mission-candidate-test
+  process 12 phase 0 (est 6814 ms): clj-surgeon.rename-alias-test
+  process 13 phase 0 (est 8277 ms): clj-surgeon.mcp-compact-relations-test
+  process 14 phase 1 (est 220 ms): clj-surgeon.mcp-server-test
+  process 15 phase 1 (est 1651 ms): clj-surgeon.namespace-split-warm-test
+  process 16 phase 1 (est 2042 ms): clj-surgeon.mcp-hot-verify-test
+  process 17 phase 1 (est 2597 ms): clj-surgeon.mcp-http-server-test
+  process 18 phase 1 (est 3457 ms): clj-surgeon.mcp-tool-test
+  process 19 phase 1 (est 8949 ms): clj-surgeon.outline-corpus-integration-test
+  process 20 phase 1 (est 47743 ms): clj-surgeon.mcp-feature-thread-test
+battery-parallel: 50 namespace(s) in 50 unit(s) over 8 lane(s); floor is clj-surgeon.install-test at 85199 ms
+  process 0 phase 0 (est 6062 ms): clj-surgeon.extract-test clj-surgeon.partition-all-test
+  process 1 phase 0 (est 5703 ms): clj-surgeon.intent-transaction-test
+  process 2 phase 0 (est 1829 ms): clj-surgeon.outline-test clj-surgeon.analyze-test clj-surgeon.cljc-existing-ops-test clj-surgeon.move-dependency-test clj-surgeon.agent-routing-test clj-surgeon.memory-battery-test clj-surgeon.move-test clj-surgeon.extract-header-test clj-surgeon.cljc.require-ops-test
+  process 3 phase 0 (est 13129 ms): clj-surgeon.edit-test clj-surgeon.core-discovery-test clj-surgeon.lens-query-test
+  process 4 phase 0 (est 465 ms): clj-surgeon.alias-migration-test clj-surgeon.ls-tree-test clj-surgeon.jvm-error-test clj-surgeon.outermost-test clj-surgeon.worktree-lifecycle-io-test clj-surgeon.edit-dsl-test clj-surgeon.syntax-var-refs-test clj-surgeon.failure-report-test
+  process 5 phase 0 (est 12578 ms): clj-surgeon.help-test clj-surgeon.xray-test clj-surgeon.platform-selector-test
+  process 6 phase 0 (est 1016 ms): clj-surgeon.operation-algebra-test clj-surgeon.workspace-onboarding-test clj-surgeon.structural-lens-test clj-surgeon.worktree-lifecycle-test clj-surgeon.fix-declares-test clj-surgeon.insertion-gap-test clj-surgeon.rename-test clj-surgeon.cljc.analyze-test
+  process 7 phase 0 (est 13453 ms): clj-surgeon.tmp-leak-support-test clj-surgeon.edn-config-integration-test
+  process 8 phase 0 (est 141 ms): clj-surgeon.recovery-test clj-surgeon.owner-hypotheses-test clj-surgeon.relation-census-test clj-surgeon.cljc.split-test clj-surgeon.quoted-var-refs-test clj-surgeon.cljc.merge-test clj-surgeon.diagnostic-delta-test clj-surgeon.file-ops-test clj-surgeon.worktree-lifecycle-cli-test
+  process 9 phase 0 (est 13592 ms): clj-surgeon.show-form-test
+  process 10 phase 0 (est 3 ms): clj-surgeon.forms-test
+  process 11 phase 0 (est 14203 ms): clj-surgeon.cli-dispatch-test
+  process 12 phase 0 (est 71766 ms): clj-surgeon.parser-admission-test
+  process 13 phase 0 (est 85199 ms): clj-surgeon.install-test
+
+========== lane 0 (clj-surgeon.receipt-artifacts-boundary-test) exit 0, 13982 ms ==========
+lanes: --ns -- 1 namespace(s), home-isolated false
+
+Testing clj-surgeon.receipt-artifacts-boundary-test
+---------- lane 0 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+
+namespace walls (1, slowest first, total 4205 ms):
+      4205 ms  clj-surgeon.receipt-artifacts-boundary-test
+
+========== lane 1 (clj-surgeon.mcp-alias-migration-test) exit 0, 89274 ms ==========
+lanes: --ns -- 1 namespace(s), home-isolated false
+
+Testing clj-surgeon.mcp-alias-migration-test
+---------- lane 1 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+
+namespace walls (1, slowest first, total 77248 ms):
+     77248 ms  clj-surgeon.mcp-alias-migration-test
+
+Ran 182 tests containing 3641 assertions.
+0 failures, 0 errors.
+0 preconditions skipped.
+0 preconditions failed.
+makespan: 89275 ms
+cadence :battery: serial-equivalent 81453 ms; budget 1800000 ms
+bb-runtime: serial-equivalent 0 ms; budget 343102 ms; makespan unmeasured ms
+
+namespace walls (2, slowest first, serial-equivalent total 81453 ms):
+     77248 ms  clj-surgeon.mcp-alias-migration-test
+      4205 ms  clj-surgeon.receipt-artifacts-boundary-test
+
+lanes (2), makespan 89275 ms:
+  lane 0     13982 ms  exit 0  clj-surgeon.receipt-artifacts-boundary-test
+  lane 1     89274 ms  exit 0  clj-surgeon.mcp-alias-migration-test
+
+test-isolation: 0 violations across 2 namespace(s) (TEST-ISO-002/003/004/005/007/010)
+battery-parallel: makespan 89275 ms over 2 lane(s); serial-equivalent 81453 ms; skipped 0
+
+========== lane 0 (clj-surgeon.splice-envelope-test clj-surgeon.ns-isolation-test clj-surgeon.mcp-compact-location-test clj-surgeon.mcp-change-buffer-test clj-surgeon.mcp-write-refusal-test clj-surgeon.mcp-extraction-plan-test clj-surgeon.mcp-operation-test) exit 0, 20931 ms ==========
+lanes: --ns -- 7 namespace(s), home-isolated true
+
+Testing clj-surgeon.splice-envelope-test
+
+Testing clj-surgeon.ns-isolation-test
+
+Testing clj-surgeon.mcp-compact-location-test
+
+Testing clj-surgeon.mcp-change-buffer-test
+
+Testing clj-surgeon.mcp-write-refusal-test
+
+Testing clj-surgeon.mcp-extraction-plan-test
+
+Testing clj-surgeon.mcp-operation-test
+---------- lane 0 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+
+namespace walls (7, slowest first, total 4093 ms):
+      1289 ms  clj-surgeon.splice-envelope-test
+      1224 ms  clj-surgeon.ns-isolation-test
+       565 ms  clj-surgeon.mcp-compact-location-test
+       528 ms  clj-surgeon.mcp-change-buffer-test
+       194 ms  clj-surgeon.mcp-extraction-plan-test
+       160 ms  clj-surgeon.mcp-write-refusal-test
+       133 ms  clj-surgeon.mcp-operation-test
+
+========== lane 1 (clj-surgeon.operation-algebra-test clj-surgeon.move-dependency-test clj-surgeon.edit-dsl-test clj-surgeon.mcp-extraction-test clj-surgeon.owner-hypotheses-test clj-surgeon.mcp-contract-test clj-surgeon.mcp-schema-test clj-surgeon.forms-test clj-surgeon.mcp-read-request-normalization-test) exit 0, 1525 ms ==========
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.mcp-extraction-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test
+
+========== lane 2 (clj-surgeon.lane-manifest-test clj-surgeon.outline-test clj-surgeon.mcp-inspect-contract-test clj-surgeon.telemetry-events-test clj-surgeon.worktree-lifecycle-io-test clj-surgeon.outermost-test clj-surgeon.move-test clj-surgeon.mission-forms-source-test clj-surgeon.cljc.require-ops-test clj-surgeon.extract-header-test clj-surgeon.cljc.analyze-test) exit 1, 3378 ms ==========
+
+Testing clj-surgeon.lane-manifest-test
+
+FAIL in (the-corpus-only-ever-grows-and-the-arithmetic-is-shown) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:874)
+every deftest in the tree is a named line in the ledger
+the tree and test/clj_surgeon/deftest_census.edn disagree. Declared in a lane but NOT in the ledger (2): clj-surgeon.install-test/cli-package-identity-covers-bundled-splice-source, clj-surgeon.install-test/installed-cli-loads-splice-verbs-outside-the-checkout. In the ledger but NO LONGER DECLARED (0): none. After regenerating, READ THE LEDGER DIFF before committing it. A removed name is a deleted test -- say why, or restore it. A removed AND an added name together is a rename, which the count ledger this replaced could not see. Then regenerate: CENSUS_REGENERATE=1 clojure -M:clj-surgeon/test-deps -e "(require 'clj-surgeon.lane-manifest-test 'clojure.test) (clojure.test/test-vars [#'clj-surgeon.lane-manifest-test/the-corpus-only-ever-grows-and-the-arithmetic-is-shown])"
+expected: (nil? diff)
+  actual: (not (nil? {:added [clj-surgeon.install-test/cli-package-identity-covers-bundled-splice-source clj-surgeon.install-test/installed-cli-loads-splice-verbs-outside-the-checkout], :removed []}))
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.mcp-inspect-contract-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.move-test
+
+Testing clj-surgeon.mission-forms-source-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.cljc.analyze-test
+
+========== lane 3 (clj-surgeon.rename-alias-receipt-test clj-surgeon.outline-memory-test clj-surgeon.mcp-expect-guard-test clj-surgeon.mcp-prepared-confirmation-test clj-surgeon.mcp-operation-async-test) exit 0, 17898 ms ==========
+lanes: --ns -- 5 namespace(s), home-isolated true
+
+Testing clj-surgeon.rename-alias-receipt-test
+
+Testing clj-surgeon.outline-memory-test
+
+Testing clj-surgeon.mcp-expect-guard-test
+
+Testing clj-surgeon.mcp-prepared-confirmation-test
+
+Testing clj-surgeon.mcp-operation-async-test
+---------- lane 3 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+
+namespace walls (5, slowest first, total 2386 ms):
+      1164 ms  clj-surgeon.rename-alias-receipt-test
+       553 ms  clj-surgeon.outline-memory-test
+       362 ms  clj-surgeon.mcp-expect-guard-test
+       184 ms  clj-surgeon.mcp-prepared-confirmation-test
+       123 ms  clj-surgeon.mcp-operation-async-test
+
+========== lane 4 (clj-surgeon.mcp-namespace-split-test clj-surgeon.census-pool-test clj-surgeon.mcp-prepared-request-test clj-surgeon.mcp-relation-census-round20-test clj-surgeon.mcp-semantic-client-test) exit 0, 21094 ms ==========
+lanes: --ns -- 5 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-namespace-split-test
+
+Testing clj-surgeon.census-pool-test
+
+Testing clj-surgeon.mcp-prepared-request-test
+
+Testing clj-surgeon.mcp-relation-census-round20-test
+WORKSPACE-PARITY-ENUMERATION:
+  unresolvable-root-escaping-link      expected invalid-workspace-root   tool "invalid-workspace-root" cli "invalid-workspace-root" scanned 0  agree true
+  unresolvable-root-outside-absolute   expected invalid-workspace-root   tool "invalid-workspace-root" cli "invalid-workspace-root" scanned 0  agree true
+ROOT-SHAPE-PARITY-ENUMERATION:
+  plain            expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  trailing-slash   expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  double-slash     expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  dot              expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  dotdot           expected no-fold-arms-found       tool "no-fold-arms-found"     cli "no-fold-arms-found"     scanned 1  agree true
+  dir-is-a-file    expected invalid-workspace-root   tool "invalid-workspace-root" cli "invalid-workspace-root" scanned 0  agree true
+
+Testing clj-surgeon.mcp-semantic-client-test
+---------- lane 4 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+
+namespace walls (5, slowest first, total 4110 ms):
+      3134 ms  clj-surgeon.mcp-namespace-split-test
+       408 ms  clj-surgeon.census-pool-test
+       281 ms  clj-surgeon.mcp-prepared-request-test
+       154 ms  clj-surgeon.mcp-relation-census-round20-test
+       133 ms  clj-surgeon.mcp-semantic-client-test
+
+========== lane 5 (clj-surgeon.helper-extraction-test clj-surgeon.analyze-test clj-surgeon.recovery-test clj-surgeon.agent-routing-test clj-surgeon.require-change-test clj-surgeon.worktree-lifecycle-test clj-surgeon.mission-typist-test clj-surgeon.battery-ledger-test clj-surgeon.mission-usage-test clj-surgeon.diagnostic-delta-test clj-surgeon.failure-report-test clj-surgeon.file-ops-test clj-surgeon.mcp-paths-test clj-surgeon.mission-git-test clj-surgeon.worktree-lifecycle-cli-test) exit 0, 2454 ms ==========
+
+Testing clj-surgeon.helper-extraction-test
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.require-change-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.mission-typist-test
+
+Testing clj-surgeon.battery-ledger-test
+
+Testing clj-surgeon.mission-usage-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.failure-report-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.mission-git-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test
+
+========== lane 6 (clj-surgeon.mcp-inspect-tool-test clj-surgeon.mcp-create-files-test clj-surgeon.receipt-booleans-test clj-surgeon.mcp-combinable-transaction-test) exit 0, 22085 ms ==========
+lanes: --ns -- 4 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-inspect-tool-test
+
+Testing clj-surgeon.mcp-create-files-test
+
+Testing clj-surgeon.receipt-booleans-test
+
+Testing clj-surgeon.mcp-combinable-transaction-test
+---------- lane 6 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+
+namespace walls (4, slowest first, total 2658 ms):
+      1845 ms  clj-surgeon.mcp-inspect-tool-test
+       352 ms  clj-surgeon.receipt-booleans-test
+       296 ms  clj-surgeon.mcp-create-files-test
+       165 ms  clj-surgeon.mcp-combinable-transaction-test
+
+========== lane 7 (clj-surgeon.namespace-split-test clj-surgeon.alias-migration-test clj-surgeon.ls-tree-test clj-surgeon.battery-parallel-test clj-surgeon.structural-lens-test clj-surgeon.mcp-workspace-test clj-surgeon.mission-plain-forms-test clj-surgeon.insertion-gap-test clj-surgeon.split-proof-gate-test clj-surgeon.mcp-telemetry-test clj-surgeon.mission-forms-test) exit 0, 2287 ms ==========
+
+Testing clj-surgeon.namespace-split-test
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.mcp-workspace-test
+
+Testing clj-surgeon.mission-plain-forms-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.split-proof-gate-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.mission-forms-test
+
+========== lane 8 (clj-surgeon.insert-forms-test clj-surgeon.insert-forms-receipt-test clj-surgeon.scope-stream-test clj-surgeon.mcp-compact-edit-test clj-surgeon.mission-candidate-race-test) exit 0, 18815 ms ==========
+lanes: --ns -- 5 namespace(s), home-isolated true
+
+Testing clj-surgeon.insert-forms-test
+
+Testing clj-surgeon.insert-forms-receipt-test
+
+Testing clj-surgeon.scope-stream-test
+
+Testing clj-surgeon.mcp-compact-edit-test
+
+Testing clj-surgeon.mission-candidate-race-test
+---------- lane 8 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+
+namespace walls (5, slowest first, total 4025 ms):
+      2358 ms  clj-surgeon.insert-forms-test
+       725 ms  clj-surgeon.insert-forms-receipt-test
+       577 ms  clj-surgeon.scope-stream-test
+       194 ms  clj-surgeon.mcp-compact-edit-test
+       171 ms  clj-surgeon.mission-candidate-race-test
+
+========== lane 9 (clj-surgeon.mcp-intent-contract-test clj-surgeon.cljc-existing-ops-test clj-surgeon.relation-census-test clj-surgeon.fast-lane-isolation-test clj-surgeon.cljc.split-test clj-surgeon.quoted-var-refs-test clj-surgeon.cljc.merge-test clj-surgeon.syntax-var-refs-test) exit 0, 972 ms ==========
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.syntax-var-refs-test
+
+========== lane 10 (clj-surgeon.mcp-operation-registry-test clj-surgeon.mcp-formatter-test) exit 0, 22552 ms ==========
+lanes: --ns -- 2 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-operation-registry-test
+
+Testing clj-surgeon.mcp-formatter-test
+---------- lane 10 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+
+namespace walls (2, slowest first, total 4461 ms):
+      4323 ms  clj-surgeon.mcp-operation-registry-test
+       138 ms  clj-surgeon.mcp-formatter-test
+
+========== lane 11 (clj-surgeon.workspace-onboarding-test clj-surgeon.jvm-error-test clj-surgeon.memory-battery-test clj-surgeon.fix-declares-test clj-surgeon.mcp-program-tool-test clj-surgeon.rename-test clj-surgeon.outline-differential-test clj-surgeon.mcp-recovery-test clj-surgeon.mcp-compact-edit-fields-test clj-surgeon.mission-candidate-test) exit 0, 792 ms ==========
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.mcp-program-tool-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.mcp-recovery-test
+
+Testing clj-surgeon.mcp-compact-edit-fields-test
+
+Testing clj-surgeon.mission-candidate-test
+
+========== lane 12 (clj-surgeon.rename-alias-test) exit 0, 7250 ms ==========
+
+Testing clj-surgeon.rename-alias-test
+
+========== lane 13 (clj-surgeon.mcp-compact-relations-test) exit 0, 24079 ms ==========
+lanes: --ns -- 1 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-compact-relations-test
+---------- lane 13 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+
+namespace walls (1, slowest first, total 8167 ms):
+      8167 ms  clj-surgeon.mcp-compact-relations-test
+
+========== lane 14 (clj-surgeon.mcp-server-test) exit 0, 11280 ms ==========
+lanes: --ns -- 1 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-server-test
+---------- lane 14 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+clj-surgeon MCP: embedded nREPL on 46381 ( /var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-306168-c5ef8543/clj-surgeon-mcp-server-test-2688736295759102742/.nrepl-port )
+clj-surgeon MCP: embedded nREPL on 46797 ( /var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-306168-c5ef8543/clj-surgeon-mcp-server-test-14059683193933041762/.nrepl-port )
+
+namespace walls (1, slowest first, total 207 ms):
+       207 ms  clj-surgeon.mcp-server-test
+
+========== lane 15 (clj-surgeon.namespace-split-warm-test) exit 0, 10266 ms ==========
+lanes: --ns -- 1 namespace(s), home-isolated true
+
+Testing clj-surgeon.namespace-split-warm-test
+---------- lane 15 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+
+namespace walls (1, slowest first, total 1330 ms):
+      1330 ms  clj-surgeon.namespace-split-warm-test
+
+========== lane 16 (clj-surgeon.mcp-hot-verify-test) exit 0, 7617 ms ==========
+lanes: --ns -- 1 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-hot-verify-test
+---------- lane 16 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+
+namespace walls (1, slowest first, total 2281 ms):
+      2281 ms  clj-surgeon.mcp-hot-verify-test
+
+========== lane 17 (clj-surgeon.mcp-http-server-test) exit 0, 16165 ms ==========
+lanes: --ns -- 1 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-http-server-test
+---------- lane 17 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+clj-surgeon MCP: embedded nREPL on 34845 ( /var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-299292-a53d83f5/clj-surgeon-mcp-http-test-17921628419283602675/.nrepl-port )
+
+namespace walls (1, slowest first, total 2847 ms):
+      2847 ms  clj-surgeon.mcp-http-server-test
+
+========== lane 18 (clj-surgeon.mcp-tool-test) exit 0, 13329 ms ==========
+lanes: --ns -- 1 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-tool-test
+---------- lane 18 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+
+namespace walls (1, slowest first, total 3042 ms):
+      3042 ms  clj-surgeon.mcp-tool-test
+
+========== lane 19 (clj-surgeon.outline-corpus-integration-test) exit 0, 15289 ms ==========
+lanes: --ns -- 1 namespace(s), home-isolated true
+
+Testing clj-surgeon.outline-corpus-integration-test
+---------- lane 19 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+
+namespace walls (1, slowest first, total 9148 ms):
+      9148 ms  clj-surgeon.outline-corpus-integration-test
+
+========== lane 20 (clj-surgeon.mcp-feature-thread-test) exit 0, 54807 ms ==========
+lanes: --ns -- 1 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-feature-thread-test
+---------- lane 20 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+
+namespace walls (1, slowest first, total 47830 ms):
+     47830 ms  clj-surgeon.mcp-feature-thread-test
+
+Ran 1411 tests containing 15577 assertions.
+1 failures, 0 errors.
+0 preconditions skipped.
+0 preconditions failed.
+makespan: 89224 ms
+cadence :fast: serial-equivalent 44615 ms; budget 60000 ms
+cadence :integration: serial-equivalent 66685 ms; budget 240000 ms
+bb-runtime: serial-equivalent 14715 ms; budget 343102 ms; makespan 15290 ms
+
+namespace walls (101, slowest first, serial-equivalent total 111300 ms):
+     47830 ms  clj-surgeon.mcp-feature-thread-test
+      9148 ms  clj-surgeon.outline-corpus-integration-test
+      8167 ms  clj-surgeon.mcp-compact-relations-test
+      6827 ms  clj-surgeon.rename-alias-test
+      4323 ms  clj-surgeon.mcp-operation-registry-test
+      3134 ms  clj-surgeon.mcp-namespace-split-test
+      3042 ms  clj-surgeon.mcp-tool-test
+      2847 ms  clj-surgeon.mcp-http-server-test
+      2358 ms  clj-surgeon.insert-forms-test
+      2281 ms  clj-surgeon.mcp-hot-verify-test
+      1845 ms  clj-surgeon.mcp-inspect-tool-test
+      1375 ms  clj-surgeon.lane-manifest-test
+      1330 ms  clj-surgeon.namespace-split-warm-test
+      1289 ms  clj-surgeon.splice-envelope-test
+      1224 ms  clj-surgeon.ns-isolation-test
+      1164 ms  clj-surgeon.rename-alias-receipt-test
+      1040 ms  clj-surgeon.outline-test
+       855 ms  clj-surgeon.helper-extraction-test
+       817 ms  clj-surgeon.operation-algebra-test
+       790 ms  clj-surgeon.namespace-split-test
+       733 ms  clj-surgeon.analyze-test
+       725 ms  clj-surgeon.insert-forms-receipt-test
+       577 ms  clj-surgeon.scope-stream-test
+       565 ms  clj-surgeon.mcp-compact-location-test
+       553 ms  clj-surgeon.outline-memory-test
+       528 ms  clj-surgeon.mcp-change-buffer-test
+       408 ms  clj-surgeon.census-pool-test
+       362 ms  clj-surgeon.mcp-expect-guard-test
+       352 ms  clj-surgeon.receipt-booleans-test
+       296 ms  clj-surgeon.mcp-create-files-test
+       281 ms  clj-surgeon.mcp-prepared-request-test
+       277 ms  clj-surgeon.mcp-inspect-contract-test
+       256 ms  clj-surgeon.mcp-intent-contract-test
+       207 ms  clj-surgeon.mcp-server-test
+       194 ms  clj-surgeon.battery-parallel-test
+       194 ms  clj-surgeon.mcp-compact-edit-test
+       194 ms  clj-surgeon.mcp-extraction-plan-test
+       184 ms  clj-surgeon.mcp-prepared-confirmation-test
+       171 ms  clj-surgeon.mission-candidate-race-test
+       168 ms  clj-surgeon.alias-migration-test
+       165 ms  clj-surgeon.mcp-combinable-transaction-test
+       160 ms  clj-surgeon.ls-tree-test
+       160 ms  clj-surgeon.mcp-write-refusal-test
+       154 ms  clj-surgeon.mcp-relation-census-round20-test
+       138 ms  clj-surgeon.mcp-formatter-test
+       133 ms  clj-surgeon.mcp-operation-test
+       133 ms  clj-surgeon.mcp-semantic-client-test
+       123 ms  clj-surgeon.mcp-operation-async-test
+       120 ms  clj-surgeon.jvm-error-test
+       118 ms  clj-surgeon.workspace-onboarding-test
+       106 ms  clj-surgeon.recovery-test
+        98 ms  clj-surgeon.cljc-existing-ops-test
+        78 ms  clj-surgeon.agent-routing-test
+        54 ms  clj-surgeon.move-dependency-test
+        51 ms  clj-surgeon.relation-census-test
+        50 ms  clj-surgeon.structural-lens-test
+        46 ms  clj-surgeon.telemetry-events-test
+        44 ms  clj-surgeon.mcp-workspace-test
+        41 ms  clj-surgeon.require-change-test
+        38 ms  clj-surgeon.mcp-extraction-test
+        36 ms  clj-surgeon.fix-declares-test
+        35 ms  clj-surgeon.mission-plain-forms-test
+        31 ms  clj-surgeon.fast-lane-isolation-test
+        27 ms  clj-surgeon.owner-hypotheses-test
+        24 ms  clj-surgeon.worktree-lifecycle-io-test
+        23 ms  clj-surgeon.outermost-test
+        22 ms  clj-surgeon.memory-battery-test
+        18 ms  clj-surgeon.worktree-lifecycle-test
+        17 ms  clj-surgeon.mcp-program-tool-test
+        16 ms  clj-surgeon.edit-dsl-test
+        14 ms  clj-surgeon.move-test
+        11 ms  clj-surgeon.insertion-gap-test
+        11 ms  clj-surgeon.mission-typist-test
+        10 ms  clj-surgeon.cljc.split-test
+        10 ms  clj-surgeon.mcp-contract-test
+         8 ms  clj-surgeon.mission-forms-source-test
+         8 ms  clj-surgeon.quoted-var-refs-test
+         7 ms  clj-surgeon.extract-header-test
+         5 ms  clj-surgeon.mcp-telemetry-test
+         5 ms  clj-surgeon.rename-test
+         5 ms  clj-surgeon.split-proof-gate-test
+         4 ms  clj-surgeon.mcp-schema-test
+         4 ms  clj-surgeon.outline-differential-test
+         3 ms  clj-surgeon.battery-ledger-test
+         3 ms  clj-surgeon.cljc.merge-test
+         3 ms  clj-surgeon.cljc.require-ops-test
+         3 ms  clj-surgeon.forms-test
+         3 ms  clj-surgeon.mcp-recovery-test
+         3 ms  clj-surgeon.mission-forms-test
+         3 ms  clj-surgeon.mission-usage-test
+         2 ms  clj-surgeon.syntax-var-refs-test
+         1 ms  clj-surgeon.cljc.analyze-test
+         1 ms  clj-surgeon.failure-report-test
+         1 ms  clj-surgeon.mcp-compact-edit-fields-test
+         1 ms  clj-surgeon.mcp-read-request-normalization-test
+         1 ms  clj-surgeon.mission-candidate-test
+         0 ms  clj-surgeon.diagnostic-delta-test
+         0 ms  clj-surgeon.file-ops-test
+         0 ms  clj-surgeon.mcp-paths-test
+         0 ms  clj-surgeon.mission-git-test
+         0 ms  clj-surgeon.worktree-lifecycle-cli-test
+
+lanes (21), makespan 89224 ms:
+  lane 0     20931 ms  exit 0  clj-surgeon.splice-envelope-test clj-surgeon.ns-isolation-test clj-surgeon.mcp-compact-location-test clj-surgeon.mcp-change-buffer-test clj-surgeon.mcp-write-refusal-test clj-surgeon.mcp-extraction-plan-test clj-surgeon.mcp-operation-test
+  lane 1      1525 ms  exit 0  clj-surgeon.operation-algebra-test clj-surgeon.move-dependency-test clj-surgeon.edit-dsl-test clj-surgeon.mcp-extraction-test clj-surgeon.owner-hypotheses-test clj-surgeon.mcp-contract-test clj-surgeon.mcp-schema-test clj-surgeon.forms-test clj-surgeon.mcp-read-request-normalization-test
+  lane 2      3378 ms  exit 1  clj-surgeon.lane-manifest-test clj-surgeon.outline-test clj-surgeon.mcp-inspect-contract-test clj-surgeon.telemetry-events-test clj-surgeon.worktree-lifecycle-io-test clj-surgeon.outermost-test clj-surgeon.move-test clj-surgeon.mission-forms-source-test clj-surgeon.cljc.require-ops-test clj-surgeon.extract-header-test clj-surgeon.cljc.analyze-test
+  lane 3     17898 ms  exit 0  clj-surgeon.rename-alias-receipt-test clj-surgeon.outline-memory-test clj-surgeon.mcp-expect-guard-test clj-surgeon.mcp-prepared-confirmation-test clj-surgeon.mcp-operation-async-test
+  lane 4     21094 ms  exit 0  clj-surgeon.mcp-namespace-split-test clj-surgeon.census-pool-test clj-surgeon.mcp-prepared-request-test clj-surgeon.mcp-relation-census-round20-test clj-surgeon.mcp-semantic-client-test
+  lane 5      2454 ms  exit 0  clj-surgeon.helper-extraction-test clj-surgeon.analyze-test clj-surgeon.recovery-test clj-surgeon.agent-routing-test clj-surgeon.require-change-test clj-surgeon.worktree-lifecycle-test clj-surgeon.mission-typist-test clj-surgeon.battery-ledger-test clj-surgeon.mission-usage-test clj-surgeon.diagnostic-delta-test clj-surgeon.failure-report-test clj-surgeon.file-ops-test clj-surgeon.mcp-paths-test clj-surgeon.mission-git-test clj-surgeon.worktree-lifecycle-cli-test
+  lane 6     22085 ms  exit 0  clj-surgeon.mcp-inspect-tool-test clj-surgeon.mcp-create-files-test clj-surgeon.receipt-booleans-test clj-surgeon.mcp-combinable-transaction-test
+  lane 7      2287 ms  exit 0  clj-surgeon.namespace-split-test clj-surgeon.alias-migration-test clj-surgeon.ls-tree-test clj-surgeon.battery-parallel-test clj-surgeon.structural-lens-test clj-surgeon.mcp-workspace-test clj-surgeon.mission-plain-forms-test clj-surgeon.insertion-gap-test clj-surgeon.split-proof-gate-test clj-surgeon.mcp-telemetry-test clj-surgeon.mission-forms-test
+  lane 8     18815 ms  exit 0  clj-surgeon.insert-forms-test clj-surgeon.insert-forms-receipt-test clj-surgeon.scope-stream-test clj-surgeon.mcp-compact-edit-test clj-surgeon.mission-candidate-race-test
+  lane 9       972 ms  exit 0  clj-surgeon.mcp-intent-contract-test clj-surgeon.cljc-existing-ops-test clj-surgeon.relation-census-test clj-surgeon.fast-lane-isolation-test clj-surgeon.cljc.split-test clj-surgeon.quoted-var-refs-test clj-surgeon.cljc.merge-test clj-surgeon.syntax-var-refs-test
+  lane 10     22552 ms  exit 0  clj-surgeon.mcp-operation-registry-test clj-surgeon.mcp-formatter-test
+  lane 11       792 ms  exit 0  clj-surgeon.workspace-onboarding-test clj-surgeon.jvm-error-test clj-surgeon.memory-battery-test clj-surgeon.fix-declares-test clj-surgeon.mcp-program-tool-test clj-surgeon.rename-test clj-surgeon.outline-differential-test clj-surgeon.mcp-recovery-test clj-surgeon.mcp-compact-edit-fields-test clj-surgeon.mission-candidate-test
+  lane 12      7250 ms  exit 0  clj-surgeon.rename-alias-test
+  lane 13     24079 ms  exit 0  clj-surgeon.mcp-compact-relations-test
+  lane 14     11280 ms  exit 0  clj-surgeon.mcp-server-test
+  lane 15     10266 ms  exit 0  clj-surgeon.namespace-split-warm-test
+  lane 16      7617 ms  exit 0  clj-surgeon.mcp-hot-verify-test
+  lane 17     16165 ms  exit 0  clj-surgeon.mcp-http-server-test
+  lane 18     13329 ms  exit 0  clj-surgeon.mcp-tool-test
+  lane 19     15289 ms  exit 0  clj-surgeon.outline-corpus-integration-test
+  lane 20     54807 ms  exit 0  clj-surgeon.mcp-feature-thread-test
+
+test-isolation: 0 violations across 101 namespace(s) (TEST-ISO-002/003/004/005/007/010)
+
+BATTERY-LANE: 1 lane failure(s):
+   lane 2 exited 1 (log target/gate-prewarm/f1806c20-565a-43f4-bec6-4d69c96974f3/mcp/lane-2.out)
+battery-parallel: makespan 89224 ms over 8 lane(s); serial-equivalent 111300 ms; skipped 0
+
+========== lane 0 (clj-surgeon.extract-test clj-surgeon.partition-all-test) exit 0, 6031 ms ==========
+
+Testing clj-surgeon.extract-test
+
+Testing clj-surgeon.partition-all-test
+
+========== lane 1 (clj-surgeon.intent-transaction-test) exit 0, 13792 ms ==========
+lanes: --ns -- 1 namespace(s), home-isolated false
+
+Testing clj-surgeon.intent-transaction-test
+---------- lane 1 stderr ----------
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+
+namespace walls (1, slowest first, total 5687 ms):
+      5687 ms  clj-surgeon.intent-transaction-test
+
+========== lane 2 (clj-surgeon.outline-test clj-surgeon.analyze-test clj-surgeon.cljc-existing-ops-test clj-surgeon.move-dependency-test clj-surgeon.agent-routing-test clj-surgeon.memory-battery-test clj-surgeon.move-test clj-surgeon.extract-header-test clj-surgeon.cljc.require-ops-test) exit 0, 2196 ms ==========
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.move-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+========== lane 3 (clj-surgeon.edit-test clj-surgeon.core-discovery-test clj-surgeon.lens-query-test) exit 0, 13686 ms ==========
+
+Testing clj-surgeon.edit-test
+
+Testing clj-surgeon.core-discovery-test
+
+Testing clj-surgeon.lens-query-test
+---------- lane 3 stderr ----------
+clj-surgeon: skipping project discovery; not an existing directory: "/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-284839-1b4f4bb5/andon-shell-safety7455408485380881812/H; touch /var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-284839-1b4f4bb5/andon-shell-safety7455408485380881812/PWNED-SEMICOLON ; echo z"
+clj-surgeon: skipping project discovery; not an existing directory: "/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-284839-1b4f4bb5/andon-shell-safety13336053505058534445/H$(touch /var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-284839-1b4f4bb5/andon-shell-safety13336053505058534445/PWNED-SUBST)"
+
+========== lane 4 (clj-surgeon.alias-migration-test clj-surgeon.ls-tree-test clj-surgeon.jvm-error-test clj-surgeon.outermost-test clj-surgeon.worktree-lifecycle-io-test clj-surgeon.edit-dsl-test clj-surgeon.syntax-var-refs-test clj-surgeon.failure-report-test) exit 0, 995 ms ==========
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.syntax-var-refs-test
+
+Testing clj-surgeon.failure-report-test
+
+========== lane 5 (clj-surgeon.help-test clj-surgeon.xray-test clj-surgeon.platform-selector-test) exit 0, 13687 ms ==========
+
+Testing clj-surgeon.help-test
+
+Testing clj-surgeon.xray-test
+
+Testing clj-surgeon.platform-selector-test
+
+========== lane 6 (clj-surgeon.operation-algebra-test clj-surgeon.workspace-onboarding-test clj-surgeon.structural-lens-test clj-surgeon.worktree-lifecycle-test clj-surgeon.fix-declares-test clj-surgeon.insertion-gap-test clj-surgeon.rename-test clj-surgeon.cljc.analyze-test) exit 0, 1400 ms ==========
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.cljc.analyze-test
+
+========== lane 7 (clj-surgeon.tmp-leak-support-test clj-surgeon.edn-config-integration-test) exit 0, 14573 ms ==========
+
+Testing clj-surgeon.tmp-leak-support-test
+
+Testing clj-surgeon.edn-config-integration-test
+---------- lane 7 stderr ----------
+tmp-refused: refusing to delete /var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-276760-383429b2/tmp-leak-sweep-guard-8480956400163462582/other-seat-precious-fixture -- it is not a private per-run root (its name must start with clj-surgeon-suite-). Sweeping a shared base would destroy another tenant's working set.
+
+========== lane 8 (clj-surgeon.recovery-test clj-surgeon.owner-hypotheses-test clj-surgeon.relation-census-test clj-surgeon.cljc.split-test clj-surgeon.quoted-var-refs-test clj-surgeon.cljc.merge-test clj-surgeon.diagnostic-delta-test clj-surgeon.file-ops-test clj-surgeon.worktree-lifecycle-cli-test) exit 0, 697 ms ==========
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test
+
+========== lane 9 (clj-surgeon.show-form-test) exit 0, 13952 ms ==========
+
+Testing clj-surgeon.show-form-test
+
+========== lane 10 (clj-surgeon.forms-test) exit 0, 181 ms ==========
+
+Testing clj-surgeon.forms-test
+
+========== lane 11 (clj-surgeon.cli-dispatch-test) exit 0, 14459 ms ==========
+
+Testing clj-surgeon.cli-dispatch-test
+
+========== lane 12 (clj-surgeon.parser-admission-test) exit 0, 72115 ms ==========
+
+Testing clj-surgeon.parser-admission-test
+
+========== lane 13 (clj-surgeon.install-test) exit 0, 91575 ms ==========
+
+Testing clj-surgeon.install-test
+Installed stable CLI /var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-276754-2e260022/clj-surgeon-installed-splice-5630564081825341028/bin with spaces/clj-surgeon from commit db318270fb2cb029617e243a99e8155d931ad23e, source hash 1eb09f703ec396c916ba332ec02dfb574beab51f181573c02bf6f6efcae9fc51
+Receipt: /var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-276754-2e260022/clj-surgeon-installed-splice-5630564081825341028/bin with spaces/clj-surgeon.receipt.edn
+ 
+:insert-forms! {:proc #object[java.lang.ProcessImpl 0x12476811 "Process[pid=288231, exitValue=2]"], :exit 2, :in #object[java.lang.ProcessImpl$ProcessPipeOutputStream 0x38dd9953 "java.lang.ProcessImpl$ProcessPipeOutputStream@38dd9953"], :out "{:state \"refused\", :committed false, :mutation_attempted false, :source_unchanged true, :at [], :elapsed_ms 2.209883, :error \"Closed map has missing or unsupported fields.\", :error-type :invalid-request, :next_action \"revise-request\", :ok false, :operation \"insert_forms\", :remedy \"Follow the closed request schema at [].\"}\n", :err "", :prev nil, :cmd ["/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-276754-2e260022/clj-surgeon-installed-splice-5630564081825341028/bin with spaces/clj-surgeon" ":op" ":insert-forms!" ":request-file" "/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-276754-2e260022/clj-surgeon-installed-splice-5630564081825341028/empty.edn"]}
+:rename-alias! {:proc #object[java.lang.ProcessImpl 0x2f101d3 "Process[pid=288522, exitValue=2]"], :exit 2, :in #object[java.lang.ProcessImpl$ProcessPipeOutputStream 0x7561f493 "java.lang.ProcessImpl$ProcessPipeOutputStream@7561f493"], :out "{:state \"refused\", :committed false, :mutation_attempted false, :source_unchanged true, :at [], :elapsed_ms 3.077855, :error \"Closed map has missing or unsupported fields.\", :error-type :invalid-request, :next_action \"revise-request\", :ok false, :operation \"rename_alias\", :remedy \"Follow the closed request schema at [].\", :version 1}\n", :err "", :prev nil, :cmd ["/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-276754-2e260022/clj-surgeon-installed-splice-5630564081825341028/bin with spaces/clj-surgeon" ":op" ":rename-alias!" ":request-file" "/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-276754-2e260022/clj-surgeon-installed-splice-5630564081825341028/empty.edn"]}
+:ls {:proc #object[java.lang.ProcessImpl 0x7aead1d5 "Process[pid=288666, exitValue=0]"], :exit 0, :in #object[java.lang.ProcessImpl$ProcessPipeOutputStream 0x1f92081f "java.lang.ProcessImpl$ProcessPipeOutputStream@1f92081f"], :out "{:ns sample,\n :file\n \"/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-276754-2e260022/clj-surgeon-installed-splice-5630564081825341028/sample.clj\",\n :lines 2,\n :form-count 1,\n :forms\n [{:type defn,\n   :platforms [:clj],\n   :line 2,\n   :end-line 2,\n   :name answer,\n   :args \"[]\"}],\n :requires [],\n :forward-refs []}\n", :err "", :prev nil, :cmd ["/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-276754-2e260022/clj-surgeon-installed-splice-5630564081825341028/bin with spaces/clj-surgeon" ":op" ":ls" ":file" "/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-suite-276754-2e260022/clj-surgeon-installed-splice-5630564081825341028/sample.clj"]}
+
+Ran 901 tests containing 7994 assertions.
+0 failures, 0 errors.
+0 preconditions skipped.
+0 preconditions failed.
+makespan: 91576 ms
+cadence :battery: serial-equivalent 243202 ms; budget 1800000 ms
+cadence :fast: serial-equivalent 3536 ms; budget 60000 ms
+bb-runtime: serial-equivalent 241051 ms; budget 343102 ms; makespan 91576 ms
+
+namespace walls (50, slowest first, serial-equivalent total 246738 ms):
+     91419 ms  clj-surgeon.install-test
+     71894 ms  clj-surgeon.parser-admission-test
+     14054 ms  clj-surgeon.cli-dispatch-test
+     13869 ms  clj-surgeon.tmp-leak-support-test
+     13512 ms  clj-surgeon.show-form-test
+     11421 ms  clj-surgeon.help-test
+      6219 ms  clj-surgeon.edit-test
+      5687 ms  clj-surgeon.intent-transaction-test
+      5379 ms  clj-surgeon.extract-test
+      4717 ms  clj-surgeon.core-discovery-test
+      2322 ms  clj-surgeon.lens-query-test
+      1515 ms  clj-surgeon.xray-test
+       916 ms  clj-surgeon.outline-test
+       771 ms  clj-surgeon.operation-algebra-test
+       683 ms  clj-surgeon.analyze-test
+       532 ms  clj-surgeon.edn-config-integration-test
+       384 ms  clj-surgeon.partition-all-test
+       278 ms  clj-surgeon.platform-selector-test
+       174 ms  clj-surgeon.alias-migration-test
+       128 ms  clj-surgeon.jvm-error-test
+       114 ms  clj-surgeon.workspace-onboarding-test
+       103 ms  clj-surgeon.ls-tree-test
+        93 ms  clj-surgeon.cljc-existing-ops-test
+        80 ms  clj-surgeon.recovery-test
+        69 ms  clj-surgeon.relation-census-test
+        58 ms  clj-surgeon.move-dependency-test
+        47 ms  clj-surgeon.owner-hypotheses-test
+        37 ms  clj-surgeon.agent-routing-test
+        37 ms  clj-surgeon.structural-lens-test
+        34 ms  clj-surgeon.worktree-lifecycle-io-test
+        31 ms  clj-surgeon.fix-declares-test
+        29 ms  clj-surgeon.outermost-test
+        21 ms  clj-surgeon.memory-battery-test
+        21 ms  clj-surgeon.cljc.split-test
+        16 ms  clj-surgeon.move-test
+        15 ms  clj-surgeon.edit-dsl-test
+        11 ms  clj-surgeon.quoted-var-refs-test
+        11 ms  clj-surgeon.insertion-gap-test
+        10 ms  clj-surgeon.worktree-lifecycle-test
+         8 ms  clj-surgeon.forms-test
+         5 ms  clj-surgeon.rename-test
+         4 ms  clj-surgeon.cljc.require-ops-test
+         3 ms  clj-surgeon.extract-header-test
+         3 ms  clj-surgeon.cljc.merge-test
+         2 ms  clj-surgeon.syntax-var-refs-test
+         2 ms  clj-surgeon.cljc.analyze-test
+         0 ms  clj-surgeon.diagnostic-delta-test
+         0 ms  clj-surgeon.failure-report-test
+         0 ms  clj-surgeon.file-ops-test
+         0 ms  clj-surgeon.worktree-lifecycle-cli-test
+
+lanes (14), makespan 91576 ms:
+  lane 0      6031 ms  exit 0  clj-surgeon.extract-test clj-surgeon.partition-all-test
+  lane 1     13792 ms  exit 0  clj-surgeon.intent-transaction-test
+  lane 2      2196 ms  exit 0  clj-surgeon.outline-test clj-surgeon.analyze-test clj-surgeon.cljc-existing-ops-test clj-surgeon.move-dependency-test clj-surgeon.agent-routing-test clj-surgeon.memory-battery-test clj-surgeon.move-test clj-surgeon.extract-header-test clj-surgeon.cljc.require-ops-test
+  lane 3     13686 ms  exit 0  clj-surgeon.edit-test clj-surgeon.core-discovery-test clj-surgeon.lens-query-test
+  lane 4       995 ms  exit 0  clj-surgeon.alias-migration-test clj-surgeon.ls-tree-test clj-surgeon.jvm-error-test clj-surgeon.outermost-test clj-surgeon.worktree-lifecycle-io-test clj-surgeon.edit-dsl-test clj-surgeon.syntax-var-refs-test clj-surgeon.failure-report-test
+  lane 5     13687 ms  exit 0  clj-surgeon.help-test clj-surgeon.xray-test clj-surgeon.platform-selector-test
+  lane 6      1400 ms  exit 0  clj-surgeon.operation-algebra-test clj-surgeon.workspace-onboarding-test clj-surgeon.structural-lens-test clj-surgeon.worktree-lifecycle-test clj-surgeon.fix-declares-test clj-surgeon.insertion-gap-test clj-surgeon.rename-test clj-surgeon.cljc.analyze-test
+  lane 7     14573 ms  exit 0  clj-surgeon.tmp-leak-support-test clj-surgeon.edn-config-integration-test
+  lane 8       697 ms  exit 0  clj-surgeon.recovery-test clj-surgeon.owner-hypotheses-test clj-surgeon.relation-census-test clj-surgeon.cljc.split-test clj-surgeon.quoted-var-refs-test clj-surgeon.cljc.merge-test clj-surgeon.diagnostic-delta-test clj-surgeon.file-ops-test clj-surgeon.worktree-lifecycle-cli-test
+  lane 9     13952 ms  exit 0  clj-surgeon.show-form-test
+  lane 10       181 ms  exit 0  clj-surgeon.forms-test
+  lane 11     14459 ms  exit 0  clj-surgeon.cli-dispatch-test
+  lane 12     72115 ms  exit 0  clj-surgeon.parser-admission-test
+  lane 13     91575 ms  exit 0  clj-surgeon.install-test
+bb-isolation: existing per-process temp leak contract; no JVM probe claim
+battery-parallel: makespan 91576 ms over 8 lane(s); serial-equivalent 246738 ms; skipped 0
+# @spec MCP-OP-ORACLE-001
+swipl -q -f test/mcp_operation_contract_oracle.pl
+mcp-operation oracle: pass; legacy counterexamples=[verification_failed,verification_pending]
+bash test/performance_regression_sentinel_intent_test.sh
+Sentinel intent witness audit passed: 50/50 requirements named
+bash test/performance_regression_sentinel_intent_self_test.sh
+Sentinel intent audit self-test passed: missing simple/multipart and unknown multipart IDs refused
+python3 -B -m unittest discover -s test/oracles -p test_gate_slot.py
+python3 -B -m unittest discover -s test/oracles -p test_namespace_split_papercut_oracle.py
+# @spec REQUIRE-CHANGE-014
+python3 -B -m unittest discover -s test/oracles -p test_require_change_oracle.py
+python3 -B -m unittest discover -s test/oracles -p test_cell_b_oracle.py
+# @spec MCP-OP-ALIAS-053
+ok: a clean repository passes (exit 0)
+ok: a cache forced in below the root fails the gate (exit 1)
+ok: a cache forced in at the root fails the gate (exit 1)
+ok: a repository with no ignore rule fails the gate (exit 1)
+ok: a directory git cannot answer for fails the gate (exit 1)
+ok: a tree whose file inventory git cannot produce fails the gate (exit 1)
+repository hygiene gate self-test: all cases pass
+clojure -M test/kernel_warning_check.clj
+kernel warning check: 2 namespace(s), 0 warning(s)
+MCP heap configuration regression passed
+--- tmpfs-literal (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/tmp is a RAM-backed path by name (/tmp or /dev/shm). Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- arm-b (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/tmp is a RAM-backed path by name (/tmp or /dev/shm). Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- name-only (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/tmp is a RAM-backed path by name (/tmp or /dev/shm). Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- devshm (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/dev/shm is a RAM-backed path by name (/tmp or /dev/shm). Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- unknown-fstype (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk has an UNDETERMINABLE filesystem type -- neither findmnt nor the mounts table could answer, so nothing proves it is not RAM. Refusing rather than assuming disk. Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- seam-escape (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/seamdisk has an UNDETERMINABLE filesystem type -- neither findmnt nor the mounts table could answer, so nothing proves it is not RAM. Refusing rather than assuming disk. Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- seam-tmpfs (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/seamdisk is RAM-backed (tmpfs, fstype=tmpfs). Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- fallback-alive (exit=0) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=child-pre max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-314203-b7573ddf node-cache=1 args=[]
+PROBE role=child max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-314203-b7573ddf node-cache=1 args=[]
+PROBE root=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-314203-b7573ddf
+PROBE leak-exit=0
+--- sentinel-decoy (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=child-pre max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/decoy-base node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/decoy-base was handed a re-exec sentinel it does not own: it names root="1" but this process's java.io.tmpdir is "/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/decoy-base". Refusing to treat a shared base as a private run root. Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- sentinel-mismatch (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=child-pre max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/decoy-base node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/decoy-base was handed a re-exec sentinel it does not own: it names root="/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/some-other-root" but this process's java.io.tmpdir is "/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/decoy-base". Refusing to treat a shared base as a private run root. Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- heap-args (exit=0) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=318 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=0 args=["alpha" "beta" "--node-cache-env"]
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=child-pre max-mb=318 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-316570-c8d1a1a8 node-cache=1 args=["alpha" "beta" "--node-cache-env"]
+PROBE role=child max-mb=318 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-316570-c8d1a1a8 node-cache=1 args=["alpha" "beta" "--node-cache-env"]
+PROBE root=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-316570-c8d1a1a8
+PROBE descendant-node-cache=1
+PROBE leak-exit=0
+--- bb-args (exit=0) ---
+PROBE role=parent max-mb=25061 tmpdir=/tmp node-cache=<unset> args=["alpha" "beta" "--node-cache-env"]
+PROBE role=child-pre max-mb=25061 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-317897-4ee9799c node-cache=1 args=["alpha" "beta" "--node-cache-env"]
+PROBE role=child max-mb=25061 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-317897-4ee9799c node-cache=1 args=["alpha" "beta" "--node-cache-env"]
+PROBE root=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-317897-4ee9799c
+PROBE descendant-node-cache=1
+PROBE leak-exit=0
+--- subproc (exit=1) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=["--leak-subprocess"]
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=child-pre max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/subbase/clj-surgeon-suite-318008-fe6aefe1 node-cache=1 args=["--leak-subprocess"]
+PROBE role=child max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/subbase/clj-surgeon-suite-318008-fe6aefe1 node-cache=1 args=["--leak-subprocess"]
+PROBE root=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/subbase/clj-surgeon-suite-318008-fe6aefe1
+PROBE subprocess-tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/subbase/clj-surgeon-suite-318008-fe6aefe1/tmp.9GtGw4nkFV
+temp-leak: 1 entries left under /var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/subbase/clj-surgeon-suite-318008-fe6aefe1: tmp.9GtGw4nkFV
+PROBE leak-exit=1
+--- kill-term (left in base) ---
+--- stale-sweep (exit=0) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=child-pre max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/stalebase/clj-surgeon-suite-320724-f61b1618 node-cache=1 args=[]
+PROBE role=child max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/stalebase/clj-surgeon-suite-320724-f61b1618 node-cache=1 args=[]
+PROBE root=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/stalebase/clj-surgeon-suite-320724-f61b1618
+PROBE leak-exit=0
+--- stalebase after ---
+clj-surgeon-suite-311771-aaaaaaaa
+other-seat-precious-fixture
+--- unwritable (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/nowrite cannot be used as a temp base: AccessDeniedException: /var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/nowrite/clj-surgeon-suite-322053-417b1f32 Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- runner analyzer-contract-test-runner (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+tmp-refused: java.io.tmpdir base=/tmp is a RAM-backed path by name (/tmp or /dev/shm). Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- runner clj-surgeon.memory.memory-test-runner (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-81gate-refused: gate-refused: runtime pool failed {:shell-exit 0, :suites [{:suite "alias", :state :passed, :problems []} {:suite "mcp", :state :failed, :problems ["lane 2 exited 1 (log target/gate-prewarm/f1806c20-565a-43f4-bec6-4d69c96974f3/mcp/lane-2.out)"]} {:suite "bb", :state :passed, :problems []}]}
+make: *** [Makefile:1262: landing-gate-prewarm] Error 1
+{"exit": 2, "wall_seconds": 169.6600949820131}

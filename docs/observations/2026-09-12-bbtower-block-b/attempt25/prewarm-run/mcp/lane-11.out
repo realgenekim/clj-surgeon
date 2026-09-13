@@ -1,0 +1,26 @@
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.move-test
+
+Testing clj-surgeon.mcp-program-tool-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.mission-git-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

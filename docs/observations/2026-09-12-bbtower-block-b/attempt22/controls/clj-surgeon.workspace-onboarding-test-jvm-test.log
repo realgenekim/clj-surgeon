@@ -1,0 +1,8 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Ran 17 tests containing 95 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.workspace-onboarding-test, :runtime :jvm, :mode "test", :started-at "2026-09-12T19:26:20.555901053Z", :elapsed-ms 2809, :status :passed, :result {:test 17, :pass 95, :fail 0, :error 0, :type :summary}}

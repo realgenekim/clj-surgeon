@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.mcp-recovery-test
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+FAIL in (the-lane-child-is-asked-for-exactly-its-slice) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:249)
+expected: (= ["clojure" "-J-Xmx512m" "-M:clj-surgeon/test-deps" "-m" "clj-surgeon.mcp-test-runner" "--emit-edn" "/tmp/out.edn" "--ns" "clj-surgeon.a-test" "clj-surgeon.b-test"] cmd)
+  actual: (not (= ["clojure" "-J-Xmx512m" "-M:clj-surgeon/test-deps" "-m" "clj-surgeon.mcp-test-runner" "--emit-edn" "/tmp/out.edn" "--ns" "clj-surgeon.a-test" "clj-surgeon.b-test"] ["clojure" "-J-Xmx512m" "-M:clj-surgeon/test-deps" "-m" "run-all" "--emit-edn" "/tmp/out.edn" "--ns" "clj-surgeon.a-test" "clj-surgeon.b-test"]))
+
+Testing clj-surgeon.mission-usage-test
+
+Testing clj-surgeon.fast-lane-isolation-test

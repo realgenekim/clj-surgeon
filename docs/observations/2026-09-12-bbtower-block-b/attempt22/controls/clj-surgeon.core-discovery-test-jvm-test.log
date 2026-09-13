@@ -1,0 +1,10 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.core-discovery-test
+clj-surgeon: skipping project discovery; not an existing directory: "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-1379319-c22a014d/andon-shell-safety3746331815388509778/H; touch /var/tmp/forge/bbtower-fx/clj-surgeon-suite-1379319-c22a014d/andon-shell-safety3746331815388509778/PWNED-SEMICOLON ; echo z"
+clj-surgeon: skipping project discovery; not an existing directory: "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-1379319-c22a014d/andon-shell-safety2454048091561611651/H$(touch /var/tmp/forge/bbtower-fx/clj-surgeon-suite-1379319-c22a014d/andon-shell-safety2454048091561611651/PWNED-SUBST)"
+
+Ran 7 tests containing 35 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.core-discovery-test, :runtime :jvm, :mode "test", :started-at "2026-09-12T18:40:46.842176338Z", :elapsed-ms 6986, :status :passed, :result {:test 7, :pass 35, :fail 0, :error 0, :type :summary}}

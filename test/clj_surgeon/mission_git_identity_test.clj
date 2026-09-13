@@ -3,6 +3,7 @@
   (:require
    [clj-surgeon.mission-git-boundary-test :as fixture]
    [clj-surgeon.mission-git-identity-fixture :as identity]
+   [clj-surgeon.tmp-leak-support :refer [with-temp-dir]]
    [clojure.test :refer [deftest is]]))
 
 (def seat-env
@@ -32,11 +33,14 @@
              (run ["show" "-s" "--format=%an <%ae>|%cn <%ce>" "HEAD"] nil))))))
 
 (deftest nonidentity-git-environment-is-still-removed
-  (let [dangerous {"GIT_CONFIG_COUNT" "1" "GIT_CONFIG_KEY_0" "user.name" "GIT_CONFIG_VALUE_0" "Injected"
-                   "GIT_CONFIG_PARAMETERS" "injected" "GIT_DIR" "/not-the-repository"
-                   "GIT_WORK_TREE" "/wrong-worktree" "GIT_INDEX_FILE" "/wrong-index"
-                   "GIT_SSH_COMMAND" "do-not-execute" "GIT_AUTHOR_IDENT" "synthetic"
-                   "GIT_TERMINAL_PROMPT" "1"}
-        result (identity/isolated (merge seat-env dangerous)
-                 "(require '[clj-surgeon.mission-git-process :as p] '[clojure.edn :as edn]) (print (p/run-process! \"/var/tmp/forge\" [\"bb\" \"-e\" \"(prn (into {} (filter (fn [[k _]] (.startsWith k \\\"GIT_\\\")) (System/getenv))))\"] nil 10000))")]
-    (is (= (assoc seat-env "GIT_TERMINAL_PROMPT" "0") result))))
+  (with-temp-dir [root "mission-identity-"]
+    (let [dangerous {"GIT_CONFIG_COUNT" "1" "GIT_CONFIG_KEY_0" "user.name" "GIT_CONFIG_VALUE_0" "Injected"
+                     "GIT_CONFIG_PARAMETERS" "injected" "GIT_DIR" "/not-the-repository"
+                     "GIT_WORK_TREE" "/wrong-worktree" "GIT_INDEX_FILE" "/wrong-index"
+                     "GIT_SSH_COMMAND" "do-not-execute" "GIT_AUTHOR_IDENT" "synthetic"
+                     "GIT_TERMINAL_PROMPT" "1"}
+          result (identity/isolated (merge seat-env dangerous)
+                   (str "(require '[clj-surgeon.mission-git-process :as p] '[clojure.edn :as edn]) (print (p/run-process! "
+                        (pr-str (str root))
+                        " [\"bb\" \"-e\" \"(prn (into {} (filter (fn [[k _]] (.startsWith k \\\"GIT_\\\")) (System/getenv))))\"] nil 10000))"))]
+      (is (= (assoc seat-env "GIT_TERMINAL_PROMPT" "0") result)))))

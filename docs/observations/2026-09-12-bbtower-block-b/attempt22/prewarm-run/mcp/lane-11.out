@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.mcp-inspect-contract-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.syntax-var-refs-test

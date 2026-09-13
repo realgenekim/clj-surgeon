@@ -1,0 +1,11 @@
+/var/tmp/forge/bbtower-fx/attempt10-lint-base/test/clj_surgeon/alias_migration_test.clj:555:18: info: Single argument to str already is a string
+/var/tmp/forge/bbtower-fx/attempt10-lint-base/test/clj_surgeon/analyze_test.clj:4:14: warning: namespace clojure.string is required but never used
+/var/tmp/forge/bbtower-fx/attempt10-lint-base/test/clj_surgeon/fix_declares_test.clj:5:5: warning: namespace clojure.java.io is required but never used
+/var/tmp/forge/bbtower-fx/attempt10-lint-base/test/clj_surgeon/fix_declares_test.clj:104:13: warning: unused binding result
+/var/tmp/forge/bbtower-fx/attempt10-lint-base/test/clj_surgeon/fix_declares_test.clj:216:13: warning: unused binding result
+/var/tmp/forge/bbtower-fx/attempt10-lint-base/test/clj_surgeon/fix_declares_test.clj:320:13: warning: unused binding result
+/var/tmp/forge/bbtower-fx/attempt10-lint-base/test/clj_surgeon/operation_algebra_test.clj:53:8: warning: Unused private var clj-surgeon.operation-algebra-test/top-level-form-source
+/var/tmp/forge/bbtower-fx/attempt10-lint-base/test/clj_surgeon/tmp_leak_support_test.clj:29:38: error: Unresolved symbol: dir
+/var/tmp/forge/bbtower-fx/attempt10-lint-base/test/clj_surgeon/tmp_leak_support_test.clj:90:30: error: Unresolved symbol: parent
+/var/tmp/forge/bbtower-fx/attempt10-lint-base/test/clj_surgeon/worktree_lifecycle_test.clj:4:37: warning: #'clojure.test/testing is referred but never used
+linting took 989ms, errors: 2, warnings: 7

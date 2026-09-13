@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.mcp-inspect-contract-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.battery-ledger-test
+
+Testing clj-surgeon.cljc.analyze-test

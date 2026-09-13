@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.mission-provider-fallback-events-test, :runtime :bb, :mode "load", :started-at "2026-09-12T19:11:53.223441532Z", :elapsed-ms 24, :status :load-failed, :message "Unable to resolve classname: java.util.concurrent.ExecutorCompletionService", :causes ["Unable to resolve classname: java.util.concurrent.ExecutorCompletionService"]}

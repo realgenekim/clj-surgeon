@@ -1,0 +1,24 @@
+
+Testing clj-surgeon.lane-manifest-test
+
+Testing clj-surgeon.helper-extraction-test
+
+Testing clj-surgeon.mcp-inspect-contract-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.require-change-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.failure-report-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.battery-ledger-test

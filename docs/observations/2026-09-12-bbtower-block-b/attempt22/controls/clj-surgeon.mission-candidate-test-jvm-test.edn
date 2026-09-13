@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.mission-candidate-test, :runtime :jvm, :mode "test", :started-at "2026-09-12T19:11:00.269068523Z", :elapsed-ms 1038, :status :passed, :result {:test 5, :pass 58, :fail 0, :error 0, :type :summary}}

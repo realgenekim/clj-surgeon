@@ -1,0 +1,105 @@
+SERIAL/NOT-A-GATE: direct Babashka diagnostic
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.tmp-leak-support-test
+tmp-refused: refusing to delete /var/tmp/forge/bbtower-fx/clj-surgeon-suite-918823-ffda5511/tmp-leak-sweep-guard-7660608115485618084/other-seat-precious-fixture -- it is not a private per-run root (its name must start with clj-surgeon-suite-). Sweeping a shared base would destroy another tenant's working set.
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.move-test
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.extract-test
+
+Testing clj-surgeon.failure-report-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.show-form-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.syntax-var-refs-test
+
+Testing clj-surgeon.lens-query-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.cljc.analyze-test
+
+Testing clj-surgeon.edn-config-integration-test
+
+Testing clj-surgeon.edit-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.parser-admission-test
+
+Testing clj-surgeon.partition-all-test
+
+Testing clj-surgeon.platform-selector-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.xray-test
+
+Testing clj-surgeon.help-test
+
+Testing clj-surgeon.install-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.cli-dispatch-test
+
+Testing clj-surgeon.core-discovery-test
+clj-surgeon: skipping project discovery; not an existing directory: "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-918823-ffda5511/andon-shell-safety2926939698461295206/H; touch /var/tmp/forge/bbtower-fx/clj-surgeon-suite-918823-ffda5511/andon-shell-safety2926939698461295206/PWNED-SEMICOLON ; echo z"
+clj-surgeon: skipping project discovery; not an existing directory: "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-918823-ffda5511/andon-shell-safety15152512609040275437/H$(touch /var/tmp/forge/bbtower-fx/clj-surgeon-suite-918823-ffda5511/andon-shell-safety15152512609040275437/PWNED-SUBST)"
+
+Ran 829 tests containing 7281 assertions.
+0 failures, 0 errors.

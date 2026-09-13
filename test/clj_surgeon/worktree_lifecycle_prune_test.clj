@@ -123,7 +123,7 @@
   ([f] (with-missing-worktree-fixture :missing f))
   ([path-case f]
    (let [base (.toFile (java.nio.file.Files/createTempDirectory
-                         (.toPath (io/file "/private/tmp"))
+                         (.toPath (io/file (System/getProperty "java.io.tmpdir")))
                          "worktree-prune-test"
                          (make-array java.nio.file.attribute.FileAttribute 0)))
          repo (io/file base "repo")
@@ -393,7 +393,7 @@
 (deftest no-follow-path-authority-distinguishes-absence-and-links
   ;; @spec WTL-PRUNE-002 WTL-PRUNE-006
   (let [base (.toFile (java.nio.file.Files/createTempDirectory
-                        (.toPath (io/file "/private/tmp"))
+                        (.toPath (io/file (System/getProperty "java.io.tmpdir")))
                         "worktree-path-proof"
                         (make-array java.nio.file.attribute.FileAttribute 0)))
         target (io/file base "missing")

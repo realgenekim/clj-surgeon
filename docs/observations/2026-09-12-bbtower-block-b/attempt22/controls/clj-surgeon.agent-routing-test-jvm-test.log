@@ -1,0 +1,9 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.agent-routing-test
+
+Ran 18 tests containing 298 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.agent-routing-test, :runtime :jvm, :mode "test", :started-at "2026-09-12T18:39:15.079576731Z", :elapsed-ms 333, :status :passed, :result {:test 18, :pass 298, :fail 0, :error 0, :type :summary}}

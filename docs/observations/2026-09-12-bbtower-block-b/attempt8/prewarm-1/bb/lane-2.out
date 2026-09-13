@@ -1,0 +1,34 @@
+
+Testing clj-surgeon.edit-test
+
+Testing clj-surgeon.core-discovery-test
+
+Testing clj-surgeon.xray-test
+
+Testing clj-surgeon.edn-config-integration-test
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.cljc.analyze-test
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.failure-report-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

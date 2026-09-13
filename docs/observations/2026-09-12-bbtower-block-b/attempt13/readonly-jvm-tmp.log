@@ -1,0 +1,3 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/sys
+{:jvm-tmp "/sys", :selected "/var/tmp/forge/bbtower-fx"}
+{:ok true, :format {:status :complete, :elapsed_ms 523.088113, :file-count 1, :changed-file-count 1}, :replacements [{:form "(def x 1)\n"}]}

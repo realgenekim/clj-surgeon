@@ -1,0 +1,415 @@
+diff --git a/docs/intent/hot-verification/bb-probe-specs.md b/docs/intent/hot-verification/bb-probe-specs.md
+index 69e25e88..7196129b 100644
+--- a/docs/intent/hot-verification/bb-probe-specs.md
++++ b/docs/intent/hot-verification/bb-probe-specs.md
+@@ -8,7 +8,7 @@ includes probe as the third verb, discovered from the CLI operation catalog:
+ every boolean in a passed probe verdict requires a driven literal-false seam.
+ A real `probe/verdict` with tests executed and no failures omits
+ verification_complete; no constant boolean is fabricated by the witness.
+-Receipt keys (EDN): `#{:state :proof_pending :reloaded :closure-expected :tests :assertions :failures :elapsed_ms}`
++Receipt keys (EDN): `#{:state :proof_pending :reloaded :closure-expected :roots :external :tests :assertions :failures :elapsed_ms}`
+ This is the complete untruncated verdict shape for passed and failed test runs;
+ a caught execution exception may additionally carry :error. The shape witness
+ parses this statement and compares it to an executed successful probe receipt.
+@@ -32,7 +32,16 @@ repository-relative source, authorized roots and an empty reload list.
+ Target refusal keys (EDN): `#{:state :error-type :error :proof_pending :requested :source :authorized-roots :reloaded :elapsed_ms}`
+ An absent local source retains `:probe-namespace-not-found`. For an authorized
+ target, serially reload its local dependency closure before running that namespace;
+-dependencies may resolve under `src`, `test`, and `libs/clj-splice/src`.
++Local source roots shall be derived from the image's actual `java.class.path`:
++canonical directory entries in classpath order, never a literal root list.
++Resolve each required namespace through the image classloader. A source file
++under a local classpath root enters the reload order; a jar entry is external,
++skipped and counted once per namespace in `:external`. A dependency with no
++classpath resource (including a namespace already loaded in the image), or a
++file outside every root, refuses as `:probe-dependency-unresolved` with
++`:ns`, `:resolved-to` (resource URL or nil), `:roots`, and zero reloads.
++Execution receipts list the canonical roots used in `:roots` for comparison
++with the image classpath. Discovery must finish before the first reload.
+ The shared ns parser shall expand prefix lists (including nested lists), vector
+ libspecs, bare symbols and strings in `:require`, `:require-macros` and `:use`,
+ selecting the `:clj` reader-conditional branch (or reader default). Any dependency
+diff --git a/docs/intent/hot-verification/hot-verification-design.md b/docs/intent/hot-verification/hot-verification-design.md
+index a3528073..9b25cb1c 100644
+--- a/docs/intent/hot-verification/hot-verification-design.md
++++ b/docs/intent/hot-verification/hot-verification-design.md
+@@ -16,11 +16,19 @@ is retained as `:closure-expected` independently of the completed reload list.
+ This prevents Sol round-four F1: green tests using an already-loaded stale
+ dependency silently omitted by a partial ns reader.
+ 
++Round-five F1 removes the remaining literal source-root list. Discovery takes
++canonical directory entries from the running image's java.class.path and resolves
++source resources through the same RT/baseLoader used by require. Files beneath
++those roots are local, jar resources are external (counted distinctly), and
++unresolved or outside-root dependencies refuse before any reload. The completed
++order carries roots and external count to the receipt alongside the independent
++closure count. A loaded namespace alone is never evidence of external source.
++
+ BB-PROBE-003 separately authorizes the requested target's canonical source under
+ the repository `test/` root before traversing dependencies. A production target
+ with a valid image identity receives `:probe-target-not-a-test-namespace` and
+ zero reloads; a missing source retains `:probe-namespace-not-found`. Authorized
+-tests still reload production dependencies from `src` and `libs/clj-splice/src`.
++tests still reload production dependencies from every local image-classpath root.
+ The target refusal identifies the requested symbol, resolved source and authorized
+ roots. The executable spec/receipt witness covers that refusal shape as well as
+ successful probe verdicts. This closes Sol F3 without narrowing dependency roots.
+diff --git a/docs/intent/probe/refusals.edn b/docs/intent/probe/refusals.edn
+index a186b6b6..9b73e6b4 100644
+--- a/docs/intent/probe/refusals.edn
++++ b/docs/intent/probe/refusals.edn
+@@ -13,7 +13,15 @@
+   "mcp_http_server.clj"
+   #{:invalid-project-formatter :invalid-project-verification-profiles}}
+  :refusals
+- [{:type :probe-require-unparsed :class :semantic
++ [{:type :probe-dependency-unresolved :class :semantic
++   :native_failure "A green verdict over code the image never reloaded."
++   :promise "Every dependency resolves to a local image-classpath source or a jar before any reload."
++   :native_method "Derive directory roots from java.class.path and classify each namespace resource before reloading."
++   :minimal_reproducer "Load a dependency outside every image classpath root or remove its source after loading; probe must refuse with zero reloads."
++   :existing_check "mcp-hot-verify/probe-reload-order; BB-PROBE-003"
++   :owner "probe" :witness "mcp-hot-verify-test/probe-refuses-dependencies-outside-image-roots"
++   :retirement_condition "A replacement accounts for every resolved dependency and refuses unresolved image code before reload."}
++  {:type :probe-require-unparsed :class :semantic
+    :native_failure "A probe reporting green over a dependency it never reloaded."
+    :promise "Every dependency spec is classified before reload, or refused with its form and file."
+    :native_method "Expand the complete local dependency closure with the shared ns parser before requiring any namespace."
+diff --git a/docs/tech-tree.md b/docs/tech-tree.md
+index 3f18e7e7..b93e656b 100644
+--- a/docs/tech-tree.md
++++ b/docs/tech-tree.md
+@@ -1,5 +1,13 @@
+ # clj-surgeon tech tree
+ 
++Probe classpath repair (Sol round-five F1): a literal root list omitted a live
++dev/experiments dependency and returned green over value 1 after disk changed
++to 2. Attempt25 derives roots from the image classpath, resolves via the require
++classloader, counts jar dependencies and refuses unresolved dependencies before
++reload. Red and verification evidence live in
++`docs/observations/2026-09-12-bbtower-block-b/attempt25/REPORT.md`.
++This is a correctness repair, with no performance admission claim.
++
+ Probe closure repair (Sol round-four F1): the partial probe ns reader silently
+ omitted prefix-list dependencies. Attempt24 commits the exact red reproduction,
+ reuses and extends the shared form-identity parser, refuses unclassified require
+diff --git a/src/clj_surgeon/mcp_hot_verify.clj b/src/clj_surgeon/mcp_hot_verify.clj
+index a7e4759e..c4c28e47 100644
+--- a/src/clj_surgeon/mcp_hot_verify.clj
++++ b/src/clj_surgeon/mcp_hot_verify.clj
+@@ -212,31 +212,55 @@
+       (catch Exception e
+         (if (:error-type (ex-data e)) (throw e) (unparsed source))))))
+ 
++;; @spec BB-PROBE-003
++(defn probe-source-roots []
++  (->> (str/split (System/getProperty "java.class.path")
++         (re-pattern (java.util.regex.Pattern/quote java.io.File/pathSeparator)))
++       (map #(-> % io/file .getCanonicalFile))
++       (filter #(.isDirectory %))
++       (mapv #(.getPath %))))
++
++;; @spec BB-PROBE-003
++(defn probe-source-resource [n]
++  (let [rel (str/replace (str/replace (str n) "-" "_") "." "/")]
++    (some #(io/resource (str rel %) (clojure.lang.RT/baseLoader)) [".clj" ".cljc"])))
++
+ ;; @spec BB-PROBE-003
+ (defn probe-reload-order [root target]
+-  (let [visited (atom #{})
++  (let [roots (probe-source-roots)
++        visited (atom #{})
+         ordered (atom [])
++        external (atom #{})
+         locate (fn [n]
+-                 (let [rel (str/replace (str/replace (str n) "-" "_") "." "/")]
+-                   (some (fn [[dir extension]]
+-                           (let [f (.getCanonicalFile (io/file root dir (str rel extension)))]
+-                             (when (and (.isFile f)
+-                                        (str/starts-with? (.getPath f) (str root java.io.File/separator))) f)))
+-                         (for [dir ["src" "test" "libs/clj-splice/src"]
+-                               extension [".clj" ".cljc"]] [dir extension]))))]
++                 (let [resource (probe-source-resource n)
++                       file (when (= "file" (some-> resource .getProtocol))
++                              (.getCanonicalFile (io/file (.toURI resource))))]
++                   (cond
++                     (= "jar" (some-> resource .getProtocol)) :external
++                     (and file (.isFile file)
++                          (some #(.startsWith (.toPath file) (.toPath (io/file %))) roots)) file
++                     (and (= n target) (nil? resource)) nil
++                     :else
++                     (throw (ex-info
++                              "Refusing a green verdict over code the image never reloaded. Resolve every dependency against the image classpath before probing."
++                              {:error-type :probe-dependency-unresolved
++                               :ns n :resolved-to (some-> resource str) :roots roots})))))]
+     (letfn [(visit [n]
+               (when-not (@visited n)
+                 (swap! visited conj n)
+                 (when-let [f (locate n)]
+-                  (when (> (.length f) 8388608)
+-                    (throw (ex-info "Reload source exceeds 8 MiB" {:error-type :probe-source-too-large})))
+-                  (let [deps (probe-require-libs (slurp f) (.getPath f))]
+-                    (doseq [dep deps] (visit dep))
+-                    (swap! ordered conj n)))))]
++                  (if (= :external f)
++                    (swap! external conj n)
++                    (do
++                      (when (> (.length f) 8388608)
++                        (throw (ex-info "Reload source exceeds 8 MiB" {:error-type :probe-source-too-large})))
++                      (let [deps (probe-require-libs (slurp f) (.getPath f))]
++                        (doseq [dep deps] (visit dep))
++                        (swap! ordered conj n)))))))]
+       (let [source (locate target)
+             authorized-roots ["test"]
+             root-path (.toPath (.getCanonicalFile (io/file root)))]
+-        (when-not source
++        (when (or (nil? source) (= :external source))
+           (throw (ex-info "Test namespace is not a local .clj source" {:error-type :probe-namespace-not-found})))
+         ;; Authorize the requested subject before visiting any dependency.
+         ;; Canonical source paths prevent a test-root symlink escaping to src.
+@@ -249,7 +273,7 @@
+                     :source (str (.relativize root-path (.toPath source)))
+                     :authorized-roots authorized-roots}))))
+       (visit target)
+-      @ordered)))
++      (with-meta @ordered {:roots roots :external (count @external)}))))
+ 
+ ;; @spec BB-PROBE-001
+ ;; @spec BB-PROBE-002
+@@ -261,12 +285,14 @@
+           verdict (requiring-resolve 'clj-surgeon.probe/verdict)
+           reloaded (atom [])
+           closure-expected (atom 0)
++          discovery (atom {})
+           elapsed #(/ (double (- (System/nanoTime) started)) 1000000.0)]
+       (try
+         (if-let [error (problem image (fingerprint (:root image)) request)]
+           (assoc error :elapsed_ms (elapsed))
+           (let [target (symbol (:ns request))
+                 order (probe-reload-order (:root image) target)]
++            (reset! discovery (select-keys (meta order) [:roots :external]))
+             (reset! closure-expected (count order))
+             (doseq [n order]
+               (require n :reload)
+@@ -275,12 +301,12 @@
+             (let [run-tests (requiring-resolve 'clojure.test/run-tests)
+                   summary (binding [*out* (java.io.StringWriter.) *err* (java.io.StringWriter.)]
+                             (run-tests target))]
+-              (verdict @reloaded summary (elapsed) @closure-expected))))
++              (merge (verdict @reloaded summary (elapsed) @closure-expected) @discovery))))
+         (catch Exception e
+           ;; forwarded-refusal-kind: relay probe-reload-order's ex-data;
+           ;; its literal kinds are enumerated in this namespace.
+           (if-let [kind (:error-type (ex-data e))]
+             (merge (probe/refusal kind (.getMessage e))
+-                   (select-keys (ex-data e) [:requested :source :authorized-roots :form :file])
++                   (select-keys (ex-data e) [:requested :source :authorized-roots :form :file :ns :resolved-to :roots])
+                    {:reloaded @reloaded :elapsed_ms (elapsed)})
+-            (assoc (verdict @reloaded {:error 1} (elapsed) @closure-expected) :error (.getMessage e))))))))
++            (assoc (merge (verdict @reloaded {:error 1} (elapsed) @closure-expected) @discovery) :error (.getMessage e))))))))
+diff --git a/test/clj_surgeon/deftest_census.edn b/test/clj_surgeon/deftest_census.edn
+index 8ccc62ea..60901c7b 100644
+--- a/test/clj_surgeon/deftest_census.edn
++++ b/test/clj_surgeon/deftest_census.edn
+@@ -1343,6 +1343,8 @@
+   clj-surgeon.mcp-hot-verify-test/probe-authorizes-the-requested-test-target-before-reload
+   clj-surgeon.mcp-hot-verify-test/probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload
+   clj-surgeon.mcp-hot-verify-test/probe-receipt-retains-expected-closure-after-reload-failure
++  clj-surgeon.mcp-hot-verify-test/probe-refuses-dependencies-outside-image-roots
++  clj-surgeon.mcp-hot-verify-test/probe-reloads-image-classpath-experiment-dependency
+   clj-surgeon.mcp-hot-verify-test/probe-reloads-prefix-list-dependency
+   clj-surgeon.mcp-hot-verify-test/probe-require-shape-matrix
+   clj-surgeon.mcp-hot-verify-test/profile-validation-is-closed-and-bounded
+diff --git a/test/clj_surgeon/lane_manifest_test.clj b/test/clj_surgeon/lane_manifest_test.clj
+index 387452ff..5dca7f99 100644
+--- a/test/clj_surgeon/lane_manifest_test.clj
++++ b/test/clj_surgeon/lane_manifest_test.clj
+@@ -1168,7 +1168,7 @@
+    "test/clj_surgeon/mcp_tool_test.clj"
+    {1395 "bounded poll -- succeeds as soon as the job reports complete, bounded by an attempt count (1380 -> 1381 on 2026-09-06: the `cheshire.core` require the next_call REPLAY witnesses need moved the whole namespace down one line -- the pin costing one number is the point; 1381 -> 1394 on 2026-09-07 when the expect-guard witness was inserted above it)"}
+    "test/clj_surgeon/mcp_hot_verify_test.clj"
+-   {384 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
++   {497 "STIMULUS, not a wait: 50 ms between the non-terminal nREPL responses a stub server pumps at a hot verification whose ceiling is 500 ms. The claim under test is that a response arriving mid-read does NOT push the deadline out, so the interval must be shorter than the ceiling and there is no condition to poll for -- the assertion is on the ELAPSED time of the read, which is bounded by the profile's own :timeout-ms and asserted on both sides. The pump runs in a future the witness cancels."}})
+ 
+ (deftest every-sleep-on-the-merge-gate-is-declared-with-its-reason
+   (let [sources (fn [lane]
+diff --git a/test/clj_surgeon/mcp_alias_migration_test.clj b/test/clj_surgeon/mcp_alias_migration_test.clj
+index 71bcebef..ec2516b1 100644
+--- a/test/clj_surgeon/mcp_alias_migration_test.clj
++++ b/test/clj_surgeon/mcp_alias_migration_test.clj
+@@ -5995,7 +5995,7 @@
+     "probe-namespace-not-found" "probe-source-too-large"
+     "probe-target-not-a-test-namespace"
+     ;; BB-PROBE-003: never omit an unclassified dependency from a warm reload.
+-    "probe-require-unparsed"
++    "probe-require-unparsed" "probe-dependency-unresolved"
+     "invalid-probe-request" "stale-probe-image" "probe-message-too-large"
+     "invalid-probe-port" "probe-connection-failed"
+     ;; BB-PROBE-004: oversized HTTP verdicts retain bounded truncation facts.
+@@ -6010,7 +6010,7 @@
+   ;; could see. Both directions are asserted — a kind that appears and a kind
+   ;; that vanishes are each a change to what a text-reading client is promised.
+   (let [kinds (set (refusal-kinds-in-source))]
+-    (is (= 163 (count kinds))
++    (is (= 164 (count kinds))
+         (str "the entrance's refusal enumeration changed size: "
+              (count kinds) " kinds"))
+     (is (empty? (clojure.set/difference kinds frozen-refusal-kinds))
+diff --git a/test/clj_surgeon/mcp_hot_verify_test.clj b/test/clj_surgeon/mcp_hot_verify_test.clj
+index c3669f48..b05deca6 100644
+--- a/test/clj_surgeon/mcp_hot_verify_test.clj
++++ b/test/clj_surgeon/mcp_hot_verify_test.clj
+@@ -12,6 +12,113 @@
+ (deftest passing-law
+   (is (= 4 (+ 2 2))))
+ 
++(defn- with-image-roots [root dirs f]
++  (let [classpath (System/getProperty "java.class.path")
++        loader (clojure.lang.DynamicClassLoader. (clojure.lang.RT/baseLoader))
++        paths (mapv #(io/file root %) dirs)]
++    (try
++      (doseq [path paths] (.addURL loader (.toURL (.toURI path))))
++      (System/setProperty "java.class.path"
++                          (str/join java.io.File/pathSeparator (cons classpath paths)))
++      (with-bindings {clojure.lang.Compiler/LOADER loader} (f))
++      (finally (System/setProperty "java.class.path" classpath)))))
++
++;; @spec BB-PROBE-003 -- Sol round-five F1: live dev/experiments was omitted.
++(deftest probe-reloads-image-classpath-experiment-dependency
++  (let [root (.toFile (java.nio.file.Files/createTempDirectory
++                        "probe-classpath-" (make-array java.nio.file.attribute.FileAttribute 0)))
++        dependency (io/file root "dev/experiments/sol_round5/dependency.clj")
++        target (io/file root "test/sol_round5/probe_test.clj")
++        original-classpath (System/getProperty "java.class.path")
++        loader (clojure.lang.DynamicClassLoader. (clojure.lang.RT/baseLoader))]
++    (try
++      (io/make-parents dependency)
++      (io/make-parents target)
++      (doseq [path probe/identity-files]
++        (io/make-parents (io/file root path))
++        (io/copy (io/file path) (io/file root path)))
++      (doseq [dir ["test" "dev/experiments"]]
++        (.addURL loader (.toURL (.toURI (io/file root dir)))))
++      (System/setProperty "java.class.path"
++                          (str original-classpath java.io.File/pathSeparator
++                               (io/file root "test") java.io.File/pathSeparator
++                               (io/file root "dev/experiments")))
++      (spit dependency "(ns sol-round5.dependency) (def value 1)")
++      (spit target "(ns sol-round5.probe-test (:require [clojure.test :refer [deftest is]] [sol-round5.dependency :as d])) (deftest stale-check (is (= 1 d/value)))")
++      (with-bindings {clojure.lang.Compiler/LOADER loader}
++        (require 'sol-round5.probe-test :reload)
++        (is (= 1 (var-get (resolve 'sol-round5.dependency/value))))
++        (let [image (probe/image-identity (.getCanonicalPath root))
++              request {:ns "sol-round5.probe-test" :image image}]
++          (is (nil? (probe/request-problem image (probe/fingerprint (:root image)) request)))
++          (spit dependency "(ns sol-round5.dependency) (def value 2)")
++          (let [receipt (hot-verify/probe! image request)]
++            (println :sol-round5 receipt :loaded-value (var-get (resolve 'sol-round5.dependency/value)) :disk-value 2)
++            (is (= :probe-failed (:state receipt)))
++            (is (= 1 (:failures receipt)))
++            (is (= ["sol-round5.dependency" "sol-round5.probe-test"] (:reloaded receipt)))
++            (is (= 2 (var-get (resolve 'sol-round5.dependency/value))))
++            (is (= 2 (:closure-expected receipt)))
++            (is (= "jar" (.getProtocol (io/resource "clojure/test.clj"))))
++            (is (= 1 (:external receipt)))
++            (is (= (->> (str/split (System/getProperty "java.class.path")
++                          (re-pattern (java.util.regex.Pattern/quote java.io.File/pathSeparator)))
++                        (map io/file)
++                        (filter #(.isDirectory %))
++                        (mapv #(.getCanonicalPath %)))
++                   (:roots receipt))))))
++      (finally
++        (System/setProperty "java.class.path" original-classpath)
++        (doseq [n '[sol-round5.probe-test sol-round5.dependency]]
++          (when (find-ns n) (remove-ns n))
++          (dosync (alter @#'clojure.core/*loaded-libs* disj n)))
++        (doseq [file (reverse (file-seq root))] (io/delete-file file))))))
++
++;; @spec BB-PROBE-003 -- refusal is preflight, including already-loaded code.
++(deftest probe-refuses-dependencies-outside-image-roots
++  (let [root (.toFile (java.nio.file.Files/createTempDirectory
++                        "probe-unresolved-" (make-array java.nio.file.attribute.FileAttribute 0)))
++        dependency (io/file root "outside/sol_unresolved/dependency.clj")
++        target (io/file root "test/sol_unresolved/probe_test.clj")]
++    (try
++      (io/make-parents dependency)
++      (io/make-parents target)
++      (doseq [path probe/identity-files]
++        (io/make-parents (io/file root path))
++        (io/copy (io/file path) (io/file root path)))
++      (spit dependency "(ns sol-unresolved.dependency) (def value 1)")
++      (spit target "(ns sol-unresolved.probe-test (:require [sol-unresolved.dependency]))")
++      (with-image-roots root ["test"]
++        (fn []
++          ;; The loader can see this file, but it is outside the image's roots.
++          (.addURL ^clojure.lang.DynamicClassLoader @clojure.lang.Compiler/LOADER
++                   (.toURL (.toURI (io/file root "outside"))))
++          (require 'sol-unresolved.probe-test :reload)
++          (let [image (probe/image-identity (.getCanonicalPath root))
++                request {:ns "sol-unresolved.probe-test" :image image}]
++            (doseq [case [:outside :missing]]
++              (when (= :missing case) (io/delete-file dependency))
++              (let [reloads (atom [])
++                    original require
++                    receipt (with-redefs [clojure.core/require
++                                          (fn [& args]
++                                            (when (some #{:reload} args) (swap! reloads conj args))
++                                            (apply original args))]
++                              (hot-verify/probe! image request))]
++                (is (some? (find-ns 'sol-unresolved.dependency)))
++                (is (= :probe-dependency-unresolved (:error-type receipt)) case)
++                (is (= 'sol-unresolved.dependency (:ns receipt)))
++                (is (= (when (= :outside case) (str (.toURL (.toURI dependency))))
++                       (:resolved-to receipt)))
++                (is (= (hot-verify/probe-source-roots) (:roots receipt)))
++                (is (= [] (:reloaded receipt)))
++                (is (= [] @reloads)))))))
++      (finally
++        (doseq [n '[sol-unresolved.probe-test sol-unresolved.dependency]]
++          (when (find-ns n) (remove-ns n))
++          (dosync (alter @#'clojure.core/*loaded-libs* disj n)))
++        (doseq [file (reverse (file-seq root))] (io/delete-file file))))))
++
+ ;; @spec BB-PROBE-003 -- Sol F1, round-four review of e3ffc6a7.
+ (deftest probe-reloads-prefix-list-dependency
+   (let [root (.toFile (java.nio.file.Files/createTempDirectory
+@@ -23,8 +130,9 @@
+       (io/make-parents target)
+       (spit dependency "(ns foo.bar) (def value 1)")
+       (spit target "(ns demo.probe-test (:require (foo [bar :as b])))")
+-      (is (= '[foo.bar demo.probe-test]
+-             (hot-verify/probe-reload-order (.getCanonicalPath root) 'demo.probe-test)))
++      (with-image-roots root ["src" "test"]
++        #(is (= '[foo.bar demo.probe-test]
++                (hot-verify/probe-reload-order (.getCanonicalPath root) 'demo.probe-test))))
+       (finally
+         (doseq [file (reverse (file-seq root))] (io/delete-file file))))))
+ 
+@@ -61,7 +169,8 @@
+                         "probe-stale-" (make-array java.nio.file.attribute.FileAttribute 0)))
+         dependency (io/file root "src/probe_fixture/dependency.clj")
+         target (io/file root "test/probe_fixture/check_test.clj")
+-        loader (clojure.lang.DynamicClassLoader. (clojure.lang.RT/baseLoader))]
++        loader (clojure.lang.DynamicClassLoader. (clojure.lang.RT/baseLoader))
++        classpath (System/getProperty "java.class.path")]
+     (try
+       (io/make-parents dependency)
+       (io/make-parents target)
+@@ -70,6 +179,9 @@
+         (io/copy (io/file path) (io/file root path)))
+       (.addURL loader (.toURL (.toURI (io/file root "src"))))
+       (.addURL loader (.toURL (.toURI (io/file root "test"))))
++      (System/setProperty "java.class.path"
++                          (str/join java.io.File/pathSeparator
++                                    [classpath (io/file root "src") (io/file root "test")]))
+       (spit dependency "(ns probe-fixture.dependency) (def value 1)")
+       (spit target "(ns probe-fixture.check-test (:require [clojure.test :refer [deftest is]] (probe-fixture [dependency :as d]))) (deftest stale-check (is (= 1 d/value)))")
+       (let [image (probe/image-identity (.getCanonicalPath root))
+@@ -93,6 +205,7 @@
+             (is (= [] (:reloaded receipt)))
+             (is (= [] @reloads)))))
+       (finally
++        (System/setProperty "java.class.path" classpath)
+         (doseq [n '[probe-fixture.check-test probe-fixture.dependency]]
+           (when (find-ns n) (remove-ns n))
+           (dosync (alter @#'clojure.core/*loaded-libs* disj n)))

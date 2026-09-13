@@ -1,0 +1,136 @@
+# @spec MCP-OP-ORACLE-001
+swipl -q -f test/mcp_operation_contract_oracle.pl
+mcp-operation oracle: pass; legacy counterexamples=[verification_failed,verification_pending]
+bash test/performance_regression_sentinel_intent_test.sh
+Sentinel intent witness audit passed: 50/50 requirements named
+bash test/performance_regression_sentinel_intent_self_test.sh
+Sentinel intent audit self-test passed: missing simple/multipart and unknown multipart IDs refused
+python3 -B -m unittest discover -s test/oracles -p test_gate_slot.py
+python3 -B -m unittest discover -s test/oracles -p test_namespace_split_papercut_oracle.py
+# @spec REQUIRE-CHANGE-014
+python3 -B -m unittest discover -s test/oracles -p test_require_change_oracle.py
+python3 -B -m unittest discover -s test/oracles -p test_cell_b_oracle.py
+# @spec MCP-OP-ALIAS-053
+ok: a clean repository passes (exit 0)
+ok: a cache forced in below the root fails the gate (exit 1)
+ok: a cache forced in at the root fails the gate (exit 1)
+ok: a repository with no ignore rule fails the gate (exit 1)
+ok: a directory git cannot answer for fails the gate (exit 1)
+ok: a tree whose file inventory git cannot produce fails the gate (exit 1)
+repository hygiene gate self-test: all cases pass
+clojure -M test/kernel_warning_check.clj
+kernel warning check: 2 namespace(s), 0 warning(s)
+MCP heap configuration regression passed
+--- tmpfs-literal (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/tmp is a RAM-backed path by name (/tmp or /dev/shm). Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- arm-b (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/tmp is a RAM-backed path by name (/tmp or /dev/shm). Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- name-only (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/tmp is a RAM-backed path by name (/tmp or /dev/shm). Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- devshm (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/dev/shm is a RAM-backed path by name (/tmp or /dev/shm). Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- unknown-fstype (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk has an UNDETERMINABLE filesystem type -- neither findmnt nor the mounts table could answer, so nothing proves it is not RAM. Refusing rather than assuming disk. Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- seam-escape (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/seamdisk has an UNDETERMINABLE filesystem type -- neither findmnt nor the mounts table could answer, so nothing proves it is not RAM. Refusing rather than assuming disk. Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- seam-tmpfs (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/seamdisk is RAM-backed (tmpfs, fstype=tmpfs). Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- fallback-alive (exit=0) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=child-pre max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-314203-b7573ddf node-cache=1 args=[]
+PROBE role=child max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-314203-b7573ddf node-cache=1 args=[]
+PROBE root=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-314203-b7573ddf
+PROBE leak-exit=0
+--- sentinel-decoy (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=child-pre max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/decoy-base node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/decoy-base was handed a re-exec sentinel it does not own: it names root="1" but this process's java.io.tmpdir is "/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/decoy-base". Refusing to treat a shared base as a private run root. Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- sentinel-mismatch (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=child-pre max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/decoy-base node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/decoy-base was handed a re-exec sentinel it does not own: it names root="/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/some-other-root" but this process's java.io.tmpdir is "/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/decoy-base". Refusing to treat a shared base as a private run root. Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- heap-args (exit=0) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=318 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=0 args=["alpha" "beta" "--node-cache-env"]
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=child-pre max-mb=318 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-316570-c8d1a1a8 node-cache=1 args=["alpha" "beta" "--node-cache-env"]
+PROBE role=child max-mb=318 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-316570-c8d1a1a8 node-cache=1 args=["alpha" "beta" "--node-cache-env"]
+PROBE root=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-316570-c8d1a1a8
+PROBE descendant-node-cache=1
+PROBE leak-exit=0
+--- bb-args (exit=0) ---
+PROBE role=parent max-mb=25061 tmpdir=/tmp node-cache=<unset> args=["alpha" "beta" "--node-cache-env"]
+PROBE role=child-pre max-mb=25061 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-317897-4ee9799c node-cache=1 args=["alpha" "beta" "--node-cache-env"]
+PROBE role=child max-mb=25061 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-317897-4ee9799c node-cache=1 args=["alpha" "beta" "--node-cache-env"]
+PROBE root=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/realdisk/clj-surgeon-suite-317897-4ee9799c
+PROBE descendant-node-cache=1
+PROBE leak-exit=0
+--- subproc (exit=1) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=["--leak-subprocess"]
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=child-pre max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/subbase/clj-surgeon-suite-318008-fe6aefe1 node-cache=1 args=["--leak-subprocess"]
+PROBE role=child max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/subbase/clj-surgeon-suite-318008-fe6aefe1 node-cache=1 args=["--leak-subprocess"]
+PROBE root=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/subbase/clj-surgeon-suite-318008-fe6aefe1
+PROBE subprocess-tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/subbase/clj-surgeon-suite-318008-fe6aefe1/tmp.9GtGw4nkFV
+temp-leak: 1 entries left under /var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/subbase/clj-surgeon-suite-318008-fe6aefe1: tmp.9GtGw4nkFV
+PROBE leak-exit=1
+--- kill-term (left in base) ---
+--- stale-sweep (exit=0) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=child-pre max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/stalebase/clj-surgeon-suite-320724-f61b1618 node-cache=1 args=[]
+PROBE role=child max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/stalebase/clj-surgeon-suite-320724-f61b1618 node-cache=1 args=[]
+PROBE root=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/stalebase/clj-surgeon-suite-320724-f61b1618
+PROBE leak-exit=0
+--- stalebase after ---
+clj-surgeon-suite-311771-aaaaaaaa
+other-seat-precious-fixture
+--- unwritable (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+PROBE role=parent max-mb=1024 tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp node-cache=<unset> args=[]
+tmp-refused: java.io.tmpdir base=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/nowrite cannot be used as a temp base: AccessDeniedException: /var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn/nowrite/clj-surgeon-suite-322053-417b1f32 Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- runner analyzer-contract-test-runner (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+tmp-refused: java.io.tmpdir base=/tmp is a RAM-backed path by name (/tmp or /dev/shm). Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- runner clj-surgeon.memory.memory-test-runner (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+tmp-refused: java.io.tmpdir base=/tmp is a RAM-backed path by name (/tmp or /dev/shm). Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- runner clj-surgeon.memory-battery-runner (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+tmp-refused: java.io.tmpdir base=/tmp is a RAM-backed path by name (/tmp or /dev/shm). Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- runner clj-surgeon.mcp-test-runner (exit=97) ---
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp
+tmp-refused: java.io.tmpdir base=/tmp is a RAM-backed path by name (/tmp or /dev/shm). Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one.
+--- SELF_TEST_TMP with TMPDIR=/tmp -> /var/tmp ---
+--- SELF_TEST_TMP with TMPDIR=/tmp/probe -> /var/tmp ---
+--- SELF_TEST_TMP with TMPDIR=/dev/shm -> /var/tmp ---
+--- SELF_TEST_TMP with TMPDIR=/dev/shm/probe -> /var/tmp ---
+--- SELF_TEST_TMP with TMPDIR unset -> /var/tmp ---
+--- SELF_TEST_TMP with TMPDIR=/var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn -> /var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-tmpleak-witness.8gOSCn ---
+--- SELF_TEST_TMP with TMPDIR=/var/tmp/forge -> /var/tmp/forge ---
+tmp-leak ratchet witness passed
+Installed analyzer gate /var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-kondo-path.V9rt6y/home/bin/clj-kondo-admission and shell entrance /var/tmp/forge/bbtower-fx/packets/9bb9e314-a0b9-4138-8166-fbbf6ca940ab/tmp/clj-surgeon-kondo-path.V9rt6y/home/bin/clj-kondo
+clj-kondo admission path regression passed
+cclsp already ready at http://127.0.0.1:7890/mcp
+cclsp-start transient-health regression passed
+cclsp ready at http://127.0.0.1:7890/mcp with restart-on-save TypeScript
+cclsp launch PATH regression passed
+direct cclsp client audit self-test: ok

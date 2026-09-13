@@ -1,0 +1,18 @@
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.failure-report-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

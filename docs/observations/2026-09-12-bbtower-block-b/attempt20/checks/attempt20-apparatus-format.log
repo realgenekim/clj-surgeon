@@ -1,0 +1,7 @@
+standard-clj fix v0.29.0
+
+F /docs/observations/2026-09-12-bbtower-block-b/attempt20/fold.clj [7.62ms]
+F /docs/observations/2026-09-12-bbtower-block-b/attempt20/freeze.clj [0.61ms]
+F /docs/observations/2026-09-12-bbtower-block-b/attempt20/measure_runner.clj [1.53ms]
+
+All 3 files formatted with Standard Clojure Style 👍 [17.29ms]

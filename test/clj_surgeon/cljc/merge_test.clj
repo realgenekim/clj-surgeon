@@ -1,11 +1,33 @@
 (ns clj-surgeon.cljc.merge-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [clojure.string :as str]
-            [clojure.tools.reader :as r]
-            [clojure.tools.reader.reader-types :as rt]
-            [clj-surgeon.cljc.merge :as m]))
+  {:lane :fast}
+  (:require
+   [clj-surgeon.cljc.merge :as m]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]
+   [clojure.tools.reader :as r]
+   [clojure.tools.reader.reader-types :as rt]
+   [clojure.walk :as walk]))
 
-(defn- parse-forms
+(defn normalize-generated-symbols
+  "Alpha-normalize reader-generated symbols, retaining distinct identities.
+   ReaderConditional is opaque to clojure.walk, so recurse into its form."
+  [forms]
+  (let [names (atom {})]
+    (letfn [(normalize [form]
+              (cond
+                (reader-conditional? form)
+                (reader-conditional (normalize (:form form)) (:splicing? form))
+                (and (symbol? form)
+                     (nil? (namespace form))
+                     (re-matches #"(?:p\d+__\d+#|rest__\d+#|.+__\d+__auto__)" (name form)))
+                (or (@names form)
+                    (let [canonical (symbol (str "reader-generated-" (count @names)))]
+                      (swap! names assoc form canonical)
+                      canonical))
+                :else (walk/walk normalize identity form)))]
+      (normalize forms))))
+
+(defn parse-forms
   "Parse a CLJC source string into a vector of forms with reader conditionals
    preserved as ReaderConditional records. Two sources that differ only in
    whitespace/formatting produce equal vectors."
@@ -13,7 +35,8 @@
   (let [rdr (rt/string-push-back-reader src)]
     (->> (repeatedly #(r/read {:eof ::end :read-cond :preserve} rdr))
          (take-while #(not= ::end %))
-         vec)))
+         vec
+         normalize-generated-symbols)))
 
 (defn- read-fixture [path]
   (slurp (str "test-fixtures/cljc/merge/" path)))
@@ -116,13 +139,23 @@
 (deftest unmatched-body-counts-emit-strict-split
   (testing "When CLJ and CLJS have different numbers of body forms, the merge
             falls back to a strict reader-conditional split: each side's full
-            body wrapped in its own #?@(:clj [...]) / #?@(:cljs [...]) branch.
-            The output is mechanically correct; the LLM can refactor it later."
+            body form wrapped in its own non-splicing platform branch."
     (let [{:keys [expected got]} (check-merge "unmatched-counts")]
-      (is (= expected got)))))
+      (is (= expected got))))
+  (testing "JVM reader consumes every platform, including empty and unequal bodies"
+    (doseq [[clj-src cljs-src] [["(ns foo) (def a 1) (def b 2)" "(ns foo) (def c 3)"]
+                                ["(ns foo) (def a 1)" "(ns foo)"]
+                                ["(ns foo)" "(ns foo) (def c 3)"]]]
+      (let [merged (m/merge-files clj-src cljs-src)]
+        (doseq [[platform original] [[:clj clj-src] [:cljs cljs-src]]]
+          (let [rdr (rt/string-push-back-reader merged)
+                forms (->> (repeatedly #(r/read {:eof ::end :read-cond :allow
+                                                 :features #{platform}} rdr))
+                           (take-while #(not= ::end %)) vec)]
+            (is (= (parse-forms original) forms))))))))
 
 (deftest only-clj-has-body-emits-clj-only-splice
-  (testing "If CLJS has no body forms at all, output uses just #?@(:clj [...])."
+  (testing "If CLJS has no body forms at all, output uses just #?(:clj ...)."
     (let [src (m/merge-files "(ns foo) (def a 1)" "(ns foo)")]
-      (is (str/includes? src "#?@(:clj"))
+      (is (str/includes? src "#?(:clj"))
       (is (not (str/includes? src ":cljs"))))))

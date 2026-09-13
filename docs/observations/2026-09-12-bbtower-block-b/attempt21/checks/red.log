@@ -1,0 +1,35 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.core
+
+Ran 0 tests containing 0 assertions.
+0 failures, 0 errors.
+
+FAIL in (probe-authorizes-the-requested-test-target-before-reload) (mcp_hot_verify_test.clj:20)
+expected: (= :probe-refused (:state receipt))
+  actual: (not (= :probe-refused :probe-failed))
+
+FAIL in (probe-authorizes-the-requested-test-target-before-reload) (mcp_hot_verify_test.clj:21)
+expected: (= :probe-target-not-a-test-namespace (:error-type receipt))
+  actual: (not (= :probe-target-not-a-test-namespace nil))
+
+FAIL in (probe-authorizes-the-requested-test-target-before-reload) (mcp_hot_verify_test.clj:22)
+expected: (= [] (:reloaded receipt))
+  actual: (not (= [] ["clj-surgeon.jvm-error" "clj-surgeon.path-classification" "clj-surgeon.receipt-artifacts" "clj-surgeon.fields" "clj-surgeon.forms" "clj-surgeon.parse-admission" "clj-surgeon.analyze" "clj-surgeon.relation-census" "clj-surgeon.census-discovery" "clj-surgeon.cljc.merge" "clj-surgeon.cljc.split" "clj-surgeon.cljc.walk" "clj-surgeon.cljc.analyze" "clj-surgeon.cljc.require-ops" "clj-surgeon.file-ops" "clj-surgeon.outline" "clj-surgeon.structural-lens" "clj-surgeon.edit-dsl" "clj-surgeon.extract-header" "clj-surgeon.mcp-paths" "clj-surgeon.mcp-source-anchor" "clj-surgeon.quoted-var-refs" "clj-surgeon.extract" "clj-surgeon.spawn-ledger" "clj-surgeon.mcp-process" "clj-surgeon.forward-refs" "clj-surgeon.fix-declares" "clj-surgeon.binding-rename" "clj-surgeon.mcp-write-refusal" "clj-surgeon.operation-algebra" "clj-surgeon.intent-transaction" "clj-surgeon.move" "clj-surgeon.rename" "clj-surgeon.owner-hypotheses" "clj-surgeon.show-form" "clj-surgeon.core"]))
+
+FAIL in (probe-authorizes-the-requested-test-target-before-reload) (mcp_hot_verify_test.clj:23)
+expected: (= (quote clj-surgeon.core) (:requested receipt))
+  actual: (not (= clj-surgeon.core nil))
+
+FAIL in (probe-authorizes-the-requested-test-target-before-reload) (mcp_hot_verify_test.clj:24)
+expected: (= "src/clj_surgeon/core.clj" (:source receipt))
+  actual: (not (= "src/clj_surgeon/core.clj" nil))
+
+FAIL in (probe-authorizes-the-requested-test-target-before-reload) (mcp_hot_verify_test.clj:25)
+expected: (= ["test"] (:authorized-roots receipt))
+  actual: (not (= ["test"] nil))
+
+FAIL in (probe-authorizes-the-requested-test-target-before-reload) (mcp_hot_verify_test.clj:26)
+expected: (str/includes? (str (:error receipt)) "warm image executing production code on request, with no test to bound it")
+  actual: (not (str/includes? "" "warm image executing production code on request, with no test to bound it"))
+{:test 1, :pass 1, :fail 7, :error 0}

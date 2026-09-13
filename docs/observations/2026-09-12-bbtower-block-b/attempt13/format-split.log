@@ -1,0 +1,5 @@
+standard-clj fix v0.29.0
+
+F /src/clj_surgeon/split_proof_gate.clj [13.35ms]
+
+1 file formatted with Standard Clojure Style 👍 [20.8ms]

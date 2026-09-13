@@ -1,4 +1,5 @@
 (ns clj-surgeon.cljc.require-ops-test
+  {:lane :fast}
   (:require
    [clj-surgeon.cljc.require-ops :as ops]
    [clj-surgeon.cljc.split :as split]

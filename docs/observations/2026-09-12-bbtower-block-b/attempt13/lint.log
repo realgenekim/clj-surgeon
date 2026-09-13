@@ -1,0 +1,4 @@
+test/clj_surgeon/mcp_alias_migration_test.clj:538:27: info: Single argument to str already is a string
+test/clj_surgeon/mcp_alias_migration_test.clj:6723:22: info: Redundant double coercion: expression already has type double
+test/clj_surgeon/mission_typist_executor_test.clj:177:23: warning: Unresolved namespace clj-surgeon.mcp-process. Are you missing a require?
+linting took 393ms, errors: 0, warnings: 1

@@ -1,0 +1,4 @@
+{:label "fast", :log "docs/observations/2026-09-12-bbtower-block-b/attempt24/checks/fast.log", :started "2026-09-12T20:48:22Z", :wall-s 29, :exit 2}
+{:label "restricted", :log "docs/observations/2026-09-12-bbtower-block-b/attempt24/checks/restricted.log", :started "2026-09-12T20:50:19Z", :wall-s 172, :exit 2}
+{:label "prewarm", :log "docs/observations/2026-09-12-bbtower-block-b/attempt24/checks/prewarm.log", :started "2026-09-12T20:54:45Z", :wall-s 172, :exit 2}
+{:label "prewarm-final", :log "docs/observations/2026-09-12-bbtower-block-b/attempt24/checks/prewarm-final.log", :started "2026-09-12T20:58:44Z", :wall-s 400, :exit 0}

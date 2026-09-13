@@ -1,0 +1,8 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+lanes: --ns -- 1 namespace(s), home-isolated true
+
+Testing clj-surgeon.outline-corpus-integration-test
+
+namespace walls (1, slowest first, total 8306 ms):
+      8306 ms  clj-surgeon.outline-corpus-integration-test

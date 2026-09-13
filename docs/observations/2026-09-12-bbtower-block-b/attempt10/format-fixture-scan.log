@@ -1,0 +1,5 @@
+standard-clj fix v0.29.0
+
+F /test/clj_surgeon/fast_lane_isolation_test.clj [8.24ms]
+
+1 file formatted with Standard Clojure Style 👍 [16.78ms]

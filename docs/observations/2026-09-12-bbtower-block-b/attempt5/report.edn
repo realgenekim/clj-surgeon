@@ -1,0 +1,61 @@
+{:schema "report/v1"
+ :verdict :blocked
+ :manifest_id "8eb28c1ea8260fd2d34b2d0b5a7f3381184b2f1f0a141468e1c537ab70d4cb42"
+ :subject "617288424c62979308dca74f83db5e0102f6905c"
+ :recorded_utc "2026-09-12T06:39:34.055950+00:00"
+ :findings [{:severity "blocking"
+ :file "/home/forge/bin/lib/packet.py"
+ :line 162
+ :reproduction ["java" "-Xmx512m" "-Djava.io.tmpdir=/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt5/isolated-probe" "-XX:+PrintFlagsFinal" "-XshowSettings:properties" "-version"]
+ :exact_output "   size_t MaxHeapSize                              = 1073741824                                {product} {command line}\n    java.io.tmpdir = /var/tmp/forge/packets/ad7e0a55-9a1f-4363-b5b7-1a8f5899f1c6/tmp"}]
+ :measurements [{:name "Effective JVM maximum heap (launcher diagnostic)"
+ :before 536870912
+ :after 1073741824
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt5/jvm-effective-options.log"} {:name "Effective java.io.tmpdir (launcher diagnostic)"
+ :before "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt5/isolated-probe"
+ :after "/var/tmp/forge/packets/ad7e0a55-9a1f-4363-b5b7-1a8f5899f1c6/tmp"
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt5/jvm-effective-options.log"} {:name "a/base sum and makespan"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt5/slowdown.md"} {:name "b/subject without bb sum and makespan"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt5/slowdown.md"} {:name "c/shipped subject sum and makespan"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt5/slowdown.md"} {:name "top ten a/c namespace deltas"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt5/slowdown.md"} {:name "step-2 fast sum and bb sum"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt5/slowdown.md"} {:name "new bb ceiling and proportional margin"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt5/slowdown.md"} {:name "feature-thread bb/JVM and integration sum"
+ :before nil
+ :after nil
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt5/gate.md"} {:name "builder prewarm attempts"
+ :before 0
+ :after 0
+ :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt5/gate.md"}]
+ :commits []
+ :least_sure ["Slowdown cause remains unmeasured." "The corrected process-local environment is proposed, not authorized or validated." "Later suite prerequisites remain untested; no claim that this is the last blocker."]
+ :disagreements ["The sealed _JAVA_OPTIONS forces 1024 MiB and the packet temp base, conflicting with the required 512 MiB child cap and private per-run startup temp directory." "The one-suite lease clarification is accepted; this is not the earlier peak-process-count disagreement."]
+ :owed [{:what "Approve or reseal the effective JVM launch environment for step 1."
+ :owner "Fable (or Gene)"
+ :unblock "Authorize common process-local _JAVA_OPTIONS=-Xmx512m without a java.io.tmpdir override, or supply an equivalent sealed environment preserving worker heap and private temp flags."} {:what "Step 1: matched a/b/c sums, makespans and ten largest namespace deltas."
+ :owner "Astra"
+ :unblock "After launch correction is authorized, verify effective options and execute the three arms sequentially using the existing base checkout."} {:what "Step 2: measured-cause coordinator fix and one make test-fast run."
+ :owner "Astra"
+ :unblock "Complete step 1; retain 60000 ms fast budget and all membership; stop if the measured rerun exceeds it."} {:what "Step 3: new bb ceiling, proportional derivation and at/one-ms-past witnesses."
+ :owner "Astra; Fable ratifies"
+ :unblock "Obtain the step-2 fast and bb sums; declare the new ceiling under TEST-ISO-007 and submit its value for Fable review."} {:what "Step 4: probe refusals registry, completeness witness, receipt boolean false seams and encounter scoring."
+ :owner "Astra"
+ :unblock "Complete preceding ordered steps; measure encounter score entrance is installed but has not been executed; use the registered encounter and later-run identity when the witnesses exist."} {:what "Step 5: feature-thread bb/JVM walls, runtime witness and one make test-integration run."
+ :owner "Astra"
+ :unblock "Complete preceding steps and measure both runtimes; retain the 240000 ms integration ceiling."} {:what "Step 6: final-tip prewarm, bounded repair/final prewarm and verbatim census/budget lines."
+ :owner "Astra"
+ :unblock "Complete ordered implementation and checks with an authorized launch environment; at most two builder prewarm attempts."} {:what "Manifest test-battery obligation and independent acceptance."
+ :owner "Astra (battery); external acceptance owner"
+ :unblock "Execute the registered battery under the suite lease after blockers are resolved; independent review must assess the tested final tip."}]}

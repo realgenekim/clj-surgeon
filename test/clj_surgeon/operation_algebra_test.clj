@@ -1,4 +1,5 @@
 (ns clj-surgeon.operation-algebra-test
+  {:lane :fast}
   (:require
    [clj-surgeon.core :as core]
    [clj-surgeon.intent-transaction :as transaction]
@@ -124,17 +125,17 @@
   ([] (runtime-architecture-inventory
         (top-level-form-index transaction-file)))
   ([index]
-  (let [refs #(architecture-references-one-frame-deeper index %)]
-    {:preview (refs 'plan-change)
-     ;; the two adapters name the same helpers, and a helper's own effect set
-     ;; is a function of its source alone, so merging cannot lose an answer
-     :commit-adapters
-     (reduce merge {} (map refs ['execute-change! 'execute-mcp-change!]))
-     :commit-entry (refs 'execute-change-with-context!)
-     :commit-runtime (refs 'commit-compiled!)
-     :receipt-stage (refs 'stage-receipt!)
-     :receipt-publish (refs 'publish-staged-receipt!)
-     :rollback (refs 'recovery-result)})))
+   (let [refs #(architecture-references-one-frame-deeper index %)]
+     {:preview (refs 'plan-change)
+      ;; the two adapters name the same helpers, and a helper's own effect set
+      ;; is a function of its source alone, so merging cannot lose an answer
+      :commit-adapters
+      (reduce merge {} (map refs ['execute-change! 'execute-mcp-change!]))
+      :commit-entry (refs 'execute-change-with-context!)
+      :commit-runtime (refs 'commit-compiled!)
+      :receipt-stage (refs 'stage-receipt!)
+      :receipt-publish (refs 'publish-staged-receipt!)
+      :rollback (refs 'recovery-result)})))
 
 (deftest operation-algebra-architecture-is-transport-neutral-and-bounded
   ;; @spec OP-ALG-CATALOG-001, OP-ALG-COMPILE-001, OP-ALG-EFFECT-001,
@@ -219,143 +220,143 @@
       ;; standing between. Two frames down is still outside this oracle, and
       ;; that is the stated limit rather than an oversight.
       (is (= '{:commit-adapters
-             {execute-change! #{execute-change! execute-change-with-context!},
-              execute-change-with-context!
-              #{.delete
-                assert-receipt-does-not-alias-source!
-                commit-compiled!
+               {execute-change! #{execute-change! execute-change-with-context!}
                 execute-change-with-context!
-                prepare-compiled!
-                publish-staged-receipt!
-                refuse!
-                slurp
-                stage-receipt!
-                validate-receipt!},
-              execute-mcp-change! #{execute-change-with-context! execute-mcp-change!}},
-             :commit-entry
-             {assert-receipt-does-not-alias-source!
-              #{assert-receipt-does-not-alias-source! refuse!},
-              build-receipt #{},
-              canonical-receipt-path #{refuse!},
-              commit-compiled!
-              #{assert-file-hash!
+                #{.delete
+                  assert-receipt-does-not-alias-source!
+                  commit-compiled!
+                  execute-change-with-context!
+                  prepare-compiled!
+                  publish-staged-receipt!
+                  refuse!
+                  slurp
+                  stage-receipt!
+                  validate-receipt!}
+                execute-mcp-change! #{execute-change-with-context! execute-mcp-change!}}
+               :commit-entry
+               {assert-receipt-does-not-alias-source!
+                #{assert-receipt-does-not-alias-source! refuse!}
+                build-receipt #{}
+                canonical-receipt-path #{refuse!}
                 commit-compiled!
-                create-directory!
-                create-source!
-                default-create-directory!
-                default-delete-file!
-                delete-file!
-                execute-creations!
-                execute-deletions!
-                execute-writes!
-                recover-transaction!
-                refuse!
-                rollback-creations!
-                rollback-deletions!
-                slurp
-                write-source!
-                file-ops/atomic-create!
-                file-ops/atomic-write!},
-              compile-change-spec #{refuse! validate-spec!},
-              compile-inverse
-              #{invalid-receipt! refuse! validate-complete-source! validate-receipt!},
-              execute-change-with-context!
-              #{.delete
-                assert-receipt-does-not-alias-source!
-                commit-compiled!
+                #{assert-file-hash!
+                  commit-compiled!
+                  create-directory!
+                  create-source!
+                  default-create-directory!
+                  default-delete-file!
+                  delete-file!
+                  execute-creations!
+                  execute-deletions!
+                  execute-writes!
+                  recover-transaction!
+                  refuse!
+                  rollback-creations!
+                  rollback-deletions!
+                  slurp
+                  write-source!
+                  file-ops/atomic-create!
+                  file-ops/atomic-write!}
+                compile-change-spec #{refuse! validate-spec!}
+                compile-inverse
+                #{invalid-receipt! refuse! validate-complete-source! validate-receipt!}
                 execute-change-with-context!
-                prepare-compiled!
-                publish-staged-receipt!
-                refuse!
-                slurp
+                #{.delete
+                  assert-receipt-does-not-alias-source!
+                  commit-compiled!
+                  execute-change-with-context!
+                  prepare-compiled!
+                  publish-staged-receipt!
+                  refuse!
+                  slurp
+                  stage-receipt!
+                  validate-receipt!}
+                ;; main's :expect-matched basis check; documented pure ("Performs
+                ;; no I/O"), so it names no architecture effect of its own.
+                matched-basis-evidence #{}
+                observe-change-result #{}
+                publish-staged-receipt! #{publish-staged-receipt! Files/move}
+                refuse! #{refuse!}
                 stage-receipt!
-                validate-receipt!},
-              ;; main's :expect-matched basis check; documented pure ("Performs
-              ;; no I/O"), so it names no architecture effect of its own.
-              matched-basis-evidence #{},
-              observe-change-result #{},
-              publish-staged-receipt! #{publish-staged-receipt! Files/move},
-              refuse! #{refuse!},
-              stage-receipt!
-              #{.delete
-                .write
-                refuse!
-                slurp
-                stage-receipt!
-                validate-receipt!
-                Files/newOutputStream},
-              validate-receipt! #{invalid-receipt! validate-receipt!}},
-             :commit-runtime
-             {assert-file-hash! #{assert-file-hash! read-source! refuse!},
-              changed-file-plans #{},
-              commit-compiled!
-              #{assert-file-hash!
+                #{.delete
+                  .write
+                  refuse!
+                  slurp
+                  stage-receipt!
+                  validate-receipt!
+                  Files/newOutputStream}
+                validate-receipt! #{invalid-receipt! validate-receipt!}}
+               :commit-runtime
+               {assert-file-hash! #{assert-file-hash! read-source! refuse!}
+                changed-file-plans #{}
                 commit-compiled!
-                create-directory!
-                create-source!
-                default-create-directory!
-                default-delete-file!
-                delete-file!
+                #{assert-file-hash!
+                  commit-compiled!
+                  create-directory!
+                  create-source!
+                  default-create-directory!
+                  default-delete-file!
+                  delete-file!
+                  execute-creations!
+                  execute-deletions!
+                  execute-writes!
+                  recover-transaction!
+                  refuse!
+                  rollback-creations!
+                  rollback-deletions!
+                  slurp
+                  write-source!
+                  file-ops/atomic-create!
+                  file-ops/atomic-write!}
                 execute-creations!
+                #{assert-file-hash!
+                  create-directory!
+                  create-source!
+                  execute-creations!
+                  refuse!
+                  swap!
+                  file-ops/revalidate-create-target!}
                 execute-deletions!
-                execute-writes!
-                recover-transaction!
-                refuse!
-                rollback-creations!
-                rollback-deletions!
-                slurp
-                write-source!
-                file-ops/atomic-create!
-                file-ops/atomic-write!},
-              execute-creations!
-              #{assert-file-hash!
-                create-directory!
-                create-source!
-                execute-creations!
-                refuse!
-                swap!
-                file-ops/revalidate-create-target!},
-              execute-deletions!
-              #{assert-file-hash! delete-file! execute-deletions! refuse! swap!},
-              execute-writes! #{assert-file-hash! execute-writes! write-source!},
-              recover-transaction! #{recover-transaction! write-source!},
-              recovered? #{},
-              refuse! #{refuse!},
-              rollback-creations! #{delete-file! rollback-creations!},
-              rollback-deletions! #{rollback-deletions! write-source!},
-              verified-hashes #{assert-file-hash!}},
-             :preview
-             {canonicalize-spec #{},
-              plan-change #{refuse! validate-spec!},
-              public-plan #{},
-              read-sources #{refuse! slurp},
-              refuse! #{refuse!},
-              spec-files #{},
-              validate-spec!
-              #{refuse!
-                validate-aggregate-expectation!
-                validate-change-aggregate-expectation!
-                validate-changes!
-                validate-create-files!
-                validate-intent!
-                validate-spec!}},
-             :receipt-publish
-             {publish-staged-receipt! #{publish-staged-receipt! Files/move}},
-             :receipt-stage
-             {receipt-source #{},
-              refuse! #{refuse!},
-              stage-receipt!
-              #{.delete
-                .write
-                refuse!
-                slurp
+                #{assert-file-hash! delete-file! execute-deletions! refuse! swap!}
+                execute-writes! #{assert-file-hash! execute-writes! write-source!}
+                recover-transaction! #{recover-transaction! write-source!}
+                recovered? #{}
+                refuse! #{refuse!}
+                rollback-creations! #{delete-file! rollback-creations!}
+                rollback-deletions! #{rollback-deletions! write-source!}
+                verified-hashes #{assert-file-hash!}}
+               :preview
+               {canonicalize-spec #{}
+                plan-change #{refuse! validate-spec!}
+                public-plan #{}
+                read-sources #{refuse! slurp}
+                refuse! #{refuse!}
+                spec-files #{}
+                validate-spec!
+                #{refuse!
+                  validate-aggregate-expectation!
+                  validate-change-aggregate-expectation!
+                  validate-changes!
+                  validate-create-files!
+                  validate-intent!
+                  validate-spec!}}
+               :receipt-publish
+               {publish-staged-receipt! #{publish-staged-receipt! Files/move}}
+               :receipt-stage
+               {receipt-source #{}
+                refuse! #{refuse!}
                 stage-receipt!
-                validate-receipt!
-                Files/newOutputStream},
-              validate-receipt! #{invalid-receipt! validate-receipt!}},
-             :rollback
-             {read-source! #{read-source! refuse!},
-              recovery-result #{read-source! write-source!}}}
+                #{.delete
+                  .write
+                  refuse!
+                  slurp
+                  stage-receipt!
+                  validate-receipt!
+                  Files/newOutputStream}
+                validate-receipt! #{invalid-receipt! validate-receipt!}}
+               :rollback
+               {read-source! #{read-source! refuse!}
+                recovery-result #{read-source! write-source!}}}
              (runtime-architecture-inventory))))))
 
 ;; @spec OP-ALG-CATALOG-001, OP-ALG-CONTEXT-001, OP-ALG-CONTEXT-002,
@@ -771,7 +772,6 @@
       (finally
         (doseq [file (reverse (file-seq workspace))]
           (io/delete-file file true))))))
-
 
 ;; @spec MCP-OP-ALIAS-056
 ;; @spec OP-ALG-EFFECT-003

@@ -1,0 +1,36 @@
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.move-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.mcp-recovery-test
+
+Testing clj-surgeon.failure-report-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.mission-git-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

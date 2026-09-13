@@ -1,0 +1,27 @@
+lanes: --ns -- 10 namespace(s), home-isolated false
+
+Testing clj-surgeon.install-test
+Installed stable CLI /var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/bin with spaces/clj-surgeon from commit af4e0aa203ee0698c573330e74ae82921e3b3c59, source hash 4e17f933b55652a0d4aca9cd744634e54b44583ba3119a841805773ede79ed00
+Receipt: /var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/bin with spaces/clj-surgeon.receipt.edn
+ 
+:insert-forms! {:proc #object[java.lang.ProcessImpl 0x1978c926 "Process[pid=3050049, exitValue=2]"], :exit 2, :in #object[java.lang.ProcessImpl$ProcessPipeOutputStream 0x18f4f7aa "java.lang.ProcessImpl$ProcessPipeOutputStream@18f4f7aa"], :out "{:state \"refused\", :committed false, :mutation_attempted false, :source_unchanged true, :at [], :elapsed_ms 2.222472, :error \"Closed map has missing or unsupported fields.\", :error-type :invalid-request, :next_action \"revise-request\", :ok false, :operation \"insert_forms\", :remedy \"Follow the closed request schema at [].\"}\n", :err "", :prev nil, :cmd ["/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/bin with spaces/clj-surgeon" ":op" ":insert-forms!" ":request-file" "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/empty.edn"]}
+:rename-alias! {:proc #object[java.lang.ProcessImpl 0x5000a828 "Process[pid=3050053, exitValue=2]"], :exit 2, :in #object[java.lang.ProcessImpl$ProcessPipeOutputStream 0x6f764c25 "java.lang.ProcessImpl$ProcessPipeOutputStream@6f764c25"], :out "{:state \"refused\", :committed false, :mutation_attempted false, :source_unchanged true, :at [], :elapsed_ms 2.263502, :error \"Closed map has missing or unsupported fields.\", :error-type :invalid-request, :next_action \"revise-request\", :ok false, :operation \"rename_alias\", :remedy \"Follow the closed request schema at [].\", :version 1}\n", :err "", :prev nil, :cmd ["/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/bin with spaces/clj-surgeon" ":op" ":rename-alias!" ":request-file" "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/empty.edn"]}
+:ls {:proc #object[java.lang.ProcessImpl 0x595de4fa "Process[pid=3050101, exitValue=0]"], :exit 0, :in #object[java.lang.ProcessImpl$ProcessPipeOutputStream 0x25c7b8fa "java.lang.ProcessImpl$ProcessPipeOutputStream@25c7b8fa"], :out "{:ns sample,\n :file\n \"/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/sample.clj\",\n :lines 2,\n :form-count 1,\n :forms\n [{:type defn,\n   :platforms [:clj],\n   :line 2,\n   :end-line 2,\n   :name answer,\n   :args \"[]\"}],\n :requires [],\n :forward-refs []}\n", :err "", :prev nil, :cmd ["/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/bin with spaces/clj-surgeon" ":op" ":ls" ":file" "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3037392-683349e5/clj-surgeon-installed-splice-11282233061819930182/sample.clj"]}
+
+Testing clj-surgeon.mcp-process-test
+
+Testing clj-surgeon.help-test
+
+Testing clj-surgeon.mission-events-test
+
+Testing clj-surgeon.rename-alias-parity-test
+
+Testing clj-surgeon.cell-b-oracle-test
+
+Testing clj-surgeon.mission-test
+
+Testing clj-surgeon.platform-selector-test
+
+Testing clj-surgeon.mission-typist-executor-admission-test
+
+Testing clj-surgeon.mission-usage-executor-test

@@ -1,0 +1,11 @@
+standard-clj fix v0.29.0
+
+F /docs/observations/2026-09-12-bbtower-block-b/attempt23/run_controls.clj [5.41ms]
+F /src/clj_surgeon/cljc/merge.clj [5.54ms]
+F /test/clj_surgeon/cljc/merge_test.clj [2.22ms]
+✓ /test/clj_surgeon/cljc/split_test.clj [1.74ms]
+✓ /test/clj_surgeon/lane_manifest.clj [8.7ms]
+✓ /test/clj_surgeon/lane_manifest_test.clj [13.62ms]
+✓ /test/clj_surgeon/worktree_lifecycle_prune_test.clj [7.85ms]
+
+All 7 files formatted with Standard Clojure Style 👍 [53.86ms]

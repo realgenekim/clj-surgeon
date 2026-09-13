@@ -1,11 +1,12 @@
 (ns clj-surgeon.parser-admission-test
-  "Millisecond-scale witnesses for MCP-OP-MEM-005 — bounded lexical/parser
+  "Witnesses for MCP-OP-MEM-005 — bounded lexical/parser
    admission.
 
    The heavy reproduction of the defect these guard against lives in
    `make memory-red` (subprocess JVMs at explicit -Xmx). Nothing here starts a
-   JVM, allocates a large tree, or measures heap: every witness is a pure scan
-   of a string, or one small outline.
+   JVM or measures heap. Most witnesses scan strings or one small outline;
+   the repository-wide corpus takes 71,055 ms under bb (block B attempt10),
+   so this namespace has battery cadence with its existing 300,000 ms budget.
 
    Every ceiling is exercised through the CONFIGURED value, not through a
    hard-coded constant, so the witnesses keep meaning if a ceiling is retuned —
@@ -13,6 +14,7 @@
    real, measured corpora (`default-ceilings-*`), because a ceiling that no
    longer admits this repository's own sources is the failure mode a retune
    causes."
+  {:lane :battery}
   (:require
    [clj-surgeon.analyze :as analyze]
    [clj-surgeon.outline :as outline]

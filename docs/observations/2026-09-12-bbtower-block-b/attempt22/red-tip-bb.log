@@ -1,0 +1,11 @@
+Sat Sep 12 18:34:29 UTC 2026
+ac1977977a2b6db2c36ccc6e3377524816b53367
+bb -e <expression below>
+(require 'clj-surgeon.xray-test)(let [r (clojure.test/run-tests 'clj-surgeon.xray-test)] (prn r) (shutdown-agents) (System/exit (+ (:fail r) (:error r))))
+
+Testing clj-surgeon.xray-test
+
+Ran 26 tests containing 456 assertions.
+0 failures, 0 errors.
+{:test 26, :pass 456, :fail 0, :error 0, :type :summary}
+EXIT=0

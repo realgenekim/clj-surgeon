@@ -1,0 +1,15 @@
+lanes: --ns -- 7 namespace(s), home-isolated true
+
+Testing clj-surgeon.insert-forms-test
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.mcp-program-tool-test
+
+Testing clj-surgeon.mcp-write-refusal-test
+
+Testing clj-surgeon.mission-usage-test
+
+Testing clj-surgeon.rename-alias-test

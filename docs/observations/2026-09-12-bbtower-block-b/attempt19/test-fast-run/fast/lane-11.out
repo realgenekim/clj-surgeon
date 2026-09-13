@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.mission-plain-forms-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.require-change-test
+
+Testing clj-surgeon.mission-forms-source-test
+
+Testing clj-surgeon.syntax-var-refs-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.mission-candidate-test

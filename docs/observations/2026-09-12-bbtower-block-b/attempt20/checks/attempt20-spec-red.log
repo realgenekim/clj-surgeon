@@ -1,0 +1,17 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.forms-test
+
+Ran 24 tests containing 94 assertions.
+0 failures, 0 errors.
+
+FAIL in (probe-spec-receipt-shape-matches-an-executed-probe) (mcp_http_server_test.clj:153)
+BB-PROBE-001 requires exactly one receipt-shape statement
+expected: (= 1 (count statements))
+  actual: (not (= 1 0))
+
+FAIL in (probe-spec-receipt-shape-matches-an-executed-probe) (mcp_http_server_test.clj:154)
+BB-PROBE-001 spec keys disagree with the executed probe receipt
+expected: (= (some-> statements first second edn/read-string) (set (keys receipt)))
+  actual: (not (= nil #{:elapsed_ms :reloaded :proof_pending :tests :state :failures :assertions}))
+{:test 1, :pass 2, :fail 2, :error 0}

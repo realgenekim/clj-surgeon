@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.mcp-relation-census-launcher-test, :runtime :bb, :mode "test", :started-at "2026-09-12T19:02:14.923066329Z", :elapsed-ms 4319, :status :test-failed, :result {:test 5, :pass 141, :fail 38, :error 1, :type :summary}}

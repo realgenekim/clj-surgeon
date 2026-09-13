@@ -54,7 +54,9 @@
 ;; loading is proved by LOADING, in a fresh process
 
 (def ^:private tmp-root
-  (or (System/getenv "CLJ_SURGEON_HELPER_TMP") "/var/tmp/forge/helper-fx"))
+  ;; Attempt18's restricted gate: the legacy helper-fx root is outside the
+  ;; packet. Inherit the runner's private disk root; retain explicit overrides.
+  (or (System/getenv "CLJ_SURGEON_HELPER_TMP") (System/getProperty "java.io.tmpdir")))
 
 (defn- delete-tree!
   [^java.io.File file]

@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.cljc.analyze-test

@@ -1,0 +1,11 @@
+test/clj_surgeon/alias_migration_test.clj:556:18: info: Single argument to str already is a string
+test/clj_surgeon/analyze_test.clj:5:5: warning: namespace clojure.string is required but never used
+test/clj_surgeon/fix_declares_test.clj:6:5: warning: namespace clojure.java.io is required but never used
+test/clj_surgeon/fix_declares_test.clj:105:13: warning: unused binding result
+test/clj_surgeon/fix_declares_test.clj:217:13: warning: unused binding result
+test/clj_surgeon/fix_declares_test.clj:321:13: warning: unused binding result
+test/clj_surgeon/operation_algebra_test.clj:54:8: warning: Unused private var clj-surgeon.operation-algebra-test/top-level-form-source
+test/clj_surgeon/tmp_leak_support_test.clj:30:38: error: Unresolved symbol: dir
+test/clj_surgeon/tmp_leak_support_test.clj:91:30: error: Unresolved symbol: parent
+test/clj_surgeon/worktree_lifecycle_test.clj:5:37: warning: #'clojure.test/testing is referred but never used
+linting took 994ms, errors: 2, warnings: 7

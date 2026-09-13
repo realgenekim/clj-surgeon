@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.reader-eval-fence-test, :runtime :bb, :mode "test", :started-at "2026-09-12T19:22:50.211754822Z", :elapsed-ms 4450, :status :test-failed, :result {:test 13, :pass 69, :fail 8, :error 0, :type :summary}}

@@ -1,0 +1,24 @@
+
+Testing clj-surgeon.extract-test
+
+Testing clj-surgeon.lens-query-test
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.platform-selector-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.move-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.syntax-var-refs-test

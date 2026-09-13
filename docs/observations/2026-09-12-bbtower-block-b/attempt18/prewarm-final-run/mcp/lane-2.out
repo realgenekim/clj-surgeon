@@ -1,0 +1,26 @@
+
+Testing clj-surgeon.lane-manifest-test
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.mcp-inspect-contract-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.mcp-extraction-test
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.syntax-var-refs-test

@@ -1,0 +1,22 @@
+
+Testing clj-surgeon.lane-manifest-test
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.mcp-inspect-contract-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.mission-usage-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test

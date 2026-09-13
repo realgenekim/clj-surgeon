@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.mcp-namespace-split-test, :runtime :bb, :mode "test", :started-at "2026-09-12T19:00:15.428178122Z", :elapsed-ms 3268, :status :test-failed, :result {:test 27, :pass 198, :fail 0, :error 1, :type :summary}}

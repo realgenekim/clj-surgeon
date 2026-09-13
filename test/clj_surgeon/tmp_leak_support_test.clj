@@ -14,6 +14,7 @@
    inside `mcp-test`). Round one claimed instead that \"every green suite run
    IS the end-to-end proof\"; the accepted path is not the requirement, and
    an independent review found the refusal failed open."
+  {:lane :battery}
   (:require
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.java.io :as io]

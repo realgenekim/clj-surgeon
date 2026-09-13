@@ -1,0 +1,1 @@
+{:runtime :bb, :namespace clj-surgeon.namespace-split-test, :elapsed-ms 757, :result {:test 54, :pass 495, :fail 0, :error 0, :type :summary}, :tmpdir "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-2927692-9bcc283f", :home "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-2927692-9bcc283f/home"}

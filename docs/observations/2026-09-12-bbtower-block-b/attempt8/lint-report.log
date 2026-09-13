@@ -1,0 +1,3 @@
+docs/observations/2026-09-12-bbtower-block-b/attempt8/report.clj:112:19: error: Unresolved symbol: report
+docs/observations/2026-09-12-bbtower-block-b/attempt8/report.clj:112:67: error: Unmatched bracket: unexpected )
+linting took 15ms, errors: 2, warnings: 0

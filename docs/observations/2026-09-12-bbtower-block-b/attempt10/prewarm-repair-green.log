@@ -1,0 +1,6 @@
+{:bb [20859], :jvm [8306], :result {:test 1, :pass 2, :fail 0, :error 0}}
+
+Testing clj-surgeon.lane-manifest-test
+
+Ran 27 tests containing 524 assertions.
+0 failures, 0 errors.

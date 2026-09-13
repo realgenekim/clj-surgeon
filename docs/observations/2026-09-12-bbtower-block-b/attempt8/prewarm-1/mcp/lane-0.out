@@ -1,0 +1,20 @@
+
+Testing clj-surgeon.lane-manifest-test
+
+Testing clj-surgeon.namespace-split-test
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.mcp-workspace-test
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+Testing clj-surgeon.mission-typist-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test
+
+Testing clj-surgeon.mission-forms-test

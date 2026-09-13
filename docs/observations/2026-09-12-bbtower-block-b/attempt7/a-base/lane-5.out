@@ -1,0 +1,17 @@
+lanes: --ns -- 8 namespace(s), home-isolated true
+
+Testing clj-surgeon.census-pool-test
+
+Testing clj-surgeon.mcp-compact-edit-fields-test
+
+Testing clj-surgeon.mcp-extraction-test
+
+Testing clj-surgeon.mcp-operation-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.mission-forms-test
+
+Testing clj-surgeon.outline-memory-test
+
+Testing clj-surgeon.split-proof-gate-test

@@ -1,0 +1,19 @@
+*** Begin Patch
+*** Update File: /home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest.clj
+@@
+ (defn measured-runtime [portable-runtime measurement]
+   (if (and (= :bb portable-runtime)
+            (or (nil? measurement)
+                (and (not (:contract-failure measurement))
+-                    (<= (:bb-ms measurement) (* 2 (:jvm-ms measurement))))))
++                    (empty? (:failed-samples measurement))
++                    (<= 6 (:n measurement 0))
++                    (every? #(and (<= 6 (:n % 0)) (<= 6 (count (:walls-ms %))))
++                            [(:jvm measurement) (:bb measurement)])
++                    (let [{:keys [jvm bb]} measurement]
++                      (<= (/ (+ (:mean-ms bb) (* 2 (:sd-ms bb)))
++                             (max 1.0 (- (:mean-ms jvm) (* 2 (:sd-ms jvm)))))
++                          2.0)))))
+     :bb
+     :jvm))
+*** End Patch

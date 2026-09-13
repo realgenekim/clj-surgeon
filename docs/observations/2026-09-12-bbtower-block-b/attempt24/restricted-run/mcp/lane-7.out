@@ -1,0 +1,26 @@
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.mission-forms-source-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.failure-report-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.mission-git-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test
