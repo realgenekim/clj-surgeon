@@ -11,10 +11,12 @@ import time
 import hashlib
 
 root = pathlib.Path.cwd()
-base = pathlib.Path('/var/tmp/forge/statehome-fx')
-base.mkdir(parents=True, exist_ok=True)
-with tempfile.TemporaryDirectory(prefix='warm-', dir=base) as tmp:
-    temp = pathlib.Path(tmp)
+with tempfile.TemporaryDirectory(prefix='warm-') as tmp:
+    temp = pathlib.Path(tmp).resolve()
+    if os.environ.get('TMPDIR'):
+        tmpdir = pathlib.Path(os.environ['TMPDIR']).resolve()
+        print(f'warm fixture: {temp}; TMPDIR: {tmpdir}', flush=True)
+        assert temp.is_relative_to(tmpdir), f'{temp} is outside TMPDIR {tmpdir}'
     checkout = temp / 'checkout'
     checkout.mkdir()
     files = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
