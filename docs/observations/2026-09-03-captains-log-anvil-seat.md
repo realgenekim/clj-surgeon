@@ -6416,3 +6416,5 @@ plant still red. N2 and N3 closed; the preregistration's refusal bet made falsif
 and the interval bias named. After: 80/80 green, test-fast once, prewarm first attempt
 green. Round 7 (Astra, pid 2861818): merge trunk 759974c7 semantically, rerun the oracle
 over both sides' changes, gates; evidence uncommitted this time.
+
+## 2026-09-13T02:16:56Z — Gene: "Gene report" → `2026-09-13-gene-report.md` (four sections; pasted in chat)
