@@ -6428,3 +6428,16 @@ srv7906d pid 3387652 from the server worktree at 759974c7, same argv as before
 route is not installed on 7906 (it needs :probe-image-file; the measure used its own image
 on 19066), so other seats see identical tools on newer bytes. Reversible: restart on a15531ee.
 Data-not-code round 7 (merge of trunk) still running; ship follows.
+
+## 2026-09-13T02:52:02Z — data-not-code round 7 GO-WITH-OWED: trunk merged, 81/81 impacted green, prewarm green; check-only prewarm packet at 9d057f8d
+
+Tip 9d057f8d (merge f07f1686 of 759974c7 into eb6f59b4; the only textual conflicts were the
+obsolete line-based sleep map and the refusal-count pin; both sides' behaviour survives:
+trunk's probe roots/closure/authorization/nesting bound/Throwable boundary and the
+branch's envelope, data classification, evidence rows, sleep identities). Report published
+as `2026-09-13-data-not-code-round7-report-astra.md`; evidence copied from the worktree, not
+committed (rule 2 held this round). Diff-impact over both sides: 81/81 namespaces, 1,685
+tests, incl. the 600-file memory-journal witness; 97 focused tests; test-fast once; first
+prewarm red on four builder-induced isolation violations (logs written into the tree during
+the run: my own attempt-19 class), final prewarm green. Branch pushed. Packet 3844cd7f is the
+check-only prewarm on the datacode worktree; the ship follows with the fence brief written.
