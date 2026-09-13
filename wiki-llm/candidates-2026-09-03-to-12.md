@@ -1229,3 +1229,17 @@ Listed, not entered. Each is a claim a document makes that the documents in scop
   **hand-written boilerplate briefs** (#2); **an over-broad rule executed correctly** (#8); **running
   the loop by hand instead of through its entrances** (#10); **a boundary that authenticates but does
   not authorize** (#12) — all unchanged, none repeated.
+
+## Added 2026-09-13 from the block B landing (receipts in the captain's log 2026-09-12 21:xxZ–2026-09-13 00:3xZ)
+
+### 67. A receipt's identity is the candidate's ancestry, not a row
+Category: delivery. Symptom: a passing battery row copied onto a sibling tip is refused (not-an-ancestor). Counterexample: 76af5782 carried the :pass row for candidate 8c542ede and `battery_ledger.clj check` refused it; the receipt commit df86ecda (candidate + row) passed and became the landing tip (log 2026-09-12 23:1xZ). Why: the receipt is bound to the tree it ran on; a row is data about another tree. Sublime: land the receipt commit itself; branch further work from it so the receipt stays an ancestor. Ratchet: battery-fresh (exists; enforcing entrance = landing gate). Meter: none recorded. Status: enforced.
+
+### 68. A verdict that names its class ends the round loop
+Category: review. Symptom: one blocking finding per review round, same class each time. Counterexample: rounds 4 and 5 (probe closure: prefix lists, then classpath roots) vs round 8 after the fence appendix gained "Name the class": Sol wrote `CLASS: bounded malformed EDN shapes…` and the oracle; attempt 26 built the oracle first and found 13 escapes incl. two shapes Sol had not listed (2026-09-12-bbtower-block-b-sol-fence-verdict-8.md; attempt26 report). Why: an instance detector costs a round per member. Sublime: the reviewer names the class and the oracle; the builder's first deliverable is the oracle. Ratchet: ~/bin/ship-fix-block-spec.md "Name the class" (enforcing entrance = every fence brief; seat-local, other seats owed). Meter: none recorded. Status: enforced on this seat.
+
+### 69. A content filter is a runner fact, not a task fact
+Category: apparatus. Symptom: a builder session dies in 40 s on "flagged for possible cybersecurity risk". Counterexample: Astra refused the nesting-fuzz brief (attempt 26); the same brief built green on Opus (log 2026-09-12 23:4xZ; memory sol-live-on-anvil-seat already names symlink/confinement fixtures). Why: crash-shaped and confinement-shaped fixtures trip the filter regardless of intent. Sublime: route that class to a runner without the filter at brief time, not after a refusal. Ratchet: none yet (a brief-time classifier: "fixture shape ∈ {fuzz, symlink escape, confinement} → Opus"). Meter: none recorded. Status: pending.
+
+### 70. Two suites at once turns a timing assertion into a coin flip
+Category: testing. Symptom: a battery goes red on a single-sample timing ratio while another suite runs. Counterexample: rounds 3 and 7 batteries red on parser-admission-test's 20x ratio (n=1) with two other suites running; the same battery green alone at load 1.1 (log 2026-09-12 23:0xZ; inb-2d3049). Why: a timing assertion with no variance floor is policy from one observation, and my concurrency supplied the noise. Sublime: one suite at a time (the lease), and timing assertions become structural assertions plus telemetry or median-of-n with a registered floor. Ratchet: inb-2d3049 (census of timing assertions); the suite lease exists but is not enforced on builders' focused JVMs. Meter: window (the day's apparatus share). Status: pending.
