@@ -6362,3 +6362,12 @@ Amendment 1 (Astra, pid 1115818), written before any measured cell: subject re-f
 sha recorded; T4/T5 re-cut with the same semantic edit and the byte diff shown; bets copied
 verbatim, unchanged. Then attempt 2 of the measure. Filed: the image writing its identity
 file into the checkout root is a "places" defect of the same class as the write audit.
+
+## 2026-09-13T00:49:31Z — amendment 1 written (93690642); probe measure attempt 2 running
+
+Astra, 12 minutes, three commits: the instrument admits exactly the prescribed identity
+directory (`git status -- . ':(top,exclude).clj-surgeon/'` for the PROBE arm only; old sha
+1aff7c05…, new d26701e2…), T4/T5 re-frozen on the landed subject with the same semantic
+edit (byte diff shown), subject 759974c7, bets copied verbatim and unchanged, untimed
+identity verification of all six tasks at the subject. Preregistration with the amendment
+republished in records. Attempt 2 (Opus runner) executes it now under results-2/.
