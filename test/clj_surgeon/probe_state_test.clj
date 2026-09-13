@@ -113,28 +113,38 @@
         (is (some? seam) "One injectable writer seam must cover publication stages")
         (when seam
           (let [original @seam]
+            ;; Sol SH-ROUND2-01: create can leave a file before reporting EINTR.
+            ;; Each cell owns its directory so residue cannot taint later cells.
             (doseq [stage [:create :write :sync :publish]
+                    timing [:before :after]
                     [message errno] [["No space left on device" "ENOSPC"]
                                      ["Disk quota exceeded" "EDQUOT"]
                                      ["Permission denied" "EACCES"]
                                      ["Interrupted system call" "EINTR"]
                                      ["File too large" "EFBIG"]
                                      ["Short write" :unavailable]]]
-              (spit path "{:prior true}\n")
-              (let [r (with-redefs-fn
-                        {seam (fn [at & args]
-                                (if (= stage at)
-                                  (do
-                                    (when (= at :write)
-                                      (spit (str (first args)) "partial"))
-                                    (throw (java.io.IOException. message)))
-                                  (apply original at args)))}
-                        #(try (state/write-image! path {:next true})
-                              (catch Exception e (ex-data e))))]
-                (is (= :probe-state-not-writable (:error-type r)) (pr-str [stage r]))
-                (is (= errno (:errno r)) (pr-str [stage r]))
-                (is (= "{:prior true}\n" (slurp path)))
-                (is (= #{"probe.edn"} (set (.list dir))))))))))))
+              (with-directory
+                (fn [cell-dir]
+                  (let [path (str (io/file cell-dir "probe.edn"))]
+                    (spit path "{:prior true}\n")
+                    (let [r (with-redefs-fn
+                              {seam (fn [at & args]
+                                      (if (= stage at)
+                                        (do
+                                          (when (= timing :after)
+                                            (apply original at args))
+                                          (throw (java.io.IOException. message)))
+                                        (apply original at args)))}
+                              #(try (state/write-image! path {:next true})
+                                    (catch Exception e (ex-data e))))]
+                      (is (= :probe-state-not-writable (:error-type r)) (pr-str [stage timing r]))
+                      (is (= errno (:errno r)) (pr-str [stage timing r]))
+                      (is (= path (:path r)))
+                      ;; A completed atomic move is the publication commit boundary.
+                      (is (= (if (= [stage timing] [:publish :after])
+                               "{:next true}\n" "{:prior true}\n") (slurp path)))
+                      (is (= #{"probe.edn"} (set (.list cell-dir)))
+                          (pr-str [stage timing errno])))))))))))))
 
 ;; @spec STATE-HOME-011
 ;; @spec STATE-HOME-012
