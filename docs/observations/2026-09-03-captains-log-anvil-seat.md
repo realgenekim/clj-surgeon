@@ -6326,3 +6326,20 @@ Eighteenth check-only prewarm (packet e52c0f37) exit 0 at 839b7c53, receipt boun
 F1 answered by the oracle-first attempt 26; the client-side member of the class declared
 owed), battery on fable/battery-receipt-839b7c53 (pre-created), fast lane beside. The
 receipt commit df86ecda is an ancestor of this tip, so battery-fresh sees 8c542ede's pass.
+
+## 2026-09-13T00:33:59Z — LANDED: bb-rewrite-tower blocks A+B on MCP/main = 759974c7 = stable/2026-09-13.1
+
+Ship run 20260913T001531Z on candidate ca749adb: Sol GO (verdict 9 published; binding
+confirmed, tree matched the sealed candidate, 839b7c53 an ancestor), fast lane green in
+586 s, battery receipt 1b567a90 by receipt-chain, PUBLISHED confirmed 759974c7 at 00:32:14Z.
+Trunk tagged stable/2026-09-13.1. Nine ship rounds, twenty-six branch attempts, eighteen
+check-only prewarms, four ship-tooling rounds, two red-teams, two verifiers, and Sol's six
+NO-GOs, one GO-WITH-FIX and two GOs, between "Go on block 2!" and this line. The probe verb
+lands with target authorization, complete closure through the shared ns parser, roots from
+the image classpath, a bounded and Throwable-safe HTTP boundary, seven registered refusal
+kinds each naming its native failure, and no verification boolean it cannot make false.
+
+Skills'-terms index: 4 → 5, as estimated (the landing through the check-only path with the
+six-run rule, receipted). Window stays 7 until the probe measure runs. Next, in Gene's
+order (1b): install the CLI from the landed trunk, warm an owned image, run the
+preregistered probe measure; then data-not-code round 6 and its landing (2b).
