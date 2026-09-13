@@ -6452,3 +6452,17 @@ forgery vs the "evidence not attestation" claim; the merge's survival of trunk's
 witnesses; a dependent the one-intermediate rule would miss), battery on
 fable/battery-receipt-9d057f8d (pre-created), fast lane beside. On GO and green legs this
 lands the safety pick and moves the skills'-terms index to 6.
+
+## 2026-09-13T03:10:19Z — Sol NO-GO on data-not-code 6ddc3c4c, class-named again: the impact oracle stops one hop short; round 8 builds the fixed point
+
+Verdict published as `2026-09-13-data-not-code-sol-fence-verdict-1.md`. "CLASS: dependency
+paths containing two or more intermediate namespaces. Oracle: fixed-point reverse-dependency
+closure … mutation-tested with paths of arbitrary depth." The one-intermediate bound was in
+MY brief for round 6; Sol's read-only graph probe found a three-hop chain to a battery-lane
+test (mcp-prepared-wire-test) that rounds 6 and 7 never ran. Everything else held: envelope
+injection refused at the CLI, MCP and HTTP adapters; trunk's four probe witnesses 591/0
+after the merge; census +14/−0; registry 166 → 168 with only the two envelope refusals;
+DATACODE-ROWS-001 states evidence-not-attestation; hard-link coverage stated as
+admission-time only with bind mounts excluded. Round 8 (Astra, pid 4111099): closure to a
+fixed point, a depth-1..8 mutation test committed red first, rerun of the enlarged set,
+gates. Two class-named verdicts in a row since the fence rule; each cost one round.
