@@ -1,0 +1,14 @@
+{
+  "subject_sha": "759974c718889c52a05a1d0746c9c21d0f00dcdb",
+  "task": "N2",
+  "arm": "NATIVE",
+  "argv": [
+    "clojure",
+    "-J-Xmx1024m",
+    "-M:clj-surgeon/test-deps",
+    "-e",
+    "(require 'clojure.test) (require 'clj-surgeon.analyze) (let [r (clojure.test/run-tests 'clj-surgeon.analyze)] (prn r) (shutdown-agents) (System/exit (if (zero? (+ (:fail r) (:error r))) 0 1)))"
+  ],
+  "runner_sha256": "e58dcc47503ce044df47955caddf5009b4b813fc1603396c6fec0b00db4f8230",
+  "namespace": "clj-surgeon.analyze"
+}

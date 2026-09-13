@@ -1,0 +1,16 @@
+{
+  "status": "accepted",
+  "typed_kind": null,
+  "receipt": {
+    "test": 0,
+    "pass": 0,
+    "fail": 0,
+    "error": 0,
+    "type": "summary"
+  },
+  "exit": 0,
+  "subject_sha": "759974c718889c52a05a1d0746c9c21d0f00dcdb",
+  "t0_monotonic_ns": 2716976453111909,
+  "t0_utc_ns": 1789278686167392340,
+  "command_wall_ms": 3029.931282
+}

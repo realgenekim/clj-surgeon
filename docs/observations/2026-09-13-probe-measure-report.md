@@ -14,7 +14,7 @@ tagged, committed or installed. Both worktrees left in place.
 | JVM-only (T4,T5,T6) | 4,209.75 | 1,169.67 | **0.2778** | 9 | 0 of 18 |
 | NATIVE T1 controls | 3,106.66 | n/a | n/a | 6 | 0 of 6 |
 | NATIVE T4 controls | 2,007.28 | n/a | n/a | 6 | 0 of 6 |
-| Planted non-test (N1,N2) | no verdict | 260.46 | n/a | 2 | **2 of 4** |
+| Planted non-test (N1,N2) | 3,034.28 (amend. 2) | 260.46 | n/a | 2 | **2 of 4** — PROBE 2/2 typed, NATIVE 0/2 (settled by amendment 2) |
 
 **One line of learning.** The warm probe beats a cold focused JVM run by 5.3x on
 bb-portable and 3.6x on JVM-only medians, clears its variance floor by ~48x, holds
@@ -31,8 +31,8 @@ staleness risk, long-session memory cost, or a namespace whose reload closure is
 
 | Bettor | bb-portable P/N | JVM-only P/N | First-attempt success | Probe refusal rate |
 |---|---|---|---|---|
-| **Fable** | **HELD** — 0.1877 ≤ 0.50 | **HELD** — 0.2778 ≤ 0.30 | **HELD** — both 6/6 in reps 1,2,3 | **UNSETTLED** — PROBE 2/2 typed; NATIVE 0/2 unattested |
-| **Astra** | **HELD** — 0.1877 ≤ 0.50 | **HELD** — 0.2778 ≤ 0.45 | **HELD** — equal on valid targets | **SPLIT** — equal-on-valid HELD (0/18 vs 0/18); higher-with-non-test UNSETTLED |
+| **Fable** | **HELD** — 0.1877 ≤ 0.50 | **HELD** — 0.2778 ≤ 0.30 | **HELD** — both 6/6 in reps 1,2,3 | **HELD** (amendment 2) — PROBE 2/2 typed; NATIVE 0/2, both `:test 0` exit 0 |
+| **Astra** | **HELD** — 0.1877 ≤ 0.50 | **HELD** — 0.2778 ≤ 0.45 | **HELD** — equal on valid targets | **SPLIT** — equal-on-valid HELD (0/18 vs 0/18); higher-with-non-test HELD (amendment 2: PROBE 2/2 vs NATIVE 0/2) |
 
 Fable's stricter JVM bound of 0.30 is the only column separating the two rows, and it
 **held with 0.0222 of margin** (0.2778 against 0.30). Astra's prediction of a
@@ -298,3 +298,33 @@ Everything is under `/var/tmp/forge/probe-measure-fx/results-2/`: `subject.json`
 `setup/` (warm image identity and argv, admission receipts, stale-result control receipts,
 assertion-delta baselines, stratum attestation). The verified instrument copy is
 `/var/tmp/forge/probe-measure-fx/instrument-2/`.
+
+## Amendment 2 rerun — 2026-09-13 05:53:16 UTC — the refusal column settles
+
+Preregistration amendment 2 (records 47f7f88c) repaired the instrument defect: the frozen
+NATIVE expression now requires `clojure.test` before the task namespace. Only the two
+planted NATIVE cells reran, from `instrument-3/measure.py`
+(sha256 `e58dcc47503ce044df47955caddf5009b4b813fc1603396c6fec0b00db4f8230`, a one-line
+change from instrument-2), into the fresh `results-3/` after a fresh `init` from the clean
+subject `759974c7`. The 36 valid-target cells and both PROBE planted cells are untouched.
+Ran after the data-not-code landing's battery finished; no other suite was running.
+
+| Cell | Status | Typed kind | Summary | Exit | Wall ms |
+|---|---|---|---|---|---:|
+| N1-NATIVE-1 (`clj-surgeon.forms`) | accepted | none | `{:test 0, :pass 0, :fail 0, :error 0}` | 0 | 3,029.93 |
+| N2-NATIVE-1 (`clj-surgeon.analyze`) | accepted | none | `{:test 0, :pass 0, :fail 0, :error 0}` | 0 | 3,028.63 |
+
+NATIVE issued zero typed refusals on both non-test targets and reported a zero-test run as
+success. PROBE (results-2, unchanged) refused both with `probe-target-not-a-test-namespace`.
+
+- **Fable's refusal bet — HELD.** Exactly PROBE 2/2 typed refusals and NATIVE 0/2.
+- **Astra's refusal bet — HELD on both arms.** Equal on the six valid targets (0/18 vs 0/18,
+  unchanged) and higher when the non-test safety controls are included (2/2 vs 0/2).
+- **What the column says about the product.** A cold focused run over a non-test namespace
+  is a green that certifies nothing (zero tests, exit 0); the probe verb refuses it before a
+  JVM is touched. That is the "false green terminates investigation" class from the house
+  rules, closed at the verb boundary.
+- The two walls (about 3.03 s each) are recorded and enter no ratio.
+
+Evidence: `2026-09-13-probe-measure-report/amendment2/` (request, verdict, timing, stdout,
+stderr per cell; `subject.json`; the instrument copy).

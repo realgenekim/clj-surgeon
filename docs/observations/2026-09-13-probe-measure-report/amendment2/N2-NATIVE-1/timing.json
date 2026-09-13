@@ -1,0 +1,8 @@
+{
+  "t0_monotonic_ns": 2716979581794403,
+  "t1_monotonic_ns": 2716982622689233,
+  "t1_utc_ns": 1789278692336982444,
+  "complete_wall_ms": 3040.89483,
+  "units": "ms",
+  "endpoint": "verdict.json durable write"
+}
