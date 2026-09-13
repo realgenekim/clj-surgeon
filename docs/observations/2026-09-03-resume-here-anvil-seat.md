@@ -795,3 +795,10 @@ B01 records now frozen in 2026-09-08-row1-split-ledger.md. Code commit 4856f5aa;
 - Worktrees: clj-surgeon-bbtower detached at da247b05 (packet owner); base checkout target/base-checkout at eae1e432 (gitignored).
 - Open inbox: inb-55b884 (closed by v3.12 in effect; mark), encounter ledger registration for receipt-booleans owed (seeded in fixture not live), shared CLI unexpected_paths unbounded (attempt10/owed.md).
 - Experiments: long-context attempt 5 and arm N attempt 3 both need Gene's go (spent cohorts).
+
+## STATE 2026-09-13T00:35:27Z — block B LANDED; probe measure running; data-not-code round 6 next
+- Trunk MCP/main = 759974c7 = stable/2026-09-13.1 (bb-rewrite-tower blocks A+B: probe verb, TEST-ISO-016, bb ceiling 343,102, envelope-clean gate). CLI installed from 759974c7 (receipt ~/bin/clj-surgeon.receipt.edn). 7906 server still on a15531ee (restart onto trunk is owed; announce first).
+- ~/bin == ship v3.12 round 3 (INSTALL OK stamp=20260912T113424Z). Ship ratchets owed for v3.13: inb-db9e78 (refspec), inb-61761d (autofix census), inb-257a96 (code-tree receipt), inb-16b396 (packet battery rows), inb-da1941 (short tmp).
+- In flight: the preregistered probe measure (Opus agent; subject 759974c7; results under /var/tmp/forge/probe-measure-fx/; bets in datacode round3 prereg). Gene's order: 1b measure first, 2b data-not-code next (branch fable/data-not-code at 7182573b; verifier NO-GO on the hard-link over-breadth; round 6 brief /var/tmp/forge/datacode-fx/brief-astra-datacode-6.md written, launch when the box is quiet; class-first diff-impact oracle).
+- Management system (Gene: "Modify management system accordingly"): tighten SKILL.md three rules at claude-skills-nrepl bb267bf (mayor to merge, inb-fa856d); fence appendix "Name the class"; memory evidence-commits-move-the-tip, class-oracle-before-another-round; wiki-llm in records (encounter-contract rule; Astra's review; promotion queue pending Gene, D3 open).
+- Worktrees: bbtower detached at 839b7c53 (branch bb-rewrite-tower-land-local); datacode on fable/data-not-code-local; land at origin/MCP/main.
