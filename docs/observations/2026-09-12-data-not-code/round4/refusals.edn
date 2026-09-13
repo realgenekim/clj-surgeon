@@ -1,0 +1,23 @@
+{:verb :shared-artifact-boundary
+ :coverage "Shared artifact publications, including final telemetry ledger targets; not every writer or filesystem races."
+ :refusals
+ [{:type :write-outside-envelope
+   :class :authority
+   :native_failure "An otherwise owned disk-backed destination outside trusted invocation roots can be created or overwritten, including through an ancestor or final-file symlink."
+   :promise "Admit the resolved final target before directory creation or publication."
+   :native_method "Resolve existing ancestors, retain absent suffixes and compare path components against trusted startup roots."
+   :minimal_reproducer "Publish an inverse receipt to an outside sentinel under a narrow trusted envelope."
+   :existing_check "receipt-artifacts/admit-target!"
+   :owner "receipt-artifacts"
+   :witness "receipt-artifacts-boundary-test/destination-envelope-guards-real-publication"
+   :retirement_condition "A replacement proves the same final-target boundary across the admitted publication families."}
+  {:type :artifact-path-unresolvable
+   :class :path-resolution
+   :native_failure "Cyclic or excessive symlinks prevent establishing a concrete destination; guessing containment could authorize an unknown path."
+   :promise "Refuse when target resolution cannot establish containment."
+   :native_method "Follow existing ancestors and links with bounded resolution depth; refuse unresolved roots."
+   :minimal_reproducer "Choose a target whose ancestor is a cyclic symlink."
+   :existing_check "receipt-artifacts/resolved-target"
+   :owner "receipt-artifacts"
+   :witness "mcp-alias-migration-test/the-refusal-enumeration-is-pinned-in-count-and-in-membership"
+   :retirement_condition "A replacement has equivalent bounded resolution refusal."}]}

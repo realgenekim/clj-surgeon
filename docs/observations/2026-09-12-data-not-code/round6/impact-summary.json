@@ -1,0 +1,32 @@
+{
+  "before": {
+    "completed": 80,
+    "expected": 80,
+    "passed": 79,
+    "failed": [
+      "clj-surgeon.txn-journal-test"
+    ],
+    "counters": {
+      "test": 1660,
+      "pass": 24219,
+      "fail": 0,
+      "error": 7
+    },
+    "worker_wall_ms": 1259133,
+    "complete": true
+  },
+  "after": {
+    "completed": 80,
+    "expected": 80,
+    "passed": 80,
+    "failed": [],
+    "counters": {
+      "test": 1661,
+      "pass": 24292,
+      "fail": 0,
+      "error": 0
+    },
+    "worker_wall_ms": 1256554,
+    "complete": true
+  }
+}

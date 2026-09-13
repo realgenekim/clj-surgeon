@@ -1,0 +1,8 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+
+Testing clj-surgeon.core-discovery-test
+clj-surgeon: skipping project discovery; not an existing directory: "/var/tmp/forge/datacode-fx/andon-shell-safety16103849782188613185/H; touch /var/tmp/forge/datacode-fx/andon-shell-safety16103849782188613185/PWNED-SEMICOLON ; echo z"
+clj-surgeon: skipping project discovery; not an existing directory: "/var/tmp/forge/datacode-fx/andon-shell-safety3995938964318821190/H$(touch /var/tmp/forge/datacode-fx/andon-shell-safety3995938964318821190/PWNED-SUBST)"
+
+Ran 7 tests containing 35 assertions.
+0 failures, 0 errors.

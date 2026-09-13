@@ -1,0 +1,27 @@
+{:verdict :review-required
+ :recorded-at "2026-09-12T20:32:30Z"
+ :subject "81328496d25916b096e29764128af81276360a34"
+ :branch "fable/data-not-code-local"
+ :phase :item-1-high-level-design
+ :findings [{:kind :launcher-contract-resolved
+             :source :user-round-2-contract}
+            {:kind :required-phase-review
+             :source "Supplied AGENTS.md: Stop after each phase for user review."
+             :artifact "envelope-design.md"}
+            {:kind :ledger-admission-order
+             :evidence "src/clj_surgeon/mcp_alias_migration.clj:append-telemetry!"
+             :finding "Directory creation precedes the existing ledger symlink check."}
+            {:kind :concrete-target-coverage
+             :finding "Audit final filenames in consumers of directory, not only selected roots."}]
+ :measurements {:red :not-run :green :not-run :lint :not-run
+                :test-fast :not-run :landing-gate-prewarm :not-run
+                :probe :not-run :sublime-delta nil}
+ :commits {:implementation [] :report :enclosing-git-commit}
+ :dogfood []
+ :least_sure ["Whether the build instruction is intended to waive per-phase reviews."]
+ :disagreements []
+ :owed ["Review item-1 phase-one design."
+        "Item 1 requirements, committed red witnesses, implementation, refusal registration, green evidence."
+        "Items 2-4 committed red/fix/green in order."
+        "Item 5 preregistration and both bets; do not run the measure."
+        "Item 6 lint, focused checks, lease-gated test-fast/prewarm, final report."]}

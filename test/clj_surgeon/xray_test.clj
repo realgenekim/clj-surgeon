@@ -164,6 +164,38 @@
   '[lazy-seq loop loop* recur case* throw new unchecked-inc
     chunked-seq? chunk-first chunk-rest chunk-buffer chunk-append chunk chunk-cons])
 
+;; @spec DATACODE-SCI-001
+(deftest sandbox-refusal-classification-is-data-not-prose
+  (doseq [message ["wording changed completely" "" "une permission refusee"]
+          wrapped? [false true]]
+    (let [denial (ex-info message {:sandbox/decision :deny :symbol 'spit})
+          failure (if wrapped? (ex-info "runtime wrapper" {:type :sci/error} denial) denial)
+          r (with-redefs [sci/eval-string+ (fn [& _] (throw failure))]
+              (try (dsl/compile-xray "(form 'data)")
+                   (catch Exception e (ex-data e))))]
+      (is (= :invalid-xray-expression (:error-type r)))
+      (is (= :disallowed-symbol (:reason r)) (pr-str r))
+      (is (= 'spit (:symbol r)))))
+  (doseq [expression ["(spit \"unused\" \"bytes\")"
+                      "(unknown-function 1)"
+                      "(-> (form 'data) (analyze (fn [_] (System/exit 1))))"]]
+    (let [r (try (dsl/compile-xray expression) (catch Exception e e))
+          causes (take-while some? (iterate ex-cause r))]
+      (is (= :disallowed-symbol (:reason (ex-data r))))
+      (is (some #(= :deny (:sandbox/decision (ex-data %))) causes)
+          "the sandbox produces a denial value before presentation")))
+  (testing "English-looking runtime failures cannot impersonate a capability denial"
+    (let [r (with-redefs [sci/eval-string+ (fn [& _] (throw (ex-info "spit is not allowed!" {})))]
+              (try (dsl/compile-xray "(form 'data)") (catch Exception e (ex-data e))))]
+      (is (= :evaluation-failed (:reason r)))))
+  (testing "lexical bindings and quoted data retain the existing accepted grammar"
+    (doseq [expression ["(let [spit identity] (-> (form 'data) (analyze spit)))"
+                        "(-> (form 'data) (analyze (fn named [xs] (mapv (fn [[v]] v) xs))))"
+                        "(-> (form 'data) (analyze (fn [xs] (for [x xs :let [v (inc x)] :when (pos? v)] v))))"
+                        "(-> (form 'data) (analyze (fn [x] (case x spit :a slurp :b :other))))"
+                        "(-> (form 'data) (match 'unknown-function))"]]
+      (is (map? (dsl/compile-xray expression)) expression))))
+
 (deftest quoted-macro-expansion-symbols-remain-searchable-structural-data
   ;; Regression from the 2026-08-04 X-ray maximality review: the source guard
   ;; walked through (quote ...), so `(match 'loop)` was refused before file I/O.

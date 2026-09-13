@@ -1,0 +1,10 @@
+--- a/test/clj_surgeon/forms_test.clj
++++ b/test/clj_surgeon/forms_test.clj
+@@ -36,6 +36,7 @@
+     (is (= :defn  (forms/classify "s/defn")))
+     (is (= :defn  (forms/classify "schema.core/defn"))))
+   (testing "alias/defn- auto-resolves as private"
++    (is (= :defn- (forms/classify "schema.core/defn-")))
+     (is (= :defn- (forms/classify "mu/defn-")))
+     (is (= :defn- (forms/classify "m/defn-"))))
+   (testing "other core forms work through / too"

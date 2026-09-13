@@ -1,0 +1,13 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+
+Testing clj-surgeon.memory.journal-green-test
+GREEN scope: {:root /var/tmp/forge/datacode-fx/clj-surgeon-green-journal-1789262004366, :files 600, :bytes 314772270}
+GREEN reference receipt: {:arm :frozen-read, :files 600, :bytes 314772270, :result-hash-count 600, :tree-hash 55423110f805a112cd6b353252ccd5183e035dfb8fe4b50da52e5f310a762440, :memory {:xmx-mb 2048.0, :heap-used-start-mb 34.10808563232422, :heap-used-peak-mb 2046.3705825805664, :heap-used-end-mb 13.406364440917969, :heap-after-gc-peak-mb 1677.1175537109375, :heap-retained-peak-mb 0.0, :wall-ms 139507}}
+GREEN journal receipt: {:tree-hash 55423110f805a112cd6b353252ccd5183e035dfb8fe4b50da52e5f310a762440, :arm :journal, :work {:walk-entries 604, :files-discovered 600, :files-read 600, :source-bytes 314772270, :largest-file-bytes 524621, :receipt-records 0, :receipt-bytes 0}, :memory {:xmx-mb 256.0, :heap-used-start-mb 55.061790466308594, :heap-used-peak-mb 254.38773345947266, :heap-used-end-mb 13.262168884277344, :heap-after-gc-peak-mb 237.02062225341797, :heap-retained-peak-mb 16.48980712890625, :wall-ms 163839}, :read-set-files 600, :commit-error nil, :committed true, :refusals [], :files 600, :reserved {:staged-files 600, :aggregate-bytes 314772270, :heap-reserved-peak-bytes 29446956, :path-list-bytes 68180, :journal-bytes-max 1073741824, :staged-files-max 2000, :aggregate-bytes-max 536870912, :journal-bytes-peak 629544540, :journal-bytes 629544540, :work-budget-bytes 201326592, :discovered-files 600, :parse-factor 56}, :files-written 600}
+GREEN err: Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+
+FLATNESS 60 {:xmx-mb 256.0, :heap-used-start-mb 61.87847137451172, :heap-used-peak-mb 253.08807373046875, :heap-used-end-mb 15.410202026367188, :heap-after-gc-peak-mb 238.6729278564453, :heap-retained-peak-mb 16.455841064453125, :wall-ms 17404}
+FLATNESS 600 {:xmx-mb 256.0, :heap-used-start-mb 23.99323272705078, :heap-used-peak-mb 253.91055297851562, :heap-used-end-mb 13.314697265625, :heap-after-gc-peak-mb 246.28534698486328, :heap-retained-peak-mb 16.633155822753906, :wall-ms 164365}
+
+Ran 2 tests containing 18 assertions.
+0 failures, 0 errors.

@@ -37,4 +37,15 @@
    :misreadings ["Nested execute writes a second line." "Ledger failure undoes a committed operation."]
    :boundaries ["direct/MCP; concurrency; write failure; no workspace bookkeeping"]
    :tests [:route-telemetry-records-commit-and-refusal]}
+  {:id :DATACODE-ENV-005 :status :active
+   :ears "When an internal journal/workspace entrance receives a state-home substitute, it shall register the admitted resolved substitute only for that invocation."
+   :misreadings ["Trusted means an arbitrary outside root is allowed."
+                 "A request map can supply the same authority."
+                 "Admitting the substitute also admits symlinked final descendants."
+                 "Registration may mutate startup authority."]
+   :boundaries ["nil" "under TMPDIR" "outside all roots" "narrower context"
+                "absent parent" "symlink descendant" "next invocation"]
+   :tests [:state-home-substitution-is-bounded-launcher-context
+           :state-home-substitution-preserves-narrow-context-and-final-target-checks]
+   :rationale "Round 9: a wide oracle hid the narrow battery's 74 journal admission errors."}
 ]}

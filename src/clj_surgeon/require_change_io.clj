@@ -1,10 +1,10 @@
 (ns clj-surgeon.require-change-io
   "Explicit-file capture and shared failure-atomic publication/proof/inverse."
   (:require
-   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.mcp-extraction :as kernel]
    [clj-surgeon.mcp-paths :as paths]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.require-change :as change]
    [clj-surgeon.synchronous-verification :as proof]
    [clojure.edn :as edn]
@@ -63,8 +63,10 @@
                      spec)])))
 
 (defn- save! [dir name data]
-  (.mkdirs (io/file dir))
-  (let [path (str (io/file dir name))] (file-ops/atomic-write! path (pr-str data)) path))
+  (let [path (artifacts/admit-target! (io/file dir name))]
+    (.mkdirs (io/file dir))
+    (file-ops/atomic-write! path (pr-str (artifacts/receipt-evidence data)))
+    path))
 
 (defn- absolute-compiled [root compiled]
   (let [absolute #(into (sorted-map) (map (fn [[f s]] [(str (.resolve root f)) s])) %)]
@@ -140,20 +142,21 @@
 
 ;; @spec REQUIRE-CHANGE-012
 (defn- bound-receipt! [receipt-dir result]
-  (if (<= (count (.getBytes (pr-str result) "UTF-8")) 4096) result
-    (let [detail (save! receipt-dir (str (UUID/randomUUID) "-complete-receipt.edn") result)]
-      (-> result
-          (select-keys [:ok :operation :state :committed :mutation_attempted
-                        :source_unchanged :restored :verification_complete :counts
-                        :expected :counts_match :protected_bytes :symbol_edits
-                        :workspace_status :workspace_clean_except :details_path
-                        :elapsed_ms :undo_receipt :receipt_hash :proof_pending :error_type :collisions_resolved])
-          (cond-> (<= (count (pr-str (:alias_histogram result))) 512)
-            (assoc :alias_histogram (:alias_histogram result)))
-          (cond-> (:error result)
-            (assoc :error (subs (:error result) 0 (min 256 (count (:error result))))))
-          (assoc :receipt_details_path detail :details_elided true
-                 :next_call nil)))))
+  (let [result (artifacts/receipt-evidence result)]
+    (if (<= (count (.getBytes (pr-str result) "UTF-8")) 4096) result
+      (let [detail (save! receipt-dir (str (UUID/randomUUID) "-complete-receipt.edn") result)]
+        (-> result
+            (select-keys [:ok :operation :state :committed :mutation_attempted
+                          :source_unchanged :restored :verification_complete :counts
+                          :expected :counts_match :protected_bytes :symbol_edits
+                          :workspace_status :workspace_clean_except :details_path :envelope-id
+                          :elapsed_ms :undo_receipt :receipt_hash :proof_pending :error_type :collisions_resolved])
+            (cond-> (<= (count (pr-str (:alias_histogram result))) 512)
+              (assoc :alias_histogram (:alias_histogram result)))
+            (cond-> (:error result)
+              (assoc :error (subs (:error result) 0 (min 256 (count (:error result))))))
+            (assoc :receipt_details_path detail :details_elided true
+                   :next_call nil))))))
 
 ;; @spec REQUIRE-CHANGE-010
 ;; @spec REQUIRE-CHANGE-013

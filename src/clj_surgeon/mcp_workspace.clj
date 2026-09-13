@@ -72,6 +72,7 @@
                         (.getBytes ^String canonical-workspace-root "UTF-8"))]
     (apply str (map #(format "%02x" (bit-and 0xff (int %))) digest))))
 
+;; @spec DATACODE-ENV-005
 (defn state-dir
   "Return the deterministic local-state directory for one workspace.
 
@@ -79,15 +80,21 @@
    pre-image objects, projection caches - hangs off this one root, so a
    workspace's state is found, quota'd and cleaned in one place. `state-home`
    overrides the user home the directory hangs from, which is what test
-   isolation needs; it is not a request parameter."
+   isolation needs; it is not a request parameter. An explicit substitute is
+   registered for this invocation after admission against the current roots."
   ([workspace-root] (state-dir workspace-root nil))
   ([workspace-root state-home]
-   (let [{:keys [ok workspace-root] :as resolved} (canonical-root workspace-root)]
-     (when-not ok
-       (throw (ex-info (:error resolved) resolved)))
-     (str (io/file (or state-home (System/getProperty "user.home"))
-                   ".local" "state" "clj-surgeon" "workspaces"
-                   (workspace-id workspace-root))))))
+   (artifacts/call-with-state-home state-home
+     (fn []
+       (let [{:keys [ok workspace-root] :as resolved} (canonical-root workspace-root)]
+         (when-not ok
+           (throw (ex-info (:error resolved) resolved)))
+         (let [target (str (io/file (or state-home (System/getProperty "user.home"))
+                             ".local" "state" "clj-surgeon" "workspaces"
+                             (workspace-id workspace-root)))]
+           (if state-home
+             (artifacts/admit-target! target :workspace-state)
+             target)))))))
 
 (defn receipt-dir
   "Return the deterministic local-state receipt directory for one workspace."

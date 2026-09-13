@@ -1,0 +1,40 @@
+{:verdict :stop-contract
+ :recorded-at "2026-09-12T20:27:11Z"
+ :subject "3b6d5357"
+ :branch "fable/data-not-code-local"
+ :stopped-at 1
+ :findings
+ [{:kind :missing-launcher-destination-contract
+   :evidence ["src/clj_surgeon/operation_algebra.clj:context-keys"
+              "src/clj_surgeon/operation_algebra.clj:derive-capabilities"
+              "src/clj_surgeon/intent_transaction.clj:cli-change-context"
+              "src/clj_surgeon/intent_transaction.clj:mcp-change-context"
+              "src/clj_surgeon/receipt_artifacts.clj:writable-root!"]
+   :decision "Do not infer authority from candidate selection or silently choose absent-envelope behavior."
+   :proposed-contract "Launcher supplies ID, effects, and allowed roots independently of request data; absent or malformed authority refuses publication."
+   :approved false}
+  {:kind :ledger-admission-location
+   :evidence "src/clj_surgeon/mcp_alias_migration.clj:append-telemetry!"
+   :finding "Concrete ledger admission must precede mkdirs; root validation alone does not inspect descendant symlinks."}
+  {:kind :coverage
+   :claim "Shared artifact boundary only; Landlock retained; no arbitrary subprocess or race-elimination claim."}]
+ :measurements
+ {:focused-tests :not-run
+  :lint :not-run
+  :test-fast :not-run
+  :landing-gate-prewarm :not-run
+  :probe :not-run
+  :sublime {:measured-delta nil
+            :numeric-estimate nil
+            :prospective-axes [:diagnostic-leverage :evidence-fidelity :operational-burden]
+            :status :qualitative-estimate-only}}
+ :commits {:implementation [] :report :enclosing-git-commit}
+ :dogfood []
+ :least_sure ["Unavailable inb-162207 reconciliation may already specify the launcher contract."]
+ :disagreements ["Candidate selection must not silently become invocation authority."
+                 "Absent-envelope compatibility requires a declared decision."]
+ :owed ["Resolve launcher contract and absence policy."
+        "Item 1 red commit, implementation, green publication witnesses, refusal registration."
+        "Items 2-4 red/fix/green commits in order."
+        "Item 5 six-task preregistration, Fable rows, Astra bets; do not run measurement."
+        "Item 6 lint, focused checks, lease-gated test-fast and prewarm, final report."]}

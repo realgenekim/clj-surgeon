@@ -223,6 +223,7 @@
                {execute-change! #{execute-change! execute-change-with-context!}
                 execute-change-with-context!
                 #{.delete
+                  artifacts/admit-target!
                   assert-receipt-does-not-alias-source!
                   commit-compiled!
                   execute-change-with-context!
@@ -237,6 +238,7 @@
                {assert-receipt-does-not-alias-source!
                 #{assert-receipt-does-not-alias-source! refuse!}
                 build-receipt #{}
+                receipt-hash #{}
                 canonical-receipt-path #{refuse!}
                 commit-compiled!
                 #{assert-file-hash!
@@ -262,6 +264,7 @@
                 #{invalid-receipt! refuse! validate-complete-source! validate-receipt!}
                 execute-change-with-context!
                 #{.delete
+                  artifacts/admit-target!
                   assert-receipt-does-not-alias-source!
                   commit-compiled!
                   execute-change-with-context!
@@ -744,7 +747,9 @@
                :entrance :mcp
                :policy :mcp-strict
                :lifecycle :commit}]
-             @contexts))
+             (mapv #(dissoc % :destination-envelope) @contexts)))
+      (doseq [context @contexts]
+        (is (algebra/valid-destination-envelope? (:destination-envelope context))))
       (finally
         (doseq [file (reverse (file-seq workspace))]
           (io/delete-file file true))))))

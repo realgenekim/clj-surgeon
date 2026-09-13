@@ -1,9 +1,10 @@
-(ns ^{:lane :fast} clj-surgeon.scope-stream-test
+(ns clj-surgeon.scope-stream-test
   "Witnesses for the bounded streaming scope reader.
 
    Every ceiling witness has Sol's shape: exactly at the limit succeeds, and one
    unit past it refuses BEFORE the effect the limit bounds - which for this
    reader means before the planner callback ever sees the file."
+  {:lane :fast}
   (:require
    [clj-surgeon.memory-battery :as battery]
    [clj-surgeon.scope-stream :as scope]
@@ -91,53 +92,49 @@
    its way to failing. The number is a bound on patience, not a measurement."
   10000)
 
-(defn- await-cleared
-  "Applies collection pressure until every `WeakReference` in `refs` is
-   cleared, or `gc-deadline-ms` elapses. Returns how many are still reachable
-   -- 0 is the contract."
-  [refs]
-  (let [deadline (+ (System/nanoTime) (* gc-deadline-ms 1000000))]
-    (loop []
-      (System/gc)
-      (let [reachable (count (remove #(nil? (.get ^WeakReference %)) refs))]
-        (if (or (zero? reachable) (> (System/nanoTime) deadline))
-          reachable
-          (do (Thread/sleep 10) (recur)))))))
-
 ;; ------------------------------------------------- MCP-OP-MEM-020 retention
 
 ;; @spec MCP-OP-MEM-020
 (deftest the-reader-drops-each-source-when-its-callback-returns
-  (testing "a weak reference to every source the planner saw is cleared after
+  (let [await-cleared
+        (fn [refs]
+          (let [deadline (+ (System/nanoTime) (* gc-deadline-ms 1000000))]
+            (loop []
+              (System/gc)
+              (let [reachable (count (remove #(nil? (.get ^WeakReference %)) refs))]
+                (if (or (zero? reachable) (> (System/nanoTime) deadline))
+                  reachable
+                  (do (^{:temporal-purpose :poll} Thread/sleep 10) (recur)))))))]
+    (testing "a weak reference to every source the planner saw is cleared after
             the walk: the reader holds no source it has finished with"
-    (let [root (temp-root "retention")]
-      (try
-        (dotimes [i 6]
-          (write-file! root (format "src/n%02d.clj" i) (padded 20000)))
-        (let [refs (atom [])
-              receipt (scope/stream-scope!
-                        root
-                        (fn [entry]
-                          (swap! refs conj (WeakReference. (:source entry)))
-                          nil)
-                        {})]
-          ;; The collection happens BEFORE the receipt is read, and the receipt
-          ;; is read afterwards, so the local stays a GC root across it. Assert
-          ;; on the receipt first and a leak hiding inside the receipt becomes
-          ;; invisible: the JVM is free to collect a local after its last use,
-          ;; and this witness passed a deliberate whole-scope leak until the
-          ;; order was fixed.
-          (let [reachable (await-cleared @refs)]
-            (is (zero? reachable)
-                (str reachable " of " (count @refs) " sources the planner saw "
-                     "are still strongly reachable after " gc-deadline-ms
-                     " ms of collection pressure -- the reader is holding "
-                     "sources it has finished with")))
-          (is (:ok receipt))
-          (is (= 6 (get-in receipt [:work :files-read])))
-          (is (= 0 (get-in receipt [:work :receipt-records]))
-              "the default receipt carries counters, never records"))
-        (finally (delete-tree! root))))))
+      (let [root (temp-root "retention")]
+        (try
+          (dotimes [i 6]
+            (write-file! root (format "src/n%02d.clj" i) (padded 20000)))
+          (let [refs (atom [])
+                receipt (scope/stream-scope!
+                          root
+                          (fn [entry]
+                            (swap! refs conj (WeakReference. (:source entry)))
+                            nil)
+                          {})]
+            ;; The collection happens BEFORE the receipt is read, and the receipt
+            ;; is read afterwards, so the local stays a GC root across it. Assert
+            ;; on the receipt first and a leak hiding inside the receipt becomes
+            ;; invisible: the JVM is free to collect a local after its last use,
+            ;; and this witness passed a deliberate whole-scope leak until the
+            ;; order was fixed.
+            (let [reachable (await-cleared @refs)]
+              (is (zero? reachable)
+                  (str reachable " of " (count @refs) " sources the planner saw "
+                       "are still strongly reachable after " gc-deadline-ms
+                       " ms of collection pressure -- the reader is holding "
+                       "sources it has finished with")))
+            (is (:ok receipt))
+            (is (= 6 (get-in receipt [:work :files-read])))
+            (is (= 0 (get-in receipt [:work :receipt-records]))
+                "the default receipt carries counters, never records"))
+          (finally (delete-tree! root)))))))
 
 ;; @spec MCP-OP-MEM-020
 (deftest the-summary-receipt-does-not-grow-with-the-file-count

@@ -287,13 +287,14 @@
                    (assoc closed :live-processes alive
                           :terminated? (and (:terminated? closed) (empty? alive)))))
         result (assoc result :cancelled-usage (when (seq (:cancelled result)) :unknown))]
-    (file-ops/atomic-write! (str (io/file artifacts "transport-close.edn")) (pr-str result))
+    (file-ops/atomic-write! (str (artifacts/admitted-file artifacts "transport-close.edn")) (pr-str result))
     result))
 
 (defn make-artifacts! [config]
-  (let [parent (io/file (artifacts/directory "typist" (get-in config [:plan :typist :root])))]
+  (let [parent (io/file (artifacts/directory "typist" (get-in config [:plan :typist :root])))
+        dir (artifacts/admitted-file parent (str "mission-" (java.util.UUID/randomUUID)))]
     (.mkdirs parent)
-    (str (Files/createTempDirectory (.toPath parent) "mission-" (make-array FileAttribute 0)))))
+    (str (Files/createDirectory (.toPath dir) (make-array FileAttribute 0)))))
 
 (defn delete-tree! [root]
   (with-open [paths (Files/walk (.toPath (io/file root)) (make-array java.nio.file.FileVisitOption 0))]
@@ -346,13 +347,13 @@
                           :future-sources (absolute (:future-sources compiled))
                           :caller-edit-count 0
                           :created-files [] :created-directories [])
-          raw-inverse (assoc (extraction/build-receipt compiled)
+          raw-inverse (assoc (artifacts/receipt-evidence (extraction/build-receipt compiled))
                              :file-modes (into {} (map (fn [[rel modes]]
                                                          [(get-in authority [:absolute rel]) modes]))
                                                (select-keys (:modes authority) (keys (:sources (:basis authority))))))
           inverse (assoc raw-inverse :receipt-hash
                          (mission/sha256 (pr-str (dissoc raw-inverse :receipt-hash))))
-          receipt-file (str (io/file artifacts "undo.edn"))]
+          receipt-file (str (artifacts/admitted-file artifacts "undo.edn"))]
       ;; Durable inverse exists before the first live write; a crashed ledger apply
       ;; retains its :applied state and this artifact for explicit recovery.
       (file-ops/atomic-write! receipt-file (pr-str inverse))
@@ -364,7 +365,7 @@
 
 (defn candidate-refusal! [artifacts index compiled]
   (when-not (:ok compiled)
-    (let [path (str (io/file artifacts (str "candidate-" index "-diagnostic.edn")))
+    (let [path (str (artifacts/admitted-file artifacts (str "candidate-" index "-diagnostic.edn")))
           diagnostic (select-keys compiled [:error-type :error :condition :lost :moved :next_call])
           bounded (if (<= (count (pr-str diagnostic)) 4096)
                     diagnostic
@@ -383,14 +384,14 @@
       (when-not (and (string? (:receipt-dir config)) (not (str/blank? (:receipt-dir config))))
         (reject! :typist-receipt-dir-required))
       (let [artifacts (make-artifacts! config)
-            _ (file-ops/atomic-write! (str (io/file artifacts "authority.edn")) (pr-str authority))
+            _ (file-ops/atomic-write! (str (artifacts/admitted-file artifacts "authority.edn")) (pr-str authority))
             handle (request-candidates! authority)
             closed? (atom false)]
         (try
           (loop [pending (candidate-sequence handle) ordinal 0 receipts []]
             (if-let [candidate (first pending)]
               (let [index (or (:index candidate) ordinal)
-                    _ (file-ops/atomic-write! (str (io/file artifacts (str "candidate-" index ".edn")))
+                    _ (file-ops/atomic-write! (str (artifacts/admitted-file artifacts (str "candidate-" index ".edn")))
                         (pr-str candidate))
                     compiled (compile-candidate! authority candidate)
                     proof (when (:ok compiled)
@@ -400,7 +401,7 @@
                                     :error-type (:error-type compiled)}
                                    (candidate-refusal! artifacts index compiled))
                     receipts (conj receipts receipt)]
-                (file-ops/atomic-write! (str (io/file artifacts "candidates.edn")) (pr-str receipts))
+                (file-ops/atomic-write! (str (artifacts/admitted-file artifacts "candidates.edn")) (pr-str receipts))
                 (if (:ok proof)
                   (let [closed (close-candidates! handle artifacts)
                         _ (reset! closed-snapshot closed)]

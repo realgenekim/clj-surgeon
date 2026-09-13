@@ -1,0 +1,11 @@
+--- a/test/clj_surgeon/mcp_formatter_test.clj
++++ b/test/clj_surgeon/mcp_formatter_test.clj
+@@ -119,6 +119,8 @@
+             ["/tools/standard-clj" "fix" "{files}"] true]
+            [{"/repo/node_modules/.bin/standard-clj" "/repo/local"}
+             ["/repo/local" "fix" "{files}"] true]
++           [{"standard-clj" "/tools with space/standard-clj"}
++            ["/tools with space/standard-clj" "fix" "{files}"] true]
+            [{} formatter/default-command false]]]
+     (with-redefs [process/resolve-executable available]
+       (is (= {:command expected :resolved? resolved?}

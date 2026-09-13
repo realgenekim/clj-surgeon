@@ -1,0 +1,1 @@
+{"argv": ["clojure", "-J-Xmx1g", "-M:clj-surgeon/test-deps", "docs/observations/2026-09-12-data-not-code/round6/focused.clj", "red"], "exit": 1, "started_utc_ns": 1789262781951283566, "wall_ms": 6437.017273}

@@ -1,0 +1,6 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+
+Testing clj-surgeon.receipt-artifacts-boundary-test
+
+Ran 32 tests containing 285 assertions.
+0 failures, 0 errors.

@@ -1,0 +1,204 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+
+ERROR in (destination-envelope-admits-only-accounted-inode-links) (receipt_artifacts.clj:130)
+all links across disjoint admitted roots are accounted for
+expected: (= (str lock) (artifacts/admit-target! lock))
+  actual: clojure.lang.ExceptionInfo: Artifact write is outside the destination envelope
+{:error-type :write-outside-envelope, :effect :receipt-publish, :path "/var/tmp/forge/datacode-fx/receipt-publication-454697532607695500/a/LOCK", :resolved-path "/var/tmp/forge/datacode-fx/receipt-publication-454697532607695500/a/LOCK", :envelope-id "655942edf9b1e4dabd58b51fce550db28d847af51a713811d40375f138419728", :roots ["/var/tmp/forge/datacode-fx/receipt-publication-454697532607695500/a" "/var/tmp/forge/datacode-fx/receipt-publication-454697532607695500/b"], :reason :hard-link}
+ at clj_surgeon.receipt_artifacts$admit_target_BANG_.invokeStatic (receipt_artifacts.clj:130)
+    clj_surgeon.receipt_artifacts$admit_target_BANG_.invoke (receipt_artifacts.clj:120)
+    clj_surgeon.receipt_artifacts$admit_target_BANG_.invokeStatic (receipt_artifacts.clj:122)
+    clj_surgeon.receipt_artifacts$admit_target_BANG_.invoke (receipt_artifacts.clj:120)
+    clj_surgeon.receipt_artifacts_boundary_test$fn__30370$fn__30371$fn__30372.invoke (receipt_artifacts_boundary_test.clj:218)
+    clj_surgeon.receipt_artifacts_boundary_test$with_envelope$fn__30144.invoke (receipt_artifacts_boundary_test.clj:67)
+    clojure.lang.AFn.applyToHelper (AFn.java:152)
+    clojure.lang.AFn.applyTo (AFn.java:144)
+    clojure.core$apply.invokeStatic (core.clj:667)
+    clojure.core$with_bindings_STAR_.invokeStatic (core.clj:1990)
+    clojure.core$with_bindings_STAR_.doInvoke (core.clj:1990)
+    clojure.lang.RestFn.invoke (RestFn.java:428)
+    clj_surgeon.receipt_artifacts_boundary_test$with_envelope.invokeStatic (receipt_artifacts_boundary_test.clj:67)
+    clj_surgeon.receipt_artifacts_boundary_test$with_envelope.invoke (receipt_artifacts_boundary_test.clj:62)
+    clj_surgeon.receipt_artifacts_boundary_test$fn__30370$fn__30371.invoke (receipt_artifacts_boundary_test.clj:217)
+    clj_surgeon.receipt_artifacts_boundary_test$with_workspace.invokeStatic (receipt_artifacts_boundary_test.clj:60)
+    clj_surgeon.receipt_artifacts_boundary_test$with_workspace.invoke (receipt_artifacts_boundary_test.clj:57)
+    clj_surgeon.receipt_artifacts_boundary_test$fn__30370.invokeStatic (receipt_artifacts_boundary_test.clj:208)
+    clj_surgeon.receipt_artifacts_boundary_test/fn (receipt_artifacts_boundary_test.clj:206)
+    clojure.test$test_var$fn__9898.invoke (test.clj:717)
+    clojure.test$test_var.invokeStatic (test.clj:717)
+    clojure.test$test_var.invoke (test.clj:708)
+    clojure.test$test_vars$fn__9924$fn__9929.invoke (test.clj:735)
+    clojure.test$default_fixture.invokeStatic (test.clj:687)
+    clojure.test$default_fixture.invoke (test.clj:683)
+    clojure.test$test_vars$fn__9924.invoke (test.clj:735)
+    clojure.test$default_fixture.invokeStatic (test.clj:687)
+    clojure.test$default_fixture.invoke (test.clj:683)
+    clojure.test$test_vars.invokeStatic (test.clj:731)
+    clojure.test$test_vars.invoke (test.clj:723)
+    user$eval32945$fn__32946.invoke (focused.clj:11)
+    user$eval32945.invokeStatic (focused.clj:9)
+    user$eval32945.invoke (focused.clj:5)
+    clojure.lang.Compiler.eval (Compiler.java:7739)
+    clojure.lang.Compiler.load (Compiler.java:8211)
+    clojure.lang.Compiler.loadFile (Compiler.java:8149)
+    clojure.main$load_script.invokeStatic (main.clj:476)
+    clojure.main$script_opt.invokeStatic (main.clj:536)
+    clojure.main$script_opt.invoke (main.clj:531)
+    clojure.main$main.invokeStatic (main.clj:665)
+    clojure.main$main.doInvoke (main.clj:617)
+    clojure.lang.RestFn.applyTo (RestFn.java:140)
+    clojure.lang.Var.applyTo (Var.java:707)
+    clojure.main.main (main.java:40)
+
+ERROR in (destination-envelope-admits-only-accounted-inode-links) (receipt_artifacts.clj:130)
+journal sibling links are admitted
+expected: (= (str lock) (artifacts/admit-target! lock))
+  actual: clojure.lang.ExceptionInfo: Artifact write is outside the destination envelope
+{:error-type :write-outside-envelope, :effect :receipt-publish, :path "/var/tmp/forge/datacode-fx/receipt-publication-454697532607695500/a/LOCK", :resolved-path "/var/tmp/forge/datacode-fx/receipt-publication-454697532607695500/a/LOCK", :envelope-id "2c48a3a0f735660bfae1727a1b003b64a12e06a8e73d7a2cd0de0c8dd64de5fc", :roots ["/var/tmp/forge/datacode-fx/receipt-publication-454697532607695500/a"], :reason :hard-link}
+ at clj_surgeon.receipt_artifacts$admit_target_BANG_.invokeStatic (receipt_artifacts.clj:130)
+    clj_surgeon.receipt_artifacts$admit_target_BANG_.invoke (receipt_artifacts.clj:120)
+    clj_surgeon.receipt_artifacts$admit_target_BANG_.invokeStatic (receipt_artifacts.clj:122)
+    clj_surgeon.receipt_artifacts$admit_target_BANG_.invoke (receipt_artifacts.clj:120)
+    clj_surgeon.receipt_artifacts_boundary_test$fn__30370$fn__30371$fn__30388.invoke (receipt_artifacts_boundary_test.clj:232)
+    clj_surgeon.receipt_artifacts_boundary_test$with_envelope$fn__30144.invoke (receipt_artifacts_boundary_test.clj:67)
+    clojure.lang.AFn.applyToHelper (AFn.java:152)
+    clojure.lang.AFn.applyTo (AFn.java:144)
+    clojure.core$apply.invokeStatic (core.clj:667)
+    clojure.core$with_bindings_STAR_.invokeStatic (core.clj:1990)
+    clojure.core$with_bindings_STAR_.doInvoke (core.clj:1990)
+    clojure.lang.RestFn.invoke (RestFn.java:428)
+    clj_surgeon.receipt_artifacts_boundary_test$with_envelope.invokeStatic (receipt_artifacts_boundary_test.clj:67)
+    clj_surgeon.receipt_artifacts_boundary_test$with_envelope.invoke (receipt_artifacts_boundary_test.clj:62)
+    clj_surgeon.receipt_artifacts_boundary_test$fn__30370$fn__30371.invoke (receipt_artifacts_boundary_test.clj:231)
+    clj_surgeon.receipt_artifacts_boundary_test$with_workspace.invokeStatic (receipt_artifacts_boundary_test.clj:60)
+    clj_surgeon.receipt_artifacts_boundary_test$with_workspace.invoke (receipt_artifacts_boundary_test.clj:57)
+    clj_surgeon.receipt_artifacts_boundary_test$fn__30370.invokeStatic (receipt_artifacts_boundary_test.clj:208)
+    clj_surgeon.receipt_artifacts_boundary_test/fn (receipt_artifacts_boundary_test.clj:206)
+    clojure.test$test_var$fn__9898.invoke (test.clj:717)
+    clojure.test$test_var.invokeStatic (test.clj:717)
+    clojure.test$test_var.invoke (test.clj:708)
+    clojure.test$test_vars$fn__9924$fn__9929.invoke (test.clj:735)
+    clojure.test$default_fixture.invokeStatic (test.clj:687)
+    clojure.test$default_fixture.invoke (test.clj:683)
+    clojure.test$test_vars$fn__9924.invoke (test.clj:735)
+    clojure.test$default_fixture.invokeStatic (test.clj:687)
+    clojure.test$default_fixture.invoke (test.clj:683)
+    clojure.test$test_vars.invokeStatic (test.clj:731)
+    clojure.test$test_vars.invoke (test.clj:723)
+    user$eval32945$fn__32946.invoke (focused.clj:11)
+    user$eval32945.invokeStatic (focused.clj:9)
+    user$eval32945.invoke (focused.clj:5)
+    clojure.lang.Compiler.eval (Compiler.java:7739)
+    clojure.lang.Compiler.load (Compiler.java:8211)
+    clojure.lang.Compiler.loadFile (Compiler.java:8149)
+    clojure.main$load_script.invokeStatic (main.clj:476)
+    clojure.main$script_opt.invokeStatic (main.clj:536)
+    clojure.main$script_opt.invoke (main.clj:531)
+    clojure.main$main.invokeStatic (main.clj:665)
+    clojure.main$main.doInvoke (main.clj:617)
+    clojure.lang.RestFn.applyTo (RestFn.java:140)
+    clojure.lang.Var.applyTo (Var.java:707)
+    clojure.main.main (main.java:40)
+
+FAIL in (destination-envelope-admits-only-accounted-inode-links) (receipt_artifacts_boundary_test.clj:245)
+a path escape is not mislabelled as an inode escape
+expected: (nil? (:reason r))
+  actual: (not (nil? :hard-link))
+
+FAIL in (runtime-steering-fields-cannot-outvote-control-receipts) (lane_manifest_test.clj:339)
+nil
+expected: (= :invalid-runtime-evidence (:error-type r))
+  actual: (not (= :invalid-runtime-evidence nil))
+
+FAIL in (runtime-steering-fields-cannot-outvote-control-receipts) (lane_manifest_test.clj:340)
+nil
+expected: (= namespace-name (:namespace r))
+  actual: (not (= clj-surgeon.intent-transaction-test nil))
+
+FAIL in (runtime-steering-fields-cannot-outvote-control-receipts) (lane_manifest_test.clj:341)
+nil
+expected: (= field (:field r))
+  actual: (not (= :contract-failure nil))
+
+FAIL in (runtime-steering-fields-cannot-outvote-control-receipts) (lane_manifest_test.clj:339)
+nil
+expected: (= :invalid-runtime-evidence (:error-type r))
+  actual: (not (= :invalid-runtime-evidence nil))
+
+FAIL in (runtime-steering-fields-cannot-outvote-control-receipts) (lane_manifest_test.clj:340)
+nil
+expected: (= namespace-name (:namespace r))
+  actual: (not (= clj-surgeon.intent-transaction-test nil))
+
+FAIL in (runtime-steering-fields-cannot-outvote-control-receipts) (lane_manifest_test.clj:341)
+nil
+expected: (= field (:field r))
+  actual: (not (= :contract-failure nil))
+
+FAIL in (runtime-steering-fields-cannot-outvote-control-receipts) (lane_manifest_test.clj:339)
+nil
+expected: (= :invalid-runtime-evidence (:error-type r))
+  actual: (not (= :invalid-runtime-evidence nil))
+
+FAIL in (runtime-steering-fields-cannot-outvote-control-receipts) (lane_manifest_test.clj:340)
+nil
+expected: (= namespace-name (:namespace r))
+  actual: (not (= clj-surgeon.intent-transaction-test nil))
+
+FAIL in (runtime-steering-fields-cannot-outvote-control-receipts) (lane_manifest_test.clj:341)
+nil
+expected: (= field (:field r))
+  actual: (not (= :contract-failure nil))
+
+FAIL in (runtime-steering-fields-cannot-outvote-control-receipts) (lane_manifest_test.clj:339)
+nil
+expected: (= :invalid-runtime-evidence (:error-type r))
+  actual: (not (= :invalid-runtime-evidence nil))
+
+FAIL in (runtime-steering-fields-cannot-outvote-control-receipts) (lane_manifest_test.clj:340)
+nil
+expected: (= namespace-name (:namespace r))
+  actual: (not (= clj-surgeon.battery-ledger-test nil))
+
+FAIL in (runtime-steering-fields-cannot-outvote-control-receipts) (lane_manifest_test.clj:341)
+nil
+expected: (= field (:field r))
+  actual: (not (= :portability-state nil))
+
+FAIL in (runtime-steering-fields-cannot-outvote-control-receipts) (lane_manifest_test.clj:339)
+nil
+expected: (= :invalid-runtime-evidence (:error-type r))
+  actual: (not (= :invalid-runtime-evidence nil))
+
+FAIL in (runtime-steering-fields-cannot-outvote-control-receipts) (lane_manifest_test.clj:340)
+nil
+expected: (= namespace-name (:namespace r))
+  actual: (not (= clj-surgeon.battery-ledger-test nil))
+
+FAIL in (runtime-steering-fields-cannot-outvote-control-receipts) (lane_manifest_test.clj:341)
+nil
+expected: (= field (:field r))
+  actual: (not (= :failed-samples nil))
+
+FAIL in (runtime-receipts-must-stay-in-retained-evidence-roots) (lane_manifest_test.clj:355)
+nil
+expected: (= :invalid-runtime-evidence (:error-type r))
+  actual: (not (= :invalid-runtime-evidence nil))
+
+FAIL in (runtime-receipts-must-stay-in-retained-evidence-roots) (lane_manifest_test.clj:356)
+nil
+expected: (= n (:namespace r))
+  actual: (not (= clj-surgeon.battery-ledger-test nil))
+
+FAIL in (runtime-receipts-must-stay-in-retained-evidence-roots) (lane_manifest_test.clj:357)
+nil
+expected: (= [:bb :logs] (:field r))
+  actual: (not (= [:bb :logs] nil))
+
+FAIL in (runtime-receipts-must-stay-in-retained-evidence-roots) (lane_manifest_test.clj:358)
+nil
+expected: (= :outside-retained-evidence (:reason r))
+  actual: (not (= :outside-retained-evidence nil))
+
+Ran 3 tests containing 36 assertions.
+20 failures, 2 errors.

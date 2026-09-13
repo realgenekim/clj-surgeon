@@ -1,0 +1,6 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+
+Testing clj-surgeon.mcp-inspect-tool-test
+
+Ran 49 tests containing 464 assertions.
+0 failures, 0 errors.

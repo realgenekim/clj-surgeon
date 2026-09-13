@@ -1,22 +1,15 @@
-(ns ^{:lane :fast} clj-surgeon.census-pool-test
+(ns clj-surgeon.census-pool-test
   "Unit witnesses for the census plan-phase pool.
 
    The pool is the one place claypoole is used. What must hold is narrow and
    testable without a census: every input is mapped exactly once, the pool is
    bounded by the size it was given, no thread outlives the call, and the result
    is the same collection `map` would produce."
+  {:lane :fast}
   (:require
    [clj-surgeon.census-pool :as census-pool]
    [clj-surgeon.relation-census :as census]
    [clojure.test :refer [deftest is testing]]))
-
-(defn- eventually-dead?
-  [threads]
-  (loop [attempts 0]
-    (cond
-      (every? #(not (.isAlive ^Thread %)) threads) true
-      (> attempts 100) false
-      :else (do (Thread/sleep 20) (recur (inc attempts))))))
 
 ;; @spec MCP-OP-CENSUS-020
 (deftest pooled-map-maps-every-input-exactly-once
@@ -34,8 +27,16 @@
 
 ;; @spec MCP-OP-CENSUS-020
 (deftest the-pool-is-bounded-and-outlives-nothing
-  (let [threads (atom #{})
-        work (fn [x] (swap! threads conj (Thread/currentThread)) (Thread/sleep 5) x)]
+  (let [eventually-dead? (fn [threads]
+                           (loop [attempts 0]
+                             (cond
+                               (every? #(not (.isAlive ^Thread %)) threads) true
+                               (> attempts 100) false
+                               :else (do (^{:temporal-purpose :poll} Thread/sleep 20)
+                                         (recur (inc attempts))))))
+        threads (atom #{})
+        work (fn [x] (swap! threads conj (Thread/currentThread))
+               (^{:temporal-purpose :spaced-stimulus} Thread/sleep 5) x)]
     ((census-pool/pooled-map 4) work (range 80))
     (testing "the pool never exceeds the size it was given"
       (is (<= (count @threads) 4) (str "threads used: " (count @threads))))

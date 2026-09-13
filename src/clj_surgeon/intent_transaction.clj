@@ -5,6 +5,7 @@
    [clj-surgeon.mcp-write-refusal :as write-refusal]
    [clj-surgeon.operation-algebra :as operation-algebra]
    [clj-surgeon.outline :as outline]
+   [clj-surgeon.receipt-artifacts :as artifacts]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -13,8 +14,7 @@
    [rewrite-clj.parser :as parser]
    [rewrite-clj.zip :as z])
   (:import
-   (java.nio.file CopyOption Files OpenOption StandardCopyOption
-                  StandardOpenOption)
+   (java.nio.file CopyOption Files OpenOption StandardCopyOption StandardOpenOption)
    (java.util UUID)))
 
 (def transaction-version 1)
@@ -2911,168 +2911,173 @@
    {:keys [spec receipt-out prepare-compiled! prepare-spec
            write-refusal-context expect-matched on-write-boundary]
     :as opts}]
-  (try
-    (let [unknown (vec (sort (remove #{:op :spec :receipt-out :prepare-compiled! :prepare-spec
-                                       :write-refusal-context :expect-matched
-                                       :on-write-boundary}
-                                     (keys opts))))]
-      (when (seq unknown)
-        (refuse! :unknown-arguments
-                 (str "Unknown :change! arguments: " (str/join ", " unknown))
-                 {:unknown unknown})))
-    (when-not (map? spec)
-      (refuse! :invalid-transaction-spec ":spec must be an EDN map"))
-    (let [receipt-path (canonical-receipt-path receipt-out)
-          {:keys [spec compiled capabilities authority-error]} (compile-change-spec
-                                                                 context spec prepare-spec
-                                                                 write-refusal-context)
-          compiled (if (and (nil? (:error compiled)) prepare-compiled!)
-                     (prepare-compiled! compiled)
-                     compiled)
-          ;; @spec MCP-OP-MATCHED-001
-          ;; Computed once, against this transaction's own frozen pre-image,
-          ;; before any effect is authorized.
-          matched-basis (when (and expect-matched (nil? (:error compiled)))
-                          (matched-basis-evidence compiled expect-matched))]
-      (assert-receipt-does-not-alias-source! receipt-path spec)
-      (cond
-        authority-error
-        (observe-change-result
-          :authority capabilities compiled nil authority-error)
+  (binding [artifacts/*destination-envelope* (or (:destination-envelope context)
+                                               (artifacts/current-envelope))]
+    (try
+      (let [unknown (vec (sort (remove #{:op :spec :receipt-out :prepare-compiled! :prepare-spec
+                                         :write-refusal-context :expect-matched
+                                         :on-write-boundary}
+                                       (keys opts))))]
+        (when (seq unknown)
+          (refuse! :unknown-arguments
+                   (str "Unknown :change! arguments: " (str/join ", " unknown))
+                   {:unknown unknown})))
+      (when-not (map? spec)
+        (refuse! :invalid-transaction-spec ":spec must be an EDN map"))
+      (let [receipt-path (canonical-receipt-path receipt-out)
+            _ (artifacts/admit-target! receipt-out)
+            {:keys [spec compiled capabilities authority-error]} (compile-change-spec
+                                                                   context spec prepare-spec
+                                                                   write-refusal-context)
+            compiled (if (and (nil? (:error compiled)) prepare-compiled!)
+                       (prepare-compiled! compiled)
+                       compiled)
+            ;; @spec MCP-OP-MATCHED-001
+            ;; Computed once, against this transaction's own frozen pre-image,
+            ;; before any effect is authorized.
+            matched-basis (when (and expect-matched (nil? (:error compiled)))
+                            (matched-basis-evidence compiled expect-matched))]
+        (assert-receipt-does-not-alias-source! receipt-path spec)
+        (cond
+          authority-error
+          (observe-change-result
+            :authority capabilities compiled nil authority-error)
 
-        (:error compiled)
-        (observe-change-result
-          :compile capabilities compiled nil
-          (assoc compiled :phase :compile :source-unchanged true))
+          (:error compiled)
+          (observe-change-result
+            :compile capabilities compiled nil
+            (assoc compiled :phase :compile :source-unchanged true))
 
-        ;; @spec MCP-OP-MATCHED-002
-        ;; @spec MCP-OP-MATCHED-003
-        (:error-type matched-basis)
-        (observe-change-result
-          :compile capabilities compiled nil
-          (assoc matched-basis :phase :compile :source-unchanged true))
+          ;; @spec MCP-OP-MATCHED-002
+          ;; @spec MCP-OP-MATCHED-003
+          (:error-type matched-basis)
+          (observe-change-result
+            :compile capabilities compiled nil
+            (assoc matched-basis :phase :compile :source-unchanged true))
 
-        :else
-        (let [matched-evidence (:evidence matched-basis)
-              authorization
-              (operation-algebra/authorize-effects
-                capabilities
-                #{:source-write
-                  :receipt-stage
-                  :receipt-publish
-                  :rollback})]
-          (if (:error authorization)
-            (observe-change-result
-              :authority capabilities compiled nil authorization)
-            (let [receipt (build-receipt compiled)
-                  staged-result
-                  (try
-                    {:staged (stage-receipt! receipt-path receipt)}
-                    (catch clojure.lang.ExceptionInfo e
-                      {:error-result
-                       (merge {:error (.getMessage e)} (ex-data e))})
-                    (catch Exception e
-                      {:error-result
-                       {:error (.getMessage e)
-                        :error-type :transaction-write-exception}}))]
-              (if-let [stage-error (:error-result staged-result)]
-                (observe-change-result
-                  :receipt-stage capabilities compiled nil stage-error)
-                (let [staged (:staged staged-result)]
-                  (try
-                    (let [commit (binding [*on-write-boundary* on-write-boundary]
-                                   (commit-compiled! compiled))]
-                      (if (:error commit)
-                        (observe-change-result
-                          :commit capabilities compiled nil commit)
-                        (try
-                          (publish-staged-receipt! staged receipt-path)
-                          (let [published (edn/read-string (slurp receipt-path))]
-                            (validate-receipt! published)
-                            (let [result
-                                  (merge
-                                    commit
-                                    (cond->
-                                      {:receipt-file receipt-path
-                                       :receipt-hash (:receipt-hash receipt)
-                                       :intent-count (:intent-count compiled)
-                                       :match-count (:match-count compiled)
-                                       :inverse (:inverse receipt)}
-                                      (:change-count compiled)
-                                      (assoc :change-count
-                                             (:change-count compiled))
+          :else
+          (let [matched-evidence (:evidence matched-basis)
+                authorization
+                (operation-algebra/authorize-effects
+                  capabilities
+                  #{:source-write
+                    :receipt-stage
+                    :receipt-publish
+                    :rollback})]
+            (if (:error authorization)
+              (observe-change-result
+                :authority capabilities compiled nil authorization)
+              (let [receipt (artifacts/receipt-evidence (build-receipt compiled))
+                    receipt (assoc receipt :receipt-hash (receipt-hash receipt))
+                    staged-result
+                    (try
+                      {:staged (stage-receipt! receipt-path receipt)}
+                      (catch clojure.lang.ExceptionInfo e
+                        {:error-result
+                         (merge {:error (.getMessage e)} (ex-data e))})
+                      (catch Exception e
+                        {:error-result
+                         {:error (.getMessage e)
+                          :error-type :transaction-write-exception}}))]
+                (if-let [stage-error (:error-result staged-result)]
+                  (observe-change-result
+                    :receipt-stage capabilities compiled nil stage-error)
+                  (let [staged (:staged staged-result)]
+                    (try
+                      (let [commit (binding [*on-write-boundary* on-write-boundary]
+                                     (commit-compiled! compiled))]
+                        (if (:error commit)
+                          (observe-change-result
+                            :commit capabilities compiled nil commit)
+                          (try
+                            (publish-staged-receipt! staged receipt-path)
+                            (let [published (edn/read-string (slurp receipt-path))]
+                              (validate-receipt! published)
+                              (let [result
+                                    (merge
+                                      commit
+                                      (cond->
+                                        {:receipt-file receipt-path
+                                         :envelope-id (:envelope-id receipt)
+                                         :receipt-hash (:receipt-hash receipt)
+                                         :intent-count (:intent-count compiled)
+                                         :match-count (:match-count compiled)
+                                         :inverse (:inverse receipt)}
+                                        (:change-count compiled)
+                                        (assoc :change-count
+                                               (:change-count compiled))
 
-                                      (:format compiled)
-                                      (assoc :format (:format compiled))
+                                        (:format compiled)
+                                        (assoc :format (:format compiled))
 
-                                      (:location-normalization compiled)
-                                      (assoc :location-normalization
-                                             (:location-normalization compiled))
+                                        (:location-normalization compiled)
+                                        (assoc :location-normalization
+                                               (:location-normalization compiled))
 
-                                      (:canonical-effect-identity compiled)
-                                      (assoc :canonical-effect-identity
-                                             (:canonical-effect-identity compiled))
+                                        (:canonical-effect-identity compiled)
+                                        (assoc :canonical-effect-identity
+                                               (:canonical-effect-identity compiled))
 
-                                      ;; @spec MCP-OP-MATCHED-001
-                                      matched-evidence
-                                      (assoc :matched-evidence
-                                             matched-evidence)))]
-                              (observe-change-result
-                                :success capabilities compiled
-                                {:path receipt-path
-                                 :hash (:receipt-hash receipt)}
-                                result)))
-                          (catch Exception publish-error
-                            (let [;; @spec MCP-OP-EDIT-034
-                                  ;; Creations are current sources during a
-                                  ;; publication rollback, just as edited
-                                  ;; future sources are current sources.
-                                  rollback-sources
-                                  (into (:future-sources compiled)
-                                        (map (fn [{:keys [file]}]
-                                               [file
-                                                (try
-                                                  (slurp file)
-                                                  (catch Exception _ nil))]))
-                                        (:created-files compiled))
-                                  inverse
-                                  (compile-inverse
-                                    receipt rollback-sources)
-                                  rollback (if (:ok inverse)
-                                             (commit-compiled! inverse)
-                                             inverse)
-                                  result
-                                  {:error (if (:ok rollback)
-                                            "Receipt publication failed; all files restored"
-                                            "Receipt publication failed; manual recovery required")
-                                   :error-type
-                                   (if (:ok rollback)
-                                     :receipt-write-failed
-                                     :transaction-recovery-required)
-                                   :cause-error (.getMessage publish-error)
-                                   :rolled-back (boolean (:ok rollback))
-                                   :recovery rollback}]
-                              (observe-change-result
-                                :receipt-publish capabilities compiled
-                                {:path receipt-path
-                                 :hash (:receipt-hash receipt)}
-                                result))))))
-                    (finally
-                      (when (.exists staged) (.delete staged)))))))))))
-    (catch clojure.lang.ExceptionInfo e
-      (merge {:error (.getMessage e)} (ex-data e)))
-    (catch Exception e
-      {:error (.getMessage e) :error-type :transaction-write-exception})))
+                                        ;; @spec MCP-OP-MATCHED-001
+                                        matched-evidence
+                                        (assoc :matched-evidence
+                                               matched-evidence)))]
+                                (observe-change-result
+                                  :success capabilities compiled
+                                  {:path receipt-path
+                                   :hash (:receipt-hash receipt)}
+                                  result)))
+                            (catch Exception publish-error
+                              (let [;; @spec MCP-OP-EDIT-034
+                                    ;; Creations are current sources during a
+                                    ;; publication rollback, just as edited
+                                    ;; future sources are current sources.
+                                    rollback-sources
+                                    (into (:future-sources compiled)
+                                          (map (fn [{:keys [file]}]
+                                                 [file
+                                                  (try
+                                                    (slurp file)
+                                                    (catch Exception _ nil))]))
+                                          (:created-files compiled))
+                                    inverse
+                                    (compile-inverse
+                                      receipt rollback-sources)
+                                    rollback (if (:ok inverse)
+                                               (commit-compiled! inverse)
+                                               inverse)
+                                    result
+                                    {:error (if (:ok rollback)
+                                              "Receipt publication failed; all files restored"
+                                              "Receipt publication failed; manual recovery required")
+                                     :error-type
+                                     (if (:ok rollback)
+                                       :receipt-write-failed
+                                       :transaction-recovery-required)
+                                     :cause-error (.getMessage publish-error)
+                                     :rolled-back (boolean (:ok rollback))
+                                     :recovery rollback}]
+                                (observe-change-result
+                                  :receipt-publish capabilities compiled
+                                  {:path receipt-path
+                                   :hash (:receipt-hash receipt)}
+                                  result))))))
+                      (finally
+                        (when (.exists staged) (.delete staged)))))))))))
+      (catch clojure.lang.ExceptionInfo e
+        (merge {:error (.getMessage e)} (ex-data e)))
+      (catch Exception e
+        {:error (.getMessage e) :error-type :transaction-write-exception}))))
 
 (defn execute-change!
   "Execute one CLI-legacy change transaction."
   [opts]
-  (execute-change-with-context! cli-change-context opts))
+  (execute-change-with-context! (assoc cli-change-context :destination-envelope (artifacts/current-envelope)) opts))
 
 (defn execute-mcp-change!
   "Execute one MCP-strict change transaction."
   [opts]
-  (execute-change-with-context! mcp-change-context opts))
+  (execute-change-with-context! (assoc mcp-change-context :destination-envelope (artifacts/current-envelope)) opts))
 
 (defn execute-undo!
   "Apply the hash-fenced inverse from a durable :change! receipt."

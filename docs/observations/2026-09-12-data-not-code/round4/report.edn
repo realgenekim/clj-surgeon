@@ -1,0 +1,180 @@
+{:findings
+ [{:kind :transport-resume,
+   :finding
+   "Committed items 1-5 stood; four uncommitted draft files were retained and completed."}
+  {:kind :trusted-final-target-admission,
+   :finding
+   "Policy default and immutable launcher roots bound artifact publication; requests cannot widen roots; final-file and ancestor symlinks and the ledger are admitted before creation.",
+   :coverage
+   "Shared artifact boundary only; Landlock unchanged; no every-writer or filesystem-race claim.",
+   :refusal-registry "refusals.edn"}
+  {:kind :data-valued-sandbox-denial,
+   :finding
+   "Typed sandbox denial determines classification on JVM and bb, independently of exception wording.",
+   :round4-repair
+   "Shorter remedy restores existing 1024-character X-ray CLI refusal bound."}
+  {:kind :manifest-consumes-evidence,
+   :finding
+   "Validated receipt-backed EDN rows supply measured runtime facts; declared policy remains policy."}
+  {:kind :temporal-identities,
+   :finding
+   "Sleep pins use owner, ordinal and purpose; line movement is diagnostic-only."}
+  {:kind :prewarm-repair,
+   :finding
+   "Compact require-change receipts retain envelope IDs; two actual refusal kinds are pinned; telemetry effect is :telemetry-append; admitted-file has a File return hint.",
+   :census-before 162,
+   :census-after 164,
+   :heuristic-limit
+   "The existing alias-prefix text census can misread similarly named effect data; it was not redesigned here."}
+  {:kind :timing-wrapper-defect,
+   :finding
+   "Initial date +%s%3N columns in checks.tsv are invalid and excluded from measurements. Final wrapper uses monotonic_ns."}
+  {:kind :lint-baseline,
+   :finding
+   "Seven warnings reproduce at 3383da9b; no warning was suppressed. Temporary namespace-layout errors and return-hint-placement warning were corrected.",
+   :evidence
+   ["lint-baseline-corrected.log"
+    "lint-baseline-expanded.log"
+    "lint-post-repair.log"
+    "lint-return-hint-final.log"]}],
+ :constraints
+ {:test-fast-attempts 1,
+  :prewarm-attempts 2,
+  :push false,
+  :merge false,
+  :shared-install false,
+  :probe-measurement false,
+  :routing-admission false},
+ :block-base "3383da9b",
+ :least_sure
+ ["Cross-platform passwd-home and realpath behavior is not certified by the Linux run."
+  "Check/publication races and writers outside the shared artifact boundary are outside coverage."
+  "The static refusal census retains a broad alias-prefix text heuristic."
+  "Round 3 source-edit transports are unknown where original receipts omit them."
+  "Enumeration of artifact-path-unresolvable is not behavioral proof of every pathological link topology."],
+ :measurements
+ {:kernel-warning
+  {:namespaces 2, :warnings 0, :receipt "kernel-warning-final.log"},
+  :bb-focused
+  {:test 70,
+   :pass 1122,
+   :fail 0,
+   :error 0,
+   :receipt "focused-bb-green.log"},
+  :sublime
+  {:measured-delta nil,
+   :numeric-estimate nil,
+   :status :qualitative-estimate-only,
+   :prospective-axes
+   [:authority
+    :diagnostic-stability
+    :evidence-fidelity
+    :maintenance-cost]},
+  :intent-audit {:ok true, :receipt "intent-audit-final-summary.log"},
+  :test-fast
+  {:receipt "test-fast-receipt.edn",
+   :exit 0,
+   :makespan-ms 29682,
+   :attempts 1,
+   :isolation-violations 0,
+   :skipped 0,
+   :snapshot :before-prewarm-repair,
+   :fail 0,
+   :runtime-sums-ms {:bb 7518, :jvm 34172},
+   :error 0,
+   :source-digest
+   "5157ff5e52dc16308f9e10d6b5423df4ea4cac6cbfb69ce723ee1d8f9e05e75e",
+   :pass 12632,
+   :lane-sum-ms 41690,
+   :test 1246},
+  :lint {:errors 0, :inherited-warnings 7, :new-warnings 0},
+  :probe
+  {:status :not-run,
+   :reason :preregistration-only,
+   :document "../round3/probe-measure-preregistration.md"},
+  :prewarm-final
+  {:gate-wall-ms 422819,
+   :receipt "prewarm-final-receipt.edn",
+   :suites
+   [{:suite "alias",
+     :state :passed,
+     :result {:test 187, :pass 3727, :fail 0, :error 0},
+     :measurements
+     {:makespan-ms 91759,
+      :lane-sums-ms {:battery 83769},
+      :runtime-sums-ms {:jvm 83769}},
+     :problems []}
+    {:suite "mcp",
+     :state :passed,
+     :result {:test 1418, :pass 16506, :fail 0, :error 0},
+     :measurements
+     {:makespan-ms 97614,
+      :lane-sums-ms {:fast 50656, :integration 70086},
+      :runtime-sums-ms {:bb 8625, :jvm 112117}},
+     :problems []}
+    {:suite "bb",
+     :state :passed,
+     :result {:test 903, :pass 8061, :fail 0, :error 0},
+     :measurements
+     {:makespan-ms 92864,
+      :lane-sums-ms {:fast 3572, :battery 247994},
+      :runtime-sums-ms {:bb 245307, :jvm 6259}},
+     :problems []}],
+   :stages
+   [{:target "admit-transaction-recovery-battery",
+     :exit 0,
+     :wall-ms 11222}
+    {:target "alias-migration-test", :exit 0, :wall-ms 91759}
+    {:target "mcp-test", :exit 0, :wall-ms 97614}
+    {:target "test-bb", :exit 0, :wall-ms 92864}
+    {:target "test-bb-diagnostic", :exit 0, :wall-ms 240305}
+    {:target "repository-hygiene", :exit 0, :wall-ms 2090}
+    {:target "intent-audit", :exit 0, :wall-ms 2210}],
+   :landing? false,
+   :problems [],
+   :exit 0,
+   :state :passed,
+   :command-wall-ms 424964,
+   :source-digest
+   "56fc87b089c2506439a734a08e17827bcefdd6799639f147cdeada3fd9c70d00",
+   :prewarm? true},
+  :prewarm-first
+  {:exit 2,
+   :state :failed,
+   :alias-failures 3,
+   :kernel-reflection-warnings 4,
+   :mcp-result {:test 1418, :pass 16506, :fail 0, :error 0},
+   :bb-result {:test 903, :pass 8061, :fail 0, :error 0},
+   :receipts "prewarm-red/"},
+  :jvm-focused
+  {:test 196,
+   :pass 3370,
+   :fail 0,
+   :error 0,
+   :receipt "focused-jvm-summary.edn"},
+  :repair-focused
+  {:test 3,
+   :pass 18,
+   :fail 0,
+   :error 0,
+   :receipt "prewarm-repair-focused-green.log"}},
+ :dogfood "dogfood.md",
+ :disagreements
+ ["Astra predicts JVM probe/native complete-wall ratio <=0.45; Fable predicts <=0.30. Neither was measured."],
+ :release-approved false,
+ :verified-source-digest
+ "56fc87b089c2506439a734a08e17827bcefdd6799639f147cdeada3fd9c70d00",
+ :phase-approval
+ "Round 3 explicitly pre-approved every remaining phase.",
+ :recorded-at "2026-09-12T21:44:13.301798565Z",
+ :commits
+ {:red ["d458160d" "91e9ebbf" "f468a954" "c8a4067e"],
+  :implementation ["dfa16a54" "579f00e7" "c22660f3" "2b71963c"],
+  :preregistration "6c5b1230",
+  :round4-repair-and-report :enclosing-git-commit},
+ :verdict :pass,
+ :owed
+ ["Independent adversarial review before release/merge of sandbox and path-boundary changes."
+  "Run the separate preregistered matched probe experiment before making a speed claim."],
+ :branch "fable/data-not-code-local",
+ :resumed-head "6c5b1230"}

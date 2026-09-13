@@ -1,0 +1,36 @@
+
+FAIL in (runtime-evidence-is-consumed-and-receipts-are-required) (lane_manifest_test.clj:252)
+the fold and manifest share the evidence admission value
+expected: (some? validate)
+  actual: (not (some? nil))
+
+FAIL in (runtime-evidence-is-consumed-and-receipts-are-required) (lane_manifest_test.clj:258)
+clj-surgeon.mcp-recovery-test :jvm
+expected: (= :missing-evidence-receipts (:error-type r))
+  actual: (not (= :missing-evidence-receipts nil))
+
+FAIL in (runtime-evidence-is-consumed-and-receipts-are-required) (lane_manifest_test.clj:259)
+expected: (= n (:namespace r))
+  actual: (not (= clj-surgeon.mcp-recovery-test nil))
+
+FAIL in (runtime-evidence-is-consumed-and-receipts-are-required) (lane_manifest_test.clj:258)
+clj-surgeon.mcp-recovery-test :bb
+expected: (= :missing-evidence-receipts (:error-type r))
+  actual: (not (= :missing-evidence-receipts nil))
+
+FAIL in (runtime-evidence-is-consumed-and-receipts-are-required) (lane_manifest_test.clj:259)
+expected: (= n (:namespace r))
+  actual: (not (= clj-surgeon.mcp-recovery-test nil))
+
+FAIL in (runtime-evidence-is-consumed-and-receipts-are-required) (lane_manifest_test.clj:260)
+measured facts have a data source, not a quoted source copy
+expected: (some? evidence-path)
+  actual: (not (some? nil))
+
+FAIL in (runtime-evidence-is-consumed-and-receipts-are-required) (lane_manifest_test.clj:268)
+the statistical fold must not manufacture source edits
+expected: (not (str/includes? source "*** Begin Patch"))
+  actual: (not (not true))
+{:test 1, :pass 0, :fail 7, :error 0}
+=> nil
+*======== user | clj ========*

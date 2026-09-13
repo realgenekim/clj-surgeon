@@ -1,0 +1,6 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+
+Testing clj-surgeon.mcp-read-request-normalization-test
+
+Ran 5 tests containing 42 assertions.
+0 failures, 0 errors.
