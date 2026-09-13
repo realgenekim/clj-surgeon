@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-hot-verify
   "Reload namespaces and run exact focused test Vars in one configured app JVM."
   (:require
+   [clj-surgeon.form-identity :as form-identity]
    [clj-surgeon.probe :as probe]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -198,52 +199,81 @@
                :elapsed_ms (/ (double (- (System/nanoTime) started))
                               1000000.0)})))))))
 ;; @spec BB-PROBE-003 -- one reload/test transaction in the warm MCP image.
+(defn probe-require-libs [source file]
+  (let [unparsed (fn [form]
+                   (throw (ex-info
+                            "Refusing a probe reporting green over a dependency it never reloaded. Classify the require form before probing."
+                            {:error-type :probe-require-unparsed :form form :file file})))]
+    (try
+      (mapv (comp symbol :lib)
+            (form-identity/source-require-entries
+              source {:platform :clj :clauses #{":require" ":require-macros" ":use"}
+                      :on-unparsed unparsed}))
+      (catch Exception e
+        (if (:error-type (ex-data e)) (throw e) (unparsed source))))))
+
+;; @spec BB-PROBE-003
+(defn probe-source-roots []
+  (->> (str/split (System/getProperty "java.class.path")
+         (re-pattern (java.util.regex.Pattern/quote java.io.File/pathSeparator)))
+       (map #(-> % io/file .getCanonicalFile))
+       (filter #(.isDirectory %))
+       (mapv #(.getPath %))))
+
+;; @spec BB-PROBE-003
+(defn probe-source-resource [n]
+  (let [rel (str/replace (str/replace (str n) "-" "_") "." "/")]
+    (some #(io/resource (str rel %) (clojure.lang.RT/baseLoader)) [".clj" ".cljc"])))
+
+;; @spec BB-PROBE-003
 (defn probe-reload-order [root target]
-  (let [of-string (requiring-resolve 'rewrite-clj.zip/of-string)
-        find-value (requiring-resolve 'rewrite-clj.zip/find-value)
-        next-node (requiring-resolve 'rewrite-clj.zip/next)
-        up (requiring-resolve 'rewrite-clj.zip/up)
-        sexpr (requiring-resolve 'rewrite-clj.zip/sexpr)
+  (let [roots (probe-source-roots)
         visited (atom #{})
         ordered (atom [])
+        external (atom #{})
         locate (fn [n]
-                 (let [rel (str (str/replace (str/replace (str n) "-" "_") "." "/") ".clj")]
-                   (some (fn [dir]
-                           (let [f (.getCanonicalFile (io/file root dir rel))]
-                             (when (and (.isFile f)
-                                        (str/starts-with? (.getPath f) (str root java.io.File/separator))) f)))
-                         ["src" "test" "libs/clj-splice/src"])))]
+                 (let [resource (probe-source-resource n)
+                       file (when (= "file" (some-> resource .getProtocol))
+                              (.getCanonicalFile (io/file (.toURI resource))))]
+                   (cond
+                     (= "jar" (some-> resource .getProtocol)) :external
+                     (and file (.isFile file)
+                          (some #(.startsWith (.toPath file) (.toPath (io/file %))) roots)) file
+                     (and (= n target) (nil? resource)) nil
+                     :else
+                     (throw (ex-info
+                              "Refusing a green verdict over code the image never reloaded. Resolve every dependency against the image classpath before probing."
+                              {:error-type :probe-dependency-unresolved
+                               :ns n :resolved-to (some-> resource str) :roots roots})))))]
     (letfn [(visit [n]
               (when-not (@visited n)
                 (swap! visited conj n)
                 (when-let [f (locate n)]
-                  (when (> (.length f) 8388608)
-                    (throw (ex-info "Reload source exceeds 8 MiB" {:error-type :probe-source-too-large})))
-                  (let [form (some-> (of-string (slurp f)) (find-value next-node 'ns) up sexpr)
-                        deps (for [clause (drop 2 form)
-                                   :when (and (seq? clause) (= :require (first clause)))
-                                   lib (rest clause)
-                                   :let [n (if (symbol? lib) lib (first lib))]
-                                   :when (symbol? n)] n)]
-                    (doseq [dep deps] (visit dep))
-                    (swap! ordered conj n)))))]
+                  (if (= :external f)
+                    (swap! external conj n)
+                    (do
+                      (when (> (.length f) 8388608)
+                        (throw (ex-info "Reload source exceeds 8 MiB" {:error-type :probe-source-too-large})))
+                      (let [deps (probe-require-libs (slurp f) (.getPath f))]
+                        (doseq [dep deps] (visit dep))
+                        (swap! ordered conj n)))))))]
       (let [source (locate target)
             authorized-roots ["test"]
             root-path (.toPath (.getCanonicalFile (io/file root)))]
-        (when-not source
+        (when (or (nil? source) (= :external source))
           (throw (ex-info "Test namespace is not a local .clj source" {:error-type :probe-namespace-not-found})))
         ;; Authorize the requested subject before visiting any dependency.
         ;; Canonical source paths prevent a test-root symlink escaping to src.
         (when-not (some #(.startsWith (.toPath source) (.resolve root-path ^String %))
                         authorized-roots)
           (throw (ex-info
-                  "Refusing a warm image executing production code on request, with no test to bound it. Supply a namespace under the authorized test roots."
-                  {:error-type :probe-target-not-a-test-namespace
-                   :requested target
-                   :source (str (.relativize root-path (.toPath source)))
-                   :authorized-roots authorized-roots}))))
+                   "Refusing a warm image executing production code on request, with no test to bound it. Supply a namespace under the authorized test roots."
+                   {:error-type :probe-target-not-a-test-namespace
+                    :requested target
+                    :source (str (.relativize root-path (.toPath source)))
+                    :authorized-roots authorized-roots}))))
       (visit target)
-      @ordered)))
+      (with-meta @ordered {:roots roots :external (count @external)}))))
 
 ;; @spec BB-PROBE-001
 ;; @spec BB-PROBE-002
@@ -254,12 +284,16 @@
           problem (requiring-resolve 'clj-surgeon.probe/request-problem)
           verdict (requiring-resolve 'clj-surgeon.probe/verdict)
           reloaded (atom [])
+          closure-expected (atom 0)
+          discovery (atom {})
           elapsed #(/ (double (- (System/nanoTime) started)) 1000000.0)]
       (try
         (if-let [error (problem image (fingerprint (:root image)) request)]
           (assoc error :elapsed_ms (elapsed))
           (let [target (symbol (:ns request))
                 order (probe-reload-order (:root image) target)]
+            (reset! discovery (select-keys (meta order) [:roots :external]))
+            (reset! closure-expected (count order))
             (doseq [n order]
               (require n :reload)
               (swap! reloaded conj (str n)))
@@ -267,12 +301,12 @@
             (let [run-tests (requiring-resolve 'clojure.test/run-tests)
                   summary (binding [*out* (java.io.StringWriter.) *err* (java.io.StringWriter.)]
                             (run-tests target))]
-              (verdict @reloaded summary (elapsed)))))
+              (merge (verdict @reloaded summary (elapsed) @closure-expected) @discovery))))
         (catch Exception e
           ;; forwarded-refusal-kind: relay probe-reload-order's ex-data;
           ;; its literal kinds are enumerated in this namespace.
           (if-let [kind (:error-type (ex-data e))]
             (merge (probe/refusal kind (.getMessage e))
-                   (select-keys (ex-data e) [:requested :source :authorized-roots])
+                   (select-keys (ex-data e) [:requested :source :authorized-roots :form :file :ns :resolved-to :roots])
                    {:reloaded @reloaded :elapsed_ms (elapsed)})
-            (assoc (verdict @reloaded {:error 1} (elapsed)) :error (.getMessage e))))))))
+            (assoc (merge (verdict @reloaded {:error 1} (elapsed) @closure-expected) @discovery) :error (.getMessage e))))))))

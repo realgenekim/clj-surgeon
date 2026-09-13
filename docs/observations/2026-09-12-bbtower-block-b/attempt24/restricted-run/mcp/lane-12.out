@@ -1,0 +1,5 @@
+lanes: --ns -- 2 namespace(s), home-isolated true
+
+Testing clj-surgeon.rename-alias-test
+
+Testing clj-surgeon.mission-candidate-race-test

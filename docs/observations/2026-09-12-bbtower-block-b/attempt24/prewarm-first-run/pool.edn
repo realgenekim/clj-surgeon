@@ -1,0 +1,1 @@
+{:phases [{:phase 0, :process-count 15, :wall-ms 25525} {:phase 1, :process-count 24, :wall-ms 133112}], :preparation {:command ["clojure" "-J-Xms64m" "-J-Xmx512m" "-Spath" "-M:clj-surgeon/test-deps"], :exit 0, :wall-ms 54}, :peak-worker-count 8, :wall-ms 158693}

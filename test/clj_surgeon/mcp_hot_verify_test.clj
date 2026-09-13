@@ -12,6 +12,215 @@
 (deftest passing-law
   (is (= 4 (+ 2 2))))
 
+(defn- with-image-roots [root dirs f]
+  (let [classpath (System/getProperty "java.class.path")
+        loader (clojure.lang.DynamicClassLoader. (clojure.lang.RT/baseLoader))
+        paths (mapv #(io/file root %) dirs)]
+    (try
+      (doseq [path paths] (.addURL loader (.toURL (.toURI path))))
+      (System/setProperty "java.class.path"
+                          (str/join java.io.File/pathSeparator (cons classpath paths)))
+      (with-bindings {clojure.lang.Compiler/LOADER loader} (f))
+      (finally (System/setProperty "java.class.path" classpath)))))
+
+;; @spec BB-PROBE-003 -- Sol round-five F1: live dev/experiments was omitted.
+(deftest probe-reloads-image-classpath-experiment-dependency
+  (let [root (.toFile (java.nio.file.Files/createTempDirectory
+                        "probe-classpath-" (make-array java.nio.file.attribute.FileAttribute 0)))
+        dependency (io/file root "dev/experiments/sol_round5/dependency.clj")
+        target (io/file root "test/sol_round5/probe_test.clj")
+        original-classpath (System/getProperty "java.class.path")
+        loader (clojure.lang.DynamicClassLoader. (clojure.lang.RT/baseLoader))]
+    (try
+      (io/make-parents dependency)
+      (io/make-parents target)
+      (doseq [path probe/identity-files]
+        (io/make-parents (io/file root path))
+        (io/copy (io/file path) (io/file root path)))
+      (doseq [dir ["test" "dev/experiments"]]
+        (.addURL loader (.toURL (.toURI (io/file root dir)))))
+      (System/setProperty "java.class.path"
+                          (str original-classpath java.io.File/pathSeparator
+                               (io/file root "test") java.io.File/pathSeparator
+                               (io/file root "dev/experiments")))
+      (spit dependency "(ns sol-round5.dependency) (def value 1)")
+      (spit target "(ns sol-round5.probe-test (:require [clojure.test :refer [deftest is]] [sol-round5.dependency :as d])) (deftest stale-check (is (= 1 d/value)))")
+      (with-bindings {clojure.lang.Compiler/LOADER loader}
+        (require 'sol-round5.probe-test :reload)
+        (is (= 1 (var-get (resolve 'sol-round5.dependency/value))))
+        (let [image (probe/image-identity (.getCanonicalPath root))
+              request {:ns "sol-round5.probe-test" :image image}]
+          (is (nil? (probe/request-problem image (probe/fingerprint (:root image)) request)))
+          (spit dependency "(ns sol-round5.dependency) (def value 2)")
+          (let [receipt (hot-verify/probe! image request)]
+            (println :sol-round5 receipt :loaded-value (var-get (resolve 'sol-round5.dependency/value)) :disk-value 2)
+            (is (= :probe-failed (:state receipt)))
+            (is (= 1 (:failures receipt)))
+            (is (= ["sol-round5.dependency" "sol-round5.probe-test"] (:reloaded receipt)))
+            (is (= 2 (var-get (resolve 'sol-round5.dependency/value))))
+            (is (= 2 (:closure-expected receipt)))
+            (is (= "jar" (.getProtocol (io/resource "clojure/test.clj"))))
+            (is (= 1 (:external receipt)))
+            (is (= (->> (str/split (System/getProperty "java.class.path")
+                          (re-pattern (java.util.regex.Pattern/quote java.io.File/pathSeparator)))
+                        (map io/file)
+                        (filter #(.isDirectory %))
+                        (mapv #(.getCanonicalPath %)))
+                   (:roots receipt))))))
+      (finally
+        (System/setProperty "java.class.path" original-classpath)
+        (doseq [n '[sol-round5.probe-test sol-round5.dependency]]
+          (when (find-ns n) (remove-ns n))
+          (dosync (alter @#'clojure.core/*loaded-libs* disj n)))
+        (doseq [file (reverse (file-seq root))] (io/delete-file file))))))
+
+;; @spec BB-PROBE-003 -- refusal is preflight, including already-loaded code.
+(deftest probe-refuses-dependencies-outside-image-roots
+  (let [root (.toFile (java.nio.file.Files/createTempDirectory
+                        "probe-unresolved-" (make-array java.nio.file.attribute.FileAttribute 0)))
+        dependency (io/file root "outside/sol_unresolved/dependency.clj")
+        target (io/file root "test/sol_unresolved/probe_test.clj")]
+    (try
+      (io/make-parents dependency)
+      (io/make-parents target)
+      (doseq [path probe/identity-files]
+        (io/make-parents (io/file root path))
+        (io/copy (io/file path) (io/file root path)))
+      (spit dependency "(ns sol-unresolved.dependency) (def value 1)")
+      (spit target "(ns sol-unresolved.probe-test (:require [sol-unresolved.dependency]))")
+      (with-image-roots root ["test"]
+        (fn []
+          ;; The loader can see this file, but it is outside the image's roots.
+          (.addURL ^clojure.lang.DynamicClassLoader @clojure.lang.Compiler/LOADER
+                   (.toURL (.toURI (io/file root "outside"))))
+          (require 'sol-unresolved.probe-test :reload)
+          (let [image (probe/image-identity (.getCanonicalPath root))
+                request {:ns "sol-unresolved.probe-test" :image image}]
+            (doseq [case [:outside :missing]]
+              (when (= :missing case) (io/delete-file dependency))
+              (let [reloads (atom [])
+                    original require
+                    receipt (with-redefs [clojure.core/require
+                                          (fn [& args]
+                                            (when (some #{:reload} args) (swap! reloads conj args))
+                                            (apply original args))]
+                              (hot-verify/probe! image request))]
+                (is (some? (find-ns 'sol-unresolved.dependency)))
+                (is (= :probe-dependency-unresolved (:error-type receipt)) case)
+                (is (= 'sol-unresolved.dependency (:ns receipt)))
+                (is (= (when (= :outside case) (str (.toURL (.toURI dependency))))
+                       (:resolved-to receipt)))
+                (is (= (hot-verify/probe-source-roots) (:roots receipt)))
+                (is (= [] (:reloaded receipt)))
+                (is (= [] @reloads)))))))
+      (finally
+        (doseq [n '[sol-unresolved.probe-test sol-unresolved.dependency]]
+          (when (find-ns n) (remove-ns n))
+          (dosync (alter @#'clojure.core/*loaded-libs* disj n)))
+        (doseq [file (reverse (file-seq root))] (io/delete-file file))))))
+
+;; @spec BB-PROBE-003 -- Sol F1, round-four review of e3ffc6a7.
+(deftest probe-reloads-prefix-list-dependency
+  (let [root (.toFile (java.nio.file.Files/createTempDirectory
+                        "probe-prefix-" (make-array java.nio.file.attribute.FileAttribute 0)))
+        dependency (io/file root "src/foo/bar.clj")
+        target (io/file root "test/demo/probe_test.clj")]
+    (try
+      (io/make-parents dependency)
+      (io/make-parents target)
+      (spit dependency "(ns foo.bar) (def value 1)")
+      (spit target "(ns demo.probe-test (:require (foo [bar :as b])))")
+      (with-image-roots root ["src" "test"]
+        #(is (= '[foo.bar demo.probe-test]
+                (hot-verify/probe-reload-order (.getCanonicalPath root) 'demo.probe-test))))
+      (finally
+        (doseq [file (reverse (file-seq root))] (io/delete-file file))))))
+
+;; @spec BB-PROBE-003
+(deftest probe-require-shape-matrix
+  (doseq [[source expected]
+          [["(ns demo (:require (foo [bar :as b])))" '[foo.bar]]
+           ["(ns demo (:require (foo (bar [baz :as b]))))" '[foo.bar.baz]]
+           ["(ns demo (:require [foo [bar :as b] baz]))" '[foo.bar foo.baz]]
+           ["(ns demo (:require [foo.bar :as b] foo.baz))" '[foo.bar foo.baz]]
+           ["(ns demo (:require [\"foo.bar\" :as b] \"foo.baz\"))" '[foo.bar foo.baz]]
+           ["(ns demo (:require-macros (foo [bar :as b])) (:use foo.baz))" '[foo.bar foo.baz]]
+           ["(ns demo (:require #?(:cljs [wrong.lib] :clj [foo.bar])))" '[foo.bar]]
+           ["(ns demo #?(:clj (:require foo.bar) :cljs (:require wrong.lib)))" '[foo.bar]]
+           ["(ns demo (:require #?@(:clj [foo.bar [foo.baz]] :cljs [wrong.lib])))" '[foo.bar foo.baz]]
+           ["(ns demo #?@(:clj [(:require foo.bar) (:use foo.baz)]))" '[foo.bar foo.baz]]
+           ["(ns demo (:require #?(:cljs wrong.lib :default foo.bar)))" '[foo.bar]]
+           ["(ns demo (:require #?(:cljs wrong.lib) #_[ignored.lib] foo.bar :reload))" '[foo.bar]]
+           ["(ns demo (:require ^:meta [foo.bar :as b]))" '[foo.bar]]
+           ["(ns demo (:import java.io.File))" []]
+           ["'(ns decoy) #_(ns discarded) (ns demo (:require foo.bar))" '[foo.bar]]]]
+    (is (= expected (hot-verify/probe-require-libs source "fixture.cljc")) source))
+  (doseq [form ["{:unknown foo}" "42" "[]" "[foo.bar :as]" "(foo {:unknown bar})" "#?@(:clj foo.bar)" "#?(:clj)" "#?(:clj foo.bar :cljs)"]]
+    (let [data (try
+                 (hot-verify/probe-require-libs (str "(ns demo (:require " form "))") "fixture.clj")
+                 (catch Exception e (ex-data e)))]
+      (is (= :probe-require-unparsed (:error-type data)) form)
+      (is (= "fixture.clj" (:file data)))
+      (is (string? (:form data))))))
+
+;; @spec BB-PROBE-003 -- execute the green-that-lies failure, not only its order.
+(deftest probe-observes-changed-prefix-dependency-and-refuses-unknown-before-reload
+  (let [root (.toFile (java.nio.file.Files/createTempDirectory
+                        "probe-stale-" (make-array java.nio.file.attribute.FileAttribute 0)))
+        dependency (io/file root "src/probe_fixture/dependency.clj")
+        target (io/file root "test/probe_fixture/check_test.clj")
+        loader (clojure.lang.DynamicClassLoader. (clojure.lang.RT/baseLoader))
+        classpath (System/getProperty "java.class.path")]
+    (try
+      (io/make-parents dependency)
+      (io/make-parents target)
+      (doseq [path probe/identity-files]
+        (io/make-parents (io/file root path))
+        (io/copy (io/file path) (io/file root path)))
+      (.addURL loader (.toURL (.toURI (io/file root "src"))))
+      (.addURL loader (.toURL (.toURI (io/file root "test"))))
+      (System/setProperty "java.class.path"
+                          (str/join java.io.File/pathSeparator
+                                    [classpath (io/file root "src") (io/file root "test")]))
+      (spit dependency "(ns probe-fixture.dependency) (def value 1)")
+      (spit target "(ns probe-fixture.check-test (:require [clojure.test :refer [deftest is]] (probe-fixture [dependency :as d]))) (deftest stale-check (is (= 1 d/value)))")
+      (let [image (probe/image-identity (.getCanonicalPath root))
+            request {:ns "probe-fixture.check-test" :image image}]
+        (with-bindings {clojure.lang.Compiler/LOADER loader}
+          (require 'probe-fixture.check-test :reload)
+          (is (= 1 (var-get (resolve 'probe-fixture.dependency/value))))
+          (spit dependency "(ns probe-fixture.dependency) (def value 2)")
+          (let [receipt (hot-verify/probe! image request)]
+            (is (= :probe-failed (:state receipt)))
+            (is (= [1 1 1] ((juxt :tests :assertions :failures) receipt)))
+            (is (= 2 (:closure-expected receipt)))
+            (is (= ["probe-fixture.dependency" "probe-fixture.check-test"] (:reloaded receipt))))
+          (spit dependency "(ns probe-fixture.dependency (:require {:unknown foo}))")
+          (let [reloads (atom [])
+                receipt (with-redefs [clojure.core/require (fn [& args] (swap! reloads conj args))]
+                          (hot-verify/probe! image request))]
+            (is (= :probe-require-unparsed (:error-type receipt)))
+            (is (= "{:unknown foo}" (:form receipt)))
+            (is (= (.getCanonicalPath dependency) (:file receipt)))
+            (is (= [] (:reloaded receipt)))
+            (is (= [] @reloads)))))
+      (finally
+        (System/setProperty "java.class.path" classpath)
+        (doseq [n '[probe-fixture.check-test probe-fixture.dependency]]
+          (when (find-ns n) (remove-ns n))
+          (dosync (alter @#'clojure.core/*loaded-libs* disj n)))
+        (doseq [file (reverse (file-seq root))] (io/delete-file file))))))
+
+;; @spec BB-PROBE-003
+(deftest probe-receipt-retains-expected-closure-after-reload-failure
+  (let [image (probe/image-identity ".")
+        receipt (with-redefs [hot-verify/probe-reload-order (constantly '[foo.bar demo.probe-test])
+                              clojure.core/require (fn [& _] (throw (Exception. "reload failed")))]
+                  (hot-verify/probe! image {:ns "demo.probe-test" :image image}))]
+    (is (= :probe-failed (:state receipt)))
+    (is (= 2 (:closure-expected receipt)))
+    (is (= [] (:reloaded receipt)))))
+
 ;; @spec BB-PROBE-003 -- Sol F3, round-two review of 09486a6f.
 (deftest probe-authorizes-the-requested-test-target-before-reload
   (let [image (probe/image-identity ".")
@@ -121,8 +330,7 @@
              (hot-verify/probe-reload-order root 'clj-surgeon.forms-test)))
       (is (= :probe-namespace-not-found
              (try (hot-verify/probe-reload-order root 'absent.probe-test)
-                  (catch Exception e (:error-type (ex-data e))))))))
-  )
+                  (catch Exception e (:error-type (ex-data e)))))))))
 
 ;; --- Hot verification terminates on a terminal status, not on its ceiling ---
 ;; Requirements: docs/intent/hot-verification/hot-verification-specs.md

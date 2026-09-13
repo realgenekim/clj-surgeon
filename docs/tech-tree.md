@@ -1,5 +1,21 @@
 # clj-surgeon tech tree
 
+Probe classpath repair (Sol round-five F1): a literal root list omitted a live
+dev/experiments dependency and returned green over value 1 after disk changed
+to 2. Attempt25 derives roots from the image classpath, resolves via the require
+classloader, counts jar dependencies and refuses unresolved dependencies before
+reload. Red and verification evidence live in
+`docs/observations/2026-09-12-bbtower-block-b/attempt25/REPORT.md`.
+This is a correctness repair, with no performance admission claim.
+
+Probe closure repair (Sol round-four F1): the partial probe ns reader silently
+omitted prefix-list dependencies. Attempt24 commits the exact red reproduction,
+reuses and extends the shared form-identity parser, refuses unclassified require
+forms before reload, and exposes the expected closure count independently of
+completed reloads. Evidence and gate verdict live in
+`docs/observations/2026-09-12-bbtower-block-b/attempt24/REPORT.md`.
+This is a correctness repair, with no performance admission claim.
+
 Block B attempt 21 closes Sol F3: a valid image identity no longer authorizes
 a production probe target. The canonical target must resolve under `test/`
 before dependency traversal, with a typed refusal and zero reloads otherwise.

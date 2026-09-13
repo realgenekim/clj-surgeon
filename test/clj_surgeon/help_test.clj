@@ -32,7 +32,8 @@
                       ":omitted" "verification_complete is absent"]]
           (is (str/includes? help text))))
       (is (= {:state :probe-passed :proof_pending [:landing-gate]
-              :reloaded ["example-test"] :tests 2 :assertions 3 :failures 0 :elapsed_ms 12.5}
+              :reloaded ["example-test"] :closure-expected 1
+              :tests 2 :assertions 3 :failures 0 :elapsed_ms 12.5}
              (verdict ["example-test"] {:test 2 :pass 3 :fail 0 :error 0} 12.5)))
       (doseq [summary [{:test 1 :fail 1} {:test 1 :error 1} {:test 0 :pass 0}]]
         (is (= :probe-failed (:state (verdict [] summary 0)))))

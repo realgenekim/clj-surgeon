@@ -1,0 +1,6 @@
+standard-clj fix v0.29.0
+
+✓ /src/clj_surgeon/mcp_hot_verify.clj [12.3ms]
+F /test/clj_surgeon/mcp_hot_verify_test.clj [10.33ms]
+
+All 2 files formatted with Standard Clojure Style 👍 [30.17ms]

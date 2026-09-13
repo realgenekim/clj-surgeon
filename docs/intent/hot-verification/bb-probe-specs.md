@@ -8,7 +8,7 @@ includes probe as the third verb, discovered from the CLI operation catalog:
 every boolean in a passed probe verdict requires a driven literal-false seam.
 A real `probe/verdict` with tests executed and no failures omits
 verification_complete; no constant boolean is fabricated by the witness.
-Receipt keys (EDN): `#{:state :proof_pending :reloaded :tests :assertions :failures :elapsed_ms}`
+Receipt keys (EDN): `#{:state :proof_pending :reloaded :closure-expected :roots :external :tests :assertions :failures :elapsed_ms}`
 This is the complete untruncated verdict shape for passed and failed test runs;
 a caught execution exception may additionally carry :error. The shape witness
 parses this statement and compares it to an executed successful probe receipt.
@@ -20,8 +20,26 @@ Zero tests is failed. Misreading: zero failures without executed tests is proof.
 
 - [x] **BB-PROBE-002**: When worktree root, startup generation or classpath/server
 fingerprint differs, the probe shall refuse as stale-probe-image before reload.
-Malformed namespace/request data shall refuse without evaluation. Misreading:
-the port or a surviving descriptor alone identifies the correct image.
+Malformed namespace/request data shall refuse without evaluation.
+A bounded request is not a safe request: `clojure.edn`'s reader recurses per
+container AND per prefix form, so 8,192 nested `[` fits the 8,192-character
+bound and overflows the stack. Before reading any request, the server shall
+count reader-recursive openers over the request characters -- `(`, `[`, `{`
+(including `#{`), a tagged literal, `^` metadata and `#_` discard, skipping
+openers inside a string, a character literal or a comment -- and refuse a
+request deeper than the declared `probe/request-depth-bound` (64, against a
+closed request's own depth of two) as `:probe-request-too-deep`, carrying
+`:bound`, the measured `:depth` and the request `:bytes`, before any parse.
+The servlet's request boundary shall be Throwable, not Exception: a
+StackOverflowError is not an Exception, and one that escapes kills the thread
+of the shared warm image while its client reads zero bytes as a verdict.
+Any throwable at that boundary refuses as `:probe-request-unreadable`,
+carrying `:throwable-class` and no stack. Both halves hold together: the bound
+keeps the parse shallow, and the Throwable boundary holds when the bound is
+wrong. Misreadings: the port or a surviving descriptor alone identifies the
+correct image; a character bound also bounds parse depth; counting `[` alone
+enumerates the class; an escaping error is a server-side detail because the
+HTTP status still says 200.
 
 - [x] **BB-PROBE-003**: When an identity-admitted probe requests a namespace,
 the warm MCP image shall authorize its resolved canonical source under the
@@ -32,7 +50,26 @@ repository-relative source, authorized roots and an empty reload list.
 Target refusal keys (EDN): `#{:state :error-type :error :proof_pending :requested :source :authorized-roots :reloaded :elapsed_ms}`
 An absent local source retains `:probe-namespace-not-found`. For an authorized
 target, serially reload its local dependency closure before running that namespace;
-dependencies may resolve under `src`, `test`, and `libs/clj-splice/src`.
+Local source roots shall be derived from the image's actual `java.class.path`:
+canonical directory entries in classpath order, never a literal root list.
+Resolve each required namespace through the image classloader. A source file
+under a local classpath root enters the reload order; a jar entry is external,
+skipped and counted once per namespace in `:external`. A dependency with no
+classpath resource (including a namespace already loaded in the image), or a
+file outside every root, refuses as `:probe-dependency-unresolved` with
+`:ns`, `:resolved-to` (resource URL or nil), `:roots`, and zero reloads.
+Execution receipts list the canonical roots used in `:roots` for comparison
+with the image classpath. Discovery must finish before the first reload.
+The shared ns parser shall expand prefix lists (including nested lists), vector
+libspecs, bare symbols and strings in `:require`, `:require-macros` and `:use`,
+selecting the `:clj` reader-conditional branch (or reader default). Any dependency
+form it cannot classify shall refuse as `:probe-require-unparsed`, carrying
+`:form` and `:file`, before any reload. Successful and failed execution receipts
+shall carry `:closure-expected`, the number of namespaces in the complete local
+closure computed before reload, independently of the completed `:reloaded` list.
+Bounded HTTP projections shall retain that count. Misreading: a missing prefix
+namespace means its children are external; a green target reload proves that
+already-loaded dependencies were refreshed.
 Oversized source retains its typed refusal. The refusal text names the prevented
 native failure: a warm image executing production code on request, with no test
 to bound it.

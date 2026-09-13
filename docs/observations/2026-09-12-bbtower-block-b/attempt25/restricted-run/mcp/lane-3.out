@@ -1,0 +1,32 @@
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.mcp-extraction-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+Testing clj-surgeon.mcp-program-tool-test
+
+Testing clj-surgeon.mcp-recovery-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.mission-git-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

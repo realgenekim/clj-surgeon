@@ -1,0 +1,20 @@
+
+Testing clj-surgeon.helper-extraction-test
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.require-change-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.battery-ledger-test
+
+Testing clj-surgeon.failure-report-test

@@ -39,13 +39,16 @@
     :else nil))
 
 ;; @spec BB-PROBE-001
-(defn verdict [reloaded summary elapsed]
-  (let [failures (+ (:fail summary 0) (:error summary 0))]
-    {:state (if (and (pos? (:test summary 0)) (zero? failures)) :probe-passed :probe-failed)
-     :proof_pending [cold-gate]
-     :reloaded reloaded :tests (:test summary 0)
-     :assertions (+ (:pass summary 0) failures) :failures failures
-     :elapsed_ms elapsed}))
+(defn verdict
+  ([reloaded summary elapsed]
+   (verdict reloaded summary elapsed (count reloaded)))
+  ([reloaded summary elapsed closure-expected]
+   (let [failures (+ (:fail summary 0) (:error summary 0))]
+     {:state (if (and (pos? (:test summary 0)) (zero? failures)) :probe-passed :probe-failed)
+      :proof_pending [cold-gate]
+      :reloaded reloaded :closure-expected closure-expected :tests (:test summary 0)
+      :assertions (+ (:pass summary 0) failures) :failures failures
+      :elapsed_ms elapsed})))
 
 ;; @spec BB-PROBE-004 -- the whole UTF-8 encoding, before the servlet writer.
 (def response-byte-bound 16384)
@@ -62,7 +65,7 @@
             total (count names)
             cause (:error-type result)
             base (cond-> (assoc (select-keys result [:state :proof_pending :tests :assertions
-                                                     :failures :elapsed_ms])
+                                                     :failures :elapsed_ms :closure-expected])
                                 :error-type :probe-response-truncated
                                 :reloaded-count total)
                    (and (keyword? cause) (<= (size (pr-str cause)) 128)) (assoc :cause cause)
@@ -77,7 +80,7 @@
               candidate
               (recur (dec n)))))))))
 
-(defn read-bounded [reader limit]
+(defn read-bounded-text [reader limit]
   (let [buf (char-array (inc limit))
         n (loop [offset 0]
             (let [n (.read ^java.io.Reader reader buf offset (- (alength buf) offset))]
@@ -85,7 +88,105 @@
                     (= (alength buf) (+ offset n)) (inc limit)
                     :else (recur (+ offset n)))))]
     (when (> n limit) (throw (ex-info "Probe message exceeds bound" {:error-type :probe-message-too-large})))
-    (edn/read-string (String. buf 0 n))))
+    (String. buf 0 n)))
+
+(defn read-bounded [reader limit]
+  (edn/read-string (read-bounded-text reader limit)))
+
+;; @spec BB-PROBE-002
+;; A closed probe request nests two deep: {:ns "..." :image {...}}. The bound
+;; is not a guess at the reader's stack limit; it is the shape's own ceiling
+;; with room, so the reader's limit is never the thing under test.
+(def request-depth-bound 64)
+
+;; @spec BB-PROBE-002
+(defn request-recursion-depth
+  "A conservative upper bound on how deep clojure.edn's reader will recurse
+   over TEXT, counted over characters BEFORE any parse.
+
+   The reader recurses per container AND per prefix form -- a tagged literal,
+   metadata, or a discard reads the value that follows it recursively -- so
+   counting `[` alone under-reads the class. Openers inside a string, a
+   character literal or a comment open nothing and are skipped. Prefixes are
+   counted cumulatively and never discharged: over-counting refuses a request
+   that would have parsed, which is a bounded typed refusal; under-counting
+   returns a StackOverflowError, which is not."
+  [^String text]
+  (let [n (.length text)]
+    (loop [i 0 open 0 peak 0 prefixes 0]
+      (if (>= i n)
+        (+ peak prefixes)
+        (let [c (.charAt text i)
+              next-c (when (< (inc i) n) (.charAt text (inc i)))]
+          (cond
+            (= c \")
+            (recur (loop [j (inc i)]
+                     (cond (>= j n) j
+                           (= \\ (.charAt text j)) (recur (+ j 2))
+                           (= \" (.charAt text j)) (inc j)
+                           :else (recur (inc j))))
+                   open peak prefixes)
+
+            (= c \;)
+            (recur (loop [j (inc i)]
+                     (if (or (>= j n) (= \newline (.charAt text j))) j (recur (inc j))))
+                   open peak prefixes)
+
+            ;; A character literal: the escaped character may itself be a
+            ;; delimiter (\( ), and the rest of a named character is inert.
+            (= c \\) (recur (+ i 2) open peak prefixes)
+
+            (or (= c \() (= c \[) (= c \{))
+            (recur (inc i) (inc open) (max peak (inc open)) prefixes)
+
+            (or (= c \)) (= c \]) (= c \}))
+            (recur (inc i) (dec open) peak prefixes)
+
+            (= c \^) (recur (inc i) open peak (inc prefixes))
+
+            ;; #{ is a set: its { is counted above. #_ discards and #tag read
+            ;; the next value recursively.
+            (= c \#)
+            (if (and next-c (or (= \_ next-c) (Character/isLetter ^char next-c)))
+              (recur (+ i 2) open peak (inc prefixes))
+              (recur (inc i) open peak prefixes))
+
+            :else (recur (inc i) open peak prefixes)))))))
+
+;; @spec BB-PROBE-002
+(defn read-bounded-request
+  "Read one bounded probe request, refusing a recursion-deep request BEFORE
+   any parse. A bounded but deeply nested request -- 8,192 nested `[` fits the
+   8,192-character bound -- overflows the reader's stack, and a
+   StackOverflowError is not an Exception: it crosses the servlet's boundary,
+   kills the thread of the SHARED warm image, and leaves the client reading
+   zero bytes as a verdict."
+  [reader limit]
+  (let [text (read-bounded-text reader limit)
+        depth (request-recursion-depth text)]
+    (when (> depth request-depth-bound)
+      (throw (ex-info "Probe request nests deeper than the pre-parse bound"
+                      {:error-type :probe-request-too-deep
+                       :bound request-depth-bound
+                       :depth depth
+                       :bytes (alength (.getBytes text "UTF-8"))})))
+    (edn/read-string text)))
+
+;; @spec BB-PROBE-002
+(defn request-refusal
+  "One typed, bounded refusal for ANY throwable raised while serving a probe
+   request. The second half of the same fence: if the pre-parse bound is ever
+   wrong, or a reader recurses through a shape nobody enumerated, the request
+   still leaves as a named refusal rather than as zero wire bytes. The
+   throwable's class name is reported; its stack is not."
+  [^Throwable t]
+  (let [data (ex-data t)]
+    (if (instance? Exception t)
+      (merge (refusal (or (:error-type data) :invalid-probe-request) (.getMessage t))
+             (select-keys data [:bound :depth :bytes]))
+      (assoc (refusal :probe-request-unreadable
+                      "The probe request could not be read; the reader failed outside the exception boundary.")
+             :throwable-class (.getName (class t))))))
 
 (defn cli! [{:keys [ns image-file]}]
   (try

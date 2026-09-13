@@ -7,11 +7,28 @@ one image with test dependencies and writes `.clj-surgeon/probe.edn`.
 image identity and calls the hot-verification implementation through `/probe`.
 The existing nREPL verification profile remains available for its existing callers.
 
+Probe dependency discovery uses the shared form-identity namespace parser,
+selecting the JVM reader branch. That parser expands recursive prefix lists,
+vector libspecs, bare and string libraries, and require/macro/use clauses.
+An unclassified dependency form refuses before any reload, with the source file
+and exact form. The closure is computed completely before execution; its count
+is retained as `:closure-expected` independently of the completed reload list.
+This prevents Sol round-four F1: green tests using an already-loaded stale
+dependency silently omitted by a partial ns reader.
+
+Round-five F1 removes the remaining literal source-root list. Discovery takes
+canonical directory entries from the running image's java.class.path and resolves
+source resources through the same RT/baseLoader used by require. Files beneath
+those roots are local, jar resources are external (counted distinctly), and
+unresolved or outside-root dependencies refuse before any reload. The completed
+order carries roots and external count to the receipt alongside the independent
+closure count. A loaded namespace alone is never evidence of external source.
+
 BB-PROBE-003 separately authorizes the requested target's canonical source under
 the repository `test/` root before traversing dependencies. A production target
 with a valid image identity receives `:probe-target-not-a-test-namespace` and
 zero reloads; a missing source retains `:probe-namespace-not-found`. Authorized
-tests still reload production dependencies from `src` and `libs/clj-splice/src`.
+tests still reload production dependencies from every local image-classpath root.
 The target refusal identifies the requested symbol, resolved source and authorized
 roots. The executable spec/receipt witness covers that refusal shape as well as
 successful probe verdicts. This closes Sol F3 without narrowing dependency roots.

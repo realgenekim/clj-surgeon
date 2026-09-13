@@ -99,8 +99,8 @@
             kept (count (:reloaded parsed))]
         (is (<= (bytes wire) 16384))
         (is (= :probe-response-truncated (:error-type parsed)))
-        (is (= (select-keys original [:state :proof_pending :tests :assertions :failures :elapsed_ms])
-               (select-keys parsed [:state :proof_pending :tests :assertions :failures :elapsed_ms])))
+        (is (= (select-keys original [:state :proof_pending :tests :assertions :failures :elapsed_ms :closure-expected])
+               (select-keys parsed [:state :proof_pending :tests :assertions :failures :elapsed_ms :closure-expected])))
         (is (= (count names) (:reloaded-count parsed)))
         (is (<= kept 64))
         (is (= (subvec names 0 kept) (:reloaded parsed)))
@@ -142,6 +142,197 @@
       (is (= [2 3 0] ((juxt :tests :assertions :failures) receipt)))
       (is (= :probe-response-truncated (:error-type receipt)))
       (is (= 5000 (+ (count (:reloaded receipt)) (get-in receipt [:truncated :omitted] 0)))))))
+
+;; @spec BB-PROBE-002
+;; @spec BB-PROBE-004
+(deftest probe-servlet-preserves-the-request-bound-refusal
+  (let [out (java.io.StringWriter.)
+        writer (java.io.PrintWriter. out)
+        adapter (fn [interface methods]
+                  (java.lang.reflect.Proxy/newProxyInstance
+                    (.getClassLoader ^Class interface) (into-array Class [interface])
+                    (reify java.lang.reflect.InvocationHandler
+                      (invoke [_ _ method _]
+                        (get methods (.getName ^java.lang.reflect.Method method))))))
+        request (adapter jakarta.servlet.http.HttpServletRequest
+                         {"getMethod" "POST"
+                          "getReader" (java.io.BufferedReader.
+                                        (java.io.StringReader. (apply str (repeat 8193 "x"))))})
+        response (adapter jakarta.servlet.http.HttpServletResponse {"getWriter" writer})
+        servlet ((ns-resolve 'clj-surgeon.mcp-http-server 'probe-servlet) {})]
+    (.service ^jakarta.servlet.http.HttpServlet servlet
+              ^jakarta.servlet.ServletRequest request ^jakarta.servlet.ServletResponse response)
+    (let [receipt (edn/read-string (str out))]
+      (is (= :probe-refused (:state receipt)))
+      (is (= :probe-message-too-large (:error-type receipt)))
+      (is (= [:landing-gate] (:proof_pending receipt))))))
+
+(defn- servlet-adapter
+  [^Class interface methods]
+  (java.lang.reflect.Proxy/newProxyInstance
+    (.getClassLoader interface) (into-array Class [interface])
+    (reify java.lang.reflect.InvocationHandler
+      (invoke [_ _ method _]
+        (get methods (.getName ^java.lang.reflect.Method method))))))
+
+(defn- drive-probe-servlet
+  "POST one request body through the REAL probe servlet entrance and report
+   what crossed it: the throwable that escaped (nil when none did), the bytes
+   actually written to the response writer, and the EDN forms in them."
+  [image ^String body]
+  (let [out (java.io.StringWriter.)
+        writer (java.io.PrintWriter. out)
+        request (servlet-adapter
+                  jakarta.servlet.http.HttpServletRequest
+                  {"getMethod" "POST"
+                   "getReader" (java.io.BufferedReader. (java.io.StringReader. body))})
+        response (servlet-adapter
+                   jakarta.servlet.http.HttpServletResponse {"getWriter" writer})
+        servlet ((ns-resolve 'clj-surgeon.mcp-http-server 'probe-servlet) image)
+        escaped (try
+                  (.service ^jakarta.servlet.http.HttpServlet servlet
+                            ^jakarta.servlet.ServletRequest request
+                            ^jakarta.servlet.ServletResponse response)
+                  nil
+                  (catch Throwable t t))
+        wire (str out)
+        eof (Object.)]
+    {:escaped escaped
+     :wire wire
+     :wire-bytes (alength (.getBytes wire "UTF-8"))
+     :forms (when (seq wire)
+              (let [reader (java.io.PushbackReader. (java.io.StringReader. wire))]
+                (vec (take 3 (take-while #(not (identical? eof %))
+                                         (repeatedly #(edn/read {:eof eof} reader)))))))}))
+
+(defn- declared-depth-bound
+  "The declared pre-parse nesting bound. Absent at a tip that has no bound
+   yet: the fuzz below then runs against this assumption and reports what
+   actually escapes, which is what a red oracle is for."
+  []
+  (or (some-> (requiring-resolve 'clj-surgeon.probe/request-depth-bound) deref) 64))
+
+(defn- on-small-stack
+  "Run f on a thread with a 512 KiB stack -- Sol's `-Xss512k` reproduction,
+   bound to one thread so the oracle is deterministic inside the gate's JVM."
+  [f]
+  (let [result (atom nil)
+        thread (Thread. nil
+                        ^Runnable (fn [] (reset! result (f)))
+                        "probe-nesting-oracle-512k"
+                        (* 512 1024))]
+    (.start thread)
+    (.join thread)
+    @result))
+
+;; Every shape clojure.edn's reader recurses through: the four containers, and
+;; the three prefix forms (tagged literal, metadata, discard) that recurse into
+;; the value that follows them. `0` is the innermost value for all of them.
+(def ^:private probe-nesting-shapes
+  {:vector ["[" "]"] :list ["(" ")"] :set ["#{" "}"] :map ["{:a " "}"]
+   :tagged ["#a/b " ""] :meta ["^:m " ""] :discard ["#_" ""]})
+
+(def ^:private probe-nesting-depths
+  ;; Small, past the reader's actual recursion limit under a 512 KiB stack
+  ;; (Sol's escapes began at 1,024), and past the 8,192-character request bound.
+  [1 8 64 256 1024 2048 4096 8192 16384])
+
+;; @spec BB-PROBE-002
+;; @spec BB-PROBE-004
+;; The class, not the instance: a bounded but malformed EDN request whose
+;; parser throws a Throwable OUTSIDE Exception. At the tip, 8,192 nested `[`
+;; through this entrance produced {:escaped java.lang.StackOverflowError,
+;; :caught-by-servlet-exception-boundary false, :wire-bytes 0} -- the client
+;; reads zero bytes, and the thread of the SHARED warm image dies, as a
+;; verdict. Every shape below is one member of that class.
+(deftest probe-servlet-refuses-every-nested-edn-shape-without-escaping
+  (let [image (probe/image-identity ".")
+        depth-bound (declared-depth-bound)
+        byte-bound 8192
+        typed-kinds #{:probe-request-too-deep :probe-message-too-large
+                      :probe-request-unreadable :invalid-probe-request
+                      :stale-probe-image}]
+    (is (some? (requiring-resolve 'clj-surgeon.probe/request-depth-bound))
+        "The pre-parse nesting bound must be declared at the request boundary")
+    (doseq [depth probe-nesting-depths
+            [shape [open close]] (sort-by key probe-nesting-shapes)]
+      (testing (str shape " nested " depth " deep")
+        (let [body (str (apply str (repeat depth open)) "0"
+                        (apply str (repeat depth close)))
+              driven (on-small-stack #(drive-probe-servlet image body))
+              receipt (first (:forms driven))]
+          (is (nil? (:escaped driven))
+              (str "A throwable escaped the probe servlet: "
+                   (some-> (:escaped driven) class .getName)))
+          (is (pos? (:wire-bytes driven)) "A client must never read zero bytes")
+          (is (<= (:wire-bytes driven) 16384))
+          (is (= 1 (count (:forms driven)))
+              "Exactly one EDN value may reach the client")
+          (is (= :probe-refused (:state receipt)))
+          (is (contains? typed-kinds (:error-type receipt))
+              (str "Untyped refusal kind " (pr-str (:error-type receipt))))
+          (is (= [:landing-gate] (:proof_pending receipt)))
+          (cond
+            (> (count body) byte-bound)
+            (is (= :probe-message-too-large (:error-type receipt)))
+
+            (> depth depth-bound)
+            (do (is (= :probe-request-too-deep (:error-type receipt)))
+                (is (= depth-bound (:bound receipt)))
+                (is (and (integer? (:depth receipt)) (> (:depth receipt) depth-bound)))
+                (is (= (alength (.getBytes body "UTF-8")) (:bytes receipt))))
+
+            :else
+            (is (= :invalid-probe-request (:error-type receipt))
+                "A request inside the bound must still reach the request contract")))))))
+
+;; @spec BB-PROBE-002
+;; The bound counts openers, so it must not count them inside a string, and a
+;; well-formed request must survive it: a fence that refuses everything proves
+;; nothing.
+(deftest probe-request-depth-bound-reads-only-real-openers
+  (let [image (probe/image-identity ".")
+        depth-bound (declared-depth-bound)
+        cases {(pr-str {:ns (apply str (repeat 400 "[")) :image image})
+               :invalid-probe-request
+               (pr-str {:ns "clj-surgeon.forms-test" :image (assoc image :generation "other")})
+               :stale-probe-image
+               (str "[" (apply str (repeat (dec depth-bound) "[0 ")) "0"
+                    (apply str (repeat (dec depth-bound) "]")) "]")
+               :invalid-probe-request}]
+    (doseq [[body expected] cases]
+      (testing (subs body 0 (min 48 (count body)))
+        (let [driven (on-small-stack #(drive-probe-servlet image body))
+              receipt (first (:forms driven))]
+          (is (nil? (:escaped driven)))
+          (is (pos? (:wire-bytes driven)))
+          (is (= expected (:error-type receipt))))))))
+
+;; @spec BB-PROBE-002
+;; Belt and braces for the same class: even if the pre-parse bound is wrong,
+;; or a future reader recurses through a shape nobody enumerated, the servlet's
+;; boundary must be Throwable, not Exception, and must still write one bounded
+;; typed receipt naming what failed -- with no stack.
+(deftest probe-servlet-converts-any-throwable-into-a-typed-refusal
+  (let [image (probe/image-identity ".")
+        body (pr-str {:ns "clj-surgeon.forms-test" :image image})]
+    (doseq [thrown [(StackOverflowError. "deep")
+                    (AssertionError. "assert")
+                    (Error. "raw error")]]
+      (testing (.getName (class thrown))
+        (let [driven (with-redefs [hot-verify/probe! (fn [_ _] (throw thrown))]
+                       (drive-probe-servlet image body))
+              receipt (first (:forms driven))]
+          (is (nil? (:escaped driven))
+              (str "A throwable escaped the probe servlet: "
+                   (some-> (:escaped driven) class .getName)))
+          (is (pos? (:wire-bytes driven)))
+          (is (= 1 (count (:forms driven))))
+          (is (= :probe-refused (:state receipt)))
+          (is (= :probe-request-unreadable (:error-type receipt)))
+          (is (= (.getName (class thrown)) (:throwable-class receipt)))
+          (is (not (re-find #"(?i)at clojure\.|\.java:|\$fn__" (:wire driven)))
+              "A refusal must not carry a stack"))))))
 
 ;; @spec BB-PROBE-001
 (deftest probe-spec-receipt-shape-matches-an-executed-probe
