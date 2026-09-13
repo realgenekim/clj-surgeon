@@ -101,6 +101,24 @@
           (System/exit (if (every? #(zero? (:exit (read-string %))) results) 0 1)))))))
 
 (when (= ["--self-test"] *command-line-args*)
+  ;; Sol F1, 2026-09-13: generate the dependency-depth class, then mutate
+  ;; every edge. Fixture declarations are data; no fixture namespace is loaded.
+  (doseq [depth (range 1 9)]
+    (let [names (mapv #(symbol (str "fixture.n" %)) (range (inc depth)))
+          leaf (peek names)
+          nodes (mapv (fn [i n]
+                        {:namespace n :test? (= n leaf)
+                         :requires (dependencies
+                                     (if (zero? i) (list 'ns n)
+                                       (list 'ns n (list :require [(names (dec i)) :as 'dep]))))})
+                      (range) names)
+          nodes (conj nodes {:namespace 'unrelated-test :test? true :requires #{}})
+          selected (set (map :namespace (impact nodes #{(first names)})))]
+      (println "Chain depth" depth "selected" selected)
+      (assert (= #{leaf} selected) (str "Every leaf selected at depth " depth))
+      (doseq [edge (range 1 (inc depth))]
+        (assert (empty? (impact (assoc-in nodes [edge :requires] #{}) #{(first names)}))
+                (str "Cut edge " edge " disconnects depth " depth)))))
   (let [nodes [{:namespace 'source :requires #{}}
                {:namespace 'middle :requires #{'source}}
                {:namespace 'far :requires #{'middle}}
