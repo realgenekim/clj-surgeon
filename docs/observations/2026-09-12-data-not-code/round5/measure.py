@@ -53,7 +53,9 @@ def main():
     assert output.is_relative_to('/var/tmp/forge/probe-measure-fx')
     output.mkdir(parents=True, exist_ok=True)
     subject = git(checkout, 'rev-parse', 'HEAD')
-    assert not git(checkout, 'status', '--porcelain'), 'checkout must start clean'
+    # The prescribed PROBE warm setup writes its identity in this root directory.
+    status_paths = ['--', '.', ':(top,exclude).clj-surgeon/'] if args.arm == 'PROBE' else []
+    assert not git(checkout, 'status', '--porcelain', *status_paths), 'checkout must start clean'
     runner_hash = digest(Path(__file__).read_bytes())
     manifest_hash = digest((HERE / 'tasks/manifest.json').read_bytes())
     for row in TASKS:
