@@ -6318,3 +6318,11 @@ green in 394 s, git-head 839b7c53. Owed, named by Opus: the CLIENT side of the s
 (probe/cli! catches Exception only; read-bounded has no nesting bound) — a hostile server
 could overflow the bb client; next finding, not a regression. Eighteenth check-only prewarm
 (packet e52c0f37) at 839b7c53 on bb-rewrite-tower-land; ship round 9 follows.
+
+## 2026-09-13T00:17:26Z — ship round 9 SEALED: candidate ca749adb (839b7c53 onto a15531ee)
+
+Eighteenth check-only prewarm (packet e52c0f37) exit 0 at 839b7c53, receipt bound. Ship run
+20260913T001531Z sealed ca749adb (tree bbad025a), Sol on the round-9 brief (his class-named
+F1 answered by the oracle-first attempt 26; the client-side member of the class declared
+owed), battery on fable/battery-receipt-839b7c53 (pre-created), fast lane beside. The
+receipt commit df86ecda is an ancestor of this tip, so battery-fresh sees 8c542ede's pass.
