@@ -6502,3 +6502,18 @@ scratch base from java.io.tmpdir; an explicitly bound state-home substitute is t
 launcher context and an envelope root for that invocation (my ruling); narrow oracle,
 test-fast, a counted battery alone, prewarm. Two of Sol's GOs tonight have been undone by
 the battery beside them; both times the battery was right.
+
+## 2026-09-13T05:24:45Z — data-not-code round 9 GO: the oracle now runs in the gate's environment and reproduced the battery's red before the fix; counted battery green alone; prewarm packet at ce08cb01
+
+Tip ce08cb01, pushed; report published as `2026-09-13-data-not-code-round9-report-astra.md`.
+Red first (30c2a285): diff-impact refuses any CLJ_SURGEON_*_TMP or ARTIFACT_ROOT override,
+creates a fresh /var/tmp/forge/clj-surgeon-suite-<pid>-<hex> root exactly as the battery
+does, and reproduced the counted battery's red: 1 failure + 74 errors in txn-journal-test,
+the other 81 namespaces green. Fixes (98b69b82, ce08cb01): every test scratch base from
+java.io.tmpdir (the /home/forge/tmp literal gone); the state-home substitute is
+policy-bounded registration (admitted against current roots, then registered in the
+invocation context: under TMPDIR succeeds, outside policy refused). Narrow oracle after:
+1,693 tests / 25,136 assertions / 0 / 0. test-fast once; the counted battery ALONE:
+1,178 / 18,667 / 0 / 0 in 174 s; prewarm seven stages green; fast and prewarm share one
+source digest over 484 runner inputs. Packet dff8609d is the check-only prewarm; ship
+round 3 follows.
