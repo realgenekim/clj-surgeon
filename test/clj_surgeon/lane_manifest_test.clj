@@ -421,6 +421,28 @@
       (is (or (nil? refusal) unsupported-jvm-only?)
           (pr-str refusal)))))
 
+;; @spec STATE-HOME-013
+(deftest generated-portability-census-agrees-with-all-inventories
+  (let [root "docs/observations/2026-09-12-bbtower-block-b/attempt22/"
+        controls (edn/read-string (slurp (str root "portability-controls.edn")))
+        markdown (slurp (str root "portability-census.md"))
+        header (Long/parseLong (second (re-find #"All (\d+) assigned namespaces" markdown)))
+        rows (re-seq #"(?m)^\| (clj-surgeon\.[^ |]+) \| ([^|]+) \| ([^|]+) \| [^\n]*? \| ([a-z-]+)(?::[^\n]*)? \|$" markdown)
+        names (map (comp symbol second) rows)
+        census (edn/read-string (slurp "test/clj_surgeon/deftest_census.edn"))]
+    (is (= header (count controls) (count rows)))
+    (is (= (set names) (set (keys controls)) (set (keys lm/namespace-runtimes))))
+    (is (= (count names) (count (set names))))
+    (is (= (set (keys lm/manifest))
+           (set (map (comp symbol namespace) census))))
+    (doseq [[_ n runtime cadence classification] rows]
+      (let [n (symbol n)]
+        (is (= (lm/namespace-runtimes n) (edn/read-string runtime)))
+        (is (= (or (lm/lane-of n) :dedicated) (edn/read-string cadence)))
+        (is (= (:classification (controls n)) (keyword classification)))))
+    (is (= (frequencies (map :classification (vals controls)))
+           (edn/read-string (second (re-find #"Summary: (.*)" markdown)))))))
+
 (deftest every-test-namespace-on-disk-is-accounted-for
   (testing "disk -> manifest: a new test namespace cannot silently never run"
     (let [unaccounted (sort (remove (fn [s]

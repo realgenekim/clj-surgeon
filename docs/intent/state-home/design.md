@@ -26,3 +26,21 @@ Verification: named affected namespaces, serialized lint, fixed-point diff-impac
 and each namespace it selects. No merge, push or performance claim is included.
 
 The registered requirements and witnesses are in [state-home-specs.md](state-home-specs.md).
+
+Round 5 closes four classes with enumerating oracles before implementation.
+Canonical root admission excludes the workspace first, then checks the existing
+envelope without extending it. The same exclusion applies to the final descriptor
+destination, including explicit overrides and redirected descendants. Publication
+uses a same-directory temporary file, complete write, fsync, and atomic rename;
+no failure path truncates or restores the old file. One function var supplies the
+injectable stage seam. Native exception class/message mapping remains bounded.
+All local probe resolution and reads occur inside a filesystem receipt boundary,
+before transport. Paths remain data, bounded at the receipt crossing with explicit
+truncation metadata. The generated portability header derives its population from
+the same rows as its table; a single independent reading witness compares every
+inventory. Existing battery and fast namespaces own these tests and their lanes.
+
+The second envelope-writer recurrence is invisible to the prior Landlock oracle:
+the checkout is deliberately writable. The Cartesian Make matrix is its class
+oracle. The registered red-first cycle covers all four requested classes without
+further phase approval; evidence stays in the external Round 5 report.
