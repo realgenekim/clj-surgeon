@@ -130,8 +130,8 @@
   {:type :probe-state-not-writable
    :class :filesystem
    :native_failure "The state destination rejects directory creation or descriptor publication."
-   :promise "Publication refuses with the path and native errno category."
-   :native_method "Use the reported path and native errno to restore permissions, space or quota at an admitted state destination; retry make warm after repairing the publication failure."
+   :promise "Publication refuses with the original path and native errno category; cleanup-failure names the temporary path and cleanup errno if removal also fails."
+   :native_method "Use the reported path and native errno to restore permissions, space or quota at an admitted state destination; if cleanup-failure is present, repair its reported temporary-path error and remove any remaining temporary file; retry make warm after repairing the publication failure."
    :minimal_reproducer "Publish under a read-only state directory."
    :existing_check "probe-state/write-image!; STATE-HOME-007"
    :owner "probe"

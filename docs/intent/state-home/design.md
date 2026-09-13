@@ -67,3 +67,16 @@ process-group disappearance, then deletes. Cleanup retries once after 250 ms,
 records the original error in the cell row, and propagates a second failure.
 The complete battery must pass below 1,800,000 ms serial-equivalent with margin;
 a namespace allowance or fixed-point impact run cannot establish that gate.
+
+
+Round 8 (Sol SH-ROUND2-01) enumerates throw-before and throw-after for each
+real publication stage and registered errno. Failure cleanup attempts removal
+without relying on create returning successfully. A cleanup failure supplements
+the original refusal with cleanup-failure (temporary path and native errno);
+it never replaces the original kind, path or errno. No new refusal kind is needed.
+The atomic move remains the commit boundary: failures before it preserve prior
+bytes; an injected error after it reports failure with the new descriptor already
+published. Rollback after a completed atomic move would introduce a restore race.
+The cleanup oracle also crosses every primary errno with every cleanup errno and
+both removal timings. No residue is allowed when removal succeeds; a failed
+removal must be named, and the fixture removes its deliberately retained residue.

@@ -25,3 +25,16 @@ a namespace allowance or fixed-point impact run cannot establish that gate.
 Reduced namespace control: 116,659 ms, 13 tests / 201 assertions, no isolation
 violations or leaks. The measured-baseline allowance is 240,000 ms (~2×),
 subject to the independent complete battery gate.
+
+
+Round 8 (Sol SH-ROUND2-01) enumerates throw-before and throw-after for each
+real publication stage and registered errno. Failure cleanup attempts removal
+without relying on create returning successfully. A cleanup failure supplements
+the original refusal with cleanup-failure (temporary path and native errno);
+it never replaces the original kind, path or errno. No new refusal kind is needed.
+The atomic move remains the commit boundary: failures before it preserve prior
+bytes; an injected error after it reports failure with the new descriptor already
+published. Rollback after a completed atomic move would introduce a restore race.
+The cleanup oracle also crosses every primary errno with every cleanup errno and
+both removal timings. No residue is allowed when removal succeeds; a failed
+removal must be named, and the fixture removes its deliberately retained residue.

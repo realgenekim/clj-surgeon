@@ -64,10 +64,11 @@
 
 ;; @spec STATE-HOME-011
 (defn publish-stage!
-  "One rebindable I/O seam; publication is the last fallible operation.
+  "One rebindable I/O seam; publication is the final forward operation.
    ATOMIC_MOVE preserves the prior name if publication fails. No restore race."
   [stage temporary target bytes]
   (case stage
+    :cleanup (Files/deleteIfExists temporary)
     :create (Files/createFile temporary (make-array FileAttribute 0))
     :write (with-open [out (java.io.FileOutputStream. (.toFile temporary))]
              (.write out ^bytes bytes))
@@ -85,27 +86,35 @@
   ;; Admission is outside the I/O catch: an envelope refusal is never relabeled
   ;; as a permissions error, and mkdir cannot happen before destination admission.
   (let [target (io/file (artifacts/admit-target! path :probe-image))
-        temporary (.toPath (io/file (.getParentFile target) (str ".probe-" (random-uuid) ".tmp")))
-        created? (volatile! false)]
+        temporary (.toPath (io/file (.getParentFile target) (str ".probe-" (random-uuid) ".tmp")))]
     (try
       (Files/createDirectories (.toPath (.getParentFile target)) (make-array FileAttribute 0))
       (let [bytes (.getBytes (str (pr-str descriptor) "\n") "UTF-8")]
         (publish-stage! :create temporary (.toPath target) bytes)
-        (vreset! created? true)
         (publish-stage! :write temporary (.toPath target) bytes)
         (when-not (= (alength bytes) (Files/size temporary))
           (throw (java.io.IOException. "Short write")))
         (publish-stage! :sync temporary (.toPath target) bytes)
-        (publish-stage! :publish temporary (.toPath target) bytes)
-        (vreset! created? false))
+        (publish-stage! :publish temporary (.toPath target) bytes))
       (str target)
-      (catch java.io.IOException error
-        (throw (ex-info "Warm image state destination is not writable"
-                        (assoc (native-failure error path)
-                               :error-type :probe-state-not-writable)
-                        error)))
-      (finally
-        (when @created? (Files/deleteIfExists temporary))))))
+      (catch Exception error
+        ;; A stage can perform its side effect and then throw. Cleanup must not
+        ;; depend on create returning, nor mask the original refusal if it fails.
+        (let [cleanup-failure (try
+                                (publish-stage! :cleanup temporary (.toPath target) nil)
+                                nil
+                                (catch Exception cleanup
+                                  (native-failure cleanup temporary)))]
+          (if (instance? java.io.IOException error)
+            (throw (ex-info "Warm image state destination is not writable"
+                            (cond-> (assoc (native-failure error path)
+                                           :error-type :probe-state-not-writable)
+                              cleanup-failure (assoc :cleanup-failure cleanup-failure))
+                            error))
+            (if cleanup-failure
+              (throw (ex-info (.getMessage error)
+                              (assoc (ex-data error) :cleanup-failure cleanup-failure) error))
+              (throw error))))))))
 
 ;; @spec STATE-HOME-009
 ;; @spec STATE-HOME-010

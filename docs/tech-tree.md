@@ -1026,3 +1026,12 @@ Round 7 state-home: packet 68bacdec battery found a kill/delete teardown race
 and 1,851,865 ms serial-equivalent budget violation. Split 72 admission classes
 into :fast and five Make boundaries into :battery; wait for process-group exit
 before cleanup. Verification and measured costs: /var/tmp/forge/statehome-fx/REPORT.md, Round 7.
+
+
+State-home Round 8: Sol SH-ROUND2-01 found that the Round-5 stage seam replaced
+create, so the oracle could never observe a created temporary file followed by
+an error. The 48-cell before/after publication matrix reproduces six residue
+failures at db23914d. Cleanup now attempts removal on failure and retains both
+native diagnostics when removal fails; 72 additional cleanup cells enumerate
+primary errno × cleanup errno × removal timing. Atomic move is still the commit
+boundary. Verification and costs: /var/tmp/forge/statehome-fx/REPORT.md, Round 8.
