@@ -6517,3 +6517,7 @@ invocation context: under TMPDIR succeeds, outside policy refused). Narrow oracl
 1,178 / 18,667 / 0 / 0 in 174 s; prewarm seven stages green; fast and prewarm share one
 source digest over 484 runner inputs. Packet dff8609d is the check-only prewarm; ship
 round 3 follows.
+
+### 2026-09-13T05:38:01Z — data-not-code ship round 3 SEALED
+
+Ship dir `/var/tmp/forge/ship/20260913T053427Z-ce08cb015850/`, tip ce08cb01 → candidate b33bf3b0 onto 759974c7, prewarm receipt git-head verified. Sol fence review started 05:34:29Z (pid 2936533), ship pid 2935210, waiter bound to the pid. Verdict file `docs/observations/data-not-code.md` in the fence worktree.
