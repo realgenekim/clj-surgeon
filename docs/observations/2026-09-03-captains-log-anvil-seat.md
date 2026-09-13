@@ -6401,3 +6401,18 @@ command, and the document governs. Instrument defect for amendment 2; not the pr
 
 52/52 cells with complete receipts: 48 accepted, 2 typed refusals, 2 unknown. The 50%
 floor is met for the day. Window 7 → 8. Index stays 5 until the envelope refusal lands.
+
+## 2026-09-13T02:13:05Z — data-not-code round 6 GO-WITH-OWED: the diff-impact oracle found the regression first, then the fixes; round 7 merges the landed trunk
+
+Tip eb6f59b4 (report published as `2026-09-13-data-not-code-round6-report-astra.md`, the
+80-namespace impact table beside it). Class first: `bash test/diff-impact <base> <out> <label>`
+is now a committed, lane-independent entrance that reads ns declarations as data,
+enumerates direct and one-intermediate dependents of every changed src file, and runs
+them sequentially in fresh JVMs under the suite lock. Before any patch it ran 80
+namespaces: 79 green and exactly txn-journal-test red with the verifier's seven errors.
+Fix: a hard link is refused only when its inode is shared with a path outside the
+envelope; the journal's in-envelope createLink protocol is admitted; an outside-link
+plant still red. N2 and N3 closed; the preregistration's refusal bet made falsifiable
+and the interval bias named. After: 80/80 green, test-fast once, prewarm first attempt
+green. Round 7 (Astra, pid 2861818): merge trunk 759974c7 semantically, rerun the oracle
+over both sides' changes, gates; evidence uncommitted this time.
