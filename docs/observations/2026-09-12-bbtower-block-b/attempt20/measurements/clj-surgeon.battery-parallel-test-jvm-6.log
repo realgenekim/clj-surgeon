@@ -1,0 +1,12 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Ran 41 tests containing 275 assertions.
+0 failures, 0 errors.
+{:runtime :jvm, :namespace clj-surgeon.battery-parallel-test, :elapsed-ms 965, :result {:test 41, :pass 275, :fail 0, :error 0, :type :summary}, :tmpdir "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-1231426-00315486", :home "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-1231426-00315486/home"}

@@ -32,10 +32,10 @@
    of `test/run_all.clj` -- the namespaces babashka actually loads, computed
    here from their `ns` forms rather than assumed.
 
-   This namespace runs in the BB lane on purpose: the runtime that cares is the
-   one doing the checking. A bb namespace is declared in `test/run_all.clj` and
-   carries NO `{:lane ...}` ns metadata: that key names a JVM lane, and
-   `lane-manifest-test` reads it as a claim to be in `lane-manifest/manifest`."
+   This namespace uses bb on purpose: the runtime that cares does the checking.
+   Its :fast cadence is independent of runtime and is also declared in the
+   manifest; historical bb inventory membership is not a budget exemption."
+  {:lane :fast}
   (:require
    [clj-surgeon.jvm-error :as jvm]
    [clojure.edn :as edn]

@@ -1,0 +1,18 @@
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.cljc.analyze-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.failure-report-test

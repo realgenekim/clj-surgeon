@@ -1,0 +1,6 @@
+
+Testing clj-surgeon.mission-plain-forms-test
+
+Ran 8 tests containing 53 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.mission-plain-forms-test, :runtime :bb, :mode "test", :started-at "2026-09-12T19:11:53.092589169Z", :elapsed-ms 79, :status :passed, :result {:test 8, :pass 53, :fail 0, :error 0, :type :summary}}

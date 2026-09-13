@@ -1,0 +1,157 @@
+test/gate_memory_one_reader_test.sh:22:work=$(mktemp -d "${TMPDIR:-/var/tmp}/gate-memory-one-reader-XXXXXX")
+test/clj_surgeon/battery_parallel_runner.clj:26:   write-up reports at ~4x on 4 shards. This repository does not use kaocha
+test/clj_surgeon/battery_parallel_runner.clj:200:       TMPDIR (or /var/tmp), since bb ignores JAVA_TOOL_OPTIONS.
+test/clj_surgeon/battery_parallel_runner.clj:453:                           ["/tmp" "/dev/shm"]))
+test/clj_surgeon/battery_parallel_runner.clj:454:                 "/var/tmp"
+test/clj_surgeon/tmp_leak_support.clj:3:   runners. Anvil's /tmp filled to 96% of its inodes from 82,210 leaked
+test/clj_surgeon/tmp_leak_support.clj:17:        JAVA_TOOL_OPTIONS=\"-Djava.io.tmpdir=/var/tmp/forge\" \\
+test/clj_surgeon/tmp_leak_support.clj:19:      still prints /tmp. Only a literal `-D` flag passed to `bb` itself
+test/clj_surgeon/tmp_leak_support.clj:20:      changes it (`bb -Djava.io.tmpdir=/var/tmp/forge ...`). So
+test/clj_surgeon/tmp_leak_support.clj:21:      ~/bin/suite-run's env alone does not protect `bb test/run_all.clj`.
+test/clj_surgeon/tmp_leak_support.clj:37:      SHARED base (or, for bb without the fix in (1), literally /tmp). Both
+test/clj_surgeon/tmp_leak_support.clj:96:(def tmpfs? pc/tmpfs?)
+test/clj_surgeon/tmp_leak_support.clj:301:     ;; @spec TEST-ISO-006 -- a subprocess reads $HOME, never the JVM
+test/clj_surgeon/tmp_leak_support.clj:304:     isolate-home? (assoc "HOME" (str (isolated-home root))))))
+test/clj_surgeon/tmp_leak_support.clj:311:   usable real disk. It fails CLOSED: a RAM path by name (/tmp, /dev/shm), a
+test/clj_surgeon/tmp_leak_support.clj:472:  `(let [~sym (.toFile (fs/create-temp-dir {:prefix ~prefix}))]
+test/clj_surgeon/tmp_leak_support.clj:474:       ~@body
+test/clj_surgeon/tmp_leak_support.clj:476:         (try (fs/delete-tree ~sym) (catch Throwable _# nil))))))
+test/direct_cclsp_client_audit_test.sh:5:fixture=$(mktemp -d "${TMPDIR:-/var/tmp}/direct-cclsp-audit.XXXXXX")
+test/clj_kondo_admission_path_test.sh:4:test_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-kondo-path.XXXXXX")
+test/clj_kondo_admission_path_test.sh:16:  HOME="$test_home" \
+test/clj_kondo_admission_path_test.sh:23:HOME="$test_home" \
+test/clj_kondo_admission_path_test.sh:103:hygiene_worktree=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-kondo-hygiene.XXXXXX")
+test/cclsp_start_test.sh:4:test_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-cclsp-start.XXXXXX")
+test/cclsp_start_test.sh:57:  CCLSP_HOME="$cclsp_home" \
+test/gate_slot.py:232:# The `/var/tmp` fallback fits, but only a box with NO TMPDIR ever reached it,
+test/gate_slot.py:236:# `/tmp/csg-<uid>` is 12 or 13 bytes; on macOS `/tmp` is a symlink to
+test/gate_slot.py:237:# `/private/tmp` and is DISK-BACKED, so the suite's no-RAM-temp rule is not
+test/gate_slot.py:269:    return Path('/tmp') / ('csg-%d' % uid)
+test/gate_slot.py:282:    mode, because /tmp is world-writable and sticky and another user must not
+test/gate_slot.py:290:        Path('/var/tmp') / ('clj-surgeon-gate-%d' % uid)
+test/gate_slot.py:314:    # /tmp is world-writable and sticky, so the short root has to PROVE it is
+test/cclsp_launch_path_test.sh:4:test_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-cclsp-path.XXXXXX")
+test/cclsp_launch_path_test.sh:50:HOME="$test_home" \
+test/cclsp_launch_path_test.sh:57:  CCLSP_HOME="$cclsp_home" \
+test/tmp_leak_ratchet_test.sh:10:# java.io.tmpdir under /tmp when findmnt could not answer).
+test/tmp_leak_ratchet_test.sh:20:FX=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-tmpleak-witness.XXXXXX")
+test/tmp_leak_ratchet_test.sh:91:# 3a. The original mistake: TMPDIR=/tmp, findmnt present and answering.
+test/tmp_leak_ratchet_test.sh:92:run_probe tmpfs-literal TMPDIR=/tmp
+test/tmp_leak_ratchet_test.sh:93:[ "$PROBE_EXIT" -eq 97 ] || fail "3a: TMPDIR=/tmp must exit 97, got $PROBE_EXIT"
+test/tmp_leak_ratchet_test.sh:94:grep -q 'tmp-refused:' "$FX/tmpfs-literal.out" \
+test/tmp_leak_ratchet_test.sh:96:grep -q 'clj-surgeon-suite-' "$FX/tmpfs-literal.out" \
+test/tmp_leak_ratchet_test.sh:101:run_probe arm-b TMPDIR=/tmp PATH="$FX/shim:$PATH"
+test/tmp_leak_ratchet_test.sh:102:[ "$PROBE_EXIT" -eq 97 ] || fail "3b (arm B): findmnt unavailable + TMPDIR=/tmp must exit 97, got $PROBE_EXIT"
+test/tmp_leak_ratchet_test.sh:108:# 3f. Neither mount source can answer AND the base is /tmp: only the literal
+test/tmp_leak_ratchet_test.sh:110:# mounts table still answers "tmpfs" for /tmp when findmnt is shimmed away.)
+test/tmp_leak_ratchet_test.sh:111:run_probe name-only TMPDIR=/tmp PATH="$FX/shim:$PATH" \
+test/tmp_leak_ratchet_test.sh:113:[ "$PROBE_EXIT" -eq 97 ] || fail "3f: /tmp must be refused BY NAME when no mount source can answer, got $PROBE_EXIT"
+test/tmp_leak_ratchet_test.sh:232:env -u NODE_DISABLE_COMPILE_CACHE TMPDIR="$FX/realdisk" bb test/tmp_leak_probe.clj alpha beta --node-cache-env >"$FX/bb-args.out" 2>&1
+test/tmp_leak_ratchet_test.sh:259:  bb "-Djava.io.tmpdir=$NODE_ROOT" test/tmp_leak_probe.clj > "$FX/node-cache-refusal.out" 2>&1
+test/tmp_leak_ratchet_test.sh:299:# 7a. A killed parent. ~/bin/suite-run jobs are routinely wrapped in
+test/tmp_leak_ratchet_test.sh:371:  run_bounded 45 env TMPDIR=/tmp java -cp "$CP" clojure.main -m "$ns" >"$out_file" 2>&1
+test/tmp_leak_ratchet_test.sh:377:    || fail "9: $ns ran (exit $rc) with TMPDIR=/tmp instead of refusing"
+test/tmp_leak_ratchet_test.sh:387:# MCP-OP-TMPHYG-010: no gate writes to a hard-coded /tmp path
+test/tmp_leak_ratchet_test.sh:393:# Prose mentions of /tmp are not matches; only a literal /tmp/<name> used as a
+test/tmp_leak_ratchet_test.sh:395:# round two: that shape takes /tmp whenever TMPDIR is unset, which is every
+test/tmp_leak_ratchet_test.sh:396:# shell without seat-tmp-guard.sh. Default to /var/tmp instead.
+test/tmp_leak_ratchet_test.sh:406:hardcoded=$(grep -nE '(^|[^A-Za-z0-9_.-])/tmp/[A-Za-z0-9_.]|TMPDIR:-/tmp\}' Makefile test/*.sh bench/*.sh || true)
+test/tmp_leak_ratchet_test.sh:409:  fail "10: hard-coded /tmp write targets remain in Makefile / test / bench shell gates"
+test/tmp_leak_ratchet_test.sh:417:# their harnesses. Its default was `$(or $(TMPDIR),/var/tmp)`, which is right
+test/tmp_leak_ratchet_test.sh:419:# layer propagated /tmp happily and only the Clojure layer refused, so a
+test/tmp_leak_ratchet_test.sh:432:# file for a hard-coded /tmp/<name> write target, and a literal RAM subpath
+test/tmp_leak_ratchet_test.sh:435:ram_tmp_root=/tmp
+test/tmp_leak_ratchet_test.sh:442:    /tmp|/tmp/*|/dev/shm|/dev/shm/*)
+test/tmp_leak_ratchet_test.sh:449:[ "$got" = "/var/tmp" ] \
+test/tmp_leak_ratchet_test.sh:450:  || fail "11: an unset TMPDIR must default SELF_TEST_TMP to /var/tmp, got $got"
+test/tmp_leak_ratchet_test.sh:457:got=$(self_test_tmp "/var/tmp/forge")
+test/tmp_leak_ratchet_test.sh:458:echo "--- SELF_TEST_TMP with TMPDIR=/var/tmp/forge -> $got ---"
+test/tmp_leak_ratchet_test.sh:459:[ "$got" = "/var/tmp/forge" ] \
+test/tmp_leak_ratchet_test.sh:460:  || fail "11: a real-disk TMPDIR (/var/tmp/forge) must be honoured, got $got"
+test/relation_causal_cohort_runner_test.sh:6:test_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-relation-coordinator-test.XXXXXX")
+test/performance_regression_sentinel_runner_test.sh:6:test_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-performance-sentinel-runner-test.XXXXXX")
+test/performance_regression_sentinel_intent_test.sh:17:tmp_root=$(mktemp -d "${TMPDIR:-/var/tmp}/clj-surgeon-sentinel-intent.XXXXXX")
+test/mcp_heap_config_test.sh:13:if [ -n "${JAVA_HOME:-}" ]; then
+test/mcp_heap_config_test.sh:14:  expected_java="$JAVA_HOME/bin/java"
+test/mcp_heap_config_test.sh:24:lifecycle_state_dir="${TMPDIR:-/var/tmp}/clj-surgeon-mcp-lifecycle-test"
+test/mcp_heap_config_test.sh:52:  MCP_JAVA_HOME='/opt/test-java' \
+test/mcp_heap_config_test.sh:55:printf '%s\n' "$override_output" | grep -Fq -- 'JAVA_HOME="/opt/test-java"'
+test/performance_regression_sentinel_intent_self_test.sh:7:fixture=$(mktemp -d "${TMPDIR:-/var/tmp}/sentinel-intent-self-test.XXXXXX")
+Makefile:1:CLJ_SURGEON_HOME := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+Makefile:2:CLI_DEST ?= $(HOME)/bin/clj-surgeon
+Makefile:3:CODEX_HOME ?= $(HOME)/.codex
+Makefile:4:CLAUDE_HOME ?= $(HOME)/.claude
+Makefile:5:INSTALL_ROOT ?= $(HOME)/.local/share/clj-surgeon
+Makefile:7:SKILL_SOURCE := $(CLJ_SURGEON_HOME)skills/clj-surgeon
+Makefile:8:AGENT_ROUTING_SOURCE := $(CLJ_SURGEON_HOME)resources/clj-surgeon-agent-routing.md
+Makefile:9:CLJ_KONDO_ADMISSION_SOURCE := $(CLJ_SURGEON_HOME)resources/clj-kondo-admission.py
+Makefile:10:CLJ_KONDO_ADMISSION_DEST ?= $(HOME)/bin/clj-kondo-admission
+Makefile:11:CLJ_KONDO_SHIM_DEST ?= $(HOME)/bin/clj-kondo
+Makefile:12:CODEX_SKILL_DEST := $(CODEX_HOME)/skills/clj-surgeon
+Makefile:13:CLAUDE_SKILL_DEST := $(CLAUDE_HOME)/skills/clj-surgeon
+Makefile:14:CODEX_GLOBAL_INSTRUCTIONS ?= $(CODEX_HOME)/AGENTS.md
+Makefile:15:CLAUDE_GLOBAL_INSTRUCTIONS ?= $(CLAUDE_HOME)/CLAUDE.md
+Makefile:16:SOURCE_COMMIT := $(shell git -C "$(CLJ_SURGEON_HOME)" rev-parse HEAD 2>/dev/null || printf unknown)
+Makefile:17:CLI_SOURCE_HASH := $(shell cd "$(CLJ_SURGEON_HOME)" && { find src -type f -print; printf '%s\n' bb.edn deps.edn; } | LC_ALL=C sort | while IFS= read -r file; do shasum -a 256 "$$file"; done | shasum -a 256 | awk '{print $$1}')
+Makefile:23:MCP_STATE_DIR ?= $(HOME)/.local/state/clj-surgeon/mcp
+Makefile:26:MCP_PROJECT_DIR ?= $(CLJ_SURGEON_HOME)
+Makefile:33:MCP_JAVA_HOME ?= $(JAVA_HOME)
+Makefile:34:MCP_JAVA_CMD ?= $(if $(MCP_JAVA_HOME),$(MCP_JAVA_HOME)/bin/java,$(shell command -v java 2>/dev/null))
+Makefile:36:# Scratch root for self-tests that need a real directory. NEVER /tmp: it is a
+Makefile:43:SELF_TEST_TMP ?= $(if $(filter /tmp /tmp/% /dev/shm /dev/shm/%,$(TMPDIR)),/var/tmp,$(or $(TMPDIR),/var/tmp))
+Makefile:46:# It was `flock /home/forge/tmp/suite.lock`: a util-linux binary macOS does not
+Makefile:68:SUITE_LOCK_KEY := $(shell git -C "$(CLJ_SURGEON_HOME)" rev-list --max-parents=0 HEAD 2>/dev/null | tail -1 | cut -c1-16)
+Makefile:69:SUITE_LOCK_KEY := $(if $(SUITE_LOCK_KEY),$(SUITE_LOCK_KEY),path-$(shell printf '%s' "$(CLJ_SURGEON_HOME)" | shasum -a 256 | cut -c1-12))
+Makefile:71:WITH_LOCK := $(CLJ_SURGEON_HOME)bin/with-lock
+Makefile:76:MCP_DEV_STATE_DIR ?= $(HOME)/.local/state/clj-surgeon/dev-$(MCP_DEV_PORT)
+Makefile:83:CCLSP_HOME ?= $(abspath $(CLJ_SURGEON_HOME)../cclsp-structural-results)
+Makefile:86:CCLSP_CONFIG ?= $(HOME)/.local/state/clj-surgeon/cclsp.json
+Makefile:87:CCLSP_STATE_DIR ?= $(HOME)/.local/state/clj-surgeon/cclsp
+Makefile:143:	@echo "  make study-agent-events        Count the box-wide MCP call ledger (~/.clj-surgeon/events.jsonl)"
+Makefile:164:	@echo "  make memory-battery-generate  Build/verify the synthetic 100/1k/10k trees (~1 s)"
+Makefile:186:	@echo "  CODEX_HOME=/path/to/.codex     Codex home (default: $(CODEX_HOME))"
+Makefile:187:	@echo "  CLAUDE_HOME=/path/to/.claude   Claude home (default: $(CLAUDE_HOME))"
+Makefile:192:	@echo "  MCP_JAVA_HOME=/path/to/jdk     Java home for the shared MCP (default: inherited JAVA_HOME)"
+Makefile:193:	@echo "  MCP_JAVA_CMD=/path/to/java     Java command (default: MCP_JAVA_HOME/bin/java, then PATH)"
+Makefile:198:	@echo "  bb -m clj-surgeon.core :op :ls-tree :dir ~/src.local/ :grep \"mail|imap\""
+Makefile:212:	@bash "$(CLJ_SURGEON_HOME)bin/install-preflight" "$(CLJ_SURGEON_HOME)"
+Makefile:234:	bb --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.agent-routing install "$(AGENT_ROUTING_SOURCE)" "$(CODEX_GLOBAL_INSTRUCTIONS)" "$(CLAUDE_GLOBAL_INSTRUCTIONS)"
+Makefile:238:	bb --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.agent-routing check "$(AGENT_ROUTING_SOURCE)" $(if $(filter 1,$(PLATE_ONLY)),--plate-only,"$(CODEX_GLOBAL_INSTRUCTIONS)" "$(CLAUDE_GLOBAL_INSTRUCTIONS)")
+Makefile:283:	  (let [d (or (System/getenv "TMPDIR") "/tmp") r (t/base-refusal d)]\
+Makefile:349:	@sh test/tmp_leak_ratchet_test.sh
+Makefile:376:	JAVA_HOME="$(MCP_JAVA_HOME)" JAVA_CMD="$(MCP_JAVA_CMD)" clojure $(MCP_JAVA_OPTS) -X:clj-surgeon/mcp :telemetry :full
+Makefile:379:	JAVA_HOME="$(MCP_JAVA_HOME)" JAVA_CMD="$(MCP_JAVA_CMD)" clojure $(MCP_JAVA_OPTS) -X:clj-surgeon/mcp :telemetry :full :nrepl-port :none :run-id '"$${RUN_ID:-manual}"'
+Makefile:408:	  cd "$(CLJ_SURGEON_HOME)"; \
+Makefile:409:	  nohup env JAVA_HOME="$(MCP_JAVA_HOME)" JAVA_CMD="$(MCP_JAVA_CMD)" \
+Makefile:411:	    :project-dir '"$(CLJ_SURGEON_HOME)"' \
+Makefile:462:	  workspace="$${WORKSPACE:-$(CLJ_SURGEON_HOME)}"; mkdir -p "$$workspace"; \
+Makefile:476:	@python3 dev/audit_direct_cclsp_clients.py --root "$(abspath $(CLJ_SURGEON_HOME)..)"
+Makefile:514:	  test -x "$(CCLSP_HOME)/node_modules/.bin/bun" || { echo "Run make setup in $(CCLSP_HOME)" >&2; exit 1; }; \
+Makefile:519:	    "$(CCLSP_HOME)" "$(CCLSP_CONFIG)" "$(PATH)" \
+Makefile:521:	    CCLSP_BUN="$(CCLSP_HOME)/node_modules/.bin/bun" \
+Makefile:574:	    /bin/sh -c 'cd "$$1"; shift; export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$$PATH"; exec "$$@"' _ "$(CLJ_SURGEON_HOME)" \
+Makefile:575:	    /usr/bin/env JAVA_HOME="$(MCP_JAVA_HOME)" JAVA_CMD="$(MCP_JAVA_CMD)" \
+Makefile:632:	  grep -Fq '"rootDir" : "$(abspath $(WORKSPACE))"' "$(HOME)/.local/state/clj-surgeon/cclsp.json"; \
+Makefile:661:	    cp -R "$(CLJ_SURGEON_HOME)src/." "$$stage/src/"; \
+Makefile:672:	  echo "  Install (no sudo): bash <(curl -s https://raw.githubusercontent.com/babashka/babashka/master/install) --dir ~/bin"; \
+Makefile:677:	  echo "  Install (no sudo): bash <(curl -s https://raw.githubusercontent.com/clj-kondo/clj-kondo/master/script/install-clj-kondo) --dir ~/bin"; \
+Makefile:695:	  printf '%s\n' "$(CLJ_SURGEON_HOME)" > "$$control_plane_stage"; \
+Makefile:697:	  printf '%s\n' '{:artifact :control-plane-root' ' :mode :local-pointer' ' :source-commit "$(SOURCE_COMMIT)"' ' :path "$(CLJ_SURGEON_HOME)"}' > "$$control_plane_receipt"; \
+Makefile:700:	  printf '%s\n' '#!/bin/sh' '## clj-surgeon stable launcher' 'surgeon_tmp=$${TMPDIR:-/var/tmp}' 'case "$$surgeon_tmp" in /tmp|/tmp/*|/dev/shm|/dev/shm/*) surgeon_tmp=/var/tmp ;; esac' 'case "$$surgeon_tmp" in *[![:space:]]*) ;; *) surgeon_tmp=/var/tmp ;; esac' 'export TMPDIR="$$surgeon_tmp"' 'CLJ_SURGEON_CONTROL_PLANE_ROOT_FILE="$(CONTROL_PLANE_ROOT_FILE)" exec bb "-Djava.io.tmpdir=$$surgeon_tmp" --classpath "$(CLI_PACKAGE)/src" -m clj-surgeon.core "$$@"' > "$$stage"; \
+Makefile:725:	@mkdir -p "$(CODEX_HOME)/skills"
+Makefile:747:	@mkdir -p "$(CLAUDE_HOME)/skills"
+Makefile:769:	@echo "DEVELOPMENT INSTALL: all entrances are branch-coupled to $(CLJ_SURGEON_HOME)"
+Makefile:786:	  printf '%s\n' '#!/bin/sh' '## clj-surgeon stable launcher — branch-coupled development' 'surgeon_tmp=$${TMPDIR:-/var/tmp}' 'case "$$surgeon_tmp" in /tmp|/tmp/*|/dev/shm|/dev/shm/*) surgeon_tmp=/var/tmp ;; esac' 'case "$$surgeon_tmp" in *[![:space:]]*) ;; *) surgeon_tmp=/var/tmp ;; esac' 'export TMPDIR="$$surgeon_tmp"' 'exec bb "-Djava.io.tmpdir=$$surgeon_tmp" --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.core "$$@"' > "$$stage"; \
+Makefile:790:	  printf '%s\n' '{:artifact :cli' ' :mode :development-link' ' :source-commit "$(SOURCE_COMMIT)"' ' :source-hash "$(CLI_SOURCE_HASH)"' ' :destination "$(CLI_DEST)"' ' :source "$(CLJ_SURGEON_HOME)src"}' > "$$receipt"
+Makefile:791:	@echo "DEVELOPMENT LINK: $(CLI_DEST) loads the active checkout $(CLJ_SURGEON_HOME)src"
+Makefile:794:	@mkdir -p "$(CODEX_HOME)/skills"
+Makefile:815:	@mkdir -p "$(CLAUDE_HOME)/skills"
+Makefile:836:	cd $(CLJ_SURGEON_HOME) && clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/mcp-test:clj-surgeon/nrepl
+Makefile:897:	BENCH_RESULT_DIR="$$(mktemp -d "$${TMPDIR:-/var/tmp}/clj-surgeon-inspect-self-test.XXXXXX")" \
+Makefile:1135:# The eleven. Minutes-scale (~674 s), deliberately OUT of the merge gate.
+Makefile:1217:# TEST-ISO-009b -- THE LANDING GATE. This is the target `~/bin/land` runs.
+Makefile:1234:# `~/bin/land` must run exactly this target. It is the single name to change
+test/oracles/cell_b_oracle.sh:3:# Run from the ROOT of the worktree under test:  bash /var/tmp/forge/plan2/cellB/oracle.sh
+test/oracles/cell_b_oracle.sh:8:#   ORACLE_TMP    scratch dir (default: /var/tmp/forge/plan2/cellB/run-$$)
+test/oracles/cell_b_oracle.sh:14:TMP="${ORACLE_TMP:-/var/tmp/forge/plan2/cellB/run-$$}"
+test/oracles/cell_b_oracle.sh:15:KONDO="${KONDO:-$HOME/bin/clj-kondo}"

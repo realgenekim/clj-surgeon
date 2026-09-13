@@ -1,0 +1,18 @@
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.syntax-var-refs-test
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.mission-plain-forms-test
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.split-proof-gate-test

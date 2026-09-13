@@ -1,4 +1,5 @@
 (ns clj-surgeon.fix-declares-test
+  {:lane :fast}
   (:require
    [clj-surgeon.fix-declares :as fix]
    [clj-surgeon.forward-refs :as fwd]

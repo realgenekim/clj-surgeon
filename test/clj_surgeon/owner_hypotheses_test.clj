@@ -1,4 +1,5 @@
 (ns clj-surgeon.owner-hypotheses-test
+  {:lane :fast}
   (:require
    [cheshire.core :as json]
    [clj-surgeon.owner-hypotheses :as hypotheses]

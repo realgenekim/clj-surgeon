@@ -3,6 +3,7 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.file-ops :as file-ops]
+   [clj-surgeon.mcp-process :as process]
    [clj-surgeon.spawn-ledger :as spawn]
    [clj-surgeon.structural-lens :as lens]
    [clj-surgeon.synchronous-verification :as proof]
@@ -70,15 +71,16 @@
   {:action "set-java-tmpdir-and-retry"
    :java_tmpdir "/var/tmp/<owned-temp-directory>"})
 
-(defn- admitted-tmpdir! []
-  (let [tmpdir (System/getProperty "java.io.tmpdir")]
-    (when-not (safe-tmpdir? tmpdir)
-      (throw (ex-info (str "Background proof requires java.io.tmpdir below /var/tmp. "
-                           "Run Babashka with TMPDIR=/var/tmp/<owned-dir> and the JVM/MCP server "
-                           "with -Djava.io.tmpdir=/var/tmp/<owned-dir>.")
-                      {:error-type :background-gate-unsafe-tmpdir :java_tmpdir tmpdir
-                       :next_call unsafe-tmpdir-next-call})))
-    (str (.toRealPath (.toPath (io/file tmpdir)) (make-array LinkOption 0)))))
+(defn- admitted-tmpdir!
+  ([] (admitted-tmpdir! (System/getProperty "java.io.tmpdir")))
+  ([tmpdir]
+   (when-not (safe-tmpdir? tmpdir)
+     (throw (ex-info (str "Background proof requires java.io.tmpdir below /var/tmp. "
+                          "Run Babashka with TMPDIR=/var/tmp/<owned-dir> and the JVM/MCP server "
+                          "with -Djava.io.tmpdir=/var/tmp/<owned-dir>.")
+                     {:error-type :background-gate-unsafe-tmpdir :java_tmpdir tmpdir
+                      :next_call unsafe-tmpdir-next-call})))
+   (str (.toRealPath (.toPath (io/file tmpdir)) (make-array LinkOption 0)))))
 
 ;; @spec NS-SPLIT-051
 ;; @spec NS-SPLIT-055
@@ -197,7 +199,7 @@
   "Launch an owned detached process, then seal original and job exactly once.
   The worker waits for its sealed job; command streams never inherit the caller."
   [receipt dir capability]
-  (let [tmpdir (admitted-tmpdir!)
+  (let [tmpdir (admitted-tmpdir! (process/selected-temp-root))
         id (:receipt_id receipt)
         job-path (str (io/file dir (str id "-gate-job.edn")))
         config-path (str (io/file dir (str id "-bb.edn")))
@@ -209,12 +211,14 @@
                                  (str/split (System/getProperty "java.class.path")
                                             (re-pattern java.io.File/pathSeparator))))
         argv (into (or (:runner capability) (runner-commands!))
-                   ["--config" config-path "--classpath" classpath "-m" "clj-surgeon.split-proof-gate" job-path])
+                   [(str "-Djava.io.tmpdir=" tmpdir)
+                    "--config" config-path "--classpath" classpath "-m" "clj-surgeon.split-proof-gate" job-path])
         builder (doto (ProcessBuilder. ^java.util.List argv)
                   (.directory (io/file (:workspace_root receipt)))
                   (.redirectInput (io/file "/dev/null"))
                   (.redirectOutput (io/file log-path))
                   (.redirectErrorStream true))
+        _ (process/configure-environment! (.environment builder))
         worker (.start builder)
         worker-started (some-> (.startInstant (.info (.toHandle worker))) (.orElse nil) str)
         _ (when-not worker-started

@@ -1,0 +1,3 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+CENSUS_REGENERATE=1: wrote 2580 deftests to test/clj_surgeon/deftest_census.edn
+{:test 2, :pass 9, :fail 0, :error 0}

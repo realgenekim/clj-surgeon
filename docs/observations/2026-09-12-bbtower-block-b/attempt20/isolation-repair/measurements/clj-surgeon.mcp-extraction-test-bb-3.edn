@@ -1,0 +1,1 @@
+{:runtime :bb, :namespace clj-surgeon.mcp-extraction-test, :elapsed-ms 49, :result {:test 11, :pass 70, :fail 0, :error 0, :type :summary}}

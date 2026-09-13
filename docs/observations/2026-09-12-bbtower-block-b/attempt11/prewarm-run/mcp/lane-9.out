@@ -1,0 +1,22 @@
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.alias-migration-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.require-change-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.mcp-contract-test
+
+Testing clj-surgeon.extract-header-test
+
+Testing clj-surgeon.mcp-telemetry-test
+
+Testing clj-surgeon.cljc.analyze-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test

@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.mcp-intent-contract-test, :runtime :jvm, :mode "test", :started-at "2026-09-12T19:00:02.613651909Z", :elapsed-ms 523, :status :passed, :result {:test 22, :pass 562, :fail 0, :error 0, :type :summary}}

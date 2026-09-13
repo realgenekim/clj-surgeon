@@ -1,0 +1,36 @@
+
+Testing clj-surgeon.lane-manifest-test
+
+FAIL in (every-sleep-on-the-merge-gate-is-declared-with-its-reason) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:1109)
+1 undeclared Thread/sleep site(s) in the merge-gate lanes. A sleep is an assertion about a clock: make it a bounded poll that succeeds on the CONDITION and fails at a named deadline, then declare it in `declared-merge-gate-sleeps` with the reason it must wait: test/clj_surgeon/mcp_hot_verify_test.clj:288 -- (Thread/sleep 50)
+expected: (empty? undeclared)
+  actual: (not (empty? (["test/clj_surgeon/mcp_hot_verify_test.clj" 288 "(Thread/sleep 50)"])))
+
+FAIL in (every-sleep-on-the-merge-gate-is-declared-with-its-reason) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:1109)
+declared sleep site(s) that are no longer there -- delete the line from the pin: test/clj_surgeon/mcp_hot_verify_test.clj:253
+expected: (empty? stale)
+  actual: (not (empty? ("test/clj_surgeon/mcp_hot_verify_test.clj:253")))
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.outermost-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.mcp-compact-edit-fields-test
+
+Testing clj-surgeon.mission-candidate-test

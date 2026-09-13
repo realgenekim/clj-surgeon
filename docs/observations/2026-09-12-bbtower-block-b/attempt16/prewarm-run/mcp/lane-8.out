@@ -1,0 +1,13 @@
+lanes: --ns -- 6 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-namespace-split-test
+
+Testing clj-surgeon.insert-forms-receipt-test
+
+Testing clj-surgeon.census-pool-test
+
+Testing clj-surgeon.mcp-create-files-test
+
+Testing clj-surgeon.mcp-combinable-transaction-test
+
+Testing clj-surgeon.mcp-semantic-client-test

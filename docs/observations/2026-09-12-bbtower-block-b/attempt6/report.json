@@ -1,0 +1,115 @@
+{
+  "verdict": "blocked",
+  "manifest_id": "da0217373e110e79ca729d7624afc7ddb767671d89b86dad1f6ae27488a059af",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "test/clj_surgeon/tmp_leak_support.clj",
+      "line": 372,
+      "reproduction": "In the verified base checkout, execute the exact argv in a-launch.json with the sealed environment (login=false). All eight workers exit 97; no tests execute. Packet _JAVA_OPTIONS overwrites the private tmpdir.",
+      "exact_output": "tmp-refused: java.io.tmpdir base=/var/tmp/forge/packets/35dc856c-986f-4921-b4d2-29bb3ff5afba/tmp was handed a re-exec sentinel it does not own: it names root=\"/var/tmp/forge/packets/35dc856c-986f-4921-b4d2-29bb3ff5afba/tmp/clj-surgeon-suite-3008526-844d44c3\" but this process's java.io.tmpdir is \"/var/tmp/forge/packets/35dc856c-986f-4921-b4d2-29bb3ff5afba/tmp\". Refusing to treat a shared base as a private run root. Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one."
+    },
+    {
+      "severity": "info",
+      "file": "docs/observations/2026-09-12-bbtower-block-b/attempt6/a-login-shell.json",
+      "line": 1,
+      "reproduction": "Initial exec used default login=true, causing shell initialization to replace TMPDIR/JAVA_TOOL_OPTIONS. Corrected to login=false with identical coordinator argv; both launch records retained.",
+      "exact_output": "tmp-refused: java.io.tmpdir base=/var/tmp/forge cannot be used as a temp base: AccessDeniedException: /var/tmp/forge/clj-surgeon-suite-2998446-3ad2c1f6 Launch with -Djava.io.tmpdir=/var/tmp/clj-surgeon, or export TMPDIR=/var/tmp/clj-surgeon before invoking bb (bb does not read JAVA_TOOL_OPTIONS). On macOS the per-user $TMPDIR the shell already sets is real disk and needs no override -- an EMPTY TMPDIR is the usual cause of this refusal, not a wrong one."
+    }
+  ],
+  "measurements": [
+    {
+      "name": "a-base failed coordinator makespan (not namespace performance)",
+      "before": null,
+      "after": 6127,
+      "receipt": "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt6/a-base/receipt.edn"
+    },
+    {
+      "name": "a-base complete failed launch wall ms",
+      "before": null,
+      "after": 7440,
+      "receipt": "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt6/a-launch.json"
+    },
+    {
+      "name": "a-base executed namespaces (61 scheduled)",
+      "before": 61,
+      "after": 0,
+      "receipt": "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt6/a-base.log"
+    },
+    {
+      "name": "a-base namespace sum; b/c sums and makespans; top deltas",
+      "before": "Unmeasured",
+      "after": "Unmeasured; baseline refused",
+      "receipt": "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt6/slowdown.md"
+    },
+    {
+      "name": "bb sum and new ceiling; feature-thread bb/JVM; integration sum",
+      "before": "Unmeasured",
+      "after": "Owed in frozen order",
+      "receipt": "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt6/slowdown.md"
+    },
+    {
+      "name": "prewarm attempts and emitted budget/census lines",
+      "before": 0,
+      "after": 0,
+      "receipt": "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt6/gate.md"
+    },
+    {
+      "name": "invalid login-shell launch wall ms (harness error)",
+      "before": null,
+      "after": 6509,
+      "receipt": "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt6/a-login-shell.json"
+    }
+  ],
+  "commits": [],
+  "least_sure": [
+    "Original slowdown cause remains unknown because no baseline namespace executed.",
+    "New bb margin and feature-thread runtime classification have no current measurement.",
+    "Later gate prerequisites remain untested."
+  ],
+  "disagreements": [
+    "The reseal authorizes 1 GiB/shared packet temp settings as-is, but execution proves the shared temp override defeats the existing private-root isolation guard. Heap and one-suite lease are accepted. Fable/Gene must resolve the executable protocol; changing the guard or injected options is outside this packet."
+  ],
+  "owed": [
+    {
+      "what": "Step 1: valid a/b/c matched measurements, sums, makespans and ten deltas",
+      "owner": "Fable",
+      "unblock": "Reseal a launch environment that preserves each child private tempdir (1 GiB heap may remain), or authorize an equivalent measured protocol preserving the isolation oracle; then rerun all arms."
+    },
+    {
+      "what": "Step 2: measured-cause coordinator repair and make test-fast once",
+      "owner": "Astra",
+      "unblock": "Step 1 completes and identifies a cause; keep 60000 ms ceiling unchanged."
+    },
+    {
+      "what": "Step 3: NEW bb ceiling, derivation and boundary witnesses; Fable ratification",
+      "owner": "Fable",
+      "unblock": "A successful step-2 run supplies fast and bb serial sums; approve the derived new value in review."
+    },
+    {
+      "what": "Step 4: probe refusals, completeness, receipt boolean false seams and encounter score",
+      "owner": "Astra",
+      "unblock": "Earlier ordered steps complete; encounter entrance is installed but no score was attempted."
+    },
+    {
+      "what": "Step 5: feature-thread bb/JVM measurements, runtime witness and make test-integration once",
+      "owner": "Astra",
+      "unblock": "Earlier steps complete under executable environment; preserve 240000 ms ceiling."
+    },
+    {
+      "what": "Step 6: final-tip prewarm, at most one repair and final prewarm; verbatim gate lines",
+      "owner": "Astra",
+      "unblock": "Steps 1-5 complete; neither of the two allowed prewarm attempts was consumed."
+    },
+    {
+      "what": "Registered make test-battery obligation and outstanding zero-JVM acceptance checks",
+      "owner": "Astra",
+      "unblock": "Executable environment and completed implementation; ordered stop currently prevents gate completion."
+    },
+    {
+      "what": "Seat-environment landing budgets and independent acceptance",
+      "owner": "Fable",
+      "unblock": "External ship path re-establishes budgets and independent review; this packet cannot authorize landing."
+    }
+  ]
+}

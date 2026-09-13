@@ -1,0 +1,78 @@
+{:verdict :blocked
+ :manifest_id "b28586b6b7e8c5295e949c019f56d25d63364df3b158813504708107e6ddfb30"
+ :findings
+ [{:severity :high
+   :file "test/clj_surgeon/ns_isolation.clj"
+   :line 60
+   :reproduction "git show eae1e43280635be9b4e317e176d29476fd358702:test/clj_surgeon/ns_isolation.clj; inspect lane-budget-ms. Base coordinator line 1069 disables report! isolation for bb. No pre-existing bb lane ceiling can be restored."
+   :exact_output "  {:fast 60000\n   :integration 240000\n   :battery 1800000})"}
+  {:severity :high
+   :file "test/clj_surgeon/battery_parallel_runner.clj"
+   :line 900
+   :reproduction "bb -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx docs/observations/2026-09-12-bbtower-block-b/replay.clj; replay only original JVM-fast members using retained Block A walls, no test execution."
+   :exact_output "   TEST-ISO-007 VIOLATION in :fast -- lane time budget: the fast lane took 68210 ms, over its 60000 ms budget"}
+  {:severity :high
+   :file "docs/intent/receipt-booleans/registry.edn"
+   :line 15
+   :reproduction "Run replay.clj as above. The probe verb has no boolean seam registration; receipt_booleans_test.clj scenarios cover the same two write verbs."
+   :exact_output ":probe-boolean-registration nil\n:registered-boolean-verbs [\"insert_forms\" \"rename_alias\"]"}
+  {:severity :high
+   :file "src/clj_surgeon/probe.clj"
+   :line 23
+   :reproduction "git ls-files '*refusals.edn'; no probe refusal registry is tracked at the sealed subject. Refusal-kind census success cannot prove native-failure completeness."
+   :exact_output "docs/intent/insert-forms/refusals.edn\ndocs/intent/rename-alias/refusals.edn"}]
+ :measurements
+ [{:name "original-jvm-fast-members-sum-ms; retained Block A facts replayed"
+   :before 68210 :after nil
+   :receipt "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/replay.log"}
+  {:name "original-bb-members-sum-ms; re-fold, not a new execution"
+   :before 237596 :after nil
+   :receipt "/var/tmp/forge/bbtower-fx/fast-1g.log"}
+  {:name "overlap-members-sum-ms"
+   :before 120 :after nil
+   :receipt "/var/tmp/forge/bbtower-fx/fast-1g.log"}
+  {:name "union-sum-ms"
+   :before 305686 :after nil
+   :receipt "/var/tmp/forge/bbtower-fx/fast-1g.log"}
+  {:name "parallel-makespan-ms"
+   :before 83233 :after nil
+   :receipt "/var/tmp/forge/bbtower-fx/fast-1g.log"}
+  {:name "feature-thread-bb-vs-jvm-ms; before is historical bb, JVM unmeasured"
+   :before 727579 :after nil
+   :receipt "/var/tmp/forge/bbtower-fx/prewarm.log"}
+  {:name "integration-sum-ms"
+   :before 758486 :after nil
+   :receipt "/var/tmp/forge/bbtower-fx/prewarm.log"}]
+ :commits []
+ :least_sure
+ ["A different intended base may contain the missing bb policy; the named base has none."
+  "Historical walls do not predict a new execution under the single-JVM lease."
+  "The probe witnesses may exist on an unprovided subject; they are absent from this subject's registries."]
+ :disagreements
+ ["The brief attributes 68210 ms to a bb/fast union; it already sums exactly the original fast membership. The full union is 305686 ms."
+  "The brief requires an unchanged pre-existing bb lane ceiling; base bb execution disables TEST-ISO-007 and no bb ceiling is registered. Inventing one changes the frozen oracle."
+  "The original memberships overlap in quoted-var-refs-test and workspace-onboarding-test; they are not a disjoint partition."
+  "The brief names src/clj_surgeon/ns_isolation.clj; the existing implementation is test/clj_surgeon/ns_isolation.clj."
+  "The requested probe registry witnesses cannot be reported green solely from Block A's refusal-kind census repair."]
+ :owed
+ [{:what "Resolve step-one lane budget contract and intended base; amend frozen oracle only with authority."
+   :owner "Fable"
+   :unblock "Supply the source of the intended bb ceiling or an authorized corrected contract; acknowledge the existing fast-only refusal and overlapping membership."}
+  {:what "Implement lane accounting and boundary witnesses."
+   :owner "Astra"
+   :unblock "Fable resolves the step-one contract without unauthorized budget relief; confirm the correct isolation implementation path if needed."}
+  {:what "Measure feature-thread once under bb and once under JVM, record meter.tsv, then implement supported runtime assignment and witness."
+   :owner "Astra"
+   :unblock "Complete the preceding ordered lane step under the resolved contract; keep the single-JVM lease and bounded heap."}
+  {:what "make test-fast and make test-integration; retain namespace walls and stop on integration sum above 240000 ms."
+   :owner "Astra"
+   :unblock "Implementation and runtime measurements complete; execute under the unchanged resource contract."}
+  {:what "Probe native-failure completeness, receipt false seams, and executed CLI help example."
+   :owner "Fable"
+   :unblock "Identify the intended existing witness subject or authorize bounded scope changes; assign warm example execution to an eligible executor under an amended no-server constraint."}
+  {:what "Final-tip make landing-gate-prewarm, with at most the permitted repair and second attempt, plus make test-battery. No attempts consumed."
+   :owner "Astra"
+   :unblock "Resolve contract blockers and complete preceding steps; ensure every reachable process complies with the sealed execution manifest or obtain an eligible executor from Fable."}
+  {:what "Independent acceptance, stable-tag proposal if gate green, and landing decision."
+   :owner "Fable"
+   :unblock "Actual final-tip green witnesses and independent review; this report provides neither landing nor acceptance authority."}]}

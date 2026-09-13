@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.file-ops-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

@@ -1,0 +1,77 @@
+{:verdict :no-go
+ :summary "Typed xray refusals survive on JVM and bb; counted battery passes. The expanded portability witness refuses twelve other namespaces."
+ :branch "bb-rewrite-tower-local"
+ :initial-subject "357a2b799168599dc7e4f0c3d9def5cfb00e49b9"
+ :trunk-control "a15531ee56255bd128ee378f55d7080c01c093c5"
+ :census-subject "4492f9dff7419fccfe7ff9dfb3407e1fe9e44a5d"
+ :battery-subject "14ae555f05f9b1d89fa9019b13337bc4365a80ed"
+ :prewarm-subject "3fdd5af477c0d282a0da818e837bf6f3c16624b1"
+ :findings
+ [{:id :pre-existing-xray-jvm-refusal-loss :state :fixed
+   :evidence ["red-tip-jvm.log" "red-tip-bb.log" "red-trunk-jvm.log" "red-trunk-bb.log" "xray-findings.md"]}
+  {:id :all-assignment-portability :state :enforced-with-named-refusals
+   :namespaces 159 :passing-both 97 :bb-load-incompatible 50
+   :failed-control-namespaces 12 :asymmetric-namespaces 11
+   :evidence ["portability-census.md" "controls/index.edn" "nonportable-findings.md"]}
+  {:id :original-red-battery-leg :state :passed :evidence "checks/battery.log"}]
+ :measurements
+ {:red {:subjects [:tip :trunk] :test 26 :assertions 456
+        :jvm {:fail 3 :error 0} :bb {:fail 0 :error 0}
+        :logs ["red-tip-jvm.log" "red-tip-bb.log" "red-trunk-jvm.log" "red-trunk-bb.log"]}
+  :final-evaluator {:runtimes [:jvm :bb]
+                    :xray {:test 27 :assertions 477 :fail 0 :error 0}
+                    :edit-dsl {:test 28 :assertions 419 :fail 0 :error 0}
+                    :logs ["final-evaluator-jvm.log" "final-evaluator-bb.log"]}
+  :runtime-rule {:runtimes [:jvm :bb] :test 1 :pass 198 :fail 12 :error 0
+                 :logs ["runtime-rule-jvm.log" "runtime-rule-bb.log"]}
+  :fast {:runs 1 :exit 2 :wall-s 29 :serial-equivalent-ms 46188
+         :test 1244 :pass 12515 :fail 12 :error 0 :isolation-violations 0
+         :log "checks/fast.log"}
+  :battery {:runs 1 :exit 0 :wrapper-wall-s 352 :ledger-wall-s 350
+            :makespan-ms 347765 :serial-equivalent-ms 1000933
+            :test 1166 :pass 18472 :fail 0 :error 0
+            :lanes 8 :skipped 0 :isolation-violations 0
+            :logs ["checks/battery.log" "battery-total.edn"]}
+  :prewarm {:runs 1 :exit 2 :wall-s 171
+            :suites {:alias :passed :mcp :failed :bb :passed :shell :passed}
+            :failure :non-portable-namespace :failed-control-namespaces 12
+            :mcp-fast-ms 47143 :mcp-integration-ms 69226
+            :bb-suite-actual-bb-runtime-ms 242253
+            :log "gate.md" :verbatim-source "checks/prewarm.log"
+            :repair-attempts 0 :retries 0}}
+ :unchanged {:runtime-assignments 159 :cadence-membership true :budgets true
+             :paired-runtime-timing-measurements true :sci-allowlist true :cli-output-bound true
+             :assignment-evidence "runtime-assignments-check.edn"}
+ :non-portable
+ [clj-surgeon.cljc.merge-test clj-surgeon.cljc.split-test
+  clj-surgeon.mcp-cold-verify-test clj-surgeon.mcp-namespace-split-test
+  clj-surgeon.mcp-relation-census-launcher-test
+  clj-surgeon.memory.journal-green-test clj-surgeon.memory.oom-reproduction-test
+  clj-surgeon.mission-display-test clj-surgeon.ns-isolation-test
+  clj-surgeon.reader-eval-fence-test clj-surgeon.worktree-lifecycle-prune-test
+  clj-surgeon.worktree-lifecycle-recovery-test]
+ :commits
+ [{:sha "ac1977977a2b6db2c36ccc6e3377524816b53367" :intent :preserve-prior-receipts}
+  {:sha "4492f9dff7419fccfe7ff9dfb3407e1fe9e44a5d" :intent :typed-xray-repair}
+  {:sha "43a36e6b3cf46d2550ff6642565e0770cab6dc55" :intent :real-sci-witness-and-typed-preservation}
+  {:sha "14ae555f05f9b1d89fa9019b13337bc4365a80ed" :intent :all-assignment-portability-rule}
+  {:sha "3fdd5af477c0d282a0da818e837bf6f3c16624b1" :intent :passing-counted-battery}
+  {:sha "295ffa6ee789034bedd6f5b3bd6df6f01b149b54" :intent :generated-battery-packing-estimates}]
+ :evidence-commit :the-commit-containing-this-report
+ :coordinator-estimates {:state :refreshed-by-counted-battery
+                         :file "docs/observations/battery-namespace-walls.edn"}
+ :least_sure
+ ["The complete census is frozen at 4492f9df; the evaluator follow-up has later JVM/bb focused controls and a passing final JVM battery, not a second complete census."
+  "Initial bb load incompatibility describes this configured classpath, not every possible setup."
+  "Recovery's precise lock-release mechanism is not established."
+  "Only xray was reproduced on trunk; no trunk reproduction is claimed for the other findings."]
+ :disagreements []
+ :owed
+ ["Repair the twelve named failing-control namespaces and rerun their affected controls."
+  "Obtain passing fast and prewarm gates after those repairs; accounting for a defect is not a passing control."
+  "Independent fence review of the new evaluator candidate before merge; the earlier Sol GO covers the supplied candidate."]
+ :dogfood "dogfood.md"
+ :commands "commands.md"
+ :read-route-deviation "Initial bounded source inspection used sed; subsequent discovery used rg and all Clojure source mutations used exact-form native patches or the existing census regeneration entrance."
+ :owned-trunk-clone :removed
+ :pushed false :landed false}

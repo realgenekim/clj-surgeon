@@ -1,0 +1,6 @@
+'/tmp' => '/var/tmp'
+'/dev/shm/x' => '/var/tmp'
+'' => '/var/tmp'
+'  ' => '/var/tmp'
+'/var/tmp/with spaces' => '/var/tmp/with spaces'
+Python spawn matrix and mission help: passed

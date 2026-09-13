@@ -1,0 +1,16 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.splice-envelope-test
+
+FAIL in (bounded-input-path-encoding) (splice_envelope_test.clj:85)
+probe refusal vocabulary must be complete
+expected: (= (remedy-vocabulary verb) (set (map :type rows)))
+  actual: (not (= #{:invalid-probe-port :probe-namespace-not-found :probe-connection-failed :stale-probe-image :invalid-probe-request :probe-message-too-large :probe-source-too-large} #{:invalid-probe-port :probe-namespace-not-found :probe-connection-failed :stale-probe-image :invalid-probe-request :probe-message-too-large :probe-source-too-large :probe-registered-but-never-emitted}))
+
+FAIL in (bounded-input-path-encoding) (splice_envelope_test.clj:91)
+probe
+expected: (and (seq rows) (= (count rows) (count (set (map :type rows)))) (every? (fn [row] (and (every? (fn* [p1__14912#] (contains? row p1__14912#)) [:promise :native_failure :native_method :minimal_reproducer :class :existing_check :owner :witness :retirement_condition]) (or (not= :none (:native_failure row)) (#{:protocol :capability :resource} (:class row))))) rows))
+  actual: false
+
+Ran 2 tests containing 63 assertions.
+2 failures, 0 errors.

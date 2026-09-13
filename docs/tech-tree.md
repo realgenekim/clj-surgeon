@@ -1,5 +1,80 @@
 # clj-surgeon tech tree
 
+Probe classpath repair (Sol round-five F1): a literal root list omitted a live
+dev/experiments dependency and returned green over value 1 after disk changed
+to 2. Attempt25 derives roots from the image classpath, resolves via the require
+classloader, counts jar dependencies and refuses unresolved dependencies before
+reload. Red and verification evidence live in
+`docs/observations/2026-09-12-bbtower-block-b/attempt25/REPORT.md`.
+This is a correctness repair, with no performance admission claim.
+
+Probe closure repair (Sol round-four F1): the partial probe ns reader silently
+omitted prefix-list dependencies. Attempt24 commits the exact red reproduction,
+reuses and extends the shared form-identity parser, refuses unclassified require
+forms before reload, and exposes the expected closure count independently of
+completed reloads. Evidence and gate verdict live in
+`docs/observations/2026-09-12-bbtower-block-b/attempt24/REPORT.md`.
+This is a correctness repair, with no performance admission claim.
+
+Block B attempt 21 closes Sol F3: a valid image identity no longer authorizes
+a production probe target. The canonical target must resolve under `test/`
+before dependency traversal, with a typed refusal and zero reloads otherwise.
+Production dependencies of authorized tests remain supported. Red reproduces
+36 reloads and zero tests; final evidence and outstanding review are recorded in
+[attempt21](observations/2026-09-12-bbtower-block-b/attempt21/REPORT.md).
+
+Block B attempt 20: six controls per runtime now govern all 38 paired
+namespaces through conservative two-standard-deviation clearance. Rename-alias
+selects JVM; the historical bb ceiling replays recorded execution runtimes.
+The probe HTTP crossing bounds complete UTF-8 EDN and preserves oversized
+verdicts with explicit truncation facts. A real-probe witness compares receipt
+keys with the specification's parsed shape statement. This is branch-only
+contract repair; gate results and retained red evidence are recorded in
+`docs/observations/2026-09-12-bbtower-block-b/attempt20/REPORT.md`.
+
+Block B attempt 18 (2026-09-12): the whole restricted gate exposed a helper
+fixture rooted outside the packet and a hygiene witness registering Git
+worktrees in the external common directory, alongside three oracle scratch
+defaults. Repairs inherit the existing temp roots and keep clone metadata
+inside owned scratch. The device-only `/dev/null` exception matches packet.py.
+Evidence, census and final verification status:
+`docs/observations/2026-09-12-bbtower-block-b/attempt18/REPORT.md`.
+
+Block B attempt 13 (2026-09-12): descendant temp-root repair. The CLI-shaped bb
+child reproduced `/tmp` despite TMPDIR; formatter staging ignored the selected
+root and typist discarded its failure evidence. Product launchers now pass the
+startup property, process/formatter scratch uses the selected root, and the
+tmpfs refusal fixture stays beneath product state. Evidence and acceptance:
+`docs/observations/2026-09-12-bbtower-block-b/attempt13/REPORT.md`.
+No speed, packet-confinement, or landing claim follows from this repair.
+
+Block B red-team repairs (2026-09-12): **BUILDING**, branch-only. Indirect
+probe refusal literals now have per-owner coverage; probe omits its constant
+verification boolean. Attempt11 computes both calibration sums under the shipped
+manifest: 240,989 * 60,000 / 42,143, rounded up to a new bb ceiling of
+343,102 ms (Fable ratification pending). Executable calibration and spec-boundary
+witnesses prevent drift. Every top-level form of each declared probe owner is
+scanned, with explicit reverse-checked registration of shared-owner kinds;
+the verifier's helper plant and a separate verify! plant both fail by file/kind.
+The no-argument bb diagnostic passed
+829 tests and is a required landing/prewarm stage. The 47 previously unbudgeted
+bb inventory members have measured cadence; 33 join fast and 14 battery.
+Parent-side bb namespace budgeting, cadence-only fast selection, actual-runtime
+sums and makespan-first reports have targeted negative witnesses. Final suite
+and prewarm evidence is recorded in
+[attempt11](observations/2026-09-12-bbtower-block-b/attempt11/REPORT.md).
+This is contract repair, not performance admission or a runtime speedup claim.
+
+Block A, bb-rewrite-tower-local (2026-09-11): **BUILDING** babashka-first hybrid.
+The [inventory](plans/bb-first-inventory.md) separates runtime from cadence;
+execution overturned two load-only portable classifications. The bb coordinator
+retains the existing admission fence and JVM-only workers. The [inner meter](plans/edit-to-probe.md)
+observed medians 3.135 s cold JVM, 0.0459 s cold bb, 0.3539 s warm probe on
+forms-test. This is an ordered comment-edit measurement, not performance admission.
+Red, fixed and stale-generation probes retain pending cold proof. Installed
+eae1e432's launcher omitted clj-splice; dogfood used the worktree request-file
+CLI after that process-local repair failed. No automatic routing admission.
+
 *A living map: every capability shape we have tried or could try, its status, the receipt
 that set the status, and the live backlog of experiments. Opened 2026-09-02T12:15:40Z on Gene's request.
 Rules: a status changes only with a receipt (captain's log entry with commit timestamp, or a
@@ -734,6 +809,39 @@ admission. Normal fast/prewarm coordination conflicts with this seat's one-JVM/n
 server execution fence; no landing gate or ship claim follows. Evidence and the
 named deletion map: /var/tmp/forge/splice-fx/astra-build-report.md and witness-map.md.
 
+### 2026-09-12 — bb tower block B, runtime cost found; fast stop honored
+
+Attempt8 applies the authorized TEST-ISO-016 paired-wall rule to all 35
+bb-assigned original-fast members. Three move to JVM; rename-alias remains
+bb because 6,478 / 3,265 is within 2.0. The first measured fast sum falls to
+36,944 ms without changing its 60,000 ms budget. The NEW bb runtime ceiling
+is 399,155 ms, derived from the measured 245,773 ms bb sum and the fast
+lane's proportional margin; it is not a restored budget.
+
+Finding: clj-splice's envelope test is 34x slower under bb than the JVM:
+834 ms JVM versus 28,591 ms bb in attempt7. That bounds where the
+babashka-first plan can put heavy rewrite-clj work. This is a finding, not
+a decision. At the attempt8 measurement tip, feature-thread passes the same
+69 tests / 2,265 assertions on both runtimes, taking 43,280 ms JVM and
+728,265 ms bb; the runtime rule selects JVM.
+
+The supposed bb-only CLI output leak reproduces on both runtimes when the
+workspace contains many untracked paths. The shared output bound remains
+owed; intent-transaction uses the authorized JVM contract escape with
+paired walls recorded. Probe now has seven native-failure refusal rows and
+the third-verb receipt-boolean false seam. Final gates, repairs, uncertainties
+and independent-review debt: [attempt8 report](observations/2026-09-12-bbtower-block-b/attempt8/REPORT.md).
+
+The matched base/JVM, subject/JVM-only and subject/hybrid observations charge
+the same original fast membership. The dominant increase is splice-envelope's
+Babashka execution time, rather than a demonstrated coordinator contention
+effect. The required `make test-fast` still exceeds its unchanged lane ceiling;
+block B stops before budget registration, probe-contract work, runtime assignment
+and prewarm. No production coordinator fix or runtime reclassification is claimed.
+The report retains the initial log-placement contamination, corrected measurements,
+an independent CLI-output assertion failure, and the limits of the single-sample
+comparison. [Attempt 7 evidence](observations/2026-09-12-bbtower-block-b/attempt7/REPORT.md).
+
 ### 2026-09-11T05:46:14.400103+00:00 — clj-splice fix round 1
 
 Opus GO-WITH-FIX exposed a missing payload-refusal row, argument-order-dependent
@@ -756,3 +864,51 @@ library-only edit changes the package hash. The package copies and names the
 library source; Babashka supplies its external runtime dependencies. Twenty verb
 groups pass (382 assertions). This is a packaging correctness fix, with no catalog
 or routing change. Receipts: `/var/tmp/forge/clifix-fx/report.md`.
+
+### 2026-09-12 — formatter npm home writes, bb tower attempt 14
+
+The real staged formatter failed with EACCES against a read-only npm cache.
+The shared launcher now places npm cache/logs beneath the selected temp root;
+the default formatter prefers an installed standard-clj, then checkout-local
+standard-clj, before npx. Receipts expose the actual command and resolution.
+Both real command paths format the multiline fixture successfully with the
+inherited cache/log locations unwritable. This is a write-location correction,
+not a performance comparison. Final suite/gate evidence and remaining limits:
+[attempt14](observations/2026-09-12-bbtower-block-b/attempt14/REPORT.md).
+
+### 2026-09-12 — bb tower attempt 19, trunk dependency closure merge
+
+The stable launcher now combines trunk's bundled clj-splice classpath with the
+branch's explicit java.io.tmpdir policy. The installed splice and package-hash
+witnesses pass, as does the branch's generated-launcher matrix. The once-only
+fast run and restricted diagnostic exposed two trunk test names missing from
+the branch's derived deftest census; regeneration adds exactly those names and
+removes none. Final prewarm evidence and retained red results:
+[attempt19](observations/2026-09-12-bbtower-block-b/attempt19/REPORT.md).
+
+### 2026-09-12 — bb tower attempt 22, runtime correctness controls
+
+The xray battery's three JVM refusal-reason failures reproduce at both
+357a2b79 and trunk a15531ee, while bb passes both controls. SCI's JVM wrapper
+hides typed host exceptions in its cause, and uses a different unresolved-symbol
+message. The repair preserves typed refusals and untyped cause diagnostics,
+with the capability fence and CLI receipt bound still exercised.
+
+Portability evidence now covers every runtime assignment, independently of
+cadence and the 38 paired cost measurements. A complete control on each runtime
+is required; load-only success cannot certify a namespace. The census exposes
+additional CLJC reader/oracle and bb capability/dependency failures by name.
+No runtime is moved to hide a failing control, and no budget changes.
+Full census, individual accounts, gate outcomes and remaining work:
+[attempt22](observations/2026-09-12-bbtower-block-b/attempt22/REPORT.md).
+
+Attempt23 applies Fable's corrected ruling: the JVM is the reference and named
+bb capability limits select JVM with reasons. The CLJC strict-split emitter now
+uses JVM-readable per-form conditionals and its oracle normalizes generated
+arguments. Prune's TMPDIR repair exposed an unregistered Git version (2.53.0,
+admitted after its real compatibility matrix passed) and then the same SCI
+FileLockImpl.release limitation as recovery. The fold is therefore 99 portable,
+10 explicitly bb-ineligible and zero refused, plus 50 unchanged initial-load
+exclusions with no claim of complete controls. Counts differ from the predicted
+100/9 for that evidenced reason. Gates and source dogfood are recorded in
+[attempt23](observations/2026-09-12-bbtower-block-b/attempt23/REPORT.md).

@@ -1,0 +1,8 @@
+TMPDIR=/var/tmp/forge/bbtower-fx/a15-zq1i30x8 (fresh and empty)
+.......s...s.........
+----------------------------------------------------------------------
+Ran 21 tests in 0.321s
+
+OK (skipped=2)
+exit=0
+remaining TMPDIR entries=[]

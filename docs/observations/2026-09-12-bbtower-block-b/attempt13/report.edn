@@ -1,0 +1,73 @@
+{:attempt 13
+ :branch "bb-rewrite-tower-local"
+ :base "b45d3eb113b5d258ba3601023a8c64fc9fce8339"
+ :source-tip "86d98e4afd8ab3d12cb5a3e6bd2e2710d655def6"
+ :verdict :pass-with-tmp-unknown
+ :code-checks-passed true
+ :gate-receipt "gate-receipt.edn"
+ :findings
+ [{:kind :bb-startup-property
+   :red "red.log" :observed "/tmp" :expected "/var/tmp/forge/bbtower-fx"
+   :repair "Explicit startup property in generated CLI and product bb launch adapters"}
+  {:kind :formatter-temp-root-and-refusal
+   :red "formatter-red.log"
+   :green "readonly-jvm-tmp.log"
+   :host-jvm-tmp "/sys"
+   :repair "Selected staging/process base, cleanup, native message/path/process evidence retained by typist"}
+  {:kind :fixture-state-root
+   :repair "Alias tmpfs symlink parent is beneath configured artifact root; Git scratch uses selected TMPDIR"
+   :evidence ["three-namespaces.log" "boundaries.log"]}
+  {:kind :prewarm-repair
+   :red "gate-first.md"
+   :test "clj-surgeon.intent-transaction-test/change-cli-dogfoods-one-shot-multi-file-apply-and-exact-undo"
+   :console-characters 3970 :receipt-characters 3660
+   :repair "Owned fixture cwd and anchored bb classpath; every existing assertion retained; workspace-root assertion added"
+   :green "repair.log" :tests 1 :assertions 30}]
+ :measurements
+ {:three-red-namespaces {:runs 1 :tests 202 :assertions 3827 :failures 0 :errors 0
+                         :isolation-violations 0 :exit 0
+                         :evidence "three-namespaces.log"
+                         :fresh-empty-root "focused-root.txt"
+                         :root-empty-after true :root-removed true}
+  :focused-green {:tests 25 :assertions 110 :failures 0 :errors 0
+                  :additional-boundary-tests 2 :additional-boundary-assertions 5
+                  :evidence "green.log"}
+  :boundaries {:tests 32 :assertions 198 :failures 0 :errors 0 :evidence "boundaries.log"}
+  :launchers {:generated-launchers 2 :root-cases-each 8 :real-cli-invocations 2
+              :python-real-bb-cases 5 :evidence ["launcher-check.log" "entrances.log"]}
+  :test-fast {:runs 1 :exit 0 :tests 1242 :assertions 11765
+              :clj-splice-tests 5 :clj-splice-assertions 59
+              :fast-sum-ms 40285 :fast-ceiling-ms 60000
+              :bb-sum-ms 14434 :bb-ceiling-ms 343102
+              :evidence "test-fast.log"}
+  :first-prewarm {:run "c375bec2-ea76-4bb6-befe-408f0ebafaa9" :exit 2
+                  :fast-sum-ms 41198 :integration-sum-ms 65486 :bb-sum-ms 235993
+                  :failures 1 :evidence "gate-first.md"}
+  :final-prewarm {:run "5e655dfe-aa31-4ad5-9fc7-9f7836ba1870" :state :passed
+                  :exit 0 :problems [] :landing? false :wall-ms 386707
+                  :alias-tests 182 :alias-assertions 3639 :alias-sum-ms 83241
+                  :mcp-tests 1410 :mcp-assertions 15563
+                  :bb-tests 899 :bb-assertions 7984
+                  :serial-bb-tests 830 :serial-bb-assertions 7283 :serial-bb-wall-ms 217854
+                  :fast-sum-ms 41882 :integration-sum-ms 66790
+                  :bb-sum-ms 235571 :bb-makespan-ms 85965
+                  :fast-ceiling-ms 60000 :integration-ceiling-ms 240000 :bb-ceiling-ms 343102
+                  :evidence "gate.md"}}
+ :tmp-audit {:immediate-new ["tmp.Ijj8taxfAV"] :followup-new []
+             :attribution :unknown :zero-new-during-run-proven false
+             :shared-entries-removed-by-agent 0
+             :evidence ["tmp-before.txt.gz" "tmp-after.txt.gz" "tmp-new.txt"
+                        "tmp-after-followup.txt.gz" "tmp-new-followup.txt"]}
+ :commits ["f097d30ff8f1147581376078a55c9491b190c20a"
+           "c49e74252b8fddc09adba474a358c4b3301ff524"
+           "86d98e4afd8ab3d12cb5a3e6bd2e2710d655def6"]
+ :dogfood "DOGFOOD.md"
+ :least_sure ["Transient /tmp entry disappeared before inspection; ownership is unknown"
+              "Literal TMPDIR policy is not general symlink/mount validation"]
+ :disagreements ["Cannot claim the requested unconditional zero-new-/tmp result"
+                 "First prewarm required one fixture repair"]
+ :owed ["Fable review and packet-envelope recheck"
+        "Attribution or confinement evidence for the transient /tmp name"]
+ :constraints {:test-fast-runs 1 :prewarm-runs 2 :prewarm-repairs 1
+               :test-removals 0 :runtime-or-membership-changes 0 :budget-changes 0
+               :pushes 0 :tags 0 :shared-installs 0 :landings 0}}

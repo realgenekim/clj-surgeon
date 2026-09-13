@@ -1,0 +1,72 @@
+{:attempt 14
+ :verdict :PASS
+ :branch "bb-rewrite-tower-local"
+ :start "c2ec3039a5b4382d2353e9c9f2b2f1b7e0db3dd1"
+ :source-tip "e679393fe5b122b3f21d7b8418f7c57b58da70f8"
+ :reported-at-file "report-time.txt"
+ :findings
+ [{:id :real-npm-cache-red :evidence "red.log" :exit 1
+   :native-error "EACCES creating _cacache; _logs not written"
+   :precondition "empty mode-0555 npm_config_cache; real product formatter command"}
+  {:id :launcher-temp-roots
+   :cache "<selected-temp-root>/npm-cache"
+   :logs "<selected-temp-root>/npm-logs"
+   :policy "Preserve nonblank TMPDIR except /tmp or /dev/shm trees; otherwise /var/tmp"
+   :evidence ["focused-green.log" "green.log" "npm-paths.txt"]}
+  {:id :resolved-formatter
+   :priority [:path-standard-clj :checkout-node-modules-bin-standard-clj :npx]
+   :custom-argv-preserved true
+   :receipt-fields [:formatter/command :formatter/resolved?]
+   :typist-location [:format :formatter]
+   :evidence ["green.log" "namespace.log"]}
+  {:id :home-endpoints-unchanged :new-entries 0
+   :evidence ["home-before.txt" "home-after.txt" "home-diff.txt"]
+   :limit "Scratch HOME environment; JVM user.home unchanged; no transient-write or Landlock claim"}
+  {:id :first-prewarm-contaminated-by-agent
+   :violation :TEST-ISO-003 :count 4 :path "attempt14/DOGFOOD.md"
+   :assertion-failures 0 :assertion-errors 0
+   :evidence ["gate-first.md" "gate-first-mcp-receipt.edn"]
+   :repair "Freeze repository writes; capture final prewarm outside worktree until exit"}]
+ :measurements
+ {:focused {:tests 26 :assertions 125 :fail 0 :error 0 :log "focused-green.log"}
+  :real-formatter {:exit 0 :resolved-ms 123.892552 :npx-ms 3092.676539
+                   :log "green.log" :comparison-claim false}
+  :previously-red-namespace
+  {:namespace clj-surgeon.receipt-artifacts-boundary-test
+   :named-test typist-publishes-external-inverse-after-real-proof
+   :tests 24 :assertions 202 :fail 0 :error 0 :isolation-violations 0
+   :wall-ms 3287 :exit 0 :log "namespace.log" :command "focused.sh"}
+  :fast {:runs 1 :exit 0 :tests 1243 :assertions 11778
+         :clj-splice {:tests 5 :assertions 59}
+         :sum-ms 43190 :ceiling-ms 60000
+         :bb-sum-ms 14778 :bb-ceiling-ms 343102 :bb-makespan-ms 10614
+         :log "test-fast.log"}
+  :prewarm
+  {:runs 2 :repairs 1 :final-exit 0 :state :passed :problems [] :landing? false
+   :run-id "f9b818cd-f120-4bb6-8f33-dfc611e81e12"
+   :wall-ms 387383 :log "gate.md" :receipt "gate-receipt.edn"
+   :first-log "gate-first.md" :first-exit 2
+   :alias {:tests 182 :assertions 3641 :sum-ms 81374 :ceiling-ms 1800000}
+   :mcp {:tests 1411 :assertions 15576
+         :fast-sum-ms 43167 :fast-ceiling-ms 60000
+         :integration-sum-ms 67606 :integration-ceiling-ms 240000}
+   :bb {:tests 899 :assertions 7984 :sum-ms 235276
+        :ceiling-ms 343102 :makespan-ms 86493}
+   :serial-diagnostic {:tests 830 :assertions 7283 :wall-ms 218655}}
+  :lint {:errors 0 :warnings 0 :log "lint.log"}}
+ :commits
+ [{:sha "5197d751ac984d370e158db27332bb2af0375647" :purpose :preserve-third-packet}
+  {:sha "7a266c614f9b18dd3d281807ec43d18a03119a49" :purpose :red-before-fix}
+  {:sha "e679393fe5b122b3f21d7b8418f7c57b58da70f8" :purpose :launcher-fix-and-witnesses}]
+ :evidence-commit "The commit containing this report; committed last after verification"
+ :dogfood "DOGFOOD.md"
+ :least_sure ["A different installed standard-clj version may format differently."
+              "Endpoint listings cannot exclude transient scratch-HOME writes."
+              "Read-only npm cache is a stand-in, not a new Landlock packet run."]
+ :disagreements ["The named red test belongs to receipt-artifacts-boundary-test and calls the mission typist fixture; the owning namespace was run."
+                 "The first prewarm was contaminated by this agent's concurrent documentation edit; final prewarm passed after freezing worktree writes."
+                 "Witness setup and inline-spacing expectation errors are preserved separately from the native EACCES red."]
+ :owed ["Fable independent review and fresh packet-envelope recheck."
+        "No landing or full-battery certification is claimed."]
+ :unchanged {:budgets true :memberships true :runtime-classifications true}
+ :pushed false :tagged false :shared-install-changed false}

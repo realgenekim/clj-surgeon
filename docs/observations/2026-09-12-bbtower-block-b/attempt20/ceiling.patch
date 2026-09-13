@@ -1,0 +1,34 @@
+*** Begin Patch
+*** Update File: /home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/bb_ceiling.clj
+@@
+-  "Reproduce TEST-ISO-007 from one receipt and the shipped lane manifest."
++  "Reproduce TEST-ISO-007 from recorded runtimes and unchanged lane cadence."
+@@
+-  (let [runs (:runs receipt)
++  (let [runs (:runs receipt)
++        runtime-entries (vec (for [lane (:lanes receipt) n (:namespaces lane)]
++                               [n (:runtime lane)]))
++        runtimes (into {} runtime-entries)
++        _ (assert (and (= (count runtime-entries) (count runtimes))
++                       (= (set (keys runtimes)) (set (map :namespace runs)))
++                       (every? #{:bb :jvm} (vals runtimes)))
++                  "Calibration requires one recorded execution runtime per namespace")
+@@
+-        bb (reduce + 0 (map :elapsed-ms (filter #(= :bb (lm/namespace-runtimes (:namespace %))) runs)))
++        bb (reduce + 0 (map :elapsed-ms (filter #(= :bb (runtimes (:namespace %))) runs)))
+*** Update File: /home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/ns_isolation_test.clj
+@@
+ (deftest bb-ceiling-reproduces-from-calibration-under-shipped-manifest
+   (is (= (:ceiling-ms (ceiling/from-file ceiling/calibration-receipt))
+-         (:bb iso/lane-budget-ms))))
++         (:bb iso/lane-budget-ms)))
++  (let [receipt (clojure.edn/read-string (slurp ceiling/calibration-receipt))
++        expected {:bb-runtime-sum-ms 240989 :fast-cadence-sum-ms 42143 :ceiling-ms 343102}
++        runtimes (ns-resolve 'clj-surgeon.lane-manifest 'namespace-runtimes)]
++    (is (= expected (ceiling/derive receipt)))
++    (with-redefs-fn {runtimes (zipmap (keys @runtimes) (repeat :jvm))}
++      #(is (= expected (ceiling/derive receipt))
++           "A new runtime policy cannot relabel historical calibration walls"))
++    (is (thrown? AssertionError (ceiling/derive (update receipt :lanes conj (first (:lanes receipt))))))
++    (is (thrown? AssertionError (ceiling/derive (assoc-in receipt [:lanes 0 :runtime] :unknown))))))
+*** End Patch

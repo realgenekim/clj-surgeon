@@ -1,0 +1,10 @@
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.cljc.analyze-test

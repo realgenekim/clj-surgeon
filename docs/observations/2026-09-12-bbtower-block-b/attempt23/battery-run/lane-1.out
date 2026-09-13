@@ -1,0 +1,30 @@
+lanes: --ns -- 10 namespace(s), home-isolated false
+
+Testing clj-surgeon.reader-eval-fence-test
+
+Testing clj-surgeon.mcp-relation-census-test
+PARITY-ENUMERATION:
+  missing              expected not-found                    tool "not-found"                  cli :not-found                   agree true
+  denied-file          expected permission-denied            tool "permission-denied"          cli :permission-denied           agree true
+  denied-parent        expected parent-denied                tool "parent-denied"              cli :parent-denied               agree true
+  dir-named-clj        expected not-a-regular-file           tool "not-a-regular-file"         cli :not-a-regular-file          agree true
+  fifo                 expected not-a-regular-file           tool "not-a-regular-file"         cli :not-a-regular-file          agree true
+  symlink-loop         expected not-found                    tool "not-found"                  cli :not-found                   agree true
+  name-too-long        expected not-found                    tool "not-found"                  cli :not-found                   agree true
+  enotdir-component    expected not-found                    tool "not-found"                  cli :not-found                   agree true
+  escape               expected outside-project              tool "outside-project"            cli :outside-project             agree true
+  wrong-extension      expected not-a-relative-source-path   tool "not-a-relative-source-path" cli :not-a-relative-source-path  agree true
+
+Testing clj-surgeon.extract-test
+
+Testing clj-surgeon.core-discovery-test
+
+Testing clj-surgeon.receipt-artifacts-boundary-test
+
+Testing clj-surgeon.parser-admission-test
+
+Testing clj-surgeon.edn-config-integration-test
+
+Testing clj-surgeon.mission-git-submodule-test
+
+Testing clj-surgeon.mcp-inspect-cold-job-test

@@ -1,0 +1,10 @@
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.move-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.syntax-var-refs-test

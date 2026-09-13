@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.mcp-inspect-cold-job-test, :runtime :bb, :mode "load", :started-at "2026-09-12T18:59:52.488444505Z", :elapsed-ms 125, :status :load-failed, :message "Could not locate nrepl/core.bb, nrepl/core.clj or nrepl/core.cljc on classpath.", :causes ["Could not locate nrepl/core.bb, nrepl/core.clj or nrepl/core.cljc on classpath."]}

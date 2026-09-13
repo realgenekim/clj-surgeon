@@ -1,8 +1,8 @@
 (ns clj-surgeon.worktree-lifecycle-io
   "Bounded Git, Supacode, plan, journal, and single-target apply adapter."
   (:require
-   [clj-surgeon.spawn-ledger :as spawn]
    [cheshire.core :as json]
+   [clj-surgeon.spawn-ledger :as spawn]
    [clj-surgeon.worktree-lifecycle :as lifecycle]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -601,7 +601,9 @@
 (def supported-prune-git-versions
   ;; The initial release gate is intentionally exact. A new version enters
   ;; only after the compatibility matrix passes on that version.
-  #{"git version 2.50.1 (Apple Git-155)"})
+  ;; Git 2.53.0: attempt23's JVM and bb real-git-prune compatibility controls
+  ;; prove absent-target success, four refusals, and peer preservation.
+  #{"git version 2.50.1 (Apple Git-155)" "git version 2.53.0"})
 
 (defn git-version-supported? [controller]
   ;; @spec WTL-PRUNE-006

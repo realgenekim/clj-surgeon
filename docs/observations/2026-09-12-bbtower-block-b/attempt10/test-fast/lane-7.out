@@ -1,0 +1,33 @@
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.agent-routing-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.owner-hypotheses-test
+
+Testing clj-surgeon.cljc.split-test
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+FAIL in (no-fast-lane-namespace-roots-a-fixture-outside-its-own-tmpdir) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/fast_lane_isolation_test.clj:109)
+1 fast-lane namespace(s) rooting fixtures outside this run's own java.io.tmpdir subtree. The lane's rule is that it reads nothing outside its own temp root, and a seat-absolute root is also shared by every clone the concurrency battery runs at once: clj-surgeon.memory-battery-test -- the seat's shared /home/<user>/tmp ("\"/home/forge/tmp")
+expected: (empty? offenders)
+  actual: (not (empty? ("clj-surgeon.memory-battery-test -- the seat's shared /home/<user>/tmp (\"\\\"/home/forge/tmp\")")))
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.mcp-schema-test
+
+Testing clj-surgeon.mission-forms-test
+
+Testing clj-surgeon.diagnostic-delta-test
+
+Testing clj-surgeon.mcp-paths-test
+
+Testing clj-surgeon.mission-git-test
+
+Testing clj-surgeon.worktree-lifecycle-cli-test

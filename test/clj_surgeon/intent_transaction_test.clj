@@ -1,9 +1,11 @@
 (ns clj-surgeon.intent-transaction-test
+  {:lane :battery}
   (:require
    [babashka.fs :as fs]
    [babashka.process :as proc]
    [clj-surgeon.core :as core]
    [clj-surgeon.intent-transaction :as transaction]
+   [clj-surgeon.mcp-process :as process]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.edn :as edn]
    [clojure.string :as str]
@@ -2159,6 +2161,19 @@
 
 (deftest change-cli-dogfoods-one-shot-multi-file-apply-and-exact-undo
   (let [temp-dir (fs/create-temp-dir {:prefix "intent-change-dogfood-"})
+        ;; Attempt 13 prewarm: workspace-status included the live checkout's
+        ;; observation files, making the console larger than its receipt.
+        ;; Exercise the CLI in the owned fixture with an anchored classpath.
+        cli-base (process/bb-command
+                   ["bb" "--classpath"
+                    (str/join java.io.File/pathSeparator
+                              (map #(str (fs/absolutize %))
+                                   (str/split (System/getProperty "java.class.path")
+                                              (re-pattern java.io.File/pathSeparator))))
+                    "-m" "clj-surgeon.core"])
+        run-cli (fn [args options]
+                  @(proc/process (into cli-base args)
+                                 (merge {:dir (str temp-dir) :out :string :err :string} options)))
         app-file (str (fs/path temp-dir "app_shell.clj"))
         reader-file (str (fs/path temp-dir "source_reader.clj"))
         receipt-file (str (fs/path temp-dir "receipt.edn"))
@@ -2179,12 +2194,8 @@
       (spit app-file original-app)
       (spit reader-file original-reader)
       (let [{:keys [exit out err]}
-            @(proc/process ["bb" "-m" "clj-surgeon.core"
-                            ":op" ":change!"
-                            ":spec-file" "-"
-                            ":receipt-out" receipt-file]
-                           {:in (pr-str change-spec)
-                            :out :string :err :string})
+            (run-cli [":op" ":change!" ":spec-file" "-" ":receipt-out" receipt-file]
+                     {:in (pr-str change-spec)})
             result (edn/read-string out)
             _ (reset! published-receipt (:receipt-file result))
             receipt-file (:receipt-file result)
@@ -2203,6 +2214,7 @@
         (is (nil? (:files result)))
         (is (not (str/includes? out ":inverse-edits")))
         (is (< (count out) (count (slurp receipt-file))))
+        (is (= (str temp-dir) (get-in result [:workspace_status :command 2])))
         (is (str/includes? changed-app "#(str"))
         (is (not (str/includes? changed-app "fn*")))
         (is (str/includes? changed-app ":body.intent-page"))
@@ -2213,10 +2225,7 @@
         (is (valid-source? changed-reader)))
 
       (let [{:keys [exit out err]}
-            @(proc/process ["bb" "-m" "clj-surgeon.core"
-                            ":op" ":undo-change!"
-                            ":receipt" @published-receipt]
-                           {:out :string :err :string})
+            (run-cli [":op" ":undo-change!" ":receipt" @published-receipt] {})
             result (edn/read-string out)]
         (is (= 0 exit))
         (is (= "" err))
@@ -2226,10 +2235,7 @@
         (is (= original-reader (slurp reader-file))))
 
       (let [{:keys [exit out err]}
-            @(proc/process ["bb" "-m" "clj-surgeon.core"
-                            ":op" ":undo-change!"
-                            ":receipt" @published-receipt]
-                           {:out :string :err :string})
+            (run-cli [":op" ":undo-change!" ":receipt" @published-receipt] {})
             result (edn/read-string out)]
         (is (= 1 exit))
         (is (= "" err))

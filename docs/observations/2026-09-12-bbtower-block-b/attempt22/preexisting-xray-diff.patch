@@ -1,0 +1,10 @@
+diff --git a/test/clj_surgeon/xray_test.clj b/test/clj_surgeon/xray_test.clj
+index f9934a45..9b6eab8e 100644
+--- a/test/clj_surgeon/xray_test.clj
++++ b/test/clj_surgeon/xray_test.clj
+@@ -1,4 +1,5 @@
+ (ns clj-surgeon.xray-test
++  {:lane :battery}
+   (:require
+    [babashka.fs :as fs]
+    [babashka.process :as proc]

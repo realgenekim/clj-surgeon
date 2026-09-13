@@ -80,7 +80,7 @@
       (when line
         (if-let [[_ prereqs] (re-find head line)]
           (let [recipe (str/join "\n" (take-while #(str/starts-with? % "\t") more))
-                gate? (str/includes? recipe "test-battery-parallel --suite gate")]
+                gate? (boolean (re-find #"(?:test-battery-parallel|clj-surgeon\.battery-parallel-runner) --suite gate" recipe))]
             {:prerequisites (into (vec (remove str/blank? (str/split (str/trim (or prereqs "")) #"\s+")))
                                   (when gate?
                                     ((requiring-resolve 'clj-surgeon.battery-parallel-runner/gate-targets)
@@ -164,7 +164,7 @@
           sub-targets (concat prerequisites
                               (map second (re-seq #"\$\(MAKE\)(?:\s+--[a-z\-]+)*\s+([a-z0-9\-]+)" recipe)))
           bb-lane? (str/includes? recipe "bb test/run_all.clj")
-          coordinator-suite (when (str/includes? recipe "test-battery-parallel --suite")
+          coordinator-suite (when (re-find #"(?:test-battery-parallel|clj-surgeon\.battery-parallel-runner) --suite" recipe)
                               (second (re-find #"--suite (fast|mcp|bb|alias|gate)" recipe)))
           coordinator-members (when coordinator-suite
                                 (if (= "gate" coordinator-suite) #{}

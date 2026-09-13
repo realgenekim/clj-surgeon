@@ -1,0 +1,9 @@
+
+Testing clj-surgeon.forms-test
+
+Ran 24 tests containing 94 assertions.
+0 failures, 0 errors.
+0 preconditions skipped.
+0 preconditions failed.
+=> {:state :probe-passed, :proof_pending [:landing-gate], :reloaded ["clj-surgeon.fields" "clj-surgeon.forms" "clj-surgeon.forms-test"], :closure-expected 3, :tests 24, :assertions 94, :failures 0, :elapsed_ms 82.17618}
+*======== user | clj ========*

@@ -1,0 +1,2 @@
+Preparing worktree (detached HEAD eae1e432)
+fatal: could not create directory of '/home/forge/src/clj-surgeon/.git/worktrees/base-checkout': Permission denied

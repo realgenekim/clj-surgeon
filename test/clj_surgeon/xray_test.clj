@@ -1,4 +1,5 @@
 (ns clj-surgeon.xray-test
+  {:lane :battery}
   (:require
    [babashka.fs :as fs]
    [babashka.process :as proc]
@@ -7,7 +8,8 @@
    [clj-surgeon.structural-lens :as lens]
    [clojure.edn :as edn]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]))
+   [clojure.test :refer [deftest is testing]]
+   [sci.core :as sci]))
 
 (def ^:private source
   (str "(ns bench.xray)\n"
@@ -128,6 +130,35 @@
         (is (= expression (:expression error)))
         (is (some #{"(analyze path pure-function)"} (:allowed-forms error)))
         (is (str/includes? (:usage error) ":xray"))))))
+
+(deftest evaluation-preserves-typed-refusals-and-untyped-cause-messages
+  ;; Attempt22: JVM SCI wraps host exceptions; bb exposes them directly.
+  (doseq [error-type [:invalid-xray-expression :invalid-edit-expression :invalid-xray-cardinality]
+          wrapped? [false true]]
+    (let [refusal (ex-info "typed refusal" {:error-type error-type
+                                            :reason :field-refusal
+                                            :detail {:preserved true}})
+          raised (if wrapped? (ex-info "SCI wrapper" {:type :sci/error} refusal) refusal)
+          caught (with-redefs [sci/eval-string+ (fn [& _] (throw raised))]
+                   (try (dsl/compile-xray "(form 'data)")
+                        (catch Exception e e)))]
+      (is (identical? refusal caught))
+      (is (= (ex-data refusal) (ex-data caught)))))
+  (doseq [error-type [:invalid-xray-expression :invalid-edit-expression :invalid-xray-cardinality]]
+    (let [refusal (ex-info "typed builder refusal" {:error-type error-type :reason :field-refusal})
+          bindings-var (ns-resolve 'clj-surgeon.edit-dsl 'sci-bindings)
+          caught (with-redefs-fn
+                   {bindings-var (assoc (var-get bindings-var) 'form (fn [_] (throw refusal)))}
+                   #(try (dsl/compile-xray "(form 'data)") (catch Exception e e)))]
+      (is (identical? refusal caught))
+      (is (= (ex-data refusal) (ex-data caught)))))
+  (let [cause (IllegalArgumentException. "field evaluation failure")
+        caught (with-redefs [sci/eval-string+ (fn [& _] (throw cause))]
+                 (try (dsl/compile-xray "(form 'data)")
+                      (catch Exception e e)))]
+    (is (= :evaluation-failed (:reason (ex-data caught))))
+    (is (= "field evaluation failure" (:cause-message (ex-data caught))))
+    (is (identical? cause (ex-cause caught)))))
 
 (def macro-expansion-only-symbols
   '[lazy-seq loop loop* recur case* throw new unchecked-inc

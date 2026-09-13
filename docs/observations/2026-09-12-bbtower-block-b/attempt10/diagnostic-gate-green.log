@@ -1,0 +1,29 @@
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+FAIL in (the-lane-budget-is-folded-over-the-union-not-per-lane) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:145)
+NEW bb budget is enforced even without JVM isolation; span is separate
+expected: (= expected (clojure.core/deref result))
+  actual: (not (= 0 1))
+
+FAIL in (the-lane-budget-is-folded-over-the-union-not-per-lane) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:145)
+NEW bb budget is enforced even without JVM isolation; span is separate
+expected: (str/includes? out (str "bb-runtime: serial-equivalent " wall " ms; budget 399155 ms; makespan 20 ms"))
+  actual: (not (str/includes? "bb-runtime: serial-equivalent 399155 ms; budget 374149 ms; makespan 20 ms\n\nnamespace walls (1, slowest first, serial-equivalent total 399155 ms):\n    399155 ms  example.bb-test\n\nlanes (1), makespan 25 ms:\n  lane 0        20 ms  exit 0  example.bb-test\n\nTEST-ISOLATION: 1 violation(s) -- the suite's own purity rules, per namespace:\n   TEST-ISO-007 VIOLATION in :bb -- lane time budget: the bb lane took 399155 ms, over its 374149 ms budget\n" "bb-runtime: serial-equivalent 399155 ms; budget 399155 ms; makespan 20 ms"))
+
+FAIL in (the-lane-budget-is-folded-over-the-union-not-per-lane) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:145)
+NEW bb budget is enforced even without JVM isolation; span is separate
+expected: (str/includes? out (str "bb-runtime: serial-equivalent " wall " ms; budget 399155 ms; makespan 20 ms"))
+  actual: (not (str/includes? "bb-runtime: serial-equivalent 399156 ms; budget 374149 ms; makespan 20 ms\n\nnamespace walls (1, slowest first, serial-equivalent total 399156 ms):\n    399156 ms  example.bb-test\n\nlanes (1), makespan 25 ms:\n  lane 0        20 ms  exit 0  example.bb-test\n\nTEST-ISOLATION: 1 violation(s) -- the suite's own purity rules, per namespace:\n   TEST-ISO-007 VIOLATION in :bb -- lane time budget: the bb lane took 399156 ms, over its 374149 ms budget\n" "bb-runtime: serial-equivalent 399156 ms; budget 399155 ms; makespan 20 ms"))
+
+FAIL in (the-lane-budget-is-folded-over-the-union-not-per-lane) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:145)
+NEW bb budget is enforced even without JVM isolation; span is separate
+expected: (str/includes? out "bb lane took 399156 ms, over its 399155 ms budget")
+  actual: (not (str/includes? "bb-runtime: serial-equivalent 399156 ms; budget 374149 ms; makespan 20 ms\n\nnamespace walls (1, slowest first, serial-equivalent total 399156 ms):\n    399156 ms  example.bb-test\n\nlanes (1), makespan 25 ms:\n  lane 0        20 ms  exit 0  example.bb-test\n\nTEST-ISOLATION: 1 violation(s) -- the suite's own purity rules, per namespace:\n   TEST-ISO-007 VIOLATION in :bb -- lane time budget: the bb lane took 399156 ms, over its 374149 ms budget\n" "bb lane took 399156 ms, over its 399155 ms budget"))
+
+Ran 40 tests containing 258 assertions.
+4 failures, 0 errors.

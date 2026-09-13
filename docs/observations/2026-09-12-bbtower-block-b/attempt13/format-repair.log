@@ -1,0 +1,5 @@
+standard-clj fix v0.29.0
+
+✓ /test/clj_surgeon/intent_transaction_test.clj [44.95ms]
+
+1 file formatted with Standard Clojure Style 👍 [51.89ms]

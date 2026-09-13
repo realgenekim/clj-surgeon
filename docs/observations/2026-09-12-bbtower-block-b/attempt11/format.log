@@ -1,0 +1,9 @@
+standard-clj fix v0.29.0
+
+✓ /test/clj_surgeon/battery_parallel_test.clj [24.27ms]
+F /test/clj_surgeon/bb_ceiling.clj [0.9ms]
+✓ /test/clj_surgeon/ns_isolation.clj [7.11ms]
+✓ /test/clj_surgeon/ns_isolation_test.clj [8.41ms]
+✓ /test/clj_surgeon/splice_envelope_test.clj [2.28ms]
+
+All 5 files formatted with Standard Clojure Style 👍 [51.51ms]

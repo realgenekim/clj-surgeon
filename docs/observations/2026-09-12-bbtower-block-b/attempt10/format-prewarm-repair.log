@@ -1,0 +1,5 @@
+standard-clj fix v0.29.0
+
+✓ /test/clj_surgeon/lane_manifest.clj [11.43ms]
+
+1 file formatted with Standard Clojure Style 👍 [18.43ms]

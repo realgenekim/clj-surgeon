@@ -1,0 +1,20 @@
+lanes: --ns -- 11 namespace(s), home-isolated false
+
+Testing clj-surgeon.reader-eval-fence-test
+
+Testing clj-surgeon.mission-publication-test
+
+Testing clj-surgeon.mission-commit-cli-test
+
+Testing clj-surgeon.admit-patch-test
+
+Testing clj-surgeon.rename-alias-performance-test
+4000-line planner seconds: 1.486800319
+
+Testing clj-surgeon.require-change-boundary-test
+
+Testing clj-surgeon.mcp-cold-verify-test
+
+Testing clj-surgeon.mission-git-process-test
+
+Testing clj-surgeon.repository-hygiene-test

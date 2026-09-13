@@ -1,0 +1,8 @@
+standard-clj fix v0.29.0
+
+✓ /test/clj_surgeon/bb_ceiling.clj [5.2ms]
+F /test/clj_surgeon/lane_manifest.clj [11.55ms]
+F /test/clj_surgeon/lane_manifest_test.clj [15.4ms]
+✓ /test/clj_surgeon/ns_isolation_test.clj [10.32ms]
+
+All 4 files formatted with Standard Clojure Style 👍 [51.78ms]

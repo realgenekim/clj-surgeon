@@ -1,0 +1,18 @@
+
+Testing clj-surgeon.mcp-intent-contract-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.mission-typist-test
+
+Testing clj-surgeon.outline-differential-test
+
+Testing clj-surgeon.cljc.analyze-test
+
+Testing clj-surgeon.mcp-compact-edit-fields-test

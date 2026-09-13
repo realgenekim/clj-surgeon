@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "git",
+    "-c",
+    "core.hooksPath=/var/empty",
+    "worktree",
+    "add",
+    "--detach",
+    "/home/forge/src/clj-surgeon-bbtower/target/base-checkout",
+    "eae1e43280635be9b4e317e176d29476fd358702"
+  ],
+  "started": "2026-09-12T06:31:21.590456+00:00",
+  "elapsed_ms": 15,
+  "exit": 128,
+  "stdout": "",
+  "stderr": "Preparing worktree (detached HEAD eae1e432)\nfatal: could not create directory of '/home/forge/src/clj-surgeon/.git/worktrees/base-checkout': Permission denied\n"
+}

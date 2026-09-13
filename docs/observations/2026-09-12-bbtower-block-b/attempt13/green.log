@@ -1,0 +1,9 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.mcp-formatter-test
+
+Testing clj-surgeon.mcp-process-test
+
+Ran 25 tests containing 110 assertions.
+0 failures, 0 errors.
+{:test 2, :pass 5, :fail 0, :error 0}

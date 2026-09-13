@@ -1,0 +1,6 @@
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Ran 17 tests containing 95 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.workspace-onboarding-test, :runtime :bb, :mode "test", :started-at "2026-09-12T19:26:20.939872137Z", :elapsed-ms 195, :status :passed, :result {:test 17, :pass 95, :fail 0, :error 0, :type :summary}}

@@ -1,0 +1,24 @@
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.battery-parallel-test
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.battery-parallel-hook-probe
+
+Testing clj-surgeon.fast-lane-isolation-test
+
+Testing clj-surgeon.mcp-program-tool-test
+
+Testing clj-surgeon.mission-forms-source-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.mcp-read-request-normalization-test
+
+Testing clj-surgeon.mission-usage-test

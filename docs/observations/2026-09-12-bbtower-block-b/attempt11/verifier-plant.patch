@@ -1,0 +1,23 @@
+diff --git a/src/clj_surgeon/mcp_hot_verify.clj b/src/clj_surgeon/mcp_hot_verify.clj
+index ed97a57a..e7796dbc 100644
+--- a/src/clj_surgeon/mcp_hot_verify.clj
++++ b/src/clj_surgeon/mcp_hot_verify.clj
+@@ -234,6 +234,10 @@
+ 
+ ;; @spec BB-PROBE-001
+ ;; @spec BB-PROBE-002
++(defn- probe-guard [request]
++  (when (:guard request)
++    (throw (ex-info "guarded" {:error-type :hot-verify-helper-unregistered}))))
++
+ (defn probe! [image request]
+   (locking image
+     (let [started (System/nanoTime)
+@@ -243,6 +247,7 @@
+           reloaded (atom [])
+           elapsed #(/ (double (- (System/nanoTime) started)) 1000000.0)]
+       (try
++        (probe-guard request)
+         (if-let [error (problem image (fingerprint (:root image)) request)]
+           (assoc error :elapsed_ms (elapsed))
+           (let [target (symbol (:ns request))

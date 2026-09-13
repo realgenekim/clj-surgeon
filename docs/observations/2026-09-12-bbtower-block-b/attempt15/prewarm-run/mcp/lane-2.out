@@ -1,0 +1,22 @@
+
+Testing clj-surgeon.lane-manifest-test
+
+Testing clj-surgeon.helper-extraction-test
+
+Testing clj-surgeon.analyze-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.telemetry-events-test
+
+Testing clj-surgeon.move-dependency-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Testing clj-surgeon.mcp-recovery-test
+
+Testing clj-surgeon.mission-forms-test

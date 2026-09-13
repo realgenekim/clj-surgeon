@@ -1,0 +1,47 @@
+{:verdict :pass
+ :attempt 15
+ :branch "bb-rewrite-tower-local"
+ :base "2f7b4cf8"
+ :commits {:source "0d92fe92c679cff0341ef81a75dccf686f4e19e8"
+           :evidence "The final commit containing this report; attempt15 files only"}
+ :findings
+ ["Landlock reproduced all three original PermissionErrors"
+  "120-byte failure was the real /tmp fallback bind, not creation of the long TMPDIR"
+  "Private TMPDIR-derived roots preserve kernel bind, exact UTF-8 budget, occupied-slot and mode assertions"
+  "All three named mission workspace/cwd literals now use cleaned-up scratch"
+  "Ledger invalid options refuse before I/O; workspace changed as requested"
+  "Complete tracked census: 54 original matching lines, 48 remaining; libs has no matches and lib does not exist"
+  "First fast check and first prewarm passed; no gate repair or retry"]
+ :measurements
+ {:oracle-red {:log "oracle-red.log" :tests 20 :errors 3 :skipped 2 :exit 1}
+  :oracle-intermediate {:log "oracle-intermediate.log" :tests 21 :errors 1 :skipped 2 :exit 1}
+  :oracle-green {:log "oracle-green.log" :tests 21 :errors 0 :skipped 2 :exit 0}
+  :oracle-fresh {:log "oracle-fresh.log" :tests 21 :errors 0 :skipped 2 :exit 0
+                 :scratch-empty true :new-forge-gate-entries []
+                 :listings ["gate-entries-before.txt" "gate-entries-after.txt"]}
+  :mission {:log "mission-jvm.log" :tests 3 :assertions 11 :fail 0 :error 0}
+  :fast {:log "test-fast.log" :invocations 1 :exit 0 :namespaces 94
+         :sum-ms 43906 :budget-ms 60000 :makespan-ms 24584 :isolation-violations 0}
+  :prewarm {:log "gate.md" :receipt "gate-receipt.edn" :workers "prewarm-run/"
+            :invocations 1 :repairs 0 :retries 0 :exit 0 :state :passed :problems []
+            :landing? false :prewarm? true :wall-ms 384824
+            :run-id "ff89c96b-1bdb-4173-89d7-6055150eb52c"
+            :started-at "2026-09-12T13:00:31.542098977Z"
+            :completed-at "2026-09-12T13:06:56.366781727Z"
+            :source-digest "4b590b0307a25feb74eb045a0161dd5ca5cc60bc97d47931a47f3e9a6774273b"
+            :alias {:sum-ms 81517 :makespan-ms 89324 :exit 0}
+            :mcp {:fast-sum-ms 45181 :integration-sum-ms 66360 :makespan-ms 89391 :exit 0}
+            :bb {:serial-equivalent-ms 239633 :runtime-sum-ms 233916
+                 :budget-ms 343102 :makespan-ms 85216 :exit 0}
+            :shell-checks {:exit 0 :wall-ms 128433}
+            :gate-slot {:log "prewarm-run/lane-0.err" :tests 21 :errors 0 :skipped 2}}}
+ :dogfood "REPORT.md DOGFOOD table: all four modified tests and the new restricted oracle wrapper"
+ :census "literal-census.md"
+ :prior-packet "prewarm-checkonly-run4/"
+ :least_sure ["Very long TMPDIR paths explicitly fail the fixture's short-root/120-byte preconditions"
+              "Native macOS not exercised"
+              "Full prewarm was outside the packet; only the oracle was freshly Landlock-restricted"]
+ :disagreements ["120-byte case failed binding in /tmp, not mkdir under /var/tmp/forge"
+                 "Ledger invalid-options witness refuses before I/O"]
+ :owed ["Fable independent review" "Full landing/battery-fresh authority remains external"
+        "Historical block certification not re-claimed by this repair"]}

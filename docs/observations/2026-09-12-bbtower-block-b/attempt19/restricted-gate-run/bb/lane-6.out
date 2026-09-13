@@ -1,0 +1,16 @@
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.structural-lens-test
+
+Testing clj-surgeon.worktree-lifecycle-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.insertion-gap-test
+
+Testing clj-surgeon.rename-test
+
+Testing clj-surgeon.cljc.analyze-test

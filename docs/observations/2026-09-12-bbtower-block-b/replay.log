@@ -1,0 +1,74 @@
+RETAINED-FACT REPLAY; no test namespace executed
+:lane-budgets {:fast 60000, :integration 240000, :battery 1800000}
+:fast-members 61 :fast-sum-ms 68210
+
+namespace walls (61, slowest first, serial-equivalent total 68210 ms):
+     29130 ms  clj-surgeon.splice-envelope-test
+      7603 ms  clj-surgeon.mcp-compact-relations-test
+      6713 ms  clj-surgeon.rename-alias-test
+      5286 ms  clj-surgeon.insert-forms-test
+      4310 ms  clj-surgeon.mcp-operation-registry-test
+      2050 ms  clj-surgeon.rename-alias-receipt-test
+      1924 ms  clj-surgeon.mcp-namespace-split-test
+      1338 ms  clj-surgeon.mcp-inspect-tool-test
+      1018 ms  clj-surgeon.lane-manifest-test
+       815 ms  clj-surgeon.namespace-split-test
+       802 ms  clj-surgeon.helper-extraction-test
+       771 ms  clj-surgeon.ns-isolation-test
+       764 ms  clj-surgeon.insert-forms-receipt-test
+       549 ms  clj-surgeon.scope-stream-test
+       439 ms  clj-surgeon.mcp-compact-location-test
+       436 ms  clj-surgeon.outline-memory-test
+       350 ms  clj-surgeon.receipt-booleans-test
+       322 ms  clj-surgeon.mcp-prepared-request-test
+       307 ms  clj-surgeon.mcp-inspect-contract-test
+       299 ms  clj-surgeon.mcp-change-buffer-test
+       278 ms  clj-surgeon.census-pool-test
+       271 ms  clj-surgeon.mcp-intent-contract-test
+       221 ms  clj-surgeon.mcp-create-files-test
+       215 ms  clj-surgeon.mcp-relation-census-round20-test
+       194 ms  clj-surgeon.mcp-combinable-transaction-test
+       189 ms  clj-surgeon.mcp-expect-guard-test
+       186 ms  clj-surgeon.mcp-prepared-confirmation-test
+       146 ms  clj-surgeon.mcp-compact-edit-test
+       130 ms  clj-surgeon.mcp-write-refusal-test
+       125 ms  clj-surgeon.mcp-operation-async-test
+       124 ms  clj-surgeon.mcp-formatter-test
+       122 ms  clj-surgeon.mcp-extraction-plan-test
+       122 ms  clj-surgeon.mcp-operation-test
+       112 ms  clj-surgeon.workspace-onboarding-test
+       103 ms  clj-surgeon.mission-candidate-race-test
+       100 ms  clj-surgeon.mcp-semantic-client-test
+        56 ms  clj-surgeon.mcp-workspace-test
+        53 ms  clj-surgeon.battery-parallel-test
+        47 ms  clj-surgeon.telemetry-events-test
+        37 ms  clj-surgeon.mcp-extraction-test
+        36 ms  clj-surgeon.require-change-test
+        24 ms  clj-surgeon.mission-plain-forms-test
+        15 ms  clj-surgeon.mcp-program-tool-test
+        14 ms  clj-surgeon.mcp-contract-test
+         9 ms  clj-surgeon.mission-forms-source-test
+         8 ms  clj-surgeon.quoted-var-refs-test
+         7 ms  clj-surgeon.fast-lane-isolation-test
+         7 ms  clj-surgeon.mission-typist-test
+         4 ms  clj-surgeon.mcp-read-request-normalization-test
+         4 ms  clj-surgeon.mcp-recovery-test
+         4 ms  clj-surgeon.mcp-schema-test
+         4 ms  clj-surgeon.outline-differential-test
+         3 ms  clj-surgeon.battery-ledger-test
+         3 ms  clj-surgeon.mcp-telemetry-test
+         3 ms  clj-surgeon.mission-usage-test
+         3 ms  clj-surgeon.split-proof-gate-test
+         2 ms  clj-surgeon.mcp-compact-edit-fields-test
+         2 ms  clj-surgeon.mission-candidate-test
+         1 ms  clj-surgeon.mission-forms-test
+         0 ms  clj-surgeon.mcp-paths-test
+         0 ms  clj-surgeon.mission-git-test
+
+lanes (0), makespan 83233 ms:
+
+TEST-ISOLATION: 1 violation(s) -- the suite's own purity rules, per namespace:
+   TEST-ISO-007 VIOLATION in :fast -- lane time budget: the fast lane took 68210 ms, over its 60000 ms budget
+:fast-only-violation-count 1
+:probe-boolean-registration nil
+:registered-boolean-verbs ["insert_forms" "rename_alias"]

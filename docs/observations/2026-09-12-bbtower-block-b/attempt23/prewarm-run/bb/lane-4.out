@@ -1,0 +1,14 @@
+
+Testing clj-surgeon.workspace-onboarding-test
+
+Testing clj-surgeon.jvm-error-test
+
+Testing clj-surgeon.worktree-lifecycle-io-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.cljc.merge-test
+
+Testing clj-surgeon.extract-header-test

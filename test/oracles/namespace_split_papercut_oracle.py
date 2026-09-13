@@ -26,7 +26,7 @@ something a careful human reviewer would ask you to fix before merge, and that
 no compiler or test run will ever complain about.
 
 The tool never mutates the graded worktree. Baseline lint uses a temporary
-mirror under /var/tmp, deleted after the analyzer returns.  The
+mirror under TMPDIR (or /var/tmp when unset), deleted after the analyzer returns. The
 pre-split baseline is read with `git show HEAD:<path>` out of the worktree's own
 object database; the working tree is only ever read.
 
@@ -475,7 +475,7 @@ def baseline_kondo(root):
                          "src", "test", ".clj-kondo")
     if rc:
         return None, err
-    with tempfile.TemporaryDirectory(prefix="split-oracle-", dir="/var/tmp") as mirror:
+    with tempfile.TemporaryDirectory(prefix="split-oracle-", dir=os.environ.get("TMPDIR") or "/var/tmp") as mirror:
         for path in paths.splitlines():
             content = git_show(root, path)
             if content is None:

@@ -1,0 +1,16 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+prepared-wire-teardown: stderr-reader-failed -- ExceptionInfo: stderr reader died
+prepared-wire-teardown: stderr-reader-failed -- ExceptionInfo: stderr reader died
+clj-surgeon: skipping project discovery; not an existing directory: "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-2383220-d99c0f0f/andon-shell-safety13659448093820078139/H; touch /var/tmp/forge/bbtower-fx/clj-surgeon-suite-2383220-d99c0f0f/andon-shell-safety13659448093820078139/PWNED-SEMICOLON ; echo z"
+clj-surgeon: skipping project discovery; not an existing directory: "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-2383220-d99c0f0f/andon-shell-safety6926541450705689596/H$(touch /var/tmp/forge/bbtower-fx/clj-surgeon-suite-2383220-d99c0f0f/andon-shell-safety6926541450705689596/PWNED-SUBST)"
+
+namespace walls (8, slowest first, total 34467 ms):
+     23543 ms  clj-surgeon.mcp-prepared-wire-test
+      4429 ms  clj-surgeon.core-discovery-test
+      1931 ms  clj-surgeon.rename-alias-performance-test
+      1582 ms  clj-surgeon.require-change-boundary-test
+       991 ms  clj-surgeon.mission-git-fence-test
+       957 ms  clj-surgeon.edn-config-integration-test
+       522 ms  clj-surgeon.platform-selector-test
+       512 ms  clj-surgeon.reader-eval-fence-test

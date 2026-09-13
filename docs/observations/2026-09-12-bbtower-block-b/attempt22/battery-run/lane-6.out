@@ -1,0 +1,15 @@
+lanes: --ns -- 7 namespace(s), home-isolated false
+
+Testing clj-surgeon.edit-test
+
+Testing clj-surgeon.partition-all-test
+
+Testing clj-surgeon.mission-publication-test
+
+Testing clj-surgeon.insert-forms-parity-test
+
+Testing clj-surgeon.reader-eval-fence-test
+
+Testing clj-surgeon.mission-git-process-test
+
+Testing clj-surgeon.mission-usage-executor-test

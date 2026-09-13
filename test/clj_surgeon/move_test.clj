@@ -1,4 +1,5 @@
 (ns clj-surgeon.move-test
+  {:lane :fast}
   (:require
    [clj-surgeon.move :as move]
    [clojure.string :as str]

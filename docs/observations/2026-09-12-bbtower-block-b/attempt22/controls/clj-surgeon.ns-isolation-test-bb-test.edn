@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.ns-isolation-test, :runtime :bb, :mode "test", :started-at "2026-09-12T19:12:24.279266261Z", :elapsed-ms 117, :status :test-failed, :result {:test 27, :pass 161, :fail 0, :error 3, :type :summary}}

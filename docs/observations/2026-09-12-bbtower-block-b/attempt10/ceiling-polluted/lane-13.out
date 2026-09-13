@@ -1,0 +1,12 @@
+
+Testing clj-surgeon.cli-dispatch-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.forms-test
+
+Testing clj-surgeon.memory-battery-test
+
+Testing clj-surgeon.partition-all-test
+
+Testing clj-surgeon.tmp-leak-support-test

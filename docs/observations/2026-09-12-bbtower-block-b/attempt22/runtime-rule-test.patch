@@ -1,0 +1,47 @@
+*** Begin Patch
+*** Update File: /home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj
+@@
+-(deftest every-test-namespace-on-disk-is-accounted-for
++(deftest runtime-portability-controls-cover-every-assignment
++  ;; @spec TEST-ISO-016 -- all cadences, independently of the 38 cost pairs.
++  (let [n 'fixture/runtime-test
++        passing (fn [runtime] {:namespace n :runtime runtime :status :passed :exit 0
++                               :result {:test 1 :fail 0 :error 0}})
++        controls {:jvm (passing :jvm) :bb (passing :bb)}]
++    (is (nil? (lm/portability-refusal n controls)))
++    (doseq [runtime [:jvm :bb]
++            bad [nil
++                 (assoc (passing runtime) :status :test-failed)
++                 (assoc (passing runtime) :exit 1)
++                 (assoc-in (passing runtime) [:result :fail] 1)
++                 (assoc-in (passing runtime) [:result :error] 1)
++                 (assoc-in (passing runtime) [:result :test] 0)
++                 (assoc (passing runtime) :namespace 'wrong/test)
++                 (assoc (passing runtime) :runtime :wrong)]]
++      (let [refusal (lm/portability-refusal n (assoc controls runtime bad))]
++        (is (= :non-portable-namespace (:error-type refusal)))
++        (is (= n (:namespace refusal)))
++        (is (contains? (:controls refusal) runtime))))
++    (is (= :bb-load-incompatible
++           (:reason (lm/portability-refusal n
++                       {:bb-load {:status :load-failed :mode "load" :namespace n
++                                  :runtime :bb :exit 1 :message "unsupported class"}})))))
++  (is (= (set (keys lm/namespace-runtimes))
++         (set (keys lm/namespace-runtime-controls))))
++  (doseq [[n paths] lm/namespace-runtime-controls]
++    (let [controls (into {}
++                         (for [[runtime path] paths
++                               :when (.isFile (io/file path))]
++                           [runtime (assoc (edn/read-string (slurp path)) :receipt path)]))
++          refusal (lm/portability-refusal n controls)
++          unsupported-jvm-only? (and (= :bb-load-incompatible (:reason refusal))
++                                     (= :jvm (lm/namespace-runtimes n))
++                                     (= :jvm (lm/portability-runtimes n))
++                                     (= n (get-in controls [:bb-load :namespace]))
++                                     (= :bb (get-in controls [:bb-load :runtime]))
++                                     (not (str/blank? (get-in controls [:bb-load :message]))))]
++      (is (or (nil? refusal) unsupported-jvm-only?)
++          (pr-str refusal)))))
++
++(deftest every-test-namespace-on-disk-is-accounted-for
+*** End Patch

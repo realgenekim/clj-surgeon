@@ -1,0 +1,7 @@
+lanes: --ns -- 3 namespace(s), home-isolated true
+
+Testing clj-surgeon.mcp-operation-registry-test
+
+Testing clj-surgeon.mcp-extraction-plan-test
+
+Testing clj-surgeon.mcp-operation-test

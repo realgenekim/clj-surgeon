@@ -1,0 +1,1 @@
+{:namespace clj-surgeon.txn-journal-test, :runtime :bb, :mode "load", :started-at "2026-09-12T19:26:15.301904650Z", :elapsed-ms 77, :status :load-failed, :message "Unable to resolve classname: java.nio.file.SimpleFileVisitor", :causes ["Unable to resolve classname: java.nio.file.SimpleFileVisitor"]}

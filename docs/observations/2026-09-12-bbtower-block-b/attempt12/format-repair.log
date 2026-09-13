@@ -1,0 +1,6 @@
+standard-clj fix v0.29.0
+
+✓ /test/clj_surgeon/battery_parallel_test.clj [22.72ms]
+F /test/clj_surgeon/receipt_artifacts_boundary_test.clj [7.22ms]
+
+All 2 files formatted with Standard Clojure Style 👍 [37.52ms]

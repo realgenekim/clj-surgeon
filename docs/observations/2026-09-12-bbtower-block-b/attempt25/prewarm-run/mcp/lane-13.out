@@ -1,0 +1,12 @@
+
+Testing clj-surgeon.cljc-existing-ops-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.battery-ledger-test
+
+Testing clj-surgeon.mcp-recovery-test
+
+Testing clj-surgeon.worktree-lifecycle-test

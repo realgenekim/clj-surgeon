@@ -1,0 +1,7 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx/attempt14-red/tmp
+{:ok true, :formatter {:command ["/home/forge/.local/lib/node_modules/@chrisoakman/standard-clojure-style/cli.mjs" "fix" "/var/tmp/forge/bbtower-fx/attempt14-red/tmp/clj-surgeon-candidate-8705896253674307579.clj"], :resolved? true}, :status :complete, :file-count 1, :changed-file-count 0, :elapsed_ms 114.644617}
+Execution error (AssertionError) at user/eval14212 (formatter-witness.clj:11).
+Assert failed: (= "(ns app)\n\n(def x 1)\n" (get-in result [:future-sources "app.clj"]))
+
+Full report at:
+/var/tmp/forge/bbtower-fx/attempt14-red/tmp/clojure-11639348399699966759.edn

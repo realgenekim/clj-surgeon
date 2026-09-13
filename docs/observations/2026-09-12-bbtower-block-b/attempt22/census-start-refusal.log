@@ -1,0 +1,29 @@
+----- Error --------------------------------------------------------------------
+Type:     java.io.IOException
+Message:  Cannot run program "[bb": Exec failed, error: 2 (No such file or directory) 
+Location: /home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt22/run_census.clj:23:17
+
+----- Context ------------------------------------------------------------------
+19:                          (pr-str {:paths ["src" "test" "dev/experiments" root]})
+20:                          "-M:clj-surgeon/test-deps" "-m" "portability-runner"])
+21:                       [(name runtime) (str n) receipt mode])
+22:         _ (spit (str prefix ".command.edn") (pr-str {:command command :subject subject}))
+23:         process (p/process {:out (str prefix ".log") :err :out} command)
+                    ^--- Cannot run program "[bb": Exec failed, error: 2 (No such file or directory) 
+24:         exit (:exit @process)
+25:         row (if (fs/exists? receipt) (edn/read-string (slurp receipt))
+26:                 {:namespace n :runtime runtime :status :process-failed :exit exit})]
+27:     (println (str n " " runtime " " mode " " (:status row) " exit=" exit))
+28:     (flush)
+
+----- Stack trace --------------------------------------------------------------
+babashka.process/process*     - <built-in>
+babashka.process/process      - <built-in>
+clojure.core/apply            - <built-in>
+babashka.impl.process/process - <built-in>
+babashka.process/process      - babashka/impl/process.clj:16:1
+run-census/control!           - /home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt22/run_census.clj:23:17
+run-census/control!           - /home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt22/run_census.clj:12:1
+run-census                    - /home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt22/run_census.clj:32:16
+run-census                    - /home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt22/run_census.clj:31:1
+

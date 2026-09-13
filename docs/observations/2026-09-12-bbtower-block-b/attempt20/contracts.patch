@@ -1,0 +1,99 @@
+*** Begin Patch
+*** Update File: /home/forge/src/clj-surgeon-bbtower/docs/intent/test-isolation/test-isolation-specs.md
+@@
+-  bb-portable AND its measured bb namespace wall is at most 2.0 times its
+-  measured JVM namespace wall on the same box. Record both walls, their
+-  ratio and log paths beside the assignment; otherwise select JVM. Existing
++  bb-portable AND its conservative paired namespace-wall ratio is at most
++  2.0. Measure at least six identical controls per runtime on the same box,
++  one suite at a time. Use sample standard deviations (n-1) and the ratio
++  (mean_bb + 2 * sd_bb) / max(1 ms, mean_jvm - 2 * sd_jvm).
++  Record n, every wall, mean, sd, conservative ratio and receipt paths beside
++  each paired assignment in the manifest; otherwise select JVM. Existing
+@@
+-  paired walls and defect recorded. "bb-first" means bb where bb is not
+-  slower, never bb at any price; 2.0 is the declared admission tolerance.
++  paired controls and defect recorded. The declared bb admission tolerance
++  is 2.0 after the conservative variance adjustment.
+@@
+-  The initial application covers every bb-assigned member of the original
+-  61 fast namespaces using attempt7/a-base and attempt7/c-subject receipts.
+-  A bb assignment with a recorded ratio above 2.0 shall fail by namespace
+-  name, independently of the selection function. At 2.0 bb is eligible;
+-  one ms beyond twice the JVM wall is not. Cadence, membership and the
++  Attempt20 replaces the single observations for all 35 bb-portable members
++  of the original fast set and every additional paired namespace moved by
++  the rule. Receipts and their fold script live under attempt20/.
++  Any recorded sample smaller than six, or a bb assignment with a recorded
++  conservative ratio above 2.0, shall fail by namespace name independently
++  of the selection function. The witness recomputes mean and sd from the
++  receipts. At conservative ratio 2.0 bb is eligible; any excess is not.
++  Failed test samples cannot certify bb portability. Cadence, membership and the
+@@
+-  Both sums fold ONE calibration receipt under the SHIPPED lane manifest at
+-  the tip, never frozen maps. Thus ceil(240,989 * 60,000 / 42,143) = 343,102 ms.
++  Both sums fold ONE calibration receipt: execution runtimes come from its
++  recorded lanes, and cadence comes from the unchanged cadence manifest.
++  A later TEST-ISO-016 assignment must not relabel historical execution walls.
++  Thus ceil(240,989 * 60,000 / 42,143) = 343,102 ms; no budget is recalibrated.
+@@
+-  A manifest change must therefore reproduce and reconcile the declaration.
++  A cadence change must therefore reproduce and reconcile the declaration.
+*** Update File: /home/forge/src/clj-surgeon-bbtower/docs/intent/hot-verification/bb-probe-specs.md
+@@
+-A real `probe/verdict` with tests executed and no failures supplies
+-verification_complete=false; no boolean is fabricated by the witness.
++A real `probe/verdict` with tests executed and no failures omits
++verification_complete; no constant boolean is fabricated by the witness.
++Receipt keys (EDN): `#{:state :proof_pending :reloaded :tests :assertions :failures :elapsed_ms}`
++This is the complete untruncated verdict shape for passed and failed test runs;
++a caught execution exception may additionally carry :error. The shape witness
++parses this statement and compares it to an executed successful probe receipt.
+@@
+-failed inner-loop verdict with verification_complete false, pending landing-gate,
++failed inner-loop verdict without verification_complete, pending landing-gate,
+@@
+ - [x] **BB-PROBE-003**: When an admitted probe names a local test namespace, the warm
+@@
+ Misreading: start a second analysis JVM for each probe or silently run old tests.
++
++- [x] **BB-PROBE-004**: When the servlet encodes a probe result larger than
++16,384 UTF-8 bytes, it shall emit a complete bounded EDN projection before
++writing any response bytes. A bound must degrade, never delete: retain state,
++pending proof, test/assertion/failure counts and elapsed time; include
++:error-type :probe-response-truncated, :reloaded-count, a prefix of at most 64
++reload names that fits the bound, and :truncated {:bound 16384 :encoded original-bytes
++:omitted omitted-name-count}. Oversized refusal messages use the same projection;
++their original keyword refusal type is retained as :cause when its encoding
++fits 128 bytes.
++An oversized :error is replaced by a bounded message, preserving the CLI's
++nonzero failure exit.
++At 16,384 bytes emit the original encoding; at 16,385 bytes degrade. Both failed
++and passed verdicts retain their status. No partial EDN stream is permitted.
++Misreadings: enforce only the client read guard; count characters instead of
++UTF-8 bytes; assume 64 names always fit; drop the verdict to satisfy the bound.
++Witnesses: mcp-http-server-test/probe-output-degrades-without-deleting-the-verdict
++and mcp-http-server-test/probe-servlet-bounds-the-actual-writer include Sol's
++5,000-dependency case and multibyte/oversized names.
+*** Update File: /home/forge/src/clj-surgeon-bbtower/docs/intent/hot-verification/hot-verification-design.md
+@@
+-namespace-level alias-migration refusal census can follow it. Its seven new
++namespace-level alias-migration refusal census can follow it. Its registered
+@@
+ actual forwarding, and do not exempt an unresolved constructor call.
++
++The HTTP crossing encodes the entire probe result and measures UTF-8 bytes
++before obtaining its writer. BB-PROBE-004 caps emitted EDN at 16,384 bytes.
++Oversized output preserves the verdict and counts while projecting a bounded
++prefix of reload names with typed truncation metadata. The client receives a
++complete verdict even when a reload closure is larger than its input guard.
++BB-PROBE-001's executable receipt-shape statement keeps the checked spec in
++agreement with the actual receipt; verification_complete remains absent.
+*** Update File: /home/forge/src/clj-surgeon-bbtower/docs/high-level-design.md
+@@
+ - [Babashka warm probe](intent/hot-verification/bb-probe-specs.md): a generation-bound
+-  inner-loop verdict from the one MCP JVM, always pending cold proof.
++  inner-loop verdict from the one MCP JVM, always pending cold proof. The server
++  bounds complete encoded output; oversized reload inventories degrade to a
++  prefix with explicit truncation facts while retaining the verdict and counts.
+*** End Patch

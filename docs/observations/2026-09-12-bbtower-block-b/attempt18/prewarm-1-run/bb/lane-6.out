@@ -1,0 +1,20 @@
+
+Testing clj-surgeon.outline-test
+
+Testing clj-surgeon.operation-algebra-test
+
+Testing clj-surgeon.ls-tree-test
+
+Testing clj-surgeon.recovery-test
+
+Testing clj-surgeon.fix-declares-test
+
+Testing clj-surgeon.relation-census-test
+
+Testing clj-surgeon.edit-dsl-test
+
+Testing clj-surgeon.cljc.require-ops-test
+
+Testing clj-surgeon.failure-report-test
+
+Testing clj-surgeon.cljc.analyze-test

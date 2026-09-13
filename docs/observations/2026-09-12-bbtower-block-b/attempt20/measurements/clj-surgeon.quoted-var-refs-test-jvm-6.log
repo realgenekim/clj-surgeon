@@ -1,0 +1,8 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+Testing clj-surgeon.quoted-var-refs-test
+
+Ran 5 tests containing 36 assertions.
+0 failures, 0 errors.
+{:runtime :jvm, :namespace clj-surgeon.quoted-var-refs-test, :elapsed-ms 91, :result {:test 5, :pass 36, :fail 0, :error 0, :type :summary}, :tmpdir "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3009282-de6769e5", :home "/var/tmp/forge/bbtower-fx/clj-surgeon-suite-3009282-de6769e5/home"}

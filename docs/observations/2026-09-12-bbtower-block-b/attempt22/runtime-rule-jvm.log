@@ -1,0 +1,62 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1g -Djava.io.tmpdir=/var/tmp/forge/bbtower-fx
+
+FAIL in (runtime-portability-controls-cover-every-assignment) (lane_manifest_test.clj:284)
+{:error-type :non-portable-namespace, :namespace clj-surgeon.cljc.merge-test, :reason :runtime-control-failed, :controls {:jvm {:status :test-failed, :result {:test 14, :pass 19, :fail 0, :error 1, :type :summary}, :receipt "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.cljc.merge-test-jvm-test.control.edn"}}}
+expected: (or (nil? refusal) unsupported-jvm-only?)
+  actual: false
+
+FAIL in (runtime-portability-controls-cover-every-assignment) (lane_manifest_test.clj:284)
+{:error-type :non-portable-namespace, :namespace clj-surgeon.cljc.split-test, :reason :runtime-control-failed, :controls {:jvm {:status :test-failed, :result {:test 11, :pass 29, :fail 1, :error 1, :type :summary}, :receipt "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.cljc.split-test-jvm-test.control.edn"}}}
+expected: (or (nil? refusal) unsupported-jvm-only?)
+  actual: false
+
+FAIL in (runtime-portability-controls-cover-every-assignment) (lane_manifest_test.clj:284)
+{:error-type :non-portable-namespace, :namespace clj-surgeon.mcp-cold-verify-test, :reason :runtime-control-failed, :controls {:bb {:status :test-failed, :result {:test 7, :pass 50, :fail 0, :error 1, :type :summary}, :receipt "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.mcp-cold-verify-test-bb-test.control.edn"}}}
+expected: (or (nil? refusal) unsupported-jvm-only?)
+  actual: false
+
+FAIL in (runtime-portability-controls-cover-every-assignment) (lane_manifest_test.clj:284)
+{:error-type :non-portable-namespace, :namespace clj-surgeon.mcp-namespace-split-test, :reason :runtime-control-failed, :controls {:bb {:status :test-failed, :result {:test 27, :pass 198, :fail 0, :error 1, :type :summary}, :receipt "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.mcp-namespace-split-test-bb-test.control.edn"}}}
+expected: (or (nil? refusal) unsupported-jvm-only?)
+  actual: false
+
+FAIL in (runtime-portability-controls-cover-every-assignment) (lane_manifest_test.clj:284)
+{:error-type :non-portable-namespace, :namespace clj-surgeon.mcp-relation-census-launcher-test, :reason :runtime-control-failed, :controls {:bb {:status :test-failed, :result {:test 5, :pass 141, :fail 38, :error 1, :type :summary}, :receipt "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.mcp-relation-census-launcher-test-bb-test.control.edn"}}}
+expected: (or (nil? refusal) unsupported-jvm-only?)
+  actual: false
+
+FAIL in (runtime-portability-controls-cover-every-assignment) (lane_manifest_test.clj:284)
+{:error-type :non-portable-namespace, :namespace clj-surgeon.memory.journal-green-test, :reason :runtime-control-failed, :controls {:bb {:status :test-failed, :result {:test 2, :pass 0, :fail 0, :error 2, :type :summary}, :receipt "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.memory.journal-green-test-bb-test.control.edn"}}}
+expected: (or (nil? refusal) unsupported-jvm-only?)
+  actual: false
+
+FAIL in (runtime-portability-controls-cover-every-assignment) (lane_manifest_test.clj:284)
+{:error-type :non-portable-namespace, :namespace clj-surgeon.memory.oom-reproduction-test, :reason :runtime-control-failed, :controls {:bb {:status :test-failed, :result {:test 2, :pass 0, :fail 0, :error 2, :type :summary}, :receipt "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.memory.oom-reproduction-test-bb-test.control.edn"}}}
+expected: (or (nil? refusal) unsupported-jvm-only?)
+  actual: false
+
+FAIL in (runtime-portability-controls-cover-every-assignment) (lane_manifest_test.clj:284)
+{:error-type :non-portable-namespace, :namespace clj-surgeon.mission-display-test, :reason :runtime-control-failed, :controls {:bb {:status :test-failed, :result {:test 14, :pass 106, :fail 0, :error 3, :type :summary}, :receipt "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.mission-display-test-bb-test.control.edn"}}}
+expected: (or (nil? refusal) unsupported-jvm-only?)
+  actual: false
+
+FAIL in (runtime-portability-controls-cover-every-assignment) (lane_manifest_test.clj:284)
+{:error-type :non-portable-namespace, :namespace clj-surgeon.ns-isolation-test, :reason :runtime-control-failed, :controls {:bb {:status :test-failed, :result {:test 27, :pass 161, :fail 0, :error 3, :type :summary}, :receipt "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.ns-isolation-test-bb-test.control.edn"}}}
+expected: (or (nil? refusal) unsupported-jvm-only?)
+  actual: false
+
+FAIL in (runtime-portability-controls-cover-every-assignment) (lane_manifest_test.clj:284)
+{:error-type :non-portable-namespace, :namespace clj-surgeon.reader-eval-fence-test, :reason :runtime-control-failed, :controls {:bb {:status :test-failed, :result {:test 13, :pass 69, :fail 8, :error 0, :type :summary}, :receipt "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.reader-eval-fence-test-bb-test.control.edn"}}}
+expected: (or (nil? refusal) unsupported-jvm-only?)
+  actual: false
+
+FAIL in (runtime-portability-controls-cover-every-assignment) (lane_manifest_test.clj:284)
+{:error-type :non-portable-namespace, :namespace clj-surgeon.worktree-lifecycle-prune-test, :reason :runtime-control-failed, :controls {:bb {:status :test-failed, :result {:test 24, :pass 23, :fail 0, :error 5, :type :summary}, :receipt "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.worktree-lifecycle-prune-test-bb-test.control.edn"}, :jvm {:status :test-failed, :result {:test 24, :pass 23, :fail 0, :error 5, :type :summary}, :receipt "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.worktree-lifecycle-prune-test-jvm-test.control.edn"}}}
+expected: (or (nil? refusal) unsupported-jvm-only?)
+  actual: false
+
+FAIL in (runtime-portability-controls-cover-every-assignment) (lane_manifest_test.clj:284)
+{:error-type :non-portable-namespace, :namespace clj-surgeon.worktree-lifecycle-recovery-test, :reason :runtime-control-failed, :controls {:bb {:status :test-failed, :result {:test 10, :pass 26, :fail 5, :error 9, :type :summary}, :receipt "docs/observations/2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.worktree-lifecycle-recovery-test-bb-test.control.edn"}}}
+expected: (or (nil? refusal) unsupported-jvm-only?)
+  actual: false
+{:test 1, :pass 198, :fail 12, :error 0}

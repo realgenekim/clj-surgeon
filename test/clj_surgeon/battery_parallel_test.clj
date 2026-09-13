@@ -25,11 +25,28 @@
 
 (def ^:private units (mapv vector (sort (keys walls))))
 
+(deftest bb-lane-command-honours-disk-tmpdir
+  (doseq [[tmpdir expected] [["/var/tmp/forge/bbtower-fx" "/var/tmp/forge/bbtower-fx"]
+                             [nil "/var/tmp"] ["" "/var/tmp"]
+                             ["/tmp" "/var/tmp"] ["/tmp/nested" "/var/tmp"]
+                             ["/dev/shm" "/var/tmp"] ["/dev/shm/nested" "/var/tmp"]
+                             ["/var/tmp/space dir" "/var/tmp/space dir"]]]
+    (testing (str "TMPDIR=" (pr-str tmpdir))
+      (is (= ["bb" "-Xmx1g" (str "-Djava.io.tmpdir=" expected)
+              "test/run_all.clj" "--emit-edn" "receipt.edn" "--ns" "clj-surgeon.a-test"]
+             (bp/bb-lane-command tmpdir "receipt.edn" '[clj-surgeon.a-test]))))))
+
 ;; ---------------------------------------------------------------------------
 ;; clause 1 -- the inventory is the gate's own membership
 ;; ---------------------------------------------------------------------------
 
 (deftest the-inventory-is-the-lane-manifests-battery-lane
+  ;; @spec TEST-ISO-016 -- changing runtime preserves the original runner inventory.
+  (is (= ["clojure" "-J-Xmx512m" "-M:clj-surgeon/test-deps" "-m" "clj-surgeon.mcp-test-runner"
+          "--emit-edn" "receipt.edn" "--ns" "clj-surgeon.intent-transaction-test"]
+         (bp/lane-command "-J-Xmx512m" "receipt.edn" '[clj-surgeon.intent-transaction-test])))
+  (is (= "clj-surgeon.mcp-test-runner"
+         (nth (bp/lane-command "-J-Xmx512m" "receipt.edn" '[clj-surgeon.splice-envelope-test]) 4)))
   (testing "the scheduler reads the manifest, so a namespace added there is run"
     ;; A hard-coded inventory is how a namespace joins the manifest and
     ;; silently stops being run: the gate stays green while covering less.
@@ -137,13 +154,55 @@
         "the report reads the same whichever lane a namespace landed in")))
 
 (deftest the-lane-budget-is-folded-over-the-union-not-per-lane
+  (testing "Unknown cadence refuses by name; declared runtime cannot rewrite executed runtime"
+    (with-redefs [lm/manifest {'example.fast :fast}
+                  lm/namespace-runtimes {'example.fast :bb}]
+      (is (= ['missing] (bp/unbudgeted-members ['example.fast 'missing])))
+      (is (= {:makespan-ms 12 :lane-sums-ms {:fast 8} :runtime-sums-ms {:jvm 8}}
+             (bp/run-measurements [{:namespace 'example.fast :elapsed-ms 8}]
+                                  [{:runtime :jvm :namespaces ['example.fast]}] 12)))
+      (with-redefs [iso/lane-default-budget-ms {}]
+        (is (= ['example.fast] (bp/unbudgeted-members ['example.fast]))))))
+  (testing "A bb child cannot omit its namespace budget verdict"
+    (with-redefs [lm/manifest {'example.fast :fast}]
+      (doseq [[wall expected] [[8000 0] [8001 1]]]
+        (let [result (atom nil)
+              out (with-out-str
+                    (binding [*err* *out*]
+                      (reset! result
+                              (bp/report! [{:namespace 'example.fast :elapsed-ms wall :violations []}]
+                                          [{:index 0 :runtime :bb :started-ms 0 :completed-ms wall
+                                            :wall-ms wall :exit 0 :namespaces ['example.fast]}]
+                                          wall))))]
+          (is (= expected @result))
+          (is (str/starts-with? out (str "makespan: " wall " ms")))
+          (when (pos? expected)
+            (is (str/includes? out "example.fast"))
+            (is (str/includes? out "8001 ms, over its 8000 ms budget")))))))
+  (testing "NEW bb budget is enforced even without JVM isolation; span is separate"
+    (with-redefs [lm/namespace-runtimes {'example.bb-test :bb}]
+      (doseq [[wall expected] [[343102 0] [343103 1]]]
+        (let [result (atom nil)
+              out (with-out-str
+                    (binding [*err* *out*]
+                      (reset! result
+                              (bp/report! [{:namespace 'example.bb-test :elapsed-ms wall :violations []}]
+                                          [{:index 0 :runtime :bb :started-ms 100 :completed-ms 120
+                                            :wall-ms 20 :exit 0 :namespaces ['example.bb-test]}]
+                                          25 false))))]
+          (is (= expected @result))
+          (is (str/includes? out (str "bb-runtime: serial-equivalent " wall " ms; budget 343102 ms; makespan 20 ms")))
+          (when (pos? expected)
+            (is (str/includes? out "bb lane took 343103 ms, over its 343102 ms budget")))))))
   ;; @spec TEST-ISO-007 -- the number the fleet pays is the SUM of the
   ;; namespaces' walls. A child holding a slice would report a five-minute
   ;; lane as forty seconds, which is a budget that can never fire.
   (let [runs (mapv (fn [i] {:namespace (nth (lm/namespaces-for :battery) i)
                             :elapsed-ms 1000000 :counters {} :violations []})
                    (range 3))
-        out (with-out-str (binding [*err* *out*] (bp/report! runs [] 12345)))]
+        out (with-out-str (binding [*err* *out*]
+                            (with-redefs [lm/namespace-runtimes {}]
+                              (bp/report! runs [] 12345))))]
     (is (str/includes? out "TEST-ISOLATION: 1 violation")
         "3 x 1 000 000 ms is over the battery lane's 1 800 000 ms budget")
     (is (str/includes? out "3000000 ms, over its 1800000 ms budget"))
@@ -605,7 +664,7 @@
              (select-keys (ex-data error) [:source :step :reason])))))
   (testing "the preflight line is the reader's own answer, never a source name"
     (with-redefs [mem/available-mib (fn [] (throw (ex-info "gate-refused: available memory is unknown"
-                                                          {:step "vm_stat"})))]
+                                                    {:step "vm_stat"})))]
       (let [line (mem/preflight-line)]
         (is (str/starts-with? line "REFUSED gate-refused: available memory is unknown"))
         (is (str/includes? line ":step \"vm_stat\""))))
@@ -639,12 +698,16 @@
 
 ;; @spec TEST-ISO-015 -- Sol GATE-LANES-FENCE-002, omitted alias/audit prewarm.
 (deftest prewarm-membership-and-authority-are-explicit
+  (let [select-default (requiring-resolve 'run-all/default-namespaces)]
+    (is (= '[a c] (select-default '[a b c] '{a :bb b :jvm c :bb} :bb)))
+    (is (= '[b] (select-default '[a b c] '{a :bb b :jvm c :bb} :jvm)))
+    (is (= [] (select-default '[unknown] {} :bb))))
   (let [stages (requiring-resolve 'clj-surgeon.battery-parallel-runner/gate-stages)
         full (stages false false)
         warm (stages false true)]
     (is (= ["admit-transaction-recovery-battery" "battery-fresh"
             "alias-migration-test" "mcp-test" "test-bb"
-            "repository-hygiene" "intent-audit"] (mapv :target full)))
+            "test-bb-diagnostic" "repository-hygiene" "intent-audit"] (mapv :target full)))
     (is (= (filterv #(not= "battery-fresh" (:target %)) full) warm))
     (is (= (count full) (count (set (map :target full)))))
     (is (= (mapv :target full) (bp/gate-targets false)))

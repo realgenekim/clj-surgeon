@@ -1,0 +1,4 @@
+{:namespace clj-surgeon.cljc.merge-test, :runtime :jvm, :status :passed, :exit 0, :result {:test 14, :pass 26, :fail 0, :error 0, :type :summary}, :elapsed-ms 1205}
+{:namespace clj-surgeon.cljc.merge-test, :runtime :bb, :status :passed, :exit 0, :result {:test 14, :pass 26, :fail 0, :error 0, :type :summary}, :elapsed-ms 20}
+{:namespace clj-surgeon.cljc.split-test, :runtime :jvm, :status :passed, :exit 0, :result {:test 11, :pass 34, :fail 0, :error 0, :type :summary}, :elapsed-ms 3783}
+{:namespace clj-surgeon.cljc.split-test, :runtime :bb, :status :passed, :exit 0, :result {:test 11, :pass 34, :fail 0, :error 0, :type :summary}, :elapsed-ms 260}

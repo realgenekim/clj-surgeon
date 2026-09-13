@@ -1,0 +1,39 @@
+{"command": ["python3", "-B", "docs/observations/2026-09-12-bbtower-block-b/attempt18/static-probes.py"], "writable_roots": ["/home/forge/src/clj-surgeon-bbtower", "/var/tmp/forge/bbtower-fx/packets/75b62700-de01-4577-9fde-6c5ad595884b/tmp", "/home/forge/.local/state/clj-surgeon"], "writable_devices": ["/dev/null"], "started": 1789220287.2041445, "diagnostic": true}
+/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt18/restricted-gate.py:35: DeprecationWarning: Due to '_pack_', the 'Rule' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+  class Rule(ctypes.Structure):
+test_cell_b_shell_default (__main__.ScratchWriters.test_cell_b_shell_default) ... FAIL
+test_papercut_baseline_mirror (__main__.ScratchWriters.test_papercut_baseline_mirror) ... ERROR
+
+======================================================================
+ERROR: test_papercut_baseline_mirror (__main__.ScratchWriters.test_papercut_baseline_mirror)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt18/static-probes.py", line 25, in test_papercut_baseline_mirror
+    self.assertEqual(([], None), oracle.baseline_kondo('.'))
+                                 ~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/forge/src/clj-surgeon-bbtower/test/oracles/namespace_split_papercut_oracle.py", line 478, in baseline_kondo
+    with tempfile.TemporaryDirectory(prefix="split-oracle-", dir="/var/tmp") as mirror:
+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 907, in __init__
+    self.name = mkdtemp(suffix, prefix, dir)
+                ~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/tempfile.py", line 381, in mkdtemp
+    _os.mkdir(file, 0o700)
+    ~~~~~~~~~^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/var/tmp/split-oracle-yci8ur94'
+
+======================================================================
+FAIL: test_cell_b_shell_default (__main__.ScratchWriters.test_cell_b_shell_default)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-bbtower/docs/observations/2026-09-12-bbtower-block-b/attempt18/static-probes.py", line 38, in test_cell_b_shell_default
+    self.assertTrue(root.is_relative_to(Path(env['TMPDIR'])), str(root))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : /var/tmp/forge/plan2/cellB/run-3413730
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.007s
+
+FAILED (failures=1, errors=1)
+mkdir: Permission denied
+{"exit": 1, "wall_seconds": 0.08919895021244884}

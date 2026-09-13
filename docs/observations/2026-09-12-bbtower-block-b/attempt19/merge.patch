@@ -1,0 +1,142 @@
+diff --git a/Makefile b/Makefile
+index 3b329f19..8968f5e6 100644
+--- a/Makefile
++++ b/Makefile
+@@ -14,7 +14,8 @@ CLAUDE_SKILL_DEST := $(CLAUDE_HOME)/skills/clj-surgeon
+ CODEX_GLOBAL_INSTRUCTIONS ?= $(CODEX_HOME)/AGENTS.md
+ CLAUDE_GLOBAL_INSTRUCTIONS ?= $(CLAUDE_HOME)/CLAUDE.md
+ SOURCE_COMMIT := $(shell git -C "$(CLJ_SURGEON_HOME)" rev-parse HEAD 2>/dev/null || printf unknown)
+-CLI_SOURCE_HASH := $(shell cd "$(CLJ_SURGEON_HOME)" && { find src -type f -print; printf '%s\n' bb.edn deps.edn; } | LC_ALL=C sort | while IFS= read -r file; do shasum -a 256 "$$file"; done | shasum -a 256 | awk '{print $$1}')
++# @spec CLI-PACKAGE-002
++CLI_SOURCE_HASH := $(shell cd "$(CLJ_SURGEON_HOME)" && { find src libs/clj-splice/src -type f -print; printf '%s\n' bb.edn deps.edn libs/clj-splice/deps.edn; } | LC_ALL=C sort | while IFS= read -r file; do shasum -a 256 "$$file"; done | shasum -a 256 | awk '{print $$1}')
+ SKILL_SOURCE_HASH := $(shell cd "$(SKILL_SOURCE)" && find . -type f -print | LC_ALL=C sort | while IFS= read -r file; do shasum -a 256 "$$file"; done | shasum -a 256 | awk '{print $$1}')
+ VERSION_ROOT := $(INSTALL_ROOT)/versions/$(SOURCE_COMMIT)
+ CLI_PACKAGE := $(VERSION_ROOT)/cli-$(CLI_SOURCE_HASH)
+@@ -650,6 +651,7 @@ uninstall-mcp-codex-dev:
+ 	@$(MAKE) --no-print-directory mcp-stop
+ 	@echo "Removed the local clj-surgeon MCP registration from Codex."
+ 
++# @spec CLI-PACKAGE-001
+ prepare-cli-package:
+ 	@set -eu; \
+ 	  package="$(CLI_PACKAGE)"; \
+@@ -657,8 +659,9 @@ prepare-cli-package:
+ 	    mkdir -p "$(VERSION_ROOT)"; \
+ 	    stage="$$package.tmp.$$$$"; \
+ 	    trap 'chmod -R u+w "$$stage" 2>/dev/null || true; rm -rf "$$stage"' EXIT HUP INT TERM; \
+-	    mkdir -p "$$stage/src"; \
++	    mkdir -p "$$stage/src" "$$stage/libs/clj-splice/src"; \
+ 	    cp -R "$(CLJ_SURGEON_HOME)src/." "$$stage/src/"; \
++	    cp -R "$(CLJ_SURGEON_HOME)libs/clj-splice/src/." "$$stage/libs/clj-splice/src/"; \
+ 	    printf '%s\n' '{:artifact :cli-runtime' ' :mode :stable-copy' ' :source-commit "$(SOURCE_COMMIT)"' ' :source-hash "$(CLI_SOURCE_HASH)"}' > "$$stage/install-receipt.edn"; \
+ 	    chmod -R a-w "$$stage"; \
+ 	    mv "$$stage" "$$package"; \
+@@ -697,7 +700,7 @@ install-cli: prepare-cli-package
+ 	  printf '%s\n' '{:artifact :control-plane-root' ' :mode :local-pointer' ' :source-commit "$(SOURCE_COMMIT)"' ' :path "$(CLJ_SURGEON_HOME)"}' > "$$control_plane_receipt"; \
+ 	  stage="$$dest.tmp.$$$$"; \
+ 	  trap 'rm -f "$$stage" "$$control_plane_stage"' EXIT HUP INT TERM; \
+-	  printf '%s\n' '#!/bin/sh' '## clj-surgeon stable launcher' 'surgeon_tmp=$${TMPDIR:-/var/tmp}' 'case "$$surgeon_tmp" in /tmp|/tmp/*|/dev/shm|/dev/shm/*) surgeon_tmp=/var/tmp ;; esac' 'case "$$surgeon_tmp" in *[![:space:]]*) ;; *) surgeon_tmp=/var/tmp ;; esac' 'export TMPDIR="$$surgeon_tmp"' 'CLJ_SURGEON_CONTROL_PLANE_ROOT_FILE="$(CONTROL_PLANE_ROOT_FILE)" exec bb "-Djava.io.tmpdir=$$surgeon_tmp" --classpath "$(CLI_PACKAGE)/src" -m clj-surgeon.core "$$@"' > "$$stage"; \
++	  printf '%s\n' '#!/bin/sh' '## clj-surgeon stable launcher' 'surgeon_tmp=$${TMPDIR:-/var/tmp}' 'case "$$surgeon_tmp" in /tmp|/tmp/*|/dev/shm|/dev/shm/*) surgeon_tmp=/var/tmp ;; esac' 'case "$$surgeon_tmp" in *[![:space:]]*) ;; *) surgeon_tmp=/var/tmp ;; esac' 'export TMPDIR="$$surgeon_tmp"' 'CLJ_SURGEON_CONTROL_PLANE_ROOT_FILE="$(CONTROL_PLANE_ROOT_FILE)" exec bb "-Djava.io.tmpdir=$$surgeon_tmp" --classpath "$(CLI_PACKAGE)/src:$(CLI_PACKAGE)/libs/clj-splice/src" -m clj-surgeon.core "$$@"' > "$$stage"; \
+ 	  chmod +x "$$stage"; \
+ 	  mv "$$stage" "$$dest"; \
+ 	  trap - EXIT HUP INT TERM; \
+diff --git a/docs/observations/battery-ledger.edn b/docs/observations/battery-ledger.edn
+index 97aa117d..fac4d7fc 100644
+--- a/docs/observations/battery-ledger.edn
++++ b/docs/observations/battery-ledger.edn
+@@ -60,4 +60,5 @@
+ {:sha "23cd511c1fa924c731f7833db1e2c36650ba1ee3", :started "2026-09-10T23:27:19Z", :wall_s 182, :verdict :pass, :host "anvil-server", :lanes 8, :skipped 0}
+ {:sha "012c111e3d1a64a0740f70f2f21e8276ac65cc40", :started "2026-09-11T01:19:27Z", :wall_s 200, :verdict :pass, :host "anvil-server", :lanes 8, :skipped 0}
+ {:sha "4acc7e50d56c4ab85d7d843ded13a72328b878ff", :started "2026-09-11T05:57:26Z", :wall_s 152, :verdict :pass, :host "anvil-server", :lanes 8, :skipped 0}
++{:sha "582b62bc3f9ef0c2f2674c3b9cbcd4b712b74f0e", :started "2026-09-11T14:44:50Z", :wall_s 147, :verdict :pass, :host "anvil-server", :lanes 8, :skipped 0}
+ {:sha "e7cefb822954ea085fedf46ebb5eeff37e8b2574", :started "2026-09-12T14:14:13Z", :wall_s 346, :verdict :fail, :host "anvil-server", :lanes 8, :skipped 0}
+diff --git a/docs/tech-tree.md b/docs/tech-tree.md
+index a3973974..964d5051 100644
+--- a/docs/tech-tree.md
++++ b/docs/tech-tree.md
+@@ -823,6 +823,16 @@ Executed budget: rename 211 + insert 171 + shared/library 135 = 517 (ceiling 580
+ Final gate receipts and limitations belong to `/var/tmp/forge/splice-fx/astra-fix1-report.md`.
+ This is correctness evidence on a branch, with no new performance or routing claim.
+ 
++### 2026-09-11T14:38:18.580348+00:00 — installed CLI dependency closure
++
++The stable eae1e432 launcher could list forms but failed to load either splice
++verb because its copied classpath omitted clj-splice. A fixture-installed launcher
++now witnesses both typed empty-request refusals outside the checkout, and a
++library-only edit changes the package hash. The package copies and names the
++library source; Babashka supplies its external runtime dependencies. Twenty verb
++groups pass (382 assertions). This is a packaging correctness fix, with no catalog
++or routing change. Receipts: `/var/tmp/forge/clifix-fx/report.md`.
++
+ ### 2026-09-12 — formatter npm home writes, bb tower attempt 14
+ 
+ The real staged formatter failed with EACCES against a read-only npm cache.
+diff --git a/test/clj_surgeon/install_test.clj b/test/clj_surgeon/install_test.clj
+index 2fba600a..bdca9d2c 100644
+--- a/test/clj_surgeon/install_test.clj
++++ b/test/clj_surgeon/install_test.clj
+@@ -3,6 +3,7 @@
+   (:require
+    [babashka.fs :as fs]
+    [babashka.process :as proc]
++   [clojure.edn :as edn]
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+    [clojure.test :refer [deftest is testing]]))
+@@ -567,3 +568,56 @@
+           (is (not= chosen (head-commit)))))
+       (finally
+         (delete-temp-tree tmp-dir)))))
++
++;; @spec CLI-PACKAGE-001
++(deftest installed-cli-loads-splice-verbs-outside-the-checkout
++  (let [root (fs/create-temp-dir {:prefix "clj-surgeon-installed-splice-"})
++        cli (fs/path root "bin with spaces" "clj-surgeon")
++        request (fs/path root "empty.edn")
++        source (fs/path root "sample.clj")]
++    (try
++      (spit (str request) "{}")
++      (spit (str source) "(ns sample)\n(defn answer [] 42)\n")
++      (let [installed (run-make "install-cli"
++                               (str "CLI_DEST=" cli)
++                               (str "CLAUDE_HOME=" (fs/path root "claude"))
++                               (str "INSTALL_ROOT=" (fs/path root "packages")))]
++        (println (:out installed) (:err installed))
++        (is (zero? (:exit installed)) (pr-str installed)))
++      (doseq [op [":insert-forms!" ":rename-alias!"]]
++        (let [result @(proc/process [(str cli) ":op" op ":request-file" (str request)]
++                                   {:dir (str root) :out :string :err :string})
++              receipt (try (edn/read-string (:out result)) (catch Exception _ nil))]
++          (println op (pr-str result))
++          (is (= [2 :invalid-request "refused"]
++                 [(:exit result) (:error-type receipt) (:state receipt)]) (pr-str result))
++          (is (not (str/includes? (str (:out result) (:err result)) "FileNotFoundException")))))
++      (let [result @(proc/process [(str cli) ":op" ":ls" ":file" (str source)]
++                                 {:dir (str root) :out :string :err :string})]
++        (println ":ls" (pr-str result))
++        (is (zero? (:exit result)) (pr-str result))
++        (is (str/includes? (:out result) "answer")))
++      (finally (delete-temp-tree root)))))
++
++;; @spec CLI-PACKAGE-002
++(deftest cli-package-identity-covers-bundled-splice-source
++  (let [root (fs/create-temp-dir {:prefix "clj-surgeon-package-hash-"})
++        library (fs/path root "libs/clj-splice/src/clj_splice/core.clj")]
++    (try
++      (fs/create-dirs (fs/parent library))
++      (fs/create-dirs (fs/path root "src"))
++      (spit (str (fs/path root "src/core.clj")) "(ns core)")
++      (doseq [file ["bb.edn" "deps.edn" "libs/clj-splice/deps.edn"]]
++        (spit (str (fs/path root file)) "{}"))
++      (spit (str (fs/path root "Makefile"))
++            (str (slurp "Makefile") "\nfixture-hash:\n\t@echo $(CLI_SOURCE_HASH)\n"))
++      (let [hash! (fn []
++                    (let [result @(proc/process ["make" "--silent" "fixture-hash"]
++                                                {:dir (str root) :out :string :err :string})]
++                      (is (zero? (:exit result)) (pr-str result))
++                      (str/trim (:out result))))]
++        (spit (str library) "(ns clj-splice.core)\n(def version 1)\n")
++        (let [before (hash!)]
++          (spit (str library) "(ns clj-splice.core)\n(def version 2)\n")
++          (is (not= before (hash!)) "library-only edits must select a fresh immutable package")))
++      (finally (delete-temp-tree root)))))

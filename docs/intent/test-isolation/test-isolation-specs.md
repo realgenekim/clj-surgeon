@@ -6,6 +6,54 @@ status: "round four implemented 2026-09-04 (002/003/004/005/007/010 runtime witn
 
 # JVM Test-Suite Isolation Specifications
 
+- [x] **TEST-ISO-016**: A namespace shall run on bb only when it is
+  bb-portable AND its conservative paired namespace-wall ratio is at most
+  2.0. Measure at least six identical controls per runtime on the same box,
+  one suite at a time. Use sample standard deviations (n-1) and the ratio
+  (mean_bb + 2 * sd_bb) / max(1 ms, mean_jvm - 2 * sd_jvm).
+  Record n, every wall, mean, sd, conservative ratio and receipt paths beside
+  each paired assignment in the manifest; otherwise select JVM. Existing
+  assignments without paired receipts remain unchanged and are explicitly
+  unmeasured for cost. Portability is a separate prerequisite for EVERY
+  namespace with a runtime assignment, at every cadence, including namespaces
+  outside the 38 paired fast controls. A bb-portable namespace must have one
+  passing complete namespace control on BOTH JVM and bb, with command, subject,
+  result and receipt paths recorded beside its assignment. A namespace passing
+  on both is `:portable`. The JVM is the reference runtime; bb is an eligible
+  accelerator. A failed JVM control ALWAYS produces `:refused`. A passing JVM
+  plus a failed complete bb control is `:bb-ineligible` ONLY with an explicit
+  registration from the closed vocabulary `:sci-host-interop`,
+  `:native-image-reflection`, `:bb-classpath-missing/nrepl.core`, or
+  `:bb-hosted-jvm-launcher`. The registration records the exact reason and
+  evidence beside the assignment, which must be `:jvm`. Unknown reasons,
+  real behavior differences, missing controls and both-runtime failures refuse.
+  The witness fails by namespace only for `:refused` and prints every
+  `:bb-ineligible` namespace with its registered reasons. A configured-runtime load
+  incompatibility is explicitly accounted for with its named load refusal;
+  it is not a passing test control or evidence of bb portability.
+  These initial-load exclusions remain separately visible; they do not claim
+  passing complete controls. A registered capability limitation is not a product
+  repair or a performance measurement. An unregistered bb failure still refuses
+  even when the current assignment uses the JVM.
+  The declared bb admission tolerance
+  is 2.0 after the conservative variance adjustment.
+  Attempt20 replaces the single observations for all 35 bb-portable members
+  of the original fast set and every additional paired namespace moved by
+  the rule. Receipts and their fold script live under attempt20/.
+  Any recorded sample smaller than six, or a bb assignment with a recorded
+  conservative ratio above 2.0, shall fail by namespace name independently
+  of the selection function. The witness recomputes mean and sd from the
+  receipts. At conservative ratio 2.0 bb is eligible; any excess is not.
+  Failed test samples cannot certify bb portability. Cadence, membership and the
+  60,000/240,000 ms fast/integration ceilings do not change.
+  *Witness:* `clj-surgeon.lane-manifest-test/every-manifest-entry-exists-on-disk`.
+  The original library-test inventory retains its runner, counters, temp
+  guard and cadence when a member selects JVM. Runtime selection does not
+  require inventing a JVM lane for that member. Both runtime workers reject
+  a selection assigned to the other runtime; the coordinator splits them
+  before launch. Witness: `battery-parallel-test/the-inventory-is-the-lane-manifests-battery-lane`
+  and the real hybrid fast run.
+
 Gene, filing the spike (2026-09-04): *"I think a spike to clean up JVM test
 suite and speed it up and ensure pure and at least tests that don't interfere
 with each other is definitely warranted. Unacceptable that we have to gate
@@ -232,6 +280,45 @@ it); the battery lane to 007 alone (it exists to launch cold child JVMs).
   (at the ceiling passes, one ms past it refuses),
   `.../the-lane-total-has-its-own-budget-because-the-sum-is-what-the-fleet-pays`.
 
+  Every namespace selected by `make test-fast`, including bb children, shall
+  carry a cadence with a per-namespace budget and contribute to its lane sum.
+  Runtime portability shall not add battery members to the fast entrance.
+  The parent shall derive bb per-namespace violations from recorded walls;
+  missing cadence or budget shall refuse by namespace before launch. The
+  report shall print makespan first, then cadence and actual-runtime sums.
+  Misreadings: nil cadence is unbounded permission; empty child violations
+  prove a bb namespace met its budget; declaring bb means it runs fast;
+  a declared bb runtime charges a namespace actually executed on the JVM.
+  Witnesses: `lane-manifest-test/every-manifest-entry-exists-on-disk`,
+  `battery-parallel-test/the-lane-budget-is-folded-over-the-union-not-per-lane`.
+
+  NEW bb runtime-lane budget, computed in attempt11: **343,102 ms**.
+  The shipped-map run records a serial bb-runtime namespace sum of 240,989 ms
+  and a fast-cadence sum of 42,143 ms in the same run (makespan 82,910 ms).
+  Definition: ceiling = ceil(bb_runtime_sum * 60,000 / fast_cadence_sum).
+  Both sums fold ONE calibration receipt: execution runtimes come from its
+  recorded lanes, and cadence comes from the unchanged cadence manifest.
+  A later TEST-ISO-016 assignment must not relabel historical execution walls.
+  Thus ceil(240,989 * 60,000 / 42,143) = 343,102 ms; no budget is recalibrated.
+  Reproduce with `bb test/clj_surgeon/bb_ceiling.clj
+  docs/observations/2026-09-12-bbtower-block-b/attempt10/ceiling-run/receipt.edn`.
+  The script prints both sums and the ceiling; the calibration witness calls
+  that same computation and requires equality with the registered constant.
+  A cadence change must therefore reproduce and reconcile the declaration.
+  This replaces attempt8's pre-escape derivation, and remains a NEW declaration,
+  not restoration of any base budget. Fable's ratification remains required.
+  Charge each bb-runtime namespace once, independently of its cadence lane.
+  The original fast set remains independently charged even when executed by
+  bb, so these overlapping sums must not be added. Report the bb sum and bb
+  process-span makespan separately. Both hybrid and standalone bb suites
+  enforce the bb ceiling, including when JVM isolation is disabled.
+  At 343,102 ms accept; at 343,103 ms refuse naming bb and both numbers.
+  Witnesses: `ns-isolation-test/bb-ceiling-reproduces-from-calibration-under-shipped-manifest`
+  and `ns-isolation-test/spec-bb-boundary-equals-registered-ceiling` fail by name
+  when either the calibration or the spec boundary disagrees with the constant.
+  Witnesses: the lane-total witness above and
+  `battery-parallel-test/the-lane-budget-is-folded-over-the-union-not-per-lane`.
+
   Round-two gate margin (2026-09-09): compact-relations has an explicit
   18,000 ms namespace override, about twice its measured 8,836 ms under
   eight-worker contention (the four-worker fence measured 8,002/8,000 ms).
@@ -414,6 +501,17 @@ evidence -- so every landing pays it in full.
   `clj-surgeon.mcp-intent-contract-test/an-intent-the-registry-cannot-reach-is-named-not-silently-dropped`.
 
 ### TEST-ISO-015 execution — automatic complete landing gate
+
+When the documented `bb test/run_all.clj` diagnostic is invoked without
+arguments, it shall execute the historical inventory's members assigned to
+the executing runtime and return nonzero for test failures. Explicit child
+selections shall still refuse a runtime mismatch. The landing gate and its
+prewarm shall execute the actual no-argument entrance as `test-bb-diagnostic`
+after the runtime pool. Misreading: a green explicit `--ns` child selection
+proves the no-argument default; filtering deletes the JVM member from the
+coordinator's inventory; a diagnostic result authorizes landing.
+Witness: `battery-parallel-test/prewarm-membership-and-authority-are-explicit`
+and the gate's `test-bb-diagnostic` subprocess exit.
 
 Every worker shall hold an inherited flock slot under
 `/var/tmp/forge/gate-slots/` for its lifetime. Each acquisition shall recompute

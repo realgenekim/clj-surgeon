@@ -1,4 +1,5 @@
 (ns clj-surgeon.worktree-lifecycle-io-test
+  {:lane :fast}
   (:require
    [babashka.fs :as fs]
    [clojure.java.io :as io]

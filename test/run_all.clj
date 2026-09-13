@@ -1,5 +1,6 @@
 (ns run-all
   (:require
+   [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.namespace-execution :as execution]
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.test :as t]))
@@ -57,34 +58,50 @@
     clj-surgeon.cli-dispatch-test
     clj-surgeon.core-discovery-test])
 
+;; @spec TEST-ISO-015 -- no-argument diagnostics follow runtime reassignment.
+(defn default-namespaces [inventory runtimes runtime]
+  (filterv #(= runtime (get runtimes %)) inventory))
+
 ;; @spec TEST-ISO-015 -- whole namespace children preserve fixtures/hooks.
-(let [args (vec *command-line-args*)
-      emit? (= "--emit-edn" (first args))
-      output (when emit? (second args))
-      selected (if emit? (mapv symbol (drop 3 args)) namespaces)
-      {:keys [refused root]} (tmp-leak/secure-tmpdir! {:bb-script *file* :bb-heap-mib 512} args)]
-  (when refused (System/exit 97))
-  (when-not (and (seq selected)
-              (= (count selected) (count (set selected)))
-              (every? (set namespaces) selected)
-              (or (not emit?) (= "--ns" (nth args 2 nil))))
-    (binding [*out* *err*] (println "bb-lane-refused: invalid or missing namespace selection"))
-    (System/exit 96))
-  (when-not emit? (println "SERIAL/NOT-A-GATE: direct Babashka diagnostic"))
-  (let [before (tmp-leak/tmp-entries)
-        _ (doseq [n selected] (require n))
-        runs (mapv (fn [n]
-                     (let [start (System/nanoTime)
-                           facts (execution/run-observed n nil #(t/test-ns n))]
-                       {:namespace n :counters (:counters facts)
-                        :expected-vars (:expected-vars facts)
-                        :executed-vars (:executed-vars facts)
-                        :elapsed-ms (quot (- (System/nanoTime) start) 1000000)
-                        :violations []})) selected)
-        result (apply merge-with + (map :counters runs))
-        leaks (tmp-leak/report-and-sweep-leak! root before)]
-    (if output
-      (spit output (pr-str {:namespaces selected :runs runs :result result
-                            :notes {} :leak-fail leaks}))
-      (t/do-report (assoc result :type :summary)))
-    (System/exit (if (zero? (+ (:fail result) (:error result) leaks)) 0 1))))
+(defn -main [& arguments]
+  (let [args (vec arguments)
+        runtime (if (System/getProperty "babashka.version") :bb :jvm)
+        emit? (= "--emit-edn" (first args))
+        output (when emit? (second args))
+        selected (if emit? (mapv symbol (drop 3 args))
+                     (default-namespaces namespaces lm/namespace-runtimes runtime))
+        {:keys [refused root]} (tmp-leak/secure-tmpdir! {:bb-script "test/run_all.clj" :bb-heap-mib 1024
+                                                         :main-ns "run-all"
+                                                         :isolate-home? (every? #(contains? #{:fast :integration} (lm/lane-of %)) selected)} args)]
+    (when refused (System/exit 97))
+    (when-not (and (seq selected)
+                (= (count selected) (count (set selected)))
+                (every? #(= runtime (get lm/namespace-runtimes %)) selected)
+                (or (not emit?) (= "--ns" (nth args 2 nil))))
+      (binding [*out* *err*] (println "bb-lane-refused: invalid or missing namespace selection"))
+      (System/exit 96))
+    (when-not emit? (println "SERIAL/NOT-A-GATE: direct Babashka diagnostic"))
+    (let [before (tmp-leak/tmp-entries)
+          _ (doseq [n selected]
+              (try (require n)
+                   (catch Throwable e
+                     (throw (ex-info (str "bb-portable-load-failed: " n)
+                                     {:namespace n :error-type :bb-portable-load-failed} e)))))
+          runs (mapv (fn [n]
+                       (let [start (System/nanoTime)
+                             facts (execution/run-observed n nil #(t/test-ns n))]
+                         {:namespace n :counters (:counters facts)
+                          :expected-vars (:expected-vars facts)
+                          :executed-vars (:executed-vars facts)
+                          :elapsed-ms (quot (- (System/nanoTime) start) 1000000)
+                          :violations []})) selected)
+          result (apply merge-with + (map :counters runs))
+          leaks (tmp-leak/report-and-sweep-leak! root before)]
+      (if output
+        (spit output (pr-str {:namespaces selected :runs runs :result result
+                              :notes {} :leak-fail leaks}))
+        (t/do-report (assoc result :type :summary)))
+      (System/exit (if (zero? (+ (:fail result) (:error result) leaks)) 0 1)))))
+
+(when (= *file* (System/getProperty "babashka.file"))
+  (apply -main *command-line-args*))

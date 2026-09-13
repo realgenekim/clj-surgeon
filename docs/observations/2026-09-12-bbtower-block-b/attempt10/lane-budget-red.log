@@ -1,0 +1,308 @@
+
+FAIL in (the-lane-budget-is-folded-over-the-union-not-per-lane) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:145)
+A bb child cannot omit its namespace budget verdict
+expected: (str/starts-with? out (str "makespan: " wall " ms"))
+  actual: (not (str/starts-with? "bb-runtime: serial-equivalent 0 ms; budget 374149 ms; makespan 8000 ms\n\nnamespace walls (1, slowest first, serial-equivalent total 8000 ms):\n      8000 ms  example.fast\n\nlanes (1), makespan 8000 ms:\n  lane 0      8000 ms  exit 0  example.fast\n\ntest-isolation: 0 violations across 1 namespace(s) (TEST-ISO-002/003/004/005/007/010)\n" "makespan: 8000 ms"))
+
+FAIL in (the-lane-budget-is-folded-over-the-union-not-per-lane) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:145)
+A bb child cannot omit its namespace budget verdict
+expected: (= expected (clojure.core/deref result))
+  actual: (not (= 1 0))
+
+FAIL in (the-lane-budget-is-folded-over-the-union-not-per-lane) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:145)
+A bb child cannot omit its namespace budget verdict
+expected: (str/starts-with? out (str "makespan: " wall " ms"))
+  actual: (not (str/starts-with? "bb-runtime: serial-equivalent 0 ms; budget 374149 ms; makespan 8001 ms\n\nnamespace walls (1, slowest first, serial-equivalent total 8001 ms):\n      8001 ms  example.fast\n\nlanes (1), makespan 8001 ms:\n  lane 0      8001 ms  exit 0  example.fast\n\ntest-isolation: 0 violations across 1 namespace(s) (TEST-ISO-002/003/004/005/007/010)\n" "makespan: 8001 ms"))
+
+FAIL in (the-lane-budget-is-folded-over-the-union-not-per-lane) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/battery_parallel_test.clj:145)
+A bb child cannot omit its namespace budget verdict
+expected: (str/includes? out "8001 ms, over its 8000 ms budget")
+  actual: (not (str/includes? "bb-runtime: serial-equivalent 0 ms; budget 374149 ms; makespan 8001 ms\n\nnamespace walls (1, slowest first, serial-equivalent total 8001 ms):\n      8001 ms  example.fast\n\nlanes (1), makespan 8001 ms:\n  lane 0      8001 ms  exit 0  example.fast\n\ntest-isolation: 0 violations across 1 namespace(s) (TEST-ISO-002/003/004/005/007/010)\n" "8001 ms, over its 8000 ms budget"))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+expected: (= (set (lm/namespaces-for :fast)) (set (suite-namespaces "fast")))
+  actual: (not (= #{clj-surgeon.mcp-recovery-test clj-surgeon.mission-plain-forms-test clj-surgeon.mcp-expect-guard-test clj-surgeon.workspace-onboarding-test clj-surgeon.mcp-paths-test clj-surgeon.ns-isolation-test clj-surgeon.mission-candidate-race-test clj-surgeon.mission-candidate-test clj-surgeon.mcp-extraction-plan-test clj-surgeon.mcp-semantic-client-test clj-surgeon.telemetry-events-test clj-surgeon.fast-lane-isolation-test clj-surgeon.mcp-schema-test clj-surgeon.mission-usage-test clj-surgeon.mission-forms-source-test clj-surgeon.mcp-telemetry-test clj-surgeon.mcp-workspace-test clj-surgeon.mcp-formatter-test clj-surgeon.mcp-extraction-test clj-surgeon.namespace-split-test clj-surgeon.mcp-program-tool-test clj-surgeon.scope-stream-test clj-surgeon.mcp-read-request-normalization-test clj-surgeon.mcp-operation-registry-test clj-surgeon.battery-ledger-test clj-surgeon.mcp-inspect-tool-test clj-surgeon.census-pool-test clj-surgeon.mission-git-test clj-surgeon.mcp-create-files-test clj-surgeon.mission-forms-test clj-surgeon.mcp-prepared-confirmation-test clj-surgeon.mcp-compact-edit-test clj-surgeon.mcp-contract-test clj-surgeon.insert-forms-test clj-surgeon.mcp-combinable-transaction-test clj-surgeon.mcp-compact-relations-test clj-surgeon.mcp-prepared-request-test clj-surgeon.rename-alias-receipt-test clj-surgeon.battery-parallel-test clj-surgeon.helper-extraction-test clj-surgeon.mcp-operation-test clj-surgeon.split-proof-gate-test clj-surgeon.mcp-operation-async-test clj-surgeon.require-change-test clj-surgeon.mcp-write-refusal-test clj-surgeon.mcp-relation-census-round20-test clj-surgeon.mcp-compact-location-test clj-surgeon.lane-manifest-test clj-surgeon.mcp-intent-contract-test clj-surgeon.outline-memory-test clj-surgeon.mcp-compact-edit-fields-test clj-surgeon.mission-typist-test clj-surgeon.quoted-var-refs-test clj-surgeon.receipt-booleans-test clj-surgeon.rename-alias-test clj-surgeon.insert-forms-receipt-test clj-surgeon.outline-differential-test clj-surgeon.mcp-change-buffer-test clj-surgeon.splice-envelope-test clj-surgeon.mcp-namespace-split-test clj-surgeon.mcp-inspect-contract-test} #{clj-surgeon.show-form-test clj-surgeon.mcp-recovery-test clj-surgeon.parser-admission-test clj-surgeon.core-discovery-test clj-surgeon.mission-plain-forms-test clj-surgeon.move-test clj-surgeon.outermost-test clj-surgeon.mcp-expect-guard-test clj-surgeon.workspace-onboarding-test clj-surgeon.relation-census-test clj-surgeon.move-dependency-test clj-surgeon.extract-test clj-surgeon.lens-query-test clj-surgeon.mcp-paths-test clj-surgeon.ns-isolation-test clj-surgeon.tmp-leak-support-test clj-surgeon.mission-candidate-race-test clj-surgeon.ls-tree-test clj-surgeon.mission-candidate-test clj-surgeon.cljc.analyze-test clj-surgeon.mcp-extraction-plan-test clj-surgeon.mcp-semantic-client-test clj-surgeon.diagnostic-delta-test clj-surgeon.telemetry-events-test clj-surgeon.fast-lane-isolation-test clj-surgeon.mcp-schema-test clj-surgeon.mission-usage-test clj-surgeon.mission-forms-source-test clj-surgeon.mcp-telemetry-test clj-surgeon.mcp-workspace-test clj-surgeon.mcp-formatter-test clj-surgeon.insertion-gap-test clj-surgeon.mcp-extraction-test clj-surgeon.file-ops-test clj-surgeon.namespace-split-test clj-surgeon.worktree-lifecycle-cli-test clj-surgeon.mcp-program-tool-test clj-surgeon.analyze-test clj-surgeon.memory-battery-test clj-surgeon.scope-stream-test clj-surgeon.mcp-read-request-normalization-test clj-surgeon.mcp-operation-registry-test clj-surgeon.battery-ledger-test clj-surgeon.failure-report-test clj-surgeon.structural-lens-test clj-surgeon.mcp-inspect-tool-test clj-surgeon.census-pool-test clj-surgeon.mission-git-test clj-surgeon.alias-migration-test clj-surgeon.mcp-create-files-test clj-surgeon.mission-forms-test clj-surgeon.outline-test clj-surgeon.mcp-prepared-confirmation-test clj-surgeon.platform-selector-test clj-surgeon.mcp-compact-edit-test clj-surgeon.mcp-contract-test clj-surgeon.xray-test clj-surgeon.insert-forms-test clj-surgeon.mcp-combinable-transaction-test clj-surgeon.mcp-compact-relations-test clj-surgeon.syntax-var-refs-test clj-surgeon.mcp-prepared-request-test clj-surgeon.rename-alias-receipt-test clj-surgeon.battery-parallel-test clj-surgeon.helper-extraction-test clj-surgeon.mcp-operation-test clj-surgeon.edit-dsl-test clj-surgeon.worktree-lifecycle-test clj-surgeon.split-proof-gate-test clj-surgeon.mcp-operation-async-test clj-surgeon.require-change-test clj-surgeon.mcp-write-refusal-test clj-surgeon.recovery-test clj-surgeon.mcp-relation-census-round20-test clj-surgeon.partition-all-test clj-surgeon.mcp-compact-location-test clj-surgeon.lane-manifest-test clj-surgeon.agent-routing-test clj-surgeon.mcp-intent-contract-test clj-surgeon.outline-memory-test clj-surgeon.cljc.merge-test clj-surgeon.mcp-compact-edit-fields-test clj-surgeon.cljc.split-test clj-surgeon.extract-header-test clj-surgeon.fix-declares-test clj-surgeon.mission-typist-test clj-surgeon.quoted-var-refs-test clj-surgeon.cli-dispatch-test clj-surgeon.receipt-booleans-test clj-surgeon.edit-test clj-surgeon.jvm-error-test clj-surgeon.cljc-existing-ops-test clj-surgeon.forms-test clj-surgeon.rename-alias-test clj-surgeon.insert-forms-receipt-test clj-surgeon.worktree-lifecycle-io-test clj-surgeon.owner-hypotheses-test clj-surgeon.rename-test clj-surgeon.outline-differential-test clj-surgeon.help-test clj-surgeon.install-test clj-surgeon.mcp-change-buffer-test clj-surgeon.splice-envelope-test clj-surgeon.mcp-namespace-split-test clj-surgeon.mcp-inspect-contract-test clj-surgeon.cljc.require-ops-test clj-surgeon.edn-config-integration-test clj-surgeon.intent-transaction-test clj-surgeon.operation-algebra-test}))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.jvm-error-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.tmp-leak-support-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.forms-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.alias-migration-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.agent-routing-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.outline-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.move-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.operation-algebra-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.move-dependency-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.analyze-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.diagnostic-delta-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.rename-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.fix-declares-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.extract-header-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.extract-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.failure-report-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.file-ops-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.show-form-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.structural-lens-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.syntax-var-refs-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.lens-query-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.memory-battery-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.cljc.merge-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.cljc.split-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.cljc.require-ops-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.cljc.analyze-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.edn-config-integration-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.edit-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.edit-dsl-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.cljc-existing-ops-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.ls-tree-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.outermost-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.owner-hypotheses-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.parser-admission-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.partition-all-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.platform-selector-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.xray-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.help-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.install-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.insertion-gap-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.intent-transaction-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.worktree-lifecycle-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.worktree-lifecycle-io-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.worktree-lifecycle-cli-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.recovery-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.relation-census-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+
+FAIL in (every-manifest-entry-exists-on-disk) (/home/forge/src/clj-surgeon-bbtower/test/clj_surgeon/lane_manifest_test.clj:158)
+Every historical bb member has a budgeted cadence; fast excludes battery
+clj-surgeon.cli-dispatch-test requires a cadence budget
+expected: (pos-int? (get defaults (lm/lane-of n)))
+  actual: (not (pos-int? nil))
+{:test 2, :pass 223, :fail 52, :error 0}

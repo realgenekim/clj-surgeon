@@ -1,0 +1,6 @@
+
+Testing clj-surgeon.xray-test
+
+Ran 27 tests containing 467 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.xray-test, :runtime :bb, :mode "test", :started-at "2026-09-12T19:26:45.316286445Z", :elapsed-ms 1657, :status :passed, :result {:test 27, :pass 467, :fail 0, :error 0, :type :summary}}

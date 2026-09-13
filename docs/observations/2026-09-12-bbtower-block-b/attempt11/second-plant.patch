@@ -1,0 +1,13 @@
+diff --git a/src/clj_surgeon/mcp_hot_verify.clj b/src/clj_surgeon/mcp_hot_verify.clj
+index ed97a57a..814858a2 100644
+--- a/src/clj_surgeon/mcp_hot_verify.clj
++++ b/src/clj_surgeon/mcp_hot_verify.clj
+@@ -118,7 +118,7 @@
+   (let [started (System/nanoTime)]
+     (if-not (valid-profile? profile)
+       {:ok false :status :refused
+-       :error-type :invalid-hot-verification-profile
++       :error-type :attempt11-verify-profile-unregistered
+        :error "Hot verification profile is not closed data"}
+       (let [root (.getCanonicalFile (io/file project-root))
+             port-file (.getCanonicalFile (io/file root (:port-file profile)))]
