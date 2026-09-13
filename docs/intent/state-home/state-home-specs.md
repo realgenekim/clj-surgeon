@@ -18,3 +18,28 @@ These stable IDs extend the [warm-image state design](design.md). IDs are never 
 - [x] **STATE-HOME-013**: When portability summaries are generated, their declared population shall equal the inventory population. Misreading: a constant header remains valid after an assignment is added. Witness generated-portability-census-agrees-with-all-inventories checks header, table, summary, controls, lane manifest and deftest census together.
 - [x] **PROBE-RECEIPT-001**: When a pre-network descriptor filesystem stage fails, probe shall return a filesystem-typed refusal before attempting transport. Misreading: local IOExceptions are connection failures. Boundaries: resolution, absent, unreadable, directory, malformed, oversize, path too long and NUL; witness local-filesystem-failures-never-connect.
 - [x] **PROBE-RECEIPT-002**: When probe returns a local filesystem refusal, the receipt shall carry the actual attempted path through bounded EDN encoding. Misreading: raw path text is safe to concatenate or an exception message supplies adequate provenance. Boundaries: newline/quote injection and oversized path diagnostics; witness local-filesystem-failures-never-connect.
+
+## Refusal registration and repair reference
+
+The vocabulary/remedy ledger is [probe/refusals.edn](../probe/refusals.edn).
+Its rows carry the native failure, repair (`native_method`), owner and witness.
+The independent frozen source census in `mcp-alias-migration-test` contains all
+seven kinds below within its 176-kind pin. The vocabulary census witness is
+`splice-envelope-test/bounded-input-path-encoding`; neither census substitutes
+for the behavioral witnesses named in the ledger.
+
+| Refusal kind | Native failure and repair | Existing intent |
+|---|---|---|
+| `probe-image-path-invalid` | Invalid/NUL/overlong path; correct the configured root or image-file path and retry. | PROBE-RECEIPT-001/002 |
+| `probe-image-malformed` | Invalid descriptor EDN, shape or nesting; regenerate one bounded image descriptor with make warm. | PROBE-RECEIPT-001 |
+| `probe-image-unreadable` | Access denial, directory or local read failure; restore readability at the reported path or select the intended file. | PROBE-RECEIPT-001 |
+| `probe-image-too-large` | Descriptor exceeds its 8192-byte size or read bound; regenerate the small identity descriptor and correct a mistaken file override. | PROBE-RECEIPT-001 |
+| `state-root-inside-workspace` | Canonical state root enters the checkout; select an external admitted root and correct symlink/relative targets. | STATE-HOME-009 |
+| `state-root-outside-envelope` | State root exceeds existing write authority; select an external root already inside that envelope. | STATE-HOME-010 |
+| `probe-state-not-writable` | Directory creation or publication fails; repair permissions, space or quota from the native errno, then retry make warm. | STATE-HOME-007/011/012 |
+
+Registration checklist for a source-census refusal: name every missing kind and
+its emitting owner; check both directions of the frozen enumeration and its
+count; check the vocabulary/remedy EDN rows and owner membership; check this
+repair reference and the owning intent; name the direct behavioral and census
+witnesses and ensure the impact selection includes path-reading witnesses.
