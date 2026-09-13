@@ -671,3 +671,161 @@
           (is (= {:name "true" :profile "b07-cell-b" :command ["/bin/true"] :exit 0 :status "passed"}
                  (dissoc check :duration_ms)))
           (is (number? (:duration_ms check))))))))
+
+;; ------------------------------------- TXN-RACE-001 (inb-c74f05, 2026-09-13)
+;;
+;; The admission boundary asks two syscalls about one path - `Files/exists`
+;; then `.toRealPath`, `Files/isSymbolicLink` then `Files/readSymbolicLink` -
+;; and another actor may remove that path between them. Three batteries in one
+;; day died on the second call throwing `NoSuchFileException` out of
+;; `txn-journal/lock-file`, which had only asked what the LOCK is called. These
+;; witnesses open the window on purpose, so the interleaving is a schedule
+;; rather than a coincidence under load.
+
+(def ^:private resolution-seam
+  (ns-resolve 'clj-surgeon.receipt-artifacts '*resolution-interleave*))
+
+(defn- resolution-windows
+  "Every check-then-act window `resolved-target` contains, in the order the
+   resolution reaches them. Enumerated here so a witness is added by naming a
+   window rather than by remembering one."
+  []
+  [:link-target :real-path])
+
+(defn- resolve-removing-inside-window
+  "`resolved-target` of `requested`, with `victim` removed INSIDE `window`.
+
+   Returns `{:fired n :outcome [:resolved s] | [:threw class message]}`. The
+   outcome is DATA and the caller decides which value is correct, so this
+   helper cannot turn a throw into a pass by catching it."
+  [requested ^java.io.File victim window]
+  (let [fired (atom 0)
+        victim-path (.toPath (.getAbsoluteFile victim))
+        hook (fn [^java.nio.file.Path path w]
+               (when (and (= w window) (= victim-path path))
+                 (swap! fired inc)
+                 (java.nio.file.Files/deleteIfExists path)))
+        outcome (with-bindings {resolution-seam hook}
+                  (try [:resolved (str (artifacts/resolved-target requested))]
+                       (catch Exception e
+                         [:threw (.getName (class e)) (str (.getMessage e))])))]
+    {:fired @fired :outcome outcome}))
+
+(defn- real-dir
+  "The directory's own real path, read INDEPENDENTLY of the code under test,
+   so the expected values below are not derived from it."
+  [^java.io.File dir]
+  (str (.toRealPath (.toPath dir) (make-array java.nio.file.LinkOption 0))))
+
+;; @spec TXN-RACE-001
+;; INTENT-TEST: TXN-RACE-001
+(deftest a-file-removed-inside-the-real-path-window-resolves-absent
+  (testing "the exact production interleaving: the LOCK exists when the
+            resolution checks, and is gone when it resolves. The answer a
+            caller is owed is the one it would have got a microsecond later -
+            the absent tail under the resolved parent - never the filesystem's
+            exception."
+    (with-workspace
+      (fn [base]
+        (let [dir (doto (io/file base "transactions") .mkdirs)
+              lock (io/file dir "LOCK")
+              _ (spit lock (pr-str {:txid "VICTIM"}))
+              result (resolve-removing-inside-window lock lock :real-path)]
+          (is (= 1 (:fired result))
+              (str "the window must actually be entered, or the witness proves "
+                   "nothing: " (pr-str result)))
+          (is (= [:resolved (str (real-dir dir) "/LOCK")] (:outcome result))
+              (pr-str result))
+          (is (not (.exists lock)) "and the removal really happened"))))))
+
+;; @spec TXN-RACE-001
+;; INTENT-TEST: TXN-RACE-001
+(deftest a-symlink-removed-inside-the-link-target-window-resolves-absent
+  (testing "the other window, and the one no battery has reached yet:
+            `isSymbolicLink` then `readSymbolicLink` is the same shape and
+            throws the same exception."
+    (with-workspace
+      (fn [base]
+        (let [dir (doto (io/file base "transactions") .mkdirs)
+              target (io/file dir "target")
+              link (io/file dir "link")]
+          (spit target "t")
+          (java.nio.file.Files/createSymbolicLink
+            (.toPath link) (.toPath target)
+            (make-array java.nio.file.attribute.FileAttribute 0))
+          (let [result (resolve-removing-inside-window link link :link-target)]
+            (is (= 1 (:fired result)) (pr-str result))
+            (is (= [:resolved (str (real-dir dir) "/link")] (:outcome result))
+                (pr-str result))))))))
+
+;; @spec TXN-RACE-001
+;; INTENT-TEST: TXN-RACE-001
+(deftest an-ancestor-removed-inside-its-own-window-resolves-absent
+  (testing "the removal need not land on the final component. An ANCESTOR
+            resolved on the way to an absent tail carries the same window, and
+            a directory swept by a concurrent cleanup is exactly what a
+            battery does to one."
+    (with-workspace
+      (fn [base]
+        (let [dir (doto (io/file base "transactions") .mkdirs)
+              sub (doto (io/file dir "gone") .mkdirs)
+              lock (io/file sub "LOCK")
+              result (resolve-removing-inside-window lock sub :real-path)]
+          (is (= 1 (:fired result)) (pr-str result))
+          (is (= [:resolved (str (real-dir dir) "/gone/LOCK")] (:outcome result))
+              (pr-str result)))))))
+
+;; @spec TXN-RACE-001
+;; INTENT-TEST: TXN-RACE-001
+(deftest every-resolution-window-is-covered-by-a-witness
+  (testing "the enumeration is the ratchet: a window added to the resolution
+            without a witness makes this test red, so the next check-then-act
+            pair cannot be added silently."
+    (is (= #{:link-target :real-path} (set (resolution-windows)))
+        "both windows this namespace witnesses are the windows that exist")))
+
+;; @spec TXN-RACE-001
+;; INTENT-TEST: TXN-RACE-001
+(deftest a-vanishing-path-is-still-refused-outside-the-envelope
+  (testing "the false witness for the line above. Resolving a removal as an
+            absent tail must not become a way THROUGH admission: the same
+            interleaving over a path outside every envelope root still refuses
+            with `:write-outside-envelope`, and the bytes outside are
+            untouched."
+    (with-workspace
+      (fn [base]
+        (let [inside (doto (io/file base "inside") .mkdirs)
+              outside (doto (io/file base "outside") .mkdirs)
+              lock (io/file outside "LOCK")
+              _ (spit lock "outside-claim")
+              victim-path (.toPath (.getAbsoluteFile lock))
+              hook (fn [^java.nio.file.Path path w]
+                     (when (and (= :real-path w) (= victim-path path))
+                       (java.nio.file.Files/deleteIfExists path)))
+              data (with-envelope [inside]
+                     (fn []
+                       (with-bindings {resolution-seam hook}
+                         (refusal-data #(artifacts/admit-target! lock)))))]
+          (is (= :write-outside-envelope (:error-type data)) (pr-str data))
+          (is (.isDirectory outside) "and the outside directory is untouched"))))))
+
+;; @spec TXN-RACE-001
+;; INTENT-TEST: TXN-RACE-001
+(deftest admitted-file-names-a-lock-that-vanished-under-it
+  (testing "the caller-level promise `txn-journal/lock-file` depends on:
+            asking what the LOCK is CALLED is not asking whether it is there,
+            and a concurrent break must not turn the question into a throw."
+    (with-workspace
+      (fn [base]
+        (let [dir (doto (io/file base "transactions") .mkdirs)
+              lock (io/file dir "LOCK")
+              _ (spit lock (pr-str {:txid "VICTIM"}))
+              victim-path (.toPath (.getAbsoluteFile lock))
+              hook (fn [^java.nio.file.Path path w]
+                     (when (and (= :real-path w) (= victim-path path))
+                       (java.nio.file.Files/deleteIfExists path)))
+              outcome (with-bindings {resolution-seam hook}
+                        (try [:named (str (artifacts/admitted-file dir "LOCK"))]
+                             (catch Exception e
+                               [:threw (.getName (class e)) (str (.getMessage e))])))]
+          (is (= [:named (str (real-dir dir) "/LOCK")] outcome) (pr-str outcome)))))))

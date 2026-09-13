@@ -95,25 +95,58 @@
 (defn current-envelope []
   (or *destination-envelope* @launcher-envelope policy-default))
 
+(def ^:private ^:dynamic *resolution-interleave*
+  "The witness seam inside this resolution's two CHECK-THEN-ACT windows, or nil.
+
+   `Files/isSymbolicLink` then `Files/readSymbolicLink`, and `Files/exists`
+   then `.toRealPath`, are each two syscalls about one path. Any concurrent
+   actor may remove that path BETWEEN them, and the JDK answers the second
+   call by throwing - out of `admitted-file`, out of every caller that only
+   wanted a name. A witness with no way into those windows can reproduce that
+   only by luck under load, which is how this defect reached three batteries
+   before anyone could make it happen on purpose.
+
+   Called with the path and the window's name - `:link-target` or
+   `:real-path` - between the two syscalls. ITS RETURN VALUE IS IGNORED, so
+   nothing bound here can change WHAT is admitted; it can only change WHEN the
+   second syscall runs. Nil in production, and private, so the seam is
+   reachable only from a witness that names the var."
+  nil)
+
+(defn- interleave-resolution!
+  [^java.nio.file.Path path window]
+  (when-let [hook *resolution-interleave*]
+    (hook path window))
+  nil)
+
 (defn resolved-target
-  "Resolve existing ancestors (including dangling links), retaining absent tail."
+  "Resolve existing ancestors (including dangling links), retaining absent tail.
+
+   A path that is REMOVED inside either check-then-act window is resolved as
+   an absent tail - the same answer this function gives for a path that was
+   already gone when it was asked - and never as an exception. See
+   `*resolution-interleave*` for the two windows, and TXN-RACE-001."
   [requested]
-  (letfn [(resolve-path [^java.nio.file.Path path depth]
+  (letfn [(absent-tail [^java.nio.file.Path path depth]
+            (if-let [parent (.getParent path)]
+              (.normalize (.resolve (resolve-path parent (inc depth)) (.getFileName path)))
+              (throw (ex-info "Artifact path cannot be resolved"
+                              {:error-type :artifact-path-unresolvable :path (str requested)}))))
+          (resolve-path [^java.nio.file.Path path depth]
             (when (> depth 128)
               (throw (ex-info "Artifact path has cyclic or excessive symlinks"
                               {:error-type :artifact-path-unresolvable :path (str requested)})))
             (cond
               (Files/isSymbolicLink path)
-              (let [link (Files/readSymbolicLink path)]
-                (resolve-path (if (.isAbsolute link) link (.resolve (.getParent path) link))
-                              (inc depth)))
+              (do (interleave-resolution! path :link-target)
+                  (let [link (Files/readSymbolicLink path)]
+                    (resolve-path (if (.isAbsolute link) link (.resolve (.getParent path) link))
+                                  (inc depth))))
               (Files/exists path (make-array java.nio.file.LinkOption 0))
-              (.toRealPath path (make-array java.nio.file.LinkOption 0))
+              (do (interleave-resolution! path :real-path)
+                  (.toRealPath path (make-array java.nio.file.LinkOption 0)))
               :else
-              (if-let [parent (.getParent path)]
-                (.normalize (.resolve (resolve-path parent (inc depth)) (.getFileName path)))
-                (throw (ex-info "Artifact path cannot be resolved"
-                                {:error-type :artifact-path-unresolvable :path (str requested)})))))]
+              (absent-tail path depth)))]
     (resolve-path (.toAbsolutePath (.toPath (io/file (str requested)))) 0)))
 
 (defn- inode-attributes [^java.nio.file.Path path]
