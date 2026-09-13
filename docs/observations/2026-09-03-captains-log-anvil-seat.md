@@ -6521,3 +6521,7 @@ round 3 follows.
 ### 2026-09-13T05:38:01Z — data-not-code ship round 3 SEALED
 
 Ship dir `/var/tmp/forge/ship/20260913T053427Z-ce08cb015850/`, tip ce08cb01 → candidate b33bf3b0 onto 759974c7, prewarm receipt git-head verified. Sol fence review started 05:34:29Z (pid 2936533), ship pid 2935210, waiter bound to the pid. Verdict file `docs/observations/data-not-code.md` in the fence worktree.
+
+### 2026-09-13T05:51:44Z — data-not-code LANDED (ship round 3): trunk 53b9f158 = stable/2026-09-13.2
+
+Sol GO on the first read of candidate b33bf3b0 (verdict archived 05:43:33Z); battery rc=0 at 05:37:41Z, receipt 47c5706a landed (branch fable/battery-receipt-ce08cb01); fast lane green; FINISH LANDED 05:50:31Z, merge 53b9f158 on origin/MCP/main, tag stable/2026-09-13.2 pushed. Nine Astra rounds, three ship rounds (round 1 NO-GO impact oracle one hop short; round 2 GO with battery RED from /home/forge/tmp fixtures; round 3 GO+green). Landed: destination envelope {:id :roots :source} as trusted context, final-target admission, :write-outside-envelope refusal, sandbox denial classification from :sandbox/decision data, evidence-rows validator, sleep identities, diff-impact fixed-point oracle. Sublime index 5 → 6 (data-not-code landed as the preregistered estimate said). Probe measure amendment 2 filed (47f7f88c) and its two planted NATIVE cells rerunning now (run-bg amend2-rerun, results-3/). 7906 restart onto 53b9f158 follows.
