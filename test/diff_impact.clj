@@ -3,7 +3,7 @@
          '[babashka.process :as process]
          '[cheshire.core :as json]
          '[clojure.java.io :as io]
-         '[clojure.set :as set]
+         '[clj-surgeon.form-identity :as form-identity]
          '[clojure.string :as str])
 
 ;; Read declarations, never require the subject or consult lane selection.
@@ -13,32 +13,42 @@
       (let [form (read {:eof nil :read-cond :allow :features #{:clj}} r)]
         (when (and (seq? form) (= 'ns (first form))) form)))))
 
-(defn libspecs [spec]
-  (cond
-    (symbol? spec) #{spec}
-    (and (sequential? spec) (symbol? (first spec)))
-    (if (or (empty? (rest spec)) (keyword? (second spec)))
-      #{(first spec)}
-      (into #{} (mapcat (fn [child]
-                          (map #(symbol (str (first spec) "." %)) (libspecs child))))
-            (rest spec)))
-    :else (throw (ex-info "Unsupported namespace libspec" {:spec spec}))))
-
 (defn dependencies [form]
-  (into #{} (mapcat #(mapcat libspecs (rest %)))
-        (filter #(and (seq? %) (#{:require :use} (first %))) (drop 2 form))))
+  (into #{} (map (comp symbol :lib))
+        (form-identity/source-require-entries
+          (if (string? form) form (pr-str form))
+          {:platform :clj :clauses #{":require" ":require-macros" ":use"}
+           :on-unparsed #(throw (ex-info "Unsupported namespace dependency" {:form %}))})))
+
+(defn reverse-closure
+  "Fixed point over reverse edges. Each reachable node retains one shortest
+  path to the seed; sorted neighbors make equally short witnesses deterministic.
+  Visiting each node once terminates even for cycles, without a depth bound."
+  [dependents seed]
+  (loop [paths {seed [seed]} frontier [seed]]
+    (if (empty? frontier)
+      paths
+      (let [[next-paths next-frontier]
+            (reduce (fn [[seen pending] n]
+                      (reduce (fn [[seen pending] dependent]
+                                (if (contains? seen dependent)
+                                  [seen pending]
+                                  [(assoc seen dependent (into [dependent] (get seen n)))
+                                   (conj pending dependent)]))
+                              [seen pending] (sort (get dependents n))))
+                    [paths []] frontier)]
+        (recur next-paths next-frontier)))))
 
 (defn impact [nodes changed]
-  (let [by-name (into {} (map (juxt :namespace identity)) nodes)]
+  (let [dependents (reduce (fn [graph {:keys [namespace requires]}]
+                             (reduce #(update %1 %2 (fnil conj #{}) namespace) graph requires))
+                           {} nodes)
+        closures (mapv #(reverse-closure dependents %) (sort changed))]
     (->> nodes
          (filter :test?)
-         (keep (fn [{:keys [requires] :as node}]
-                 (let [paths (vec (sort
-                                    (concat
-                                      (for [n (set/intersection requires changed)] [(str n)])
-                                      (for [via requires
-                                            n (set/intersection (get-in by-name [via :requires] #{}) changed)]
-                                        [(str via) (str n)]))))]
+         (keep (fn [{:keys [namespace] :as node}]
+                 (let [paths (vec (sort (keep #(when-let [path (get % namespace)]
+                                                 (mapv str (rest path))) closures)))]
                    (when (seq paths) (assoc node :paths paths)))))
          (sort-by #(vector (not= 'clj-surgeon.txn-journal-test (:namespace %))
                      (str (:namespace %)))) vec)))
@@ -52,8 +62,8 @@
 
 (when-not (= ["--self-test"] *command-line-args*)
   (let [[base output phase] *command-line-args*]
-    (when-not (and base output (#{"before" "after" "merged" "list"} phase))
-      (throw (ex-info "Usage: bb test/diff_impact.clj BASE OUTPUT_DIR before|after|merged|list" {})))
+    (when-not (and base output (#{"before" "after" "merged" "fixed-point" "list"} phase))
+      (throw (ex-info "Usage: bb test/diff_impact.clj BASE OUTPUT_DIR before|after|merged|fixed-point|list" {})))
     (let [files (sort (map str (mapcat #(fs/glob % "**.{clj,cljc}") ["src" "test"])))
           nodes (vec (keep (fn [file]
                              (when-let [form (declaration file)]
@@ -128,14 +138,47 @@
                {:namespace 'too-far-test :requires #{'far} :test? true}
                {:namespace 'unrelated-test :requires #{} :test? true}]
         selected (impact nodes #{'source})]
-    (assert (= #{'fast-test 'battery-test 'bb-excluded-test} (set (map :namespace selected))))
-    (assert (= 3 (count selected)))
-    (assert (= #{["middle" "source"] ["source"]} (set (:paths (first selected)))))
+    (assert (= #{'fast-test 'battery-test 'bb-excluded-test 'too-far-test} (set (map :namespace selected))))
+    (assert (= 4 (count selected)))
+    (assert (= [["source"]] (:paths (first selected))))
     (assert (empty? (impact nodes #{})))
-    (assert (= #{'a.x 'a.y} (libspecs '(a [x :as x] y))))
+    (assert (= #{'a.x 'a.y} (dependencies '(ns test (:require (a [x :as x] y))))))
     (assert (= #{'x 'y} (dependencies '(ns test (:require [x :as a]) (:use y))))))
   (assert (completed? 0 {:test 1 :pass 1 :fail 0 :error 0}))
   (doseq [[exit counters] [[0 nil] [1 {:test 1 :fail 0 :error 0}]
                            [0 {:test 0 :fail 0 :error 0}] [0 {:test 1 :fail 1 :error 0}]]]
     (assert (not (completed? exit counters))))
-  (println "Diff-impact self-check: direct, transitive, lane-independent, unique, bounded, prefix and use cases passed"))
+  (let [nodes [{:namespace 'changed :requires #{'cycle}}
+               {:namespace 'cycle :requires #{'changed}}
+               {:namespace 'helper-test :test? true :requires #{'cycle 'other}}
+               {:namespace 'leaf-test :test? true :requires #{'helper-test}}]
+        selected (impact nodes #{'changed 'other})]
+    (assert (= #{'helper-test 'leaf-test} (set (map :namespace selected))))
+    (assert (= #{["helper-test" "cycle" "changed"] ["helper-test" "other"]}
+               (set (:paths (second selected)))))
+    (assert (= selected (impact (reverse nodes) #{'other 'changed}))))
+  (doseq [clause [":require" ":use" ":require-macros"]
+          spec ["fixture.n0" "[fixture.n0]" "(fixture.n0)"
+                "[fixture.n0 :as dep]" "(fixture.n0 :refer [v])"
+                "[fixture [n0 :as dep]]" "(fixture n0)"
+                "[fixture (n0)]" "^:fixture [fixture.n0 :as-alias dep]"
+                "\"fixture.n0\"" "[\"fixture.n0\" :as dep]"
+                "#?(:clj [fixture.n0] :cljs [unrelated])"
+                "#?@(:clj [[fixture.n0]] :cljs [[unrelated]])"
+                "#_[unrelated] [fixture.n0] :reload"]]
+    (let [deps (dependencies (str "(ns fixture.leaf (" clause " " spec "))"))]
+      (assert (= #{'fixture.n0} deps) (str clause " " spec))
+      (assert (= ['fixture.leaf]
+                 (mapv :namespace (impact [{:namespace 'fixture.leaf :test? true :requires deps}]
+                                    #{'fixture.n0}))))))
+  ;; The exact path in Sol's fence report, with both intermediate namespaces.
+  (assert (= [["clj-surgeon.mcp-prepared-confirmation" "clj-surgeon.mcp-contract"
+               "clj-surgeon.mcp-extraction"]]
+             (:paths (first (impact
+                              (mapv (fn [[n dep]] {:namespace n :requires #{dep}
+                                                   :test? (= n 'clj-surgeon.mcp-prepared-wire-test)})
+                                    '[[clj-surgeon.mcp-prepared-wire-test clj-surgeon.mcp-prepared-confirmation]
+                                      [clj-surgeon.mcp-prepared-confirmation clj-surgeon.mcp-contract]
+                                      [clj-surgeon.mcp-contract clj-surgeon.mcp-extraction]])
+                              #{'clj-surgeon.mcp-extraction})))))
+  (println "Diff-impact self-check: depths 1..8, every edge cut, unrelated negative, cycles, multiple seeds, test intermediates, shared libspec shapes, Sol F1 and completion checks passed"))
