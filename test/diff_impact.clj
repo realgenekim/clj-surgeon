@@ -52,8 +52,8 @@
 
 (when-not (= ["--self-test"] *command-line-args*)
   (let [[base output phase] *command-line-args*]
-    (when-not (and base output (#{"before" "after" "list"} phase))
-      (throw (ex-info "Usage: bb test/diff_impact.clj BASE OUTPUT_DIR before|after|list" {})))
+    (when-not (and base output (#{"before" "after" "merged" "list"} phase))
+      (throw (ex-info "Usage: bb test/diff_impact.clj BASE OUTPUT_DIR before|after|merged|list" {})))
     (let [files (sort (map str (mapcat #(fs/glob % "**.{clj,cljc}") ["src" "test"])))
           nodes (vec (keep (fn [file]
                              (when-let [form (declaration file)]
