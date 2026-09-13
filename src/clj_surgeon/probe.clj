@@ -271,6 +271,7 @@
               failure (cond
                         invalid? (refusal :probe-image-path-invalid message)
                         missing? (refusal :probe-image-absent message)
+                        ;; forwarded-refusal-kind: relay the reader's typed filesystem refusal.
                         (:error-type data) (refusal (:error-type data) message)
                         :else (refusal :probe-image-unreadable message))]
           (bounded-diagnostics
