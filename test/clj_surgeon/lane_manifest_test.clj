@@ -320,6 +320,44 @@
           (is (= n (:namespace r)) (pr-str r))
           (is (= field (:field r)) (pr-str r)))))))
 
+;; @spec DATACODE-ROWS-001
+(deftest runtime-steering-fields-cannot-outvote-control-receipts
+  ;; Opus N2: removing the contract failure plus flipping runtime admitted bb.
+  (let [n 'clj-surgeon.intent-transaction-test
+        row (get lm/runtime-measurements n)
+        other 'clj-surgeon.battery-ledger-test
+        portable (get lm/runtime-measurements other)]
+    (doseq [[namespace-name candidate field]
+            [[n (-> row (dissoc :contract-failure)
+                    (assoc :portability-state :portable :runtime :bb)) :contract-failure]
+             [n (dissoc row :contract-failure) :contract-failure]
+             [n (assoc row :contract-failure "invented") :contract-failure]
+             [other (assoc portable :portability-state :unverified :runtime :jvm) :portability-state]
+             [other (assoc portable :failed-samples ["invented"] :runtime :jvm) :failed-samples]]]
+      (let [r (try (lm/validate-runtime-evidence! {namespace-name candidate}) nil
+                   (catch clojure.lang.ExceptionInfo e (ex-data e)))]
+        (is (= :invalid-runtime-evidence (:error-type r)) (pr-str r))
+        (is (= namespace-name (:namespace r)) (pr-str r))
+        (is (= field (:field r)) (pr-str r))))))
+
+;; @spec DATACODE-ROWS-001
+(deftest runtime-receipts-must-stay-in-retained-evidence-roots
+  ;; Opus N3: a complete, internally consistent receipt copied to /var/tmp.
+  (let [n 'clj-surgeon.battery-ledger-test
+        row (get lm/runtime-measurements n)
+        source (get-in row [:bb :logs 0])
+        outside (java.nio.file.Files/createTempFile
+                  "forged-receipt-" ".edn" (make-array java.nio.file.attribute.FileAttribute 0))]
+    (try
+      (spit (str outside) (slurp source))
+      (let [r (try (lm/validate-runtime-evidence! {n (assoc-in row [:bb :logs 0] (str outside))}) nil
+                   (catch clojure.lang.ExceptionInfo e (ex-data e)))]
+        (is (= :invalid-runtime-evidence (:error-type r)) (pr-str r))
+        (is (= n (:namespace r)) (pr-str r))
+        (is (= [:bb :logs] (:field r)) (pr-str r))
+        (is (= :outside-retained-evidence (:reason r)) (pr-str r)))
+      (finally (java.nio.file.Files/deleteIfExists outside)))))
+
 (deftest runtime-portability-controls-cover-every-assignment
   ;; @spec TEST-ISO-016 -- all cadences, independently of the 38 cost pairs.
   (let [n 'fixture/runtime-test

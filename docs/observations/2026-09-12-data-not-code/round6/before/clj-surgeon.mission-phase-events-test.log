@@ -1,0 +1,6 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+
+Testing clj-surgeon.mission-phase-events-test
+
+Ran 7 tests containing 31 assertions.
+0 failures, 0 errors.

@@ -811,6 +811,8 @@
   clj-surgeon.lane-manifest-test/runtime-evidence-binds-statistics-to-receipt-files
   clj-surgeon.lane-manifest-test/runtime-evidence-is-consumed-and-receipts-are-required
   clj-surgeon.lane-manifest-test/runtime-portability-controls-cover-every-assignment
+  clj-surgeon.lane-manifest-test/runtime-receipts-must-stay-in-retained-evidence-roots
+  clj-surgeon.lane-manifest-test/runtime-steering-fields-cannot-outvote-control-receipts
   clj-surgeon.lane-manifest-test/sleep-pins-survive-line-movement-and-refuse-purpose-drift
   clj-surgeon.lane-manifest-test/the-corpus-only-ever-grows-and-the-arithmetic-is-shown
   clj-surgeon.lane-manifest-test/the-landing-gate-refuses-a-stale-battery-receipt
@@ -2233,6 +2235,7 @@
   clj-surgeon.receipt-artifacts-boundary-test/compact-edit-publishes-external-inverse
   clj-surgeon.receipt-artifacts-boundary-test/default-transaction-publishes-external-journal-and-preimage
   clj-surgeon.receipt-artifacts-boundary-test/destination-envelope-admits-ledger-before-creation
+  clj-surgeon.receipt-artifacts-boundary-test/destination-envelope-admits-only-accounted-inode-links
   clj-surgeon.receipt-artifacts-boundary-test/destination-envelope-final-filename-consumer-matrix
   clj-surgeon.receipt-artifacts-boundary-test/destination-envelope-guards-real-publication
   clj-surgeon.receipt-artifacts-boundary-test/destination-envelope-is-trusted-context-only

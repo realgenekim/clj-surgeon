@@ -10,8 +10,10 @@ remaining requirements, red, implementation, green and gate phases for items
 - DATACODE-ENV-001: When a shared artifact consumer chooses a final target,
   it shall refuse a resolved destination outside the trusted envelope before
   creating any directory or publishing any bytes. A final file with link count
-  greater than one shall refuse with the same kind and `:reason :hard-link`,
-  before APPEND can change an outside inode.
+  greater than one is admitted only when all inode links are accounted for
+  inside the union of envelope roots. Outside or unaccounted links refuse
+  with the same kind and `:reason :hard-link`, before APPEND can change an
+  outside inode. In-envelope journal lock links are admitted (round 6).
 - DATACODE-ENV-002: When no launcher value is supplied, admission shall use
   the bounded policy default (disk temp, passwd seat state, startup workspace).
 - DATACODE-ENV-003: When a request carries destination authority, its decoder
@@ -39,6 +41,10 @@ Landlock is unchanged.
   receipt's namespace, runtime and elapsed wall to the row, recompute n, mean,
   sample sd and conservative ratio from those receipt walls, and refuse any
   statistic or selected-runtime disagreement naming the namespace and field.
+  Runtime-steering state and contract failure must agree with opened timing
+  and registered contract-control receipts. All receipt paths resolve within
+  explicit repository retained-evidence roots. Receipts are evidence, not
+  attestation; coordinated tampering is outside the consistency claim.
   The manifest shall consume those exact
   validated rows; declared policy remains policy. Existing statistical oracles
   retain their expected values.

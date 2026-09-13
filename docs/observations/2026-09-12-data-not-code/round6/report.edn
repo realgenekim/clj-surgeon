@@ -1,0 +1,124 @@
+{:findings
+ ["Class-first oracle selected 80 test namespaces from 20 src files changed since 3b6d5357, without lane/runtime filtering. All ran before and after fixes."
+  "Baseline journal reproduced all six verifier errors plus a concurrent-breaker error: 80 tests, 496 assertions, 7 errors. After: 80 tests, 545 assertions, zero errors."
+  "Inode links are counted as distinct parent-inode/basename entries inside the envelope union. Siblings are checked first; directory/file symlink aliases and overlapping roots cannot inflate the count. Outside/unaccounted links refuse; unavailable inode evidence is typed."
+  "Runtime state is bound to opened timing results and the registered attempt8 failed CLI controls. Both raw CLI outputs have 26581 characters versus 2876 in their saved receipts; the manifest verifies the retained counts and paired receipt identity. Deleting or forging steering fields refuses."
+  "Receipt paths must resolve within explicit repository retention roots. DATACODE-ROWS-001 states receipts are evidence, not attestation. All 38 rows and 456 timing receipts remain unchanged and admitted."
+  "NATIVE has no scored refusal concept; successful planted runs are executed-without-refusal. PROBE must refuse both planted targets with typed kinds. Ratios are unchanged and explicitly bound to the mechanical interval; editing-exclusion bias and a secondary unbet instruction-publication interval are documented and instrumented."
+  "The first BB check exposed an unavailable JVM exception classname. The portable catch repair passed the same BB witnesses. Initial combined script lint warnings were repaired by giving the BB witness script its own namespace."
+  "The measurement subject remains amendment1 759974c7. All six frozen-subject task/hash/apply checks pass. Current instrument-branch T4/T5 hashes differ by that prior design; no task bytes were refrozen and no measurement cell or init ran."],
+ :least_sure
+ ["Actual Darwin/non-ext4 behavior was not exercised; unavailable inode attributes were modeled and refused."
+  "No wall claim for searching large envelopes beyond sibling links."
+  "Dependency discovery is declared, through two edges; arbitrary computed dynamic requires are outside the claim."],
+ :source-binding "source-binding.edn",
+ :measurements
+ {:bb {:test 3, :pass 24, :fail 0, :error 0},
+  :focused-red {:test 3, :pass 14, :fail 20, :error 2},
+  :test-fast
+  {:command
+   {:argv ["make" "test-fast"],
+    :exit 0,
+    :started_utc_ns 1789264463025460623,
+    :wall_ms 30074.672671},
+   :receipt
+   {:state "passed",
+    :result {:test 1249, :pass 12685, :fail 0, :error 0},
+    :source-digest
+    "d01ad3839686cd0581d121039dce0cee952a591699c96705da1970dbb671b844",
+    :measurements
+    {:makespan-ms 26231,
+     :lane-sums-ms {:fast 46558},
+     :runtime-sums-ms {:bb 7559, :jvm 38999}},
+    :isolation-failures 0,
+    :leak-failures 0,
+    :problems []},
+   :clj-splice-prerequisite {:test 5, :pass 59, :fail 0, :error 0}},
+  :prewarm
+  {:command
+   {:argv ["make" "landing-gate-prewarm"],
+    :exit 0,
+    :started_utc_ns 1789264535826109300,
+    :wall_ms 401179.20734},
+   :receipt
+   {:state "passed",
+    :prewarm? true,
+    :landing? false,
+    :source-digest
+    "d01ad3839686cd0581d121039dce0cee952a591699c96705da1970dbb671b844",
+    :wall-ms 398998,
+    :stages
+    [{:target "admit-transaction-recovery-battery",
+      :exit 0,
+      :wall-ms 11169}
+     {:target "alias-migration-test", :exit 0, :wall-ms 90526}
+     {:target "mcp-test", :exit 0, :wall-ms 94786}
+     {:target "test-bb", :exit 0, :wall-ms 91960}
+     {:target "test-bb-diagnostic", :exit 0, :wall-ms 225738}
+     {:target "repository-hygiene", :exit 0, :wall-ms 2027}
+     {:target "intent-audit", :exit 0, :wall-ms 2126}],
+    :problems []},
+   :suites
+   [{:suite "alias",
+     :state "passed",
+     :result {:test 190, :pass 3753, :fail 0, :error 0},
+     :isolation-failures 0,
+     :leak-failures 0,
+     :problems []}
+    {:suite "mcp",
+     :state "passed",
+     :result {:test 1421, :pass 16559, :fail 0, :error 0},
+     :isolation-failures 0,
+     :leak-failures 0,
+     :problems []}
+    {:suite "bb",
+     :state "passed",
+     :result {:test 903, :pass 8061, :fail 0, :error 0},
+     :isolation-failures 0,
+     :leak-failures 0,
+     :problems []}],
+   :attempts 1,
+   :repairs 0},
+  :lint
+  {:errors 0, :warnings 0, :command-receipt "lint-clean-command.json"},
+  :probe-measurement {:init 0, :cells 0, :bet-values-changed false},
+  :focused-green
+  {:test 65, :pass 1695, :fail 0, :error 0, :type "summary"},
+  :outside-hardlink-bypass-plant {:test 1, :pass 1, :fail 6, :error 0},
+  :diff-impact
+  {:before
+   {:completed 80,
+    :expected 80,
+    :passed 79,
+    :failed ["clj-surgeon.txn-journal-test"],
+    :counters {:test 1660, :pass 24219, :fail 0, :error 7},
+    :worker_wall_ms 1259133,
+    :complete true},
+   :after
+   {:completed 80,
+    :expected 80,
+    :passed 80,
+    :failed [],
+    :counters {:test 1661, :pass 24292, :fail 0, :error 0},
+    :worker_wall_ms 1256554,
+    :complete true}},
+  :census {:added 3, :removed 0}},
+ :disagreements
+ ["No disagreement with the class-first ruling. The actual baseline had seven journal errors, not six; all are retained."
+  "The checkout was three instrument-amendment commits ahead of the requested starting SHA; these were preserved."],
+ :source-edit-method
+ "Native rg/read and native patches; derived census via its explicit regeneration witness. No routed alias/split operation applied.",
+ :recorded-at "2026-09-13T02:07:50Z",
+ :commits
+ {:starting-head "93690642e6b975796943549df7581f78b8d64f31",
+  :requested-start "7182573b67f7f02e821b3eb6376f93530b5a2882",
+  :diff-base "3b6d53577be3173cce209934e37bac904b3d38d7",
+  :delivery :containing-commit},
+ :evidence-index "impacted.md",
+ :verdict :go-with-owed,
+ :owed
+ ["Uncovered telemetry writer mcp_telemetry.clj:70-78; readiness writer mcp_http_server.clj:234-240; user.home/passwd-home mismatch."
+  "Check-to-write races and coordinated retained-evidence tampering are outside this contract."
+  "The separately scoped shared CLI output bound remains unfixed; its existing runtime escape is now receipt-backed."
+  "Independent acceptance/review and the preregistered probe/native experiment remain separate. No routing or publication claim."],
+ :branch "fable/data-not-code-local"}

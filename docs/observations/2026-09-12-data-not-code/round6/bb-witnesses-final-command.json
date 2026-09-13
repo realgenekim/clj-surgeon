@@ -1,0 +1,1 @@
+{"argv": ["bb", "-Xmx1g", "-Djava.io.tmpdir=/var/tmp/forge/datacode-fx", "docs/observations/2026-09-12-data-not-code/round6/bb_witnesses.clj"], "exit": 0, "started_utc_ns": 1789263060172673009, "wall_ms": 191.803525}

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+export TMPDIR=/var/tmp/forge/datacode-fx
+export JAVA_TOOL_OPTIONS='-Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx'
+export CLJ_SURGEON_MEMORY_TMP="$TMPDIR"
+mkdir -p "$TMPDIR"
+exec 9>/home/forge/tmp/suite-1.lock
+flock 9
+if compgen -G '/var/tmp/forge/jvm-lease*' >/dev/null ||
+   test "$(ps -eo args | grep -c '[r]eceipt-chain' || true)" != 0; then
+  echo 'Diff-impact refused: lease or receipt-chain process active' >&2
+  exit 90
+fi
+lease=/var/tmp/forge/jvm-lease-datacode-round6
+printf '%s\n' "$$" > "$lease"
+trap 'rm -f "$lease"' EXIT
+bb test/diff_impact.clj "${1:-3b6d5357}" "${2:-docs/observations/2026-09-12-data-not-code/round6}" "${3:-before}"

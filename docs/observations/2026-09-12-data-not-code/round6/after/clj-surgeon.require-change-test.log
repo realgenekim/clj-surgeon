@@ -1,0 +1,6 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+
+Testing clj-surgeon.require-change-test
+
+Ran 9 tests containing 120 assertions.
+0 failures, 0 errors.

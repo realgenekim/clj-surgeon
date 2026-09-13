@@ -203,6 +203,48 @@
         (str "DATACODE-ENV-002: policy witness must execute all 12 assertions " counts))))
 
 ;; @spec DATACODE-ENV-001
+(deftest destination-envelope-admits-only-accounted-inode-links
+  ;; Opus round 6: journal LOCK and LOCK.broken.* deliberately share an inode.
+  (with-workspace
+    (fn [base]
+      (let [a (io/file base "a") b (io/file base "b")
+            lock (io/file a "LOCK") peer (io/file b "LOCK.broken.1")
+            outside (io/file base "outside")]
+        (.mkdirs a)
+        (.mkdirs b)
+        (spit lock "lock-owner")
+        (java.nio.file.Files/createLink (.toPath peer) (.toPath lock))
+        (with-envelope [a b]
+          #(is (= (str lock) (artifacts/admit-target! lock))
+               "all links across disjoint admitted roots are accounted for"))
+        (with-envelope [a a]
+          #(let [r (refusal-data (fn [] (artifacts/admit-target! lock)))]
+             (is (= :hard-link (:reason r)) "duplicate roots cannot count LOCK twice")))
+        (java.nio.file.Files/createSymbolicLink
+          (.toPath (io/file a "peer-alias")) (.toPath lock)
+          (make-array java.nio.file.attribute.FileAttribute 0))
+        (with-envelope [a]
+          #(is (= :hard-link (:reason (refusal-data (fn [] (artifacts/admit-target! lock)))))
+               "a symlink alias cannot stand in for an outside inode link"))
+        (java.nio.file.Files/delete (.toPath peer))
+        (java.nio.file.Files/createLink (.toPath (io/file a "LOCK.broken.1")) (.toPath lock))
+        (with-envelope [a]
+          #(is (= (str lock) (artifacts/admit-target! lock)) "journal sibling links are admitted"))
+        (with-envelope [lock]
+          #(is (= :hard-link (:reason (refusal-data (fn [] (artifacts/admit-target! lock)))))
+               "a file-sized envelope does not admit sibling links"))
+        (java.nio.file.Files/createLink (.toPath outside) (.toPath lock))
+        (with-envelope [a (io/file a ".")]
+          #(let [r (refusal-data (fn [] (artifacts/admit-target! lock)))]
+             (is (= :write-outside-envelope (:error-type r)))
+             (is (= :hard-link (:reason r)) "one outside link still refuses with inside peers present")
+             (is (= "lock-owner" (slurp outside)))))
+        (with-envelope [a]
+          #(let [r (refusal-data (fn [] (artifacts/admit-target! outside)))]
+             (is (= :write-outside-envelope (:error-type r)))
+             (is (nil? (:reason r)) "a path escape is not mislabelled as an inode escape")))))))
+
+;; @spec DATACODE-ENV-001
 (deftest destination-envelope-refuses-hard-linked-final-ledger
   ;; Opus F3: APPEND follows a hard link even with NOFOLLOW_LINKS.
   (with-workspace

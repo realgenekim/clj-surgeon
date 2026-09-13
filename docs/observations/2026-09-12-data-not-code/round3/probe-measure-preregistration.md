@@ -98,6 +98,20 @@ It includes patch application, client startup, reload/test, receipt parsing and
 verdict publication. Human/model preparation happens before this mechanical
 request and is reported separately; it is not silently claimed inside this wall.
 Command-only wall is separately retained. Unknown receipts remain unknown.
+Both bettors' unchanged numeric ratios bound THIS mechanical git-apply→durable-
+verdict interval. The block-A meter underlying Fable's bounds was also mechanical.
+Neither bound applies to human/model edit composition. Bias risk: excluding
+editing removes a shared cost and favours the faster tool arm; these ratios must
+not be relayed as whole-agent-task speedups.
+
+A secondary, unbet, reported-only interval starts at the runner's monotonic
+timestamp immediately before it publishes the cell's edit instruction in
+`request.json`, and ends at the same T1. The instruction names the namespace,
+frozen patch/hash (or explicitly no edit for planted targets), and verdict command.
+`secondary_wall_ms` includes that instruction's durable publication and the edit
+execution. It does not reconstruct model deliberation or patch composition; those
+remain outside both mechanically defined intervals. Missing instruction timing
+is unknown, never imputed from the primary wall.
 Queue admission, warm image setup and untimed admission controls happen before
 T0; retain setup/amortized wall and break-even invocation count separately.
 
@@ -141,8 +155,9 @@ one stale green or missed assertion falsifies correctness regardless of wall.
 Fable's stricter JVM prediction is evaluated separately at 0.30.
 
 First-attempt success means the first prescribed command produces the correct
-full-namespace verdict, with no repair. Refusal rate is refused first calls
-divided by all first calls, counted by typed kind; retain missing telemetry as
+full-namespace verdict, with no repair. PROBE refusal rate is refused first calls
+divided by its first calls, counted by typed kind; NATIVE has no scored refusal
+rate. Retain missing telemetry as
 unknown. A retry stays in its original complete wall and is never relabelled a
 first-attempt success. Missing/terminated/unattested runs remain named unknown
 cells; no replacement, imputation, outlier deletion or claim from incomplete
@@ -156,22 +171,25 @@ The measure includes exactly two planted NON-test targets per arm: N1 =
 N/P for N1 and P/N for N2. Invoke the same runner with `--task N1|N2` and
 `--repetition 1`; the edit is empty and the timestamps have the same endpoints.
 These four cells are separate from the 36 valid-target cells and their wall
-ratios. PROBE must refuse both with a typed kind; the cold focused NATIVE run
-refuses neither (zero-test execution is expected for these controls and cannot
-certify a valid task). Fable bets exactly PROBE 2/2 typed refusals and NATIVE
-0/2 refusals. Any other result misses; unknown telemetry leaves the bet unsettled.
+ratios. PROBE must refuse both planted non-test targets with a typed kind.
+NATIVE has no refusal concept and is recorded as
+`executed-without-refusal` (unscored) when execution succeeds. A zero-test NATIVE
+execution cannot certify a valid task. Fable bets exactly PROBE 2/2 typed
+refusals; any other PROBE result misses, and unknown telemetry leaves the bet
+unsettled. NATIVE execution failures/unknowns remain reported without a refusal score.
 Record the actual kinds and keep valid-target and non-test denominators separate.
 
 ## Bets, fixed now
 
 | Bettor | bb-portable median P/N | JVM-only median P/N | First-attempt success | Probe refusal rate |
 |---|---:|---:|---|---|
-| Fable (binding block-A-derived bet) | ≤ 0.50 | ≤ 0.30 | Equal: both 6/6 each repetition | Exactly 2/2 typed non-test refusals; NATIVE 0/2 |
+| Fable (binding block-A-derived bet) | ≤ 0.50 | ≤ 0.30 | Equal: both 6/6 each repetition | PROBE refuses both planted non-test targets with a typed kind; NATIVE executed-without-refusal (unscored) |
 | Astra | ≤ 0.50 | ≤ 0.45 | Equal on valid test targets | Equal on the six valid targets; higher when non-test safety controls are included |
 
 Astra expects warm loading to remove meaningful startup cost, but predicts a
-smaller JVM advantage than Fable once editing and verdict interpretation are
-charged. This is a falsifiable prediction, not a speed claim or routing admission.
+smaller JVM advantage than Fable once frozen patch application and verdict
+interpretation are charged in the mechanical interval defined above. This is a
+falsifiable prediction, not a speed claim or routing admission.
 
 Both bettors predict ≤ 0.50 for bb-portable; that stratum alone cannot
 distinguish their bets. The JVM bounds are 0.30 versus 0.45.
@@ -281,7 +299,7 @@ unchanged by amendment 1
 
 | Bettor | bb-portable median P/N | JVM-only median P/N | First-attempt success | Probe refusal rate |
 |---|---:|---:|---|---|
-| Fable (binding block-A-derived bet) | ≤ 0.50 | ≤ 0.30 | Equal: both 6/6 each repetition | Exactly 2/2 typed non-test refusals; NATIVE 0/2 |
+| Fable (binding block-A-derived bet) | ≤ 0.50 | ≤ 0.30 | Equal: both 6/6 each repetition | PROBE refuses both planted non-test targets with a typed kind; NATIVE executed-without-refusal (unscored) |
 | Astra | ≤ 0.50 | ≤ 0.45 | Equal on valid test targets | Equal on the six valid targets; higher when non-test safety controls are included |
 
 ### (e) Untimed verification and retained evidence
@@ -323,3 +341,26 @@ untouched. No push, tag, install, or main-branch operation was performed.
 | `round5/measure.py` | Admit protocol-created PROBE image directory | Native patch | None |
 | T4/T5 patch artifacts and task hashes | Re-freeze identical semantic edits on landed subject | Replay frozen patches with `git apply`; regenerate unified diff and hashes | None |
 | Preregistration and amendment receipts | Record authorized amendment and untimed gates | Native documentation/Python writes | None |
+
+## Round 6 scoring and interval amendment — 2026-09-13 01:38:51 UTC
+
+Authorized by the round-6 build brief before any measured cell in this build.
+This amendment changes the refusal accounting and clarifies the interval to
+which both bettors' unchanged ratios apply. It adds the reported-only secondary
+instruction-publication interval defined above. NATIVE has no refusal concept:
+its planted successful executions are `executed-without-refusal`, unscored;
+failures and unknowns remain reported. PROBE must refuse both planted targets
+with a typed kind. Astra's retained qualitative refusal wording does not supply
+a numeric NATIVE refusal rate. Both arms' valid-target success remains scored.
+
+The amendment-1 measurement subject `759974c718889c52a05a1d0746c9c21d0f00dcdb`,
+six patch artifacts, task hashes, ordering, repetitions, and numerical bet
+values are unchanged. The instrument branch is a different tree: T4/T5 target
+bytes intentionally match the frozen measurement subject, not this branch.
+Round 6 rechecked all six patch hashes, frozen before hashes and index-only
+apply checks without applying a patch or running a cell. Its pure instrument
+checks and read-only receipts are retained under `../round6/`.
+
+The new runner hash requires a fresh `init` record at experiment setup, as
+already required by the instrument. This build runs neither `init` nor `cell`;
+no performance result, bettor outcome, or routing admission follows.

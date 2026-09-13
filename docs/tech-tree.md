@@ -933,3 +933,21 @@ remain explicitly owed. The six probe/native patches and common timestamp
 runner are frozen without executing the experiment. This is correctness work,
 with no routing admission or speed claim. Final gate evidence and limits:
 [round 5 report](observations/2026-09-12-data-not-code/round5/REPORT.md).
+
+### 2026-09-13T02:07:50Z — data-not-code round 6, witness coverage across lanes
+
+The diff-impact oracle runs every declared direct/one-intermediate test dependency
+of the 20 source files changed since 3b6d5357, regardless of cadence or runtime
+exclusion. Before fixes it found the journal's six reported hard-link errors plus
+a concurrent-breaker error. After inode-link accounting, the journal passes
+80 tests / 545 assertions and all 80 selected namespaces pass. Internal LOCK
+links are legitimate; outside or unaccounted inode links still refuse.
+
+Runtime steering fields now agree with opened timing and retained failed CLI
+controls; retained receipt paths cannot point to scratch. The canonical intent
+explicitly distinguishes evidence from attestation. Both measurement bets keep
+their numbers and name their mechanical interval and editing-exclusion bias;
+NATIVE refusal outcomes are unscored, with a secondary unbet instruction interval.
+No measurement experiment or new routing admission follows. Fast and first-attempt
+prewarm pass; exact counts, red receipts, code-edit method and limitations:
+[round 6 report](observations/2026-09-12-data-not-code/round6/REPORT.md).

@@ -116,6 +116,55 @@
                                 {:error-type :artifact-path-unresolvable :path (str requested)})))))]
     (resolve-path (.toAbsolutePath (.toPath (io/file (str requested)))) 0)))
 
+(defn- inode-attributes [^java.nio.file.Path path]
+  (try
+    (Files/readAttributes path "unix:dev,ino,nlink"
+                          (into-array java.nio.file.LinkOption [java.nio.file.LinkOption/NOFOLLOW_LINKS]))
+    (catch java.nio.file.NoSuchFileException _ nil)))
+
+(defn- inode-key [attributes]
+  [(get attributes "dev") (get attributes "ino")])
+
+(defn- contained-inode-links?
+  "Account for distinct names without following directory/file symlinks.
+   Siblings first keeps the journal's createLink lock protocol local."
+  [^java.nio.file.Path target roots]
+  (let [initial (inode-attributes target)]
+    (if (or (nil? initial) (= 1 (get initial "nlink")))
+      true
+      (let [key (inode-key initial)
+            links (get initial "nlink")
+            _ (when-not (and (every? integer? key) (pos-int? links))
+                (throw (ex-info "Inode identity unavailable" {})))
+            found (atom #{})
+            scan! (fn [^java.nio.file.Path root depth]
+                    (try
+                      (with-open [stream (Files/walk root (int depth)
+                                           (make-array java.nio.file.FileVisitOption 0))]
+                        (loop [paths (iterator-seq (.iterator stream))]
+                          (when (and (seq paths) (< (count @found) links))
+                            (let [path (first paths)]
+                              (when (and (some #(.startsWith ^java.nio.file.Path path
+                                                             ^java.nio.file.Path %) roots)
+                                         (not (Files/isSymbolicLink path))
+                                         (= key (inode-key (inode-attributes path))))
+                                (when-let [parent (inode-attributes (.getParent ^java.nio.file.Path path))]
+                                  ;; Parent inode + basename identifies one directory
+                                  ;; entry even through overlapping roots/bind aliases.
+                                  (swap! found conj [(inode-key parent) (str (.getFileName ^java.nio.file.Path path))]))))
+                            (recur (rest paths)))))
+                      ;; Missing/unreadable subtrees supply no evidence. Admission
+                      ;; still requires all links, even when one scan cannot finish.
+                      (catch Exception _ nil)))]
+        (scan! (.getParent target) 1)
+        (doseq [root (distinct roots) :while (< (count @found) links)]
+          (scan! root Integer/MAX_VALUE))
+        (let [current (inode-attributes target)]
+          (or (nil? current)
+              (= 1 (get current "nlink"))
+              (and (= key (inode-key current))
+                   (<= (get current "nlink") (count @found)))))))))
+
 ;; @spec DATACODE-ENV-001
 (defn admit-target!
   "Admit the final directory OR file before any creation/publication. No I/O writes."
@@ -123,15 +172,20 @@
   ([requested effect]
    (let [{:keys [id roots]} (validated-envelope! (current-envelope))
          resolved (resolved-target requested)
-         hard-link? (and (Files/isRegularFile resolved (make-array java.nio.file.LinkOption 0))
-                         (> (long (Files/getAttribute resolved "unix:nlink"
-                                                      (make-array java.nio.file.LinkOption 0))) 1))]
-     (when (or hard-link? (not (some #(.startsWith resolved (resolved-target %)) roots)))
+         resolved-roots (mapv resolved-target roots)
+         context {:error-type :write-outside-envelope :effect effect
+                  :path (str requested) :resolved-path (str resolved)
+                  :envelope-id id :roots roots}]
+     (when-not (some #(.startsWith resolved ^java.nio.file.Path %) resolved-roots)
        (throw (ex-info "Artifact write is outside the destination envelope"
-                       (cond-> {:error-type :write-outside-envelope :effect effect
-                                :path (str requested) :resolved-path (str resolved)
-                                :envelope-id id :roots roots}
-                         hard-link? (assoc :reason :hard-link)))))
+                       context)))
+     (when (Files/isRegularFile resolved (make-array java.nio.file.LinkOption 0))
+       (let [evidence (try
+                        (if (contained-inode-links? resolved resolved-roots) :contained :unaccounted)
+                        (catch Exception _ :unavailable))]
+         (when-not (= :contained evidence)
+           (throw (ex-info "Artifact inode links are not proven inside the destination envelope"
+                           (assoc context :reason :hard-link :link-evidence evidence))))))
      (str resolved))))
 
 ;; @spec DATACODE-ENV-004

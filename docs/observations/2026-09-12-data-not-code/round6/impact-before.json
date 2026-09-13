@@ -1,0 +1,566 @@
+{
+  "base" : "3b6d5357",
+  "head" : "93690642e6b975796943549df7581f78b8d64f31",
+  "changed-files" : [ "src/clj_surgeon/core.clj", "src/clj_surgeon/edit_dsl.clj", "src/clj_surgeon/extract.clj", "src/clj_surgeon/insert_forms.clj", "src/clj_surgeon/intent_transaction.clj", "src/clj_surgeon/mcp_alias_migration.clj", "src/clj_surgeon/mcp_change_buffer.clj", "src/clj_surgeon/mcp_cold_verify.clj", "src/clj_surgeon/mcp_extraction.clj", "src/clj_surgeon/mcp_helper_extraction.clj", "src/clj_surgeon/mcp_http_server.clj", "src/clj_surgeon/mcp_server.clj", "src/clj_surgeon/mcp_tool.clj", "src/clj_surgeon/mission_typist_executor.clj", "src/clj_surgeon/namespace_split_io.clj", "src/clj_surgeon/operation_algebra.clj", "src/clj_surgeon/receipt_artifacts.clj", "src/clj_surgeon/rename_alias.clj", "src/clj_surgeon/require_change_io.clj", "src/clj_surgeon/txn_journal.clj" ],
+  "namespaces" : [ {
+    "file" : "test/clj_surgeon/txn_journal_test.clj",
+    "namespace" : "clj-surgeon.txn-journal-test",
+    "lane" : "battery",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.file-ops", "clojure.test", "clj-surgeon.scope-stream", "clj-surgeon.txn-journal", "clojure.java.io", "clojure.string", "clojure.walk", "clj-surgeon.memory.child" ],
+    "paths" : [ [ "clj-surgeon.txn-journal" ], [ "clj-surgeon.scope-stream", "clj-surgeon.txn-journal" ], [ "clj-surgeon.txn-journal", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/admit_patch_test.clj",
+    "namespace" : "clj-surgeon.admit-patch-test",
+    "lane" : "battery",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.form-identity", "clj-surgeon.patch-apply", "clojure.java.shell", "clj-surgeon.artifact-boundary-support", "clojure.test", "clj-surgeon.mcp-server", "clj-surgeon.mcp-paths", "clojure.set", "clj-surgeon.mcp-write-refusal", "clj-surgeon.workspace-lock", "clojure.edn", "cheshire.core", "clojure.java.io", "clojure.string", "clj-surgeon.mcp-change-buffer", "clj-surgeon.mcp-admit-tool", "clj-surgeon.mcp-tool", "clj-surgeon.mcp-process" ],
+    "paths" : [ [ "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-server" ], [ "clj-surgeon.mcp-tool" ], [ "clj-surgeon.artifact-boundary-support", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-admit-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-admit-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-admit-tool", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-server", "clj-surgeon.mcp-tool" ], [ "clj-surgeon.mcp-server", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.workspace-lock", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/analyzer_contract_test.clj",
+    "namespace" : "clj-surgeon.analyzer-contract-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.move-dependency-test", "babashka.fs", "rewrite-clj.node", "rewrite-clj.zip", "clojure.test", "clj-surgeon.fix-declares-test", "clj-surgeon.binding-rename", "clojure.java.io", "clojure.string", "clj-surgeon.mcp-change-buffer", "clj-surgeon.forward-refs", "clj-surgeon.mcp-process" ],
+    "paths" : [ [ "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/cli_dispatch_test.clj",
+    "namespace" : "clj-surgeon.cli-dispatch-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "babashka.process", "clj-surgeon.artifact-boundary-support", "clojure.test", "clj-surgeon.relation-census", "clj-surgeon.core", "clojure.edn", "clojure.java.io", "clojure.string", "clj-surgeon.mcp-process" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.artifact-boundary-support", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/cljc_existing_ops_test.clj",
+    "namespace" : "clj-surgeon.cljc-existing-ops-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "rewrite-clj.zip", "clojure.test", "clj-surgeon.analyze", "clj-surgeon.move", "clj-surgeon.outline", "clj-surgeon.extract", "clojure.java.io", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.extract" ], [ "clj-surgeon.extract", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/cljc/split_test.clj",
+    "namespace" : "clj-surgeon.cljc.split-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clojure.test", "clj-surgeon.cljc.split", "clj-surgeon.core", "clj-surgeon.cljc.merge-test", "clj-surgeon.cljc.merge" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/core_discovery_test.clj",
+    "namespace" : "clj-surgeon.core-discovery-test",
+    "lane" : "battery",
+    "test?" : true,
+    "requires" : [ "rewrite-clj.parser", "babashka.fs", "babashka.process", "rewrite-clj.node", "clojure.test", "clj-surgeon.core", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/edit_dsl_test.clj",
+    "namespace" : "clj-surgeon.edit-dsl-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.edit-dsl", "clojure.test", "clojure.string", "clj-surgeon.structural-lens", "sci.core" ],
+    "paths" : [ [ "clj-surgeon.edit-dsl" ] ]
+  }, {
+    "file" : "test/clj_surgeon/edit_test.clj",
+    "namespace" : "clj-surgeon.edit-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "babashka.fs", "babashka.process", "clj-surgeon.edit-dsl", "rewrite-clj.zip", "clojure.test", "clj-surgeon.core", "clojure.edn", "clojure.string", "clj-surgeon.structural-lens" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/extract_test.clj",
+    "namespace" : "clj-surgeon.extract-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "rewrite-clj.parser", "clojure.java.shell", "clj-surgeon.artifact-boundary-support", "clj-surgeon.file-ops", "clojure.test", "clj-surgeon.extract", "clojure.java.io", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.extract" ], [ "clj-surgeon.artifact-boundary-support", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.extract", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/help_test.clj",
+    "namespace" : "clj-surgeon.help-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "babashka.process", "clojure.test", "clj-surgeon.core", "clojure.edn", "clojure.java.io", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/insert_forms_parity_test.clj",
+    "namespace" : "clj-surgeon.insert-forms-parity-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clojure.test", "clj-surgeon.splice-entrance-support", "clj-surgeon.insert-forms-support", "cheshire.core", "clj-surgeon.mcp-insert-forms" ],
+    "paths" : [ [ "clj-surgeon.insert-forms-support", "clj-surgeon.insert-forms" ], [ "clj-surgeon.insert-forms-support", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-insert-forms", "clj-surgeon.insert-forms" ] ]
+  }, {
+    "file" : "test/clj_surgeon/insert_forms_receipt_test.clj",
+    "namespace" : "clj-surgeon.insert-forms-receipt-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.insert-forms", "clj-surgeon.mcp-inspect-tool", "clojure.test", "clj-surgeon.insert-forms-support", "clojure.edn", "clojure.java.io", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.insert-forms" ], [ "clj-surgeon.insert-forms", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.insert-forms", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.insert-forms", "clj-surgeon.txn-journal" ], [ "clj-surgeon.insert-forms-support", "clj-surgeon.insert-forms" ], [ "clj-surgeon.insert-forms-support", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-cold-verify" ] ]
+  }, {
+    "file" : "test/clj_surgeon/insert_forms_test.clj",
+    "namespace" : "clj-surgeon.insert-forms-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.insert-forms", "clojure.test", "clj-surgeon.insert-forms-support", "clj-surgeon.insert-forms-plan", "clojure.string", "clj-surgeon.insert-forms-oracle" ],
+    "paths" : [ [ "clj-surgeon.insert-forms" ], [ "clj-surgeon.insert-forms", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.insert-forms", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.insert-forms", "clj-surgeon.txn-journal" ], [ "clj-surgeon.insert-forms-support", "clj-surgeon.insert-forms" ], [ "clj-surgeon.insert-forms-support", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/insertion_gap_test.clj",
+    "namespace" : "clj-surgeon.insertion-gap-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.intent-transaction", "clojure.test", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.intent-transaction" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.operation-algebra" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/intent_transaction_test.clj",
+    "namespace" : "clj-surgeon.intent-transaction-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "babashka.fs", "babashka.process", "clj-surgeon.intent-transaction", "rewrite-clj.zip", "clojure.test", "clj-surgeon.core", "clojure.edn", "clojure.string", "clj-surgeon.structural-lens", "clj-surgeon.mcp-process" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.operation-algebra" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/ls_tree_test.clj",
+    "namespace" : "clj-surgeon.ls-tree-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "babashka.fs", "rewrite-clj.zip", "clojure.test", "clj-surgeon.core", "clj-surgeon.outline", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_alias_migration_test.clj",
+    "namespace" : "clj-surgeon.mcp-alias-migration-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "rewrite-clj.parser", "clojure.java.shell", "clj-surgeon.mcp-alias-migration", "clj-surgeon.intent-transaction", "rewrite-clj.node", "clj-surgeon.artifact-boundary-support", "clj-surgeon.receipt-artifacts", "clj-surgeon.file-ops", "clojure.test", "clj-surgeon.mcp-server", "clj-surgeon.mcp-paths", "clojure.set", "clj-surgeon.alias-migration", "clojure.edn", "cheshire.core", "clojure.java.io", "clojure.string", "clj-surgeon.mcp-change-buffer", "clj-surgeon.mcp-tool", "clj-surgeon.alias-migration-fixture" ],
+    "paths" : [ [ "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-server" ], [ "clj-surgeon.mcp-tool" ], [ "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.artifact-boundary-support", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.operation-algebra" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-alias-migration", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-alias-migration", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-alias-migration", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-server", "clj-surgeon.mcp-tool" ], [ "clj-surgeon.mcp-server", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.receipt-artifacts", "clj-surgeon.operation-algebra" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_change_buffer_test.clj",
+    "namespace" : "clj-surgeon.mcp-change-buffer-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.intent-transaction", "clojure.test", "clj-surgeon.tmp-leak-support", "clojure.java.io", "clj-surgeon.quoted-var-refs", "clojure.string", "clj-surgeon.structural-lens", "clj-surgeon.mcp-change-buffer", "clj-surgeon.mcp-process" ],
+    "paths" : [ [ "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.operation-algebra" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_cold_verify_test.clj",
+    "namespace" : "clj-surgeon.mcp-cold-verify-test",
+    "lane" : "battery",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mcp-cold-verify", "clojure.test", "clojure.java.io", "clj-surgeon.mcp-process" ],
+    "paths" : [ [ "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-cold-verify", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_combinable_transaction_test.clj",
+    "namespace" : "clj-surgeon.mcp-combinable-transaction-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clojure.test", "clojure.java.io", "clojure.string", "clj-surgeon.mcp-tool" ],
+    "paths" : [ [ "clj-surgeon.mcp-tool" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_compact_edit_test.clj",
+    "namespace" : "clj-surgeon.mcp-compact-edit-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clojure.test", "clj-surgeon.mcp-change-buffer" ],
+    "paths" : [ [ "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_compact_location_test.clj",
+    "namespace" : "clj-surgeon.mcp-compact-location-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mcp-compact-location", "clj-surgeon.mcp-contract", "clj-surgeon.intent-transaction", "clojure.test", "clj-surgeon.core", "clojure.java.io", "clojure.string", "clj-surgeon.mcp-change-buffer", "clj-surgeon.mcp-tool" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-tool" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.operation-algebra" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-contract", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_compact_relations_test.clj",
+    "namespace" : "clj-surgeon.mcp-compact-relations-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mcp-compact-location", "clj-surgeon.mcp-contract", "clj-surgeon.intent-transaction", "clj-surgeon.experiments.mcp-candidate-admission", "clojure.test", "clj-surgeon.mcp-operation", "clj-surgeon.core", "clojure.edn", "clj-surgeon.mcp-extraction-plan", "clojure.java.io", "clojure.string", "clj-surgeon.mcp-schema", "clj-surgeon.mcp-change-buffer", "clj-surgeon.mcp-tool", "clj-surgeon.mcp-compact-relations" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-tool" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.operation-algebra" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-contract", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-extraction-plan", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_contract_test.clj",
+    "namespace" : "clj-surgeon.mcp-contract-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mcp-contract", "clj-surgeon.intent-transaction", "clojure.test", "clojure.string", "clj-surgeon.structural-lens" ],
+    "paths" : [ [ "clj-surgeon.intent-transaction" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.operation-algebra" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-contract", "clj-surgeon.mcp-extraction" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_create_files_test.clj",
+    "namespace" : "clj-surgeon.mcp-create-files-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.intent-transaction", "clojure.test", "clojure.edn", "clojure.java.io", "clj-surgeon.structural-lens", "clj-surgeon.mcp-tool" ],
+    "paths" : [ [ "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-tool" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.operation-algebra" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_expect_guard_test.clj",
+    "namespace" : "clj-surgeon.mcp-expect-guard-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mcp-contract", "clj-surgeon.experiments.mcp-candidate-admission", "clojure.test", "cheshire.core", "clojure.java.io", "clojure.string", "clj-surgeon.mcp-schema", "clj-surgeon.mcp-tool" ],
+    "paths" : [ [ "clj-surgeon.mcp-tool" ], [ "clj-surgeon.mcp-contract", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_extraction_plan_test.clj",
+    "namespace" : "clj-surgeon.mcp-extraction-plan-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mcp-contract", "clj-surgeon.mcp-workspace-sources", "clj-surgeon.mcp-inspect-tool", "clojure.test", "clj-surgeon.mcp-extraction-plan", "clojure.java.io", "clj-surgeon.mcp-extraction" ],
+    "paths" : [ [ "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-contract", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-extraction-plan", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-cold-verify" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_extraction_test.clj",
+    "namespace" : "clj-surgeon.mcp-extraction-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clojure.test", "clj-surgeon.extract", "clojure.string", "clj-surgeon.mcp-extraction" ],
+    "paths" : [ [ "clj-surgeon.extract" ], [ "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.extract", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_formatter_test.clj",
+    "namespace" : "clj-surgeon.mcp-formatter-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clojure.test", "clj-surgeon.mcp-formatter", "clojure.java.io", "clj-surgeon.mcp-process" ],
+    "paths" : [ [ "clj-surgeon.mcp-formatter", "clj-surgeon.mcp-change-buffer" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_helper_extraction_test.clj",
+    "namespace" : "clj-surgeon.mcp-helper-extraction-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clojure.java.shell", "clj-surgeon.mcp-helper-extraction", "clj-surgeon.artifact-boundary-support", "clj-surgeon.receipt-artifacts", "clj-surgeon.helper-extraction-fixture", "clojure.test", "cheshire.core", "clj-surgeon.mcp-telemetry", "clojure.java.io", "clojure.string", "clj-surgeon.mcp-schema", "clj-surgeon.mcp-tool" ],
+    "paths" : [ [ "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mcp-tool" ], [ "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.artifact-boundary-support", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-helper-extraction", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-helper-extraction", "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-helper-extraction", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-helper-extraction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.receipt-artifacts", "clj-surgeon.operation-algebra" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_http_server_test.clj",
+    "namespace" : "clj-surgeon.mcp-http-server-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mcp-contract", "nrepl.core", "clj-surgeon.probe", "clj-surgeon.mcp-http-server", "clj-surgeon.receipt-artifacts", "clj-surgeon.mcp-inspect-tool", "clojure.test", "clj-surgeon.mcp-hot-verify", "clj-surgeon.mcp-server", "clojure.edn", "cheshire.core", "clojure.java.io", "clojure.string", "clj-surgeon.structural-lens", "clj-surgeon.mcp-schema", "clj-surgeon.mcp-tool", "clj-surgeon.alias-migration-fixture" ],
+    "paths" : [ [ "clj-surgeon.mcp-http-server" ], [ "clj-surgeon.mcp-server" ], [ "clj-surgeon.mcp-tool" ], [ "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-contract", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-http-server", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-http-server", "clj-surgeon.mcp-server" ], [ "clj-surgeon.mcp-http-server", "clj-surgeon.mcp-tool" ], [ "clj-surgeon.mcp-http-server", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-server", "clj-surgeon.mcp-tool" ], [ "clj-surgeon.mcp-server", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.receipt-artifacts", "clj-surgeon.operation-algebra" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_inspect_cold_job_test.clj",
+    "namespace" : "clj-surgeon.mcp-inspect-cold-job-test",
+    "lane" : "battery",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mcp-cold-verify", "clj-surgeon.mcp-inspect-tool", "clojure.test", "clojure.java.io", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-cold-verify", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-cold-verify" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_inspect_contract_test.clj",
+    "namespace" : "clj-surgeon.mcp-inspect-contract-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clojure.test", "clj-surgeon.mcp-inspect", "clojure.string", "clj-surgeon.structural-lens" ],
+    "paths" : [ [ "clj-surgeon.mcp-inspect", "clj-surgeon.edit-dsl" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_inspect_tool_test.clj",
+    "namespace" : "clj-surgeon.mcp-inspect-tool-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.owner-hypotheses", "clj-surgeon.mcp-inspect-tool", "clojure.test", "clj-surgeon.mcp-operation", "clj-surgeon.mcp-inspect", "clj-surgeon.mcp-source-anchor", "cheshire.core", "clj-surgeon.mcp-telemetry", "clojure.java.io", "clojure.string", "clj-surgeon.structural-lens", "clj-surgeon.mcp-change-buffer" ],
+    "paths" : [ [ "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-change-buffer", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-inspect", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-cold-verify" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_namespace_split_test.clj",
+    "namespace" : "clj-surgeon.mcp-namespace-split-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.namespace-split", "clj-surgeon.namespace-split-warm", "clj-surgeon.namespace-split-test", "clojure.test", "clj-surgeon.namespace-split-io", "clj-surgeon.mcp-namespace-split", "clj-surgeon.synchronous-verification", "clj-surgeon.split-proof-gate", "clojure.edn", "cheshire.core", "clojure.java.io", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.namespace-split-io" ], [ "clj-surgeon.mcp-namespace-split", "clj-surgeon.namespace-split-io" ], [ "clj-surgeon.namespace-split", "clj-surgeon.extract" ], [ "clj-surgeon.namespace-split-io", "clj-surgeon.extract" ], [ "clj-surgeon.namespace-split-io", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.namespace-split-io", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.namespace-split-test", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.namespace-split-test", "clj-surgeon.namespace-split-io" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_operation_async_test.clj",
+    "namespace" : "clj-surgeon.mcp-operation-async-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mcp-cold-verify", "clj-surgeon.mcp-inspect-tool", "clojure.test", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-cold-verify", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-cold-verify" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_operation_registry_test.clj",
+    "namespace" : "clj-surgeon.mcp-operation-registry-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clojure.test", "clj-surgeon.mcp-server" ],
+    "paths" : [ [ "clj-surgeon.mcp-server" ], [ "clj-surgeon.mcp-server", "clj-surgeon.mcp-tool" ], [ "clj-surgeon.mcp-server", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_prepared_confirmation_test.clj",
+    "namespace" : "clj-surgeon.mcp-prepared-confirmation-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mcp-prepared-request", "clj-surgeon.mcp-contract", "clj-surgeon.mcp-inspect-tool", "clojure.test", "clojure.set", "clojure.java.io", "clojure.string", "clj-surgeon.mcp-tool" ],
+    "paths" : [ [ "clj-surgeon.mcp-tool" ], [ "clj-surgeon.mcp-contract", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_prepared_request_test.clj",
+    "namespace" : "clj-surgeon.mcp-prepared-request-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mcp-prepared-request", "clj-surgeon.mcp-contract", "clj-surgeon.mcp-inspect-tool", "clojure.test", "clojure.set", "cheshire.core", "clojure.java.io", "clojure.string", "clj-surgeon.structural-lens", "clj-surgeon.mcp-schema", "clj-surgeon.mcp-tool" ],
+    "paths" : [ [ "clj-surgeon.mcp-tool" ], [ "clj-surgeon.mcp-contract", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_program_tool_test.clj",
+    "namespace" : "clj-surgeon.mcp-program-tool-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.intent-transaction", "clojure.test", "clj-surgeon.mcp-program-tool", "clojure.java.io", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.intent-transaction" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.operation-algebra" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-program-tool", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.mcp-program-tool", "clj-surgeon.intent-transaction" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_read_request_normalization_test.clj",
+    "namespace" : "clj-surgeon.mcp-read-request-normalization-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clojure.test", "clj-surgeon.mcp-inspect", "clj-surgeon.structural-lens" ],
+    "paths" : [ [ "clj-surgeon.mcp-inspect", "clj-surgeon.edit-dsl" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_relation_census_launcher_test.clj",
+    "namespace" : "clj-surgeon.mcp-relation-census-launcher-test",
+    "lane" : "battery",
+    "test?" : true,
+    "requires" : [ "rewrite-clj.parser", "babashka.process", "rewrite-clj.node", "clojure.test", "clj-surgeon.relation-census", "clj-surgeon.core", "clojure.edn", "clojure.java.io", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_relation_census_round20_test.clj",
+    "namespace" : "clj-surgeon.mcp-relation-census-round20-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clojure.test", "clj-surgeon.relation-census", "clj-surgeon.core", "clj-surgeon.mcp-relation-census", "clojure.java.io", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_relation_census_test.clj",
+    "namespace" : "clj-surgeon.mcp-relation-census-test",
+    "lane" : "battery",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mcp-workspace", "babashka.process", "clojure.test", "clj-surgeon.mcp-paths", "clj-surgeon.relation-census", "clj-surgeon.forms", "clj-surgeon.core", "clj-surgeon.mcp-relation-census", "clojure.edn", "cheshire.core", "clojure.java.io", "clojure.string", "clj-surgeon.census-discovery" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-workspace", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_server_test.clj",
+    "namespace" : "clj-surgeon.mcp-server-test",
+    "lane" : "integration",
+    "test?" : true,
+    "requires" : [ "nrepl.core", "clj-surgeon.mcp-inspect-tool", "nrepl.server", "clojure.test", "clj-surgeon.mcp-runtime", "clj-surgeon.mcp-server", "clj-surgeon.mcp-program-tool", "clojure.java.io", "clojure.string", "clj-surgeon.mcp-tool" ],
+    "paths" : [ [ "clj-surgeon.mcp-server" ], [ "clj-surgeon.mcp-tool" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-inspect-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-program-tool", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.mcp-program-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-server", "clj-surgeon.mcp-tool" ], [ "clj-surgeon.mcp-server", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_tool_test.clj",
+    "namespace" : "clj-surgeon.mcp-tool-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mcp-workspace", "clj-surgeon.intent-transaction", "clj-surgeon.receipt-artifacts", "clj-surgeon.mcp-cold-verify", "nrepl.server", "clojure.test", "clj-surgeon.mcp-paths", "clojure.edn", "clj-surgeon.mcp-extraction-plan", "cheshire.core", "clj-surgeon.extract", "clojure.java.io", "clojure.string", "clj-surgeon.structural-lens", "clj-surgeon.mcp-schema", "clj-surgeon.mcp-tool" ],
+    "paths" : [ [ "clj-surgeon.extract" ], [ "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool" ], [ "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.extract", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.operation-algebra" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-cold-verify", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-extraction-plan", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-workspace", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.receipt-artifacts", "clj-surgeon.operation-algebra" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_workspace_test.clj",
+    "namespace" : "clj-surgeon.mcp-workspace-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mcp-workspace", "clj-surgeon.artifact-boundary-support", "clojure.test", "clojure.java.io" ],
+    "paths" : [ [ "clj-surgeon.artifact-boundary-support", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-workspace", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mcp_write_refusal_test.clj",
+    "namespace" : "clj-surgeon.mcp-write-refusal-test",
+    "lane" : "fast",
+    "test?" : true,
+    "requires" : [ "clojure.test", "cheshire.core", "clojure.java.io", "clj-surgeon.structural-lens", "clj-surgeon.mcp-tool" ],
+    "paths" : [ [ "clj-surgeon.mcp-tool" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mcp-tool", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/memory/journal_green_test.clj",
+    "namespace" : "clj-surgeon.memory.journal-green-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clojure.test", "clj-surgeon.txn-journal", "clj-surgeon.memory.fixture", "clojure.java.io", "clojure.string", "clj-surgeon.memory.child" ],
+    "paths" : [ [ "clj-surgeon.txn-journal" ], [ "clj-surgeon.txn-journal", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mission_commit_cli_test.clj",
+    "namespace" : "clj-surgeon.mission-commit-cli-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mission-typist-executor", "clojure.java.shell", "clj-surgeon.mission-git", "clj-surgeon.mission-typist-executor-test", "clojure.test", "clj-surgeon.mission-git-ledger", "clj-surgeon.mission-cli", "clojure.edn", "cheshire.core", "clojure.java.io", "clojure.string", "clj-surgeon.mission" ],
+    "paths" : [ [ "clj-surgeon.mission-typist-executor" ], [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mission-typist-executor-test", "clj-surgeon.mission-typist-executor" ], [ "clj-surgeon.mission-typist-executor-test", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mission_events_test.clj",
+    "namespace" : "clj-surgeon.mission-events-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clojure.java.shell", "clj-surgeon.telemetry-events", "clojure.test", "clj-surgeon.mission-cli", "clj-surgeon.mission-events", "clojure.edn", "cheshire.core", "clojure.java.io", "clojure.string", "clj-surgeon.mission" ],
+    "paths" : [ [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mission_fallback_test.clj",
+    "namespace" : "clj-surgeon.mission-fallback-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clojure.java.shell", "clj-surgeon.telemetry-events", "clojure.test", "clojure.data.json", "clj-surgeon.mission-cli", "clojure.edn", "clojure.java.io", "clojure.string", "clj-surgeon.mission" ],
+    "paths" : [ [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mission_git_ledger_test.clj",
+    "namespace" : "clj-surgeon.mission-git-ledger-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mission-git", "clj-surgeon.mission-typist-executor-test", "clojure.test", "clj-surgeon.mission-git-ledger", "clj-surgeon.mission-cli", "clj-surgeon.tmp-leak-support", "clojure.edn", "cheshire.core", "clojure.java.io", "clojure.string", "clj-surgeon.mission" ],
+    "paths" : [ [ "clj-surgeon.mission-typist-executor" ], [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mission-typist-executor-test", "clj-surgeon.mission-typist-executor" ], [ "clj-surgeon.mission-typist-executor-test", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mission_phase_events_test.clj",
+    "namespace" : "clj-surgeon.mission-phase-events-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mission-typist-executor", "clj-surgeon.telemetry-events", "clj-surgeon.file-ops", "clojure.test", "clj-surgeon.mission-events" ],
+    "paths" : [ [ "clj-surgeon.mission-typist-executor" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mission_provider_fallback_events_test.clj",
+    "namespace" : "clj-surgeon.mission-provider-fallback-events-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mission-typist-executor", "clj-surgeon.telemetry-events", "clojure.test", "clj-surgeon.mission-candidate-race", "clj-surgeon.mission-events", "cheshire.core", "clj-surgeon.mcp-process", "clj-surgeon.mission" ],
+    "paths" : [ [ "clj-surgeon.mission-typist-executor" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mission_publication_test.clj",
+    "namespace" : "clj-surgeon.mission-publication-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mission-typist-executor", "clojure.java.shell", "clj-surgeon.mission-git", "clj-surgeon.mission-typist-executor-test", "clojure.test", "clj-surgeon.mission-git-ledger", "clj-surgeon.mission-cli", "clojure.edn", "cheshire.core", "clojure.java.io", "clojure.string", "clj-surgeon.mission" ],
+    "paths" : [ [ "clj-surgeon.mission-typist-executor" ], [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mission-typist-executor-test", "clj-surgeon.mission-typist-executor" ], [ "clj-surgeon.mission-typist-executor-test", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mission_run_test.clj",
+    "namespace" : "clj-surgeon.mission-run-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clojure.java.shell", "clojure.test", "clj-surgeon.mission-cli", "clojure.edn", "clojure.java.io", "clojure.string", "clj-surgeon.mission" ],
+    "paths" : [ [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mission_test.clj",
+    "namespace" : "clj-surgeon.mission-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clojure.java.shell", "clj-surgeon.telemetry-events", "clj-surgeon.mcp-workspace", "clj-surgeon.helper-extraction-fixture", "clojure.test", "clj-surgeon.mission-git-ledger", "clj-surgeon.mission-cli", "clojure.edn", "cheshire.core", "clojure.java.io", "clojure.string", "clj-surgeon.mission" ],
+    "paths" : [ [ "clj-surgeon.mcp-workspace", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mission_typist_executor_admission_test.clj",
+    "namespace" : "clj-surgeon.mission-typist-executor-admission-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mission-typist", "clj-surgeon.mission-typist-executor-test", "clojure.test", "clj-surgeon.mission-cli", "clj-surgeon.mission-typist-test", "clojure.java.io" ],
+    "paths" : [ [ "clj-surgeon.mission-typist-executor" ], [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mission-typist-executor-test", "clj-surgeon.mission-typist-executor" ], [ "clj-surgeon.mission-typist-executor-test", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mission_typist_executor_test.clj",
+    "namespace" : "clj-surgeon.mission-typist-executor-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mission-typist-executor", "clj-surgeon.artifact-boundary-support", "clj-surgeon.receipt-artifacts", "clojure.test", "clj-surgeon.mcp-formatter", "clj-surgeon.mission-cli", "clojure.edn", "clj-surgeon.mission-typist-test", "cheshire.core", "clojure.java.io", "clj-surgeon.mcp-process", "clj-surgeon.mission" ],
+    "paths" : [ [ "clj-surgeon.mission-typist-executor" ], [ "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.artifact-boundary-support", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-formatter", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.mcp-helper-extraction" ], [ "clj-surgeon.mission-cli", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.receipt-artifacts", "clj-surgeon.operation-algebra" ] ]
+  }, {
+    "file" : "test/clj_surgeon/mission_usage_executor_test.clj",
+    "namespace" : "clj-surgeon.mission-usage-executor-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mission-typist-executor", "clj-surgeon.file-ops", "clojure.test", "clj-surgeon.mission-events" ],
+    "paths" : [ [ "clj-surgeon.mission-typist-executor" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mission-typist-executor", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/namespace_split_test.clj",
+    "namespace" : "clj-surgeon.namespace-split-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.verification-process", "clj-surgeon.namespace-split", "clj-surgeon.namespace-split-warm", "clj-surgeon.mcp-extraction-test", "clojure.test", "clj-surgeon.namespace-split-io", "clj-surgeon.synchronous-verification", "clojure.edn", "cheshire.core", "clojure.java.io", "clojure.string", "clj-surgeon.mcp-extraction", "clj-surgeon.mcp-process" ],
+    "paths" : [ [ "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.namespace-split-io" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-extraction-test", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-extraction-test", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.namespace-split", "clj-surgeon.extract" ], [ "clj-surgeon.namespace-split-io", "clj-surgeon.extract" ], [ "clj-surgeon.namespace-split-io", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.namespace-split-io", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/namespace_split_warm_test.clj",
+    "namespace" : "clj-surgeon.namespace-split-warm-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.verification-process", "clj-surgeon.namespace-split-warm", "clj-surgeon.namespace-split-test", "nrepl.server", "clojure.test", "clj-surgeon.namespace-split-io", "nrepl.transport", "clojure.java.io", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.namespace-split-io" ], [ "clj-surgeon.namespace-split-io", "clj-surgeon.extract" ], [ "clj-surgeon.namespace-split-io", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.namespace-split-io", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.namespace-split-test", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.namespace-split-test", "clj-surgeon.namespace-split-io" ] ]
+  }, {
+    "file" : "test/clj_surgeon/operation_algebra_test.clj",
+    "namespace" : "clj-surgeon.operation-algebra-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.intent-transaction", "clojure.test", "clj-surgeon.operation-algebra", "clj-surgeon.core", "clj-surgeon.outline", "clojure.java.io", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.intent-transaction" ], [ "clj-surgeon.operation-algebra" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.operation-algebra" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/platform_selector_test.clj",
+    "namespace" : "clj-surgeon.platform-selector-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "babashka.fs", "babashka.process", "clj-surgeon.edit-dsl", "clojure.test", "clojure.edn", "clj-surgeon.structural-lens" ],
+    "paths" : [ [ "clj-surgeon.edit-dsl" ] ]
+  }, {
+    "file" : "test/clj_surgeon/receipt_artifacts_boundary_test.clj",
+    "namespace" : "clj-surgeon.receipt-artifacts-boundary-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.require-change-boundary-test", "clj-surgeon.mcp-alias-migration", "babashka.process", "clj-surgeon.intent-transaction", "clj-surgeon.artifact-boundary-support", "clj-surgeon.receipt-artifacts", "clj-surgeon.mcp-cold-verify", "clj-surgeon.namespace-split-test", "clojure.test", "clj-surgeon.operation-algebra", "clj-surgeon.txn-journal", "clj-surgeon.namespace-split-io", "clj-surgeon.core", "clj-surgeon.require-change-io", "clj-surgeon.workspace-lock", "clojure.edn", "clojure.java.io", "clj-surgeon.battery-parallel-runner", "clojure.string", "clj-surgeon.mcp-extraction", "clj-surgeon.mcp-admit-tool", "clj-surgeon.mcp-namespace-split-test" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-alias-migration" ], [ "clj-surgeon.mcp-cold-verify" ], [ "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.namespace-split-io" ], [ "clj-surgeon.operation-algebra" ], [ "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.require-change-io" ], [ "clj-surgeon.txn-journal" ], [ "clj-surgeon.artifact-boundary-support", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.operation-algebra" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-admit-tool", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-admit-tool", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-admit-tool", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-alias-migration", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-alias-migration", "clj-surgeon.mcp-change-buffer" ], [ "clj-surgeon.mcp-alias-migration", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-cold-verify", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-namespace-split-test", "clj-surgeon.namespace-split-io" ], [ "clj-surgeon.namespace-split-io", "clj-surgeon.extract" ], [ "clj-surgeon.namespace-split-io", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.namespace-split-io", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.namespace-split-test", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.namespace-split-test", "clj-surgeon.namespace-split-io" ], [ "clj-surgeon.receipt-artifacts", "clj-surgeon.operation-algebra" ], [ "clj-surgeon.require-change-boundary-test", "clj-surgeon.core" ], [ "clj-surgeon.require-change-boundary-test", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.require-change-boundary-test", "clj-surgeon.require-change-io" ], [ "clj-surgeon.require-change-io", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.require-change-io", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.txn-journal", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.workspace-lock", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/receipt_booleans_test.clj",
+    "namespace" : "clj-surgeon.receipt-booleans-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.insert-forms", "clj-surgeon.intent-transaction", "clj-surgeon.probe", "clojure.test", "clj-surgeon.mcp-server", "clj-surgeon.rename-alias-receipt-test", "clj-surgeon.core", "clj-surgeon.rename-alias", "clj-surgeon.insert-forms-support", "clojure.edn", "clj-surgeon.rename-alias-test", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.insert-forms" ], [ "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-server" ], [ "clj-surgeon.rename-alias" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.insert-forms", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.insert-forms", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.insert-forms", "clj-surgeon.txn-journal" ], [ "clj-surgeon.insert-forms-support", "clj-surgeon.insert-forms" ], [ "clj-surgeon.insert-forms-support", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.operation-algebra" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-server", "clj-surgeon.mcp-tool" ], [ "clj-surgeon.mcp-server", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.rename-alias", "clj-surgeon.insert-forms" ], [ "clj-surgeon.rename-alias", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.rename-alias", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.rename-alias", "clj-surgeon.txn-journal" ], [ "clj-surgeon.rename-alias-receipt-test", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.rename-alias-receipt-test", "clj-surgeon.rename-alias" ], [ "clj-surgeon.rename-alias-receipt-test", "clj-surgeon.txn-journal" ], [ "clj-surgeon.rename-alias-test", "clj-surgeon.rename-alias" ], [ "clj-surgeon.rename-alias-test", "clj-surgeon.txn-journal" ] ]
+  }, {
+    "file" : "test/clj_surgeon/recovery_test.clj",
+    "namespace" : "clj-surgeon.recovery-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.mcp-workspace", "clojure.test", "clj-surgeon.tmp-leak-support", "clojure.edn", "clojure.java.io", "clj-surgeon.recovery" ],
+    "paths" : [ [ "clj-surgeon.mcp-workspace", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/rename_alias_parity_test.clj",
+    "namespace" : "clj-surgeon.rename-alias-parity-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clojure.test", "clj-surgeon.mcp-rename-alias", "clj-surgeon.splice-entrance-support", "clj-surgeon.rename-alias-test", "cheshire.core" ],
+    "paths" : [ [ "clj-surgeon.mcp-rename-alias", "clj-surgeon.rename-alias" ], [ "clj-surgeon.rename-alias-test", "clj-surgeon.rename-alias" ], [ "clj-surgeon.rename-alias-test", "clj-surgeon.txn-journal" ] ]
+  }, {
+    "file" : "test/clj_surgeon/rename_alias_performance_test.clj",
+    "namespace" : "clj-surgeon.rename-alias-performance-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.rename-alias-plan", "clojure.test", "clj-surgeon.rename-alias-test" ],
+    "paths" : [ [ "clj-surgeon.rename-alias-test", "clj-surgeon.rename-alias" ], [ "clj-surgeon.rename-alias-test", "clj-surgeon.txn-journal" ] ]
+  }, {
+    "file" : "test/clj_surgeon/rename_alias_receipt_test.clj",
+    "namespace" : "clj-surgeon.rename-alias-receipt-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.rename-alias-plan", "clj-surgeon.intent-transaction", "clj-surgeon.rename-alias-oracle", "clojure.test", "clj-surgeon.txn-journal", "clj-surgeon.rename-alias", "clj-surgeon.insert-forms-support", "clojure.edn", "clj-surgeon.insert-forms-plan", "clj-surgeon.rename-alias-test", "clojure.java.io", "clojure.string", "clojure.walk", "clj-surgeon.insert-forms-oracle" ],
+    "paths" : [ [ "clj-surgeon.intent-transaction" ], [ "clj-surgeon.rename-alias" ], [ "clj-surgeon.txn-journal" ], [ "clj-surgeon.insert-forms-support", "clj-surgeon.insert-forms" ], [ "clj-surgeon.insert-forms-support", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.operation-algebra" ], [ "clj-surgeon.intent-transaction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.rename-alias", "clj-surgeon.insert-forms" ], [ "clj-surgeon.rename-alias", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.rename-alias", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.rename-alias", "clj-surgeon.txn-journal" ], [ "clj-surgeon.rename-alias-test", "clj-surgeon.rename-alias" ], [ "clj-surgeon.rename-alias-test", "clj-surgeon.txn-journal" ], [ "clj-surgeon.txn-journal", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/rename_alias_test.clj",
+    "namespace" : "clj-surgeon.rename-alias-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.rename-alias-plan", "clj-surgeon.rename-alias-oracle", "clojure.test", "clj-surgeon.txn-journal", "clj-surgeon.rename-alias", "clj-surgeon.insert-forms-support", "clojure.edn", "clj-surgeon.insert-forms-plan", "clojure.java.io", "clojure.string", "clj-surgeon.insert-forms-oracle" ],
+    "paths" : [ [ "clj-surgeon.rename-alias" ], [ "clj-surgeon.txn-journal" ], [ "clj-surgeon.insert-forms-support", "clj-surgeon.insert-forms" ], [ "clj-surgeon.insert-forms-support", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.rename-alias", "clj-surgeon.insert-forms" ], [ "clj-surgeon.rename-alias", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.rename-alias", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.rename-alias", "clj-surgeon.txn-journal" ], [ "clj-surgeon.txn-journal", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/require_change_boundary_test.clj",
+    "namespace" : "clj-surgeon.require-change-boundary-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clojure.test", "clj-surgeon.synchronous-verification", "clj-surgeon.core", "clj-surgeon.require-change-io", "clj-surgeon.require-change", "clojure.edn", "clojure.java.io", "clojure.string", "clj-surgeon.mcp-extraction", "clj-surgeon.mcp-require-change" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.require-change-io" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-require-change", "clj-surgeon.require-change-io" ], [ "clj-surgeon.require-change-io", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.require-change-io", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/require_change_test.clj",
+    "namespace" : "clj-surgeon.require-change-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "rewrite-clj.parser", "clj-surgeon.mcp-extraction-test", "clojure.test", "clj-surgeon.require-change", "clojure.java.io", "clojure.string", "clj-surgeon.mcp-extraction" ],
+    "paths" : [ [ "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.mcp-extraction", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-extraction-test", "clj-surgeon.extract" ], [ "clj-surgeon.mcp-extraction-test", "clj-surgeon.mcp-extraction" ] ]
+  }, {
+    "file" : "test/clj_surgeon/scope_stream_test.clj",
+    "namespace" : "clj-surgeon.scope-stream-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clojure.test", "clj-surgeon.scope-stream", "clj-surgeon.memory-battery", "clojure.java.io", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.scope-stream", "clj-surgeon.txn-journal" ] ]
+  }, {
+    "file" : "test/clj_surgeon/show_form_test.clj",
+    "namespace" : "clj-surgeon.show-form-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.fields", "babashka.fs", "babashka.process", "clj-surgeon.show-form", "clojure.test", "clj-surgeon.forms", "clj-surgeon.core", "clj-surgeon.outline", "clojure.edn", "clojure.java.io", "clojure.string", "clj-surgeon.structural-lens" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ] ]
+  }, {
+    "file" : "test/clj_surgeon/splice_envelope_test.clj",
+    "namespace" : "clj-surgeon.splice-envelope-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clj-surgeon.insert-forms", "clojure.test", "clj-surgeon.rename-alias", "clj-surgeon.insert-forms-support", "clojure.edn", "clj-surgeon.rename-alias-test", "clojure.java.io", "clojure.string" ],
+    "paths" : [ [ "clj-surgeon.insert-forms" ], [ "clj-surgeon.rename-alias" ], [ "clj-surgeon.insert-forms", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.insert-forms", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.insert-forms", "clj-surgeon.txn-journal" ], [ "clj-surgeon.insert-forms-support", "clj-surgeon.insert-forms" ], [ "clj-surgeon.insert-forms-support", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.rename-alias", "clj-surgeon.insert-forms" ], [ "clj-surgeon.rename-alias", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.rename-alias", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.rename-alias", "clj-surgeon.txn-journal" ], [ "clj-surgeon.rename-alias-test", "clj-surgeon.rename-alias" ], [ "clj-surgeon.rename-alias-test", "clj-surgeon.txn-journal" ] ]
+  }, {
+    "file" : "test/clj_surgeon/split_proof_gate_boundary_test.clj",
+    "namespace" : "clj-surgeon.split-proof-gate-boundary-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "clojure.java.shell", "clj-surgeon.namespace-split-warm", "clj-surgeon.receipt-artifacts", "clojure.test", "clj-surgeon.namespace-split-io", "clj-surgeon.split-proof-gate", "clj-surgeon.spawn-ledger", "clojure.edn", "clojure.java.io", "clj-surgeon.structural-lens", "clj-surgeon.mcp-namespace-split-test" ],
+    "paths" : [ [ "clj-surgeon.namespace-split-io" ], [ "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.mcp-namespace-split-test", "clj-surgeon.namespace-split-io" ], [ "clj-surgeon.namespace-split-io", "clj-surgeon.extract" ], [ "clj-surgeon.namespace-split-io", "clj-surgeon.mcp-extraction" ], [ "clj-surgeon.namespace-split-io", "clj-surgeon.receipt-artifacts" ], [ "clj-surgeon.receipt-artifacts", "clj-surgeon.operation-algebra" ] ]
+  }, {
+    "file" : "test/clj_surgeon/xray_test.clj",
+    "namespace" : "clj-surgeon.xray-test",
+    "lane" : null,
+    "test?" : true,
+    "requires" : [ "babashka.fs", "babashka.process", "clj-surgeon.edit-dsl", "clojure.test", "clj-surgeon.core", "clojure.edn", "clojure.string", "clj-surgeon.structural-lens", "sci.core" ],
+    "paths" : [ [ "clj-surgeon.core" ], [ "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.edit-dsl" ], [ "clj-surgeon.core", "clj-surgeon.extract" ], [ "clj-surgeon.core", "clj-surgeon.intent-transaction" ], [ "clj-surgeon.core", "clj-surgeon.receipt-artifacts" ] ]
+  } ]
+}

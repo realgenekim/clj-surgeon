@@ -1,0 +1,7 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+
+Testing clj-surgeon.rename-alias-performance-test
+4000-line planner seconds: 1.508030061
+
+Ran 1 tests containing 2 assertions.
+0 failures, 0 errors.

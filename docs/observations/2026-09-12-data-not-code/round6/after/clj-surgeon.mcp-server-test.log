@@ -1,0 +1,8 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+
+Testing clj-surgeon.mcp-server-test
+clj-surgeon MCP: embedded nREPL on 32795 ( /var/tmp/forge/datacode-fx/clj-surgeon-mcp-server-test-12730258903239303647/.nrepl-port )
+clj-surgeon MCP: embedded nREPL on 36163 ( /var/tmp/forge/datacode-fx/clj-surgeon-mcp-server-test-6543845746280675530/.nrepl-port )
+
+Ran 6 tests containing 95 assertions.
+0 failures, 0 errors.

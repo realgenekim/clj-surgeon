@@ -1,0 +1,44 @@
+[
+  {
+    "task": "T1",
+    "patch_sha256_matches": true,
+    "before_sha256_matches": true,
+    "apply_check_exit": 0,
+    "error": ""
+  },
+  {
+    "task": "T2",
+    "patch_sha256_matches": true,
+    "before_sha256_matches": true,
+    "apply_check_exit": 0,
+    "error": ""
+  },
+  {
+    "task": "T3",
+    "patch_sha256_matches": true,
+    "before_sha256_matches": true,
+    "apply_check_exit": 0,
+    "error": ""
+  },
+  {
+    "task": "T4",
+    "patch_sha256_matches": true,
+    "before_sha256_matches": false,
+    "apply_check_exit": 0,
+    "error": ""
+  },
+  {
+    "task": "T5",
+    "patch_sha256_matches": true,
+    "before_sha256_matches": false,
+    "apply_check_exit": 0,
+    "error": ""
+  },
+  {
+    "task": "T6",
+    "patch_sha256_matches": true,
+    "before_sha256_matches": true,
+    "apply_check_exit": 0,
+    "error": ""
+  }
+]

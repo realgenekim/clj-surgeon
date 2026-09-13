@@ -1,0 +1,6 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/datacode-fx
+
+Testing clj-surgeon.mission-provider-fallback-events-test
+
+Ran 8 tests containing 67 assertions.
+0 failures, 0 errors.

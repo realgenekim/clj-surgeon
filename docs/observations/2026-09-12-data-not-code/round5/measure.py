@@ -36,6 +36,12 @@ def write_new(path, value):
         os.fsync(stream.fileno())
 
 
+def verdict_status(arm, is_test, good, kind):
+    if arm == 'NATIVE':
+        return ('accepted' if is_test else 'executed-without-refusal') if good else 'failed'
+    return 'accepted' if good else ('refused' if kind else 'failed')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['init', 'cell'])
@@ -99,8 +105,15 @@ def main():
         argv = ['bb', '-Xmx1g', '-Djava.io.tmpdir=' + env['TMPDIR'], '-cp',
                 str(checkout / 'src') + ':' + str(checkout / 'libs/clj-splice/src'),
                 '-m', 'clj-surgeon.core', ':probe', ':ns', ns]
+    # Secondary, unbet interval: mechanical delivery of the edit instruction.
+    instruction_t0_utc = time.time_ns()
+    instruction_t0 = time.monotonic_ns()
     write_new(cell / 'request.json', dict(subject_sha=subject, task=args.task,
-              arm=args.arm, argv=argv, runner_sha256=runner_hash, namespace=ns))
+              arm=args.arm, argv=argv, runner_sha256=runner_hash, namespace=ns,
+              edit_instruction=(dict(action='apply-frozen-patch', patch=str(patch),
+                                     sha256=row['sha256']) if row else dict(action='no-edit')),
+              instruction_t0_monotonic_ns=instruction_t0,
+              instruction_t0_utc_ns=instruction_t0_utc))
     # T0 is immediately before applying the frozen edit (empty edit for N1/N2).
     t0_utc = time.time_ns()
     t0 = time.monotonic_ns()
@@ -133,18 +146,23 @@ def main():
                     and receipt.get('tests', 0) > 0 and receipt.get('failures') == 0)
         if row:
             good = good and digest((checkout / row['file']).read_bytes()) == row['after_sha256']
-        verdict = dict(status='accepted' if good else ('refused' if kind else 'failed'),
+        verdict = dict(status=verdict_status(args.arm, row is not None, good, kind),
+                       refusal_scored=args.arm == 'PROBE',
                        typed_kind=kind, receipt=receipt, exit=result.returncode,
                        subject_sha=subject, t0_monotonic_ns=t0, t0_utc_ns=t0_utc,
                        command_wall_ms=(command_end-command_start)/1e6)
     except Exception as exc:
         verdict = dict(status='unknown', error=str(exc), subject_sha=subject,
+                       refusal_scored=args.arm == 'PROBE',
                        t0_monotonic_ns=t0, t0_utc_ns=t0_utc)
     write_new(cell / 'verdict.json', verdict)
     # T1 is sampled after the verdict receipt has been written, flushed and fsynced.
     t1 = time.monotonic_ns()
     write_new(cell / 'timing.json', dict(t0_monotonic_ns=t0, t1_monotonic_ns=t1,
               t1_utc_ns=time.time_ns(), complete_wall_ms=(t1-t0)/1e6,
+              instruction_t0_monotonic_ns=instruction_t0,
+              secondary_wall_ms=(t1-instruction_t0)/1e6,
+              secondary_scored=False,
               units='ms', endpoint='verdict.json durable write'))
     # Preserve the complete edited tree diff. Caller restores only in its owned copy.
     (cell / 'subject.diff').write_bytes(subprocess.check_output(

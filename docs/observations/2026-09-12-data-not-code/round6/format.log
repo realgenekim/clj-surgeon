@@ -1,0 +1,10 @@
+standard-clj fix v0.29.0
+
+✓ /docs/observations/2026-09-12-data-not-code/round6/focused.clj [3.65ms]
+F /src/clj_surgeon/receipt_artifacts.clj [9ms]
+F /test/clj_surgeon/lane_manifest.clj [8.84ms]
+✓ /test/clj_surgeon/lane_manifest_test.clj [21.27ms]
+✓ /test/clj_surgeon/receipt_artifacts_boundary_test.clj [4.91ms]
+F /test/diff_impact.clj [2.55ms]
+
+All 6 files formatted with Standard Clojure Style 👍 [59.45ms]
