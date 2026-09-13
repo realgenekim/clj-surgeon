@@ -6525,3 +6525,10 @@ Ship dir `/var/tmp/forge/ship/20260913T053427Z-ce08cb015850/`, tip ce08cb01 → 
 ### 2026-09-13T05:51:44Z — data-not-code LANDED (ship round 3): trunk 53b9f158 = stable/2026-09-13.2
 
 Sol GO on the first read of candidate b33bf3b0 (verdict archived 05:43:33Z); battery rc=0 at 05:37:41Z, receipt 47c5706a landed (branch fable/battery-receipt-ce08cb01); fast lane green; FINISH LANDED 05:50:31Z, merge 53b9f158 on origin/MCP/main, tag stable/2026-09-13.2 pushed. Nine Astra rounds, three ship rounds (round 1 NO-GO impact oracle one hop short; round 2 GO with battery RED from /home/forge/tmp fixtures; round 3 GO+green). Landed: destination envelope {:id :roots :source} as trusted context, final-target admission, :write-outside-envelope refusal, sandbox denial classification from :sandbox/decision data, evidence-rows validator, sleep identities, diff-impact fixed-point oracle. Sublime index 5 → 6 (data-not-code landed as the preregistered estimate said). Probe measure amendment 2 filed (47f7f88c) and its two planted NATIVE cells rerunning now (run-bg amend2-rerun, results-3/). 7906 restart onto 53b9f158 follows.
+
+### 2026-09-13T05:53:58Z — post-landing housekeeping: CLI + 7906 on 53b9f158; refusal column settled
+
+- `make install` from clj-surgeon-land at 53b9f158: rc=0, CLI/Codex-skill/Claude-skill receipts all name source-commit 53b9f158, agent-routing block hash 67e45724 unchanged (changed-count 0). Log /var/tmp/forge/install-53b9f158.log.
+- 7906 restarted onto 53b9f158 (announce inb-38c3ed; old pid 3387652 stopped by exact pid; new run-bg srv7906e pid 3355235, same argv). Verified via initialize + tools/list on a real session: 13 tools.
+- Probe measure amendment 2 rerun (records e500d19d): NATIVE 0/2 typed refusals on the planted non-test namespaces, both `:test 0` exit 0, ~3.03 s each; PROBE 2/2 unchanged. Fable's refusal bet HELD; Astra's HELD on both arms. Every column of the first vs-native table is now settled.
+- Gene's 2b condition for tower block C ("only on a measured probe win") is met by the settled table; data-not-code (1b/2b's "next") has landed. Block C brief is the next item.
