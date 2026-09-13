@@ -112,7 +112,9 @@
         (is (.contains (:out (shell/sh "bin/mission" "help" "fallback" :env env)) "user-reported"))))))
 
 (defn stable-report [report]
-  (update report :event #(dissoc % :ts :pid :wall_ms)))
+  ;; Compare the fallback contract across runtimes, excluding process identity,
+  ;; timing and prior failed appends (record! projects :dropped to this key).
+  (update report :event #(dissoc % :ts :seat :pid :wall_ms :telemetry_dropped)))
 
 (deftest fallback-bb-and-jvm-share-the-event-contract
   (with-ledger
