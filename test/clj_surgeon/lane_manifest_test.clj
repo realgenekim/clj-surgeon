@@ -943,7 +943,7 @@
      clj-surgeon.helper-extraction-test ; MCP-OP-HELPER's pure planner witnesses, enrolled into :fast when the planner went green (it requires only the planner, the fixture and clojure.test, and spawns nothing)
      clj-surgeon.telemetry-events-test ; TELEMETRY-EVENTS-001's witnesses: the box-wide JSONL ledger the public MCP fns append to as a side effect (2026-09-06, the night the hourly watch reported four figures while a dozen calls landed in launcher-chosen roots it never read)
      clj-surgeon.mcp-helper-extraction-test ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
-     clj-surgeon.probe-state-test}) ; STATE-HOME witnesses (2026-09-13, inb-3c65d7): the warm-image identity descriptor lives under the seat state root, never the checkout; :integration because it starts a warm image in a bounded child JVM and stops it by exact pid
+     clj-surgeon.probe-state-test}) ; STATE-HOME witnesses (2026-09-13, inb-3c65d7): the warm-image identity descriptor lives under the seat state root, never the checkout; :battery because its four-mode witness starts a real warm image in a bounded child JVM four times (126 s under the gate wrapper, 57.8 s unconstrained) and stops each by exact pid — far over the fast lanes' 20 s namespace budget, inside the battery's 1800 s ceiling
 
 (def ^:private census-ledger-path
   "The deftest ledger: ONE LINE PER FULLY QUALIFIED DEFTEST NAME, sorted.

@@ -1,6 +1,6 @@
 # Portability census
 
-Generated 2026-09-13T17:44:39.165744392Z. Counts in cells are tests/failures/errors. All 159 assigned namespaces are listed.
+Generated 2026-09-13T18:54:56.453082887Z. Counts in cells are tests/failures/errors. All 159 assigned namespaces are listed.
 
 Commands and subjects are in controls/*.command.edn; each .edn has its adjacent .log. The configured bb runtime is load-probed first. A load incompatibility is explicitly accounted for, with no passing test or alternate-runtime claim. Every namespace that loads on bb receives a complete JVM and bb control, serially.
 
@@ -136,7 +136,7 @@ A non-portable result refuses portability by namespace until repaired. No runtim
 | clj-surgeon.parser-admission-test | :bb | :battery | [passed (22/0/0)](controls/clj-surgeon.parser-admission-test-jvm-test.control.edn) | [passed (22/0/0)](controls/clj-surgeon.parser-admission-test-bb-test.control.edn) | portable |
 | clj-surgeon.partition-all-test | :bb | :battery | [passed (10/0/0)](controls/clj-surgeon.partition-all-test-jvm-test.control.edn) | [passed (10/0/0)](controls/clj-surgeon.partition-all-test-bb-test.control.edn) | portable |
 | clj-surgeon.platform-selector-test | :bb | :battery | [passed (6/0/0)](controls/clj-surgeon.platform-selector-test-jvm-test.control.edn) | [passed (6/0/0)](controls/clj-surgeon.platform-selector-test-bb-test.control.edn) | portable |
-| clj-surgeon.probe-state-test | :jvm | :integration | [passed (6/0/0)](controls/clj-surgeon.probe-state-test-jvm-test.control.edn) | [test-failed (6/4/0)](controls/clj-surgeon.probe-state-test-bb-test.control.edn) | non-portable |
+| clj-surgeon.probe-state-test | :jvm | :battery | [passed (6/0/0)](controls/clj-surgeon.probe-state-test-jvm-test.control.edn) | [test-failed (6/4/0)](controls/clj-surgeon.probe-state-test-bb-test.control.edn) | non-portable |
 | clj-surgeon.quoted-var-refs-test | :bb | :fast | [passed (5/0/0)](controls/clj-surgeon.quoted-var-refs-test-jvm-test.control.edn) | [passed (5/0/0)](controls/clj-surgeon.quoted-var-refs-test-bb-test.control.edn) | portable |
 | clj-surgeon.reader-eval-fence-test | :jvm | :battery | [passed (13/0/0)](controls/clj-surgeon.reader-eval-fence-test-jvm-test.control.edn) | [test-failed (13/8/0)](controls/clj-surgeon.reader-eval-fence-test-bb-test.control.edn) | non-portable |
 | clj-surgeon.receipt-artifacts-boundary-test | :jvm | :battery | not run | [load-failed](controls/clj-surgeon.receipt-artifacts-boundary-test-bb-load.edn) | bb-load-incompatible: Could not locate nrepl/core.bb, nrepl/core.clj or nrepl/core.cljc on classpath. |

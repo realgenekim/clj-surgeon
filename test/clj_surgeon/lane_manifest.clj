@@ -214,16 +214,16 @@
    'clj-surgeon.telemetry-events-test                   :fast
    'clj-surgeon.workspace-onboarding-test               :fast
 
-   ;; ---- :integration (7) ----
+   ;; ---- :integration (6) ----
    'clj-surgeon.outline-corpus-integration-test          :integration
    'clj-surgeon.mcp-feature-thread-test                 :integration
    'clj-surgeon.mcp-hot-verify-test                     :integration
    'clj-surgeon.mcp-server-test                         :integration
    'clj-surgeon.mcp-http-server-test                    :integration
    'clj-surgeon.mcp-tool-test                           :integration
-   'clj-surgeon.probe-state-test                        :integration
 
-   ;; ---- :battery (32) ----
+   ;; ---- :battery (33) ----
+   'clj-surgeon.probe-state-test                       :battery
    'clj-surgeon.mission-run-test                       :battery
    'clj-surgeon.mission-events-test :battery
    'clj-surgeon.mission-phase-events-test :battery
