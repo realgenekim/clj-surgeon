@@ -9,8 +9,9 @@ is cut.
 ## [Unreleased]
 
 - Diff-impact selection now includes test-side helper requirements and literal
-  data/source-text inputs. It reports edge reasons and returns a typed
-  `:nothing-selected` result when no witness is reachable.
+  data/source-text inputs. It reports edge reasons, returns
+  `:hold-unmatched-files` for every unmatched nonempty diff, and reserves
+  `:nothing-selected` for an empty diff.
 
 - Gate workers now share box-wide inherited flock slots with live memory
   admission across concurrent coordinators. `landing-gate-prewarm` covers all
