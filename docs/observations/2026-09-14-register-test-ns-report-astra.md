@@ -1264,3 +1264,11 @@ not the operator's scratch prefix. Raw logs and command results are retained
 under `/var/tmp/forge/regns-fx/round8`; bounded receipts are linked above. This
 branch change earns standalone correctness evidence, not a passing landing gate
 or the requested sub-150-second budget claim.
+
+## Round 8 tweezer
+
+Measured 2026-09-14T19:28:57+00:00. The live-concurrent observer now emits facts, checks exit 0, 46 tests, zero failures/errors and every non-timing isolation violation, and preserves LIVE-SNAPSHOT byte identity. Its namespace wall and launch load average are reported; the fast-lane budget remains unchanged in its own gate. The existing 120-second child timeout remains.
+
+Standalone: exit **0**, command wall **456.358 s**, namespace wall **453319 ms**, 1 test / 2 assertions, zero isolation violations. Observer: **5154 ms**, launch load **1.12 / 3.63 / 5.89**. Once-only copied eight-lane battery at 1024 MB, normal prerequisites enabled and corrected `clj-surgeon` scratch state root: Make exit **2**, command wall **299.021 s**, makespan **280509 ms**. Matrix lane 3: exit **0**, **268132 ms**; registration lane 5: exit **1**, **165983 ms** (namespace **157711 ms**). Its observer passed at **8706 ms**, launch load **10.06 / 6.08 / 6.27**, with 46 tests and byte-identical LIVE-SNAPSHOT. Registration then failed with `cell-timeout mask=0`; the required all-green battery gate remains unmet. No second battery run or other budget change was made. Total: 1207 tests / 19938 assertions, 1 failure / 0 errors, skipped 0, zero isolation violations across 57 namespaces.
+
+Paved `~/bin/clj-kondo`: 0 errors / 0 warnings. Census regeneration: exit 0, **+0/-0**. Both protected ledgers and census match the Round 8 SHA-256 values above in the live checkout and copy; no ledger append occurred. Raw logs, argv/wall/exit JSON and preservation hashes: `/var/tmp/forge/regns-fx/round8-tweezer/`.
