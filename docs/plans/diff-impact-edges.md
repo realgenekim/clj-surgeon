@@ -20,3 +20,11 @@ lint through ~/bin/clj-kondo, run affected namespaces with -Xmx1024m, regenerate
 the census and inspect additions. Do not run make test or test-battery; do not
 change either tracked battery observation file. Commit and push only
 fable/impact-entrance. Report correctness and bounds, with no speed claim.
+
+## Round 2
+
+Commit DIFF-IMPACT-004 strengthened intent and assertions together, red first.
+Add six inventory probes, all four non-list modes, mixed matched/unmatched,
+empty diff, disconnected dependent and cyclic src closure witnesses. Implement
+HOLD and src content discovery, replay both historical lists and preserve the
+protected ledgers. All phases are approved in advance by the round brief.

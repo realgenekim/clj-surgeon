@@ -13,7 +13,7 @@ existing libspec grammar, cycles and unbounded transitive closure. Test-side
 helper namespaces participate even when they are not themselves test endpoints.
 Git changed paths are not restricted to src/.
 
-Read test namespace source as syntax without evaluation. Existing file literals
+Read src/ and test/ namespace source as syntax without evaluation. Existing file literals
 under docs/ or resources/ create data-file edges. Source file literals create
 source-text edges; source directory literals in a namespace with slurp, file-seq
 or source-scanning helpers create source-scan edges to files under that root.
@@ -43,10 +43,24 @@ test/clj_surgeon/diff_impact_test.clj; the executable is test/diff_impact.clj.
 | i | changed existing docs/resources input | exact reader test set |
 | ii | changed source text below scan root | scanner test set, including non-required source |
 | iii | changed helper under test/ | all transitive requiring tests; no unrelated test |
-| iv | unmatched file or empty diff | :nothing-selected, exit 0, changed paths and reason |
+| iv | unmatched file, including mixed selection | :hold-unmatched-files; non-list exit 1 before children; list exit 0 |
+| vi | empty diff | :nothing-selected, exit 0, empty paths |
 | v | direct/transitive require edge | existing set and cycle termination preserved |
 
 CLI positions remain BASE OUTPUT MODE. list writes selection only; fixed-point,
-before, after and merged execute the same selection. Empty selection writes
-typed inventory and results without launching children or reading absent results.
+before, after and merged execute the same selection. Unmatched files HOLD before execution, including when other files selected tests.
+Only an empty diff returns :nothing-selected. The tracked no-test-can-depend.edn
+allowlist is empty: no Markdown or observation exemption is asserted.
+HOLD writes typed inventory and results without reading absent results.
 Each printed reason has the shape `selected <ns> via <edge-kind> <file>`.
+
+## Round 2 boundary
+
+Choose HOLD (exit 1), not a fallback lane: the minimum lane has no established
+bounded wall for this gate, and measuring the full manifest is outside this round.
+Source content edges seed the existing reverse require closure; no unrelated
+source namespace can contribute a reason to a test outside that closure.
+EDN configuration value flow, relative io/resource classpath resolution, deleted
+inputs and unanchored dynamic paths remain unresolved; unmatched changes HOLD.
+A seed with declared dependents but no reachable test is :no-dependency-edge;
+:no-test-dependent describes only an isolated namespace seed.

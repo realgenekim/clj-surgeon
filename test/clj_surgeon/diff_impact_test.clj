@@ -96,8 +96,8 @@
   (doseq [mode ["list" "fixed-point"]]
     (let [result (run-fixture (assoc base-files "README.md" "old") {"README.md" "new"} mode)
           inventory (:inventory result)]
-      (is (= 0 (:exit result)) (pr-str result))
-      (is (= :nothing-selected (:status inventory)) (pr-str result))
+      (is (= (if (= mode "list") 0 1) (:exit result)) (pr-str result))
+      (is (= :hold-unmatched-files (:status inventory)) (pr-str result))
       (is (= ["README.md"] (:changed-files inventory)) (pr-str result))
       (is (= [{:file "README.md" :reason :no-dependency-edge}] (:unmatched-files inventory))
           (pr-str result))
@@ -180,7 +180,7 @@
             [{:file "src/a.clj" :reason :no-test-dependent}]]
            [[] ["README.md"] [{:file "README.md" :reason :no-dependency-edge}]]]]
     (let [r (impact/select-impact nodes changed)]
-      (is (= :nothing-selected (:status r)))
+      (is (= (if (seq changed) :hold-unmatched-files :nothing-selected) (:status r)))
       (is (= [] (:namespaces r)))
       (is (= reasons (:unmatched-files r)))))
   (let [r (run-fixture base-files {} "fixed-point")]
@@ -198,3 +198,90 @@
     (is (= 0 (:exit r)) (pr-str r))
     (is (str/includes? (:out r) "selected fixture.reader-test via data-file docs/registry.edn"))
     (is (= {:data-file 1} (get-in r [:inventory :selection-edge-counts])))))
+
+;; Sol F1 pressure-point shapes from sol-verdict-1.md (the verdict omits bodies).
+(def round-two-probes
+  (let [data "resources/registry.edn"
+        source "src/fixture/unrequired.clj"
+        reader "(ns fixture.reader-test (:require [fixture.middle]))"
+        middle "(ns fixture.middle (:require [fixture.helper]))"]
+    (mapv (fn [[id extra path expected]]
+            {:id id :files (merge base-files extra)
+             :changes {path (if (= path source)
+                              "(ns fixture.unrequired) (def kind :new)" "{:new true}")}
+             :expected expected})
+          [[:src-constant {data "{}"
+                           "src/fixture/helper.clj" "(ns fixture.helper) (def path \"resources/registry.edn\")"
+                           "src/fixture/middle.clj" middle
+                           "test/fixture/reader_test.clj" reader} data '#{fixture.reader-test}]
+           [:edn-config {data "{}" "resources/config.edn" "{:path \"resources/registry.edn\"}"
+                         "test/fixture/reader_test.clj" "(ns fixture.reader-test) (slurp (:path (edn/read-string (slurp \"resources/config.edn\"))))"} data #{}]
+           [:io-resource {data "{}" "test/fixture/reader_test.clj"
+                          "(ns fixture.reader-test) (slurp (io/resource \"registry.edn\"))"} data #{}]
+           [:test-scan {"test/fixture/helper.clj" "(ns fixture.helper) (defn scan [] (map slurp (file-seq (io/file \"src/fixture\"))))"
+                        "test/fixture/middle.clj" middle
+                        "test/fixture/reader_test.clj" reader} source '#{fixture.reader-test}]
+           [:src-scan {"src/fixture/helper.clj" "(ns fixture.helper) (defn scan [] (map slurp (file-seq (io/file \"src/fixture\"))))"
+                       "src/fixture/middle.clj" middle
+                       "test/fixture/reader_test.clj" reader} source '#{fixture.reader-test}]
+           [:makefile {"Makefile" "all:\n"} "Makefile" #{}]])))
+
+;; @spec DIFF-IMPACT-004
+;; @spec DIFF-IMPACT-006
+(deftest fixed-point-unmatched-files-must-refuse-or-fallback
+  (doseq [{:keys [id files changes expected]} round-two-probes]
+    (testing (name id)
+      (let [r (run-fixture files changes "list")]
+        (is (= 0 (:exit r)))
+        (is (= expected (selected-set r)))
+        (when (empty? expected)
+          (is (= :hold-unmatched-files (get-in r [:inventory :status])))))
+      ;; Remove endpoints, retaining the exact changed-file inventory and helpers.
+      ;; Every non-list mode must hold; no fixture subject can be launched.
+      (doseq [mode ["before" "after" "merged" "fixed-point"]]
+        (let [r (run-fixture (into {} (remove #(str/ends-with? (key %) "_test.clj") files)) changes mode)]
+          (is (= 1 (:exit r)) (pr-str [id mode r]))
+          (is (= :hold-unmatched-files (get-in r [:results :status])))
+          (is (= :unmatched-files (get-in r [:results :reason])))
+          (is (= (set (keys changes)) (set (map :file (get-in r [:results :unmatched-files]))))))))))
+
+;; @spec DIFF-IMPACT-004
+(deftest mixed-selection-must-hold-before-launch
+  (doseq [mode ["before" "after" "merged" "fixed-point"]]
+    (let [r (run-fixture (assoc base-files "Makefile" "old")
+              {"Makefile" "new" "src/fixture/core.clj" "(ns fixture.core) (def value 2)"} mode)]
+      (is (= 1 (:exit r)))
+      (is (= '#{fixture.control-test} (selected-set r)))
+      (is (= :hold-unmatched-files (get-in r [:results :status])))
+      (is (= [{:file "Makefile" :reason :no-dependency-edge}]
+             (get-in r [:results :unmatched-files])))
+      (is (str/includes? (:out r) ":reason :unmatched-files")))))
+
+;; @spec DIFF-IMPACT-004
+(deftest no-test-can-depend-allowlist-is-explicit-and-empty
+  (is (= [] (edn/read-string (slurp "docs/intent/diff-impact/no-test-can-depend.edn")))))
+
+;; @spec DIFF-IMPACT-004
+;; @spec DIFF-IMPACT-006
+(deftest src-content-closure-bounds-and-unreachable-reasons
+  (let [nodes [{:namespace 'a :file "src/a.clj" :requires #{'b}
+                :content-edges [{:file "resources/x.edn" :edge-kind :data-file}]}
+               {:namespace 'b :file "src/b.clj" :requires #{'a}}
+               {:namespace 'reader-test :test? true :requires #{'b}}
+               {:namespace 'unrelated-test :test? true :requires #{}}]]
+    (is (= '#{reader-test} (set (map :namespace (:namespaces (impact/select-impact nodes ["resources/x.edn"]))))))
+    (let [r (impact/select-impact (assoc-in nodes [2 :requires] #{}) ["resources/x.edn" "src/a.clj"])]
+      (is (= [] (:namespaces r)))
+      (is (= [{:file "resources/x.edn" :reason :no-dependency-edge}
+              {:file "src/a.clj" :reason :no-dependency-edge}] (:unmatched-files r))))))
+
+;; @spec DIFF-IMPACT-006
+(deftest src-path-constant-can-name-any-existing-repo-file
+  (doseq [path ["Makefile" "config/settings.edn"]]
+    (let [r (run-fixture
+              (assoc base-files path "old"
+                     "src/fixture/paths.clj" (str "(ns fixture.paths) (def path " (pr-str path) ")")
+                     "test/fixture/reader_test.clj" "(ns fixture.reader-test (:require [fixture.paths]))")
+              {path "new"} "list")]
+      (is (= 0 (:exit r)))
+      (is (= '#{fixture.reader-test} (selected-set r))))))
