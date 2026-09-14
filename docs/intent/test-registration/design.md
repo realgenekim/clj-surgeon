@@ -65,3 +65,17 @@ admitted temporary base through both environment and startup property. A bb load
 failure still requires the JVM test to execute and pass; the shared portability
 classifier accepts that executed JVM row beside the bb load refusal. Unknown
 process provenance refuses rather than reporting registration success.
+
+Round 6 (REAL-GATE-001): a pinned-count discrepancy is one repository fact.
+Namespace checklists describe local missing registrations; a complete registered
+namespace never inherits a count failure. The repository row records the actual
+pin, discovered/runtime union count and disk-minus-manifest subjects. With no
+such subjects (the count-only mask), it remains a repository-only diagnostic.
+The ordinary gate shares one checklist calculation per namespace run, discarded
+between runs; root-specific copied specimens always calculate their own snapshot.
+The battery replaces the old redefined/eval matrix with 31 cold runner executions
+on copied repository files, plus the valid zero-mask control. The fast mask removes
+one real namespace's declarations in a copied snapshot and reads the real count.
+Original qualified test names remain; the old matrix digest is retired because it
+froze the seam that concealed this defect. No product output path is based on the
+operator's scratch path; the harness inherits its admitted temporary directory.

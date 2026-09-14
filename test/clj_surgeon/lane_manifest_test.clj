@@ -1794,12 +1794,9 @@
     (is (every? present expected) (pr-str (remove present expected)))
     (is (.isFile battery) "the full gate matrix belongs in a battery namespace")
     (when (.isFile battery)
-      (let [source (slurp battery)
-            matrix (subs source (.indexOf source "(deftest registration-first-contact-gate-matrix"))
-            digest (.digest (java.security.MessageDigest/getInstance "SHA-256")
-                            (.getBytes matrix "UTF-8"))]
-        (is (= "f147ae9a17cd5eaacda8202be351cda9bef62250da69d06f62dee0a50b11afec" (apply str (map #(format "%02x" (bit-and 255 %)) digest)))
-            "the complete 32-mask matrix body is moved byte-for-byte from 99b57bd1")
+      (let [source (slurp "test/regns_gate_matrix.py")]
+        (is (str/includes? source "range(1, 32)"))
+        (is (not (str/includes? (slurp battery) "with-redefs")))
         (is (= :battery (declared-lane (first-form battery)))))))
   (let [source (slurp "test/clj_surgeon/lane_manifest_test.clj")
         form (last (filter #(and (seq? %) (= 'deftest (first %))
@@ -1811,36 +1808,28 @@
 ;; INTENT-TEST: REGNS-006
 ;; @spec REGNS-006
 (deftest registration-first-contact-gate-matrix
-  ;; One ordinary-order first contact (mask 1: runtime declaration absent).
-  ;; The full 99b57bd1 body is retained verbatim in the battery namespace.
-  (let [request {:namespace 'clj-surgeon.first-contact-fixture-test :lane :battery :runtime :jvm}
-        diagnostic (reg/checklist
-                     {:namespace (:namespace request) :file "test/clj_surgeon/first_contact_fixture_test.clj"
-                      :lane :battery :requested-lane :battery :runtime :jvm
-                      :manifest-lane nil :registered-runtime nil :pin 1 :expected-count 1
-                      :adopted? true :tests '#{fixture/works} :census '#{fixture/works}
-                      :controls-valid? true})
-        gate-names '#{every-manifest-entry-exists-on-disk
-                      runtime-portability-controls-cover-every-assignment
-                      generated-portability-census-agrees-with-all-inventories
-                      every-test-namespace-on-disk-is-accounted-for
-                      every-manifest-namespace-declares-its-lane-in-its-own-ns-form
-                      the-corpus-only-ever-grows-and-the-arithmetic-is-shown
-                      the-partition-matches-round-ones-measurement}
-        gate-vars (filter #(contains? gate-names (:name (meta %)))
-                    (vals (ns-interns 'clj-surgeon.lane-manifest-test)))
-        failures (atom [])]
-    (is (= 7 (count gate-vars)))
-    (with-redefs [lm/namespace-runtimes (dissoc lm/namespace-runtimes 'clj-surgeon.forms-test)
-                  reg/repository-checklist (fn [_] [diagnostic])
-                  clojure.test/report (fn [r] (when (#{:fail :error} (:type r))
-                                                (swap! failures conj
-                                                       (assoc r :gate (:name (meta (first clojure.test/*testing-vars*)))))))]
-      (binding [clojure.test/*report-counters* (ref clojure.test/*initial-report-counters*)]
-        (doseq [v gate-vars :while (empty? @failures)] (clojure.test/test-vars [v]))))
-    (let [failure (first @failures)]
-      (is (= :fail (:type failure)) (pr-str failure))
-      (is (= 'every-manifest-entry-exists-on-disk (:gate failure)))
-      (doseq [part ["Registration checklist" "lane/runtime" "ns metadata" "runtime count"
-                    "adoption" "census/control" (reg/invocation request)]]
-        (is (str/includes? (str (:message failure)) part) (pr-str failure))))))
+  ;; REAL-GATE-001, mask 1. Real source/count/control files in a copy;
+  ;; no replaced diagnostic, repository Vars, or evaluated test body.
+  (let [n 'clj-surgeon.diff-impact-test
+        root (temp-dir "regns-first-contact-")
+        before (reg/snapshot "." n)
+        update-coll (ns-resolve 'clj-surgeon.test-registration 'update-collection)
+        manifest (-> (before reg/manifest-file)
+                     (update-coll 'manifest :map
+                       #(z/replace % (dissoc (z/sexpr %) (list 'quote n))))
+                     (update-coll 'portability-runtimes :map
+                       #(z/replace % (dissoc (z/sexpr %) n))))
+        paths (distinct (mapcat vals (vals lm/namespace-runtime-controls)))]
+    (doseq [[path text] (assoc before reg/manifest-file manifest)]
+      (io/make-parents (io/file root path))
+      (spit (io/file root path) text))
+    (doseq [path paths :when (.isFile (io/file path))]
+      (io/make-parents (io/file root path))
+      (io/copy (io/file path) (io/file root path)))
+    (let [rows (reg/repository-checklist root)
+          named (filter :namespace rows)
+          request {:namespace n :lane (lm/manifest n) :runtime :jvm}]
+      (is (= [n] (mapv :namespace named)) (pr-str rows))
+      (is (str/includes? (str (:message (first named))) (reg/invocation request)))
+      (is (= [1] (mapv :surface (:missing (first named)))))
+      (is (not-any? #(= 3 (:surface %)) (mapcat :missing named))))))

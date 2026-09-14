@@ -16,3 +16,12 @@ by the seat for this round. These IDs are discovered by the repository intent au
 
 - [x] **REGNS-010**: When a pre-existing control differs in source SHA or lacks argv/root/exit/result/wall/pid/start-ticks provenance, the entrance shall refuse `:register-control-stale` after executing controls. Misreading: check a claimed pass instead of running the failing source. Witness: registration-stale-control-path-matrix.
 - [x] **REGNS-011**: When either entrance regenerates the deftest census, it shall use the same derivation, removed-name refusal and serialization implementation. Misreading: append source-scanned names independently. Witness: census-writer-census.
+
+Round 6 refinement of REGNS-006: the first checklist must name only a namespace
+with local registration defects and retain its requested lane/runtime. The count
+mismatch appears once as a repository row with disk-minus-manifest subjects;
+count-only drift with an empty difference names no namespace. The battery must
+exercise all 31 nonzero masks on copied files using the landing gate's cold lane
+runner, never replaced test bodies or repository Vars. The fast representative
+uses real copied registration files and their actual count. The namespace run,
+with and without a newcomer, must remain below its existing 8000 ms budget.
