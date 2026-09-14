@@ -2222,6 +2222,7 @@
   clj-surgeon.platform-selector-test/xray-passes-file-context-through-literal-and-computed-reads
   clj-surgeon.probe-state-test/absent-descriptor-has-provenance
   clj-surgeon.probe-state-test/configured-root-warm-cells
+  clj-surgeon.probe-state-test/descriptor-provenance-stays-inside-the-whole-receipt-bound
   clj-surgeon.probe-state-test/envelope-refuses-before-creation
   clj-surgeon.probe-state-test/invalid-path-receipt-is-bounded-at-the-crossing
   clj-surgeon.probe-state-test/local-filesystem-failures-never-connect
