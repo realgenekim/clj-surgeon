@@ -1,0 +1,4 @@
+# envelope-writer-class recurrences after registration 2026-09-13T16:38:40Z (seat-recorded; each line = one instance with its record)
+2026-09-13 state-home round 1: brief planted a hardcoded temp root; Sol/Astra round — records 2026-09-13-state-home-report-astra.md (recurrence 1)
+2026-09-13 state-home rounds: configured state root resolved into the checkout — records 2026-09-13-state-home-sol-verdict-2/3 (recurrence 2)
+2026-09-14 ledger gating round 1: namespace-walls writer reached make-parents/spit without admit-state-root! — records 2026-09-14-battery-ledger-gating-sol-verdict-1.md F1 (recurrence 3)
