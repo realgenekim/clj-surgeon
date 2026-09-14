@@ -10,6 +10,12 @@ and matrix bytes. The existing stale-control matrix remains in its battery lane.
 The report records focused walls and the shared coordinator fast budget; this is
 a cadence-placement repair, with no new routed-operation performance admission.
 
+Round 6 replaces that frozen seam with copied-repository cold lane executions:
+the old gate's count-only mask names admit-patch-test first (RED). Count drift is
+now one repository row, and checklist computation is shared within each namespace
+run. The original qualified names remain; the old matrix digest is intentionally
+retired. Full mask and planted real-Make receipts are in the report's Round 6.
+
 Diff-impact Round 2 closes Sol F1 with non-list HOLD on every unmatched inventory,
 including partially selected diffs. Source content edges now propagate through
 requires; EDN value paths and relative resources remain unresolved and HOLD.

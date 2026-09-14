@@ -121,7 +121,7 @@
 ;; @spec REGNS-006
 (defn checklist [{:keys [namespace file lane requested-lane runtime manifest-lane
                          registered-runtime pin expected-count adopted? tests census
-                         controls-valid?] :as model}]
+                         controls-valid? repository-count?] :as model}]
   (let [rows [{:surface 1 :name "lane/runtime" :file manifest-file :form '[manifest portability-runtimes]
                :actual [manifest-lane registered-runtime] :expected [(or lane requested-lane) runtime]}
               {:surface 2 :name "ns metadata" :file file :form 'ns
@@ -134,8 +134,10 @@
                :form '[deftest-census portability-controls]
                :actual {:missing-tests (set/difference tests census) :controls-valid? (boolean controls-valid?)}
                :expected {:missing-tests #{} :controls-valid? true} :value tests}]
+        ;; Repository sweeps emit the pin once, outside namespace checklists.
+        rows (if repository-count? (filterv #(not= 3 (:surface %)) rows) rows)
         missing (vec (remove #(= (:actual %) (:expected %)) rows))]
-    {:ok (empty? missing) :missing missing :checklist rows
+    {:ok (empty? missing) :namespace namespace :missing missing :checklist rows
      :message (str "Registration checklist for " namespace ": "
                    (str/join "; " (map #(str (:surface %) " " (:name %) " " (:file %) " -> " (:form %)
                                              " actual=" (pr-str (:actual %)) " expected=" (pr-str (:expected %))) rows))
@@ -149,16 +151,23 @@
   (into {} (keep (fn [[k path]] (when-let [s (snapshot path)] [k (edn/read-string s)])))
         (control-paths n)))
 
-(defn- projection-valid? [snapshot n runtime lane]
+(defn- projection [snapshot]
   (let [inventory (some-> (snapshot (str control-root "/portability-controls.edn")) edn/read-string)
-        md (snapshot (str control-root "/portability-census.md"))
+        md (snapshot (str control-root "/portability-census.md"))]
+    {:inventory inventory
+     :population-valid? (and inventory md
+                          (str/includes? md (str "All " (count inventory) " assigned namespaces are listed.")))
+     :lines (when md (str/split-lines md))}))
+
+(defn- projection-valid? [snapshot n runtime lane]
+  (let [{:keys [inventory population-valid? lines]}
+        (or (:registration-projection (meta snapshot)) (projection snapshot))
         entry (get inventory n)
         row-prefix (str "| " n " | " runtime " | " lane " |")]
-    (and entry md (str/includes? md row-prefix)
-         (str/includes? md (str "All " (count inventory) " assigned namespaces are listed."))
+    (and entry population-valid?
          (some #(and (str/starts-with? % row-prefix)
                      (str/includes? % (str "| " (name (:classification entry)))))
-               (str/split-lines md)))))
+               lines))))
 
 (defn- model-base [snapshot]
   {:measurements (some-> (snapshot lm/runtime-evidence-path) edn/read-string)
@@ -320,19 +329,36 @@
 (defn repository-checklist [root]
   (let [s (snapshot root 'clj-surgeon.lane-manifest-test)
         base (model-base s)
-        excluded (collection-value (s manifest-file) 'excluded :map)]
-    (vec (for [[_ {:keys [namespace lane]}] (sort-by key (:disk base))
-               :when (not (contains? excluded namespace))
-               :let [paths (or (lm/namespace-runtime-controls namespace) (control-paths namespace))
-                     controls (into {} (keep (fn [[_ p]] (when-let [v (read-source root p)] [p v]))) paths)
-                     ;; The three historical attempt23 overrides remain authoritative.
-                     controls (into {} (for [[k p] paths :let [v (controls p)] :when v]
-                                         [(get (control-paths namespace) k) v]))
-                     snapshot (with-meta (merge s controls) {:registration-base base})
-                     r (checklist (model snapshot {:namespace namespace :lane (or lane :battery)
-                                                   :runtime (if (get (:registrations base) namespace) :jvm (get-in base [:measurements namespace :runtime] (get (:runtimes base) namespace :jvm)))}))]
-               :when (not (:ok r))]
-           r))))
+        projection-data (projection s)
+        excluded (collection-value (s manifest-file) 'excluded :map)
+        discovered (set (map :namespace (vals (:disk base))))
+        unregistered (set/difference discovered (set (keys (:manifest base))) (set (keys excluded)))
+        expected-count (count (into discovered (keys (:runtimes base))))
+        count-row (when (not= (:pin base) expected-count)
+                    {:ok false :scope :repository :surface 3 :name "runtime count"
+                     :file witness-file :form 'every-manifest-entry-exists-on-disk
+                     :actual (:pin base) :expected expected-count
+                     :namespaces (vec (sort unregistered))
+                     :message (str "Repository registration count: runtime count " witness-file
+                                   " -> every-manifest-entry-exists-on-disk actual=" (:pin base)
+                                   " expected=" expected-count
+                                   "; unregistered namespaces=" (pr-str (vec (sort unregistered)))
+                                   ". Reconcile the repository pin with the discovered/runtime union.")})]
+    (cond-> (vec (for [[_ {:keys [namespace lane]}] (sort-by key (:disk base))
+                       :when (not (contains? excluded namespace))
+                       :let [paths (or (lm/namespace-runtime-controls namespace) (control-paths namespace))
+                             controls (into {} (keep (fn [[_ p]] (when-let [v (read-source root p)] [p v]))) paths)
+                             ;; The three historical attempt23 overrides remain authoritative.
+                             controls (into {} (for [[k p] paths :let [v (controls p)] :when v]
+                                                 [(get (control-paths namespace) k) v]))
+                             snapshot (with-meta (merge s controls)
+                                        {:registration-base base :registration-projection projection-data})
+                             r (checklist (assoc (model snapshot {:namespace namespace :lane (or lane (get (:manifest base) namespace) :battery)
+                                                                  :runtime (if (get (:registrations base) namespace) :jvm (get-in base [:measurements namespace :runtime] (get (:runtimes base) namespace :jvm)))})
+                                                 :repository-count? true))]
+                       :when (not (:ok r))]
+                   r))
+      count-row (conj count-row))))
 
 (defn- digest [s]
   (let [md (java.security.MessageDigest/getInstance "SHA-256")]

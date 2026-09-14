@@ -149,8 +149,20 @@
     (when (or (seq missing) (seq extra))
       {:missing missing :extra extra})))
 
+(def ^:dynamic *registration-rows* nil)
+
+(defn- repository-rows []
+  (if *registration-rows* @*registration-rows* (reg/repository-checklist ".")))
+
+;; A namespace run is one discovered repository snapshot. A fresh run gets a
+;; fresh delay; copied-root probes never use this cache.
+(use-fixtures :once
+  (fn [f]
+    (binding [*registration-rows* (delay (reg/repository-checklist "."))]
+      (f))))
+
 (defn- registration-message []
-  (str/join "\n" (map :message (reg/repository-checklist "."))))
+  (str/join "\n" (map :message (repository-rows))))
 
 (defn- census-diff-message
   "The failure text for a `census-diff`: names the subject, both differences and
@@ -164,7 +176,7 @@
        (count (:extra diff)) "): "
        (if (seq (:extra diff)) (str/join ", " (:extra diff)) "none")
        ". Add or remove the NAMED member -- never re-pin a count."
-       (when diff (str "\n" (str/join "\n" (map :message (reg/repository-checklist ".")))))))
+       (when diff (str "\n" (str/join "\n" (map :message (repository-rows)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; @spec TEST-ISO-001
@@ -467,7 +479,7 @@
            (edn/read-string (second (re-find #"Summary: (.*)" markdown)))))))
 
 (deftest every-test-namespace-on-disk-is-accounted-for
-  (let [incomplete (reg/repository-checklist ".")]
+  (let [incomplete (repository-rows)]
     (is (empty? incomplete) (str/join "\n" (map :message incomplete))))
   (testing "disk -> manifest: a new test namespace cannot silently never run"
     (let [unaccounted (sort (remove (fn [s]
@@ -1088,7 +1100,7 @@
        ". A removed name is a deleted test -- say why, or restore it. A removed "
        "AND an added name together is a rename, which the count ledger this "
        "replaced could not see. Then regenerate: " regenerate-entrance
-       (when diff (str "\n" (str/join "\n" (map :message (reg/repository-checklist ".")))))))
+       (when diff (str "\n" (str/join "\n" (map :message (repository-rows)))))))
 
 ;; @spec BATTERY-LEDGER-004
 (def regenerate-census! census/regenerate-census!)
@@ -1741,7 +1753,7 @@
               (deliver release true)
               (deref first-call 10000 :timeout))))))))
 
-;; Round 4: freeze the 99b57bd1 source census and full matrix bytes.
+;; Retain the 99b57bd1 names; Round 6 replaces the obsolete matrix byte freeze.
 (deftest registration-witnesses-retain-names-and-battery-matrix
   (let [expected '#{every-manifest-entry-exists-on-disk
                     runtime-evidence-is-consumed-and-receipts-are-required
@@ -1828,8 +1840,12 @@
       (io/copy (io/file path) (io/file root path)))
     (let [rows (reg/repository-checklist root)
           named (filter :namespace rows)
+          ;; A real outer gate may itself contain another planted defect.
+          ;; The copied specimen adds exactly one local defect to that snapshot.
+          expected (conj (set (keep :namespace (repository-rows))) n)
+          subject-row (first (filter #(= n (:namespace %)) named))
           request {:namespace n :lane (lm/manifest n) :runtime :jvm}]
-      (is (= [n] (mapv :namespace named)) (pr-str rows))
-      (is (str/includes? (str (:message (first named))) (reg/invocation request)))
-      (is (= [1] (mapv :surface (:missing (first named)))))
+      (is (= expected (set (map :namespace named))) (pr-str rows))
+      (is (str/includes? (str (:message subject-row)) (reg/invocation request)))
+      (is (= [1] (mapv :surface (:missing subject-row))))
       (is (not-any? #(= 3 (:surface %)) (mapcat :missing named))))))

@@ -706,3 +706,165 @@ new battery-ledger receipt and did not rewrite either protected file.
 Logs and the structural count/union script are retained as `round5-*` under
 `/var/tmp/forge/regns-fx`. This is a branch merge with focused correctness
 verification; no new performance admission is claimed.
+
+## Round 6
+
+Recorded 2026-09-14T13:09:34.977995+00:00. Starting tip:
+`bfbec7f910b4d1488bb2bc2c7bf80f2c4eab771d`, branch `fable/regns-entrance`.
+Sol's full `/var/tmp/forge/regns-fx/sol-verdict-2.md` was read before changes.
+Standing approval covered every phase. The RED witness commit is `eac8dab1`.
+The current contract and matrix are recorded in
+[the Round 6 plan](../plans/register-test-ns-round6.md) and the registration leaf.
+
+**REAL-GATE-001 RED.** An archive of the starting tip with the metadata-bearing,
+otherwise unregistered `clj-surgeon.sol-first-contact-test` reproduced Sol's
+first failure through `make test-fast`: exit **2**, first checklist and remedy
+for already-registered **clj-surgeon.admit-patch-test**, pin **165 → 166**.
+The focused production JVM lane runner took **10,883 ms**; the real Make lane
+receipt measured **9,108 ms**, both above 8,000 ms. Full logs are
+`round6/red-make.log` and `round6/red-lane.log` under the approved scratch root.
+The replacement copied-file matrix, run against the original gate bodies,
+passed the valid seed and masks 1–3, then rejected mask 4 because its first
+checklist was again `admit-patch-test`. This is the global-count interaction
+that the old evaluated/redefined specimen did not exercise.
+
+**Semantics and cost.** The repository sweep removes count facts from local
+namespace checklists. It emits one separate `:scope :repository`, `:surface 3`
+row carrying the actual pin, discovered/runtime union count and the sorted
+`disk − manifest − excluded` subjects. Complete registered namespaces emit no
+checklist. Local defects retain the author's lane (or an existing manifest lane)
+and the requested runtime. The lane gate shares one delayed checklist per
+namespace run; the delay is discarded between runs. A repository snapshot also
+parses the portability inventory and markdown once, rather than once per subject.
+Copied-root probes calculate their own snapshot and do not use the live-root cache.
+
+**Count-only edge case.** Mask **4** has only the count pin missing: its planted
+namespace is already in the manifest, so `disk − manifest` is empty. Requiring a
+namespace checklist in that case conflicts with the requirement that registered
+namespaces receive none. This round uses the repository-only diagnostic, with
+no namespace checklist or namespace registration remedy. The clarification and
+this working assumption were stated during execution. The other **30 nonzero
+masks** require the planted namespace and its exact requested
+`LANE='battery' RUNTIME='jvm'`; the real Make plant separately verifies `fast/jvm`.
+This report does not claim that all 31 nonzero masks emit a namespace checklist.
+
+**Class oracle.** The battery uses a complete repository copy below the inherited
+admitted temporary root (this run: `/var/tmp/forge/regns-fx/round6/`). A seed is
+registered through actual freshly executed controls. Each mask restores the seed's
+file bytes before removing its surfaces. The helper obtains its cold JVM argv
+from the production coordinator's `lane-command`:
+
+```text
+clojure -J-Xmx1024m -M:clj-surgeon/test-deps -m clj-surgeon.mcp-test-runner --emit-edn lane.edn --ns clj-surgeon.lane-manifest-test
+```
+
+No diagnostic, repository Var, or test body is replaced. Only the actual
+registration files and the surface-3 pin literal change in the copy. The oracle
+checks the **first failure block**, all emitted checklist subjects, exact remedy,
+count-row cardinality, no test errors and a lane wall **below 8,000 ms** in every
+cell. Mask 0 must pass the real runner. The fast representative removes one real
+namespace's declarations from copied registration files, including their real
+count and controls; it emits no child process. The obsolete 99b57bd1 matrix hash
+is retired, while its original qualified names remain protected.
+
+**Final matrix:** **32/32 cells passed** (valid seed plus all 31 nonzero masks).
+The battery namespace took **341,403 ms (341.403 s)**, including seed
+controls, repository copying, mask setup, all cold lane executions and cleanup;
+runner result **1 test, 1 assertion, 0 failures, 0 errors**, no isolation violations.
+The slowest nested lane took **5,455 ms**.
+
+| Mask | Lane wall (ms) | First failing gate | Checklist subject |
+| --- | ---: | --- | --- |
+| 0 | 5221 | none (valid seed) | none |
+| 1 | 5145 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 2 | 5310 | every-manifest-namespace-declares-its-lane-in-its-own-ns-form | sol-first-contact-test |
+| 3 | 5126 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 4 | 5142 | every-manifest-entry-exists-on-disk | repository only |
+| 5 | 5415 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 6 | 5320 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 7 | 5447 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 8 | 5147 | every-test-namespace-on-disk-is-accounted-for | sol-first-contact-test |
+| 9 | 5114 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 10 | 5408 | every-manifest-namespace-declares-its-lane-in-its-own-ns-form | sol-first-contact-test |
+| 11 | 5268 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 12 | 5167 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 13 | 5209 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 14 | 5178 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 15 | 5127 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 16 | 5157 | runtime-portability-controls-cover-every-assignment | sol-first-contact-test |
+| 17 | 5455 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 18 | 5247 | every-manifest-namespace-declares-its-lane-in-its-own-ns-form | sol-first-contact-test |
+| 19 | 5173 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 20 | 5396 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 21 | 5267 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 22 | 5337 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 23 | 5213 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 24 | 5069 | runtime-portability-controls-cover-every-assignment | sol-first-contact-test |
+| 25 | 5144 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 26 | 5199 | every-manifest-namespace-declares-its-lane-in-its-own-ns-form | sol-first-contact-test |
+| 27 | 5223 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 28 | 5373 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 29 | 5151 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 30 | 5141 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+| 31 | 5338 | every-manifest-entry-exists-on-disk | sol-first-contact-test |
+
+The preliminary matrix took **393,668 ms** with the first cache change. Two
+nested cells measured **8,016 / 8,945 ms** while a full fast gate was also running;
+that preliminary oracle did not yet enforce the nested budget. Those measurements
+are retained as non-qualifying. After sharing parsed projection data, the final
+matrix above enforces the budget and passes every cell. No general speed or
+routed-operation performance admission is claimed.
+
+The first strict matrix execution took **337,496 ms** and passed all cell
+assertions, but its receipt exposed the separate **300,000 ms battery namespace**
+default (the **1,800,000 ms** limit is the whole cadence). The existing measured
+exception mechanism now gives this namespace **800,000 ms**, approximately twice
+the largest measured 393,668 ms cost of the required cold class oracle. No fast
+limit or whole-battery limit was raised. The final matrix result above is a fresh
+execution with that declared override and no isolation violations.
+
+**Final focused and landing verification.**
+
+| Execution | Result | Namespace / coordinator wall |
+| --- | --- | --- |
+| lane-manifest-test alone, no plant | exit 0; 46 tests, 2064 passes, 0 failures/errors; no isolation violations | **5,105 ms** |
+| lane-manifest-test alone, Sol plant in copy | exit 5; 46 tests, 2059 passes, 5 intended registration failures, 0 errors; no isolation violations | **5,285 ms** |
+| `make test-fast`, Sol plant in archive copy | exit **2**; first checklist is Sol's namespace; 1265 tests, 13529 passes, 5 intended registration failures, 0 errors | lane **4,193 ms**; coordinator **32,388 ms** |
+
+The first failure from the final real `make test-fast` is pasted verbatim below,
+through its complete `actual` line. No already-registered namespace appears as a
+**checklist subject**; the assertion's set dump still necessarily lists the full
+inventory being compared.
+
+```text
+FAIL in (every-manifest-entry-exists-on-disk) (/var/tmp/forge/regns-fx/round6/green/test/clj_surgeon/lane_manifest_test.clj:185)
+every discovered test namespace has a closed runtime declaration
+Registration checklist for clj-surgeon.sol-first-contact-test: 1 lane/runtime test/clj_surgeon/lane_manifest.clj -> [manifest portability-runtimes] actual=[nil nil] expected=[:fast :jvm]; 2 ns metadata test/clj_surgeon/sol_first_contact_test.clj -> ns actual=:fast expected=:fast; 4 adoption test/clj_surgeon/lane_manifest_test.clj -> adopted-since-round-one actual=false expected=true; 5 census/control ["test/clj_surgeon/deftest_census.edn" "docs/observations/2026-09-12-bbtower-block-b/attempt22/portability-controls.edn"] -> [deftest-census portability-controls] actual={:missing-tests #{clj-surgeon.sol-first-contact-test/works}, :controls-valid? false} expected={:missing-tests #{}, :controls-valid? true}. Remedy: make register-test-ns NS='clj-surgeon.sol-first-contact-test' LANE='fast' RUNTIME='jvm'
+Repository registration count: runtime count test/clj_surgeon/lane_manifest_test.clj -> every-manifest-entry-exists-on-disk actual=165 expected=166; unregistered namespaces=[clj-surgeon.sol-first-contact-test]. Reconcile the repository pin with the discovered/runtime union.
+expected: (= (set (keys (clojure.core/deref on-disk))) (set (keys runtimes)))
+  actual: (not (= #{clj-surgeon.mcp-http-server-test clj-surgeon.require-change-boundary-test clj-surgeon.show-form-test clj-surgeon.mcp-recovery-test clj-surgeon.parser-admission-test clj-surgeon.core-discovery-test clj-surgeon.mission-plain-forms-test clj-surgeon.mission-git-process-test clj-surgeon.move-test clj-surgeon.outermost-test clj-surgeon.mcp-expect-guard-test clj-surgeon.workspace-onboarding-test clj-surgeon.mcp-alias-migration-test clj-surgeon.sol-first-contact-test clj-surgeon.relation-census-test clj-surgeon.mission-test clj-surgeon.move-dependency-test clj-surgeon.extract-test clj-surgeon.lens-query-test clj-surgeon.mcp-paths-test clj-surgeon.ns-isolation-test clj-surgeon.tmp-leak-support-test clj-surgeon.mission-candidate-race-test clj-surgeon.mission-git-ledger-test clj-surgeon.ls-tree-test clj-surgeon.mission-candidate-test clj-surgeon.mission-git-fence-test clj-surgeon.battery-state-admission-test clj-surgeon.receipt-artifacts-boundary-test clj-surgeon.cljc.analyze-test clj-surgeon.mission-typist-executor-test clj-surgeon.cell-b-oracle-test clj-surgeon.mcp-relation-census-launcher-test clj-surgeon.mcp-extraction-plan-test clj-surgeon.mcp-semantic-client-test clj-surgeon.diagnostic-delta-test clj-surgeon.mission-run-test clj-surgeon.telemetry-events-test clj-surgeon.fast-lane-isolation-test clj-surgeon.mcp-schema-test clj-surgeon.memory.oom-reproduction-test clj-surgeon.mission-usage-test clj-surgeon.mission-forms-source-test clj-surgeon.mission-git-submodule-test clj-surgeon.mcp-telemetry-test clj-surgeon.mission-provider-fallback-events-test clj-surgeon.mcp-workspace-test clj-surgeon.mcp-formatter-test clj-surgeon.mcp-feature-thread-test clj-surgeon.reader-eval-fence-test clj-surgeon.insertion-gap-test clj-surgeon.mcp-extraction-test clj-surgeon.mcp-cold-verify-test clj-surgeon.file-ops-test clj-surgeon.mission-git-identity-test clj-surgeon.namespace-split-test clj-surgeon.worktree-lifecycle-cli-test clj-surgeon.mcp-program-tool-test clj-surgeon.analyze-test clj-surgeon.memory-battery-test clj-surgeon.mission-display-test clj-surgeon.scope-stream-test clj-surgeon.admit-patch-test clj-surgeon.mcp-read-request-normalization-test clj-surgeon.registration-controls-test clj-surgeon.mcp-operation-registry-test clj-surgeon.battery-ledger-test clj-surgeon.mcp-tool-test clj-surgeon.failure-report-test clj-surgeon.mission-git-boundary-test clj-surgeon.structural-lens-test clj-surgeon.mcp-inspect-tool-test clj-surgeon.census-pool-test clj-surgeon.namespace-split-warm-test clj-surgeon.mission-git-test clj-surgeon.diff-impact-test clj-surgeon.worktree-lifecycle-recovery-test clj-surgeon.alias-migration-test clj-surgeon.mcp-server-test clj-surgeon.mcp-create-files-test clj-surgeon.mcp-helper-extraction-test clj-surgeon.mission-forms-test clj-surgeon.outline-test clj-surgeon.mcp-prepared-confirmation-test clj-surgeon.rename-alias-parity-test clj-surgeon.platform-selector-test clj-surgeon.mcp-feature-thread-sed-test clj-surgeon.mcp-compact-edit-test clj-surgeon.mcp-contract-test clj-surgeon.xray-test clj-surgeon.insert-forms-test clj-surgeon.analyzer-contract-test clj-surgeon.mcp-combinable-transaction-test clj-surgeon.mission-commit-cli-test clj-surgeon.mcp-compact-relations-test clj-surgeon.memory.journal-green-test clj-surgeon.mcp-prepared-wire-test clj-surgeon.mission-events-test clj-surgeon.syntax-var-refs-test clj-surgeon.mcp-prepared-request-test clj-surgeon.mission-typist-executor-admission-test clj-surgeon.rename-alias-receipt-test clj-surgeon.rename-alias-performance-test clj-surgeon.battery-parallel-test clj-surgeon.mcp-hot-verify-test clj-surgeon.helper-extraction-test clj-surgeon.test-registration-battery-test clj-surgeon.mcp-operation-test clj-surgeon.mission-phase-events-test clj-surgeon.edit-dsl-test clj-surgeon.worktree-lifecycle-test clj-surgeon.split-proof-gate-test clj-surgeon.outline-corpus-integration-test clj-surgeon.mcp-operation-async-test clj-surgeon.require-change-test clj-surgeon.mcp-write-refusal-test clj-surgeon.recovery-test clj-surgeon.mcp-relation-census-round20-test clj-surgeon.insert-forms-parity-test clj-surgeon.mission-fallback-test clj-surgeon.partition-all-test clj-surgeon.repository-hygiene-test clj-surgeon.mcp-compact-location-test clj-surgeon.lane-manifest-test clj-surgeon.agent-routing-test clj-surgeon.mcp-intent-contract-test clj-surgeon.outline-memory-test clj-surgeon.cljc.merge-test clj-surgeon.mission-usage-executor-test clj-surgeon.mcp-compact-edit-fields-test clj-surgeon.cljc.split-test clj-surgeon.extract-header-test clj-surgeon.fix-declares-test clj-surgeon.mission-typist-test clj-surgeon.quoted-var-refs-test clj-surgeon.state-home-admission-test clj-surgeon.cli-dispatch-test clj-surgeon.receipt-booleans-test clj-surgeon.mcp-relation-census-test clj-surgeon.edit-test clj-surgeon.jvm-error-test clj-surgeon.cljc-existing-ops-test clj-surgeon.forms-test clj-surgeon.rename-alias-test clj-surgeon.insert-forms-receipt-test clj-surgeon.worktree-lifecycle-io-test clj-surgeon.owner-hypotheses-test clj-surgeon.split-proof-gate-boundary-test clj-surgeon.rename-test clj-surgeon.outline-differential-test clj-surgeon.help-test clj-surgeon.install-test clj-surgeon.mcp-change-buffer-test clj-surgeon.worktree-lifecycle-prune-test clj-surgeon.probe-state-test clj-surgeon.mcp-process-test clj-surgeon.splice-envelope-test clj-surgeon.mcp-namespace-split-test clj-surgeon.mcp-inspect-contract-test clj-surgeon.cljc.require-ops-test clj-surgeon.mcp-inspect-cold-job-test clj-surgeon.edn-config-integration-test clj-surgeon.intent-transaction-test clj-surgeon.mission-publication-test clj-surgeon.operation-algebra-test clj-surgeon.txn-journal-test} #{clj-surgeon.mcp-http-server-test clj-surgeon.require-change-boundary-test clj-surgeon.show-form-test clj-surgeon.mcp-recovery-test clj-surgeon.parser-admission-test clj-surgeon.core-discovery-test clj-surgeon.mission-plain-forms-test clj-surgeon.mission-git-process-test clj-surgeon.move-test clj-surgeon.outermost-test clj-surgeon.mcp-expect-guard-test clj-surgeon.workspace-onboarding-test clj-surgeon.mcp-alias-migration-test clj-surgeon.relation-census-test clj-surgeon.mission-test clj-surgeon.move-dependency-test clj-surgeon.extract-test clj-surgeon.lens-query-test clj-surgeon.mcp-paths-test clj-surgeon.ns-isolation-test clj-surgeon.tmp-leak-support-test clj-surgeon.mission-candidate-race-test clj-surgeon.mission-git-ledger-test clj-surgeon.ls-tree-test clj-surgeon.mission-candidate-test clj-surgeon.mission-git-fence-test clj-surgeon.battery-state-admission-test clj-surgeon.receipt-artifacts-boundary-test clj-surgeon.cljc.analyze-test clj-surgeon.mission-typist-executor-test clj-surgeon.cell-b-oracle-test clj-surgeon.mcp-relation-census-launcher-test clj-surgeon.mcp-extraction-plan-test clj-surgeon.mcp-semantic-client-test clj-surgeon.diagnostic-delta-test clj-surgeon.mission-run-test clj-surgeon.telemetry-events-test clj-surgeon.fast-lane-isolation-test clj-surgeon.mcp-schema-test clj-surgeon.memory.oom-reproduction-test clj-surgeon.mission-usage-test clj-surgeon.mission-forms-source-test clj-surgeon.mission-git-submodule-test clj-surgeon.mcp-telemetry-test clj-surgeon.mission-provider-fallback-events-test clj-surgeon.mcp-workspace-test clj-surgeon.mcp-formatter-test clj-surgeon.mcp-feature-thread-test clj-surgeon.reader-eval-fence-test clj-surgeon.insertion-gap-test clj-surgeon.mcp-extraction-test clj-surgeon.mcp-cold-verify-test clj-surgeon.file-ops-test clj-surgeon.mission-git-identity-test clj-surgeon.namespace-split-test clj-surgeon.worktree-lifecycle-cli-test clj-surgeon.mcp-program-tool-test clj-surgeon.analyze-test clj-surgeon.memory-battery-test clj-surgeon.mission-display-test clj-surgeon.scope-stream-test clj-surgeon.admit-patch-test clj-surgeon.mcp-read-request-normalization-test clj-surgeon.registration-controls-test clj-surgeon.mcp-operation-registry-test clj-surgeon.battery-ledger-test clj-surgeon.mcp-tool-test clj-surgeon.failure-report-test clj-surgeon.mission-git-boundary-test clj-surgeon.structural-lens-test clj-surgeon.mcp-inspect-tool-test clj-surgeon.census-pool-test clj-surgeon.namespace-split-warm-test clj-surgeon.mission-git-test clj-surgeon.diff-impact-test clj-surgeon.worktree-lifecycle-recovery-test clj-surgeon.alias-migration-test clj-surgeon.mcp-server-test clj-surgeon.mcp-create-files-test clj-surgeon.mcp-helper-extraction-test clj-surgeon.mission-forms-test clj-surgeon.outline-test clj-surgeon.mcp-prepared-confirmation-test clj-surgeon.rename-alias-parity-test clj-surgeon.platform-selector-test clj-surgeon.mcp-feature-thread-sed-test clj-surgeon.mcp-compact-edit-test clj-surgeon.mcp-contract-test clj-surgeon.xray-test clj-surgeon.insert-forms-test clj-surgeon.analyzer-contract-test clj-surgeon.mcp-combinable-transaction-test clj-surgeon.mission-commit-cli-test clj-surgeon.mcp-compact-relations-test clj-surgeon.memory.journal-green-test clj-surgeon.mcp-prepared-wire-test clj-surgeon.mission-events-test clj-surgeon.syntax-var-refs-test clj-surgeon.mcp-prepared-request-test clj-surgeon.mission-typist-executor-admission-test clj-surgeon.rename-alias-receipt-test clj-surgeon.rename-alias-performance-test clj-surgeon.battery-parallel-test clj-surgeon.mcp-hot-verify-test clj-surgeon.helper-extraction-test clj-surgeon.test-registration-battery-test clj-surgeon.mcp-operation-test clj-surgeon.mission-phase-events-test clj-surgeon.edit-dsl-test clj-surgeon.worktree-lifecycle-test clj-surgeon.split-proof-gate-test clj-surgeon.outline-corpus-integration-test clj-surgeon.mcp-operation-async-test clj-surgeon.require-change-test clj-surgeon.mcp-write-refusal-test clj-surgeon.recovery-test clj-surgeon.mcp-relation-census-round20-test clj-surgeon.insert-forms-parity-test clj-surgeon.mission-fallback-test clj-surgeon.partition-all-test clj-surgeon.repository-hygiene-test clj-surgeon.mcp-compact-location-test clj-surgeon.lane-manifest-test clj-surgeon.agent-routing-test clj-surgeon.mcp-intent-contract-test clj-surgeon.outline-memory-test clj-surgeon.cljc.merge-test clj-surgeon.mission-usage-executor-test clj-surgeon.mcp-compact-edit-fields-test clj-surgeon.cljc.split-test clj-surgeon.extract-header-test clj-surgeon.fix-declares-test clj-surgeon.mission-typist-test clj-surgeon.quoted-var-refs-test clj-surgeon.state-home-admission-test clj-surgeon.cli-dispatch-test clj-surgeon.receipt-booleans-test clj-surgeon.mcp-relation-census-test clj-surgeon.edit-test clj-surgeon.jvm-error-test clj-surgeon.cljc-existing-ops-test clj-surgeon.forms-test clj-surgeon.rename-alias-test clj-surgeon.insert-forms-receipt-test clj-surgeon.worktree-lifecycle-io-test clj-surgeon.owner-hypotheses-test clj-surgeon.split-proof-gate-boundary-test clj-surgeon.rename-test clj-surgeon.outline-differential-test clj-surgeon.help-test clj-surgeon.install-test clj-surgeon.mcp-change-buffer-test clj-surgeon.worktree-lifecycle-prune-test clj-surgeon.probe-state-test clj-surgeon.mcp-process-test clj-surgeon.splice-envelope-test clj-surgeon.mcp-namespace-split-test clj-surgeon.mcp-inspect-contract-test clj-surgeon.cljc.require-ops-test clj-surgeon.mcp-inspect-cold-job-test clj-surgeon.edn-config-integration-test clj-surgeon.intent-transaction-test clj-surgeon.mission-publication-test clj-surgeon.operation-algebra-test clj-surgeon.txn-journal-test}))
+```
+
+**Other checks and preservation.** Standard Clojure Style formatted the five
+changed Clojure files; paved `~/bin/clj-kondo` reported **0 errors, 0 warnings**.
+Python syntax parsed successfully. The focused budget-isolation suite passed
+**27 tests / 167 assertions**, with no failures, errors or isolation violations. `make census-regenerate` exited **0** with
+**+0/-0**. Qualified-name comparison with 99b57bd1: **45 → 47**, missing **[]**,
+duplicates **[]**. The two protected ledgers are byte-identical to the starting tip:
+
+```text
+08a1d6ee9c7f319c4a146ec23798e535273a47b7633697354014b318bff8ad39  docs/observations/battery-ledger.edn
+154faae0c803099d1bfe88e8563a8cf85cdf2376af4e4309b10bd850cd6ef264  docs/observations/battery-namespace-walls.edn
+```
+
+No `make test` or `make test-battery` ran on the live tree. The matrix's ordinary
+runner executions and all plants were in copies; no live namespace was planted.
+No product path derives from the operator's scratch root. The focused battery
+runner was invoked directly, without the full battery suite or ledger publication.
+All matrix fixtures clean up in `finally`; retained verification logs and copies
+remain under the approved scratch root for review. Cell logs were independently
+retained before cleanup as `round6/final-matrix-logs/`, with
+`round6/final-matrix-cells.json`; aggregate receipts are `final-battery.edn`,
+`final-lane-clean.edn`, `final-lane-plant.edn`, and `final-make-lane.json`.
+The test wrapper uses `println` so successful per-cell evidence is flushed
+before the runner exits; the final matrix log includes all 32 JSON cell receipts.

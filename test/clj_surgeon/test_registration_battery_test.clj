@@ -10,5 +10,5 @@
 (deftest registration-first-contact-gate-matrix
   (let [result (shell/sh "python3" "test/regns_gate_matrix.py"
                  "--scratch" (System/getProperty "java.io.tmpdir"))]
-    (print (:out result))
+    (println (:out result))
     (is (zero? (:exit result)) (str (:out result) (:err result)))))

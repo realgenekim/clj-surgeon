@@ -55,17 +55,29 @@ def run_matrix(scratch):
             code, wall = run(config["argv"], log)
             output = log.read_text()
             names = re.findall(r"Registration checklist for ([^: ]+):", output)
+            failure = re.search(r"FAIL in \(([^)]+)\).*?(?=\n\n|\Z)", output, re.S)
+            first_failure = failure.group(0) if failure else ""
+            walls = re.findall(r"(\d+) ms  clj-surgeon.lane-manifest-test", output)
+            lane_wall = int(walls[0]) if walls else None
             expected = "clj-surgeon.sol-first-contact-test"
             if mask == 0:
                 okay = code == 0 and not names
             elif mask == 4:
                 # A pin-only defect has no disk-minus-manifest subject.
-                okay = code != 0 and not names and "Repository registration count" in output
+                okay = (code != 0 and not names
+                        and "Repository registration count" in first_failure)
             else:
                 remedy = f"Remedy: make register-test-ns NS='{expected}' LANE='battery' RUNTIME='jvm'"
                 okay = (code != 0 and bool(names) and set(names) == {expected}
-                        and remedy in output.split("Registration checklist for ", 1)[1].splitlines()[0])
+                        and remedy in first_failure)
+            okay = (okay and lane_wall is not None and lane_wall < 8000
+                    and "ERROR in (" not in output)
+            if mask:
+                okay = (okay and first_failure.count("Repository registration count:")
+                        == (1 if mask & 4 else 0))
             row = {"mask": mask, "exit": code, "wall_s": round(wall, 3),
+                   "lane_wall_ms": lane_wall,
+                   "first_gate": failure.group(1) if failure else None,
                    "first": names[0] if names else None, "okay": okay}
             receipts.append(row)
             print("REAL-FIRST-CONTACT", json.dumps(row), flush=True)

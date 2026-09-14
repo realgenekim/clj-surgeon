@@ -36,12 +36,17 @@ This is process-local rollback, not crash-atomic multi-file publication. Concurr
 noncooperating source writers are outside that guarantee and snapshots are checked
 before publication. A repeated invocation preserves enrollment bytes but executes and refreshes control artifacts.
 
-Fast pure and stubbed-boundary witnesses remain in lane-manifest-test, with one ordinary-order first-contact mask. The complete 32-mask gate matrix lives in test-registration-battery-test (:battery), enrolled through register-test-ns. Its matrix body is preserved byte-for-byte from 99b57bd1; a source witness freezes the original test names and matrix digest. The existing qualified fast name remains the representative witness, so census changes are additions only. The executed path/acceptance matrix and writer census live in registration-controls-test, enrolled by the entrance itself. A copied
-repository with a real fixture namespace demonstrates author metadata, enrollment,
-actual focused control results, whole oracle success, preserved enrollment bytes on repeat and
-conflict preservation. Pure tests exhaust missing-surface combinations and CST
-preservation; boundary tests cover root scanning and execution refusal. Protected
-battery ledgers are never output paths.
+Fast pure and stubbed-boundary witnesses remain in lane-manifest-test, with one
+copied-snapshot first-contact mask. The complete cold gate matrix lives in
+test-registration-battery-test (:battery), enrolled through register-test-ns.
+It seeds a copied repository through actual registration controls and restores
+seed file bytes before each of the 31 missing-surface masks and the zero-mask
+control. Every cell launches the production coordinator's lane-command for
+lane-manifest-test. The first emitted checklist names only the defective subject
+and its requested lane/runtime; count-only drift emits a repository row instead.
+The fast qualified name and all original test names remain, keeping the census
+additions-only. The executed path/acceptance matrix and writer census live in
+registration-controls-test. Protected battery ledgers are never output paths.
 
 The initial entrance admits `.clj` test files and the repository's literal
 map/set registration shapes. Other source shapes refuse rather than being
@@ -51,9 +56,8 @@ is exactly the existing gate's JVM-assignment exception; it is not a passing JVM
 test claim. Historical controls remain diagnostic inputs to the ordinary inventory oracle only; the mutation entrance never reuses them as evidence. A killed process may leave the named lock file for manual recovery.
 
 Round 3 class repairs: the earliest registry-sensitive assertion in each ordinary
-gate carries the complete checklist and exact remedy. A 32-mask witness executes
-the real gate Vars in namespace order and inspects the first failure, including
-Sol's runtime declaration assertion. Census derivation, removed-name refusal and
+gate carries the complete checklist and exact remedy. The cold copied-repository matrix inspects the first emitted checklist, including
+Sol's runtime declaration assertion, without replacing repository Vars or test bodies. Census derivation, removed-name refusal and
 canonical one-name-per-line serialization belong to `clj-surgeon.test-census`;
 both registration and explicit regeneration delegate to it. The registration
 transaction supplies its guarded writer to retain rollback. All working paths
@@ -79,3 +83,9 @@ one real namespace's declarations in a copied snapshot and reads the real count.
 Original qualified test names remain; the old matrix digest is retired because it
 froze the seam that concealed this defect. No product output path is based on the
 operator's scratch path; the harness inherits its admitted temporary directory.
+
+The complete cold battery matrix has a measured namespace budget of 800000 ms
+(393668 ms before projection sharing; 337496 ms afterward), declared through
+the existing namespace override map. Its nested fast namespace retains 8000 ms,
+and the battery cadence retains 1800000 ms. The matrix asserts the nested budget
+for every cell, including expected refusals.
