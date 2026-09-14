@@ -89,3 +89,16 @@ The complete cold battery matrix has a measured namespace budget of 800000 ms
 the existing namespace override map. Its nested fast namespace retains 8000 ms,
 and the battery cadence retains 1800000 ms. The matrix asserts the nested budget
 for every cell, including expected refusals.
+
+Round 7 isolation (REGNS-012): the matrix receives explicit source and scratch
+roots, and the file fixture receives its repository root. Each mask runs real
+`make -C <copy> test-fast` with cwd set to that copy. Each cell owns a scratch
+envelope containing its repository, temporary directory and external state root;
+the state root is explicitly admitted through the artifact-root environment.
+Inherited checkout routing and write authorization are discarded. A separate
+real manifest JVM observes the caller concurrently. The witness compares git
+status and SHA-256 snapshots of registration/census/control surfaces and caller
+state walls/controls, including after failure. Child failures report their root,
+command and separate diagnostic/budget results so expected copied failures cannot
+be mistaken for live-tree failures. The trace and baseline must establish the
+actual failure; no contamination RED may be inferred from nested log text alone.

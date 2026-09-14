@@ -63,6 +63,11 @@ evidence. The low-level design must specify this execution boundary, the
 accepted reason representation, and failure handling before implementation.
 The ordinary census gate must continue to reject removed tests.
 
+Copied registration acceptance runs must preserve the caller's registration and
+state bytes while its ordinary manifest gate executes concurrently. Repository
+and scratch roots are explicit inputs, and child routing cannot inherit the live
+checkout's write destinations (REGNS-012).
+
 Acceptance requires committed failing tests before implementation, a temp-root
 fixture missing surfaces 2–5 whose single diagnostic lists all four, and a
 temp repository copy proving command-to-oracle success, fresh executed repeat, and

@@ -25,3 +25,5 @@ exercise all 31 nonzero masks on copied files using the landing gate's cold lane
 runner, never replaced test bodies or repository Vars. The fast representative
 uses real copied registration files and their actual count. The namespace run,
 with and without a newcomer, must remain below its existing 8000 ms budget.
+
+- [ ] **REGNS-012**: While a copied registration matrix executes concurrently with the caller's manifest gate, the caller's git status and registration, census, state walls and control bytes shall remain unchanged. Misreading: a child's printed expected refusal proves caller contamination; or cwd alone isolates inherited routing. Witness: registration-first-contact-gate-matrix and MatrixIsolationTest.
