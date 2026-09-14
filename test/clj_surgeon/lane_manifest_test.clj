@@ -32,7 +32,12 @@
 ;; RATCHET (2026-09-04, inb-9483a4): every fixture directory this namespace
 ;; creates is tracked and swept, on failure as well as on success.
 (def ^:private temp-roots (atom []))
-(use-fixtures :each (tmp-leak/tracking-temp-dir-fixture temp-roots))
+(use-fixtures :each (tmp-leak/tracking-temp-dir-fixture temp-roots)
+  (fn [f]
+    (with-redefs-fn
+      {(ns-resolve 'clj-surgeon.test-registration 'control!)
+       (fn [& _] (throw (ex-info "fast witnesses must stub control execution" {})))}
+      f)))
 
 (defn- temp-dir
   [prefix]
@@ -183,7 +188,7 @@
   (testing "every discovered test namespace has a closed runtime declaration"
     (let [runtimes @(requiring-resolve 'clj-surgeon.lane-manifest/namespace-runtimes)
           message (registration-message)]
-      (is (= 163 (count runtimes)) message)
+      (is (= 164 (count runtimes)) message)
       (is (= (set (keys @on-disk)) (set (keys runtimes))) message)
       (is (= #{:bb :jvm} (set (vals runtimes))))
       (is (= :bb (get runtimes 'clj-surgeon.forms-test)))
@@ -407,7 +412,9 @@
                       {:bb-load {:status :load-failed :mode "load" :namespace n
                                  :runtime :bb :exit 1 :message "unsupported class"}})))))
   (is (= (set (keys lm/namespace-runtimes))
-         (set (keys lm/namespace-runtime-controls))) (registration-message))
+         (set (keys lm/namespace-runtime-controls)))
+      (when-not (= (set (keys lm/namespace-runtimes)) (set (keys lm/namespace-runtime-controls)))
+        (registration-message)))
   (doseq [[n paths] lm/namespace-runtime-controls]
     (let [controls (into {}
                          (for [[runtime path] paths
@@ -437,7 +444,8 @@
 (deftest generated-portability-census-agrees-with-all-inventories
   (is (= "All 0 assigned namespaces are listed." (summary/population-line {})))
   (is (= "All 2 assigned namespaces are listed." (summary/population-line {'a {} 'b {}})))
-  (let [root "docs/observations/2026-09-12-bbtower-block-b/attempt22/"
+  (let [message (delay (registration-message))
+        root "docs/observations/2026-09-12-bbtower-block-b/attempt22/"
         controls (edn/read-string (slurp (str root "portability-controls.edn")))
         markdown (slurp (str root "portability-census.md"))
         header (Long/parseLong (second (re-find #"All (\d+) assigned namespaces" markdown)))
@@ -445,11 +453,11 @@
         names (map (comp symbol second) rows)
         census (edn/read-string (slurp "test/clj_surgeon/deftest_census.edn"))]
     (is (= header (count controls) (count rows)))
-    (is (= (set names) (set (keys controls)) (set (keys lm/namespace-runtimes))) (registration-message))
+    (is (= (set names) (set (keys controls)) (set (keys lm/namespace-runtimes))) (force message))
     (is (= (count names) (count (set names))))
     (is (= (set (keys lm/manifest))
-           (set (map (comp symbol namespace) census))) (registration-message))
-    (is (= census (derived-census)) (registration-message))
+           (set (map (comp symbol namespace) census))) (force message))
+    (is (= census (derived-census)) (force message))
     (doseq [[_ n runtime cadence classification] rows]
       (let [n (symbol n)]
         (is (= (lm/namespace-runtimes n) (edn/read-string runtime)))
@@ -645,7 +653,7 @@
                (str/join "; " (map (fn [[s want got]]
                                      (format "%s want %s got %s" s want (pr-str got)))
                                    (take 10 wrong)))
-               (when (> (count wrong) 10) " ...") "\n" (registration-message))))))
+               (when (> (count wrong) 10) " ...") "\n" (when (seq wrong) (registration-message)))))))
 
 (deftest loaded-namespaces-carry-their-lane-at-runtime
   (testing "loaded metadata agrees; one conditional assertion per manifest row"
@@ -831,7 +839,9 @@
       (testing "a namespace the tree declares and the census omits is named"
         (is (= '[clj-surgeon.fixture-newcomer-test] (:missing diff)))
         (is (empty? (:extra diff)))
-        (is (str/includes? (census-diff-message "lane :fast" diff)
+        (is (str/includes? (with-redefs [reg/repository-checklist (constantly [])]
+                             ;; This specimen is the fixture tree above, not the live checkout.
+                             (census-diff-message "lane :fast" diff))
                            "clj-surgeon.fixture-newcomer-test")))
       (testing "and a COUNT cannot see the defect a set does"
         ;; The 2026-09-08 merge in one fixture: same size, different members.
@@ -982,7 +992,7 @@
      clj-surgeon.mcp-helper-extraction-test ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
      clj-surgeon.battery-state-admission-test ; STATE-HOME-009/010: real battery read/write root and descendant refusal matrix.
      clj-surgeon.state-home-admission-test
-     clj-surgeon.probe-state-test clj-surgeon.registration-controls-test}) ; Round 7: 72 in-process admission cells in :fast; five real Make cells in :battery, plus unchanged four-mode warm witness.
+     clj-surgeon.probe-state-test clj-surgeon.registration-controls-test clj-surgeon.test-registration-battery-test}) ; Round 7: 72 in-process admission cells in :fast; five real Make cells in :battery, plus unchanged four-mode warm witness.
 
 (def ^:private census-ledger-path
   "The deftest ledger: ONE LINE PER FULLY QUALIFIED DEFTEST NAME, sorted.
@@ -1129,8 +1139,10 @@
       (is (str/includes? msg "NOTHING WAS WRITTEN"))
       (is (str/includes? msg regenerate-entrance))))
   (testing "a mismatch sends the reviewer back to the named ledger diff"
-    (let [msg (census-ledger-message {:added ['fixture/new]
-                                      :removed ['fixture/old]})]
+    (let [msg (with-redefs [reg/repository-checklist (constantly [])]
+                ;; A pure refusal-format specimen has no live registration snapshot.
+                (census-ledger-message {:added ['fixture/new]
+                                        :removed ['fixture/old]}))]
       (is (str/includes? msg "READ THE LEDGER DIFF"))))
   (testing "no request, no write -- inside make or outside it"
     (is (= :skip (regenerate-decision {})))
@@ -1790,47 +1802,23 @@
         (is (= :battery (declared-lane (first-form battery)))))))
   (let [source (slurp "test/clj_surgeon/lane_manifest_test.clj")
         form (last (filter #(and (seq? %) (= 'deftest (first %))
-                                (= 'registration-first-contact-gate-matrix (second %)))
-                          (map z/sexpr ((ns-resolve 'clj-surgeon.test-registration 'forms) source))))]
+                              (= 'registration-first-contact-gate-matrix (second %)))
+                     (map z/sexpr ((ns-resolve 'clj-surgeon.test-registration 'forms) source))))]
     (is (not-any? #{'(range 32)} (tree-seq coll? seq form))
         "fast first contact exercises one representative mask")))
-
-(defn- gate-var [n] (ns-resolve 'clj-surgeon.lane-manifest-test n))
 
 ;; INTENT-TEST: REGNS-006
 ;; @spec REGNS-006
 (deftest registration-first-contact-gate-matrix
-  (let [pass-row (fn [n runtime] {:namespace n :runtime runtime :status :passed :exit 0
-                                  :result {:test 1 :pass 1 :fail 0 :error 0}})
-        n 'clj-surgeon.first-contact-fixture-test
-        before (assoc (reg/snapshot "." n)
-                      "test/clj_surgeon/first_contact_fixture_test.clj"
-                      "(ns clj-surgeon.first-contact-fixture-test {:lane :battery})\n(deftest works (is true))\n")
-        request {:namespace n :lane :battery :runtime :jvm}
-        planned (reg/plan before request)
-        _ (is (:ok planned) (pr-str planned))
-        registered (merge before (:candidate planned))
-        model-base (ns-resolve 'clj-surgeon.test-registration 'model-base)
-        base (model-base registered)
-        paths (reg/control-paths n)
-        receipt-root (str (tmp-leak/track! temp-roots
-                            (java.nio.file.Files/createTempDirectory "regns-gate-"
-                              (into-array java.nio.file.attribute.FileAttribute []))))
-        control-files (into {} (for [[k _] paths]
-                                 (let [p (str (io/file receipt-root (str (name k) ".edn")))]
-                                   (spit p (pr-str (pass-row n k))) [k p])))
-        ;; Fixture evidence is only input to the read-only gate, never register!.
-        projected (atom registered)
-        _ (with-redefs-fn
-            {(ns-resolve 'clj-surgeon.test-registration 'read-source) (fn [_ p] (@projected p))
-             (ns-resolve 'clj-surgeon.test-registration 'write-tracked!)
-             (fn [_ _ p text] (swap! projected assoc p text))}
-            #((ns-resolve 'clj-surgeon.test-registration 'project-controls!)
-              "." (atom {}) n request {:jvm (pass-row n :jvm) :bb (pass-row n :bb)}))
-        registered (reduce-kv (fn [s k p] (assoc s p (pr-str (pass-row n k)))) @projected paths)
-        disk (into {} (map (fn [[p info]] [(:namespace info) (assoc info :file p)])) (:disk base))
-        ;; These are the ordinary inventory gates. The rest of the namespace
-        ;; witnesses fixtures/pure laws, not the repository's registration state.
+  ;; One ordinary-order first contact (mask 1: runtime declaration absent).
+  ;; The full 99b57bd1 body is retained verbatim in the battery namespace.
+  (let [request {:namespace 'clj-surgeon.first-contact-fixture-test :lane :battery :runtime :jvm}
+        diagnostic (reg/checklist
+                     {:namespace (:namespace request) :file "test/clj_surgeon/first_contact_fixture_test.clj"
+                      :lane :battery :requested-lane :battery :runtime :jvm
+                      :manifest-lane nil :registered-runtime nil :pin 1 :expected-count 1
+                      :adopted? true :tests '#{fixture/works} :census '#{fixture/works}
+                      :controls-valid? true})
         gate-names '#{every-manifest-entry-exists-on-disk
                       runtime-portability-controls-cover-every-assignment
                       generated-portability-census-agrees-with-all-inventories
@@ -1840,69 +1828,18 @@
                       the-partition-matches-round-ones-measurement}
         gate-vars (filter #(contains? gate-names (:name (meta %)))
                     (vals (ns-interns 'clj-surgeon.lane-manifest-test)))
-        original-slurp (memoize slurp)
-        original-read @(ns-resolve 'clj-surgeon.test-registration 'read-source)
-        count-var (gate-var 'every-manifest-entry-exists-on-disk)
-        old-meta (meta count-var)]
+        failures (atom [])]
     (is (= 7 (count gate-vars)))
-    (doseq [mask (range 32)]
-      (let [missing? #(bit-test mask (dec %))
-            snapshot (cond-> (reduce-kv (fn [s k p] (assoc s p (pr-str (pass-row n k)))) registered control-files)
-                       (missing? 2) (update "test/clj_surgeon/first_contact_fixture_test.clj"
-                                      str/replace "{:lane :battery}" "{}")
-                       (missing? 5) (assoc (paths :jvm) (pr-str {:status :missing})
-                                      (control-files :jvm) (pr-str {:status :missing})))
-            runtimes (cond-> (assoc lm/namespace-runtimes n :jvm) (missing? 1) (dissoc n))
-            manifest (cond-> (:manifest base) (missing? 1) (dissoc n))
-            adoptions (cond-> (:adoptions base) (missing? 4) (disj n))
-            scanned (cond-> disk (missing? 2) (assoc-in [n :lane] nil))
-            m (cond-> (reg/model registered request)
-                (missing? 1) (assoc :manifest-lane nil :registered-runtime nil)
-                (missing? 2) (assoc :lane nil)
-                (missing? 3) (update :pin dec)
-                (missing? 4) (assoc :adopted? false)
-                true (assoc :controls-valid? (not (missing? 5))))
-            diagnostic (reg/checklist m)
-            failures (atom [])
-            ;; Only the fixture's pin literal differs; assertion order/body are
-            ;; read from the actual gate source, not restated by this witness.
-            source ((ns-resolve 'clj-surgeon.test-registration 'replace-pin)
-                    (registered reg/witness-file) (:pin m))
-            gate-form (->> ((ns-resolve 'clj-surgeon.test-registration 'forms) source)
-                           (map (requiring-resolve 'rewrite-clj.zip/sexpr))
-                           (filter #(and (seq? %) (= 'deftest (first %))
-                                         (= 'every-manifest-entry-exists-on-disk (second %)))) first)
-            test-fn (binding [*ns* (the-ns 'clj-surgeon.lane-manifest-test)]
-                      (eval (list* 'fn [] (nnext gate-form))))]
-        (try
-          (alter-meta! count-var assoc :test test-fn)
-          (with-redefs-fn
-            {#'lm/namespace-runtimes runtimes #'lm/manifest manifest
-             #'lm/namespace-runtime-controls (assoc lm/namespace-runtime-controls n control-files)
-             (gate-var 'on-disk) (delay scanned)
-             (gate-var 'adopted-since-round-one) adoptions
-             #'reg/repository-checklist (fn [_] (if (:ok diagnostic) [] [diagnostic]))
-             (ns-resolve 'clj-surgeon.test-registration 'read-source)
-             (fn [root p] (or (snapshot p) (original-read root p)))
-             #'clojure.core/slurp
-             (fn [p & args] (or (snapshot (str p)) (apply original-slurp p args)))
-             #'clojure.test/report
-             (fn [r] (when (#{:fail :error} (:type r))
-                       (swap! failures conj (assoc r :gate (:name (meta (first clojure.test/*testing-vars*)))))))}
-            #(binding [clojure.test/*report-counters* (ref clojure.test/*initial-report-counters*)]
-               (doseq [v gate-vars :while (empty? @failures)]
-                 ;; Nested ordinary fixtures reset their tracker. Retain this
-                 ;; witness's outer root so its own fixture can sweep it.
-                 (let [outer-roots @temp-roots]
-                   (try (clojure.test/test-vars [v])
-                        (finally (swap! temp-roots into outer-roots)))))))
-          (finally (reset-meta! count-var old-meta)))
-        (let [first-failure (first @failures)
-              msg (str (:message first-failure))]
-          (println "FIRST-CONTACT-MATRIX" mask (:gate first-failure) (:type first-failure))
-          (if (zero? mask)
-            (is (nil? first-failure) (pr-str first-failure))
-            (do (is (= :fail (:type first-failure)) (pr-str first-failure))
-                (doseq [part ["Registration checklist" "lane/runtime" "ns metadata" "runtime count"
-                              "adoption" "census/control" (reg/invocation request)]]
-                  (is (str/includes? msg part) (str "mask " mask " first=" first-failure))))))))))
+    (with-redefs [lm/namespace-runtimes (dissoc lm/namespace-runtimes 'clj-surgeon.forms-test)
+                  reg/repository-checklist (fn [_] [diagnostic])
+                  clojure.test/report (fn [r] (when (#{:fail :error} (:type r))
+                                                (swap! failures conj
+                                                       (assoc r :gate (:name (meta (first clojure.test/*testing-vars*)))))))]
+      (binding [clojure.test/*report-counters* (ref clojure.test/*initial-report-counters*)]
+        (doseq [v gate-vars :while (empty? @failures)] (clojure.test/test-vars [v]))))
+    (let [failure (first @failures)]
+      (is (= :fail (:type failure)) (pr-str failure))
+      (is (= 'every-manifest-entry-exists-on-disk (:gate failure)))
+      (doseq [part ["Registration checklist" "lane/runtime" "ns metadata" "runtime count"
+                    "adoption" "census/control" (reg/invocation request)]]
+        (is (str/includes? (str (:message failure)) part) (pr-str failure))))))

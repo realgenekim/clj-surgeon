@@ -4,7 +4,11 @@ Test namespace registration: one shared oracle and structural Make entrance now
 cover all five registration surfaces, including actual focused portability
 executions and preserved enrollment bytes on repeats. Round 3 closes stale-control reuse, first-contact diagnostics and duplicate census regeneration; each has a class oracle. RED-first evidence and limits:
 [registration report](observations/2026-09-14-register-test-ns-report-astra.md).
-This is branch-only bookkeeping repair, with no performance admission.
+Round 4 moves the complete first-contact gate matrix to a dogfooded battery
+namespace, retains one representative fast mask, and freezes the original names
+and matrix bytes. The existing stale-control matrix remains in its battery lane.
+The report records focused walls and the shared coordinator fast budget; this is
+a cadence-placement repair, with no new routed-operation performance admission.
 
 Battery evidence ownership: receipt appends require BATTERY_LEDGER_APPEND=1;
 namespace timings use seat state with a read-only tracked seed. The explicit

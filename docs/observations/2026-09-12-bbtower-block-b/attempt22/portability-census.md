@@ -1,6 +1,6 @@
 # Portability census
 
-Generated 2026-09-14T06:18:07.887533+00:00. Counts in cells are tests/failures/errors. All 163 assigned namespaces are listed.
+Generated 2026-09-14T06:18:07.887533+00:00. Counts in cells are tests/failures/errors. All 164 assigned namespaces are listed.
 
 Commands and subjects are in controls/*.command.edn; each .edn has its adjacent .log. The configured bb runtime is load-probed. A load incompatibility is explicitly accounted for, with no passing test or alternate-runtime claim. Every namespace that loads on bb receives a complete JVM and bb control, serially.
 
@@ -171,5 +171,6 @@ A non-portable result refuses portability by namespace until repaired. No runtim
 | clj-surgeon.worktree-lifecycle-test | :bb | :fast | [passed (21/0/0)](controls/clj-surgeon.worktree-lifecycle-test-jvm-test.control.edn) | [passed (21/0/0)](controls/clj-surgeon.worktree-lifecycle-test-bb-test.control.edn) | portable |
 | clj-surgeon.xray-test | :bb | :battery | [passed (27/0/0)](controls/clj-surgeon.xray-test-jvm-test.control.edn) | [passed (27/0/0)](controls/clj-surgeon.xray-test-bb-test.control.edn) | portable |
 | clj-surgeon.registration-controls-test | :jvm | :battery | [passed (2/0/0)](controls/clj-surgeon.registration-controls-test-jvm-test.control.edn) | [passed (2/0/0)](controls/clj-surgeon.registration-controls-test-bb-test.control.edn) | portable |
+| clj-surgeon.test-registration-battery-test | :jvm | :battery | [passed (1/0/0)](controls/clj-surgeon.test-registration-battery-test-jvm-test.control.edn) | [passed (1/0/0)](controls/clj-surgeon.test-registration-battery-test-bb-test.control.edn) | portable |
 
-Summary: {:bb-load-incompatible 50, :portable 100, :non-portable 13}
+Summary: {:bb-load-incompatible 50, :portable 101, :non-portable 13}

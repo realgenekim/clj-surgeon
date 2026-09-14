@@ -823,6 +823,7 @@
   clj-surgeon.lane-manifest-test/registration-oracle-enumerates-all-surfaces
   clj-surgeon.lane-manifest-test/registration-planner-refuses-conflicts
   clj-surgeon.lane-manifest-test/registration-structural-plan-preserves-and-repeats
+  clj-surgeon.lane-manifest-test/registration-witnesses-retain-names-and-battery-matrix
   clj-surgeon.lane-manifest-test/runtime-evidence-binds-statistics-to-receipt-files
   clj-surgeon.lane-manifest-test/runtime-evidence-is-consumed-and-receipts-are-required
   clj-surgeon.lane-manifest-test/runtime-portability-controls-cover-every-assignment
@@ -2470,6 +2471,7 @@
   clj-surgeon.telemetry-events-test/the-env-override-wins-for-the-writer
   clj-surgeon.telemetry-events-test/the-ledger-file-is-private
   clj-surgeon.telemetry-events-test/truncation-is-by-utf8-bytes-and-never-splits-a-codepoint
+  clj-surgeon.test-registration-battery-test/registration-first-contact-gate-matrix
   clj-surgeon.tmp-leak-support-test/a-seam-sourced-fstype-can-never-prove-real-disk
   clj-surgeon.tmp-leak-support-test/darwin-has-a-mount-authority-of-its-own
   clj-surgeon.tmp-leak-support-test/no-gate-names-a-hard-coded-ram-path
