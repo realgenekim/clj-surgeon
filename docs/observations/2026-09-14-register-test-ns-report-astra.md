@@ -1106,3 +1106,161 @@ regeneration and the intent audit. All plants, real Make gates and tracing ran i
 product paths do not contain the operator's scratch prefix. Matrix copies clean
 up automatically. The report deliberately does not claim the requested live-leak
 RED: the evidence supports a copied-cell timing failure and harness hardening.
+
+## Round 8
+
+Recorded 2026-09-14T19:11:07.195716+00:00, starting at `c3d6c4e9` on
+`fable/regns-entrance`. Standing approval covered all phases.
+
+**The replacement passes all 32 standalone cells, but the requested budget proof
+is not green.** The standalone namespace took **454.628 s**, above the **150 s**
+target. The once-only copied eight-lane battery exited **2**, with two failures
+and zero errors. Lane **3 exited 0** in **267.288 s**; the fresh-state coordinator
+placed the registration namespace on **lane 5**, which exited **1** in **30.878 s**.
+Its live manifest observer exceeded the unchanged 8000 ms budget before any mask
+ran. This is not a successful matrix-under-load measurement.
+
+### Contract and TDD
+
+Every mask runs the exact cold gate runner:
+
+```text
+clojure -J-Xmx1024m -M:clj-surgeon/test-deps -m clj-surgeon.mcp-test-runner --ns clj-surgeon.lane-manifest-test
+```
+
+The real copied files, explicit roots, scrubbed environment, actual repository
+count, assertion order, first-failure-block remedy, count-row cardinality and
+already-registered-namespace exclusions remain. No test bodies or repository Vars
+are replaced. Mask 0 additionally runs full `make -C <copy> test-fast`; agreement
+requires both zero exits and equal first failure blocks. Each child command is
+bounded at 120 seconds and TimeoutExpired becomes `cell-timeout mask=<n>`, caught
+at the CLI boundary with exit 1 and no timeout traceback.
+
+Two new Python regressions first produced **2 errors** against the old harness
+(missing runner/failure-block and typed-timeout interfaces); afterward all **6
+Python tests pass**. The timeout regression injects TimeoutExpired at the process
+boundary and requires the exact mask-10 diagnostic and 120-second bound. The
+real 32-cell matrix remains the integration acceptance witness. No Clojure test
+names changed. [RED](2026-09-14-register-test-ns-round8/red.log) and
+[GREEN](2026-09-14-register-test-ns-round8/green.log).
+
+### Standalone measurement and seed agreement
+
+The battery namespace alone, via the real runner at `-J-Xmx1024m`, exited **0**:
+**1 test / 2 assertions**, no failures/errors and no isolation violations. Its
+namespace wall was **451663 ms**, matrix wall **450.926 s**, and command wall
+**454.628 s**. All 32 diagnostic/budget/preservation rows pass.
+
+Seed mask 0: full Make **33.893 s**, manifest runner **11.038 s**, both exit **0**,
+first failure block **empty in both**. This proves agreement on the healthy seed;
+it does not claim a full-Make comparison for a defective mask.
+[Seed receipt](2026-09-14-register-test-ns-round8/alone-seed.json).
+
+Per-cell cold runner walls range **10.687–11.489 s**, median **11.038 s**. Their
+sum alone is **352.277 s**, already above the 150-second whole-namespace target,
+before seed enrollment, full Make, copying and preservation checks. No budget or
+cold-process contract was weakened to turn that miss green. Round 7's full-Make
+cells ranged **34.596–43.947 s**, median **36.713 s**. These are historical versus
+current observations, not a fresh matched performance experiment.
+
+| Mask | Round 7 full Make (s) | Round 8 manifest runner (s) | Manifest assertions (ms) |
+| --- | ---: | ---: | ---: |
+| 0 | 43.947 | 11.038 | 5234 |
+| 1 | 42.785 | 11.139 | 5263 |
+| 2 | 39.923 | 10.787 | 5103 |
+| 3 | 37.048 | 10.742 | 5070 |
+| 4 | 37.335 | 10.688 | 5001 |
+| 5 | 36.558 | 11.239 | 5407 |
+| 6 | 37.252 | 11.039 | 5191 |
+| 7 | 37.411 | 10.887 | 5210 |
+| 8 | 37.593 | 11.188 | 5214 |
+| 9 | 40.528 | 10.737 | 5161 |
+| 10 | 36.264 | 11.089 | 5334 |
+| 11 | 35.253 | 10.989 | 5262 |
+| 12 | 37.486 | 10.887 | 5233 |
+| 13 | 37.258 | 10.888 | 5202 |
+| 14 | 36.906 | 10.787 | 5144 |
+| 15 | 39.024 | 11.489 | 5228 |
+| 16 | 36.286 | 10.939 | 5183 |
+| 17 | 36.411 | 11.290 | 5446 |
+| 18 | 35.856 | 11.088 | 5227 |
+| 19 | 36.917 | 10.840 | 5187 |
+| 20 | 36.226 | 11.089 | 5204 |
+| 21 | 36.513 | 11.089 | 5162 |
+| 22 | 38.720 | 11.086 | 5251 |
+| 23 | 35.564 | 11.038 | 5189 |
+| 24 | 35.147 | 10.888 | 5191 |
+| 25 | 35.650 | 11.137 | 5297 |
+| 26 | 35.941 | 10.987 | 5326 |
+| 27 | 36.642 | 11.239 | 5290 |
+| 28 | 34.596 | 11.089 | 5195 |
+| 29 | 35.781 | 11.038 | 5335 |
+| 30 | 35.918 | 11.140 | 5321 |
+| 31 | 36.783 | 10.687 | 5006 |
+
+
+[All current rows](2026-09-14-register-test-ns-round8/alone-cells.json) retain exact
+argv, roots, exits, first failure owner/subject, manifest wall and acceptance flags.
+The live observer and final LIVE-SNAPSHOT report byte-identical registration,
+census and control surfaces (1965 files). State roots are private scratch envelopes.
+
+### Once-only full copied battery
+
+Executed once, in `/var/tmp/forge/regns-fx/round8/battery-copy`:
+
+```text
+make test-battery 'MCP_JAVA_OPTS=-J-Xms64m -J-Xmx1024m'
+```
+
+All battery inventory was enabled through the gate's own coordinator, with its
+normal prerequisite ON; transaction recovery passed all three arms. The clone
+was based on `c3d6c4e9` with the two changed Python files overlaid. Routing/write
+variables were scrubbed and state/temp outputs stayed in the scratch envelope.
+Fresh state used the tracked timing seed, so lane assignment differs from packet
+48cf7076. Command wall **290.467 s**, coordinator makespan **272117 ms**,
+serial-equivalent **1343717 ms**, **1207 tests / 19938 assertions**, **2 failures /
+0 errors**, skipped **0**. No ledger append was authorized or performed.
+[Lane receipts](2026-09-14-register-test-ns-round8/battery-lanes.json) and
+[summary](2026-09-14-register-test-ns-round8/battery-summary.log).
+
+The two failures are retained, not excused as a passing gate:
+
+- Registration on lane 5: the concurrent live manifest observer passed **46 tests /
+  2064 assertions**, but its **8815 ms** wall exceeded **8000 ms**. The enclosing
+  registration namespace recorded **22140 ms** and failed before mask 0. Its
+  LIVE-SNAPSHOT was byte-identical. Therefore no loaded-cell wall or loaded seed
+  agreement was obtained. The ordinary assertion traceback here is from the
+  observer budget rejection, not a TimeoutExpired.
+- Lane 0: `artifact-root-default-is-derived-per-user` at
+  `mcp_alias_migration_test.clj:7342` requires the root string to contain
+  `clj-surgeon`. I reused the matrix environment helper's scratch `/state` name
+  for the outer coordinator; that apparatus choice caused this assertion failure.
+  The permanent test and product were not changed. A correctly namespaced state
+  path is the appropriate setup for this outer battery. The focused control with
+  that state name passes: **1 test / 3 assertions**, namespace wall **216 ms**,
+  command wall **10.183 s**, exit **0**.
+  [Control receipt](2026-09-14-register-test-ns-round8/state-name-control-result.json).
+
+The overall coordinator reported zero isolation violations across 57 namespaces;
+the nested observer's budget failure is nevertheless folded into the failing
+registration assertion. The requested once-only full battery was not rerun.
+
+### Verification and preservation
+
+Paved `~/bin/clj-kondo` on the unchanged Clojure battery entrance: **0 errors,
+0 warnings**. Both changed Python files parse; the Python suite passes. No
+Clojure source formatting was needed. `make intent-audit` returns `:ok true`.
+`make census-regenerate` exits **0**, **+0/-0**. Both the live checkout and battery
+copy preserve the two protected ledgers and census byte-for-byte:
+
+```text
+08a1d6ee9c7f319c4a146ec23798e535273a47b7633697354014b318bff8ad39  docs/observations/battery-ledger.edn
+154faae0c803099d1bfe88e8563a8cf85cdf2376af4e4309b10bd850cd6ef264  docs/observations/battery-namespace-walls.edn
+7cc932304e6d74c0caa62b96095fb0232119e3052c9e6e64124c02eb0775fadd  test/clj_surgeon/deftest_census.edn
+```
+
+No whole suite ran on the live tree. Product paths derive from explicit roots,
+not the operator's scratch prefix. Raw logs and command results are retained
+under `/var/tmp/forge/regns-fx/round8`; bounded receipts are linked above. This
+branch change earns standalone correctness evidence, not a passing landing gate
+or the requested sub-150-second budget claim.
