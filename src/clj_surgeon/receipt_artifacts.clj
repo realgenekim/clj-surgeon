@@ -59,18 +59,30 @@
                     {:error-type :invalid-operation-context})))
   envelope)
 
+(defn- command-path-uninspectable?
+  "True when an existing ancestor prevents checking whether `file` exists."
+  [file]
+  (loop [ancestor (.getParentFile (.getAbsoluteFile file))]
+    (cond
+      (nil? ancestor) false
+      (.exists ancestor) (or (not (.isDirectory ancestor))
+                             (not (.canExecute ancestor)))
+      :else (recur (.getParentFile ancestor)))))
+
 (defn- command-present?
-  "True when `command` names an existing file directly or on PATH. Existence,
-   rather than executability, is intentional: a present but non-executable
-   binary is an operational failure that `safe-sh` must not hide as absence."
+  "True when `command` names an existing file directly or on PATH, or when an
+   inaccessible search location means absence cannot be established. Existence,
+   rather than executability, is intentional: an uninspectable or present but
+   non-executable binary is an operational failure that `safe-sh` must not hide."
   [command]
   (let [file (io/file command)]
     (if (or (.isAbsolute file)
             (str/includes? command java.io.File/separator))
-      (.exists file)
+      (or (.exists file) (command-path-uninspectable? file))
       (let [separator (re-pattern (java.util.regex.Pattern/quote java.io.File/pathSeparator))]
         (boolean
-          (some #(.exists (io/file (if (str/blank? %) "." %) command))
+          (some #(let [candidate (io/file (if (str/blank? %) "." %) command)]
+                   (or (.exists candidate) (command-path-uninspectable? candidate)))
                 (str/split (or (System/getenv "PATH") "") separator -1)))))))
 
 (defn- safe-sh
@@ -123,16 +135,16 @@
                        (when (= username (first fields)) (nth fields 5 nil)))
                     (str/split-lines (slurp "/etc/passwd")))]
     (or entry
-        (let [getent (getent-home username)
-              dscl (dscl-home username)]
+        (let [getent (getent-home username)]
           (or (:home getent)
-              (:home dscl)
-              (throw (ex-info "Cannot determine invoking user's passwd home"
-                              {:error-type :invalid-operation-context
-                               :attempts (cond-> [{:source :etc-passwd
-                                                  :status :user-not-found}
-                                                 (dissoc getent :home)]
-                                           dscl (conj (dissoc dscl :home)))})))))))
+              (let [dscl (dscl-home username)]
+                (or (:home dscl)
+                    (throw (ex-info "Cannot determine invoking user's passwd home"
+                                    {:error-type :invalid-operation-context
+                                     :attempts (cond-> [{:source :etc-passwd
+                                                        :status :user-not-found}
+                                                       (dissoc getent :home)]
+                                                 dscl (conj (dissoc dscl :home)))})))))))))
 
 (defn- default-envelope [workspace source]
   (destination-envelope

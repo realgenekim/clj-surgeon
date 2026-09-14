@@ -724,6 +724,16 @@
         (is (= [["getent" "passwd" username]
                 ["dscl" "." "-read" (str "/Users/" username) "NFSHomeDirectory"]]
                @calls))))
+    (testing "Darwin: getent success does not attempt dscl"
+      (let [calls (atom [])]
+        (with-redefs-fn
+          {#'clojure.core/slurp (constantly "somebody-else:x:1:1::/elsewhere:/bin/sh\n")
+           safe-sh (fn [& args]
+                     (swap! calls conj (vec args))
+                     {:exit 0 :out (str username ":x:1:1::/getent/home:/bin/sh\n") :err ""})
+           darwin? (constantly true)}
+          #(is (= "/getent/home" (passwd))))
+        (is (= [["getent" "passwd" username]] @calls))))
     (testing "a username with spaces or Unicode remains one dscl argument"
       (let [calls (atom [])]
         (with-redefs-fn
@@ -767,6 +777,14 @@
          present? (constantly true)}
         #(is (thrown-with-msg? java.io.IOException #"permission denied"
                                (safe-sh "present-command")))))
+    (testing "safe-sh preserves failure when a path cannot be searched"
+      (let [blocker (java.io.File/createTempFile "safe-sh-path-" ".blocker")
+            command (str blocker java.io.File/separator "present-command")]
+        (try
+          (is (true? (present? command)))
+          (is (thrown? java.io.IOException (safe-sh command)))
+          (finally
+            (is (.delete blocker))))))
     (testing "the terminal refusal distinguishes exit failure from malformed output"
       (with-redefs-fn
         {#'clojure.core/slurp (constantly "somebody-else:x:1:1::/elsewhere:/bin/sh\n")
