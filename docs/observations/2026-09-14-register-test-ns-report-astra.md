@@ -274,3 +274,192 @@ nested output; the source and generated-fixture definitions were left untouched.
 The additional affected intent-contract check ran with the same 1024 MB JVM
 command pattern: 22 tests, 571 assertions, zero failures/errors, exit 0
 (`round2-intent.log`). No landing-gate rerun or merge-readiness claim is made.
+
+## Round 3
+
+Recorded 2026-09-14T11:20:20.204125+00:00; base `e81a9c75d7fdc106656e97a2bf1ac4c420b563e3`,
+branch `fable/regns-entrance`. Read Sol's complete `/var/tmp/forge/regns-fx/sol-verdict-1.md`
+first. The seat's standing approval covered design, requirements, tests, code,
+documentation and verification without review pauses. REGNS-004/005/006 now state
+the corrected repeat/execution/first-contact contracts; REGNS-010/011 retain the
+stale-control and shared-census promises.
+
+**F1 — STALE-CONTROL-MATRIX, red then green.** At the unmodified base, the
+copied repository under `round3-red` received this exact source:
+
+```clojure
+(ns clj-surgeon.sol-stale-test {:lane :battery}
+  (:require [clojure.test :refer [deftest is]]))
+(deftest sol-plant (is false))
+```
+
+At both predictable `controls/clj-surgeon.sol-stale-test-{jvm,bb}-test.control.edn`
+paths under attempt22, the planted map was:
+
+```clojure
+{:namespace clj-surgeon.sol-stale-test :runtime :jvm ; :bb in the other file
+ :status :passed :exit 0 :source-sha256 "stale"
+ :result {:test 1 :pass 1 :fail 0 :error 0}}
+```
+
+Command in both copied roots:
+
+```sh
+make register-test-ns NS=clj-surgeon.sol-stale-test LANE=battery RUNTIME=jvm
+```
+
+RED: Make exit 0, `{:ok true :state :registered}`, both controls claimed pass,
+neither contained `:command`; the failing test did not run. Full receipt:
+`/var/tmp/forge/regns-fx/round3-sol-red.log`.
+
+GREEN: the same plant against the changed sources ran the control argv and
+returned `{:ok false :state :rolled-back :error-type :register-control-stale}`.
+The JVM execution had `:exit 1`, `:status :test-failed`, and
+`:result {:test 1 :pass 0 :fail 1 :error 0}`; Make propagated failure as exit 2
+(the Clojure entrance exits 1). Its actual argv included `clojure`,
+`-J-Xmx1024m`, `-M:clj-surgeon/test-deps`, `-m portability-runner`, `jvm`,
+`clj-surgeon.sol-stale-test`, the raw receipt path and `test`. The recorded
+execution had pid 3137341, start ticks 282263436, wall 4198.30848 ms and source
+SHA-256 `6338f1a6f7b03dc0bab19f24d95816dd1a55d22e51a61276a4ab445cff201f83`.
+All eight checked source/registration/planted-control files were byte-identical
+after rollback; the only Sol control files remaining were the original two
+plants. Receipts: `round3-sol-green.log` and `round3-sol-green-check.json` under
+the same scratch root.
+
+The permanent matrix independently corrupts each of the three control paths
+across portable/JVM, portable/bb, bb-ineligible/JVM and bb-load-incompatible/JVM
+acceptance branches, with stale, valid-format wrong-hash and missing-provenance
+receipts: **36 cells**. Every cell plants the real failing test, executes JVM
+argv, reports fail=1, refuses stale controls and restores fixture bytes.
+Additional checks remove every required test-control provenance field and each
+subject field. Saved controls never select a shortcut in `register!`.
+`control!` writes argv, execution-time source hash/root, actual exit and runner
+result/status, parent-measured wall, pid and Linux start ticks from the process
+it just ran. A bb load failure still requires an executed passing JVM test.
+Unknown provenance refuses. Historical inventory classification remains read-only.
+
+The real runner boundary also exposed inherited cleanup ownership: nested
+controls now clear `CLJ_SURGEON_TMPDIR_REEXEC`, allowing each runner to own its
+own nested scratch root. Product code inherits the admitted temporary base;
+it contains no `/var/tmp/forge/regns-fx` constant. The JVM's ordinary procfs
+reader could not obtain start ticks on this host; the direct file reader did.
+Both fixes are exercised by the real nested controls, not fabricated pass maps.
+
+**F2 — FIRST-CONTACT-GATE-MATRIX.** The old runtime-count/closure assertions
+produced a first failure with no checklist or remedy; the red matrix captured
+that actual assertion/message pair. The runtime assertions now carry the
+registry message directly, as do the metadata and inventory assertions that
+can make first contact. Successful per-namespace control assertions avoid
+rebuilding the diagnostic. The matrix runs the seven ordinary registration
+inventory gate Vars in their actual `ns-interns` order using `test-vars`, without
+reordering tests or restating assertion bodies. Only the fixture pin literal
+is instantiated from the actual gate source. It preserves outer temporary-root
+tracking across the nested ordinary fixtures. Complete fixture state passes;
+each nonzero mask's first failure contains all five checklist rows and the exact
+shell-quoted Make remedy. The read-only matrix lives in lane-manifest-test so
+it does not demand its own unpublished enrollment controls.
+
+Final output below: `:fail` is the expected first gate failure caused by a
+planted missing-surface mask, not a failed matrix assertion.
+
+```text
+FIRST-CONTACT-MATRIX 0 nil nil
+FIRST-CONTACT-MATRIX 1 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 2 every-manifest-namespace-declares-its-lane-in-its-own-ns-form :fail
+FIRST-CONTACT-MATRIX 3 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 4 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 5 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 6 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 7 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 8 every-test-namespace-on-disk-is-accounted-for :fail
+FIRST-CONTACT-MATRIX 9 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 10 every-manifest-namespace-declares-its-lane-in-its-own-ns-form :fail
+FIRST-CONTACT-MATRIX 11 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 12 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 13 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 14 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 15 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 16 runtime-portability-controls-cover-every-assignment :fail
+FIRST-CONTACT-MATRIX 17 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 18 every-manifest-namespace-declares-its-lane-in-its-own-ns-form :fail
+FIRST-CONTACT-MATRIX 19 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 20 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 21 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 22 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 23 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 24 runtime-portability-controls-cover-every-assignment :fail
+FIRST-CONTACT-MATRIX 25 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 26 every-manifest-namespace-declares-its-lane-in-its-own-ns-form :fail
+FIRST-CONTACT-MATRIX 27 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 28 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 29 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 30 every-manifest-entry-exists-on-disk :fail
+FIRST-CONTACT-MATRIX 31 every-manifest-entry-exists-on-disk :fail
+```
+
+**F3 — CENSUS-WRITER-CENSUS.** `clj-surgeon.test-census` owns the original
+source derivation, named-removal guard and canonical serialization. Both the
+registration planner and explicit regenerator call it; registration supplies
+its snapshot/write callback and retains transaction rollback. The former
+independent scan/append implementation is gone. The canonical header and sorted
+one-qualified-name-per-line format remain byte-for-byte the previous writer's
+format. The real ledger diff contains exactly three added test names, with no
+removals or unrelated line changes. A removed source now yields named removals
+instead of trying to slurp nil.
+
+The executable census runs `rg` over `src/`, `test/` and `Makefile`, enumerates
+all literal-path files, checks both entrances' delegation, and asserts the
+single writer implementation:
+
+```text
+CENSUS-WRITER-CENSUS references
+  ("src/clj_surgeon/test_census.clj"
+   "test/clj_surgeon/lane_manifest_test.clj"
+   "test/clj_surgeon/registration_controls_test.clj")
+writers #{"src/clj_surgeon/test_census.clj"}
+```
+
+**Executed enrollment and final verification.** The new battery namespace was
+registered through the production entrance itself, with no BB_INELIGIBLE override:
+
+```sh
+make register-test-ns NS=clj-surgeon.registration-controls-test LANE=battery RUNTIME=jvm
+```
+
+Exit 0, `:state :registered`, classification portable. JVM and bb each ran
+**2 tests / 238 assertions / 0 failures / 0 errors**, plus a real bb load.
+The retained [JVM control](2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.registration-controls-test-jvm-test.control.edn),
+[bb control](2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.registration-controls-test-bb-test.control.edn)
+and adjacent complete logs/argv files bind source SHA-256 `713e34875347d3e02b29ddafd037939765b0f35615df4ec474608dc70bb6cb3c` to
+`/home/forge/src/clj-surgeon-regns`. All three hashes still match the source.
+The initial circular-fixture and nested-root failures were repaired before this
+successful enrollment; no failed receipt was promoted to passing evidence.
+
+With `TMPDIR` and the JVM startup temporary directory under the round's scratch
+root, final checks were:
+
+```text
+clojure -J-Xmx1024m -M:clj-surgeon/test-deps
+  clojure.test/run-tests: lane-manifest-test, ns-isolation-test
+  Ran 72 tests containing 2460 assertions. 0 failures, 0 errors. Exit 0.
+~/bin/clj-kondo --lint <all five changed Clojure files>
+  0 errors, 0 warnings. Exit 0.
+make census-regenerate
+  census-regenerate: +0/-0. Exit 0.
+make intent-audit
+  :ok true. Exit 0.
+Standard Clojure Style formatting and git diff --check passed.
+```
+
+Protected ledgers match the pre-round hashes:
+
+```text
+c7fb402d7580ace47675d02f7b813bcd5837bdfab5788c0c78f477721f72b0d9  docs/observations/battery-ledger.edn
+154faae0c803099d1bfe88e8563a8cf85cdf2376af4e4309b10bd850cd6ef264  docs/observations/battery-namespace-walls.edn
+```
+
+No `make test` or `test-battery` was run. This is branch-only correctness work;
+there is no main merge, performance admission or claim of a new Sol GO verdict.
+
+Round 3 fixture copies and test temporary roots were removed after verification;
+receipt logs remain under `/var/tmp/forge/regns-fx`. The owned nREPL was stopped.
