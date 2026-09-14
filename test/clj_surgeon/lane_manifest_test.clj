@@ -1728,6 +1728,73 @@
               (deliver release true)
               (deref first-call 10000 :timeout))))))))
 
+;; Round 4: freeze the 99b57bd1 source census and full matrix bytes.
+(deftest registration-witnesses-retain-names-and-battery-matrix
+  (let [expected '#{every-manifest-entry-exists-on-disk
+                    runtime-evidence-is-consumed-and-receipts-are-required
+                    runtime-evidence-binds-statistics-to-receipt-files
+                    runtime-steering-fields-cannot-outvote-control-receipts
+                    runtime-receipts-must-stay-in-retained-evidence-roots
+                    runtime-portability-controls-cover-every-assignment
+                    generated-portability-census-agrees-with-all-inventories
+                    every-test-namespace-on-disk-is-accounted-for
+                    every-lane-declares-a-cadence-the-runner-knows
+                    every-manifest-namespace-resolves-to-a-known-cadence
+                    the-refusal-message-names-the-cadence-a-lane-costs
+                    excluded-entries-are-real-and-carry-a-reason
+                    every-exclusion-is-actually-run-by-the-runner-it-names
+                    a-false-redirection-to-an-existing-target-is-refused-by-name
+                    an-exclusion-naming-an-unreadable-runner-fails-closed
+                    the-lane-runner-resolves-to-exactly-the-lane-it-names
+                    the-landing-gate-runs-both-the-merge-gate-and-the-battery-tripwire
+                    the-landing-gate-refuses-a-stale-battery-receipt
+                    every-manifest-namespace-declares-its-lane-in-its-own-ns-form
+                    loaded-namespaces-carry-their-lane-at-runtime
+                    the-runner-refuses-an-undeclared-namespace
+                    the-runner-resolves-a-declared-lane
+                    no-fast-lane-namespace-spells-a-child-process
+                    the-partition-drops-nothing-round-one-measured
+                    the-partition-matches-round-ones-measurement
+                    a-namespace-in-the-tree-but-absent-from-the-census-is-named
+                    census-regeneration-refuses-named-removals
+                    the-regenerate-entrance-refuses-inside-make
+                    the-corpus-only-ever-grows-and-the-arithmetic-is-shown
+                    every-test-iso-marker-in-the-tree-is-a-registered-requirement
+                    every-implemented-requirement-is-claimed-by-a-marker
+                    no-living-prose-still-calls-the-bb-lane-by-its-old-name
+                    sleep-pins-survive-line-movement-and-refuse-purpose-drift
+                    every-sleep-on-the-merge-gate-is-declared-with-its-reason
+                    the-rename-scanner-cannot-see-a-bb-less-mention-and-says-so
+                    registration-oracle-enumerates-all-surfaces
+                    registration-planner-refuses-conflicts
+                    registration-structural-plan-preserves-and-repeats
+                    registration-control-results-are-executions
+                    registration-checklist-covers-every-missing-surface-subset
+                    registration-boundary-refusals-preserve-source-bytes
+                    registration-existing-values-and-ambiguous-owners-refuse
+                    registration-failed-control-rolls-back-enrollment
+                    registration-lock-is-per-root-and-identifies-holder
+                    registration-first-contact-gate-matrix}
+        present (into #{} (mapcat #(map (comp symbol name) (census/deftest-names 'ignored (slurp %))))
+                      (test-source-files))
+        battery (io/file "test/clj_surgeon/test_registration_battery_test.clj")]
+    (is (every? present expected) (pr-str (remove present expected)))
+    (is (.isFile battery) "the full gate matrix belongs in a battery namespace")
+    (when (.isFile battery)
+      (let [source (slurp battery)
+            matrix (subs source (.indexOf source "(deftest registration-first-contact-gate-matrix"))
+            digest (.digest (java.security.MessageDigest/getInstance "SHA-256")
+                            (.getBytes matrix "UTF-8"))]
+        (is (= "f147ae9a17cd5eaacda8202be351cda9bef62250da69d06f62dee0a50b11afec" (apply str (map #(format "%02x" (bit-and 255 %)) digest)))
+            "the complete 32-mask matrix body is moved byte-for-byte from 99b57bd1")
+        (is (= :battery (declared-lane (first-form battery)))))))
+  (let [source (slurp "test/clj_surgeon/lane_manifest_test.clj")
+        form (last (filter #(and (seq? %) (= 'deftest (first %))
+                                (= 'registration-first-contact-gate-matrix (second %)))
+                          (map z/sexpr ((ns-resolve 'clj-surgeon.test-registration 'forms) source))))]
+    (is (not-any? #{'(range 32)} (tree-seq coll? seq form))
+        "fast first contact exercises one representative mask")))
+
 (defn- gate-var [n] (ns-resolve 'clj-surgeon.lane-manifest-test n))
 
 ;; INTENT-TEST: REGNS-006

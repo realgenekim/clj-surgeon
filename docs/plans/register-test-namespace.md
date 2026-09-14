@@ -19,3 +19,13 @@ Round 3 supersedes saved-control reuse: reproduce Sol's two forged pass files an
 `(is false)` through Make before repair, then test all control paths and acceptance
 branches, all 32 first-contact masks in ordinary order, and the census writer census.
 Standing seat approval covers design through verification without review pauses.
+
+Round 4 repairs cadence placement: time outer deftests at 99b57bd1, retain one
+ordinary-order first-contact mask in fast, and move the full gate matrix verbatim
+into an author-declared battery namespace enrolled through Make. The stale-control
+matrix already resides in registration-controls-test (:battery); retain it there.
+A source witness freezes all 45 original names and the full matrix body digest.
+Keep the old qualified fast name for its representative witness so census changes
+are additions only. Verify focused fast wall <15 s, coordinator fast cadence
+<60 s, the new battery once at 1024 MB, lint, census and protected ledger hashes.
+Standing approval covers every phase; no full suite or complete battery run.

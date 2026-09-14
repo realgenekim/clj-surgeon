@@ -36,7 +36,7 @@ This is process-local rollback, not crash-atomic multi-file publication. Concurr
 noncooperating source writers are outside that guarantee and snapshots are checked
 before publication. A repeated invocation preserves enrollment bytes but executes and refreshes control artifacts.
 
-Read-only gate witnesses remain in lane-manifest-test. The executed path/acceptance matrix and writer census live in registration-controls-test, enrolled by the entrance itself. A copied
+Fast pure and stubbed-boundary witnesses remain in lane-manifest-test, with one ordinary-order first-contact mask. The complete 32-mask gate matrix lives in test-registration-battery-test (:battery), enrolled through register-test-ns. Its matrix body is preserved byte-for-byte from 99b57bd1; a source witness freezes the original test names and matrix digest. The existing qualified fast name remains the representative witness, so census changes are additions only. The executed path/acceptance matrix and writer census live in registration-controls-test, enrolled by the entrance itself. A copied
 repository with a real fixture namespace demonstrates author metadata, enrollment,
 actual focused control results, whole oracle success, preserved enrollment bytes on repeat and
 conflict preservation. Pure tests exhaust missing-surface combinations and CST
