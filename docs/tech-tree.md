@@ -1,5 +1,15 @@
 # clj-surgeon tech tree
 
+Battery evidence ownership: receipt appends require BATTERY_LEDGER_APPEND=1;
+namespace timings use seat state with a read-only tracked seed. The explicit
+census regeneration target refuses named removals. Contract and verification
+matrix: [battery ledger gating](plans/battery-ledger-gating.md). This removes
+check-only evidence writes; it makes no measured wall-performance claim.
+Round 2 fixes Sol F1: state-root and final walls-path admission now precede
+read fallback and writes (STATE-HOME-009/010). The production boundary oracle
+reproduced 38 failures before repair; see the
+[round-2 report](observations/2026-09-14-battery-ledger-gating-report-astra.md).
+
 Probe classpath repair (Sol round-five F1): a literal root list omitted a live
 dev/experiments dependency and returned green over value 1 after disk changed
 to 2. Attempt25 derives roots from the image classpath, resolves via the require
