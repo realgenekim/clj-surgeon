@@ -6864,3 +6864,7 @@ Records: 2026-09-14-ship-round8-review-opus.md. Merge complete: 73 + 29 one-side
 ## 2026-09-14T12:01:41Z — regns round 4 (02249934): matrices moved to :battery; fast cadence 52,514 ms (12.5% headroom); prewarm 4 running
 
 3cf4a99e froze the witness names, 02249934 moved the full registration gate matrix + executed controls into clj-surgeon.test-registration-battery-test ({:lane :battery}, enrolled through the entrance itself). lane-manifest-test alone 46 tests / 2,063 assertions, 9.5 s (was 59 s); the battery namespace 1 test / 251 assertions, 80.5 s at -Xmx1024m; fast cadence 52,514 / 60,000 ms through the same coordinator the gate uses; census +2/-0. Prewarm 4 launched (run-bg prewarm-regns4 pid 212553) while Opus round 9 (bash suite) runs — no JVM builder alive. Receipt branch fable/battery-receipt-02249934.
+
+## 2026-09-14T12:13:57Z — regns prewarm 4 :pass; ship REFUSED candidate-conflicts with 866df39b; Astra round 5 merges trunk by union
+
+Five conflicts, all in the five registration surfaces (lane_manifest.clj, lane_manifest_test.clj pinned count, attempt22 portability census + controls, tech-tree): the diff-impact landing and this branch each registered one namespace from the same base — the agreeing-numbers class, live on the very branch that builds the entrance for it. Round 5 (run-bg astra-regns-6): union merge as form edits, pinned count computed from disk, proof via the branch's own repository checklist ({:ok true :missing []}) and census-regenerate +0/-0. Then prewarm 5 and ship.
