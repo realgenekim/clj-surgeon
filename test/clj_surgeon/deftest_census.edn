@@ -2279,6 +2279,9 @@
   clj-surgeon.receipt-artifacts-boundary-test/legacy-extraction-publishes-external-inverse
   clj-surgeon.receipt-artifacts-boundary-test/namespace-split-publishes-external-detail-and-inverse
   clj-surgeon.receipt-artifacts-boundary-test/no-witness-compares-an-artifact-path-against-a-literal-root
+  clj-surgeon.receipt-artifacts-boundary-test/parse-dscl-home-reads-the-nfshomedirectory-line
+  clj-surgeon.receipt-artifacts-boundary-test/parse-dscl-home-rejects-other-attributes-without-truncating-paths
+  clj-surgeon.receipt-artifacts-boundary-test/passwd-home-fallback-is-lazy-platform-bounded-and-fail-loud
   clj-surgeon.receipt-artifacts-boundary-test/prepared-apply-publishes-external-inverse
   clj-surgeon.receipt-artifacts-boundary-test/row5-trivial-profile-receipt-is-honest
   clj-surgeon.receipt-artifacts-boundary-test/standalone-require-change-publishes-external-detail-and-inverse

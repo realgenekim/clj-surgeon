@@ -26,6 +26,7 @@
    [clj-surgeon.workspace-lock :as lock]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
+   [clojure.java.shell :as shell]
    [clojure.string :as str]
    [clojure.test :as t :refer [deftest is testing]]))
 
@@ -671,6 +672,115 @@
           (is (= {:name "true" :profile "b07-cell-b" :command ["/bin/true"] :exit 0 :status "passed"}
                  (dissoc check :duration_ms)))
           (is (number? (:duration_ms check))))))))
+
+;; darwin passwd-home fallback: /etc/passwd does not list Directory-Services
+;; users and `getent` does not exist on macOS, so home resolution falls
+;; through to `dscl . -read /Users/<user> NFSHomeDirectory`. Pure parser,
+;; no shelling out required to test it.
+(deftest parse-dscl-home-reads-the-nfshomedirectory-line
+  (let [parse #'artifacts/parse-dscl-home]
+    (is (= "/Users/genekim" (parse "NFSHomeDirectory: /Users/genekim\n")))
+    (is (= "/Users/genekim" (parse "NFSHomeDirectory: /Users/genekim")))
+    (is (nil? (parse "")))
+    (is (nil? (parse nil)))
+    (is (nil? (parse "some unrelated line\n")))))
+
+(deftest parse-dscl-home-rejects-other-attributes-without-truncating-paths
+  (let [parse #'artifacts/parse-dscl-home]
+    (is (= "/Users/colon: home" (parse "NFSHomeDirectory: /Users/colon: home\n")))
+    (is (= "/Users/Gene Kim" (parse "NFSHomeDirectory: /Users/Gene Kim\n")))
+    (is (= "/Users/Zoë λ" (parse "NFSHomeDirectory: /Users/Zoë λ\n")))
+    (is (nil? (parse "No such key: NFSHomeDirectory\n")))
+    (is (nil? (parse "OtherAttribute: /Users/wrong\n")))))
+
+(deftest passwd-home-fallback-is-lazy-platform-bounded-and-fail-loud
+  (let [username (System/getProperty "user.name")
+        passwd #'artifacts/passwd-home
+        safe-sh #'artifacts/safe-sh
+        present? #'artifacts/command-present?
+        darwin? #'artifacts/darwin?
+        policy-delay (var-get (ns-resolve 'clj-surgeon.receipt-artifacts
+                                          'policy-default-delay))]
+    (is (instance? clojure.lang.Delay policy-delay)
+        "requiring the namespace must not resolve passwd home")
+    (testing "/etc/passwd remains first and suppresses every subprocess"
+      (let [calls (atom [])]
+        (with-redefs-fn
+          {#'clojure.core/slurp (constantly (str username ":x:1:1::/passwd/home:/bin/sh\n"))
+           safe-sh (fn [& args] (swap! calls conj (vec args)) nil)
+           darwin? (constantly true)}
+          #(is (= "/passwd/home" (passwd))))
+        (is (empty? @calls))))
+    (testing "Darwin: absent getent falls through the production seam to dscl"
+      (let [calls (atom [])]
+        (with-redefs-fn
+          {#'clojure.core/slurp (constantly "somebody-else:x:1:1::/elsewhere:/bin/sh\n")
+           safe-sh (fn [& args]
+                     (swap! calls conj (vec args))
+                     (when (= "dscl" (first args))
+                       {:exit 0 :out "NFSHomeDirectory: /Users/Gene Kim\n" :err ""}))
+           darwin? (constantly true)}
+          #(is (= "/Users/Gene Kim" (passwd))))
+        (is (= [["getent" "passwd" username]
+                ["dscl" "." "-read" (str "/Users/" username) "NFSHomeDirectory"]]
+               @calls))))
+    (testing "a username with spaces or Unicode remains one dscl argument"
+      (let [calls (atom [])]
+        (with-redefs-fn
+          {safe-sh (fn [& args]
+                     (swap! calls conj (vec args))
+                     {:exit 0 :out "NFSHomeDirectory: /Users/Zoë λ\n" :err ""})
+           darwin? (constantly true)}
+          #(is (= {:source :dscl :status :found :home "/Users/Zoë λ"}
+                  (#'artifacts/dscl-home "Zoë λ"))))
+        (is (= [["dscl" "." "-read" "/Users/Zoë λ" "NFSHomeDirectory"]]
+               @calls))))
+    (testing "Linux: getent success returns without attempting dscl"
+      (let [calls (atom [])]
+        (with-redefs-fn
+          {#'clojure.core/slurp (constantly "somebody-else:x:1:1::/elsewhere:/bin/sh\n")
+           safe-sh (fn [& args]
+                     (swap! calls conj (vec args))
+                     {:exit 0 :out (str username ":x:1:1::/getent/home:/bin/sh\n") :err ""})
+           darwin? (constantly false)}
+          #(is (= "/getent/home" (passwd))))
+        (is (= [["getent" "passwd" username]] @calls))))
+    (testing "Linux: dscl is never attempted, even when getent is absent"
+      (let [calls (atom [])]
+        (with-redefs-fn
+          {#'clojure.core/slurp (constantly "somebody-else:x:1:1::/elsewhere:/bin/sh\n")
+           safe-sh (fn [& args] (swap! calls conj (vec args)) nil)
+           darwin? (constantly false)}
+          #(is (= {:error-type :invalid-operation-context
+                   :attempts [{:source :etc-passwd :status :user-not-found}
+                              {:source :getent :status :binary-missing}]}
+                  (try (passwd) nil
+                       (catch clojure.lang.ExceptionInfo e (ex-data e))))))
+        (is (= [["getent" "passwd" username]] @calls))))
+    (testing "safe-sh suppresses absence but preserves other IO failures"
+      (with-redefs-fn
+        {#'shell/sh (fn [& _] (throw (java.io.IOException. "missing")))
+         present? (constantly false)}
+        #(is (nil? (safe-sh "missing-command"))))
+      (with-redefs-fn
+        {#'shell/sh (fn [& _] (throw (java.io.IOException. "permission denied")))
+         present? (constantly true)}
+        #(is (thrown-with-msg? java.io.IOException #"permission denied"
+                               (safe-sh "present-command")))))
+    (testing "the terminal refusal distinguishes exit failure from malformed output"
+      (with-redefs-fn
+        {#'clojure.core/slurp (constantly "somebody-else:x:1:1::/elsewhere:/bin/sh\n")
+         safe-sh (fn [command & _]
+                   (if (= "getent" command)
+                     {:exit 7 :out "" :err "private diagnostic"}
+                     {:exit 0 :out "No such key: NFSHomeDirectory\n" :err ""}))
+         darwin? (constantly true)}
+        #(is (= {:error-type :invalid-operation-context
+                 :attempts [{:source :etc-passwd :status :user-not-found}
+                            {:source :getent :status :exit-nonzero :exit 7}
+                            {:source :dscl :status :unrecognized-output}]}
+                (try (passwd) nil
+                     (catch clojure.lang.ExceptionInfo e (ex-data e)))))))))
 
 ;; ------------------------------------- TXN-RACE-001 (inb-c74f05, 2026-09-13)
 ;;
