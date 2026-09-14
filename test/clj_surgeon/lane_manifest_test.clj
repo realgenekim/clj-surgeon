@@ -16,6 +16,7 @@
    [clj-surgeon.battery-ledger :as ledger]
    [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.mcp-test-runner :as runner]
+   [clj-surgeon.portability-summary :as summary]
    [clj-surgeon.runner-membership :as rm]
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.edn :as edn]
@@ -175,7 +176,7 @@
   ;; @spec TEST-ISO-001 -- an explicit runtime for every namespace, independent of cadence.
   (testing "every discovered test namespace has a closed runtime declaration"
     (let [runtimes @(requiring-resolve 'clj-surgeon.lane-manifest/namespace-runtimes)]
-      (is (= 159 (count runtimes)))
+      (is (= 161 (count runtimes)))
       (is (= (set (keys @on-disk)) (set (keys runtimes))))
       (is (= #{:bb :jvm} (set (vals runtimes))))
       (is (= :bb (get runtimes 'clj-surgeon.forms-test)))
@@ -420,6 +421,33 @@
         (println "BB-LOAD-EXCLUDED" n (pr-str (:control refusal))))
       (is (or (nil? refusal) unsupported-jvm-only?)
           (pr-str refusal)))))
+
+(declare derived-census)
+
+;; @spec STATE-HOME-013
+(deftest generated-portability-census-agrees-with-all-inventories
+  (is (= "All 0 assigned namespaces are listed." (summary/population-line {})))
+  (is (= "All 2 assigned namespaces are listed." (summary/population-line {'a {} 'b {}})))
+  (let [root "docs/observations/2026-09-12-bbtower-block-b/attempt22/"
+        controls (edn/read-string (slurp (str root "portability-controls.edn")))
+        markdown (slurp (str root "portability-census.md"))
+        header (Long/parseLong (second (re-find #"All (\d+) assigned namespaces" markdown)))
+        rows (re-seq #"(?m)^\| (clj-surgeon\.[^ |]+) \| ([^|]+) \| ([^|]+) \| [^\n]*? \| ([a-z-]+)(?::[^\n]*)? \|$" markdown)
+        names (map (comp symbol second) rows)
+        census (edn/read-string (slurp "test/clj_surgeon/deftest_census.edn"))]
+    (is (= header (count controls) (count rows)))
+    (is (= (set names) (set (keys controls)) (set (keys lm/namespace-runtimes))))
+    (is (= (count names) (count (set names))))
+    (is (= (set (keys lm/manifest))
+           (set (map (comp symbol namespace) census))))
+    (is (= census (derived-census)))
+    (doseq [[_ n runtime cadence classification] rows]
+      (let [n (symbol n)]
+        (is (= (lm/namespace-runtimes n) (edn/read-string runtime)))
+        (is (= (or (lm/lane-of n) :dedicated) (edn/read-string cadence)))
+        (is (= (:classification (controls n)) (keyword classification)))))
+    (is (= (frequencies (map :classification (vals controls)))
+           (edn/read-string (second (re-find #"Summary: (.*)" markdown)))))))
 
 (deftest every-test-namespace-on-disk-is-accounted-for
   (testing "disk -> manifest: a new test namespace cannot silently never run"
@@ -942,7 +970,9 @@
      clj-surgeon.ns-isolation-test ; TEST-ISO-002/003/004/005/007/010's witnesses (round four) + round five's four spawn-ledger witnesses
      clj-surgeon.helper-extraction-test ; MCP-OP-HELPER's pure planner witnesses, enrolled into :fast when the planner went green (it requires only the planner, the fixture and clojure.test, and spawns nothing)
      clj-surgeon.telemetry-events-test ; TELEMETRY-EVENTS-001's witnesses: the box-wide JSONL ledger the public MCP fns append to as a side effect (2026-09-06, the night the hourly watch reported four figures while a dozen calls landed in launcher-chosen roots it never read)
-     clj-surgeon.mcp-helper-extraction-test}) ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
+     clj-surgeon.mcp-helper-extraction-test ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
+     clj-surgeon.state-home-admission-test
+     clj-surgeon.probe-state-test}) ; Round 7: 72 in-process admission cells in :fast; five real Make cells in :battery, plus unchanged four-mode warm witness.
 
 (def ^:private census-ledger-path
   "The deftest ledger: ONE LINE PER FULLY QUALIFIED DEFTEST NAME, sorted.

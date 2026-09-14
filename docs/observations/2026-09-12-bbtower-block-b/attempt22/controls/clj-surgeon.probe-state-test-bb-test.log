@@ -1,0 +1,63 @@
+
+Testing clj-surgeon.probe-state-test
+
+FAIL in (warm-leaves-fresh-checkout-clean) (/home/forge/src/clj-surgeon-statehome/test/clj_surgeon/probe_state_test.clj:85)
+explicit: Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-statehome/test/state_home_warm.py", line 99, in <module>
+    raise AssertionError('Warm startup failed: ' + log.read_text())
+AssertionError: Warm startup failed: clojure -J-Xmx1024m -M:clj-surgeon/test-deps -e '(require (quote clj-surgeon.probe-state)) (clj-surgeon.probe-state/warm! {:port 19000 :nrepl-port :none :log-file "/var/tmp/forge/statehome-fx/warm-2mx0_qfd/warm.log"})'
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/statehome-fx/warm-2mx0_qfd -Duser.home=/var/tmp/forge/statehome-fx/warm-2mx0_qfd/home
+Error: Could not find or load main class clojure.main
+Caused by: java.lang.ClassNotFoundException: clojure.main
+make: *** [Makefile:373: warm] Error 1
+
+
+expected: (zero? (:exit result))
+  actual: (not (zero? 1))
+
+FAIL in (warm-leaves-fresh-checkout-clean) (/home/forge/src/clj-surgeon-statehome/test/clj_surgeon/probe_state_test.clj:85)
+xdg: Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-statehome/test/state_home_warm.py", line 99, in <module>
+    raise AssertionError('Warm startup failed: ' + log.read_text())
+AssertionError: Warm startup failed: clojure -J-Xmx1024m -M:clj-surgeon/test-deps -e '(require (quote clj-surgeon.probe-state)) (clj-surgeon.probe-state/warm! {:port 19000 :nrepl-port :none :log-file "/var/tmp/forge/statehome-fx/warm-t1hoi0nw/warm.log"})'
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/statehome-fx/warm-t1hoi0nw -Duser.home=/var/tmp/forge/statehome-fx/warm-t1hoi0nw/home
+Error: Could not find or load main class clojure.main
+Caused by: java.lang.ClassNotFoundException: clojure.main
+make: *** [Makefile:373: warm] Error 1
+
+
+expected: (zero? (:exit result))
+  actual: (not (zero? 1))
+
+FAIL in (warm-leaves-fresh-checkout-clean) (/home/forge/src/clj-surgeon-statehome/test/clj_surgeon/probe_state_test.clj:85)
+fallback: Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-statehome/test/state_home_warm.py", line 99, in <module>
+    raise AssertionError('Warm startup failed: ' + log.read_text())
+AssertionError: Warm startup failed: clojure -J-Xmx1024m -M:clj-surgeon/test-deps -e '(require (quote clj-surgeon.probe-state)) (clj-surgeon.probe-state/warm! {:port 19000 :nrepl-port :none :log-file "/var/tmp/forge/statehome-fx/warm-e_255s6y/warm.log"})'
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/statehome-fx/warm-e_255s6y -Duser.home=/var/tmp/forge/statehome-fx/warm-e_255s6y/home
+Error: Could not find or load main class clojure.main
+Caused by: java.lang.ClassNotFoundException: clojure.main
+make: *** [Makefile:373: warm] Error 1
+
+
+expected: (zero? (:exit result))
+  actual: (not (zero? 1))
+
+FAIL in (warm-leaves-fresh-checkout-clean) (/home/forge/src/clj-surgeon-statehome/test/clj_surgeon/probe_state_test.clj:85)
+unwritable: Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-statehome/test/state_home_warm.py", line 90, in <module>
+    assert ':probe-state-not-writable' in failure, failure
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: clojure -J-Xmx1024m -M:clj-surgeon/test-deps -e '(require (quote clj-surgeon.probe-state)) (clj-surgeon.probe-state/warm! {:port 19000 :nrepl-port :none :log-file "/var/tmp/forge/statehome-fx/warm-i5g9g1c7/warm.log"})'
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/statehome-fx/warm-i5g9g1c7 -Duser.home=/var/tmp/forge/statehome-fx/warm-i5g9g1c7/home
+Error: Could not find or load main class clojure.main
+Caused by: java.lang.ClassNotFoundException: clojure.main
+make: *** [Makefile:373: warm] Error 1
+
+
+expected: (zero? (:exit result))
+  actual: (not (zero? 1))
+
+Ran 6 tests containing 28 assertions.
+4 failures, 0 errors.
+{:namespace clj-surgeon.probe-state-test, :runtime :bb, :mode "test", :started-at "2026-09-13T17:44:38.978373280Z", :elapsed-ms 24655, :status :test-failed, :result {:test 6, :pass 24, :fail 4, :error 0, :type :summary}}

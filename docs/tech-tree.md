@@ -987,3 +987,51 @@ errors and the same four baseline warnings. The census adds three names and
 removes none. Complete narrow oracle and gate evidence, including the counted
 battery, belong in the uncommitted [round 9 report](observations/2026-09-12-data-not-code/round9/REPORT.md).
 No speed claim, new routing admission or expanded all-writers coverage follows.
+
+### Warm image state-home identity (inb-3c65d7)
+
+The actual Make warm recipe left `?? .clj-surgeon/` in a fresh committed copy.
+The state-home leaf moves only the probe identity descriptor into a per-workspace
+SHA-256 directory beneath the declared seat state root. Startup and the Babashka
+client now share resolution; the writer uses destination-envelope admission,
+and receipts name the descriptor read. Native EACCES and absent-descriptor
+boundaries have direct witnesses. The live Make/client boundary caught a JVM-only
+exception import that the initial JVM unit checks missed; the classifier now uses
+native class names without importing unavailable Babashka classes.
+
+This is a registered second encounter, not evidence of a speed win. Operator
+refusals, manual recovery, an editor receipt written outside the task's paths,
+and remaining verification are recorded at /var/tmp/forge/statehome-fx/REPORT.md.
+The [STATE-HOME requirements](intent/state-home/state-home-specs.md) own the
+permanent regression; other checkout-state consumers remain outside this change.
+
+### State-home Round 5: class oracles after the second envelope-writer recurrence
+
+The state-root oracle now crosses precedence, path shape and envelope against
+checkout, admitted external and outside-envelope destinations through real Make
+startup. Landlock cannot catch this member because the checkout is writable.
+Canonical admission precedes directory creation and never extends the envelope.
+The matrix also exposed dangling-home-link startup and empty-home selection.
+
+Descriptor publication uses a same-directory temporary file, fsync and atomic
+move; native EFBIG and an injectable stage matrix witness prior-byte preservation
+and cleanup. Local descriptor and identity-source reads have filesystem-typed,
+bounded receipts before transport. The portability population header derives
+from its inventory, with one cross-inventory generation witness. These extend
+existing registered battery/fast namespaces; no routing or performance claim.
+Requirements live in the state-home leaf; verification and costs remain external
+at `/var/tmp/forge/statehome-fx/REPORT.md`, Round 5.
+
+Round 7 state-home: packet 68bacdec battery found a kill/delete teardown race
+and 1,851,865 ms serial-equivalent budget violation. Split 72 admission classes
+into :fast and five Make boundaries into :battery; wait for process-group exit
+before cleanup. Verification and measured costs: /var/tmp/forge/statehome-fx/REPORT.md, Round 7.
+
+
+State-home Round 8: Sol SH-ROUND2-01 found that the Round-5 stage seam replaced
+create, so the oracle could never observe a created temporary file followed by
+an error. The 48-cell before/after publication matrix reproduces six residue
+failures at db23914d. Cleanup now attempts removal on failure and retains both
+native diagnostics when removal fails; 72 additional cleanup cells enumerate
+primary errno × cleanup errno × removal timing. Atomic move is still the commit
+boundary. Verification and costs: /var/tmp/forge/statehome-fx/REPORT.md, Round 8.
