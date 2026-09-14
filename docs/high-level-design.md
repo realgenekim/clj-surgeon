@@ -18,8 +18,10 @@ verification, or consumed meaningful server time.
 
 ### One entrance for test namespace registration (inb-b10334)
 
-Status: proposed; phase-one design for `fable/regns-entrance`, based on
-`MCP/main` commit `8aedb65e`. Implementation and red/green evidence are pending.
+Status: approved and implemented on `fable/regns-entrance`, based on
+`MCP/main` commit `8aedb65e`. The [registration leaf](intent/test-registration/design.md)
+owns the shared model, execution boundary and REGNS-001 through REGNS-008.
+Evidence: [round-one report](observations/2026-09-14-register-test-ns-report-astra.md).
 
 Adding a test namespace currently exposes independent registration failures
 across successive runs. A root-parameterized registry oracle will compare the

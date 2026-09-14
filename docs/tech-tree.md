@@ -1,5 +1,11 @@
 # clj-surgeon tech tree
 
+Test namespace registration: one shared oracle and structural Make entrance now
+cover all five registration surfaces, including actual focused portability
+executions and byte-preserving repeats. RED-first evidence and limits:
+[registration report](observations/2026-09-14-register-test-ns-report-astra.md).
+This is branch-only bookkeeping repair, with no performance admission.
+
 Battery evidence ownership: receipt appends require BATTERY_LEDGER_APPEND=1;
 namespace timings use seat state with a read-only tracked seed. The explicit
 census regeneration target refuses named removals. Contract and verification

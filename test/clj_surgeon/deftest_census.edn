@@ -813,6 +813,14 @@
   clj-surgeon.lane-manifest-test/loaded-namespaces-carry-their-lane-at-runtime
   clj-surgeon.lane-manifest-test/no-fast-lane-namespace-spells-a-child-process
   clj-surgeon.lane-manifest-test/no-living-prose-still-calls-the-bb-lane-by-its-old-name
+  clj-surgeon.lane-manifest-test/registration-boundary-refusals-preserve-source-bytes
+  clj-surgeon.lane-manifest-test/registration-checklist-covers-every-missing-surface-subset
+  clj-surgeon.lane-manifest-test/registration-control-results-are-executions
+  clj-surgeon.lane-manifest-test/registration-existing-values-and-ambiguous-owners-refuse
+  clj-surgeon.lane-manifest-test/registration-failed-control-rolls-back-enrollment
+  clj-surgeon.lane-manifest-test/registration-oracle-enumerates-all-surfaces
+  clj-surgeon.lane-manifest-test/registration-planner-refuses-conflicts
+  clj-surgeon.lane-manifest-test/registration-structural-plan-preserves-and-repeats
   clj-surgeon.lane-manifest-test/runtime-evidence-binds-statistics-to-receipt-files
   clj-surgeon.lane-manifest-test/runtime-evidence-is-consumed-and-receipts-are-required
   clj-surgeon.lane-manifest-test/runtime-portability-controls-cover-every-assignment

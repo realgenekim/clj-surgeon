@@ -18,6 +18,7 @@
    [clj-surgeon.mcp-test-runner :as runner]
    [clj-surgeon.portability-summary :as summary]
    [clj-surgeon.runner-membership :as rm]
+   [clj-surgeon.test-registration :as reg]
    [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -153,7 +154,8 @@
        ". Declared by the census but ABSENT from the tree ("
        (count (:extra diff)) "): "
        (if (seq (:extra diff)) (str/join ", " (:extra diff)) "none")
-       ". Add or remove the NAMED member -- never re-pin a count."))
+       ". Add or remove the NAMED member -- never re-pin a count."
+       (when diff (str "\n" (str/join "\n" (map :message (reg/repository-checklist ".")))))))
 
 ;; ---------------------------------------------------------------------------
 ;; @spec TEST-ISO-001
@@ -450,6 +452,8 @@
            (edn/read-string (second (re-find #"Summary: (.*)" markdown)))))))
 
 (deftest every-test-namespace-on-disk-is-accounted-for
+  (let [incomplete (reg/repository-checklist ".")]
+    (is (empty? incomplete) (str/join "\n" (map :message incomplete))))
   (testing "disk -> manifest: a new test namespace cannot silently never run"
     (let [unaccounted (sort (remove (fn [s]
                                       (or (contains? lm/manifest s)
@@ -1089,7 +1093,8 @@
        ". After regenerating, READ THE LEDGER DIFF before committing it"
        ". A removed name is a deleted test -- say why, or restore it. A removed "
        "AND an added name together is a rename, which the count ledger this "
-       "replaced could not see. Then regenerate: " regenerate-entrance))
+       "replaced could not see. Then regenerate: " regenerate-entrance
+       (when diff (str "\n" (str/join "\n" (map :message (reg/repository-checklist ".")))))))
 
 ;; @spec BATTERY-LEDGER-004
 (defn regenerate-census!
@@ -1505,11 +1510,11 @@
       (is (some? oracle) "current census sees membership only; need the complete registry oracle")
       (when oracle
         (let [result (oracle {:namespace 'clj-surgeon.fixture-test :file (str file)
-                             :lane nil :requested-lane :battery :runtime :jvm
-                             :manifest-lane :battery :registered-runtime :jvm
-                             :pin 0 :expected-count 1 :adopted? false
-                             :tests '#{clj-surgeon.fixture-test/works} :census #{}
-                             :controls-valid? false})]
+                              :lane nil :requested-lane :battery :runtime :jvm
+                              :manifest-lane :battery :registered-runtime :jvm
+                              :pin 0 :expected-count 1 :adopted? false
+                              :tests '#{clj-surgeon.fixture-test/works} :census #{}
+                              :controls-valid? false})]
           (is (= [2 3 4 5] (mapv :surface (:missing result))))
           (is (every? #(every? (set (keys %)) [:file :form :actual :expected]) (:missing result)))
           (doseq [surface ["ns metadata" "runtime count" "adoption" "census/control"]]
@@ -1547,10 +1552,10 @@
               [[(assoc registration-request :lane :fast) (registration-fixture) :register-conflict]
                [registration-request (dissoc (registration-fixture) "test/clj_surgeon/fixture_test.clj") :register-source-missing]
                [registration-request (assoc (registration-fixture) "test/clj_surgeon/fixture_test.clj"
-                                             "(ns clj-surgeon.fixture-test)\n(deftest works (is true))") :register-metadata-missing]
+                                       "(ns clj-surgeon.fixture-test)\n(deftest works (is true))") :register-metadata-missing]
                [(assoc registration-request :namespace '../escape) (registration-fixture) :register-invalid-request]
                [registration-request (assoc (registration-fixture) "test/clj_surgeon/deftest_census.edn"
-                                             "#{clj-surgeon.fixture-test/removed}") :register-removed-tests]]]
+                                       "#{clj-surgeon.fixture-test/removed}") :register-removed-tests]]]
         (let [r (plan snapshot request)]
           (is (= expected (:error-type r)) (pr-str r))
           (is (empty? (:changes r)))
@@ -1594,3 +1599,84 @@
                    (assoc (pass :bb) :namespace 'other)
                    (assoc-in (pass :bb) [:result :test] 0)]]
         (is (false? (valid? n :jvm nil {:jvm (pass :jvm) :bb bad})))))))
+
+;; @spec REGNS-001
+(deftest registration-checklist-covers-every-missing-surface-subset
+  (let [base {:namespace 'fixture-test :file "test/fixture_test.clj"
+              :lane :battery :requested-lane :battery :runtime :jvm
+              :manifest-lane :battery :registered-runtime :jvm
+              :pin 1 :expected-count 1 :adopted? true
+              :tests '#{fixture-test/works} :census '#{fixture-test/works}
+              :controls-valid? true}]
+    (doseq [mask (range 32)]
+      (let [missing? #(bit-test mask (dec %))
+            m (cond-> base
+                (missing? 1) (assoc :registered-runtime nil)
+                (missing? 2) (assoc :lane nil)
+                (missing? 3) (assoc :pin 0)
+                (missing? 4) (assoc :adopted? false)
+                (missing? 5) (assoc :controls-valid? false))]
+        (is (= (vec (filter missing? (range 1 6)))
+               (mapv :surface (:missing (reg/checklist m)))) (str "mask " mask))))))
+
+;; @spec REGNS-002
+;; @spec REGNS-008
+(deftest registration-boundary-refusals-preserve-source-bytes
+  (let [root (temp-dir "regns-refusals")
+        fixture (registration-fixture)]
+    (doseq [[p s] fixture]
+      (.mkdirs (.getParentFile (io/file root p)))
+      (spit (io/file root p) s))
+    (doseq [request [(assoc registration-request :lane :fast)
+                     (assoc registration-request :runtime :unknown)
+                     (assoc registration-request :namespace 'clj-surgeon.absent-test)]]
+      (let [r (reg/register! root request)]
+        (is (false? (:ok r)))
+        (is (= fixture (into {} (map (fn [[p _]] [p (slurp (io/file root p))])) fixture)))))
+    (let [outside (temp-dir "regns-outside")
+          source (io/file root "test/clj_surgeon/fixture_test.clj")
+          target (io/file outside "fixture_test.clj")]
+      (spit target (fixture "test/clj_surgeon/fixture_test.clj"))
+      (io/delete-file source)
+      (java.nio.file.Files/createSymbolicLink (.toPath source) (.toPath target)
+                                              (into-array java.nio.file.attribute.FileAttribute []))
+      (is (= :register-path-escape (:error-type (reg/register! root registration-request)))))))
+
+;; @spec REGNS-002
+;; @spec REGNS-003
+(deftest registration-existing-values-and-ambiguous-owners-refuse
+  (let [before (registration-fixture)
+        planned (reg/plan before registration-request)
+        registered (merge before (:candidate planned))]
+    (doseq [[field replacement]
+            [[:lane [":battery" ":fast"]]
+             [:runtime [":jvm" ":bb"]]]]
+      (let [[old new] replacement
+            changed (update registered "test/clj_surgeon/lane_manifest.clj" str/replace old new)
+            result (reg/plan changed registration-request)]
+        (is (= :register-conflict (:error-type result)) (str field " " result))
+        (is (some? (:actual result)))
+        (is (some? (:expected result)))))
+    (let [changed (update before "test/clj_surgeon/lane_manifest.clj" str "\n(def manifest {})\n")]
+      (is (= :register-ambiguous (:error-type (reg/plan changed registration-request)))))))
+
+;; @spec REGNS-005
+(deftest registration-failed-control-rolls-back-enrollment
+  (let [root (temp-dir "regns-control-rollback")
+        fixture (registration-fixture)
+        control-var (ns-resolve 'clj-surgeon.test-registration 'control!)]
+    (doseq [[p s] fixture]
+      (.mkdirs (.getParentFile (io/file root p)))
+      (spit (io/file root p) s))
+    (let [r (with-redefs-fn
+              {control-var (fn [_ _ n runtime mode _]
+                             (if (= "load" mode)
+                               {:namespace n :runtime runtime :mode mode :status :loaded :exit 0}
+                               {:namespace n :runtime runtime :status :test-failed :exit 1
+                                :result {:test 1 :pass 0 :fail 1 :error 0}}))}
+              #(reg/register! root registration-request))]
+      (is (= :register-control-failed (:error-type r)))
+      (is (= :rolled-back (:state r)))
+      (is (= 1 (get-in r [:controls :jvm :exit])))
+      (is (= 1 (get-in r [:controls :bb :result :fail])))
+      (is (= fixture (into {} (map (fn [[p _]] [p (slurp (io/file root p))])) fixture))))))

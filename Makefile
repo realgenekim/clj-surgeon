@@ -160,6 +160,7 @@ help:
 	@echo "  make benchmark-agent-skills    Run both bounded clean-agent skill batteries"
 	@echo "  make benchmark-agent-skills-self-test Test both skill harnesses without model calls"
 	@echo "  make clj-surgeon-skill-self-test Verify compact routing contract and mirror"
+	@echo "  make register-test-ns NS=… LANE=battery RUNTIME=jvm   Register an author-declared test namespace and run focused controls"
 	@echo "  make census-battery           Run the COMMITTED relation-census review battery and print its per-witness composition"
 	@echo "  make memory-battery           Measure tree-scale heap at N=100/1k/10k in one bounded JVM (minutes; not in make test)"
 	@echo "  make memory-battery-generate  Build/verify the synthetic 100/1k/10k trees (~1 s)"
@@ -1426,3 +1427,10 @@ fanout-selftests:
 		exit 1; \
 	fi; \
 	echo "fanout-selftests: all $$ran modes passed"
+
+.PHONY: register-test-ns
+# INTENT: REGNS-003
+# Author metadata is mandatory. Values cross to the program through env, never shell interpolation.
+export NS LANE RUNTIME BB_INELIGIBLE
+register-test-ns:
+	@clojure -J-Xmx1024m -M:clj-surgeon/test-deps -m clj-surgeon.test-registration

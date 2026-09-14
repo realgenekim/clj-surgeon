@@ -24,7 +24,7 @@ controls cannot become a passing declaration. Projection uses the existing fold
 format; only the requested namespace's control artifacts and the two generated
 inventory files are published. No all-corpus runner is invoked.
 
-Publication is serialized by a root-local file lock in external scratch. All
+Publication is serialized by a root-keyed directory lock in external scratch. All
 source candidates are parsed before writing. Registration is temporarily installed
 for the focused runner to load the correct lane. Execution failure restores all
 registration and control bytes; its diagnostic reports the real failed execution.
@@ -38,3 +38,11 @@ actual focused control results, whole oracle success, byte identity on repeat an
 conflict preservation. Pure tests exhaust missing-surface combinations and CST
 preservation; boundary tests cover root scanning and execution refusal. Protected
 battery ledgers are never output paths.
+
+The initial entrance admits `.clj` test files and the repository's literal
+map/set registration shapes. Other source shapes refuse rather than being
+rewritten heuristically. Runtime measurements are read from the root snapshot;
+historical control overrides retain their existing paths. The bb-load exclusion
+is exactly the existing gate's JVM-assignment exception; it is not a passing JVM
+test claim. Existing valid historical controls are reused without a new freshness
+claim. A killed process may leave the named directory lock for manual recovery.
