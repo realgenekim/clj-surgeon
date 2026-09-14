@@ -1,0 +1,11 @@
+(require '[clj-surgeon.diff-impact :as impact] '[clojure.edn :as edn] '[clojure.string :as str])
+(binding [*command-line-args* ["--library"]] (load-file "/home/forge/src/clj-surgeon-impact/test/diff_impact.clj"))
+(let [nodes (repository-nodes (repository-files))
+      before (edn/read-string (slurp "/var/tmp/forge/impact-fx/real-a-final/impact-list.edn"))
+      no-src (impact/select-impact (mapv #(if (str/starts-with? (:file %) "src/") (dissoc % :content-edges) %) nodes) ["src/clj_surgeon/probe.clj"])
+      seeds (filter #(and (str/starts-with? (:file %) "src/")
+                          (some (fn [edge] (= "src/clj_surgeon/probe.clj" (:file edge))) (:content-edges %))) nodes)]
+  (prn {:without-src-content-count (count (:namespaces no-src))
+        :equals-round1 ( = (set (map :namespace (:namespaces before))) (set (map :namespace (:namespaces no-src))))
+        :src-seeds (mapv (fn [n] {:namespace (:namespace n) :file (:file n)
+                                  :literal-roots (sort (filter #(#{"src" "src/" "src/clj_surgeon" "src/clj_surgeon/"} %) (:strings (impact/content-facts (slurp (:file n))))))}) seeds)}))

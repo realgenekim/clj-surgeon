@@ -1,0 +1,4 @@
+
+FAIL in (src-content-closure-bounds-and-unreachable-reasons) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:272)
+expected: (= [{:file "src/subject.clj", :reason :no-dependency-edge}] (:unmatched-files r))
+  actual: (not (= [{:file "src/subject.clj", :reason :no-dependency-edge}] [{:file "src/subject.clj", :reason :no-test-dependent}]))

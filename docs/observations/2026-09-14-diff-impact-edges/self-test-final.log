@@ -1,0 +1,10 @@
+Environment self-check: broad/mismatched roots and empty/future overrides refused
+Chain depth 1 selected #{fixture.n1}
+Chain depth 2 selected #{fixture.n2}
+Chain depth 3 selected #{fixture.n3}
+Chain depth 4 selected #{fixture.n4}
+Chain depth 5 selected #{fixture.n5}
+Chain depth 6 selected #{fixture.n6}
+Chain depth 7 selected #{fixture.n7}
+Chain depth 8 selected #{fixture.n8}
+Diff-impact self-check: depths 1..8, every edge cut, unrelated negative, cycles, multiple seeds, test intermediates, shared libspec shapes, Sol F1 and completion checks passed

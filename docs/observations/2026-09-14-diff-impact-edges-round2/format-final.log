@@ -1,0 +1,7 @@
+standard-clj fix v0.29.0
+
+✓ /src/clj_surgeon/diff_impact.clj [8.41ms]
+✓ /test/clj_surgeon/diff_impact_test.clj [9.3ms]
+✓ /test/diff_impact.clj [9.02ms]
+
+All 3 files formatted with Standard Clojure Style 👍 [34.58ms]
