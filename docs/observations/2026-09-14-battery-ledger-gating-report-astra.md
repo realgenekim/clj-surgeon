@@ -100,3 +100,97 @@ Ran 1 tests containing 62 assertions.
 
 Full RED output is embedded in the RED commit message and retained at
 `/var/tmp/forge/ledger-fx/round2-red.log`. Census: exit 0, `+1/-0`.
+
+RED commit: `71a0e778`. GREEN commit: `7f048525`.
+
+GREEN output from the unchanged matrix:
+
+```text
+Testing clj-surgeon.battery-state-admission-test
+Ran 1 tests containing 62 assertions.
+0 failures, 0 errors.
+```
+
+The five cases are rejected selected roots (inside checkout / outside envelope),
+admitted roots with descendants redirected into either rejected location, and
+an admitted external positive control. Each calls four production boundaries:
+read-wall-record, prepare-suite!, write-walls!, finish-suite!. Preparation uses
+`--prereqs 0` and does not execute its worker plan. Completion receives an empty
+successful worker result and exercises the actual completion writer. The seed
+is the repository's tracked seed. Snapshot assertions include directory names,
+file bytes, and symlink targets, so zero bytes alone cannot hide created dirs.
+The real CLI's existing `-main` catch prints the propagated ex-data and exits 1;
+neither preparation nor completion catches an admission refusal.
+
+The fix adds `admit-wall-path!` at battery_parallel_runner.clj:73: selected-root
+admission at :77 and independent final-path admission at :79. The read at :90
+admits before existence/fallback and outside the best-effort parse catch.
+The write at :997 admits before mkdir at :998. Preparation at :1068 always uses
+the admitted battery reader, including when the state file already exists.
+Non-battery gate measurements/receipts under explicit target/work directories
+(:813, :852–874, :1180, :1206, :1238) are not state-root-derived writers.
+
+The first five-namespace verification returned 94 tests / 2,523 assertions,
+2 failures / 0 errors: the new namespace additionally needed real portability
+controls and a generated portability census entry. This was registration debt,
+not a waived test. Executed JVM and bb controls both passed 1 test / 62
+assertions; bb load passed. Added their actual command, output, receipt and
+exit records to the existing control inventory location, and updated the
+inventory/header/summary to 162 assignments (99 portable, 50 load-incompatible,
+13 non-portable). The new namespace remains assigned :jvm with :battery
+cadence; no performance reassignment or claim is made. No existing control
+was rerun or relabeled. Final requested verification:
+
+```text
+Testing clj-surgeon.state-home-admission-test
+Ran 94 tests containing 2526 assertions.
+0 failures, 0 errors.
+```
+
+Exact verification commands (all run from this worktree; every JVM explicitly
+bounded to 1,024 MiB, including the production-path test's children):
+
+```bash
+export TMPDIR=/var/tmp/forge/ledger-fx
+export JAVA_TOOL_OPTIONS='-Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/ledger-fx'
+
+# RED and GREEN: identical command, separate round2-red.log / round2-green.log.
+clojure -J-Xmx1024m -M:clj-surgeon/test-deps -e "(require 'clj-surgeon.battery-state-admission-test 'clojure.test) (let [r (clojure.test/run-tests 'clj-surgeon.battery-state-admission-test)] (shutdown-agents) (System/exit (if (zero? (+ (:fail r) (:error r))) 0 1)))"
+
+# Required five-namespace gate; final output: round2-focused-final.log.
+clojure -J-Xmx1024m -M:clj-surgeon/test-deps -e "(require 'clojure.test) (let [namespaces '[clj-surgeon.battery-state-admission-test clj-surgeon.battery-ledger-test clj-surgeon.battery-parallel-test clj-surgeon.lane-manifest-test clj-surgeon.state-home-admission-test]] (doseq [n namespaces] (require n)) (let [r (apply clojure.test/run-tests namespaces)] (shutdown-agents) (System/exit (if (zero? (+ (:fail r) (:error r))) 0 1))))"
+
+# Explicit target sets CENSUS_REGENERATE=1 internally. RED: +1/-0; final: +0/-0.
+make census-regenerate
+
+npx --yes @chrisoakman/standard-clojure-style fix test/clj_surgeon/battery_state_admission_test.clj
+~/bin/clj-kondo --lint test/clj_surgeon/battery_state_admission_test.clj test/clj_surgeon/battery_parallel_runner.clj test/clj_surgeon/lane_manifest.clj test/clj_surgeon/lane_manifest_test.clj
+make intent-audit
+
+# Required portability collateral; exact child argv and environment are also
+# committed in attempt22/controls/clj-surgeon.battery-state-admission-test-*.command.edn.
+bb /var/tmp/forge/ledger-fx/round2-controls.clj
+bb --classpath src:test /var/tmp/forge/ledger-fx/round2-inventory.clj
+
+git diff --check
+git diff 00566756 --exit-code -- docs/observations/battery-ledger.edn docs/observations/battery-namespace-walls.edn
+sha256sum -c /var/tmp/forge/ledger-fx/round2-tracked-before.sha256
+```
+
+Lint: exit 0, `errors: 0, warnings: 0`. Intent audit: exit 0, `:ok true`,
+STATE-HOME-009 and STATE-HOME-010 both `:implemented`; both IDs annotate the
+new direct witness and the admission/read/write implementation. Final census:
+exit 0, `census-regenerate: +0/-0`. Tracked ledger and walls seed: empty diff
+against starting commit and both SHA-256 checks `OK`. No `make test` or
+`make test-battery` was run this round; the seat owns the packet.
+
+Retained logs/scripts are under `/var/tmp/forge/ledger-fx/round2-*`. Initial
+fixture debugging (output framing and Java Path coercion) preceded the recorded
+RED run. The inventory update script also needed a delimiter repair; its first
+attempt had already written the inventory, so the repaired update was made
+idempotent before replay. Neither issue is counted as behavioral evidence.
+
+Pressure point 2 remains OUT OF SCOPE: `BATTERY_LEDGER_APPEND=1` is ambient
+append authority. Recommend a receipt-chain-issued provenance token bound to
+candidate SHA, run identity, and validated passing receipt, with one-time minting
+validation at append. No token/provenance mechanism is implemented here.
