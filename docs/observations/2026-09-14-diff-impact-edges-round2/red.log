@@ -1,0 +1,497 @@
+
+Testing clj-surgeon.diff-impact-test
+
+FAIL in (mixed-selection-must-hold-before-launch) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:249)
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files nil))
+
+FAIL in (mixed-selection-must-hold-before-launch) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:249)
+expected: (= [{:file "Makefile", :reason :no-dependency-edge}] (get-in r [:results :unmatched-files]))
+  actual: (not (= [{:file "Makefile", :reason :no-dependency-edge}] nil))
+
+FAIL in (mixed-selection-must-hold-before-launch) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:249)
+expected: (str/includes? (:out r) ":reason :unmatched-files")
+  actual: (not (str/includes? "Selected 1 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {:require 1}\nselected fixture.control-test via require src/fixture/core.clj\n{:namespace fixture.control-test, :exit 1, :process-exit 1, :counters nil, :wall-ms 615, :log \"/tmp/impact-17836003354084927591/out/before/fixture.control-test.log\", :receipt \"/tmp/impact-17836003354084927591/out/before/fixture.control-test.edn\"}\n" ":reason :unmatched-files"))
+
+FAIL in (mixed-selection-must-hold-before-launch) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:249)
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files nil))
+
+FAIL in (mixed-selection-must-hold-before-launch) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:249)
+expected: (= [{:file "Makefile", :reason :no-dependency-edge}] (get-in r [:results :unmatched-files]))
+  actual: (not (= [{:file "Makefile", :reason :no-dependency-edge}] nil))
+
+FAIL in (mixed-selection-must-hold-before-launch) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:249)
+expected: (str/includes? (:out r) ":reason :unmatched-files")
+  actual: (not (str/includes? "Selected 1 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {:require 1}\nselected fixture.control-test via require src/fixture/core.clj\n{:namespace fixture.control-test, :exit 1, :process-exit 1, :counters nil, :wall-ms 603, :log \"/tmp/impact-3492514489743161834/out/after/fixture.control-test.log\", :receipt \"/tmp/impact-3492514489743161834/out/after/fixture.control-test.edn\"}\n" ":reason :unmatched-files"))
+
+FAIL in (mixed-selection-must-hold-before-launch) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:249)
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files nil))
+
+FAIL in (mixed-selection-must-hold-before-launch) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:249)
+expected: (= [{:file "Makefile", :reason :no-dependency-edge}] (get-in r [:results :unmatched-files]))
+  actual: (not (= [{:file "Makefile", :reason :no-dependency-edge}] nil))
+
+FAIL in (mixed-selection-must-hold-before-launch) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:249)
+expected: (str/includes? (:out r) ":reason :unmatched-files")
+  actual: (not (str/includes? "Selected 1 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {:require 1}\nselected fixture.control-test via require src/fixture/core.clj\n{:namespace fixture.control-test, :exit 1, :process-exit 1, :counters nil, :wall-ms 629, :log \"/tmp/impact-12656101956698111444/out/merged/fixture.control-test.log\", :receipt \"/tmp/impact-12656101956698111444/out/merged/fixture.control-test.edn\"}\n" ":reason :unmatched-files"))
+
+FAIL in (mixed-selection-must-hold-before-launch) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:249)
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files nil))
+
+FAIL in (mixed-selection-must-hold-before-launch) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:249)
+expected: (= [{:file "Makefile", :reason :no-dependency-edge}] (get-in r [:results :unmatched-files]))
+  actual: (not (= [{:file "Makefile", :reason :no-dependency-edge}] nil))
+
+FAIL in (mixed-selection-must-hold-before-launch) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:249)
+expected: (str/includes? (:out r) ":reason :unmatched-files")
+  actual: (not (str/includes? "Selected 1 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {:require 1}\nselected fixture.control-test via require src/fixture/core.clj\n{:namespace fixture.control-test, :exit 1, :process-exit 1, :counters nil, :wall-ms 961, :log \"/tmp/impact-5505905384591093172/out/fixed-point/fixture.control-test.log\", :receipt \"/tmp/impact-5505905384591093172/out/fixed-point/fixture.control-test.edn\"}\n" ":reason :unmatched-files"))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-constant
+expected: (= expected (selected-set r))
+  actual: (not (= #{fixture.reader-test} #{}))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-constant
+[:src-constant "before" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"resources/registry.edn\"], :unmatched-files [{:file \"resources/registry.edn\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "a85c2fb6b717f59d139dd1028bc8e8d30fc95127", :status :nothing-selected, :changed-files ["resources/registry.edn"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "afd163e6bb9e3826a5879c6baafc2dcdba52a232f929b07c30a7aab6e16426e1", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-6404566559726259823"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["resources/registry.edn"], :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-constant
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-constant
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-constant
+[:src-constant "after" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"resources/registry.edn\"], :unmatched-files [{:file \"resources/registry.edn\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "a85c2fb6b717f59d139dd1028bc8e8d30fc95127", :status :nothing-selected, :changed-files ["resources/registry.edn"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "644c58ad75fc62d3f20f0140202090ca6f2a40257204953a2640c6f38ce11f91", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-1694185033469260579"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["resources/registry.edn"], :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-constant
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-constant
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-constant
+[:src-constant "merged" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"resources/registry.edn\"], :unmatched-files [{:file \"resources/registry.edn\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "a85c2fb6b717f59d139dd1028bc8e8d30fc95127", :status :nothing-selected, :changed-files ["resources/registry.edn"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "5afb0eeb87a795761679ebc4a790a01f727c881036528672700252024646adbb", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-12299213656071844328"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["resources/registry.edn"], :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-constant
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-constant
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-constant
+[:src-constant "fixed-point" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"resources/registry.edn\"], :unmatched-files [{:file \"resources/registry.edn\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "f080366c087c0a9d06dc86fe5e080f1a9c2be7f9", :status :nothing-selected, :changed-files ["resources/registry.edn"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "f31f0779bcdfa83607e72a7e1da06d649460f9925a074b706f12ea117750471d", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-12775529996261398951"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["resources/registry.edn"], :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-constant
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-constant
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+edn-config
+expected: (= :hold-unmatched-files (get-in r [:inventory :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+edn-config
+[:edn-config "before" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"resources/registry.edn\"], :unmatched-files [{:file \"resources/registry.edn\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "bc47a53930845672e8423e5584e21fb09766cfc7", :status :nothing-selected, :changed-files ["resources/registry.edn"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "8449ecef977813c8126dcaa87f1845e13cc6f600b614eec2462a5d567b24be1b", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-17894564894653889683"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["resources/registry.edn"], :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+edn-config
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+edn-config
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+edn-config
+[:edn-config "after" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"resources/registry.edn\"], :unmatched-files [{:file \"resources/registry.edn\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "bc47a53930845672e8423e5584e21fb09766cfc7", :status :nothing-selected, :changed-files ["resources/registry.edn"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "e87e3ad2fa762377ee70de3ca0c88f99474bcf3e043d7863437fcb79c5d5bf03", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-3676015432911775048"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["resources/registry.edn"], :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+edn-config
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+edn-config
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+edn-config
+[:edn-config "merged" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"resources/registry.edn\"], :unmatched-files [{:file \"resources/registry.edn\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "bc47a53930845672e8423e5584e21fb09766cfc7", :status :nothing-selected, :changed-files ["resources/registry.edn"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "2ecba3f4d20161a7b24c2171364f284cddfacfd64bd3b8946df1d16718c877af", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-933817483536512209"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["resources/registry.edn"], :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+edn-config
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+edn-config
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+edn-config
+[:edn-config "fixed-point" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"resources/registry.edn\"], :unmatched-files [{:file \"resources/registry.edn\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "bc47a53930845672e8423e5584e21fb09766cfc7", :status :nothing-selected, :changed-files ["resources/registry.edn"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "3bd814e54b868c5fc9f38775833c865826b0ccdf1e17db9e188aa0d41220dfcc", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-8765663035738436933"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["resources/registry.edn"], :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+edn-config
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+edn-config
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+io-resource
+expected: (= :hold-unmatched-files (get-in r [:inventory :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+io-resource
+[:io-resource "before" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"resources/registry.edn\"], :unmatched-files [{:file \"resources/registry.edn\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "99052a6daa57adb509b1958d95c54c3be66108bf", :status :nothing-selected, :changed-files ["resources/registry.edn"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "8d4cfc600abd963ccca2356a2a9315dd7db41bb0ee5f6f70f78c9c4c1078def2", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-8662114830904800103"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["resources/registry.edn"], :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+io-resource
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+io-resource
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+io-resource
+[:io-resource "after" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"resources/registry.edn\"], :unmatched-files [{:file \"resources/registry.edn\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "99052a6daa57adb509b1958d95c54c3be66108bf", :status :nothing-selected, :changed-files ["resources/registry.edn"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "33379aed0bfe559fda140f1f14eefd8c7a70057cd6555a3657b5e5d9d966b08c", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-10142075263553589520"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["resources/registry.edn"], :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+io-resource
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+io-resource
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+io-resource
+[:io-resource "merged" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"resources/registry.edn\"], :unmatched-files [{:file \"resources/registry.edn\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "99052a6daa57adb509b1958d95c54c3be66108bf", :status :nothing-selected, :changed-files ["resources/registry.edn"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "2baaea7a07e3d5b47e24e9255a977c88d7c8c699764b73ede015b75696d85d13", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-12888185994493093844"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["resources/registry.edn"], :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+io-resource
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+io-resource
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+io-resource
+[:io-resource "fixed-point" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"resources/registry.edn\"], :unmatched-files [{:file \"resources/registry.edn\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "99052a6daa57adb509b1958d95c54c3be66108bf", :status :nothing-selected, :changed-files ["resources/registry.edn"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "4a1eab8d6ab284826572a51d5ec9310ef767ee139496581e89e72c43cdab9ccf", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-2835792404055599621"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["resources/registry.edn"], :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+io-resource
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+io-resource
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+test-scan
+[:test-scan "before" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 2}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"src/fixture/unrequired.clj\"], :unmatched-files [{:file \"src/fixture/unrequired.clj\", :reason :no-test-dependent}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 2}, :namespaces [], :head "50e7098d5af0665d19f1893bd0aef8934d87990c", :status :nothing-selected, :changed-files ["src/fixture/unrequired.clj"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "24555e9cf4eb04b5e71bf02ec491c5ad3454204955ef745ebb2052749cc2ac51", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-10813795286480995112"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "src/fixture/unrequired.clj", :reason :no-test-dependent}]}, :results {:status :nothing-selected, :changed-files ["src/fixture/unrequired.clj"], :unmatched-files [{:file "src/fixture/unrequired.clj", :reason :no-test-dependent}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+test-scan
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+test-scan
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+test-scan
+[:test-scan "after" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 2}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"src/fixture/unrequired.clj\"], :unmatched-files [{:file \"src/fixture/unrequired.clj\", :reason :no-test-dependent}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 2}, :namespaces [], :head "ae532b413e9163c1e4e151111f8680f701cbb53a", :status :nothing-selected, :changed-files ["src/fixture/unrequired.clj"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "e1af51e0a13659d6cf752b4e24a58a9e6e14c0a3b4d4373fe09b7691abecc1c8", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-13512112740043413998"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "src/fixture/unrequired.clj", :reason :no-test-dependent}]}, :results {:status :nothing-selected, :changed-files ["src/fixture/unrequired.clj"], :unmatched-files [{:file "src/fixture/unrequired.clj", :reason :no-test-dependent}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+test-scan
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+test-scan
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+test-scan
+[:test-scan "merged" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 2}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"src/fixture/unrequired.clj\"], :unmatched-files [{:file \"src/fixture/unrequired.clj\", :reason :no-test-dependent}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 2}, :namespaces [], :head "ae532b413e9163c1e4e151111f8680f701cbb53a", :status :nothing-selected, :changed-files ["src/fixture/unrequired.clj"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "8c6d3c430ecceb7486f4fa3be152bf17bb70822300fc16f88815f2c9656a8d1b", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-15623698279554709909"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "src/fixture/unrequired.clj", :reason :no-test-dependent}]}, :results {:status :nothing-selected, :changed-files ["src/fixture/unrequired.clj"], :unmatched-files [{:file "src/fixture/unrequired.clj", :reason :no-test-dependent}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+test-scan
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+test-scan
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+test-scan
+[:test-scan "fixed-point" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 2}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"src/fixture/unrequired.clj\"], :unmatched-files [{:file \"src/fixture/unrequired.clj\", :reason :no-test-dependent}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 2}, :namespaces [], :head "ae532b413e9163c1e4e151111f8680f701cbb53a", :status :nothing-selected, :changed-files ["src/fixture/unrequired.clj"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "3fef30127039191497c0496c093fca0bc112823c3d8a9dd361b31581beda5289", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-16576847244177450986"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "src/fixture/unrequired.clj", :reason :no-test-dependent}]}, :results {:status :nothing-selected, :changed-files ["src/fixture/unrequired.clj"], :unmatched-files [{:file "src/fixture/unrequired.clj", :reason :no-test-dependent}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+test-scan
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+test-scan
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-scan
+expected: (= expected (selected-set r))
+  actual: (not (= #{fixture.reader-test} #{}))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-scan
+[:src-scan "before" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"src/fixture/unrequired.clj\"], :unmatched-files [{:file \"src/fixture/unrequired.clj\", :reason :no-test-dependent}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "8e6c9383fa2ad372794f1e004ed249109f332843", :status :nothing-selected, :changed-files ["src/fixture/unrequired.clj"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "25a3bd1199890250c7105e2bba48cad1aff2c72b0c1e2868191bc1d3069f06ee", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-16359562556681453656"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "src/fixture/unrequired.clj", :reason :no-test-dependent}]}, :results {:status :nothing-selected, :changed-files ["src/fixture/unrequired.clj"], :unmatched-files [{:file "src/fixture/unrequired.clj", :reason :no-test-dependent}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-scan
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-scan
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-scan
+[:src-scan "after" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"src/fixture/unrequired.clj\"], :unmatched-files [{:file \"src/fixture/unrequired.clj\", :reason :no-test-dependent}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "8e6c9383fa2ad372794f1e004ed249109f332843", :status :nothing-selected, :changed-files ["src/fixture/unrequired.clj"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "485f1c2e327df9fc33ddd6730908c618d1ebb31fe279cd38a387fd4b7d314681", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-17428863151829981564"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "src/fixture/unrequired.clj", :reason :no-test-dependent}]}, :results {:status :nothing-selected, :changed-files ["src/fixture/unrequired.clj"], :unmatched-files [{:file "src/fixture/unrequired.clj", :reason :no-test-dependent}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-scan
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-scan
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-scan
+[:src-scan "merged" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"src/fixture/unrequired.clj\"], :unmatched-files [{:file \"src/fixture/unrequired.clj\", :reason :no-test-dependent}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "bd0f7f4a604a617665383ea24997b9dc2b929d51", :status :nothing-selected, :changed-files ["src/fixture/unrequired.clj"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "53db896297a2cf8f793f47f70c32f475a78a23ea4c8efd23c8a59944214464a1", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-15969615190067547636"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "src/fixture/unrequired.clj", :reason :no-test-dependent}]}, :results {:status :nothing-selected, :changed-files ["src/fixture/unrequired.clj"], :unmatched-files [{:file "src/fixture/unrequired.clj", :reason :no-test-dependent}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-scan
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-scan
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-scan
+[:src-scan "fixed-point" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"src/fixture/unrequired.clj\"], :unmatched-files [{:file \"src/fixture/unrequired.clj\", :reason :no-test-dependent}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "bd0f7f4a604a617665383ea24997b9dc2b929d51", :status :nothing-selected, :changed-files ["src/fixture/unrequired.clj"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "4a3385186e3fd49114a7fad89daafa978879d68f72411a8e529741a63b6d4b1a", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-16845718977457258308"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "src/fixture/unrequired.clj", :reason :no-test-dependent}]}, :results {:status :nothing-selected, :changed-files ["src/fixture/unrequired.clj"], :unmatched-files [{:file "src/fixture/unrequired.clj", :reason :no-test-dependent}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-scan
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+src-scan
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+makefile
+expected: (= :hold-unmatched-files (get-in r [:inventory :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+makefile
+[:makefile "before" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"Makefile\"], :unmatched-files [{:file \"Makefile\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "2f5730dfc7c1faeeccca98f7efa5c1027444be31", :status :nothing-selected, :changed-files ["Makefile"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "f4c68ba5b21f3f0eec35aab21b4dff76aa3f17e34437efd4ebdfaf2e0a76c649", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-6679979861752949786"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "Makefile", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["Makefile"], :unmatched-files [{:file "Makefile", :reason :no-dependency-edge}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+makefile
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+makefile
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+makefile
+[:makefile "after" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"Makefile\"], :unmatched-files [{:file \"Makefile\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "2f5730dfc7c1faeeccca98f7efa5c1027444be31", :status :nothing-selected, :changed-files ["Makefile"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "ab5462c09a62937cfca397f5ecad5dba590d7029a5450ed3db900479a319b6df", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-7240901333448643898"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "Makefile", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["Makefile"], :unmatched-files [{:file "Makefile", :reason :no-dependency-edge}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+makefile
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+makefile
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+makefile
+[:makefile "merged" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"Makefile\"], :unmatched-files [{:file \"Makefile\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "2f5730dfc7c1faeeccca98f7efa5c1027444be31", :status :nothing-selected, :changed-files ["Makefile"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "eb34f06b70bcd97a95aaa440e040bc9185edea4d4941b0691867d406db5b37d9", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-16710985620125657305"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "Makefile", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["Makefile"], :unmatched-files [{:file "Makefile", :reason :no-dependency-edge}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+makefile
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+makefile
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+makefile
+[:makefile "fixed-point" {:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"Makefile\"], :unmatched-files [{:file \"Makefile\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 0, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "2f5730dfc7c1faeeccca98f7efa5c1027444be31", :status :nothing-selected, :changed-files ["Makefile"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "121aa9970655e436e449ffdc1b429696591c2ced39d58157b65672db292df613", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-6317458016457604602"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "Makefile", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["Makefile"], :unmatched-files [{:file "Makefile", :reason :no-dependency-edge}], :namespaces []}}]
+expected: (= 1 (:exit r))
+  actual: (not (= 1 0))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+makefile
+expected: (= :hold-unmatched-files (get-in r [:results :status]))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (fixed-point-unmatched-files-must-refuse-or-fallback) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:231)
+makefile
+expected: (= :unmatched-files (get-in r [:results :reason]))
+  actual: (not (= :unmatched-files nil))
+
+FAIL in (empty-and-unmatched-reasons) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:176)
+expected: (= (if (seq changed) :hold-unmatched-files :nothing-selected) (:status r))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (empty-and-unmatched-reasons) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:176)
+expected: (= (if (seq changed) :hold-unmatched-files :nothing-selected) (:status r))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (src-path-constant-can-name-any-existing-repo-file) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:279)
+expected: (= (quote #{fixture.reader-test}) (selected-set r))
+  actual: (not (= #{fixture.reader-test} #{}))
+
+FAIL in (src-path-constant-can-name-any-existing-repo-file) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:279)
+expected: (= (quote #{fixture.reader-test}) (selected-set r))
+  actual: (not (= #{fixture.reader-test} #{}))
+
+FAIL in (nothing-selected-is-typed) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:95)
+{:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"README.md\"], :unmatched-files [{:file \"README.md\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "82c50dd7e65d93acb6848fa0e741cdeed83ccd89", :status :nothing-selected, :changed-files ["README.md"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "d650d6e1bf9a98c5fcf0a8cbea9aa79ffa75965efbec692c3731dcf2deb7d8d9", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-437888071061847129"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "README.md", :reason :no-dependency-edge}]}, :results nil}
+expected: (= :hold-unmatched-files (:status inventory))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (nothing-selected-is-typed) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:95)
+{:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"README.md\"], :unmatched-files [{:file \"README.md\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "82c50dd7e65d93acb6848fa0e741cdeed83ccd89", :status :nothing-selected, :changed-files ["README.md"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "32a6468bd14b7d42b29c8f2e6c4c2b84f83bcf1047e0e2f28b25f8986ed5a073", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-11716364999739618474"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "README.md", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["README.md"], :unmatched-files [{:file "README.md", :reason :no-dependency-edge}], :namespaces []}}
+expected: (= (if (= mode "list") 0 1) (:exit result))
+  actual: (not (= 1 0))
+
+FAIL in (nothing-selected-is-typed) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:95)
+{:exit 0, :out "Selected 0 test namespaces across all lanes\nedge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}\nselection-edge-counts {}\n{:status :nothing-selected, :changed-files [\"README.md\"], :unmatched-files [{:file \"README.md\", :reason :no-dependency-edge}], :namespaces []}\n", :err "", :inventory {:edge-counts {:require 1, :data-file 0, :source-text 0, :source-scan 0}, :namespaces [], :head "82c50dd7e65d93acb6848fa0e741cdeed83ccd89", :status :nothing-selected, :changed-files ["README.md"], :environment {:tmpdir "/var/tmp/forge/impact-fx", :java-io-tmpdir "/tmp", :destination-envelope {:id "32a6468bd14b7d42b29c8f2e6c4c2b84f83bcf1047e0e2f28b25f8986ed5a073", :roots ["/var/tmp/forge/impact-fx" "/home/forge/.local/state/clj-surgeon" "/tmp/impact-11716364999739618474"], :source :policy-default}}, :base "HEAD", :selection-edge-counts {}, :unmatched-files [{:file "README.md", :reason :no-dependency-edge}]}, :results {:status :nothing-selected, :changed-files ["README.md"], :unmatched-files [{:file "README.md", :reason :no-dependency-edge}], :namespaces []}}
+expected: (= :hold-unmatched-files (:status inventory))
+  actual: (not (= :hold-unmatched-files :nothing-selected))
+
+FAIL in (src-content-closure-bounds-and-unreachable-reasons) (/home/forge/src/clj-surgeon-impact/test/clj_surgeon/diff_impact_test.clj:266)
+expected: (= [{:file "resources/x.edn", :reason :no-dependency-edge} {:file "src/a.clj", :reason :no-dependency-edge}] (:unmatched-files r))
+  actual: (not (= [{:file "resources/x.edn", :reason :no-dependency-edge} {:file "src/a.clj", :reason :no-dependency-edge}] [{:file "resources/x.edn", :reason :no-test-dependent} {:file "src/a.clj", :reason :no-test-dependent}]))
+
+Ran 14 tests containing 205 assertions.
+97 failures, 0 errors.

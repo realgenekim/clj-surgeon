@@ -8,6 +8,10 @@ is cut.
 
 ## [Unreleased]
 
+- Diff-impact selection now includes test-side helper requirements and literal
+  data/source-text inputs. It reports edge reasons and returns a typed
+  `:nothing-selected` result when no witness is reachable.
+
 - Gate workers now share box-wide inherited flock slots with live memory
   admission across concurrent coordinators. `landing-gate-prewarm` covers all
   stages except freshness and explicitly denies landing authority.

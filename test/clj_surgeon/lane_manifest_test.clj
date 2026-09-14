@@ -188,7 +188,7 @@
   (testing "every discovered test namespace has a closed runtime declaration"
     (let [runtimes @(requiring-resolve 'clj-surgeon.lane-manifest/namespace-runtimes)
           message (registration-message)]
-      (is (= 164 (count runtimes)) message)
+      (is (= 165 (count runtimes)) message)
       (is (= (set (keys @on-disk)) (set (keys runtimes))) message)
       (is (= #{:bb :jvm} (set (vals runtimes))))
       (is (= :bb (get runtimes 'clj-surgeon.forms-test)))
@@ -976,6 +976,7 @@
      clj-surgeon.mission-forms-test ; Owner identity, protected syntax and lost-comment refusal.
      clj-surgeon.mission-forms-source-test ; Strict comment text/attachment, whitespace identity and owner sentinel.
      clj-surgeon.mission-typist-executor-test ; Add candidate diagnostic survival to proof/commit/undo and saved fallback forwarding.
+     clj-surgeon.diff-impact-test ; DIFF-IMPACT-001..005: selected-set class oracle over Git fixtures.
      clj-surgeon.battery-ledger-test ; TEST-ISO-009a/b: add strict archive classification and preserved failure/audit authority.
      clj-surgeon.battery-parallel-test ; TEST-ISO-013: the battery lane run as N JVM lanes -- schedule, lane-failure classifier, shard fold, prerequisite DAG. TEST-ISO-014 (5cdd5dcc) adds two: launcher-matrix-cells-remain-independently-shardable and grouped-shards-retain-measured-per-deftest-walls.
      clj-surgeon.require-change-test ; Pure standalone require intent and strict natural-layout refusal witnesses.

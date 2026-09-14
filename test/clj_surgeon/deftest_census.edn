@@ -439,6 +439,20 @@
   clj-surgeon.core-discovery-test/the-source-scan-is-not-vacuous
   clj-surgeon.diagnostic-delta-test/diagnostic-delta-exhausts-the-pure-multiset-contract
   clj-surgeon.diagnostic-delta-test/diagnostic-delta-is-order-independent
+  clj-surgeon.diff-impact-test/data-file-reader-selected
+  clj-surgeon.diff-impact-test/empty-and-unmatched-reasons
+  clj-surgeon.diff-impact-test/fixed-point-unmatched-files-must-refuse-or-fallback
+  clj-surgeon.diff-impact-test/literal-content-edge-matrix
+  clj-surgeon.diff-impact-test/mixed-edge-fixed-point-and-explanations
+  clj-surgeon.diff-impact-test/mixed-selection-must-hold-before-launch
+  clj-surgeon.diff-impact-test/no-test-can-depend-allowlist-is-explicit-and-empty
+  clj-surgeon.diff-impact-test/nothing-selected-is-typed
+  clj-surgeon.diff-impact-test/printed-reasons-name-the-changed-file
+  clj-surgeon.diff-impact-test/require-edge-control
+  clj-surgeon.diff-impact-test/source-text-scanner-selected
+  clj-surgeon.diff-impact-test/src-content-closure-bounds-and-unreachable-reasons
+  clj-surgeon.diff-impact-test/src-path-constant-can-name-any-existing-repo-file
+  clj-surgeon.diff-impact-test/test-helper-transitive-selected
   clj-surgeon.edit-dsl-test/builders-preserve-clojure-data-without-evaluation
   clj-surgeon.edit-dsl-test/counted-builders-require-positive-integers
   clj-surgeon.edit-dsl-test/edit-options-accept-exactly-one-authoring-surface

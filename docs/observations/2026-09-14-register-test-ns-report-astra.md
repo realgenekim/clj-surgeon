@@ -656,3 +656,53 @@ Product paths derive from the repository or admitted state root; no round-specif
 scratch constant was added to product/test source. No `make test` or `test-battery`
 ran. Both commits carry the three requested trailers and land only on
 `fable/regns-entrance`; `main` remains untouched.
+
+
+## Round 5
+
+Recorded 2026-09-14T12:18:37.988406+00:00. Merged `origin/MCP/main` at
+`866df39bbfcae712d35f37497aa0c7d5927212e2` into `fable/regns-entrance`
+from `022499340b9d67fad28da31083b35bc4a6790d27`, after fetching origin.
+All five conflicts were resolved as the union. Standing approval covered this
+merge and its verification.
+
+| File | Both sides' change | Resolution | Computed count |
+| --- | --- | --- | --- |
+| `test/clj_surgeon/lane_manifest.clj` | Branch registered the registration battery; trunk registered diff-impact and its JVM runtime. | Retained both lane entries and both runtime entries, including all earlier registration-control entries. | 165 namespaces |
+| `test/clj_surgeon/lane_manifest_test.clj` | Branch retained registration diagnostics and battery adoption; trunk added diff-impact adoption. The actual parent pins were 164 and 163. | Kept both adoption entries and branch diagnostics; replaced the pin using the namespace set read from disk. | 165 namespaces |
+| `docs/observations/2026-09-12-bbtower-block-b/attempt22/portability-census.md` | Each side added its namespace's census row and adjusted the projection totals. | Retained both rows; refreshed generation time and totals from the unioned control map. | 165 rows: 102 portable, 50 bb-load-incompatible, 13 non-portable |
+| `docs/observations/2026-09-12-bbtower-block-b/attempt22/portability-controls.edn` | Each side added its namespace's control references. | Parsed both parent EDN maps, asserted that overlapping keys have equal values, and serialized their union. Both sets of control artifacts remain unchanged. | 165 entries |
+| `docs/tech-tree.md` | Branch documented registration entrance and battery placement; trunk documented diff-impact selection and HOLD repair. | Retained both summaries, rows and detailed entries. | Repository count 165; no tech-tree pin |
+
+**Count derivation.** Enumerated every `*_test.clj` / `*_test.cljc` under
+`test/`, read each first form with reader evaluation disabled, and counted the
+set of declared namespace symbols: **165**. The registration entrance's
+rewrite-clj `replace-pin` helper installed that result. No arithmetic bump was
+used. Clojure conflict resolution preserved the branch's complete forms and
+inserted the missing runtime map entry; EDN was merged as parsed maps. No
+sed/awk conflict-marker editing was used.
+
+**Verification.** All commands exited 0, with temporary files and JVM temporary
+roots under `/var/tmp/forge/regns-fx`:
+
+- Whole-repository oracle: `bb -e '(require (quote [clj-surgeon.test-registration :as r])) (let [xs (r/repository-checklist ".")] (prn {:ok (empty? xs) :missing (mapv :missing xs)}) (System/exit (if (empty? xs) 0 1)))'` returned `{:ok true, :missing []}`.
+- `make census-regenerate`: **+0/-0** on its first execution. No lost census member needed repair. Independently checked that the merged deftest census contains every line from both parents.
+- Standard Clojure Style formatted the two resolved Clojure files. Paved `~/bin/clj-kondo` linted those files, the resolved controls EDN, and trunk's three diff-impact Clojure files: **0 errors, 0 warnings**.
+- `clojure -J-Xmx1024m -M:clj-surgeon/test-deps`, requiring and running `clj-surgeon.lane-manifest-test`, `clj-surgeon.diff-impact-test`, and `clj-surgeon.test-registration-battery-test`: **61 tests, 2562 assertions, 0 failures, 0 errors**. The first-contact matrix's printed `:fail` rows are deliberate missing-surface probes; the enclosing suite passed.
+- `git diff --cached --check` passed; all five conflict entries were resolved.
+- All 12 registration-battery control/artifact files are byte-identical to `02249934`; all six diff-impact control/artifact files are byte-identical to `866df39b`.
+
+**Protected ledger baseline.** Both protected files are byte-identical to the
+incoming trunk `866df39b`. Trunk already contains receipt commit `f4891346`,
+which added the battery result for `d0334982`; preserving that existing receipt
+changes the battery-ledger hash relative to Round 4. This merge generated no
+new battery-ledger receipt and did not rewrite either protected file.
+
+```text
+08a1d6ee9c7f319c4a146ec23798e535273a47b7633697354014b318bff8ad39  docs/observations/battery-ledger.edn
+154faae0c803099d1bfe88e8563a8cf85cdf2376af4e4309b10bd850cd6ef264  docs/observations/battery-namespace-walls.edn
+```
+
+Logs and the structural count/union script are retained as `round5-*` under
+`/var/tmp/forge/regns-fx`. This is a branch merge with focused correctness
+verification; no new performance admission is claimed.

@@ -1,0 +1,6 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/impact-fx
+
+Testing clj-surgeon.diff-impact-test
+
+Ran 9 tests containing 66 assertions.
+0 failures, 0 errors.

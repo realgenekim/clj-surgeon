@@ -10,6 +10,13 @@ and matrix bytes. The existing stale-control matrix remains in its battery lane.
 The report records focused walls and the shared coordinator fast budget; this is
 a cadence-placement repair, with no new routed-operation performance admission.
 
+Diff-impact Round 2 closes Sol F1 with non-list HOLD on every unmatched inventory,
+including partially selected diffs. Source content edges now propagate through
+requires; EDN value paths and relative resources remain unresolved and HOLD.
+The no-test exemption inventory is explicitly empty. Red-first and historical
+selection evidence: [Round 2](observations/2026-09-14-diff-impact-edges-report-astra.md#round-2).
+This is correctness repair, with no fallback-wall or performance admission claim.
+
 Battery evidence ownership: receipt appends require BATTERY_LEDGER_APPEND=1;
 namespace timings use seat state with a read-only tracked seed. The explicit
 census regeneration target refuses named removals. Contract and verification
@@ -1063,3 +1070,14 @@ synchronized per-root witness repair the latter. The old hash already distinguis
 roots; the original mkdir errno was not retained. Receipt:
 [Round 2](observations/2026-09-14-register-test-ns-report-astra.md#round-2).
 No routing or performance claim.
+
+### 2026-09-14T09:43:51.276803+00:00 — diff-impact file-content selection
+
+The committed class oracle reproduces both missing dependency classes and the
+zero-selection crash (5 tests, 13 failing assertions). A pure selector now joins
+current file inputs to the existing require fixed point, including test helpers;
+empty selection is typed. The expanded 9-test / 66-assertion oracle passes on JVM
+and bb. Historical selection includes splice-envelope at df0c9e1c and all three
+named battery witnesses at 00566756..8aedb65e. Conservative directory roots select
+extra witnesses; this is correctness evidence with no speed or gate-envelope claim.
+[Report](observations/2026-09-14-diff-impact-edges-report-astra.md).
