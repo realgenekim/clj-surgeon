@@ -439,6 +439,11 @@
   clj-surgeon.core-discovery-test/the-source-scan-is-not-vacuous
   clj-surgeon.diagnostic-delta-test/diagnostic-delta-exhausts-the-pure-multiset-contract
   clj-surgeon.diagnostic-delta-test/diagnostic-delta-is-order-independent
+  clj-surgeon.diff-impact-test/data-file-reader-selected
+  clj-surgeon.diff-impact-test/nothing-selected-is-typed
+  clj-surgeon.diff-impact-test/require-edge-control
+  clj-surgeon.diff-impact-test/source-text-scanner-selected
+  clj-surgeon.diff-impact-test/test-helper-transitive-selected
   clj-surgeon.edit-dsl-test/builders-preserve-clojure-data-without-evaluation
   clj-surgeon.edit-dsl-test/counted-builders-require-positive-integers
   clj-surgeon.edit-dsl-test/edit-options-accept-exactly-one-authoring-surface

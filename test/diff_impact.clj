@@ -76,14 +76,14 @@
   (and (= 0 process-exit) (pos-int? (:test counters))
        (= 0 (:fail counters) (:error counters))))
 
-(when-not (= ["--self-test"] *command-line-args*)
+(defn main [args]
   ;; Direct script invocation must not bypass the launcher's environment gate.
   (when-let [overrides (seq (forbidden-overrides (System/getenv)))]
     (throw (ex-info "Diff-impact refused: environment overrides are set" {:overrides overrides})))
   (when-not (gate-environment? (environment-receipt))
     (throw (ex-info "Diff-impact refused: use test/diff-impact for a narrow gate environment"
                     (environment-receipt))))
-  (let [[base output phase] *command-line-args*]
+  (let [[base output phase] args]
     (when-not (and base output (#{"before" "after" "merged" "fixed-point" "list"} phase))
       (throw (ex-info "Usage: bb test/diff_impact.clj BASE OUTPUT_DIR before|after|merged|fixed-point|list" {})))
     (let [files (sort (map str (mapcat #(fs/glob % "**.{clj,cljc}") ["src" "test"])))
@@ -139,6 +139,9 @@
             (flush)))
         (let [results (str/split-lines (slurp (str output "/results-" phase ".edn")))]
           (System/exit (if (every? #(zero? (:exit (read-string %))) results) 0 1)))))))
+
+(when-not (#{"--self-test" "--library"} (first *command-line-args*))
+  (main *command-line-args*))
 
 (when (= ["--self-test"] *command-line-args*)
   ;; @spec DATACODE-ENV-002 -- mutate every environment boundary independently.
