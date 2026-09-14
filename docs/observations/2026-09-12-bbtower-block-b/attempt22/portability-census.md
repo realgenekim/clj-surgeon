@@ -1,6 +1,6 @@
 # Portability census
 
-Generated 2026-09-14T06:18:07.887533+00:00. Counts in cells are tests/failures/errors. All 162 assigned namespaces are listed.
+Generated 2026-09-14T09:40:08.305921+00:00. Counts in cells are tests/failures/errors. All 163 assigned namespaces are listed.
 
 Commands and subjects are in controls/*.command.edn; each .edn has its adjacent .log. The configured bb runtime is load-probed. A load incompatibility is explicitly accounted for, with no passing test or alternate-runtime claim. Every namespace that loads on bb receives a complete JVM and bb control, serially.
 
@@ -26,6 +26,7 @@ A non-portable result refuses portability by namespace until repaired. No runtim
 | clj-surgeon.cljc.split-test | :bb | :fast | [test-failed (11/1/1)](controls/clj-surgeon.cljc.split-test-jvm-test.control.edn) | [passed (11/0/0)](controls/clj-surgeon.cljc.split-test-bb-test.control.edn) | non-portable |
 | clj-surgeon.core-discovery-test | :bb | :battery | [passed (7/0/0)](controls/clj-surgeon.core-discovery-test-jvm-test.control.edn) | [passed (7/0/0)](controls/clj-surgeon.core-discovery-test-bb-test.control.edn) | portable |
 | clj-surgeon.diagnostic-delta-test | :bb | :fast | [passed (2/0/0)](controls/clj-surgeon.diagnostic-delta-test-jvm-test.control.edn) | [passed (2/0/0)](controls/clj-surgeon.diagnostic-delta-test-bb-test.control.edn) | portable |
+| clj-surgeon.diff-impact-test | :jvm | :integration | [passed (9/0/0)](controls/clj-surgeon.diff-impact-test-jvm-test.control.edn) | [passed (9/0/0)](controls/clj-surgeon.diff-impact-test-bb-test.control.edn) | portable |
 | clj-surgeon.edit-dsl-test | :bb | :fast | [passed (28/0/0)](controls/clj-surgeon.edit-dsl-test-jvm-test.control.edn) | [passed (28/0/0)](controls/clj-surgeon.edit-dsl-test-bb-test.control.edn) | portable |
 | clj-surgeon.edit-test | :bb | :battery | [passed (37/0/0)](controls/clj-surgeon.edit-test-jvm-test.control.edn) | [passed (37/0/0)](controls/clj-surgeon.edit-test-bb-test.control.edn) | portable |
 | clj-surgeon.edn-config-integration-test | :bb | :battery | [passed (10/0/0)](controls/clj-surgeon.edn-config-integration-test-jvm-test.control.edn) | [passed (10/0/0)](controls/clj-surgeon.edn-config-integration-test-bb-test.control.edn) | portable |
@@ -171,4 +172,4 @@ A non-portable result refuses portability by namespace until repaired. No runtim
 | clj-surgeon.worktree-lifecycle-test | :bb | :fast | [passed (21/0/0)](controls/clj-surgeon.worktree-lifecycle-test-jvm-test.control.edn) | [passed (21/0/0)](controls/clj-surgeon.worktree-lifecycle-test-bb-test.control.edn) | portable |
 | clj-surgeon.xray-test | :bb | :battery | [passed (27/0/0)](controls/clj-surgeon.xray-test-jvm-test.control.edn) | [passed (27/0/0)](controls/clj-surgeon.xray-test-bb-test.control.edn) | portable |
 
-Summary: {:bb-load-incompatible 50, :portable 99, :non-portable 13}
+Summary: {:bb-load-incompatible 50, :portable 100, :non-portable 13}

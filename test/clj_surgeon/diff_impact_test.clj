@@ -3,6 +3,7 @@
    actual script discovery; fixture subjects are never required or executed."
   {:lane :integration}
   (:require
+   [clj-surgeon.diff-impact :as impact]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.java.shell :as shell]
@@ -37,8 +38,11 @@
                       "(user/main " (pr-str ["HEAD" (str output) mode]) "))")
             result (command "bb" (str "-Djava.io.tmpdir=" (System/getProperty "java.io.tmpdir"))
                             "--classpath" classpath "-e" code)
-            inventory (io/file output (str "impact-" mode ".edn"))]
-        (assoc result :inventory (when (.isFile inventory) (edn/read-string (slurp inventory)))))
+            inventory (io/file output (str "impact-" mode ".edn"))
+            results (io/file output (str "results-" mode ".edn"))]
+        (assoc result
+               :inventory (when (.isFile inventory) (edn/read-string (slurp inventory)))
+               :results (when (.isFile results) (edn/read-string (slurp results)))))
       (finally
         (doseq [f (reverse (file-seq root))] (io/delete-file f true))))))
 
@@ -106,3 +110,91 @@
     (is (= 0 (:exit result)) (pr-str result))
     (is (= '#{fixture.control-test} (selected-set result)) (pr-str result))
     (is (= [["fixture.core"]] (get-in result [:inventory :namespaces 0 :paths])))))
+
+;; @spec DIFF-IMPACT-001
+;; @spec DIFF-IMPACT-002
+(deftest literal-content-edge-matrix
+  (let [files #{"docs/intent/probe/refusals.edn" "resources/registry.edn"
+                "src/fixture/a.clj" "src/fixture/deep/b.cljc" "src/other/c.clj"}
+        cases [["(slurp \"docs/intent/probe/refusals.edn\")"
+                #{{:file "docs/intent/probe/refusals.edn" :edge-kind :data-file}}]
+               ["(for [verb [\"probe\"]] (slurp (str \"docs/intent/\" verb \"/refusals.edn\")))"
+                #{{:file "docs/intent/probe/refusals.edn" :edge-kind :data-file}}]
+               ["(slurp \"resources/./registry.edn\")"
+                #{{:file "resources/registry.edn" :edge-kind :data-file}}]
+               ["(slurp \"src/fixture/a.clj\")"
+                #{{:file "src/fixture/a.clj" :edge-kind :source-text}}]
+               ["(scan-source-files \"src/fixture\")"
+                #{{:file "src/fixture/a.clj" :edge-kind :source-scan}
+                  {:file "src/fixture/deep/b.cljc" :edge-kind :source-scan}}]
+               ["(file-seq (io/file \"src\"))"
+                #{{:file "src/fixture/a.clj" :edge-kind :source-scan}
+                  {:file "src/fixture/deep/b.cljc" :edge-kind :source-scan}
+                  {:file "src/other/c.clj" :edge-kind :source-scan}}]
+               ["(slurp \"docs/missing.edn\")" #{}]
+               ["(slurp \"../docs/intent/probe/refusals.edn\")" #{}]
+               ["(slurp \"docs/../../resources/registry.edn\")" #{}]
+               ["(slurp \"/resources/registry.edn\")" #{}]
+               ["(slurp \"docs\\u0000/bad.edn\")" #{}]
+               ["; (slurp \"resources/registry.edn\")\n#\"src/fixture/a.clj\"" #{}]
+               ["#_(slurp \"src/fixture/a.clj\")" #{}]
+               ["(def root \"src/fixture\")" #{}]
+               ;; Never parse string contents or evaluate a reader-eval form.
+               ["\"(slurp \\\"src/fixture/a.clj\\\")\"" #{}]
+               ["#=(throw (Exception. \"must not execute\"))" #{}]]]
+    (doseq [[source expected] cases]
+      (testing source
+        (is (= expected (set (impact/content-edges source files))))))))
+
+;; @spec DIFF-IMPACT-001
+;; @spec DIFF-IMPACT-003
+;; @spec DIFF-IMPACT-005
+(deftest mixed-edge-fixed-point-and-explanations
+  (let [nodes [{:file "test/helper.clj" :namespace 'helper :requires #{'middle}
+                :content-edges [{:file "docs/registry.edn" :edge-kind :data-file}]}
+               {:file "test/middle.clj" :namespace 'middle :requires #{'helper}}
+               {:file "test/direct_test.clj" :namespace 'direct-test :test? true :requires #{'helper}}
+               {:file "test/leaf_test.clj" :namespace 'leaf-test :test? true :requires #{'direct-test}}
+               {:file "test/unrelated_test.clj" :namespace 'unrelated-test :test? true :requires #{}}]
+        changed #{"test/helper.clj" "docs/registry.edn"}
+        selected (impact/select-impact nodes changed)]
+    (is (= '#{direct-test leaf-test} (set (map :namespace (:namespaces selected)))))
+    (is (= :selected (:status selected)))
+    (is (= {:require 4 :data-file 1 :source-text 0 :source-scan 0} (:edge-counts selected)))
+    (is (= {:data-file 2 :require 2} (:selection-edge-counts selected)))
+    (doseq [entry (:namespaces selected)]
+      (is (= #{{:file "test/helper.clj" :edge-kind :require :seed 'helper}
+               {:file "docs/registry.edn" :edge-kind :data-file :seed 'helper}}
+             (set (:reasons entry)))))
+    (is (= selected (impact/select-impact (reverse nodes) (reverse (sort changed)))))
+    (doseq [edge [0 1 2 3]]
+      (let [cut (assoc-in nodes [edge :requires] #{})
+            expected (case edge 2 #{} 3 '#{direct-test} '#{direct-test leaf-test})]
+        (is (= expected (set (map :namespace (:namespaces (impact/select-impact cut changed))))))))))
+
+;; @spec DIFF-IMPACT-004
+(deftest empty-and-unmatched-reasons
+  (doseq [[nodes changed reasons]
+          [[[] [] []]
+           [[{:file "src/a.clj" :namespace 'a :requires #{}}] ["src/a.clj"]
+            [{:file "src/a.clj" :reason :no-test-dependent}]]
+           [[] ["README.md"] [{:file "README.md" :reason :no-dependency-edge}]]]]
+    (let [r (impact/select-impact nodes changed)]
+      (is (= :nothing-selected (:status r)))
+      (is (= [] (:namespaces r)))
+      (is (= reasons (:unmatched-files r)))))
+  (let [r (run-fixture base-files {} "fixed-point")]
+    (is (= 0 (:exit r)) (pr-str r))
+    (is (= {:status :nothing-selected :changed-files [] :unmatched-files [] :namespaces []}
+           (:results r)))))
+
+;; @spec DIFF-IMPACT-005
+(deftest printed-reasons-name-the-changed-file
+  (let [r (run-fixture
+            (assoc base-files "docs/registry.edn" "{}"
+                   "test/fixture/reader_test.clj"
+                   "(ns fixture.reader-test) (slurp \"docs/registry.edn\")")
+            {"docs/registry.edn" "{:new true}"} "list")]
+    (is (= 0 (:exit r)) (pr-str r))
+    (is (str/includes? (:out r) "selected fixture.reader-test via data-file docs/registry.edn"))
+    (is (= {:data-file 1} (get-in r [:inventory :selection-edge-counts])))))

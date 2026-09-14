@@ -3,7 +3,7 @@
          '[babashka.process :as process]
          '[cheshire.core :as json]
          '[clojure.java.io :as io]
-         '[clj-surgeon.form-identity :as form-identity]
+         '[clj-surgeon.diff-impact :refer [dependencies impact content-edges select-impact]]
          '[clj-surgeon.receipt-artifacts :as artifacts]
          '[clojure.string :as str])
 
@@ -29,48 +29,35 @@
       (let [form (read {:eof nil :read-cond :allow :features #{:clj}} r)]
         (when (and (seq? form) (= 'ns (first form))) form)))))
 
-(defn dependencies [form]
-  (into #{} (map (comp symbol :lib))
-        (form-identity/source-require-entries
-          (if (string? form) form (pr-str form))
-          {:platform :clj :clauses #{":require" ":require-macros" ":use"}
-           :on-unparsed #(throw (ex-info "Unsupported namespace dependency" {:form %}))})))
-
-(defn reverse-closure
-  "Fixed point over reverse edges. Each reachable node retains one shortest
-  path to the seed; sorted neighbors make equally short witnesses deterministic.
-  Visiting each node once terminates even for cycles, without a depth bound."
-  [dependents seed]
-  (loop [paths {seed [seed]} frontier [seed]]
-    (if (empty? frontier)
-      paths
-      (let [[next-paths next-frontier]
-            (reduce (fn [[seen pending] n]
-                      (reduce (fn [[seen pending] dependent]
-                                (if (contains? seen dependent)
-                                  [seen pending]
-                                  [(assoc seen dependent (into [dependent] (get seen n)))
-                                   (conj pending dependent)]))
-                              [seen pending] (sort (get dependents n))))
-                    [paths []] frontier)]
-        (recur next-paths next-frontier)))))
-
-(defn impact [nodes changed]
-  (let [dependents (reduce (fn [graph {:keys [namespace requires]}]
-                             (reduce #(update %1 %2 (fnil conj #{}) namespace) graph requires))
-                           {} nodes)
-        closures (mapv #(reverse-closure dependents %) (sort changed))]
-    (->> nodes
-         (filter :test?)
-         (keep (fn [{:keys [namespace] :as node}]
-                 (let [paths (vec (sort (keep #(when-let [path (get % namespace)]
-                                                 (mapv str (rest path))) closures)))]
-                   (when (seq paths) (assoc node :paths paths)))))
-         (sort-by #(vector (not= 'clj-surgeon.txn-journal-test (:namespace %))
-                     (str (:namespace %)))) vec)))
-
 (defn command! [args]
   (:out (process/check @(process/process (vec args) {:out :string :err :string}))))
+
+(defn repository-files []
+  (let [root (fs/real-path ".")]
+    (->> ["src" "test" "docs" "resources"]
+         (filter fs/directory?)
+         (mapcat #(fs/glob % "**" {:follow-links false}))
+         (filter #(and (fs/regular-file? %)
+                       (fs/starts-with? (fs/real-path %) root)))
+         (map str) set)))
+
+(defn repository-nodes [files]
+  (vec
+    (keep (fn [file]
+            (when-let [form (declaration file)]
+              (let [test-side? (str/starts-with? file "test/")]
+                {:file file :namespace (second form)
+                 :lane (or (:lane (meta (second form)))
+                           (:lane (first (filter map? (drop 2 form)))))
+                 :test? (and test-side? (str/ends-with? (str (second form)) "-test"))
+                 :requires (dependencies form)
+                 ;; Helpers may also read files; propagate through their test dependents.
+                 :content-edges (when test-side?
+                                  (when (> (fs/size file) 8388608)
+                                    (throw (ex-info "Diff-impact source exceeds 8 MiB"
+                                                    {:error-type :impact-input-limit :file file})))
+                                  (content-edges (slurp file) files))})))
+          (sort (filter #(re-find #"^(src|test)/.*\.cljc?$" %) files)))))
 
 (defn completed? [process-exit counters]
   (and (= 0 process-exit) (pos-int? (:test counters))
@@ -86,26 +73,28 @@
   (let [[base output phase] args]
     (when-not (and base output (#{"before" "after" "merged" "fixed-point" "list"} phase))
       (throw (ex-info "Usage: bb test/diff_impact.clj BASE OUTPUT_DIR before|after|merged|fixed-point|list" {})))
-    (let [files (sort (map str (mapcat #(fs/glob % "**.{clj,cljc}") ["src" "test"])))
-          nodes (vec (keep (fn [file]
-                             (when-let [form (declaration file)]
-                               {:file file :namespace (second form)
-                                :lane (or (:lane (meta (second form)))
-                                          (:lane (first (filter map? (drop 2 form)))))
-                                :test? (and (str/starts-with? file "test/")
-                                            (str/ends-with? (str (second form)) "-test"))
-                                :requires (dependencies form)})) files))
-          changed-files (set (str/split-lines (command! ["git" "diff" "--name-only" base "--" "src"])))
-          changed (set (map :namespace (filter #(changed-files (:file %)) nodes)))
-          selected (impact nodes changed)
-          inventory {:base base :head (str/trim (command! ["git" "rev-parse" "HEAD"]))
-                     :environment (environment-receipt)
-                     :changed-files (sort changed-files) :namespaces selected}]
+    (let [nodes (repository-nodes (repository-files))
+          changed-files (remove str/blank? (str/split (command! ["git" "diff" "--name-only" "-z" base "--"]) #"\u0000"))
+          selection (select-impact nodes changed-files)
+          selected (:namespaces selection)
+          inventory (assoc selection :base base
+                           :head (str/trim (command! ["git" "rev-parse" "HEAD"]))
+                           :environment (environment-receipt))]
       (fs/create-dirs output)
       (spit (str output "/impact-" phase ".edn") (pr-str inventory))
       (spit (str output "/impact-" phase ".json") (json/generate-string inventory {:pretty true}))
       (println "Selected" (count selected) "test namespaces across all lanes")
-      (when-not (= phase "list")
+      (println "edge-counts" (pr-str (:edge-counts inventory)))
+      (println "selection-edge-counts" (pr-str (:selection-edge-counts inventory)))
+      (doseq [{n :namespace reasons :reasons} selected
+              {:keys [edge-kind file]} reasons]
+        (println "selected" n "via" (name edge-kind) file))
+      (when (empty? selected)
+        (let [result (select-keys inventory [:status :changed-files :unmatched-files :namespaces])]
+          (println (pr-str result))
+          (when-not (= phase "list")
+            (spit (str output "/results-" phase ".edn") (str (pr-str result) "\n")))))
+      (when (and (seq selected) (not= phase "list"))
         (doseq [{n :namespace} selected]
           (let [log (str output "/" phase "/" n ".log")
                 receipt (str output "/" phase "/" n ".edn")

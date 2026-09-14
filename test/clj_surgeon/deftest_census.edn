@@ -440,7 +440,11 @@
   clj-surgeon.diagnostic-delta-test/diagnostic-delta-exhausts-the-pure-multiset-contract
   clj-surgeon.diagnostic-delta-test/diagnostic-delta-is-order-independent
   clj-surgeon.diff-impact-test/data-file-reader-selected
+  clj-surgeon.diff-impact-test/empty-and-unmatched-reasons
+  clj-surgeon.diff-impact-test/literal-content-edge-matrix
+  clj-surgeon.diff-impact-test/mixed-edge-fixed-point-and-explanations
   clj-surgeon.diff-impact-test/nothing-selected-is-typed
+  clj-surgeon.diff-impact-test/printed-reasons-name-the-changed-file
   clj-surgeon.diff-impact-test/require-edge-control
   clj-surgeon.diff-impact-test/source-text-scanner-selected
   clj-surgeon.diff-impact-test/test-helper-transitive-selected

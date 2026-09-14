@@ -23,6 +23,10 @@ root. This is intentionally an overapproximation, not arbitrary value flow or
 execution of repository code. Comments and regex contents are not string inputs.
 Paths outside the repository and absent literal files do not create edges.
 
+The pure selector is src/clj_surgeon/diff_impact.clj. The script retains Git,
+filesystem inventory and execution, while its class oracle requires the pure
+namespace directly. This also makes changes to the selector select its own tests.
+
 Every selected namespace retains require paths and deterministic reasons naming
 the changed file and edge kind. Counts distinguish inventory edge kinds from
 selection reasons. No dynamic reference completeness or behavioral proof follows
