@@ -1690,3 +1690,58 @@
       (is (= 1 (get-in r [:controls :jvm :exit])))
       (is (= 1 (get-in r [:controls :bb :result :fail])))
       (is (= fixture (into {} (map (fn [[p _]] [p (slurp (io/file root p))])) fixture))))))
+
+;; INTENT-TEST: REGNS-009
+;; @spec REGNS-009
+(deftest registration-lock-is-per-root-and-identifies-holder
+  ;; Round 2: synchronize at control execution, while enrollment holds its lock.
+  (let [roots (repeatedly 2 #(temp-dir "regns-concurrent"))
+        [a b] (vec roots)
+        entered (promise)
+        release (promise)
+        fixture (registration-fixture)
+        control-var (ns-resolve 'clj-surgeon.test-registration 'control!)]
+    (doseq [root [a b] [p s] fixture]
+      (.mkdirs (.getParentFile (io/file root p)))
+      (spit (io/file root p) s))
+    (with-redefs-fn
+      {control-var (fn [root _ n runtime mode _]
+                     (when (= root a)
+                       (deliver entered true)
+                       (when (= :timeout (deref release 10000 :timeout))
+                         (throw (ex-info "registration test timed out" {}))))
+                     (if (= mode "load")
+                       {:namespace n :runtime runtime :mode mode :status :loaded :exit 0}
+                       {:namespace n :runtime runtime :status :test-failed :exit 1
+                        :result {:test 1 :pass 0 :fail 1 :error 0}}))}
+      (fn []
+        (let [first-call (future (reg/register! a registration-request))]
+          (try
+            (is (= true (deref entered 10000 :timeout)))
+            (let [other (reg/register! b registration-request)
+                  same (reg/register! a registration-request)]
+              (is (= :register-control-failed (:error-type other)))
+              (is (= :register-busy (:error-type same)))
+              (is (= a (get-in same [:holder :root])))
+              (is (pos-int? (get-in same [:holder :pid])))
+              (is (= :register-conflict
+                     (:error-type (reg/register! a (assoc registration-request :lane :fast)))))
+              (let [source (io/file a "test/clj_surgeon/fixture_test.clj")
+                    target (io/file b "test/clj_surgeon/fixture_test.clj")]
+                (io/delete-file source)
+                (java.nio.file.Files/createSymbolicLink
+                  (.toPath source) (.toPath target)
+                  (into-array java.nio.file.attribute.FileAttribute []))
+                (try
+                  (is (= :register-path-escape
+                         (:error-type (reg/register! a registration-request))))
+                  (finally
+                    (io/delete-file source)
+                    (spit source (fixture "test/clj_surgeon/fixture_test.clj")))))
+              (deliver release true)
+              (let [results [@first-call same]]
+                (is (= 1 (count (filter #(= :register-busy (:error-type %)) results))))
+                (is (not (.exists (io/file a ".clj-surgeon-register.lock"))))))
+            (finally
+              (deliver release true)
+              (deref first-call 10000 :timeout))))))))

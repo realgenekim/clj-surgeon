@@ -2,6 +2,7 @@
   "One entrance and one diagnostic for test namespace registration."
   (:require
    [clj-surgeon.lane-manifest :as lm]
+   [clj-surgeon.spawn-ledger :as spawn]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.set :as set]
@@ -362,6 +363,7 @@
         _ (.put (.environment builder) "TMPDIR" scratch)
         _ (.put (.environment builder) "JAVA_TOOL_OPTIONS" (str "-Djava.io.tmpdir=" scratch))
         process (.start builder)
+        _ (spawn/record! (.pid process) command)
         done? (.waitFor process 600 java.util.concurrent.TimeUnit/SECONDS)
         _ (when-not done? (.destroyForcibly process))
         exit (if done? (.exitValue process) 124)
@@ -414,17 +416,36 @@
   (doseq [[p old] @originals]
     (if (nil? old) (io/delete-file (safe-file root p) true) (spit (safe-file root p) old))))
 
+;; INTENT: REGNS-009
+;; @spec REGNS-009
+(defn- acquire-lock! [root]
+  (let [lock (safe-file root ".clj-surgeon-register.lock")
+        holder {:pid (.pid (java.lang.ProcessHandle/current)) :root root}
+        prepared (java.nio.file.Files/createTempFile
+                   (.toPath (io/file root)) ".register-holder-" ".edn"
+                   (into-array java.nio.file.attribute.FileAttribute []))]
+    (try
+      (spit (.toFile prepared) (pr-str holder))
+      (try
+        ;; Publish complete holder bytes and exclusive ownership together.
+        (java.nio.file.Files/createLink (.toPath lock) prepared)
+        lock
+        (catch java.nio.file.FileAlreadyExistsException _
+          (refuse! :register-busy
+                   {:lock (str lock) :holder (edn/read-string (slurp lock))})))
+      (finally (java.nio.file.Files/deleteIfExists prepared)))))
+
 (defn register! [root request]
   (let [root (.getCanonicalPath (io/file root))
-        lock (io/file "/var/tmp/forge/regns-fx" (str "register-" (digest root) ".lock"))
-        originals (atom {})]
-    (.mkdirs (.getParentFile lock))
-    (if-not (.mkdir lock)
-      {:ok false :error-type :register-busy :lock (str lock)}
-      (try
-        (let [before (snapshot root (:namespace request))
-              planned (plan before request)]
-          (if-not (:ok planned) planned
+        originals (atom {})
+        acquired (atom nil)]
+    (try
+      ;; Invalid requests must not be masked by another registration's lock.
+      (let [before (snapshot root (:namespace request))
+            planned (plan before request)]
+        (if-not (:ok planned) planned
+          (do
+            (reset! acquired (acquire-lock! root))
             (let [n (:namespace request)
                   controls (read-controls before n)
                   valid? (controls-valid? n (:runtime request) (or (:bb-ineligible request) (get-in planned [:model :registration])) controls)]
@@ -448,11 +469,14 @@
                 {:ok true :state (if (empty? @originals) :unchanged :registered)
                  :changes (:changes planned)
                  :artifacts (vec (sort (remove (set (keys (:candidate planned))) (keys @originals))))
-                 :controls (into {} (map (fn [[k v]] [k (select-keys v [:status :exit :result :command])])) controls)}))))
-        (catch Exception e
-          (rollback! root originals)
-          (merge {:ok false :state :rolled-back :error (ex-message e)} (ex-data e)))
-        (finally (io/delete-file lock true))))))
+                 :controls (into {} (map (fn [[k v]] [k (select-keys v [:status :exit :result :command])])) controls)})))))
+      (catch Exception e
+        (when @acquired (rollback! root originals))
+        (merge {:ok false :error (ex-message e)}
+               (when @acquired {:state :rolled-back})
+               (if (ex-data e) (ex-data e) {:error-type :register-io-failed})))
+      (finally
+        (when-let [lock @acquired] (io/delete-file lock true))))))
 
 (def usage
   "make register-test-ns NS=clj-surgeon.foo-test LANE=battery RUNTIME=jvm [BB_INELIGIBLE='{:reasons #{:sci-host-interop} :detail \"reason\"}']\nAuthor ns lane metadata is required. Runs focused controls; matching repeats change nothing. Refusals exit nonzero.")

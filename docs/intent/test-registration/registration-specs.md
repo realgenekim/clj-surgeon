@@ -11,3 +11,5 @@ by the seat for this round. These IDs are discovered by the repository intent au
 - [x] **REGNS-006**: When an ordinary census gate refuses a new namespace, its diagnostic shall include the whole checklist and concrete Make remedy. Misreading: require four repair runs. Witness: registration-oracle-enumerates-all-surfaces.
 - [x] **REGNS-007**: When census names were removed, registration shall refuse without rewriting the census. Misreading: regenerate away deletions. Witness: registration-planner-refuses-conflicts.
 - [x] **REGNS-008**: When a request path escapes the root or syntax is ambiguous, registration shall refuse before writes. Misreading: a namespace is a filesystem path. Witness: registration-planner-refuses-conflicts.
+
+- [x] **REGNS-009**: When valid registrations overlap, different canonical roots shall proceed independently and the same root shall admit only one holder, refusing the contender as register-busy with holder pid/root. Validation refusals, including path escape, precede lock acquisition; filesystem errors are not contention. Misreading: every mkdir failure means busy. Witness: registration-lock-is-per-root-and-identifies-holder.

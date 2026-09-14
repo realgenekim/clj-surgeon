@@ -1051,3 +1051,11 @@ failures at db23914d. Cleanup now attempts removal on failure and retains both
 native diagnostics when removal fails; 72 additional cleanup cells enumerate
 primary errno × cleanup errno × removal timing. Atomic move is still the commit
 boundary. Verification and costs: /var/tmp/forge/statehome-fx/REPORT.md, Round 8.
+
+Register-test-ns Round 2: the full prewarm exposed a missing spawn-ledger call
+that require closure could not select, and lock refusal lost both holder evidence
+and preflight error precedence. Root-local atomic holder publication and a
+synchronized per-root witness repair the latter. The old hash already distinguished
+roots; the original mkdir errno was not retained. Receipt:
+[Round 2](observations/2026-09-14-register-test-ns-report-astra.md#round-2).
+No routing or performance claim.

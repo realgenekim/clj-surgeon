@@ -818,6 +818,7 @@
   clj-surgeon.lane-manifest-test/registration-control-results-are-executions
   clj-surgeon.lane-manifest-test/registration-existing-values-and-ambiguous-owners-refuse
   clj-surgeon.lane-manifest-test/registration-failed-control-rolls-back-enrollment
+  clj-surgeon.lane-manifest-test/registration-lock-is-per-root-and-identifies-holder
   clj-surgeon.lane-manifest-test/registration-oracle-enumerates-all-surfaces
   clj-surgeon.lane-manifest-test/registration-planner-refuses-conflicts
   clj-surgeon.lane-manifest-test/registration-structural-plan-preserves-and-repeats

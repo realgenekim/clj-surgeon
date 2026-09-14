@@ -24,7 +24,11 @@ controls cannot become a passing declaration. Projection uses the existing fold
 format; only the requested namespace's control artifacts and the two generated
 inventory files are published. No all-corpus runner is invoked.
 
-Publication is serialized by a root-keyed directory lock in external scratch. All
+Publication is serialized by a lock file inside the canonical registration root.
+A same-directory prepared holder record (pid/root) is published by atomic hard link;
+only an existing lock means busy. Request/snapshot validation precedes acquisition,
+and the snapshot is rechecked after acquisition. Every control child is recorded
+in the TEST-ISO-002 spawn ledger immediately after launch. All
 source candidates are parsed before writing. Registration is temporarily installed
 for the focused runner to load the correct lane. Execution failure restores all
 registration and control bytes; its diagnostic reports the real failed execution.
@@ -45,4 +49,4 @@ rewritten heuristically. Runtime measurements are read from the root snapshot;
 historical control overrides retain their existing paths. The bb-load exclusion
 is exactly the existing gate's JVM-assignment exception; it is not a passing JVM
 test claim. Existing valid historical controls are reused without a new freshness
-claim. A killed process may leave the named directory lock for manual recovery.
+claim. A killed process may leave the named lock file for manual recovery.
