@@ -306,3 +306,36 @@
     (is (.startsWith path (:path result)))
     (is (= result (edn/read-string wire)))
     (is (not (.contains wire "\n")))))
+
+;; @spec BB-PROBE-004
+;; @spec STATE-HOME-005
+(deftest descriptor-provenance-stays-inside-the-whole-receipt-bound
+  (let [inner {:state :probe-failed
+               :proof_pending [:landing-gate]
+               :reloaded [(apply str (repeat 16000 "x"))]
+               :tests 1 :assertions 1 :failures 1 :elapsed_ms 1
+               :closure-expected 1}
+        path (apply str (repeat 700 "p"))
+        result (with-redefs [probe/local-image
+                             (fn [_] {:root "/workspace" :path path
+                                      :descriptor {:image {:root "/workspace"} :port 9107}})
+                             probe/fingerprint (constantly "fingerprint")
+                             probe/request-problem (fn [& _] nil)
+                             probe/post-probe (fn [& _] inner)]
+                 (probe/cli! {:ns "fixture-test"}))
+        bytes (alength (.getBytes (pr-str result) "UTF-8"))]
+    (is (<= bytes probe/response-byte-bound))
+    (is (= path (:image-file result)))
+    (is (= :probe-response-truncated (:error-type result)))
+    (is (= 1 (:reloaded-count result) (get-in result [:truncated :omitted])))
+    (is (empty? (:reloaded result)))
+    (let [original (probe/verdict (vec (repeat 100 (apply str (repeat 200 "λ"))))
+                                  {:test 2 :pass 3 :fail 0 :error 0} 1)
+          already-truncated (edn/read-string (probe/encode-response original))
+          recomposed (probe/bound-response (assoc already-truncated :image-file path))]
+      (is (<= (alength (.getBytes (pr-str recomposed) "UTF-8"))
+              probe/response-byte-bound))
+      (is (= path (:image-file recomposed)))
+      (is (= 100 (:reloaded-count recomposed)
+             (+ (count (:reloaded recomposed))
+                (get-in recomposed [:truncated :omitted])))))))

@@ -62,30 +62,39 @@
 (def response-name-bound 64)
 
 ;; @spec BB-PROBE-004
-(defn encode-response [result]
+(defn bound-response [result]
   (let [wire (pr-str result)
         size #(alength (.getBytes ^String % "UTF-8"))
         encoded (size wire)]
     (if (<= encoded response-byte-bound)
-      wire
+      result
       (let [names (vec (:reloaded result))
-            total (count names)
-            cause (:error-type result)
+            prior-omitted (get-in result [:truncated :omitted] 0)
+            total (or (:reloaded-count result) (+ (count names) prior-omitted))
+            cause (if (= :probe-response-truncated (:error-type result))
+                    (:cause result)
+                    (:error-type result))
             base (cond-> (assoc (select-keys result [:state :proof_pending :tests :assertions
-                                                     :failures :elapsed_ms :closure-expected])
+                                                     :failures :elapsed_ms :closure-expected
+                                                     :image-file :diagnostic-truncation])
                                 :error-type :probe-response-truncated
                                 :reloaded-count total)
                    (and (keyword? cause) (<= (size (pr-str cause)) 128)) (assoc :cause cause)
                    (:error result) (assoc :error "Probe detail exceeded the response bound; see :truncated."))]
         ;; The closed verdict's scalar fields fit even with an empty prefix.
         ;; Count names only after UTF-8 encoding: one name may exceed the bound.
-        (loop [n (min response-name-bound total)]
-          (let [candidate (pr-str (assoc base :reloaded (subvec names 0 n)
-                                    :truncated {:bound response-byte-bound
-                                                :encoded encoded :omitted (- total n)}))]
-            (if (<= (size candidate) response-byte-bound)
+        (loop [n (min response-name-bound (count names))]
+          (let [candidate (assoc base :reloaded (subvec names 0 n)
+                                 :truncated {:bound response-byte-bound
+                                             :encoded encoded
+                                             :omitted (+ prior-omitted (- (count names) n))})]
+            (if (<= (size (pr-str candidate)) response-byte-bound)
               candidate
               (recur (dec n)))))))))
+
+;; @spec BB-PROBE-004
+(defn encode-response [result]
+  (pr-str (bound-response result)))
 
 (defn read-bounded-text [reader limit]
   (let [buf (char-array (inc limit))
@@ -292,20 +301,21 @@
   (let [{:keys [root path descriptor] :as local} (local-image image-file)]
     (if (:error-type local)
       local
-      (bounded-diagnostics
-        (assoc
-          (try
-            (let [image (:image descriptor)
-                  request {:ns (str ns) :image image}
-                  problem (or (when-not (= root (:root image))
-                                (refusal :stale-probe-image "Image belongs to another worktree; run make warm here."))
-                              (request-problem image (fingerprint root) request))]
-              (if problem problem
-                (let [port (:port descriptor)]
-                  (when-not (and (integer? port) (< 9000 port 65536))
-                    (throw (ex-info "Warm port must be above 9000" {:error-type :invalid-probe-port})))
-                  (post-probe port request))))
-            (catch Exception e
-              (merge (refusal (or (:error-type (ex-data e)) :probe-image-unreadable) (.getMessage e))
-                     (select-keys (ex-data e) [:path :errno :native-class :native-message]))))
-          :image-file path)))))
+      (bound-response
+        (bounded-diagnostics
+          (assoc
+            (try
+              (let [image (:image descriptor)
+                    request {:ns (str ns) :image image}
+                    problem (or (when-not (= root (:root image))
+                                  (refusal :stale-probe-image "Image belongs to another worktree; run make warm here."))
+                                (request-problem image (fingerprint root) request))]
+                (if problem problem
+                  (let [port (:port descriptor)]
+                    (when-not (and (integer? port) (< 9000 port 65536))
+                      (throw (ex-info "Warm port must be above 9000" {:error-type :invalid-probe-port})))
+                    (post-probe port request))))
+              (catch Exception e
+                (merge (refusal (or (:error-type (ex-data e)) :probe-image-unreadable) (.getMessage e))
+                       (select-keys (ex-data e) [:path :errno :native-class :native-message]))))
+            :image-file path))))))
