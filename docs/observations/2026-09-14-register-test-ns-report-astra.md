@@ -463,3 +463,196 @@ there is no main merge, performance admission or claim of a new Sol GO verdict.
 
 Round 3 fixture copies and test temporary roots were removed after verification;
 receipt logs remain under `/var/tmp/forge/regns-fx`. The owned nREPL was stopped.
+
+
+## Round 4
+
+Recorded 2026-09-14T11:59:31.212474+00:00; base `99b57bd1d05babf954ce202109e2b1f7e9999c94`,
+branch `fable/regns-entrance`. Standing approval covered every phase.
+
+The FAST cadence is green through the same shared coordinator that serves the
+landing gate: **52,514 ms serial-equivalent against 60,000 ms**, leaving
+**7,486 ms (12.5%) headroom**. All 95 selected fast namespaces ran: **1,265 tests,
+13,532 assertions, 0 failures, 0 errors**, exit 0, no isolation violations.
+`--suite fast` selects the fast subset of the mcp suite through the same manifest,
+runtime assignment, automatic pool allocation, and cadence accounting. This is
+focused fast-cadence proof, not a claim that the complete landing gate ran.
+
+`lane-manifest-test` alone passed **46 tests / 2,063 assertions**, with
+require-plus-tests wall **9,532.579 ms** and external process wall
+**10,250 ms**, both below 15,000 ms. Its one-mask first-contact witness costs
+**25.159 ms**. The new battery alone passed
+**1 test / 251 assertions**, require-plus-tests wall **80,527.932 ms**
+and external process wall **81,210 ms**, at `-Xmx1024m`.
+That full matrix wall belongs to the battery budget.
+
+Measurement command (the timing script wraps `clojure.test/test-var`, recording
+only outer deftests so nested ordinary gate calls are not counted a second time):
+
+```sh
+export TMPDIR=/var/tmp/forge/regns-fx
+export JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/var/tmp/forge/regns-fx
+clojure -J-Xmx1024m -M:clj-surgeon/test-deps \
+  /var/tmp/forge/regns-fx/round4/time.clj clj-surgeon.lane-manifest-test
+clojure -J-Xmx1024m -M:clj-surgeon/test-deps \
+  /var/tmp/forge/regns-fx/round4/time.clj clj-surgeon.test-registration-battery-test
+CLJ_SURGEON_STATE_HOME=/var/tmp/forge/regns-fx/round4/state \
+CLJ_SURGEON_ARTIFACT_ROOT=/var/tmp/forge/regns-fx/round4/state \
+bb -Xmx1g -Djava.io.tmpdir="$TMPDIR" -m clj-surgeon.battery-parallel-runner \
+  --suite fast --work-dir /var/tmp/forge/regns-fx/round4/fast-green
+```
+
+The authoritative outer-deftest baseline passed 45 tests / 2,293 assertions,
+require-plus-tests wall **98,951.540 ms**. An initial instrumentation run
+also recorded nested gate Vars; it is retained as `before.log` but is not the
+per-deftest table below. `before-outer.log` is the clean baseline. The following
+table is sorted by before wall, so its first ten rows are the requested top ten.
+All values are milliseconds. The matrix row's fast-after column is the retained
+single-mask witness; the full original body executes separately in battery.
+
+| Deftest | Before fast | After fast |
+|---|---:|---:|
+| registration-first-contact-gate-matrix | 79505.494 | 25.159 |
+| generated-portability-census-agrees-with-all-inventories | 5037.595 | 1723.735 |
+| every-manifest-entry-exists-on-disk | 2406.526 | 2434.443 |
+| every-manifest-namespace-declares-its-lane-in-its-own-ns-form | 1728.526 | 0.324 |
+| every-test-namespace-on-disk-is-accounted-for | 1704.815 | 1716.174 |
+| runtime-portability-controls-cover-every-assignment | 1652.586 | 27.592 |
+| a-namespace-in-the-tree-but-absent-from-the-census-is-named | 1650.190 | 2.031 |
+| the-regenerate-entrance-refuses-inside-make | 1635.389 | 1.638 |
+| no-living-prose-still-calls-the-bb-lane-by-its-old-name | 370.539 | 338.977 |
+| every-sleep-on-the-merge-gate-is-declared-with-its-reason | 248.577 | 241.443 |
+| the-landing-gate-runs-both-the-merge-gate-and-the-battery-tripwire | 189.540 | 172.027 |
+| no-fast-lane-namespace-spells-a-child-process | 178.272 | 252.581 |
+| the-corpus-only-ever-grows-and-the-arithmetic-is-shown | 109.918 | 120.753 |
+| the-lane-runner-resolves-to-exactly-the-lane-it-names | 35.296 | 32.395 |
+| registration-lock-is-per-root-and-identifies-holder | 33.620 | 34.495 |
+| runtime-evidence-binds-statistics-to-receipt-files | 29.284 | 40.291 |
+| every-implemented-requirement-is-claimed-by-a-marker | 18.497 | 18.129 |
+| every-test-iso-marker-in-the-tree-is-a-registered-requirement | 18.045 | 19.539 |
+| sleep-pins-survive-line-movement-and-refuse-purpose-drift | 16.776 | 21.961 |
+| runtime-steering-fields-cannot-outvote-control-receipts | 13.558 | 13.923 |
+| every-exclusion-is-actually-run-by-the-runner-it-names | 13.062 | 14.119 |
+| registration-failed-control-rolls-back-enrollment | 9.686 | 8.601 |
+| registration-oracle-enumerates-all-surfaces | 8.434 | 7.257 |
+| a-false-redirection-to-an-existing-target-is-refused-by-name | 7.093 | 7.318 |
+| runtime-evidence-is-consumed-and-receipts-are-required | 6.229 | 6.927 |
+| registration-existing-values-and-ambiguous-owners-refuse | 5.967 | 10.220 |
+| registration-boundary-refusals-preserve-source-bytes | 5.528 | 7.142 |
+| registration-planner-refuses-conflicts | 4.885 | 5.048 |
+| registration-structural-plan-preserves-and-repeats | 4.783 | 5.752 |
+| the-landing-gate-refuses-a-stale-battery-receipt | 3.896 | 4.064 |
+| runtime-receipts-must-stay-in-retained-evidence-roots | 2.612 | 2.024 |
+| census-regeneration-refuses-named-removals | 2.551 | 2.321 |
+| an-exclusion-naming-an-unreadable-runner-fails-closed | 2.485 | 2.362 |
+| registration-checklist-covers-every-missing-surface-subset | 1.667 | 2.076 |
+| loaded-namespaces-carry-their-lane-at-runtime | 1.605 | 1.313 |
+| registration-control-results-are-executions | 0.752 | 0.936 |
+| every-lane-declares-a-cadence-the-runner-knows | 0.644 | 3.245 |
+| the-partition-matches-round-ones-measurement | 0.635 | 1.742 |
+| the-runner-refuses-an-undeclared-namespace | 0.553 | 0.671 |
+| the-runner-resolves-a-declared-lane | 0.431 | 0.565 |
+| the-refusal-message-names-the-cadence-a-lane-costs | 0.391 | 0.482 |
+| excluded-entries-are-real-and-carry-a-reason | 0.344 | 0.428 |
+| every-manifest-namespace-resolves-to-a-known-cadence | 0.313 | 0.422 |
+| the-partition-drops-nothing-round-one-measured | 0.237 | 0.207 |
+| the-rename-scanner-cannot-see-a-bb-less-mention-and-says-so | 0.159 | 0.172 |
+| registration-witnesses-retain-names-and-battery-matrix (new source ratchet) | — | 62.431 |
+
+| Battery deftest | After |
+|---|---:|
+| registration-first-contact-gate-matrix (all 32 masks) | 78427.950 |
+
+**TDD and preservation.** Commit `3cf4a99e` recorded the source regression before
+the move. It failed because the battery namespace was absent and the fast witness
+still traversed all 32 masks (exit 1). The green source witness freezes all 45
+original deftest names and asserts the complete moved matrix body SHA-256:
+`f147ae9a17cd5eaacda8202be351cda9bef62250da69d06f62dee0a50b11afec`.
+The moved body is byte-identical to 99b57bd1. The old qualified fast name remains
+for its one ordinary-order gate mask, and the full body has the same unqualified
+name in `test-registration-battery-test`, with author metadata `{:lane :battery}`.
+This preserves the original census entry while adding the full battery witness.
+No renamed/deleted census entry or removal override was needed.
+
+The 36-cell stale-control matrix and executed failing JVM/bb controls were
+already in `registration-controls-test` with `:lane :battery` at 99b57bd1;
+that entire source file remains byte-identical. It was not in the measured fast
+namespace and did not need another move. Both full matrices remain in battery.
+
+The fast lane retains the pure registration model/oracle matrix, fixture byte
+preservation/conflict refusals, and rollback/lock witnesses. A fast fixture now
+refuses any real `control!` call; boundary witnesses provide their own stubs.
+No control process can silently return to fast through registration's indirect
+execution boundary. Two existing fixture-message tests stub the unrelated live
+repository checklist lookup. Ordinary live inventory assertions remain intact.
+The generated-inventory gate computes its identical diagnostic once per test,
+and successful metadata/control agreement avoids building failure diagnostics.
+No assertion was removed from those ordinary gate bodies, and the full matrix
+still exercises their real first failures in ordinary namespace order.
+
+**Dogfood.** Executed on the actual worktree, exit 0:
+
+```sh
+make register-test-ns NS=clj-surgeon.test-registration-battery-test LANE=battery RUNTIME=jvm
+```
+
+Selected fields from the actual printed `enroll-final.log` receipt:
+
+```edn
+{:ok true :state :registered
+ :changes [{:file "test/clj_surgeon/deftest_census.edn"
+             :forms [{:form deftest-census :before-count 2646 :after-count 2648}]}
+           {:file "test/clj_surgeon/lane_manifest.clj"
+             :forms [{:form manifest :before-count 158 :after-count 159}
+                     {:form portability-runtimes :before-count 163 :after-count 164}]}
+           {:file "test/clj_surgeon/lane_manifest_test.clj"
+             :forms [{:form adopted-since-round-one :before-count 109 :after-count 110}
+                     {:form every-manifest-entry-exists-on-disk :before-count 163 :after-count 164}]}]
+ :controls {:bb-load {:status :loaded :exit 0 :wall-ms 364.145163}
+            :jvm {:status :passed :exit 0 :wall-ms 81176.911308
+                   :result {:test 1 :pass 251 :fail 0 :error 0}}
+            :bb {:status :passed :exit 0 :wall-ms 42041.227597
+                  :result {:test 1 :pass 251 :fail 0 :error 0}}}}
+```
+
+The retained [JVM control](2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.test-registration-battery-test-jvm-test.control.edn),
+[bb control](2026-09-12-bbtower-block-b/attempt22/controls/clj-surgeon.test-registration-battery-test-bb-test.control.edn)
+and adjacent load/argv/log artifacts bind the new source SHA-256
+`7e7d360ab9b385caa8bc78cbbe56ebda6a80b0ff591f6f8e053897a03d023bc4`
+to this worktree. Each test log prints all 32 masks. During first enrollment,
+a read-only fixture supplies its own projected inventory in memory and temporary
+control rows to the gate specimen; those rows never enter `register!` or retained
+control paths. The entrance publishes only its actual executed controls.
+
+The first enrollment failed: independent fast/battery tracking atoms made the
+verbatim matrix's outer-root restoration duplicate retained roots until heap
+exhaustion. The failed JVM child and subsequent bb control were terminated, and
+Make returned `:state :rolled-back`, `:error-type :register-control-failed`, exit 2.
+Sharing the original fast tracker fixed ownership without changing matrix bytes.
+Only the later passing execution artifacts are retained in the repository.
+
+The first fast run reached 53,110 ms but had four state-envelope errors: the
+scratch state root was outside the children’s narrowed temporary-root envelope.
+Setting its matching `CLJ_SURGEON_ARTIFACT_ROOT` at launch corrected the setup.
+The second run passed assertions at 51,623 ms but exposed the namespace's separate
+8,000 ms limit (8,921 ms). Stubbing the unrelated live scans in the two pure
+message specimens produced the final exit-0 result above. No budget or override
+was raised, and no failed run is presented as a passing gate.
+
+**Final checks.** Paved `~/bin/clj-kondo` over all three changed Clojure files:
+0 errors / 0 warnings, exit 0. Standard Clojure Style and `git diff --check`
+passed. `make census-regenerate`: `+0/-0`, exit 0 (Make registration had already
+installed the two additions). The complete ledger diff from 99b57bd1 is **+2/-0**.
+`make intent-audit`: `:ok true`, exit 0. Protected ledger SHA-256 values remain:
+
+```text
+c7fb402d7580ace47675d02f7b813bcd5837bdfab5788c0c78f477721f72b0d9  docs/observations/battery-ledger.edn
+154faae0c803099d1bfe88e8563a8cf85cdf2376af4e4309b10bd850cd6ef264  docs/observations/battery-namespace-walls.edn
+```
+
+Round-4 scratch and logs are under `/var/tmp/forge/regns-fx/round4`; runner
+fixtures are created under the inherited admitted temporary root and swept.
+Product paths derive from the repository or admitted state root; no round-specific
+scratch constant was added to product/test source. No `make test` or `test-battery`
+ran. Both commits carry the three requested trailers and land only on
+`fable/regns-entrance`; `main` remains untouched.
