@@ -68,7 +68,8 @@
     (when-not (str/blank? value)
       (let [raw (java.nio.file.Paths/get value (make-array String 0))
             path (when-not (.isAbsolute raw) (str (.normalize raw)))]
-        (when (and path (re-find #"^(docs|resources|src)(/|$)" path)) path)))
+        (when (and path (not (#{"" "." ".."} path))
+                   (not (str/starts-with? path "../"))) path)))
     (catch Exception _ nil)))
 
 ;; @spec DIFF-IMPACT-001
@@ -83,7 +84,7 @@
                :let [source? (or (= path "src") (str/starts-with? path "src/"))]
                file (if (contains? existing-files path)
                       [path]
-                      (when scan?
+                      (when (and scan? (re-find #"^(docs|resources|src)(/|$)" path))
                         (filter #(str/starts-with? % (str path "/")) existing-files)))]
            {:file file :edge-kind (cond
                                     (not source?) :data-file
@@ -94,6 +95,7 @@
 ;; @spec DIFF-IMPACT-003
 ;; @spec DIFF-IMPACT-004
 ;; @spec DIFF-IMPACT-005
+;; @spec DIFF-IMPACT-006
 (defn select-impact
   "Join changed paths to namespace and content edges, then reuse the existing
    reverse fixed point. One shortest require path per seed; all seed reasons."
@@ -115,16 +117,25 @@
                                              (filter #(reachable (str (:seed %))) seeds)))))))
                        selected)
         matched (set (map :file (mapcat :reasons selected)))
-        seeded (set (map :file seeds))]
-    {:status (if (seq selected) :selected :nothing-selected)
-     :changed-files (vec (sort changed-files))
-     :namespaces selected
-     :edge-counts (merge {:require 0 :data-file 0 :source-text 0 :source-scan 0}
-                    (frequencies
-                      (concat (mapcat #(repeat (count (:requires %)) :require) nodes)
-                              (map :edge-kind (mapcat :content-edges nodes)))))
-     :selection-edge-counts (frequencies (map :edge-kind (mapcat :reasons selected)))
-     :unmatched-files (mapv (fn [file]
-                              {:file file :reason (if (seeded file)
-                                                    :no-test-dependent :no-dependency-edge)})
-                        (sort (remove matched changed-files)))}))
+        depended-on (set (mapcat :requires nodes))
+        content-inputs (set (map :file (remove #(= :require (:edge-kind %)) seeds)))
+        isolated (set (keep (fn [{:keys [file edge-kind seed]}]
+                              (when (and (= :require edge-kind)
+                                         (not (content-inputs file))
+                                         (not (depended-on seed))) file)) seeds))
+        unmatched (mapv (fn [file]
+                          {:file file :reason (if (isolated file)
+                                                :no-test-dependent :no-dependency-edge)})
+                        (sort (remove matched changed-files)))]
+    (cond-> {:status (cond (seq unmatched) :hold-unmatched-files
+                       (seq selected) :selected
+                       :else :nothing-selected)
+             :changed-files (vec (sort changed-files))
+             :namespaces selected
+             :edge-counts (merge {:require 0 :data-file 0 :source-text 0 :source-scan 0}
+                            (frequencies
+                              (concat (mapcat #(repeat (count (:requires %)) :require) nodes)
+                                      (map :edge-kind (mapcat :content-edges nodes)))))
+             :selection-edge-counts (frequencies (map :edge-kind (mapcat :reasons selected)))
+             :unmatched-files unmatched}
+      (seq unmatched) (assoc :reason :unmatched-files))))

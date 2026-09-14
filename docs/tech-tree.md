@@ -1,5 +1,12 @@
 # clj-surgeon tech tree
 
+Diff-impact Round 2 closes Sol F1 with non-list HOLD on every unmatched inventory,
+including partially selected diffs. Source content edges now propagate through
+requires; EDN value paths and relative resources remain unresolved and HOLD.
+The no-test exemption inventory is explicitly empty. Red-first and historical
+selection evidence: [Round 2](observations/2026-09-14-diff-impact-edges-report-astra.md#round-2).
+This is correctness repair, with no fallback-wall or performance admission claim.
+
 Battery evidence ownership: receipt appends require BATTERY_LEDGER_APPEND=1;
 namespace timings use seat state with a read-only tracked seed. The explicit
 census regeneration target refuses named removals. Contract and verification

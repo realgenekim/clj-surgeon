@@ -235,7 +235,13 @@
         (is (= 0 (:exit r)))
         (is (= expected (selected-set r)))
         (when (empty? expected)
-          (is (= :hold-unmatched-files (get-in r [:inventory :status])))))
+          (is (= :hold-unmatched-files (get-in r [:inventory :status])))
+          (doseq [mode ["before" "after" "merged" "fixed-point"]]
+            (let [held (run-fixture files changes mode)]
+              (is (= 1 (:exit held)))
+              (is (= :hold-unmatched-files (get-in held [:results :status])))
+              (is (= (:unmatched-files (:inventory r))
+                     (get-in held [:results :unmatched-files])))))))
       ;; Remove endpoints, retaining the exact changed-file inventory and helpers.
       ;; Every non-list mode must hold; no fixture subject can be launched.
       (doseq [mode ["before" "after" "merged" "fixed-point"]]
@@ -264,6 +270,15 @@
 ;; @spec DIFF-IMPACT-004
 ;; @spec DIFF-IMPACT-006
 (deftest src-content-closure-bounds-and-unreachable-reasons
+  ;; A source file can be isolated in the require graph yet have an unreachable
+  ;; content reader. That reader is still a dependent: do not call it absent.
+  (let [r (impact/select-impact
+            [{:namespace 'subject :file "src/subject.clj" :requires #{}}
+             {:namespace 'scanner :file "src/scanner.clj" :requires #{}
+              :content-edges [{:file "src/subject.clj" :edge-kind :source-scan}]}]
+            ["src/subject.clj"])]
+    (is (= [{:file "src/subject.clj" :reason :no-dependency-edge}]
+           (:unmatched-files r))))
   (let [nodes [{:namespace 'a :file "src/a.clj" :requires #{'b}
                 :content-edges [{:file "resources/x.edn" :edge-kind :data-file}]}
                {:namespace 'b :file "src/b.clj" :requires #{'a}}

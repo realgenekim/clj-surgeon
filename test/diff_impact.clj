@@ -34,9 +34,8 @@
 
 (defn repository-files []
   (let [root (fs/real-path ".")]
-    (->> ["src" "test" "docs" "resources"]
-         (filter fs/directory?)
-         (mapcat #(fs/glob % "**" {:follow-links false}))
+    (->> (str/split (command! ["git" "ls-files" "--cached" "--others" "--exclude-standard" "-z" "--"]) #"\u0000")
+         (remove str/blank?)
          (filter #(and (fs/regular-file? %)
                        (fs/starts-with? (fs/real-path %) root)))
          (map str) set)))
@@ -51,8 +50,9 @@
                            (:lane (first (filter map? (drop 2 form)))))
                  :test? (and test-side? (str/ends-with? (str (second form)) "-test"))
                  :requires (dependencies form)
-                 ;; Helpers may also read files; propagate through their test dependents.
-                 :content-edges (when test-side?
+                 ;; Both src and test helpers contribute through the require closure.
+                 ;; @spec DIFF-IMPACT-006
+                 :content-edges (do
                                   (when (> (fs/size file) 8388608)
                                     (throw (ex-info "Diff-impact source exceeds 8 MiB"
                                                     {:error-type :impact-input-limit :file file})))
@@ -89,7 +89,15 @@
       (doseq [{n :namespace reasons :reasons} selected
               {:keys [edge-kind file]} reasons]
         (println "selected" n "via" (name edge-kind) file))
-      (when (empty? selected)
+      ;; @spec DIFF-IMPACT-004 -- uncertainty holds even a partially selected diff.
+      (when (seq (:unmatched-files inventory))
+        (let [result (select-keys inventory [:status :reason :changed-files :unmatched-files :namespaces])]
+          (println (pr-str result))
+          (when-not (= phase "list")
+            (spit (str output "/results-" phase ".edn") (str (pr-str result) "\n"))
+            (flush)
+            (System/exit 1))))
+      (when (and (empty? selected) (empty? (:unmatched-files inventory)))
         (let [result (select-keys inventory [:status :changed-files :unmatched-files :namespaces])]
           (println (pr-str result))
           (when-not (= phase "list")

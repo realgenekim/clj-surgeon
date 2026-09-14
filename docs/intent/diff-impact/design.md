@@ -13,8 +13,10 @@ existing libspec grammar, cycles and unbounded transitive closure. Test-side
 helper namespaces participate even when they are not themselves test endpoints.
 Git changed paths are not restricted to src/.
 
-Read src/ and test/ namespace source as syntax without evaluation. Existing file literals
-under docs/ or resources/ create data-file edges. Source file literals create
+Read src/ and test/ namespace source as syntax without evaluation. Existing non-source file literals create data-file edges, including files
+at the repository root and under config/. Git supplies tracked and unignored
+untracked paths; only existing regular files whose realpaths stay in the
+repository enter the inventory. Source file literals create
 source-text edges; source directory literals in a namespace with slurp, file-seq
 or source-scanning helpers create source-scan edges to files under that root.
 Composed paths with a literal root (the splice witness's docs/intent/ and
@@ -62,5 +64,6 @@ Source content edges seed the existing reverse require closure; no unrelated
 source namespace can contribute a reason to a test outside that closure.
 EDN configuration value flow, relative io/resource classpath resolution, deleted
 inputs and unanchored dynamic paths remain unresolved; unmatched changes HOLD.
-A seed with declared dependents but no reachable test is :no-dependency-edge;
+A seed with declared require or content dependents but no reachable test is
+:no-dependency-edge;
 :no-test-dependent describes only an isolated namespace seed.

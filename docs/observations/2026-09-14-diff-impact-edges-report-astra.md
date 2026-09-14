@@ -277,3 +277,194 @@ c7fb402d7580ace47675d02f7b813bcd5837bdfab5788c0c78f477721f72b0d9  docs/observati
 
 Historical scratch worktrees are removed after retaining their selection evidence.
 All temporary work was confined to `/var/tmp/forge/impact-fx`.
+
+
+## Round 2
+
+Recorded 2026-09-14T10:19:09.340977+00:00. Starting snapshot `c6f407872f9ca19e87fa7660714660a705f1c44a`;
+branch `fable/impact-entrance`. This section supersedes Round 1's exit-zero
+contract for unmatched changes. Sol's full [NO-GO verdict](2026-09-14-diff-impact-edges-round2/sol-verdict-1.md)
+was read before work. All phases were approved in advance by the round brief.
+
+### Contract and red-first evidence
+
+Chose **(b) HOLD**. Every non-list mode (`before`, `after`, `merged`,
+`fixed-point`) now writes and prints `:status :hold-unmatched-files`,
+`:reason :unmatched-files`, and every unmatched file with its reason, then exits
+**1 before launching any test**, including when other changed files select tests.
+List is selection evidence only and exits 0 with the same typed inventory.
+
+A conservative fallback's wall is **unknown, not measured**. The existing runner
+starts separate JVMs across all selected lanes; a safe full-manifest fallback
+would include the battery lane, which this round explicitly excludes. There is
+no established bounded minimum-lane wall for this gate. HOLD closes the failure
+without asserting an unmeasured fallback budget or silently choosing a narrower
+suite. No `make test` or `test-battery` was run.
+
+`:nothing-selected` is now possible only for an empty diff. The tracked
+[no-test-can-depend allowlist](../intent/diff-impact/no-test-can-depend.edn) is
+explicitly empty, with its own named test: no path is exempt, including README,
+observations, or the allowlist itself. It is a policy inventory, not an editable
+runtime configuration granting exemptions. Adding an exemption requires a new
+implementation, intent and witnesses.
+
+**Red was committed first as `2c8ea3c6`. DIFF-IMPACT-004 and its two existing
+witness tests were amended in that same commit, only by strengthening.** The
+three changed assertions now demand HOLD/status and non-list exit 1 for unmatched
+changes; all changed-file, per-file-reason, empty-vector, and empty-diff exit-zero
+assertions remain. No existing assertion was deleted or weakened. All other
+original test assertions remain unchanged. The red commit also contains the
+full captured output: **14 tests / 205 assertions / 97 failures / 0 errors**.
+[Red log](2026-09-14-diff-impact-edges-round2/red.log).
+
+The class oracle quantifies all six changed-file inventories in all four
+non-list modes with endpoints disconnected, then tests the three residual
+unmatched fixtures unchanged in all four modes. Mixed selected/unmatched diffs
+also HOLD in every mode. The source-closure witness covers transitive paths,
+cycles, unrelated endpoints, cut paths and unreachable dependents. During
+implementation review, an extra red assertion caught an isolated namespace
+that still had an unreachable content reader; its [red output](2026-09-14-diff-impact-edges-round2/content-dependent-red.log)
+is retained. A dependent through either require or content edges now yields
+`:no-dependency-edge` when unreachable. `:no-test-dependent` remains only for
+an isolated namespace seed with neither kind of dependent.
+
+### Bounded propagation and residuals
+
+Discovery now reads content facts from both src/ and test/. The same reverse
+require fixed point carries file edges to reachable tests; it does not attach
+every source constant or scanner to every test. A literal can name any existing
+repository file, with witnesses for `Makefile` and `config/settings.edn` as well
+as resources. Git supplies tracked and unignored untracked paths, with existing
+regular-file and inside-root realpath checks. Directory expansion remains bounded
+to literal docs/resources/src roots and the existing inventory; source-scan
+vocabulary and normalization rules are unchanged.
+
+EDN configuration value flow and relative `io/resource` classpath names remain
+unresolved. Deleted inputs and dynamically constructed paths with no literal
+anchor also remain outside this analysis. Their unmatched changed files HOLD.
+This is a bounded static dependency approximation, not a completeness claim for
+all dynamic dependencies when a file already has another matched edge. Intent:
+[design](../intent/diff-impact/design.md), [DIFF-IMPACT-004/006](../intent/diff-impact/diff-impact-specs.md).
+
+### Six pressure-point results
+
+The supplied verdict's command is literally
+`bb --classpath src:test:libs/clj-splice/src -e '<five run-fixture cases>'`.
+It contains **no five case bodies**. Therefore these are faithful, explicitly
+retained reconstructions of the five reported shapes, plus Makefile; byte-for-byte
+replay of Sol's omitted bodies cannot be claimed. The reusable fixture data lives
+in `round-two-probes` in test/clj_surgeon/diff_impact_test.clj. Exact executed
+[probe driver](2026-09-14-diff-impact-edges-round2/probes.clj) and
+[results](2026-09-14-diff-impact-edges-round2/probes.edn) are retained. Invocation:
+
+```sh
+TMPDIR=/var/tmp/forge/impact-fx \
+JAVA_TOOL_OPTIONS='-Xmx1024m -Djava.io.tmpdir=/var/tmp/forge/impact-fx' \
+bb --classpath src:test:libs/clj-splice/src /var/tmp/forge/impact-fx/round2-probes.clj
+```
+
+Each result below is pasted verbatim. `:fixed-point nil` means a selected-set
+probe only; its synthetic namespace was not run. The three unmatched fixtures
+were also run in fixed-point mode and each exited 1. `:wall-ms` covers each
+list invocation plus its fixed-point invocation when present, not a fallback wall.
+
+```clojure
+{:probe :src-constant, :list-exit 0, :selection {:status :selected, :changed-files ["resources/registry.edn"], :unmatched-files [], :namespaces [{:file "test/fixture/reader_test.clj", :namespace fixture.reader-test, :lane nil, :test? true, :requires #{fixture.middle}, :paths [["fixture.middle" "fixture.helper"]], :reasons [{:file "resources/registry.edn", :edge-kind :data-file, :seed fixture.helper}]}]}, :fixed-point nil, :wall-ms 142}
+```
+
+```clojure
+{:probe :edn-config, :list-exit 0, :selection {:status :hold-unmatched-files, :reason :unmatched-files, :changed-files ["resources/registry.edn"], :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}], :namespaces []}, :fixed-point {:exit 1, :results {:status :hold-unmatched-files, :reason :unmatched-files, :changed-files ["resources/registry.edn"], :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}], :namespaces []}}, :wall-ms 297}
+```
+
+```clojure
+{:probe :io-resource, :list-exit 0, :selection {:status :hold-unmatched-files, :reason :unmatched-files, :changed-files ["resources/registry.edn"], :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}], :namespaces []}, :fixed-point {:exit 1, :results {:status :hold-unmatched-files, :reason :unmatched-files, :changed-files ["resources/registry.edn"], :unmatched-files [{:file "resources/registry.edn", :reason :no-dependency-edge}], :namespaces []}}, :wall-ms 255}
+```
+
+```clojure
+{:probe :test-scan, :list-exit 0, :selection {:status :selected, :changed-files ["src/fixture/unrequired.clj"], :unmatched-files [], :namespaces [{:file "test/fixture/reader_test.clj", :namespace fixture.reader-test, :lane nil, :test? true, :requires #{fixture.middle}, :paths [["fixture.middle" "fixture.helper"]], :reasons [{:file "src/fixture/unrequired.clj", :edge-kind :source-scan, :seed fixture.helper}]}]}, :fixed-point nil, :wall-ms 135}
+```
+
+```clojure
+{:probe :src-scan, :list-exit 0, :selection {:status :selected, :changed-files ["src/fixture/unrequired.clj"], :unmatched-files [], :namespaces [{:file "test/fixture/reader_test.clj", :namespace fixture.reader-test, :lane nil, :test? true, :requires #{fixture.middle}, :paths [["fixture.middle" "fixture.helper"]], :reasons [{:file "src/fixture/unrequired.clj", :edge-kind :source-scan, :seed fixture.helper}]}]}, :fixed-point nil, :wall-ms 140}
+```
+
+```clojure
+{:probe :makefile, :list-exit 0, :selection {:status :hold-unmatched-files, :reason :unmatched-files, :changed-files ["Makefile"], :unmatched-files [{:file "Makefile", :reason :no-dependency-edge}], :namespaces []}, :fixed-point {:exit 1, :results {:status :hold-unmatched-files, :reason :unmatched-files, :changed-files ["Makefile"], :unmatched-files [{:file "Makefile", :reason :no-dependency-edge}], :namespaces []}}, :wall-ms 267}
+```
+
+### Historical list-mode replay
+
+Both replays used detached snapshots beneath /var/tmp/forge/impact-fx, the current
+selector on the classpath, and the same library-mode harness as Round 1, replacing
+only `gate-environment?`. They make no launcher-envelope or historical test-run
+claim. Exact bases: `df0c9e1c^` at `df0c9e1c`, and `00566756` at `8aedb65e`.
+
+- **df0c9e1c: 72 → 92 namespaces**, no removals, list exit 0, unmatched empty.
+  All 20 additions have source-scan reasons seeded in required src namespaces.
+  Existing literal `src` roots in core, extract, failure-report, mcp-intent-contract,
+  mcp-recovery, mcp-source-anchor and rename explain the added selections.
+  Removing only src-side content edges restores **exactly the original set of 72**;
+  the [counterfactual](2026-09-14-diff-impact-edges-round2/attribution.edn) proves the
+  delta is propagation, not widened Git inventory. Broad literal roots remain
+  deliberately conservative. Splice-envelope-test remains selected.
+- **00566756..8aedb65e: 9 → 9 namespaces**, identical set, no additions or removals,
+  list exit 0, unmatched empty. All three previously named battery witnesses remain.
+
+The 20 added namespaces at df0c9e1c:
+
+```text
+clj-surgeon.cljc.split-test
+clj-surgeon.edit-test
+clj-surgeon.failure-report-test
+clj-surgeon.help-test
+clj-surgeon.intent-transaction-test
+clj-surgeon.mcp-contract-test
+clj-surgeon.mcp-extraction-test
+clj-surgeon.mcp-inspect-contract-test
+clj-surgeon.mcp-intent-contract-test
+clj-surgeon.mcp-prepared-wire-test
+clj-surgeon.mcp-read-request-normalization-test
+clj-surgeon.mcp-relation-census-launcher-test
+clj-surgeon.mcp-relation-census-round20-test
+clj-surgeon.operation-algebra-test
+clj-surgeon.quoted-var-refs-test
+clj-surgeon.recovery-test
+clj-surgeon.require-change-boundary-test
+clj-surgeon.require-change-test
+clj-surgeon.show-form-test
+clj-surgeon.xray-test
+```
+
+Full selections, paths and reasons: [df0c9e1c EDN](2026-09-14-diff-impact-edges-round2/real-a.edn),
+[stdout](2026-09-14-diff-impact-edges-round2/real-a.log),
+[tooling EDN](2026-09-14-diff-impact-edges-round2/real-b.edn),
+[stdout](2026-09-14-diff-impact-edges-round2/real-b.log),
+[set comparison](2026-09-14-diff-impact-edges-round2/compare.edn).
+
+### Verification
+
+- Formatter: standard-clojure-style v0.29.0 on the three changed Clojure files.
+- Lint through `~/bin/clj-kondo`: **0 errors, 0 warnings**.
+- JVM, `-J-Xmx1024m -M:clj-surgeon/test-deps`, diff-impact-test and lane-manifest-test:
+  **49 tests / 2,177 assertions, 0 failures/errors, 12.86 s wall**.
+- bb, `--classpath src:test:libs/clj-splice/src`, diff-impact-test:
+  **14 tests / 242 assertions, 0 failures/errors, 7.75 s wall**.
+- Original `test/diff_impact.clj --self-test`: exit 0; require graph and completion
+  assertions remain intact.
+- `make census-regenerate`: **exit 0, +5/-0**; only the five new test names appear.
+- Repository intent audit: `:ok true`, no violations (existing witness-debt ledger
+  remains reported separately).
+- All scratch/process temp properties were set beneath `/var/tmp/forge/impact-fx`.
+  Historical worktrees were removed after retaining their selection evidence.
+- Protected ledger hashes remain byte-identical to the starting snapshot:
+
+```text
+c7fb402d7580ace47675d02f7b813bcd5837bdfab5788c0c78f477721f72b0d9  docs/observations/battery-ledger.edn
+154faae0c803099d1bfe88e8563a8cf85cdf2376af4e4309b10bd850cd6ef264  docs/observations/battery-namespace-walls.edn
+```
+
+Logs: [JVM](2026-09-14-diff-impact-edges-round2/jvm-final.log),
+[bb](2026-09-14-diff-impact-edges-round2/bb-final.log),
+[lint](2026-09-14-diff-impact-edges-round2/lint-final.log),
+[census](2026-09-14-diff-impact-edges-round2/census.log).
+No full-suite, fallback-performance, or independent fence GO claim is made.
