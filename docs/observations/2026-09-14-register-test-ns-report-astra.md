@@ -165,3 +165,112 @@ review remains a pre-merge gate; no merge was requested or performed.
 Fixture copies and the owned warm nREPL are removed/stopped at handoff. Text logs
 and hash comparisons remain under `/var/tmp/forge/regns-fx`; this report retains
 the decisive red/green outputs and counts.
+
+## Round 2
+
+Recorded 2026-09-14T10:09:52.601914+00:00; reviewed base `32eec035`.
+Standing Round 1 approval covers this repair. No full suite or battery ran.
+
+F1 root cause: at base, `test_registration.clj:364` started the shared
+control child and immediately waited without recording its launch. All bb-load,
+JVM-test and bb-test launches use that one site. The fix requires spawn-ledger
+and calls `spawn/record!` immediately after start (current lines 347–366),
+matching the other src builders. TEST-ISO-002's scanner enumerates
+`ProcessBuilder.` in src and requires `spawn/record!` in the same file.
+This source-scanning class oracle has no require edge from test-registration:
+it is precisely the missing impact class addressed by sibling branch
+`fable/impact-entrance`'s diff-impact source-scan edges. Focused require closure
+alone could not select it.
+
+F2 root cause: base lines 418–423 canonicalized the supplied root and selected
+`/var/tmp/forge/regns-fx/register-<SHA256(canonical-root)>.lock`.
+Thus the parent was fixed/shared, but the key was already per-root—not the real
+repository root or a JVM-global singleton. Lines 421–423 ignored parent mkdir
+failure and converted **every** false mkdir result into register-busy, without
+holder evidence. Snapshot/path validation followed acquisition at lines 425–426.
+The synchronized regression confirms different roots could overlap even on the
+old implementation; it disproves an unqualified hash/key collision diagnosis.
+The prewarm log retained neither the filesystem errno nor holder identity, so
+the original gate's precise mkdir failure cannot be reconstructed from it.
+
+Current lines 421–436 publish a complete pid/root holder record by atomic hard
+link to `<canonical-registration-root>/.clj-surgeon-register.lock`.
+There is no shared external lock parent. Only FileAlreadyExists is contention;
+other filesystem exceptions return register-io-failed. Lines 438–448 perform
+snapshot/path and request validation before acquiring the lock; snapshot
+comparison still guards publication after acquisition. Only an acquired lock
+is removed by its invocation. Hard-link support is required; unsupported
+filesystems refuse. A killed holder may leave the named lock for recovery.
+
+The permanent REGNS-009 witness at lane_manifest_test.clj:1696 uses promises to
+hold root A inside control execution. Root B independently reaches its expected
+control-failed result; A's contender alone returns busy with holder pid/root.
+An invalid lane and an escaping symlink on the held root retain their own
+refusal types. Releasing A gives exactly one busy across the two A calls and
+removes its lock. Controls are stubbed at the execution boundary in this fast
+namespace; the witness proves real filesystem locking, not control execution.
+
+Prewarm RED, from `prewarm1-check.log` (Make exit 2):
+
+```text
+FAIL every-src-spawn-site-records-into-the-ledger: test_registration.clj
+registration-failed-control-rolls-back-enrollment: register-control-failed != register-busy
+registration-boundary-refusals-preserve-source-bytes: register-path-escape != register-busy
+```
+
+New witness RED on the old source, in `round2-red.log`:
+
+```text
+registration-lock-is-per-root-and-identifies-holder:
+  holder root: expected fixture root, actual nil
+  holder pid: expected positive integer, actual nil
+  register-conflict != register-busy
+  register-path-escape != register-busy
+every-src-spawn-site-records-into-the-ledger:
+  1 src spawn site(s) ... src/clj_surgeon/test_registration.clj
+```
+
+This targeted test-vars command reports assertion failures but does not translate
+them to process exit. An initial malformed test edit failed to read and was
+corrected before obtaining this behavioral RED. The first full focused run
+then exposed the new test's missing census enrollment (three class-oracle
+failures); census-regenerate added the one name before the final green run.
+
+Final commands used `TMPDIR=/var/tmp/forge/regns-fx` and
+`JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/var/tmp/forge/regns-fx`:
+
+```sh
+npx --yes @chrisoakman/standard-clojure-style fix src/clj_surgeon/test_registration.clj test/clj_surgeon/lane_manifest_test.clj
+~/bin/clj-kondo --lint src/clj_surgeon/test_registration.clj test/clj_surgeon/lane_manifest_test.clj
+make census-regenerate
+clojure -J-Xmx1024m -M:clj-surgeon/test-deps -e "(require 'clj-surgeon.ns-isolation-test 'clj-surgeon.lane-manifest-test) (let [r (clojure.test/run-tests 'clj-surgeon.ns-isolation-test 'clj-surgeon.lane-manifest-test)] (shutdown-agents) (System/exit (if (zero? (+ (:fail r) (:error r))) 0 1)))"
+sha256sum -c /var/tmp/forge/regns-fx/round2-protected.sha256
+git diff --check
+```
+
+GREEN, each command exit 0:
+
+```text
+linting: errors: 0, warnings: 0
+census-regenerate: +1/-0
+Ran 71 tests containing 2197 assertions.
+0 failures, 0 errors.
+docs/observations/battery-ledger.edn: OK
+docs/observations/battery-namespace-walls.edn: OK
+```
+
+Census ran with an additional JAVA_TOOL_OPTIONS `-Xmx1024m`.
+The protected SHA-256 values remain those recorded in Round 1. Formatter, lint,
+census and focused output are retained as `round2-*.log` under the approved
+scratch root. A bb load and the three lock/refusal witnesses also exited 0.
+
+The stale-check probe source is **byte-identical to trunk 8aedb65e**:
+`test/clj_surgeon/mcp_hot_verify_test.clj` has Git blob
+`51adf4f27114d4012020ef399fa437479a999a41` at both trunk and this branch.
+It generates the sol-round5 dev/experiments fixture, changes dependency value
+from 1 to 2, and expects probe-failed with one failure. The prefix-dependency
+probe is in that same unchanged file. Those fixture failures are expected
+nested output; the source and generated-fixture definitions were left untouched.
+The additional affected intent-contract check ran with the same 1024 MB JVM
+command pattern: 22 tests, 571 assertions, zero failures/errors, exit 0
+(`round2-intent.log`). No landing-gate rerun or merge-readiness claim is made.
