@@ -6920,3 +6920,7 @@ Isolation is settled (LIVE-SNAPSHOT byte-identical in the same run). The failure
 ## 2026-09-14T19:14:08Z — regns round 8 (84ef9e6c): cost closed (32 cells on the real manifest runner, matrix lane 267 s exit 0); one self-inflicted timing assertion left → tweezer
 
 Per-cell cold runner walls 10.7–11.5 s (median 11.0 s); seed cell agrees with full `make test-fast` (33.9 s) on the same first failure block; battery namespace alone 451 s exit 0 (over my 150 s target, inside the battery budget). Copied 8-lane battery exit 2 only because the battery namespace's concurrent live observer asserted an 8,000 ms wall for lane-manifest-test and measured 8,815 ms under load (all 46 tests passed; live snapshot byte-identical). A wall budget asserted inside a battery lane is a flake by construction; the fast lane already owns that budget. Tweezer to Astra (run-bg astra-regns-10): report the wall, assert correctness. Still red after it → park.
+
+## 2026-09-14T19:30:19Z — regns tweezer 1 (48b3a1ad): observer budget reported not asserted; battery still red on the seed cell's full make test-fast (cell-timeout mask=0 at 120 s under load); final tweezer launched
+
+Matrix lane 268 s exit 0; registration lane 166 s exit 1 on the nested full fast lane. The agreement proof (full Make vs manifest runner, same first failure block) was recorded once in round 8; it leaves the battery run and becomes a separately invocable witness. Astra final tweezer (run-bg astra-regns-11). Red after this → park with evidence.
