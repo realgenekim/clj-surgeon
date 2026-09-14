@@ -16,6 +16,69 @@ verification, or consumed meaningful server time.
 
 ## Approach
 
+### One entrance for test namespace registration (inb-b10334)
+
+Status: proposed; phase-one design for `fable/regns-entrance`, based on
+`MCP/main` commit `8aedb65e`. Implementation and red/green evidence are pending.
+
+Adding a test namespace currently exposes independent registration failures
+across successive runs. A root-parameterized registry oracle will compare the
+namespace source with every registration surface and return one complete
+diagnostic. Each missing or conflicting registration will name its file,
+containing form, actual value, and required edit. Existing census refusals will
+include this checklist and the concrete registration command.
+
+The registration surfaces are:
+
+1. Lane and runtime declarations in `test/clj_surgeon/lane_manifest.clj`,
+   including applicable Babashka ineligibility declarations.
+2. The author's lane metadata on the namespace form in the test source.
+3. The runtime namespace count pinned in `every-manifest-entry-exists-on-disk`
+   in `test/clj_surgeon/lane_manifest_test.clj` (162 at the base snapshot).
+4. Historical membership or `adopted-since-round-one` membership in that test
+   file. Historical membership stays historical; new namespaces are adopted.
+5. Fully qualified deftest membership in `test/clj_surgeon/deftest_census.edn`
+   and portability control coverage under
+   `docs/observations/2026-09-12-bbtower-block-b/attempt22/`. Coverage includes
+   receipt validation and agreement of `portability-controls.edn` with the
+   generated `portability-census.md`; `fold_census.clj` owns that projection.
+
+The author invokes
+`make register-test-ns NS=clj-surgeon.foo-test LANE=battery RUNTIME=jvm`
+with optional `BB_INELIGIBLE=reason`. A shared registration model serves both
+the read-only oracle and the command's planning stage. The command performs
+structural edits for surfaces 1, 3, 4, and 5, preserves unrelated forms and
+comments, and prints file/form changes with before/after counts. A repeated
+matching invocation is a byte-preserving no-op. Missing source, missing lane
+metadata, and conflicting declarations refuse before registration writes;
+`register-conflict` reports both values. The command never chooses a lane on
+the author's behalf.
+
+Control receipts represent executions, not declarations. The entrance must
+obtain genuine focused control results where required by the existing gate;
+adding a path or declaring a Babashka limitation cannot manufacture passing
+evidence. The low-level design must specify this execution boundary, the
+accepted reason representation, and failure handling before implementation.
+The ordinary census gate must continue to reject removed tests.
+
+Acceptance requires committed failing tests before implementation, a temp-root
+fixture missing surfaces 2–5 whose single diagnostic lists all four, and a
+temp repository copy proving command-to-oracle success, repeat no-op, and
+wrong-lane refusal. Any new test namespace is enrolled through the new
+entrance itself. Requirements will use separate stable IDs in the repository's
+discovered `docs/intent/<leaf>/*-specs.md` convention, with `@spec`, `INTENT:`,
+and `INTENT-TEST:` witnesses.
+
+Verification is restricted to affected namespaces and focused controls, with
+JVM maximum heap 1024 MB, lint through `~/bin/clj-kondo`, and successful
+`make census-regenerate`. Fixtures and process scratch belong under
+`/var/tmp/forge/regns-fx`. Neither `make test` nor `make test-battery` is part
+of this task. `docs/observations/battery-ledger.edn` and
+`docs/observations/battery-namespace-walls.edn` must remain byte-identical.
+This change makes no wall-performance or release-readiness claim.
+
+### Structural kernel and evidence ownership
+
 Battery receipt history and mutable scheduling state have separate ownership;
 the [battery evidence design](intent/battery-ledger/battery-ledger-design.md)
 defines explicit receipt minting and the guarded census regeneration entrance.
