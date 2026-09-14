@@ -176,7 +176,7 @@
   ;; @spec TEST-ISO-001 -- an explicit runtime for every namespace, independent of cadence.
   (testing "every discovered test namespace has a closed runtime declaration"
     (let [runtimes @(requiring-resolve 'clj-surgeon.lane-manifest/namespace-runtimes)]
-      (is (= 161 (count runtimes)))
+      (is (= 162 (count runtimes)))
       (is (= (set (keys @on-disk)) (set (keys runtimes))))
       (is (= #{:bb :jvm} (set (vals runtimes))))
       (is (= :bb (get runtimes 'clj-surgeon.forms-test)))
@@ -971,6 +971,7 @@
      clj-surgeon.helper-extraction-test ; MCP-OP-HELPER's pure planner witnesses, enrolled into :fast when the planner went green (it requires only the planner, the fixture and clojure.test, and spawns nothing)
      clj-surgeon.telemetry-events-test ; TELEMETRY-EVENTS-001's witnesses: the box-wide JSONL ledger the public MCP fns append to as a side effect (2026-09-06, the night the hourly watch reported four figures while a dozen calls landed in launcher-chosen roots it never read)
      clj-surgeon.mcp-helper-extraction-test ; MCP-OP-HELPER's boundary witnesses, :battery because they spawn babashka children to prove fixture trees LOAD and drive real execute! transactions
+     clj-surgeon.battery-state-admission-test ; STATE-HOME-009/010: real battery read/write root and descendant refusal matrix.
      clj-surgeon.state-home-admission-test
      clj-surgeon.probe-state-test}) ; Round 7: 72 in-process admission cells in :fast; five real Make cells in :battery, plus unchanged four-mode warm witness.
 

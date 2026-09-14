@@ -20,3 +20,15 @@ with namespace and shard timings; census no-op/add/delete/rename; make gate
 environment still refuses census regeneration. Witnesses run red first, then
 focused namespaces, diff-impact, lint, intent audit, and one serial-width battery.
 Retain execution evidence outside the checkout in `/var/tmp/forge/ledger-fx`.
+
+## Round 2: state writer admission
+
+Sol F1 extends this plan to a new battery boundary namespace and RED/GREEN
+commits. STATE-HOME-009/010 apply to the selected walls root and final path on
+read and write; refusal must propagate through preparation/completion before
+fallback or filesystem creation. Cover inside-workspace, outside-envelope,
+redirected descendants of admitted roots, and an admitted positive control.
+Enumerate state-root-derived writers before fixing the class. Preserve both
+tracked evidence files. Verify the five requested namespaces, census, lint,
+and intent audit; the seat owns the full battery. Ambient append authority is
+follow-up only; bind future minting to receipt-chain provenance.

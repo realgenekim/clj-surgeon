@@ -325,6 +325,7 @@
   clj-surgeon.battery-parallel-test/the-single-lane-floor-is-named-with-its-formula-and-its-override
   clj-surgeon.battery-parallel-test/the-union-is-taken-in-manifest-order-whichever-lane-ran-it
   clj-surgeon.battery-parallel-test/worker-admission-wraps-argv-without-shell-interpolation
+  clj-surgeon.battery-state-admission-test/walls-production-state-home-admission-matrix
   clj-surgeon.cell-b-oracle-test/cell-b-lint-case-witness
   clj-surgeon.cell-b-oracle-test/cell-b-partial-negative-witnesses
   clj-surgeon.census-pool-test/pooled-map-maps-every-input-exactly-once
