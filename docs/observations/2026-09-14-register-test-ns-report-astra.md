@@ -1264,3 +1264,19 @@ not the operator's scratch prefix. Raw logs and command results are retained
 under `/var/tmp/forge/regns-fx/round8`; bounded receipts are linked above. This
 branch change earns standalone correctness evidence, not a passing landing gate
 or the requested sub-150-second budget claim.
+
+## Round 8 tweezer
+
+Measured 2026-09-14T19:28:57+00:00. The live-concurrent observer now emits facts, checks exit 0, 46 tests, zero failures/errors and every non-timing isolation violation, and preserves LIVE-SNAPSHOT byte identity. Its namespace wall and launch load average are reported; the fast-lane budget remains unchanged in its own gate. The existing 120-second child timeout remains.
+
+Standalone: exit **0**, command wall **456.358 s**, namespace wall **453319 ms**, 1 test / 2 assertions, zero isolation violations. Observer: **5154 ms**, launch load **1.12 / 3.63 / 5.89**. Once-only copied eight-lane battery at 1024 MB, normal prerequisites enabled and corrected `clj-surgeon` scratch state root: Make exit **2**, command wall **299.021 s**, makespan **280509 ms**. Matrix lane 3: exit **0**, **268132 ms**; registration lane 5: exit **1**, **165983 ms** (namespace **157711 ms**). Its observer passed at **8706 ms**, launch load **10.06 / 6.08 / 6.27**, with 46 tests and byte-identical LIVE-SNAPSHOT. Registration then failed with `cell-timeout mask=0`; the required all-green battery gate remains unmet. No second battery run or other budget change was made. Total: 1207 tests / 19938 assertions, 1 failure / 0 errors, skipped 0, zero isolation violations across 57 namespaces.
+
+Paved `~/bin/clj-kondo`: 0 errors / 0 warnings. Census regeneration: exit 0, **+0/-0**. Both protected ledgers and census match the Round 8 SHA-256 values above in the live checkout and copy; no ledger append occurred. Raw logs, argv/wall/exit JSON and preservation hashes: `/var/tmp/forge/regns-fx/round8-tweezer/`.
+
+## Final tweezer
+
+Measured 2026-09-14T19:47:10+00:00. Mask 0 now uses only the manifest runner, like every other battery cell. The full-Make agreement check is separately invocable with `python3 -B test/regns_seed_witness.py --root "$PWD" --scratch /var/tmp/forge/regns-fx`; the script is outside the battery namespace and cites [Round 8](2026-09-14-register-test-ns-round8/alone-seed.json) as its last recorded run (full Make **33.893 s**, manifest **11.038 s**, both exit **0**, identical first failure block). No budgets or other battery behavior changed.
+
+Standalone namespace: exit **0**, command wall **419.734 s**, namespace **416778 ms**, 1 test / 2 assertions, zero isolation violations. Once-only copied eight-lane battery, normal prerequisites and 1024 MB invocation: Make exit **2**, command wall **497.832 s**, makespan **479580 ms**. All eight lanes exited **0**; matrix lane 3 **271510 ms**, registration lane 5 **478093 ms**. All 32 registration cells passed in both runs, and LIVE-SNAPSHOT remained byte-identical. The battery had 1207 tests / 19938 assertions, zero failures/errors, skipped 0, but one aggregate TEST-ISO-007 time-budget violation: **1847098 ms > 1800000 ms**. The mask-0 timeout is removed; the required overall exit-0 gate remains **unmet**. No second battery run or budget change was made.
+
+Paved `~/bin/clj-kondo`: **0 errors / 0 warnings**; both Python files parse. Census regeneration: exit **0**, **+0/-0**. The two protected ledgers and census remain byte-identical to the Round 8 hashes in both live checkout and copy. Logs, argv/wall/exit results, all cell receipts, lane walls and preservation hashes: `/var/tmp/forge/regns-fx/final-tweezer/`.
