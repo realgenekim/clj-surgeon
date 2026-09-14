@@ -1486,3 +1486,111 @@
              "all. Closing it needs a meaning-level check, not a wider regex "
              "-- a wider regex would flag every legitimate mention of the JVM "
              "fast lane, and a witness that cries wolf gets deleted."))))
+
+;; INTENT-TEST: REGNS-001
+;; INTENT-TEST: REGNS-006
+;; @spec REGNS-001
+;; @spec REGNS-006
+(deftest registration-oracle-enumerates-all-surfaces
+  ;; September 13/14 field shape: manifest present, surfaces 2–5 absent.
+  (let [root (temp-dir "regns-missing")
+        file (io/file root "test/clj_surgeon/fixture_test.clj")
+        oracle (try (requiring-resolve 'clj-surgeon.test-registration/checklist)
+                    (catch java.io.FileNotFoundException _ nil))]
+    (.mkdirs (.getParentFile file))
+    (spit file "(ns clj-surgeon.fixture-test)\n(deftest works (is true))\n")
+    (let [scanned (scan-on-disk (io/file root "test"))]
+      (is (= nil (get-in scanned ['clj-surgeon.fixture-test :lane])))
+      (is (nil? (census-diff (keys scanned) '#{clj-surgeon.fixture-test})))
+      (is (some? oracle) "current census sees membership only; need the complete registry oracle")
+      (when oracle
+        (let [result (oracle {:namespace 'clj-surgeon.fixture-test :file (str file)
+                             :lane nil :requested-lane :battery :runtime :jvm
+                             :manifest-lane :battery :registered-runtime :jvm
+                             :pin 0 :expected-count 1 :adopted? false
+                             :tests '#{clj-surgeon.fixture-test/works} :census #{}
+                             :controls-valid? false})]
+          (is (= [2 3 4 5] (mapv :surface (:missing result))))
+          (is (every? #(every? (set (keys %)) [:file :form :actual :expected]) (:missing result)))
+          (doseq [surface ["ns metadata" "runtime count" "adoption" "census/control"]]
+            (is (str/includes? (:message result) surface)))
+          (is (str/includes? (:message result)
+                             "make register-test-ns NS='clj-surgeon.fixture-test' LANE='battery' RUNTIME='jvm'")))))))
+
+(defn- registration-api [n]
+  (try (requiring-resolve (symbol "clj-surgeon.test-registration" n))
+       (catch java.io.FileNotFoundException _ nil)))
+
+(defn- registration-fixture []
+  {"test/clj_surgeon/fixture_test.clj"
+   "(ns clj-surgeon.fixture-test {:lane :battery})\n(deftest works (is true))\n"
+   "test/clj_surgeon/lane_manifest.clj"
+   "(ns clj-surgeon.lane-manifest)\n(def manifest {;; keep comment\n})\n(def portability-runtimes '{})\n(def bb-ineligibilities {})\n"
+   "test/clj_surgeon/lane_manifest_test.clj"
+   "(ns clj-surgeon.lane-manifest-test)\n(deftest every-manifest-entry-exists-on-disk (is (= 0 (count runtimes))))\n(def round-one-jvm-namespaces '#{})\n(def adopted-since-round-one '#{;; keep adoption\n})\n"
+   "test/clj_surgeon/deftest_census.edn" "; keep census\n#{}\n"})
+
+(def ^:private registration-request
+  {:namespace 'clj-surgeon.fixture-test :lane :battery :runtime :jvm})
+
+;; INTENT-TEST: REGNS-002
+;; INTENT-TEST: REGNS-007
+;; INTENT-TEST: REGNS-008
+;; @spec REGNS-002
+;; @spec REGNS-007
+;; @spec REGNS-008
+(deftest registration-planner-refuses-conflicts
+  (let [plan (registration-api "plan")]
+    (is (some? plan))
+    (when plan
+      (doseq [[request snapshot expected]
+              [[(assoc registration-request :lane :fast) (registration-fixture) :register-conflict]
+               [registration-request (dissoc (registration-fixture) "test/clj_surgeon/fixture_test.clj") :register-source-missing]
+               [registration-request (assoc (registration-fixture) "test/clj_surgeon/fixture_test.clj"
+                                             "(ns clj-surgeon.fixture-test)\n(deftest works (is true))") :register-metadata-missing]
+               [(assoc registration-request :namespace '../escape) (registration-fixture) :register-invalid-request]
+               [registration-request (assoc (registration-fixture) "test/clj_surgeon/deftest_census.edn"
+                                             "#{clj-surgeon.fixture-test/removed}") :register-removed-tests]]]
+        (let [r (plan snapshot request)]
+          (is (= expected (:error-type r)) (pr-str r))
+          (is (empty? (:changes r)))
+          (when (= expected :register-conflict)
+            (is (= :battery (:actual r)))
+            (is (= :fast (:expected r)))))))))
+
+;; INTENT-TEST: REGNS-003
+;; INTENT-TEST: REGNS-004
+;; @spec REGNS-003
+;; @spec REGNS-004
+(deftest registration-structural-plan-preserves-and-repeats
+  (let [plan (registration-api "plan")]
+    (is (some? plan))
+    (when plan
+      (let [before (registration-fixture)
+            result (plan before registration-request)
+            after (merge before (:candidate result))
+            repeated (plan after registration-request)]
+        (is (:ok result) (pr-str result))
+        (is (= 3 (count (:changes result))))
+        (is (str/includes? (after "test/clj_surgeon/lane_manifest.clj") ";; keep comment\n"))
+        (is (str/includes? (after "test/clj_surgeon/lane_manifest_test.clj") ";; keep adoption\n"))
+        (is (str/starts-with? (after "test/clj_surgeon/deftest_census.edn") "; keep census\n"))
+        (is (= [] (:changes repeated)))
+        (is (= {} (:candidate repeated)))
+        (is (= (before "test/clj_surgeon/fixture_test.clj") (after "test/clj_surgeon/fixture_test.clj")))))))
+
+;; INTENT-TEST: REGNS-005
+;; @spec REGNS-005
+(deftest registration-control-results-are-executions
+  (let [valid? (registration-api "controls-valid?")
+        n 'clj-surgeon.fixture-test
+        pass (fn [runtime] {:namespace n :runtime runtime :status :passed :exit 0
+                            :result {:test 1 :pass 1 :fail 0 :error 0}})]
+    (is (some? valid?))
+    (when valid?
+      (is (true? (valid? n :jvm nil {:jvm (pass :jvm) :bb (pass :bb)})))
+      (doseq [bad [nil {:status :passed :exit 0}
+                   (assoc (pass :bb) :exit 1)
+                   (assoc (pass :bb) :namespace 'other)
+                   (assoc-in (pass :bb) [:result :test] 0)]]
+        (is (false? (valid? n :jvm nil {:jvm (pass :jvm) :bb bad})))))))
