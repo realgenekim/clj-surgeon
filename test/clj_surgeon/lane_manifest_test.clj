@@ -1504,9 +1504,19 @@
                     (catch java.io.FileNotFoundException _ nil))]
     (.mkdirs (.getParentFile file))
     (spit file "(ns clj-surgeon.fixture-test)\n(deftest works (is true))\n")
+    (doseq [[p source]
+            {"test/clj_surgeon/lane_manifest.clj"
+             "(def manifest {'clj-surgeon.fixture-test :battery})\n(def portability-runtimes '{clj-surgeon.fixture-test :jvm})\n(def bb-ineligibilities {})\n"
+             "test/clj_surgeon/lane_manifest_test.clj"
+             "(ns clj-surgeon.lane-manifest-test)\n(deftest every-manifest-entry-exists-on-disk (is (= 0 (count runtimes))))\n(def round-one-jvm-namespaces '#{})\n(def adopted-since-round-one '#{})\n"
+             "test/clj_surgeon/deftest_census.edn" "#{}\n"}]
+      (spit (io/file root p) source))
+    (is (= [2 3 4 5]
+           (mapv :surface (:missing (reg/oracle root {:namespace 'clj-surgeon.fixture-test
+                                                      :lane :battery :runtime :jvm})))))
     (let [scanned (scan-on-disk (io/file root "test"))]
       (is (= nil (get-in scanned ['clj-surgeon.fixture-test :lane])))
-      (is (nil? (census-diff (keys scanned) '#{clj-surgeon.fixture-test})))
+      (is (nil? (census-diff (keys (dissoc scanned 'clj-surgeon.lane-manifest-test)) '#{clj-surgeon.fixture-test})))
       (is (some? oracle) "current census sees membership only; need the complete registry oracle")
       (when oracle
         (let [result (oracle {:namespace 'clj-surgeon.fixture-test :file (str file)
