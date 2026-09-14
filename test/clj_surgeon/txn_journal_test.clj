@@ -3587,3 +3587,232 @@
       (is (zero? (long (:unreadable-stamps (:bucket under) -1)))
           (str "and the count is a zero that is present, not an absent key: "
                (pr-str (:bucket under)))))))
+
+;; ------------------------- the break protocol's interleaving oracle
+;;
+;; inb-c74f05, 2026-09-13. `two-breakers-sharing-a-txid-cannot-destroy-each-
+;; others-evidence` above is a HAMMER: it runs up to 4,000 rounds and hopes the
+;; scheduler puts two breakers in the same window. It found the defect three
+;; times in one day and could reproduce it on demand exactly never - which is
+;; why an uncaught `java.nio.file.NoSuchFileException` naming the LOCK reached
+;; a SHIP battery and blocked a landing that already had its GO.
+;;
+;; These witnesses are the same question asked as a SCHEDULE. The boundaries a
+;; second actor can run at are enumerated as data, every one of them is opened
+;; on purpose, and the assertions are about the outcome VALUE rather than about
+;; whether the run happened to survive.
+
+(def ^:private resolution-seam
+  "The admission boundary's own check-then-act window, as a var a witness can
+   bind. `break-lock!`'s FIRST act is asking `receipt-artifacts` what the LOCK
+   is called, and that question is `Files/exists` followed by `.toRealPath`."
+  (ns-resolve 'clj-surgeon.receipt-artifacts '*resolution-interleave*))
+
+(def ^:private break-step-boundaries
+  "Every boundary inside ONE break at which a second actor can run, in the
+   order `break-by-link!` reaches them.
+
+   `:admit-lock-path`  naming the LOCK, inside the admission boundary's
+                       existence-check-then-resolve window - before the break
+                       has touched anything at all.
+   `:before-link`      the marker sidecar is claimed and the evidence name is
+                       not yet held.
+   `:before-unlink`    the evidence name is held and proved to be the judged
+                       claim, and the LOCK has not been unlinked yet.
+
+   Listed here so a NEW boundary is added by naming it, and so the witnesses
+   below cannot quietly cover fewer than all of them."
+  [:admit-lock-path :before-link :before-unlink])
+
+(def ^:private typed-break-causes
+  "Every cause a refused break is allowed to answer with. A cause outside this
+   set is an untyped outcome wearing a keyword, and the caller that has to act
+   on it has no rule for it."
+  #{:lock-vanished :tombstone-exists :evidence-unrecordable
+    :holder-changed :break-failed})
+
+(defn- create-if-absent!
+  "Create `target` holding `content` the way the kernel claims a name - a
+   fully written temporary given the name by `link(2)` - and say whether this
+   caller is the one that created it."
+  [^java.io.File target content]
+  (let [^java.io.File tmp (java.io.File/createTempFile
+                            ".claim-" ".tmp" (.getParentFile target))]
+    (try
+      (spit tmp content)
+      (Files/createLink (.toPath target) (.toPath tmp))
+      true
+      (catch java.nio.file.FileAlreadyExistsException _ false)
+      (finally (Files/deleteIfExists (.toPath tmp))))))
+
+(defn- file-contents
+  "Every readable file body in `dir`. What survives a break is a question
+   about BYTES on disk, not about which name is holding them."
+  [dir]
+  (into #{} (keep (fn [^java.io.File f]
+                    (when (.isFile f)
+                      (try (slurp f) (catch Exception _ nil))))
+                  (.listFiles (io/file dir)))))
+
+(defn- break-adversaries
+  "What a second actor can do at a boundary, as data: the four moves that
+   change what the rest of the break will find."
+  [dir txid]
+  {:delete-lock
+   #(.delete (io/file dir "LOCK"))
+   :replace-lock
+   #(do (.delete (io/file dir "LOCK"))
+        (create-if-absent! (io/file dir "LOCK")
+                           (pr-str {:txid "LIVE-OTHER" :pid 1 :boot-id "b"})))
+   :delete-tombstone
+   #(.delete (io/file dir (str "LOCK.broken." txid)))
+   :steal-tombstone-name
+   #(create-if-absent! (io/file dir (str "LOCK.broken." txid))
+                       (pr-str {:txid "THIRD-BREAKER"}))})
+
+(defn- gated-breaker
+  "One breaker on its own thread, PAUSED the first time it reaches `boundary`.
+
+   `:reached` counts down when it is paused, `:release` lets it finish, and
+   `:result` is delivered as `[:outcome m]` or `[:threw class message]` - DATA,
+   so a witness cannot turn a throw into a pass by catching it here."
+  [dir claim txid boundary]
+  (let [reached (java.util.concurrent.CountDownLatch. 1)
+        release (java.util.concurrent.CountDownLatch. 1)
+        fired (atom 0)
+        gate (fn []
+               (when (= 1 (swap! fired inc))
+                 (.countDown reached)
+                 (.await release 30 java.util.concurrent.TimeUnit/SECONDS)))
+        lock-path (.toPath (.getAbsoluteFile (io/file dir "LOCK")))
+        seam (fn [^java.nio.file.Path path window]
+               (when (and (= :real-path window) (= lock-path path)) (gate)))
+        opts (case boundary
+               :before-link {:before-link (fn [_] (gate))}
+               :before-unlink {:before-unlink (fn [_] (gate))}
+               :admit-lock-path nil)
+        run (fn []
+              (try [:outcome (@#'journal/break-lock! dir claim txid opts)]
+                   (catch Throwable t
+                     [:threw (.getName (class t)) (str (.getMessage t))])))
+        result (promise)
+        ^Thread thread (Thread.
+                         (fn []
+                           (deliver result
+                                    (if (= :admit-lock-path boundary)
+                                      (with-bindings {resolution-seam seam} (run))
+                                      (run)))))]
+    (.setDaemon thread true)
+    (.start thread)
+    {:reached reached :release release :result result :fired fired
+     :boundary boundary :thread thread}))
+
+(defn- settle!
+  "Wait until a gated breaker is paused at its boundary or has finished on its
+   own. Both are legal schedule states: a breaker refused before its boundary
+   never reaches it, and pretending otherwise would deadlock the oracle."
+  [{:keys [reached result]}]
+  (loop [waited 0]
+    (cond
+      (zero? (.getCount ^java.util.concurrent.CountDownLatch reached)) :paused
+      (realized? result) :finished
+      (< waited 30000) (do (Thread/sleep 5) (recur (+ waited 5)))
+      :else :stuck)))
+
+(defn- finish!
+  [{:keys [release result]}]
+  (.countDown ^java.util.concurrent.CountDownLatch release)
+  (deref result 30000 [:timed-out]))
+
+(defn- judged-claim!
+  "A fresh transactions directory holding one claim, already judged - the
+   state every break in this section starts from."
+  [dir victim]
+  (create-if-absent! (io/file dir "LOCK") victim)
+  (@#'journal/read-lock-claim (io/file dir "LOCK")))
+
+;; @spec TXN-RACE-002
+;; INTENT-TEST: TXN-RACE-002
+(deftest a-break-answers-every-step-boundary-with-a-typed-outcome
+  (testing "the LOCK removed, replaced, or its evidence name taken at EVERY
+            enumerated boundary of the break protocol. Twelve deterministic
+            schedules; each must produce a break outcome the caller can read,
+            and the `:admit-lock-path` column is the one that was throwing
+            `NoSuchFileException` out of the breaker before anything had been
+            touched."
+    (doseq [boundary break-step-boundaries
+            action (sort (keys (break-adversaries "." "X")))]
+      (let [dir (temp-dir (str "break-schedule-" (name boundary) "-" (name action)))
+            victim (pr-str {:txid "VICTIM" :pid 1 :boot-id "b"})
+            label (str (name boundary) "/" (name action))]
+        (try
+          (let [claim (judged-claim! dir victim)
+                breaker (gated-breaker dir claim "SAME-TXID" boundary)
+                state (settle! breaker)
+                _ (when (= :paused state)
+                    ((get (break-adversaries dir "SAME-TXID") action)))
+                [kind value message] (finish! breaker)]
+            (is (= :paused state)
+                (str label ": the boundary must actually be reached, or the "
+                     "schedule proves nothing"))
+            (is (= :outcome kind)
+                (str label ": a break may never throw out of the breaker: "
+                     (pr-str [kind value message])))
+            (when (= :outcome kind)
+              (is (map? value) (str label ": " (pr-str value)))
+              (is (boolean? (:broken value))
+                  (str label ": every outcome says whether it broke: "
+                       (pr-str value)))
+              (when (false? (:broken value))
+                (is (contains? typed-break-causes (:cause value))
+                    (str label ": a refusal carries a cause its caller has a "
+                         "rule for: " (pr-str value))))))
+          (finally (delete-tree! dir)))))))
+
+;; @spec TXN-RACE-003
+;; INTENT-TEST: TXN-RACE-003
+(deftest two-breakers-interleaved-at-every-boundary-pair-keep-the-evidence
+  (testing "the hammer above, asked as a schedule. Breaker A is stopped at
+            boundary i, breaker B is stopped at boundary j, then A is released
+            to completion and B after it - nine deterministic interleavings of
+            two breakers that share one txid. In every one: neither throws, the
+            judged claim is still readable on disk, and at most ONE of them
+            owns the evidence name."
+    (doseq [i break-step-boundaries
+            j break-step-boundaries]
+      (let [dir (temp-dir (str "break-pair-" (name i) "-" (name j)))
+            victim (pr-str {:txid "VICTIM" :pid 1 :boot-id "b"})
+            label (str (name i) " x " (name j))]
+        (try
+          (let [claim (judged-claim! dir victim)
+                a (gated-breaker dir claim "SAME-TXID" i)
+                state-a (settle! a)
+                b (gated-breaker dir claim "SAME-TXID" j)
+                state-b (settle! b)
+                [kind-a value-a message-a] (finish! a)
+                [kind-b value-b message-b] (finish! b)
+                surviving (file-contents dir)]
+            (is (= :paused state-a)
+                (str label ": A must reach its boundary: " (pr-str state-a)))
+            (is (contains? #{:paused :finished} state-b)
+                (str label ": B is either paused at its boundary or already "
+                     "refused before it: " (pr-str state-b)))
+            (is (= [:outcome :outcome] [kind-a kind-b])
+                (str label ": neither breaker may throw: "
+                     (pr-str [[kind-a value-a message-a]
+                              [kind-b value-b message-b]])))
+            (when (= [:outcome :outcome] [kind-a kind-b])
+              (is (>= 1 (count (filter true? [(:broken value-a) (:broken value-b)])))
+                  (str label ": two breakers may never both own one tombstone "
+                       "name: " (pr-str [value-a value-b])))
+              (doseq [[who outcome] [["A" value-a] ["B" value-b]]]
+                (when (false? (:broken outcome))
+                  (is (contains? typed-break-causes (:cause outcome))
+                      (str label " breaker " who
+                           ": a refusal carries a typed cause: "
+                           (pr-str outcome))))))
+            (is (contains? surviving victim)
+                (str label ": the judged claim must still be readable on disk, "
+                     "under the LOCK or inside the evidence: "
+                     (pr-str [value-a value-b surviving]))))
+          (finally (delete-tree! dir)))))))
