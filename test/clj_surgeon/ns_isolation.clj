@@ -119,7 +119,12 @@
     ;; 206 s build-file loop into six independent matrix cells. This exception
     ;; remains: TEST-ISO-013 judges the SUM of shard walls, not the makespan,
     ;; and splitting the launches does not reduce their total namespace cost.
-    clj-surgeon.reader-eval-fence-test 1000000})
+    clj-surgeon.reader-eval-fence-test 1000000
+    ;; STATE-HOME-009/010, Round 7: the reduced namespace measured 116659 ms
+    ;; (13 tests / 201 assertions, one packed JVM). Five Make cells replace 72;
+    ;; the 72-cell admission matrix is :fast. Declare ~2x measured cost, while
+    ;; the complete battery still must fit its independent 1800000 ms ceiling.
+    clj-surgeon.probe-state-test 240000})
 
 (def mutable-global-allowlist
   "@spec TEST-ISO-005 -- vars whose deref'd value is EXPECTED to differ across

@@ -112,22 +112,36 @@
         (is (.contains (:out (shell/sh "bin/mission" "help" "fallback" :env env)) "user-reported"))))))
 
 (defn stable-report [report]
-  (update report :event #(dissoc % :ts :pid :wall_ms)))
+  ;; Compare the fallback contract across runtimes, excluding process identity,
+  ;; timing and prior failed appends (record! projects :dropped to this key).
+  (update report :event #(dissoc % :ts :seat :pid :wall_ms :telemetry_dropped)))
 
 (deftest fallback-bb-and-jvm-share-the-event-contract
   (with-ledger
     (fn [root opts]
       (let [bb-file (str (io/file root "bb-events" "events.jsonl"))
             jvm-file (str (io/file root "jvm-events" "events.jsonl"))
-            env (assoc (into {} (System/getenv)) "CLJ_SURGEON_EVENTS_FILE" bb-file)
+            env (assoc (into {} (System/getenv)) "CLJ_SURGEON_EVENTS_FILE" bb-file
+                       "SURGEON_SEAT" "bb-contract-seat")
             before (bytes-under root)
             bb-result (shell/sh "bb" "--classpath" "src" "bin/mission-read.clj"
                                 "fallback" "M-1" "--workspace" (:workspace opts)
                                 "--state-home" (:state-home opts) "--reason" "refusal" :env env)
-            jvm-result (with-redefs [events/default-events-file (constantly jvm-file)] (cli/fallback! opts))]
+            ;; Battery at 73f8e38d: earlier namespaces left 16 failed appends
+            ;; in this JVM; the bb child had none. Keep that history visible.
+            ;; with-redefs restores the original atom (and its count) on exit.
+            jvm-result (with-redefs [events/events-file (constantly jvm-file)
+                                     events/dropped (atom 16)
+                                     events/current-seat (constantly "jvm-contract-seat")]
+                         (cli/fallback! opts))]
+        (is (= 16 (get-in jvm-result [:event :telemetry_dropped])))
+        (is (= "jvm-contract-seat" (get-in jvm-result [:event :seat])))
         (is (= 0 (:exit bb-result)) (:err bb-result))
         (when (= 0 (:exit bb-result))
-          (is (= (stable-report jvm-result) (stable-report (edn/read-string (:out bb-result))))))
+          (let [bb-report (edn/read-string (:out bb-result))]
+            (is (not (contains? (:event bb-report) :telemetry_dropped)))
+            (is (= "bb-contract-seat" (get-in bb-report [:event :seat])))
+            (is (= (stable-report jvm-result) (stable-report bb-report)))))
         (is (= before (apply dissoc (bytes-under root) [bb-file jvm-file])))))))
 
 (deftest public-fallback-starts-bb-and-never-clojure
