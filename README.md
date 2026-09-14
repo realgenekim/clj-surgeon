@@ -2331,6 +2331,15 @@ records.
 
 ## Testing
 
+For changed-file selection, use `test/diff-impact BASE OUTPUT_DIR list`.
+The third argument is a mode: `fixed-point` executes the same selected set.
+The oracle follows transitive requirements under `src/` and `test/`, existing
+`docs/` and `resources/` file literals, and literal source scanning roots.
+It prints `selected <ns> via <edge-kind> <file>` and records edge counts.
+An empty set returns `:status :nothing-selected`, changed paths and unmatched
+reasons with exit 0; it is not a passing test run. See the
+[selection contract and bounds](docs/intent/diff-impact/design.md).
+
 ```bash
 make test
 ```
