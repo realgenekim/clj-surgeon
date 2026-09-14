@@ -827,6 +827,17 @@
   clj-surgeon.lane-manifest-test/loaded-namespaces-carry-their-lane-at-runtime
   clj-surgeon.lane-manifest-test/no-fast-lane-namespace-spells-a-child-process
   clj-surgeon.lane-manifest-test/no-living-prose-still-calls-the-bb-lane-by-its-old-name
+  clj-surgeon.lane-manifest-test/registration-boundary-refusals-preserve-source-bytes
+  clj-surgeon.lane-manifest-test/registration-checklist-covers-every-missing-surface-subset
+  clj-surgeon.lane-manifest-test/registration-control-results-are-executions
+  clj-surgeon.lane-manifest-test/registration-existing-values-and-ambiguous-owners-refuse
+  clj-surgeon.lane-manifest-test/registration-failed-control-rolls-back-enrollment
+  clj-surgeon.lane-manifest-test/registration-first-contact-gate-matrix
+  clj-surgeon.lane-manifest-test/registration-lock-is-per-root-and-identifies-holder
+  clj-surgeon.lane-manifest-test/registration-oracle-enumerates-all-surfaces
+  clj-surgeon.lane-manifest-test/registration-planner-refuses-conflicts
+  clj-surgeon.lane-manifest-test/registration-structural-plan-preserves-and-repeats
+  clj-surgeon.lane-manifest-test/registration-witnesses-retain-names-and-battery-matrix
   clj-surgeon.lane-manifest-test/runtime-evidence-binds-statistics-to-receipt-files
   clj-surgeon.lane-manifest-test/runtime-evidence-is-consumed-and-receipts-are-required
   clj-surgeon.lane-manifest-test/runtime-portability-controls-cover-every-assignment
@@ -2312,6 +2323,8 @@
   clj-surgeon.recovery-test/recover-creates-the-failure-receipt-directory
   clj-surgeon.recovery-test/recover-fails-once-and-publishes-an-executable-report-command
   clj-surgeon.recovery-test/recover-publishes-one-terminal-success-receipt
+  clj-surgeon.registration-controls-test/census-writer-census
+  clj-surgeon.registration-controls-test/registration-stale-control-path-matrix
   clj-surgeon.relation-census-test/a-caller-supplied-door-changes-the-classification
   clj-surgeon.relation-census-test/a-non-write-update-fn-contributes-no-site
   clj-surgeon.relation-census-test/a-worker-failure-names-its-file-and-publishes-no-counts
@@ -2472,6 +2485,7 @@
   clj-surgeon.telemetry-events-test/the-env-override-wins-for-the-writer
   clj-surgeon.telemetry-events-test/the-ledger-file-is-private
   clj-surgeon.telemetry-events-test/truncation-is-by-utf8-bytes-and-never-splits-a-codepoint
+  clj-surgeon.test-registration-battery-test/registration-first-contact-gate-matrix
   clj-surgeon.tmp-leak-support-test/a-seam-sourced-fstype-can-never-prove-real-disk
   clj-surgeon.tmp-leak-support-test/darwin-has-a-mount-authority-of-its-own
   clj-surgeon.tmp-leak-support-test/no-gate-names-a-hard-coded-ram-path

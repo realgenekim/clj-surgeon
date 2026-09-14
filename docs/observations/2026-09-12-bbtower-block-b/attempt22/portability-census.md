@@ -1,6 +1,6 @@
 # Portability census
 
-Generated 2026-09-14T09:40:08.305921+00:00. Counts in cells are tests/failures/errors. All 163 assigned namespaces are listed.
+Generated 2026-09-14T12:15:34.682023+00:00. Counts in cells are tests/failures/errors. All 165 assigned namespaces are listed.
 
 Commands and subjects are in controls/*.command.edn; each .edn has its adjacent .log. The configured bb runtime is load-probed. A load incompatibility is explicitly accounted for, with no passing test or alternate-runtime claim. Every namespace that loads on bb receives a complete JVM and bb control, serially.
 
@@ -171,5 +171,7 @@ A non-portable result refuses portability by namespace until repaired. No runtim
 | clj-surgeon.worktree-lifecycle-recovery-test | :jvm | :dedicated | [passed (10/0/0)](controls/clj-surgeon.worktree-lifecycle-recovery-test-jvm-test.control.edn) | [test-failed (10/5/9)](controls/clj-surgeon.worktree-lifecycle-recovery-test-bb-test.control.edn) | non-portable |
 | clj-surgeon.worktree-lifecycle-test | :bb | :fast | [passed (21/0/0)](controls/clj-surgeon.worktree-lifecycle-test-jvm-test.control.edn) | [passed (21/0/0)](controls/clj-surgeon.worktree-lifecycle-test-bb-test.control.edn) | portable |
 | clj-surgeon.xray-test | :bb | :battery | [passed (27/0/0)](controls/clj-surgeon.xray-test-jvm-test.control.edn) | [passed (27/0/0)](controls/clj-surgeon.xray-test-bb-test.control.edn) | portable |
+| clj-surgeon.registration-controls-test | :jvm | :battery | [passed (2/0/0)](controls/clj-surgeon.registration-controls-test-jvm-test.control.edn) | [passed (2/0/0)](controls/clj-surgeon.registration-controls-test-bb-test.control.edn) | portable |
+| clj-surgeon.test-registration-battery-test | :jvm | :battery | [passed (1/0/0)](controls/clj-surgeon.test-registration-battery-test-jvm-test.control.edn) | [passed (1/0/0)](controls/clj-surgeon.test-registration-battery-test-bb-test.control.edn) | portable |
 
-Summary: {:bb-load-incompatible 50, :portable 100, :non-portable 13}
+Summary: {:bb-load-incompatible 50, :portable 102, :non-portable 13}

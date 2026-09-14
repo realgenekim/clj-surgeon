@@ -1,5 +1,15 @@
 # clj-surgeon tech tree
 
+Test namespace registration: one shared oracle and structural Make entrance now
+cover all five registration surfaces, including actual focused portability
+executions and preserved enrollment bytes on repeats. Round 3 closes stale-control reuse, first-contact diagnostics and duplicate census regeneration; each has a class oracle. RED-first evidence and limits:
+[registration report](observations/2026-09-14-register-test-ns-report-astra.md).
+Round 4 moves the complete first-contact gate matrix to a dogfooded battery
+namespace, retains one representative fast mask, and freezes the original names
+and matrix bytes. The existing stale-control matrix remains in its battery lane.
+The report records focused walls and the shared coordinator fast budget; this is
+a cadence-placement repair, with no new routed-operation performance admission.
+
 Diff-impact Round 2 closes Sol F1 with non-list HOLD on every unmatched inventory,
 including partially selected diffs. Source content edges now propagate through
 requires; EDN value paths and relative resources remain unresolved and HOLD.
@@ -1052,6 +1062,14 @@ failures at db23914d. Cleanup now attempts removal on failure and retains both
 native diagnostics when removal fails; 72 additional cleanup cells enumerate
 primary errno × cleanup errno × removal timing. Atomic move is still the commit
 boundary. Verification and costs: /var/tmp/forge/statehome-fx/REPORT.md, Round 8.
+
+Register-test-ns Round 2: the full prewarm exposed a missing spawn-ledger call
+that require closure could not select, and lock refusal lost both holder evidence
+and preflight error precedence. Root-local atomic holder publication and a
+synchronized per-root witness repair the latter. The old hash already distinguished
+roots; the original mkdir errno was not retained. Receipt:
+[Round 2](observations/2026-09-14-register-test-ns-report-astra.md#round-2).
+No routing or performance claim.
 
 ### 2026-09-14T09:43:51.276803+00:00 — diff-impact file-content selection
 

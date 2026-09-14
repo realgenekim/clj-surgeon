@@ -2503,3 +2503,28 @@ that id. Missing admission facts do not become a provider call.
 
 The one-process entrance removes one cold JVM start; it does not remove proof
 or establish a measured speedup. Runtime, provider and proof costs still count.
+
+### Registering a test namespace
+
+Declare the lane in the test source first, for example `(ns clj-surgeon.foo-test
+{:lane :battery} ...)`, then run:
+
+```sh
+make register-test-ns NS=clj-surgeon.foo-test LANE=battery RUNTIME=jvm
+```
+
+The entrance registers lane/runtime, runtime count, adoption, deftest census and
+portability coverage. Every invocation runs the focused bb load and JVM test
+controls, plus the bb test when bb loads, with 1024 MB maximum heaps. It returns
+EDN naming changed files/forms and executed controls with argv, source SHA-256,
+canonical root, exit/result, wall time, pid and start ticks. Repeats preserve
+enrollment bytes and execute fresh controls. A pre-existing receipt with a stale
+source or missing provenance refuses as `:register-control-stale` after execution.
+Refusals exit nonzero; metadata/value conflicts report both `:actual` and `:expected`.
+
+`BB_INELIGIBLE` optionally accepts EDN such as
+`'{:reasons #{:sci-host-interop} :detail "the observed limitation"}'` using the
+manifest's existing capability vocabulary. This declaration never substitutes
+for a control execution. A control failure rolls registration bytes back.
+Ordinary census gates still reject removed tests. See the
+[registration contract](docs/intent/test-registration/design.md).
