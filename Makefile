@@ -1140,8 +1140,8 @@ test-integration:
 #
 # Taking it out of the merge gate is the point of the partition AND the risk:
 # a gate that does not run on every merge is a gate whose ABSENCE is silent.
-# So every run appends a receipt to docs/observations/battery-ledger.edn --
-# pass or fail, one line, append-only. The RUNNER writes the file; the SEAT
+# Every run prints a candidate receipt. BATTERY_LEDGER_APPEND=1 alone appends
+# it to docs/observations/battery-ledger.edn, pass or fail. The receipt chain
 # commits it. `make battery-fresh` is the tripwire that reads it back.
 # TEST-ISO-013 -- HOW WIDE THE BATTERY RUNS. `1` is the serial PROCESS SHAPE:
 # one lane child holding every battery namespace in LPT order, in one JVM.
@@ -1163,6 +1163,9 @@ BATTERY_LANES ?= 8
 # and a precondition STILL skipped afterwards is RED.
 BATTERY_PREREQS ?= 1
 
+# @spec BATTERY-LEDGER-001 -- receipt history requires explicit minting.
+# @spec BATTERY-LEDGER-002 -- runtime timings live in seat state.
+# @spec BATTERY-LEDGER-003 -- tracked timings are a read-only seed.
 test-battery:
 	@# @spec TEST-ISO-001
 	@# @spec TEST-ISO-009a
@@ -1264,6 +1267,11 @@ landing-gate-prewarm: gate-prerequisites
 
 print-gate-stages:
 	@bb --classpath src:test -m clj-surgeon.battery-parallel-runner --print-gate-stages true
+
+.PHONY: census-regenerate
+# @spec BATTERY-LEDGER-004 -- explicit regeneration; ordinary gates retain make markers.
+census-regenerate:
+	@env -u MAKELEVEL -u MAKEFLAGS -u MFLAGS CENSUS_REGENERATE=1 clojure -J-Xmx1024m -M:clj-surgeon/test-deps -e "(require 'clj-surgeon.lane-manifest-test 'clojure.test) (binding [clojure.test/*report-counters* (ref clojure.test/*initial-report-counters*)] (clojure.test/test-vars [#'clj-surgeon.lane-manifest-test/the-corpus-only-ever-grows-and-the-arithmetic-is-shown]) (System/exit (if (zero? (+ (:fail @clojure.test/*report-counters*) (:error @clojure.test/*report-counters*))) 0 1)))"
 
 intent-audit:
 	@bb --classpath src:test -e '(require (quote clj-surgeon.mcp-intent-contract)) (let [r (clj-surgeon.mcp-intent-contract/audit-current-repository)] (prn r) (System/exit (if (:ok r) 0 1)))'

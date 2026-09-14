@@ -993,7 +993,8 @@
    name fully qualified and stable, sorted. Two branches adding tests touch two
    different lines; a deleted test is a NAMED line that disappears.
 
-   Regenerate ONLY through the direct entrance -- never inside make, see
+   Regenerate with `make census-regenerate`, which wraps the direct entrance
+   below and propagates test failures. Ordinary make gates still refuse; see
    `regenerate-decision`:
 
      CENSUS_REGENERATE=1 clojure -M:clj-surgeon/test-deps -e \"(require 'clj-surgeon.lane-manifest-test 'clojure.test) (clojure.test/test-vars [#'clj-surgeon.lane-manifest-test/the-corpus-only-ever-grows-and-the-arithmetic-is-shown])\"
@@ -1055,8 +1056,8 @@
 (defn- write-census-ledger!
   "Writes `census` to `census-ledger-path`, one fully qualified deftest per line,
    sorted. Reached ONLY through `regenerate-decision` returning `:write`."
-  [census]
-  (spit census-ledger-path
+  [path census]
+  (spit path
         (str ";; Deftest census -- DERIVED, regenerated, never hand-edited.\n"
              ";; One FULLY QUALIFIED deftest per line: two branches adding tests\n"
              ";; touch two different lines, and a deleted test is a named line\n"
@@ -1088,6 +1089,46 @@
        ". A removed name is a deleted test -- say why, or restore it. A removed "
        "AND an added name together is a rename, which the count ledger this "
        "replaced could not see. Then regenerate: " regenerate-entrance))
+
+;; @spec BATTERY-LEDGER-004
+(defn regenerate-census!
+  "Regenerates additions only. A removed name refuses before any write."
+  [path derived]
+  (let [ledger (edn/read-string (slurp path))
+        _ (when-not (set? ledger)
+            (throw (ex-info "census-regenerate-refused: ledger must be a set" {})))
+        {:keys [added removed]} (census-ledger-diff derived ledger)]
+    (println (str "census-regenerate: +" (count added) "/-" (count removed)))
+    (if (seq removed)
+      (do (println "census-regenerate-refused: removed names" (pr-str removed))
+          {:ok false :removed removed})
+      (do (when (seq added) (write-census-ledger! path derived))
+          {:ok true :added (or added [])}))))
+
+;; @spec BATTERY-LEDGER-004
+(deftest census-regeneration-refuses-named-removals
+  (let [regenerate! (ns-resolve 'clj-surgeon.lane-manifest-test 'regenerate-census!)
+        f (io/file (System/getProperty "java.io.tmpdir")
+                   (str "census-regenerate-" (System/nanoTime) ".edn"))]
+    (try
+      (is (some? regenerate!))
+      (when regenerate!
+        (doseq [[candidate plus minus] [['#{fixture/a} 0 0]
+                                        ['#{fixture/a fixture/b} 1 0]
+                                        ['#{} 0 1]
+                                        ['#{fixture/b} 1 1]]]
+          (spit f (pr-str '#{fixture/a}))
+          (let [before (slurp f)
+                result (atom nil)
+                output (with-out-str
+                         (reset! result (regenerate! f candidate)))]
+            (is (str/includes? output (str "+" plus "/-" minus)))
+            (is (= (zero? minus) (:ok @result)))
+            (if (pos? minus)
+              (do (is (= ['fixture/a] (:removed @result)))
+                  (is (= before (slurp f))))
+              (is (= candidate (edn/read-string (slurp f))))))))
+      (finally (io/delete-file f true)))))
 
 ;; @spec TEST-ISO-015
 ;; INTENT-TEST: TEST-ISO-015
@@ -1138,9 +1179,8 @@
         env (environment)
         decision (regenerate-decision env)]
     (when (= :write decision)
-      (write-census-ledger! derived)
-      (println "CENSUS_REGENERATE=1: wrote" (count derived) "deftests to"
-               census-ledger-path))
+      (is (:ok (regenerate-census! census-ledger-path derived))
+          "census regeneration refuses removed names before writing"))
     (testing "regeneration never happens inside a make recipe"
       (is (not= :refuse-under-make decision) (regenerate-refusal env)))
     (testing "the corpus is not empty, so nothing below passes vacuously"

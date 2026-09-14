@@ -25,6 +25,38 @@
 
 (def ^:private units (mapv vector (sort (keys walls))))
 
+;; @spec BATTERY-LEDGER-002
+;; @spec BATTERY-LEDGER-003
+(deftest battery-walls-live-in-state-with-read-only-seed
+  (let [path-fn (ns-resolve 'clj-surgeon.battery-parallel-runner 'state-walls-path)
+        read-fn (ns-resolve 'clj-surgeon.battery-parallel-runner 'read-wall-record)
+        root (io/file (System/getProperty "java.io.tmpdir")
+               (str "battery-state-" (System/nanoTime)))
+        seed (io/file root "seed.edn")
+        state-file (io/file root "battery" "namespace-walls.edn")
+        seed-data '{:walls-ms {fixture/a 7} :var-walls-ms {fixture/a-test 8}}]
+    (is (some? path-fn))
+    (is (some? read-fn))
+    (try
+      (when (and path-fn read-fn)
+        (doseq [[env expected] [[{} "/seat/.local/state/clj-surgeon/battery/namespace-walls.edn"]
+                                [{"XDG_STATE_HOME" "/xdg"} "/xdg/clj-surgeon/battery/namespace-walls.edn"]
+                                [{"CLJ_SURGEON_STATE_HOME" "/custom" "XDG_STATE_HOME" "/xdg"}
+                                 "/custom/battery/namespace-walls.edn"]
+                                [{"CLJ_SURGEON_STATE_HOME" "" "XDG_STATE_HOME" ""}
+                                 "/seat/.local/state/clj-surgeon/battery/namespace-walls.edn"]]]
+          (is (= expected (path-fn env "/seat"))))
+        (.mkdirs root)
+        (spit seed (pr-str seed-data))
+        (let [before (slurp seed)]
+          (is (= seed-data (read-fn state-file seed)))
+          (bp/write-walls! state-file [{:namespace 'fixture/b :elapsed-ms 11}] [] seed)
+          (is (= '{fixture/b 11} (:walls-ms (read-fn state-file seed))))
+          (is (= '{fixture/a-test 8} (:var-walls-ms (read-fn state-file seed))))
+          (is (= before (slurp seed)))))
+      (finally
+        (doseq [f (reverse (file-seq root))] (io/delete-file f true))))))
+
 (deftest bb-lane-command-honours-disk-tmpdir
   (doseq [[tmpdir expected] [["/var/tmp/forge/bbtower-fx" "/var/tmp/forge/bbtower-fx"]
                              [nil "/var/tmp"] ["" "/var/tmp"]

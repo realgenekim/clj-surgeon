@@ -1,4 +1,4 @@
-(ns ^{:lane :fast} clj-surgeon.battery-ledger-test
+(ns clj-surgeon.battery-ledger-test
   "TEST-ISO-009a/b's witness -- the battery receipt ledger and its freshness
    tripwire, driven through EVERY state it can be in.
 
@@ -8,6 +8,7 @@
    injected. That is the reason the decision was written as a pure function in
    the first place -- a tripwire whose refusals can only be reproduced by
    letting a day pass is a tripwire nobody ever proves."
+  {:lane :fast}
   (:require
    [clj-surgeon.battery-ledger :as ledger]
    [clojure.java.io :as io]
@@ -18,6 +19,31 @@
   "2026-09-05T00:00:00Z, as ms. A fixed instant: the witness must not depend
    on when it is run."
   (.toEpochMilli (java.time.Instant/parse "2026-09-05T00:00:00Z")))
+
+;; @spec BATTERY-LEDGER-001
+(deftest receipt-writing-requires-explicit-minting
+  (let [f (io/file (System/getProperty "java.io.tmpdir")
+                   (str "battery-mint-" (System/nanoTime) ".edn"))
+        record! (ns-resolve 'clj-surgeon.battery-ledger 'record-entry!)]
+    (try
+      (is (some? record!))
+      (when record!
+        (doseq [verdict [:pass :fail]
+                value [nil "" "0" "true" "1"]]
+          (let [e {:sha "abc1234" :started "2026-09-14T00:00:00Z"
+                   :wall_s 9 :verdict verdict :host "fixture"}
+                before ";; existing receipt history\n"
+                _ (spit f before)
+                output (with-out-str (record! f e {"BATTERY_LEDGER_APPEND" value}))]
+            (is (= (if (= "1" value) (str before (ledger/entry-line e) "\n") before)
+                   (slurp f)))
+            (is (str/includes? output (ledger/entry-line e)))
+            (is (str/includes? output (if (= "1" value) "battery-ledger: appended"
+                                        "not appended (BATTERY_LEDGER_APPEND unset)")))))
+        (io/delete-file f true)
+        (with-out-str (record! f {} {}))
+        (is (not (.exists f))))
+      (finally (io/delete-file f true)))))
 
 (defn- ago
   "An ISO instant `hours` before `now`."
@@ -165,12 +191,12 @@
     (is (ledger/archive-only-diff? good))
     (testing "every merge parent must independently prove archive-only content"
       (doseq [[second-out exit expected] [[good 0 true] ["" 0 false]
-                                         [good 1 false]
-                                         [(raw "M" "100644" "100644" "src/x.clj") 0 false]]]
+                                          [good 1 false]
+                                          [(raw "M" "100644" "100644" "src/x.clj") 0 false]]]
         (with-redefs-fn {#'ledger/sh (fn [& args]
-                                     (if (= "p2" (nth args (- (count args) 3)))
-                                       {:exit exit :out second-out}
-                                       {:exit 0 :out good}))}
+                                       (if (= "p2" (nth args (- (count args) 3)))
+                                         {:exit exit :out second-out}
+                                         {:exit 0 :out good}))}
           #(is (= expected (#'ledger/archive-only-commit? "commit p1 p2"))))))
     (doseq [bad ["" "garbage" (subs good 0 (dec (count good)))
                  (raw "A" "000000" "100644" path)
