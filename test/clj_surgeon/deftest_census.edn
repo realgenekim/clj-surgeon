@@ -2252,8 +2252,13 @@
   clj-surgeon.reader-eval-fence-test/no-source-in-this-repository-calls-the-evaluating-reader
   clj-surgeon.reader-eval-fence-test/the-fence-does-not-refuse-an-ordinary-path-under-a-symlinked-root
   clj-surgeon.reader-eval-fence-test/the-oracle-names-every-evaluator-it-claims-to-fence
+  clj-surgeon.receipt-artifacts-boundary-test/a-file-removed-inside-the-real-path-window-resolves-absent
+  clj-surgeon.receipt-artifacts-boundary-test/a-symlink-removed-inside-the-link-target-window-resolves-absent
+  clj-surgeon.receipt-artifacts-boundary-test/a-vanishing-path-is-still-refused-outside-the-envelope
   clj-surgeon.receipt-artifacts-boundary-test/admit-focused-runner-publishes-an-external-report
+  clj-surgeon.receipt-artifacts-boundary-test/admitted-file-names-a-lock-that-vanished-under-it
   clj-surgeon.receipt-artifacts-boundary-test/advisory-lock-creates-only-an-external-lock-file
+  clj-surgeon.receipt-artifacts-boundary-test/an-ancestor-removed-inside-its-own-window-resolves-absent
   clj-surgeon.receipt-artifacts-boundary-test/bb-lane-child-honours-disk-tmpdir
   clj-surgeon.receipt-artifacts-boundary-test/cli-change-publishes-external-inverse
   clj-surgeon.receipt-artifacts-boundary-test/cold-proof-publication-is-external-and-workspace-isolated
@@ -2267,6 +2272,7 @@
   clj-surgeon.receipt-artifacts-boundary-test/destination-envelope-policy-witness-assertion-count
   clj-surgeon.receipt-artifacts-boundary-test/destination-envelope-refuses-hard-linked-final-ledger
   clj-surgeon.receipt-artifacts-boundary-test/destination-envelope-resolves-ancestor-and-final-symlinks
+  clj-surgeon.receipt-artifacts-boundary-test/every-resolution-window-is-covered-by-a-witness
   clj-surgeon.receipt-artifacts-boundary-test/external-profile-is-read-without-workspace-artifacts
   clj-surgeon.receipt-artifacts-boundary-test/general-change-publishes-external-inverse
   clj-surgeon.receipt-artifacts-boundary-test/helper-extraction-publishes-external-detail-and-inverse
@@ -2458,6 +2464,7 @@
   clj-surgeon.tmp-leak-support-test/tmpfs-predicate-tells-ram-from-disk
   clj-surgeon.tmp-leak-support-test/with-temp-dir-cleans-up-on-success
   clj-surgeon.tmp-leak-support-test/with-temp-dir-cleans-up-on-throw
+  clj-surgeon.txn-journal-test/a-break-answers-every-step-boundary-with-a-typed-outcome
   clj-surgeon.txn-journal-test/a-break-does-not-retire-the-evidence-it-just-created
   clj-surgeon.txn-journal-test/a-break-interrupted-between-the-link-and-the-unlink-is-not-a-break
   clj-surgeon.txn-journal-test/a-break-that-cannot-record-itself-does-not-happen
@@ -2536,6 +2543,7 @@
   clj-surgeon.txn-journal-test/the-sweep-and-the-prune-read-one-clock-for-a-tombstone
   clj-surgeon.txn-journal-test/the-sweep-counts-corroborated-and-uncorroborated-interrupted-breaks-apart
   clj-surgeon.txn-journal-test/the-sweep-never-bills-a-tombstone-that-is-not-there
+  clj-surgeon.txn-journal-test/two-breakers-interleaved-at-every-boundary-pair-keep-the-evidence
   clj-surgeon.txn-journal-test/two-breakers-sharing-a-txid-cannot-destroy-each-others-evidence
   clj-surgeon.txn-journal-test/undo-refuses-a-target-another-writer-changed-after-the-commit
   clj-surgeon.txn-journal-test/undo-waits-for-the-publish-lock-another-process-holds
