@@ -1,0 +1,877 @@
+{:ledger
+ ({:diff "d5",
+   :arm "native",
+   :run "1",
+   :launch "2026-09-14T14:28:40Z",
+   :load "2.31",
+   :wall-ns "32615068358",
+   :exit "0",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d5-native-1.log"}
+  {:diff "d5",
+   :arm "native",
+   :run "2",
+   :launch "2026-09-14T14:31:12Z",
+   :load "3.85",
+   :wall-ns "29733336880",
+   :exit "0",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d5-native-2.log"}
+  {:diff "d5",
+   :arm "tool",
+   :run "2",
+   :launch "2026-09-14T14:34:12Z",
+   :load "2.80",
+   :wall-ns "25208286527",
+   :exit "0",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d5-tool-2.log"}
+  {:diff "d2",
+   :arm "native",
+   :run "1",
+   :launch "2026-09-14T14:34:37Z",
+   :load "3.52",
+   :wall-ns "32022126396",
+   :exit "0",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d2-native-1.log"}
+  {:diff "d2",
+   :arm "tool",
+   :run "1",
+   :launch "2026-09-14T14:36:39Z",
+   :load "3.67",
+   :wall-ns "45304747126",
+   :exit "0",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d2-tool-1.log"}
+  {:diff "d2",
+   :arm "native",
+   :run "2",
+   :launch "2026-09-14T14:37:55Z",
+   :load "3.22",
+   :wall-ns "27254856611",
+   :exit "0",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d2-native-2.log"}
+  {:diff "d2",
+   :arm "tool",
+   :run "2",
+   :launch "2026-09-14T14:39:52Z",
+   :load "3.80",
+   :wall-ns "44078212694",
+   :exit "0",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d2-tool-2.log"}
+  {:diff "d1",
+   :arm "native",
+   :run "1",
+   :launch "2026-09-14T14:40:36Z",
+   :load "3.98",
+   :wall-ns "30238416784",
+   :exit "1",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d1-native-1.log"}
+  {:diff "d1",
+   :arm "tool",
+   :run "1",
+   :launch "2026-09-14T14:42:37Z",
+   :load "3.17",
+   :wall-ns "2611254173516",
+   :exit "1",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d1-tool-1.log"}
+  {:diff "d1",
+   :arm "native",
+   :run "2",
+   :launch "2026-09-14T15:26:08Z",
+   :load "2.86",
+   :wall-ns "30103648113",
+   :exit "1",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d1-native-2.log"}
+  {:diff "d1",
+   :arm "tool",
+   :run "2",
+   :launch "2026-09-14T15:28:08Z",
+   :load "3.13",
+   :wall-ns "2599404486779",
+   :exit "1",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d1-tool-2.log"}
+  {:diff "d3",
+   :arm "native",
+   :run "1",
+   :launch "2026-09-14T16:11:28Z",
+   :load "3.50",
+   :wall-ns "31165745710",
+   :exit "1",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d3-native-1.log"}
+  {:diff "d3",
+   :arm "tool",
+   :run "1",
+   :launch "2026-09-14T16:13:59Z",
+   :load "3.06",
+   :wall-ns "1984985160530",
+   :exit "1",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d3-tool-1.log"}
+  {:diff "d3",
+   :arm "native",
+   :run "2",
+   :launch "2026-09-14T16:47:04Z",
+   :load "3.92",
+   :wall-ns "30564467146",
+   :exit "1",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d3-native-2.log"}
+  {:diff "d3",
+   :arm "tool",
+   :run "2",
+   :launch "2026-09-14T16:49:05Z",
+   :load "3.48",
+   :wall-ns "1985224388533",
+   :exit "1",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d3-tool-2.log"}
+  {:diff "d4",
+   :arm "native",
+   :run "1",
+   :launch "2026-09-14T17:22:40Z",
+   :load "3.71",
+   :wall-ns "29985239101",
+   :exit "0",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d4-native-1.log"}
+  {:diff "d4",
+   :arm "tool",
+   :run "1",
+   :launch "2026-09-14T17:24:40Z",
+   :load "3.68",
+   :wall-ns "2060091461066",
+   :exit "1",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d4-tool-1.log"}
+  {:diff "d4",
+   :arm "native",
+   :run "2",
+   :launch "2026-09-14T17:59:00Z",
+   :load "3.31",
+   :wall-ns "28750393759",
+   :exit "0",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d4-native-2.log"}
+  {:diff "d4",
+   :arm "tool",
+   :run "2",
+   :launch "2026-09-14T18:01:29Z",
+   :load "3.07",
+   :wall-ns "2064283446775",
+   :exit "1",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d4-tool-2.log"}
+  {:diff "d5",
+   :arm "tool",
+   :run "1",
+   :launch "2026-09-14T18:36:24Z",
+   :load "2.71",
+   :wall-ns "25748878381",
+   :exit "0",
+   :log "/var/tmp/forge/measure-fx/diff-impact/logs/d5-tool-1.log"}),
+ :subject-trunk "866df39b",
+ :list-mode-wall-ms
+ {"d1" 4215, "d2" 4338, "d3" 4208, "d4" 4444, "d5" 4364},
+ :bets
+ [{:bet "wall ratio D1 ~= 0.60", :observed 86.35, :verdict :broke}
+  {:bet "wall ratio D2 < 0.20", :observed 1.51, :verdict :broke}
+  {:bet "wall ratio D3 < 0.30", :observed 64.32, :verdict :broke}
+  {:bet "wall ratio D4 < 0.20", :observed 70.22, :verdict :broke}
+  {:bet "wall ratio D5 ~= 0 (nothing run)",
+   :observed 0.82,
+   :note "6 namespaces ran; status :selected, not :nothing-selected",
+   :verdict :broke}
+  {:bet "median ratio D1-D4 < 0.35", :observed 67.27, :verdict :broke}
+  {:bet "catch preservation D1 = 1/1", :observed "1/1", :verdict :held}
+  {:bet "catch preservation D3 = k/k, k >= 1",
+   :observed "1/1 (k=1, clj-surgeon.lane-manifest-test)",
+   :verdict :held}
+  {:bet "catch preservation D2 vacuous",
+   :observed "vacuous (0 native failures)",
+   :verdict :held}
+  {:bet "catch preservation D4 vacuous",
+   :observed "vacuous (0 native failures)",
+   :verdict :held}
+  {:bet "first-attempt 5/5 TOOL",
+   :observed
+   "4/5 (d5 tool run 1 refused exit 90: lease/receipt-chain precondition; green on retry)",
+   :verdict :broke}
+  {:bet "first-attempt 5/5 NATIVE", :observed "5/5", :verdict :held}
+  {:bet
+   "kill-switch: no NATIVE failure absent from the TOOL selection",
+   :observed
+   "0 missed; D1 splice-envelope-test and D3 lane-manifest-test both selected and both red under TOOL",
+   :verdict :held}],
+ :setup
+ {:worktrees 6,
+  :worktree-add-ms-each 732,
+  :worktree-disk-mb 145,
+  :classpath-warm-all-six-ms 18683,
+  :list-mode-receipts-total-ms 22015,
+  :discovery-list-passes 5,
+  :note
+  "setup is untimed relative to the arms; every arm wall below is a warm-classpath wall"},
+ :rows
+ [{:native-spread 0.0044745695298387496,
+   :meta
+   {:range "df0c9e1c^..df0c9e1c",
+    :base "df0c9e1c^",
+    :kind "one line in src/clj_surgeon/probe.clj"},
+   :tool
+   {:load ["3.17" "3.13"],
+    :selected [92 92],
+    :exit ["1" "1"],
+    :reason [nil nil],
+    :status [:selected :selected],
+    :wall-ms [2611254 2599404],
+    :failing
+    [clj-surgeon.fast-lane-isolation-test
+     clj-surgeon.splice-envelope-test],
+    :launch ["2026-09-14T14:42:37Z" "2026-09-14T15:28:08Z"],
+    :unmatched [[] []],
+    :log
+    ["/var/tmp/forge/measure-fx/diff-impact/logs/d1-tool-1.log"
+     "/var/tmp/forge/measure-fx/diff-impact/logs/d1-tool-2.log"],
+    :ran [92 92],
+    :results
+    ["/var/tmp/forge/measure-fx/diff-impact/out/d1-tool-1/results-fixed-point.edn"
+     "/var/tmp/forge/measure-fx/diff-impact/out/d1-tool-2/results-fixed-point.edn"]},
+   :native
+   {:wall-ms [30238 30103],
+    :exit ["1" "1"],
+    :load ["3.98" "2.86"],
+    :launch ["2026-09-14T14:40:36Z" "2026-09-14T15:26:08Z"],
+    :log
+    ["/var/tmp/forge/measure-fx/diff-impact/logs/d1-native-1.log"
+     "/var/tmp/forge/measure-fx/diff-impact/logs/d1-native-2.log"],
+    :ran [94 94],
+    :failing [clj-surgeon.splice-envelope-test],
+    :receipt
+    ["/var/tmp/forge/measure-fx/diff-impact/wt-d1/target/gate-parallel/cell-d1-native-1/fast/receipt.edn"
+     "/var/tmp/forge/measure-fx/diff-impact/wt-d1/target/gate-parallel/cell-d1-native-2/fast/receipt.edn"]},
+   :list
+   {:path
+    "/var/tmp/forge/measure-fx/diff-impact/out/d1-list/impact-list.edn",
+    :edge-counts
+    {:require 1875,
+     :data-file 29411,
+     :source-text 48,
+     :source-scan 6426},
+    :namespaces
+    [clj-surgeon.admit-patch-test
+     clj-surgeon.alias-migration-test
+     clj-surgeon.analyzer-contract-test
+     clj-surgeon.battery-parallel-test
+     clj-surgeon.cli-dispatch-test
+     clj-surgeon.cljc-existing-ops-test
+     clj-surgeon.cljc.split-test
+     clj-surgeon.core-discovery-test
+     clj-surgeon.edit-test
+     clj-surgeon.extract-test
+     clj-surgeon.failure-report-test
+     clj-surgeon.fast-lane-isolation-test
+     clj-surgeon.help-test
+     clj-surgeon.helper-extraction-test
+     clj-surgeon.insert-forms-receipt-test
+     clj-surgeon.install-test
+     clj-surgeon.intent-transaction-test
+     clj-surgeon.jvm-error-test
+     clj-surgeon.lane-manifest-test
+     clj-surgeon.ls-tree-test
+     clj-surgeon.mcp-alias-migration-test
+     clj-surgeon.mcp-change-buffer-test
+     clj-surgeon.mcp-combinable-transaction-test
+     clj-surgeon.mcp-compact-edit-test
+     clj-surgeon.mcp-compact-location-test
+     clj-surgeon.mcp-compact-relations-test
+     clj-surgeon.mcp-contract-test
+     clj-surgeon.mcp-create-files-test
+     clj-surgeon.mcp-expect-guard-test
+     clj-surgeon.mcp-extraction-plan-test
+     clj-surgeon.mcp-extraction-test
+     clj-surgeon.mcp-feature-thread-sed-test
+     clj-surgeon.mcp-feature-thread-test
+     clj-surgeon.mcp-formatter-test
+     clj-surgeon.mcp-helper-extraction-test
+     clj-surgeon.mcp-hot-verify-test
+     clj-surgeon.mcp-http-server-test
+     clj-surgeon.mcp-inspect-cold-job-test
+     clj-surgeon.mcp-inspect-contract-test
+     clj-surgeon.mcp-inspect-tool-test
+     clj-surgeon.mcp-intent-contract-test
+     clj-surgeon.mcp-namespace-split-test
+     clj-surgeon.mcp-operation-async-test
+     clj-surgeon.mcp-operation-registry-test
+     clj-surgeon.mcp-prepared-confirmation-test
+     clj-surgeon.mcp-prepared-request-test
+     clj-surgeon.mcp-prepared-wire-test
+     clj-surgeon.mcp-process-test
+     clj-surgeon.mcp-read-request-normalization-test
+     clj-surgeon.mcp-recovery-test
+     clj-surgeon.mcp-relation-census-launcher-test
+     clj-surgeon.mcp-relation-census-round20-test
+     clj-surgeon.mcp-relation-census-test
+     clj-surgeon.mcp-server-test
+     clj-surgeon.mcp-tool-test
+     clj-surgeon.mcp-write-refusal-test
+     clj-surgeon.memory.journal-green-test
+     clj-surgeon.memory.oom-reproduction-test
+     clj-surgeon.mission-commit-cli-test
+     clj-surgeon.mission-events-test
+     clj-surgeon.mission-fallback-test
+     clj-surgeon.mission-git-ledger-test
+     clj-surgeon.mission-phase-events-test
+     clj-surgeon.mission-provider-fallback-events-test
+     clj-surgeon.mission-publication-test
+     clj-surgeon.mission-run-test
+     clj-surgeon.mission-test
+     clj-surgeon.mission-typist-executor-admission-test
+     clj-surgeon.mission-typist-executor-test
+     clj-surgeon.mission-usage-executor-test
+     clj-surgeon.namespace-split-test
+     clj-surgeon.namespace-split-warm-test
+     clj-surgeon.ns-isolation-test
+     clj-surgeon.operation-algebra-test
+     clj-surgeon.outline-corpus-integration-test
+     clj-surgeon.parser-admission-test
+     clj-surgeon.probe-state-test
+     clj-surgeon.quoted-var-refs-test
+     clj-surgeon.reader-eval-fence-test
+     clj-surgeon.receipt-artifacts-boundary-test
+     clj-surgeon.receipt-booleans-test
+     clj-surgeon.recovery-test
+     clj-surgeon.rename-test
+     clj-surgeon.require-change-boundary-test
+     clj-surgeon.require-change-test
+     clj-surgeon.scope-stream-test
+     clj-surgeon.show-form-test
+     clj-surgeon.splice-envelope-test
+     clj-surgeon.split-proof-gate-boundary-test
+     clj-surgeon.txn-journal-test
+     clj-surgeon.workspace-onboarding-test
+     clj-surgeon.xray-test],
+    :selected 92,
+    :reason nil,
+    :status :selected,
+    :changed 1,
+    :selection-edge-counts
+    {:source-scan 246, :require 40, :source-text 40},
+    :unmatched []},
+   :ratio 86.35352413781675,
+   :catch "1/1",
+   :tie? false,
+   :diff "d1"}
+  {:native-spread 0.1608745529387948,
+   :meta
+   {:range "00566756..8aedb65e",
+    :base "00566756",
+    :kind "test-side runner change"},
+   :tool
+   {:load ["3.67" "3.80"],
+    :selected [9 9],
+    :exit ["0" "0"],
+    :reason [nil nil],
+    :status [:selected :selected],
+    :wall-ms [45304 44078],
+    :failing [],
+    :launch ["2026-09-14T14:36:39Z" "2026-09-14T14:39:52Z"],
+    :unmatched [[] []],
+    :log
+    ["/var/tmp/forge/measure-fx/diff-impact/logs/d2-tool-1.log"
+     "/var/tmp/forge/measure-fx/diff-impact/logs/d2-tool-2.log"],
+    :ran [9 9],
+    :results
+    ["/var/tmp/forge/measure-fx/diff-impact/out/d2-tool-1/results-fixed-point.edn"
+     "/var/tmp/forge/measure-fx/diff-impact/out/d2-tool-2/results-fixed-point.edn"]},
+   :native
+   {:wall-ms [32022 27254],
+    :exit ["0" "0"],
+    :load ["3.52" "3.22"],
+    :launch ["2026-09-14T14:34:37Z" "2026-09-14T14:37:55Z"],
+    :log
+    ["/var/tmp/forge/measure-fx/diff-impact/logs/d2-native-1.log"
+     "/var/tmp/forge/measure-fx/diff-impact/logs/d2-native-2.log"],
+    :ran [95 95],
+    :failing [],
+    :receipt
+    ["/var/tmp/forge/measure-fx/diff-impact/wt-d2/target/gate-parallel/cell-d2-native-1/fast/receipt.edn"
+     "/var/tmp/forge/measure-fx/diff-impact/wt-d2/target/gate-parallel/cell-d2-native-2/fast/receipt.edn"]},
+   :list
+   {:path
+    "/var/tmp/forge/measure-fx/diff-impact/out/d2-list/impact-list.edn",
+    :edge-counts
+    {:require 1888,
+     :data-file 29526,
+     :source-text 48,
+     :source-scan 6426},
+    :namespaces
+    [clj-surgeon.agent-routing-test
+     clj-surgeon.battery-ledger-test
+     clj-surgeon.battery-parallel-test
+     clj-surgeon.battery-state-admission-test
+     clj-surgeon.lane-manifest-test
+     clj-surgeon.mcp-intent-contract-test
+     clj-surgeon.ns-isolation-test
+     clj-surgeon.receipt-artifacts-boundary-test
+     clj-surgeon.splice-envelope-test],
+    :selected 9,
+    :reason nil,
+    :status :selected,
+    :changed 24,
+    :selection-edge-counts {:data-file 147, :require 11},
+    :unmatched []},
+   :ratio 1.507895269586342,
+   :catch :vacuous,
+   :tie? false,
+   :diff "d2"}
+  {:native-spread 0.01947220917235011,
+   :meta
+   {:range "ad05e27c^..ad05e27c",
+    :base "ad05e27c^",
+    :kind "committed RED (tombstone-collision race oracle)"},
+   :tool
+   {:load ["3.06" "3.48"],
+    :selected [101 101],
+    :exit ["1" "1"],
+    :reason [nil nil],
+    :status [:selected :selected],
+    :wall-ms [1984985 1985224],
+    :failing
+    [clj-surgeon.fast-lane-isolation-test
+     clj-surgeon.lane-manifest-test
+     clj-surgeon.receipt-artifacts-boundary-test
+     clj-surgeon.txn-journal-test],
+    :launch ["2026-09-14T16:13:59Z" "2026-09-14T16:49:05Z"],
+    :unmatched [[] []],
+    :log
+    ["/var/tmp/forge/measure-fx/diff-impact/logs/d3-tool-1.log"
+     "/var/tmp/forge/measure-fx/diff-impact/logs/d3-tool-2.log"],
+    :ran [101 101],
+    :results
+    ["/var/tmp/forge/measure-fx/diff-impact/out/d3-tool-1/results-fixed-point.edn"
+     "/var/tmp/forge/measure-fx/diff-impact/out/d3-tool-2/results-fixed-point.edn"]},
+   :native
+   {:wall-ms [31165 30564],
+    :exit ["1" "1"],
+    :load ["3.50" "3.92"],
+    :launch ["2026-09-14T16:11:28Z" "2026-09-14T16:47:04Z"],
+    :log
+    ["/var/tmp/forge/measure-fx/diff-impact/logs/d3-native-1.log"
+     "/var/tmp/forge/measure-fx/diff-impact/logs/d3-native-2.log"],
+    :ran [94 94],
+    :failing [clj-surgeon.lane-manifest-test],
+    :receipt
+    ["/var/tmp/forge/measure-fx/diff-impact/wt-d3/target/gate-parallel/cell-d3-native-1/fast/receipt.edn"
+     "/var/tmp/forge/measure-fx/diff-impact/wt-d3/target/gate-parallel/cell-d3-native-2/fast/receipt.edn"]},
+   :list
+   {:path
+    "/var/tmp/forge/measure-fx/diff-impact/out/d3-list/impact-list.edn",
+    :edge-counts
+    {:require 1863,
+     :data-file 27707,
+     :source-text 48,
+     :source-scan 6324},
+    :namespaces
+    [clj-surgeon.admit-patch-test
+     clj-surgeon.alias-migration-test
+     clj-surgeon.analyzer-contract-test
+     clj-surgeon.battery-parallel-test
+     clj-surgeon.cli-dispatch-test
+     clj-surgeon.cljc-existing-ops-test
+     clj-surgeon.cljc.split-test
+     clj-surgeon.core-discovery-test
+     clj-surgeon.edit-test
+     clj-surgeon.extract-test
+     clj-surgeon.failure-report-test
+     clj-surgeon.fast-lane-isolation-test
+     clj-surgeon.help-test
+     clj-surgeon.helper-extraction-test
+     clj-surgeon.insert-forms-parity-test
+     clj-surgeon.insert-forms-receipt-test
+     clj-surgeon.insert-forms-test
+     clj-surgeon.insertion-gap-test
+     clj-surgeon.install-test
+     clj-surgeon.intent-transaction-test
+     clj-surgeon.jvm-error-test
+     clj-surgeon.lane-manifest-test
+     clj-surgeon.ls-tree-test
+     clj-surgeon.mcp-alias-migration-test
+     clj-surgeon.mcp-change-buffer-test
+     clj-surgeon.mcp-cold-verify-test
+     clj-surgeon.mcp-combinable-transaction-test
+     clj-surgeon.mcp-compact-edit-test
+     clj-surgeon.mcp-compact-location-test
+     clj-surgeon.mcp-compact-relations-test
+     clj-surgeon.mcp-contract-test
+     clj-surgeon.mcp-create-files-test
+     clj-surgeon.mcp-expect-guard-test
+     clj-surgeon.mcp-extraction-plan-test
+     clj-surgeon.mcp-extraction-test
+     clj-surgeon.mcp-feature-thread-sed-test
+     clj-surgeon.mcp-feature-thread-test
+     clj-surgeon.mcp-formatter-test
+     clj-surgeon.mcp-helper-extraction-test
+     clj-surgeon.mcp-hot-verify-test
+     clj-surgeon.mcp-http-server-test
+     clj-surgeon.mcp-inspect-cold-job-test
+     clj-surgeon.mcp-inspect-contract-test
+     clj-surgeon.mcp-inspect-tool-test
+     clj-surgeon.mcp-intent-contract-test
+     clj-surgeon.mcp-namespace-split-test
+     clj-surgeon.mcp-operation-async-test
+     clj-surgeon.mcp-operation-registry-test
+     clj-surgeon.mcp-prepared-confirmation-test
+     clj-surgeon.mcp-prepared-request-test
+     clj-surgeon.mcp-prepared-wire-test
+     clj-surgeon.mcp-process-test
+     clj-surgeon.mcp-program-tool-test
+     clj-surgeon.mcp-read-request-normalization-test
+     clj-surgeon.mcp-recovery-test
+     clj-surgeon.mcp-relation-census-launcher-test
+     clj-surgeon.mcp-relation-census-round20-test
+     clj-surgeon.mcp-relation-census-test
+     clj-surgeon.mcp-server-test
+     clj-surgeon.mcp-tool-test
+     clj-surgeon.mcp-workspace-test
+     clj-surgeon.mcp-write-refusal-test
+     clj-surgeon.memory.journal-green-test
+     clj-surgeon.memory.oom-reproduction-test
+     clj-surgeon.mission-commit-cli-test
+     clj-surgeon.mission-events-test
+     clj-surgeon.mission-fallback-test
+     clj-surgeon.mission-git-ledger-test
+     clj-surgeon.mission-phase-events-test
+     clj-surgeon.mission-provider-fallback-events-test
+     clj-surgeon.mission-publication-test
+     clj-surgeon.mission-run-test
+     clj-surgeon.mission-test
+     clj-surgeon.mission-typist-executor-admission-test
+     clj-surgeon.mission-typist-executor-test
+     clj-surgeon.mission-usage-executor-test
+     clj-surgeon.namespace-split-test
+     clj-surgeon.namespace-split-warm-test
+     clj-surgeon.ns-isolation-test
+     clj-surgeon.operation-algebra-test
+     clj-surgeon.outline-corpus-integration-test
+     clj-surgeon.parser-admission-test
+     clj-surgeon.quoted-var-refs-test
+     clj-surgeon.reader-eval-fence-test
+     clj-surgeon.receipt-artifacts-boundary-test
+     clj-surgeon.receipt-booleans-test
+     clj-surgeon.recovery-test
+     clj-surgeon.rename-alias-parity-test
+     clj-surgeon.rename-alias-performance-test
+     clj-surgeon.rename-alias-receipt-test
+     clj-surgeon.rename-alias-test
+     clj-surgeon.rename-test
+     clj-surgeon.require-change-boundary-test
+     clj-surgeon.require-change-test
+     clj-surgeon.scope-stream-test
+     clj-surgeon.show-form-test
+     clj-surgeon.splice-envelope-test
+     clj-surgeon.split-proof-gate-boundary-test
+     clj-surgeon.txn-journal-test
+     clj-surgeon.workspace-onboarding-test
+     clj-surgeon.xray-test],
+    :selected 101,
+    :reason nil,
+    :status :selected,
+    :changed 4,
+    :selection-edge-counts
+    {:require 81, :source-scan 246, :data-file 11},
+    :unmatched []},
+   :ratio 64.31675549579614,
+   :catch "1/1",
+   :tie? false,
+   :diff "d3"}
+  {:native-spread 0.04205329020175364,
+   :meta
+   {:range "7bf44cfe^..7bf44cfe",
+    :base "7bf44cfe^",
+    :kind "green src fix (probe image cleanup)"},
+   :tool
+   {:load ["3.68" "3.07"],
+    :selected [93 93],
+    :exit ["1" "1"],
+    :reason [nil nil],
+    :status [:selected :selected],
+    :wall-ms [2060091 2064283],
+    :failing [clj-surgeon.fast-lane-isolation-test],
+    :launch ["2026-09-14T17:24:40Z" "2026-09-14T18:01:29Z"],
+    :unmatched [[] []],
+    :log
+    ["/var/tmp/forge/measure-fx/diff-impact/logs/d4-tool-1.log"
+     "/var/tmp/forge/measure-fx/diff-impact/logs/d4-tool-2.log"],
+    :ran [93 93],
+    :results
+    ["/var/tmp/forge/measure-fx/diff-impact/out/d4-tool-1/results-fixed-point.edn"
+     "/var/tmp/forge/measure-fx/diff-impact/out/d4-tool-2/results-fixed-point.edn"]},
+   :native
+   {:wall-ms [29985 28750],
+    :exit ["0" "0"],
+    :load ["3.71" "3.31"],
+    :launch ["2026-09-14T17:22:40Z" "2026-09-14T17:59:00Z"],
+    :log
+    ["/var/tmp/forge/measure-fx/diff-impact/logs/d4-native-1.log"
+     "/var/tmp/forge/measure-fx/diff-impact/logs/d4-native-2.log"],
+    :ran [95 95],
+    :failing [],
+    :receipt
+    ["/var/tmp/forge/measure-fx/diff-impact/wt-d4/target/gate-parallel/cell-d4-native-1/fast/receipt.edn"
+     "/var/tmp/forge/measure-fx/diff-impact/wt-d4/target/gate-parallel/cell-d4-native-2/fast/receipt.edn"]},
+   :list
+   {:path
+    "/var/tmp/forge/measure-fx/diff-impact/out/d4-list/impact-list.edn",
+    :edge-counts
+    {:require 1879,
+     :data-file 29459,
+     :source-text 48,
+     :source-scan 6426},
+    :namespaces
+    [clj-surgeon.admit-patch-test
+     clj-surgeon.alias-migration-test
+     clj-surgeon.analyzer-contract-test
+     clj-surgeon.battery-parallel-test
+     clj-surgeon.cli-dispatch-test
+     clj-surgeon.cljc-existing-ops-test
+     clj-surgeon.cljc.split-test
+     clj-surgeon.core-discovery-test
+     clj-surgeon.edit-test
+     clj-surgeon.extract-test
+     clj-surgeon.failure-report-test
+     clj-surgeon.fast-lane-isolation-test
+     clj-surgeon.help-test
+     clj-surgeon.helper-extraction-test
+     clj-surgeon.insert-forms-receipt-test
+     clj-surgeon.install-test
+     clj-surgeon.intent-transaction-test
+     clj-surgeon.jvm-error-test
+     clj-surgeon.lane-manifest-test
+     clj-surgeon.ls-tree-test
+     clj-surgeon.mcp-alias-migration-test
+     clj-surgeon.mcp-change-buffer-test
+     clj-surgeon.mcp-combinable-transaction-test
+     clj-surgeon.mcp-compact-edit-test
+     clj-surgeon.mcp-compact-location-test
+     clj-surgeon.mcp-compact-relations-test
+     clj-surgeon.mcp-contract-test
+     clj-surgeon.mcp-create-files-test
+     clj-surgeon.mcp-expect-guard-test
+     clj-surgeon.mcp-extraction-plan-test
+     clj-surgeon.mcp-extraction-test
+     clj-surgeon.mcp-feature-thread-sed-test
+     clj-surgeon.mcp-feature-thread-test
+     clj-surgeon.mcp-formatter-test
+     clj-surgeon.mcp-helper-extraction-test
+     clj-surgeon.mcp-hot-verify-test
+     clj-surgeon.mcp-http-server-test
+     clj-surgeon.mcp-inspect-cold-job-test
+     clj-surgeon.mcp-inspect-contract-test
+     clj-surgeon.mcp-inspect-tool-test
+     clj-surgeon.mcp-intent-contract-test
+     clj-surgeon.mcp-namespace-split-test
+     clj-surgeon.mcp-operation-async-test
+     clj-surgeon.mcp-operation-registry-test
+     clj-surgeon.mcp-prepared-confirmation-test
+     clj-surgeon.mcp-prepared-request-test
+     clj-surgeon.mcp-prepared-wire-test
+     clj-surgeon.mcp-process-test
+     clj-surgeon.mcp-read-request-normalization-test
+     clj-surgeon.mcp-recovery-test
+     clj-surgeon.mcp-relation-census-launcher-test
+     clj-surgeon.mcp-relation-census-round20-test
+     clj-surgeon.mcp-relation-census-test
+     clj-surgeon.mcp-server-test
+     clj-surgeon.mcp-tool-test
+     clj-surgeon.mcp-write-refusal-test
+     clj-surgeon.memory.journal-green-test
+     clj-surgeon.memory.oom-reproduction-test
+     clj-surgeon.mission-commit-cli-test
+     clj-surgeon.mission-events-test
+     clj-surgeon.mission-fallback-test
+     clj-surgeon.mission-git-ledger-test
+     clj-surgeon.mission-phase-events-test
+     clj-surgeon.mission-provider-fallback-events-test
+     clj-surgeon.mission-publication-test
+     clj-surgeon.mission-run-test
+     clj-surgeon.mission-test
+     clj-surgeon.mission-typist-executor-admission-test
+     clj-surgeon.mission-typist-executor-test
+     clj-surgeon.mission-usage-executor-test
+     clj-surgeon.namespace-split-test
+     clj-surgeon.namespace-split-warm-test
+     clj-surgeon.ns-isolation-test
+     clj-surgeon.operation-algebra-test
+     clj-surgeon.outline-corpus-integration-test
+     clj-surgeon.parser-admission-test
+     clj-surgeon.probe-state-test
+     clj-surgeon.quoted-var-refs-test
+     clj-surgeon.reader-eval-fence-test
+     clj-surgeon.receipt-artifacts-boundary-test
+     clj-surgeon.receipt-booleans-test
+     clj-surgeon.recovery-test
+     clj-surgeon.rename-test
+     clj-surgeon.require-change-boundary-test
+     clj-surgeon.require-change-test
+     clj-surgeon.scope-stream-test
+     clj-surgeon.show-form-test
+     clj-surgeon.splice-envelope-test
+     clj-surgeon.split-proof-gate-boundary-test
+     clj-surgeon.state-home-admission-test
+     clj-surgeon.txn-journal-test
+     clj-surgeon.workspace-onboarding-test
+     clj-surgeon.xray-test],
+    :selected 93,
+    :reason nil,
+    :status :selected,
+    :changed 7,
+    :selection-edge-counts
+    {:source-scan 246, :require 42, :data-file 22},
+    :unmatched []},
+   :ratio 70.2200391589342,
+   :catch :vacuous,
+   :tie? false,
+   :diff "d4"}
+  {:native-spread 0.09244883556810163,
+   :meta
+   {:range "6e77580f^..6e77580f",
+    :base "6e77580f^",
+    :kind "docs-only (battery pass record)"},
+   :tool
+   {:load ["2.71" "2.80"],
+    :selected [6 6],
+    :exit ["0" "0"],
+    :reason [nil nil],
+    :status [:selected :selected],
+    :wall-ms [25748 25208],
+    :failing [],
+    :launch ["2026-09-14T18:36:24Z" "2026-09-14T14:34:12Z"],
+    :unmatched [[] []],
+    :log
+    ["/var/tmp/forge/measure-fx/diff-impact/logs/d5-tool-1.log"
+     "/var/tmp/forge/measure-fx/diff-impact/logs/d5-tool-2.log"],
+    :ran [6 6],
+    :results
+    ["/var/tmp/forge/measure-fx/diff-impact/out/d5-tool-1/results-fixed-point.edn"
+     "/var/tmp/forge/measure-fx/diff-impact/out/d5-tool-2/results-fixed-point.edn"]},
+   :native
+   {:wall-ms [32615 29733],
+    :exit ["0" "0"],
+    :load ["2.31" "3.85"],
+    :launch ["2026-09-14T14:28:40Z" "2026-09-14T14:31:12Z"],
+    :log
+    ["/var/tmp/forge/measure-fx/diff-impact/logs/d5-native-1.log"
+     "/var/tmp/forge/measure-fx/diff-impact/logs/d5-native-2.log"],
+    :ran [95 95],
+    :failing [],
+    :receipt
+    ["/var/tmp/forge/measure-fx/diff-impact/wt-d5/target/gate-parallel/cell-d5-native-1/fast/receipt.edn"
+     "/var/tmp/forge/measure-fx/diff-impact/wt-d5/target/gate-parallel/cell-d5-native-2/fast/receipt.edn"]},
+   :list
+   {:path
+    "/var/tmp/forge/measure-fx/diff-impact/out/d5-list/impact-list.edn",
+    :edge-counts
+    {:require 1879,
+     :data-file 29459,
+     :source-text 48,
+     :source-scan 6426},
+    :namespaces
+    [clj-surgeon.agent-routing-test
+     clj-surgeon.battery-ledger-test
+     clj-surgeon.battery-parallel-test
+     clj-surgeon.lane-manifest-test
+     clj-surgeon.mcp-intent-contract-test
+     clj-surgeon.receipt-artifacts-boundary-test],
+    :selected 6,
+    :reason nil,
+    :status :selected,
+    :changed 2,
+    :selection-edge-counts {:data-file 10},
+    :unmatched []},
+   :ratio 0.8172836337973952,
+   :catch :vacuous,
+   :tie? false,
+   :diff "d5"}],
+ :refusals
+ [{:cell "d5-tool-1 (first attempt)",
+   :exit 90,
+   :reason
+   "Diff-impact refused: lease or receipt-chain process active (an external /var/tmp/forge/jvm-lease* file existed at 14:31:12Z)",
+   :ledger-row
+   "/var/tmp/forge/measure-fx/diff-impact/ledger-with-refusal.tsv"}
+  {:cell "runner parity (both arms)",
+   :kind :impossible,
+   :reason
+   "battery-parallel-runner takes no namespace subset: suite-namespaces is the lane manifest and census-problems refuses a receipt whose namespaces are not exactly the suite. The TOOL arm therefore runs test/diff-impact's own serial cold-JVM child launcher, not the gate's parallel fast lane."}
+  {:cell "trunk lane runner on tip trees",
+   :kind :impossible,
+   :reason
+   "putting wt-tool/test first on the classpath would shadow the tip's own test namespaces, i.e. run trunk's tests. The runner argv comes from trunk; the runner code and the tests both resolve from the tip snapshot."}],
+ :derived
+ {"d1"
+  {"1"
+   {:ran 92,
+    :fast-lane-members 45,
+    :child-wall-ms 2606962,
+    :fast-lane-only-child-wall-ms 224991,
+    :whole-wall-ms 2611254,
+    :selection-and-overhead-ms 4292},
+   "2"
+   {:ran 92,
+    :fast-lane-members 45,
+    :child-wall-ms 2594846,
+    :fast-lane-only-child-wall-ms 224738,
+    :whole-wall-ms 2599404,
+    :selection-and-overhead-ms 4558}},
+  "d2"
+  {"1"
+   {:ran 9,
+    :fast-lane-members 7,
+    :child-wall-ms 40985,
+    :fast-lane-only-child-wall-ms 19951,
+    :whole-wall-ms 45304,
+    :selection-and-overhead-ms 4319},
+   "2"
+   {:ran 9,
+    :fast-lane-members 7,
+    :child-wall-ms 39655,
+    :fast-lane-only-child-wall-ms 19363,
+    :whole-wall-ms 44078,
+    :selection-and-overhead-ms 4423}},
+  "d3"
+  {"1"
+   {:ran 101,
+    :fast-lane-members 51,
+    :child-wall-ms 1980434,
+    :fast-lane-only-child-wall-ms 251296,
+    :whole-wall-ms 1984985,
+    :selection-and-overhead-ms 4551},
+   "2"
+   {:ran 101,
+    :fast-lane-members 51,
+    :child-wall-ms 1980944,
+    :fast-lane-only-child-wall-ms 251047,
+    :whole-wall-ms 1985224,
+    :selection-and-overhead-ms 4280}},
+  "d4"
+  {"1"
+   {:ran 93,
+    :fast-lane-members 46,
+    :child-wall-ms 2055627,
+    :fast-lane-only-child-wall-ms 224869,
+    :whole-wall-ms 2060091,
+    :selection-and-overhead-ms 4464},
+   "2"
+   {:ran 93,
+    :fast-lane-members 46,
+    :child-wall-ms 2059763,
+    :fast-lane-only-child-wall-ms 228177,
+    :whole-wall-ms 2064283,
+    :selection-and-overhead-ms 4520}},
+  "d5"
+  {"1"
+   {:ran 6,
+    :fast-lane-members 5,
+    :child-wall-ms 21498,
+    :fast-lane-only-child-wall-ms 11468,
+    :whole-wall-ms 25748,
+    :selection-and-overhead-ms 4250},
+   "2"
+   {:ran 6,
+    :fast-lane-members 5,
+    :child-wall-ms 20876,
+    :fast-lane-only-child-wall-ms 11021,
+    :whole-wall-ms 25208,
+    :selection-and-overhead-ms 4332}}},
+ :preregistration
+ "/home/forge/src/clj-surgeon-records/docs/observations/2026-09-14-diff-impact-measure/preregistration.md"}

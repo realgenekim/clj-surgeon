@@ -52,3 +52,21 @@ Honest reading of the index: the runner now exists and scores end to end on the 
 2. Register the day's recurrences as encounters through the runner (the ones above are exactly its subject) and score them on the next fix — the index moves only when a fix closes its class first time.
 3. A vs-native measurement on a branch tip, ≥50% of the next block: candidates are the diff-impact selection (gate wall with vs without edges on a real diff) or the registration entrance (author time to register a namespace, tool vs native).
 4. On Gene's word only: tower block C, the spent cohorts, the wiki promotion queue.
+
+## Addendum (2026-09-14 18:45Z) — the vs-native table landed: diff-impact selection vs the full fast lane
+
+Preregistered (this directory: 2026-09-14-diff-impact-measure/), five frozen diffs, n=2 per arm, native first, load-gated.
+
+| diff | NATIVE fast lane (16 lanes) | TOOL select + run selected | selected | catch preserved | ratio |
+|---|---:|---:|---:|---|---:|
+| D1 one src line, historical miss | 30.2 s / 30.1 s (red: splice-envelope-test) | 2,611 s / 2,599 s (red, same ns) | 92 | 1/1 | **86×** |
+| D2 test-side runner change | 32.0 s / 27.3 s | 45.3 s / 44.1 s | 9 | vacuous | **1.5×** |
+| D3 committed red race oracle | 31.2 s / 30.6 s (red: lane-manifest-test) | 1,985 s / 1,985 s (red, same + the battery-lane race tests native cannot see) | 101 | 1/1 | **64×** |
+| D4 green src fix | 30.0 s / 28.8 s | 2,060 s / 2,064 s (a false red: fast-lane-isolation-test) | 93 | vacuous | **70×** |
+| D5 docs-only | 32.6 s / 29.7 s | 25.7 s (after one lease refusal) / 25.2 s | 6 (no allowlist at that tip) | vacuous | 0.82× |
+
+Bets: six wall bets BROKE (median D1–D4 67× against a bet of < 0.35); four catch-preservation bets HELD (no native failure missed on any diff; kill switch not tripped); first-attempt TOOL 4/5 (one external-lease refusal, named), NATIVE 5/5.
+
+Learning: the selector is sound and the executor is the loss — it runs one cold JVM per selected namespace, serially, across all lanes, while the native fast lane spends 16 lanes in parallel on everything; on this box selection cannot beat a gate that has already spent the parallelism selection tries to save. Caveat: the arms differ in executor and lane scope, not only namespace set (the lane runner refuses subsets by census), so the ratios judge the tool's executor, not its selection; the selection and catch columns are the comparable part and the selector wins them. Two defects surfaced: the selector's child launcher omits -Duser.home inside the run root (a false red on D1/D3/D4 from the tree's own isolation ratchet), and no docs allowlist exists at older tips.
+
+Window meter after this: 7. A preregistered vs-native table exists for the window (the meter's condition), and it is a loss recorded with its bets. Index unchanged at 4.
