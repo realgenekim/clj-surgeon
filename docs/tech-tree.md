@@ -1094,3 +1094,15 @@ and bb. Historical selection includes splice-envelope at df0c9e1c and all three
 named battery witnesses at 00566756..8aedb65e. Conservative directory roots select
 extra witnesses; this is correctness evidence with no speed or gate-envelope claim.
 [Report](observations/2026-09-14-diff-impact-edges-report-astra.md).
+
+### 2026-09-14T19:05:56.114381+00:00 — register-test-ns Round 8, bounded cold matrix
+
+The registration matrix now invokes the real manifest namespace runner in each
+copy and retains one full-Make seed agreement check. Standalone acceptance passes
+all 32 masks in 454.628 seconds end to end; individual cold gates take
+10.687–11.489 seconds, and seed Make takes 33.893 seconds. The requested
+150-second target is missed. The once-only full copied battery exposes the
+unchanged live observer's 8000 ms budget under contention; its assertions and
+byte-preservation check pass. Full lane outcomes and limitations belong in
+[Round 8](observations/2026-09-14-register-test-ns-report-astra.md#round-8).
+This records observed correctness and budget limits, with no routing admission.

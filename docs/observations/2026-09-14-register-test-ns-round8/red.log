@@ -1,0 +1,23 @@
+EE....
+======================================================================
+ERROR: test_cell_timeout_is_typed_and_bounded (__main__.MatrixIsolationTest.test_cell_timeout_is_typed_and_bounded)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-regns/test/regns_gate_matrix_test.py", line 28, in test_cell_timeout_is_typed_and_bounded
+    with self.assertRaisesRegex(matrix.CellTimeout, "^cell-timeout mask=10$"):
+                                ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'matrix' has no attribute 'CellTimeout'
+
+======================================================================
+ERROR: test_gate_entrances_and_first_failure_agreement (__main__.MatrixIsolationTest.test_gate_entrances_and_first_failure_agreement)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-regns/test/regns_gate_matrix_test.py", line 20, in test_gate_entrances_and_first_failure_agreement
+    "clj-surgeon.lane-manifest-test"], matrix.MANIFEST_ARGV)
+                                       ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'matrix' has no attribute 'MANIFEST_ARGV'
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.009s
+
+FAILED (errors=2)

@@ -1,4 +1,4 @@
-"""REGNS-006/012: real Make gates in copies, observed from the caller tree."""
+"""REGNS-006/012: real manifest gates in copies, with one full Make control."""
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
@@ -10,6 +10,21 @@ import shutil
 import subprocess
 import tempfile
 import time
+import sys
+
+
+MANIFEST_ARGV = ["clojure", "-J-Xmx1024m", "-M:clj-surgeon/test-deps",
+                 "-m", "clj-surgeon.mcp-test-runner", "--ns",
+                 "clj-surgeon.lane-manifest-test"]
+
+
+class CellTimeout(Exception):
+    """A bounded cell failed to finish; the CLI reports this without a traceback."""
+
+
+def first_failure_block(output):
+    failure = re.search(r"FAIL in \(([^)]+)\).*?(?=\n\n|\Z)", output, re.S)
+    return failure.group(0) if failure else ""
 
 
 # INTENT: REGNS-012
@@ -77,11 +92,14 @@ def copy_repository(source, root):
         ".git", ".cpcache", "target", "node_modules", ".clj-kondo", ".lsp", "__pycache__"))
 
 
-def run(argv, root, env, log):
+def run(argv, root, env, log, mask=None):
     tick = time.monotonic()
     with log.open("w") as output:
-        result = subprocess.run(argv, cwd=root, env=env, stdout=output,
-                                stderr=subprocess.STDOUT, timeout=180)
+        try:
+            result = subprocess.run(argv, cwd=root, env=env, stdout=output,
+                                    stderr=subprocess.STDOUT, timeout=120)
+        except subprocess.TimeoutExpired:
+            raise CellTimeout(f"cell-timeout mask={mask}") from None
     return result.returncode, time.monotonic() - tick
 
 
@@ -101,9 +119,7 @@ def run_matrix(source, scratch):
             setup = ["bb", "-Djava.io.tmpdir=" + env["TMPDIR"], "-m",
                      "clj-surgeon.registration-gate-fixture"]
             observer_env = prepare_environment(owner / "observer")
-            observer = ["clojure", "-J-Xmx1024m", "-M:clj-surgeon/test-deps",
-                        "-m", "clj-surgeon.mcp-test-runner", "--ns",
-                        "clj-surgeon.lane-manifest-test"]
+            observer = MANIFEST_ARGV
             # Run the live observer during actual seed registration. Direct mode
             # folds isolation/budget violations; --emit-edn only emits facts.
             with ThreadPoolExecutor(max_workers=1) as pool:
@@ -125,15 +141,28 @@ def run_matrix(source, scratch):
                     env = prepare_environment(cell / "gate")
                     setup = ["bb", "-Djava.io.tmpdir=" + env["TMPDIR"], "-m",
                              "clj-surgeon.registration-gate-fixture", str(root), str(mask)]
-                    code, _ = run(setup, root, env, cell / "setup.log")
+                    code, _ = run(setup, root, env, cell / "setup.log", mask=mask)
                     assert code == 0, (cell / "setup.log").read_text()
                     log = cell / "gate.log"
-                    argv = ["make", "-C", str(root), "test-fast"]
-                    code, wall = run(argv, root, env, log)
+                    argv = MANIFEST_ARGV
+                    code, wall = run(argv, root, env, log, mask=mask)
                     output = log.read_text()
+                    if mask == 0:
+                        full_argv = ["make", "-C", str(root), "test-fast"]
+                        full_log = cell / "full-fast.log"
+                        full_code, full_wall = run(full_argv, root, env, full_log, mask=mask)
+                        agreement = (full_code == code == 0
+                                     and first_failure_block(full_log.read_text())
+                                     == first_failure_block(output))
+                        print("SEED-ENTRANCE-AGREEMENT", json.dumps({
+                            "mask": mask, "argv": full_argv, "exit": full_code,
+                            "full_wall_s": round(full_wall, 3), "runner_wall_s": round(wall, 3),
+                            "first_failure_block": first_failure_block(output),
+                            "agreement": agreement}), flush=True)
+                        assert agreement, full_log.read_text()
                     names = re.findall(r"Registration checklist for ([^: ]+):", output)
                     failure = re.search(r"FAIL in \(([^)]+)\).*?(?=\n\n|\Z)", output, re.S)
-                    first_failure = failure.group(0) if failure else ""
+                    first_failure = first_failure_block(output)
                     walls = re.findall(r"(\d+) ms  clj-surgeon.lane-manifest-test", output)
                     lane_wall = int(walls[0]) if walls else None
                     expected = "clj-surgeon.sol-first-contact-test"
@@ -175,4 +204,8 @@ if __name__ == "__main__":
     parser.add_argument("--root", required=True)
     parser.add_argument("--scratch", required=True)
     args = parser.parse_args()
-    run_matrix(Path(args.root), Path(args.scratch).resolve())
+    try:
+        run_matrix(Path(args.root), Path(args.scratch).resolve())
+    except CellTimeout as error:
+        print(str(error), file=sys.stderr, flush=True)
+        sys.exit(1)

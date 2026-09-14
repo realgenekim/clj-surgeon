@@ -1,0 +1,14 @@
+{
+  "mask": 0,
+  "argv": [
+    "make",
+    "-C",
+    "/var/tmp/forge/regns-fx/round8/alone-runtime/temp/clj-surgeon-suite-901067-13128fc2/regns-real-gate-kp_zkboi/cell-0-zqzibfh2/repo",
+    "test-fast"
+  ],
+  "exit": 0,
+  "full_wall_s": 33.893,
+  "runner_wall_s": 11.038,
+  "first_failure_block": "",
+  "agreement": true
+}

@@ -1,0 +1,127 @@
+[
+  {
+    "lane": 0,
+    "wall_ms": 259504,
+    "exit": 1,
+    "namespaces": [
+      "clj-surgeon.mcp-alias-migration-test",
+      "clj-surgeon.reader-eval-fence-test/the-fence-does-not-refuse-an-ordinary-path-under-a-symlinked-root",
+      "clj-surgeon.mission-run-test",
+      "clj-surgeon.admit-patch-test",
+      "clj-surgeon.cli-dispatch-test",
+      "clj-surgeon.reader-eval-fence-test/a-deeply-nested-build-file-is-refused-typed-not-overflowed",
+      "clj-surgeon.core-discovery-test",
+      "clj-surgeon.rename-alias-performance-test",
+      "clj-surgeon.require-change-boundary-test",
+      "clj-surgeon.mission-typist-executor-test",
+      "clj-surgeon.mission-git-fence-test",
+      "clj-surgeon.mission-git-process-test",
+      "clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-bb-project-clj",
+      "clj-surgeon.reader-eval-fence-test/the-oracle-names-every-evaluator-it-claims-to-fence",
+      "clj-surgeon.reader-eval-fence-test/build-file-matrix-covers-the-frozen-launcher-pairs"
+    ]
+  },
+  {
+    "lane": 1,
+    "wall_ms": 228783,
+    "exit": 0,
+    "namespaces": [
+      "clj-surgeon.mcp-relation-census-launcher-test",
+      "clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-jvm-bb-edn",
+      "clj-surgeon.txn-journal-test",
+      "clj-surgeon.mission-commit-cli-test",
+      "clj-surgeon.mcp-process-test",
+      "clj-surgeon.intent-transaction-test",
+      "clj-surgeon.lens-query-test",
+      "clj-surgeon.parser-admission-test",
+      "clj-surgeon.mcp-feature-thread-sed-test",
+      "clj-surgeon.mcp-cold-verify-test",
+      "clj-surgeon.mission-git-submodule-test",
+      "clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-bb-bb-edn",
+      "clj-surgeon.mcp-inspect-cold-job-test"
+    ]
+  },
+  {
+    "lane": 2,
+    "wall_ms": 267870,
+    "exit": 0,
+    "namespaces": [
+      "clj-surgeon.install-test",
+      "clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-jvm-project-clj",
+      "clj-surgeon.mcp-relation-census-test",
+      "clj-surgeon.mission-publication-test",
+      "clj-surgeon.mission-display-test",
+      "clj-surgeon.extract-test",
+      "clj-surgeon.mcp-helper-extraction-test",
+      "clj-surgeon.cell-b-oracle-test",
+      "clj-surgeon.mission-git-identity-test",
+      "clj-surgeon.platform-selector-test",
+      "clj-surgeon.mission-fallback-test",
+      "clj-surgeon.repository-hygiene-test",
+      "clj-surgeon.mission-typist-executor-admission-test"
+    ]
+  },
+  {
+    "lane": 3,
+    "wall_ms": 267288,
+    "exit": 0,
+    "namespaces": [
+      "clj-surgeon.reader-eval-fence-test/no-real-launcher-follows-a-build-file-path-out-of-the-tree",
+      "clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-jvm-deps-edn",
+      "clj-surgeon.mcp-prepared-wire-test",
+      "clj-surgeon.mission-events-test",
+      "clj-surgeon.edit-test",
+      "clj-surgeon.receipt-artifacts-boundary-test",
+      "clj-surgeon.insert-forms-parity-test",
+      "clj-surgeon.mission-test",
+      "clj-surgeon.mission-git-ledger-test",
+      "clj-surgeon.partition-all-test",
+      "clj-surgeon.reader-eval-fence-test/no-real-launcher-evaluates-discovered-bb-deps-edn",
+      "clj-surgeon.mission-usage-executor-test"
+    ]
+  },
+  {
+    "lane": 4,
+    "wall_ms": 270697,
+    "exit": 0,
+    "namespaces": [
+      "clj-surgeon.probe-state-test",
+      "clj-surgeon.reader-eval-fence-test/a-non-string-paths-entry-never-reaches-io-file",
+      "clj-surgeon.tmp-leak-support-test",
+      "clj-surgeon.show-form-test",
+      "clj-surgeon.help-test",
+      "clj-surgeon.split-proof-gate-boundary-test",
+      "clj-surgeon.xray-test",
+      "clj-surgeon.rename-alias-parity-test",
+      "clj-surgeon.reader-eval-fence-test/no-source-in-this-repository-calls-the-evaluating-reader",
+      "clj-surgeon.edn-config-integration-test",
+      "clj-surgeon.mission-git-boundary-test",
+      "clj-surgeon.mission-provider-fallback-events-test",
+      "clj-surgeon.mission-phase-events-test"
+    ]
+  },
+  {
+    "lane": 5,
+    "wall_ms": 30878,
+    "exit": 1,
+    "namespaces": [
+      "clj-surgeon.test-registration-battery-test"
+    ]
+  },
+  {
+    "lane": 6,
+    "wall_ms": 134489,
+    "exit": 0,
+    "namespaces": [
+      "clj-surgeon.registration-controls-test"
+    ]
+  },
+  {
+    "lane": 7,
+    "wall_ms": 30437,
+    "exit": 0,
+    "namespaces": [
+      "clj-surgeon.battery-state-admission-test"
+    ]
+  }
+]

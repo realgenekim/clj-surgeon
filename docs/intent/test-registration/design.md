@@ -41,7 +41,14 @@ copied-snapshot first-contact mask. The complete cold gate matrix lives in
 test-registration-battery-test (:battery), enrolled through register-test-ns.
 It seeds a copied repository through actual registration controls and copies
 that seed into a fresh repository for each of the 31 missing-surface masks and
-the zero-mask control. Every cell launches real `make -C <copy> test-fast`.
+the zero-mask control. Every cell launches
+`clojure -J-Xmx1024m -M:clj-surgeon/test-deps -m clj-surgeon.mcp-test-runner --ns clj-surgeon.lane-manifest-test`
+with cwd set to the copy. This is the real gate runner and the sole namespace
+whose assertions emit registration checklists. The zero-mask control also runs
+`make -C <copy> test-fast`; both entrances must exit zero and have the same
+first failure block (empty for the fully registered seed). Its full-Make wall
+is reported separately. Each child command has a 120-second timeout; a timed-out
+cell fails with `cell-timeout mask=<n>` and a nonzero CLI exit, without a traceback.
 The first emitted checklist names only the defective subject
 and its requested lane/runtime; count-only drift emits a repository row instead.
 The fast qualified name and all original test names remain, keeping the census
@@ -91,8 +98,8 @@ and the battery cadence retains 1800000 ms. The matrix asserts the nested budget
 for every cell, including expected refusals.
 
 Round 7 isolation (REGNS-012): the matrix receives explicit source and scratch
-roots, and the file fixture receives its repository root. Each mask runs real
-`make -C <copy> test-fast` with cwd set to that copy. Each cell owns a scratch
+roots, and the file fixture receives its repository root. Each mask runs the real
+manifest runner described above with cwd set to that copy. Each cell owns a scratch
 envelope containing its repository, temporary directory and external state root;
 the state root is explicitly admitted through the artifact-root environment.
 Inherited checkout routing and write authorization are discarded. A separate
@@ -104,6 +111,9 @@ state walls/controls, including after failure. Child failures report their root,
 command and separate diagnostic/budget results so expected copied failures cannot
 be mistaken for live-tree failures. The trace and baseline must establish the
 actual failure; no contamination RED may be inferred from nested log text alone.
-The complete Round 7 witness measured 1332598 ms and has a 1500000 ms namespace
-ceiling. The fast namespace's 8000 ms ceiling and battery cadence's independent
+The historical complete Round 7 full-Make matrix measured 1332598 ms. The
+1500000 ms namespace ceiling is unchanged. Round 8 targets less than 150 seconds
+for the standalone witness and separately measures it under the eight-lane
+battery; a missed target must be reported rather than weakening the cold gate.
+The fast namespace's 8000 ms ceiling and battery cadence's independent
 1800000 ms ceiling remain in force.

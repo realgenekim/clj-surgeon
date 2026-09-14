@@ -3,6 +3,8 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
+import subprocess
 
 spec = importlib.util.spec_from_file_location("matrix", Path(__file__).with_name("regns_gate_matrix.py"))
 matrix = importlib.util.module_from_spec(spec)
@@ -12,6 +14,21 @@ spec.loader.exec_module(matrix)
 # INTENT-TEST: REGNS-012
 # @spec REGNS-012
 class MatrixIsolationTest(unittest.TestCase):
+    def test_gate_entrances_and_first_failure_agreement(self):
+        self.assertEqual(["clojure", "-J-Xmx1024m", "-M:clj-surgeon/test-deps",
+                          "-m", "clj-surgeon.mcp-test-runner", "--ns",
+                          "clj-surgeon.lane-manifest-test"], matrix.MANIFEST_ARGV)
+        self.assertEqual("", matrix.first_failure_block("Ran 4 tests.\n"))
+        block = "FAIL in (registration) (x.clj:1)\nremedy"
+        self.assertEqual(block, matrix.first_failure_block("prefix\n" + block + "\n\nnext"))
+
+    def test_cell_timeout_is_typed_and_bounded(self):
+        with tempfile.TemporaryDirectory(prefix="regns-timeout-") as tmp:
+            with patch.object(matrix.subprocess, "run", side_effect=subprocess.TimeoutExpired("gate", 120)) as child:
+                with self.assertRaisesRegex(matrix.CellTimeout, "^cell-timeout mask=10$"):
+                    matrix.run(["gate"], Path(tmp), {}, Path(tmp) / "log", mask=10)
+                self.assertEqual(120, child.call_args.kwargs["timeout"])
+
     def test_inherited_live_routing_cannot_reach_a_cell(self):
         poisoned = {key: "/live" for key in [
             "CLJ_SURGEON_STATE_HOME", "CLJ_SURGEON_ARTIFACT_ROOT",

@@ -27,3 +27,12 @@ uses real copied registration files and their actual count. The namespace run,
 with and without a newcomer, must remain below its existing 8000 ms budget.
 
 - [x] **REGNS-012**: While a copied registration matrix executes concurrently with the caller's manifest gate, the caller's git status and registration, census, state walls and control bytes shall remain unchanged. Misreading: a child's printed expected refusal proves caller contamination; or cwd alone isolates inherited routing. Witness: registration-first-contact-gate-matrix and MatrixIsolationTest.
+
+Round 8 refinement of REGNS-006 / REAL-GATE-001: every copied mask executes
+lane-manifest-test through the real cold mcp-test-runner at 1024 MB. Mask 0 also
+runs full `make test-fast` and requires identical first failure blocks and zero
+exits, with its wall recorded separately. Child commands time out after 120
+seconds; the CLI emits `cell-timeout mask=<n>` and exits nonzero without a
+TimeoutExpired traceback. All first-block, exact-remedy, count-cardinality and
+already-registered-subject exclusions remain in force. Witnesses:
+registration-first-contact-gate-matrix and MatrixIsolationTest.

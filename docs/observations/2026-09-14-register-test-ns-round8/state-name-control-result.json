@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "wall_s": 10.182996128685772,
+  "argv": [
+    "clojure",
+    "-J-Xmx1024m",
+    "-M:clj-surgeon/test-deps",
+    "-m",
+    "clj-surgeon.mcp-test-runner",
+    "--ns",
+    "clj-surgeon.mcp-alias-migration-test/artifact-root-default-is-derived-per-user"
+  ]
+}

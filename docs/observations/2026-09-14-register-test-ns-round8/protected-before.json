@@ -1,0 +1,5 @@
+{
+  "docs/observations/battery-ledger.edn": "08a1d6ee9c7f319c4a146ec23798e535273a47b7633697354014b318bff8ad39",
+  "docs/observations/battery-namespace-walls.edn": "154faae0c803099d1bfe88e8563a8cf85cdf2376af4e4309b10bd850cd6ef264",
+  "test/clj_surgeon/deftest_census.edn": "7cc932304e6d74c0caa62b96095fb0232119e3052c9e6e64124c02eb0775fadd"
+}

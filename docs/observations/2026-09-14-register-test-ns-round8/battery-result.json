@@ -1,0 +1,10 @@
+{
+  "exit": 2,
+  "wall_s": 290.46738210413605,
+  "argv": [
+    "make",
+    "test-battery",
+    "MCP_JAVA_OPTS=-J-Xms64m -J-Xmx1024m"
+  ],
+  "cwd": "/var/tmp/forge/regns-fx/round8/battery-copy"
+}

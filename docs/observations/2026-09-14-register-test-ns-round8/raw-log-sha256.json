@@ -1,0 +1,12 @@
+{
+  "/var/tmp/forge/regns-fx/round8/alone.log": "1e8cbd8d705ae8619ce646691d055bb48cbb615e39bece2fde0fd44db29f5034",
+  "/var/tmp/forge/regns-fx/round8/battery.log": "2f3b71b92a1d2f7ce8c12cb948d0fcb1ac645a9860c80b9ed225c20189f510ca",
+  "/var/tmp/forge/regns-fx/round8/battery-lane-0.out": "f3d9c8c47ff0cd9de063e188ed670f0244c3d479758f5b4aadab639e5a9d0ea1",
+  "/var/tmp/forge/regns-fx/round8/battery-lane-5.out": "ebb79b79130c2d74de405124a2377bc640f3fb8054f5a0f28541e46e84e5ee13",
+  "/var/tmp/forge/regns-fx/round8/red.log": "8bf228d4f010a56449ad6ad5203cb80c08ece62cc4250a0739145ba3d7f592c7",
+  "/var/tmp/forge/regns-fx/round8/green.log": "37d8a0769d6c800296764c21f8e08feca52d770d400afabe65713604062cf749",
+  "/var/tmp/forge/regns-fx/round8/lint.log": "f95ffb900a060c65cfe92059ebe047829131f15bcff22f575f71496d72fcd6df",
+  "/var/tmp/forge/regns-fx/round8/census.log": "ebeb49d06bda0a97ca20ca6cabb12a7a498079f21582eaffbdbef34d2cef10e8",
+  "/var/tmp/forge/regns-fx/round8/intent.log": "289f392e994d42fd0369fb4b3dadaffeb60bbc748a5b0388c27e016f434d0f06",
+  "/var/tmp/forge/regns-fx/round8/state-name-control.log": "f3385cae893fa8ca7069aefe00e6c4f9857d3d1f8e13354a7432a1e50f1635c4"
+}
