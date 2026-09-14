@@ -1,5 +1,11 @@
 # clj-surgeon tech tree
 
+Battery evidence ownership: receipt appends require BATTERY_LEDGER_APPEND=1;
+namespace timings use seat state with a read-only tracked seed. The explicit
+census regeneration target refuses named removals. Contract and verification
+matrix: [battery ledger gating](plans/battery-ledger-gating.md). This removes
+check-only evidence writes; it makes no measured wall-performance claim.
+
 Probe classpath repair (Sol round-five F1): a literal root list omitted a live
 dev/experiments dependency and returned green over value 1 after disk changed
 to 2. Attempt25 derives roots from the image classpath, resolves via the require

@@ -52,17 +52,28 @@
    [clj-surgeon.gate-memory :as mem]
    [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.ns-isolation :as iso]
+   [clj-surgeon.probe-state :as state]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :as t]))
 
-(def walls-path
-  "Where the measured per-namespace walls are recorded, so the NEXT run
-   rebalances on what the LAST run actually cost. Rewritten (not appended) on
-   every complete run: it is the current best estimate, not an event log --
-   the event log is `docs/observations/battery-ledger.edn`."
+(def walls-seed-path
+  "Read-only initial scheduling estimates shipped with the repository."
   "docs/observations/battery-namespace-walls.edn")
+
+;; @spec BATTERY-LEDGER-002
+(defn state-walls-path [env home]
+  (str (io/file (state/state-root env home) "battery" "namespace-walls.edn")))
+
+(def walls-path (state-walls-path (System/getenv) (System/getProperty "user.home")))
+
+;; @spec BATTERY-LEDGER-003
+(defn read-wall-record [path seed]
+  (let [f (io/file path)
+        source (if (.exists f) f seed)]
+    (try (if source (or (edn/read-string (slurp source)) {}) {})
+         (catch Exception _ {}))))
 
 (def fallback-wall-ms
   "The estimate for a namespace with no measurement, and the seed the very
@@ -964,31 +975,31 @@
 (defn write-walls!
   "Records what every namespace -- and every measured SHARD's vars -- cost, for
    the next run's schedule."
-  [path runs lanes]
-  (io/make-parents (io/file path))
-  (let [previous-var-walls
-        (try (or (:var-walls-ms (edn/read-string (slurp path))) {})
-             (catch Exception _ {}))
-        shard-runs (for [l lanes r (:runs (:emitted l)) :when (:sharded r)] r)
-        ;; @spec TEST-ISO-014 -- prefer actual test-var measurements, even
-        ;; from grouped shards. Older receipts only measured isolated vars;
-        ;; retain that fallback, never divide an aggregate into guessed walls.
-        var-walls (into (sorted-map)
-                        (into previous-var-walls
-                              (for [r shard-runs
-                                    [v wall] (or (:var-walls-ms r)
-                                                 (when (= 1 (count (:vars r)))
-                                                   {(first (:vars r)) (:elapsed-ms r)}))]
-                                [(symbol (str (:namespace r)) (str v))
-                                 wall])))]
-    (spit path
-          (with-out-str
-            (println ";; TEST-ISO-013 -- measured walls of the battery lane.")
-            (println ";; REWRITTEN by `make test-battery` on every complete run; it is the")
-            (println ";; current estimate the next run's bin-packing reads, not an event log.")
-            (println ";; A stale or absent entry costs makespan, never correctness.")
-            (prn {:walls-ms (into (sorted-map) (map (juxt :namespace :elapsed-ms)) runs)
-                  :var-walls-ms var-walls})))))
+  ([path runs lanes] (write-walls! path runs lanes nil))
+  ([path runs lanes seed]
+   (io/make-parents (io/file path))
+   (let [previous-var-walls
+         (:var-walls-ms (read-wall-record path seed) {})
+         shard-runs (for [l lanes r (:runs (:emitted l)) :when (:sharded r)] r)
+         ;; @spec TEST-ISO-014 -- prefer actual test-var measurements, even
+         ;; from grouped shards. Older receipts only measured isolated vars;
+         ;; retain that fallback, never divide an aggregate into guessed walls.
+         var-walls (into (sorted-map)
+                         (into previous-var-walls
+                               (for [r shard-runs
+                                     [v wall] (or (:var-walls-ms r)
+                                                  (when (= 1 (count (:vars r)))
+                                                    {(first (:vars r)) (:elapsed-ms r)}))]
+                                 [(symbol (str (:namespace r)) (str v))
+                                  wall])))]
+     (spit path
+           (with-out-str
+             (println ";; TEST-ISO-013 -- measured walls of the battery lane.")
+             (println ";; REWRITTEN by `make test-battery` on every complete run; it is the")
+             (println ";; current estimate the next run's bin-packing reads, not an event log.")
+             (println ";; A stale or absent entry costs makespan, never correctness.")
+             (prn {:walls-ms (into (sorted-map) (map (juxt :namespace :elapsed-ms)) runs)
+                   :var-walls-ms var-walls}))))))
 
 ;; ---------------------------------------------------------------------------
 
@@ -1039,7 +1050,7 @@
         walls-file (let [f (io/file effective-walls-path)]
                      (if (.exists f)
                        (try (or (edn/read-string (slurp f)) {}) (catch Exception _ {}))
-                       (if battery? {}
+                       (if battery? (read-wall-record effective-walls-path walls-seed-path)
                            (try (get (edn/read-string (slurp "docs/observations/gate-namespace-walls.edn"))
                                      (keyword suite) {})
                                 (catch Exception _ {})))))
@@ -1138,7 +1149,7 @@
                               "-- a battery that ran less is a failure, never a pass.")
                          (count missing) (str/join " " missing)))))
     (when (and (empty? broken) (empty? missing))
-      (write-walls! effective-walls-path runs lanes))
+      (write-walls! effective-walls-path runs lanes (when battery? walls-seed-path)))
     (when (seq prereq-failures)
       (binding [*out* *err*]
         (println (format "\nBATTERY-PREREQ: %d prerequisite stage(s) failed:" (count prereq-failures)))

@@ -17,7 +17,7 @@
 
    THE TWO HALVES:
 
-     the LEDGER   `make test-battery` appends one line to
+     the LEDGER   `BATTERY_LEDGER_APPEND=1 make test-battery` appends one line to
                   docs/observations/battery-ledger.edn -- {:sha :started
                   :wall_s :verdict :host} -- whether it passed or failed. One
                   entry per line, append-only, never rewritten: it is an event
@@ -95,6 +95,16 @@
   (spit path (str (entry-line entry) "\n") :append true)
   entry)
 
+;; @spec BATTERY-LEDGER-001
+(defn record-entry!
+  "Prints every candidate receipt; only explicit minting appends history."
+  [path entry env]
+  (if (= "1" (get env "BATTERY_LEDGER_APPEND"))
+    (do (append-entry! path entry)
+        (println "battery-ledger: appended" (entry-line entry)))
+    (println "battery-ledger: not appended (BATTERY_LEDGER_APPEND unset)"
+             (entry-line entry))))
+
 ;; --------------------------------------------------------------------------
 ;; the tripwire
 ;; --------------------------------------------------------------------------
@@ -112,7 +122,7 @@
 
 (def remedy
   (str "REMEDY: run the battery and commit its receipt --\n"
-       "  flock /home/forge/tmp/suite.lock make test-battery\n"
+       "  BATTERY_LEDGER_APPEND=1 flock /home/forge/tmp/suite.lock make test-battery\n"
        "  git add " ledger-path " && git commit\n"
        "The battery is the only gate that drives the eleven cold-launcher "
        "namespaces; `make mcp-test` cannot stand in for it."))
@@ -250,7 +260,7 @@
             raw (when (zero? count-exit) (parse-long (str/trim count-out)))]
         (when raw
           (let [{:keys [exit out]} (when (<= raw 1000)
-                                    (sh "git" "rev-list" "--parents" range))
+                                     (sh "git" "rev-list" "--parents" range))
                 lines (when (and (= 0 exit) (not (str/blank? out))) (str/split-lines out))
                 ignored (if (and (<= raw 1000) (= raw (count lines)))
                           (count (filter archive-only-commit? lines)) 0)]
@@ -274,8 +284,7 @@
                    ;; covered less than the reader thinks, so the number belongs
                    ;; in the receipt rather than only in the scrollback.
                    :skipped (some-> (get opts "--skipped") str parse-long)}]
-        (append-entry! ledger-path entry)
-        (println "battery-ledger: appended" (entry-line entry)))
+        (record-entry! ledger-path entry (System/getenv)))
 
       "check"
       (let [entries (parse-ledger (when (.exists (io/file ledger-path))
@@ -284,7 +293,7 @@
         (when (some? (:raw-commits-behind r))
           (println "battery-fresh: distance"
                    (pr-str (select-keys r [:commits-behind :raw-commits-behind
-                                          :ignored-archive-commits]))))
+                                           :ignored-archive-commits]))))
         (if (:ok r)
           (do (println (format (str "battery-fresh: OK -- newest receipt sha %s, started %s, "
                                     "wall %ss, %.1f h old, %d commit(s) behind HEAD")

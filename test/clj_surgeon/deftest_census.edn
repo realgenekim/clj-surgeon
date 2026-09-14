@@ -281,6 +281,7 @@
   clj-surgeon.battery-ledger-test/archive-distance-keeps-the-raw-audit-and-failure-authority
   clj-surgeon.battery-ledger-test/every-refusal-carries-the-remedy
   clj-surgeon.battery-ledger-test/only-existing-regular-archive-content-is-exempt
+  clj-surgeon.battery-ledger-test/receipt-writing-requires-explicit-minting
   clj-surgeon.battery-ledger-test/the-make-targets-are-wired-to-this-mechanism
   clj-surgeon.battery-parallel-test/a-cold-checkout-prepares-the-worker-classpath
   clj-surgeon.battery-parallel-test/a-correctly-sharded-lane-is-not-a-lane-that-ran-less
@@ -294,6 +295,7 @@
   clj-surgeon.battery-parallel-test/a-serial-group-is-never-split-across-lanes
   clj-surgeon.battery-parallel-test/a-sharded-namespace-is-folded-back-into-one-run-before-any-fold
   clj-surgeon.battery-parallel-test/an-unmeasured-namespace-is-scheduled-first-and-still-runs
+  clj-surgeon.battery-parallel-test/battery-walls-live-in-state-with-read-only-seed
   clj-surgeon.battery-parallel-test/bb-lane-command-honours-disk-tmpdir
   clj-surgeon.battery-parallel-test/darwin-memory-reader-is-the-documented-arithmetic
   clj-surgeon.battery-parallel-test/emit-edn-is-stripped-from-argv-wherever-it-appears
@@ -795,6 +797,7 @@
   clj-surgeon.lane-manifest-test/a-false-redirection-to-an-existing-target-is-refused-by-name
   clj-surgeon.lane-manifest-test/a-namespace-in-the-tree-but-absent-from-the-census-is-named
   clj-surgeon.lane-manifest-test/an-exclusion-naming-an-unreadable-runner-fails-closed
+  clj-surgeon.lane-manifest-test/census-regeneration-refuses-named-removals
   clj-surgeon.lane-manifest-test/every-exclusion-is-actually-run-by-the-runner-it-names
   clj-surgeon.lane-manifest-test/every-implemented-requirement-is-claimed-by-a-marker
   clj-surgeon.lane-manifest-test/every-lane-declares-a-cadence-the-runner-knows

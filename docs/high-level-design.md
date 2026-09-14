@@ -16,6 +16,10 @@ verification, or consumed meaningful server time.
 
 ## Approach
 
+Battery receipt history and mutable scheduling state have separate ownership;
+the [battery evidence design](intent/battery-ledger/battery-ledger-design.md)
+defines explicit receipt minting and the guarded census regeneration entrance.
+
 clj-surgeon is a small structural kernel for Clojure agents. The model and
 human retain architectural judgment. The kernel supplies exact structural
 perception, guarded mutation, failure-atomic transactions, and terminal
