@@ -868,3 +868,241 @@ retained before cleanup as `round6/final-matrix-logs/`, with
 `final-lane-clean.edn`, `final-lane-plant.edn`, and `final-make-lane.json`.
 The test wrapper uses `println` so successful per-cell evidence is flushed
 before the runner exits; the final matrix log includes all 32 JSON cell receipts.
+
+## Round 7
+
+Recorded 2026-09-14T14:25:38.073733+00:00; branch `fable/regns-entrance`.
+
+### Finding: the packet does not demonstrate a live-tree plant
+
+The reported six assertions are the **expected mask-10 copied gate refusal**,
+printed inside lane 3's matrix output, then repeated in its failed assertion.
+`prewarm6-battery.log:124` opens lane 3; lines 129–139 print masks 0–10; line 139
+records `lane_wall_ms: 8261, okay: false`; lines 140–250 are the copied gate's
+output. Line 254 is the outer matrix assertion. The next outer lane header is
+line 426. None of the eight outer lane inventories contains lane-manifest-test.
+That namespace is :fast, not part of the outer battery inventory.
+
+Mask 10 removes author metadata and adoption. Its six expected failures name
+Sol's namespace; its 8,261 ms wall exceeded the 8,000 ms assertion in the old
+`test/regns_gate_matrix.py:72`. This is a budget failure, not evidence that
+another live-tree lane observed the plant. No claim of a reproduced live-tree
+contamination RED is made.
+
+### Trace and original-code concurrent witness
+
+Original fixture source: `4a43f8dbe817670d58726ebe14a3a86586fee88e`.
+The original seed, mask 10 and cold lane argv were traced in
+`/var/tmp/forge/regns-fx/round7/trace/repo` using `strace -f -yy -s 4096 -e trace=%file`.
+The decoder joins unfinished/resumed syscalls and collects successful write-open,
+create, rename, link, unlink, directory and metadata operations. Raw traces and
+all resolved paths remain in the scratch evidence; instrumentation is not product
+code. It found 1,197 write-intent records, 545 distinct paths outside the copy,
+and **zero paths in the live checkout**. External paths are temporary test trees
+(528 paths), JVM `/tmp/hsperfdata_forge/<pid>` (six), `/proc/<pid>/coredump_filter`
+(six), `/dev/null`, and four Clojure dependency-cache paths under
+`~/.gitlibs/_repos/https/github.com/bhauman/clojure-mcp/` (`FETCH_HEAD`, `HEAD`,
+`HEAD.lock`, `objects/maintenance.lock`). The trace demonstrates the incidental
+JVM PerfData exception to java.io.tmpdir; the new Make environment supplies `-XX:-UsePerfData`; the existing registration
+control wrapper replaces JAVA_TOOL_OPTIONS, so this does not claim suppression
+of PerfData in every registration control JVM.
+No external registration, census or caller-state walls/control write was observed.
+The complete unique-path list is linked below; no outside path is silently
+classified as a registration leak.
+
+Path ownership at the original tip:
+
+- `test/regns_gate_matrix.py:19`: source inferred from cwd; `:24` inherits all
+  environment routing, while `:33` correctly sets subprocess cwd to the copy.
+- `test/clj_surgeon/registration_gate_fixture.clj:26,30,42–55`: fixture uses
+  relative source/manifest/witness/control names and registers `"."`.
+- `src/clj_surgeon/test_registration.clj:292–300,367–372`: all registration
+  file reads/writes resolve through `safe-file root path`; the trace confirms
+  copy-local manifest, witness, census and controls. `:408–415` sets child cwd
+  and temporary environment; it does not select a different registration root.
+- `src/clj_surgeon/test_census.clj:47–61`: the filesystem adapter takes a path;
+  the registration planner calls its four-argument data/writer adapter
+  (`test_registration.clj:263`). That adapter does not write to cwd.
+- `test/clj_surgeon/battery_parallel_runner.clj:66–77`: walls derive from seat
+  state and workspace admission. The old direct lane argv does not publish the
+  coordinator's battery walls. Real Make cells now admit their own external
+  state root instead of inheriting this seat's routing.
+
+Two bounded JVMs launched the unchanged battery namespace and live manifest
+namespace from the live checkout. Before/after snapshots include git porcelain,
+SHA-256 of **all tracked files**, census and state walls/controls. They are
+byte-identical. The live namespace passed: **46 tests / 2,064 assertions**, zero
+failures/errors, 5,253 ms. The matrix failed its timing check at mask 17 (10,315 ms),
+with the expected Sol-only copied refusal. Scratch tracing and a real-Make pilot
+also overlapped this run; these walls are not a controlled performance comparison.
+
+A second trace starts from `git archive 4a43f8db` and includes actual `write`,
+`writev`, `pwrite64`, `pwritev`, `ftruncate`, `copy_file_range` and `sendfile`
+syscalls as well as `%file`. It records **2,568 destination events**, including
+**1,340 successful filesystem write syscalls**. There are **550 distinct outside
+paths** (546 reached by successful operations), **zero live-tree destinations**
+and no unresolved filesystem write descriptors. Pipes, sockets and eventfds are
+non-filesystem communication, not omitted destination paths. Failed attempts
+include `/dev/tty` and dependency-cache bookkeeping; successful outside writes
+remain runtime/temp/cache/log destinations, not live registration or state files.
+
+Every outside path is listed in [the byte-trace destination list](2026-09-14-register-test-ns-round7/outside-write-paths.txt);
+[the initial file-operation list](2026-09-14-register-test-ns-round7/initial-outside-paths.txt)
+retains the earlier run's distinct temporary names. The trace driver, decoder,
+summary and raw-artifact SHA-256 manifest are in the same evidence directory.
+The raw syscall traces and complete per-write JSON remain under the approved
+scratch root and can be reconstructed from the frozen tip.
+
+The original copied mask-10 output is preserved as
+[copied-mask10-red.log](2026-09-14-register-test-ns-round7/copied-mask10-red.log).
+Its first refusal begins:
+
+```text
+FAIL in (every-manifest-namespace-declares-its-lane-in-its-own-ns-form) (lane_manifest_test.clj:662)
+source metadata agrees with the manifest, per namespace
+1 namespace(s) whose ns metadata does not declare the manifest's lane (expected/declared): clj-surgeon.sol-first-contact-test want :battery got nil
+```
+
+### TDD and implemented ratchet
+
+RED commit `25ef0489` adds REGNS-012, the explicit-root invocation from an
+unrelated cwd, and independent inherited-routing/snapshot tests. All four Python
+checks fail on the old harness because it has no isolation/snapshot boundary.
+This RED is recorded accurately; it is not a fabricated live plant.
+
+The matrix now receives explicit source and scratch roots. Fixture writes receive
+the copy's explicit root. Each mask has its own copied repository and private
+state/artifact/temp directories. The nested command is actual
+`make -C <copy> test-fast`, with cwd set; no Make target, test body or repository
+Var is replaced. Inherited CLJ_SURGEON/GIT/Make routing, JVM property injections,
+census-write authorization and ledger-append authorization are discarded.
+The private state root is also the explicit artifact envelope: a pilot with a
+sibling state root but no admitted envelope correctly refused state admission.
+
+The matrix launches a separate 1024 MB manifest JVM against the caller tree
+concurrently with actual seed registration. It uses direct runner mode, whose
+exit includes namespace isolation and budget violations. It hashes the caller's test/registration
+surfaces, control inventory, protected ledgers and state walls/controls, and
+compares git status and hashes after every cell and in `finally`. The snapshot
+oracle independently rejects changed bytes despite unchanged git status, added
+or removed state controls, and changes observed on disk. Reports identify the
+child root/argv and distinguish diagnostic, budget and live-observer outcomes.
+
+The public registration entrance already resolves registration writes from its
+explicit root, and its shared census transaction adapter was not a leak site.
+Those production implementations retain their behavior (register! gains its
+REGNS-012 traceability annotation); this change removes implicit
+roots and inherited routing at the witnessed harness boundary.
+
+Real-Make pilots took 31–34 seconds per cell. Thirty-two complete Make gates plus
+the concurrent observer require a larger namespace ceiling than 32 direct lane processes:
+1,500,000 ms is reserved for this matrix, retaining fast's 8,000 ms ceiling and
+the battery cadence's independent 1,800,000 ms limit. This is additional
+acceptance coverage, not a speed claim.
+
+The first stronger-matrix execution ran a JVM observer for every mask. Its
+saved mask-15 live receipt had passing counters but a TEST-ISO-007 violation:
+`elapsed-ms 8064`, over 8000 ms. `--emit-edn` intentionally does not fold that
+violation into its process exit. That preliminary run was stopped after its
+active mask-19 gate finished; its live snapshot was still byte-identical. It is
+not a GREEN receipt. The final harness uses direct observer mode and observes
+seed registration once, matching the requested two-process class boundary,
+instead of multiplying fresh JVM startup variance across 32 observers. Every
+mask still runs complete real Make, and every mask still checks caller bytes.
+
+The old copied matrix forced `lane-command` (JVM) for lane-manifest-test.
+Real `make test-fast` uses the manifest's :bb assignment for that namespace.
+The final receipts therefore measure the actual fast-gate runtime; they do not
+claim a matched performance comparison between the two process shapes.
+
+### Verification
+
+The final two namespaces ran concurrently in separate `-Xmx1024m` JVMs with
+`CLJ_SURGEON_STATE_HOME` explicitly pointing at the live state root in the outer
+environment. Both exited **0**; each EDN receipt has zero failures/errors, zero
+leaks and an empty isolation-violations vector:
+
+- `test-registration-battery-test`: **1 test / 2 assertions**, **1,332,598 ms**.
+- Live `lane-manifest-test`: **46 tests / 2,064 assertions**, **5,775 ms**.
+- The matrix's direct live observer during enrollment: **46 tests / 2,064
+  assertions**, **5,651 ms**, zero isolation violations.
+- All **32 real-Make cells** accepted their required outcome. Nested manifest
+  walls were **3,709–4,274 ms**. The matrix wall was **1,329.814 s**.
+- The permanent snapshot covered **1,966 files**. The external witness compared
+  **11,688 tracked/state entries** plus git porcelain before and after: identical.
+- All 32 retained raw Make logs are complete, have zero test errors and zero
+  isolation violations, and have no failing test outside lane-manifest-test.
+- Four independent Python isolation tests pass. Standard Clojure Style and paved
+  `~/bin/clj-kondo` pass: **0 errors, 0 warnings**.
+- `make census-regenerate`: **exit 0, +0/-0**. Intent audit passes after linking
+  the already-rooted registration entry point to REGNS-012.
+
+Actual green output:
+
+```text
+test-registration-battery-test 0
+lane-manifest-test 0
+snapshot identical True
+REAL-FIRST-CONTACT-WALL 1329.814
+LIVE-SNAPSHOT byte-identical {"root": "/home/forge/src/clj-surgeon-regns", "files": 1966, "state": "/home/forge/.local/state/clj-surgeon"}
+census-regenerate: +0/-0
+```
+
+| Mask | Make exit | Manifest wall (ms) | Class oracle |
+| --- | --- | --- | --- |
+| 0 | 0 | 3937 | PASS |
+| 1 | 2 | 3936 | PASS |
+| 2 | 2 | 3888 | PASS |
+| 3 | 2 | 3925 | PASS |
+| 4 | 2 | 3864 | PASS |
+| 5 | 2 | 3907 | PASS |
+| 6 | 2 | 3944 | PASS |
+| 7 | 2 | 3878 | PASS |
+| 8 | 2 | 4059 | PASS |
+| 9 | 2 | 3709 | PASS |
+| 10 | 2 | 3765 | PASS |
+| 11 | 2 | 3902 | PASS |
+| 12 | 2 | 3839 | PASS |
+| 13 | 2 | 3872 | PASS |
+| 14 | 2 | 4007 | PASS |
+| 15 | 2 | 3772 | PASS |
+| 16 | 2 | 3817 | PASS |
+| 17 | 2 | 3996 | PASS |
+| 18 | 2 | 4040 | PASS |
+| 19 | 2 | 3759 | PASS |
+| 20 | 2 | 3846 | PASS |
+| 21 | 2 | 3960 | PASS |
+| 22 | 2 | 4274 | PASS |
+| 23 | 2 | 4074 | PASS |
+| 24 | 2 | 3964 | PASS |
+| 25 | 2 | 3810 | PASS |
+| 26 | 2 | 3824 | PASS |
+| 27 | 2 | 3814 | PASS |
+| 28 | 2 | 3808 | PASS |
+| 29 | 2 | 3813 | PASS |
+| 30 | 2 | 3876 | PASS |
+| 31 | 2 | 3769 | PASS |
+
+Nonzero Make exits above are the deliberate missing-registration refusals.
+[matrix-cells.json](2026-09-14-register-test-ns-round7/matrix-cells.json) preserves
+each exact argv, copy root, first failure/checklist subject and budget result.
+[namespace-results.json](2026-09-14-register-test-ns-round7/namespace-results.json)
+and [snapshots.json](2026-09-14-register-test-ns-round7/snapshots.json) retain the
+independent live results and every tracked registration/control/state hash.
+The full before/after snapshots, all 32 raw copied Make logs and syscall traces
+remain in `/var/tmp/forge/regns-fx/round7`, with hashes in the evidence manifest.
+
+The protected ledger and census bytes still equal the starting `4a43f8db`:
+
+```text
+08a1d6ee9c7f319c4a146ec23798e535273a47b7633697354014b318bff8ad39  docs/observations/battery-ledger.edn
+154faae0c803099d1bfe88e8563a8cf85cdf2376af4e4309b10bd850cd6ef264  docs/observations/battery-namespace-walls.edn
+7cc932304e6d74c0caa62b96095fb0232119e3052c9e6e64124c02eb0775fadd  test/clj_surgeon/deftest_census.edn
+```
+
+No full `make test` or `make test-battery` ran on the live tree. Verification used the requested
+namespace JVMs, the matrix's live observer, Python isolation tests, lint, census
+regeneration and the intent audit. All plants, real Make gates and tracing ran in scratch;
+product paths do not contain the operator's scratch prefix. Matrix copies clean
+up automatically. The report deliberately does not claim the requested live-leak
+RED: the evidence supports a copied-cell timing failure and harness hardening.

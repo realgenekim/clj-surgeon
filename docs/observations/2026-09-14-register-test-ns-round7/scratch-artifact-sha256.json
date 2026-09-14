@@ -1,0 +1,15 @@
+{
+  "/var/tmp/forge/regns-fx/round7/trace-bytes/seed.strace": "4eb71987d8ea8f6c976ebcaa999b91917cb7e0a4a5e392b2ce467817b3e21e37",
+  "/var/tmp/forge/regns-fx/round7/trace-bytes/mask.strace": "464a14c44227d10490543d51c68c97d0d874dd2ca3f144485ff2b36a41e6d718",
+  "/var/tmp/forge/regns-fx/round7/trace-bytes/gate.strace": "4c4c549e8bcac0c190e3f86bf2ea3d830bf5868672eeb7f627caea1414c4aace",
+  "/var/tmp/forge/regns-fx/round7/trace-bytes/write-destinations.json": "1d413045d38e03f339c91d570792a8c978acc218eccc64ca55e0100001c4c4c8",
+  "/var/tmp/forge/regns-fx/round7/baseline-before.json": "e218730904fe673b8955be6e2579d3384f50ec5827ee79c592a0a1d1a6f99600",
+  "/var/tmp/forge/regns-fx/round7/baseline-after.json": "e218730904fe673b8955be6e2579d3384f50ec5827ee79c592a0a1d1a6f99600",
+  "/var/tmp/forge/regns-fx/round7/final-before.json": "b5da27cf0273e6129b01d86546bc52a4e11fabc2feb1c0b0ed51fe3f4b45d283",
+  "/var/tmp/forge/regns-fx/round7/final-after.json": "b5da27cf0273e6129b01d86546bc52a4e11fabc2feb1c0b0ed51fe3f4b45d283",
+  "/var/tmp/forge/regns-fx/round7/final-test-registration-battery-test.log": "bce92432d9bc76bf258ce3e40a566554a1e44d2f989dc54e58c6547aab5e2420",
+  "/var/tmp/forge/regns-fx/round7/final-test-registration-battery-test.edn": "0a083ad146662f46d50c5f3f6ed35ea4e5cc7263c60ee0f2725b1c3438e6ca45",
+  "/var/tmp/forge/regns-fx/round7/final-lane-manifest-test.edn": "843d3ca551f3526367250794d36bddc144f4e9f0580b46c3de0b4641699c2e8c",
+  "/var/tmp/forge/regns-fx/round7/final.py": "c692b83d4a88f2811a056f2f864ca040b3d47c97e678704fef008ea8d0c98057",
+  "/var/tmp/forge/regns-fx/round7/baseline.py": "4931e6eef9666e262f035a177f6c4cfaafaa99ee6daad8420ec6f32d9b51618c"
+}

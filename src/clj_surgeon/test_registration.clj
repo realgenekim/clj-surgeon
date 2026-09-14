@@ -496,6 +496,8 @@
                    {:lock (str lock) :holder (edn/read-string (slurp lock))})))
       (finally (java.nio.file.Files/deleteIfExists prepared)))))
 
+;; INTENT: REGNS-012
+;; @spec REGNS-012 -- canonical root owns enrollment and control destinations.
 (defn register! [root request]
   (let [root (.getCanonicalPath (io/file root))
         originals (atom {})

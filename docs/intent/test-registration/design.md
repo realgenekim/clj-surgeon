@@ -39,10 +39,10 @@ before publication. A repeated invocation preserves enrollment bytes but execute
 Fast pure and stubbed-boundary witnesses remain in lane-manifest-test, with one
 copied-snapshot first-contact mask. The complete cold gate matrix lives in
 test-registration-battery-test (:battery), enrolled through register-test-ns.
-It seeds a copied repository through actual registration controls and restores
-seed file bytes before each of the 31 missing-surface masks and the zero-mask
-control. Every cell launches the production coordinator's lane-command for
-lane-manifest-test. The first emitted checklist names only the defective subject
+It seeds a copied repository through actual registration controls and copies
+that seed into a fresh repository for each of the 31 missing-surface masks and
+the zero-mask control. Every cell launches real `make -C <copy> test-fast`.
+The first emitted checklist names only the defective subject
 and its requested lane/runtime; count-only drift emits a repository row instead.
 The fast qualified name and all original test names remain, keeping the census
 additions-only. The executed path/acceptance matrix and writer census live in
@@ -84,7 +84,7 @@ Original qualified test names remain; the old matrix digest is retired because i
 froze the seam that concealed this defect. No product output path is based on the
 operator's scratch path; the harness inherits its admitted temporary directory.
 
-The complete cold battery matrix has a measured namespace budget of 800000 ms
+The Round 6 direct-lane matrix had a declared namespace budget of 800000 ms
 (393668 ms before projection sharing; 337496 ms afterward), declared through
 the existing namespace override map. Its nested fast namespace retains 8000 ms,
 and the battery cadence retains 1800000 ms. The matrix asserts the nested budget
@@ -96,9 +96,14 @@ roots, and the file fixture receives its repository root. Each mask runs real
 envelope containing its repository, temporary directory and external state root;
 the state root is explicitly admitted through the artifact-root environment.
 Inherited checkout routing and write authorization are discarded. A separate
-real manifest JVM observes the caller concurrently. The witness compares git
+real manifest JVM observes the caller during seed registration. Its direct
+runner mode folds isolation and budget violations into the exit status.
+The witness compares git
 status and SHA-256 snapshots of registration/census/control surfaces and caller
 state walls/controls, including after failure. Child failures report their root,
 command and separate diagnostic/budget results so expected copied failures cannot
 be mistaken for live-tree failures. The trace and baseline must establish the
 actual failure; no contamination RED may be inferred from nested log text alone.
+The complete Round 7 witness measured 1332598 ms and has a 1500000 ms namespace
+ceiling. The fast namespace's 8000 ms ceiling and battery cadence's independent
+1800000 ms ceiling remain in force.

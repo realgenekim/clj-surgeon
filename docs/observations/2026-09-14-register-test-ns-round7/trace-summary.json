@@ -1,0 +1,8 @@
+{
+  "records": 2568,
+  "actual_write_syscalls": 1340,
+  "outside_paths": 550,
+  "successful_outside_paths": 546,
+  "live_tree_records": [],
+  "unresolved_fd_calls": []
+}

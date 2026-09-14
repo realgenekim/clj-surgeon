@@ -125,14 +125,12 @@
     ;; the 72-cell admission matrix is :fast. Declare ~2x measured cost, while
     ;; the complete battery still must fit its independent 1800000 ms ceiling.
     clj-surgeon.probe-state-test 240000
-    ;; REGNS-006 / REAL-GATE-001, Round 6: 32 real cold lane executions
-    ;; measured 393668 ms before projection sharing and 337496 ms afterward.
-    ;; This replaces the redefined gate specimen; process startup is required
-    ;; by the class oracle. ~2x the largest measured wall, following the
-    ;; battery exceptions above. The nested fast namespace still has 8000 ms;
-    ;; the whole battery still has its independent 1800000 ms ceiling.
+    ;; REGNS-006/012: 32 complete copied Make gates and a concurrent live observer.
+    ;; The full witness measured 1332598 ms; reserve 1500000 ms for this matrix.
+    ;; The nested fast namespace retains 8000 ms, and the complete battery
+    ;; retains its independent 1800000 ms ceiling.
     ;; Receipt: docs/observations/2026-09-14-register-test-ns-report-astra.md
-    clj-surgeon.test-registration-battery-test 800000})
+    clj-surgeon.test-registration-battery-test 1500000})
 
 (def mutable-global-allowlist
   "@spec TEST-ISO-005 -- vars whose deref'd value is EXPECTED to differ across

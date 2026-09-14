@@ -1,0 +1,610 @@
+[
+  {
+    "mask": 0,
+    "exit": 0,
+    "wall_s": 43.947,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-0-a4bl1k6v/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-0-a4bl1k6v/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3937,
+    "first_gate": null,
+    "first": null,
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 1,
+    "exit": 2,
+    "wall_s": 42.785,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-1-fnz5bv0_/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-1-fnz5bv0_/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3936,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 2,
+    "exit": 2,
+    "wall_s": 39.923,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-2-g_tv8v37/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-2-g_tv8v37/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3888,
+    "first_gate": "every-manifest-namespace-declares-its-lane-in-its-own-ns-form",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 3,
+    "exit": 2,
+    "wall_s": 37.048,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-3-cvyqpenc/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-3-cvyqpenc/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3925,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 4,
+    "exit": 2,
+    "wall_s": 37.335,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-4-g9oa2gj6/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-4-g9oa2gj6/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3864,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": null,
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 5,
+    "exit": 2,
+    "wall_s": 36.558,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-5-bi5b7xhs/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-5-bi5b7xhs/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3907,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 6,
+    "exit": 2,
+    "wall_s": 37.252,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-6-ndt5l130/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-6-ndt5l130/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3944,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 7,
+    "exit": 2,
+    "wall_s": 37.411,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-7-rxqei7hn/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-7-rxqei7hn/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3878,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 8,
+    "exit": 2,
+    "wall_s": 37.593,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-8-yib3iq0w/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-8-yib3iq0w/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 4059,
+    "first_gate": "every-test-namespace-on-disk-is-accounted-for",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 9,
+    "exit": 2,
+    "wall_s": 40.528,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-9-8st6vv46/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-9-8st6vv46/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3709,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 10,
+    "exit": 2,
+    "wall_s": 36.264,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-10-pt8txo11/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-10-pt8txo11/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3765,
+    "first_gate": "every-manifest-namespace-declares-its-lane-in-its-own-ns-form",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 11,
+    "exit": 2,
+    "wall_s": 35.253,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-11-isvhhe03/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-11-isvhhe03/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3902,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 12,
+    "exit": 2,
+    "wall_s": 37.486,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-12-bmqyopib/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-12-bmqyopib/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3839,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 13,
+    "exit": 2,
+    "wall_s": 37.258,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-13-f1zsvoan/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-13-f1zsvoan/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3872,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 14,
+    "exit": 2,
+    "wall_s": 36.906,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-14-9c4ilq6f/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-14-9c4ilq6f/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 4007,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 15,
+    "exit": 2,
+    "wall_s": 39.024,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-15-_j9u1br0/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-15-_j9u1br0/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3772,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 16,
+    "exit": 2,
+    "wall_s": 36.286,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-16-52snpin9/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-16-52snpin9/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3817,
+    "first_gate": "runtime-portability-controls-cover-every-assignment",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 17,
+    "exit": 2,
+    "wall_s": 36.411,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-17-bxroapm5/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-17-bxroapm5/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3996,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 18,
+    "exit": 2,
+    "wall_s": 35.856,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-18-koboh9g4/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-18-koboh9g4/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 4040,
+    "first_gate": "every-manifest-namespace-declares-its-lane-in-its-own-ns-form",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 19,
+    "exit": 2,
+    "wall_s": 36.917,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-19-azeravcj/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-19-azeravcj/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3759,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 20,
+    "exit": 2,
+    "wall_s": 36.226,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-20-oldfglp_/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-20-oldfglp_/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3846,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 21,
+    "exit": 2,
+    "wall_s": 36.513,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-21-hg1tco65/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-21-hg1tco65/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3960,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 22,
+    "exit": 2,
+    "wall_s": 38.72,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-22-lkb_do31/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-22-lkb_do31/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 4274,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 23,
+    "exit": 2,
+    "wall_s": 35.564,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-23-sksmxfzp/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-23-sksmxfzp/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 4074,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 24,
+    "exit": 2,
+    "wall_s": 35.147,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-24-uje5vq7i/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-24-uje5vq7i/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3964,
+    "first_gate": "runtime-portability-controls-cover-every-assignment",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 25,
+    "exit": 2,
+    "wall_s": 35.65,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-25-dmhvrd3b/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-25-dmhvrd3b/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3810,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 26,
+    "exit": 2,
+    "wall_s": 35.941,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-26-y8ix7d3q/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-26-y8ix7d3q/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3824,
+    "first_gate": "every-manifest-namespace-declares-its-lane-in-its-own-ns-form",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 27,
+    "exit": 2,
+    "wall_s": 36.642,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-27-hat9g4n8/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-27-hat9g4n8/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3814,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 28,
+    "exit": 2,
+    "wall_s": 34.596,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-28-glf9uovv/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-28-glf9uovv/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3808,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 29,
+    "exit": 2,
+    "wall_s": 35.781,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-29-_2lwamxp/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-29-_2lwamxp/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3813,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 30,
+    "exit": 2,
+    "wall_s": 35.918,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-30-4yvqqrkl/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-30-4yvqqrkl/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3876,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  },
+  {
+    "mask": 31,
+    "exit": 2,
+    "wall_s": 36.783,
+    "root": "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-31-jph35epb/repo",
+    "argv": [
+      "make",
+      "-C",
+      "/var/tmp/forge/regns-fx/round7/clj-surgeon-suite-3133229-d8bb703a/regns-real-gate-dj8apnj5/cell-31-jph35epb/repo",
+      "test-fast"
+    ],
+    "lane_wall_ms": 3769,
+    "first_gate": "every-manifest-entry-exists-on-disk",
+    "first": "clj-surgeon.sol-first-contact-test",
+    "diagnostic_ok": true,
+    "budget_ok": true,
+    "live_unchanged": true,
+    "okay": true
+  }
+]

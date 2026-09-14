@@ -16,6 +16,13 @@ now one repository row, and checklist computation is shared within each namespac
 run. The original qualified names remain; the old matrix digest is intentionally
 retired. Full mask and planted real-Make receipts are in the report's Round 6.
 
+Round 7 traces the reported plant to expected copied-cell output and a nested
+budget overrun; no live registration write was observed. Explicit roots, private
+cell state/artifact envelopes, real Make masks and a concurrent live observer now
+guard caller-byte preservation. All 32 cells pass with byte-identical live
+snapshots; the report retains the failed timing evidence and the actual limits.
+This is harness hardening, with no routed-operation performance admission.
+
 Diff-impact Round 2 closes Sol F1 with non-list HOLD on every unmatched inventory,
 including partially selected diffs. Source content edges now propagate through
 requires; EDN value paths and relative resources remain unresolved and HOLD.

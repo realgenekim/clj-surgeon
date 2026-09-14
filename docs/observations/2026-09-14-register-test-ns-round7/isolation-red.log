@@ -1,0 +1,41 @@
+EEEE
+======================================================================
+ERROR: test_inherited_live_routing_cannot_reach_a_cell (__main__.MatrixIsolationTest.test_inherited_live_routing_cannot_reach_a_cell)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-regns/test/regns_gate_matrix_test.py", line 24, in test_inherited_live_routing_cannot_reach_a_cell
+    env = matrix.cell_environment(poisoned, Path("/cell"))
+          ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'matrix' has no attribute 'cell_environment'
+
+======================================================================
+ERROR: test_snapshot_hashes_state_and_registration_files (__main__.MatrixIsolationTest.test_snapshot_hashes_state_and_registration_files)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-regns/test/regns_gate_matrix_test.py", line 58, in test_snapshot_hashes_state_and_registration_files
+    before = matrix.live_snapshot(root, state)
+             ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'matrix' has no attribute 'live_snapshot'
+
+======================================================================
+ERROR: test_snapshot_rejects_added_and_removed_state_controls (__main__.MatrixIsolationTest.test_snapshot_rejects_added_and_removed_state_controls)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-regns/test/regns_gate_matrix_test.py", line 46, in test_snapshot_rejects_added_and_removed_state_controls
+    matrix.assert_unchanged(before, {"status": "", "sha256": hashes})
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'matrix' has no attribute 'assert_unchanged'
+
+======================================================================
+ERROR: test_snapshot_rejects_changed_bytes_even_with_identical_git_status (__main__.MatrixIsolationTest.test_snapshot_rejects_changed_bytes_even_with_identical_git_status)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/forge/src/clj-surgeon-regns/test/regns_gate_matrix_test.py", line 39, in test_snapshot_rejects_changed_bytes_even_with_identical_git_status
+    matrix.assert_unchanged(before, after)
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'matrix' has no attribute 'assert_unchanged'
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.002s
+
+FAILED (errors=4)
