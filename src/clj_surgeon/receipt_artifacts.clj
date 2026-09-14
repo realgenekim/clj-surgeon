@@ -59,16 +59,92 @@
                     {:error-type :invalid-operation-context})))
   envelope)
 
+(defn- command-path-uninspectable?
+  "True when an existing ancestor prevents checking whether `file` exists."
+  [file]
+  (loop [ancestor (.getParentFile (.getAbsoluteFile file))]
+    (cond
+      (nil? ancestor) false
+      (.exists ancestor) (or (not (.isDirectory ancestor))
+                             (not (.canExecute ancestor)))
+      :else (recur (.getParentFile ancestor)))))
+
+(defn- command-present?
+  "True when `command` names an existing file directly or on PATH, or when an
+   inaccessible search location means absence cannot be established. Existence,
+   rather than executability, is intentional: an uninspectable or present but
+   non-executable binary is an operational failure that `safe-sh` must not hide."
+  [command]
+  (let [file (io/file command)]
+    (if (or (.isAbsolute file)
+            (str/includes? command java.io.File/separator))
+      (or (.exists file) (command-path-uninspectable? file))
+      (let [separator (re-pattern (java.util.regex.Pattern/quote java.io.File/pathSeparator))]
+        (boolean
+          (some #(let [candidate (io/file (if (str/blank? %) "." %) command)]
+                   (or (.exists candidate) (command-path-uninspectable? candidate)))
+                (str/split (or (System/getenv "PATH") "") separator -1)))))))
+
+(defn- safe-sh
+  "Run `shell/sh`, returning nil only when its command is absent. Other
+   java.io.IOExceptions (permission, working-directory, or stream failures)
+   retain their original diagnostic instead of silently selecting a fallback."
+  [& args]
+  (try
+    (apply shell/sh args)
+    (catch java.io.IOException e
+      (if (command-present? (first args)) (throw e) nil))))
+
+(defn- darwin? []
+  (str/starts-with? (System/getProperty "os.name") "Mac"))
+
+(defn- parse-dscl-home
+  "Parse the stdout of `dscl . -read /Users/<user> NFSHomeDirectory`, e.g.
+   \"NFSHomeDirectory: /Users/genekim\\n\" -> \"/Users/genekim\". Pure so it is
+   testable without shelling out; returns nil on an unrecognized shape."
+  [out]
+  (let [prefix "NFSHomeDirectory: "
+        line (first (str/split-lines (or out "")))]
+    (when (and (some? line) (str/starts-with? line prefix))
+      (let [path (subs line (count prefix))]
+        (when-not (str/blank? path) path)))))
+
+(defn- shell-home-result [source result parse-home]
+  (cond
+    (nil? result) {:source source :status :binary-missing}
+    (not (zero? (:exit result))) {:source source :status :exit-nonzero :exit (:exit result)}
+    :else (if-let [home (parse-home (:out result))]
+            {:source source :status :found :home home}
+            {:source source :status :unrecognized-output})))
+
+(defn- getent-home [username]
+  (shell-home-result
+    :getent (safe-sh "getent" "passwd" username)
+    #(nth (str/split (str/trim (or % "")) #":") 5 nil)))
+
+(defn- dscl-home [username]
+  (when (darwin?)
+    (shell-home-result
+      :dscl
+      (safe-sh "dscl" "." "-read" (str "/Users/" username) "NFSHomeDirectory")
+      parse-dscl-home)))
+
 (defn- passwd-home []
   (let [username (System/getProperty "user.name")
         entry (some #(let [fields (str/split % #":")]
                        (when (= username (first fields)) (nth fields 5 nil)))
                     (str/split-lines (slurp "/etc/passwd")))]
     (or entry
-        (let [{:keys [exit out]} (shell/sh "getent" "passwd" username)]
-          (when (zero? exit) (nth (str/split (str/trim out) #":") 5 nil)))
-        (throw (ex-info "Cannot determine invoking user's passwd home"
-                        {:error-type :invalid-operation-context})))))
+        (let [getent (getent-home username)]
+          (or (:home getent)
+              (let [dscl (dscl-home username)]
+                (or (:home dscl)
+                    (throw (ex-info "Cannot determine invoking user's passwd home"
+                                    {:error-type :invalid-operation-context
+                                     :attempts (cond-> [{:source :etc-passwd
+                                                        :status :user-not-found}
+                                                       (dissoc getent :home)]
+                                                 dscl (conj (dissoc dscl :home)))})))))))))
 
 (defn- default-envelope [workspace source]
   (destination-envelope
@@ -77,8 +153,8 @@
                             :artifact-root (System/getenv "CLJ_SURGEON_ARTIFACT_ROOT")})
     source))
 
-(defonce ^:private policy-default
-  (default-envelope (System/getProperty "user.dir") :policy-default))
+(defonce ^:private policy-default-delay
+  (delay (default-envelope (System/getProperty "user.dir") :policy-default)))
 (defonce ^:private launcher-envelope (atom nil))
 (def ^:dynamic *destination-envelope* nil)
 
@@ -93,7 +169,7 @@
          @launcher-envelope))))
 
 (defn current-envelope []
-  (or *destination-envelope* @launcher-envelope policy-default))
+  (or *destination-envelope* @launcher-envelope @policy-default-delay))
 
 (def ^:private ^:dynamic *resolution-interleave*
   "The witness seam inside this resolution's two CHECK-THEN-ACT windows, or nil.
