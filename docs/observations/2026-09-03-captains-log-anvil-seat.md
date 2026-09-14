@@ -6868,3 +6868,7 @@ Records: 2026-09-14-ship-round8-review-opus.md. Merge complete: 73 + 29 one-side
 ## 2026-09-14T12:13:57Z — regns prewarm 4 :pass; ship REFUSED candidate-conflicts with 866df39b; Astra round 5 merges trunk by union
 
 Five conflicts, all in the five registration surfaces (lane_manifest.clj, lane_manifest_test.clj pinned count, attempt22 portability census + controls, tech-tree): the diff-impact landing and this branch each registered one namespace from the same base — the agreeing-numbers class, live on the very branch that builds the entrance for it. Round 5 (run-bg astra-regns-6): union merge as form edits, pinned count computed from disk, proof via the branch's own repository checklist ({:ok true :missing []}) and census-regenerate +0/-0. Then prewarm 5 and ship.
+
+## 2026-09-14T12:19:31Z — regns round 5 (bfbec7f9): trunk merged by union; prewarm 5 running
+
+Five registration-surface conflicts resolved as the union; pinned count computed from disk = 165; repository checklist {:ok true :missing []}; census +0/-0; lint clean; 61 tests / 2,562 assertions; protected ledgers match trunk byte-for-byte. Prewarm 5 (run-bg prewarm-regns5 pid 628642); receipt branch fable/battery-receipt-bfbec7f9; Sol round-2 brief updated. Ship on :pass — round 9 (bash) is the only other builder.
