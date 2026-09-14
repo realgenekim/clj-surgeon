@@ -23,3 +23,13 @@ bytes. The target propagates clojure.test failures as a nonzero exit.
 Misreadings: a passing check is not permission to append; `true` is not `1`;
 state does not move the receipt ledger; seed fallback is not permission to
 rewrite the seed; an unchanged total does not make a census rename safe.
+
+State admission is an acceptance boundary even though timing values are not.
+Before reading (including seed fallback) or writing battery state, admit both
+the selected root and final namespace-walls path under STATE-HOME-009/010.
+A redirected descendant must pass independently. Admission runs outside the
+best-effort measurement read catch and before directory creation; its typed
+refusal propagates through battery preparation/completion to the CLI's nonzero
+`gate-refused` diagnostic. An invalid root never authorizes seed fallback or
+silent completion without walls. Witness:
+`battery-state-admission-test/walls-production-state-home-admission-matrix`.

@@ -68,9 +68,24 @@
 
 (def walls-path (state-walls-path (System/getenv) (System/getProperty "user.home")))
 
+;; @spec STATE-HOME-009
+;; @spec STATE-HOME-010
+(defn- admit-wall-path! [path seed]
+  (if (or seed (= (str path) walls-path))
+    (let [workspace (System/getProperty "user.dir")
+          root (state/state-root (System/getenv) (System/getProperty "user.home"))]
+      (state/admit-state-root! workspace root)
+      ;; An admitted root does not authorize a redirected descendant.
+      (state/admit-state-root! workspace path))
+    path))
+
 ;; @spec BATTERY-LEDGER-003
+;; @spec STATE-HOME-009
+;; @spec STATE-HOME-010
 (defn read-wall-record [path seed]
-  (let [f (io/file path)
+  ;; Admission must precede existence checks and remain outside the read catch:
+  ;; a refused state home is not an absent measurement eligible for seed fallback.
+  (let [f (io/file (admit-wall-path! path seed))
         source (if (.exists f) f seed)]
     (try (if source (or (edn/read-string (slurp source)) {}) {})
          (catch Exception _ {}))))
@@ -229,7 +244,7 @@
   "namespace symbol -> measured wall in ms, from `walls-path`. Missing,
    unreadable or partial is not an error: it degrades to the fallback."
   [path]
-  (let [f (io/file path)]
+  (let [f (io/file (admit-wall-path! path nil))]
     (if (.exists f)
       (try (let [m (edn/read-string (slurp f))]
              (if (map? m) (:walls-ms m {}) {}))
@@ -972,13 +987,16 @@
                     "bb-isolation: existing per-process temp leak contract; no JVM probe claim"))))
      (count vs))))
 
+;; @spec STATE-HOME-009
+;; @spec STATE-HOME-010
 (defn write-walls!
   "Records what every namespace -- and every measured SHARD's vars -- cost, for
    the next run's schedule."
   ([path runs lanes] (write-walls! path runs lanes nil))
   ([path runs lanes seed]
-   (io/make-parents (io/file path))
-   (let [previous-var-walls
+   (let [path (admit-wall-path! path seed)
+         _ (io/make-parents (io/file path))
+         previous-var-walls
          (:var-walls-ms (read-wall-record path seed) {})
          shard-runs (for [l lanes r (:runs (:emitted l)) :when (:sharded r)] r)
          ;; @spec TEST-ISO-014 -- prefer actual test-var measurements, even
@@ -1047,13 +1065,14 @@
                                 (or (get opts "--prereqs")
                                     (System/getenv "BATTERY_PREREQS") "1")))
         battery-namespaces inventory
-        walls-file (let [f (io/file effective-walls-path)]
-                     (if (.exists f)
-                       (try (or (edn/read-string (slurp f)) {}) (catch Exception _ {}))
-                       (if battery? (read-wall-record effective-walls-path walls-seed-path)
-                           (try (get (edn/read-string (slurp "docs/observations/gate-namespace-walls.edn"))
-                                     (keyword suite) {})
-                                (catch Exception _ {})))))
+        walls-file (if battery?
+                     (read-wall-record effective-walls-path walls-seed-path)
+                     (let [f (io/file effective-walls-path)]
+                       (if (.exists f)
+                         (try (or (edn/read-string (slurp f)) {}) (catch Exception _ {}))
+                         (try (get (edn/read-string (slurp "docs/observations/gate-namespace-walls.edn"))
+                                   (keyword suite) {})
+                              (catch Exception _ {})))))
         walls (:walls-ms walls-file {})
         var-walls (:var-walls-ms walls-file {})
         units (-> battery-namespaces
