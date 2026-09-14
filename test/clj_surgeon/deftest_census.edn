@@ -818,6 +818,7 @@
   clj-surgeon.lane-manifest-test/registration-control-results-are-executions
   clj-surgeon.lane-manifest-test/registration-existing-values-and-ambiguous-owners-refuse
   clj-surgeon.lane-manifest-test/registration-failed-control-rolls-back-enrollment
+  clj-surgeon.lane-manifest-test/registration-first-contact-gate-matrix
   clj-surgeon.lane-manifest-test/registration-lock-is-per-root-and-identifies-holder
   clj-surgeon.lane-manifest-test/registration-oracle-enumerates-all-surfaces
   clj-surgeon.lane-manifest-test/registration-planner-refuses-conflicts
@@ -2307,6 +2308,8 @@
   clj-surgeon.recovery-test/recover-creates-the-failure-receipt-directory
   clj-surgeon.recovery-test/recover-fails-once-and-publishes-an-executable-report-command
   clj-surgeon.recovery-test/recover-publishes-one-terminal-success-receipt
+  clj-surgeon.registration-controls-test/census-writer-census
+  clj-surgeon.registration-controls-test/registration-stale-control-path-matrix
   clj-surgeon.relation-census-test/a-caller-supplied-door-changes-the-classification
   clj-surgeon.relation-census-test/a-non-write-update-fn-contributes-no-site
   clj-surgeon.relation-census-test/a-worker-failure-names-its-file-and-publishes-no-counts

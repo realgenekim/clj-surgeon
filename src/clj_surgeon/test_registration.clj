@@ -3,6 +3,7 @@
   (:require
    [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.spawn-ledger :as spawn]
+   [clj-surgeon.test-census :as census]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.set :as set]
@@ -11,7 +12,7 @@
 
 (def manifest-file "test/clj_surgeon/lane_manifest.clj")
 (def witness-file "test/clj_surgeon/lane_manifest_test.clj")
-(def census-file "test/clj_surgeon/deftest_census.edn")
+(def census-file census/census-file)
 (def control-root "docs/observations/2026-09-12-bbtower-block-b/attempt22")
 
 (defn- refuse! [kind data]
@@ -90,10 +91,7 @@
     (when (> (count (set lanes)) 1)
       (refuse! :register-conflict {:form 'ns :actual (first lanes) :expected (second lanes)}))
     {:namespace (second v) :lane (first lanes)
-     :tests (into #{} (keep (fn [loc]
-                              (let [f (z/sexpr loc)]
-                                (when (and (seq? f) (#{'deftest 'clojure.test/deftest} (first f)))
-                                  (symbol (str (second v)) (str (second f))))))) (forms source))}))
+     :tests (census/deftest-names (second v) source)}))
 
 (defn- namespace-file [n]
   (str "test/" (-> (str n) (str/replace "." "/") (str/replace "-" "_")) ".clj"))
@@ -232,9 +230,6 @@
           (when-not (= expected (get entry k))
             (refuse! :register-conflict {:file (str control-root "/portability-controls.edn")
                                          :form namespace :field k :actual (get entry k) :expected expected})))))
-    (let [disk-tests (into #{} (mapcat :tests) (vals (:disk (model-base snapshot))))
-          removed (set/difference (:census m) disk-tests)]
-      (when (seq removed) (refuse! :register-removed-tests {:removed (vec (sort removed))})))
     m))
 
 ;; INTENT: REGNS-003
@@ -251,10 +246,16 @@
           ws (cond-> (snapshot witness-file)
                (not= (:pin m) (:expected-count m)) (replace-pin (:expected-count m))
                (not (:adopted? m)) (append-set 'adopted-since-round-one #{namespace}))
-          additions (set/difference (:tests m) (:census m))
-          cs (if (seq additions)
-               (z/root-string (reduce z/append-child (z/of-string (snapshot census-file)) (sort additions)))
-               (snapshot census-file))
+          census-candidate (atom (snapshot census-file))
+          derived (census/derived-census
+                    (for [n (keys (collection-value ms 'manifest :map))]
+                      [n (snapshot (namespace-file n))]))
+          census-result (binding [*out* (java.io.StringWriter.)]
+                          (census/regenerate-census! census-file derived snapshot
+                            (fn [_ text] (reset! census-candidate text))))
+          _ (when-not (:ok census-result)
+              (refuse! :register-removed-tests (select-keys census-result [:removed])))
+          cs @census-candidate
           candidate (into {} (remove (fn [[p s]] (= s (snapshot p))))
                           {manifest-file ms witness-file ws census-file cs})
           changes (mapv (fn [[p s]]
@@ -344,11 +345,32 @@
     (.mkdirs (.getParentFile f))
     (spit f text)))
 
-(defn- control! [root originals n runtime mode subject]
+(defn control-provenance? [row]
+  (and (vector? (:command row)) (seq (:command row))
+       (every? string? (:command row))
+       (string? (get-in row [:subject :root]))
+       (boolean (re-matches #"[0-9a-f]{64}" (or (get-in row [:subject :source-sha256]) "")))
+       (integer? (:exit row)) (keyword? (:status row))
+       (or (= "load" (:mode row)) (map? (:result row)))
+       (number? (:wall-ms row)) (<= 0 (:wall-ms row))
+       (pos-int? (:pid row)) (pos-int? (:start-ticks row))))
+
+;; INTENT: REGNS-010
+;; @spec REGNS-010
+(defn stale-controls [previous executed]
+  (into {} (for [[k row] previous
+                 :let [fresh (executed k)]
+                 :when (or (not (control-provenance? row))
+                           (not= (:subject row) (:subject fresh))
+                           (not= (:command row) (:command fresh)))]
+             [k {:previous row :executed fresh}])))
+
+(defn- control! [root originals n runtime mode _]
   (let [prefix (str control-root "/controls/" n "-" (name runtime) "-" mode)
         raw (str prefix ".edn")
         log (str prefix ".log")
-        scratch "/var/tmp/forge/regns-fx"
+        scratch (System/getProperty "java.io.tmpdir")
+        subject {:source-sha256 (digest (read-source root (namespace-file n))) :root root}
         command (into (if (= :bb runtime)
                         ["bb" "-Xmx1024m" (str "-Djava.io.tmpdir=" scratch)
                          (str control-root "/portability_runner.clj")]
@@ -360,18 +382,31 @@
         builder (doto (ProcessBuilder. ^java.util.List command)
                   (.directory (io/file root)) (.redirectErrorStream true)
                   (.redirectOutput (safe-file root log)))
+        ;; Each control owns its nested runner root; inheriting the parent's
+        ;; sweep sentinel would let an exiting child delete the caller's root.
+        _ (.remove (.environment builder) "CLJ_SURGEON_TMPDIR_REEXEC")
         _ (.put (.environment builder) "TMPDIR" scratch)
         _ (.put (.environment builder) "JAVA_TOOL_OPTIONS" (str "-Djava.io.tmpdir=" scratch))
+        started (System/nanoTime)
         process (.start builder)
         _ (spawn/record! (.pid process) command)
+        start-ticks (try
+                      (with-open [r (java.io.RandomAccessFile. (str "/proc/" (.pid process) "/stat") "r")]
+                        (let [stat (.readLine r)]
+                          (Long/parseLong (nth (str/split (str/trim (subs stat (inc (.lastIndexOf stat ")")))) #"\s+") 19))))
+                      (catch Exception _ nil))
         done? (.waitFor process 600 java.util.concurrent.TimeUnit/SECONDS)
         _ (when-not done? (.destroyForcibly process))
         exit (if done? (.exitValue process) 124)
         row (try (edn/read-string (slurp (safe-file root raw))) (catch Exception _ nil))
         result (assoc (or row {:namespace n :runtime runtime :status :process-failed})
-                      :exit exit :command command :subject subject :raw-receipt raw)]
+                      :mode mode :exit exit :command command :subject subject :raw-receipt raw
+                      :pid (.pid process) :start-ticks start-ticks
+                      :wall-ms (/ (double (- (System/nanoTime) started)) 1000000.0))]
     (write-tracked! root originals (str prefix ".command.edn") (str (pr-str {:command command :subject subject}) "\n"))
     (write-tracked! root originals (str prefix ".control.edn") (str (pr-str result) "\n"))
+    (when-not (= (:source-sha256 subject) (digest (read-source root (namespace-file n))))
+      (refuse! :register-control-stale {:controls {runtime result} :reason :source-changed-during-execution}))
     result))
 
 (defn- project-controls! [root originals n request controls]
@@ -447,21 +482,23 @@
           (do
             (reset! acquired (acquire-lock! root))
             (let [n (:namespace request)
-                  controls (read-controls before n)
-                  valid? (controls-valid? n (:runtime request) (or (:bb-ineligible request) (get-in planned [:model :registration])) controls)]
+                  previous (read-controls before n)]
               (when-not (= before (snapshot root n)) (refuse! :register-stale {}))
               (doseq [[p text] (:candidate planned)] (write-tracked! root originals p text))
-              (let [controls (if valid? controls
-                               (let [subject {:source-sha256 (digest (before (namespace-file n)))
-                                              :root root}
-                                     load-row (control! root originals n :bb "load" subject)]
-                                 (if (= :loaded (:status load-row))
-                                   {:bb-load load-row
-                                    :jvm (control! root originals n :jvm "test" subject)
-                                    :bb (control! root originals n :bb "test" subject)}
-                                   {:bb-load load-row})))]
-                (when-not (controls-valid? n (:runtime request)
-                            (or (:bb-ineligible request) (get-in planned [:model :registration])) controls)
+              (let [subject {:source-sha256 (digest (before (namespace-file n))) :root root}
+                    load-row (control! root originals n :bb "load" subject)
+                    controls (cond-> {:bb-load load-row
+                                      :jvm (control! root originals n :jvm "test" subject)}
+                               (= :loaded (:status load-row))
+                               (assoc :bb (control! root originals n :bb "test" subject)))
+                    stale (stale-controls previous controls)]
+                (when (seq stale)
+                  (refuse! :register-control-stale {:stale stale :controls controls}))
+                (when-not (and (every? control-provenance? (vals controls))
+                               (= :passed (get-in controls [:jvm :status]))
+                               (zero? (get-in controls [:jvm :exit] -1))
+                               (controls-valid? n (:runtime request)
+                                 (or (:bb-ineligible request) (get-in planned [:model :registration])) controls))
                   (refuse! :register-control-failed {:controls controls}))
                 (project-controls! root originals n request controls)
                 (let [result (oracle root request)]
@@ -469,7 +506,7 @@
                 {:ok true :state (if (empty? @originals) :unchanged :registered)
                  :changes (:changes planned)
                  :artifacts (vec (sort (remove (set (keys (:candidate planned))) (keys @originals))))
-                 :controls (into {} (map (fn [[k v]] [k (select-keys v [:status :exit :result :command])])) controls)})))))
+                 :controls controls})))))
       (catch Exception e
         (when @acquired (rollback! root originals))
         (merge {:ok false :error (ex-message e)}
@@ -479,7 +516,7 @@
         (when-let [lock @acquired] (io/delete-file lock true))))))
 
 (def usage
-  "make register-test-ns NS=clj-surgeon.foo-test LANE=battery RUNTIME=jvm [BB_INELIGIBLE='{:reasons #{:sci-host-interop} :detail \"reason\"}']\nAuthor ns lane metadata is required. Runs focused controls; matching repeats change nothing. Refusals exit nonzero.")
+  "make register-test-ns NS=clj-surgeon.foo-test LANE=battery RUNTIME=jvm [BB_INELIGIBLE='{:reasons #{:sci-host-interop} :detail \"reason\"}']\nAuthor ns lane metadata is required. Runs focused controls; repeats execute fresh controls and preserve enrollment bytes. Stale saved controls refuse after execution. Refusals exit nonzero.")
 
 (defn -main [& args]
   (if (= ["--help"] (vec args))

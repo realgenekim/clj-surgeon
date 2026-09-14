@@ -14,3 +14,8 @@ then exercise a copied real repository. Run affected namespaces only with
 -Xmx1024m, paved clj-kondo, census-regenerate, discovered intent audit and protected
 ledger hash comparison. No full suite, battery, main merge or performance claim.
 Report commands and counts in the requested September 14 observation document.
+
+Round 3 supersedes saved-control reuse: reproduce Sol's two forged pass files and
+`(is false)` through Make before repair, then test all control paths and acceptance
+branches, all 32 first-contact masks in ordinary order, and the census writer census.
+Standing seat approval covers design through verification without review pauses.

@@ -1,0 +1,45 @@
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/var/tmp/forge/regns-fx
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/var/tmp/forge/regns-fx
+
+Testing clj-surgeon.registration-controls-test
+STALE-CONTROL-MATRIX :portable-jvm :jvm :stale :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-jvm :jvm :wrong-hash :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-jvm :jvm :missing-provenance :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-jvm :bb :stale :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-jvm :bb :wrong-hash :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-jvm :bb :missing-provenance :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-jvm :bb-load :stale :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-jvm :bb-load :wrong-hash :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-jvm :bb-load :missing-provenance :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-bb :jvm :stale :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-bb :jvm :wrong-hash :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-bb :jvm :missing-provenance :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-bb :bb :stale :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-bb :bb :wrong-hash :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-bb :bb :missing-provenance :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-bb :bb-load :stale :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-bb :bb-load :wrong-hash :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :portable-bb :bb-load :missing-provenance :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-ineligible :jvm :stale :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-ineligible :jvm :wrong-hash :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-ineligible :jvm :missing-provenance :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-ineligible :bb :stale :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-ineligible :bb :wrong-hash :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-ineligible :bb :missing-provenance :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-ineligible :bb-load :stale :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-ineligible :bb-load :wrong-hash :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-ineligible :bb-load :missing-provenance :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-load-incompatible :jvm :stale :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-load-incompatible :jvm :wrong-hash :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-load-incompatible :jvm :missing-provenance :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-load-incompatible :bb :stale :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-load-incompatible :bb :wrong-hash :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-load-incompatible :bb :missing-provenance :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-load-incompatible :bb-load :stale :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-load-incompatible :bb-load :wrong-hash :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+STALE-CONTROL-MATRIX :bb-load-incompatible :bb-load :missing-provenance :register-control-stale {:test 1, :pass 0, :fail 1, :error 0, :type :summary}
+CENSUS-WRITER-CENSUS references ("src/clj_surgeon/test_census.clj" "test/clj_surgeon/lane_manifest_test.clj" "test/clj_surgeon/registration_controls_test.clj") writers #{"src/clj_surgeon/test_census.clj"}
+
+Ran 2 tests containing 238 assertions.
+0 failures, 0 errors.
+{:namespace clj-surgeon.registration-controls-test, :runtime :jvm, :mode "test", :started-at "2026-09-14T11:09:24.106198519Z", :elapsed-ms 90043, :status :passed, :result {:test 2, :pass 238, :fail 0, :error 0, :type :summary}}

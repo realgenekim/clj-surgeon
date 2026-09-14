@@ -2505,11 +2505,13 @@ make register-test-ns NS=clj-surgeon.foo-test LANE=battery RUNTIME=jvm
 ```
 
 The entrance registers lane/runtime, runtime count, adoption, deftest census and
-portability coverage. It runs the existing focused bb load control and, when bb
-loads the namespace, JVM and bb test controls with 1024 MB maximum heaps. It
-returns EDN naming changed files/forms and real control results. Matching repeats
-return `:state :unchanged` without writes or control execution. Refusals exit
-nonzero; metadata/value conflicts report both `:actual` and `:expected`.
+portability coverage. Every invocation runs the focused bb load and JVM test
+controls, plus the bb test when bb loads, with 1024 MB maximum heaps. It returns
+EDN naming changed files/forms and executed controls with argv, source SHA-256,
+canonical root, exit/result, wall time, pid and start ticks. Repeats preserve
+enrollment bytes and execute fresh controls. A pre-existing receipt with a stale
+source or missing provenance refuses as `:register-control-stale` after execution.
+Refusals exit nonzero; metadata/value conflicts report both `:actual` and `:expected`.
 
 `BB_INELIGIBLE` optionally accepts EDN such as
 `'{:reasons #{:sci-host-interop} :detail "the observed limitation"}'` using the

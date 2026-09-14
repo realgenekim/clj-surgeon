@@ -20,7 +20,7 @@ verification, or consumed meaningful server time.
 
 Status: approved and implemented on `fable/regns-entrance`, based on
 `MCP/main` commit `8aedb65e`. The [registration leaf](intent/test-registration/design.md)
-owns the shared model, execution boundary and REGNS-001 through REGNS-008.
+owns the shared model, execution boundary and REGNS-001 through REGNS-011. Round 3 requires fresh executed controls, complete first-contact diagnostics, and one shared census implementation.
 Evidence: [round-one report](observations/2026-09-14-register-test-ns-report-astra.md).
 
 Adding a test namespace currently exposes independent registration failures
@@ -51,13 +51,13 @@ with optional `BB_INELIGIBLE=reason`. A shared registration model serves both
 the read-only oracle and the command's planning stage. The command performs
 structural edits for surfaces 1, 3, 4, and 5, preserves unrelated forms and
 comments, and prints file/form changes with before/after counts. A repeated
-matching invocation is a byte-preserving no-op. Missing source, missing lane
+matching invocation preserves enrollment bytes and executes fresh controls. Missing source, missing lane
 metadata, and conflicting declarations refuse before registration writes;
 `register-conflict` reports both values. The command never chooses a lane on
 the author's behalf.
 
 Control receipts represent executions, not declarations. The entrance must
-obtain genuine focused control results where required by the existing gate;
+obtain genuine focused control results on every invocation;
 adding a path or declaring a Babashka limitation cannot manufacture passing
 evidence. The low-level design must specify this execution boundary, the
 accepted reason representation, and failure handling before implementation.
@@ -65,7 +65,7 @@ The ordinary census gate must continue to reject removed tests.
 
 Acceptance requires committed failing tests before implementation, a temp-root
 fixture missing surfaces 2–5 whose single diagnostic lists all four, and a
-temp repository copy proving command-to-oracle success, repeat no-op, and
+temp repository copy proving command-to-oracle success, fresh executed repeat, and
 wrong-lane refusal. Any new test namespace is enrolled through the new
 entrance itself. Requirements will use separate stable IDs in the repository's
 discovered `docs/intent/<leaf>/*-specs.md` convention, with `@spec`, `INTENT:`,

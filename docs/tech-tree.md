@@ -2,7 +2,7 @@
 
 Test namespace registration: one shared oracle and structural Make entrance now
 cover all five registration surfaces, including actual focused portability
-executions and byte-preserving repeats. RED-first evidence and limits:
+executions and preserved enrollment bytes on repeats. Round 3 closes stale-control reuse, first-contact diagnostics and duplicate census regeneration; each has a class oracle. RED-first evidence and limits:
 [registration report](observations/2026-09-14-register-test-ns-report-astra.md).
 This is branch-only bookkeeping repair, with no performance admission.
 
