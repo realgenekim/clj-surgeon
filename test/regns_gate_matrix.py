@@ -1,4 +1,4 @@
-"""REGNS-006/012: real manifest gates in copies, with one full Make control."""
+"""REGNS-006/012: real manifest gates in copies; full Make has a standalone witness."""
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
@@ -158,19 +158,6 @@ def run_matrix(source, scratch):
                     argv = MANIFEST_ARGV
                     code, wall = run(argv, root, env, log, mask=mask)
                     output = log.read_text()
-                    if mask == 0:
-                        full_argv = ["make", "-C", str(root), "test-fast"]
-                        full_log = cell / "full-fast.log"
-                        full_code, full_wall = run(full_argv, root, env, full_log, mask=mask)
-                        agreement = (full_code == code == 0
-                                     and first_failure_block(full_log.read_text())
-                                     == first_failure_block(output))
-                        print("SEED-ENTRANCE-AGREEMENT", json.dumps({
-                            "mask": mask, "argv": full_argv, "exit": full_code,
-                            "full_wall_s": round(full_wall, 3), "runner_wall_s": round(wall, 3),
-                            "first_failure_block": first_failure_block(output),
-                            "agreement": agreement}), flush=True)
-                        assert agreement, full_log.read_text()
                     names = re.findall(r"Registration checklist for ([^: ]+):", output)
                     failure = re.search(r"FAIL in \(([^)]+)\).*?(?=\n\n|\Z)", output, re.S)
                     first_failure = first_failure_block(output)
