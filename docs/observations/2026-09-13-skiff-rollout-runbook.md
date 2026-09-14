@@ -8,7 +8,8 @@
 
 - WHERE: the Skiff (Gene's Apple Silicon laptop), checkout `/Users/genekim/src.local/clj-surgeon/`, GitHub `realgenekim/clj-surgeon`. The shared clj-surgeon MCP JVM there runs under launchd on port 7888 from that checkout (docs/mcp-publishing-dev.md).
 - STATE: the Skiff's last recorded install is **stable/2026-09-10 = 59d8bc0c** (receipt inb-e09349: `make install` PASSED on Darwin arm64 25.5.0, bash 5.3.9, bb 1.12.209, java 26.0.2, clojure 1.12.4.1602, swipl 10.0.2; `make test` then FAILED on four Darwin defects). All four were fixed and landed (fable/skiff-fixes → a15531ee stable/2026-09-11.3), then the probe verb and TEST-ISO-016 (759974c7 stable/2026-09-13.1), then destination-envelope admission (53b9f158 stable/2026-09-13.2). If the Skiff moved since 09-10, step 1 reads the real receipt.
-- TARGET: **stable/2026-09-13.2 = commit 53b9f158979eb1c71cd8afa1d5397f7254c6d55a** (annotated tag object 84eadae0a8507886200b8d489c16c1e695adf5d8, on GitHub). Trunk MCP/main is at the same commit. Public `main` stays frozen; nothing here touches it.
+- TARGET (revised 2026-09-14): **stable/2026-09-14.3 = commit 94b9180aa197859cfac8e2b98890a2a7f1692eaa** (annotated tag object fc6dfd6087f0497e75d41568948d72c1ab2212cc, on GitHub). Trunk MCP/main is at the same commit. It supersedes stable/2026-09-13.2, which could not start on macOS at all (a load-time `getent` shell-out in receipt_artifacts.clj; found by the mayor on the Skiff, fixed as 7799b9c7 by mayor@skiff session kiloclaw-ff, hardened by Sol twice: lazy resolution, real I/O failures preserved, exact NFSHomeDirectory attribute, sanitized attempt statuses, /etc/passwd → getent → dscl ordering with Linux never attempting dscl). It also carries the txn-journal race fix (receipt-artifacts target resolution) and the state-home change (the warm-image identity descriptor lives under `~/.local/state/clj-surgeon`, never the checkout). Public `main` stays frozen; nothing here touches it.
+- Every `53b9f158` below reads as `94b9180a`; every `stable/2026-09-13.2` reads as `stable/2026-09-14.3`. Expected receipts at the new commit (from this seat's install of it): CLI `:source-hash "172e6fc4aca44303d213fae732850d39da756b67d757216ada49151026e719a2"`; both skills `21489506…` (unchanged); routing block `67e45724…` (unchanged).
 - WHY NOW: Gene ordered real-work use on the Skiff with dogfood telemetry. The first destination task and its retrievable telemetry are the done condition; install alone proves availability, not adoption.
 
 ## 1. What is shipped, and what is NOT
@@ -83,7 +84,7 @@ Expected in order: the preflight block with `platform Darwin arm64`, `mode :path
 grep -E 'source-(commit|hash)' ~/bin/clj-surgeon.receipt.edn ~/.claude/skills/clj-surgeon.receipt.edn ~/.codex/skills/clj-surgeon.receipt.edn
 ls ~/.local/share/clj-surgeon/versions/53b9f158979eb1c71cd8afa1d5397f7254c6d55a/
 make check-agent-routing 2>&1 | tail -2           # must report parity, block 67e45724…
-~/bin/clj-surgeon :help >/dev/null && echo "CLI runs"
+~/bin/clj-surgeon :op :help >/dev/null && echo "CLI runs"     # `:op :help` — the mayor's correction; `:help` alone is not a valid invocation
 ~/bin/clj-surgeon :probe :ns clj-surgeon.forms; echo "rc=$?"
 ```
 
