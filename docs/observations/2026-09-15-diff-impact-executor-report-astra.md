@@ -464,3 +464,67 @@ code commit. Both commits carry the three required trailers. No merge or push
 to main; publication is confined to `fable/impact-executor`.
 
 Report assembled 2026-09-15T08:28:19.483479+00:00 from retained machine receipts.
+
+## Round 4
+
+Sol **IMPACT-EXEC-02** at `b2887b5a`: a nonempty selection containing only
+other-lane members projected to no fast groups; `every?` over the empty receipt
+vector returned exit 0 with no runs. The coordinator now refuses that class
+before any lane output directory or child call with `:error-type
+:fast-scope-empty`, `:scope :fast`, and the complete `:classification` table,
+including every namespace and its admitted lane. The outer CLI already translates
+this exception into a refused observation and process exit 1.
+
+### RED → GREEN
+
+Committed RED `750c9663` strengthens `fast-scope-total-membership`: **1 test,
+59 passing / 20 failing assertions, zero errors** against the unchanged executor.
+The retained red includes Sol's exact `other-test` shape: `:exit 0`,
+`:selected []`, `:receipts []`, `:runs []`. The matrix crosses fast/all with
+singleton and multiple other-lane members, an explicitly accounted exclusion,
+a mixture of other-lane/excluded members, and fast/other-lane mixtures.
+Empty fast projections must refuse with their complete classification and leave
+no lane output directory; all other observations must match exact selected,
+called and executed membership. Existing renamed/load-excluded/bb-ineligible
+refusals and empty-selection projection witnesses remain in place.
+
+The implementation is a five-line guard in `run-selected-scope!`, after existing
+membership validation and before execution. Pure projection and `:all` are
+unchanged. The mixed-selection witness asserts that fast members run while the
+observation retains the other members' named lanes.
+
+Retained coordinator probes use a controlled `run-suite!` test double to observe
+routing, not real namespace execution or performance:
+
+| Selection | Scope | Exit | Result |
+|---|---|---:|---|
+| other-test | fast | 1 | fast-scope-empty; integration lane retained; zero child calls |
+| other-test | all | 0 | other-test selected and reported run |
+| fast-test + other-test | fast | 0 | fast-test selected and reported run; both classifications retained |
+
+### Verification
+
+All receipts are under `/var/tmp/forge/impact-fx/exec/round4/`:
+
+- `red.log`: committed failing oracle above.
+- `jvm.log` and `bb.log`: diff-impact-test + battery-parallel-test, each **78
+  tests / 957 assertions, zero failures/errors**, process exit 0. JVM and inherited
+  child Java heaps are bounded with `-Xmx1024m`; temp roots remain inside the
+  requested scratch directory.
+- `lint.log`: `~/bin/clj-kondo` on both changed Clojure files, exit 0,
+  **zero errors/warnings**; Standard Clojure Style applied first.
+- `census.log`: `make census-regenerate` exit 0, **+0/-0**.
+- `probe-other-fast.edn`, `probe-other-all.edn`, `probe-mixed-fast.edn`:
+  coordinator observations above; the fast-only refusal probe exits 1.
+- `git diff --check` passes. Protected files remain byte-identical:
+  `battery-ledger.edn` SHA-256
+  `08a1d6ee9c7f319c4a146ec23798e535273a47b7633697354014b318bff8ad39`;
+  `battery-namespace-walls.edn` SHA-256
+  `154faae0c803099d1bfe88e8563a8cf85cdf2376af4e4309b10bd850cd6ef264`.
+
+No `make test` or `test-battery` ran. This addresses IMPACT-EXEC-02;
+Sol's separate ENVELOPE-01 finding is outside this round's requested repair.
+Both commits carry Gene, OpenAI Codex and the current Codex session trailers;
+publication is confined to `fable/impact-executor`.
+
+Report assembled 2026-09-15T08:57:05.245149+00:00 from the retained receipts.

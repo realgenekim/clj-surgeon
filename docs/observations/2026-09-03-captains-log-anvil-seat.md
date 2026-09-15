@@ -6960,3 +6960,7 @@ Astra: at 866df39b, `/home/forge/bin/suite-run make landing-gate-prewarm` + `bb 
 ## 2026-09-15T08:53:19Z — executor ship round 4: Sol NO-GO IMPACT-EXEC-02 (empty :fast projection of a nonempty selection passes with zero runs); tweezer round 4
 
 Candidate 13eafcb6 on b2887b5a (records: 2026-09-15-diff-impact-executor-sol-verdict-4.md). Unregistered/load-excluded/bb-ineligible refuse in both scopes; other-lane-only under :fast → exit 0, nothing run. Astra round 4 (run-bg astra-exec-4): typed `:fast-scope-empty` or ≥ 1 executed namespace; mixed selections keep the round-2 contract.
+
+## 2026-09-15T08:57:58Z — executor round 4 (e19ce755): nonempty selections with no fast members refuse `:fast-scope-empty`; prewarm 5 running
+
+750c9663 RED → e19ce755; mixed and :all witnesses pass; JVM + bb 78 tests / 957 assertions. Prewarm 5 (run-bg prewarm-exec5); receipt branch fable/battery-receipt-e19ce755; Sol brief round 5. Replay executor armed (5 h cap).
