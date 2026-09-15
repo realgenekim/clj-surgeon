@@ -62,14 +62,15 @@
 
 (defn entry-line
   "One ledger entry as the single line it is appended as."
-  [{:keys [sha started wall_s verdict host lanes skipped]}]
+  [{:keys [sha started wall_s verdict host lanes skipped partial selected selection-sha]}]
   ;; @spec TEST-ISO-013 -- `:lanes` is appended only when the run declared one,
   ;; so every line written before the lane split still reads byte-identically
   ;; and the tripwire's arithmetic is untouched. A receipt that does not say
   ;; how wide it ran is a receipt whose wall cannot be compared to another's.
   (pr-str (cond-> {:sha sha :started started :wall_s wall_s :verdict verdict :host host}
             lanes (assoc :lanes lanes)
-            skipped (assoc :skipped skipped))))
+            skipped (assoc :skipped skipped)
+            partial (assoc :partial true :selected selected :selection-sha selection-sha))))
 
 (defn parse-ledger
   "Every entry in ledger `text`, in file order. A line that does not read is
@@ -148,6 +149,10 @@
                         (count bad) ledger-path (::line (first bad))
                         (pr-str (::unreadable (first bad))))
        :remedy remedy}
+
+      (:partial newest)
+      {:ok false :reason :partial-receipt-not-a-gate-receipt
+       :message "A selected subset cannot certify battery freshness" :remedy remedy}
 
       (nil? newest)
       {:ok false :reason :no-entries

@@ -67,3 +67,31 @@ inputs and unanchored dynamic paths remain unresolved; unmatched changes HOLD.
 A seed with declared require or content dependents but no reachable test is
 :no-dependency-edge;
 :no-test-dependent describes only an isolated namespace seed.
+
+## Executor
+
+[Executor plan](../../plans/diff-impact-executor.md) and DIFF-IMPACT-007 bind the
+selector to the gate's existing runner. Selection remains independent of cadence;
+execution projects it into separately reported fast/all scopes. A partial receipt
+is evidence only for its explicit subset and never conveys landing authority.
+
+### Total selected membership (IMPACT-EXEC-01)
+
+Before fast/all projection, classify every selected namespace against the on-disk
+inventory and admitted manifest: fast-member; other-lane-member with named lane;
+unregistered/renamed; load-excluded; or bb-ineligible. An existing admitted JVM
+or dedicated lane takes precedence over BB incompatibility. Missing on-disk
+namespaces cannot inherit stale manifest admission. Only explicitly admitted
+BB-only members use the BB suite.
+
+Report the complete classification table in successful and refused observations.
+Fast runs fast members and reports other-lane members as belonging to all.
+Both scopes refuse all remaining members together with error type
+`selected-namespace-unclassified` and one `selected-namespace-unclassified <ns>`
+reason per namespace, before any child or output directory. An explicit
+`:selection-exclusion {:reason <classification>}` on that namespace in the
+selection receipt accounts for an excluded member; mismatched or absent reasons
+refuse. Require-edge selection reasons never count as exclusion authorization.
+The oracle is `fast-scope-total-membership`, including Sol's exact renamed-away
+invocation. Replace the contradictory unknown-fast `{}` expectation in the same
+committed red as the stronger oracle. Standing approval covers all phases.
