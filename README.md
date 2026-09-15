@@ -2332,12 +2332,28 @@ records.
 ## Testing
 
 For changed-file selection, use `test/diff-impact BASE OUTPUT_DIR list`.
-The third argument is a mode: `fixed-point` executes the same selected set.
+The third argument is a mode: `fixed-point` executes selected tests using the
+gate's lane runner. An optional fourth argument selects `fast` or `all`; omitted,
+it runs both and records separate EDN observations with `:scope :fast` / `:all`.
+Fast intersects selection with the fast manifest and uses the gate's automatic
+width (16 on Anvil). All partitions selection by lane, including registered dedicated witnesses.
+Dedicated work runs serially through the existing observed runner; analyzer work
+retains its mission, and memory work retains the Make entrance's exclusive lock.
+A namespace without an
+admitted lane entrance produces a typed refusal, never a silent omission.
+Results include selection SHA-256, selection/run/total walls and lane receipts.
+
+The runner also accepts `--suite fast --selected '[clj-surgeon.fast-lane-isolation-test]'
+with `--selection-sha SHA256` (the hash of the selection EDN bytes). It uses the
+same scheduler, runtime policy and isolated child launcher as a full run. The
+receipt records `:partial true` and cannot certify a landing gate or battery
+freshness, even when the selected subset happens to equal the entire suite.
+Partial runs read scheduling estimates but do not replace full-suite wall tables.
 The oracle follows transitive requirements under `src/` and `test/`, existing
 `docs/` and `resources/` file literals, and literal source scanning roots.
 It prints `selected <ns> via <edge-kind> <file>` and records edge counts.
-An empty set returns `:status :nothing-selected`, changed paths and unmatched
-reasons with exit 0; it is not a passing test run. See the
+Unmatched paths produce `:hold-unmatched-files` and non-list exit 1 before any
+children. An empty diff returns `:status :nothing-selected` with exit 0; it is not a passing test run. See the
 [selection contract and bounds](docs/intent/diff-impact/design.md).
 
 ```bash

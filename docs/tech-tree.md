@@ -1063,3 +1063,24 @@ and bb. Historical selection includes splice-envelope at df0c9e1c and all three
 named battery witnesses at 00566756..8aedb65e. Conservative directory roots select
 extra witnesses; this is correctness evidence with no speed or gate-envelope claim.
 [Report](observations/2026-09-14-diff-impact-edges-report-astra.md).
+
+### 2026-09-15T05:53:23.860182+00:00 — diff-impact executor parity
+
+The committed-red subset contract now uses the gate scheduler, runtime and child
+isolation, with partial receipts excluded from full-gate and battery freshness
+authority. Dedicated analyzer/memory/lifecycle witnesses retain admission; a real
+run exposed and repaired recovery-fixture leaks without weakening assertions.
+The final one-file isolation diff goes from eight failures to green and agrees
+with its full-fast namespace verdict. This host admits eight gate workers; the
+single-fixture walls do not qualify a routing change or score the five-diff bets.
+[Round 1 report](observations/2026-09-15-diff-impact-executor-report-astra.md).
+
+### Diff-impact executor total membership (Round 2)
+
+Sol IMPACT-EXEC-01 exposed fast projection discarding an unknown selection before
+validation. Committed red `5e3367ef` replaces the contradictory empty projection
+expectation and reproduces the exact false-green renamed-away call. The repair
+classifies every selection against disk and lane admission before projection,
+retains the full table, and refuses all unaccounted names together. Named oracle:
+`fast-scope-total-membership`. This is correctness evidence, not routing admission
+or a speed result. Receipt: [Round 2 executor report](observations/2026-09-15-diff-impact-executor-report-astra.md#round-2).
