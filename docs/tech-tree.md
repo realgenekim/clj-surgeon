@@ -1084,3 +1084,13 @@ classifies every selection against disk and lane admission before projection,
 retains the full table, and refuses all unaccounted names together. Named oracle:
 `fast-scope-total-membership`. This is correctness evidence, not routing admission
 or a speed result. Receipt: [Round 2 executor report](observations/2026-09-15-diff-impact-executor-report-astra.md#round-2).
+
+### Landing envelope producer compatibility (executor Round 3)
+
+The installed envelope writer refuses missing toolchain identity and obligation
+inventory even after a green prewarm. Exact `run-gate!` comparison shows the
+receipt map is unchanged between `866df39b` and `88b8603d`; the former also
+reproduces both refusals. Restore the historical obligation/toolchain producer
+contract with boundary and full/partial preservation witnesses. Keep diagnostic
+BB in the inventory and freshness out of prewarm discharge claims. No routing or
+speed claim. [Round 3 report](observations/2026-09-15-diff-impact-executor-report-astra.md#round-3).

@@ -291,16 +291,22 @@
   clj-surgeon.battery-parallel-test/a-lane-that-timed-out-or-wrote-nothing-is-a-named-failure
   clj-surgeon.battery-parallel-test/a-named-precondition-skip-survives-the-lane-split
   clj-surgeon.battery-parallel-test/a-namespace-with-fixtures-is-never-sharded
+  clj-surgeon.battery-parallel-test/a-policy-hash-covers-the-rules-and-not-the-data-the-rules-read
   clj-surgeon.battery-parallel-test/a-prerequisite-already-satisfied-is-not-re-run
   clj-surgeon.battery-parallel-test/a-serial-group-is-never-split-across-lanes
   clj-surgeon.battery-parallel-test/a-sharded-namespace-is-folded-back-into-one-run-before-any-fold
+  clj-surgeon.battery-parallel-test/a-suite-obligation-carries-the-identities-not-only-a-count
+  clj-surgeon.battery-parallel-test/an-unknown-recipe-is-named-never-an-empty-one
   clj-surgeon.battery-parallel-test/an-unmeasured-namespace-is-scheduled-first-and-still-runs
+  clj-surgeon.battery-parallel-test/banner-only-output-is-unknown-and-unknown-is-not-a-version
   clj-surgeon.battery-parallel-test/battery-walls-live-in-state-with-read-only-seed
   clj-surgeon.battery-parallel-test/bb-lane-command-honours-disk-tmpdir
   clj-surgeon.battery-parallel-test/darwin-memory-reader-is-the-documented-arithmetic
   clj-surgeon.battery-parallel-test/emit-edn-is-stripped-from-argv-wherever-it-appears
   clj-surgeon.battery-parallel-test/every-deftest-of-a-sharded-namespace-lands-in-exactly-one-shard
   clj-surgeon.battery-parallel-test/every-namespace-is-scheduled-exactly-once-across-the-lanes
+  clj-surgeon.battery-parallel-test/every-section-4-obligation-is-present-and-named
+  clj-surgeon.battery-parallel-test/full-and-partial-receipts-share-envelope-evidence
   clj-surgeon.battery-parallel-test/gate-census-rejects-every-loss-and-duplicate
   clj-surgeon.battery-parallel-test/gate-parity-is-per-namespace
   clj-surgeon.battery-parallel-test/gate-pool-overlaps-suites-without-multiplying-width
@@ -308,25 +314,35 @@
   clj-surgeon.battery-parallel-test/gate-refuses-malformed-and-lost-child-facts
   clj-surgeon.battery-parallel-test/gate-width-is-resource-bounded
   clj-surgeon.battery-parallel-test/grouped-shards-retain-measured-per-deftest-walls
+  clj-surgeon.battery-parallel-test/landing-envelope-consumer-contract
   clj-surgeon.battery-parallel-test/launcher-matrix-cells-remain-independently-shardable
   clj-surgeon.battery-parallel-test/memory-refusals-name-the-step-that-could-not-answer
+  clj-surgeon.battery-parallel-test/nested-checks-are-derived-from-the-recipe-not-a-second-list
   clj-surgeon.battery-parallel-test/one-lane-is-the-serial-shape
   clj-surgeon.battery-parallel-test/partial-ledger-serialization-cannot-launder-authority
   clj-surgeon.battery-parallel-test/partial-receipts-never-land
   clj-surgeon.battery-parallel-test/prewarm-membership-and-authority-are-explicit
   clj-surgeon.battery-parallel-test/prewarm-pool-stores-evidence-under-the-parent-run
+  clj-surgeon.battery-parallel-test/r9-and-r10-can-never-be-discharged-by-a-gate-receipt
   clj-surgeon.battery-parallel-test/selected-subset-admission-and-census
   clj-surgeon.battery-parallel-test/serial-cannot-authorize-a-landing
   clj-surgeon.battery-parallel-test/the-declared-shard-target-is-the-namespace-that-owns-the-floor
   clj-surgeon.battery-parallel-test/the-floor-is-the-largest-unit
+  clj-surgeon.battery-parallel-test/the-inventory-is-readable-by-a-real-edn-reader
   clj-surgeon.battery-parallel-test/the-inventory-is-the-lane-manifests-battery-lane
+  clj-surgeon.battery-parallel-test/the-java-tool-options-banner-is-never-the-version
   clj-surgeon.battery-parallel-test/the-lane-budget-is-folded-over-the-union-not-per-lane
   clj-surgeon.battery-parallel-test/the-lane-child-is-asked-for-exactly-its-slice
   clj-surgeon.battery-parallel-test/the-note-vars-the-summary-reprints-still-exist
+  clj-surgeon.battery-parallel-test/the-policy-hash-covers-the-bytes-of-every-rule-the-recipe-invokes
+  clj-surgeon.battery-parallel-test/the-policy-hash-moves-when-a-single-namespace-is-dropped
   clj-surgeon.battery-parallel-test/the-prerequisite-dag-names-its-target-its-product-and-its-consumers
   clj-surgeon.battery-parallel-test/the-re-derived-time-budget-is-word-for-word-the-serial-one
+  clj-surgeon.battery-parallel-test/the-required-inputs-of-a-gate-obligation-exist-in-this-tree
+  clj-surgeon.battery-parallel-test/the-shell-identity-is-a-resolved-path-not-the-word-sh
   clj-surgeon.battery-parallel-test/the-single-lane-floor-is-named-with-its-formula-and-its-override
   clj-surgeon.battery-parallel-test/the-union-is-taken-in-manifest-order-whichever-lane-ran-it
+  clj-surgeon.battery-parallel-test/two-different-boxes-with-the-same-banner-do-not-agree
   clj-surgeon.battery-parallel-test/worker-admission-wraps-argv-without-shell-interpolation
   clj-surgeon.battery-state-admission-test/walls-production-state-home-admission-matrix
   clj-surgeon.cell-b-oracle-test/cell-b-lint-case-witness

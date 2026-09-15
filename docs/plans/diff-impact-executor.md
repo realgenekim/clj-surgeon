@@ -43,3 +43,24 @@ refuse. Require-edge selection reasons never count as exclusion authorization.
 The oracle is `fast-scope-total-membership`, including Sol's exact renamed-away
 invocation. Replace the contradictory unknown-fast `{}` expectation in the same
 committed red as the stronger oracle. Standing approval covers all phases.
+
+### Round 3: landing envelope producer contract
+
+Both requested snapshots are checked through the installed suite-run/prewarm
+entrance and read-only gate-envelope consumer. Report observed results even if
+both controls refuse; never manufacture a passing historical receipt.
+The gate writer must retain the consumer's top-level receipt fields, typed
+non-unknown toolchain identity, and readable obligation sidecar. Inventory stage
+membership must cover the actual manifest (including diagnostic BB), and
+prewarm must not claim to discharge battery freshness. Full/partial suite
+receipts preserve their existing facts and share the evidence enrichment;
+partial selection remains explicit and cannot certify a gate.
+
+Use the existing historical obligation/toolchain implementation where applicable,
+with a boundary regression against the actual gate writer plus pure tests for
+full/partial enrichment. Mirror every producer field read by the installed
+consumer, including nested stage/suite/inventory keys. Preserve existing receipt
+values; historical snapshots without these fields cannot provide byte parity
+for fields they never emitted. TDD, affected JVM/BB tests at 1024 MiB, lint,
+census, protected hashes, one fixed prewarm and installed consumer are the gates.
+All phases have standing approval.

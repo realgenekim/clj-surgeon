@@ -51,9 +51,11 @@
    [babashka.process :as proc]
    [clj-surgeon.diff-impact :as impact]
    [clj-surgeon.gate-memory :as mem]
+   [clj-surgeon.gate-obligations :as gob]
    [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.ns-isolation :as iso]
    [clj-surgeon.probe-state :as state]
+   [clj-surgeon.toolchain-identity :as tc]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -897,6 +899,35 @@
 
 (declare run-gate-pool!)
 
+(defn gate-provenance
+  "Capture the gate's identity once; keep subprocess observation at this boundary."
+  []
+  {:toolchain (tc/snapshot)
+   :git-head (str/trim (:out @(proc/process {:out :string} "git" "rev-parse" "HEAD")))
+   :git-tree (str/trim (:out @(proc/process {:out :string} "git" "rev-parse" "HEAD^{tree}")))})
+
+(defn receipt-evidence
+  "Add the envelope evidence without projecting away any producer facts.
+   A partial suite never discharges whole-gate obligations."
+  [receipt inventory toolchain path]
+  (let [text (pr-str inventory)
+        stages (set (map :target (:stages receipt)))]
+    (assoc receipt
+           :receipt-version 2
+           :toolchain toolchain
+           :obligations
+           {:policy-sha256 (:policy-sha256 inventory)
+            :inventory-version (:inventory-version inventory)
+            :ids (mapv :id (:obligations inventory))
+            :evidence {:path path :sha256 (tc/sha256 text)
+                       :bytes (count (.getBytes ^String text "UTF-8"))}
+            :discharged-by-this-receipt
+            (if (:partial receipt) []
+              (vec (sort (keep #(when (stages (:stage %)) (:id %))
+                               (:obligations inventory)))))
+            :out-of-band (mapv :id (filter #(= :out-of-band (get-in % [:discharge :by]))
+                                     (:obligations inventory)))})))
+
 (defn run-gate! [opts]
   (when (contains? opts "--selected")
     (throw (ex-info "A selected subset cannot certify the landing gate"
@@ -914,6 +945,7 @@
         started (str (java.time.Instant/now))
         t0 (System/nanoTime)
         digest (source-digest)
+        provenance (gate-provenance)
         census (tree-census)
         manifest (gate-stages debug? prewarm?)
         required-suites (vec (keep :suite manifest))
@@ -959,16 +991,114 @@
                           (when-not (= digest (source-digest)) [{:kind :tree-changed-during-gate}])
                           (when-not debug?
                             (mapcat #(suite-receipt-problems (:suite %) % digest) suites))))
+          ;; ---- FRAME 7 SECTION 4/5: the receipt says what this tree REQUIRED,
+          ;; who ran what, and under which observed toolchain. Before this, a
+          ;; landing receipt named seven stage strings and nothing else: the
+          ;; obligation each stage discharges, the exact selected identities and
+          ;; the runtime that produced them were all left for a consumer to
+          ;; assume. A consumer that assumes is a consumer that can be fooled by
+          ;; a self-consistent producer, which is exactly the defect Sol's
+          ;; GATE-LANES-FENCE-002 found.
+          obligation-inventory (gob/inventory {:stage-manifest (mapv :target gate-stage-manifest)
+                                               :suite-namespaces suite-namespaces})
+          obligation-bytes (pr-str obligation-inventory)
+          obligation-path (io/file "target" "gate-obligations.edn")
+          _ (do (.mkdirs (io/file "target")) (spit obligation-path obligation-bytes))
+          toolchain (:toolchain provenance)
+          stage->obligations (into {} (for [o (:obligations obligation-inventory)
+                                            :when (:stage o)]
+                                        [(:stage o) [(:id o)]]))
+          obl-by-stage (into {} (for [o (:obligations obligation-inventory) :when (:stage o)]
+                                  [(:stage o) o]))
+          suite-by-name (into {} (for [sr suites] [(str (:suite sr)) sr]))
+          recovery-receipt (let [f (io/file "target" "admit-transaction-recovery-battery-receipt.edn")]
+                             (when (.isFile f) (try (edn/read-string (slurp f)) (catch Exception _ nil))))
+          ;; THE COUNTERS ARE ASSERTED BY THE PROCESS THAT OWNS THEM. Section 5:
+          ;; "absence is unknown, not zero." `:precondition-skipped` only appears
+          ;; in a merged report when it is non-zero, so a consumer reading the raw
+          ;; suite receipt cannot tell "no skip" from "nobody counted". This
+          ;; runner already applies `(get-in receipt [:result :precondition-skipped] 0)`
+          ;; as its own refusal policy, so it -- and only it -- may write the
+          ;; observed value down explicitly.
+          executions (mapv (fn [{:keys [target exit wall-ms]}]
+                             (let [obl (get obl-by-stage target)
+                                   sr (get suite-by-name (:suite obl))]
+                               (cond-> {:id (str run-id "/" target)
+                                        :obligation-ids (get stage->obligations target [])
+                                        :target target
+                                        :candidate {:commit (:git-head provenance)
+                                                    :tree (:git-tree provenance)}
+                                        :check-contract-sha256 (get-in obl [:recipe :sha256])
+                                        :runtime (:runtime obl)
+                                        :scope (:scope obl)
+                                        :declared-skips []
+                                        :focus-omissions []
+                                        :unexecuted-tests []
+                                        :expected-tests (vec (:selected-test-identities obl))
+                                        :executed-tests []
+                                        :result {:exit exit :wall-ms wall-ms}}
+                                 ;; SOL-EC-001: provenance fields are EMITTED, always, so a
+                                 ;; consumer can tell "nothing was skipped" from "nobody
+                                 ;; recorded whether anything was skipped". A missing field
+                                 ;; is now a typed refusal downstream, so silence here would
+                                 ;; refuse every landing rather than pass one.
+                                 true
+                                 (assoc :inputs-manifest
+                                        ;; SOL-EC-006: the manifest must ACCOUNT FOR the inputs the
+                                        ;; tree names, entry by entry, not merely exist. The runner
+                                        ;; has the inventory in hand, so it writes the entries it
+                                        ;; actually read rather than a pointer to a file that lists
+                                        ;; them.
+                                        {:path "target/gate-obligations.edn"
+                                         :sha256 (tc/sha256 obligation-bytes)
+                                         :bytes (count (.getBytes ^String obligation-bytes "UTF-8"))
+                                         :entries (vec (:required-inputs obl))}
+                                        :environment-manifest
+                                        ;; ACCOUNTED FOR, not merely present: a key that is
+                                        ;; unset cannot be digested, and omitting it would be
+                                        ;; indistinguishable from a manifest that quietly
+                                        ;; shrank. So an unset key is NAMED as unset.
+                                        (let [ks (:keys gob/environment-policy)]
+                                          {:selected (into (sorted-map)
+                                                           (for [k ks :let [v (System/getenv k)] :when v]
+                                                             [k (tc/sha256 v)]))
+                                           :unset (vec (sort (remove #(System/getenv %) ks)))
+                                           :basis (:basis gob/environment-policy)}))
+
+                                 sr
+                                 (assoc :executed-tests (vec (sort (distinct (map (comp str :namespace) (:runs sr)))))
+                                        ;; SOL-EC-002 / deviation 9: VAR identities, not only
+                                        ;; namespaces. The child runs already carry them.
+                                        :expected-vars (vec (sort (distinct (map str (mapcat :expected-vars (:runs sr))))))
+                                        :executed-vars (vec (sort (distinct (map str (mapcat :executed-vars (:runs sr))))))
+                                        :result {:exit exit :wall-ms wall-ms
+                                                 :failures (get-in sr [:result :fail])
+                                                 :errors (get-in sr [:result :error])
+                                                 :tests (get-in sr [:result :test])
+                                                 :assertions (get-in sr [:result :pass])
+                                                 :isolation-violations (:isolation-failures sr)
+                                                 :leaks (:leak-failures sr)
+                                                 :skipped-preconditions (get-in sr [:result :precondition-skipped] 0)})
+
+                                 (and recovery-receipt (= "admit-transaction-recovery-battery" target))
+                                 (assoc :result {:exit exit :wall-ms wall-ms
+                                                 :arms (count (:arms recovery-receipt))
+                                                 :arms-passed (:arms-passed recovery-receipt)
+                                                 :failed-arms (vec (:failed-arms recovery-receipt))
+                                                 :verdict (:verdict recovery-receipt)}))))
+                           @stages)
           receipt {:state (if (seq problems) :failed :passed)
                    :landing? (landing-eligible? debug? prewarm? problems)
                    :prewarm? (and prewarm? (not debug?))
+                   :executions executions
                    :run-id run-id
-                   :git-head (str/trim (:out @(proc/process {:out :string} "git" "rev-parse" "HEAD")))
-                   :git-tree (str/trim (:out @(proc/process {:out :string} "git" "rev-parse" "HEAD^{tree}")))
+                   :git-head (:git-head provenance)
+                   :git-tree (:git-tree provenance)
                    :started-at started :completed-at (str (java.time.Instant/now))
                    :wall-ms (quot (- (System/nanoTime) t0) 1000000)
                    :source-digest digest :capacity capacity :namespace-census census
-                   :stages @stages :pool (dissoc @pool :stages) :suites suites :problems problems}]
+                   :stages @stages :pool (dissoc @pool :stages) :suites suites :problems problems}
+          receipt (receipt-evidence receipt obligation-inventory toolchain "target/gate-obligations.edn")]
       (spit (io/file work-dir "stages.edn") (pr-str @stages))
       (spit (io/file work-dir "receipt.edn") (pr-str receipt))
       (when (and (= :passed (:state receipt)) (not debug?)) (spit output (pr-str receipt)))
@@ -1327,7 +1457,11 @@
                              :measurements (run-measurements runs lanes wall-ms)
                              :wall-ms wall-ms :problems (vec (concat broken census-errors
                                                                (when changed? [:tree-changed-during-suite])))}
-                      partial (assoc :partial true :selected selected :selection-sha selection-sha))]
+                      partial (assoc :partial true :selected selected :selection-sha selection-sha))
+            inventory (gob/inventory (gob/runner-policy))
+            inventory-path (io/file work-dir "gate-obligations.edn")
+            _ (spit inventory-path (pr-str inventory))
+            receipt (receipt-evidence receipt inventory (tc/snapshot) (str inventory-path))]
         (spit (io/file work-dir "receipt.edn") (pr-str receipt))
         receipt))))
 
