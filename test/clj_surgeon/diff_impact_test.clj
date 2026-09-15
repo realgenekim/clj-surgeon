@@ -327,3 +327,37 @@
         (is (= :unadmitted-selection
                (try (groups '[unknown-test] :all) nil
                     (catch clojure.lang.ExceptionInfo e (:error-type (ex-data e))))))))))
+
+;; @spec DIFF-IMPACT-007
+(deftest dedicated-entrances-preserve-admission
+  (require 'clj-surgeon.battery-parallel-runner)
+  (when-not (find-ns 'run-all) (require 'run-all))
+  (let [wrap (ns-resolve 'run-all 'run-with-dedicated-mission)
+        lock-command (ns-resolve 'clj-surgeon.battery-parallel-runner 'memory-lock-command!)
+        memory? (ns-resolve 'clj-surgeon.battery-parallel-runner 'memory-members?)
+        calls (atom [])]
+    (is (memory? '[clj-surgeon.memory.oom-reproduction-test]))
+    (is (not (memory? '[clj-surgeon.worktree-lifecycle-prune-test])))
+    (with-redefs [clojure.core/requiring-resolve
+                  (fn [n]
+                    (case n
+                      clj-surgeon.mcp-process/call-with-analyzer-contract-mission
+                      (fn [root sha f] (swap! calls conj [root sha]) (f))
+                      analyzer-contract-test-runner/mission-scope-sha256
+                      (constantly "mission-sha")))]
+      (is (= :ran (wrap 'clj-surgeon.analyzer-contract-test (constantly :ran)))))
+    (is (= [[(System/getProperty "user.dir") "mission-sha"]] @calls))
+    (is (= :plain (wrap 'clj-surgeon.worktree-lifecycle-prune-test (constantly :plain))))
+    (with-redefs-fn {(ns-resolve 'babashka.process 'process)
+                     (fn [argv _opts]
+                       (is (some #(and (string? %) (str/includes? % "$(SUITE_LOCK)")) argv))
+                       (delay {:exit 0 :out "/admitted/suite.lock\n"}))}
+      #(let [argv (lock-command ["java" "--probe"])]
+         (is (str/ends-with? (first argv) "/bin/with-lock"))
+         (is (= ["/admitted/suite.lock" "java" "--probe"] (vec (rest argv))))))
+    (let [lock-command (ns-resolve 'clj-surgeon.battery-parallel-runner 'memory-lock-command!)]
+      (doseq [result [{:exit 1 :out ""} {:exit 0 :out ""} {:exit 0 :out "a\nb"}]]
+        (with-redefs-fn {(ns-resolve 'babashka.process 'process) (fn [& _] (delay result))}
+          #(is (= :memory-lock-unresolved
+                  (try (lock-command ["java"]) nil
+                       (catch clojure.lang.ExceptionInfo e (:error-type (ex-data e)))))))))))

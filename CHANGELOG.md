@@ -1,5 +1,8 @@
 # Changelog
 
+- Diff-impact fixed-point uses selected subsets of the gate lane runner, separate
+  fast/all walls, shared child isolation and partial receipts that cannot land.
+
 All notable changes to clj-surgeon are documented here.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). No version

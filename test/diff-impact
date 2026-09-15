@@ -32,5 +32,5 @@ export NODE_DISABLE_COMPILE_CACHE=1
 if [ "${1:-}" = --self-test ]; then
   bb -Djava.io.tmpdir="$TMPDIR" test/diff_impact.clj --self-test
 else
-  bb -Djava.io.tmpdir="$TMPDIR" test/diff_impact.clj "${1:-3b6d5357}" "${2:-docs/observations/2026-09-12-data-not-code/round9}" "${3:-before}"
+  bb -Djava.io.tmpdir="$TMPDIR" test/diff_impact.clj "${1:-3b6d5357}" "${2:-docs/observations/2026-09-12-data-not-code/round9}" "${3:-before}" ${4:+"$4"}
 fi

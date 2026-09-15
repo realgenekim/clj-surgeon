@@ -311,8 +311,11 @@
   clj-surgeon.battery-parallel-test/launcher-matrix-cells-remain-independently-shardable
   clj-surgeon.battery-parallel-test/memory-refusals-name-the-step-that-could-not-answer
   clj-surgeon.battery-parallel-test/one-lane-is-the-serial-shape
+  clj-surgeon.battery-parallel-test/partial-ledger-serialization-cannot-launder-authority
+  clj-surgeon.battery-parallel-test/partial-receipts-never-land
   clj-surgeon.battery-parallel-test/prewarm-membership-and-authority-are-explicit
   clj-surgeon.battery-parallel-test/prewarm-pool-stores-evidence-under-the-parent-run
+  clj-surgeon.battery-parallel-test/selected-subset-admission-and-census
   clj-surgeon.battery-parallel-test/serial-cannot-authorize-a-landing
   clj-surgeon.battery-parallel-test/the-declared-shard-target-is-the-namespace-that-owns-the-floor
   clj-surgeon.battery-parallel-test/the-floor-is-the-largest-unit
@@ -440,7 +443,9 @@
   clj-surgeon.diagnostic-delta-test/diagnostic-delta-exhausts-the-pure-multiset-contract
   clj-surgeon.diagnostic-delta-test/diagnostic-delta-is-order-independent
   clj-surgeon.diff-impact-test/data-file-reader-selected
+  clj-surgeon.diff-impact-test/dedicated-entrances-preserve-admission
   clj-surgeon.diff-impact-test/empty-and-unmatched-reasons
+  clj-surgeon.diff-impact-test/executor-scope-partitions-without-losing-selected-members
   clj-surgeon.diff-impact-test/fixed-point-unmatched-files-must-refuse-or-fallback
   clj-surgeon.diff-impact-test/literal-content-edge-matrix
   clj-surgeon.diff-impact-test/mixed-edge-fixed-point-and-explanations

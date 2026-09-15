@@ -9,8 +9,10 @@ serve either full-suite validation or battery freshness. Preserve full defaults.
 
 Fixed-point takes an optional fast/all scope (default both): fast intersects the
 selection with the fast manifest; all partitions every selected namespace by its
-own cadence, using the existing bb suite for unlaned members. Unadmitted members
-refuse explicitly; none silently disappear. Record independent scoped results,
+own cadence, using the existing observed runner for registered dedicated members. Dedicated
+work is serial, analyzer work retains its mission, and memory work resolves and
+holds the same exclusive lock as its Make entrance. Unknown members refuse
+explicitly; none silently disappear. Record independent scoped results,
 wall to verdict and per-lane receipts. Empty/HOLD behavior is unchanged.
 
 Commit failing pure admission/census/freshness/routing witnesses before code.

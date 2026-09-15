@@ -62,6 +62,15 @@
 (defn default-namespaces [inventory runtimes runtime]
   (filterv #(= runtime (get runtimes %)) inventory))
 
+ ;; @spec DIFF-IMPACT-007 -- retain the dedicated analyzer entrance's mission.
+(defn run-with-dedicated-mission [n run-test]
+  (if (= n 'clj-surgeon.analyzer-contract-test)
+    ((requiring-resolve 'clj-surgeon.mcp-process/call-with-analyzer-contract-mission)
+     (System/getProperty "user.dir")
+     ((requiring-resolve 'analyzer-contract-test-runner/mission-scope-sha256))
+     run-test)
+    (run-test)))
+
 ;; @spec TEST-ISO-015 -- whole namespace children preserve fixtures/hooks.
 (defn -main [& arguments]
   (let [args (vec arguments)
@@ -89,7 +98,8 @@
                                      {:namespace n :error-type :bb-portable-load-failed} e)))))
           runs (mapv (fn [n]
                        (let [start (System/nanoTime)
-                             facts (execution/run-observed n nil #(t/test-ns n))]
+                             facts (run-with-dedicated-mission n
+                                     #(execution/run-observed n nil (fn [] (t/test-ns n))))]
                          {:namespace n :counters (:counters facts)
                           :expected-vars (:expected-vars facts)
                           :executed-vars (:executed-vars facts)

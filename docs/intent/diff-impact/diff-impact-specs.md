@@ -10,9 +10,7 @@ Parent: [selection design](design.md). Plan: [round 1](../../plans/diff-impact-e
 
 - [x] **DIFF-IMPACT-006**: When a test transitively requires a source namespace containing a bounded repository file literal or source-scan root, the oracle shall propagate those content edges through the same require closure, preserving root bounds, cycles and disconnected negatives. EDN-config value paths and relative io/resource names remain outside bounded resolution; their unmatched changed files shall HOLD under DIFF-IMPACT-004.
 
-## DIFF-IMPACT-007 — executor parity
-
-When an explicit selected lane subset and selection-receipt SHA-256 are supplied,
+- [x] **DIFF-IMPACT-007**: When an explicit selected lane subset and selection-receipt SHA-256 are supplied,
 the lane runner shall admit only distinct members of that suite, run exactly that
 subset through its normal scheduler and child isolation, and emit `:partial true`,
 `:selected` and `:selection-sha`. Census shall detect missing, duplicate and outside
@@ -21,6 +19,8 @@ a partial receipt with `partial-receipt-not-a-gate-receipt`.
 
 Fixed-point shall execute fast/all as separately scoped observations, selecting
 fast members for fast and every selected member through its own lane for all.
+Registered dedicated witnesses shall run serially through the existing observed
+runner, preserving the analyzer mission and the memory entrance's exclusive lock.
 Unknown membership shall refuse before any run. Each observation shall record wall,
 per-namespace results, lane receipts and selection provenance. Existing HOLD and
 nothing-selected precedence is unchanged. A fixture comparison shall witness

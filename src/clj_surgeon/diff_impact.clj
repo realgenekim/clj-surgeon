@@ -139,3 +139,17 @@
              :selection-edge-counts (frequencies (map :edge-kind (mapcat :reasons selected)))
              :unmatched-files unmatched}
       (seq unmatched) (assoc :reason :unmatched-files))))
+
+;; @spec DIFF-IMPACT-007
+(defn selected-inventory
+  "Admit an explicit subset before scheduling or writing any artifacts."
+  [inventory selected selection-sha]
+  (if (nil? selected)
+    inventory
+    (if (and (vector? selected) (seq selected) (every? symbol? selected)
+             (= (count selected) (count (set selected)))
+             (every? (set inventory) selected)
+             (string? selection-sha) (re-matches #"[0-9a-f]{64}" selection-sha))
+      selected
+      (throw (ex-info "Selected namespaces must be distinct suite members with selection SHA-256"
+                      {:error-type :invalid-selected-subset :selected selected})))))
