@@ -6964,3 +6964,7 @@ Candidate 13eafcb6 on b2887b5a (records: 2026-09-15-diff-impact-executor-sol-ver
 ## 2026-09-15T08:57:58Z — executor round 4 (e19ce755): nonempty selections with no fast members refuse `:fast-scope-empty`; prewarm 5 running
 
 750c9663 RED → e19ce755; mixed and :all witnesses pass; JVM + bb 78 tests / 957 assertions. Prewarm 5 (run-bg prewarm-exec5); receipt branch fable/battery-receipt-e19ce755; Sol brief round 5. Replay executor armed (5 h cap).
+
+## 2026-09-15T09:32:33Z — LANDED 5cc35402 = stable/2026-09-15.1: diff-impact executor parity (inb-b142af, inb-fbd110 closed)
+
+Round 5 (e19ce755): Sol GO (verdict-5 in records), battery green, gate envelope consumable (state=:complete, obligations 11, executions 7 — the product now carries its own envelope evidence), phase-B battery-fresh OK, PUBLISHED 09:31Z, tag pushed. Five ship runs for this landing: NO-GO (unclassified members), GO-WITH-FIX → iteration-2 receipt push race (ship defect inb-4e3f13), GO → gate-envelope refusal (ship-side cause suspected, inb-96dc5f), NO-GO (empty fast projection), GO. The replay executor (armed since ~06:10Z, cap 5 h) now sees cf237f96 in trunk and runs the repaired comparison on a quiet box.
