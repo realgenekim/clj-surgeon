@@ -9,3 +9,53 @@ Parent: [selection design](design.md). Plan: [round 1](../../plans/diff-impact-e
 - [x] **DIFF-IMPACT-005**: When selection completes, the oracle shall retain deterministic edge kinds and counts and print each selected namespace's changed-file reason as `selected <ns> via <edge-kind> <file>`. list and fixed-point shall share the selector; the third positional argument shall remain the mode.
 
 - [x] **DIFF-IMPACT-006**: When a test transitively requires a source namespace containing a bounded repository file literal or source-scan root, the oracle shall propagate those content edges through the same require closure, preserving root bounds, cycles and disconnected negatives. EDN-config value paths and relative io/resource names remain outside bounded resolution; their unmatched changed files shall HOLD under DIFF-IMPACT-004.
+
+- [x] **DIFF-IMPACT-007**: When an explicit selected lane subset and selection-receipt SHA-256 are supplied,
+the lane runner shall admit only distinct members of that suite, run exactly that
+subset through its normal scheduler and child isolation, and emit `:partial true`,
+`:selected` and `:selection-sha`. Census shall detect missing, duplicate and outside
+runs against the subset. Full-suite validation and battery freshness shall refuse
+a partial receipt with `partial-receipt-not-a-gate-receipt`.
+
+Fixed-point shall execute fast/all as separately scoped observations, selecting
+fast members for fast and every selected member through its own lane for all.
+Registered dedicated witnesses shall run serially through the existing observed
+runner, preserving the analyzer mission and the memory entrance's exclusive lock.
+Unknown membership shall refuse before any run. Each observation shall record wall,
+per-namespace results, lane receipts and selection provenance. Existing HOLD and
+nothing-selected precedence is unchanged. A fixture comparison shall witness
+per-namespace verdict parity with a full fast run and print measured walls.
+
+### Total selected membership (IMPACT-EXEC-01)
+
+Before fast/all projection, classify every selected namespace against the on-disk
+inventory and admitted manifest: fast-member; other-lane-member with named lane;
+unregistered/renamed; load-excluded; or bb-ineligible. An existing admitted JVM
+or dedicated lane takes precedence over BB incompatibility. Missing on-disk
+namespaces cannot inherit stale manifest admission. Only explicitly admitted
+BB-only members use the BB suite.
+
+Report the complete classification table in successful and refused observations.
+Fast runs fast members and reports other-lane members as belonging to all.
+Both scopes refuse all remaining members together with error type
+`selected-namespace-unclassified` and one `selected-namespace-unclassified <ns>`
+reason per namespace, before any child or output directory. An explicit
+`:selection-exclusion {:reason <classification>}` on that namespace in the
+selection receipt accounts for an excluded member; mismatched or absent reasons
+refuse. Require-edge selection reasons never count as exclusion authorization.
+The oracle is `fast-scope-total-membership`, including Sol's exact renamed-away
+invocation. Replace the contradictory unknown-fast `{}` expectation in the same
+committed red as the stronger oracle. Standing approval covers all phases.
+
+### Nonempty fast projection (IMPACT-EXEC-02)
+
+For every nonempty classification whose fast projection is empty, the executor
+shall refuse before output-directory creation or child calls with
+`:error-type :fast-scope-empty`, `:scope :fast`, and the complete
+`:classification` table retaining every namespace and its lane where admitted.
+The refusal is nonzero/not-green, including explicitly accounted exclusions.
+Mixed selections still execute fast members and retain other-lane members in the
+observation. `:all`, empty-diff and prior unclassified refusals are unchanged.
+The `fast-scope-total-membership` oracle exercises singleton and multiple
+other-lane selections, accounted exclusions, mixed selections and all controls
+through the coordinator. Standing approval covers RED, repair and verification.

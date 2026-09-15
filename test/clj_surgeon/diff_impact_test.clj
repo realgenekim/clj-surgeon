@@ -300,3 +300,177 @@
               {path "new"} "list")]
       (is (= 0 (:exit r)))
       (is (= '#{fixture.reader-test} (selected-set r))))))
+
+;; @spec DIFF-IMPACT-007
+(deftest executor-scope-partitions-without-losing-selected-members
+  (require 'clj-surgeon.battery-parallel-runner)
+  (let [groups (ns-resolve 'clj-surgeon.battery-parallel-runner 'selection-suites)]
+    (is (some? groups))
+    (when groups
+      (let [members '[clj-surgeon.fast-lane-isolation-test clj-surgeon.diff-impact-test]
+            fast (groups members :fast)
+            all (groups members :all)]
+        (is (= {"fast" '[clj-surgeon.fast-lane-isolation-test]} fast))
+        (is (= {"fast" '[clj-surgeon.fast-lane-isolation-test]
+                "mcp" '[clj-surgeon.diff-impact-test]} all))
+        (is (= {} (groups [] :fast)))
+        (is (= :selected-namespace-unclassified
+               (try (groups '[unknown-test] :fast) nil
+                    (catch clojure.lang.ExceptionInfo e (:error-type (ex-data e))))))
+        (is (= {} (groups '[clj-surgeon.analyzer-contract-test] :fast)))
+        (is (= {"dedicated" '[clj-surgeon.analyzer-contract-test
+                              clj-surgeon.memory.oom-reproduction-test
+                              clj-surgeon.worktree-lifecycle-prune-test]}
+               (groups '[clj-surgeon.analyzer-contract-test
+                         clj-surgeon.memory.oom-reproduction-test
+                         clj-surgeon.worktree-lifecycle-prune-test] :all)))
+        (is (= {"battery" '[clj-surgeon.cli-dispatch-test]}
+               (groups '[clj-surgeon.cli-dispatch-test] :all)))
+        (is (= :selected-namespace-unclassified
+               (try (groups '[unknown-test] :all) nil
+                    (catch clojure.lang.ExceptionInfo e (:error-type (ex-data e))))))))))
+
+;; @spec DIFF-IMPACT-007
+(deftest dedicated-entrances-preserve-admission
+  (require 'clj-surgeon.battery-parallel-runner)
+  (when-not (find-ns 'run-all) (require 'run-all))
+  (let [wrap (ns-resolve 'run-all 'run-with-dedicated-mission)
+        lock-command (ns-resolve 'clj-surgeon.battery-parallel-runner 'memory-lock-command!)
+        memory? (ns-resolve 'clj-surgeon.battery-parallel-runner 'memory-members?)
+        calls (atom [])]
+    (is (memory? '[clj-surgeon.memory.oom-reproduction-test]))
+    (is (not (memory? '[clj-surgeon.worktree-lifecycle-prune-test])))
+    (with-redefs [clojure.core/requiring-resolve
+                  (fn [n]
+                    (case n
+                      clj-surgeon.mcp-process/call-with-analyzer-contract-mission
+                      (fn [root sha f] (swap! calls conj [root sha]) (f))
+                      analyzer-contract-test-runner/mission-scope-sha256
+                      (constantly "mission-sha")))]
+      (is (= :ran (wrap 'clj-surgeon.analyzer-contract-test (constantly :ran)))))
+    (is (= [[(System/getProperty "user.dir") "mission-sha"]] @calls))
+    (is (= :plain (wrap 'clj-surgeon.worktree-lifecycle-prune-test (constantly :plain))))
+    (with-redefs-fn {(ns-resolve 'babashka.process 'process)
+                     (fn [argv _opts]
+                       (is (some #(and (string? %) (str/includes? % "$(SUITE_LOCK)")) argv))
+                       (delay {:exit 0 :out "/admitted/suite.lock\n"}))}
+      #(let [argv (lock-command ["java" "--probe"])]
+         (is (str/ends-with? (first argv) "/bin/with-lock"))
+         (is (= ["/admitted/suite.lock" "java" "--probe"] (vec (rest argv))))))
+    (let [lock-command (ns-resolve 'clj-surgeon.battery-parallel-runner 'memory-lock-command!)]
+      (doseq [result [{:exit 1 :out ""} {:exit 0 :out ""} {:exit 0 :out "a\nb"}]]
+        (with-redefs-fn {(ns-resolve 'babashka.process 'process) (fn [& _] (delay result))}
+          #(is (= :memory-lock-unresolved
+                  (try (lock-command ["java"]) nil
+                       (catch clojure.lang.ExceptionInfo e (:error-type (ex-data e)))))))))))
+
+;; @spec DIFF-IMPACT-007
+(deftest fast-scope-total-membership
+  ;; Sol IMPACT-EXEC-01, cf237f96: the exact renamed-away call returned exit 0
+  ;; with :selected [], :receipts [], :runs []. No child may start on refusal.
+  (require 'clj-surgeon.battery-parallel-runner)
+  (let [runner 'clj-surgeon.battery-parallel-runner
+        classify (ns-resolve runner 'classify-selection)
+        project (ns-resolve runner 'project-selection)
+        fixture {:manifest '{fast-test :fast other-test :integration stale-test :fast}
+                 :discovered '#{fast-test other-test excluded-test ineligible-test}
+                 :dedicated #{} :bb '#{ineligible-test}
+                 :excluded '{excluded-test "load failed"}
+                 :bb-ineligible '{ineligible-test {:reasons #{:sci-host-interop}}}}
+        selected (mapv #(hash-map :namespace %) '[fast-test other-test renamed-test excluded-test ineligible-test])
+        expected [{:namespace 'fast-test :classification :fast-member :lane :fast :suite "fast"}
+                  {:namespace 'other-test :classification :other-lane-member :lane :integration :suite "mcp"}
+                  {:namespace 'renamed-test :classification :unregistered/renamed}
+                  {:namespace 'excluded-test :classification :load-excluded}
+                  {:namespace 'ineligible-test :classification :bb-ineligible}]]
+    (is (some? classify))
+    (is (some? project))
+    (when (and classify project)
+      (is (= expected (classify selected fixture)))
+      (is (= [{:namespace 'ineligible-test :classification :fast-member :lane :fast :suite "fast"}]
+             (classify [{:namespace 'ineligible-test}] (assoc-in fixture [:manifest 'ineligible-test] :fast))))
+      (is (= :other-lane-member
+             (:classification (first (classify [{:namespace 'ineligible-test}]
+                                               (assoc fixture :bb-ineligible {}))))))
+      (doseq [scope [:fast :all]
+              reason [nil :wrong-reason]]
+        (is (= :selected-namespace-unclassified
+               (try (project (classify [{:namespace 'excluded-test :selection-exclusion {:reason reason}}] fixture) scope) nil
+                    (catch clojure.lang.ExceptionInfo e (:error-type (ex-data e)))))))
+      (is (= :unregistered/renamed (:classification (first (classify [{:namespace 'stale-test}] fixture)))))
+      (doseq [scope [:fast :all]]
+        (let [data (try (project (classify selected fixture) scope) nil
+                     (catch clojure.lang.ExceptionInfo e (ex-data e)))]
+          (is (= :selected-namespace-unclassified (:error-type data)))
+          (is (= expected (:classification data)))
+          (is (= '[renamed-test excluded-test ineligible-test] (mapv :namespace (:problems data))))
+          (is (= (mapv #(str "selected-namespace-unclassified " %) '[renamed-test excluded-test ineligible-test])
+                 (mapv :reason (:problems data))))))
+      (let [accounted (mapv #(if (#{:unregistered/renamed :load-excluded :bb-ineligible} (:classification %))
+                               (assoc % :selection-exclusion {:reason (:classification %)}) %) expected)]
+        (is (= {"fast" '[fast-test]} (project accounted :fast)))
+        (is (= {"fast" '[fast-test] "mcp" '[other-test]} (project accounted :all))))
+      (is (= :load-excluded
+             (get-in (classify [{:namespace 'excluded-test :selection-exclusion {:reason :load-excluded}}] fixture)
+                     [0 :selection-exclusion :reason]))))
+    (binding [*command-line-args* ["--library"] *ns* (the-ns 'user)]
+      (load-file "test/diff_impact.clj"))
+    ;; @spec IMPACT-EXEC-02
+    ;; Sol at b2887b5a: other-test alone returned exit 0 with no runs/calls.
+    (let [root (.toFile (java.nio.file.Files/createTempDirectory
+                          "impact-scope-" (make-array java.nio.file.attribute.FileAttribute 0)))
+          fast (first expected)
+          other (second expected)
+          battery {:namespace 'battery-test :classification :other-lane-member
+                   :lane :battery :suite "battery"}
+          excluded (assoc (nth expected 3) :selection-exclusion {:reason :load-excluded})]
+      (try
+        (doseq [classification [[other] [other battery] [excluded] [other excluded]
+                                [fast other] [fast other battery]]
+                scope [:fast :all]]
+          (let [calls (atom [])
+                output (io/file root (str (count (file-seq root)) "-" (name scope)))
+                result (with-redefs-fn
+                         {(ns-resolve runner 'selection-classification) (constantly classification)
+                          (ns-resolve runner 'run-suite!)
+                          (fn [opts]
+                            (let [members (edn/read-string (get opts "--selected"))]
+                              (swap! calls into members)
+                              {:state :passed :runs (mapv #(hash-map :namespace %) members)}))}
+                         #(try ((ns-resolve 'user 'run-selected-scope!)
+                                (mapv (fn [row] (select-keys row [:namespace :selection-exclusion])) classification)
+                                scope (str output) "sol-other-lane" (apply str (repeat 64 "a")) 0)
+                               (catch clojure.lang.ExceptionInfo e
+                                 {:exit 1 :data (ex-data e)})))
+                projected (vec (mapcat val (project classification scope)))
+                empty-fast? (and (= :fast scope) (empty? projected))]
+            (if empty-fast?
+              (do
+                (is (not= 0 (:exit result)) (pr-str result))
+                (is (= :fast-scope-empty (get-in result [:data :error-type])))
+                (is (= :fast (get-in result [:data :scope])))
+                (is (= classification (get-in result [:data :classification])))
+                (is (= [] @calls))
+                (is (not (.exists output))))
+              (do
+                (is (= 0 (:exit result)) (pr-str result))
+                (is (= classification (:classification result)))
+                (is (= projected (:selected result) @calls (mapv :namespace (:runs result))))))
+            (when (= :fast scope)
+              (is (or (seq (:runs result))
+                      (and (not= 0 (:exit result))
+                           (= :fast-scope-empty (get-in result [:data :error-type]))))
+                  (pr-str result)))))
+        (finally
+          (doseq [f (reverse (file-seq root))] (io/delete-file f true)))))
+    (let [calls (atom [])
+          result (with-redefs-fn {(ns-resolve runner 'run-suite!) (fn [opts] (swap! calls conj opts))}
+                   #(try ((ns-resolve 'user 'run-selected-scope!)
+                          [{:namespace 'clj-surgeon.renamed-away-test}] :fast
+                          (System/getProperty "java.io.tmpdir") "sol-renamed" (apply str (repeat 64 "a")) 0)
+                         (catch clojure.lang.ExceptionInfo e
+                           {:exit 1 :data (ex-data e) :error (.getMessage e)})))]
+      (is (= 1 (:exit result)) (pr-str result))
+      (is (= :selected-namespace-unclassified (get-in result [:data :error-type])))
+      (is (str/includes? (or (:error result) "") "selected-namespace-unclassified clj-surgeon.renamed-away-test"))
+      (is (= [] @calls)))))
