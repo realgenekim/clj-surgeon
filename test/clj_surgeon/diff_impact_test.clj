@@ -387,17 +387,27 @@
     (is (some? project))
     (when (and classify project)
       (is (= expected (classify selected fixture)))
+      (is (= [{:namespace 'ineligible-test :classification :fast-member :lane :fast :suite "fast"}]
+             (classify [{:namespace 'ineligible-test}] (assoc-in fixture [:manifest 'ineligible-test] :fast))))
+      (is (= :other-lane-member
+             (:classification (first (classify [{:namespace 'ineligible-test}]
+                                               (assoc fixture :bb-ineligible {}))))))
+      (doseq [scope [:fast :all]
+              reason [nil :wrong-reason]]
+        (is (= :selected-namespace-unclassified
+               (try (project (classify [{:namespace 'excluded-test :selection-exclusion {:reason reason}}] fixture) scope) nil
+                    (catch clojure.lang.ExceptionInfo e (:error-type (ex-data e)))))))
       (is (= :unregistered/renamed (:classification (first (classify [{:namespace 'stale-test}] fixture)))))
       (doseq [scope [:fast :all]]
         (let [data (try (project (classify selected fixture) scope) nil
-                       (catch clojure.lang.ExceptionInfo e (ex-data e)))]
+                     (catch clojure.lang.ExceptionInfo e (ex-data e)))]
           (is (= :selected-namespace-unclassified (:error-type data)))
           (is (= expected (:classification data)))
           (is (= '[renamed-test excluded-test ineligible-test] (mapv :namespace (:problems data))))
           (is (= (mapv #(str "selected-namespace-unclassified " %) '[renamed-test excluded-test ineligible-test])
                  (mapv :reason (:problems data))))))
       (let [accounted (mapv #(if (#{:unregistered/renamed :load-excluded :bb-ineligible} (:classification %))
-                              (assoc % :selection-exclusion {:reason (:classification %)}) %) expected)]
+                               (assoc % :selection-exclusion {:reason (:classification %)}) %) expected)]
         (is (= {"fast" '[fast-test]} (project accounted :fast)))
         (is (= {"fast" '[fast-test] "mcp" '[other-test]} (project accounted :all))))
       (is (= :load-excluded

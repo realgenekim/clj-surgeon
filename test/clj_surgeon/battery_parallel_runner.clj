@@ -747,24 +747,60 @@
 (defn partial-census-problems [receipt observed]
   (census-problems receipt observed))
 
-(defn selection-suites
-  "Project selection onto gate suites. Integration uses the mcp suite's phases."
-  [selected scope]
+(declare tree-census)
+
+;; @spec DIFF-IMPACT-007
+(defn classify-selection
+  "Total membership before projection. A live admitted JVM lane remains valid
+   when BB cannot load/run it; exclusions never create an implicit runner."
+  [selected {:keys [manifest discovered dedicated bb excluded bb-ineligible]}]
+  (mapv (fn [entry]
+          (let [{n :namespace :keys [selection-exclusion]} (if (symbol? entry) {:namespace entry} entry)
+                lane (get manifest n)
+                membership (cond
+                             (not (contains? discovered n)) {:classification :unregistered/renamed}
+                             (contains? #{:fast :integration :battery} lane)
+                             {:classification (if (= lane :fast) :fast-member :other-lane-member)
+                              :lane lane :suite (case lane :fast "fast" :integration "mcp" :battery "battery")}
+                             (contains? dedicated n) {:classification :other-lane-member :lane :dedicated :suite "dedicated"}
+                             (contains? excluded n) {:classification :load-excluded}
+                             (contains? bb-ineligible n) {:classification :bb-ineligible}
+                             (contains? bb n) {:classification :other-lane-member :lane :bb :suite "bb"}
+                             :else {:classification :unregistered/renamed})]
+            (cond-> (assoc membership :namespace n)
+              selection-exclusion (assoc :selection-exclusion selection-exclusion)))) selected))
+
+(defn selection-classification [selected]
+  (classify-selection selected
+                      {:manifest lm/manifest :discovered (set (:discovered (tree-census)))
+                       :dedicated (set (suite-namespaces "dedicated"))
+                       :bb (set (bb-namespaces)) :excluded lm/excluded
+                       :bb-ineligible lm/bb-ineligibilities}))
+
+;; @spec DIFF-IMPACT-007
+(defn project-selection
+  "Refuse every unaccounted non-member together before selecting any suite."
+  [classification scope]
   (when-not (contains? #{:fast :all} scope)
     (throw (ex-info "Unknown impact scope" {:error-type :invalid-impact-scope :scope scope})))
-  (reduce (fn [groups n]
-            (let [suite (case (lm/lane-of n)
-                          :fast "fast" :integration "mcp" :battery "battery"
-                          (cond (contains? (set (suite-namespaces "dedicated")) n) "dedicated"
-                                (contains? (set (bb-namespaces)) n) "bb"))]
-              (when-not suite
-                (throw (ex-info "Selected namespace has no admitted lane runner"
-                                {:error-type :unadmitted-selection :namespace n})))
-              (if (or (= scope :all) (= suite "fast"))
-                (update groups suite (fnil conj []) n) groups)))
-          (sorted-map) (if (= scope :fast)
-                         (filter #(= :fast (lm/lane-of %)) selected)
-                         selected)))
+  (let [problems (vec (for [{:keys [namespace classification selection-exclusion]} classification
+                            :when (and (not (contains? #{:fast-member :other-lane-member} classification))
+                                       (not= classification (:reason selection-exclusion)))]
+                        {:namespace namespace :classification classification
+                         :reason (str "selected-namespace-unclassified " namespace)}))]
+    (when (seq problems)
+      (throw (ex-info (str/join "; " (map :reason problems))
+                      {:error-type :selected-namespace-unclassified :scope scope
+                       :classification classification :problems problems})))
+    (reduce (fn [groups {:keys [namespace suite]}]
+              (if (and suite (or (= scope :all) (= suite "fast")))
+                (update groups suite (fnil conj []) namespace) groups))
+            (sorted-map) classification)))
+
+(defn selection-suites
+  "Classify every selected namespace against disk and admission before projection."
+  [selected scope]
+  (project-selection (selection-classification selected) scope))
 
 (defn source-digest []
   (let [md (java.security.MessageDigest/getInstance "SHA-256")

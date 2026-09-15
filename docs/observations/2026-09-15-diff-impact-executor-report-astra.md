@@ -189,3 +189,124 @@ Read first: the records repository's
 `preregistration.md` Addendum. Their original broken bets remain broken. This
 branch supplies executor parity and its class oracle; it does not execute or
 score that repaired five-diff experiment, merge to trunk, or change routing.
+
+## Round 2
+
+IMPACT-EXEC-01 repair against `cf237f96`, under standing phase approval.
+The red commit is `5e3367ef`. **That same commit replaces the contradictory
+unknown-fast `{}` expectation with a typed-refusal expectation.** Seven assertions
+failed before implementation. Sol's exact renamed-away call produced:
+
+```edn
+{:selected [] :receipts [] :runs [] :exit 0 :scope :fast :partial true}
+```
+
+The committed `fast-scope-total-membership` oracle covers the five-class fixture,
+all unaccounted names in both scopes, stale manifest membership absent on disk,
+explicit matching selection exclusions, mismatched/missing exclusion reasons,
+BB-only admission, JVM admission despite BB incompatibility, and the exact
+renamed-away public executor call with zero child launches. The repaired call
+throws `:error-type :selected-namespace-unclassified` and names
+`selected-namespace-unclassified clj-surgeon.renamed-away-test`; the CLI turns
+that into a refused observation with exit 1.
+
+Classification precedes projection. Successful and refused observations retain
+`:classification` for the complete selection. Fast runs fast members and reports
+other-lane members with their lane and suite; all routes those members normally.
+An on-disk, admitted JVM/dedicated member remains a member when BB is incompatible.
+An absent namespace cannot inherit admission from a stale manifest. Non-members
+require an explicit matching `:selection-exclusion {:reason <classification>}`
+on their selection-receipt entry; dependency-edge reasons cannot authorize omission.
+
+| Fixture namespace | Classification | Lane / suite |
+|---|---|---|
+| fast-test | fast-member | fast / fast |
+| other-test | other-lane-member | integration / mcp |
+| renamed-test | unregistered/renamed | refusal |
+| excluded-test | load-excluded | refusal |
+| ineligible-test | bb-ineligible | refusal |
+
+Both scopes report all three refused names together, each with
+`selected-namespace-unclassified <ns>`. No run begins until the entire table
+has passed admission.
+
+### Re-run of Sol's probes
+
+Sol's script was present. The retained copy changes only its scratch prefix to
+this round's allowed directory. Selected output (full output in `sol-probes.log`):
+
+```text
+:battery-fresh {:ok false, :reason :partial-receipt-not-a-gate-receipt, :message A selected subset cannot certify battery freshness}
+:census-gate [{:kind :partial-receipt-not-a-gate-receipt, :suite fast}]
+:partial-execution-census []
+:prewarm-entry {:error-type :partial-receipt-not-a-gate-receipt, :message A selected subset cannot certify the landing gate}
+:landing-entry {:error-type :partial-receipt-not-a-gate-receipt, :message A selected subset cannot certify the landing gate}
+:landing-receipt-chain {:eligible false, :problems [{:kind :partial-receipt-not-a-gate-receipt, :suite fast}]}
+:selected-silently-omitted {:state :failed, :namespace-census {:expected [a], :observed [], :expected-count 1, :observed-count 0}}
+:unselected-ran {:state :failed}
+```
+
+The omitted case includes `:missing [a]`; the unselected case includes
+`{:kind :namespace-census-mismatch :missing [] :unexpected [b]}` and
+`:partial-child-census-mismatch`. The existing parity checker accepts its retained
+positive pair (exit 0, `:delta []`) and rejects Sol's retained user.home-omission
+result (exit 1, `{:namespace clj-surgeon.fast-lane-isolation-test :control true
+:candidate false}`). These are rechecks of retained artifacts, not new full-fast
+measurements. JVM and BB child command comparisons report
+`{:argv-prefix-delta []}`; only the namespace tail differs.
+
+### Validation
+
+- BB diff-impact: 17 tests / 287 assertions, zero failures/errors.
+- JVM affected run: 97 tests / 2,531 assertions; only two stale-census assertions
+  failed before regeneration. Diff-impact and battery-parallel passed.
+- `make census-regenerate`: exit 0, +1/-0 (the new oracle).
+- JVM lane-manifest after regeneration: 35 tests / 1,935 assertions, zero
+  failures/errors. All requested affected namespaces therefore pass.
+- Warm JVM exact oracle passed after checking this worktree's `user.dir`.
+- Standard Clojure Style v0.29.0; `~/bin/clj-kondo`: 0 errors / 0 warnings.
+- Intent audit: `:ok true`; `git diff --check` clean.
+- Required JVM/BB invocations use 1024 MiB. Replay children keep the original
+  gate's own runtime/heap policy. No `make test` or `test-battery` was run.
+- Both protected ledgers remain byte-identical to the pre-round SHA-256 capture.
+  The selector source and HOLD/nothing-selected block are byte-identical to
+  `cf237f96`; both intent documents retain their complete base prefixes.
+
+### D2 / D3 replay
+
+Fresh shared clones of Sol's clean D2 (`8aedb65e`) and D3 (`ad05e27c`) subjects
+live entirely under `/var/tmp/forge/impact-fx/exec/round2`. D2 compares `00566756`;
+D3 compares `ad05e27c^`. The overlay supplies the repaired selector/coordinator
+and its probe-state dependency without changing the subject Git diff or manifest.
+The driver replaces only the environment root-location predicate for the nested
+scratch root, as in round 1. This is not public-launcher root admission evidence.
+No product path derives from scratch. Runs are serial by replay cell; affected
+checks overlapped some cells. These single-sample walls carry no speed claim.
+
+| Replay | Complete selection | Executed | Selection ms | Execution ms | Selection + execution ms | Invocation ms | Exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| D2 list | 9 | 0 | — | — | — | 4,274 | 0 |
+| D2 fast | 9 (7 fast / 2 other-lane) | 7 | 4,104 | 9,047 | 13,151 | 13,245 | 0 |
+| D3 list | 101 | 0 | — | — | — | 4,607 | 0 |
+| D3 fast | 101 (51 fast / 50 other-lane) | 51 | 4,331 | 33,357 | 37,688 | 37,781 | 1 |
+| D3 all | 101 (51 fast / 50 other-lane) | 101 | 4,480 | 773,462 | 777,942 | 778,022 | 1 |
+
+D3 fast fails only `clj-surgeon.lane-manifest-test`, as expected on that historic
+red snapshot. D3 all reports those same 101 namespaces as executed, with failing
+namespaces `clj-surgeon.txn-journal-test`,
+`clj-surgeon.receipt-artifacts-boundary-test`, and
+`clj-surgeon.lane-manifest-test`. Its battery receipt additionally reports two
+nonzero child exits and `:partial-child-census-mismatch`; dedicated and mcp
+receipts pass. These fixture failures are retained, not excused as repair-suite
+passes. Battery wall is 160,219 ms; dedicated wall is 513,078 ms.
+
+All round-2 scripts, logs, cloned subjects, overlay files and receipts are retained
+under `/var/tmp/forge/impact-fx/exec/round2/`. Reproduction driver: `replay.py`.
+Evidence: `red.log`, `green-focused.log`, `renamed-green.edn`, `sol-probes.clj`,
+`sol-probes.log`, `argv.log`, `parity.log`, `parity-negative.log`, `jvm.log`,
+`bb.log`, `lane-final.log`, `census.log`, `format.log`, `lint.log`, `intent.log`,
+`summary.edn`, `replay-walls.json`, `protected.sha256`, `protected-code.json`,
+and `d2-{list,fast}` / `d3-{list,fast,all}` receipt directories.
+The project-local nREPL started for the warm check was stopped afterward.
+
+Completed: 2026-09-15T06:59:38.442206+00:00

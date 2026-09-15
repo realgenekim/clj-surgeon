@@ -74,8 +74,8 @@
   [selected scope output phase sha selection-ms]
   (let [start (System/nanoTime)
         _ (require 'clj-surgeon.battery-parallel-runner)
-        groups ((resolve 'clj-surgeon.battery-parallel-runner/selection-suites)
-                (mapv :namespace selected) scope)
+        classification ((resolve 'clj-surgeon.battery-parallel-runner/selection-classification) selected)
+        groups ((resolve 'clj-surgeon.battery-parallel-runner/project-selection) classification scope)
         receipts
         (mapv (fn [[suite members]]
                 (let [work (str (io/file output phase (name scope) suite))
@@ -95,6 +95,7 @@
           groups)
         wall (quot (- (System/nanoTime) start) 1000000)]
     {:scope scope :partial true :selection-sha sha
+     :classification classification
      :selected (vec (mapcat val groups))
      :selection-wall-ms selection-ms :wall-ms wall :total-wall-ms (+ selection-ms wall)
      :exit (if (every? #(= :passed (:state %)) receipts) 0 1)
@@ -155,6 +156,7 @@
                                                     {:scope scope :partial true :selection-sha sha
                                                      :selected (mapv :namespace selected)
                                                      :state :refused :exit 1 :runs [] :receipts []
+                                                     :classification (:classification (ex-data e))
                                                      :selection-wall-ms selection-ms :wall-ms wall
                                                      :total-wall-ms (+ selection-ms wall)
                                                      :error (.getMessage e) :data (ex-data e)})))]

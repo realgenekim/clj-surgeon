@@ -446,6 +446,7 @@
   clj-surgeon.diff-impact-test/dedicated-entrances-preserve-admission
   clj-surgeon.diff-impact-test/empty-and-unmatched-reasons
   clj-surgeon.diff-impact-test/executor-scope-partitions-without-losing-selected-members
+  clj-surgeon.diff-impact-test/fast-scope-total-membership
   clj-surgeon.diff-impact-test/fixed-point-unmatched-files-must-refuse-or-fallback
   clj-surgeon.diff-impact-test/literal-content-edge-matrix
   clj-surgeon.diff-impact-test/mixed-edge-fixed-point-and-explanations
