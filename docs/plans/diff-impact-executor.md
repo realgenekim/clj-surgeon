@@ -64,3 +64,16 @@ values; historical snapshots without these fields cannot provide byte parity
 for fields they never emitted. TDD, affected JVM/BB tests at 1024 MiB, lint,
 census, protected hashes, one fixed prewarm and installed consumer are the gates.
 All phases have standing approval.
+
+### Nonempty fast projection (IMPACT-EXEC-02)
+
+For every nonempty classification whose fast projection is empty, the executor
+shall refuse before output-directory creation or child calls with
+`:error-type :fast-scope-empty`, `:scope :fast`, and the complete
+`:classification` table retaining every namespace and its lane where admitted.
+The refusal is nonzero/not-green, including explicitly accounted exclusions.
+Mixed selections still execute fast members and retain other-lane members in the
+observation. `:all`, empty-diff and prior unclassified refusals are unchanged.
+The `fast-scope-total-membership` oracle exercises singleton and multiple
+other-lane selections, accounted exclusions, mixed selections and all controls
+through the coordinator. Standing approval covers RED, repair and verification.

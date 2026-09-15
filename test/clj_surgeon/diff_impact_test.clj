@@ -415,6 +415,54 @@
                      [0 :selection-exclusion :reason]))))
     (binding [*command-line-args* ["--library"] *ns* (the-ns 'user)]
       (load-file "test/diff_impact.clj"))
+    ;; @spec IMPACT-EXEC-02
+    ;; Sol at b2887b5a: other-test alone returned exit 0 with no runs/calls.
+    (let [root (.toFile (java.nio.file.Files/createTempDirectory
+                          "impact-scope-" (make-array java.nio.file.attribute.FileAttribute 0)))
+          fast (first expected)
+          other (second expected)
+          battery {:namespace 'battery-test :classification :other-lane-member
+                   :lane :battery :suite "battery"}
+          excluded (assoc (nth expected 3) :selection-exclusion {:reason :load-excluded})]
+      (try
+        (doseq [classification [[other] [other battery] [excluded] [other excluded]
+                                [fast other] [fast other battery]]
+                scope [:fast :all]]
+          (let [calls (atom [])
+                output (io/file root (str (count (file-seq root)) "-" (name scope)))
+                result (with-redefs-fn
+                         {(ns-resolve runner 'selection-classification) (constantly classification)
+                          (ns-resolve runner 'run-suite!)
+                          (fn [opts]
+                            (let [members (edn/read-string (get opts "--selected"))]
+                              (swap! calls into members)
+                              {:state :passed :runs (mapv #(hash-map :namespace %) members)}))}
+                         #(try ((ns-resolve 'user 'run-selected-scope!)
+                                (mapv (fn [row] (select-keys row [:namespace :selection-exclusion])) classification)
+                                scope (str output) "sol-other-lane" (apply str (repeat 64 "a")) 0)
+                               (catch clojure.lang.ExceptionInfo e
+                                 {:exit 1 :data (ex-data e)})))
+                projected (vec (mapcat val (project classification scope)))
+                empty-fast? (and (= :fast scope) (empty? projected))]
+            (if empty-fast?
+              (do
+                (is (not= 0 (:exit result)) (pr-str result))
+                (is (= :fast-scope-empty (get-in result [:data :error-type])))
+                (is (= :fast (get-in result [:data :scope])))
+                (is (= classification (get-in result [:data :classification])))
+                (is (= [] @calls))
+                (is (not (.exists output))))
+              (do
+                (is (= 0 (:exit result)) (pr-str result))
+                (is (= classification (:classification result)))
+                (is (= projected (:selected result) @calls (mapv :namespace (:runs result))))))
+            (when (= :fast scope)
+              (is (or (seq (:runs result))
+                      (and (not= 0 (:exit result))
+                           (= :fast-scope-empty (get-in result [:data :error-type]))))
+                  (pr-str result)))))
+        (finally
+          (doseq [f (reverse (file-seq root))] (io/delete-file f true)))))
     (let [calls (atom [])
           result (with-redefs-fn {(ns-resolve runner 'run-suite!) (fn [opts] (swap! calls conj opts))}
                    #(try ((ns-resolve 'user 'run-selected-scope!)
