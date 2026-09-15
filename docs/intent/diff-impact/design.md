@@ -67,3 +67,10 @@ inputs and unanchored dynamic paths remain unresolved; unmatched changes HOLD.
 A seed with declared require or content dependents but no reachable test is
 :no-dependency-edge;
 :no-test-dependent describes only an isolated namespace seed.
+
+## Executor
+
+[Executor plan](../../plans/diff-impact-executor.md) and DIFF-IMPACT-007 bind the
+selector to the gate's existing runner. Selection remains independent of cadence;
+execution projects it into separately reported fast/all scopes. A partial receipt
+is evidence only for its explicit subset and never conveys landing authority.

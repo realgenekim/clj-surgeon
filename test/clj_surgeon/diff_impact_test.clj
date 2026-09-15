@@ -300,3 +300,20 @@
               {path "new"} "list")]
       (is (= 0 (:exit r)))
       (is (= '#{fixture.reader-test} (selected-set r))))))
+
+;; @spec DIFF-IMPACT-007
+(deftest executor-scope-partitions-without-losing-selected-members
+  (require 'clj-surgeon.battery-parallel-runner)
+  (let [groups (ns-resolve 'clj-surgeon.battery-parallel-runner 'selection-suites)]
+    (is (some? groups))
+    (when groups
+      (let [members '[clj-surgeon.fast-lane-isolation-test clj-surgeon.diff-impact-test]
+            fast (groups members :fast)
+            all (groups members :all)]
+        (is (= {"fast" '[clj-surgeon.fast-lane-isolation-test]} fast))
+        (is (= {"fast" '[clj-surgeon.fast-lane-isolation-test]
+                "mcp" '[clj-surgeon.diff-impact-test]} all))
+        (is (= {} (groups [] :fast)))
+        (is (= :unadmitted-selection
+               (try (groups '[unknown-test] :all) nil
+                    (catch clojure.lang.ExceptionInfo e (:error-type (ex-data e))))))))))
