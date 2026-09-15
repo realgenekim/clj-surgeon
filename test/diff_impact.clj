@@ -3,6 +3,7 @@
          '[babashka.process :as process]
          '[cheshire.core :as json]
          '[clojure.java.io :as io]
+         '[clojure.edn :as edn]
          '[clj-surgeon.diff-impact :refer [dependencies impact content-edges select-impact]]
          '[clj-surgeon.receipt-artifacts :as artifacts]
          '[clojure.string :as str])
@@ -63,6 +64,48 @@
   (and (= 0 process-exit) (pos-int? (:test counters))
        (= 0 (:fail counters) (:error counters))))
 
+ ;; @spec DIFF-IMPACT-007
+(defn selection-sha [text]
+  (let [md (java.security.MessageDigest/getInstance "SHA-256")]
+    (.update md (.getBytes text "UTF-8"))
+    (apply str (map #(format "%02x" (bit-and 255 %)) (.digest md)))))
+
+(defn run-selected-scope!
+  [selected scope output phase sha selection-ms]
+  (let [start (System/nanoTime)
+        _ (require 'clj-surgeon.battery-parallel-runner)
+        classification ((resolve 'clj-surgeon.battery-parallel-runner/selection-classification) selected)
+        groups ((resolve 'clj-surgeon.battery-parallel-runner/project-selection) classification scope)
+        ;; @spec IMPACT-EXEC-02
+        _ (when (and (= :fast scope) (seq classification) (empty? groups))
+            (throw (ex-info "Diff-impact refused: fast-scope-empty"
+                            {:error-type :fast-scope-empty :scope scope
+                             :classification classification})))
+        receipts
+        (mapv (fn [[suite members]]
+                (let [work (str (io/file output phase (name scope) suite))
+                      log (str work ".log")
+                      opts {"--suite" suite "--selected" (pr-str members)
+                            "--selection-sha" sha "--work-dir" work}]
+                  (io/make-parents log)
+                  (with-open [out (io/writer log)]
+                    (binding [*out* out *err* out]
+                      (try
+                        ((resolve 'clj-surgeon.battery-parallel-runner/run-suite!) opts)
+                        (catch Exception e
+                          (if (fs/exists? (str work "/receipt.edn"))
+                            (edn/read-string (slurp (str work "/receipt.edn")))
+                            {:state :refused :suite suite :partial true :selected members
+                             :selection-sha sha :error (.getMessage e) :data (ex-data e)})))))))
+          groups)
+        wall (quot (- (System/nanoTime) start) 1000000)]
+    {:scope scope :partial true :selection-sha sha
+     :classification classification
+     :selected (vec (mapcat val groups))
+     :selection-wall-ms selection-ms :wall-ms wall :total-wall-ms (+ selection-ms wall)
+     :exit (if (every? #(= :passed (:state %)) receipts) 0 1)
+     :receipts receipts :runs (vec (mapcat :runs receipts))}))
+
 (defn main [args]
   ;; Direct script invocation must not bypass the launcher's environment gate.
   (when-let [overrides (seq (forbidden-overrides (System/getenv)))]
@@ -70,9 +113,12 @@
   (when-not (gate-environment? (environment-receipt))
     (throw (ex-info "Diff-impact refused: use test/diff-impact for a narrow gate environment"
                     (environment-receipt))))
-  (let [[base output phase] args]
+  (let [[base output phase scope-arg] args
+        started (System/nanoTime)
+        scopes (case scope-arg nil (if (= phase "fixed-point") [:fast :all] [:all]) "fast" [:fast] "all" [:all]
+                     (throw (ex-info "Scope must be fast or all" {:error-type :invalid-impact-scope})))]
     (when-not (and base output (#{"before" "after" "merged" "fixed-point" "list"} phase))
-      (throw (ex-info "Usage: bb test/diff_impact.clj BASE OUTPUT_DIR before|after|merged|fixed-point|list" {})))
+      (throw (ex-info "Usage: bb test/diff_impact.clj BASE OUTPUT_DIR before|after|merged|fixed-point|list [fast|all]" {})))
     (let [nodes (repository-nodes (repository-files))
           changed-files (remove str/blank? (str/split (command! ["git" "diff" "--name-only" "-z" base "--"]) #"\u0000"))
           selection (select-impact nodes changed-files)
@@ -80,6 +126,8 @@
           inventory (assoc selection :base base
                            :head (str/trim (command! ["git" "rev-parse" "HEAD"]))
                            :environment (environment-receipt))]
+      (when (fs/exists? (str output "/results-" phase ".edn"))
+        (throw (ex-info "Never overwrite a run" {:output output :phase phase})))
       (fs/create-dirs output)
       (spit (str output "/impact-" phase ".edn") (pr-str inventory))
       (spit (str output "/impact-" phase ".json") (json/generate-string inventory {:pretty true}))
@@ -103,39 +151,27 @@
           (when-not (= phase "list")
             (spit (str output "/results-" phase ".edn") (str (pr-str result) "\n")))))
       (when (and (seq selected) (not= phase "list"))
-        (doseq [{n :namespace} selected]
-          (let [log (str output "/" phase "/" n ".log")
-                receipt (str output "/" phase "/" n ".edn")
-                code (str "(require '[clojure.test :as t] '[clj-surgeon.receipt-artifacts :as artifacts]) "
-                          "(let [environment {:tmpdir (System/getenv \"TMPDIR\") "
-                          ":java-io-tmpdir (System/getProperty \"java.io.tmpdir\") "
-                          ":destination-envelope (artifacts/current-envelope)}] "
-                          "(when-not (= " (pr-str (:environment inventory)) " environment) "
-                          "(throw (ex-info \"Diff-impact child environment differs from launcher\" environment))) "
-                          "(let [r (try (require '" n ") (t/run-tests '" n ") "
-                          "(catch Throwable e (.printStackTrace e) {:test 0 :pass 0 :fail 0 :error 1}))] "
-                          "(spit " (pr-str receipt) " (pr-str (assoc r :environment environment))) "
-                          "(shutdown-agents) (System/exit (if (and (pos? (:test r)) "
-                          "(zero? (+ (:fail r) (:error r)))) 0 1))))")
-                _ (fs/create-dirs (fs/parent log))
-                _ (when (fs/exists? log) (throw (ex-info "Never overwrite a run" {:log log})))
-                start (System/nanoTime)
-                result (with-open [out (io/writer log)]
-                         @(process/process ["clojure" "-J-Xmx1g"
-                                            (str "-J-Djava.io.tmpdir=" (System/getenv "TMPDIR"))
-                                            "-M:clj-surgeon/test-deps" "-e" code]
-                                           {:out out :err :out}))
-                counters (when (fs/exists? receipt)
-                           (try (read-string (slurp receipt)) (catch Exception _ nil)))
-                observation {:namespace n :exit (if (completed? (:exit result) counters) 0 1)
-                             :process-exit (:exit result) :counters counters
-                             :wall-ms (quot (- (System/nanoTime) start) 1000000)
-                             :log log :receipt receipt}]
-            (spit (str output "/results-" phase ".edn") (str (pr-str observation) "\n") :append true)
-            (println (pr-str observation))
-            (flush)))
-        (let [results (str/split-lines (slurp (str output "/results-" phase ".edn")))]
-          (System/exit (if (every? #(zero? (:exit (read-string %))) results) 0 1)))))))
+        (let [selection-ms (quot (- (System/nanoTime) started) 1000000)
+              sha (selection-sha (slurp (str output "/impact-" phase ".edn")))
+              observations (mapv (fn [scope]
+                                   (let [scope-start (System/nanoTime)
+                                         r (try (run-selected-scope! selected scope output phase sha selection-ms)
+                                                (catch Exception e
+                                                  (let [wall (quot (- (System/nanoTime) scope-start) 1000000)]
+                                                    {:scope scope :partial true :selection-sha sha
+                                                     :selected (mapv :namespace selected)
+                                                     :state :refused :exit 1 :runs [] :receipts []
+                                                     :classification (:classification (ex-data e))
+                                                     :selection-wall-ms selection-ms :wall-ms wall
+                                                     :total-wall-ms (+ selection-ms wall)
+                                                     :error (.getMessage e) :data (ex-data e)})))]
+                                     (spit (str output "/results-" phase ".edn")
+                                           (str (pr-str r) "\n") :append true)
+                                     (println "TOOL" (name scope) "wall-ms" (:wall-ms r)
+                                              "total-wall-ms" (:total-wall-ms r) "exit" (:exit r))
+                                     (flush)
+                                     r)) scopes)]
+          (System/exit (if (every? #(zero? (:exit %)) observations) 0 1)))))))
 
 (when-not (#{"--self-test" "--library"} (first *command-line-args*))
   (main *command-line-args*))

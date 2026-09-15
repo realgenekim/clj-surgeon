@@ -49,10 +49,13 @@
    battery namespace degrades the makespan rather than the verdict."
   (:require
    [babashka.process :as proc]
+   [clj-surgeon.diff-impact :as impact]
    [clj-surgeon.gate-memory :as mem]
+   [clj-surgeon.gate-obligations :as gob]
    [clj-surgeon.lane-manifest :as lm]
    [clj-surgeon.ns-isolation :as iso]
    [clj-surgeon.probe-state :as state]
+   [clj-surgeon.toolchain-identity :as tc]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -236,7 +239,8 @@
    it across lanes. Returns [unit ...] where a unit is a vector of namespaces
    to run in that order."
   [namespaces groups]
-  (let [grouped (into #{} (mapcat identity) groups)
+  (let [groups (filterv seq (mapv #(filterv (set namespaces) %) groups))
+        grouped (into #{} (mapcat identity) groups)
         singles (mapv vector (remove grouped namespaces))]
     (into (mapv vec groups) singles)))
 
@@ -483,6 +487,24 @@
            "test/run_all.clj" "--emit-edn" (str out-path) "--ns"]
           (map str namespaces))))
 
+ ;; @spec DIFF-IMPACT-007 -- use the same lock path and lock implementation as make memory-red-kernel.
+(defn memory-members? [namespaces]
+  (boolean (some #{'clj-surgeon.memory.journal-green-test
+                   'clj-surgeon.memory.oom-reproduction-test} namespaces)))
+
+(defn memory-lock-command! [argv]
+  (let [result @(proc/process
+                  ["make" "--no-print-directory" "-s"
+                   "--eval" "impact-print-suite-lock:; @$(info $(SUITE_LOCK))"
+                   "impact-print-suite-lock"]
+                  {:out :string :err :string})
+        lock (str/trim (:out result))]
+    (when-not (and (= 0 (:exit result)) (not (str/blank? lock))
+                   (not (str/includes? lock "\n")))
+      (throw (ex-info "Cannot resolve the memory entrance's exclusive lock"
+                      {:error-type :memory-lock-unresolved :exit (:exit result)})))
+    (into [(.getCanonicalPath (io/file "bin/with-lock")) lock] argv)))
+
 (defn- run-lane!
   [{:keys [index namespaces java-opts work-dir runtime phase suite target checkout-root]}]
   (let [out-path (io/file work-dir (format "lane-%d.edn" index))
@@ -495,10 +517,12 @@
                    {:out :write :out-file log-path
                     :err :write :err-file err-path
                     :dir (or checkout-root (System/getProperty "user.dir"))}
-                   (slot-command (cond target ["make" "--no-print-directory" target]
+                   (slot-command
+                     (cond-> (cond target ["make" "--no-print-directory" target]
                                    (= :bb runtime)
                                    (bb-lane-command (System/getenv "TMPDIR") out-path namespaces)
-                                   :else (lane-command java-opts out-path namespaces))))
+                                   :else (lane-command java-opts out-path namespaces))
+                       (memory-members? namespaces) memory-lock-command!)))
           exit (deref (future (:exit @p)) lane-timeout-ms ::timeout)
           timed-out? (= ::timeout exit)]
       (when timed-out? (proc/destroy-tree p) (try @p (catch Exception _ nil)))
@@ -676,13 +700,14 @@
      :floor-mib mem/single-lane-floor-mib}))
 
 (defn census-problems [expected observed]
-  (cond-> []
-    (not= (set expected) (set observed))
-    (conj {:kind :namespace-census-mismatch
-           :missing (vec (sort (remove (set observed) expected)))
-           :unexpected (vec (sort (remove (set expected) observed)))})
-    (not= (count observed) (count (set observed)))
-    (conj {:kind :duplicate-namespace})))
+  (let [expected (if (and (map? expected) (:partial expected)) (:selected expected) expected)]
+    (cond-> []
+      (not= (set expected) (set observed))
+      (conj {:kind :namespace-census-mismatch
+             :missing (vec (sort (remove (set observed) expected)))
+             :unexpected (vec (sort (remove (set expected) observed)))})
+      (not= (count observed) (count (set observed)))
+      (conj {:kind :duplicate-namespace}))))
 
 (defn parity-delta [control candidate]
   (vec (for [n (sort (into (set (keys control)) (keys candidate)))
@@ -699,14 +724,85 @@
                        (slurp "test/run_all.clj")) second edn/read-string)
       (throw (ex-info "gate-refused: unreadable Babashka namespace census" {}))))
 
+;; Dedicated admission is an exact catalogue: a future exclusion needs its
+;; own mission/lock review before it can enter this lane.
+(def dedicated-namespaces
+  '[clj-surgeon.analyzer-contract-test
+    clj-surgeon.memory.journal-green-test
+    clj-surgeon.memory.oom-reproduction-test
+    clj-surgeon.worktree-lifecycle-prune-test
+    clj-surgeon.worktree-lifecycle-recovery-test])
+
 (defn suite-namespaces [suite]
   (case suite
+    "dedicated" (filterv #(contains? lm/excluded %) dedicated-namespaces)
     "battery" (lm/namespaces-for :battery)
     "fast" (lm/namespaces-for :fast)
     "mcp" (vec (mapcat lm/namespaces-for [:fast :integration]))
     "bb" (bb-namespaces)
     "alias" '[clj-surgeon.mcp-alias-migration-test clj-surgeon.receipt-artifacts-boundary-test]
     (throw (ex-info "gate-refused: unknown suite" {:suite suite}))))
+
+ ;; @spec DIFF-IMPACT-007
+(def selected-inventory impact/selected-inventory)
+
+(defn partial-census-problems [receipt observed]
+  (census-problems receipt observed))
+
+(declare tree-census)
+
+;; @spec DIFF-IMPACT-007
+(defn classify-selection
+  "Total membership before projection. A live admitted JVM lane remains valid
+   when BB cannot load/run it; exclusions never create an implicit runner."
+  [selected {:keys [manifest discovered dedicated bb excluded bb-ineligible]}]
+  (mapv (fn [entry]
+          (let [{n :namespace :keys [selection-exclusion]} (if (symbol? entry) {:namespace entry} entry)
+                lane (get manifest n)
+                membership (cond
+                             (not (contains? discovered n)) {:classification :unregistered/renamed}
+                             (contains? #{:fast :integration :battery} lane)
+                             {:classification (if (= lane :fast) :fast-member :other-lane-member)
+                              :lane lane :suite (case lane :fast "fast" :integration "mcp" :battery "battery")}
+                             (contains? dedicated n) {:classification :other-lane-member :lane :dedicated :suite "dedicated"}
+                             (contains? excluded n) {:classification :load-excluded}
+                             (contains? bb-ineligible n) {:classification :bb-ineligible}
+                             (contains? bb n) {:classification :other-lane-member :lane :bb :suite "bb"}
+                             :else {:classification :unregistered/renamed})]
+            (cond-> (assoc membership :namespace n)
+              selection-exclusion (assoc :selection-exclusion selection-exclusion)))) selected))
+
+(defn selection-classification [selected]
+  (classify-selection selected
+                      {:manifest lm/manifest :discovered (set (:discovered (tree-census)))
+                       :dedicated (set (suite-namespaces "dedicated"))
+                       :bb (set (bb-namespaces)) :excluded lm/excluded
+                       :bb-ineligible lm/bb-ineligibilities}))
+
+;; @spec DIFF-IMPACT-007
+(defn project-selection
+  "Refuse every unaccounted non-member together before selecting any suite."
+  [classification scope]
+  (when-not (contains? #{:fast :all} scope)
+    (throw (ex-info "Unknown impact scope" {:error-type :invalid-impact-scope :scope scope})))
+  (let [problems (vec (for [{:keys [namespace classification selection-exclusion]} classification
+                            :when (and (not (contains? #{:fast-member :other-lane-member} classification))
+                                       (not= classification (:reason selection-exclusion)))]
+                        {:namespace namespace :classification classification
+                         :reason (str "selected-namespace-unclassified " namespace)}))]
+    (when (seq problems)
+      (throw (ex-info (str/join "; " (map :reason problems))
+                      {:error-type :selected-namespace-unclassified :scope scope
+                       :classification classification :problems problems})))
+    (reduce (fn [groups {:keys [namespace suite]}]
+              (if (and suite (or (= scope :all) (= suite "fast")))
+                (update groups suite (fnil conj []) namespace) groups))
+            (sorted-map) classification)))
+
+(defn selection-suites
+  "Classify every selected namespace against disk and admission before projection."
+  [selected scope]
+  (project-selection (selection-classification selected) scope))
 
 (defn source-digest []
   (let [md (java.security.MessageDigest/getInstance "SHA-256")
@@ -754,13 +850,16 @@
 
 (defn suite-receipt-problems [suite receipt digest]
   (vec (concat
+         (when (:partial receipt)
+           [{:kind :partial-receipt-not-a-gate-receipt :suite suite}])
          (when-not (and (= :passed (:state receipt))
                         (false? (:debug receipt))
                         (= digest (:source-digest receipt))
                         (= suite (:suite receipt))
                         (zero? (get-in receipt [:result :precondition-skipped] 0)))
            [{:kind :invalid-suite-receipt :suite suite}])
-         (census-problems (suite-namespaces suite) (map :namespace (:runs receipt))))))
+         (when-not (:partial receipt)
+           (census-problems (suite-namespaces suite) (map :namespace (:runs receipt)))))))
 
 (defn gate-phases
   "Global fast-before-integration barrier: integration may write checkout files
@@ -800,7 +899,39 @@
 
 (declare run-gate-pool!)
 
+(defn gate-provenance
+  "Capture the gate's identity once; keep subprocess observation at this boundary."
+  []
+  {:toolchain (tc/snapshot)
+   :git-head (str/trim (:out @(proc/process {:out :string} "git" "rev-parse" "HEAD")))
+   :git-tree (str/trim (:out @(proc/process {:out :string} "git" "rev-parse" "HEAD^{tree}")))})
+
+(defn receipt-evidence
+  "Add the envelope evidence without projecting away any producer facts.
+   A partial suite never discharges whole-gate obligations."
+  [receipt inventory toolchain path]
+  (let [text (pr-str inventory)
+        stages (set (map :target (:stages receipt)))]
+    (assoc receipt
+           :receipt-version 2
+           :toolchain toolchain
+           :obligations
+           {:policy-sha256 (:policy-sha256 inventory)
+            :inventory-version (:inventory-version inventory)
+            :ids (mapv :id (:obligations inventory))
+            :evidence {:path path :sha256 (tc/sha256 text)
+                       :bytes (count (.getBytes ^String text "UTF-8"))}
+            :discharged-by-this-receipt
+            (if (:partial receipt) []
+              (vec (sort (keep #(when (stages (:stage %)) (:id %))
+                               (:obligations inventory)))))
+            :out-of-band (mapv :id (filter #(= :out-of-band (get-in % [:discharge :by]))
+                                     (:obligations inventory)))})))
+
 (defn run-gate! [opts]
+  (when (contains? opts "--selected")
+    (throw (ex-info "A selected subset cannot certify the landing gate"
+                    {:error-type :partial-receipt-not-a-gate-receipt})))
   (let [debug? (= "true" (get opts "--debug-serial"))
         prewarm? (= "true" (get opts "--prewarm"))
         run-id (str (java.util.UUID/randomUUID))
@@ -814,6 +945,7 @@
         started (str (java.time.Instant/now))
         t0 (System/nanoTime)
         digest (source-digest)
+        provenance (gate-provenance)
         census (tree-census)
         manifest (gate-stages debug? prewarm?)
         required-suites (vec (keep :suite manifest))
@@ -859,16 +991,114 @@
                           (when-not (= digest (source-digest)) [{:kind :tree-changed-during-gate}])
                           (when-not debug?
                             (mapcat #(suite-receipt-problems (:suite %) % digest) suites))))
+          ;; ---- FRAME 7 SECTION 4/5: the receipt says what this tree REQUIRED,
+          ;; who ran what, and under which observed toolchain. Before this, a
+          ;; landing receipt named seven stage strings and nothing else: the
+          ;; obligation each stage discharges, the exact selected identities and
+          ;; the runtime that produced them were all left for a consumer to
+          ;; assume. A consumer that assumes is a consumer that can be fooled by
+          ;; a self-consistent producer, which is exactly the defect Sol's
+          ;; GATE-LANES-FENCE-002 found.
+          obligation-inventory (gob/inventory {:stage-manifest (mapv :target gate-stage-manifest)
+                                               :suite-namespaces suite-namespaces})
+          obligation-bytes (pr-str obligation-inventory)
+          obligation-path (io/file "target" "gate-obligations.edn")
+          _ (do (.mkdirs (io/file "target")) (spit obligation-path obligation-bytes))
+          toolchain (:toolchain provenance)
+          stage->obligations (into {} (for [o (:obligations obligation-inventory)
+                                            :when (:stage o)]
+                                        [(:stage o) [(:id o)]]))
+          obl-by-stage (into {} (for [o (:obligations obligation-inventory) :when (:stage o)]
+                                  [(:stage o) o]))
+          suite-by-name (into {} (for [sr suites] [(str (:suite sr)) sr]))
+          recovery-receipt (let [f (io/file "target" "admit-transaction-recovery-battery-receipt.edn")]
+                             (when (.isFile f) (try (edn/read-string (slurp f)) (catch Exception _ nil))))
+          ;; THE COUNTERS ARE ASSERTED BY THE PROCESS THAT OWNS THEM. Section 5:
+          ;; "absence is unknown, not zero." `:precondition-skipped` only appears
+          ;; in a merged report when it is non-zero, so a consumer reading the raw
+          ;; suite receipt cannot tell "no skip" from "nobody counted". This
+          ;; runner already applies `(get-in receipt [:result :precondition-skipped] 0)`
+          ;; as its own refusal policy, so it -- and only it -- may write the
+          ;; observed value down explicitly.
+          executions (mapv (fn [{:keys [target exit wall-ms]}]
+                             (let [obl (get obl-by-stage target)
+                                   sr (get suite-by-name (:suite obl))]
+                               (cond-> {:id (str run-id "/" target)
+                                        :obligation-ids (get stage->obligations target [])
+                                        :target target
+                                        :candidate {:commit (:git-head provenance)
+                                                    :tree (:git-tree provenance)}
+                                        :check-contract-sha256 (get-in obl [:recipe :sha256])
+                                        :runtime (:runtime obl)
+                                        :scope (:scope obl)
+                                        :declared-skips []
+                                        :focus-omissions []
+                                        :unexecuted-tests []
+                                        :expected-tests (vec (:selected-test-identities obl))
+                                        :executed-tests []
+                                        :result {:exit exit :wall-ms wall-ms}}
+                                 ;; SOL-EC-001: provenance fields are EMITTED, always, so a
+                                 ;; consumer can tell "nothing was skipped" from "nobody
+                                 ;; recorded whether anything was skipped". A missing field
+                                 ;; is now a typed refusal downstream, so silence here would
+                                 ;; refuse every landing rather than pass one.
+                                 true
+                                 (assoc :inputs-manifest
+                                        ;; SOL-EC-006: the manifest must ACCOUNT FOR the inputs the
+                                        ;; tree names, entry by entry, not merely exist. The runner
+                                        ;; has the inventory in hand, so it writes the entries it
+                                        ;; actually read rather than a pointer to a file that lists
+                                        ;; them.
+                                        {:path "target/gate-obligations.edn"
+                                         :sha256 (tc/sha256 obligation-bytes)
+                                         :bytes (count (.getBytes ^String obligation-bytes "UTF-8"))
+                                         :entries (vec (:required-inputs obl))}
+                                        :environment-manifest
+                                        ;; ACCOUNTED FOR, not merely present: a key that is
+                                        ;; unset cannot be digested, and omitting it would be
+                                        ;; indistinguishable from a manifest that quietly
+                                        ;; shrank. So an unset key is NAMED as unset.
+                                        (let [ks (:keys gob/environment-policy)]
+                                          {:selected (into (sorted-map)
+                                                           (for [k ks :let [v (System/getenv k)] :when v]
+                                                             [k (tc/sha256 v)]))
+                                           :unset (vec (sort (remove #(System/getenv %) ks)))
+                                           :basis (:basis gob/environment-policy)}))
+
+                                 sr
+                                 (assoc :executed-tests (vec (sort (distinct (map (comp str :namespace) (:runs sr)))))
+                                        ;; SOL-EC-002 / deviation 9: VAR identities, not only
+                                        ;; namespaces. The child runs already carry them.
+                                        :expected-vars (vec (sort (distinct (map str (mapcat :expected-vars (:runs sr))))))
+                                        :executed-vars (vec (sort (distinct (map str (mapcat :executed-vars (:runs sr))))))
+                                        :result {:exit exit :wall-ms wall-ms
+                                                 :failures (get-in sr [:result :fail])
+                                                 :errors (get-in sr [:result :error])
+                                                 :tests (get-in sr [:result :test])
+                                                 :assertions (get-in sr [:result :pass])
+                                                 :isolation-violations (:isolation-failures sr)
+                                                 :leaks (:leak-failures sr)
+                                                 :skipped-preconditions (get-in sr [:result :precondition-skipped] 0)})
+
+                                 (and recovery-receipt (= "admit-transaction-recovery-battery" target))
+                                 (assoc :result {:exit exit :wall-ms wall-ms
+                                                 :arms (count (:arms recovery-receipt))
+                                                 :arms-passed (:arms-passed recovery-receipt)
+                                                 :failed-arms (vec (:failed-arms recovery-receipt))
+                                                 :verdict (:verdict recovery-receipt)}))))
+                           @stages)
           receipt {:state (if (seq problems) :failed :passed)
                    :landing? (landing-eligible? debug? prewarm? problems)
                    :prewarm? (and prewarm? (not debug?))
+                   :executions executions
                    :run-id run-id
-                   :git-head (str/trim (:out @(proc/process {:out :string} "git" "rev-parse" "HEAD")))
-                   :git-tree (str/trim (:out @(proc/process {:out :string} "git" "rev-parse" "HEAD^{tree}")))
+                   :git-head (:git-head provenance)
+                   :git-tree (:git-tree provenance)
                    :started-at started :completed-at (str (java.time.Instant/now))
                    :wall-ms (quot (- (System/nanoTime) t0) 1000000)
                    :source-digest digest :capacity capacity :namespace-census census
-                   :stages @stages :pool (dissoc @pool :stages) :suites suites :problems problems}]
+                   :stages @stages :pool (dissoc @pool :stages) :suites suites :problems problems}
+          receipt (receipt-evidence receipt obligation-inventory toolchain "target/gate-obligations.edn")]
       (spit (io/file work-dir "stages.edn") (pr-str @stages))
       (spit (io/file work-dir "receipt.edn") (pr-str receipt))
       (when (and (= :passed (:state receipt)) (not debug?)) (spit output (pr-str receipt)))
@@ -1030,11 +1260,22 @@
   [opts]
   (let [suite (get opts "--suite" "battery")
         battery? (= "battery" suite)
+        dedicated? (= "dedicated" suite)
+        _ (when (and dedicated? (not (contains? opts "--selected")))
+            (throw (ex-info "Dedicated entry requires an explicit selection"
+                            {:error-type :invalid-selected-subset})))
         debug? (= "true" (get opts "--debug-serial"))
         _ (when (and (not battery?) (contains? opts "--lanes"))
             (throw (ex-info "gate-refused: width is automatic; use --debug-serial true for diagnostics" {})))
-        inventory (suite-namespaces suite)
-        _ (when-let [missing (seq (unbudgeted-members inventory))]
+        selected (when (contains? opts "--selected")
+                   (try (edn/read-string (get opts "--selected"))
+                        (catch Exception _
+                          (throw (ex-info "Malformed selected EDN" {:error-type :invalid-selected-subset})))))
+        _ (when (and (contains? opts "--selected") (nil? selected))
+            (throw (ex-info "Selected subset cannot be nil" {:error-type :invalid-selected-subset})))
+        selection-sha (get opts "--selection-sha")
+        inventory (selected-inventory (suite-namespaces suite) selected selection-sha)
+        _ (when-let [missing (when-not dedicated? (seq (unbudgeted-members inventory)))]
             (throw (ex-info (str "gate-refused: namespaces without cadence budgets " (pr-str missing))
                             {:error-type :unbudgeted-namespaces :namespaces (vec missing)})))
         run-id (or (::run-id opts) (System/getenv "CLJ_SURGEON_GATE_RUN_ID") (str (java.util.UUID/randomUUID)))
@@ -1045,7 +1286,7 @@
         lanes-n (if battery?
                   (or (some-> (get opts "--lanes") parse-long)
                       (some-> (System/getenv "BATTERY_LANES") parse-long) default-lanes)
-                  (if debug? 1 (min (count inventory) (:lanes capacity))))
+                  (if (or debug? dedicated?) 1 (min (count inventory) (:lanes capacity))))
         java-opts (if battery?
                     (or (get opts "--java-opts") (System/getenv "BATTERY_CHILD_JAVA_OPTS") "-J-Xms64m -J-Xmx512m")
                     "-J-Xms64m -J-Xmx512m")
@@ -1127,7 +1368,8 @@
         (println (str "battery-parallel: BATTERY_PREREQS is off -- prerequisite stages are "
                       "NOT run and an unmet precondition stays a counted, named skip "
                       "(the serial lane's semantics)")))
-      {:suite suite :battery? battery? :debug? debug? :run-id run-id :capacity capacity :digest digest :lanes-n lanes-n :work-dir work-dir :effective-walls-path effective-walls-path :battery-namespaces battery-namespaces :prereqs? prereqs? :prereq-failures prereq-failures :waves waves
+      {:partial (some? selected) :selected selected :selection-sha selection-sha
+       :suite suite :battery? battery? :debug? debug? :run-id run-id :capacity capacity :digest digest :lanes-n lanes-n :work-dir work-dir :effective-walls-path effective-walls-path :battery-namespaces battery-namespaces :prereqs? prereqs? :prereq-failures prereq-failures :waves waves
        :plan (mapv (fn [i entry]
                      (assoc entry :index i :java-opts java-opts :suite suite
                             :estimated-ms (unit-cost walls var-walls (:namespaces entry))
@@ -1135,7 +1377,7 @@
                    (range) (remove (comp empty? :namespaces) plan))})))
 
 (defn finish-suite!
-  [{:keys [suite battery? debug? run-id capacity digest lanes-n work-dir effective-walls-path battery-namespaces prereqs? prereq-failures waves]} lanes wall-ms]
+  [{:keys [partial selected selection-sha suite battery? debug? run-id capacity digest lanes-n work-dir effective-walls-path battery-namespaces prereqs? prereq-failures waves]} lanes wall-ms]
   ;; The complete transcript, in LANE ORDER, so a parallel run's output can
   ;; be diffed against a serial one instead of being interleaved noise.
   (doseq [l (sort-by :index lanes)]
@@ -1156,7 +1398,7 @@
                  {:test 0 :pass 0 :fail 0 :error 0})
         notes (apply merge-with into (keep (comp :notes :emitted) lanes))
         _ (print-summary! result notes)
-        iso-fail (report! runs lanes wall-ms (not= suite "bb"))
+        iso-fail (report! runs lanes wall-ms (not (contains? #{"bb" "dedicated"} suite)))
         leak-fail (reduce + (keep (comp :leak-fail :emitted) lanes))]
     (when (seq broken)
       (binding [*out* *err*]
@@ -1167,7 +1409,7 @@
         (println (format (str "\nBATTERY-LANE: %d battery namespace(s) produced NO result: %s "
                               "-- a battery that ran less is a failure, never a pass.")
                          (count missing) (str/join " " missing)))))
-    (when (and (empty? broken) (empty? missing))
+    (when (and (not partial) (empty? broken) (empty? missing))
       (write-walls! effective-walls-path runs lanes (when battery? walls-seed-path)))
     (when (seq prereq-failures)
       (binding [*out* *err*]
@@ -1186,23 +1428,40 @@
                            skipped))))
       (println (format "battery-parallel: makespan %d ms over %d lane(s); serial-equivalent %d ms; skipped %d"
                        wall-ms lanes-n (reduce + (map :elapsed-ms runs)) skipped))
-      (let [census-errors (when-not battery? (census-problems battery-namespaces (mapv :namespace runs)))
+      (let [census-errors (when (or partial (not battery?))
+                            (vec (concat
+                                   (if partial
+                                     (partial-census-problems {:partial true :selected selected}
+                                       (mapv :namespace runs))
+                                     (census-problems battery-namespaces (mapv :namespace runs)))
+                                   (when partial
+                                     (census-problems selected
+                                                      (distinct (mapcat #(map :namespace (get-in % [:emitted :runs])) lanes))))
+                                   ;; Inspect raw children as well: union-runs intentionally merges shards.
+                                   (when (not= (frequencies (mapcat #(map selector-namespace (:namespaces %)) lanes))
+                                               (frequencies (mapcat #(map :namespace (get-in % [:emitted :runs])) lanes)))
+                                     [{:kind :partial-child-census-mismatch}]))))
             changed? (and (not battery?) (not= digest (source-digest)))
             failures (+ (:fail result) (:error result) iso-fail leak-fail
                         (count broken) (count missing) (count census-errors)
                         (count prereq-failures) skipped-red
                         (if changed? 1 0))
-            receipt {:suite suite :runtime (cond (= suite "bb") :bb (contains? #{"fast" "mcp"} suite) :hybrid :else :jvm)
-                     :state (if (zero? failures) :passed :failed) :debug debug? :run-id run-id
-                     :source-digest digest :capacity capacity :lane-count lanes-n :process-count (count lanes)
-                     :phase-count (count waves)
-                     :namespace-census {:expected battery-namespaces :observed (mapv :namespace runs)
-                                        :expected-count (count battery-namespaces) :observed-count (count runs)}
-                     :lanes (mapv #(dissoc % :emitted) lanes) :runs runs :result result
-                     :isolation-failures iso-fail :leak-failures leak-fail
-                     :measurements (run-measurements runs lanes wall-ms)
-                     :wall-ms wall-ms :problems (vec (concat broken census-errors
-                                                       (when changed? [:tree-changed-during-suite])))}]
+            receipt (cond-> {:suite suite :runtime (cond (= suite "bb") :bb (contains? #{"fast" "mcp"} suite) :hybrid :else :jvm)
+                             :state (if (zero? failures) :passed :failed) :debug debug? :run-id run-id
+                             :source-digest digest :capacity capacity :lane-count lanes-n :process-count (count lanes)
+                             :phase-count (count waves)
+                             :namespace-census {:expected battery-namespaces :observed (mapv :namespace runs)
+                                                :expected-count (count battery-namespaces) :observed-count (count runs)}
+                             :lanes (mapv #(dissoc % :emitted) lanes) :runs runs :result result
+                             :isolation-failures iso-fail :leak-failures leak-fail
+                             :measurements (run-measurements runs lanes wall-ms)
+                             :wall-ms wall-ms :problems (vec (concat broken census-errors
+                                                               (when changed? [:tree-changed-during-suite])))}
+                      partial (assoc :partial true :selected selected :selection-sha selection-sha))
+            inventory (gob/inventory (gob/runner-policy))
+            inventory-path (io/file work-dir "gate-obligations.edn")
+            _ (spit inventory-path (pr-str inventory))
+            receipt (receipt-evidence receipt inventory (tc/snapshot) (str inventory-path))]
         (spit (io/file work-dir "receipt.edn") (pr-str receipt))
         receipt))))
 
