@@ -6968,3 +6968,7 @@ Candidate 13eafcb6 on b2887b5a (records: 2026-09-15-diff-impact-executor-sol-ver
 ## 2026-09-15T09:32:33Z — LANDED 5cc35402 = stable/2026-09-15.1: diff-impact executor parity (inb-b142af, inb-fbd110 closed)
 
 Round 5 (e19ce755): Sol GO (verdict-5 in records), battery green, gate envelope consumable (state=:complete, obligations 11, executions 7 — the product now carries its own envelope evidence), phase-B battery-fresh OK, PUBLISHED 09:31Z, tag pushed. Five ship runs for this landing: NO-GO (unclassified members), GO-WITH-FIX → iteration-2 receipt push race (ship defect inb-4e3f13), GO → gate-envelope refusal (ship-side cause suspected, inb-96dc5f), NO-GO (empty fast projection), GO. The replay executor (armed since ~06:10Z, cap 5 h) now sees cf237f96 in trunk and runs the repaired comparison on a quiet box.
+
+## 2026-09-15T12:15:02Z — REPLAY DONE: selector sound, wins only on narrow selections; window 8; native routing stays
+
+records 2026-09-14-diff-impact-measure/replay/. TOOL-FAST/NATIVE: D1 1.11 slower, D2 0.44 faster, D3 1.15 slower, D4 1.09 tie, D5 0.26 faster; catches preserved 1/1, 1/1, rest vacuous; first attempt 5/5 all arms; TOOL-ALL 26–44× on the broad diffs (its value is the battery catches on D3, found both runs). Makespan floor explains it: the slowest fast-lane member bounds the wall regardless of count. Decision rule (Astra): native stays default; a size-threshold routing (select only when the fast projection is small) is filed as a decision, not built. Gene report addendum 2 written. Window 8, index 4.

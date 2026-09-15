@@ -70,3 +70,23 @@ Bets: six wall bets BROKE (median D1–D4 67× against a bet of < 0.35); four ca
 Learning: the selector is sound and the executor is the loss — it runs one cold JVM per selected namespace, serially, across all lanes, while the native fast lane spends 16 lanes in parallel on everything; on this box selection cannot beat a gate that has already spent the parallelism selection tries to save. Caveat: the arms differ in executor and lane scope, not only namespace set (the lane runner refuses subsets by census), so the ratios judge the tool's executor, not its selection; the selection and catch columns are the comparable part and the selector wins them. Two defects surfaced: the selector's child launcher omits -Duser.home inside the run root (a false red on D1/D3/D4 from the tree's own isolation ratchet), and no docs allowlist exists at older tips.
 
 Window meter after this: 7. A preregistered vs-native table exists for the window (the meter's condition), and it is a loss recorded with its bets. Index unchanged at 4.
+
+## Addendum 2 (2026-09-15 12:20Z) — the repaired replay (one replay, as ruled)
+
+Subject trunk 5cc35402 (executor parity landed 09:31Z as stable/2026-09-15.1). Same five frozen diffs, n=2 per arm, native first, quiet box (all 30 cells first attempt).
+
+| diff | NATIVE fast lane (8 admitted workers) | TOOL-FAST select + selected∩fast | selected fast/all | catch | ratio | noise gate | verdict |
+|---|---:|---:|---:|---|---:|---:|---|
+| D1 src line, historical miss | 29.4 / 30.7 s (red) | 33.3 / 33.1 s (same red) | 45 / 92 | 1/1 | **1.11** | 4.3 % | slower |
+| D2 test-side runner change | 30.2 / 27.9 s | 12.7 / 12.7 s | 7 / 9 | vacuous | **0.44** | 8.0 % | **faster** |
+| D3 committed red race oracle | 30.0 / 29.4 s (red) | 34.1 / 34.1 s (same red) | 51 / 101 | 1/1 | **1.15** | 1.9 % | slower |
+| D4 green src fix | 30.7 / 27.2 s | 31.4 / 31.5 s | 46 / 93 | vacuous | 1.09 | 11.9 % | tie |
+| D5 docs-only | 26.7 / 27.8 s | 7.0 / 7.1 s | 5 / 6 | vacuous | **0.26** | 4.0 % | **faster** |
+
+TOOL-ALL (reported separately, never blended): 18.6 s (D5), 32 s (D2), 1,331 s (D1), 779 s (D3), 796 s (D4); it found the battery-lane race tests on D3 both runs, which the fast lane cannot see.
+
+Bets: Fable median D1/D3/D4 0.8 → 1.105 BROKE; Astra 0.9 (plausible 0.7–1.2) → point broke, inside plausible. D2: Fable 0.45 / Astra 0.5 → 0.44 HELD both. D5: Fable 0.35 / Astra 0.4 → 0.26 (better than both). Catch preservation held everywhere (0 missed); first attempt 5/5 on all three arms; TOOL-ALL slower on D1/D3/D4 as both bet.
+
+Learning (measured): selection wins only where it shrinks the fast projection to a handful; on broad source diffs the makespan floor is the slowest namespace (a 300 s-estimated lane member), so cutting 94 to 45 namespaces removes 0.6 s while cutting 95 to 7 removes 22 s. Decision rule applied: a TOOL-FAST win beyond noise with preserved catches exists on narrow diffs only; native routing stays the default; the selector earns a place only behind a size threshold on its fast projection (a routing decision, filed, not built).
+
+Window meter: 8. A preregistered measurement, replayed once after a repair, with a bounded real win and zero missed catches. Index unchanged at 4 (E3 awaits the mayor's acceptance of the next real content-edge diff).
