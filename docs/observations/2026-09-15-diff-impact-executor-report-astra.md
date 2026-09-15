@@ -310,3 +310,157 @@ and `d2-{list,fast}` / `d3-{list,fast,all}` receipt directories.
 The project-local nREPL started for the warm check was stopped afterward.
 
 Completed: 2026-09-15T06:59:38.442206+00:00
+
+## Round 3
+
+Standing approval covered the complete TDD repair. Installed consumer source:
+`/home/forge/bin/gate-envelope.clj`, SHA-256
+`034b5afed6023b29da55ee8354b2c9448ca8d507dba5de17c057ba9ffb2765c3`.
+The installed consumer and suite wrapper were read-only and their hashes were
+checked afterward. Scratch evidence lives under
+`/var/tmp/forge/impact-fx/exec/round3/`.
+
+### Reproduction and corrected attribution
+
+Both requested commits were checked out as detached scratch worktrees and run
+through `/home/forge/bin/suite-run make landing-gate-prewarm`, with identical
+explicit environment recorded in `environment.edn`. This is the ship's
+prewarm-target entrance, with no replacement Make recipe or staged receipt.
+The consumer was run as `bb /home/forge/bin/gate-envelope.clj <out>` with
+`GATE_WORKTREE`, `GATE_RECEIPT_PATH`, and `GATE_OBLIGATIONS_PATH` pointing at each
+worktree and its retained evidence. No missing inventory was manufactured.
+
+**The requested positive control does not reproduce.** At `866df39b`, prewarm
+passes but the installed consumer refuses both missing fields, just as the
+candidate does. No code path in the requested diff dropped them:
+`test/clj_surgeon/battery_parallel_runner.clj:862` at `866df39b` and `:962` at
+`88b8603d` construct the same receipt map. The complete `run-gate!` diff adds
+only the `--selected` refusal (`:900` at the candidate); it does not change the
+receipt writer. Neither snapshot includes `gate_obligations.clj` or
+`toolchain_identity.clj`. The historical producer implementation exists at
+`7582c0d9` with refinements at `2f924bee`, outside the requested baseline's
+ancestry. Evidence: `run-gate-only.diff`, `round3-runner.diff` in the parent
+scratch directory, and the two retained raw producer receipts.
+
+The supplied incident receipt names commit `2dce4893` but tree
+`3291767f14eb0d9ac855a9e48ac567a726a32d9e`, the same tree as `88b8603d`.
+Its top-level keys also match the reproduced baseline, including the absence
+of `:toolchain`. The observed control result is RED/RED, not a fabricated
+GREEN/RED or a claim that executor census changes removed these fields.
+
+### Producer contract and TDD
+
+`landing-envelope-consumer-contract` drives the real `run-gate!` writer with
+bounded stage and identity facts, for both full landing and prewarm.
+Identity subprocesses are isolated behind `gate-provenance`, captured once by
+the real runner and substituted by the fast-lane boundary test. The original RED on
+`88b8603d` records four failures: missing `:toolchain`, missing `:executions`,
+a non-map toolchain, and absent inventory. `oracle-red.log` retains the actual
+failures. `full-and-partial-receipts-share-envelope-evidence` has a separate
+recorded RED (`partial-red.log`) before the common evidence helper was added.
+
+The consumer's producer reads are explicitly mirrored:
+
+- Receipt: `:toolchain`, `:git-head`, `:git-tree`, `:source-digest`, `:run-id`,
+  `:prewarm?`, `:landing?`, `:stages`, `:suites`, `:executions`, `:state`,
+  `:started-at`, `:completed-at`.
+- Toolchain refusal check: `[:toolchain :unknown]` must be empty.
+- Stage: `:target`, `:exit`, `:wall-ms`.
+- Legacy suite adapter: `:suite`, `:state`, `:result`, `:runs`; run
+  `:namespace`; result `:fail`, `:error`, `:test`, `:pass`, and optional
+  `:precondition-skipped`. The native execution producer explicitly records
+  zero skipped preconditions when the runner observed zero.
+- Inventory: `:policy-sha256`, `:inventory-version`, `:obligations`;
+  obligations' `:id`, `:stage`, `[:recipe :sha256]`, `:runtime`, `:scope`,
+  suite `:suite`, and `:selected-test-identities`.
+- Native execution adapter reads optional `:expected-vars`, `:executed-vars`,
+  and `:target` to externalize large identity lists; the installed consumer's
+  65,536-byte bound remains unchanged.
+
+Restore the historical typed identity and inventory implementation with its
+policy-hash, rule-input, namespace identity, and banner witnesses inside the
+already registered `battery-parallel-test` namespace. Keep current hybrid MCP
+runtime assignments and add diagnostic BB as R11. Inventory R1–R10 retain their
+historical meaning. Prewarm discharges only executed stages and therefore
+never claims R2/battery-fresh. `receipt-evidence` enriches both gate and suite
+writers without projecting away existing fields; partial suites retain
+`:partial`, `:selected`, `:selection-sha` and discharge no whole-gate obligation.
+Each writer emits its inventory with a hash and byte count. Original receipt
+values and `pr-str` EDN serialization are preserved; byte identity for missing
+historical fields cannot be asserted.
+
+The real partial smoke selects `clj-surgeon.analyze-test`: passed, one namespace,
+zero isolation violations/skips, `:receipt-version 2`, `:partial true`, known
+toolchain, readable hashed sidecar, and `:discharged-by-this-receipt []`.
+The mocked writer's consumer smoke is labeled `contract-fixture/`; it is only a
+boundary test and is not the real fixed-tip prewarm proof below.
+
+### Verification
+
+- JVM, `-Xmx1024m`: diff-impact-test, battery-parallel-test (including restored
+  receipt-writer witnesses), lane-manifest-test: **113 tests / 2,838 assertions,
+  zero failures/errors** (`affected-jvm-verified.log`, exit 0).
+- BB, `-Xmx1024m`: diff-impact-test and battery-parallel-test: **78 tests / 903
+  assertions, zero failures/errors** (`affected-bb-verified.log`, exit 0).
+- Standard Clojure Style on all four changed Clojure files; lint through
+  `~/bin/clj-kondo`: zero errors/warnings (`format*.log`, `lint*.log`, exit 0).
+- `make census-regenerate`: exit 0, **+16/-0** (`census.log`); no test namespace
+  added, renamed, or removed.
+- Protected SHA-256 values remain byte-identical:
+  `battery-ledger.edn` =
+  `08a1d6ee9c7f319c4a146ec23798e535273a47b7633697354014b318bff8ad39`;
+  `battery-namespace-walls.edn` =
+  `154faae0c803099d1bfe88e8563a8cf85cdf2376af4e4309b10bd850cd6ef264`.
+
+- Final isolated BB receipt-writer namespace: **61 tests / 615 assertions**,
+  `:leak-fail 0`, `:violations []`, 1,738 ms
+  (`battery-isolated-verified.edn`, exit 0). An intermediate attempt to mock the
+  process library directly was rejected by the fast-lane source census; the
+  final `gate-provenance` boundary avoids process-library references in the test
+  and passes both the source census and runtime isolation. The intermediate
+  failure remains in `affected-jvm-final.log`.
+
+### Real prewarm and installed consumer
+
+| Revision | Prewarm exit | Producer wall (ms) | Consumer exit | Result |
+|---|---:|---:|---:|---|
+| `866df39b` | 0 | 420574 | 5 | missing inventory and toolchain |
+| `88b8603d` | 0 | 420291 | 5 | missing inventory and toolchain |
+| `1a780eab` | 0 | 421485 | 0 | complete; 11 obligations / 7 executions |
+
+Actual installed-consumer output, without normalization:
+
+```text
+gate-envelope: /var/tmp/forge/impact-fx/exec/round3/fixed-evidence/envelope.edn 59044 bytes state=:complete obligations=11 executions=7 pending=[]
+```
+
+Exactly one fixed prewarm ran on code commit `1a780eab5579174fbc78e473471b9e426a2d7642`
+(tree `1489034ba2ce3188812c407aec81382a8cc8dbfa`), in `fixed/`.
+All seven stages exited 0; producer state is `:passed`, `:prewarm? true`,
+`:landing? false`, `:problems []`, and toolchain `:unknown []`. This proves
+prewarm and envelope consumability, not battery freshness or landing authority.
+
+| Fixed stage | Exit | Wall (ms) |
+|---|---:|---:|
+| `admit-transaction-recovery-battery` | 0 | 13075 |
+| `alias-migration-test` | 0 | 99746 |
+| `mcp-test` | 0 | 106296 |
+| `test-bb` | 0 | 96363 |
+| `test-bb-diagnostic` | 0 | 232049 |
+| `repository-hygiene` | 0 | 2077 |
+| `intent-audit` | 0 | 2221 |
+
+Actual full-suite receipts lose no existing keys; their only added keys are
+`:obligations`, `:receipt-version`, and `:toolchain`
+(`full-suite-key-comparison.edn`). The final producer and inventory copies,
+consumer envelope, and externalized Var sidecars are in `fixed-evidence/`.
+Both original receipts and their raw diff are retained in `base-evidence/`,
+`candidate-evidence/`, and `producer-receipts.diff`. No historical receipt
+was patched to manufacture the expected positive control.
+
+The subsequent report-only commit changes no gate input: Makefile, deps.edn,
+bb.edn, src, test, resources, and docs/intent remain identical to the tested
+code commit. Both commits carry the three required trailers. No merge or push
+to main; publication is confined to `fable/impact-executor`.
+
+Report assembled 2026-09-15T08:28:19.483479+00:00 from retained machine receipts.
