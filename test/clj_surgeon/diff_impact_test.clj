@@ -314,6 +314,16 @@
         (is (= {"fast" '[clj-surgeon.fast-lane-isolation-test]
                 "mcp" '[clj-surgeon.diff-impact-test]} all))
         (is (= {} (groups [] :fast)))
+        (is (= {} (groups '[unknown-test] :fast)))
+        (is (= {} (groups '[clj-surgeon.analyzer-contract-test] :fast)))
+        (is (= {"dedicated" '[clj-surgeon.analyzer-contract-test
+                              clj-surgeon.memory.oom-reproduction-test
+                              clj-surgeon.worktree-lifecycle-prune-test]}
+               (groups '[clj-surgeon.analyzer-contract-test
+                         clj-surgeon.memory.oom-reproduction-test
+                         clj-surgeon.worktree-lifecycle-prune-test] :all)))
+        (is (= {"battery" '[clj-surgeon.cli-dispatch-test]}
+               (groups '[clj-surgeon.cli-dispatch-test] :all)))
         (is (= :unadmitted-selection
                (try (groups '[unknown-test] :all) nil
                     (catch clojure.lang.ExceptionInfo e (:error-type (ex-data e))))))))))
