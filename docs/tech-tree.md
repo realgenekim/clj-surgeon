@@ -1094,3 +1094,13 @@ reproduces both refusals. Restore the historical obligation/toolchain producer
 contract with boundary and full/partial preservation witnesses. Keep diagnostic
 BB in the inventory and freshness out of prewarm discharge claims. No routing or
 speed claim. [Round 3 report](observations/2026-09-15-diff-impact-executor-report-astra.md#round-3).
+
+### 2026-09-15T08:57:05.245149+00:00 — diff-impact empty fast projection (Round 4)
+
+Sol IMPACT-EXEC-02 exposed vacuous success for a nonempty other-lane-only
+selection. Committed RED `750c9663` records 20 failing assertions. The coordinator
+now refuses empty fast projections with `fast-scope-empty` and complete member/lane
+classification before children; mixed fast/other observations retain both lanes.
+JVM and BB each pass 78 tests / 957 assertions; census is +0/-0 and protected
+ledgers are unchanged. Correctness evidence only, with no performance claim.
+[Round 4 report](observations/2026-09-15-diff-impact-executor-report-astra.md#round-4).

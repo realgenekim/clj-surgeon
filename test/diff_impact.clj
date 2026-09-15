@@ -76,6 +76,11 @@
         _ (require 'clj-surgeon.battery-parallel-runner)
         classification ((resolve 'clj-surgeon.battery-parallel-runner/selection-classification) selected)
         groups ((resolve 'clj-surgeon.battery-parallel-runner/project-selection) classification scope)
+        ;; @spec IMPACT-EXEC-02
+        _ (when (and (= :fast scope) (seq classification) (empty? groups))
+            (throw (ex-info "Diff-impact refused: fast-scope-empty"
+                            {:error-type :fast-scope-empty :scope scope
+                             :classification classification})))
         receipts
         (mapv (fn [[suite members]]
                 (let [work (str (io/file output phase (name scope) suite))
