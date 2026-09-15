@@ -1,13 +1,14 @@
 (ns analyzer-contract-test-runner
   (:require
    [clj-surgeon.analyzer-contract-test]
-   [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clj-surgeon.mcp-process :as process]
+   [clj-surgeon.tmp-leak-support :as tmp-leak]
    [clojure.java.io :as io]
    [clojure.test :refer [run-tests]]))
 
 (def mission-scope-files
   ["test/analyzer_contract_test_runner.clj"
+   "test/run_all.clj"
    "test/clj_surgeon/analyzer_contract_test.clj"
    "src/clj_surgeon/forward_refs.clj"
    "src/clj_surgeon/binding_rename.clj"
@@ -30,14 +31,15 @@
 ;; fails the lane by name. `make test` runs this target between the two
 ;; lanes that were guarded first. See clj-surgeon.tmp-leak-support.
 ;; @spec MCP-OP-TMPHYG-009
-(let [{:keys [refused root]}
-      (tmp-leak/secure-tmpdir! {:main-ns "analyzer-contract-test-runner"}
-                               *command-line-args*)
-      _ (when refused (System/exit 97))
-      tmp-before (tmp-leak/tmp-entries)
-      result (process/call-with-analyzer-contract-mission
-               (System/getProperty "user.dir")
-               (mission-scope-sha256)
-               #(run-tests 'clj-surgeon.analyzer-contract-test))
-      leak-fail (tmp-leak/report-and-sweep-leak! root tmp-before)]
-  (System/exit (+ (:fail result) (:error result) leak-fail)))
+(defn -main [& args]
+  (let [{:keys [refused root]}
+        (tmp-leak/secure-tmpdir! {:main-ns "analyzer-contract-test-runner"}
+                                 args)
+        _ (when refused (System/exit 97))
+        tmp-before (tmp-leak/tmp-entries)
+        result (process/call-with-analyzer-contract-mission
+                 (System/getProperty "user.dir")
+                 (mission-scope-sha256)
+                 #(run-tests 'clj-surgeon.analyzer-contract-test))
+        leak-fail (tmp-leak/report-and-sweep-leak! root tmp-before)]
+    (System/exit (+ (:fail result) (:error result) leak-fail))))

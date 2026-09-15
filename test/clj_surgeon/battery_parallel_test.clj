@@ -830,3 +830,55 @@
                             (when (zero? n) (throw (ex-info "failed job" {})))))))
       (is (= [0 1 2] @completed) "a failed job cannot abandon its queued siblings"))
     (is (thrown? clojure.lang.ExceptionInfo (bp/run-pool! [] 0 identity)))))
+
+;; @spec DIFF-IMPACT-007
+(deftest selected-subset-admission-and-census
+  (let [admit (ns-resolve 'clj-surgeon.battery-parallel-runner 'selected-inventory)
+        census (ns-resolve 'clj-surgeon.battery-parallel-runner 'partial-census-problems)
+        sha (apply str (repeat 64 "a"))]
+    (is (= '[[b] [c]] (bp/apply-serial-groups '[b c] '[[a b]])))
+    (is (some? admit))
+    (is (some? census))
+    (when (and admit census)
+      (is (= '[a b] (admit '[a b] nil nil)))
+      (is (= '[b] (admit '[a b] '[b] sha)))
+      (doseq [[selected hash] [[[] sha] ['[b b] sha] ['[z] sha]
+                               ['[a] nil] ['[a] "bad"] ["[a]" sha]]]
+        (is (= :invalid-selected-subset
+               (try (admit '[a b] selected hash) nil
+                    (catch clojure.lang.ExceptionInfo e (:error-type (ex-data e)))))))
+      (is (empty? (census {:partial true :selected '[b]} '[b])))
+      (doseq [observed ['[] '[a b] '[b b]]]
+        (is (seq (census {:partial true :selected '[b]} observed)))))))
+
+;; @spec DIFF-IMPACT-007
+(deftest partial-receipts-never-land
+  (is (= :partial-receipt-not-a-gate-receipt
+         (try (bp/run-gate! {"--selected" "[a]"}) nil
+              (catch clojure.lang.ExceptionInfo e (:error-type (ex-data e))))))
+  (let [receipt {:partial true :selected (bp/suite-namespaces "fast")
+                 :state :passed :debug false :source-digest "sha" :suite "fast"
+                 :runs (mapv #(hash-map :namespace %) (bp/suite-namespaces "fast"))}]
+    (is (some #(= :partial-receipt-not-a-gate-receipt (:kind %))
+              (bp/suite-receipt-problems "fast" receipt "sha")))
+    (require 'clj-surgeon.battery-ledger)
+    (let [freshness (ns-resolve 'clj-surgeon.battery-ledger 'freshness)]
+      (is (= :partial-receipt-not-a-gate-receipt
+             (:reason (freshness [(assoc receipt :sha "abc" :started "2026-09-15T00:00:00Z"
+                                    :verdict :pass)] 0 (constantly 0))))))))
+
+;; @spec DIFF-IMPACT-007 -- partial identity survives ledger serialization.
+(deftest partial-ledger-serialization-cannot-launder-authority
+  (require 'clj-surgeon.battery-ledger)
+  (let [encode (ns-resolve 'clj-surgeon.battery-ledger 'entry-line)
+        freshness (ns-resolve 'clj-surgeon.battery-ledger 'freshness)
+        e {:partial true :selected '[a] :selection-sha (apply str (repeat 64 "a"))
+           :sha "abc" :started "2026-09-15T00:00:00Z" :verdict :pass}
+        decoded (edn/read-string (encode e))]
+    (is (= (select-keys e [:partial :selected :selection-sha])
+           (select-keys decoded [:partial :selected :selection-sha])))
+    (is (= :partial-receipt-not-a-gate-receipt
+           (:reason (freshness [decoded] 0 (constantly 0))))))
+  (is (empty? (bp/census-problems {:partial true :selected '[a]} '[a])))
+  (doseq [observed ['[] '[a a] '[a b]]]
+    (is (seq (bp/census-problems {:partial true :selected '[a]} observed)))))
