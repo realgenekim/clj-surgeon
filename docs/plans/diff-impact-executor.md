@@ -22,3 +22,24 @@ and measured walls, without asserting speed. Reuse registered test namespaces.
 Run requested JVM/bb tests with 1024 MiB, lint, census regeneration and protected
 ledger hash verification. No make test or test-battery. All phases have standing
 approval. This is correctness evidence, not the five-diff repaired replay.
+
+### Total selected membership (IMPACT-EXEC-01)
+
+Before fast/all projection, classify every selected namespace against the on-disk
+inventory and admitted manifest: fast-member; other-lane-member with named lane;
+unregistered/renamed; load-excluded; or bb-ineligible. An existing admitted JVM
+or dedicated lane takes precedence over BB incompatibility. Missing on-disk
+namespaces cannot inherit stale manifest admission. Only explicitly admitted
+BB-only members use the BB suite.
+
+Report the complete classification table in successful and refused observations.
+Fast runs fast members and reports other-lane members as belonging to all.
+Both scopes refuse all remaining members together with error type
+`selected-namespace-unclassified` and one `selected-namespace-unclassified <ns>`
+reason per namespace, before any child or output directory. An explicit
+`:selection-exclusion {:reason <classification>}` on that namespace in the
+selection receipt accounts for an excluded member; mismatched or absent reasons
+refuse. Require-edge selection reasons never count as exclusion authorization.
+The oracle is `fast-scope-total-membership`, including Sol's exact renamed-away
+invocation. Replace the contradictory unknown-fast `{}` expectation in the same
+committed red as the stronger oracle. Standing approval covers all phases.
