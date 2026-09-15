@@ -1,10 +1,22 @@
 (ns clj-surgeon.worktree-lifecycle-recovery-test
   (:require
+   [babashka.fs :as fs]
    [cheshire.core :as json]
    [clj-surgeon.worktree-lifecycle :as lifecycle]
    [clj-surgeon.worktree-lifecycle-io :as lifecycle-io]
    [clojure.java.io :as io]
-   [clojure.test :refer [deftest is]]))
+   [clojure.test :refer [deftest is use-fixtures]]))
+
+ ;; DIFF-IMPACT-007 field regression: the dedicated observed runner exposed
+;; nine worktree-lifecycle-apply roots retained after otherwise passing tests.
+(def ^:dynamic *fixture-roots* nil)
+
+(use-fixtures :each
+  (fn [f]
+    (binding [*fixture-roots* (atom [])]
+      (try (f)
+           (finally
+             (doseq [root @*fixture-roots*] (fs/delete-tree root)))))))
 
 (def ^:private plan
   {:schema :clj-surgeon.worktree-close-plan/v1
@@ -92,6 +104,7 @@
                 (java.nio.file.Files/createTempDirectory
                   "worktree-lifecycle-apply"
                   (make-array java.nio.file.attribute.FileAttribute 0)))
+         _ (swap! *fixture-roots* conj root)
          root-path (.getCanonicalPath root)
          target (doto (io/file root "target") .mkdirs)
          target-path (.getCanonicalPath target)
