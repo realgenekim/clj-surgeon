@@ -189,4 +189,3 @@ Read first: the records repository's
 `preregistration.md` Addendum. Their original broken bets remain broken. This
 branch supplies executor parity and its class oracle; it does not execute or
 score that repaired five-diff experiment, merge to trunk, or change routing.
-
