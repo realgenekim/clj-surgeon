@@ -6972,3 +6972,7 @@ Round 5 (e19ce755): Sol GO (verdict-5 in records), battery green, gate envelope 
 ## 2026-09-15T12:15:02Z — REPLAY DONE: selector sound, wins only on narrow selections; window 8; native routing stays
 
 records 2026-09-14-diff-impact-measure/replay/. TOOL-FAST/NATIVE: D1 1.11 slower, D2 0.44 faster, D3 1.15 slower, D4 1.09 tie, D5 0.26 faster; catches preserved 1/1, 1/1, rest vacuous; first attempt 5/5 all arms; TOOL-ALL 26–44× on the broad diffs (its value is the battery catches on D3, found both runs). Makespan floor explains it: the slowest fast-lane member bounds the wall regardless of count. Decision rule (Astra): native stays default; a size-threshold routing (select only when the fast projection is small) is filed as a decision, not built. Gene report addendum 2 written. Window 8, index 4.
+
+## 2026-09-15T12:15:43Z — replay verdict corrected to the executor's stricter reading: decision rule NOT satisfied (wins only on vacuous-catch diffs; losses on catch-bearing ones) → native stays; no selector apparatus
+
+Astra 6/7 bets held vs my 5/7 — its ranges better calibrated on every diff. New executor defect filed (partial-child-census-mismatch on :all receipts). Window 8 (measurement, not win), index 4. Decisions for Gene: inb-2ce1e0 (routing threshold), inb-60f29b (parked entrance budget), next transfer candidate.
