@@ -6976,3 +6976,7 @@ records 2026-09-14-diff-impact-measure/replay/. TOOL-FAST/NATIVE: D1 1.11 slower
 ## 2026-09-15T12:15:43Z — replay verdict corrected to the executor's stricter reading: decision rule NOT satisfied (wins only on vacuous-catch diffs; losses on catch-bearing ones) → native stays; no selector apparatus
 
 Astra 6/7 bets held vs my 5/7 — its ranges better calibrated on every diff. New executor defect filed (partial-child-census-mismatch on :all receipts). Window 8 (measurement, not win), index 4. Decisions for Gene: inb-2ce1e0 (routing threshold), inb-60f29b (parked entrance budget), next transfer candidate.
+
+## 2026-09-16T14:03:36Z — ZOOM OUT delivered: three strategies + one recommendation (records 2026-09-16-zoom-out-three-strategies.md); Astra passes 1–2; ethnography of the Aug–Sep record
+
+The ethnographer's finding I accept against myself: the meter was the bug — two days of wall measurement on a selector after Gene ratified "Wall is a diagnostic column, never the verdict" on 09-10, and the 48-h report opened with a wall table. Astra pass 2 corrected the synthesis where it overreached (107 candidates are associations to audit, not a baseline; E4's 5.9 ms was the form refusal, the count refusal 157 ms; "no decision" ≠ mental state) and reordered its own commitment: damage baseline first, probe vs WARM native subordinate. Awaiting Gene's word on the two-week plan; nothing launched.
