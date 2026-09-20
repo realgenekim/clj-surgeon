@@ -44,3 +44,11 @@ drift band is the registered 2*s_N = 46.346 s.
 - context only, NOT like for like (those are agent-caller arms; this is a runner-issued call): registered tool caller 27 s, registered native caller 121 s
 - evidence: `/var/tmp/forge/row2/sentinel-20260913T070001Z` (attestation.txt, candidate.patch, oracle-run.txt, wall.txt, stopwatch.log) ; job log `/var/tmp/forge/tighten/sentinel-alias-20260913T070001Z.log`
 
+## 2026-09-20T07:01:37Z  arm=sentinel-20260920T070001Z port=7906
+
+- oracles: ACCEPTED=YES (PASS), call rc=0
+- caller=7.316s ; primary=35.731s ; previous sentinel caller=4.310s
+- drift band vs the PREVIOUS SENTINEL, 2*s_N=46.346 s -> IN
+- context only, NOT like for like (those are agent-caller arms; this is a runner-issued call): registered tool caller 27 s, registered native caller 121 s
+- evidence: `/var/tmp/forge/row2/sentinel-20260920T070001Z` (attestation.txt, candidate.patch, oracle-run.txt, wall.txt, stopwatch.log) ; job log `/var/tmp/forge/tighten/sentinel-alias-20260920T070001Z.log`
+
