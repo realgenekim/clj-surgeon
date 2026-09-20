@@ -284,7 +284,14 @@
          (re-matches #"http://127\.0\.0\.1:[0-9]+/mcp" url))))
 
 (defn workspace-mcp-block
-  "Return the managed Codex TOML block for the single public Surgeon boundary."
+  "Return the managed Codex TOML block for the single public Surgeon boundary.
+
+  The block is always `required = false`. The Surgeon server is shared loopback
+  infrastructure that this workspace neither owns nor starts, and it does not
+  exist at all on hosts other than the one running it. A required entry makes
+  Codex refuse to start whenever that service is down, which converts a tool
+  outage into a total work stoppage (clj-surgeon-7h2). Optional means Codex
+  boots, logs the dead server, and the tools appear once the service answers."
   [{:keys [surgeon-url]}]
   (when-not (loopback-mcp-url? surgeon-url)
     (throw (ex-info "surgeon-url must be an explicit loopback MCP URL"
@@ -294,7 +301,7 @@
   (str managed-begin "\n"
        "[mcp_servers.clj-surgeon]\n"
        "url = \"" surgeon-url "\"\n"
-       "required = true\n"
+       "required = false\n"
        "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\", \"transform_clojure\", \"relation_census\", \"alias_migration\", \"feature_thread\"]\n"
        managed-end))
 
