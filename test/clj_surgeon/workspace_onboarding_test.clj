@@ -126,12 +126,27 @@
 (deftest managed-block-is-bounded-and-mcp-first
   (let [block (onboarding/workspace-mcp-block options)]
     (is (str/includes? block "[mcp_servers.clj-surgeon]"))
-    (is (str/includes? block "required = true"))
+    (is (str/includes? block "required = false"))
     (is (str/includes? block
                        "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\", \"transform_clojure\", \"relation_census\", \"alias_migration\", \"feature_thread\"]"))
     (is (not (str/includes? block "[mcp_servers.cclsp]")))
     (is (not (str/includes? block "resolve_var_surface")))
     (is (not (str/includes? block "rename")))))
+
+;; Regression for clj-surgeon-7h2. The generated block once carried
+;; `required = true`; Codex then refused to start in every onboarded workspace
+;; whenever the shared loopback service was down, and each `up` or `recover`
+;; re-stamped the flag over a hand repair.
+(deftest managed-block-never-gates-codex-startup
+  (let [block (onboarding/workspace-mcp-block options)
+        rearmed (onboarding/upsert-workspace-block
+                  (str/replace block "required = false" "required = true")
+                  options)]
+    (is (not (re-find #"(?m)^\s*required\s*=\s*true" block))
+        "a dead shared service must never stop Codex from starting")
+    (is (= 1 (count (re-seq #"(?m)^required = false$" block))))
+    (is (not (re-find #"(?m)^\s*required\s*=\s*true" rearmed))
+        "upsert must repair a workspace that still carries the old required block")))
 
 (deftest upsert-preserves-unmanaged-settings-and-is-idempotent
   (let [before "model = \"gpt-5\"\n\n[features]\napps = true\n"

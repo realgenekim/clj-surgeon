@@ -2599,6 +2599,7 @@
   clj-surgeon.workspace-onboarding-test/internal-semantic-provider-restart-does-not-invalidate-agent-sessions
   clj-surgeon.workspace-onboarding-test/malformed-managed-blocks-and-non-loopback-urls-refuse
   clj-surgeon.workspace-onboarding-test/managed-block-is-bounded-and-mcp-first
+  clj-surgeon.workspace-onboarding-test/managed-block-never-gates-codex-startup
   clj-surgeon.workspace-onboarding-test/shared-cclsp-config-does-not-reorder-an-already-onboarded-workspace
   clj-surgeon.workspace-onboarding-test/shared-cclsp-config-preserves-other-servers-and-deduplicates-roots
   clj-surgeon.workspace-onboarding-test/shared-cclsp-config-prunes-only-missing-managed-roots

@@ -11,6 +11,13 @@ is cut.
 
 ## [Unreleased]
 
+- Workspace onboarding now writes the Codex Surgeon entry as `required = false`.
+  A required entry made Codex refuse to start in every onboarded workspace
+  whenever the shared loopback service was down, and `up` or `recover` re-stamped
+  it over hand repairs. Running `clj-surgeon up` again repairs an existing
+  workspace. Benchmark harness registrations stay required, because an arm that
+  runs without its subject is an invalid measurement (clj-surgeon-7h2).
+
 - Diff-impact selection now includes test-side helper requirements and literal
   data/source-text inputs. It reports edge reasons and returns a typed
   `:nothing-selected` result when no witness is reachable.
