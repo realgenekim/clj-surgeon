@@ -45,3 +45,11 @@ build/wave"; there is NO registered s_N, so a wall excursion here is REPORTED, n
 - band: UNREGISTERED — wall reported only
 - evidence: `/var/tmp/forge/round/runs/sentinel-ns-20261018T070001Z/` ; job log `/var/tmp/forge/tighten/sentinel-split-20261018T070001Z.log`
 
+## 2026-10-25T07:01:01Z  trunk=454a2863
+
+- oracles: 4/4 (PASS)
+- split-call wall: 42s ; whole-round wall: 59s ; previous sentinel: none
+- registered tool: 56 s CLI / 46-49 s MCP ; registered native: 447 s (n=2, no s_N)
+- band: UNREGISTERED — wall reported only
+- evidence: `/var/tmp/forge/round/runs/sentinel-ns-20261025T070002Z/` ; job log `/var/tmp/forge/tighten/sentinel-split-20261025T070002Z.log`
+
