@@ -1,0 +1,141 @@
+row	op	outcome	store	label	why
+1	alias_migration	refusal	codex	abandoned	cohort D1-D4 (2026-09-06): refused (unknown-verification-profile, then alias-migration-indirect-reference); the turn went on to apply_clojure_changes and python/apply_patch rewrites of the same requires; the migration was finished natively
+2	alias_migration	refusal	codex	abandoned	cohort D1-D4 (2026-09-06): refused (unknown-verification-profile, then alias-migration-indirect-reference); the turn went on to apply_clojure_changes and python/apply_patch rewrites of the same requires; the migration was finished natively
+3	alias_migration	refusal	codex	abandoned	cohort D1-D4 (2026-09-06): refused (unknown-verification-profile, then alias-migration-indirect-reference); the turn went on to apply_clojure_changes and python/apply_patch rewrites of the same requires; the migration was finished natively
+4	alias_migration	refusal	codex	abandoned	cohort D1-D4 (2026-09-06): refused (unknown-verification-profile, then alias-migration-indirect-reference); the turn went on to apply_clojure_changes and python/apply_patch rewrites of the same requires; the migration was finished natively
+5	alias_migration	refusal	codex	abandoned	cohort D1-D4 (2026-09-06): refused (unknown-verification-profile, then alias-migration-indirect-reference); the turn went on to apply_clojure_changes and python/apply_patch rewrites of the same requires; the migration was finished natively
+6	alias_migration	refusal	codex	abandoned	cohort D1-D4 (2026-09-06): refused (unknown-verification-profile, then alias-migration-indirect-reference); the turn went on to apply_clojure_changes and python/apply_patch rewrites of the same requires; the migration was finished natively
+7	alias_migration	refusal	codex	abandoned	cohort D1-D4 (2026-09-06): refused (unknown-verification-profile, then alias-migration-indirect-reference); the turn went on to apply_clojure_changes and python/apply_patch rewrites of the same requires; the migration was finished natively
+8	alias_migration	refusal	codex	abandoned	cohort D1-D4 (2026-09-06): refused (unknown-verification-profile, then alias-migration-indirect-reference); the turn went on to apply_clojure_changes and python/apply_patch rewrites of the same requires; the migration was finished natively
+9	alias_migration	success	codex	used	store2 alias migration succeeded (21 files, 63 sites); next actions were the repo tests (bin/fan-test, bb test/load_all)
+10	alias_migration	success	codex	used	store2 alias migration succeeded (21 files, 63 sites); next actions were the repo tests (bin/fan-test, bb test/load_all)
+11	alias_migration	success	codex	used	store2 alias migration succeeded (21 files, 63 sites); next actions were the repo tests (bin/fan-test, bb test/load_all)
+12	split-ns!	unknown	codex	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+13	alias_migration	success	codex	used	pilot migration succeeded (9 files, 21 sites); next: stopwatch, git diff, load, server tests
+14	alias_migration	success	codex	used	pilot migration succeeded (9 files, 21 sites); next: stopwatch, git diff, load, server tests
+15	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+16	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+17	alias_migration	success	claude	used	pilot migration succeeded (9 files, 21 sites); next: stopwatch, git diff, load, server tests
+18	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+19	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+20	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+21	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+22	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+23	alias_migration	success	claude	used	pilot migration succeeded (9 files, 21 sites); next: stopwatch, git diff, load, server tests
+24	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+25	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+26	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+27	split-ns!	unknown	claude	abandoned	arm F2: refused with unknown-owner blockers; the seat then created exports/calendar.clj by hand (cat >, sed -i) and rewrote requires natively
+28	split-ns!	refusal	claude	abandoned	arm F2: refused with unknown-owner blockers; the seat then created exports/calendar.clj by hand (cat >, sed -i) and rewrote requires natively
+29	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+30	split-ns!	unknown	claude	unrelated	experiment bookkeeping: building classify/answerable scripts, checking the installed version, a process observer, freezing stage files, records pull
+31	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+32	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+33	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+34	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+35	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+36	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+37	alias_migration	success	claude	used	pilot migration succeeded (9 files, 21 sites); next: stopwatch, git diff, load, server tests
+38	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+39	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+40	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+41	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+42	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+43	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+44	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+45	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+46	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+47	split-ns!	unknown	claude	unrelated	experiment bookkeeping: building classify/answerable scripts, checking the installed version, a process observer, freezing stage files, records pull
+48	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+49	split-ns!	unknown	claude	unrelated	experiment bookkeeping: building classify/answerable scripts, checking the installed version, a process observer, freezing stage files, records pull
+50	split-ns!	unknown	claude	unrelated	experiment bookkeeping: building classify/answerable scripts, checking the installed version, a process observer, freezing stage files, records pull
+51	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+52	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+53	split-ns!	unknown	claude	repaired	a failed or planning call (EXIT=1, help text, mutating D call) followed by a corrected request or profile and another split-ns! call in the same turn
+54	split-ns!	unknown	claude	unrelated	experiment bookkeeping: building classify/answerable scripts, checking the installed version, a process observer, freezing stage files, records pull
+55	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+56	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+57	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+58	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+59	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+60	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+61	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+62	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+63	alias_migration	success	claude	used	pilot migration succeeded (9 files, 21 sites); next: stopwatch, git diff, load, server tests
+64	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+65	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+66	alias-migration	refusal	claude	abandoned	CLI spelled :alias-migration, refused as unknown op; the seat wrote its own alias-migrate script
+67	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+68	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+69	split-ns!	unknown	claude	repaired	a failed or planning call (EXIT=1, help text, mutating D call) followed by a corrected request or profile and another split-ns! call in the same turn
+70	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+71	split-ns!	unknown	claude	repaired	a failed or planning call (EXIT=1, help text, mutating D call) followed by a corrected request or profile and another split-ns! call in the same turn
+72	split-ns!	unknown	claude	repaired	a failed or planning call (EXIT=1, help text, mutating D call) followed by a corrected request or profile and another split-ns! call in the same turn
+73	split-ns!	unknown	claude	unrelated	experiment bookkeeping: building classify/answerable scripts, checking the installed version, a process observer, freezing stage files, records pull
+74	split-ns!	unknown	claude	repaired	a failed or planning call (EXIT=1, help text, mutating D call) followed by a corrected request or profile and another split-ns! call in the same turn
+75	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+76	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+77	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+78	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+79	split-ns!	unknown	claude	unrelated	experiment bookkeeping: building classify/answerable scripts, checking the installed version, a process observer, freezing stage files, records pull
+80	split-ns!	unknown	claude	used	the call wrote a receipt; the next actions read the receipt (head, python parse, grep of :state/:facts) and inspected the resulting tree (git diff --stat, ns forms); python here parses receipts, it does not edit Clojure
+81	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+82	cat	refusal	codex	abandoned	refused (forward-reference-analysis-failed); the seat read the file with rg and went on to apply_patch
+83	cat	unknown	codex	unrelated	the next actions do not touch the read: logs, messages, server start, sleep/wait, worktree removal, or no further action in the turn
+84	cat	unknown	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+85	cat	success	codex	unrelated	the next actions do not touch the read: logs, messages, server start, sleep/wait, worktree removal, or no further action in the turn
+86	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+87	cat	unknown	codex	unrelated	the next actions do not touch the read: logs, messages, server start, sleep/wait, worktree removal, or no further action in the turn
+88	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+89	cat	success	codex	unrelated	the next actions do not touch the read: logs, messages, server start, sleep/wait, worktree removal, or no further action in the turn
+90	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+91	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+92	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+93	cat	unknown	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+94	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+95	cat	unknown	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+96	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+97	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+98	cat	unknown	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+99	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+100	cat	unknown	codex	unrelated	the next actions do not touch the read: logs, messages, server start, sleep/wait, worktree removal, or no further action in the turn
+101	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+102	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+103	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+104	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+105	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+106	cat	error	codex	repaired	refusal (ambiguous-form, remedies) or error followed by a corrected cat (:line, :forms, :form) on the same file
+107	cat	success	codex	unrelated	the next actions do not touch the read: logs, messages, server start, sleep/wait, worktree removal, or no further action in the turn
+108	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+109	cat	refusal	codex	repaired	refusal (ambiguous-form, remedies) or error followed by a corrected cat (:line, :forms, :form) on the same file
+110	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+111	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+112	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+113	cat	unknown	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+114	cat	unknown	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+115	cat	unknown	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+116	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+117	cat	unknown	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+118	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+119	cat	error	codex	repaired	refusal (ambiguous-form, remedies) or error followed by a corrected cat (:line, :forms, :form) on the same file
+120	cat	refusal	codex	repaired	refusal (ambiguous-form, remedies) or error followed by a corrected cat (:line, :forms, :form) on the same file
+121	cat	unknown	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+122	cat	unknown	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+123	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+124	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+125	cat	success	codex	unrelated	the next actions do not touch the read: logs, messages, server start, sleep/wait, worktree removal, or no further action in the turn
+126	cat	unknown	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+127	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+128	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+129	cat	refusal	codex	repaired	refusal (ambiguous-form, remedies) or error followed by a corrected cat (:line, :forms, :form) on the same file
+130	cat	success	codex	unrelated	the next actions do not touch the read: logs, messages, server start, sleep/wait, worktree removal, or no further action in the turn
+131	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+132	cat	unknown	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+133	cat	unknown	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+134	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+135	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+136	cat	refusal	codex	repaired	refusal (ambiguous-form, remedies) or error followed by a corrected cat (:line, :forms, :form) on the same file
+137	cat	unknown	codex	unrelated	the next actions do not touch the read: logs, messages, server start, sleep/wait, worktree removal, or no further action in the turn
+138	cat	unknown	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+139	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
+140	cat	success	codex	used	the read fed the next actions: further cats/ls on the same files, rg, sed, apply_patch or a test run
