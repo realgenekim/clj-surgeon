@@ -1,0 +1,7 @@
+verdict	unique_commits_exclusive	raw_family_branch_commit_sum	family_sibling_union_nonexclusive	note
+won and routed	0	0	2493	Exclusive partition; cross-verdict overlap -> unassigned; main precedence. Other columns nonadditive.
+lost and suspended	0	0	19	Exclusive partition; cross-verdict overlap -> unassigned; main precedence. Other columns nonadditive.
+inconclusive	0	0	2788	Exclusive partition; cross-verdict overlap -> unassigned; main precedence. Other columns nonadditive.
+never measured	1796	882625	4584	Exclusive partition; cross-verdict overlap -> unassigned; main precedence. Other columns nonadditive.
+on main	1396	0	1396	Exclusive partition; cross-verdict overlap -> unassigned; main precedence. Other columns nonadditive.
+unassigned	2802	0	0	Exclusive partition; cross-verdict overlap -> unassigned; main precedence. Other columns nonadditive.
