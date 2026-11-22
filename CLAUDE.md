@@ -30,6 +30,13 @@ updates, and verification gates. It is not a chronological coding diary.
 
 ## Testing
 
+- **The bar for new code (Gene, 2026-11-22): "we have a world-class bar on testing, I think.  Make sure
+  any code functionality we add, we match/exceed it."** Measured on main that day: 35,262 test lines for
+  30,533 source lines (115 test lines for every 100 source lines) and 1,173 `deftest` forms (about 38 for
+  every 1,000 source lines). A change that adds behaviour must not lower either ratio for the files it
+  touches, must exhaust the pure behaviour matrix as the rest of this section says, and must carry a
+  native control when it claims to be faster or cheaper than native editing ("strictly better, or
+  native"). A reviewer may refuse a change on this rule alone.
 - Run: `make test`
 - For the inner Clojure development loop, first run
   `clj-nrepl-eval --discover-ports` and reuse the project-local nREPL. Reload
