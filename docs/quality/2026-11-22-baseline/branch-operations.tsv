@@ -1,0 +1,173 @@
+ref	operation	location	registry/dispatch text
+origin/main	xray	src/clj_surgeon/core.clj:822	:xray             {:handler run-xray
+origin/main	ls	src/clj_surgeon/core.clj:846	:ls               {:handler   run-outline
+origin/main	cat	src/clj_surgeon/core.clj:855	:aliases  [:cat]
+origin/main	inspect_clojure	src/clj_surgeon/mcp_inspect_tool.clj:1145	:name "inspect_clojure"
+origin/main	edit_clojure	src/clj_surgeon/mcp_tool.clj:1327	:name "edit_clojure"
+origin/main	apply_clojure_changes	src/clj_surgeon/mcp_tool.clj:1336	:name "apply_clojure_changes"
+origin/astra/namespace-split	split-ns!	src/clj_surgeon/core.clj:2153	:split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))
+origin/astra/namespace-split	xray	src/clj_surgeon/core.clj:2353	:xray             {:handler run-xray
+origin/astra/namespace-split	ls	src/clj_surgeon/core.clj:2377	:ls               {:handler   run-outline
+origin/astra/namespace-split	cat	src/clj_surgeon/core.clj:2386	:aliases  [:cat]
+origin/astra/namespace-split	admit_clojure_patch	src/clj_surgeon/mcp_admit_tool.clj:3026	:name "admit_clojure_patch"
+origin/astra/namespace-split	feature_thread	src/clj_surgeon/mcp_feature_thread.clj:4328	:name "feature_thread"
+origin/astra/namespace-split	helper_extraction	src/clj_surgeon/mcp_helper_extraction.clj:1364	:name operation
+origin/astra/namespace-split	inspect_clojure	src/clj_surgeon/mcp_inspect_tool.clj:1352	:name "inspect_clojure"
+origin/astra/namespace-split	namespace_split	src/clj_surgeon/mcp_namespace_split.clj:22	{:id :namespace-split :name "namespace_split"
+origin/astra/namespace-split	require_change	src/clj_surgeon/mcp_require_change.clj:21	{:id :require-change :name "require_change"
+origin/astra/namespace-split	edit_clojure	src/clj_surgeon/mcp_tool.clj:1713	:name "edit_clojure"
+origin/astra/namespace-split	alias_migration	src/clj_surgeon/mcp_tool.clj:2363	:name "alias_migration"
+origin/astra/namespace-split	apply_clojure_changes	src/clj_surgeon/mcp_tool.clj:2542	:name "apply_clojure_changes"
+origin/MCP/main	insert-forms!	src/clj_surgeon/core.clj:2172	:insert-forms! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.insert-forms/cli!) opts))
+origin/MCP/main	rename-alias!	src/clj_surgeon/core.clj:2183	:rename-alias! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.rename-alias/cli!) opts))
+origin/MCP/main	split-ns!	src/clj_surgeon/core.clj:2194	:split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))
+origin/MCP/main	xray	src/clj_surgeon/core.clj:2395	:xray             {:handler run-xray
+origin/MCP/main	ls	src/clj_surgeon/core.clj:2419	:ls               {:handler   run-outline
+origin/MCP/main	cat	src/clj_surgeon/core.clj:2428	:aliases  [:cat]
+origin/MCP/main	admit_clojure_patch	src/clj_surgeon/mcp_admit_tool.clj:3026	:name "admit_clojure_patch"
+origin/MCP/main	feature_thread	src/clj_surgeon/mcp_feature_thread.clj:4328	:name "feature_thread"
+origin/MCP/main	helper_extraction	src/clj_surgeon/mcp_helper_extraction.clj:1364	:name operation
+origin/MCP/main	inspect_clojure	src/clj_surgeon/mcp_inspect_tool.clj:1360	:name "inspect_clojure"
+origin/MCP/main	namespace_split	src/clj_surgeon/mcp_namespace_split.clj:25	{:id :namespace-split :name "namespace_split"
+origin/MCP/main	require_change	src/clj_surgeon/mcp_require_change.clj:21	{:id :require-change :name "require_change"
+origin/MCP/main	edit_clojure	src/clj_surgeon/mcp_tool.clj:1714	:name "edit_clojure"
+origin/MCP/main	alias_migration	src/clj_surgeon/mcp_tool.clj:2363	:name "alias_migration"
+origin/MCP/main	apply_clojure_changes	src/clj_surgeon/mcp_tool.clj:2542	:name "apply_clojure_changes"
+origin/MCP/astra-helper-performance-2026-09-05	xray	src/clj_surgeon/core.clj:2278	:xray             {:handler run-xray
+origin/MCP/astra-helper-performance-2026-09-05	ls	src/clj_surgeon/core.clj:2302	:ls               {:handler   run-outline
+origin/MCP/astra-helper-performance-2026-09-05	cat	src/clj_surgeon/core.clj:2311	:aliases  [:cat]
+origin/MCP/astra-helper-performance-2026-09-05	admit_clojure_patch	src/clj_surgeon/mcp_admit_tool.clj:3005	:name "admit_clojure_patch"
+origin/MCP/astra-helper-performance-2026-09-05	inspect_clojure	src/clj_surgeon/mcp_inspect_tool.clj:1145	:name "inspect_clojure"
+origin/MCP/astra-helper-performance-2026-09-05	edit_clojure	src/clj_surgeon/mcp_tool.clj:1342	:name "edit_clojure"
+origin/MCP/astra-helper-performance-2026-09-05	alias_migration	src/clj_surgeon/mcp_tool.clj:1936	:name "alias_migration"
+origin/MCP/astra-helper-performance-2026-09-05	apply_clojure_changes	src/clj_surgeon/mcp_tool.clj:1951	:name "apply_clojure_changes"
+origin/astra/gate-lanes-receipt-2dfbc286	split-ns!	src/clj_surgeon/core.clj:2153	:split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))
+origin/astra/gate-lanes-receipt-2dfbc286	xray	src/clj_surgeon/core.clj:2354	:xray             {:handler run-xray
+origin/astra/gate-lanes-receipt-2dfbc286	ls	src/clj_surgeon/core.clj:2378	:ls               {:handler   run-outline
+origin/astra/gate-lanes-receipt-2dfbc286	cat	src/clj_surgeon/core.clj:2387	:aliases  [:cat]
+origin/astra/gate-lanes-receipt-2dfbc286	admit_clojure_patch	src/clj_surgeon/mcp_admit_tool.clj:3026	:name "admit_clojure_patch"
+origin/astra/gate-lanes-receipt-2dfbc286	feature_thread	src/clj_surgeon/mcp_feature_thread.clj:4328	:name "feature_thread"
+origin/astra/gate-lanes-receipt-2dfbc286	helper_extraction	src/clj_surgeon/mcp_helper_extraction.clj:1364	:name operation
+origin/astra/gate-lanes-receipt-2dfbc286	inspect_clojure	src/clj_surgeon/mcp_inspect_tool.clj:1352	:name "inspect_clojure"
+origin/astra/gate-lanes-receipt-2dfbc286	namespace_split	src/clj_surgeon/mcp_namespace_split.clj:25	{:id :namespace-split :name "namespace_split"
+origin/astra/gate-lanes-receipt-2dfbc286	require_change	src/clj_surgeon/mcp_require_change.clj:21	{:id :require-change :name "require_change"
+origin/astra/gate-lanes-receipt-2dfbc286	edit_clojure	src/clj_surgeon/mcp_tool.clj:1713	:name "edit_clojure"
+origin/astra/gate-lanes-receipt-2dfbc286	alias_migration	src/clj_surgeon/mcp_tool.clj:2363	:name "alias_migration"
+origin/astra/gate-lanes-receipt-2dfbc286	apply_clojure_changes	src/clj_surgeon/mcp_tool.clj:2542	:name "apply_clojure_changes"
+origin/bb-rewrite-tower	insert-forms!	src/clj_surgeon/core.clj:2172	:insert-forms! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.insert-forms/cli!) opts))
+origin/bb-rewrite-tower	rename-alias!	src/clj_surgeon/core.clj:2183	:rename-alias! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.rename-alias/cli!) opts))
+origin/bb-rewrite-tower	split-ns!	src/clj_surgeon/core.clj:2194	:split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))
+origin/bb-rewrite-tower	xray	src/clj_surgeon/core.clj:2395	:xray             {:handler run-xray
+origin/bb-rewrite-tower	ls	src/clj_surgeon/core.clj:2419	:ls               {:handler   run-outline
+origin/bb-rewrite-tower	cat	src/clj_surgeon/core.clj:2428	:aliases  [:cat]
+origin/bb-rewrite-tower	admit_clojure_patch	src/clj_surgeon/mcp_admit_tool.clj:3026	:name "admit_clojure_patch"
+origin/bb-rewrite-tower	feature_thread	src/clj_surgeon/mcp_feature_thread.clj:4328	:name "feature_thread"
+origin/bb-rewrite-tower	helper_extraction	src/clj_surgeon/mcp_helper_extraction.clj:1364	:name operation
+origin/bb-rewrite-tower	inspect_clojure	src/clj_surgeon/mcp_inspect_tool.clj:1360	:name "inspect_clojure"
+origin/bb-rewrite-tower	namespace_split	src/clj_surgeon/mcp_namespace_split.clj:25	{:id :namespace-split :name "namespace_split"
+origin/bb-rewrite-tower	require_change	src/clj_surgeon/mcp_require_change.clj:21	{:id :require-change :name "require_change"
+origin/bb-rewrite-tower	edit_clojure	src/clj_surgeon/mcp_tool.clj:1715	:name "edit_clojure"
+origin/bb-rewrite-tower	alias_migration	src/clj_surgeon/mcp_tool.clj:2365	:name "alias_migration"
+origin/bb-rewrite-tower	apply_clojure_changes	src/clj_surgeon/mcp_tool.clj:2544	:name "apply_clojure_changes"
+origin/bb-rewrite-tower-land	insert-forms!	src/clj_surgeon/core.clj:2172	:insert-forms! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.insert-forms/cli!) opts))
+origin/bb-rewrite-tower-land	rename-alias!	src/clj_surgeon/core.clj:2183	:rename-alias! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.rename-alias/cli!) opts))
+origin/bb-rewrite-tower-land	split-ns!	src/clj_surgeon/core.clj:2194	:split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))
+origin/bb-rewrite-tower-land	xray	src/clj_surgeon/core.clj:2395	:xray             {:handler run-xray
+origin/bb-rewrite-tower-land	ls	src/clj_surgeon/core.clj:2419	:ls               {:handler   run-outline
+origin/bb-rewrite-tower-land	cat	src/clj_surgeon/core.clj:2428	:aliases  [:cat]
+origin/bb-rewrite-tower-land	admit_clojure_patch	src/clj_surgeon/mcp_admit_tool.clj:3026	:name "admit_clojure_patch"
+origin/bb-rewrite-tower-land	feature_thread	src/clj_surgeon/mcp_feature_thread.clj:4328	:name "feature_thread"
+origin/bb-rewrite-tower-land	helper_extraction	src/clj_surgeon/mcp_helper_extraction.clj:1364	:name operation
+origin/bb-rewrite-tower-land	inspect_clojure	src/clj_surgeon/mcp_inspect_tool.clj:1360	:name "inspect_clojure"
+origin/bb-rewrite-tower-land	namespace_split	src/clj_surgeon/mcp_namespace_split.clj:25	{:id :namespace-split :name "namespace_split"
+origin/bb-rewrite-tower-land	require_change	src/clj_surgeon/mcp_require_change.clj:21	{:id :require-change :name "require_change"
+origin/bb-rewrite-tower-land	edit_clojure	src/clj_surgeon/mcp_tool.clj:1715	:name "edit_clojure"
+origin/bb-rewrite-tower-land	alias_migration	src/clj_surgeon/mcp_tool.clj:2365	:name "alias_migration"
+origin/bb-rewrite-tower-land	apply_clojure_changes	src/clj_surgeon/mcp_tool.clj:2544	:name "apply_clojure_changes"
+origin/bridge/apply-expect-honoured	xray	src/clj_surgeon/core.clj:2278	:xray             {:handler run-xray
+origin/bridge/apply-expect-honoured	ls	src/clj_surgeon/core.clj:2302	:ls               {:handler   run-outline
+origin/bridge/apply-expect-honoured	cat	src/clj_surgeon/core.clj:2311	:aliases  [:cat]
+origin/bridge/apply-expect-honoured	admit_clojure_patch	src/clj_surgeon/mcp_admit_tool.clj:3023	:name "admit_clojure_patch"
+origin/bridge/apply-expect-honoured	feature_thread	src/clj_surgeon/mcp_feature_thread.clj:4328	:name "feature_thread"
+origin/bridge/apply-expect-honoured	helper_extraction	src/clj_surgeon/mcp_helper_extraction.clj:1623	:name operation
+origin/bridge/apply-expect-honoured	inspect_clojure	src/clj_surgeon/mcp_inspect_tool.clj:1337	:name "inspect_clojure"
+origin/bridge/apply-expect-honoured	edit_clojure	src/clj_surgeon/mcp_tool.clj:1705	:name "edit_clojure"
+origin/bridge/apply-expect-honoured	alias_migration	src/clj_surgeon/mcp_tool.clj:2354	:name "alias_migration"
+origin/bridge/apply-expect-honoured	apply_clojure_changes	src/clj_surgeon/mcp_tool.clj:2533	:name "apply_clojure_changes"
+origin/experiment/result-decision-chord-screen	xray	src/clj_surgeon/core.clj:715	:xray             {:handler run-xray
+origin/experiment/result-decision-chord-screen	ls	src/clj_surgeon/core.clj:739	:ls               {:handler   run-outline
+origin/experiment/result-decision-chord-screen	cat	src/clj_surgeon/core.clj:748	:aliases  [:cat]
+origin/experiment/result-decision-chord-screen	inspect_clojure	src/clj_surgeon/mcp_inspect_tool.clj:987	:name "inspect_clojure"
+origin/experiment/result-decision-chord-screen	edit_clojure	src/clj_surgeon/mcp_tool.clj:983	:name "edit_clojure"
+origin/experiment/result-decision-chord-screen	apply_clojure_changes	src/clj_surgeon/mcp_tool.clj:992	:name "apply_clojure_changes"
+origin/fable/regns-entrance	insert-forms!	src/clj_surgeon/core.clj:2172	:insert-forms! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.insert-forms/cli!) opts))
+origin/fable/regns-entrance	rename-alias!	src/clj_surgeon/core.clj:2183	:rename-alias! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.rename-alias/cli!) opts))
+origin/fable/regns-entrance	split-ns!	src/clj_surgeon/core.clj:2194	:split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))
+origin/fable/regns-entrance	xray	src/clj_surgeon/core.clj:2395	:xray             {:handler run-xray
+origin/fable/regns-entrance	ls	src/clj_surgeon/core.clj:2419	:ls               {:handler   run-outline
+origin/fable/regns-entrance	cat	src/clj_surgeon/core.clj:2428	:aliases  [:cat]
+origin/fable/regns-entrance	admit_clojure_patch	src/clj_surgeon/mcp_admit_tool.clj:3026	:name "admit_clojure_patch"
+origin/fable/regns-entrance	feature_thread	src/clj_surgeon/mcp_feature_thread.clj:4328	:name "feature_thread"
+origin/fable/regns-entrance	helper_extraction	src/clj_surgeon/mcp_helper_extraction.clj:1364	:name operation
+origin/fable/regns-entrance	inspect_clojure	src/clj_surgeon/mcp_inspect_tool.clj:1360	:name "inspect_clojure"
+origin/fable/regns-entrance	namespace_split	src/clj_surgeon/mcp_namespace_split.clj:25	{:id :namespace-split :name "namespace_split"
+origin/fable/regns-entrance	require_change	src/clj_surgeon/mcp_require_change.clj:21	{:id :require-change :name "require_change"
+origin/fable/regns-entrance	edit_clojure	src/clj_surgeon/mcp_tool.clj:1714	:name "edit_clojure"
+origin/fable/regns-entrance	alias_migration	src/clj_surgeon/mcp_tool.clj:2363	:name "alias_migration"
+origin/fable/regns-entrance	apply_clojure_changes	src/clj_surgeon/mcp_tool.clj:2542	:name "apply_clojure_changes"
+origin/records/MCP-main	split-ns!	src/clj_surgeon/core.clj:2153	:split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))
+origin/records/MCP-main	xray	src/clj_surgeon/core.clj:2353	:xray             {:handler run-xray
+origin/records/MCP-main	ls	src/clj_surgeon/core.clj:2377	:ls               {:handler   run-outline
+origin/records/MCP-main	cat	src/clj_surgeon/core.clj:2386	:aliases  [:cat]
+origin/records/MCP-main	admit_clojure_patch	src/clj_surgeon/mcp_admit_tool.clj:3026	:name "admit_clojure_patch"
+origin/records/MCP-main	feature_thread	src/clj_surgeon/mcp_feature_thread.clj:4328	:name "feature_thread"
+origin/records/MCP-main	helper_extraction	src/clj_surgeon/mcp_helper_extraction.clj:1364	:name operation
+origin/records/MCP-main	inspect_clojure	src/clj_surgeon/mcp_inspect_tool.clj:1352	:name "inspect_clojure"
+origin/records/MCP-main	namespace_split	src/clj_surgeon/mcp_namespace_split.clj:22	{:id :namespace-split :name "namespace_split"
+origin/records/MCP-main	require_change	src/clj_surgeon/mcp_require_change.clj:21	{:id :require-change :name "require_change"
+origin/records/MCP-main	edit_clojure	src/clj_surgeon/mcp_tool.clj:1713	:name "edit_clojure"
+origin/records/MCP-main	alias_migration	src/clj_surgeon/mcp_tool.clj:2363	:name "alias_migration"
+origin/records/MCP-main	apply_clojure_changes	src/clj_surgeon/mcp_tool.clj:2542	:name "apply_clojure_changes"
+origin/skiff/darwin-passwd-home	insert-forms!	src/clj_surgeon/core.clj:2172	:insert-forms! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.insert-forms/cli!) opts))
+origin/skiff/darwin-passwd-home	rename-alias!	src/clj_surgeon/core.clj:2183	:rename-alias! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.rename-alias/cli!) opts))
+origin/skiff/darwin-passwd-home	split-ns!	src/clj_surgeon/core.clj:2194	:split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))
+origin/skiff/darwin-passwd-home	xray	src/clj_surgeon/core.clj:2395	:xray             {:handler run-xray
+origin/skiff/darwin-passwd-home	ls	src/clj_surgeon/core.clj:2419	:ls               {:handler   run-outline
+origin/skiff/darwin-passwd-home	cat	src/clj_surgeon/core.clj:2428	:aliases  [:cat]
+origin/skiff/darwin-passwd-home	admit_clojure_patch	src/clj_surgeon/mcp_admit_tool.clj:3026	:name "admit_clojure_patch"
+origin/skiff/darwin-passwd-home	feature_thread	src/clj_surgeon/mcp_feature_thread.clj:4328	:name "feature_thread"
+origin/skiff/darwin-passwd-home	helper_extraction	src/clj_surgeon/mcp_helper_extraction.clj:1364	:name operation
+origin/skiff/darwin-passwd-home	inspect_clojure	src/clj_surgeon/mcp_inspect_tool.clj:1360	:name "inspect_clojure"
+origin/skiff/darwin-passwd-home	namespace_split	src/clj_surgeon/mcp_namespace_split.clj:25	{:id :namespace-split :name "namespace_split"
+origin/skiff/darwin-passwd-home	require_change	src/clj_surgeon/mcp_require_change.clj:21	{:id :require-change :name "require_change"
+origin/skiff/darwin-passwd-home	edit_clojure	src/clj_surgeon/mcp_tool.clj:1714	:name "edit_clojure"
+origin/skiff/darwin-passwd-home	alias_migration	src/clj_surgeon/mcp_tool.clj:2363	:name "alias_migration"
+origin/skiff/darwin-passwd-home	apply_clojure_changes	src/clj_surgeon/mcp_tool.clj:2542	:name "apply_clojure_changes"
+origin/skiff-worker/7h2-onboarding-required-false	insert-forms!	src/clj_surgeon/core.clj:2172	:insert-forms! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.insert-forms/cli!) opts))
+origin/skiff-worker/7h2-onboarding-required-false	rename-alias!	src/clj_surgeon/core.clj:2183	:rename-alias! {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.rename-alias/cli!) opts))
+origin/skiff-worker/7h2-onboarding-required-false	split-ns!	src/clj_surgeon/core.clj:2194	:split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))
+origin/skiff-worker/7h2-onboarding-required-false	xray	src/clj_surgeon/core.clj:2395	:xray             {:handler run-xray
+origin/skiff-worker/7h2-onboarding-required-false	ls	src/clj_surgeon/core.clj:2419	:ls               {:handler   run-outline
+origin/skiff-worker/7h2-onboarding-required-false	cat	src/clj_surgeon/core.clj:2428	:aliases  [:cat]
+origin/skiff-worker/7h2-onboarding-required-false	admit_clojure_patch	src/clj_surgeon/mcp_admit_tool.clj:3026	:name "admit_clojure_patch"
+origin/skiff-worker/7h2-onboarding-required-false	feature_thread	src/clj_surgeon/mcp_feature_thread.clj:4328	:name "feature_thread"
+origin/skiff-worker/7h2-onboarding-required-false	helper_extraction	src/clj_surgeon/mcp_helper_extraction.clj:1364	:name operation
+origin/skiff-worker/7h2-onboarding-required-false	inspect_clojure	src/clj_surgeon/mcp_inspect_tool.clj:1360	:name "inspect_clojure"
+origin/skiff-worker/7h2-onboarding-required-false	namespace_split	src/clj_surgeon/mcp_namespace_split.clj:25	{:id :namespace-split :name "namespace_split"
+origin/skiff-worker/7h2-onboarding-required-false	require_change	src/clj_surgeon/mcp_require_change.clj:21	{:id :require-change :name "require_change"
+origin/skiff-worker/7h2-onboarding-required-false	edit_clojure	src/clj_surgeon/mcp_tool.clj:1714	:name "edit_clojure"
+origin/skiff-worker/7h2-onboarding-required-false	alias_migration	src/clj_surgeon/mcp_tool.clj:2363	:name "alias_migration"
+origin/skiff-worker/7h2-onboarding-required-false	apply_clojure_changes	src/clj_surgeon/mcp_tool.clj:2542	:name "apply_clojure_changes"
+origin/study/2026-11-22	split-ns!	src/clj_surgeon/core.clj:2153	:split-ns!        {:handler (fn [opts] ((requiring-resolve 'clj-surgeon.namespace-split-io/cli!) opts))
+origin/study/2026-11-22	xray	src/clj_surgeon/core.clj:2353	:xray             {:handler run-xray
+origin/study/2026-11-22	ls	src/clj_surgeon/core.clj:2377	:ls               {:handler   run-outline
+origin/study/2026-11-22	cat	src/clj_surgeon/core.clj:2386	:aliases  [:cat]
+origin/study/2026-11-22	admit_clojure_patch	src/clj_surgeon/mcp_admit_tool.clj:3026	:name "admit_clojure_patch"
+origin/study/2026-11-22	feature_thread	src/clj_surgeon/mcp_feature_thread.clj:4328	:name "feature_thread"
+origin/study/2026-11-22	helper_extraction	src/clj_surgeon/mcp_helper_extraction.clj:1364	:name operation
+origin/study/2026-11-22	inspect_clojure	src/clj_surgeon/mcp_inspect_tool.clj:1352	:name "inspect_clojure"
+origin/study/2026-11-22	namespace_split	src/clj_surgeon/mcp_namespace_split.clj:22	{:id :namespace-split :name "namespace_split"
+origin/study/2026-11-22	require_change	src/clj_surgeon/mcp_require_change.clj:21	{:id :require-change :name "require_change"
+origin/study/2026-11-22	edit_clojure	src/clj_surgeon/mcp_tool.clj:1713	:name "edit_clojure"
+origin/study/2026-11-22	alias_migration	src/clj_surgeon/mcp_tool.clj:2363	:name "alias_migration"
+origin/study/2026-11-22	apply_clojure_changes	src/clj_surgeon/mcp_tool.clj:2542	:name "apply_clojure_changes"
