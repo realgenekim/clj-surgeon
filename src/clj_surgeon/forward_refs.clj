@@ -5,6 +5,17 @@
    [clj-surgeon.mcp-process :as process-env]
    [clojure.string :as str]))
 
+(defn admit-analysis-result
+  "Admit completed clj-kondo analysis: exit 0 means no findings, 2 warnings,
+  and 3 errors. Lint findings do not invalidate the analysis output."
+  [result]
+  (when-not (and (:finished? result) (contains? #{0 2 3} (:exit result)))
+    (throw (ex-info "Forward-reference analysis failed"
+                    {:error-type :forward-reference-analysis-failed
+                     :exit (:exit result)
+                     :diagnostic (str/trim (or (:err result) ""))})))
+  result)
+
 (defn- run-kondo [file]
   (let [command ["clj-kondo" "--lint" file
                  "--config"
@@ -25,11 +36,7 @@
       (throw (ex-info "Forward-reference analyzer authority is unverified"
                       {:error-type :analyzer-authority-unverified
                        :admission (:admission result)})))
-    (when-not (and (:finished? result) (zero? (:exit result)))
-      (throw (ex-info "Forward-reference analysis failed"
-                      {:error-type :forward-reference-analysis-failed
-                       :exit (:exit result)
-                       :diagnostic (str/trim (or (:err result) ""))})))
+    (admit-analysis-result result)
     (try
       (json/parse-string (:out result) true)
       (catch Exception error
