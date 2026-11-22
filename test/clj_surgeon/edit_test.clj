@@ -4,6 +4,7 @@
    [babashka.process :as proc]
    [clj-surgeon.core :as core]
    [clj-surgeon.edit-dsl :as edit-dsl]
+   [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.structural-lens :as lens]
    [clj-surgeon.test-permissions :as permissions]
    [clojure.edn :as edn]
@@ -839,26 +840,47 @@
         (is (= (:result-hash result)
                (lens/source-hash (slurp source-file))))))))
 
+(defn- run-edit-with-blocked-parent [opts parent]
+  (let [atomic-write! file-ops/atomic-write!
+        saved-parent (fs/path (fs/parent parent) "saved-source-dir")
+        writer-reached? (volatile! false)
+        result (with-redefs [file-ops/atomic-write!
+                             (fn [file source]
+                               ;; The source has already been read when the writer runs.
+                               (fs/move parent saved-parent)
+                               (try
+                                 (spit (str parent) "")
+                                 (vreset! writer-reached? true)
+                                 (atomic-write! file source)
+                                 (finally
+                                   (fs/delete-if-exists parent)
+                                   (fs/move saved-parent parent))))]
+                 (core/run-edit opts))]
+    (is @writer-reached? "the fixture reached the real writer with a regular file as its parent")
+    result))
+
 (deftest expect-row-9-apply-failure-keeps-the-existing-executor-refusal
   (let [dir (fs/create-temp-dir {:prefix "clj surgeon expect apply "})
         source-dir (fs/path dir "readonly")
         source-file (str (fs/path source-dir "source.clj"))
-        plan-file (str (fs/path dir "plan.edn"))]
+        plan-file (str (fs/path dir "plan.edn"))
+        opts {:file source-file
+              :expr expect-replacement-expr
+              :plan-out plan-file
+              :expect true-expect}]
     (try
       (fs/create-dir source-dir)
       (spit source-file edit-source)
       (.setWritable (java.io.File. (str source-dir)) false false)
-      (let [result (core/run-edit {:file source-file
-                                   :expr expect-replacement-expr
-                                   :plan-out plan-file
-                                   :expect true-expect})]
-        (when (permissions/check-permission-refusal? "guarded edit atomic write")
-          (is (:error result))
-          (is (= :atomic-write-failed (:error-type result)))
-          (is (nil? (:ok result)))
-          (is (= edit-source (slurp source-file))
-              "the atomic write never partially replaced the target"))
+      (let [result (if (permissions/root?)
+                     (run-edit-with-blocked-parent opts source-dir)
+                     (core/run-edit opts))]
+        (is (:error result))
+        (is (= :atomic-write-failed (:error-type result)))
         (is (= :expect-guarded (:mode result)))
+        (is (nil? (:ok result)))
+        (is (= edit-source (slurp source-file))
+            "the atomic write never partially replaced the target")
         (is (= :replace-subform
                (:operation (edn/read-string (slurp plan-file))))
             "the audit artifact is saved before the apply attempt"))

@@ -326,7 +326,8 @@
                             java.nio.file.attribute.PosixFilePermission/GROUP_WRITE
                             java.nio.file.attribute.PosixFilePermission/OTHERS_WRITE}
                           (fs/posix-file-permissions skill-file)))
-            (when (permissions/check-permission-refusal? "installed SKILL.md writability")
+            (if (permissions/root?)
+              (println "Skipping installed SKILL.md writability as UID 0 because root can bypass POSIX write permissions.")
               (is (not (fs/writable? skill-file))))))
         (testing "the CLI launcher resolves only the copied runtime"
           (let [launcher (slurp-path cli-path)]
