@@ -6,14 +6,18 @@ Read and follow [CLAUDE.md](CLAUDE.md) before making changes. It is the
 canonical repository instruction file for all coding agents, regardless of
 vendor or runtime.
 
-Its Clojure routing and Surgeon-owned semantic escalation rules apply before native
-Read, Edit, grep, sed, or cat touches existing source. Load the working-tree
-skill before acting.
+Load the working-tree skill before calling clj-surgeon.
 
-Use the hottest capable entrance: prefer the persistent `inspect_clojure` and
-`apply_clojure_changes` MCP tools. Use `~/bin/clj-surgeon` only when MCP is
-unavailable, the operation is not exposed there, or the CLI itself is under
-test.
+Native `rg` plus a native patch is the default route for reading and editing
+Clojure. Do not prefer `inspect_clojure` or `apply_clojure_changes`. Call
+clj-surgeon only for a measured winner (see the plan above and the routing
+block in your global CLAUDE.md). Gene's ruling, 2026-09-02, verbatim: "Pull
+'Surgeon is available and expected' from every Clojure agent prompt today. It
+is a standing 2x tax with no measured return, on every delegated Clojure job in
+the fleet, and it is a one-line doctrine edit. Leave the server running for
+agents that choose it; stop telling them to. The data says they will decline
+it, and decline it correctly." Receipts:
+`docs/observations/2026-09-02-captains-log-bridge-wall-clock-ideal-program.md`.
 
 For non-trivial feature work, `CLAUDE.md` requires the design, planning,
 testing, documentation, and verification standards that must be satisfied

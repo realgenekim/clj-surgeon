@@ -8,6 +8,7 @@ Epic: `clj-surgeon-98y`. Sources: the four-seat fleet review, the two Anvil hand
 - "we have a world-class bar on testing, I think.  Make sure any code functionality we add, we match/exceed it."
 - "Clj surgeon: wire up to tier 2!   Go go go !"
 - "Clj sugeon: yes on plan; go on phase 1!  And maybe do the hardening first to make things safer and faster.  Right???  The hypothesis is that we need to create conditions for changes to be made sublime and fast and awesome (< 150 LoC changes, etc.)"
+- "And I love the idea of merging in only the winning verbs for surgeon, 150 LoC at a time, leaving out losing ones; and validation that we don't need MCP access anymore, and we can retire all of that on its own branch. This is super exciting for SAIER. We're distilling only the good stuff after massive investment in exploration."
 
 ## Verdict
 
@@ -43,7 +44,8 @@ The two winning verbs are not on main. Main has no namespace-split code. Namespa
 
 Anvil builder: 1 to 8 and 10. Condition 9: unassigned.
 
-Other steps: xray experiment `.11`, fall-back label audit `.12`, winners onto main `.13` (Anvil builder);
+Other steps: xray experiment `.11`, fall-back label audit `.12`, port of the winners `.13`, CLI coverage and
+MCP retirement branch `.18` (Anvil builder);
 phase 2 deletions `.14`, trigger-text pilot `.15`, add-require candidate audit `.16`, one new verb `.17`
 (unassigned).
 
@@ -51,10 +53,16 @@ phase 2 deletions `.14`, trigger-text pilot `.15`, add-require candidate audit `
 
 1. **Gate first.** Conditions 2, 4, 5, 6 (tier 2 handoff). Then 3, 8, 10 (phase 1).
 2. **Read-only work.** The xray experiment (it builds condition 7) and the fall-back label audit.
-3. **Winners onto main.** ONE fleet-reviewed pull request, the named exception to 150 lines. Not before the
-   gate is green and protection is confirmed. This makes condition 1 true.
-4. **Phase 2 deletions.** Only when all ten hold. Archive to a tag first. Nothing is deleted in phase 1.
-5. **One new verb.** After the candidate audit, with a native control.
+3. **Port the winners onto main, 150 changed lines at a time.** Alias migration first, then namespace split.
+   A port plan first, then one pull request per slice. Losing operations stay behind. A running tally in the
+   port plan (slices done, lines ported, lines left behind) is the harvest number. Not before the gate is
+   green and protection is confirmed. This makes condition 1 true. No merge was ever possible: every large
+   branch carries about 2,500 to 3,000 stacked commits.
+4. **Prove the CLI covers the winners; prepare MCP retirement on its own branch** (`retire/mcp-surface`).
+   Not merged. No seat's registration or boot file changes without Gene's word. The control must answer
+   the 2026-09-02 finding that the CLI wrapper refused 2.2 times as often as MCP.
+5. **Phase 2 deletions.** Only when all ten hold. Archive to a tag first. Nothing is deleted in phase 1.
+6. **One new verb.** After the candidate audit, with a native control.
 
 ## The xray experiment
 
@@ -80,7 +88,8 @@ if total wall and input tokens fall at equal correctness.
 |---|---|
 | Gate | Main not green in CI, or three cold runs disagree with no cause found. |
 | xray experiment | Below the promotion rule. No encouragement; if the outline also fails, both leave in phase 2. |
-| Winners onto main | The branch's suite or the Cell C receipt fails on the result. Winners stay recipes. |
+| Port of the winners | A slice cannot pass alone under 150 lines without a ruling, or a verb's frozen fixture does not produce its committed receipt on main. Winners stay recipes. |
+| MCP retirement | A winner needs behaviour only MCP has, or the CLI-only control takes more actions. MCP stays. |
 | Phase 2 deletions | A surviving verb loses correctness, or a testing-bar ratio falls. |
 | One new verb | Under 6 audited candidates share a contract; or, on 8 held-out native pairs, any correctness loss or under 25% median wall savings. |
 | Field, four weeks after a trigger ships | Under 10 unprompted calls outside clj-surgeon repositories, or fall-back above 25%. |
@@ -95,3 +104,16 @@ if total wall and input tokens fall at equal correctness.
 - No architecture model before the shrink. A one-page CALM map comes after.
 - Not fixing all five refusal classes. Three belong to operations phase 2 removes. Never weaken a valid safety refusal.
 - No platform of our own: no orchestration or worktree-lifecycle code here.
+
+## Older issues superseded by this plan
+
+Left open, each with a comment: "superseded unless the plan revives it". They serve surfaces this plan
+retires (per-form writers, admit, apply and edit tools, the semantic-provider stack, MCP-only machinery).
+
+`az8` `xio` `q5z` `46o` `tfh` `q7l` `e1g` `iwl` `dgi` `4fy` `lqo` `dkj` `45j` `h9m` `tmr` `tmr.1` `tmr.2`
+`tmr.3` `tmr.4` `tmr.5` `tmr.8` `tmr.9` `wjz` `x9d` `95u` `p24` `k6q` `9iy` `th5` `ajg` `0me` `9xi` `h6l`
+`dwe` `g39` `67s` `04g` `etx` `9cn` `wwa` `dr2` (41, all `clj-surgeon-` prefixed).
+
+Kept live: `qf9` (a shipped CLI edit can mutate the wrong owner) and `7h2` (codex boot trap) are hazards
+to seats today. Extraction bugs, kondo serialization, flakes and harness issues stay as they were.
+
