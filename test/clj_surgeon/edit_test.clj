@@ -5,6 +5,7 @@
    [clj-surgeon.core :as core]
    [clj-surgeon.edit-dsl :as edit-dsl]
    [clj-surgeon.structural-lens :as lens]
+   [clj-surgeon.test-permissions :as permissions]
    [clojure.edn :as edn]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
@@ -851,12 +852,13 @@
                                    :expr expect-replacement-expr
                                    :plan-out plan-file
                                    :expect true-expect})]
-        (is (:error result))
-        (is (= :atomic-write-failed (:error-type result)))
+        (when (permissions/check-permission-refusal? "guarded edit atomic write")
+          (is (:error result))
+          (is (= :atomic-write-failed (:error-type result)))
+          (is (nil? (:ok result)))
+          (is (= edit-source (slurp source-file))
+              "the atomic write never partially replaced the target"))
         (is (= :expect-guarded (:mode result)))
-        (is (nil? (:ok result)))
-        (is (= edit-source (slurp source-file))
-            "the atomic write never partially replaced the target")
         (is (= :replace-subform
                (:operation (edn/read-string (slurp plan-file))))
             "the audit artifact is saved before the apply attempt"))

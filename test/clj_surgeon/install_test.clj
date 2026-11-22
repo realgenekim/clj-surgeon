@@ -2,6 +2,7 @@
   (:require
    [babashka.fs :as fs]
    [babashka.process :as proc]
+   [clj-surgeon.test-permissions :as permissions]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
@@ -320,7 +321,13 @@
                     (fs/real-path (fs/path codex-skill "SKILL.md"))))
           (is (= (str (slurp-path canonical-skill-path) stable-copy-stamp)
                  (slurp-path (fs/path codex-skill "SKILL.md"))))
-          (is (not (fs/writable? (fs/path (fs/real-path codex-skill) "SKILL.md")))))
+          (let [skill-file (fs/path (fs/real-path codex-skill) "SKILL.md")]
+            (is (not-any? #{java.nio.file.attribute.PosixFilePermission/OWNER_WRITE
+                            java.nio.file.attribute.PosixFilePermission/GROUP_WRITE
+                            java.nio.file.attribute.PosixFilePermission/OTHERS_WRITE}
+                          (fs/posix-file-permissions skill-file)))
+            (when (permissions/check-permission-refusal? "installed SKILL.md writability")
+              (is (not (fs/writable? skill-file))))))
         (testing "the CLI launcher resolves only the copied runtime"
           (let [launcher (slurp-path cli-path)]
             (is (str/includes? launcher "clj-surgeon stable launcher"))
