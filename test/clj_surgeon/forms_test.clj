@@ -310,3 +310,7 @@
       (finally
         (rm-rf dir)
         (reset! forms/project-aliases {})))))
+
+(deftest seeded-failure-for-the-ci-proof
+  ;; Throwaway: proves the linux gate goes red on a failing test. Never merged.
+  (is (= 1 2) "deliberately broken"))
