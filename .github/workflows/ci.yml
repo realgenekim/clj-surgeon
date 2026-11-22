@@ -64,5 +64,10 @@ jobs:
           printf '#!/bin/sh\nexec timeout "$@"\n' > "$HOME/.local/bin/gtimeout"
           chmod +x "$HOME/.local/bin/gtimeout"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # The project's executable resolver (mcp_change_buffer/expand-command) searches fixed directories
+      # (/opt/homebrew/bin, /usr/local/bin, /usr/bin, /bin), not PATH; setup-clojure installs clj-kondo into the
+      # tool cache, so the verify tests see a bare name unless it is also reachable at /usr/local/bin.
+      - name: Expose clj-kondo where the project's resolver looks
+        run: sudo ln -sf "$(command -v clj-kondo)" /usr/local/bin/clj-kondo && /usr/local/bin/clj-kondo --version
       - name: Canonical gate
         run: make test
