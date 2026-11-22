@@ -1,5 +1,7 @@
 # Repository Agent Instructions
 
+On first action after compaction or a fresh start, read docs/plans/2026-11-22-reshape-plan.md.
+
 Read and follow [CLAUDE.md](CLAUDE.md) before making changes. It is the
 canonical repository instruction file for all coding agents, regardless of
 vendor or runtime.
