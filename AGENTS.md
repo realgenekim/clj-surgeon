@@ -24,6 +24,12 @@ testing, documentation, and verification standards that must be satisfied
 before the work is complete. Do not treat those linked documents as optional
 background reading.
 
+## Change rules
+
+Every pull request: 150 changed lines or fewer including tests; one independent read before the first push; one push
+per review round; self-merge when green; after a third failed review stop and write the design on one page. The full
+text, Gene's words and the measured inner loop are in CLAUDE.md "Change rules (Gene, 2026-11-22)".
+
 ## LID
 
 - Mode: Scoped
