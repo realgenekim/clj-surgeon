@@ -1353,6 +1353,48 @@
     {:refusal (refer-all-refusal request file target)}
     :else nil))
 
+;; @spec MCP-OP-ALIAS-008
+;; NO next_call. The composition used to append
+;; `(str (last policy) "-2")`, so a four-entry policy was
+;; answered with `store-2-2` — a value the caller's own request
+;; forbids. A next_call is the caller's request with one field
+;; corrected, and a correction that violates a constraint the
+;; caller stated is not executable by the caller who stated it.
+;; Which alias to add is the one thing here only they know.
+(defn- alias-policy-refusal
+  "Explain an exhausted policy without inventing an unauthorized alias."
+  [file to-lib policy collided bindings]
+  {:refusal (refusal :alias-migration-alias-policy-exhausted
+                     (str "Every alias_policy entry is already bound in "
+                          file)
+                     {:file file
+                      :alias_policy policy
+                      :collided_bindings collided
+                      :remedy
+                      (str "to.alias_policy is exhausted for "
+                           file ": every one of its "
+                           (count policy) " entries — "
+                           (pr-str (vec policy))
+                           " — is already bound in that file's ns "
+                           "form to a namespace other than "
+                           to-lib ": "
+                           (str/join ", "
+                                     (map #(str % " → "
+                                                (let [bound (get bindings %)]
+                                                  (if (= ::referred bound)
+                                                    "a Var referred into this namespace"
+                                                    bound)))
+                                          collided))
+                           ". No "
+                           "next_call is composed, because any "
+                           "alias this verb could propose would "
+                           "be outside the policy you sent and "
+                           "your own request forbids it. Add an "
+                           "alias that file does not bind to "
+                           "to.alias_policy, or exclude " file
+                           " through scope.exclude, and resend.")}
+                     nil)})
+
 (defn- file-plan
   "Plan one file, or return {:refusal r}, or nil when the file is out of scope."
   [request file source]
@@ -1384,44 +1426,7 @@
           (let [{:keys [alias collided bindings reuse?]}
                 (choose-alias root direct policy (when-not lib-mode? to-lib))]
             (if (nil? alias)
-              ;; @spec MCP-OP-ALIAS-008
-              ;; NO next_call. The composition used to append
-              ;; `(str (last policy) "-2")`, so a four-entry policy was
-              ;; answered with `store-2-2` — a value the caller's own request
-              ;; forbids. A next_call is the caller's request with one field
-              ;; corrected, and a correction that violates a constraint the
-              ;; caller stated is not executable by the caller who stated it.
-              ;; Which alias to add is the one thing here only they know.
-              {:refusal (refusal :alias-migration-alias-policy-exhausted
-                                 (str "Every alias_policy entry is already bound in "
-                                      file)
-                                 {:file file
-                                  :alias_policy policy
-                                  :collided_bindings collided
-                                  :remedy
-                                  (str "to.alias_policy is exhausted for "
-                                       file ": every one of its "
-                                       (count policy) " entries — "
-                                       (pr-str (vec policy))
-                                       " — is already bound in that file's ns "
-                                       "form to a namespace other than "
-                                       to-lib ": "
-                                       (str/join ", "
-                                                 (map #(str % " → "
-                                                            (let [bound (get bindings %)]
-                                                              (if (= ::referred bound)
-                                                                "a Var referred into this namespace"
-                                                                bound)))
-                                                      collided))
-                                       ". No "
-                                       "next_call is composed, because any "
-                                       "alias this verb could propose would "
-                                       "be outside the policy you sent and "
-                                       "your own request forbids it. Add an "
-                                       "alias that file does not bind to "
-                                       "to.alias_policy, or exclude " file
-                                       " through scope.exclude, and resend.")}
-                                 nil)}
+              (alias-policy-refusal file to-lib policy collided bindings)
               (let [referred (:referred target)
                     var-bare? (and (not lib-mode?)
                                    (or (contains? referred from-var)
