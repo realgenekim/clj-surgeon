@@ -97,53 +97,48 @@
     "preflight: rg not on the arm PATH (every arm needs the native route)"
     :else :ok))
 
-(defn git-env []
-  (apply dissoc (assoc (into {} (System/getenv)) "GIT_CONFIG_GLOBAL" "/dev/null" "GIT_CONFIG_NOSYSTEM" "1")
-         ["GIT_DIR" "GIT_WORK_TREE" "GIT_INDEX_FILE" "GIT_OBJECT_DIRECTORY"
-          "GIT_AUTHOR_NAME" "GIT_AUTHOR_EMAIL" "GIT_COMMITTER_NAME" "GIT_COMMITTER_EMAIL"]))
-
-(defn checked! [argv]
-  (when-not (and (vector? argv) (every? string? argv))
-    (throw (ex-info "argv must be a vector of strings" {})))
-  (:out (p/check @(p/process argv {:in "" :out :string :err :string :env (git-env)}))))
-
+(defn git-env [source-env]
+  (assoc (select-keys source-env ["PATH" "HOME" "LANG" "LC_ALL"])
+         "GIT_CONFIG_GLOBAL" "/dev/null" "GIT_CONFIG_NOSYSTEM" "1"))
+(defn checked! [argv & [env]]
+  (when-not (and (vector? argv) (every? string? argv)) (throw (ex-info "argv must be a vector of strings" {})))
+  (:out (p/check @(p/process argv {:in "" :out :string :err :string :env (git-env (or env (System/getenv)))}))))
 (defn ensure-root! [root-str]
   (when-not (and (string? root-str) (not (str/blank? root-str)))
     (throw (ex-info "root must name a directory" {})))
-  (when-not (fs/exists? root-str)
-    (fs/create-dirs root-str {:posix-file-permissions "rwx------"}))
+  (when-not (fs/exists? root-str) (fs/create-dirs root-str {:posix-file-permissions "rwx------"}))
   (when-not (fs/directory? root-str) (throw (ex-info "root must be a directory" {})))
   (str (fs/canonicalize root-str)))
-
-(defn materialize-workspace! [{:keys [repo sha]} arm-file ws]
+(defn materialize-workspace! [{:keys [repo sha]} arm-file ws & [{:keys [env] :or {env (System/getenv)}}]]
+  (when-not (and (string? ws) (not (str/blank? ws))) (throw (ex-info "ws must be a non-blank string" {})))
   (doseq [[valid message] [[(and (string? sha) (re-matches #"[0-9a-f]{40}" sha)) "sha must be 40 lowercase hex digits"]
                           [(and repo (fs/directory? repo)) "repo directory must exist"]
                           [(and arm-file (fs/regular-file? arm-file)) "arm file must exist"]]]
     (when-not valid (throw (ex-info message {}))))
-  (when (fs/starts-with? (fs/canonicalize repo) (fs/canonicalize ws))
-    (throw (ex-info "ws must not equal repo or be its ancestor" {})))
+  (let [r (fs/canonicalize repo) w (fs/canonicalize ws)]
+    (when (or (fs/starts-with? r w) (fs/starts-with? w r))
+      (throw (ex-info "ws must not equal repo or be its ancestor or descendant" {}))))
   (fs/delete-tree ws)
   (fs/create-dirs ws)
-  (doseq [result (mapv deref (p/pipeline
-                               (p/pb ["git" "-C" repo "archive" "--end-of-options" sha]
-                                     {:in "" :err :string :env (git-env)})
-                               (p/pb ["tar" "-x" "-C" ws] {:out :string :err :string})))]
-    (p/check result))
+  (fs/set-posix-file-permissions ws "rwx------")
+  (run! p/check (mapv deref (p/pipeline
+                            (p/pb ["git" "-C" repo "archive" "--end-of-options" sha]
+                                  {:in "" :err :string :env (git-env env)})
+                            (p/pb ["tar" "-xf" "-" "-C" ws] {:out :string :err :string :env (git-env env)}))))
   (let [visit (fn [f _]
                 (if (#{"AGENTS.md" "CLAUDE.md" ".codex" ".clj-surgeon.edn" ".mcp.json"} (fs/file-name f))
                   (do
                     (fs/delete-tree f)
                     :skip-subtree)
                   :continue))
-        git! (fn [& args] (checked! (into ["git" "-C" ws] args)))]
+        git! (fn [& args] (checked! (into ["git" "-C" ws] args) env))]
     (fs/walk-file-tree ws {:pre-visit-dir visit :visit-file visit})
     (fs/copy arm-file (str ws "/AGENTS.md"))
-    (git! "init" "-q")
+    (git! "init" "-q" "--template=")
     (git! "add" "-A" "-f")
     (git! "-c" "user.name=native-control" "-c" "user.email=native-control@anvil"
           "-c" "commit.gpgsign=false" "commit" "-qm" "Frozen read experiment")
     (str/trim (git! "rev-parse" "HEAD"))))
-
 ;; PR 35 regressions: traversal, last-line loss, setup cleanup and lost run status.
 (deftest components
   (doseq [s [nil "" "." ".." "../../x" "a/b" "a b" "a\nb"]] (is (false? (valid-component? s))))
@@ -329,18 +324,23 @@
   (doseq [arm ["arm2" "arm3"]]
     (is (= :ok (preflight-decision arm :wrapper true true)))))
 
+(deftest git-environment-allow-list-pr71
+  (doseq [allowed [{} {"PATH" "/usr/bin" "HOME" "/h"} {"LANG" "C" "LC_ALL" "C.UTF-8"}]]
+    (is (= (merge {"GIT_CONFIG_GLOBAL" "/dev/null" "GIT_CONFIG_NOSYSTEM" "1"} allowed)
+           (git-env (merge allowed {"GIT_CONFIG_COUNT" "1" "GIT_CONFIG_KEY_0" "core.hooksPath"
+                                   "GIT_CONFIG_VALUE_0" "/x" "GIT_CONFIG_PARAMETERS" "..."
+                                   "GIT_COMMON_DIR" "/g" "GIT_ALTERNATE_OBJECT_DIRECTORIES" "/o"
+                                   "GIT_CEILING_DIRECTORIES" "/c" "GIT_NAMESPACE" "poison"
+                                   "GIT_TEMPLATE_DIR" "/t" "GIT_DIR" "/g"}))))))
 (deftest checked-process-streams-and-failure
   (doseq [argv ["echo unsafe" '("echo") ["echo" nil] nil]]
     (with-redefs [p/process (fn [& _] (throw (AssertionError. "process ran")))]
       (is (thrown-with-msg? Exception #"vector of strings" (checked! argv)))))
   (is (= "" (checked! ["sh" "-c" "cat"])))
   (is (= "literal $value\n" (checked! ["printf" "%s\n" "literal $value"])))
-  (is (thrown-with-msg? Exception #"process stderr"
-        (checked! ["sh" "-c" "printf 'process stderr' >&2; exit 7"]))))
-
+  (is (thrown-with-msg? Exception #"process stderr" (checked! ["sh" "-c" "echo 'process stderr' >&2; exit 7"]))))
 (deftest result-root-permissions
-  (let [tmp (fs/create-temp-dir {:prefix "nc-root-"})
-        root (str tmp "/results")
+  (let [tmp (fs/create-temp-dir {:prefix "nc-root-"}) root (str tmp "/results")
         mode #(fs/posix->str (fs/posix-file-permissions %))]
     (try
       (spit (str tmp "/file") "regular file")
@@ -351,20 +351,13 @@
       (fs/set-posix-file-permissions root "rwxr-x---")
       (is (= (str (fs/canonicalize root)) (ensure-root! (str root "/../results"))))
       (is (= "rwxr-x---" (mode root)))
-      (finally
-        (fs/delete-tree tmp)))))
-
+      (finally (fs/delete-tree tmp)))))
 ;; Reduced from the PR 35 setup integration fixture: inherited instructions and ignored files.
 (deftest materialize-workspace-integration-requires-git
-  (doseq [tool ["git" "tar"]]
-    (is (some? (fs/which tool)) (str "Missing integration prerequisite: " tool))
-    (when-not (fs/which tool)
-      (throw (ex-info (str "Missing integration prerequisite: " tool) {}))))
+  (doseq [tool ["git" "tar"]] (is (some? (fs/which tool)) (str "Missing integration prerequisite: " tool)))
   (let [tmp (str (fs/create-temp-dir {:prefix "nc-materialize-"}))
-        repo (str tmp "/repo")
-        ws (str tmp "/ws")
-        arm-file (str tmp "/arm.md")
-        arm-text "Native-control fixture instructions: λ\n"
+        repo (str tmp "/repo") ws (str tmp "/ws")
+        arm-file (str tmp "/arm.md") arm-text "Native-control fixture instructions: λ\n"
         git! (fn [& args] (checked! (into ["git" "-C" repo] args)))
         workspace-git! (fn [& args] (checked! (into ["git" "-C" ws] args)))]
     (try
@@ -389,25 +382,37 @@
                                     [task (str tmp "/missing") ws #"arm file"]
                                     [(assoc task :repo arm-file) arm-file ws #"repo directory"]
                                     [(assoc task :repo (str tmp "/missing")) arm-file ws #"repo directory"]
-                                    [task arm-file repo #"ancestor"]
-                                    [task arm-file tmp #"ancestor"]]]
+                                    [task arm-file repo #"ancestor"] [task arm-file tmp #"ancestor"]
+                                    [task arm-file (str repo "/nested") #"descendant"]
+                                    [{} nil "" #"ws must"] [{} nil nil #"ws must"] [{} nil " " #"ws must"]]]
           (let [unexpected (fn [& _] (throw (AssertionError. "side effect before refusal")))]
             (with-redefs [fs/delete-tree unexpected p/process unexpected p/pipeline unexpected]
               (is (thrown-with-msg? Exception message (materialize-workspace! t arm dest)))))
           (is (= "stale workspace" (slurp (str ws "/stale.txt")))))
-        (let [expr (list 'do (list 'load-file (str (fs/absolutize *file*)))
-                         (list 'print (list 'native-control.run/materialize-workspace! task arm-file ws)))
-              baseline (:out (p/check @(p/process ["bb" "-e" (pr-str expr)]
-                                                 {:extra-env {"GIT_DIR" (str repo "/.git")
-                                                              "GIT_WORK_TREE" repo
-                                                              "GIT_INDEX_FILE" (str repo "/.git/index")
-                                                              "GIT_OBJECT_DIRECTORY" (str repo "/.git/objects")
-                                                              "GIT_CONFIG_GLOBAL" arm-file "GIT_CONFIG_NOSYSTEM" "0"}
-                                                  :out :string :err :string})))]
-          (is (= (:sha task) (str/trim (git! "rev-parse" "HEAD"))))
-          (is (fs/directory? (str ws "/.git")))
-          (is (= baseline (str/trim (workspace-git! "rev-parse" "HEAD"))))
-          (is (= "commit\n" (workspace-git! "cat-file" "-t" baseline))))
+        (is (= "inherited instructions" (slurp (str repo "/nested/AGENTS.md"))))
+        ;; PR 71: inherited config and templates must neither run nor install hooks.
+        (doseq [dir ["hooks" "template/hooks"]]
+          (fs/create-dirs (str tmp "/" dir))
+          (spit (str tmp "/" dir "/pre-commit") (str "#!/bin/sh\ntouch '" tmp "/" dir "/ran'\n"))
+          (fs/set-posix-file-permissions (str tmp "/" dir "/pre-commit") "rwx------"))
+        (doseq [fresh? [false true]]
+          (when fresh? (fs/delete-tree ws))
+          (is (= (not fresh?) (fs/exists? ws)))
+          (let [env (merge (into {} (System/getenv))
+                           {"GIT_DIR" (str repo "/.git") "GIT_WORK_TREE" repo
+                            "GIT_INDEX_FILE" (str repo "/.git/index")
+                            "GIT_OBJECT_DIRECTORY" (str repo "/.git/objects")
+                            "GIT_CONFIG_GLOBAL" arm-file "GIT_CONFIG_NOSYSTEM" "0"
+                            "GIT_CONFIG_COUNT" "1" "GIT_CONFIG_KEY_0" "core.hooksPath"
+                            "GIT_CONFIG_VALUE_0" (str tmp "/hooks") "GIT_TEMPLATE_DIR" (str tmp "/template")})
+                baseline (materialize-workspace! task arm-file ws {:env env})]
+            (is (= (:sha task) (str/trim (git! "rev-parse" "HEAD"))))
+            (is (fs/directory? (str ws "/.git")))
+            (is (= baseline (str/trim (workspace-git! "rev-parse" "HEAD"))))
+            (is (= "rwx------" (fs/posix->str (fs/posix-file-permissions ws))))
+            (is (= "commit\n" (workspace-git! "cat-file" "-t" baseline)))))
+        (doseq [path ["hooks/ran" "template/hooks/ran" "ws/.git/hooks/pre-commit"]]
+          (is (not (fs/exists? (str tmp "/" path)))))
         (is (= arm-text (slurp (str ws "/AGENTS.md"))))
         (is (= "frozen source\n" (slurp (str ws "/tracked.txt"))))
         (is (= "forced into baseline\n" (workspace-git! "show" "HEAD:ignored.txt")))
@@ -421,16 +426,11 @@
         (is (= arm-text (workspace-git! "show" "HEAD:AGENTS.md")))
         (is (= "" (workspace-git! "status" "--porcelain" "--ignored" "--untracked-files=all")))
         (let [pb p/pb]
-          (with-redefs [p/pb (fn [argv opts]
-                               (pb (if (= "tar" (first argv))
-                                     ["sh" "-c" "cat >/dev/null; echo tar-failed >&2; exit 9"]
-                                     argv)
-                                   opts))]
+          (with-redefs [p/pb #(pb (if (= "tar" (first %1))
+                                   ["sh" "-c" "cat >/dev/null; echo tar-failed >&2; exit 9"] %1) %2)]
             (is (thrown-with-msg? Exception #"tar-failed" (materialize-workspace! task arm-file ws)))))
         (is (not (fs/exists? (str ws "/.git")))))
-      (finally
-        (fs/delete-tree tmp)))))
-
+      (finally (fs/delete-tree tmp)))))
 (when (entry-script? (System/getProperty "babashka.file") *file*)
   (case (vec *command-line-args*)
     ["--self-test"]
