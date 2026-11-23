@@ -2,7 +2,12 @@
 ;; Standalone script: retain the sibling scripts' namespace and hyphenated directory convention.
 #_{:clj-kondo/ignore [:namespace-name-mismatch]}
 (ns native-control.run
-  (:require [clojure.string :as str] [clojure.test :refer [deftest is run-tests]]))
+  (:require [babashka.fs :as fs]
+            [clojure.string :as str]
+            [clojure.test :refer [deftest is run-tests]]))
+
+(def script-dir (str (fs/parent *file*)))
+
 (defn valid-component? [s]
   (boolean (and (string? s) (re-matches #"[A-Za-z0-9._-]+" s) (not (#{"." ".."} s)))))
 (defn validate-run [run-id task-id arm rep-str]
@@ -51,6 +56,39 @@
     {:total (count results) :failed n :exit (if (zero? n) 0 1)}))
 (defn exit-with [n] (System/exit n))
 (defn entry-script? [file-prop file] (= file-prop file))
+(defn env-config [env]
+  (let [value (fn [k default]
+                (let [v (get env k)]
+                  (if (seq v) v default)))
+        home (System/getProperty "user.home")
+        cfg {:root (value "NC_RESULT_ROOT" "/var/tmp/forge/native-control")
+             :model (value "NC_MODEL" "gpt-6-astra")
+             :reasoning (value "NC_REASONING" "medium")
+             :timeout (value "NC_TIMEOUT_S" "900")
+             :keep (value "NC_KEEP" "0")
+             :sandbox (value "NC_SANDBOX" "workspace-write")
+             :config (value "NC_SURGEON_BB_CONFIG" (str script-dir "/../../bb.edn"))
+             :auth (value "NC_CODEX_AUTH" (str (value "HOME" home) "/.codex/auth.json"))
+             :codex (value "NC_CODEX" (some-> (fs/which "codex") str))
+             :invoker-home home
+             :kondo-path (some-> (or (fs/which "/usr/local/bin/clj-kondo") (fs/which "clj-kondo")) str)
+             :tool-dirs ["/usr/bin" "/bin"]}]
+    (if (re-matches #"[0-9]+" (:timeout cfg))
+      cfg
+      {:error "NC_TIMEOUT_S must contain digits only"})))
+
+(defn preflight-decision [arm resolved kondo? rg?]
+  (cond
+    (and (= arm "arm1") (not (str/blank? (str resolved))))
+    (str "preflight: arm1 must not see clj-surgeon, found '" resolved "'")
+    (and (not= arm "arm1") (not= :wrapper resolved))
+    (str "preflight: clj-surgeon resolves to '" resolved "', not the arm wrapper")
+    (and (not= arm "arm1") (not kondo?))
+    "preflight: clj-kondo not on the arm PATH"
+    (not rg?)
+    "preflight: rg not on the arm PATH (every arm needs the native route)"
+    :else :ok))
+
 ;; PR 35 regressions: traversal, last-line loss, setup cleanup and lost run status.
 (deftest components
   (doseq [s [nil "" "." ".." "../../x" "a/b" "a b" "a\nb"]] (is (false? (valid-component? s))))
@@ -143,6 +181,76 @@
   (is (true? (entry-script? "run.clj" "run.clj")))
   (is (false? (entry-script? "other.clj" "run.clj")))
   (is (false? (entry-script? nil "run.clj"))))
+(deftest environment-defaults
+  (let [cfg (env-config {"HOME" "/credential-home"})]
+    (is (= {:root "/var/tmp/forge/native-control"
+            :model "gpt-6-astra"
+            :reasoning "medium"
+            :timeout "900"
+            :keep "0"
+            :sandbox "workspace-write"
+            :auth "/credential-home/.codex/auth.json"
+            :config (str script-dir "/../../bb.edn")
+            :codex (some-> (fs/which "codex") str)
+            :invoker-home (System/getProperty "user.home")
+            :kondo-path (some-> (or (fs/which "/usr/local/bin/clj-kondo") (fs/which "clj-kondo")) str)
+            :tool-dirs ["/usr/bin" "/bin"]}
+           cfg))))
+
+(deftest environment-overrides
+  (is (= {:root "/results"
+          :model "test-model"
+          :reasoning "high"
+          :timeout "12"
+          :keep "1"
+          :sandbox "read-only"
+          :config "/config.edn"
+          :auth "/auth.json"
+          :codex "/codex"}
+         (dissoc (env-config {"NC_RESULT_ROOT" "/results"
+                              "NC_MODEL" "test-model"
+                              "NC_REASONING" "high"
+                              "NC_TIMEOUT_S" "12"
+                              "NC_KEEP" "1"
+                              "NC_SANDBOX" "read-only"
+                              "NC_SURGEON_BB_CONFIG" "/config.edn"
+                              "NC_CODEX_AUTH" "/auth.json"
+                              "NC_CODEX" "/codex"})
+                 :invoker-home :kondo-path :tool-dirs))))
+
+(deftest environment-empty-values
+  (is (= (env-config {})
+         (env-config {"NC_RESULT_ROOT" "" "NC_MODEL" "" "NC_REASONING" ""
+                      "NC_TIMEOUT_S" "" "NC_KEEP" "" "NC_SANDBOX" ""
+                      "NC_SURGEON_BB_CONFIG" "" "NC_CODEX_AUTH" "" "NC_CODEX" "" "HOME" ""}))))
+
+(deftest environment-bad-timeout
+  (doseq [value ["-1" "+1" "1.5" " 9" "9 " "1s" "\n" "9\n" "１２"]]
+    (is (= {:error "NC_TIMEOUT_S must contain digits only"}
+           (env-config {"NC_TIMEOUT_S" value})))))
+
+(deftest environment-digit-timeout
+  (doseq [value ["0" "01" "900" "9223372036854775808"]]
+    (is (= value (:timeout (env-config {"NC_TIMEOUT_S" value}))))))
+
+(deftest environment-invoker-home
+  (doseq [env [{} {"HOME" ""} {"HOME" "/unrelated-home"}]]
+    (is (= (System/getProperty "user.home") (:invoker-home (env-config env))))))
+
+(deftest preflight-refusals
+  (doseq [[arm resolved kondo? rg? message]
+          [["arm1" "/leaked" true true "preflight: arm1 must not see clj-surgeon, found '/leaked'"]
+           ["arm2" "/wrong" true true "preflight: clj-surgeon resolves to '/wrong', not the arm wrapper"]
+           ["arm2" :wrapper false true "preflight: clj-kondo not on the arm PATH"]
+           ["arm1" "" false false "preflight: rg not on the arm PATH (every arm needs the native route)"]]]
+    (is (= message (preflight-decision arm resolved kondo? rg?)))))
+
+(deftest preflight-accepted
+  (doseq [resolved [nil "" " \n"] kondo? [false true]]
+    (is (= :ok (preflight-decision "arm1" resolved kondo? true))))
+  (doseq [arm ["arm2" "arm3"]]
+    (is (= :ok (preflight-decision arm :wrapper true true)))))
+
 (when (entry-script? (System/getProperty "babashka.file") *file*)
   (if (= ["--self-test"] (vec *command-line-args*))
     (let [r (run-tests 'native-control.run)] (exit-with (if (zero? (+ (:fail r) (:error r))) 0 1)))
