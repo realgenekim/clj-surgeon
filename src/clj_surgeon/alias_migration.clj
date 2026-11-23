@@ -323,6 +323,7 @@
 
 (declare rewrite-binding-vector)
 (declare rewrite-arity)
+(declare rewrite-forms)
 
 ;; @spec MCP-OP-ALIAS-025
 
@@ -451,6 +452,202 @@
   {:node node :sites 0 :refer-sites 0 :indirect [] :other-use false
    :unselected-sites false})
 
+;; `alias/x inside a syntax quote IS resolved through the alias map by
+;; the reader, so it is ordinary code and must migrate with everything
+;; else. A plain 'alias/x is a literal symbol that nothing resolves, so
+;; whether it is a reference is a judgment and the verb refuses.
+(defn- rewrite-quote
+  "Rewrite fully qualified quoted references; refuse alias-qualified data."
+  [node context live-bare]
+  (let [facts (quoted-facts node context live-bare)]
+    (cond
+      (empty? facts) (leaf node)
+
+      ;; 'fully.qualified.lib/x names exactly one namespace and nothing
+      ;; resolves it away, so the rewrite is mechanical — this is how a
+      ;; runtime (requiring-resolve 'old.lib/v) survives a lib rename
+      (every? :fully-qualified? facts)
+      (let [quoted-context (assoc context :quoted-data? true)
+            walked (reduce (fn [state child]
+                             (accumulate state
+                                         (rewrite-forms child quoted-context
+                                                        live-bare)))
+                           empty-walk
+                           (children node))]
+        (walk-result node walked))
+
+      :else
+      (assoc (leaf node)
+             :indirect [{:reason :quoted-reference :form (n/string node)}]))))
+
+(defn- rewrite-token
+  "Apply one token decision and retain all migration tallies."
+  [node context live-bare]
+  (let [{:keys [rewrite refer-hit? other-use? indirect]}
+        (decide node context live-bare)]
+    (cond-> (leaf node)
+      rewrite (assoc :node (parser/parse-string rewrite) :sites 1)
+      refer-hit? (assoc :refer-sites 1)
+      other-use? (assoc :other-use true)
+      indirect (assoc :indirect
+                      [(assoc indirect :form (n/string node))]))))
+
+;; @spec MCP-OP-ALIAS-066
+;; PER-ARITY SCOPES. `(defn f ([] (h)) ([h] h))` has two scopes, not one:
+;; the first arity's `(h)` is a reference and the second arity's `h` is a
+;; parameter. The generic descendant walk below cannot express that,
+;; because it subtracts the names a form introduces before walking ALL of
+;; its children, so it would union the parameters of every arity and
+;; leave the first arity's call unrewritten -- silently. The guard after
+;; this branch is what has protected alias migration from that, by
+;; refusing multi-arity shapes outright.
+;;
+;; This branch is the analysis that refusal stood in for, and it is OPT-IN
+;; (`:per-arity-scopes`) precisely so that alias migration's published
+;; refusal does not change under it: a caller that has its own witnesses
+;; for the rewritten shape asks for it, everyone else keeps the refusal.
+(defn- rewrite-function-arities
+  "Walk each function arity with its own lexical scope."
+  [node context live-bare]
+  (let [walked (reduce
+                 (fn [state child]
+                   (if (arity-list? child)
+                     (accumulate state (rewrite-arity child context live-bare))
+                     (accumulate state (rewrite-forms child context live-bare))))
+                 empty-walk
+                 (children node))]
+    (walk-result node walked)))
+
+(defn- rewrite-reader-conditional
+  "Rewrite selected branches and report sites in unselected branches."
+  [node {:keys [platform] :as context} live-bare]
+  (let [kids (children node)
+        body-index (reader-conditional-body-index node)
+        body (nth kids body-index)
+        body-kids (children body)
+        {:keys [selected unselected]} (branch-positions body-kids platform)
+        branch-site? (fn [position]
+                       (some #(:rewrite (decide % context live-bare))
+                             (filter #(= :token (n/tag %))
+                                     (tree-seq n/inner? n/children
+                                               (nth body-kids position)))))
+        unselected-hit? (boolean (some branch-site? unselected))
+        walked (reduce
+                 (fn [state [index child]]
+                   (if (contains? selected index)
+                     (accumulate state (rewrite-forms child context live-bare))
+                     (update state :nodes conj child)))
+                 empty-walk
+                 (map-indexed vector body-kids))
+        rebuilt (assoc kids body-index
+                       (n/replace-children body (:nodes walked)))]
+    (-> (walk-result node (assoc walked :nodes rebuilt))
+        (update :indirect
+                #(cond-> %
+                   unselected-hit?
+                   (conj {:reason :unselected-reader-conditional-branch
+                          :form (n/string node)})))
+        (update :unselected-sites #(or % unselected-hit?)))))
+
+(defn- unsupported-binding-scope?
+  "Whether selected references cross a binding scope the walker cannot model."
+  [node context live-bare]
+  ;; @spec MCP-OP-ALIAS-066
+  ;; These scopes need independent parameter/default/control-flow analysis.
+  ;; Never pretend the generic descendant walk proves their bare references.
+  (let [head (head-name node)
+        params (when (contains? function-heads head) (parameter-vectors node))
+        binding-vector (when (contains? local-binding-vector-heads head)
+                         (first (filter vector-node? (rest (meaningful-children node)))))
+        binding-forms (concat params (when binding-vector
+                                       (take-nth 2 (meaningful-children binding-vector))))
+        default? (some (fn [binding-form]
+                         (some (fn [part]
+                                 (and (= :map (n/tag part))
+                                      (some #(= ":or" (n/string %))
+                                            (take-nth 2 (meaningful-children part)))))
+                               (tree-seq n/inner? children binding-form)))
+                       binding-forms)
+        metadata-node (when (or (contains? function-heads head)
+                                (contains? local-binding-vector-heads head))
+                        (when-let [first-vector (first (filter #(= :vector (n/tag (unmeta-node %)))
+                                                               (rest (meaningful-children node))))]
+                          (when (= :meta (n/tag first-vector)) first-vector)))
+        potential-in? (fn [nodes]
+                        (boolean
+                          (some (fn [part]
+                                  (when (= :token (n/tag part))
+                                    (let [facts (decide part context live-bare)]
+                                      (or (:rewrite facts) (:refer-hit? facts)))))
+                                (mapcat #(tree-seq (fn [candidate]
+                                                     (and (n/inner? candidate)
+                                                          (not= :uneval (n/tag candidate))))
+                                                   children %)
+                                        nodes))))
+        potential? (potential-in? [node])]
+    ;; @spec MCP-OP-ALIAS-066
+    ;; The `:or`-default and metadata-vector boundaries are about sites
+    ;; INSIDE the binding construct, whose evaluation scope this walk does
+    ;; not model. A site in the BODY is not one of them: dogfood3
+    ;; (2026-09-07) refused a plain `(json/write-str {...})` in ordinary
+    ;; value position because the enclosing `defn` merely HAD `:or`
+    ;; defaults elsewhere in its parameter vector. Scope the site test to
+    ;; the construct that motivates the refusal.
+    (and potential?
+         (or (and default? (potential-in? binding-forms))
+             (and metadata-node (potential-in? [metadata-node]))
+             (and (seq live-bare)
+                  (or (contains? #{"if-let" "if-some" "as->" "for" "doseq"} head)
+                      (> (count params) 1)
+                      (and (= "fn" head)
+                           (contains? live-bare (some-> (second (meaningful-children node)) unmeta-node simple-symbol-name)))
+                      (and (= "letfn" head)
+                           (some (fn [part]
+                                   (and (vector-node? part)
+                                        (some live-bare (binding-form-names part))))
+                                 (rest (tree-seq n/inner? children node))))))))))
+
+(defn- rewrite-inner
+  "Walk compound nodes, preserving binding positions and lexical shadowing."
+  [node context live-bare]
+  (let [head (head-name node)
+        introduced (form-introduced-names node)
+        kids (children node)
+        ;; a var-binding vector is ordinary code on BOTH sides
+        binding-vector (when (contains? local-binding-vector-heads head)
+                         (first (filter vector-node?
+                                        (rest (meaningful-children node)))))
+        letfn-vector (when (= "letfn" head)
+                       (first (filter vector-node?
+                                      (rest (meaningful-children node)))))
+        skipped-vectors (cond-> #{}
+                          (contains? function-heads head)
+                          (into (parameter-vectors node))
+
+                          letfn-vector
+                          (into (letfn-binding-parameter-vectors letfn-vector)))
+        ;; names this form binds leave scope for every child except the
+        ;; let-style binding vector, which accumulates them pair by pair
+        body-bare (reduce disj live-bare introduced)]
+    (walk-result
+      node
+      (reduce
+        (fn [state child]
+          (cond
+            (identical? child binding-vector)
+            (accumulate state (rewrite-binding-vector child context live-bare))
+
+            (identical? child letfn-vector)
+            (accumulate state (rewrite-forms child context body-bare))
+
+            (contains? skipped-vectors child)
+            (update state :nodes conj child)
+
+            :else
+            (accumulate state (rewrite-forms child context body-bare))))
+        empty-walk
+        kids))))
+
 ;; @spec MCP-OP-ALIAS-029
 ;; @spec MCP-OP-ALIAS-033
 (defn rewrite-forms
@@ -464,157 +661,27 @@
   Every node type a qualified symbol can sit in is walked: operator and
   argument position, binding vectors, map keys and values, vector elements,
   metadata values, `:var` nodes (`#'x`), and `(var x)` lists."
-  [node {:keys [platform] :as context} live-bare]
+  [node context live-bare]
   (let [tag (n/tag node)]
     (cond
       ;; a reader discard is data the contract keeps exactly as it is
       (= :uneval tag) (leaf node)
 
-      ;; `alias/x inside a syntax quote IS resolved through the alias map by
-      ;; the reader, so it is ordinary code and must migrate with everything
-      ;; else. A plain 'alias/x is a literal symbol that nothing resolves, so
-      ;; whether it is a reference is a judgment and the verb refuses.
       (= :quote tag)
-      (let [facts (quoted-facts node context live-bare)]
-        (cond
-          (empty? facts) (leaf node)
-
-          ;; 'fully.qualified.lib/x names exactly one namespace and nothing
-          ;; resolves it away, so the rewrite is mechanical — this is how a
-          ;; runtime (requiring-resolve 'old.lib/v) survives a lib rename
-          (every? :fully-qualified? facts)
-          (let [quoted-context (assoc context :quoted-data? true)
-                walked (reduce (fn [state child]
-                                 (accumulate state
-                                             (rewrite-forms child quoted-context
-                                                            live-bare)))
-                               empty-walk
-                               (children node))]
-            (walk-result node walked))
-
-          :else
-          (assoc (leaf node)
-                 :indirect [{:reason :quoted-reference :form (n/string node)}])))
+      (rewrite-quote node context live-bare)
 
       (= :token tag)
-      (let [{:keys [rewrite refer-hit? other-use? indirect]}
-            (decide node context live-bare)]
-        (cond-> (leaf node)
-          rewrite (assoc :node (parser/parse-string rewrite) :sites 1)
-          refer-hit? (assoc :refer-sites 1)
-          other-use? (assoc :other-use true)
-          indirect (assoc :indirect
-                          [(assoc indirect :form (n/string node))])))
+      (rewrite-token node context live-bare)
 
-      ;; @spec MCP-OP-ALIAS-066
-      ;; PER-ARITY SCOPES. `(defn f ([] (h)) ([h] h))` has two scopes, not one:
-      ;; the first arity's `(h)` is a reference and the second arity's `h` is a
-      ;; parameter. The generic descendant walk below cannot express that,
-      ;; because it subtracts the names a form introduces before walking ALL of
-      ;; its children, so it would union the parameters of every arity and
-      ;; leave the first arity's call unrewritten -- silently. The guard after
-      ;; this branch is what has protected alias migration from that, by
-      ;; refusing multi-arity shapes outright.
-      ;;
-      ;; This branch is the analysis that refusal stood in for, and it is OPT-IN
-      ;; (`:per-arity-scopes`) precisely so that alias migration's published
-      ;; refusal does not change under it: a caller that has its own witnesses
-      ;; for the rewritten shape asks for it, everyone else keeps the refusal.
       (and (:per-arity-scopes context)
            (contains? function-heads (head-name node))
            (some arity-list? (children node)))
-      (let [walked (reduce
-                     (fn [state child]
-                       (if (arity-list? child)
-                         (accumulate state (rewrite-arity child context live-bare))
-                         (accumulate state (rewrite-forms child context live-bare))))
-                     empty-walk
-                     (children node))]
-        (walk-result node walked))
+      (rewrite-function-arities node context live-bare)
 
       (reader-conditional-node? node)
-      (let [kids (children node)
-            body-index (reader-conditional-body-index node)
-            body (nth kids body-index)
-            body-kids (children body)
-            {:keys [selected unselected]} (branch-positions body-kids platform)
-            branch-site? (fn [position]
-                           (some #(:rewrite (decide % context live-bare))
-                                 (filter #(= :token (n/tag %))
-                                         (tree-seq n/inner? n/children
-                                                   (nth body-kids position)))))
-            unselected-hit? (boolean (some branch-site? unselected))
-            walked (reduce
-                     (fn [state [index child]]
-                       (if (contains? selected index)
-                         (accumulate state (rewrite-forms child context live-bare))
-                         (update state :nodes conj child)))
-                     empty-walk
-                     (map-indexed vector body-kids))
-            rebuilt (assoc kids body-index
-                           (n/replace-children body (:nodes walked)))]
-        (-> (walk-result node (assoc walked :nodes rebuilt))
-            (update :indirect
-                    #(cond-> %
-                       unselected-hit?
-                       (conj {:reason :unselected-reader-conditional-branch
-                              :form (n/string node)})))
-            (update :unselected-sites #(or % unselected-hit?))))
+      (rewrite-reader-conditional node context live-bare)
 
-      ;; @spec MCP-OP-ALIAS-066
-      ;; These scopes need independent parameter/default/control-flow analysis.
-      ;; Never pretend the generic descendant walk proves their bare references.
-      (let [head (head-name node)
-            params (when (contains? function-heads head) (parameter-vectors node))
-            binding-vector (when (contains? local-binding-vector-heads head)
-                             (first (filter vector-node? (rest (meaningful-children node)))))
-            binding-forms (concat params (when binding-vector
-                                           (take-nth 2 (meaningful-children binding-vector))))
-            default? (some (fn [binding-form]
-                             (some (fn [part]
-                                     (and (= :map (n/tag part))
-                                          (some #(= ":or" (n/string %))
-                                                (take-nth 2 (meaningful-children part)))))
-                                   (tree-seq n/inner? children binding-form)))
-                           binding-forms)
-            metadata-node (when (or (contains? function-heads head)
-                                    (contains? local-binding-vector-heads head))
-                            (when-let [first-vector (first (filter #(= :vector (n/tag (unmeta-node %)))
-                                                                   (rest (meaningful-children node))))]
-                              (when (= :meta (n/tag first-vector)) first-vector)))
-            potential-in? (fn [nodes]
-                            (boolean
-                              (some (fn [part]
-                                      (when (= :token (n/tag part))
-                                        (let [facts (decide part context live-bare)]
-                                          (or (:rewrite facts) (:refer-hit? facts)))))
-                                    (mapcat #(tree-seq (fn [candidate]
-                                                         (and (n/inner? candidate)
-                                                              (not= :uneval (n/tag candidate))))
-                                                       children %)
-                                            nodes))))
-            potential? (potential-in? [node])]
-        ;; @spec MCP-OP-ALIAS-066
-        ;; The `:or`-default and metadata-vector boundaries are about sites
-        ;; INSIDE the binding construct, whose evaluation scope this walk does
-        ;; not model. A site in the BODY is not one of them: dogfood3
-        ;; (2026-09-07) refused a plain `(json/write-str {...})` in ordinary
-        ;; value position because the enclosing `defn` merely HAD `:or`
-        ;; defaults elsewhere in its parameter vector. Scope the site test to
-        ;; the construct that motivates the refusal.
-        (and potential?
-             (or (and default? (potential-in? binding-forms))
-                 (and metadata-node (potential-in? [metadata-node]))
-                 (and (seq live-bare)
-                      (or (contains? #{"if-let" "if-some" "as->" "for" "doseq"} head)
-                          (> (count params) 1)
-                          (and (= "fn" head)
-                               (contains? live-bare (some-> (second (meaningful-children node)) unmeta-node simple-symbol-name)))
-                          (and (= "letfn" head)
-                               (some (fn [part]
-                                       (and (vector-node? part)
-                                            (some live-bare (binding-form-names part))))
-                                     (rest (tree-seq n/inner? children node)))))))))
+      (unsupported-binding-scope? node context live-bare)
       ;; @spec MCP-OP-ALIAS-066
       ;; A receipt must name its subject: carry the node's own row/col so the
       ;; caller gets file:line, not the enclosing defn's docstring.
@@ -624,43 +691,7 @@
                                       (:col (meta node)) (assoc :col (:col (meta node))))])
 
       (n/inner? node)
-      (let [head (head-name node)
-            introduced (form-introduced-names node)
-            kids (children node)
-            ;; a var-binding vector is ordinary code on BOTH sides
-            binding-vector (when (contains? local-binding-vector-heads head)
-                             (first (filter vector-node?
-                                            (rest (meaningful-children node)))))
-            letfn-vector (when (= "letfn" head)
-                           (first (filter vector-node?
-                                          (rest (meaningful-children node)))))
-            skipped-vectors (cond-> #{}
-                              (contains? function-heads head)
-                              (into (parameter-vectors node))
-
-                              letfn-vector
-                              (into (letfn-binding-parameter-vectors letfn-vector)))
-            ;; names this form binds leave scope for every child except the
-            ;; let-style binding vector, which accumulates them pair by pair
-            body-bare (reduce disj live-bare introduced)]
-        (walk-result
-          node
-          (reduce
-            (fn [state child]
-              (cond
-                (identical? child binding-vector)
-                (accumulate state (rewrite-binding-vector child context live-bare))
-
-                (identical? child letfn-vector)
-                (accumulate state (rewrite-forms child context body-bare))
-
-                (contains? skipped-vectors child)
-                (update state :nodes conj child)
-
-                :else
-                (accumulate state (rewrite-forms child context body-bare))))
-            empty-walk
-            kids)))
+      (rewrite-inner node context live-bare)
 
       :else (leaf node))))
 
@@ -1231,6 +1262,224 @@
                             (libspec-with-refer to-lib alias referred
                                                 alias-needed?)))))})))
 
+(defn- qualified-only-file-plan
+  "Plan fully qualified references in a file without an old-library require."
+  [request file root from-lib to-lib]
+  (let [context {:mode :lib
+                 :from-lib from-lib
+                 :to-lib to-lib
+                 :qualifiers #{from-lib}
+                 :alias to-lib
+                 :rewrite-bare #{}
+                 :count-bare #{}
+                 :platform (platform-keyword file)}
+        forms (top-level-forms root)
+        walked (mapv #(rewrite-forms % context #{}) forms)
+        indirect (vec (mapcat :indirect walked))
+        sites (reduce + 0 (map :sites walked))]
+    (cond
+      (seq indirect)
+      (let [blocking (first indirect)]
+        {:refusal (refusal :alias-migration-indirect-reference
+                           (str "An indirect reference to " from-lib " in " file
+                                (when (:row blocking) (str ":" (:row blocking)))
+                                " cannot be closed mechanically")
+                           (indirect-facts file blocking)
+                           (when-not (= :unsupported-binding-scope (:reason blocking))
+                             (excluding-call request file)))})
+
+      (zero? sites) nil
+
+      :else
+      {:file file
+       :alias to-lib
+       :collided []
+       :sites sites
+       :refer-sites 0
+       :require-mode :qualified-only
+       :edits (vec (keep (fn [[form result]]
+                           (when (pos? (:sites result))
+                             {:kind :form
+                              :original (n/string form)
+                              :replacement (n/string (:node result))}))
+                         (map vector forms walked)))})))
+
+(defn- migration-facts
+  "Derive the request facts shared by file-planning phases."
+  [request]
+  (let [from-var (get-in request [:from :var])]
+    {:from-lib (get-in request [:from :lib])
+     :from-var from-var
+     :to-lib (get-in request [:to :lib])
+     :to-var (get-in request [:to :var])
+     :lib-mode? (nil? from-var)
+     :preserve-refer? (not= "alias-qualify" (get-in request [:to :refer-policy]))
+     :policy (vec (get-in request [:to :alias-policy]))}))
+
+(defn- file-analysis-refusal
+  "Check selected renamed refers, ownership and whole-library refer-all in order."
+  [request file from-lib from-var lib-mode? target others]
+  (cond
+    ;; @spec MCP-OP-ALIAS-063
+    ;; The scope walker models referred names, not their :rename bindings.
+    ;; Do not commit a partial rewrite or offer a different scope as repair.
+    (and from-var
+         (some (fn [[option value]]
+                 (and (= ":rename" (n/string option))
+                      (= :map (n/tag (unmeta-node value)))
+                      (some (fn [[key-node _]]
+                              (= from-var (refer-symbol-name key-node)))
+                            (partition 2
+                                       (remove #(= :uneval (n/tag %))
+                                               (meaningful-children (unmeta-node value)))))))
+               (partition 2 1 (rest (remove #(= :uneval (n/tag %)) (meaningful-children (:node target)))))))
+    {:refusal (refusal :alias-migration-indirect-reference
+                       (str "The selected Var has an unsupported renamed binding in " file)
+                       {:file file
+                        :reason "unsupported-selected-renamed-refer"
+                        :remedy (str "This migration does not model the selected Var's renamed binding. "
+                                     "Review and migrate that binding and its uses explicitly; "
+                                     "no scope-changing next_call is provided.")}
+                       nil)}
+
+    (ownership-refusal request file from-lib from-var target others)
+    {:refusal (ownership-refusal request file from-lib from-var target others)}
+
+    (and lib-mode? (refer-all-refusal request file target))
+    {:refusal (refer-all-refusal request file target)}
+    :else nil))
+
+;; @spec MCP-OP-ALIAS-008
+;; NO next_call. The composition used to append
+;; `(str (last policy) "-2")`, so a four-entry policy was
+;; answered with `store-2-2` — a value the caller's own request
+;; forbids. A next_call is the caller's request with one field
+;; corrected, and a correction that violates a constraint the
+;; caller stated is not executable by the caller who stated it.
+;; Which alias to add is the one thing here only they know.
+(defn- alias-policy-refusal
+  "Explain an exhausted policy without inventing an unauthorized alias."
+  [file to-lib policy collided bindings]
+  {:refusal (refusal :alias-migration-alias-policy-exhausted
+                     (str "Every alias_policy entry is already bound in "
+                          file)
+                     {:file file
+                      :alias_policy policy
+                      :collided_bindings collided
+                      :remedy
+                      (str "to.alias_policy is exhausted for "
+                           file ": every one of its "
+                           (count policy) " entries — "
+                           (pr-str (vec policy))
+                           " — is already bound in that file's ns "
+                           "form to a namespace other than "
+                           to-lib ": "
+                           (str/join ", "
+                                     (map #(str % " → "
+                                                (let [bound (get bindings %)]
+                                                  (if (= ::referred bound)
+                                                    "a Var referred into this namespace"
+                                                    bound)))
+                                          collided))
+                           ". No "
+                           "next_call is composed, because any "
+                           "alias this verb could propose would "
+                           "be outside the policy you sent and "
+                           "your own request forbids it. Add an "
+                           "alias that file does not bind to "
+                           "to.alias_policy, or exclude " file
+                           " through scope.exclude, and resend.")}
+                     nil)})
+
+(defn- collect-file-sites
+  "Walk file forms and collect sites, retained imports and blocking references."
+  [file root {:keys [ns-node target]}
+   {:keys [from-lib from-var to-lib to-var lib-mode? preserve-refer?]} alias]
+  (let [referred (:referred target)
+        var-bare? (and (not lib-mode?)
+                       (or (contains? referred from-var)
+                           (:refer-all? target)))
+        count-bare (if lib-mode?
+                     referred
+                     (if var-bare? #{from-var} #{}))
+        rewrite-bare (cond
+                       (not lib-mode?) count-bare
+                       preserve-refer? #{}
+                       :else referred)
+        ;; preserve-refer keeps the same referred names against the
+        ;; new lib; alias-qualify rewrites them and drops the :refer
+        kept-refer (if (and lib-mode? preserve-refer?) referred #{})
+        context {:mode (if lib-mode? :lib :var)
+                 :from-lib from-lib
+                 :to-lib to-lib
+                 :qualifiers (into #{from-lib} (:aliases target))
+                 :from-var from-var
+                 :to-var to-var
+                 :alias alias
+                 :rewrite-bare rewrite-bare
+                 :count-bare count-bare
+                 :platform (platform-keyword file)}
+        forms (top-level-forms root)
+        walked (mapv (fn [form]
+                       (if (identical? form ns-node)
+                         (leaf form)
+                         (rewrite-forms form context count-bare)))
+                     forms)
+        indirect (vec (mapcat :indirect walked))
+        unselected? (boolean (some :unselected-sites walked))
+        other-use? (boolean (some :other-use walked))
+        cljc? (str/ends-with? file ".cljc")
+        blocking (first (remove
+                          #(and (= :unselected-reader-conditional-branch
+                                   (:reason %))
+                                (not cljc?))
+                          indirect))
+        sites (reduce + 0 (map :sites walked))
+        refer-sites (reduce + 0 (map :refer-sites walked))]
+    {:referred referred :kept-refer kept-refer :forms forms :walked walked
+     :unselected? unselected? :other-use? other-use? :blocking blocking
+     :sites sites :refer-sites refer-sites}))
+
+(defn- assemble-file-plan
+  "Shape the file result and assemble its namespace and form edits."
+  [file {:keys [from-var to-lib lib-mode?]}
+   {:keys [ns-node clause target]} {:keys [alias collided reuse?]}
+   {:keys [referred kept-refer forms walked unselected? other-use? sites refer-sites]}]
+  (let [other-imports? (and (not lib-mode?)
+                            (or (seq (disj referred from-var))
+                                (:refer-all? target)))
+        mode (if (or unselected? other-use? other-imports?)
+               :add :replace)]
+    {:file file
+     :alias alias
+     :collided collided
+     :sites sites
+     :refer-sites refer-sites
+     :require-mode (if reuse?
+                     (if (= :replace mode) :reuse :reuse-keep)
+                     mode)
+     :edits (into (let [ns-edit (ns-form-edit ns-node clause (:node target)
+                                  mode to-lib alias
+                                  (if (= :add mode) #{} kept-refer)
+                                  (pos? sites)
+                                  (when (and (not lib-mode?)
+                                             (= :add mode)
+                                             (not unselected?))
+                                    from-var)
+                                  reuse?)]
+                    ;; a reused alias with nothing to drop from
+                    ;; the ns form leaves it byte-identical --
+                    ;; never emit a no-op edit
+                    (if (= (:original ns-edit) (:replacement ns-edit))
+                      []
+                      [ns-edit]))
+                  (keep (fn [[form result]]
+                          (when (pos? (:sites result))
+                            {:kind :form
+                             :original (n/string form)
+                             :replacement (n/string (:node result))}))
+                        (map vector forms walked)))}))
+
 ;; @spec MCP-OP-ALIAS-013
 ;; @spec MCP-OP-ALIAS-021
 ;; @spec MCP-OP-ALIAS-024
@@ -1238,13 +1487,8 @@
 (defn- file-plan
   "Plan one file, or return {:refusal r}, or nil when the file is out of scope."
   [request file source]
-  (let [from-lib (get-in request [:from :lib])
-        from-var (get-in request [:from :var])
-        to-lib (get-in request [:to :lib])
-        to-var (get-in request [:to :var])
-        lib-mode? (nil? from-var)
-        preserve-refer? (not= "alias-qualify" (get-in request [:to :refer-policy]))
-        policy (vec (get-in request [:to :alias-policy]))
+  (let [{:keys [from-lib from-var to-lib lib-mode? policy] :as facts}
+        (migration-facts request)
         root (parser/parse-string-all source)
         analysis (analyze-requires request file root)]
     (cond
@@ -1253,167 +1497,27 @@
       ;; the compile-time dependency. Retiring the lib breaks it at RUNTIME,
       ;; where no load check can see it.
       (and (nil? analysis) lib-mode?)
-      (let [context {:mode :lib
-                     :from-lib from-lib
-                     :to-lib to-lib
-                     :qualifiers #{from-lib}
-                     :alias to-lib
-                     :rewrite-bare #{}
-                     :count-bare #{}
-                     :platform (platform-keyword file)}
-            forms (top-level-forms root)
-            walked (mapv #(rewrite-forms % context #{}) forms)
-            indirect (vec (mapcat :indirect walked))
-            sites (reduce + 0 (map :sites walked))]
-        (cond
-          (seq indirect)
-          (let [blocking (first indirect)]
-            {:refusal (refusal :alias-migration-indirect-reference
-                               (str "An indirect reference to " from-lib " in " file
-                                    (when (:row blocking) (str ":" (:row blocking)))
-                                    " cannot be closed mechanically")
-                               (indirect-facts file blocking)
-                               (when-not (= :unsupported-binding-scope (:reason blocking))
-                                 (excluding-call request file)))})
-
-          (zero? sites) nil
-
-          :else
-          {:file file
-           :alias to-lib
-           :collided []
-           :sites sites
-           :refer-sites 0
-           :require-mode :qualified-only
-           :edits (vec (keep (fn [[form result]]
-                               (when (pos? (:sites result))
-                                 {:kind :form
-                                  :original (n/string form)
-                                  :replacement (n/string (:node result))}))
-                             (map vector forms walked)))}))
+      (qualified-only-file-plan request file root from-lib to-lib)
 
       (nil? analysis) nil
       (:refusal analysis) analysis
 
       :else
-      (let [{:keys [ns-node clause direct target others]} analysis]
-        (cond
-          ;; @spec MCP-OP-ALIAS-063
-          ;; The scope walker models referred names, not their :rename bindings.
-          ;; Do not commit a partial rewrite or offer a different scope as repair.
-          (and from-var
-               (some (fn [[option value]]
-                       (and (= ":rename" (n/string option))
-                            (= :map (n/tag (unmeta-node value)))
-                            (some (fn [[key-node _]]
-                                    (= from-var (refer-symbol-name key-node)))
-                                  (partition 2
-                                             (remove #(= :uneval (n/tag %))
-                                                     (meaningful-children (unmeta-node value)))))))
-                     (partition 2 1 (rest (remove #(= :uneval (n/tag %)) (meaningful-children (:node target)))))))
-          {:refusal (refusal :alias-migration-indirect-reference
-                             (str "The selected Var has an unsupported renamed binding in " file)
-                             {:file file
-                              :reason "unsupported-selected-renamed-refer"
-                              :remedy (str "This migration does not model the selected Var's renamed binding. "
-                                           "Review and migrate that binding and its uses explicitly; "
-                                           "no scope-changing next_call is provided.")}
-                             nil)}
-
-          (ownership-refusal request file from-lib from-var target others)
-          {:refusal (ownership-refusal request file from-lib from-var target others)}
-
-          (and lib-mode? (refer-all-refusal request file target))
-          {:refusal (refer-all-refusal request file target)}
-
-          :else
+      (let [{:keys [direct target others]} analysis]
+        (if-let [refused (file-analysis-refusal request file from-lib from-var
+                           lib-mode? target others)]
+          refused
           ;; @spec MCP-OP-ALIAS-067
           ;; Reuse is offered for var-mode migrations only. A lib-mode
           ;; migration under `preserve-refer` would have to MERGE a kept :refer
           ;; set into the file's existing target libspec; that is not modelled,
           ;; so lib-mode keeps the pre-existing free-alias behaviour exactly.
-          (let [{:keys [alias collided bindings reuse?]}
+          (let [{:keys [alias collided bindings] :as alias-choice}
                 (choose-alias root direct policy (when-not lib-mode? to-lib))]
             (if (nil? alias)
-              ;; @spec MCP-OP-ALIAS-008
-              ;; NO next_call. The composition used to append
-              ;; `(str (last policy) "-2")`, so a four-entry policy was
-              ;; answered with `store-2-2` — a value the caller's own request
-              ;; forbids. A next_call is the caller's request with one field
-              ;; corrected, and a correction that violates a constraint the
-              ;; caller stated is not executable by the caller who stated it.
-              ;; Which alias to add is the one thing here only they know.
-              {:refusal (refusal :alias-migration-alias-policy-exhausted
-                                 (str "Every alias_policy entry is already bound in "
-                                      file)
-                                 {:file file
-                                  :alias_policy policy
-                                  :collided_bindings collided
-                                  :remedy
-                                  (str "to.alias_policy is exhausted for "
-                                       file ": every one of its "
-                                       (count policy) " entries — "
-                                       (pr-str (vec policy))
-                                       " — is already bound in that file's ns "
-                                       "form to a namespace other than "
-                                       to-lib ": "
-                                       (str/join ", "
-                                                 (map #(str % " → "
-                                                            (let [bound (get bindings %)]
-                                                              (if (= ::referred bound)
-                                                                "a Var referred into this namespace"
-                                                                bound)))
-                                                      collided))
-                                       ". No "
-                                       "next_call is composed, because any "
-                                       "alias this verb could propose would "
-                                       "be outside the policy you sent and "
-                                       "your own request forbids it. Add an "
-                                       "alias that file does not bind to "
-                                       "to.alias_policy, or exclude " file
-                                       " through scope.exclude, and resend.")}
-                                 nil)}
-              (let [referred (:referred target)
-                    var-bare? (and (not lib-mode?)
-                                   (or (contains? referred from-var)
-                                       (:refer-all? target)))
-                    count-bare (if lib-mode?
-                                 referred
-                                 (if var-bare? #{from-var} #{}))
-                    rewrite-bare (cond
-                                   (not lib-mode?) count-bare
-                                   preserve-refer? #{}
-                                   :else referred)
-                    ;; preserve-refer keeps the same referred names against the
-                    ;; new lib; alias-qualify rewrites them and drops the :refer
-                    kept-refer (if (and lib-mode? preserve-refer?) referred #{})
-                    context {:mode (if lib-mode? :lib :var)
-                             :from-lib from-lib
-                             :to-lib to-lib
-                             :qualifiers (into #{from-lib} (:aliases target))
-                             :from-var from-var
-                             :to-var to-var
-                             :alias alias
-                             :rewrite-bare rewrite-bare
-                             :count-bare count-bare
-                             :platform (platform-keyword file)}
-                    forms (top-level-forms root)
-                    walked (mapv (fn [form]
-                                   (if (identical? form ns-node)
-                                     (leaf form)
-                                     (rewrite-forms form context count-bare)))
-                                 forms)
-                    indirect (vec (mapcat :indirect walked))
-                    unselected? (boolean (some :unselected-sites walked))
-                    other-use? (boolean (some :other-use walked))
-                    cljc? (str/ends-with? file ".cljc")
-                    blocking (first (remove
-                                      #(and (= :unselected-reader-conditional-branch
-                                               (:reason %))
-                                            (not cljc?))
-                                      indirect))
-                    sites (reduce + 0 (map :sites walked))
-                    refer-sites (reduce + 0 (map :refer-sites walked))]
+              (alias-policy-refusal file to-lib policy collided bindings)
+              (let [{:keys [blocking sites refer-sites] :as collected}
+                    (collect-file-sites file root analysis facts alias)]
                 (cond
                   blocking
                   {:refusal (refusal :alias-migration-indirect-reference
@@ -1428,40 +1532,7 @@
                   (and (zero? sites) (zero? refer-sites)) nil
 
                   :else
-                  (let [other-imports? (and (not lib-mode?)
-                                            (or (seq (disj referred from-var))
-                                                (:refer-all? target)))
-                        mode (if (or unselected? other-use? other-imports?)
-                               :add :replace)]
-                    {:file file
-                     :alias alias
-                     :collided collided
-                     :sites sites
-                     :refer-sites refer-sites
-                     :require-mode (if reuse?
-                                     (if (= :replace mode) :reuse :reuse-keep)
-                                     mode)
-                     :edits (into (let [ns-edit (ns-form-edit ns-node clause (:node target)
-                                                             mode to-lib alias
-                                                             (if (= :add mode) #{} kept-refer)
-                                                             (pos? sites)
-                                                             (when (and (not lib-mode?)
-                                                                        (= :add mode)
-                                                                        (not unselected?))
-                                                               from-var)
-                                                             reuse?)]
-                                    ;; a reused alias with nothing to drop from
-                                    ;; the ns form leaves it byte-identical --
-                                    ;; never emit a no-op edit
-                                    (if (= (:original ns-edit) (:replacement ns-edit))
-                                      []
-                                      [ns-edit]))
-                                  (keep (fn [[form result]]
-                                          (when (pos? (:sites result))
-                                            {:kind :form
-                                             :original (n/string form)
-                                             :replacement (n/string (:node result))}))
-                                        (map vector forms walked)))}))))))))))
+                  (assemble-file-plan file facts analysis alias-choice collected))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; the defining namespace
