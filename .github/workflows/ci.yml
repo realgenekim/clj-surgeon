@@ -76,10 +76,11 @@ jobs:
           # This branch's verification profiles run `bb` through the same fixed-directory resolver.
           sudo ln -sf "$HOME/.local/bin/bb" /usr/local/bin/bb && /usr/local/bin/bb --version
       - name: Canonical gate (the product's tests)
-        # This branch's test runner refuses a RAM-backed java.io.tmpdir (/tmp): give bb and the JVM a disk-backed one.
+        # This branch's runner refuses a RAM-backed java.io.tmpdir (/tmp), and its background proof gate admits only a
+        # temp root below /var/tmp (split_proof_gate/safe-tmpdir?): give bb and the JVM one there.
         env:
-          TMPDIR: ${{ runner.temp }}/clj-surgeon-tmp
-          JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=${{ runner.temp }}/clj-surgeon-tmp
+          TMPDIR: /var/tmp/clj-surgeon-ci
+          JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/var/tmp/clj-surgeon-ci
         run: mkdir -p "$TMPDIR" && make test-product
 
   bench-harness:
@@ -142,6 +143,6 @@ jobs:
           sudo ln -sf "$HOME/.local/bin/bb" /usr/local/bin/bb && /usr/local/bin/bb --version
       - name: Benchmark harness self-tests (apparatus, not product; not a required check)
         env:
-          TMPDIR: ${{ runner.temp }}/clj-surgeon-tmp
-          JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=${{ runner.temp }}/clj-surgeon-tmp
+          TMPDIR: /var/tmp/clj-surgeon-ci
+          JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/var/tmp/clj-surgeon-ci
         run: mkdir -p "$TMPDIR" && make test-bench-harness
