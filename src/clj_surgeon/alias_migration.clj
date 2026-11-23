@@ -1395,10 +1395,59 @@
                            " through scope.exclude, and resend.")}
                      nil)})
 
+(defn- collect-file-sites
+  "Walk file forms and collect sites, retained imports and blocking references."
+  [file root {:keys [ns-node target]}
+   {:keys [from-lib from-var to-lib to-var lib-mode? preserve-refer?]} alias]
+  (let [referred (:referred target)
+        var-bare? (and (not lib-mode?)
+                       (or (contains? referred from-var)
+                           (:refer-all? target)))
+        count-bare (if lib-mode?
+                     referred
+                     (if var-bare? #{from-var} #{}))
+        rewrite-bare (cond
+                       (not lib-mode?) count-bare
+                       preserve-refer? #{}
+                       :else referred)
+        ;; preserve-refer keeps the same referred names against the
+        ;; new lib; alias-qualify rewrites them and drops the :refer
+        kept-refer (if (and lib-mode? preserve-refer?) referred #{})
+        context {:mode (if lib-mode? :lib :var)
+                 :from-lib from-lib
+                 :to-lib to-lib
+                 :qualifiers (into #{from-lib} (:aliases target))
+                 :from-var from-var
+                 :to-var to-var
+                 :alias alias
+                 :rewrite-bare rewrite-bare
+                 :count-bare count-bare
+                 :platform (platform-keyword file)}
+        forms (top-level-forms root)
+        walked (mapv (fn [form]
+                       (if (identical? form ns-node)
+                         (leaf form)
+                         (rewrite-forms form context count-bare)))
+                     forms)
+        indirect (vec (mapcat :indirect walked))
+        unselected? (boolean (some :unselected-sites walked))
+        other-use? (boolean (some :other-use walked))
+        cljc? (str/ends-with? file ".cljc")
+        blocking (first (remove
+                          #(and (= :unselected-reader-conditional-branch
+                                   (:reason %))
+                                (not cljc?))
+                          indirect))
+        sites (reduce + 0 (map :sites walked))
+        refer-sites (reduce + 0 (map :refer-sites walked))]
+    {:referred referred :kept-refer kept-refer :forms forms :walked walked
+     :unselected? unselected? :other-use? other-use? :blocking blocking
+     :sites sites :refer-sites refer-sites}))
+
 (defn- file-plan
   "Plan one file, or return {:refusal r}, or nil when the file is out of scope."
   [request file source]
-  (let [{:keys [from-lib from-var to-lib to-var lib-mode? preserve-refer? policy]}
+  (let [{:keys [from-lib from-var to-lib lib-mode? policy] :as facts}
         (migration-facts request)
         root (parser/parse-string-all source)
         analysis (analyze-requires request file root)]
@@ -1427,47 +1476,9 @@
                 (choose-alias root direct policy (when-not lib-mode? to-lib))]
             (if (nil? alias)
               (alias-policy-refusal file to-lib policy collided bindings)
-              (let [referred (:referred target)
-                    var-bare? (and (not lib-mode?)
-                                   (or (contains? referred from-var)
-                                       (:refer-all? target)))
-                    count-bare (if lib-mode?
-                                 referred
-                                 (if var-bare? #{from-var} #{}))
-                    rewrite-bare (cond
-                                   (not lib-mode?) count-bare
-                                   preserve-refer? #{}
-                                   :else referred)
-                    ;; preserve-refer keeps the same referred names against the
-                    ;; new lib; alias-qualify rewrites them and drops the :refer
-                    kept-refer (if (and lib-mode? preserve-refer?) referred #{})
-                    context {:mode (if lib-mode? :lib :var)
-                             :from-lib from-lib
-                             :to-lib to-lib
-                             :qualifiers (into #{from-lib} (:aliases target))
-                             :from-var from-var
-                             :to-var to-var
-                             :alias alias
-                             :rewrite-bare rewrite-bare
-                             :count-bare count-bare
-                             :platform (platform-keyword file)}
-                    forms (top-level-forms root)
-                    walked (mapv (fn [form]
-                                   (if (identical? form ns-node)
-                                     (leaf form)
-                                     (rewrite-forms form context count-bare)))
-                                 forms)
-                    indirect (vec (mapcat :indirect walked))
-                    unselected? (boolean (some :unselected-sites walked))
-                    other-use? (boolean (some :other-use walked))
-                    cljc? (str/ends-with? file ".cljc")
-                    blocking (first (remove
-                                      #(and (= :unselected-reader-conditional-branch
-                                               (:reason %))
-                                            (not cljc?))
-                                      indirect))
-                    sites (reduce + 0 (map :sites walked))
-                    refer-sites (reduce + 0 (map :refer-sites walked))]
+              (let [{:keys [referred kept-refer forms walked unselected? other-use?
+                            blocking sites refer-sites]}
+                    (collect-file-sites file root analysis facts alias)]
                 (cond
                   blocking
                   {:refusal (refusal :alias-migration-indirect-reference
