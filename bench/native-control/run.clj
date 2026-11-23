@@ -115,21 +115,20 @@
                           [(and repo (fs/directory? repo)) "repo directory must exist"]
                           [(and arm-file (fs/regular-file? arm-file)) "arm file must exist"]]]
     (when-not valid (throw (ex-info message {}))))
-  (let [r (fs/canonicalize repo) w (fs/canonicalize ws)]
+  (let [r (fs/canonicalize repo) w (fs/canonicalize ws) a (fs/canonicalize arm-file)]
     (when (or (fs/starts-with? r w) (fs/starts-with? w r))
-      (throw (ex-info "ws must not equal repo or be its ancestor or descendant" {}))))
+      (throw (ex-info "ws must not equal repo or be its ancestor or descendant" {})))
+    (when (fs/starts-with? a w) (throw (ex-info "arm file must be outside ws" {}))))
   (fs/delete-tree ws)
   (fs/create-dirs ws)
   (fs/set-posix-file-permissions ws "rwx------")
-  (run! p/check (mapv deref (p/pipeline
-                            (p/pb ["git" "-C" repo "archive" "--end-of-options" sha]
-                                  {:in "" :err :string :env (git-env env)})
-                            (p/pb ["tar" "-xf" "-" "-C" ws] {:out :string :err :string :env (git-env env)}))))
+  (run! p/check (mapv deref (p/pipeline (p/pb ["git" "-C" repo "archive" "--end-of-options" sha]
+                                          {:in "" :err :string :env (git-env env)})
+                                    (p/pb ["tar" "-xf" "-" "-C" ws] {:out :string :err :string :env (git-env env)}))))
   (let [visit (fn [f _]
                 (if (#{"AGENTS.md" "CLAUDE.md" ".codex" ".clj-surgeon.edn" ".mcp.json"} (fs/file-name f))
-                  (do
-                    (fs/delete-tree f)
-                    :skip-subtree)
+                  (do (fs/delete-tree f)
+                      :skip-subtree)
                   :continue))
         git! (fn [& args] (checked! (into ["git" "-C" ws] args) env))]
     (fs/walk-file-tree ws {:pre-visit-dir visit :visit-file visit})
@@ -355,8 +354,7 @@
 ;; Reduced from the PR 35 setup integration fixture: inherited instructions and ignored files.
 (deftest materialize-workspace-integration-requires-git
   (doseq [tool ["git" "tar"]] (is (some? (fs/which tool)) (str "Missing integration prerequisite: " tool)))
-  (let [tmp (str (fs/create-temp-dir {:prefix "nc-materialize-"}))
-        repo (str tmp "/repo") ws (str tmp "/ws")
+  (let [tmp (str (fs/create-temp-dir {:prefix "nc-materialize-"})) repo (str tmp "/repo") ws (str tmp "/ws")
         arm-file (str tmp "/arm.md") arm-text "Native-control fixture instructions: λ\n"
         git! (fn [& args] (checked! (into ["git" "-C" repo] args)))
         workspace-git! (fn [& args] (checked! (into ["git" "-C" ws] args)))]
@@ -375,22 +373,24 @@
             "-c" "commit.gpgsign=false" "commit" "-qm" "Fixture")
       (fs/create-dirs (str ws "/.git"))
       (spit (str ws "/stale.txt") "stale workspace")
-      (let [task {:repo repo :sha (str/trim (git! "rev-parse" "HEAD"))}]
-        ;; Independent pre-review probes: refusal must precede deletion and process launch.
+      (spit (str ws "/arm.md") arm-text)
+      (let [task {:repo repo :sha (str/trim (git! "rev-parse" "HEAD"))} pb p/pb]
+        ;; PR 71: refusal precedes mutation; inherited config and templates cannot run or install hooks.
         (doseq [[t arm dest message] [[(assoc task :sha "--output=x") arm-file ws #"sha"]
                                     [(assoc task :sha "HEAD") arm-file ws #"sha"]
                                     [task (str tmp "/missing") ws #"arm file"]
+                                    [task (str ws "/arm.md") ws #"arm file must be outside ws"]
                                     [(assoc task :repo arm-file) arm-file ws #"repo directory"]
                                     [(assoc task :repo (str tmp "/missing")) arm-file ws #"repo directory"]
                                     [task arm-file repo #"ancestor"] [task arm-file tmp #"ancestor"]
                                     [task arm-file (str repo "/nested") #"descendant"]
                                     [{} nil "" #"ws must"] [{} nil nil #"ws must"] [{} nil " " #"ws must"]]]
           (let [unexpected (fn [& _] (throw (AssertionError. "side effect before refusal")))]
-            (with-redefs [fs/delete-tree unexpected p/process unexpected p/pipeline unexpected]
+            (with-redefs [p/process unexpected p/pipeline unexpected]
               (is (thrown-with-msg? Exception message (materialize-workspace! t arm dest)))))
+          (is (= arm-text (slurp (str ws "/arm.md"))))
           (is (= "stale workspace" (slurp (str ws "/stale.txt")))))
         (is (= "inherited instructions" (slurp (str repo "/nested/AGENTS.md"))))
-        ;; PR 71: inherited config and templates must neither run nor install hooks.
         (doseq [dir ["hooks" "template/hooks"]]
           (fs/create-dirs (str tmp "/" dir))
           (spit (str tmp "/" dir "/pre-commit") (str "#!/bin/sh\ntouch '" tmp "/" dir "/ran'\n"))
@@ -418,18 +418,18 @@
         (is (= "forced into baseline\n" (workspace-git! "show" "HEAD:ignored.txt")))
         (is (not (fs/exists? (str ws "/stale.txt"))))
         (is (empty? (fs/list-dir (str ws "/nested"))))
-        (is (empty? (filter #(#{"CLAUDE.md" ".codex"} (fs/file-name %))
-                           (fs/glob ws "**" {:hidden true}))))
+        (is (empty? (filter #(#{"CLAUDE.md" ".codex"} (fs/file-name %)) (fs/glob ws "**" {:hidden true}))))
         (is (= "native-control <native-control@anvil>\nnative-control <native-control@anvil>\n"
                (workspace-git! "log" "-1" "--format=%an <%ae>%n%cn <%ce>")))
         (is (= "Frozen read experiment\n" (workspace-git! "log" "-1" "--format=%s")))
         (is (= arm-text (workspace-git! "show" "HEAD:AGENTS.md")))
         (is (= "" (workspace-git! "status" "--porcelain" "--ignored" "--untracked-files=all")))
-        (let [pb p/pb]
-          (with-redefs [p/pb #(pb (if (= "tar" (first %1))
+        (doseq [[sha message] [[(:sha task) #"tar-failed"] [(apply str (repeat 40 "0")) #"not a tree object"]]]
+          (with-redefs [p/pb #(pb (if (and (= sha (:sha task)) (= "tar" (first %1)))
                                    ["sh" "-c" "cat >/dev/null; echo tar-failed >&2; exit 9"] %1) %2)]
-            (is (thrown-with-msg? Exception #"tar-failed" (materialize-workspace! task arm-file ws)))))
-        (is (not (fs/exists? (str ws "/.git")))))
+            (is (thrown-with-msg? Exception message
+                                 (materialize-workspace! (assoc task :sha sha) arm-file ws))))
+          (is (not (fs/exists? (str ws "/.git"))))))
       (finally (fs/delete-tree tmp)))))
 (when (entry-script? (System/getProperty "babashka.file") *file*)
   (case (vec *command-line-args*)
