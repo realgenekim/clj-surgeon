@@ -816,6 +816,7 @@ verify-benchmark-evidence:
 
 benchmark-native-control-self-test:
 	bb bench/native-control/schedule.clj --self-test
+	bb bench/native-control/summarize.clj --self-test
 
 test-fast:
 	bb test/run_all.clj

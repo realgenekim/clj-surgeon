@@ -1,7 +1,6 @@
 #!/usr/bin/env bb
 (ns native-control.summarize
-  (:require [cheshire.core :as json] [clojure.edn :as edn] [clojure.string :as str]
-            [clojure.set :as set] [babashka.fs :as fs]
+  (:require [cheshire.core :as json] [clojure.string :as str] [clojure.set :as set]
             [clojure.test :refer [deftest is run-tests]]))
 
 (def empty-metrics {:actions 0 :tool-output-chars 0 :surgeon-calls 0 :surgeon-refusals 0
@@ -31,7 +30,8 @@
 (defn normalize-line
   "Normalize answer decoration and whitespace; trailing periods remain strict."
   [s]
-  (-> (or s "") str/trim (str/replace #"^(?:[-*•]|\d+[.)])\s+" "")
+  (-> (or s "") str/trim (str/replace #"^[`\"']+|[`\"']+$" "")
+      (str/replace #"^(?:[-*•]|\d+[.)])\s+" "")
       (str/replace #"^#'" "")
       (str/replace #"^[`\"']+|[`\"']+$" "") str/trim (str/replace #"\s+" " ")))
 (defn score [task answer]
@@ -76,6 +76,7 @@
                             ["12) alpha" "alpha"]
                             ["• alpha" "alpha"] ["#'alpha" "alpha"]
                             ["• #'alpha" "alpha"] ["alpha." "alpha."]
+                            ["`#'foo`" "foo"] ["\"- foo\"" "foo"]
                             ["`a\t b`" "a b"]
                             ["-not-a-bullet" "-not-a-bullet"]
                             ["1.2" "1.2"]
@@ -112,18 +113,13 @@
   (is (:correct (score {:answer-kind :exact :expected "[req]"} "```clojure\n[req]\n```")))
   (is (:correct (score {:answer-kind :set :expected ["a" "b"]} "```\na\n```\n```text\nb\n```")))
   (is (false? (:correct (score {:answer-kind :exact :expected "alpha"} "alpha.")))))
+(defn entry-script? [file-prop file] (= file-prop file))
 (deftest cli-load-guard
-  ;; load-file rebinds *file*, so model a different entry script via babashka.file.
-  (let [entry (System/getProperty "babashka.file")]
-    (try
-      (System/setProperty "babashka.file" "required.clj")
-      (is (nil? (load-file "bench/native-control/summarize.clj")))
-      (finally
-        (if entry
-          (System/setProperty "babashka.file" entry)
-          (System/clearProperty "babashka.file"))))))
+  (is (true? (entry-script? "summarize.clj" "summarize.clj")))
+  (is (false? (entry-script? "required.clj" "summarize.clj")))
+  (is (false? (entry-script? nil "summarize.clj"))))
 
-(when (= *file* (System/getProperty "babashka.file"))
+(when (entry-script? (System/getProperty "babashka.file") *file*)
   (let [[tasks-file] *command-line-args*]
     (if (= tasks-file "--self-test")
       (let [r (run-tests 'native-control.summarize)]
