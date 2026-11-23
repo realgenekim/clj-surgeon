@@ -323,6 +323,7 @@
 
 (declare rewrite-binding-vector)
 (declare rewrite-arity)
+(declare rewrite-forms)
 
 ;; @spec MCP-OP-ALIAS-025
 
@@ -451,6 +452,46 @@
   {:node node :sites 0 :refer-sites 0 :indirect [] :other-use false
    :unselected-sites false})
 
+;; `alias/x inside a syntax quote IS resolved through the alias map by
+;; the reader, so it is ordinary code and must migrate with everything
+;; else. A plain 'alias/x is a literal symbol that nothing resolves, so
+;; whether it is a reference is a judgment and the verb refuses.
+(defn- rewrite-quote
+  "Rewrite fully qualified quoted references; refuse alias-qualified data."
+  [node context live-bare]
+  (let [facts (quoted-facts node context live-bare)]
+    (cond
+      (empty? facts) (leaf node)
+
+      ;; 'fully.qualified.lib/x names exactly one namespace and nothing
+      ;; resolves it away, so the rewrite is mechanical — this is how a
+      ;; runtime (requiring-resolve 'old.lib/v) survives a lib rename
+      (every? :fully-qualified? facts)
+      (let [quoted-context (assoc context :quoted-data? true)
+            walked (reduce (fn [state child]
+                             (accumulate state
+                                         (rewrite-forms child quoted-context
+                                                        live-bare)))
+                           empty-walk
+                           (children node))]
+        (walk-result node walked))
+
+      :else
+      (assoc (leaf node)
+             :indirect [{:reason :quoted-reference :form (n/string node)}]))))
+
+(defn- rewrite-token
+  "Apply one token decision and retain all migration tallies."
+  [node context live-bare]
+  (let [{:keys [rewrite refer-hit? other-use? indirect]}
+        (decide node context live-bare)]
+    (cond-> (leaf node)
+      rewrite (assoc :node (parser/parse-string rewrite) :sites 1)
+      refer-hit? (assoc :refer-sites 1)
+      other-use? (assoc :other-use true)
+      indirect (assoc :indirect
+                      [(assoc indirect :form (n/string node))]))))
+
 ;; @spec MCP-OP-ALIAS-029
 ;; @spec MCP-OP-ALIAS-033
 (defn rewrite-forms
@@ -470,41 +511,11 @@
       ;; a reader discard is data the contract keeps exactly as it is
       (= :uneval tag) (leaf node)
 
-      ;; `alias/x inside a syntax quote IS resolved through the alias map by
-      ;; the reader, so it is ordinary code and must migrate with everything
-      ;; else. A plain 'alias/x is a literal symbol that nothing resolves, so
-      ;; whether it is a reference is a judgment and the verb refuses.
       (= :quote tag)
-      (let [facts (quoted-facts node context live-bare)]
-        (cond
-          (empty? facts) (leaf node)
-
-          ;; 'fully.qualified.lib/x names exactly one namespace and nothing
-          ;; resolves it away, so the rewrite is mechanical — this is how a
-          ;; runtime (requiring-resolve 'old.lib/v) survives a lib rename
-          (every? :fully-qualified? facts)
-          (let [quoted-context (assoc context :quoted-data? true)
-                walked (reduce (fn [state child]
-                                 (accumulate state
-                                             (rewrite-forms child quoted-context
-                                                            live-bare)))
-                               empty-walk
-                               (children node))]
-            (walk-result node walked))
-
-          :else
-          (assoc (leaf node)
-                 :indirect [{:reason :quoted-reference :form (n/string node)}])))
+      (rewrite-quote node context live-bare)
 
       (= :token tag)
-      (let [{:keys [rewrite refer-hit? other-use? indirect]}
-            (decide node context live-bare)]
-        (cond-> (leaf node)
-          rewrite (assoc :node (parser/parse-string rewrite) :sites 1)
-          refer-hit? (assoc :refer-sites 1)
-          other-use? (assoc :other-use true)
-          indirect (assoc :indirect
-                          [(assoc indirect :form (n/string node))])))
+      (rewrite-token node context live-bare)
 
       ;; @spec MCP-OP-ALIAS-066
       ;; PER-ARITY SCOPES. `(defn f ([] (h)) ([h] h))` has two scopes, not one:
