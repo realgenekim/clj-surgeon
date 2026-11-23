@@ -1308,16 +1308,23 @@
                               :replacement (n/string (:node result))}))
                          (map vector forms walked)))})))
 
+(defn- migration-facts
+  "Derive the request facts shared by file-planning phases."
+  [request]
+  (let [from-var (get-in request [:from :var])]
+    {:from-lib (get-in request [:from :lib])
+     :from-var from-var
+     :to-lib (get-in request [:to :lib])
+     :to-var (get-in request [:to :var])
+     :lib-mode? (nil? from-var)
+     :preserve-refer? (not= "alias-qualify" (get-in request [:to :refer-policy]))
+     :policy (vec (get-in request [:to :alias-policy]))}))
+
 (defn- file-plan
   "Plan one file, or return {:refusal r}, or nil when the file is out of scope."
   [request file source]
-  (let [from-lib (get-in request [:from :lib])
-        from-var (get-in request [:from :var])
-        to-lib (get-in request [:to :lib])
-        to-var (get-in request [:to :var])
-        lib-mode? (nil? from-var)
-        preserve-refer? (not= "alias-qualify" (get-in request [:to :refer-policy]))
-        policy (vec (get-in request [:to :alias-policy]))
+  (let [{:keys [from-lib from-var to-lib to-var lib-mode? preserve-refer? policy]}
+        (migration-facts request)
         root (parser/parse-string-all source)
         analysis (analyze-requires request file root)]
     (cond
