@@ -20,6 +20,21 @@
 (def smoke-deadline-ms
   120000)
 
+(def expected-tools
+  "The exact structural tool catalog this branch exposes, sorted by name. The
+   smoke's earlier catalog of eight was never updated when helper_extraction,
+   namespace_split and require_change were added on astra/namespace-split
+   (main itself exposes four: inspect_clojure, apply_clojure_changes,
+   edit_clojure, transform_clojure). A name set says what changed; a count
+   that drifts tells nobody."
+  ["admit_clojure_patch" "alias_migration" "apply_clojure_changes" "edit_clojure"
+   "feature_thread" "helper_extraction" "inspect_clojure" "namespace_split"
+   "relation_census" "require_change" "transform_clojure"])
+
+(defn- tool-named
+  [tools tool-name]
+  (first (filter #(= tool-name (:name %)) tools)))
+
 (defn- assert!
   [truth message data]
   (when-not truth
@@ -91,18 +106,19 @@
                    "MCP must not advertise prompts" {:capabilities capabilities})
           (assert! (not (contains? capabilities :resources))
                    "MCP must not advertise resources" {:capabilities capabilities})
-          (assert! (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
-                       "transform_clojure"
-                       "relation_census" "alias_migration"
-                       "admit_clojure_patch" "feature_thread"]
-                      (mapv :name tools))
-                   "MCP must expose exactly eight structural tools"
-                   {:tools tools})
-          (assert! (= false (get-in tools [0 :inputSchema :additionalProperties]))
+          (assert! (= expected-tools (vec (sort (map :name tools))))
+                   (str "MCP must expose exactly these eleven structural tools, sorted by name; "
+                        "helper_extraction, namespace_split and require_change are the three "
+                        "this branch added after the smoke's catalog of eight was written")
+                   {:expected expected-tools :actual (vec (sort (map :name tools)))})
+          (assert! (= false (get-in (tool-named tools "inspect_clojure")
+                                    [:inputSchema :additionalProperties]))
                    "inspect_clojure schema must refuse unknown fields" {:tools tools})
-          (assert! (= true (get-in tools [0 :annotations :readOnlyHint]))
+          (assert! (= true (get-in (tool-named tools "inspect_clojure")
+                                   [:annotations :readOnlyHint]))
                    "inspect_clojure must be annotated read-only" {:tools tools})
-          (assert! (= false (get-in tools [1 :inputSchema :additionalProperties]))
+          (assert! (= false (get-in (tool-named tools "apply_clojure_changes")
+                                    [:inputSchema :additionalProperties]))
                    "apply_clojure_changes schema must refuse unknown fields" {:tools tools})
           (assert! (= true (get-in invalid-call [:result :isError]))
                    "Invalid call must use the MCP error channel"
@@ -121,10 +137,7 @@
               {:ok true
                :operation :mcp-stdio-smoke
                :server "clj-surgeon"
-               :tools ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
-                       "transform_clojure"
-                       "relation_census" "alias_migration"
-                       "admit_clojure_patch" "feature_thread"]
+               :tools expected-tools
                :response-count 3
                :wall-ms (/ (double (- (System/nanoTime) started)) 1000000.0)}))))
       (finally
