@@ -4,6 +4,7 @@
    [clj-surgeon.tmp-leak-support-test]
    [clj-surgeon.agent-routing-test]
    [clj-surgeon.alias-migration-test]
+   [clj-surgeon.alias-migration-characterization-test]
    [clj-surgeon.analyze-test]
    [clj-surgeon.cli-dispatch-test]
    [clj-surgeon.cljc-existing-ops-test]
@@ -63,6 +64,7 @@
       r (run-tests 'clj-surgeon.tmp-leak-support-test
                    'clj-surgeon.forms-test
                    'clj-surgeon.alias-migration-test
+                   'clj-surgeon.alias-migration-characterization-test
                    'clj-surgeon.agent-routing-test
                    'clj-surgeon.outline-test
                    'clj-surgeon.move-test
