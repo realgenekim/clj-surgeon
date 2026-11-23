@@ -24,7 +24,7 @@
           (not (and rep (pos? rep))) {:error "rep: expected a positive integer within signed 64-bit range"}
           (not= run-id (str task-id "-" arm "-r" rep)) {:error "run_id: does not match task_id, arm and rep"}
           :else {:ok {:run-id run-id :task task-id :arm arm :rep rep}})))
-(defn parse-schedule [text]
+(defn parse-schedule [text & [task-ids]]
   (let [[header & lines] (str/split-lines text) seen (volatile! #{})]
     (if (not= "run_id\ttask\tarm\trep" header)
       {:error "line 1: expected header run_id<TAB>task<TAB>arm<TAB>rep"}
@@ -33,6 +33,8 @@
                     (let [cells (str/split line #"\t" -1)
                           r (cond (not= 4 (count cells)) {:error "expected 4 tab-separated cells"}
                                   (@seen (first cells)) {:error "run_id: duplicate"}
+                                  (and task-ids (not (task-ids (second cells))))
+                                  {:error (str "task_id: unknown " (second cells))}
                                   :else (apply validate-run cells))]
                       (if-let [e (:error r)] (reduced {:error (str "line " (+ i 2) ": " e)})
                               (do (vswap! seen conj (first cells)) (update acc :rows conj (:ok r)))))))
@@ -204,7 +206,7 @@
     (throw (ex-info (str "bb config must be a regular file: " (:config cfg)) {})))
   (when-not (= paths (run-paths (:root cfg) plan))
     (throw (ex-info "Setup paths must match run-paths before canonicalization" {})))
-  (let [t (try (schedule/find-task (edn/read-string (slurp tasks-path)) task)
+  (let [t (try (schedule/find-task (or (:tasks cfg) (edn/read-string (slurp tasks-path))) task)
                (catch Exception e (throw (ex-info (str "Task " task " in " tasks-path ": " (ex-message e)) {} e))))
         root (ensure-root! (:root cfg))
         {:keys [run-dir ws codex-home bin-dir] :as paths} (run-paths root plan)
@@ -279,6 +281,50 @@
             (json/generate-string (assoc (failure-receipt plan rc (str (java.time.Instant/now)))
                                     :failed_before_run (not @launched)))))
     (assoc result :exit-code rc :failed-before-run (not @launched))))
+(defn run-schedule! [rows root run-fn]
+  (tally (mapv (fn [row]
+                 (try (run-fn row)
+                      (catch Throwable e
+                        (binding [*out* *err*] (println (str (:run-id row) ": " (error-message e))))
+                        (let [dir (:run-dir (run-paths root row))]
+                          (when-not (fs/exists? (str dir "/run.json"))
+                            (spit (fs/file (fs/create-dirs dir) "failure.json")
+                                  (json/generate-string (failure-receipt row 3 (str (java.time.Instant/now)))))))
+                        {:exit-code 3}))) rows)))
+(defn run-decision [args]
+  (let [r (if (= 5 (count args))
+            (apply validate-run (rest args))
+            {:error "Usage: run TASKS.edn RUN_ID TASK_ID ARM REP"})]
+    (cond-> r (:error r) (assoc :exit 2))))
+(defn read-input! [kind path parse]
+  (try (parse (slurp path))
+       (catch Throwable e (throw (ex-info (str kind ": cannot read " path ": " (error-message e)) {} e)))))
+(defn exception-exit [decided?] (if decided? 3 2))
+(defn run-command! [command args]
+  (let [decided? (atom false)]
+    (try
+      (let [initial (case command
+                      "run" (run-decision args)
+                      "schedule" (when-not (= 2 (count args)) {:error "Usage: schedule TASKS.edn SCHEDULE.tsv"})
+                      {:error "Usage: bb bench/native-control/run.clj --self-test | config | run | schedule"})
+            _ (when-let [e (:error initial)] (throw (ex-info e {})))
+            tasks (read-input! "tasks" (first args) edn/read-string)
+            cfg (assoc (env-config (System/getenv)) :tasks tasks)
+            decision (if (= command "schedule")
+                       (parse-schedule (read-input! "schedule" (second args) identity) (set (map :id tasks)))
+                       initial)]
+        (when-let [e (or (:error cfg) (:error decision))] (throw (ex-info e {})))
+        (when (= command "run") (schedule/find-task tasks (:task (:ok decision))))
+        (reset! decided? true)
+        (if (= command "run")
+          (:exit-code (run-one! (first args) (:ok decision) cfg))
+          (let [{:keys [total failed exit]} (run-schedule! (:rows decision) (:root cfg)
+                                                        #(run-one! (first args) % cfg))]
+            (println (str "schedule: " total " runs, " failed " failed"))
+            exit)))
+      (catch Throwable e
+        (binding [*out* *err*] (println (error-message e)))
+        (exception-exit @decided?)))))
 ;; PR 35 regressions: traversal, last-line loss, setup cleanup and lost run status.
 (deftest components
   (doseq [s [nil "" "." ".." "../../x" "a/b" "a b" "a\nb"]] (is (false? (valid-component? s))))
@@ -824,6 +870,99 @@
                 (is (contains? (set (str/split-lines (slurp (str run-dir "/env.txt"))))
                                (str "HOME=" codex-home)))))
             (when (= :timeout mode) (is (< (- (System/currentTimeMillis) start) 5000)))))))))
+(deftest run-arguments
+  (doseq [args [[] ["tasks"] ["tasks" "id" "T" "arm1"] ["tasks" "id" "T" "arm1" "1" "extra"]]]
+    (is (= {:error "Usage: run TASKS.edn RUN_ID TASK_ID ARM REP" :exit 2} (run-decision args))))
+  (is (= {:ok {:run-id "T-arm1-r1" :task "T" :arm "arm1" :rep 1}}
+         (run-decision ["tasks" "T-arm1-r1" "T" "arm1" "1"])))
+  (is (= {:error "task_id: expected a safe path component, excluding . and .." :exit 2}
+         (run-decision ["tasks" "../x-arm1-r1" "../x" "arm1" "1"]))))
+(deftest schedule-order-and-tally
+  (let [rows (mapv #(-> (validate-run (str "T-arm" % "-r1") "T" (str "arm" %) "1") :ok) [1 2 3])]
+    (doseq [codes [[0 7 0] [0 0 0] [3 7 1] []]]
+      (let [calls (atom [])]
+        (is (= (tally (mapv #(hash-map :exit-code %) codes))
+               (run-schedule! (take (count codes) rows) nil
+                              #(do (swap! calls conj %) {:exit-code (codes (dec (count @calls)))}))))
+        (is (= (take (count codes) rows) @calls))))
+    (let [root (str (fs/create-temp-dir)) err (java.io.StringWriter.) calls (atom [])
+          dir (:run-dir (run-paths root (first rows)))]
+      (try
+        (doseq [completed? [false true]]
+          (when completed? (fs/delete (str dir "/failure.json")) (spit (str dir "/run.json") "existing"))
+          (binding [*err* err]
+            (is (= {:total 3 :failed 1 :exit 1}
+                   (run-schedule! rows root #(do (swap! calls conj %)
+                                                (if (= % (first rows))
+                                                  (throw (ex-info "escaped" {}))
+                                                  {:exit-code 0}))))))
+          (is (= (not completed?) (fs/exists? (str dir "/failure.json"))))
+          (when-not completed?
+            (is (= (dissoc (failure-receipt (first rows) 3 nil) :ended_at)
+                   (dissoc (json/parse-string (slurp (str dir "/failure.json")) true) :ended_at)))))
+        (is (= (concat rows rows) @calls))
+        (is (= "T-arm1-r1: escaped\nT-arm1-r1: escaped\n" (str err)))
+        (is (= "existing" (slurp (str dir "/run.json"))))
+        (finally (fs/delete-tree root))))))
+(deftest environment-pure-boundaries
+  (with-redefs [find-kondo (fn [_ _] "/kondo")]
+    (let [opts {:which {"codex" "/codex"} :user-home "/invoker" :script-dir "/bench"}]
+      (doseq [env [{} {"HOME" ""} {"NC_KILL_AFTER_S" ""}]]
+        (is (= ["/invoker/.codex/auth.json" "30" {}]
+               ((juxt :auth :kill-after :locale) (env-config env opts)))))
+      (doseq [seconds ["1" "3600"]]
+        (is (= ["/custom/.codex/auth.json" seconds {"LANG" "C"} "/invoker"]
+               ((juxt :auth :kill-after :locale :invoker-home)
+                (env-config {"HOME" "/custom" "NC_KILL_AFTER_S" seconds "LANG" "C" "LC_ALL" ""} opts)))))
+      (is (nil? (:codex (env-config {} (assoc opts :which (constantly nil)))))))))
+(deftest command-dispatch
+  (is (= [2 3] (mapv exception-exit [false true])))
+  (let [header "run_id\ttask\tarm\trep\n" row "T-arm1-r1\tT\tarm1\t1"
+        run-args ["tasks" "T-arm1-r1" "T" "arm1" "1"]]
+    (doseq [[cmd args inputs cfg code message]
+            [["run" [] {} {} 2 "Usage:"] ["schedule" ["tasks"] {} {} 2 "Usage:"]
+             ["unknown" [] {} {} 2 "Usage:"]
+             ["schedule" ["tasks" "schedule"] {"tasks" :missing} {} 2 "tasks: cannot read tasks: missing"]
+             ["schedule" ["tasks" "schedule"] {"tasks" "["} {} 2 "tasks: cannot read tasks:"]
+             ["schedule" ["tasks" "schedule"] {"schedule" :missing} {} 2 "schedule: cannot read schedule: missing"]
+             ["schedule" ["tasks" "schedule"] {"schedule" "bad"} {} 2 "line 1:"]
+             ["schedule" ["tasks" "schedule"]
+              {"schedule" (str header row "\n\nX-arm1-r1\tX\tarm1\t1")} {} 2 "line 4: task_id: unknown X"]
+             ["run" run-args {} {:error "config"} 2 "config"]
+             ["run" run-args {} {} 7 ""] ["run" run-args {} {:throw true} 3 "escaped"]
+             ["schedule" ["tasks" "schedule"] {} {} 1 ""]]]
+      (let [calls (atom []) reads (atom []) err (java.io.StringWriter.)]
+        (with-redefs [env-config (constantly cfg)
+                      slurp #(let [v (get (merge {"tasks" "[{:id \"T\"}]" "schedule" (str header row)} inputs) %)]
+                               (swap! reads conj %)
+                               (if (= :missing v)
+                                 (throw (java.io.FileNotFoundException. "missing"))
+                                 v))
+                      run-one! (fn [_ plan cfg]
+                                 (swap! calls conj plan)
+                                 (is (= [{:id "T"}] (:tasks cfg)))
+                                 (if (:throw cfg)
+                                   (throw (ex-info "escaped" {}))
+                                   {:exit-code 7}))]
+          (binding [*err* err]
+            (let [out (with-out-str (is (= code (run-command! cmd args))))]
+              (is (= (if (= code 1) "schedule: 1 runs, 1 failed\n" "") out))))
+          (is (str/starts-with? (str err) message))
+          (is (= (if (= code 2) 0 1) (count @calls)))
+          (when (seq @calls) (is (= 1 (count (filter #{"tasks"} @reads))))))))))
+(deftest real-entry-subprocess
+  (let [root (fs/create-temp-dir) tasks (str root "/tasks.edn") schedule (str root "/schedule.tsv")]
+    (try
+      (spit tasks "[]")
+      (spit schedule "run_id\ttask\tarm\trep\n")
+      (doseq [[args code out err] [[["run" "a" "b"] 2 "" "Usage: run TASKS.edn RUN_ID TASK_ID ARM REP\n"]
+                                 [["schedule" tasks schedule] 0 "schedule: 0 runs, 0 failed\n" ""]]]
+        (is (= [code out err]
+               ((juxt :exit :out :err)
+                @(p/process (into ["bb" "bench/native-control/run.clj"] args)
+                            {:in "" :out :string :err :string
+                             :env (dissoc (into {} (System/getenv)) "NC_TIMEOUT_S" "NC_KILL_AFTER_S")})))))
+      (finally (fs/delete-tree root)))))
 (when (entry-script? (System/getProperty "babashka.file") *file*)
   (case (vec *command-line-args*)
     ["--self-test"]
@@ -832,5 +971,4 @@
     (let [cfg (env-config (System/getenv)) rc (decide-config-exit cfg)]
       (binding [*out* (if (zero? rc) *out* *err*)] (println (or (:error cfg) (render-config cfg))))
       (exit-with rc))
-    (do (binding [*out* *err*] (println "Usage: bb bench/native-control/run.clj --self-test | config"))
-        (exit-with 2))))
+    (exit-with (run-command! (first *command-line-args*) (rest *command-line-args*)))))

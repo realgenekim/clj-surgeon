@@ -12,9 +12,12 @@ TASKS.edn is a vector of maps with string `:id`, `:repo` (absolute), `:sha`
 or `:set`) and `:expected` (string or vector of strings, respectively).
 Arm text comes from `arms/arm1.md` to `arms/arm4.md` (arm4: arm3 plus routing by where the answer sits).
 
+For one run, or a generated schedule:
+
 ```bash
-bb bench/native-control/schedule.clj TASKS.edn arm1,arm2,arm3,arm4 2 42 > /var/tmp/forge/schedule.tsv
-bench/native-control/run-schedule.sh TASKS.edn /var/tmp/forge/schedule.tsv
+bb bench/native-control/run.clj run TASKS.edn RUN_ID TASK_ID ARM REP
+bb bench/native-control/schedule.clj TASKS.edn arm1,arm2,arm3,arm4 2 42 > SCHEDULE.tsv
+bb bench/native-control/run.clj schedule TASKS.edn SCHEDULE.tsv
 bb bench/native-control/summarize.clj TASKS.edn /var/tmp/forge/native-control
 make benchmark-native-control-self-test
 ```
@@ -30,3 +33,15 @@ Review exit-code, tree-changed and skipped-lines in rows.tsv before interpreting
 verdicts; the requested promotion rule does not add validity gates.
 The arm AGENTS.md is included in the clean baseline before execution.
 TSV cells escape backslashes, tabs and newlines; answer.txt overrides event text.
+
+Linux only. Identifiers are validated as path components before any run filesystem call.
+Cleanup runs in try/finally; setup or preflight failures leave `failure.json` and remove
+workspace and credential copy unless `NC_KEEP=1`.
+`run` exits with codex's exit code (2 for a refusal before anything ran, 3 for a failure after);
+`schedule` exits 0 only when every run exited 0, else 1; a refusal before any run is 2.
+The credential is copied as 0600 inside a 0700 home. The sandbox defaults to `workspace-write`,
+with two extra writable roots only for wrapper arms, both in the INVOKER's home:
+`~/.local/state/clj-surgeon` and `~/.local/state/diagnose-skiff-cpu-memory`.
+The tree comparison includes ignored files, so any remaining write is `tree_changed`.
+Every arm's PATH must carry `rg`. Schedules read tasks once and validate all rows and task ids before running,
+close process stdin, continue after failures, and print total/failed counts.
