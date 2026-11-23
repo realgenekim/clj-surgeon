@@ -2026,7 +2026,7 @@
             @(proc/process ["bb" "-m" "clj-surgeon.core"
                             ":op" ":change"
                             ":spec" (pr-str change-spec)]
-                           {:out :string :err :string})
+                           {:out :string :err :string :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}})
             result (edn/read-string out)]
         (is (= 0 exit))
         (is (= "" err))
@@ -2043,7 +2043,7 @@
             @(proc/process ["bb" "-m" "clj-surgeon.core"
                             ":op" ":change"
                             ":spec" (pr-str wrong-spec)]
-                           {:out :string :err :string})
+                           {:out :string :err :string :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}})
             result (edn/read-string out)]
         (is (= 1 exit))
         (is (= "" err))
@@ -2064,7 +2064,7 @@
               {:intent-count 1 :edit-count 1 :changed-file-count 1})
         run-cli (fn [args input]
                   @(proc/process (into ["bb" "-m" "clj-surgeon.core"] args)
-                                 (cond-> {:out :string :err :string}
+                                 (cond-> {:out :string :err :string :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}}
                                    input (assoc :in input))))]
     (try
       (spit file source)
@@ -2126,7 +2126,7 @@
                             ":op" ":change!"
                             ":spec-file" "-"
                             ":receipt-out" receipt-file]
-                           {:in (pr-str change-spec)
+                           {:extra-env {"CLJ_SURGEON_USAGE_LOG" "off"} :in (pr-str change-spec)
                             :out :string :err :string})
             result (edn/read-string out)
             changed-app (slurp app-file)
@@ -2157,7 +2157,7 @@
             @(proc/process ["bb" "-m" "clj-surgeon.core"
                             ":op" ":undo-change!"
                             ":receipt" receipt-file]
-                           {:out :string :err :string})
+                           {:out :string :err :string :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}})
             result (edn/read-string out)]
         (is (= 0 exit))
         (is (= "" err))
@@ -2170,7 +2170,7 @@
             @(proc/process ["bb" "-m" "clj-surgeon.core"
                             ":op" ":undo-change!"
                             ":receipt" receipt-file]
-                           {:out :string :err :string})
+                           {:out :string :err :string :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}})
             result (edn/read-string out)]
         (is (= 1 exit))
         (is (= "" err))
@@ -2212,7 +2212,7 @@
                             ":op" ":change!"
                             ":spec-file" "-"
                             ":receipt-out" receipt-file]
-                           {:in (pr-str scoped-spec)
+                           {:extra-env {"CLJ_SURGEON_USAGE_LOG" "off"} :in (pr-str scoped-spec)
                             :out :string :err :string})
             result (edn/read-string out)]
         (is (= 0 exit))
@@ -2233,7 +2233,7 @@
             @(proc/process ["bb" "-m" "clj-surgeon.core"
                             ":op" ":undo-change!"
                             ":receipt" receipt-file]
-                           {:out :string :err :string})
+                           {:out :string :err :string :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}})
             result (edn/read-string out)]
         (is (= 0 exit))
         (is (= "" err))
@@ -2264,7 +2264,7 @@
                             ":op" ":change!"
                             ":spec-file" "-"
                             ":receipt-out" receipt-file]
-                           {:in (pr-str scoped-spec)
+                           {:extra-env {"CLJ_SURGEON_USAGE_LOG" "off"} :in (pr-str scoped-spec)
                             :out :string :err :string})
             result (edn/read-string out)]
         (is (= 1 exit))

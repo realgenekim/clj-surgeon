@@ -2011,7 +2011,8 @@ run_one() {
     && [ "$context" != mcp-exploratory-rule-no-skill ]; then
     codex_args+=(--ignore-rules)
   fi
-  PATH="$run_path" ZDOTDIR="$zsh_dir" CODEX_HOME="$codex_home" \
+  # benchmark arms are measurement, not use: the whole arm runs with the usage log off
+  CLJ_SURGEON_USAGE_LOG=off PATH="$run_path" ZDOTDIR="$zsh_dir" CODEX_HOME="$codex_home" \
     codex "${codex_args[@]}" \
     --skip-git-repo-check --sandbox "$sandbox" --color never \
     -m "$model" -c "model_reasoning_effort=\"$reasoning\"" \

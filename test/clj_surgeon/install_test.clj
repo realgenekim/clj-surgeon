@@ -35,7 +35,7 @@
   [path & args]
   @(proc/process
      (into [(str path)] args)
-     {:err :string :out :string}))
+     {:err :string :out :string :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}}))
 
 (defn- slurp-path
   [path]
@@ -349,7 +349,7 @@
                   "(ns clj-surgeon.core)\n(defn -main [& _] (println \"HOSTILE-WORKTREE\"))\n")
             (let [{:keys [exit out err]}
                   @(proc/process [(str cli-path) "--version"]
-                                 {:dir (str hostile-root)
+                                 {:extra-env {"CLJ_SURGEON_USAGE_LOG" "off"} :dir (str hostile-root)
                                   :out :string :err :string})]
               (is (zero? exit) (str out err))
               (is (str/includes? out ":tool \"clj-surgeon\""))

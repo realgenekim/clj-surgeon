@@ -57,7 +57,7 @@
    delivery, not identity."
   [& args]
   (let [src (str (fs/absolutize "src"))]
-    (apply proc/shell {:out :string :err :string :continue true}
+    (apply proc/shell {:out :string :err :string :continue true :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}}
            "bb" "-cp" src "-m" "clj-surgeon.core" ":op" "ls-tree" args)))
 
 ;; @spec MCP-OP-SHELL-ARGV-001
