@@ -1262,10 +1262,6 @@
                             (libspec-with-refer to-lib alias referred
                                                 alias-needed?)))))})))
 
-;; @spec MCP-OP-ALIAS-013
-;; @spec MCP-OP-ALIAS-021
-;; @spec MCP-OP-ALIAS-024
-;; @spec MCP-OP-ALIAS-035
 (defn- qualified-only-file-plan
   "Plan fully qualified references in a file without an old-library require."
   [request file root from-lib to-lib]
@@ -1484,6 +1480,10 @@
                              :replacement (n/string (:node result))}))
                         (map vector forms walked)))}))
 
+;; @spec MCP-OP-ALIAS-013
+;; @spec MCP-OP-ALIAS-021
+;; @spec MCP-OP-ALIAS-024
+;; @spec MCP-OP-ALIAS-035
 (defn- file-plan
   "Plan one file, or return {:refusal r}, or nil when the file is out of scope."
   [request file source]
