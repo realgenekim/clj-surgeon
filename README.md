@@ -2114,6 +2114,21 @@ a regression test:
 See [docs/observations/](docs/observations/) for the complete build-use-fix
 records.
 
+## Usage log
+
+Each CLI operation dispatch appends one JSON line to `$XDG_STATE_HOME/clj-surgeon/usage.jsonl`, else
+`$HOME/.local/state/clj-surgeon/usage.jsonl`: the time,
+the op, the outcome (`ok`, `refused`, `error`), the refusal or error code, the duration in ms, the repository's
+basename and the agent kind (`CLJ_SURGEON_AGENT`, else `codex` or `claude` from their environment). It never records
+arguments, paths or file text; an unresolved op is logged as `unknown`. The log stays on this machine; nothing sends
+it anywhere. `CLJ_SURGEON_USAGE_LOG=<path>` moves it and `CLJ_SURGEON_USAGE_LOG=off` disables it. The weekly count
+that reads it is the next slice. Only the CLI entry logs; in-process calls, help, version, `up`, `recover`, and
+`report-failure` do not; one refusal path, `ls-tree` exiting inside the op, is not counted. Benchmark arms set it off
+and are not counted either. The test suite never writes the real log: in-process calls never log, and every test
+that spawns the CLI passes `CLJ_SURGEON_USAGE_LOG=off` in its own spawn (24 spawns in 12 test files, landed first as
+their own change); `test/usage_log_isolation_gate.sh` runs the suite under a seeded custom path and refuses on any change,
+(usage-log boundary tests select temporary files).
+
 ## Testing
 
 ```bash
