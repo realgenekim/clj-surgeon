@@ -1,0 +1,134 @@
+# Required merge gate: ci / linux = the product's tests (make test-product). The benchmark-harness self-tests run in
+# their own job, bench-harness, which is NOT a required check: they test the measuring apparatus, not the tool, and
+# are red on Linux today (they need gtimeout and the codex CLI); keeping them separate keeps them visible until fixed
+# without blocking merges (mayor's ruling, 2026-11-22). The advisory quality ratchet comes in a second pull request.
+# Actions are pinned to reviewed commit SHAs so moving tags cannot change the gate.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main, astra/namespace-split]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Full history supplies both endpoints for PR and push comparisons.
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+      # Java 21 runs the cold Clojure contract tests.
+      - uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          cli: 1.12.5.1664 # Match the specified CLI rather than a moving latest.
+          clj-kondo: 2026.08.04 # The analyzer contract test needs the clj-kondo executable (Anvil runs v2026.08.04).
+      # Python runs the usage collector, fixture test, and stdlib ratchet.
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.12'
+      # Dependency caches are disposable; deps.edn changes invalidate the key.
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            ~/.m2
+            ~/.gitlibs
+          key: ${{ runner.os }}-clojure-${{ hashFiles('deps.edn') }}
+      - name: Install babashka (pinned release and SHA256)
+        env:
+          BB_VERSION: '1.13.219'
+          BB_SHA256: 9ac1fe988d7001625b30ef3e3307e67f8545505a7cb49a4aa179f578115a3e09
+        run: |
+          f="babashka-${BB_VERSION}-linux-amd64-static.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$f" "https://github.com/babashka/babashka/releases/download/v${BB_VERSION}/$f"
+          echo "${BB_SHA256}  $RUNNER_TEMP/$f" | sha256sum -c -
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf "$RUNNER_TEMP/$f" -C "$HOME/.local/bin" bb
+          "$HOME/.local/bin/bb" --version
+      # The operation oracle needs swipl; harness discovery needs rg. clj-kondo comes from setup-clojure above.
+      - name: Install gate dependencies
+        run: sudo apt-get update -q && sudo apt-get install -y -q swi-prolog-nox ripgrep
+      # The benchmark harness calls the macOS GNU timeout name on Linux too.
+      - name: Provide gtimeout and local PATH
+        run: |
+          printf '#!/bin/sh\nexec timeout "$@"\n' > "$HOME/.local/bin/gtimeout"
+          chmod +x "$HOME/.local/bin/gtimeout"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # The project's executable resolver (mcp_change_buffer/expand-command) searches fixed directories
+      # (/opt/homebrew/bin, /usr/local/bin, /usr/bin, /bin), not PATH; setup-clojure installs clj-kondo into the
+      # tool cache, so the verify tests see a bare name unless it is also reachable at /usr/local/bin.
+      - name: Expose clj-kondo where the project's resolver looks
+        run: sudo ln -sf "$(command -v clj-kondo)" /usr/local/bin/clj-kondo && /usr/local/bin/clj-kondo --version
+      - name: Canonical gate (the product's tests)
+        run: make test-product
+
+  bench-harness:
+    name: bench-harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Separate so the required gate never waits on the apparatus; red here is information, not a block.
+    steps:
+      # Full history supplies both endpoints for PR and push comparisons.
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+      # Java 21 runs the cold Clojure contract tests.
+      - uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          cli: 1.12.5.1664 # Match the specified CLI rather than a moving latest.
+          clj-kondo: 2026.08.04 # The analyzer contract test needs the clj-kondo executable (Anvil runs v2026.08.04).
+      # Python runs the usage collector, fixture test, and stdlib ratchet.
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.12'
+      # Dependency caches are disposable; deps.edn changes invalidate the key.
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            ~/.m2
+            ~/.gitlibs
+          key: ${{ runner.os }}-clojure-${{ hashFiles('deps.edn') }}
+      - name: Install babashka (pinned release and SHA256)
+        env:
+          BB_VERSION: '1.13.219'
+          BB_SHA256: 9ac1fe988d7001625b30ef3e3307e67f8545505a7cb49a4aa179f578115a3e09
+        run: |
+          f="babashka-${BB_VERSION}-linux-amd64-static.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$f" "https://github.com/babashka/babashka/releases/download/v${BB_VERSION}/$f"
+          echo "${BB_SHA256}  $RUNNER_TEMP/$f" | sha256sum -c -
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf "$RUNNER_TEMP/$f" -C "$HOME/.local/bin" bb
+          "$HOME/.local/bin/bb" --version
+      # The operation oracle needs swipl; harness discovery needs rg. clj-kondo comes from setup-clojure above.
+      - name: Install gate dependencies
+        run: sudo apt-get update -q && sudo apt-get install -y -q swi-prolog-nox ripgrep
+      # The benchmark harness calls the macOS GNU timeout name on Linux too.
+      - name: Provide gtimeout and local PATH
+        run: |
+          printf '#!/bin/sh\nexec timeout "$@"\n' > "$HOME/.local/bin/gtimeout"
+          chmod +x "$HOME/.local/bin/gtimeout"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # The project's executable resolver (mcp_change_buffer/expand-command) searches fixed directories
+      # (/opt/homebrew/bin, /usr/local/bin, /usr/bin, /bin), not PATH; setup-clojure installs clj-kondo into the
+      # tool cache, so the verify tests see a bare name unless it is also reachable at /usr/local/bin.
+      - name: Expose clj-kondo where the project's resolver looks
+        run: sudo ln -sf "$(command -v clj-kondo)" /usr/local/bin/clj-kondo && /usr/local/bin/clj-kondo --version
+      - name: Benchmark harness self-tests (apparatus, not product; not a required check)
+        run: make test-bench-harness
