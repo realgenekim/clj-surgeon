@@ -3,6 +3,7 @@
 #_{:clj-kondo/ignore [:namespace-name-mismatch]}
 (ns native-control.run
   (:require [babashka.fs :as fs]
+            [babashka.process :as p]
             [clojure.string :as str]
             [clojure.test :refer [deftest is run-tests]]))
 
@@ -95,6 +96,53 @@
     (not rg?)
     "preflight: rg not on the arm PATH (every arm needs the native route)"
     :else :ok))
+
+(defn git-env []
+  (apply dissoc (assoc (into {} (System/getenv)) "GIT_CONFIG_GLOBAL" "/dev/null" "GIT_CONFIG_NOSYSTEM" "1")
+         ["GIT_DIR" "GIT_WORK_TREE" "GIT_INDEX_FILE" "GIT_OBJECT_DIRECTORY"
+          "GIT_AUTHOR_NAME" "GIT_AUTHOR_EMAIL" "GIT_COMMITTER_NAME" "GIT_COMMITTER_EMAIL"]))
+
+(defn checked! [argv]
+  (when-not (and (vector? argv) (every? string? argv))
+    (throw (ex-info "argv must be a vector of strings" {})))
+  (:out (p/check @(p/process argv {:in "" :out :string :err :string :env (git-env)}))))
+
+(defn ensure-root! [root-str]
+  (when-not (and (string? root-str) (not (str/blank? root-str)))
+    (throw (ex-info "root must name a directory" {})))
+  (when-not (fs/exists? root-str)
+    (fs/create-dirs root-str {:posix-file-permissions "rwx------"}))
+  (when-not (fs/directory? root-str) (throw (ex-info "root must be a directory" {})))
+  (str (fs/canonicalize root-str)))
+
+(defn materialize-workspace! [{:keys [repo sha]} arm-file ws]
+  (doseq [[valid message] [[(and (string? sha) (re-matches #"[0-9a-f]{40}" sha)) "sha must be 40 lowercase hex digits"]
+                          [(and repo (fs/directory? repo)) "repo directory must exist"]
+                          [(and arm-file (fs/regular-file? arm-file)) "arm file must exist"]]]
+    (when-not valid (throw (ex-info message {}))))
+  (when (fs/starts-with? (fs/canonicalize repo) (fs/canonicalize ws))
+    (throw (ex-info "ws must not equal repo or be its ancestor" {})))
+  (fs/delete-tree ws)
+  (fs/create-dirs ws)
+  (doseq [result (mapv deref (p/pipeline
+                               (p/pb ["git" "-C" repo "archive" "--end-of-options" sha]
+                                     {:in "" :err :string :env (git-env)})
+                               (p/pb ["tar" "-x" "-C" ws] {:out :string :err :string})))]
+    (p/check result))
+  (let [visit (fn [f _]
+                (if (#{"AGENTS.md" "CLAUDE.md" ".codex" ".clj-surgeon.edn" ".mcp.json"} (fs/file-name f))
+                  (do
+                    (fs/delete-tree f)
+                    :skip-subtree)
+                  :continue))
+        git! (fn [& args] (checked! (into ["git" "-C" ws] args)))]
+    (fs/walk-file-tree ws {:pre-visit-dir visit :visit-file visit})
+    (fs/copy arm-file (str ws "/AGENTS.md"))
+    (git! "init" "-q")
+    (git! "add" "-A" "-f")
+    (git! "-c" "user.name=native-control" "-c" "user.email=native-control@anvil"
+          "-c" "commit.gpgsign=false" "commit" "-qm" "Frozen read experiment")
+    (str/trim (git! "rev-parse" "HEAD"))))
 
 ;; PR 35 regressions: traversal, last-line loss, setup cleanup and lost run status.
 (deftest components
@@ -280,6 +328,108 @@
     (is (= :ok (preflight-decision "arm1" resolved kondo? true))))
   (doseq [arm ["arm2" "arm3"]]
     (is (= :ok (preflight-decision arm :wrapper true true)))))
+
+(deftest checked-process-streams-and-failure
+  (doseq [argv ["echo unsafe" '("echo") ["echo" nil] nil]]
+    (with-redefs [p/process (fn [& _] (throw (AssertionError. "process ran")))]
+      (is (thrown-with-msg? Exception #"vector of strings" (checked! argv)))))
+  (is (= "" (checked! ["sh" "-c" "cat"])))
+  (is (= "literal $value\n" (checked! ["printf" "%s\n" "literal $value"])))
+  (is (thrown-with-msg? Exception #"process stderr"
+        (checked! ["sh" "-c" "printf 'process stderr' >&2; exit 7"]))))
+
+(deftest result-root-permissions
+  (let [tmp (fs/create-temp-dir {:prefix "nc-root-"})
+        root (str tmp "/results")
+        mode #(fs/posix->str (fs/posix-file-permissions %))]
+    (try
+      (spit (str tmp "/file") "regular file")
+      (doseq [invalid [nil (str tmp "/file")]]
+        (is (thrown-with-msg? Exception #"root.*directory" (ensure-root! invalid))))
+      (is (= (str (fs/canonicalize root)) (ensure-root! root)))
+      (is (= "rwx------" (mode root)))
+      (fs/set-posix-file-permissions root "rwxr-x---")
+      (is (= (str (fs/canonicalize root)) (ensure-root! (str root "/../results"))))
+      (is (= "rwxr-x---" (mode root)))
+      (finally
+        (fs/delete-tree tmp)))))
+
+;; Reduced from the PR 35 setup integration fixture: inherited instructions and ignored files.
+(deftest materialize-workspace-integration-requires-git
+  (doseq [tool ["git" "tar"]]
+    (is (some? (fs/which tool)) (str "Missing integration prerequisite: " tool))
+    (when-not (fs/which tool)
+      (throw (ex-info (str "Missing integration prerequisite: " tool) {}))))
+  (let [tmp (str (fs/create-temp-dir {:prefix "nc-materialize-"}))
+        repo (str tmp "/repo")
+        ws (str tmp "/ws")
+        arm-file (str tmp "/arm.md")
+        arm-text "Native-control fixture instructions: λ\n"
+        git! (fn [& args] (checked! (into ["git" "-C" repo] args)))
+        workspace-git! (fn [& args] (checked! (into ["git" "-C" ws] args)))]
+    (try
+      (fs/create-dirs (str repo "/nested/.codex"))
+      (doseq [name ["AGENTS.md" "CLAUDE.md" ".clj-surgeon.edn" ".mcp.json" ".codex/config.toml"]]
+        (spit (str repo "/nested/" name) "inherited instructions"))
+      (spit (str repo "/AGENTS.md") "old root instructions")
+      (spit (str repo "/.gitignore") "AGENTS.md\nignored.txt\n")
+      (spit (str repo "/tracked.txt") "frozen source\n")
+      (spit (str repo "/ignored.txt") "forced into baseline\n")
+      (spit arm-file arm-text)
+      (git! "init" "-q")
+      (git! "add" "-A" "-f")
+      (git! "-c" "user.name=fixture" "-c" "user.email=fixture@example.test"
+            "-c" "commit.gpgsign=false" "commit" "-qm" "Fixture")
+      (fs/create-dirs (str ws "/.git"))
+      (spit (str ws "/stale.txt") "stale workspace")
+      (let [task {:repo repo :sha (str/trim (git! "rev-parse" "HEAD"))}]
+        ;; Independent pre-review probes: refusal must precede deletion and process launch.
+        (doseq [[t arm dest message] [[(assoc task :sha "--output=x") arm-file ws #"sha"]
+                                    [(assoc task :sha "HEAD") arm-file ws #"sha"]
+                                    [task (str tmp "/missing") ws #"arm file"]
+                                    [(assoc task :repo arm-file) arm-file ws #"repo directory"]
+                                    [(assoc task :repo (str tmp "/missing")) arm-file ws #"repo directory"]
+                                    [task arm-file repo #"ancestor"]
+                                    [task arm-file tmp #"ancestor"]]]
+          (let [unexpected (fn [& _] (throw (AssertionError. "side effect before refusal")))]
+            (with-redefs [fs/delete-tree unexpected p/process unexpected p/pipeline unexpected]
+              (is (thrown-with-msg? Exception message (materialize-workspace! t arm dest)))))
+          (is (= "stale workspace" (slurp (str ws "/stale.txt")))))
+        (let [expr (list 'do (list 'load-file (str (fs/absolutize *file*)))
+                         (list 'print (list 'native-control.run/materialize-workspace! task arm-file ws)))
+              baseline (:out (p/check @(p/process ["bb" "-e" (pr-str expr)]
+                                                 {:extra-env {"GIT_DIR" (str repo "/.git")
+                                                              "GIT_WORK_TREE" repo
+                                                              "GIT_INDEX_FILE" (str repo "/.git/index")
+                                                              "GIT_OBJECT_DIRECTORY" (str repo "/.git/objects")
+                                                              "GIT_CONFIG_GLOBAL" arm-file "GIT_CONFIG_NOSYSTEM" "0"}
+                                                  :out :string :err :string})))]
+          (is (= (:sha task) (str/trim (git! "rev-parse" "HEAD"))))
+          (is (fs/directory? (str ws "/.git")))
+          (is (= baseline (str/trim (workspace-git! "rev-parse" "HEAD"))))
+          (is (= "commit\n" (workspace-git! "cat-file" "-t" baseline))))
+        (is (= arm-text (slurp (str ws "/AGENTS.md"))))
+        (is (= "frozen source\n" (slurp (str ws "/tracked.txt"))))
+        (is (= "forced into baseline\n" (workspace-git! "show" "HEAD:ignored.txt")))
+        (is (not (fs/exists? (str ws "/stale.txt"))))
+        (is (empty? (fs/list-dir (str ws "/nested"))))
+        (is (empty? (filter #(#{"CLAUDE.md" ".codex"} (fs/file-name %))
+                           (fs/glob ws "**" {:hidden true}))))
+        (is (= "native-control <native-control@anvil>\nnative-control <native-control@anvil>\n"
+               (workspace-git! "log" "-1" "--format=%an <%ae>%n%cn <%ce>")))
+        (is (= "Frozen read experiment\n" (workspace-git! "log" "-1" "--format=%s")))
+        (is (= arm-text (workspace-git! "show" "HEAD:AGENTS.md")))
+        (is (= "" (workspace-git! "status" "--porcelain" "--ignored" "--untracked-files=all")))
+        (let [pb p/pb]
+          (with-redefs [p/pb (fn [argv opts]
+                               (pb (if (= "tar" (first argv))
+                                     ["sh" "-c" "cat >/dev/null; echo tar-failed >&2; exit 9"]
+                                     argv)
+                                   opts))]
+            (is (thrown-with-msg? Exception #"tar-failed" (materialize-workspace! task arm-file ws)))))
+        (is (not (fs/exists? (str ws "/.git")))))
+      (finally
+        (fs/delete-tree tmp)))))
 
 (when (entry-script? (System/getProperty "babashka.file") *file*)
   (case (vec *command-line-args*)
