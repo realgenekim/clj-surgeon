@@ -39,7 +39,7 @@
 (defn- run-cli [& args]
   @(proc/process
      (into ["bb" "-m" "clj-surgeon.core"] args)
-     {:dir project-root :err :string :out :string}))
+     {:dir project-root :err :string :out :string :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}}))
 
 (deftest partition-all-groups-a-semantic-sibling-suffix-with-an-explicit-tail
   (let [query [[:form 'route] [:find 'case] :up :down :right :right

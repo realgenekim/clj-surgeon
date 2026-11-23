@@ -145,7 +145,7 @@
                     ":op" ":xray"
                     ":file" (str source-file)
                     ":expr" "(form 'shared :clj)"]
-                   {:dir project-root :err :string :out :string})
+                   {:dir project-root :err :string :out :string :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}})
             result (edn/read-string (:out run))]
         (is (pos? (:exit run)))
         (is (= :platform-context-required (:error-type result)))

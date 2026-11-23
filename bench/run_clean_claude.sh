@@ -420,7 +420,7 @@ run_actual_child() {
 
   (
     cd "$workspace"
-    PATH="$workspace/bin:$PATH" bounded_exec "$run_dir" "$deadline_seconds" "${command[@]}"
+    CLJ_SURGEON_USAGE_LOG=off PATH="$workspace/bin:$PATH" bounded_exec "$run_dir" "$deadline_seconds" "${command[@]}"
   )
   extract_results "$run_dir"
   if [ -f "$workspace/plan.edn" ]; then

@@ -487,7 +487,7 @@
                ".clj-surgeon.edn" cli-config
                "src/myapp/api.clj" cli-source)
       (let [src-path (str dir "/src/myapp/api.clj")
-            result (proc/shell {:out :string :err :string :dir (str dir)}
+            result (proc/shell {:out :string :err :string :dir (str dir) :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}}
                                "bb" "-cp" project-src "-m" "clj-surgeon.core"
                                ":op" ":ls" ":file" src-path)
             output (:out result)]
@@ -522,7 +522,7 @@
                "src/app.clj"
                "(defendpoint handle [req] req)\n(defn greet [x] (str \"hi \" x))")
       (let [src-path (str dir "/src/app.clj")
-            result (proc/shell {:out :string :err :string :dir (str dir)}
+            result (proc/shell {:out :string :err :string :dir (str dir) :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}}
                                "bb" "-cp" project-src "-m" "clj-surgeon.core"
                                ":op" ":ls" ":file" src-path)
             output (:out result)]
