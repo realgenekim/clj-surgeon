@@ -817,6 +817,7 @@ verify-benchmark-evidence:
 benchmark-native-control-self-test:
 	bb bench/native-control/schedule.clj --self-test
 	bb bench/native-control/summarize.clj --self-test
+	bb bench/native-control/run.clj --self-test
 
 test-fast:
 	@# The suite runs under a seeded custom usage-log path and the gate refuses if that file changes.
