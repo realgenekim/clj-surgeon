@@ -58,8 +58,20 @@ if [[ -n $wrapper ]]; then
 else
   [[ -z $resolved ]] || { echo "preflight: arm1 must not see clj-surgeon, found '$resolved'" >&2; exit 3; }
 fi
+[[ -n $(env -i HOME="$codex_home" PATH="$run_path" bash -lc 'command -v rg') ]] || { echo 'preflight: rg not on the arm PATH (every arm needs the native route)' >&2; exit 3; }
 printf 'resolved_clj_surgeon=%s\nbb_config=%s\n' "$resolved" "$config" > "$run_dir/preflight.txt"
-# The credential is copied, not linked, and kept 0600 inside a 0700 home; the result root is 0700 too.
+# The credential is copied, not linked, and kept 0600 inside a 0700 home; the result root is 0700 too. The trap
+# below removes the home (credential included) on ANY exit unless NC_KEEP=1 asked to retain it, and leaves a
+# failure receipt when the run died before run.json existed, so a setup or preflight failure is never silent.
+cleanup() {
+  rc=$?
+  if [[ ! -f $run_dir/run.json ]]; then
+    printf '{"run_id":"%s","task":"%s","arm":"%s","rep":%s,"exit_code":%s,"failed_before_run":true,"ended_at":"%s"}\n' \
+      "$run_id" "$task_id" "$arm" "$rep" "$rc" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$run_dir/failure.json" 2>/dev/null || true
+  fi
+  if [[ $keep != true ]]; then rm -rf -- "$ws" "$codex_home"; fi
+}
+trap cleanup EXIT
 chmod 700 "$root" "$codex_home"; install -m 600 "$auth" "$codex_home/auth.json"
 printf 'model = "%s"\nmodel_reasoning_effort = "%s"\n' "$model" "$reasoning" > "$codex_home/config.toml"
 prompt=$(bb "$script_dir/schedule.clj" prompt "$tasks" "$task_id")
@@ -78,4 +90,3 @@ bb "$script_dir/schedule.clj" receipt "$run_id" "$task_id" "$arm" "$rep" "$model
   "$repo" "$sha" "$start_ms" "$end_ms" "$exit_code" "$status" "$(wc -c < "$arm_file")" \
   "$started_at" "$ended_at" > "$run_dir/run.json.tmp"
 mv "$run_dir/run.json.tmp" "$run_dir/run.json"
-if [[ $keep != true ]]; then rm -rf -- "$ws" "$codex_home"; fi

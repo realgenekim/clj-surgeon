@@ -30,3 +30,11 @@ Review exit-code, tree-changed and skipped-lines in rows.tsv before interpreting
 verdicts; the requested promotion rule does not add validity gates.
 The arm AGENTS.md is included in the clean baseline before execution.
 TSV cells escape backslashes, tabs and newlines; answer.txt overrides event text.
+
+Linux only (GNU date %3N, realpath, timeout, find -exec). The sandbox is workspace-write with two writable roots in the
+INVOKER's home, `~/.local/state/clj-surgeon` (the shared clj-kondo admission lock and events, which the analyzer
+resolves from the passwd home) and `~/.local/state/diagnose-skiff-cpu-memory` (the admission wrapper's pressure
+status); the task tree is compared against its baseline, ignored files included, and any write is tree_changed.
+`NC_KEEP=1` retains the workspace AND the Codex home, credential copy included; the default removes both on any exit.
+A run that dies before run.json exists leaves failure.json, and run-schedule.sh exits nonzero when any run failed.
+Every arm's PATH must carry `rg`; the preflight refuses otherwise, so a missing grep cannot inflate the native arm.
