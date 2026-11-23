@@ -5,10 +5,11 @@ import unittest
 spec = importlib.util.spec_from_file_location('parse', Path(__file__).with_name('usage_week_parse.py'))
 p = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(p)
-CLI = {'name': 'exec_command', 'arguments': '{"cmd":"clj-surgeon :op :split-ns!"}',
+CLI = {'session': 'one', 'name': 'exec_command', 'arguments': '{"cmd":"clj-surgeon :op :split-ns!"}',
     'output': '{:error-type :stale}'}
-MCP = {'name': 'mcp__clj_surgeon__alias_migration', 'input': {}, 'output': 'success'}
-PATCH = {'name': 'apply_patch',
+MCP = {'session': 'two', 'name': 'mcp__clj_surgeon__alias_migration',
+    'input': {}, 'output': '{"success": true}'}
+PATCH = {'session': 'one', 'name': 'apply_patch',
     'input': '*** Begin Patch\n*** Update File: src/x.clj\n@@\n-x\n+y\n*** End Patch'}
 
 class Relations(unittest.TestCase):
@@ -104,13 +105,17 @@ class Relations(unittest.TestCase):
     def test_aggregation_and_render(self):
         calls = p.fold_turn([CLI, MCP, MCP, PATCH])
         counts = p.aggregate(calls)
-        self.assertEqual(dict(calls=1, sessions=1, refusals=1, errors=0, unknown=0, fallbacks=0),
+        self.assertEqual(dict(calls=1, sessions=1, refusals=1, errors=0, unknown=0,
+                              fallbacks=0, undecodable=0),
             counts['split-ns!'])
-        totals = dict(calls=3, sessions=1, refusals=1, errors=0, unknown=0, fallbacks=0, files_scanned=2,
+        totals = dict(calls=3, sessions=2, refusals=1, errors=0, unknown=0, fallbacks=0, undecodable=0,
+            files_scanned=2,
             seconds='0.123')
-        self.assertEqual('op=alias_migration calls=2 sessions=1 refusals=0 errors=0 unknown=0 fallbacks=0\n'
-                         'op=split-ns! calls=1 sessions=1 refusals=1 errors=0 unknown=0 fallbacks=0\n'
-                         'total=3 calls=3 sessions=1 refusals=1 errors=0 unknown=0 fallbacks=0'
+        self.assertEqual('op=alias_migration calls=2 sessions=1 refusals=0 errors=0 unknown=0 fallbacks=0 '
+                         'undecodable=0\n'
+                         'op=split-ns! calls=1 sessions=1 refusals=1 errors=0 unknown=0 fallbacks=0 '
+                         'undecodable=0\n'
+                         'total=3 calls=3 sessions=2 refusals=1 errors=0 unknown=0 fallbacks=0 undecodable=0'
                          ' files_scanned=2 seconds=0.123', p.render(counts, totals))
         self.assertEqual({}, p.aggregate([]))
         self.assertEqual(2, p.aggregate([dict(calls[0], session='a'), dict(calls[0],
@@ -198,6 +203,87 @@ class ReviewRegressions(unittest.TestCase):
         records = list(p.actions({'name': 'exec',
                                   'input': 'tools["clj-surgeon__alias_migration"]({})'}))
         self.assertEqual('alias_migration', p.detect_call(records[0])['op'])
+
+
+class RoundFour(unittest.TestCase):
+    def test_command_property_orders(self):
+        for key in ('cmd', 'command'):
+            for obj in (f'{{workdir:"/repo", {key}:"clj-surgeon :op :ls"}}',
+                        f'{{{key}:"clj-surgeon :op :ls", workdir:"/repo"}}'):
+                record = dict(session='one', name='exec', input='tools.exec_command(' + obj + ')')
+                calls = p.fold_turn(list(p.actions(record)))
+                self.assertEqual(['ls'], [c['op'] for c in calls])
+                self.assertEqual('one', calls[0]['session'])
+
+    def test_affirmative_success_only(self):
+        for output in ('{"success": false}', 'unsuccessful', 'success', 'uncommitted',
+                       '{"status": "unsuccessful"}', '{:ok false}'):
+            with self.subTest(output=output):
+                self.assertEqual('unknown', p.classify_outcome(output))
+                self.assertTrue(p.fold_turn([CLI, dict(MCP, output=output), PATCH])[0]['fallback'])
+        for output in ('{"success": true}', '{"status": "success"}', '{:ok true}', 'exit 0'):
+            self.assertEqual('success', p.classify_outcome(output))
+        self.assertEqual('error', p.classify_outcome('exit 0\nError: broken'))
+        self.assertEqual('refusal', p.classify_outcome('exit 0\nrefused · stale'))
+
+    def test_undecodable_records_survive(self):
+        for source in ('unknown syntax', 'tools.exec_command(command)', 'tools.exec_command({cmd: nope})'):
+            record = dict(session='one', name='exec', input=source)
+            made = list(p.actions(record))
+            self.assertEqual([dict(record, undecodable=True)], made)
+            self.assertIsNone(p.detect_call(made[0]))
+            self.assertFalse(p.is_native_clj_edit(made[0]))
+        source = 'clj-surgeon :op :ls "'
+        self.assertEqual([source.split()], p.shell_segments(source))
+        made = list(p.actions(dict(session='one', name='Bash', input=source)))
+        self.assertTrue(made[0]['undecodable'])
+        self.assertEqual(source, made[0]['input'])
+        self.assertEqual('ls', p.detect_call(made[0])['op'])
+
+    def test_split_preserves_outer_session(self):
+        records = [dict(session=session, payload=dict(name='Bash',
+                   input={'command': 'clj-surgeon :op :ls; clj-surgeon :op :ls'}))
+                   for session in ('one', 'two')]
+        calls = p.fold_turn([a for record in records for a in p.actions(record)])
+        self.assertEqual(4, len(calls))
+        self.assertEqual(2, p.aggregate(calls)['ls']['sessions'])
+
+    def test_patch_dict_arguments(self):
+        for args, expected in [({}, False), ({'cmd': '*** Update File: x.clj'}, True),
+                               ({'patch': '*** Add File: x.edn'}, True),
+                               ({'other': 'x.clj'}, False)]:
+            record = dict(session='one', name='apply_patch', input=args)
+            self.assertEqual(expected, p.is_native_clj_edit(record))
+
+    def test_error_types_are_not_all_refusals(self):
+        for output in ('{"error_type": "RuntimeError"}\nexit 1',
+                       '{"error-type": "exception"}\nError: broken'):
+            self.assertEqual('error', p.classify_outcome(output))
+        for output in ('{"error_type": "stale-snapshot"}', '{:refused true}',
+                       '{"status":"refused"}', '{"refusal_code":"stale"}'):
+            self.assertEqual('refusal', p.classify_outcome(output))
+
+    def test_macos_scratch_paths(self):
+        for prefix in ('/private/tmp/', '/private/var/folders/', '/var/folders/'):
+            record = dict(session='one', name='apply_patch', input='*** Update File: ' + prefix + 'x.clj')
+            self.assertFalse(p.is_native_clj_edit(record))
+        self.assertTrue(p.is_native_clj_edit(dict(session='one', name='apply_patch',
+                        input='*** Update File: /var/tmp/forge/worktree/src/x.clj')))
+
+    def test_undecodable_is_rendered_per_operation_and_total(self):
+        calls = p.fold_turn([dict(CLI, undecodable=True)])
+        counts = p.aggregate(calls)
+        self.assertEqual(1, counts['split-ns!']['undecodable'])
+        totals = dict(counts['split-ns!'], undecodable=3, files_scanned=2, seconds='0.001')
+        lines = p.render(counts, totals).splitlines()
+        self.assertTrue(lines[0].endswith('undecodable=1'))
+        self.assertIn('undecodable=3 files_scanned=2', lines[1])
+
+    def test_timeout_options(self):
+        for prefix in ('timeout -k 5 10', 'timeout -s TERM 10', 'timeout -k 5 -s TERM 10',
+                       'timeout -s TERM -k 5 10', 'timeout 10'):
+            record = dict(session='one', name='Bash', input=prefix + ' clj-surgeon :op :ls')
+            self.assertEqual('ls', p.detect_call(record)['op'])
 
 if __name__ == '__main__':
     unittest.main()
