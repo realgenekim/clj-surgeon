@@ -1444,6 +1444,46 @@
      :unselected? unselected? :other-use? other-use? :blocking blocking
      :sites sites :refer-sites refer-sites}))
 
+(defn- assemble-file-plan
+  "Shape the file result and assemble its namespace and form edits."
+  [file {:keys [from-var to-lib lib-mode?]}
+   {:keys [ns-node clause target]} {:keys [alias collided reuse?]}
+   {:keys [referred kept-refer forms walked unselected? other-use? sites refer-sites]}]
+  (let [other-imports? (and (not lib-mode?)
+                            (or (seq (disj referred from-var))
+                                (:refer-all? target)))
+        mode (if (or unselected? other-use? other-imports?)
+               :add :replace)]
+    {:file file
+     :alias alias
+     :collided collided
+     :sites sites
+     :refer-sites refer-sites
+     :require-mode (if reuse?
+                     (if (= :replace mode) :reuse :reuse-keep)
+                     mode)
+     :edits (into (let [ns-edit (ns-form-edit ns-node clause (:node target)
+                                  mode to-lib alias
+                                  (if (= :add mode) #{} kept-refer)
+                                  (pos? sites)
+                                  (when (and (not lib-mode?)
+                                             (= :add mode)
+                                             (not unselected?))
+                                    from-var)
+                                  reuse?)]
+                    ;; a reused alias with nothing to drop from
+                    ;; the ns form leaves it byte-identical --
+                    ;; never emit a no-op edit
+                    (if (= (:original ns-edit) (:replacement ns-edit))
+                      []
+                      [ns-edit]))
+                  (keep (fn [[form result]]
+                          (when (pos? (:sites result))
+                            {:kind :form
+                             :original (n/string form)
+                             :replacement (n/string (:node result))}))
+                        (map vector forms walked)))}))
+
 (defn- file-plan
   "Plan one file, or return {:refusal r}, or nil when the file is out of scope."
   [request file source]
@@ -1463,21 +1503,20 @@
       (:refusal analysis) analysis
 
       :else
-      (let [{:keys [ns-node clause direct target others]} analysis]
+      (let [{:keys [direct target others]} analysis]
         (if-let [refused (file-analysis-refusal request file from-lib from-var
-                                              lib-mode? target others)]
+                           lib-mode? target others)]
           refused
           ;; @spec MCP-OP-ALIAS-067
           ;; Reuse is offered for var-mode migrations only. A lib-mode
           ;; migration under `preserve-refer` would have to MERGE a kept :refer
           ;; set into the file's existing target libspec; that is not modelled,
           ;; so lib-mode keeps the pre-existing free-alias behaviour exactly.
-          (let [{:keys [alias collided bindings reuse?]}
+          (let [{:keys [alias collided bindings] :as alias-choice}
                 (choose-alias root direct policy (when-not lib-mode? to-lib))]
             (if (nil? alias)
               (alias-policy-refusal file to-lib policy collided bindings)
-              (let [{:keys [referred kept-refer forms walked unselected? other-use?
-                            blocking sites refer-sites]}
+              (let [{:keys [blocking sites refer-sites] :as collected}
                     (collect-file-sites file root analysis facts alias)]
                 (cond
                   blocking
@@ -1493,40 +1532,7 @@
                   (and (zero? sites) (zero? refer-sites)) nil
 
                   :else
-                  (let [other-imports? (and (not lib-mode?)
-                                            (or (seq (disj referred from-var))
-                                                (:refer-all? target)))
-                        mode (if (or unselected? other-use? other-imports?)
-                               :add :replace)]
-                    {:file file
-                     :alias alias
-                     :collided collided
-                     :sites sites
-                     :refer-sites refer-sites
-                     :require-mode (if reuse?
-                                     (if (= :replace mode) :reuse :reuse-keep)
-                                     mode)
-                     :edits (into (let [ns-edit (ns-form-edit ns-node clause (:node target)
-                                                             mode to-lib alias
-                                                             (if (= :add mode) #{} kept-refer)
-                                                             (pos? sites)
-                                                             (when (and (not lib-mode?)
-                                                                        (= :add mode)
-                                                                        (not unselected?))
-                                                               from-var)
-                                                             reuse?)]
-                                    ;; a reused alias with nothing to drop from
-                                    ;; the ns form leaves it byte-identical --
-                                    ;; never emit a no-op edit
-                                    (if (= (:original ns-edit) (:replacement ns-edit))
-                                      []
-                                      [ns-edit]))
-                                  (keep (fn [[form result]]
-                                          (when (pos? (:sites result))
-                                            {:kind :form
-                                             :original (n/string form)
-                                             :replacement (n/string (:node result))}))
-                                        (map vector forms walked)))}))))))))))
+                  (assemble-file-plan file facts analysis alias-choice collected))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; the defining namespace
