@@ -38,11 +38,15 @@
 (deftest append-boundary
   (let [file (java.io.File/createTempFile "usage" ".jsonl")]
     (try
-      (is (nil? (u/append! (str file) "one")))
-      (is (nil? (u/append! (str file) "two")))
+      (u/append! (str file) "one")
+      (u/append! (str file) "two")
       (is (= "one\ntwo\n" (slurp file)))
-      (is (nil? (u/append! (str file "/unwritable") "three")))
-      (is (nil? (u/append! "off" "disabled")))
+      ;; A failed or disabled append leaves the filesystem exactly as it was: nothing thrown, nothing written.
+      (u/append! (str file "/unwritable") "three")
+      (u/append! "off" "disabled")
+      (is (= "one\ntwo\n" (slurp file)))
+      (is (not (.exists (java.io.File. (str file "/unwritable")))))
+      (is (not (.exists (java.io.File. "off"))))
       (finally (.delete file)))))
 
 (deftest dispatch-boundary

@@ -814,9 +814,12 @@ benchmark-retention-self-test:
 verify-benchmark-evidence:
 	bb bench/verify_evidence_manifest.clj
 
+# Every test target runs the CLI in-process and as subprocesses; none of those calls may land in the real usage
+# log (src/clj_surgeon/usage_log.clj). A target-specific export reaches child processes too.
+test test-product test-bench-harness test-fast analyzer-contract-test analyzer-contract-target-self-test mcp-test mcp-smoke runtests: export CLJ_SURGEON_USAGE_LOG = off
+
 test-fast:
-	@# The suite calls the CLI in-process and as subprocesses; neither may land in the real usage log.
-	CLJ_SURGEON_USAGE_LOG=off bb test/run_all.clj
+	bb test/run_all.clj
 
 analyzer-contract-test:
 	@# @spec MCP-OP-ANALYZER-008

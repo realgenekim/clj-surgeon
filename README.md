@@ -2114,6 +2114,15 @@ a regression test:
 See [docs/observations/](docs/observations/) for the complete build-use-fix
 records.
 
+## Usage log
+
+Every `clj-surgeon :op ...` call appends one JSON line to `$HOME/.local/state/clj-surgeon/usage.jsonl`: the time,
+the op, the outcome (`ok`, `refused`, `error`), the refusal or error code, the duration in ms, the repository's
+basename and the agent kind (`CLJ_SURGEON_AGENT`, else `codex` or `claude` from their environment). It never records
+arguments, paths or file text; an unresolved op is logged as `unknown`. The log stays on this machine; nothing sends
+it anywhere. `CLJ_SURGEON_USAGE_LOG=<path>` moves it and `CLJ_SURGEON_USAGE_LOG=off` disables it. The weekly count
+that reads it is the next slice. Why a log at the source and not transcript parsing: `docs/plans/2026-11-23-usage-week-attribution-design.md`.
+
 ## Testing
 
 ```bash

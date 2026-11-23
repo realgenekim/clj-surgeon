@@ -1060,6 +1060,8 @@
     (.append sb "Usage: clj-surgeon :op <command> [args...]\n")
     (.append sb "       clj-surgeon up [WORKSPACE]      join the shared hot MCP stack\n")
     (.append sb "       clj-surgeon recover [WORKSPACE] repair once; receipt names fallback\n")
+    (.append sb "Every :op call appends one line (time, op, outcome, code, ms, repo basename, agent; never arguments or paths)\n")
+    (.append sb "to $HOME/.local/state/clj-surgeon/usage.jsonl; CLJ_SURGEON_USAGE_LOG=<path> moves it, =off disables it.\n")
     (.append sb "       clj-surgeon report-failure --receipt PATH\n")
     (.append sb "       clj-surgeon --help              show this message\n")
     (.append sb "       clj-surgeon :op :help           show this message\n")

@@ -8,6 +8,13 @@ is cut.
 
 ## [Unreleased]
 
+### Added
+
+- The CLI appends one line per call to a local usage log, `$HOME/.local/state/clj-surgeon/usage.jsonl`:
+  time, op, outcome, refusal or error code, duration, repository basename and agent kind. Never arguments,
+  paths or file text. `CLJ_SURGEON_USAGE_LOG=<path>` moves it, `CLJ_SURGEON_USAGE_LOG=off` disables it; the
+  Makefile test targets export it off. Mayor's ruling of 2026-11-23 (count use at the source).
+
 ### Fixed
 
 - Receipt and refusal wording no longer contradicts its own numbers: a
