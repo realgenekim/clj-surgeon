@@ -2124,7 +2124,9 @@ arguments, paths or file text; an unresolved op is logged as `unknown`. The log 
 it anywhere. `CLJ_SURGEON_USAGE_LOG=<path>` moves it and `CLJ_SURGEON_USAGE_LOG=off` disables it. The weekly count
 that reads it is the next slice. Only the CLI entry logs; in-process calls, help, version, `up`, `recover`, and
 `report-failure` do not; one refusal path, `ls-tree` exiting inside the op, is not counted. Benchmark arms set it off
-and are not counted either. The test suite never writes the real log: tests that spawn the CLI switch it off explicitly
+and are not counted either. The test suite never writes the real log: in-process calls never log, and every test
+that spawns the CLI passes `CLJ_SURGEON_USAGE_LOG=off` in its own spawn (24 spawns in 12 test files, landed first as
+their own change); `test/usage_log_isolation_gate.sh` runs the suite under a seeded custom path and refuses on any change,
 (usage-log boundary tests select temporary files).
 
 ## Testing

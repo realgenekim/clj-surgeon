@@ -80,7 +80,7 @@
 
 (deftest cli-entry-logs-once
   (doseq [[args op outcomes exit-code]
-          [[[":op" ":ls" ":file" "src/clj_surgeon/mcp_runtime.clj"] "ls" #{"ok" "refused"} 0]
+          [[[":op" ":ls" ":file" "src/clj_surgeon/mcp_runtime.clj"] "ls" #{"ok"} 0]
            [[":op" ":no-such-op"] "unknown" #{"refused"} 1]
            [[":op" ":ls"] "ls" #{"refused"} 1]
            [[] nil nil 0] [["--help"] nil nil 0] [[":op" ":help"] nil nil 0]
