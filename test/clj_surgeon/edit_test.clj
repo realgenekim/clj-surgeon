@@ -5,6 +5,7 @@
    [clj-surgeon.core :as core]
    [clj-surgeon.edit-dsl :as edit-dsl]
    [clj-surgeon.structural-lens :as lens]
+   [clj-surgeon.write-refusal :as write-refusal]
    [clojure.edn :as edn]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
@@ -846,23 +847,38 @@
     (try
       (fs/create-dir source-dir)
       (spit source-file edit-source)
-      (.setWritable (java.io.File. (str source-dir)) false false)
-      (let [result (core/run-edit {:file source-file
-                                   :expr expect-replacement-expr
-                                   :plan-out plan-file
-                                   :expect true-expect})]
-        (is (:error result))
-        (is (= :atomic-write-failed (:error-type result)))
-        (is (= :expect-guarded (:mode result)))
-        (is (nil? (:ok result)))
-        (is (= edit-source (slurp source-file))
-            "the atomic write never partially replaced the target")
-        (is (= :replace-subform
-               (:operation (edn/read-string (slurp plan-file))))
-            "the audit artifact is saved before the apply attempt"))
+      (if-let [reason (write-refusal/deny-writes! source-dir)]
+        (write-refusal/skip! "expect-row-9-apply-failure-keeps-the-existing-executor-refusal" reason)
+        (let [result (core/run-edit {:file source-file
+                                     :expr expect-replacement-expr
+                                     :plan-out plan-file
+                                     :expect true-expect})]
+          (is (:error result))
+          (is (= :atomic-write-failed (:error-type result)))
+          (is (= :expect-guarded (:mode result)))
+          (is (nil? (:ok result)))
+          (is (= edit-source (slurp source-file))
+              "the atomic write never partially replaced the target")
+          (is (= :replace-subform
+                 (:operation (edn/read-string (slurp plan-file))))
+              "the audit artifact is saved before the apply attempt")))
       (finally
-        (.setWritable (java.io.File. (str source-dir)) true false)
+        (write-refusal/allow-writes! source-dir)
         (fs/delete-tree dir)))))
+
+(deftest write-refusal-helper-reports-a-real-refusal-or-says-why-not
+  (let [dir (fs/create-temp-dir {:prefix "clj-surgeon-write-refusal-"})]
+    (try
+      (let [reason (write-refusal/deny-writes! dir)]
+        (if reason
+          (is (str/includes? reason (str dir)) "a skip names the directory it could not lock")
+          (is (thrown? java.io.IOException
+                       (java.io.File/createTempFile "probe" ".tmp" (fs/file dir)))
+              "nil means this process really cannot create files there")))
+      (finally
+        (write-refusal/allow-writes! dir)
+        (fs/delete-tree dir)))
+    (is (not (fs/exists? dir)) "allow-writes! restores deletability")))
 
 (deftest expect-help-documents-the-optional-one-call-guarded-edit
   ;; @spec MCP-OP-POS-AUTH-009

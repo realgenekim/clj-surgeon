@@ -1,22 +1,34 @@
 # Repository Agent Instructions
 
+On first action after compaction or a fresh start, read docs/plans/2026-11-22-reshape-plan.md.
+
 Read and follow [CLAUDE.md](CLAUDE.md) before making changes. It is the
 canonical repository instruction file for all coding agents, regardless of
 vendor or runtime.
 
-Its Clojure routing and Surgeon-owned semantic escalation rules apply before native
-Read, Edit, grep, sed, or cat touches existing source. Load the working-tree
-skill before acting.
+Load the working-tree skill before calling clj-surgeon.
 
-Use the hottest capable entrance: prefer the persistent `inspect_clojure` and
-`apply_clojure_changes` MCP tools. Use `~/bin/clj-surgeon` only when MCP is
-unavailable, the operation is not exposed there, or the CLI itself is under
-test.
+Native `rg` plus a native patch is the default route for reading and editing
+Clojure. Do not prefer `inspect_clojure` or `apply_clojure_changes`. Call
+clj-surgeon only for a measured winner (see the plan above and the routing
+block in your global CLAUDE.md). Gene's ruling, 2026-09-02, verbatim: "Pull
+'Surgeon is available and expected' from every Clojure agent prompt today. It
+is a standing 2x tax with no measured return, on every delegated Clojure job in
+the fleet, and it is a one-line doctrine edit. Leave the server running for
+agents that choose it; stop telling them to. The data says they will decline
+it, and decline it correctly." Receipts:
+`docs/observations/2026-09-02-captains-log-bridge-wall-clock-ideal-program.md`.
 
 For non-trivial feature work, `CLAUDE.md` requires the design, planning,
 testing, documentation, and verification standards that must be satisfied
 before the work is complete. Do not treat those linked documents as optional
 background reading.
+
+## Change rules
+
+Every pull request: 150 changed lines or fewer including tests; one independent read before the first push; one push
+per review round; self-merge when green; after a third failed review stop and write the design on one page. The full
+text, Gene's words and the measured inner loop are in CLAUDE.md "Change rules (Gene, 2026-11-22)".
 
 ## LID
 
