@@ -17,7 +17,7 @@
   (or (some #(when (= id (:id %)) %) tasks)
       (throw (ex-info "Unknown task" {:id id}))))
 (defn task-field [task k]
-  (if (#{"arm1" "arm2" "arm3"} k) (str "arms/" k ".md")
+  (if (#{"arm1" "arm2" "arm3" "arm4"} k) (str "arms/" k ".md")
       (or (get task (keyword k)) (throw (ex-info "Missing task field" {:key k})))))
 (defn keep-workspace? [run-id keep]
   (when-not (re-matches #"[A-Za-z0-9_-]+" run-id)
@@ -29,7 +29,7 @@
    :exit_code (parse-long code) :tree_changed (not (str/blank? status))
    :arm_text_chars (parse-long (str/trim bytes)) :started_at began :ended_at ended})
 (defn wrapper [arm config]
-  (when-not (#{"arm1" "arm2" "arm3"} arm) (throw (ex-info "Unknown arm" {:arm arm})))
+  (when-not (#{"arm1" "arm2" "arm3" "arm4"} arm) (throw (ex-info "Unknown arm" {:arm arm})))
   (if (= arm "arm1") ""
       (str "#!/bin/bash\nexec bb --config '" (str/replace config "'" "'\\''")
            "' -m clj-surgeon.core \"$@\"\n")))
@@ -62,7 +62,8 @@
   (is (= "abc" (task-field {:sha "abc"} "sha")))
   (is (= :inventory (task-field {:class :inventory} "class")))
   (is (thrown? Exception (task-field {} "missing")))
-  (is (= "arms/arm3.md" (task-field {} "arm3"))))
+  (is (= "arms/arm3.md" (task-field {} "arm3")))
+  (is (= "arms/arm4.md" (task-field {} "arm4"))))
 (deftest retention-and-paths
   (is (true? (keep-workspace? "T01-arm1-r1" "1")))
   (is (false? (keep-workspace? "T01-arm1-r1" "0")))
@@ -75,6 +76,7 @@
   (is (= "#!/bin/bash\nexec bb --config '/a b/bb.edn' -m clj-surgeon.core \"$@\"\n"
          (wrapper "arm2" "/a b/bb.edn")))
   (is (str/includes? (wrapper "arm3" "/a'b") "'/a'\\''b'"))
+  (is (str/includes? (wrapper "arm4" "/bb.edn") "clj-surgeon.core"))
   (is (thrown? Exception (wrapper "oops" "/bb.edn")))
   (let [args ["T01-arm1-r1" "T01" "arm1" "1" "model" "medium" "/repo" "abc"
               "100" "350" "124" "" " 42\n" "start" "end"]]
