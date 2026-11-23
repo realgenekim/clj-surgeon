@@ -2,6 +2,7 @@
   (:require
    [babashka.fs :as fs]
    [babashka.process :as proc]
+   [clj-surgeon.write-refusal :as write-refusal]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
@@ -320,7 +321,13 @@
                     (fs/real-path (fs/path codex-skill "SKILL.md"))))
           (is (= (str (slurp-path canonical-skill-path) stable-copy-stamp)
                  (slurp-path (fs/path codex-skill "SKILL.md"))))
-          (is (not (fs/writable? (fs/path (fs/real-path codex-skill) "SKILL.md")))))
+          (let [skill-md (fs/path (fs/real-path codex-skill) "SKILL.md")]
+            (is (not (str/includes? (fs/posix->str (fs/posix-file-permissions skill-md)) "w"))
+                "the installer clears every write bit, for any caller")
+            (if @write-refusal/root?
+              (write-refusal/skip! "stable-install-isolates-cli-and-both-agent-skills"
+                                   "uid 0 can write a file whose write bits are clear")
+              (is (not (fs/writable? skill-md))))))
         (testing "the CLI launcher resolves only the copied runtime"
           (let [launcher (slurp-path cli-path)]
             (is (str/includes? launcher "clj-surgeon stable launcher"))
