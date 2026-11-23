@@ -54,3 +54,13 @@ evidence of the rounds; the rewrite starts from main with the reviewers' fixture
 Agree or amend: (a) two numbers, attributed and unattributed, no inference; (b) a fall-back needs both ends attributed;
 (c) September is reported as mostly unattributed and the hand audit stands as its figure. Then one more build, one
 independent read, one push.
+
+## Ruling (mayor, 2026-11-23 03:25Z; ~/handoffs/mayor-rulings-surgeon-4.md point 3)
+
+No fleet read. The transcript-parsing approach is parked and PRs 43 and 44 are closed with a pointer here: a parser of
+other tools' logs cannot be made complete, and three rounds found the same class every time. The count is taken at the
+source instead: the CLI entrance appends ONE line per call to a local usage log (time, op, exit code or refusal code,
+duration in ms, repository name, and the agent kind from the environment if set; never arguments, paths or file text),
+and the weekly command only counts lines. One slice of 150 lines or fewer with tests; it cannot miscount a call.
+Fall-backs cannot be seen from inside the tool: refusals and non-zero exits by op are reported as the proxy, and the
+weekly line says so. This note stays as the record of why.
