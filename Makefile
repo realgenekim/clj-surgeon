@@ -815,7 +815,8 @@ verify-benchmark-evidence:
 	bb bench/verify_evidence_manifest.clj
 
 test-fast:
-	bb test/run_all.clj
+	@# The suite runs under a seeded custom usage-log path and the gate refuses if that file changes.
+	sh test/usage_log_isolation_gate.sh
 
 analyzer-contract-test:
 	@# @spec MCP-OP-ANALYZER-008

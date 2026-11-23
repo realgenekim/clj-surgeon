@@ -59,6 +59,50 @@
       (is (not (.exists (java.io.File. (str file "/unwritable")))))
       (finally (.delete file)))))
 
+(deftest in-process-run-does-not-log
+  (let [file (java.io.File/createTempFile "usage-run" ".jsonl")]
+    (.delete file)
+    (try
+      (let [{:keys [exit out err]}
+            @(proc/process
+               ["bb" "-e"
+                "(require '[clj-surgeon.core :as core] '[clj-surgeon.usage-log :as u])
+                (with-out-str (core/run {:op :ls}))
+                (let [calls (atom 0)]
+                  (with-redefs [u/append! (fn [& _] (swap! calls inc))]
+                    (with-out-str (core/run {:op :ls})))
+                  (prn @calls))"]
+               {:out :string :err :string :extra-env {"CLJ_SURGEON_USAGE_LOG" (str file)}})]
+        (is (zero? exit) err)
+        (is (= 0 (edn/read-string out)))
+        (is (not (.exists file))))
+      (finally (.delete file)))))
+
+(deftest cli-entry-logs-once
+  (doseq [[args op outcomes exit-code]
+          [[[":op" ":ls" ":file" "src/clj_surgeon/mcp_runtime.clj"] "ls" #{"ok" "refused"} 0]
+           [[":op" ":no-such-op"] "unknown" #{"refused"} 1]
+           [[":op" ":ls"] "ls" #{"refused"} 1]
+           [[] nil nil 0] [["--help"] nil nil 0] [[":op" ":help"] nil nil 0]
+           [["--version"] nil nil 0] [[":op" ":ls" "--help"] nil nil 0]
+           [["up" "--help"] nil nil 0] [["recover" "--help"] nil nil 0]
+           [["report-failure" "--help"] nil nil 0]]]
+    (let [file (java.io.File/createTempFile "usage-entry" ".jsonl")]
+      (.delete file)
+      (try
+        (let [{:keys [exit err]}
+              @(proc/process (into ["bb" "-m" "clj-surgeon.core"] args)
+                             {:out :string :err :string :extra-env {"CLJ_SURGEON_USAGE_LOG" (str file)}})]
+          (is (= exit-code exit) (str args err))
+          (if op
+            (let [lines (when (.exists file) (str/split-lines (slurp file)))
+                  entry (some-> (first lines) (json/parse-string true))]
+              (is (= 1 (count lines)))
+              (is (= op (:op entry)))
+              (is (contains? outcomes (:outcome entry))))
+            (is (not (.exists file)) (str args))))
+        (finally (.delete file))))))
+
 (deftest record-call-preserves-results
   (let [lines (atom [])]
     (with-redefs [u/append! (fn [_ line] (swap! lines conj (json/parse-string line true)))]
