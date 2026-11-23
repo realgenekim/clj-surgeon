@@ -8,6 +8,12 @@ is cut.
 
 ## [Unreleased]
 
+### Removed
+
+- `bench/native-control/run.sh` and `run-schedule.sh`, the bash benchmark runner: replaced by the `run` and
+  `schedule` subcommands of `bench/native-control/run.clj` (identifiers validated before any filesystem call,
+  cleanup and receipts in try/finally, the process exit code is the run's).
+
 ### Added
 
 - The CLI entry appends one line per operation dispatch to `$XDG_STATE_HOME/clj-surgeon/usage.jsonl`, else

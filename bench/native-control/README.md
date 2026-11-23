@@ -22,6 +22,9 @@ bb bench/native-control/summarize.clj TASKS.edn /var/tmp/forge/native-control
 make benchmark-native-control-self-test
 ```
 
+The bash runner (`run.sh`, `run-schedule.sh`) is retired; the `run` and `schedule` subcommands of `run.clj`
+above replace it and are the only way to run the benchmark.
+
 Environment defaults: `NC_RESULT_ROOT=/var/tmp/forge/native-control`,
 `NC_MODEL=gpt-6-astra`, `NC_REASONING=medium`, `NC_TIMEOUT_S=900`,
 `NC_SURGEON_BB_CONFIG` = this checkout's absolute bb.edn,
