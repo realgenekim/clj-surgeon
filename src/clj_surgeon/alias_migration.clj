@@ -607,6 +607,47 @@
                                         (some live-bare (binding-form-names part))))
                                  (rest (tree-seq n/inner? children node))))))))))
 
+(defn- rewrite-inner
+  "Walk compound nodes, preserving binding positions and lexical shadowing."
+  [node context live-bare]
+  (let [head (head-name node)
+        introduced (form-introduced-names node)
+        kids (children node)
+        ;; a var-binding vector is ordinary code on BOTH sides
+        binding-vector (when (contains? local-binding-vector-heads head)
+                         (first (filter vector-node?
+                                        (rest (meaningful-children node)))))
+        letfn-vector (when (= "letfn" head)
+                       (first (filter vector-node?
+                                      (rest (meaningful-children node)))))
+        skipped-vectors (cond-> #{}
+                          (contains? function-heads head)
+                          (into (parameter-vectors node))
+
+                          letfn-vector
+                          (into (letfn-binding-parameter-vectors letfn-vector)))
+        ;; names this form binds leave scope for every child except the
+        ;; let-style binding vector, which accumulates them pair by pair
+        body-bare (reduce disj live-bare introduced)]
+    (walk-result
+      node
+      (reduce
+        (fn [state child]
+          (cond
+            (identical? child binding-vector)
+            (accumulate state (rewrite-binding-vector child context live-bare))
+
+            (identical? child letfn-vector)
+            (accumulate state (rewrite-forms child context body-bare))
+
+            (contains? skipped-vectors child)
+            (update state :nodes conj child)
+
+            :else
+            (accumulate state (rewrite-forms child context body-bare))))
+        empty-walk
+        kids))))
+
 ;; @spec MCP-OP-ALIAS-029
 ;; @spec MCP-OP-ALIAS-033
 (defn rewrite-forms
@@ -650,43 +691,7 @@
                                       (:col (meta node)) (assoc :col (:col (meta node))))])
 
       (n/inner? node)
-      (let [head (head-name node)
-            introduced (form-introduced-names node)
-            kids (children node)
-            ;; a var-binding vector is ordinary code on BOTH sides
-            binding-vector (when (contains? local-binding-vector-heads head)
-                             (first (filter vector-node?
-                                            (rest (meaningful-children node)))))
-            letfn-vector (when (= "letfn" head)
-                           (first (filter vector-node?
-                                          (rest (meaningful-children node)))))
-            skipped-vectors (cond-> #{}
-                              (contains? function-heads head)
-                              (into (parameter-vectors node))
-
-                              letfn-vector
-                              (into (letfn-binding-parameter-vectors letfn-vector)))
-            ;; names this form binds leave scope for every child except the
-            ;; let-style binding vector, which accumulates them pair by pair
-            body-bare (reduce disj live-bare introduced)]
-        (walk-result
-          node
-          (reduce
-            (fn [state child]
-              (cond
-                (identical? child binding-vector)
-                (accumulate state (rewrite-binding-vector child context live-bare))
-
-                (identical? child letfn-vector)
-                (accumulate state (rewrite-forms child context body-bare))
-
-                (contains? skipped-vectors child)
-                (update state :nodes conj child)
-
-                :else
-                (accumulate state (rewrite-forms child context body-bare))))
-            empty-walk
-            kids)))
+      (rewrite-inner node context live-bare)
 
       :else (leaf node))))
 
