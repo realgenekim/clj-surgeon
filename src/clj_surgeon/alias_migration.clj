@@ -492,6 +492,63 @@
       indirect (assoc :indirect
                       [(assoc indirect :form (n/string node))]))))
 
+;; @spec MCP-OP-ALIAS-066
+;; PER-ARITY SCOPES. `(defn f ([] (h)) ([h] h))` has two scopes, not one:
+;; the first arity's `(h)` is a reference and the second arity's `h` is a
+;; parameter. The generic descendant walk below cannot express that,
+;; because it subtracts the names a form introduces before walking ALL of
+;; its children, so it would union the parameters of every arity and
+;; leave the first arity's call unrewritten -- silently. The guard after
+;; this branch is what has protected alias migration from that, by
+;; refusing multi-arity shapes outright.
+;;
+;; This branch is the analysis that refusal stood in for, and it is OPT-IN
+;; (`:per-arity-scopes`) precisely so that alias migration's published
+;; refusal does not change under it: a caller that has its own witnesses
+;; for the rewritten shape asks for it, everyone else keeps the refusal.
+(defn- rewrite-function-arities
+  "Walk each function arity with its own lexical scope."
+  [node context live-bare]
+  (let [walked (reduce
+                 (fn [state child]
+                   (if (arity-list? child)
+                     (accumulate state (rewrite-arity child context live-bare))
+                     (accumulate state (rewrite-forms child context live-bare))))
+                 empty-walk
+                 (children node))]
+    (walk-result node walked)))
+
+(defn- rewrite-reader-conditional
+  "Rewrite selected branches and report sites in unselected branches."
+  [node {:keys [platform] :as context} live-bare]
+  (let [kids (children node)
+        body-index (reader-conditional-body-index node)
+        body (nth kids body-index)
+        body-kids (children body)
+        {:keys [selected unselected]} (branch-positions body-kids platform)
+        branch-site? (fn [position]
+                       (some #(:rewrite (decide % context live-bare))
+                             (filter #(= :token (n/tag %))
+                                     (tree-seq n/inner? n/children
+                                               (nth body-kids position)))))
+        unselected-hit? (boolean (some branch-site? unselected))
+        walked (reduce
+                 (fn [state [index child]]
+                   (if (contains? selected index)
+                     (accumulate state (rewrite-forms child context live-bare))
+                     (update state :nodes conj child)))
+                 empty-walk
+                 (map-indexed vector body-kids))
+        rebuilt (assoc kids body-index
+                       (n/replace-children body (:nodes walked)))]
+    (-> (walk-result node (assoc walked :nodes rebuilt))
+        (update :indirect
+                #(cond-> %
+                   unselected-hit?
+                   (conj {:reason :unselected-reader-conditional-branch
+                          :form (n/string node)})))
+        (update :unselected-sites #(or % unselected-hit?)))))
+
 ;; @spec MCP-OP-ALIAS-029
 ;; @spec MCP-OP-ALIAS-033
 (defn rewrite-forms
@@ -505,7 +562,7 @@
   Every node type a qualified symbol can sit in is walked: operator and
   argument position, binding vectors, map keys and values, vector elements,
   metadata values, `:var` nodes (`#'x`), and `(var x)` lists."
-  [node {:keys [platform] :as context} live-bare]
+  [node context live-bare]
   (let [tag (n/tag node)]
     (cond
       ;; a reader discard is data the contract keeps exactly as it is
@@ -517,60 +574,13 @@
       (= :token tag)
       (rewrite-token node context live-bare)
 
-      ;; @spec MCP-OP-ALIAS-066
-      ;; PER-ARITY SCOPES. `(defn f ([] (h)) ([h] h))` has two scopes, not one:
-      ;; the first arity's `(h)` is a reference and the second arity's `h` is a
-      ;; parameter. The generic descendant walk below cannot express that,
-      ;; because it subtracts the names a form introduces before walking ALL of
-      ;; its children, so it would union the parameters of every arity and
-      ;; leave the first arity's call unrewritten -- silently. The guard after
-      ;; this branch is what has protected alias migration from that, by
-      ;; refusing multi-arity shapes outright.
-      ;;
-      ;; This branch is the analysis that refusal stood in for, and it is OPT-IN
-      ;; (`:per-arity-scopes`) precisely so that alias migration's published
-      ;; refusal does not change under it: a caller that has its own witnesses
-      ;; for the rewritten shape asks for it, everyone else keeps the refusal.
       (and (:per-arity-scopes context)
            (contains? function-heads (head-name node))
            (some arity-list? (children node)))
-      (let [walked (reduce
-                     (fn [state child]
-                       (if (arity-list? child)
-                         (accumulate state (rewrite-arity child context live-bare))
-                         (accumulate state (rewrite-forms child context live-bare))))
-                     empty-walk
-                     (children node))]
-        (walk-result node walked))
+      (rewrite-function-arities node context live-bare)
 
       (reader-conditional-node? node)
-      (let [kids (children node)
-            body-index (reader-conditional-body-index node)
-            body (nth kids body-index)
-            body-kids (children body)
-            {:keys [selected unselected]} (branch-positions body-kids platform)
-            branch-site? (fn [position]
-                           (some #(:rewrite (decide % context live-bare))
-                                 (filter #(= :token (n/tag %))
-                                         (tree-seq n/inner? n/children
-                                                   (nth body-kids position)))))
-            unselected-hit? (boolean (some branch-site? unselected))
-            walked (reduce
-                     (fn [state [index child]]
-                       (if (contains? selected index)
-                         (accumulate state (rewrite-forms child context live-bare))
-                         (update state :nodes conj child)))
-                     empty-walk
-                     (map-indexed vector body-kids))
-            rebuilt (assoc kids body-index
-                           (n/replace-children body (:nodes walked)))]
-        (-> (walk-result node (assoc walked :nodes rebuilt))
-            (update :indirect
-                    #(cond-> %
-                       unselected-hit?
-                       (conj {:reason :unselected-reader-conditional-branch
-                              :form (n/string node)})))
-            (update :unselected-sites #(or % unselected-hit?))))
+      (rewrite-reader-conditional node context live-bare)
 
       ;; @spec MCP-OP-ALIAS-066
       ;; These scopes need independent parameter/default/control-flow analysis.
