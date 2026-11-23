@@ -5,6 +5,7 @@
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is run-tests]]))
 
@@ -178,37 +179,40 @@
       (throw (ex-info decision {})))))
 
 (defn install-credential! [auth-src codex-home cfg]
-  (when-not (and auth-src (fs/regular-file? auth-src) (fs/readable? auth-src))
+  (when-not (and auth-src (fs/regular-file? auth-src)
+                 (or (fs/readable? auth-src) (= \r (first (fs/posix->str (fs/posix-file-permissions auth-src))))))
     (throw (ex-info (str "credential must be a regular readable file: " auth-src) {})))
-  (doseq [key [:model :reasoning]]
-    (let [value (get cfg key)]
-      (when-not (and (string? value) (not (re-find #"\p{Cc}" value)))
-        (throw (ex-info (str (name key) " must be a string without control characters") {})))))
-  (fs/copy auth-src (str codex-home "/auth.json"))
-  (fs/set-posix-file-permissions (str codex-home "/auth.json") "rw-------")
+  (doseq [key [:model :reasoning] :let [value (get cfg key)]]
+    (when-not (and (string? value) (not (re-find #"\p{Cc}" value)))
+      (throw (ex-info (str (name key) " must be a string without control characters") {}))))
+  (let [dest (str codex-home "/auth.json")]
+    (fs/delete-if-exists dest)
+    (fs/create-file dest {:posix-file-permissions "rw-------"})
+    ;; fs/copy with :replace-existing recreates the file with the source mode.
+    (io/copy (io/file auth-src) (io/file dest)))
   (spit (str codex-home "/config.toml")
         (str "model = " (pr-str (:model cfg)) "\nmodel_reasoning_effort = " (pr-str (:reasoning cfg)) "\n")))
-
 (defn setup! [tasks-path {:keys [task arm] :as plan} cfg paths]
   (when-not (and (seq (:tool-dirs cfg)) (fs/which "timeout" {:paths (:tool-dirs cfg)}))
     (throw (ex-info "Linux prerequisite: timeout required on PATH" {})))
   (when-not (and (:config cfg) (fs/regular-file? (:config cfg)))
     (throw (ex-info (str "bb config must be a regular file: " (:config cfg)) {})))
   (when-not (= paths (run-paths (:root cfg) plan))
-    (throw (ex-info "Setup paths must match run-paths" {})))
+    (throw (ex-info "Setup paths must match run-paths before canonicalization" {})))
   (let [t (try (schedule/find-task (edn/read-string (slurp tasks-path)) task)
-               (catch Exception e
-                 (throw (ex-info (str "Task " task " in " tasks-path ": " (ex-message e)) {} e))))
+               (catch Exception e (throw (ex-info (str "Task " task " in " tasks-path ": " (ex-message e)) {} e))))
         root (ensure-root! (:root cfg))
         {:keys [run-dir ws codex-home bin-dir] :as paths} (run-paths root plan)
         config (str (fs/canonicalize (:config cfg)))
         wrapper (schedule/wrapper arm config)
-        arm-file (or (get t (keyword arm)) (str script-dir "/" (schedule/task-field t arm)))]
+        script-dir (or (:script-dir cfg) script-dir)
+        arm-file (str (fs/canonicalize (str script-dir "/" (schedule/task-field t arm))))]
+    (when-not (fs/starts-with? arm-file (fs/path (fs/canonicalize script-dir) "arms"))
+      (throw (ex-info "arm file must be under script-dir/arms" {:arm arm :file arm-file})))
     (doseq [dir [codex-home bin-dir]]
       (fs/delete-tree dir)
       (fs/create-dirs dir {:posix-file-permissions "rwx------"}))
-    (doseq [name ["answer.txt" "failure.json" "run.json" "run.json.tmp"
-                  "preflight.txt" "events.jsonl" "stderr.txt"]]
+    (doseq [name ["answer.txt" "failure.json" "run.json" "run.json.tmp" "preflight.txt" "events.jsonl" "stderr.txt"]]
       (fs/delete-if-exists (str run-dir "/" name)))
     (materialize-workspace! t arm-file ws)
     (let [path (install-arm-tools! cfg arm wrapper bin-dir)]
@@ -216,7 +220,6 @@
       (preflight! arm wrapper bin-dir codex-home path run-dir config)
       (install-credential! (:auth cfg) codex-home cfg)
       {:path path :task t :arm-bytes (fs/size arm-file) :config config :paths paths})))
-
 ;; PR 35 regressions: traversal, last-line loss, setup cleanup and lost run status.
 (deftest components
   (doseq [s [nil "" "." ".." "../../x" "a/b" "a b" "a\nb"]] (is (false? (valid-component? s))))
@@ -456,7 +459,6 @@
       (f {:tmp tmp :repo repo :ws ws :arm-file arm-file :arm-text arm-text
           :git! git! :workspace-git! workspace-git!})
       (finally (fs/delete-tree tmp)))))
-
 (deftest materialize-workspace-integration-requires-git
   (with-workspace-fixture
     (fn [{:keys [tmp repo ws arm-file arm-text git! workspace-git!]}]
@@ -516,29 +518,24 @@
             (is (thrown-with-msg? Exception message
                                  (materialize-workspace! (assoc task :sha sha) arm-file ws))))
           (is (not (fs/exists? (str ws "/.git")))))))))
-
 (deftest setup-integration-requires-git
   (with-workspace-fixture
     (fn [{:keys [tmp repo arm-file arm-text git!]}]
-      (let [tools (str tmp "/tools")
-            auth (str tmp "/auth.json")
-            tasks (str tmp "/tasks.edn")
-            task {:id "T01" :repo repo :sha (str/trim (git! "rev-parse" "HEAD"))
-                  :arm1 arm-file :arm2 arm-file}
+      (let [tools (str tmp "/tools") auth (str tmp "/auth.json") tasks (str tmp "/tasks.edn")
+            task {:id "T01" :repo repo :sha (str/trim (git! "rev-parse" "HEAD"))}
             stale ["answer.txt" "failure.json" "run.json" "run.json.tmp" "events.jsonl" "stderr.txt"]
             mode #(fs/posix->str (fs/posix-file-permissions %))]
-        (doseq [tool ["timeout" "java" "bb" "bash" "env"]]
-          (when-not (fs/which tool)
-            (throw (ex-info (str "Missing integration prerequisite: " tool) {}))))
+        (doseq [tool ["timeout" "java" "bb" "bash" "env"]] (is (some? (fs/which tool)) tool))
         (fs/create-dirs tools)
+        (fs/create-dirs (str tmp "/arms"))
         (doseq [name ["rg" "clj-kondo"]]
           (spit (str tools "/" name) "#!/bin/sh\nexit 0\n")
           (fs/set-posix-file-permissions (str tools "/" name) "rwxr-xr-x"))
         (spit auth "{\"fixture\":true}")
         (spit tasks (pr-str [task]))
         (doseq [arm ["arm1" "arm2"]]
-          (let [cfg (assoc (env-config {}) :root (str tmp "/./" arm) :auth auth
-                           :config (str script-dir "/../../bb.edn") :model "gpt-6-astra" :reasoning "medium"
+          (fs/copy arm-file (str tmp "/" (schedule/task-field task arm)) {:replace-existing true})
+          (let [cfg (assoc (env-config {}) :root (str tmp "/./" arm) :auth auth :script-dir tmp
                            :kondo-path (str tools "/clj-kondo") :tool-dirs [tools "/usr/bin" "/bin"])
                 plan (:ok (validate-run (str "T01-" arm "-r1") "T01" arm "1"))
                 input-paths (run-paths (:root cfg) plan)
@@ -558,16 +555,17 @@
                 (is (thrown-with-msg? Exception message
                       (setup! source plan (merge cfg overrides) (run-paths (:root cfg) plan)))))
               (is (not (fs/exists? (:root cfg))) "prerequisite refusal must precede every write"))
-            (doseq [dir [codex-home bin-dir]]
-              (fs/create-dirs dir)
-              (spit (str dir "/stale") "old"))
-            (doseq [name (conj stale "preflight.txt")]
-              (spit (str run-dir "/" name) "old"))
+            (doseq [file (concat (map #(str % "/stale") [codex-home bin-dir])
+                                 (map #(str run-dir "/" %) (conj stale "preflight.txt")))]
+              (fs/create-dirs (fs/parent file))
+              (spit file "old"))
             (is (= {:path path :task task :arm-bytes (fs/size arm-file) :config config :paths paths}
                    (setup! tasks plan cfg input-paths)))
             (is (= arm-text (slurp (str ws "/AGENTS.md"))))
             (is (= "rwx------" (mode codex-home)))
             (is (= "rw-------" (mode (str codex-home "/auth.json"))))
+            (is (= #{".profile" ".bashrc" "auth.json" "config.toml"}
+                   (set (map fs/file-name (fs/list-dir codex-home)))))
             (is (= (slurp auth) (slurp (str codex-home "/auth.json"))))
             (is (not (fs/same-file? auth (str codex-home "/auth.json"))))
             (is (= "model = \"gpt-6-astra\"\nmodel_reasoning_effort = \"medium\"\n"
@@ -584,18 +582,21 @@
                 (is (fs/regular-file? (str run-dir "/" file))))
               (doseq [file ["codex-home/auth.json" "codex-home/config.toml" "run.json"]]
                 (is (not (fs/exists? (str run-dir "/" file)))))
-              (fs/delete (str tools "/clj-surgeon")))))))))
-
+              (fs/delete (str tools "/clj-surgeon")))
+            (fs/delete (str tmp "/arms/" arm ".md"))
+            (fs/create-sym-link (str tmp "/arms/" arm ".md") arm-file)
+            (is (thrown-with-msg? Exception #"arm file must be under script-dir/arms"
+                  (setup! tasks plan cfg input-paths)))))))))
 ;; Directory/missing/unreadable credentials and invalid TOML values must refuse before copying.
 (deftest credential-refusals
   (let [tmp (str (fs/create-temp-dir {:prefix "nc-credential-"}))
-        auth (str tmp "/credential.json")
-        home (str (fs/create-dirs (str tmp "/home")))
-        cfg {:model "test" :reasoning "medium"}]
+        auth (str tmp "/credential.json") home (str (fs/create-dirs (str tmp "/home")))
+        cfg {:model "test" :reasoning "medium"} root? (= "0" (str/trim (checked! ["id" "-u"])))]
     (try
       (spit auth "fixture")
       (fs/set-posix-file-permissions auth "---------")
-      (doseq [source [tmp (str tmp "/missing-credential.json") auth]]
+      (when root? (binding [*out* *err*] (println "SKIP unreadable credential: uid 0 bypasses file permissions")))
+      (doseq [source (cond-> [tmp (str tmp "/missing-credential.json")] (not root?) (conj auth))]
         (is (thrown-with-msg? clojure.lang.ExceptionInfo
               (re-pattern (str "credential.*regular readable file: " (java.util.regex.Pattern/quote source)))
               (install-credential! source home cfg)))
@@ -606,6 +607,7 @@
         (is (thrown-with-msg? clojure.lang.ExceptionInfo (re-pattern (name key))
               (install-credential! auth home (assoc cfg key value))))
         (is (empty? (fs/list-dir home))))
+      (install-credential! auth home (assoc cfg :model "test\"\\λ"))
       (install-credential! auth home (assoc cfg :model "test\"\\λ"))
       (is (= "model = \"test\\\"\\\\λ\"\nmodel_reasoning_effort = \"medium\"\n"
              (slurp (str home "/config.toml"))))
