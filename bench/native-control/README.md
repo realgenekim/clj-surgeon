@@ -38,11 +38,14 @@ Linux only. Identifiers are validated as path components before any run filesyst
 Cleanup runs in try/finally; setup or preflight failures leave `failure.json` and remove
 workspace and credential copy unless `NC_KEEP=1`.
 `run` exits with codex's exit code (2 for a refusal before anything ran, 3 for a failure after);
-`schedule` exits 0 only when at least one run happened and every run exited 0, else 1;
-a refusal before any run is 2.
+`schedule` exits 2 when the schedule or tasks file is refused before any row runs;
+otherwise every row runs, a row that fails in setup or preflight (never launched) counts
+as a failed run with `failure.json`, and the exit is 0 only when at least one run happened
+and every run exited 0, else 1; an unexpected error after the decision, inside the loop
+machinery rather than a run's own failure, exits 3 and is printed.
 The credential is copied as 0600 inside a 0700 home. The sandbox defaults to `workspace-write`,
 with two extra writable roots only for wrapper arms, both in the INVOKER's home:
 `~/.local/state/clj-surgeon` and `~/.local/state/diagnose-skiff-cpu-memory`.
 The tree comparison includes ignored files, so any remaining write is `tree_changed`.
 Every arm's PATH must carry `rg`. Schedules read tasks once and validate all rows and task ids before running,
-close process stdin, continue after failures, and print total/failed counts.
+close process stdin, continue after failures, and print total/failed/never-launched counts.
