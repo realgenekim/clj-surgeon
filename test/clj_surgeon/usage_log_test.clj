@@ -131,3 +131,76 @@
       (.mkdirs nested)
       (is (= (.getName root) (u/repo-name (str nested))) "the nearest .git ancestor names the repository")
       (finally (doseq [f (reverse (file-seq root))] (.delete f))))))
+
+(require '[clj-surgeon.core :as core])
+
+(deftest weekly-literals
+  (let [agg (u/count-week
+              ["{\"at\":\"2026-11-16T00:00:00Z\",\"op\":\"ls\",\"outcome\":\"ok\"}"
+               "{\"at\":\"2026-11-22T23:59:59Z\",\"op\":\"ls\",\"outcome\":\"refused\"}"
+               "{\"at\":\"2026-11-18T00:00:00Z\",\"op\":\"cat\",\"outcome\":\"error\"}"
+               "{\"at\":\"2026-11-23T00:00:00Z\",\"op\":\"ls\",\"outcome\":\"ok\"}"
+               "{\"at\":\"2026-11-15T23:59:59Z\",\"op\":\"ls\",\"outcome\":\"ok\"}"
+               "bad" "null" "{}"]
+              "2026-11-16T00:00:00Z" "2026-11-23T00:00:00Z")]
+    (is (= {:ops {"ls" {:calls 2 :ok 1 :refused 1 :error 0}
+                  "cat" {:calls 1 :ok 0 :refused 0 :error 1}}
+            :total {:calls 3 :ok 1 :refused 1 :error 1} :malformed 3} agg))
+    (is (= (str "op=ls calls=2 ok=1 refused=1 error=0\n"
+             "op=cat calls=1 ok=0 refused=0 error=1\n"
+             "total calls=3 ok=1 refused=1 error=1 malformed=3\n"
+             "fall-backs cannot be seen from inside the tool; refusals and non-zero exits by op are the proxy")
+          (u/render-week agg)))))
+
+(deftest weekly-empty
+  (let [agg (u/count-week [] "2026-11-16T00:00:00Z" "2026-11-23T00:00:00Z")]
+    (is (= {:ops {} :total {:calls 0 :ok 0 :refused 0 :error 0} :malformed 0} agg))
+    (is (= (str "total calls=0 ok=0 refused=0 error=0 malformed=0\n"
+             "fall-backs cannot be seen from inside the tool; refusals and non-zero exits by op are the proxy")
+          (u/render-week agg)))))
+
+(deftest weekly-malformed
+  (doseq [line ["" "[]" "42"
+                "{\"at\":\"bad\",\"op\":\"ls\",\"outcome\":\"ok\"}"
+                "{\"at\":\"2026-11-16T00:00:00Z\",\"op\":7,\"outcome\":\"ok\"}"
+                "{\"at\":\"2026-11-16T00:00:00Z\",\"op\":\"ls\",\"outcome\":\"unknown\"}"]]
+    (is (= {:ops {} :total {:calls 0 :ok 0 :refused 0 :error 0} :malformed 1}
+          (u/count-week [line] "2026-11-16T00:00:00Z" "2026-11-23T00:00:00Z")))))
+
+(deftest weekly-handler-arguments
+  (let [handler (:handler (:usage-week core/ops-registry))]
+    (doseq [opts [{:week "2026-11-17"}
+                  {:week "2026-11-16" :since "2026-11-16"}
+                  {:since "bad" :until "2026-11-23"}
+                  {:since "2026-11-23" :until "2026-11-16"} {}]]
+      (let [result (handler opts)]
+        (is (= :invalid-arguments (:error-type result)))
+        (is (string? (:error result)))))
+    (with-redefs [u/log-path (constantly nil)]
+      (is (= (handler {:week "2026-11-16"})
+            (handler {:since "2026-11-16" :until "2026-11-23"}))))
+    (is (= :read (:category (:usage-week core/ops-registry))))
+    (is (str/includes? (core/format-global-help core/ops-registry) "usage-week"))
+    (is (str/includes? (core/format-op-help :usage-week (:usage-week core/ops-registry))
+          ":week 2026-11-16"))))
+
+(deftest weekly-cli
+  (let [file (java.io.File/createTempFile "usage-week" ".jsonl")]
+    (try
+      (spit file (str "{\"at\":\"2026-11-16T00:00:00Z\",\"op\":\"ls\",\"outcome\":\"ok\"}\n"
+                   "{\"at\":\"2026-11-22T23:59:59Z\",\"op\":\"cat\",\"outcome\":\"refused\"}\n"))
+      (let [{:keys [exit out err]}
+            @(proc/process ["bb" "-m" "clj-surgeon.core" ":op" ":usage-week"
+                            ":log" (str file) ":since" "2026-11-16" ":until" "2026-11-23"]
+               {:out :string :err :string :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}})]
+        (is (= 0 exit) err)
+        (is (= (str "op=cat calls=1 ok=0 refused=1 error=0\n"
+                 "op=ls calls=1 ok=1 refused=0 error=0\n"
+                 "total calls=2 ok=1 refused=1 error=0 malformed=0\n"
+                 "fall-backs cannot be seen from inside the tool; refusals and non-zero exits by op are the proxy\n")
+              out)))
+      (.delete file)
+      (is (str/starts-with? ((:handler (:usage-week core/ops-registry))
+                             {:log (str file) :week "2026-11-16"})
+            "total calls=0 ok=0 refused=0 error=0 malformed=0\n"))
+      (finally (.delete file)))))

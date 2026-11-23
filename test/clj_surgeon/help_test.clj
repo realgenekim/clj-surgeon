@@ -104,7 +104,7 @@
 (deftest registry-has-all-ops
   (testing "registry contains every canonical op"
     (let [expected #{:ls :ls-tree :show-form :mv :declares :deps :topo
-                     :ls-extract :ls-deps
+                     :ls-extract :ls-deps :usage-week
                      :rename-ns :rename-ns!
                      :fix-declares :fix-declares!
                      :extract :extract! :undo-extract!

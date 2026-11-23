@@ -1,7 +1,8 @@
 (ns clj-surgeon.usage-log
   (:require
    [cheshire.core :as json]
-   [clojure.java.io :as io]))
+   [clojure.java.io :as io]
+   [clojure.string :as str]))
 
 (defn usage-line [{:keys [op outcome code ms repo agent at]}]
   (json/generate-string (array-map :at at :op (name op) :outcome outcome
@@ -54,3 +55,26 @@
                                      :repo (repo-name (System/getProperty "user.dir")) :agent (agent-kind env)}))))
       (catch Throwable _ nil))
     (if-let [e (:thrown result)] (throw e) (:value result))))
+
+(def zero-counts {:calls 0 :ok 0 :refused 0 :error 0})
+(defn count-week [lines since until]
+  (let [since (java.time.Instant/parse since) until (java.time.Instant/parse until)]
+    (reduce (fn [agg line]
+              (try
+                (let [{:keys [at op outcome]} (json/parse-string line true)
+                      at (java.time.Instant/parse at)
+                      k (get {"ok" :ok "refused" :refused "error" :error} outcome)]
+                  (when-not (and (string? op) k) (throw (ex-info "Malformed usage" {})))
+                  (if (and (not (.isBefore at since)) (.isBefore at until))
+                    (let [bump #(-> (or % zero-counts) (update :calls inc) (update k inc))]
+                      (-> agg (update-in [:ops op] bump) (update :total bump))) agg))
+                (catch Throwable _ (update agg :malformed inc))))
+            {:ops {} :total zero-counts :malformed 0} lines)))
+(defn render-week [{:keys [ops total malformed]}]
+  (let [counts (fn [{:keys [calls ok refused error]}]
+                 (str " calls=" calls " ok=" ok " refused=" refused " error=" error))]
+    (str/join "\n"
+      (concat (for [[op c] (sort-by (fn [[op c]] [(- (:calls c)) op]) ops)]
+                (str "op=" op (counts c)))
+              [(str "total" (counts total) " malformed=" malformed)
+               "fall-backs cannot be seen from inside the tool; refusals and non-zero exits by op are the proxy"]))))

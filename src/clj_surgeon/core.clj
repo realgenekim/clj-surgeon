@@ -28,6 +28,7 @@
    [clj-surgeon.structural-lens :as structural-lens]
    [clj-surgeon.usage-log :as usage-log]
    [clojure.edn :as edn]
+   [clojure.java.io :as io]
    [clojure.pprint :as pp]
    [clojure.string :as str]))
 
@@ -594,6 +595,32 @@
   ;; non-keyword lookup throws ClassCastException (the ed6ad99 bug class). Ordering
   ;; for display is done at render time (format-global-help sort-by, error-msg sort).
   (hash-map
+    :usage-week {:handler
+                  (fn [{:keys [week since until log]}]
+                    (let [window (try
+                                   (when (and week (or since until))
+                                     (throw (ex-info "Use :week or :since/:until" {})))
+                                   (let [start (java.time.LocalDate/parse (or week since))
+                                         end (if week (.plusDays start 7) (java.time.LocalDate/parse until))]
+                                     (when (or (and week (not= java.time.DayOfWeek/MONDAY (.getDayOfWeek start)))
+                                               (not (.isBefore start end)))
+                                       (throw (ex-info "Expected a Monday week or increasing date range" {})))
+                                     [(str start "T00:00:00Z") (str end "T00:00:00Z")])
+                                   (catch Exception _ nil))]
+                      (if-not window
+                        {:error "Use :week with a Monday, or :since/:until with increasing ISO dates"
+                         :error-type :invalid-arguments}
+                        (let [path (or log (usage-log/log-path (into {} (System/getenv))))
+                              report #(usage-log/render-week (apply usage-log/count-week % window))]
+                          (if (and path (not= path "off") (fs/exists? path))
+                            (with-open [reader (io/reader path)] (report (line-seq reader)))
+                            (report []))))))
+                  :desc "Count usage log lines in a UTC week or date range"
+                  :args {:week {:desc "Monday, ISO date (exclusive of :since/:until)"}
+                         :since {:desc "Inclusive ISO date"} :until {:desc "Exclusive ISO date"}
+                         :log {:desc "Log path (default: writer environment path)"}}
+                  :examples ["clj-surgeon :op :usage-week :week 2026-11-16"]
+                  :category :read}
     :cljc-add-require {:handler   run-cljc-add-require
                        :desc      "Add a platform-aware require to a CLJC file"
                        :args      {:file     {:required true :desc "Input CLJC file"}
