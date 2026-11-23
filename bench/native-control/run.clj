@@ -2,8 +2,10 @@
 ;; Standalone script: retain the sibling scripts' namespace and hyphenated directory convention.
 #_{:clj-kondo/ignore [:namespace-name-mismatch]}
 (ns native-control.run
+  (:refer-clojure :exclude [run!])
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
+            [cheshire.core :as json]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
@@ -71,6 +73,8 @@
               :model (value "NC_MODEL" "gpt-6-astra")
               :reasoning (value "NC_REASONING" "medium")
               :timeout (value "NC_TIMEOUT_S" "900")
+              :kill-after (value "NC_KILL_AFTER_S" "30")
+              :locale (into {} (filter (comp seq val)) (select-keys env ["LANG" "LC_ALL"]))
               :keep (value "NC_KEEP" "0")
               :sandbox (value "NC_SANDBOX" "workspace-write")
               :config (value "NC_SURGEON_BB_CONFIG" (str script-dir "/../../bb.edn"))
@@ -79,9 +83,10 @@
               :invoker-home user-home
               :kondo-path (find-kondo which "/usr/local/bin/clj-kondo")
               :tool-dirs ["/usr/bin" "/bin"]}
+         kill-after (when (re-matches #"[0-9]+" (:kill-after cfg)) (parse-long (:kill-after cfg)))
          timeout (when (re-matches #"[0-9]+" (:timeout cfg)) (parse-long (:timeout cfg)))]
      (if (and timeout (<= 1 timeout 86400))
-       cfg
+       (if (and kill-after (<= 1 kill-after 3600)) cfg {:error "NC_KILL_AFTER_S must be an integer 1..3600"})
        {:error "NC_TIMEOUT_S must be an integer 1..86400"}))))
 (defn render-config [cfg]
   (str/join "\n" (map (fn [[k v]] (str (name k) "=" v)) (sort-by key cfg))))
@@ -126,7 +131,7 @@
   (fs/delete-tree ws)
   (fs/create-dirs ws)
   (fs/set-posix-file-permissions ws "rwx------")
-  (run! p/check (mapv deref (p/pipeline (p/pb ["git" "-C" repo "archive" "--end-of-options" sha]
+  (clojure.core/run! p/check (mapv deref (p/pipeline (p/pb ["git" "-C" repo "archive" "--end-of-options" sha]
                                           {:in "" :err :string :env (git-env env)})
                                     (p/pb ["tar" "-xf" "-" "-C" ws] {:out :string :err :string :env (git-env env)}))))
   (let [visit (fn [f _]
@@ -220,6 +225,60 @@
       (preflight! arm wrapper bin-dir codex-home path run-dir config)
       (install-credential! (:auth cfg) codex-home cfg)
       {:path path :task t :arm-bytes (fs/size arm-file) :config config :paths paths})))
+
+(defn codex-argv [{:keys [timeout-path timeout kill-after codex sandbox wrapper invoker-home model reasoning]}
+                  ws run-dir prompt]
+  [timeout-path (str "--kill-after=" kill-after) timeout codex "exec" "--json" "--ephemeral"
+   "--ignore-user-config" "--skip-git-repo-check" "--sandbox" sandbox "--color" "never" "-c"
+   (str "sandbox_workspace_write.writable_roots="
+        (json/generate-string (mapv #(str invoker-home "/.local/state/" %)
+                                    (when (seq wrapper) ["clj-surgeon" "diagnose-skiff-cpu-memory"]))))
+   "-m" model "-c" (str "model_reasoning_effort=" (pr-str reasoning))
+   "-C" ws "-o" (str run-dir "/answer.txt") prompt])
+(defn codex-env [cfg codex-home path] (merge {"HOME" codex-home "CODEX_HOME" codex-home "PATH" path "TERM" "dumb"}
+         (select-keys (:locale cfg) ["LANG" "LC_ALL"])))
+(defn run! [cfg {:keys [paths task path] :as ctx} launched]
+  (let [{:keys [ws run-dir codex-home]} paths
+        cfg (assoc cfg :timeout-path (str (fs/which "timeout" {:paths (:tool-dirs cfg)})))
+        argv (codex-argv cfg ws run-dir (schedule/task-prompt task))
+        start (System/currentTimeMillis)]
+    (reset! launched true)
+    {:exit-code (:exit @(p/process argv {:in "" :out (fs/file run-dir "events.jsonl")
+                                        :err (fs/file run-dir "stderr.txt") :env (codex-env cfg codex-home path)}))
+     :detail (assoc ctx :start start :end (System/currentTimeMillis) :timeout-path (:timeout-path cfg))}))
+(defn finish! [plan cfg {:keys [exit-code detail]}]
+  (let [{:keys [task arm-bytes start end paths timeout-path]} detail
+        target (str (:run-dir paths) "/run.json")
+        status (checked! ["git" "-C" (:ws paths) "status" "--porcelain" "--ignored" "--untracked-files=all"])
+        receipt (schedule/receipt (mapv str [(:run-id plan) (:task plan) (:arm plan) (:rep plan)
+                                             (:model cfg) (:reasoning cfg) (:repo task) (:sha task)
+                                          start end exit-code status arm-bytes (java.time.Instant/ofEpochMilli start)
+                                             (java.time.Instant/ofEpochMilli end)]))]
+    (spit (str target ".tmp") (json/generate-string
+                              (assoc receipt :timeout_method timeout-path :kill_after_s (:kill-after cfg))))
+    (fs/move (str target ".tmp") target {:atomic-move true})))
+(defn cleanup! [cfg {:keys [ws codex-home]}]
+  (when-not (= "1" (:keep cfg))
+    (when-let [errors (seq (keep #(try (fs/delete-tree %)
+                                      nil
+                                      (catch Throwable e (str % ": " (error-message e)))) [ws codex-home]))]
+      (throw (ex-info (str/join "; " errors) {})))))
+(defn run-one! [tasks-path plan cfg]
+  (let [paths (run-paths (:root cfg) plan) target (str (:run-dir paths) "/run.json")
+        complete? (fs/exists? target) ctx (atom nil) launched (atom false)
+        result (guarded-run
+                 {:setup! #(when-not complete? (reset! ctx (setup! tasks-path plan cfg paths)))
+                  :run! #(if complete? {:exit-code (:exit_code (json/parse-string (slurp target) true))}
+                             (run! (assoc cfg :wrapper (schedule/wrapper (:arm plan) (:config @ctx))) @ctx launched))
+                  :finish! #(when-not complete? (finish! plan cfg %))
+                  :cleanup! #(cleanup! cfg paths)})
+        rc (if (:cleanup-error result) (max 1 (:exit-code result)) (:exit-code result))]
+    (doseq [error (keep result [:error :cleanup-error])] (binding [*out* *err*] (println error)))
+    (when-not (fs/exists? target)
+      (spit (fs/file (fs/create-dirs (:run-dir paths)) "failure.json")
+            (json/generate-string (assoc (failure-receipt plan rc (str (java.time.Instant/now)))
+                                    :failed_before_run (not @launched)))))
+    (assoc result :exit-code rc :failed-before-run (not @launched))))
 ;; PR 35 regressions: traversal, last-line loss, setup cleanup and lost run status.
 (deftest components
   (doseq [s [nil "" "." ".." "../../x" "a/b" "a b" "a\nb"]] (is (false? (valid-component? s))))
@@ -321,6 +380,7 @@
               :model "gpt-6-astra"
               :reasoning "medium"
               :timeout "900"
+              :kill-after "30" :locale {}
               :keep "0"
               :sandbox "workspace-write"
               :auth "/credential-home/.codex/auth.json"
@@ -350,7 +410,7 @@
                               "NC_SURGEON_BB_CONFIG" "/config.edn"
                               "NC_CODEX_AUTH" "/auth.json"
                               "NC_CODEX" "/codex"})
-                 :invoker-home :kondo-path :tool-dirs))))
+                 :invoker-home :kondo-path :tool-dirs :kill-after :locale))))
 
 (deftest environment-empty-values
   (is (= (env-config {})
@@ -680,6 +740,90 @@
       (finally
         (fs/delete-tree tmp)))))
 
+(deftest launch-values
+  (doseq [value ["abc" "0" "3601" "9223372036854775808" "-1" "+1" "1.5" " 9" "9\n"]]
+    (is (= {:error "NC_KILL_AFTER_S must be an integer 1..3600"} (env-config {"NC_KILL_AFTER_S" value}))))
+  (doseq [[wrapper roots] [[nil "[]"] ["" "[]"]
+                           ["w" "[\"/h/.local/state/clj-surgeon\",\"/h/.local/state/diagnose-skiff-cpu-memory\"]"]]]
+    (is (= ["/timeout" "--kill-after=1" "2" "/codex" "exec" "--json" "--ephemeral"
+            "--ignore-user-config" "--skip-git-repo-check" "--sandbox" "workspace-write" "--color" "never" "-c"
+            (str "sandbox_workspace_write.writable_roots=" roots)
+            "-m" "model" "-c" "model_reasoning_effort=\"high\"" "-C" "/ws" "-o" "/r/answer.txt" "prompt"]
+           (codex-argv {:timeout-path "/timeout" :timeout "2" :kill-after "1" :codex "/codex" :wrapper wrapper
+                        :sandbox "workspace-write" :invoker-home "/h" :model "model" :reasoning "high"}
+                       "/ws" "/r" "prompt"))))
+  (doseq [locale [{} {"LANG" "C"} {"LC_ALL" "C.UTF-8"} {"LANG" "C" "LC_ALL" "C.UTF-8"} {"LANG" "" "LC_ALL" ""}]]
+    (is (= (merge (into {} (filter (comp seq val)) locale) {"HOME" "/h" "CODEX_HOME" "/h" "PATH" "/p" "TERM" "dumb"})
+           (codex-env (env-config (assoc locale "BASH_ENV" "poison")) "/h" "/p")))))
+(deftest launch-integration
+  (with-workspace-fixture
+    (fn [{:keys [tmp repo arm-file git!]}]
+      (let [tasks (str tmp "/tasks.edn") auth (str tmp "/auth") stub (str tmp "/codex")
+            plan (:ok (validate-run "T-arm1-r1" "T" "arm1" "1"))
+            cfg (assoc (env-config {"NC_TIMEOUT_S" "1" "NC_KILL_AFTER_S" "1"})
+                       :root tmp :auth auth :codex stub :script-dir tmp
+                       :tool-dirs [(str (fs/parent (fs/which "rg"))) "/usr/bin" "/bin"])
+            {:keys [run-dir ws codex-home]} (run-paths tmp plan)
+            target (str run-dir "/run.json") read-json #(json/parse-string (slurp %) true)
+            process p/process move fs/move delete fs/delete-tree
+            bounded #(let [proc (process %1 %2)] (delay (or (deref proc 20000 nil)
+                                  (do (doseq [p (reverse (cons (:proc proc) (.toArray (.descendants (:proc proc)))))]
+                                        (.destroyForcibly p))
+                                      (throw (ex-info "launch-integration: process deadline exceeded" {}))))))]
+        (fs/create-dirs (str tmp "/arms"))
+        (fs/copy arm-file (str tmp "/" (schedule/task-field {} "arm1")))
+        (spit tasks (pr-str [{:id "T" :repo repo :sha (str/trim (git! "rev-parse" "HEAD"))}]))
+        (spit auth "{}")
+        (doseq [mode [:exit :resume :corrupt :timeout :setup :launch :finish :cleanup-ws :cleanup-home]]
+          (when-not (#{:resume :corrupt} mode) (fs/delete-tree run-dir))
+          (doseq [dir [ws codex-home]] (fs/create-dirs dir))
+          (when (#{:corrupt :cleanup-ws :cleanup-home} mode)
+            (spit target (if (= :corrupt mode) "unreadable" "{\"exit_code\":0}")))
+          (spit stub (str "#!/bin/bash\nwhile [[ $1 != -o ]]; do shift; done\n"
+                          "echo answer > \"$2\"\nd=${2%/*}\nenv > \"$d/env.txt\"\necho x >> \"$d/marker\"\n"
+                          (if (= :timeout mode) "trap '' TERM\nwhile :; do sleep 1; done\n" "exit 7\n")))
+          (fs/set-posix-file-permissions stub "rwx------")
+          (let [start (System/currentTimeMillis) err (java.io.StringWriter.) moves (atom 0)
+                failed-dir (case mode :cleanup-ws ws :cleanup-home codex-home nil)
+                child-env (assoc (into {} (System/getenv)) "BASH_ENV" "/nc-poison")
+                child-expr (pr-str `(do (load-file ~*file*) (prn (run-one! ~tasks ~plan ~cfg))))
+                result (binding [*err* err]
+                         (with-redefs [p/process (fn [argv opts]
+                                                   (if (and (= :launch mode)
+                                                            (= "timeout" (fs/file-name (first argv))))
+                                                     (throw (ex-info "launch" {})) (bounded argv opts)))
+                                       fs/move (fn [src dst opts]
+                                                 (swap! moves inc)
+                                                 (is (= [(str target ".tmp") target {:atomic-move true}]
+                                                        [src dst opts]))
+                                                 (is (integer? (:exit_code (read-json src))))
+                                                 (when (= :finish mode) (throw (ex-info "finish" {})))
+                                                 (move src dst opts))
+                                       fs/delete-tree (fn [dir]
+                                                        (if (= dir failed-dir) (throw (ex-info "cleanup" {}))
+                                                            (delete dir)))]
+                           (if (= :exit mode)
+                             (edn/read-string (:out @(bounded [(str (fs/which "bb")) "-e" child-expr]
+                                                             {:env child-env :out :string :err :string})))
+                             (run-one! tasks plan (cond-> cfg (= :setup mode) (assoc :auth "missing"))))))
+                rc (:exit-code result) failure? (#{:setup :launch :finish} mode)]
+            (is (= (if (#{:timeout :finish} mode) 1 0) @moves))
+            (is (contains? (case mode :timeout #{124 137} (:setup :launch :corrupt) #{3}
+                                 (:cleanup-ws :cleanup-home) #{1} #{7}) rc) (pr-str result))
+            (is (= (boolean failure?) (fs/exists? (str run-dir "/failure.json"))))
+            (is (= (mapv #(= failed-dir %) [ws codex-home]) (mapv fs/exists? [ws codex-home])))
+            (when failed-dir (is (str/includes? (str err) "cleanup")))
+            (if failure?
+              (is (= [rc (= :setup mode)] ((juxt :exit_code :failed_before_run)
+                                         (read-json (str run-dir "/failure.json")))))
+              (when (#{:exit :resume :timeout} mode)
+                (is (= [rc "/usr/bin/timeout" "1"]
+                       ((juxt :exit_code :timeout_method :kill_after_s) (read-json target))))
+                (is (= ["answer\n" "x\n"] (mapv #(slurp (str run-dir "/" %)) ["answer.txt" "marker"])))
+                (is (not (str/includes? (slurp (str run-dir "/env.txt")) "BASH_ENV=")))
+                (is (contains? (set (str/split-lines (slurp (str run-dir "/env.txt"))))
+                               (str "HOME=" codex-home)))))
+            (when (= :timeout mode) (is (< (- (System/currentTimeMillis) start) 5000)))))))))
 (when (entry-script? (System/getProperty "babashka.file") *file*)
   (case (vec *command-line-args*)
     ["--self-test"]
