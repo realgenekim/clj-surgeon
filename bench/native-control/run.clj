@@ -4,10 +4,13 @@
 (ns native-control.run
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
+            [clojure.edn :as edn]
             [clojure.string :as str]
             [clojure.test :refer [deftest is run-tests]]))
 
 (def script-dir (str (fs/parent *file*)))
+(load-file (str script-dir "/schedule.clj"))
+(require '[native-control.schedule :as schedule])
 (defn valid-component? [s]
   (boolean (and (string? s) (re-matches #"[A-Za-z0-9._-]+" s) (not (#{"." ".."} s)))))
 (defn validate-run [run-id task-id arm rep-str]
@@ -173,6 +176,46 @@
                "\nresolved_rg=" rg "\nbb_config=" config "\n"))
     (when-not (= :ok decision)
       (throw (ex-info decision {})))))
+
+(defn install-credential! [auth-src codex-home cfg]
+  (when-not (and auth-src (fs/regular-file? auth-src) (fs/readable? auth-src))
+    (throw (ex-info (str "credential must be a regular readable file: " auth-src) {})))
+  (doseq [key [:model :reasoning]]
+    (let [value (get cfg key)]
+      (when-not (and (string? value) (not (re-find #"\p{Cc}" value)))
+        (throw (ex-info (str (name key) " must be a string without control characters") {})))))
+  (fs/copy auth-src (str codex-home "/auth.json"))
+  (fs/set-posix-file-permissions (str codex-home "/auth.json") "rw-------")
+  (spit (str codex-home "/config.toml")
+        (str "model = " (pr-str (:model cfg)) "\nmodel_reasoning_effort = " (pr-str (:reasoning cfg)) "\n")))
+
+(defn setup! [tasks-path {:keys [task arm] :as plan} cfg paths]
+  (when-not (and (seq (:tool-dirs cfg)) (fs/which "timeout" {:paths (:tool-dirs cfg)}))
+    (throw (ex-info "Linux prerequisite: timeout required on PATH" {})))
+  (when-not (and (:config cfg) (fs/regular-file? (:config cfg)))
+    (throw (ex-info (str "bb config must be a regular file: " (:config cfg)) {})))
+  (when-not (= paths (run-paths (:root cfg) plan))
+    (throw (ex-info "Setup paths must match run-paths" {})))
+  (let [t (try (schedule/find-task (edn/read-string (slurp tasks-path)) task)
+               (catch Exception e
+                 (throw (ex-info (str "Task " task " in " tasks-path ": " (ex-message e)) {} e))))
+        root (ensure-root! (:root cfg))
+        {:keys [run-dir ws codex-home bin-dir] :as paths} (run-paths root plan)
+        config (str (fs/canonicalize (:config cfg)))
+        wrapper (schedule/wrapper arm config)
+        arm-file (or (get t (keyword arm)) (str script-dir "/" (schedule/task-field t arm)))]
+    (doseq [dir [codex-home bin-dir]]
+      (fs/delete-tree dir)
+      (fs/create-dirs dir {:posix-file-permissions "rwx------"}))
+    (doseq [name ["answer.txt" "failure.json" "run.json" "run.json.tmp"
+                  "preflight.txt" "events.jsonl" "stderr.txt"]]
+      (fs/delete-if-exists (str run-dir "/" name)))
+    (materialize-workspace! t arm-file ws)
+    (let [path (install-arm-tools! cfg arm wrapper bin-dir)]
+      (write-profile! codex-home path)
+      (preflight! arm wrapper bin-dir codex-home path run-dir config)
+      (install-credential! (:auth cfg) codex-home cfg)
+      {:path path :task t :arm-bytes (fs/size arm-file) :config config :paths paths})))
 
 ;; PR 35 regressions: traversal, last-line loss, setup cleanup and lost run status.
 (deftest components
@@ -388,7 +431,7 @@
       (is (= "rwxr-x---" (mode root)))
       (finally (fs/delete-tree tmp)))))
 ;; Reduced from the PR 35 setup integration fixture: inherited instructions and ignored files.
-(deftest materialize-workspace-integration-requires-git
+(defn with-workspace-fixture [f]
   (doseq [tool ["git" "tar"]] (is (some? (fs/which tool)) (str "Missing integration prerequisite: " tool)))
   (let [tmp (str (fs/create-temp-dir {:prefix "nc-materialize-"})) repo (str tmp "/repo") ws (str tmp "/ws")
         arm-file (str tmp "/arm.md") arm-text "Native-control fixture instructions: λ\n"
@@ -410,6 +453,13 @@
       (fs/create-dirs (str ws "/.git"))
       (spit (str ws "/stale.txt") "stale workspace")
       (spit (str ws "/arm.md") arm-text)
+      (f {:tmp tmp :repo repo :ws ws :arm-file arm-file :arm-text arm-text
+          :git! git! :workspace-git! workspace-git!})
+      (finally (fs/delete-tree tmp)))))
+
+(deftest materialize-workspace-integration-requires-git
+  (with-workspace-fixture
+    (fn [{:keys [tmp repo ws arm-file arm-text git! workspace-git!]}]
       (let [task {:repo repo :sha (str/trim (git! "rev-parse" "HEAD"))} pb p/pb]
         ;; PR 71: refusal precedes mutation; inherited config and templates cannot run or install hooks.
         (doseq [[t arm dest message] [[(assoc task :sha "--output=x") arm-file ws #"sha"]
@@ -465,8 +515,102 @@
                                    ["sh" "-c" "cat >/dev/null; echo tar-failed >&2; exit 9"] %1) %2)]
             (is (thrown-with-msg? Exception message
                                  (materialize-workspace! (assoc task :sha sha) arm-file ws))))
-          (is (not (fs/exists? (str ws "/.git"))))))
+          (is (not (fs/exists? (str ws "/.git")))))))))
+
+(deftest setup-integration-requires-git
+  (with-workspace-fixture
+    (fn [{:keys [tmp repo arm-file arm-text git!]}]
+      (let [tools (str tmp "/tools")
+            auth (str tmp "/auth.json")
+            tasks (str tmp "/tasks.edn")
+            task {:id "T01" :repo repo :sha (str/trim (git! "rev-parse" "HEAD"))
+                  :arm1 arm-file :arm2 arm-file}
+            stale ["answer.txt" "failure.json" "run.json" "run.json.tmp" "events.jsonl" "stderr.txt"]
+            mode #(fs/posix->str (fs/posix-file-permissions %))]
+        (doseq [tool ["timeout" "java" "bb" "bash" "env"]]
+          (when-not (fs/which tool)
+            (throw (ex-info (str "Missing integration prerequisite: " tool) {}))))
+        (fs/create-dirs tools)
+        (doseq [name ["rg" "clj-kondo"]]
+          (spit (str tools "/" name) "#!/bin/sh\nexit 0\n")
+          (fs/set-posix-file-permissions (str tools "/" name) "rwxr-xr-x"))
+        (spit auth "{\"fixture\":true}")
+        (spit tasks (pr-str [task]))
+        (doseq [arm ["arm1" "arm2"]]
+          (let [cfg (assoc (env-config {}) :root (str tmp "/./" arm) :auth auth
+                           :config (str script-dir "/../../bb.edn") :model "gpt-6-astra" :reasoning "medium"
+                           :kondo-path (str tools "/clj-kondo") :tool-dirs [tools "/usr/bin" "/bin"])
+                plan (:ok (validate-run (str "T01-" arm "-r1") "T01" arm "1"))
+                input-paths (run-paths (:root cfg) plan)
+                {:keys [run-dir ws codex-home bin-dir] :as paths} (run-paths (str tmp "/" arm) plan)
+                config (str (fs/canonicalize (:config cfg)))
+                path (str bin-dir ":" tools ":/usr/bin:/bin:" (fs/parent (fs/which "java")))]
+            (spit (str tmp "/invalid.edn") "[")
+            (doseq [[overrides source id message]
+                    [[{:tool-dirs nil} tasks "T01" #"Linux prerequisite: timeout"]
+                     [{:tool-dirs [] :config "missing"} tasks "T01" #"Linux prerequisite: timeout"]
+                     [{:config (str tmp "/missing-bb.edn")} tasks "T01" #"config.*regular file"]
+                     [{:config tools} tasks "T01" #"config.*regular file"]
+                     [{} (str tmp "/missing.edn") "T01" #"missing.edn"]
+                     [{} (str tmp "/invalid.edn") "T01" #"invalid.edn"]
+                     [{} tasks "unknown-id" #"unknown-id"]]]
+              (let [plan (:ok (validate-run (str id "-" arm "-r1") id arm "1"))]
+                (is (thrown-with-msg? Exception message
+                      (setup! source plan (merge cfg overrides) (run-paths (:root cfg) plan)))))
+              (is (not (fs/exists? (:root cfg))) "prerequisite refusal must precede every write"))
+            (doseq [dir [codex-home bin-dir]]
+              (fs/create-dirs dir)
+              (spit (str dir "/stale") "old"))
+            (doseq [name (conj stale "preflight.txt")]
+              (spit (str run-dir "/" name) "old"))
+            (is (= {:path path :task task :arm-bytes (fs/size arm-file) :config config :paths paths}
+                   (setup! tasks plan cfg input-paths)))
+            (is (= arm-text (slurp (str ws "/AGENTS.md"))))
+            (is (= "rwx------" (mode codex-home)))
+            (is (= "rw-------" (mode (str codex-home "/auth.json"))))
+            (is (= (slurp auth) (slurp (str codex-home "/auth.json"))))
+            (is (not (fs/same-file? auth (str codex-home "/auth.json"))))
+            (is (= "model = \"gpt-6-astra\"\nmodel_reasoning_effort = \"medium\"\n"
+                   (slurp (str codex-home "/config.toml"))))
+            (is (every? #(not (fs/exists? (str run-dir "/" %)))
+                        (into stale ["bin/stale" "codex-home/stale"])))
+            (is (str/includes? (slurp (str run-dir "/preflight.txt")) (str "resolved_rg=" tools "/rg")))
+            (when (= arm "arm1")
+              (fs/copy (str tools "/rg") (str tools "/clj-surgeon"))
+              (spit (str run-dir "/run.json") "old success")
+              (is (thrown-with-msg? Exception #"preflight: arm1 must not see clj-surgeon"
+                    (setup! tasks plan cfg input-paths)))
+              (doseq [file ["codex-home/.profile" "preflight.txt" "ws/AGENTS.md"]]
+                (is (fs/regular-file? (str run-dir "/" file))))
+              (doseq [file ["codex-home/auth.json" "codex-home/config.toml" "run.json"]]
+                (is (not (fs/exists? (str run-dir "/" file)))))
+              (fs/delete (str tools "/clj-surgeon")))))))))
+
+;; Directory/missing/unreadable credentials and invalid TOML values must refuse before copying.
+(deftest credential-refusals
+  (let [tmp (str (fs/create-temp-dir {:prefix "nc-credential-"}))
+        auth (str tmp "/credential.json")
+        home (str (fs/create-dirs (str tmp "/home")))
+        cfg {:model "test" :reasoning "medium"}]
+    (try
+      (spit auth "fixture")
+      (fs/set-posix-file-permissions auth "---------")
+      (doseq [source [tmp (str tmp "/missing-credential.json") auth]]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+              (re-pattern (str "credential.*regular readable file: " (java.util.regex.Pattern/quote source)))
+              (install-credential! source home cfg)))
+        (is (empty? (fs/list-dir home))))
+      (fs/set-posix-file-permissions auth "rw-------")
+      (doseq [key [:model :reasoning]
+              value (cons nil (map #(str "bad" (char %)) (concat (range 32) (range 127 160))))]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo (re-pattern (name key))
+              (install-credential! auth home (assoc cfg key value))))
+        (is (empty? (fs/list-dir home))))
+      (install-credential! auth home (assoc cfg :model "test\"\\λ"))
+      (is (= "model = \"test\\\"\\\\λ\"\nmodel_reasoning_effort = \"medium\"\n"
+             (slurp (str home "/config.toml"))))
       (finally (fs/delete-tree tmp)))))
+
 ;; Independent 2a-iii probe regressions: missing invoker tools and directory-valued kondo.
 (deftest install-tools-refusals
   (let [tmp (str (fs/create-temp-dir {:prefix "nc-tools-"}))
