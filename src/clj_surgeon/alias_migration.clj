@@ -1266,6 +1266,48 @@
 ;; @spec MCP-OP-ALIAS-021
 ;; @spec MCP-OP-ALIAS-024
 ;; @spec MCP-OP-ALIAS-035
+(defn- qualified-only-file-plan
+  "Plan fully qualified references in a file without an old-library require."
+  [request file root from-lib to-lib]
+  (let [context {:mode :lib
+                 :from-lib from-lib
+                 :to-lib to-lib
+                 :qualifiers #{from-lib}
+                 :alias to-lib
+                 :rewrite-bare #{}
+                 :count-bare #{}
+                 :platform (platform-keyword file)}
+        forms (top-level-forms root)
+        walked (mapv #(rewrite-forms % context #{}) forms)
+        indirect (vec (mapcat :indirect walked))
+        sites (reduce + 0 (map :sites walked))]
+    (cond
+      (seq indirect)
+      (let [blocking (first indirect)]
+        {:refusal (refusal :alias-migration-indirect-reference
+                           (str "An indirect reference to " from-lib " in " file
+                                (when (:row blocking) (str ":" (:row blocking)))
+                                " cannot be closed mechanically")
+                           (indirect-facts file blocking)
+                           (when-not (= :unsupported-binding-scope (:reason blocking))
+                             (excluding-call request file)))})
+
+      (zero? sites) nil
+
+      :else
+      {:file file
+       :alias to-lib
+       :collided []
+       :sites sites
+       :refer-sites 0
+       :require-mode :qualified-only
+       :edits (vec (keep (fn [[form result]]
+                           (when (pos? (:sites result))
+                             {:kind :form
+                              :original (n/string form)
+                              :replacement (n/string (:node result))}))
+                         (map vector forms walked)))})))
+
 (defn- file-plan
   "Plan one file, or return {:refusal r}, or nil when the file is out of scope."
   [request file source]
@@ -1284,44 +1326,7 @@
       ;; the compile-time dependency. Retiring the lib breaks it at RUNTIME,
       ;; where no load check can see it.
       (and (nil? analysis) lib-mode?)
-      (let [context {:mode :lib
-                     :from-lib from-lib
-                     :to-lib to-lib
-                     :qualifiers #{from-lib}
-                     :alias to-lib
-                     :rewrite-bare #{}
-                     :count-bare #{}
-                     :platform (platform-keyword file)}
-            forms (top-level-forms root)
-            walked (mapv #(rewrite-forms % context #{}) forms)
-            indirect (vec (mapcat :indirect walked))
-            sites (reduce + 0 (map :sites walked))]
-        (cond
-          (seq indirect)
-          (let [blocking (first indirect)]
-            {:refusal (refusal :alias-migration-indirect-reference
-                               (str "An indirect reference to " from-lib " in " file
-                                    (when (:row blocking) (str ":" (:row blocking)))
-                                    " cannot be closed mechanically")
-                               (indirect-facts file blocking)
-                               (when-not (= :unsupported-binding-scope (:reason blocking))
-                                 (excluding-call request file)))})
-
-          (zero? sites) nil
-
-          :else
-          {:file file
-           :alias to-lib
-           :collided []
-           :sites sites
-           :refer-sites 0
-           :require-mode :qualified-only
-           :edits (vec (keep (fn [[form result]]
-                               (when (pos? (:sites result))
-                                 {:kind :form
-                                  :original (n/string form)
-                                  :replacement (n/string (:node result))}))
-                             (map vector forms walked)))}))
+      (qualified-only-file-plan request file root from-lib to-lib)
 
       (nil? analysis) nil
       (:refusal analysis) analysis
