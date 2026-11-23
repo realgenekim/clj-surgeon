@@ -1,7 +1,7 @@
 """Bounded weekly counts. Example: python3 -I usage_week.py --week 2026-09-07."""
 # Known unhandled shapes from the independent review, deferred to a later round:
-# timeout -k; timeout N env ...; bash -lc '<cmd>' unwrapping; python writes not at command start;
-# printf/echo redirects; perl -pi; dict-argument apply_patch; Error: text inside MCP content lists.
+# timeout N env ...; bash -lc '<cmd>' unwrapping; python writes not at command start;
+# printf/echo redirects; perl -pi; Error: text inside MCP content lists.
 import argparse
 import datetime as dt
 import importlib.util
@@ -35,7 +35,7 @@ def arguments(argv=None):
     except (ValueError, TypeError, AttributeError) as e: parser.error(str(e))
     return args, since, until
 
-def scan_records(lines, session, mtime):
+def scan_records(lines, session, mtime, stats=None):
     turn, pending, seen, cells = [], {}, set(), {}
     for line in lines:
         if p.secret_line(line): continue
@@ -71,6 +71,10 @@ def scan_records(lines, session, mtime):
                     pending[cid] = cells.get(str(args.get('cell_id')), [])
                     continue
                 made = list(p.actions(dict(b, timestamp=record.get('timestamp'), session=session)))
+                if stats is not None:
+                    when = instant(record['timestamp']) if record.get('timestamp') else mtime
+                    if stats['since'] <= when < stats['until']:
+                        stats['undecodable'] += sum(bool(a.get('undecodable')) for a in made)
                 for a in made:
                     a['time'] = instant(a['timestamp']) if a.get('timestamp') else mtime
                     a['output'] = ''
@@ -78,9 +82,9 @@ def scan_records(lines, session, mtime):
                 if cid is not None: pending[cid] = [a for a in made if p.detect_call(a)]
                 turn.extend(made)
     yield from p.fold_turn(turn)
-def scan(path, mtime):
+def scan(path, mtime, stats=None):
     with path.open(errors='replace') as stream:
-        yield from scan_records(stream, str(path), mtime)
+        yield from scan_records(stream, str(path), mtime, stats)
 def main(argv=None):
     args, since, until = arguments(argv); start = time.monotonic()
     if args.self_test:
@@ -88,14 +92,16 @@ def main(argv=None):
                                    str(Path(__file__).with_name(name + '_test.py'))])
                    for name in ('usage_week_parse', 'usage_week'))
     calls = []; files = 0
+    stats = dict(since=since, until=until, undecodable=0)
     roots = ((args.codex_root or '~/.codex/sessions', 'rollout-*.jsonl'),
              (args.claude_root or '~/.claude/projects', '*.jsonl'))
     for root, pattern in roots:
         for path in Path(root).expanduser().rglob(pattern):
             mtime = path.stat().st_mtime
             if since - 86400 <= mtime <= until + 8 * 86400:
-                files += 1; calls.extend(c for c in scan(path, mtime) if since <= c['time'] < until)
+                files += 1; calls.extend(c for c in scan(path, mtime, stats) if since <= c['time'] < until)
     totals = p.aggregate([dict(c, op='all') for c in calls]).get('all', dict.fromkeys(p.FIELDS, 0))
+    totals['undecodable'] = stats['undecodable']
     print(p.render(p.aggregate(calls),
                    dict(totals, files_scanned=files, seconds=f'{time.monotonic()-start:.3f}')))
     return 0

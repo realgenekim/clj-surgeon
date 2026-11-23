@@ -60,7 +60,7 @@ class Command(unittest.TestCase):
                        event('message', role='user', content='next turn'),
                        event('function_call', name='mcp__clj_surgeon__alias_migration', call_id='c',
                            arguments='{}'),
-                       event('function_call_output', call_id='c', output='success'),
+                       event('function_call_output', call_id='c', output='{:ok true}'),
                        event('custom_tool_call', name='apply_patch', call_id='d',
                            input='*** Update File: x.clj')]
             # Timestamp wins over an eligible mtime, and missing timestamps use mtime.
@@ -86,18 +86,19 @@ class Command(unittest.TestCase):
                 timeout=10)
             self.assertEqual(0, result.returncode, result.stderr)
             lines = result.stdout.splitlines()
-            self.assertEqual('op=ls calls=2 sessions=1 refusals=1 errors=1 unknown=0 fallbacks=1', lines[0])
+            self.assertEqual('op=ls calls=2 sessions=1 refusals=1 errors=1 unknown=0 fallbacks=1 '
+                             'undecodable=0', lines[0])
             self.assertEqual('op=alias_migration calls=1 sessions=1 refusals=0 errors=0 unknown=0'
-                             ' fallbacks=0', lines[1])
+                             ' fallbacks=0 undecodable=0', lines[1])
             self.assertRegex(lines[2],
-                r'^total=3 calls=3 sessions=1 refusals=1 errors=1 unknown=0 fallbacks=1'
+                r'^total=3 calls=3 sessions=1 refusals=1 errors=1 unknown=0 fallbacks=1 undecodable=0'
                 r' files_scanned=1 seconds=\d+\.\d{3}$')
             # Neither provider's old file is opened in the empty week.
             result = subprocess.run(command + ['--week', '2026-11-16'], capture_output=True, text=True,
                 timeout=10)
             self.assertEqual(0, result.returncode, result.stderr)
             self.assertRegex(result.stdout,
-                r'^total=0 calls=0 sessions=0 refusals=0 errors=0 unknown=0 fallbacks=0'
+                r'^total=0 calls=0 sessions=0 refusals=0 errors=0 unknown=0 fallbacks=0 undecodable=0'
                 r' files_scanned=0 seconds=\d+\.\d{3}\n$')
 
 def event(kind, **fields):
@@ -158,6 +159,27 @@ class ScannerRegressions(unittest.TestCase):
             self.assertEqual(0, w.main(['--self-test']))
         self.assertEqual(2, run.call_count)
         self.assertTrue(all(c.args[0][0] == w.sys.executable for c in run.call_args_list))
+
+
+    def test_secret_session_line_is_discarded_before_json_parsing(self):
+        secret = event('function_call', name='clj-surgeon__ls', call_id='secret',
+                       arguments={'password': 'example'})
+        ordinary = event('function_call', name='clj-surgeon__ls', call_id='ordinary', arguments={})
+        original = w.json.loads
+        with patch.object(w.json, 'loads', wraps=original) as parse:
+            calls = self.scan([secret, ordinary])
+        self.assertEqual(1, len(calls))
+        self.assertEqual('ordinary', calls[0]['call_id'])
+        self.assertNotIn(secret, [call.args[0] for call in parse.call_args_list])
+        self.assertFalse(w.p.secret_line('password=example token=example'))
+
+    def test_undecodable_without_call_is_counted_in_window(self):
+        record = event('custom_tool_call', name='exec', input='unknown syntax')
+        stats = dict(since=0, until=1, undecodable=0)
+        self.assertEqual([], list(w.scan_records([record], 'one', 0, stats)))
+        self.assertEqual(1, stats['undecodable'])
+        self.assertEqual([], list(w.scan_records([record], 'two', 2, stats)))
+        self.assertEqual(1, stats['undecodable'])
 
 if __name__ == '__main__':
     unittest.main()
