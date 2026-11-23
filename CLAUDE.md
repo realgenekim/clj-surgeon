@@ -1,5 +1,7 @@
 ## First action after compaction (the Memento rule)
 
+On first action after compaction or a fresh start, read docs/plans/2026-11-22-reshape-plan.md.
+
 Read, in this order: `docs/observations/2026-09-03-resume-here-anvil-seat.md` (host facts for the seat on forge@anvil since 2026-09-03: no reply tool, no sudo, never ports 7888/7894/7895, never `~/acid/GO-*` or the cohort lock, nothing merges from here) and `docs/observations/2026-09-02-resume-here-bridge-program.md` (the program state). Keep both current when state changes materially.
 
 # clj-surgeon
