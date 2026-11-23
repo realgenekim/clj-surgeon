@@ -26,6 +26,7 @@
    [clj-surgeon.rename :as rename]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
+   [clj-surgeon.usage-log :as usage-log]
    [clojure.edn :as edn]
    [clojure.pprint :as pp]
    [clojure.string :as str]))
@@ -1229,7 +1230,7 @@
       (throw (ex-info "Provide exactly one of :spec or :spec-file"
                       {:error-type :missing-spec-input})))))
 
-(defn run [{:keys [op] :as opts}]
+(defn- run-dispatched [{:keys [op] :as opts}]
   ;; Load .clj-surgeon.edn project aliases from nearest config file
   (when-let [anchor (or (:file opts) (:clj opts) (:cljs opts) (:dir opts))]
     (forms/init-from-file! anchor))
@@ -1280,6 +1281,10 @@
                    opts))]
     (if (string? result) (println result) (pp/pprint result))
     result))
+
+(defn run [{:keys [op] :as opts}]
+  ;; An unresolved op is logged as "unknown": the raw text could be anything the caller typed, a path included.
+  (usage-log/record-call (or (resolve-op op) "unknown") #(run-dispatched opts)))
 
 (defn parse-val
   "Parse a single CLI value string into its Clojure equivalent.

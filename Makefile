@@ -815,7 +815,8 @@ verify-benchmark-evidence:
 	bb bench/verify_evidence_manifest.clj
 
 test-fast:
-	bb test/run_all.clj
+	@# The suite calls the CLI in-process and as subprocesses; neither may land in the real usage log.
+	CLJ_SURGEON_USAGE_LOG=off bb test/run_all.clj
 
 analyzer-contract-test:
 	@# @spec MCP-OP-ANALYZER-008
