@@ -104,7 +104,7 @@
 (deftest registry-has-all-ops
   (testing "registry contains every canonical op"
     (let [expected #{:ls :ls-tree :show-form :mv :declares :deps :topo
-                     :ls-extract :ls-deps
+                     :ls-extract :ls-deps :usage-week
                      :rename-ns :rename-ns!
                      :fix-declares :fix-declares!
                      :extract :extract! :undo-extract!
@@ -463,7 +463,7 @@
 (defn- run-cli
   "Run clj-surgeon CLI as subprocess, return {:exit :out :err}."
   [& args]
-  (apply proc/shell {:out :string :err :string :continue true}
+  (apply proc/shell {:out :string :err :string :continue true :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}}
          "bb" "-cp" project-src "-m" "clj-surgeon.core" args))
 
 (defn- run-outline-cli-without-semantic-enrichment [operation]

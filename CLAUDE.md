@@ -1,5 +1,7 @@
 ## First action after compaction (the Memento rule)
 
+On first action after compaction or a fresh start, read docs/plans/2026-11-22-reshape-plan.md.
+
 Read, in this order: `docs/observations/2026-09-03-resume-here-anvil-seat.md` (host facts for the seat on forge@anvil since 2026-09-03: no reply tool, no sudo, never ports 7888/7894/7895, never `~/acid/GO-*` or the cohort lock, nothing merges from here) and `docs/observations/2026-09-02-resume-here-bridge-program.md` (the program state). Keep both current when state changes materially.
 
 # clj-surgeon
@@ -27,6 +29,35 @@ If a non-trivial feature has no plan, write one in `docs/plans/` before
 implementation. A useful plan fixes the observable contract, non-goals,
 failure data, exhaustive behavior matrix, real-program evidence, documentation
 updates, and verification gates. It is not a chronological coding diary.
+
+## Change rules (Gene, 2026-11-22)
+
+Gene: "The hypothesis is that we need to create conditions for changes to be made sublime and fast and awesome
+(< 150 LoC changes, etc.)" The rules, for every pull request to main:
+
+1. **150 changed lines or fewer**, insertions plus deletions, tests included. Frozen fixture data may exceed it only
+   with a ruling recorded in the pull request. A change that cannot be cut to 150 is refactored first.
+2. **One independent read before the first push**: a fresh reviewer (another seat, Opus or Codex) reads the diff and
+   runs the focused tests; its verdict is quoted in the pull request.
+3. **One push per review round.** Rounds 1 and 2 fix, round 3 cuts scope.
+4. **Self-merge when green**: CI green, the independent read done, no open blocker. Nothing merges from a builder seat without
+   that; the mayor merges when the author seat has no merge authority.
+5. **After a third failed review, stop** and write the design on one page in `docs/plans/` for a fleet read.
+
+### The inner loop (measured on main 22a38492, Anvil, 2026-11-22)
+
+The test suite runs under babashka, so for it the kaocha-sublime `warm-jvm`/`test-focus` loop does not apply: a cold
+focused bb run already takes about a second. The project nREPL described under Testing below remains the warm loop
+for analysis probes; the one JVM test path (`make analyzer-contract-test`, Clojure CLI) takes 7 s cold.
+
+| Loop | Command | Wall |
+|---|---|---|
+| Focused, two namespaces | `bb -e "(require 'clj-surgeon.outline-test 'clj-surgeon.xray-test) (clojure.test/run-tests 'clj-surgeon.outline-test 'clj-surgeon.xray-test)"` | 2.3 s (three runs, 41 tests, 507 assertions) |
+| Full babashka suite, cold | `bb test/run_all.clj` (727 tests, 6,051 assertions) | 65 s (one run, with a benchmark battery running beside it) |
+| JVM analyzer contract, cold | `make analyzer-contract-test` | 7 s |
+| Canonical gate, cold | `make test` | about 180 s (tier 2 report, three runs) |
+
+Use the focused run as the inner loop and the full suite as the trailing check, in the background.
 
 ## Testing
 

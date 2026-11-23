@@ -26,7 +26,9 @@
    [clj-surgeon.rename :as rename]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
+   [clj-surgeon.usage-log :as usage-log]
    [clojure.edn :as edn]
+   [clojure.java.io :as io]
    [clojure.pprint :as pp]
    [clojure.string :as str]))
 
@@ -593,6 +595,32 @@
   ;; non-keyword lookup throws ClassCastException (the ed6ad99 bug class). Ordering
   ;; for display is done at render time (format-global-help sort-by, error-msg sort).
   (hash-map
+    :usage-week {:handler
+                  (fn [{:keys [week since until log]}]
+                    (let [window (try
+                                   (when (and week (or since until))
+                                     (throw (ex-info "Use :week or :since/:until" {})))
+                                   (let [start (java.time.LocalDate/parse (or week since))
+                                         end (if week (.plusDays start 7) (java.time.LocalDate/parse until))]
+                                     (when (or (and week (not= java.time.DayOfWeek/MONDAY (.getDayOfWeek start)))
+                                               (not (.isBefore start end)))
+                                       (throw (ex-info "Expected a Monday week or increasing date range" {})))
+                                     [(str start "T00:00:00Z") (str end "T00:00:00Z")])
+                                   (catch Exception _ nil))]
+                      (if-not window
+                        {:error "Use :week with a Monday, or :since/:until with increasing ISO dates"
+                         :error-type :invalid-arguments}
+                        (let [path (or log (usage-log/log-path (into {} (System/getenv))))
+                              report #(usage-log/render-week (apply usage-log/count-week % window))]
+                          (if (and path (not= path "off") (fs/exists? path))
+                            (with-open [reader (io/reader path)] (report (line-seq reader)))
+                            (report []))))))
+                  :desc "Count usage log lines in a UTC week or date range"
+                  :args {:week {:desc "Monday, ISO date (exclusive of :since/:until)"}
+                         :since {:desc "Inclusive ISO date"} :until {:desc "Exclusive ISO date"}
+                         :log {:desc "Log path (default: writer environment path)"}}
+                  :examples ["clj-surgeon :op :usage-week :week 2026-11-16"]
+                  :category :read}
     :cljc-add-require {:handler   run-cljc-add-require
                        :desc      "Add a platform-aware require to a CLJC file"
                        :args      {:file     {:required true :desc "Input CLJC file"}
@@ -1076,6 +1104,7 @@
             (.append sb (format "  -> %s" (name pair))))
           (.append sb "\n"))
         (.append sb "\n")))
+    (.append sb "  Usage log:\n      CLI operations record time, op, outcome, code, duration, repository basename and agent kind;\n      never arguments, paths or file text. Default: $XDG_STATE_HOME/clj-surgeon/usage.jsonl,\n      else ~/.local/state/clj-surgeon/usage.jsonl. CLJ_SURGEON_USAGE_LOG=<path> changes it; =off disables it.\n\n")
     (.append sb "  Quick start:\n")
     (.append sb "    clj-surgeon :op :ls :file src/my/ns.clj\n")
     (.append sb "    clj-surgeon :op :cat :file src/my/ns.clj :contains 'distinctive text'\n")
@@ -1385,7 +1414,7 @@
                    {:receipt-file receipt-file}))))
 
             :else
-            (let [opts (parse-args args)]
+            (let [{:keys [op] :as opts} (parse-args args)]
               (cond
                 (contains? #{:help "help"} (:op opts))
                 (println (format-global-help ops-registry))
@@ -1403,7 +1432,9 @@
                       (pp/pprint error)
                       error)))
 
-                :else (run opts))))]
+                :else (usage-log/record-call
+                        (try (or (resolve-op op) "unknown") (catch Throwable _ "unknown"))
+                        #(run opts)))))]
       (when (and (map? result) (:error result))
         (System/exit 1)))
     (catch Exception e

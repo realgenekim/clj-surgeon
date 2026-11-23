@@ -87,17 +87,24 @@
     (is (:tree_changed (receipt (assoc args 11 "?? new"))))
     (is (false? (:tree_changed (receipt (assoc args 11 "\n")))))))
 
-(let [[cmd a b c] *command-line-args*]
-  (case cmd
-    "--self-test" (let [r (run-tests 'native-control.schedule)]
-                    (System/exit (if (zero? (+ (:fail r) (:error r))) 0 1)))
-    "keep" (println (keep-workspace? a b))
-    "receipt" (println (json/generate-string (receipt (rest *command-line-args*))))
-    "wrapper" (print (wrapper a b))
-    (let [tasks (edn/read-string (slurp (if (#{"prompt" "task"} cmd) a cmd)))]
-      (case cmd
-        "prompt" (println (task-prompt (find-task tasks b)))
-        "task" (println (task-field (find-task tasks b) c))
-        (do (println "run_id\ttask\tarm\trep")
-            (doseq [row (schedule tasks (str/split a #",") (parse-long b) (parse-long c))]
-              (println (str/join "\t" ((juxt :run-id :task :arm :rep) row)))))))))
+(defn entry-script? [file-prop file] (= file-prop file))
+(deftest cli-load-guard
+  (is (true? (entry-script? "schedule.clj" "schedule.clj")))
+  (is (false? (entry-script? "required.clj" "schedule.clj")))
+  (is (false? (entry-script? nil "schedule.clj"))))
+
+(when (entry-script? (System/getProperty "babashka.file") *file*)
+  (let [[cmd a b c] *command-line-args*]
+    (case cmd
+      "--self-test" (let [r (run-tests 'native-control.schedule)]
+                      (System/exit (if (zero? (+ (:fail r) (:error r))) 0 1)))
+      "keep" (println (keep-workspace? a b))
+      "receipt" (println (json/generate-string (receipt (rest *command-line-args*))))
+      "wrapper" (print (wrapper a b))
+      (let [tasks (edn/read-string (slurp (if (#{"prompt" "task"} cmd) a cmd)))]
+        (case cmd
+          "prompt" (println (task-prompt (find-task tasks b)))
+          "task" (println (task-field (find-task tasks b) c))
+          (do (println "run_id\ttask\tarm\trep")
+              (doseq [row (schedule tasks (str/split a #",") (parse-long b) (parse-long c))]
+                (println (str/join "\t" ((juxt :run-id :task :arm :rep) row))))))))))
