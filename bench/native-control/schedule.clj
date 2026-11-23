@@ -1,4 +1,6 @@
 #!/usr/bin/env bb
+;; Standalone sibling script loaded by path from the hyphenated directory.
+#_{:clj-kondo/ignore [:namespace-name-mismatch]}
 (ns native-control.schedule
   (:require [clojure.edn :as edn] [clojure.string :as str]
             [cheshire.core :as json] [clojure.test :refer [deftest is run-tests]]))
