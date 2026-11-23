@@ -90,7 +90,9 @@
                     (str "| " (str/join " | " (concat [c a] ((juxt :n :correct :invalid :median-actions
                               :median-tool-output-chars :median-input-tokens :median-wall-ms) m))) " |\n")))
        (apply str (for [c (sort (set (map first (keys summaries))))
-                        [t controls] [["arm3" ["arm1" "arm2"]] ["arm2" ["arm1"]]]]
+                        [t controls] [["arm3" ["arm1" "arm2"]] ["arm2" ["arm1"]]
+                                      ["arm4" ["arm1" "arm2"]] ["arm4" ["arm3"]]]
+                        :when (or (not= t "arm4") (contains? summaries [c t]))]
                     (str "\n" c " " t " vs best of " (str/join "/" controls) ": "
                          (pr-str (verdict summaries c t controls)) "\n")))))
 
@@ -223,6 +225,12 @@
     (is (str/includes? text "| c | arm1 | 1 | 1 | 0 | 2 | 100 | 9 | 20 |"))
     (is (str/includes? text "c arm3 vs best of arm1/arm2"))
     (is (str/includes? text "c arm2 vs best of arm1"))
+    (is (not (str/includes? text "c arm4 vs")))
+    (is (str/includes? (table {["c" "arm3"] {:n 1 :correct 1 :invalid 0 :median-actions 1 :median-tool-output-chars 10
+                                               :median-input-tokens 1 :median-wall-ms 1}
+                               ["c" "arm4"] {:n 1 :correct 1 :invalid 0 :median-actions 1 :median-tool-output-chars 5
+                                               :median-input-tokens 1 :median-wall-ms 1}})
+                       "c arm4 vs best of arm3"))
     (is (str/includes? text ":promote false"))))
 (deftest cli-load-guard
   (binding [*file* "required.clj"]

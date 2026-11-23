@@ -10,10 +10,10 @@ in correct answers (counts, so use balanced schedules). Missing/zero controls re
 TASKS.edn is a vector of maps with string `:id`, `:repo` (absolute), `:sha`
 (pinned commit), `:class`, `:prompt`, `:answer-format`, `:answer-kind` (`:exact`
 or `:set`) and `:expected` (string or vector of strings, respectively).
-Arm text comes from `arms/arm1.md`, `arms/arm2.md`, `arms/arm3.md`.
+Arm text comes from `arms/arm1.md` to `arms/arm4.md` (arm4: arm3 plus routing by where the answer sits).
 
 ```bash
-bb bench/native-control/schedule.clj TASKS.edn arm1,arm2,arm3 2 42 > /var/tmp/forge/schedule.tsv
+bb bench/native-control/schedule.clj TASKS.edn arm1,arm2,arm3,arm4 2 42 > /var/tmp/forge/schedule.tsv
 bench/native-control/run-schedule.sh TASKS.edn /var/tmp/forge/schedule.tsv
 bb bench/native-control/summarize.clj TASKS.edn /var/tmp/forge/native-control
 make benchmark-native-control-self-test
