@@ -4,6 +4,7 @@ set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 { read -r header
   while IFS=$'\t' read -r run_id task arm rep; do
-    "$script_dir/run.sh" "$1" "$run_id" "$task" "$arm" "$rep" </dev/null
+    # one run's refusal or failure is recorded by that run; the schedule goes on
+    "$script_dir/run.sh" "$1" "$run_id" "$task" "$arm" "$rep" </dev/null || echo "run $run_id exited $?" >&2
   done
 } < "$2"

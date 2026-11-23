@@ -13,6 +13,10 @@ run_dir=$root/runs/$run_id
 if [[ -f $run_dir/run.json ]]; then echo 'already complete'; exit 0; fi
 model=${NC_MODEL:-gpt-6-astra}; reasoning=${NC_REASONING:-medium}
 # workspace-write: the read-only sandbox blocks the analyzer admission temp file; writes are still caught by tree_changed.
+# The two writable roots are the INVOKER's ~/.local/state/clj-surgeon (the shared clj-kondo admission lock and events;
+# the analyzer resolves them from the passwd home, not $HOME) and ~/.local/state/diagnose-skiff-cpu-memory (the pressure
+# status file the admission wrapper reads). Both are outside the experiment tree by design; nothing else is writable.
+# Linux only: GNU date %3N, realpath, timeout and find -exec semantics are assumed.
 config=$(realpath "${NC_SURGEON_BB_CONFIG:-$script_dir/../../bb.edn}")
 auth=$(realpath "${NC_CODEX_AUTH:-$HOME/.codex/auth.json}")
 bb_bin=$(command -v bb); java_bin=$(command -v java); codex_bin=$(command -v codex)
@@ -30,7 +34,7 @@ git -C "$repo" archive "$sha" | tar -x -C "$ws"
 find "$ws" \( -name AGENTS.md -o -name CLAUDE.md -o -name .codex -o -name .clj-surgeon.edn -o -name .mcp.json \) -prune -exec rm -rf -- {} +
 cp "$arm_file" "$ws/AGENTS.md"
 git -C "$ws" init -q
-git -C "$ws" add -A
+git -C "$ws" add -A -f
 git -C "$ws" add -f AGENTS.md
 git -C "$ws" -c user.name=native-control -c user.email=native-control@anvil -c commit.gpgsign=false commit -qm 'Frozen read experiment'
 if [[ -n $wrapper ]]; then
@@ -55,7 +59,8 @@ else
   [[ -z $resolved ]] || { echo "preflight: arm1 must not see clj-surgeon, found '$resolved'" >&2; exit 3; }
 fi
 printf 'resolved_clj_surgeon=%s\nbb_config=%s\n' "$resolved" "$config" > "$run_dir/preflight.txt"
-ln -s "$auth" "$codex_home/auth.json"
+# The credential is copied, not linked, and kept 0600 inside a 0700 home; the result root is 0700 too.
+chmod 700 "$root" "$codex_home"; install -m 600 "$auth" "$codex_home/auth.json"
 printf 'model = "%s"\nmodel_reasoning_effort = "%s"\n' "$model" "$reasoning" > "$codex_home/config.toml"
 prompt=$(bb "$script_dir/schedule.clj" prompt "$tasks" "$task_id")
 started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ); start_ms=$(date +%s%3N)
@@ -68,7 +73,7 @@ HOME="$codex_home" CODEX_HOME="$codex_home" PATH="$run_path" timeout "${NC_TIMEO
 exit_code=$?
 set -e
 end_ms=$(date +%s%3N); ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-status=$(git -C "$ws" status --porcelain --untracked-files=all)
+status=$(git -C "$ws" status --porcelain --ignored --untracked-files=all)
 bb "$script_dir/schedule.clj" receipt "$run_id" "$task_id" "$arm" "$rep" "$model" "$reasoning" \
   "$repo" "$sha" "$start_ms" "$end_ms" "$exit_code" "$status" "$(wc -c < "$arm_file")" \
   "$started_at" "$ended_at" > "$run_dir/run.json.tmp"
