@@ -549,6 +549,64 @@
                           :form (n/string node)})))
         (update :unselected-sites #(or % unselected-hit?)))))
 
+(defn- unsupported-binding-scope?
+  "Whether selected references cross a binding scope the walker cannot model."
+  [node context live-bare]
+  ;; @spec MCP-OP-ALIAS-066
+  ;; These scopes need independent parameter/default/control-flow analysis.
+  ;; Never pretend the generic descendant walk proves their bare references.
+  (let [head (head-name node)
+        params (when (contains? function-heads head) (parameter-vectors node))
+        binding-vector (when (contains? local-binding-vector-heads head)
+                         (first (filter vector-node? (rest (meaningful-children node)))))
+        binding-forms (concat params (when binding-vector
+                                       (take-nth 2 (meaningful-children binding-vector))))
+        default? (some (fn [binding-form]
+                         (some (fn [part]
+                                 (and (= :map (n/tag part))
+                                      (some #(= ":or" (n/string %))
+                                            (take-nth 2 (meaningful-children part)))))
+                               (tree-seq n/inner? children binding-form)))
+                       binding-forms)
+        metadata-node (when (or (contains? function-heads head)
+                                (contains? local-binding-vector-heads head))
+                        (when-let [first-vector (first (filter #(= :vector (n/tag (unmeta-node %)))
+                                                               (rest (meaningful-children node))))]
+                          (when (= :meta (n/tag first-vector)) first-vector)))
+        potential-in? (fn [nodes]
+                        (boolean
+                          (some (fn [part]
+                                  (when (= :token (n/tag part))
+                                    (let [facts (decide part context live-bare)]
+                                      (or (:rewrite facts) (:refer-hit? facts)))))
+                                (mapcat #(tree-seq (fn [candidate]
+                                                     (and (n/inner? candidate)
+                                                          (not= :uneval (n/tag candidate))))
+                                                   children %)
+                                        nodes))))
+        potential? (potential-in? [node])]
+    ;; @spec MCP-OP-ALIAS-066
+    ;; The `:or`-default and metadata-vector boundaries are about sites
+    ;; INSIDE the binding construct, whose evaluation scope this walk does
+    ;; not model. A site in the BODY is not one of them: dogfood3
+    ;; (2026-09-07) refused a plain `(json/write-str {...})` in ordinary
+    ;; value position because the enclosing `defn` merely HAD `:or`
+    ;; defaults elsewhere in its parameter vector. Scope the site test to
+    ;; the construct that motivates the refusal.
+    (and potential?
+         (or (and default? (potential-in? binding-forms))
+             (and metadata-node (potential-in? [metadata-node]))
+             (and (seq live-bare)
+                  (or (contains? #{"if-let" "if-some" "as->" "for" "doseq"} head)
+                      (> (count params) 1)
+                      (and (= "fn" head)
+                           (contains? live-bare (some-> (second (meaningful-children node)) unmeta-node simple-symbol-name)))
+                      (and (= "letfn" head)
+                           (some (fn [part]
+                                   (and (vector-node? part)
+                                        (some live-bare (binding-form-names part))))
+                                 (rest (tree-seq n/inner? children node))))))))))
+
 ;; @spec MCP-OP-ALIAS-029
 ;; @spec MCP-OP-ALIAS-033
 (defn rewrite-forms
@@ -582,60 +640,7 @@
       (reader-conditional-node? node)
       (rewrite-reader-conditional node context live-bare)
 
-      ;; @spec MCP-OP-ALIAS-066
-      ;; These scopes need independent parameter/default/control-flow analysis.
-      ;; Never pretend the generic descendant walk proves their bare references.
-      (let [head (head-name node)
-            params (when (contains? function-heads head) (parameter-vectors node))
-            binding-vector (when (contains? local-binding-vector-heads head)
-                             (first (filter vector-node? (rest (meaningful-children node)))))
-            binding-forms (concat params (when binding-vector
-                                           (take-nth 2 (meaningful-children binding-vector))))
-            default? (some (fn [binding-form]
-                             (some (fn [part]
-                                     (and (= :map (n/tag part))
-                                          (some #(= ":or" (n/string %))
-                                                (take-nth 2 (meaningful-children part)))))
-                                   (tree-seq n/inner? children binding-form)))
-                           binding-forms)
-            metadata-node (when (or (contains? function-heads head)
-                                    (contains? local-binding-vector-heads head))
-                            (when-let [first-vector (first (filter #(= :vector (n/tag (unmeta-node %)))
-                                                                   (rest (meaningful-children node))))]
-                              (when (= :meta (n/tag first-vector)) first-vector)))
-            potential-in? (fn [nodes]
-                            (boolean
-                              (some (fn [part]
-                                      (when (= :token (n/tag part))
-                                        (let [facts (decide part context live-bare)]
-                                          (or (:rewrite facts) (:refer-hit? facts)))))
-                                    (mapcat #(tree-seq (fn [candidate]
-                                                         (and (n/inner? candidate)
-                                                              (not= :uneval (n/tag candidate))))
-                                                       children %)
-                                            nodes))))
-            potential? (potential-in? [node])]
-        ;; @spec MCP-OP-ALIAS-066
-        ;; The `:or`-default and metadata-vector boundaries are about sites
-        ;; INSIDE the binding construct, whose evaluation scope this walk does
-        ;; not model. A site in the BODY is not one of them: dogfood3
-        ;; (2026-09-07) refused a plain `(json/write-str {...})` in ordinary
-        ;; value position because the enclosing `defn` merely HAD `:or`
-        ;; defaults elsewhere in its parameter vector. Scope the site test to
-        ;; the construct that motivates the refusal.
-        (and potential?
-             (or (and default? (potential-in? binding-forms))
-                 (and metadata-node (potential-in? [metadata-node]))
-                 (and (seq live-bare)
-                      (or (contains? #{"if-let" "if-some" "as->" "for" "doseq"} head)
-                          (> (count params) 1)
-                          (and (= "fn" head)
-                               (contains? live-bare (some-> (second (meaningful-children node)) unmeta-node simple-symbol-name)))
-                          (and (= "letfn" head)
-                               (some (fn [part]
-                                       (and (vector-node? part)
-                                            (some live-bare (binding-form-names part))))
-                                     (rest (tree-seq n/inner? children node)))))))))
+      (unsupported-binding-scope? node context live-bare)
       ;; @spec MCP-OP-ALIAS-066
       ;; A receipt must name its subject: carry the node's own row/col so the
       ;; caller gets file:line, not the enclosing defn's docstring.
