@@ -7,7 +7,6 @@
             [clojure.test :refer [deftest is run-tests]]))
 
 (def script-dir (str (fs/parent *file*)))
-
 (defn valid-component? [s]
   (boolean (and (string? s) (re-matches #"[A-Za-z0-9._-]+" s) (not (#{"." ".."} s)))))
 (defn validate-run [run-id task-id arm rep-str]
@@ -56,27 +55,35 @@
     {:total (count results) :failed n :exit (if (zero? n) 0 1)}))
 (defn exit-with [n] (System/exit n))
 (defn entry-script? [file-prop file] (= file-prop file))
-(defn env-config [env]
-  (let [value (fn [k default]
-                (let [v (get env k)]
-                  (if (seq v) v default)))
-        home (System/getProperty "user.home")
-        cfg {:root (value "NC_RESULT_ROOT" "/var/tmp/forge/native-control")
-             :model (value "NC_MODEL" "gpt-6-astra")
-             :reasoning (value "NC_REASONING" "medium")
-             :timeout (value "NC_TIMEOUT_S" "900")
-             :keep (value "NC_KEEP" "0")
-             :sandbox (value "NC_SANDBOX" "workspace-write")
-             :config (value "NC_SURGEON_BB_CONFIG" (str script-dir "/../../bb.edn"))
-             :auth (value "NC_CODEX_AUTH" (str (value "HOME" home) "/.codex/auth.json"))
-             :codex (value "NC_CODEX" (some-> (fs/which "codex") str))
-             :invoker-home home
-             :kondo-path (some-> (or (fs/which "/usr/local/bin/clj-kondo") (fs/which "clj-kondo")) str)
-             :tool-dirs ["/usr/bin" "/bin"]}]
-    (if (re-matches #"[0-9]+" (:timeout cfg))
-      cfg
-      {:error "NC_TIMEOUT_S must contain digits only"})))
+(defn find-kondo [which file]
+  (some-> (if (and (fs/regular-file? file) (fs/executable? file)) file (which "clj-kondo")) str))
+(defn env-config
+  ([env] (env-config env {}))
+  ([env {:keys [which user-home script-dir]
+         :or {which fs/which user-home (System/getProperty "user.home") script-dir script-dir}}]
+   (let [value #(or (not-empty (get env %1)) %2)
+         cfg {:root (value "NC_RESULT_ROOT" "/var/tmp/forge/native-control")
+              :model (value "NC_MODEL" "gpt-6-astra")
+              :reasoning (value "NC_REASONING" "medium")
+              :timeout (value "NC_TIMEOUT_S" "900")
+              :keep (value "NC_KEEP" "0")
+              :sandbox (value "NC_SANDBOX" "workspace-write")
+              :config (value "NC_SURGEON_BB_CONFIG" (str script-dir "/../../bb.edn"))
+              :auth (value "NC_CODEX_AUTH" (str (value "HOME" user-home) "/.codex/auth.json"))
+              :codex (value "NC_CODEX" (some-> (which "codex") str))
+              :invoker-home user-home
+              :kondo-path (find-kondo which "/usr/local/bin/clj-kondo")
+              :tool-dirs ["/usr/bin" "/bin"]}
+         timeout (when (re-matches #"[0-9]+" (:timeout cfg)) (parse-long (:timeout cfg)))]
+     (if (and timeout (<= 1 timeout 86400))
+       cfg
+       {:error "NC_TIMEOUT_S must be an integer 1..86400"}))))
+(defn render-config [cfg]
+  (str/join "\n" (map (fn [[k v]] (str (name k) "=" v)) (sort-by key cfg))))
+(defn decide-config-exit [cfg] (if (:error cfg) 2 0))
 
+;; arm1 has no outline tool, so needs no kondo; every arm needs rg for the native route.
+;; The runner is Linux-only: tool-dirs stays ["/usr/bin" "/bin"].
 (defn preflight-decision [arm resolved kondo? rg?]
   (cond
     (and (= arm "arm1") (not (str/blank? (str resolved))))
@@ -182,20 +189,23 @@
   (is (false? (entry-script? "other.clj" "run.clj")))
   (is (false? (entry-script? nil "run.clj"))))
 (deftest environment-defaults
-  (let [cfg (env-config {"HOME" "/credential-home"})]
-    (is (= {:root "/var/tmp/forge/native-control"
-            :model "gpt-6-astra"
-            :reasoning "medium"
-            :timeout "900"
-            :keep "0"
-            :sandbox "workspace-write"
-            :auth "/credential-home/.codex/auth.json"
-            :config (str script-dir "/../../bb.edn")
-            :codex (some-> (fs/which "codex") str)
-            :invoker-home (System/getProperty "user.home")
-            :kondo-path (some-> (or (fs/which "/usr/local/bin/clj-kondo") (fs/which "clj-kondo")) str)
-            :tool-dirs ["/usr/bin" "/bin"]}
-           cfg))))
+  (with-redefs [fs/regular-file? (constantly false)]
+    (let [cfg (env-config {"HOME" "/credential-home"}
+                          {:which {"codex" "/tools/codex" "clj-kondo" "/tools/kondo"}
+                           :user-home "/invoker" :script-dir "/bench"})]
+      (is (= {:root "/var/tmp/forge/native-control"
+              :model "gpt-6-astra"
+              :reasoning "medium"
+              :timeout "900"
+              :keep "0"
+              :sandbox "workspace-write"
+              :auth "/credential-home/.codex/auth.json"
+              :config "/bench/../../bb.edn"
+              :codex "/tools/codex"
+              :invoker-home "/invoker"
+              :kondo-path "/tools/kondo"
+              :tool-dirs ["/usr/bin" "/bin"]}
+             cfg)))))
 
 (deftest environment-overrides
   (is (= {:root "/results"
@@ -225,17 +235,37 @@
                       "NC_SURGEON_BB_CONFIG" "" "NC_CODEX_AUTH" "" "NC_CODEX" "" "HOME" ""}))))
 
 (deftest environment-bad-timeout
-  (doseq [value ["-1" "+1" "1.5" " 9" "9 " "1s" "\n" "9\n" "１２"]]
-    (is (= {:error "NC_TIMEOUT_S must contain digits only"}
+  (doseq [value ["0" "86401" "9223372036854775808" "-1" "+1" "1.5" " 9" "9 " "1s" "\n" "9\n" "１２"]]
+    (is (= {:error "NC_TIMEOUT_S must be an integer 1..86400"}
            (env-config {"NC_TIMEOUT_S" value})))))
 
 (deftest environment-digit-timeout
-  (doseq [value ["0" "01" "900" "9223372036854775808"]]
+  (doseq [value ["1" "01" "900" "86400"]]
     (is (= value (:timeout (env-config {"NC_TIMEOUT_S" value}))))))
 
 (deftest environment-invoker-home
   (doseq [env [{} {"HOME" ""} {"HOME" "/unrelated-home"}]]
-    (is (= (System/getProperty "user.home") (:invoker-home (env-config env))))))
+    (is (= "/invoker" (:invoker-home (env-config env {:user-home "/invoker"}))))))
+
+(deftest kondo-executable-file
+  (let [file (fs/create-temp-file) which {"clj-kondo" "/tools/kondo"}]
+    (try
+      (fs/set-posix-file-permissions file "rw-------")
+      (is (= "/tools/kondo" (find-kondo which file)))
+      (fs/set-posix-file-permissions file "rwx------")
+      (is (= (str file) (find-kondo (fn [_] (throw (AssertionError. "unexpected PATH lookup"))) file)))
+      (is (= "/tools/kondo" (find-kondo which (fs/parent file))))
+      (fs/delete file)
+      (is (= "/tools/kondo" (find-kondo which file)))
+      (is (nil? (find-kondo (constantly nil) file)))
+      (finally (fs/delete-if-exists file)))))
+
+(deftest config-output-and-exit
+  (is (= "auth=/auth.json\ninvoker-home=/invoker\nmodel=test\ntool-dirs=[\"/usr/bin\" \"/bin\"]"
+         (render-config {:model "test" :tool-dirs ["/usr/bin" "/bin"]
+                         :invoker-home "/invoker" :auth "/auth.json"})))
+  (is (= 0 (decide-config-exit {:model "test"})))
+  (is (= 2 (decide-config-exit {:error "invalid timeout"}))))
 
 (deftest preflight-refusals
   (doseq [[arm resolved kondo? rg? message]
@@ -252,6 +282,12 @@
     (is (= :ok (preflight-decision arm :wrapper true true)))))
 
 (when (entry-script? (System/getProperty "babashka.file") *file*)
-  (if (= ["--self-test"] (vec *command-line-args*))
+  (case (vec *command-line-args*)
+    ["--self-test"]
     (let [r (run-tests 'native-control.run)] (exit-with (if (zero? (+ (:fail r) (:error r))) 0 1)))
-    (do (binding [*out* *err*] (println "Usage: bb bench/native-control/run.clj --self-test")) (exit-with 2))))
+    ["config"]
+    (let [cfg (env-config (System/getenv)) rc (decide-config-exit cfg)]
+      (binding [*out* (if (zero? rc) *out* *err*)] (println (or (:error cfg) (render-config cfg))))
+      (exit-with rc))
+    (do (binding [*out* *err*] (println "Usage: bb bench/native-control/run.clj --self-test | config"))
+        (exit-with 2))))
