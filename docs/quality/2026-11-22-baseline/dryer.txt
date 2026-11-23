@@ -1,0 +1,159 @@
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/binding_rename.clj:18-21
+  <repo>/src/clj_surgeon/mcp_formatter.clj:26-29
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/binding_rename.clj:70-76
+  <repo>/src/clj_surgeon/intent_transaction.clj:1146-1152
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/cljc/require_ops.clj:23-30
+  <repo>/src/clj_surgeon/cljc/split.clj:62-69
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/cljc/require_ops.clj:32-38
+  <repo>/src/clj_surgeon/cljc/split.clj:71-77
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/cljc/require_ops.clj:32-38
+  <repo>/src/clj_surgeon/mcp_compact_relations.clj:391-397
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/cljc/split.clj:22-26
+  <repo>/src/clj_surgeon/outline.clj:195-199
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/cljc/split.clj:71-77
+  <repo>/src/clj_surgeon/mcp_compact_relations.clj:391-397
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/edit_dsl.clj:170-173
+  <repo>/src/clj_surgeon/edit_dsl.clj:175-178
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/edit_dsl.clj:170-173
+  <repo>/src/clj_surgeon/edit_dsl.clj:220-223
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/edit_dsl.clj:175-178
+  <repo>/src/clj_surgeon/edit_dsl.clj:220-223
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/fields.clj:95-106
+  <repo>/src/clj_surgeon/fields.clj:153-162
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/fix_declares.clj:27-34
+  <repo>/src/clj_surgeon/fix_declares.clj:36-43
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/intent_transaction.clj:35-43
+  <repo>/src/clj_surgeon/structural_lens.clj:951-959
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/intent_transaction.clj:95-101
+  <repo>/src/clj_surgeon/mcp_program_tool.clj:76-82
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/intent_transaction.clj:2792-2797
+  <repo>/src/clj_surgeon/intent_transaction.clj:2799-2804
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/mcp_compact_edit_fields.clj:19-24
+  <repo>/src/clj_surgeon/mcp_contract.clj:122-127
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/mcp_compact_relations.clj:51-54
+  <repo>/src/clj_surgeon/mcp_compact_relations.clj:56-59
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/mcp_contract.clj:129-133
+  <repo>/src/clj_surgeon/mcp_inspect.clj:49-53
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/mcp_contract.clj:176-180
+  <repo>/src/clj_surgeon/mcp_inspect.clj:126-130
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/mcp_contract.clj:182-186
+  <repo>/src/clj_surgeon/mcp_inspect.clj:132-136
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/mcp_contract.clj:188-192
+  <repo>/src/clj_surgeon/mcp_inspect.clj:138-142
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/mcp_process.clj:60-64
+  <repo>/src/clj_surgeon/mcp_process.clj:136-140
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/mcp_process.clj:60-64
+  <repo>/src/clj_surgeon/mcp_process.clj:142-146
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/mcp_process.clj:136-140
+  <repo>/src/clj_surgeon/mcp_process.clj:142-146
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/mcp_program_tool.clj:411-418
+  <repo>/src/clj_surgeon/mcp_tool.clj:1325-1332
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/mcp_program_tool.clj:411-418
+  <repo>/src/clj_surgeon/mcp_tool.clj:1334-1341
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/mcp_tool.clj:1281-1284
+  <repo>/src/clj_surgeon/mcp_tool.clj:1286-1289
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/mcp_tool.clj:1325-1332
+  <repo>/src/clj_surgeon/mcp_tool.clj:1334-1341
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/quoted_var_refs.clj:68-71
+  <repo>/src/clj_surgeon/syntax_var_refs.clj:18-21
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/worktree_lifecycle.clj:32-35
+  <repo>/src/clj_surgeon/worktree_lifecycle.clj:36-39
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/worktree_lifecycle.clj:437-440
+  <repo>/src/clj_surgeon/worktree_lifecycle_io.clj:976-979
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/worktree_lifecycle_io.clj:850-856
+  <repo>/src/clj_surgeon/worktree_lifecycle_io.clj:858-864
+
+DUPLICATE score=1.00
+  <repo>/src/clj_surgeon/worktree_lifecycle_io.clj:1110-1114
+  <repo>/src/clj_surgeon/worktree_lifecycle_io.clj:1143-1147
+
+DUPLICATE score=0.92
+  <repo>/src/clj_surgeon/intent_transaction.clj:35-43
+  <repo>/src/clj_surgeon/mcp_compact_location.clj:30-36
+
+DUPLICATE score=0.92
+  <repo>/src/clj_surgeon/mcp_compact_location.clj:30-36
+  <repo>/src/clj_surgeon/structural_lens.clj:951-959
+
+DUPLICATE score=0.91
+  <repo>/src/clj_surgeon/mcp_combinable_transaction.clj:119-124
+  <repo>/src/clj_surgeon/mcp_prepared_confirmation.clj:111-116
+
+DUPLICATE score=0.91
+  <repo>/src/clj_surgeon/mcp_contract.clj:194-207
+  <repo>/src/clj_surgeon/mcp_paths.clj:10-26
+
+DUPLICATE score=0.87
+  <repo>/src/clj_surgeon/cljc/merge.clj:24-33
+  <repo>/src/clj_surgeon/cljc/require_ops.clj:23-30
+
+DUPLICATE score=0.87
+  <repo>/src/clj_surgeon/cljc/merge.clj:24-33
+  <repo>/src/clj_surgeon/cljc/split.clj:62-69
+
+DUPLICATE score=0.85
+  <repo>/src/clj_surgeon/mcp_telemetry.clj:129-144
+  <repo>/src/clj_surgeon/mcp_telemetry.clj:179-194
