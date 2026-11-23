@@ -1,0 +1,1 @@
+Wrote $scratch/.metrics/crap.edn

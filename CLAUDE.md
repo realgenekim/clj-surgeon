@@ -1,5 +1,7 @@
 ## First action after compaction (the Memento rule)
 
+On first action after compaction or a fresh start, read docs/plans/2026-11-22-reshape-plan.md.
+
 Read, in this order: `docs/observations/2026-09-03-resume-here-anvil-seat.md` (host facts for the seat on forge@anvil since 2026-09-03: no reply tool, no sudo, never ports 7888/7894/7895, never `~/acid/GO-*` or the cohort lock, nothing merges from here) and `docs/observations/2026-09-02-resume-here-bridge-program.md` (the program state). Keep both current when state changes materially.
 
 # clj-surgeon
@@ -28,8 +30,44 @@ implementation. A useful plan fixes the observable contract, non-goals,
 failure data, exhaustive behavior matrix, real-program evidence, documentation
 updates, and verification gates. It is not a chronological coding diary.
 
+## Change rules (Gene, 2026-11-22)
+
+Gene: "The hypothesis is that we need to create conditions for changes to be made sublime and fast and awesome
+(< 150 LoC changes, etc.)" The rules, for every pull request to main:
+
+1. **150 changed lines or fewer**, insertions plus deletions, tests included. Frozen fixture data may exceed it only
+   with a ruling recorded in the pull request. A change that cannot be cut to 150 is refactored first.
+2. **One independent read before the first push**: a fresh reviewer (another seat, Opus or Codex) reads the diff and
+   runs the focused tests; its verdict is quoted in the pull request.
+3. **One push per review round.** Rounds 1 and 2 fix, round 3 cuts scope.
+4. **Self-merge when green**: CI green, the independent read done, no open blocker. Nothing merges from a builder seat without
+   that; the mayor merges when the author seat has no merge authority.
+5. **After a third failed review, stop** and write the design on one page in `docs/plans/` for a fleet read.
+
+### The inner loop (measured on main 22a38492, Anvil, 2026-11-22)
+
+The test suite runs under babashka, so for it the kaocha-sublime `warm-jvm`/`test-focus` loop does not apply: a cold
+focused bb run already takes about a second. The project nREPL described under Testing below remains the warm loop
+for analysis probes; the one JVM test path (`make analyzer-contract-test`, Clojure CLI) takes 7 s cold.
+
+| Loop | Command | Wall |
+|---|---|---|
+| Focused, two namespaces | `bb -e "(require 'clj-surgeon.outline-test 'clj-surgeon.xray-test) (clojure.test/run-tests 'clj-surgeon.outline-test 'clj-surgeon.xray-test)"` | 2.3 s (three runs, 41 tests, 507 assertions) |
+| Full babashka suite, cold | `bb test/run_all.clj` (727 tests, 6,051 assertions) | 65 s (one run, with a benchmark battery running beside it) |
+| JVM analyzer contract, cold | `make analyzer-contract-test` | 7 s |
+| Canonical gate, cold | `make test` | about 180 s (tier 2 report, three runs) |
+
+Use the focused run as the inner loop and the full suite as the trailing check, in the background.
+
 ## Testing
 
+- **The bar for new code (Gene, 2026-11-22): "we have a world-class bar on testing, I think.  Make sure
+  any code functionality we add, we match/exceed it."** Measured on main that day: 35,262 test lines for
+  30,533 source lines (115 test lines for every 100 source lines) and 1,173 `deftest` forms (about 38 for
+  every 1,000 source lines). A change that adds behaviour must not lower either ratio for the files it
+  touches, must exhaust the pure behaviour matrix as the rest of this section says, and must carry a
+  native control when it claims to be faster or cheaper than native editing ("strictly better, or
+  native"). A reviewer may refuse a change on this rule alone.
 - Run: `make test`
 - For the inner Clojure development loop, first run
   `clj-nrepl-eval --discover-ports` and reuse the project-local nREPL. Reload
@@ -480,3 +518,17 @@ clojure-lsp <-> cclsp http://127.0.0.1:7890/mcp
 - `make mcp-status` verifies both loopback services, the launchd job, and the
   Codex registration.
 - Run `make mcp-test` after each live patch. Run `make test` before completion.
+
+## Fence review scope (amended 02:20Z 2026-09-03, after the study-ops NO-GO)
+
+The standing rule — anything touching the SCI allowlist, the evaluation fence, or path/workspace
+confinement gets adversarial review BEFORE merge — was too narrow: a READ verb got two code-execution
+holes without touching any of those files. The scope now includes, for every new or changed MCP or CLI
+surface: (1) every subprocess reachable from a request — argv only, `--` before any pattern, no request
+field or repo-controlled value (`.clj-surgeon.edn`, deps.edn aliases, file names) interpolated without
+validation; (2) every reader on repo bytes — `clojure.edn/read-string` only, never `clojure.core/
+read-string` with read-eval; (3) every path a walk produces — realpath inside the root, symlinks and
+`:paths` relocations dropped, not only the top directory; (4) bounds applied BEFORE parsing — a file cap
+and lazy outlining, so a monorepo cannot OOM the server; (5) `next_call` never equals the call just
+made. The review is executed (probes, not reading), Sol when authenticated, Opus otherwise, and its
+verdict is filed under docs/observations before the branch enters the merge queue.

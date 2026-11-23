@@ -3,9 +3,11 @@
    [cheshire.core :as json]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
+   [clj-surgeon.mcp-inspect :as inspect]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-source-anchor :as source-anchor]
    [clj-surgeon.mcp-telemetry :as telemetry]
+   [clj-surgeon.owner-hypotheses :as hypotheses]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -306,6 +308,183 @@
       (finally
         (inspect-tool/init! nil)
         (delete-tree! project)))))
+
+(def ^:private folds-arms-source
+  (str "(ns cfp-scheduler-killer.folds)\n\n"
+       "(defmulti fold-event (fn [_state payload] (:type payload)))\n\n"
+       (apply str
+              (for [dispatch ["\"schedule.locked\"" "\"schedule.unlocked\""
+                              "\"agenda.published\"" "\"replay.marked\""
+                              "\"sink.registered\""]]
+                (str "(defmethod fold-event " dispatch "\n"
+                     "  [state payload]\n"
+                     "  ;; INTENT: LENS-004\n"
+                     "  (if-let [slug (:slug (event-by-id state"
+                     " (:event-id payload)))]\n"
+                     "    (assoc-in state [:events slug :settings :x] true)\n"
+                     "    state))\n\n")))
+       "(defn event-by-id [state id] nil)\n"))
+
+(deftest selector-refusal-summary-shows-the-exact-defmethod-owner-form
+  ;; @spec MCP-OP-DISPATCH-002
+  ;; @spec MCP-OP-DISPATCH-003
+  (let [project (temp-dir)
+        _source (write-source! project "src/folds.clj" folds-arms-source)
+        calls (atom [])]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (inspect-tool/handle-inspect
+        nil
+        {"requests" [{"id" "owner-probe" "operation" "forms"
+                      "file" "src/folds.clj"
+                      "forms" ["fold-event \"schedule.locked\""]
+                      "expect" {"forms" 1}}]
+         "expect" {"requests" 1 "files" 1}}
+        (fn [content error? structured]
+          (swap! calls conj {:content content :error? error?
+                             :structured structured})))
+      (let [{:keys [content error? structured]} (first @calls)
+            summary (first content)
+            failure (first (:selection_failures structured))
+            owner (:defmethod_owner failure)]
+        (is error?)
+        (is (= "batch-form-selection-failed" (:error_type structured)))
+        (testing "the structured refusal carries the exact owner form"
+          (is (= {:kind "defmethod" :name "fold-event"
+                  :dispatch "\"schedule.locked\""}
+                 (:owner_form owner)))
+          (is (true? (:owner_form_is_exact owner)))
+          (is (= "apply_clojure_changes changes[].forms" (:accepted_by owner)))
+          (is (= 5 (:arm_count owner)))
+          (is (= ["\"schedule.locked\"" "\"schedule.unlocked\""
+                  "\"agenda.published\"" "\"replay.marked\""
+                  "\"sink.registered\""]
+                 (:dispatch_vocabulary owner)))
+          (is (false? (:authority owner))))
+        (testing "the visible summary teaches the shape, not just the name"
+          (is (str/includes?
+                summary
+                "owner is a multimethod · 5 defmethod arms share the name fold-event"))
+          (is (str/includes?
+                summary
+                (str "send this exact owner form to apply_clojure_changes"
+                     " changes[].forms: {kind: \"defmethod\","
+                     " name: \"fold-event\","
+                     " dispatch: \"\\\"schedule.locked\\\"\"}")))
+          (is (str/includes?
+                summary
+                (str "dispatch values (5/5): \"schedule.locked\","
+                     " \"schedule.unlocked\", \"agenda.published\","
+                     " \"replay.marked\", \"sink.registered\"")))))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
+(def ^:private noisy-dispatch-arms-source
+  (str "(ns cfp-scheduler-killer.noisy)\n\n"
+       "(defmulti fold-event (fn [_state payload] (:type payload)))\n\n"
+       (apply str
+              (for [index (range 60)]
+                (str "(defmethod fold-event"
+                     " [:conference.schedule/event-with-a-long-qualified-name-"
+                     index "\n"
+                     "                       ;; kept for the 2026 migration\n"
+                     "                       :legacy-arm]\n"
+                     "  [state payload]\n"
+                     "  state)\n\n")))))
+
+(deftest selector-refusal-bounds-dispatch-vocabulary-characters
+  ;; @spec MCP-OP-DISPATCH-004
+  (let [project (temp-dir)
+        _source (write-source! project "src/noisy.clj"
+                               noisy-dispatch-arms-source)
+        calls (atom [])]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (inspect-tool/handle-inspect
+        nil
+        {"requests" [{"id" "owner-probe" "operation" "forms"
+                      "file" "src/noisy.clj"
+                      "forms" ["fold-event"]
+                      "expect" {"forms" 1}}]
+         "expect" {"requests" 1 "files" 1}}
+        (fn [content error? structured]
+          (swap! calls conj {:content content :error? error?
+                             :structured structured})))
+      (let [{:keys [content error? structured]} (first @calls)
+            summary (first content)
+            owner (:defmethod_owner (first (:selection_failures structured)))
+            vocabulary (:dispatch_vocabulary owner)]
+        (is error?)
+        (is (= 60 (:dispatch_count owner)))
+        (testing "the published vocabulary fits its character budget"
+          (is (<= (count (json/generate-string vocabulary))
+                  hypotheses/dispatch-vocabulary-character-limit))
+          (is (true? (:dispatch_vocabulary_truncated owner)))
+          (is (= (count vocabulary) (:dispatch_vocabulary_returned owner)))
+          (is (= (- 60 (count vocabulary)) (:dispatch_vocabulary_omitted owner))))
+        (testing "no entry can comment out or break the joined summary line"
+          (is (not-any? #(str/includes? % ";;") vocabulary))
+          (is (not-any? #(str/includes? % "\n") vocabulary))
+          (let [line (first (filter #(str/includes? % "dispatch values")
+                                    (str/split-lines summary)))]
+            (is (some? line))
+            (is (not (str/includes? line ";;")))
+            (is (str/includes? line "; truncated"))
+            (is (str/includes?
+                  line
+                  "[:conference.schedule/event-with-a-long-qualified-name-0 :legacy-arm]")))))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
+(deftest selector-refusal-summary-says-one-defmethod-arm-in-the-singular
+  ;; @spec MCP-OP-DISPATCH-003
+  (let [project (temp-dir)
+        _source (write-source!
+                  project "src/one.clj"
+                  (str "(ns one)\n\n"
+                       "(defmulti fold-event (fn [_state payload] (:type payload)))\n\n"
+                       "(defmethod fold-event \"only.arm\"\n"
+                       "  [state payload]\n"
+                       "  state)\n"))
+        calls (atom [])]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (inspect-tool/handle-inspect
+        nil
+        {"requests" [{"id" "owner-probe" "operation" "forms"
+                      "file" "src/one.clj"
+                      "forms" ["fold-event"]
+                      "expect" {"forms" 1}}]
+         "expect" {"requests" 1 "files" 1}}
+        (fn [content error? structured]
+          (swap! calls conj {:content content :error? error?
+                             :structured structured})))
+      (let [{:keys [content error?]} (first @calls)
+            summary (first content)]
+        (is error?)
+        (is (str/includes?
+              summary
+              "owner is a multimethod · 1 defmethod arm shares the name fold-event"))
+        (is (not (str/includes? summary "1 defmethod arms"))))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
+(deftest missing-field-evidence-computes-its-minimal-shape-once
+  ;; @spec MCP-OP-FIELD-001
+  (let [calls (atom 0)
+        original @#'clj-surgeon.mcp-inspect/minimal-request-shape]
+    (with-redefs [clj-surgeon.mcp-inspect/minimal-request-shape
+                  (fn [path required]
+                    (swap! calls inc)
+                    (original path required))]
+      (let [evidence (#'clj-surgeon.mcp-inspect/missing-fields-evidence
+                       ["requests" 0] #{"file" "id" "operation"} ["file"])]
+        (is (= {"file" "src/example.clj" "id" "r1" "operation" "outline"}
+               (:minimal_request evidence)))
+        (is (= 1 @calls))))))
 
 (deftest selector-refusal-summary-names-the-miss-and-hypothesis-without-authority
   ;; @spec MCP-OP-READ-DIAG-002 MCP-OP-READ-DIAG-003 MCP-OP-READ-CONT-001
@@ -1092,4 +1271,111 @@
       (finally
         (inspect-tool/init! nil)
         (change-buffer/clear-bases!)
+        (delete-tree! project)))))
+
+;; ---------------------------------------------------------------------------
+;; Refusals that name their own field, in the visible summary. Friction ledger
+;; items 3, 4 and 6 (2026-09-02): "two refusals name no field" and "`_`
+;; silently misses longer paths".
+;; ---------------------------------------------------------------------------
+
+(deftest missing-fields-summary-names-the-field-and-the-minimal-shape
+  ;; @spec MCP-OP-FIELD-001
+  (let [project (temp-dir)
+        _source (write-source! project "src/demo.clj" "(ns demo)\n(def a 1)\n")
+        calls (atom [])]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (inspect-tool/handle-inspect
+        nil
+        {"requests" [{"id" "outline" "operation" "outline"
+                      "file" "src/demo.clj"}]}
+        (fn [content error? structured]
+          (swap! calls conj {:content content :error? error?
+                             :structured structured})))
+      (let [{:keys [content structured]} (first @calls)
+            summary (first content)]
+        (is (false? (:ok structured)))
+        (is (= "missing-fields" (:reason structured)))
+        (is (str/includes?
+              summary
+              "missing required field at the request root: expect"))
+        (is (str/includes? summary "required there: expect, requests"))
+        (is (str/includes?
+              summary
+              (str "minimal valid shape: "
+                   "{\"expect\":{\"requests\":1,\"files\":1},"
+                   "\"requests\":[{\"id\":\"r1\",\"operation\":\"outline\","
+                   "\"file\":\"src/example.clj\"}]}")))
+        (is (str/includes?
+              summary
+              (str "→ add the named field(s) in the minimal valid shape above "
+                   "and call inspect_clojure once"))))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
+(deftest invalid-require-policy-summary-names-the-field-and-its-values
+  ;; @spec MCP-OP-FIELD-002
+  (let [project (temp-dir)
+        _source (write-source! project "src/demo.clj"
+                               "(ns demo)\n(defn a [] 1)\n")
+        calls (atom [])]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (inspect-tool/handle-inspect
+        nil
+        {"mode" "plan-extraction"
+         "file" "src/demo.clj"
+         "to" "src/demo_moved.clj"
+         "forms" ["a"]}
+        (fn [content error? structured]
+          (swap! calls conj {:content content :error? error?
+                             :structured structured})))
+      (let [{:keys [content structured]} (first @calls)
+            summary (first content)]
+        (is (false? (:ok structured)))
+        (is (= "invalid-require-policy" (:error_type structured)))
+        (is (= "require_policy" (:field structured)))
+        (is (= ["minimal" "copy-all"] (:accepted structured)))
+        (is (str/includes?
+              summary "field require_policy accepts: minimal, copy-all"))
+        (is (str/includes?
+              summary
+              "require_policy is required and is never defaulted")))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
+(deftest match-cardinality-refusal-summary-explains-the-wildcard
+  ;; @spec MCP-OP-FIELD-003
+  (let [project (temp-dir)
+        _source (write-source!
+                  project "src/demo.clj"
+                  (str "(ns demo)\n"
+                       "(def paths [[:events slug :settings :hero :url]\n"
+                       "            [:events slug :settings :blind :on]])\n"))
+        calls (atom [])]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (inspect-tool/handle-inspect
+        nil
+        {"requests" [{"id" "paths" "operation" "match"
+                      "file" "src/demo.clj"
+                      "match" "[:events slug :settings _]"
+                      "expect" {"matches" 2}}]
+         "expect" {"requests" 1 "files" 1}}
+        (fn [content error? structured]
+          (swap! calls conj {:content content :error? error?
+                             :structured structured})))
+      (let [{:keys [content structured]} (first @calls)
+            summary (first content)]
+        (is (false? (:ok structured)))
+        (is (= "inspect-cardinality-mismatch" (:error_type structured)))
+        (is (str/includes?
+              summary
+              (str "note: each `_` matches exactly one subtree; "
+                   "a longer form needs a longer pattern"))))
+      (finally
+        (inspect-tool/init! nil)
         (delete-tree! project)))))

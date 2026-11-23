@@ -1,6 +1,7 @@
 (ns clj-surgeon.experiments.mcp-candidate-catalog-test
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.experiments.mcp-candidate-admission :as admission]
    [clj-surgeon.experiments.mcp-candidate-catalog :as candidate]
    [clj-surgeon.mcp-http-server :as http-server]
    [clj-surgeon.mcp-server :as mcp-server]
@@ -202,14 +203,13 @@
     (is (= (:outcome-classes base-edit) (:outcome-classes edit)))
     (is (= (:outcome-classes base-change) (:outcome-classes extraction)))
     (is (= (:outcome-classes base-change) (:outcome-classes plan)))
-    (is (= #{"workspace_root" "edits" "programs" "delete_owners"
-             "changes" "expect"}
+    (is (= #{"workspace_root" "edits" "programs" "delete_owners"}
            (set (keys (get-in edit [:schema :properties])))))
     (is (= #{"workspace_root" "extraction" "verify"}
            (set (keys (get-in extraction [:schema :properties])))))
     (is (= #{"workspace_root" "basis" "decisions" "verify"}
            (set (keys (get-in plan [:schema :properties])))))
-    (is (= 2 (count (get-in edit [:schema :oneOf]))))
+    (is (= 1 (count (get-in edit [:schema :oneOf]))))
     (is (= 1 (count (get-in extraction [:schema :oneOf]))))
     (is (= 1 (count (get-in plan [:schema :oneOf]))))
     (is (re-find #"compiles, commits, and verifies the extraction in this call"
@@ -221,6 +221,49 @@
     (is (= :not-implemented
            (get-in (candidate/catalog-report :M)
                    [:deferred-factorials 0 :status])))))
+
+;; ---------------------------------------------------------------------------
+;; Sol's 2026-09-03 re-review, item 2: the projected `edit_clojure` candidate
+;; advertised the explicit-change branch (`changes`+`expect`) in its schema,
+;; but its bound handler is the unchanged production `handle-edit-clojure`,
+;; which MCP-OP-MATCHED-005 (e9f5772) guards with `mcp-schema/editor-tool-schema`
+;; and refuses those exact fields with `unexpected_fields=[changes expect]`.
+;; Sol's probe: schema-ok=true, handler refused. A request only ever reaches
+;; the real handler after admission accepts it, so the fix narrows the schema
+;; to the compact shape the handler actually accepts; a `changes`+`expect`
+;; request is now refused at admission and never reaches the handler at all.
+;; ---------------------------------------------------------------------------
+
+(deftest split-catalog-edit-entrance-schema-and-handler-agree-on-changes
+  (let [base (mcp-server/public-tool-registry)
+        edit (tool-by-name (candidate/catalog-tools :M base) "edit_clojure")
+        schema (:schema edit)
+        changes-request
+        (java-json-value
+          {:workspace_root "/tmp/does-not-need-to-exist"
+           :changes [{:file "src/demo.clj" :find "a" :replace "b"}]
+           :expect {:changes 1}})
+        edits-request
+        (java-json-value
+          {:workspace_root "/tmp/does-not-need-to-exist"
+           :edits [{:file "src/demo.clj"
+                    :within {:form "a"}
+                    :from "a"
+                    :to "b"}]})
+        results (atom [])]
+    (testing "changes+expect is refused at admission, before the handler runs"
+      (let [admitted (admission/authorize schema changes-request)]
+        (is (false? (:ok admitted)))
+        ((:tool-fn edit) nil changes-request
+         (fn [content error? structured]
+           (swap! results conj [content error? structured])))
+        (let [[_ error? structured] (first @results)]
+          (is (true? error?))
+          (is (= :public-schema-denied (:error-type structured)))
+          (is (nil? (:unexpected_fields structured))
+              "must be blocked at the schema, not reach the handler's own MCP-OP-MATCHED-005 field check"))))
+    (testing "the compact edits shape the handler actually accepts is schema-admitted"
+      (is (true? (:ok (admission/authorize schema edits-request)))))))
 
 (deftest split-catalog-does-not-increase-total-schema-characters
   (let [base (candidate/catalog-tools :A)

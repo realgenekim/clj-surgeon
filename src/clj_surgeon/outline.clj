@@ -145,6 +145,35 @@
                                   (recur (z/right child))))
               :else           (recur (z/right child)))))))))
 
+;; @spec MCP-OP-DISPATCH-001
+;; @spec MCP-OP-DISPATCH-005
+(defn defmethod-dispatch-location
+  "Zipper location of a `defmethod` form's dispatch value.
+
+   The dispatch value is not simply the third child: `#_` discards before it are
+   read and thrown away, and a `^meta` wrapper decorates the value rather than
+   being it. Both are traversed here so the location returned is the one the
+   reader — and therefore the exact-owner selector — actually sees."
+  [zloc]
+  (loop [location (some-> zloc z/down z/right z/right)
+         steps 0]
+    (cond
+      (or (nil? location) (< 64 steps)) nil
+      (= :uneval (z/tag location)) (recur (z/right location) (inc steps))
+      (= :meta (z/tag location)) (recur (some-> location z/down z/rightmost)
+                                        (inc steps))
+      :else location)))
+
+;; @spec MCP-OP-DISPATCH-001
+(defn- extract-dispatch
+  "Source spelling of a `defmethod` dispatch value.
+
+   The exact spelling of that value is returned, not a normalized one, so a
+   caller can copy it verbatim into an exact `{kind, name, dispatch}` owner
+   form. Discard and metadata wrappers are not part of the value."
+  [zloc]
+  (some-> (defmethod-dispatch-location zloc) z/string))
+
 (defn attached-comment-start
   "Look backwards from a form's start line to find attached comment lines.
    Comments must be contiguous (no blank lines between them and the form)."
@@ -253,6 +282,9 @@
                    arglist (cond
                              user-fields (:arglist extracted)
                              name-val (extract-arglist zloc))
+                   dispatch (when (and name-val
+                                       (= :defmethod (:kind form-spec)))
+                              (extract-dispatch zloc))
                    form-line (:row m)
                    comment-start (when form-line
                                    (attached-comment-start lines form-line))
@@ -267,6 +299,7 @@
                                          name-val
                                          (symbol (str name-val))))
                  arglist (assoc :args arglist)
+                 dispatch (assoc :dispatch dispatch)
                  (seq extras) (merge extras)
                  (and form-line comment-start (< comment-start form-line))
                  (assoc :comment-start comment-start))))

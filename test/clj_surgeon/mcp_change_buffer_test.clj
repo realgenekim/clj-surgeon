@@ -683,9 +683,27 @@
     (is (= :project (:profile-source compiled)))
     (is (= 64 (count (:profile-sha256 compiled))))
     (is (= (:profile-sha256 compiled) (:profile-sha256 reordered)))
-    (is (= ["/opt/homebrew/bin/clj-kondo" "--lint" "src/app.clj"
-            "--fail-level" "error"]
-           (:argv compiled)))
+    ;; The resolution RULE, not a host path: compile-exact-profile must hand
+    ;; the raw command through the project's own executable resolver
+    ;; (expand-command), and that resolver must land on an absolute,
+    ;; existing, executable file actually named "clj-kondo" -- wherever this
+    ;; host happens to keep it (Homebrew on macOS, /usr/local/bin on Linux,
+    ;; etc). The expectation is computed from the resolver itself, never
+    ;; typed, so this assertion is host-independent.
+    (let [resolved-argv (:argv compiled)
+          resolved-clj-kondo (first resolved-argv)
+          resolved-file (io/file resolved-clj-kondo)]
+      (is (= (change-buffer/expand-command (first (:commands profile)) [])
+             resolved-argv)
+          "compiled argv must equal this host's own resolver output for the same command")
+      (is (= ["--lint" "src/app.clj" "--fail-level" "error"]
+             (rest resolved-argv)))
+      (is (.isAbsolute resolved-file)
+          (str "resolved clj-kondo must be an absolute path, not a bare name: "
+               resolved-clj-kondo))
+      (is (and (.isFile resolved-file) (.canExecute resolved-file))
+          (str "resolved clj-kondo must exist and be executable: " resolved-clj-kondo))
+      (is (= "clj-kondo" (.getName resolved-file))))
     (is (= :exact-profile-not-project-owned
            (:error-type
              (change-buffer/compile-exact-profile

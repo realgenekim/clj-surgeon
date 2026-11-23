@@ -505,3 +505,159 @@
                 "  1,234 source characters · 12.50 ms")
            summary))
     (is (not (.contains summary "(defn")))))
+
+;; ---------------------------------------------------------------------------
+;; Refusals that name their own field. Friction ledger items 3 and 6
+;; (2026-09-02): `missing-fields` named nothing a caller could act on, and a
+;; four-element `[:events slug :settings _]` pattern silently missed the
+;; five-element paths because `_` matches exactly one subtree.
+;; ---------------------------------------------------------------------------
+
+(deftest missing-fields-names-the-field-and-the-minimal-valid-shape
+  ;; @spec MCP-OP-FIELD-001
+  (testing "the omitted top-level aggregate expect"
+    (let [result (inspect/validate-inspect-params
+                   {"requests" [{"id" "r1" "operation" "outline"
+                                 "file" "src/demo.clj"}]})]
+      (is (false? (:ok result)))
+      (is (= :missing-fields (:reason result)))
+      (is (= [] (:path result)))
+      (is (= ["expect"] (:missing result)))
+      (is (= ["expect" "requests"] (:required result)))
+      (is (= {"expect" {"requests" 1 "files" 1}
+              "requests" [{"id" "r1" "operation" "outline"
+                           "file" "src/example.clj"}]}
+             (:minimal_request result)))))
+  (testing "an omitted field inside the aggregate expect"
+    (let [result (inspect/validate-inspect-params
+                   {"requests" [{"id" "r1" "operation" "outline"
+                                 "file" "src/demo.clj"}]
+                    "expect" {"requests" 1}})]
+      (is (false? (:ok result)))
+      (is (= :missing-fields (:reason result)))
+      (is (= ["expect"] (:path result)))
+      (is (= ["files"] (:missing result)))
+      (is (= {"files" 1 "requests" 1} (:minimal_request result)))))
+  (testing "an omitted required field on one request"
+    (let [result (inspect/validate-inspect-params
+                   {"requests" [{"id" "r1" "operation" "outline"}]
+                    "expect" {"requests" 1 "files" 1}})]
+      (is (false? (:ok result)))
+      (is (= :missing-fields (:reason result)))
+      (is (= ["requests" 0] (:path result)))
+      (is (= ["file"] (:missing result)))
+      (is (= ["file" "id" "operation"] (:required result)))
+      (is (= {"file" "src/example.clj" "id" "r1" "operation" "outline"}
+             (:minimal_request result))))))
+
+(deftest match-miss-explains-that-one-wildcard-matches-one-subtree
+  ;; @spec MCP-OP-FIELD-003
+  (let [source (str "(ns demo)\n"
+                    "(def paths [[:events slug :settings :hero :url]\n"
+                    "            [:events slug :settings :blind :on]])\n")
+        run (fn [pattern expect]
+              (let [raw (cond-> {"requests"
+                                 [(cond-> {"id" "paths" "operation" "match"
+                                           "file" "src/demo.clj"
+                                           "match" pattern}
+                                    expect (assoc "expect"
+                                                  {"matches" expect}))]
+                                 "expect" {"requests" 1 "files" 1}})
+                    params (:params (inspect/validate-inspect-params raw))]
+                (inspect/evaluate-snapshots
+                  params
+                  {"src/demo.clj" (snapshot "src/demo.clj" source)})))]
+    (testing "zero matches with a standalone wildcard"
+      (let [result (get-in (run "[:events slug :settings _]" nil) [:results 0])]
+        (is (= 0 (:match_count result)))
+        (is (= (str "each `_` matches exactly one subtree; "
+                    "a longer form needs a longer pattern")
+               (:note result)))))
+    (testing "zero matches with no wildcard carries no note"
+      (let [result (get-in (run "[:events slug :settings :hero]" nil)
+                           [:results 0])]
+        (is (= 0 (:match_count result)))
+        (is (nil? (:note result)))))
+    (testing "a five-element pattern finds what the four-element one missed"
+      (let [result (get-in (run "[:events slug :settings _ _]" nil)
+                           [:results 0])]
+        (is (= 2 (:match_count result)))
+        (is (nil? (:note result)))))
+    (testing "fewer matches than declared refuses and still explains the wildcard"
+      (let [refusal (run "[:events slug :settings _]" 2)]
+        (is (false? (:ok refusal)))
+        (is (= "inspect-cardinality-mismatch" (:error_type refusal)))
+        (is (= (str "each `_` matches exactly one subtree; "
+                    "a longer form needs a longer pattern")
+               (:note refusal)))))
+    ;; @spec MCP-OP-FIELD-005
+    ;; The note used to be decided from the pattern's raw bytes, which cannot
+    ;; tell a wildcard from an underscore inside a string, and cannot see one
+    ;; behind a comma.
+    (testing "`_` inside a string literal is data, not a wildcard"
+      (let [result (get-in (run "(missing \"a _ b\")" nil) [:results 0])]
+        (is (= 0 (:match_count result)))
+        (is (nil? (:note result)))))
+    (testing "`_` behind a comma is still a wildcard"
+      (let [result (get-in (run "[:events,_]" nil) [:results 0])]
+        (is (= 0 (:match_count result)))
+        (is (= (str "each `_` matches exactly one subtree; "
+                    "a longer form needs a longer pattern")
+               (:note result)))))
+    (testing "an underscore inside one symbol is not a wildcard"
+      (let [result (get-in (run "(missing_thing 1)" nil) [:results 0])]
+        (is (= 0 (:match_count result)))
+        (is (nil? (:note result)))))))
+
+;; ---------------------------------------------------------------------------
+;; The minimal-shape table is a promise about the live validators. Nothing
+;; pinned it to them: an example could drift out of validity, or cover a path
+;; whose required set it does not satisfy, and no test would notice.
+;; ---------------------------------------------------------------------------
+
+(def ^:private minimal-example-carriers
+  "For each registered example path, a complete request embedding that example."
+  {[] identity
+   ["expect"]
+   (fn [example]
+     {"requests" [{"id" "r1" "operation" "outline" "file" "src/example.clj"}]
+      "expect" example})
+   ["requests" :index]
+   (fn [example]
+     {"requests" [example] "expect" {"requests" 1 "files" 1}})
+   ["requests" :index "expect"]
+   (fn [example]
+     {"requests" [{"id" "r1" "operation" "forms" "file" "src/example.clj"
+                   "forms" ["f"] "expect" example}]
+      "expect" {"requests" 1 "files" 1}})})
+
+(deftest minimal-request-examples-are-accepted-by-the-live-validator
+  ;; @spec MCP-OP-FIELD-006
+  (let [examples @#'inspect/minimal-request-examples]
+    (is (= (set (keys examples)) (set (keys minimal-example-carriers)))
+        "every registered example must be exercised against the validator")
+    (doseq [[path example] examples]
+      (testing (pr-str path)
+        (let [request ((get minimal-example-carriers path) example)
+              result (inspect/validate-inspect-params request)]
+          (is (:ok result) (pr-str result)))))))
+
+(deftest a-refusal-with-no-standing-minimal-shape-shows-none
+  ;; @spec MCP-OP-FIELD-006
+  (testing "a forms request omitting forms and expect has no covering example"
+    (let [result (inspect/validate-inspect-params
+                   {"requests" [{"id" "r1" "operation" "forms"
+                                 "file" "src/example.clj"}]
+                    "expect" {"requests" 1 "files" 1}})]
+      (is (false? (:ok result)))
+      (is (= :missing-fields (:reason result)))
+      (is (= ["requests" 0] (:path result)))
+      (is (= ["expect" "forms"] (:missing result)))
+      (is (= ["expect" "file" "forms" "id" "operation"] (:required result)))
+      (is (not (contains? result :minimal_request)))))
+  (testing "and a path the table does not register shows none either"
+    (let [evidence (#'inspect/missing-fields-evidence
+                     ["requests" 0 "snapshot_guards"] #{"file" "hash"} ["hash"])]
+      (is (= ["hash"] (:missing evidence)))
+      (is (= ["file" "hash"] (:required evidence)))
+      (is (not (contains? evidence :minimal_request))))))

@@ -1,0 +1,10 @@
+week	store	surface	calls	sessions
+2026-08-31	claude	cli	5	1
+2026-08-31	claude	mcp	23	2
+2026-08-31	codex	cli	1350	54
+2026-08-31	codex	mcp	153	43
+2026-09-07	claude	cli	117	49
+2026-09-07	claude	mcp	122	16
+2026-09-07	codex	cli	218	17
+2026-09-07	codex	mcp	2	2
+2026-09-14	codex	cli	59	4

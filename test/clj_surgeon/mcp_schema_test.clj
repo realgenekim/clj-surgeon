@@ -1,11 +1,13 @@
 (ns clj-surgeon.mcp-schema-test
   (:require
+   [clj-surgeon.experiments.mcp-candidate-admission :as admission]
    [clj-surgeon.mcp-schema :as schema]
    [clojure.test :refer [deftest is testing]]))
 
 (deftest direct-change-contract-is-projected-from-the-published-schema
+  ;; @spec MCP-OP-MATCHED-003
   (is (= {:request
-          {:allowed #{"changes" "expect" "verify"}
+          {:allowed #{"changes" "expect" "verify" "expect_matched"}
            :required #{"changes"}}
           :change
           {:allowed #{"id" "files" "forms" "owner" "find" "inside"
@@ -29,7 +31,10 @@
            :required #{"from" "to" "preserve_external_key"}}
           :assoc-entry
           {:allowed #{"key" "value"}
-           :required #{"key" "value"}}}
+           :required #{"key" "value"}}
+          :expect-matched
+          {:allowed #{"file" "file_hash" "match" "count"}
+           :required #{"file" "file_hash" "match" "count"}}}
          schema/direct-change-contract))
   (is (re-find #"Never combine edits and changes"
                (get-in schema/explicit-change-schema
@@ -109,3 +114,73 @@
            (get-in program [:properties "expect" :required])))
     (is (= 16 (get-in schema/editor-tool-schema
                       [:properties "programs" :maxItems])))))
+
+;; ---------------------------------------------------------------------------
+;; `expect_matched` is a property of the direct changes transaction only. The
+;; published schema merged every branch's properties, so it advertised the field
+;; on the edits and extraction branches that refuse it at validation.
+;; ---------------------------------------------------------------------------
+
+(def ^:private matched-basis
+  {"file" "src/a.clj"
+   "file_hash" (apply str (repeat 64 "a"))
+   "match" "(f _)"
+   "count" 2})
+
+(def ^:private one-change
+  {"id" "c1"
+   "files" ["src/a.clj"]
+   "forms" ["f"]
+   "find" ":old"
+   "replace" ":new"
+   "expect" {"matches" 1}})
+
+(def ^:private one-edit
+  {"file" "src/a.clj"
+   "within" {"form" "f"}
+   "from" ":old"
+   "to" ":new"})
+
+(def ^:private one-extraction
+  {"file" "src/a.clj"
+   "to" "src/b.clj"
+   "forms" ["f"]
+   "require_policy" "minimal"})
+
+(deftest published-schema-advertises-expect-matched-only-where-it-is-accepted
+  ;; @spec MCP-OP-MATCHED-005
+  (testing "the direct changes branch accepts the prior-match basis"
+    (is (:ok (admission/authorize
+               schema/clj-change-schema
+               {"changes" [one-change]
+                "expect" {"changes" 1 "edits" 1 "files" 1}
+                "expect_matched" matched-basis}))))
+  (testing "the editor gesture branch does not"
+    (is (:ok (admission/authorize schema/clj-change-schema
+                                  {"edits" [one-edit]})))
+    (is (false? (:ok (admission/authorize
+                       schema/clj-change-schema
+                       {"edits" [one-edit]
+                        "expect_matched" matched-basis})))))
+  (testing "the extraction branch does not"
+    (is (:ok (admission/authorize schema/clj-change-schema
+                                  {"extraction" one-extraction})))
+    (is (false? (:ok (admission/authorize
+                       schema/clj-change-schema
+                       {"extraction" one-extraction
+                        "expect_matched" matched-basis}))))))
+
+(deftest edit-clojure-schema-omits-the-direct-transaction-fields
+  ;; @spec MCP-OP-MATCHED-005
+  (testing "edit_clojure advertises neither changes nor the prior-match basis"
+    (is (not (contains? (:properties schema/editor-tool-schema) "changes")))
+    (is (not (contains? (:properties schema/editor-tool-schema)
+                        "expect_matched"))))
+  (testing "and its published schema refuses them"
+    (is (false? (:ok (admission/authorize
+                       schema/editor-tool-schema
+                       {"edits" [one-edit] "changes" [one-change]}))))
+    (is (false? (:ok (admission/authorize
+                       schema/editor-tool-schema
+                       {"edits" [one-edit]
+                        "expect_matched" matched-basis}))))))

@@ -1,0 +1,8 @@
+classification	occurrences	median_native_actions	median_files_touched	clears_bar
+rename-namespace	5	20	18	yes
+add-require-across-files	43	29	17	yes
+move-var	0			no
+extract-function	89	16	7	yes
+arity-change	1	55	33	yes
+alias-migration	6	14.5	18.0	yes
+other-multi-file	1035	7	6	yes

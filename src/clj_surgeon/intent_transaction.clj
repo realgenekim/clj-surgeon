@@ -242,15 +242,24 @@
     (parse-one-form (:dispatch form-owner) ":forms dispatch"))
   forms)
 
+(def ^:private unreadable-dispatch
+  "Identity sentinel for an arm whose dispatch value cannot be read.
+
+   It is never equal to a caller's parsed dispatch, so one unreadable arm can
+   never match a selector — and, unlike a thrown exception, can never make every
+   other arm in that file unaddressable."
+  (Object.))
+
+;; @spec MCP-OP-DISPATCH-005
 (defn- defmethod-dispatch
   [record]
   (when (= 'defmethod (:type record))
-    (some-> (:source record)
-            z/of-string
-            z/down
-            z/right
-            z/right
-            z/sexpr)))
+    (try
+      (some-> (:source record)
+              z/of-string
+              outline/defmethod-dispatch-location
+              z/sexpr)
+      (catch Exception _ unreadable-dispatch))))
 
 (defn- owner-identity
   [owner-record]
@@ -1488,6 +1497,150 @@
        {:error (.getMessage e)
         :error-type :intent-compiler-failure}))))
 
+(def ^:private unaddressed-match-limit 20)
+
+;; @spec MCP-OP-MATCHED-004
+(defn- preorder-subtree-ends
+  "Map one snapshot's preorder index to the last preorder index of its subtree.
+
+   Matched sites and compiled edits are numbered by the same whitespace-skipping
+   preorder walk, so this turns a site's `:address {:preorder}` into the closed
+   span an edit's `[:address :preorder]`/`:end-preorder` span is compared with.
+   Line numbers cannot do that: two sites on one line share a line span."
+  [source]
+  (persistent!
+    (reduce (fn [ends [preorder location]]
+              (assoc! ends preorder
+                      (+ preorder (node-size (z/node location)) -1)))
+            (transient {})
+            (map-indexed vector
+                         (zipper-locations
+                           (z/of-string source {:track-position? true}))))))
+
+(defn- edit-preorder-span
+  "Pre-image preorder span [start end] of one compiled edit."
+  [{:keys [address end-preorder]}]
+  (let [start (:preorder address)]
+    (when (and (integer? start) (integer? end-preorder))
+      [start end-preorder])))
+
+(defn- site-preorder-span
+  "Pre-image preorder span [start end] of one matched site."
+  [ends site]
+  (let [start (get-in site [:address :preorder])]
+    (when (integer? start)
+      [start (get ends start start)])))
+
+(defn- spans-intersect?
+  [[left-start left-end] [right-start right-end]]
+  (and (<= left-start right-end) (<= right-start left-end)))
+
+;; @spec MCP-OP-MATCHED-001
+;; @spec MCP-OP-MATCHED-002
+;; @spec MCP-OP-MATCHED-003
+;; @spec MCP-OP-MATCHED-004
+(defn matched-basis-evidence
+  "Pure: one compiled transaction plus one prior-match basis in ; receipt
+   evidence or one typed pre-write refusal out. Performs no I/O.
+
+   The basis is exactly what an `inspect_clojure` `match` receipt already
+   returned for one file: its project-relative path, its `file_hash`, the exact
+   pattern, and the match count. The transaction's own frozen pre-image is the
+   only snapshot consulted, so the two calls are joined by the caller's hash and
+   the server retains no session state between them. A site is addressed when
+   its pre-image preorder span intersects a compiled edit's preorder span."
+  [compiled {:keys [file file-hash match public] expected-count :count}]
+  (let [source (get (:original-sources compiled) file)
+        public-file (get public :file file)
+        public-files (or (:files public)
+                         (vec (sort (keys (:original-sources compiled)))))
+        actual-hash (when source (structural-lens/source-hash source))
+        stale (fn [mismatch message extra]
+                (merge {:error-type :expect-matched-stale
+                        :error message
+                        :mismatch mismatch
+                        :file public-file
+                        :source-unchanged true
+                        :remedy (str "Re-run the inspect_clojure match against the "
+                                     "current snapshot and resend expect_matched "
+                                     "from that receipt, or omit expect_matched.")}
+                       extra))]
+    (cond
+      (nil? source)
+      (stale "file_not_in_transaction"
+             (str "expect_matched names " public-file
+                  ", which this transaction did not read")
+             {:transaction-files public-files})
+
+      (not= file-hash actual-hash)
+      (stale "file_hash"
+             (str "expect_matched was taken from a different snapshot of "
+                  public-file)
+             {:expected-file-hash file-hash :actual-file-hash actual-hash})
+
+      :else
+      (let [found (structural-lens/find-subforms source {:match match})]
+        (cond
+          ;; The pattern and the file are separate causes and get separate
+          ;; labels: only the caller can fix an unusable pattern.
+          (= :invalid-match (:error-type found))
+          {:error-type :expect-matched-invalid-pattern
+           :error (str "expect_matched.match must be exactly one complete "
+                       "Clojure form: " (:error found))
+           :file public-file
+           :match match
+           :source-unchanged true
+           :remedy "Resend the exact pattern string the match receipt echoed."}
+
+          (:error found)
+          {:error-type :expect-matched-unreadable-source
+           :error (str "expect_matched could not be evaluated against "
+                       public-file ": " (:error found))
+           :file public-file
+           :match match
+           :source-unchanged true
+           :remedy (str "Repair " public-file " so it parses, re-run the "
+                        "inspect_clojure match, and resend expect_matched from "
+                        "that receipt.")}
+
+          (not= expected-count (:match-count found))
+          (stale "match_count"
+                 (str "expect_matched declared " expected-count
+                      " matches; this snapshot has " (:match-count found))
+                 {:expected-match-count expected-count
+                  :actual-match-count (:match-count found)})
+
+          :else
+          (let [spans (->> (:files compiled)
+                           (filter #(= file (:file %)))
+                           (mapcat :edits)
+                           (keep edit-preorder-span)
+                           vec)
+                ends (preorder-subtree-ends source)
+                unaddressed
+                (->> (:matches found)
+                     (remove (fn [site]
+                               (when-let [span (site-preorder-span ends site)]
+                                 (boolean (some #(spans-intersect? span %)
+                                                spans)))))
+                     (mapv (fn [site]
+                             {:line (:line site)
+                              :hash (structural-lens/source-hash
+                                      (:source site))})))
+                returned (vec (take unaddressed-match-limit unaddressed))]
+            {:ok true
+             :evidence
+             {:expect-matched {:file public-file
+                               :match (:match found)
+                               :file-hash actual-hash
+                               :count expected-count}
+              :matched-count (:match-count found)
+              :addressed-matches (- (:match-count found) (count unaddressed))
+              :unaddressed-match-count (count unaddressed)
+              :unaddressed-matches returned
+              :unaddressed-matches-truncated (> (count unaddressed)
+                                                unaddressed-match-limit)}}))))))
+
 (defn- canonical-effect-refusal!
   [message data]
   (refuse! :invalid-canonical-effect-input
@@ -2691,11 +2844,11 @@
   "Compile, commit, verify, and publish one durable inverse receipt."
   [context
    {:keys [spec receipt-out prepare-compiled! prepare-spec
-           write-refusal-context]
+           write-refusal-context expect-matched]
     :as opts}]
   (try
     (let [unknown (vec (sort (remove #{:op :spec :receipt-out :prepare-compiled! :prepare-spec
-                                       :write-refusal-context}
+                                       :write-refusal-context :expect-matched}
                                      (keys opts))))]
       (when (seq unknown)
         (refuse! :unknown-arguments
@@ -2709,7 +2862,12 @@
                                                                  write-refusal-context)
           compiled (if (and (nil? (:error compiled)) prepare-compiled!)
                      (prepare-compiled! compiled)
-                     compiled)]
+                     compiled)
+          ;; @spec MCP-OP-MATCHED-001
+          ;; Computed once, against this transaction's own frozen pre-image,
+          ;; before any effect is authorized.
+          matched-basis (when (and expect-matched (nil? (:error compiled)))
+                          (matched-basis-evidence compiled expect-matched))]
       (assert-receipt-does-not-alias-source! receipt-path spec)
       (cond
         authority-error
@@ -2721,8 +2879,16 @@
           :compile capabilities compiled nil
           (assoc compiled :phase :compile :source-unchanged true))
 
+        ;; @spec MCP-OP-MATCHED-002
+        ;; @spec MCP-OP-MATCHED-003
+        (:error-type matched-basis)
+        (observe-change-result
+          :compile capabilities compiled nil
+          (assoc matched-basis :phase :compile :source-unchanged true))
+
         :else
-        (let [authorization
+        (let [matched-evidence (:evidence matched-basis)
+              authorization
               (operation-algebra/authorize-effects
                 capabilities
                 #{:source-write
@@ -2778,7 +2944,12 @@
 
                                       (:canonical-effect-identity compiled)
                                       (assoc :canonical-effect-identity
-                                             (:canonical-effect-identity compiled))))]
+                                             (:canonical-effect-identity compiled))
+
+                                      ;; @spec MCP-OP-MATCHED-001
+                                      matched-evidence
+                                      (assoc :matched-evidence
+                                             matched-evidence)))]
                               (observe-change-result
                                 :success capabilities compiled
                                 {:path receipt-path

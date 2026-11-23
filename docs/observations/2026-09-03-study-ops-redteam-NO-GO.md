@@ -1,4 +1,4 @@
-# NO-GO: bridge/study-ops-mcp b3c17bb must not merge until the security round lands (2026-09-03T02:12Z)
+# (superseded 2026-09-03: re-review at 212b045 lifts this to GO-WITH-FIX — see 2026-09-03-study-ops-rereview.md) NO-GO: bridge/study-ops-mcp b3c17bb must not merge until the security round lands (2026-09-03T02:12Z)
 
 Opus red-team (standing in for Sol; codex is unauthenticated on the Anvil seat), executed against the
 branch bytes, no server started. Verdict **NO-GO**; items 1–4 blocking.

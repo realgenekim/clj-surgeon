@@ -2275,3 +2275,237 @@
         (is (not (fs/exists? receipt-file))))
       (finally
         (fs/delete-tree temp-dir)))))
+
+;; ---------------------------------------------------------------------------
+;; Matched-but-unaddressed reporting. Field case: 2026-09-02 session 4 on
+;; curtain-call src/cfp_scheduler_killer/folds.clj — one `match` on the guard
+;; shape returned 19 arms, the transaction addressed 16, and the exclusion
+;; rationale for the other 3 existed only in the driver's head.
+;; ---------------------------------------------------------------------------
+
+(def ^:private guard-pattern
+  "(if-let [slug (:slug (event-by-id state (:event-id payload)))] _ state)")
+
+(defn- fold-arm
+  [dispatch]
+  (str "(defmethod fold-event \"" dispatch "\"\n"
+       "  [state payload]\n"
+       "  ;; INTENT: LENS-004\n"
+       "  (if-let [slug (:slug (event-by-id state (:event-id payload)))]\n"
+       "    (assoc-in state [:events slug :settings :" dispatch "] true)\n"
+       "    state))\n"))
+
+(def ^:private folds-source
+  (str "(ns cfp-scheduler-killer.folds)\n\n"
+       (str/join "\n" (map #(fold-arm (str "flag" %)) (range 19)))
+       "\n(defn event-by-id [state id] nil)\n"))
+
+(defn- folds-transaction
+  [addressed-dispatches]
+  (transaction/compile-transaction
+    {"src/folds.clj" folds-source}
+    {:changes
+     (mapv (fn [dispatch]
+             {:id (keyword (str "arm-" dispatch))
+              :in ["src/folds.clj"]
+              :forms [{:kind :defmethod
+                       :name 'fold-event
+                       :dispatch (str "\"" dispatch "\"")}]
+              :find (str "(if-let [slug (:slug (event-by-id state"
+                         " (:event-id payload)))]\n"
+                         "    (assoc-in state [:events slug :settings :"
+                         dispatch "] true)\n"
+                         "    state)")
+              :do [:replace
+                   (str "(update-settings state (:event-id payload) assoc :"
+                        dispatch " true)")]
+              :expect {:matches 1}})
+           addressed-dispatches)
+     :expect {:changes (count addressed-dispatches)
+              :edits (count addressed-dispatches)
+              :files 1}}))
+
+(defn- folds-basis
+  [expected-count]
+  {:file "src/folds.clj"
+   :file-hash (structural-lens/source-hash folds-source)
+   :match guard-pattern
+   :count expected-count})
+
+(deftest expect-matched-lists-the-matched-sites-a-transaction-did-not-address
+  ;; @spec MCP-OP-MATCHED-001
+  (let [compiled (folds-transaction (mapv #(str "flag" %) (range 16)))
+        _ (is (:ok compiled))
+        result (transaction/matched-basis-evidence compiled (folds-basis 19))
+        evidence (:evidence result)]
+    (is (:ok result))
+    (is (= 19 (:matched-count evidence)))
+    (is (= 16 (:addressed-matches evidence)))
+    (is (= 3 (:unaddressed-match-count evidence)))
+    (is (= 3 (count (:unaddressed-matches evidence))))
+    (is (every? #(and (integer? (:line %))
+                      (re-matches #"[0-9a-f]{64}" (:hash %)))
+                (:unaddressed-matches evidence)))
+    (testing "the reported lines are the pre-image lines of the skipped arms"
+      (let [lines (mapv :line (:unaddressed-matches evidence))
+            source-lines (vec (str/split-lines folds-source))]
+        (is (= 3 (count (distinct lines))))
+        (is (every? #(str/includes? (nth source-lines (dec %)) "if-let [slug")
+                    lines))))))
+
+(deftest expect-matched-reports-zero-when-the-transaction-addressed-everything
+  ;; @spec MCP-OP-MATCHED-001
+  (let [compiled (folds-transaction (mapv #(str "flag" %) (range 19)))
+        result (transaction/matched-basis-evidence compiled (folds-basis 19))
+        evidence (:evidence result)]
+    (is (:ok result))
+    (is (= 19 (:matched-count evidence)))
+    (is (= 19 (:addressed-matches evidence)))
+    (is (= 0 (:unaddressed-match-count evidence)))
+    (is (= [] (:unaddressed-matches evidence)))))
+
+(deftest expect-matched-refuses-a-stale-basis-before-any-write
+  ;; @spec MCP-OP-MATCHED-002
+  (let [compiled (folds-transaction ["flag0"])]
+    (testing "a file hash from a different snapshot"
+      (let [result (transaction/matched-basis-evidence
+                     compiled
+                     (assoc (folds-basis 19)
+                            :file-hash (structural-lens/source-hash "(ns other)")))]
+        (is (nil? (:ok result)))
+        (is (= :expect-matched-stale (:error-type result)))
+        (is (= "file_hash" (:mismatch result)))
+        (is (= (structural-lens/source-hash folds-source)
+               (:actual-file-hash result)))))
+    (testing "a file this transaction did not read"
+      (let [result (transaction/matched-basis-evidence
+                     compiled (assoc (folds-basis 19) :file "src/other.clj"))]
+        (is (= :expect-matched-stale (:error-type result)))
+        (is (= "file_not_in_transaction" (:mismatch result)))
+        (is (= ["src/folds.clj"] (:transaction-files result)))))
+    (testing "a match count that does not describe this snapshot"
+      (let [result (transaction/matched-basis-evidence
+                     compiled (folds-basis 21))]
+        (is (= :expect-matched-stale (:error-type result)))
+        (is (= "match_count" (:mismatch result)))
+        (is (= 21 (:expected-match-count result)))
+        (is (= 19 (:actual-match-count result)))))))
+
+(deftest expect-matched-refuses-a-pattern-that-is-not-one-complete-form
+  ;; @spec MCP-OP-MATCHED-003
+  (let [compiled (folds-transaction ["flag0"])
+        result (transaction/matched-basis-evidence
+                 compiled (assoc (folds-basis 19) :match "(a) (b)"))]
+    (is (= :expect-matched-invalid-pattern (:error-type result)))
+    (is (= "src/folds.clj" (:file result)))))
+
+;; ---------------------------------------------------------------------------
+;; Two matched sites can share one pre-image line. Line granularity called the
+;; unedited sibling "addressed" — the wrong failure direction for a receipt
+;; whose whole job is naming what the transaction skipped.
+;; ---------------------------------------------------------------------------
+
+(def ^:private one-line-source
+  "(ns one-line)\n\n(defn go [] (do (f 1) (f 2)))\n")
+
+(defn- one-line-transaction
+  [find-source replace-source]
+  (transaction/compile-transaction
+    {"src/one_line.clj" one-line-source}
+    {:changes [{:id :one-call
+                :in ["src/one_line.clj"]
+                :forms ['go]
+                :find find-source
+                :do [:replace replace-source]
+                :expect {:matches 1}}]
+     :expect {:changes 1 :edits 1 :files 1}}))
+
+(defn- one-line-basis
+  []
+  {:file "src/one_line.clj"
+   :file-hash (structural-lens/source-hash one-line-source)
+   :match "(f _)"
+   :count 2})
+
+(deftest expect-matched-separates-two-sites-that-share-one-line
+  ;; @spec MCP-OP-MATCHED-004
+  (let [compiled (one-line-transaction "(f 1)" "(g 1)")
+        _ (is (:ok compiled))
+        result (transaction/matched-basis-evidence compiled (one-line-basis))
+        evidence (:evidence result)]
+    (is (:ok result))
+    (is (= 2 (:matched-count evidence)))
+    (is (= 1 (:addressed-matches evidence)))
+    (is (= 1 (:unaddressed-match-count evidence)))
+    (testing "the skipped sibling is the one sharing the edited line"
+      (is (= [3] (mapv :line (:unaddressed-matches evidence))))
+      (is (= [(structural-lens/source-hash "(f 2)")]
+             (mapv :hash (:unaddressed-matches evidence)))))))
+
+(deftest expect-matched-counts-sites-inside-one-edited-form-as-addressed
+  ;; @spec MCP-OP-MATCHED-004
+  (let [compiled (one-line-transaction "(do (f 1) (f 2))" "(h)")
+        _ (is (:ok compiled))
+        result (transaction/matched-basis-evidence compiled (one-line-basis))
+        evidence (:evidence result)]
+    (is (:ok result))
+    (is (= 2 (:addressed-matches evidence)))
+    (is (= 0 (:unaddressed-match-count evidence)))
+    (is (= [] (:unaddressed-matches evidence)))))
+
+;; ---------------------------------------------------------------------------
+;; The exact-owner selector reads every arm sharing a multimethod name while it
+;; looks for one. A `#_` discard or a `^meta` wrapper on any of those arms threw
+;; while scanning, so one unrelated arm made the whole file unaddressable.
+;; ---------------------------------------------------------------------------
+
+(def ^:private discarded-and-meta-arms-source
+  (str "(ns t)\n\n"
+       "(defmulti f (fn [x] x))\n\n"
+       "(defmethod f #_skipped :actual [x] (inc x))\n\n"
+       "(defmethod f ^:meta :withmeta [x] (inc x))\n\n"
+       "(defmethod f :plain [x] (inc x))\n"))
+
+(defn- dispatch-arm-transaction
+  [dispatch]
+  (transaction/compile-transaction
+    {"src/t.clj" discarded-and-meta-arms-source}
+    {:changes [{:id :one-arm
+                :in ["src/t.clj"]
+                :forms [{:kind :defmethod :name 'f :dispatch dispatch}]
+                :find "(inc x)"
+                :do [:replace "(dec x)"]
+                :expect {:matches 1}}]
+     :expect {:changes 1 :edits 1 :files 1}}))
+
+(deftest defmethod-selector-scans-past-discarded-and-metadata-dispatches
+  ;; @spec MCP-OP-DISPATCH-005
+  (testing "an ordinary arm is still addressable in that file"
+    (let [compiled (dispatch-arm-transaction ":plain")]
+      (is (:ok compiled))
+      (is (= 1 (count (mapcat :edits (:files compiled)))))))
+  (testing "the arm behind a #_ discard is addressed by its real dispatch"
+    (let [compiled (dispatch-arm-transaction ":actual")]
+      (is (:ok compiled))))
+  (testing "the arm behind ^meta is addressed by the value the metadata wraps"
+    (let [compiled (dispatch-arm-transaction ":withmeta")]
+      (is (:ok compiled)))))
+
+(deftest expect-matched-separates-an-unreadable-file-from-an-unusable-pattern
+  ;; @spec MCP-OP-MATCHED-003
+  (let [compiled (one-line-transaction "(f 1)" "(g 1)")
+        broken "(ns broken)\n\n(defn go [] (f 1"
+        unreadable (assoc-in compiled [:original-sources "src/one_line.clj"]
+                             broken)]
+    (testing "an unusable pattern is named as one"
+      (let [result (transaction/matched-basis-evidence
+                     compiled (assoc (one-line-basis) :match "(a) (b)"))]
+        (is (= :expect-matched-invalid-pattern (:error-type result)))))
+    (testing "a file the pattern cannot be evaluated against is not"
+      (let [result (transaction/matched-basis-evidence
+                     unreadable
+                     (assoc (one-line-basis)
+                            :file-hash (structural-lens/source-hash broken)))]
+        (is (= :expect-matched-unreadable-source (:error-type result)))
+        (is (= "src/one_line.clj" (:file result)))
+        (is (true? (:source-unchanged result)))))))
