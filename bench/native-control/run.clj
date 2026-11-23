@@ -138,6 +138,42 @@
     (git! "-c" "user.name=native-control" "-c" "user.email=native-control@anvil"
           "-c" "commit.gpgsign=false" "commit" "-qm" "Frozen read experiment")
     (str/trim (git! "rev-parse" "HEAD"))))
+
+(defn install-arm-tools! [cfg arm wrapper bin-dir]
+  (let [java (or (fs/which "java") (throw (ex-info "preflight: java not found on invoker PATH" {})))]
+    (when (and (not= arm "arm1") (seq wrapper))
+      (let [bb (or (fs/which "bb") (throw (ex-info "preflight: bb not found on invoker PATH" {})))
+            kondo (or (when-let [k (:kondo-path cfg)]
+                        (when (and (fs/regular-file? k) (fs/executable? k)) k))
+                      (fs/which "clj-kondo" {:paths (:tool-dirs cfg)})
+                      (throw (ex-info "preflight: clj-kondo not found" {})))]
+        (spit (str bin-dir "/clj-surgeon") wrapper)
+        (fs/set-posix-file-permissions (str bin-dir "/clj-surgeon") "rwxr-xr-x")
+        (fs/create-sym-link (str bin-dir "/clj-kondo") kondo)
+        (fs/create-sym-link (str bin-dir "/bb") bb)))
+    (str/join ":" (concat [bin-dir] (:tool-dirs cfg) [(fs/parent java)]))))
+
+(defn write-profile! [codex-home path]
+  (fs/set-posix-file-permissions codex-home "rwx------")
+  (doseq [name [".profile" ".bashrc"]]
+    (spit (str codex-home "/" name) (str "export PATH='" (str/replace path "'" "'\\''") "'\n"))))
+
+(defn resolve-on-path [codex-home path name]
+  (when-not (#{"clj-surgeon" "clj-kondo" "rg"} name)
+    (throw (ex-info "Unsupported preflight command" {:name name})))
+  (str/trim (checked! ["env" "-i" (str "HOME=" codex-home) (str "PATH=" path)
+                       "bash" "-lc" (str "command -v " name " || true")])))
+
+(defn preflight! [arm wrapper bin-dir codex-home path run-dir config]
+  (let [[resolved kondo rg] (mapv #(resolve-on-path codex-home path %) ["clj-surgeon" "clj-kondo" "rg"])
+        normalized (if (and (seq wrapper) (= resolved (str bin-dir "/clj-surgeon"))) :wrapper resolved)
+        decision (preflight-decision arm normalized (seq kondo) (seq rg))]
+    (spit (str run-dir "/preflight.txt")
+          (str "resolved_clj_surgeon=" resolved "\nresolved_clj_kondo=" kondo
+               "\nresolved_rg=" rg "\nbb_config=" config "\n"))
+    (when-not (= :ok decision)
+      (throw (ex-info decision {})))))
+
 ;; PR 35 regressions: traversal, last-line loss, setup cleanup and lost run status.
 (deftest components
   (doseq [s [nil "" "." ".." "../../x" "a/b" "a b" "a\nb"]] (is (false? (valid-component? s))))
@@ -431,6 +467,73 @@
                                  (materialize-workspace! (assoc task :sha sha) arm-file ws))))
           (is (not (fs/exists? (str ws "/.git"))))))
       (finally (fs/delete-tree tmp)))))
+;; Independent 2a-iii probe regressions: missing invoker tools and directory-valued kondo.
+(deftest install-tools-refusals
+  (let [tmp (str (fs/create-temp-dir {:prefix "nc-tools-"}))
+        which fs/which
+        cfg {:kondo-path (str (which "bb")) :tool-dirs []}]
+    (try
+      (doseq [[missing arms] [["java" ["arm1" "arm2" "arm3"]] ["bb" ["arm2" "arm3"]]]
+              arm arms]
+        (with-redefs [fs/which (fn [name & opts] (when-not (= missing name) (apply which name opts)))]
+          (is (thrown-with-msg? Exception (re-pattern (str "preflight: " missing " not found"))
+                (install-arm-tools! cfg arm "wrapper" tmp))))
+        (is (empty? (fs/list-dir tmp))))
+      (with-redefs [fs/which (fn [name & opts] (when-not (= "bb" name) (apply which name opts)))]
+        (doseq [arm ["arm1" "arm2" "arm3"]]
+          (is (string? (install-arm-tools! cfg arm "" tmp)))))
+      (spit (str tmp "/not-executable") "fixture")
+      (doseq [kondo [nil tmp (str tmp "/not-executable") (str tmp "/missing")]]
+        (is (thrown-with-msg? Exception #"preflight: clj-kondo not found"
+              (install-arm-tools! (assoc cfg :kondo-path kondo) "arm2" "wrapper" tmp)))
+        (is (= ["not-executable"] (mapv fs/file-name (fs/list-dir tmp)))))
+      (finally
+        (fs/delete-tree tmp)))))
+
+(deftest arm-tools-profile-and-preflight
+  (let [tmp (str (fs/create-temp-dir {:prefix "nc-preflight-"}))
+        tools (str tmp "/tools'quoted")
+        home (str tmp "/home")
+        bin (str tmp "/bin")
+        wrapper "#!/bin/sh\nexit 0\n"
+        mode #(fs/posix->str (fs/posix-file-permissions %))]
+    (try
+      (doseq [dir [tools home]] (fs/create-dirs dir))
+      (doseq [name ["clj-kondo" "rg"]]
+        (spit (str tools "/" name) wrapper)
+        (fs/set-posix-file-permissions (str tools "/" name) "rwxr-xr-x"))
+      (doseq [arm ["arm1" "arm2" "arm3"] kondo [nil tools (str tools "/clj-kondo")]]
+        (fs/delete-tree bin)
+        (fs/create-dirs bin)
+        (let [cfg {:kondo-path kondo :tool-dirs [tools "/usr/bin" "/bin"]}
+              path (install-arm-tools! cfg arm wrapper bin)
+              wrapped? (not= arm "arm1")]
+          (is (= (str bin ":" tools ":/usr/bin:/bin:" (fs/parent (fs/which "java"))) path))
+          (write-profile! home path)
+          (is (= path (checked! ["env" "-i" (str "HOME=" home) (str "PATH=" path)
+                                 "bash" "-lc" "printf %s \"$PATH\""])))
+          (is (= (slurp (str home "/.profile")) (slurp (str home "/.bashrc"))))
+          (is (= "rwx------" (mode home)))
+          (is (nil? (preflight! arm wrapper bin home path tmp "fixture-config")))
+          (is (= (str "resolved_clj_surgeon=" (when wrapped? (str bin "/clj-surgeon"))
+                      "\nresolved_clj_kondo=" (if wrapped? bin tools) "/clj-kondo"
+                      "\nresolved_rg=" tools "/rg\nbb_config=fixture-config\n")
+                 (slurp (str tmp "/preflight.txt"))))
+          (is (thrown-with-msg? Exception #"Unsupported preflight command"
+                (resolve-on-path home path "rg; false")))
+          (doseq [name ["clj-surgeon" "clj-kondo" "bb"]]
+            (is (= wrapped? (fs/executable? (str bin "/" name))))
+            (is (= (and wrapped? (not= name "clj-surgeon")) (fs/sym-link? (str bin "/" name)))))
+          (when wrapped?
+            (is (= "rwxr-xr-x" (mode (str bin "/clj-surgeon"))))
+            (is (= wrapper (slurp (str bin "/clj-surgeon"))))
+            (is (= (str (fs/which "bb")) (str (fs/read-link (str bin "/bb")))))
+            (is (= (str tools "/clj-kondo") (str (fs/read-link (str bin "/clj-kondo")))))
+            (is (thrown-with-msg? Exception #"preflight: arm1 must not see clj-surgeon"
+                  (preflight! "arm1" "" bin home path tmp "fixture-config"))))))
+      (finally
+        (fs/delete-tree tmp)))))
+
 (when (entry-script? (System/getProperty "babashka.file") *file*)
   (case (vec *command-line-args*)
     ["--self-test"]
