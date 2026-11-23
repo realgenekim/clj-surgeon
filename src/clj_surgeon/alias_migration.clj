@@ -1320,6 +1320,39 @@
      :preserve-refer? (not= "alias-qualify" (get-in request [:to :refer-policy]))
      :policy (vec (get-in request [:to :alias-policy]))}))
 
+(defn- file-analysis-refusal
+  "Check selected renamed refers, ownership and whole-library refer-all in order."
+  [request file from-lib from-var lib-mode? target others]
+  (cond
+    ;; @spec MCP-OP-ALIAS-063
+    ;; The scope walker models referred names, not their :rename bindings.
+    ;; Do not commit a partial rewrite or offer a different scope as repair.
+    (and from-var
+         (some (fn [[option value]]
+                 (and (= ":rename" (n/string option))
+                      (= :map (n/tag (unmeta-node value)))
+                      (some (fn [[key-node _]]
+                              (= from-var (refer-symbol-name key-node)))
+                            (partition 2
+                                       (remove #(= :uneval (n/tag %))
+                                               (meaningful-children (unmeta-node value)))))))
+               (partition 2 1 (rest (remove #(= :uneval (n/tag %)) (meaningful-children (:node target)))))))
+    {:refusal (refusal :alias-migration-indirect-reference
+                       (str "The selected Var has an unsupported renamed binding in " file)
+                       {:file file
+                        :reason "unsupported-selected-renamed-refer"
+                        :remedy (str "This migration does not model the selected Var's renamed binding. "
+                                     "Review and migrate that binding and its uses explicitly; "
+                                     "no scope-changing next_call is provided.")}
+                       nil)}
+
+    (ownership-refusal request file from-lib from-var target others)
+    {:refusal (ownership-refusal request file from-lib from-var target others)}
+
+    (and lib-mode? (refer-all-refusal request file target))
+    {:refusal (refer-all-refusal request file target)}
+    :else nil))
+
 (defn- file-plan
   "Plan one file, or return {:refusal r}, or nil when the file is out of scope."
   [request file source]
@@ -1340,36 +1373,9 @@
 
       :else
       (let [{:keys [ns-node clause direct target others]} analysis]
-        (cond
-          ;; @spec MCP-OP-ALIAS-063
-          ;; The scope walker models referred names, not their :rename bindings.
-          ;; Do not commit a partial rewrite or offer a different scope as repair.
-          (and from-var
-               (some (fn [[option value]]
-                       (and (= ":rename" (n/string option))
-                            (= :map (n/tag (unmeta-node value)))
-                            (some (fn [[key-node _]]
-                                    (= from-var (refer-symbol-name key-node)))
-                                  (partition 2
-                                             (remove #(= :uneval (n/tag %))
-                                                     (meaningful-children (unmeta-node value)))))))
-                     (partition 2 1 (rest (remove #(= :uneval (n/tag %)) (meaningful-children (:node target)))))))
-          {:refusal (refusal :alias-migration-indirect-reference
-                             (str "The selected Var has an unsupported renamed binding in " file)
-                             {:file file
-                              :reason "unsupported-selected-renamed-refer"
-                              :remedy (str "This migration does not model the selected Var's renamed binding. "
-                                           "Review and migrate that binding and its uses explicitly; "
-                                           "no scope-changing next_call is provided.")}
-                             nil)}
-
-          (ownership-refusal request file from-lib from-var target others)
-          {:refusal (ownership-refusal request file from-lib from-var target others)}
-
-          (and lib-mode? (refer-all-refusal request file target))
-          {:refusal (refer-all-refusal request file target)}
-
-          :else
+        (if-let [refused (file-analysis-refusal request file from-lib from-var
+                                              lib-mode? target others)]
+          refused
           ;; @spec MCP-OP-ALIAS-067
           ;; Reuse is offered for var-mode migrations only. A lib-mode
           ;; migration under `preserve-refer` would have to MERGE a kept :refer
