@@ -60,7 +60,7 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
 CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: repository-hygiene repository-hygiene-self-test test test-full test-fast test-integration test-battery test-battery-serial battery-fresh landing-gate test-bb suite-concurrency-battery analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test admit-analyzer-memory-self-test admit-transaction-recovery-battery cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-events study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test worktree-lifecycle-test worktree-lifecycle-recovery-test worktree-audit handoff-worktree finish-worktree retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence census-battery memory-battery memory-battery-generate memory-battery-reference memory-battery-self-test memory-red memory-red-kernel anvil-arms-self-test txn-kernel-warning-check fanout-selftests tmp-leak-ratchet-self-test
+.PHONY: repository-hygiene repository-hygiene-self-test test test-full test-fast test-integration test-battery test-battery-serial battery-fresh landing-gate test-bb suite-concurrency-battery analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test admit-analyzer-memory-self-test admit-transaction-recovery-battery cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-events study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test worktree-lifecycle-test worktree-lifecycle-recovery-test worktree-audit handoff-worktree finish-worktree retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence census-battery memory-battery memory-battery-generate memory-battery-reference memory-battery-self-test memory-red memory-red-kernel anvil-arms-self-test txn-kernel-warning-check fanout-selftests tmp-leak-ratchet-self-test test-product test-bench-harness
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -1222,6 +1222,37 @@ test-full:
 	$(MAKE) --no-print-directory test-battery
 	$(MAKE) --no-print-directory mcp-smoke
 	$(MAKE) --no-print-directory memory-battery-self-test
+	python3 skills/study-agent-usage/scripts/collect_agent_usage.py --self-test
+	bb bench/initialize_benchmark_workspace.clj --self-test
+	bb bench/verify_edit_portfolio.clj --self-test
+	bb bench/verify_edit_portfolio.clj bench/fixtures/edit_portfolio
+	bb bench/summarize_clean_codex.clj --self-test
+	bb bench/score_ops_registry.clj --self-test
+	BENCH_SCHEDULE_SELF_TEST=true bash bench/run_clean_codex.sh
+	BENCH_HARNESS_SELF_TEST=true bash bench/run_clean_codex.sh
+	$(MAKE) --no-print-directory benchmark-anvil-portfolio-pair-self-test
+	$(MAKE) --no-print-directory benchmark-inspect-mcp-self-test
+	CLAUDE_BENCH_HARNESS_SELF_TEST=true bash bench/run_clean_claude.sh
+	bash bench/retain_benchmark_result.sh --self-test
+	bash bench/retain_benchmark_result.sh --verify-tracked
+	bb bench/verify_evidence_manifest.clj --self-test
+	bb bench/verify_evidence_manifest.clj
+
+# CI gate for this branch (slice 00 of the refactor stack, 2026-11-23). main's workflow runs `make test-product` as the
+# required `linux` check and `make test-bench-harness` as a visible non-required job. On this branch those two targets
+# are the two halves of `test-full` above, minus the three batteries (admit-transaction-recovery-battery, test-battery,
+# memory-battery-self-test), which read battery receipts or run for minutes and are measured separately; and plus
+# alias-migration-test, the landing gate's JVM suite for the verb this stack refactors. `test` itself is unchanged.
+test-product:
+	$(MAKE) --no-print-directory check-clj-surgeon-skill-mirrors
+	$(MAKE) --no-print-directory repository-hygiene
+	$(MAKE) --no-print-directory test-bb
+	$(MAKE) --no-print-directory analyzer-contract-test
+	$(MAKE) --no-print-directory mcp-test
+	$(MAKE) --no-print-directory mcp-smoke
+	$(MAKE) --no-print-directory alias-migration-test
+
+test-bench-harness:
 	python3 skills/study-agent-usage/scripts/collect_agent_usage.py --self-test
 	bb bench/initialize_benchmark_workspace.clj --self-test
 	bb bench/verify_edit_portfolio.clj --self-test
