@@ -1060,13 +1060,15 @@
     (.append sb "Usage: clj-surgeon :op <command> [args...]\n")
     (.append sb "       clj-surgeon up [WORKSPACE]      join the shared hot MCP stack\n")
     (.append sb "       clj-surgeon recover [WORKSPACE] repair once; receipt names fallback\n")
-    (.append sb "Every :op call appends one line (time, op, outcome, code, ms, repo basename, agent; never arguments or paths)\n")
-    (.append sb "to $HOME/.local/state/clj-surgeon/usage.jsonl; CLJ_SURGEON_USAGE_LOG=<path> moves it, =off disables it.\n")
     (.append sb "       clj-surgeon report-failure --receipt PATH\n")
     (.append sb "       clj-surgeon --help              show this message\n")
     (.append sb "       clj-surgeon :op :help           show this message\n")
     (.append sb "       clj-surgeon --version           show machine-readable version\n")
-    (.append sb "       clj-surgeon :op <cmd> --help    show command details\n\n  Agent entrance:\n      Prefer persistent MCP inspect_clojure and apply_clojure_changes.\n      Use this process-starting CLI when MCP is unavailable or lacks the operation.\n\n")
+    (.append sb "       clj-surgeon :op <cmd> --help    show command details\n\n")
+    (.append sb "  Usage log: every :op call appends one line (time, op, outcome, code, ms, repo basename, agent; never\n")
+    (.append sb "      arguments or paths) to $XDG_STATE_HOME/clj-surgeon/usage.jsonl (default ~/.local/state);\n")
+    (.append sb "      CLJ_SURGEON_USAGE_LOG=<path> moves it, CLJ_SURGEON_USAGE_LOG=off disables it.\n\n")
+    (.append sb "  Agent entrance:\n      Prefer persistent MCP inspect_clojure and apply_clojure_changes.\n      Use this process-starting CLI when MCP is unavailable or lacks the operation.\n\n")
     (doseq [cat category-order
             :let [label (get category-labels cat)
                   ops   (get by-cat cat)]]
@@ -1286,7 +1288,9 @@
 
 (defn run [{:keys [op] :as opts}]
   ;; An unresolved op is logged as "unknown": the raw text could be anything the caller typed, a path included.
-  (usage-log/record-call (or (resolve-op op) "unknown") #(run-dispatched opts)))
+  ;; Resolution for the log is guarded so a strange op can never keep the call from running or being logged.
+  (usage-log/record-call (try (or (resolve-op op) "unknown") (catch Throwable _ "unknown"))
+                         #(run-dispatched opts)))
 
 (defn parse-val
   "Parse a single CLI value string into its Clojure equivalent.

@@ -45,7 +45,15 @@
    [clj-surgeon.worktree-lifecycle-io-test]
    [clj-surgeon.worktree-lifecycle-test]
    [clj-surgeon.xray-test]
+   [babashka.process :as process]
    [clojure.test :refer [run-tests]]))
+
+;; The suite calls the CLI in-process (core/run) and as subprocesses. Neither may reach the developer's real usage
+;; log, however the suite was started: when the variable is absent, re-execute this runner with it set to off so
+;; every child inherits it. (Requiring the namespaces above runs no test; run-tests below does.)
+(when-not (System/getenv "CLJ_SURGEON_USAGE_LOG")
+  (process/exec ["bb" *file*] {:extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}}))
+
 
 (let [r (run-tests 'clj-surgeon.forms-test
                    'clj-surgeon.usage-log-test

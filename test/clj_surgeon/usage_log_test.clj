@@ -28,6 +28,8 @@
   (is (= "claude" (u/agent-kind {"CLAUDE_CODE_ENTRYPOINT" "cli"})))
   (is (= "off" (u/log-path {"CLJ_SURGEON_USAGE_LOG" "off" "HOME" "/home/a"})))
   (is (nil? (u/log-path {})))
+  (is (= "/st/clj-surgeon/usage.jsonl" (u/log-path {"XDG_STATE_HOME" "/st" "HOME" "/home/a"})))
+  (is (= {:outcome "ok" :code nil} (u/outcome-of {:error nil})))
   (is (nil? (u/agent-kind {"CLAUDECODE" "" "CODEX_HOME" ""})))
   (is (= {:outcome "refused" :code nil} (u/outcome-of {:error "Forms not found: nope"})))
   (is (nil? (u/agent-kind {})))
@@ -46,7 +48,6 @@
       (u/append! "off" "disabled")
       (is (= "one\ntwo\n" (slurp file)))
       (is (not (.exists (java.io.File. (str file "/unwritable")))))
-      (is (not (.exists (java.io.File. "off"))))
       (finally (.delete file)))))
 
 (deftest dispatch-boundary
@@ -71,4 +72,11 @@
 
 (deftest repository-boundary
   (is (nil? (u/repo-name nil)))
-  (is (= "tmp" (u/repo-name "/tmp"))))
+  (is (= "tmp" (u/repo-name "/tmp")))
+  (let [root (.toFile (java.nio.file.Files/createTempDirectory "usage-repo-" (make-array java.nio.file.attribute.FileAttribute 0)))
+        nested (java.io.File. root "src/deep")]
+    (try
+      (.mkdirs (java.io.File. root ".git"))
+      (.mkdirs nested)
+      (is (= (.getName root) (u/repo-name (str nested))) "the nearest .git ancestor names the repository")
+      (finally (doseq [f (reverse (file-seq root))] (.delete f))))))

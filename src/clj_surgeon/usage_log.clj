@@ -11,7 +11,7 @@
    either, and many handlers return {:error ...} without a type); anything else is ok."
   [result]
   (let [m (if (map? result) result {})]
-    {:outcome (cond (:exception m) "error" (or (contains? m :error) (contains? m :error-type)) "refused" :else "ok")
+    {:outcome (cond (:exception m) "error" (or (some? (:error m)) (some? (:error-type m))) "refused" :else "ok")
      :code (some-> (:error-type m) name)}))
 (defn agent-kind
   "An empty variable counts as unset."
@@ -21,11 +21,13 @@
         (when (some set? ["CODEX_HOME" "CODEX_SANDBOX" "CODEX_SANDBOX_NETWORK_DISABLED"]) "codex")
         (when (some set? ["CLAUDECODE" "CLAUDE_CODE_ENTRYPOINT"]) "claude"))))
 (defn log-path
-  "CLJ_SURGEON_USAGE_LOG wins; \"off\" disables. The Makefile exports it as off for every test target, so suite
-   calls, in-process and subprocess alike, never reach the real log; a bare `bb test/run_all.clj` does not get that
-   export and writes to the default path. Without HOME there is no default path and nothing is written."
+  "CLJ_SURGEON_USAGE_LOG wins; \"off\" disables. The default is $XDG_STATE_HOME/clj-surgeon/usage.jsonl, else
+   $HOME/.local/state/clj-surgeon/usage.jsonl; without either there is no path and nothing is written. The test
+   suite never reaches the real log: test/run_all.clj re-executes itself with the variable set to off when it is
+   absent, so its in-process and subprocess calls are covered, and the Makefile exports off for every target."
   [env]
   (or (not-empty (get env "CLJ_SURGEON_USAGE_LOG"))
+      (when-let [state (not-empty (get env "XDG_STATE_HOME"))] (str state "/clj-surgeon/usage.jsonl"))
       (when-let [home (not-empty (get env "HOME"))] (str home "/.local/state/clj-surgeon/usage.jsonl"))))
 (defn repo-name
   "Basename of the nearest ancestor of cwd holding a .git entry (a directory or a worktree's file), else of
