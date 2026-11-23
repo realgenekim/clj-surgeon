@@ -71,7 +71,10 @@ jobs:
       # (/opt/homebrew/bin, /usr/local/bin, /usr/bin, /bin), not PATH; setup-clojure installs clj-kondo into the
       # tool cache, so the verify tests see a bare name unless it is also reachable at /usr/local/bin.
       - name: Expose clj-kondo where the project's resolver looks
-        run: sudo ln -sf "$(command -v clj-kondo)" /usr/local/bin/clj-kondo && /usr/local/bin/clj-kondo --version
+        run: |
+          sudo ln -sf "$(command -v clj-kondo)" /usr/local/bin/clj-kondo && /usr/local/bin/clj-kondo --version
+          # This branch's verification profiles run `bb` through the same fixed-directory resolver.
+          sudo ln -sf "$HOME/.local/bin/bb" /usr/local/bin/bb && /usr/local/bin/bb --version
       - name: Canonical gate (the product's tests)
         # This branch's test runner refuses a RAM-backed java.io.tmpdir (/tmp): give bb and the JVM a disk-backed one.
         env:
@@ -133,7 +136,10 @@ jobs:
       # (/opt/homebrew/bin, /usr/local/bin, /usr/bin, /bin), not PATH; setup-clojure installs clj-kondo into the
       # tool cache, so the verify tests see a bare name unless it is also reachable at /usr/local/bin.
       - name: Expose clj-kondo where the project's resolver looks
-        run: sudo ln -sf "$(command -v clj-kondo)" /usr/local/bin/clj-kondo && /usr/local/bin/clj-kondo --version
+        run: |
+          sudo ln -sf "$(command -v clj-kondo)" /usr/local/bin/clj-kondo && /usr/local/bin/clj-kondo --version
+          # This branch's verification profiles run `bb` through the same fixed-directory resolver.
+          sudo ln -sf "$HOME/.local/bin/bb" /usr/local/bin/bb && /usr/local/bin/bb --version
       - name: Benchmark harness self-tests (apparatus, not product; not a required check)
         env:
           TMPDIR: ${{ runner.temp }}/clj-surgeon-tmp
