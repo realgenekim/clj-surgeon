@@ -88,13 +88,40 @@ Wall per arm over 24 runs: 543 s, 514 s, 514 s, equal within noise. Median input
 - Tool-output characters are a proxy for tokens read; Codex's own truncation of long outputs is not modelled.
 - All 72 answers were correct, so these tasks cannot show a correctness cost or benefit; harder tasks would.
 - Form size is NOT the dividing line: all four exact tasks sit inside forms of 158 to 324 lines, and two of them did not
-  benefit. What the rows support is "xray wins when no single grep line holds the answer". The trigger text that would
-  capture the win and avoid the loss is the hypothesis for the next experiment, a fourth arm on the same 12 tasks: "use
-  `:xray` when the value you need is not on one greppable line, or for a computation over one form; use `rg` for a named
-  form or arglist; use `ls` only when the question is about a whole file".
+  benefit. What the rows support is "xray wins when no single grep line holds the answer". That wording became the
+  fourth arm's routing block (next section), which adds "the branch for one key, every pair inside one form" and so
+  names the T02 suspect itself.
+
+## The fourth arm (2026-11-23, 24 runs; mayor's ruling 5)
+
+Arm 4 is arm 3's text plus one routing block, written after seeing the twelve tasks: one greppable line (a form's
+header, an alias) goes to `rg`; a value no single grep line holds, or a computation over one form, goes to `:xray`; a
+whole-file question goes to `:ls`. Same tasks, two repetitions, same CLI. 24 of 24 correct. Rows:
+`~/handoffs/surgeon-seat-battery/arm4/`.
+
+| Class | arm1 | arm2 | arm3 | arm4 | arm4 vs best of arm1/arm2 | arm4 vs arm3 |
+|---|---:|---:|---:|---:|---:|---:|
+| control, median tool chars | 1,328 | 11,061 | 11,061 | 366 | 72% less, but no tool was used: native against native | 97% less |
+| exact | 3,285 | 2,984 | 838 | 838 | 72% less, PROMOTE | equal |
+| inventory | 24,883 | 20,487 | 17,850 | 17,850 | 13% less, not promoted | equal |
+
+- The control-class regression is gone: told where the answer sits, the agent used no tool on any known-name lookup.
+  The 72% against arm 1 is native-route variance at two repetitions (T10 read 1.3x more than arm 1), so the claim is
+  "roughly equal to native", not a promotion. The exact-class win is kept exactly (xray used on all four tasks).
+- Arm 4 text 1,717 characters; tools used in 16 of 24 runs, 21 calls, 2 refusals; wall 516 s; median input tokens 34.7k.
+- T02 is still 2.4x worse than one grep, as the arm-4 reviewer predicted from the "branch for one key" example in the
+  routing text; that example is the first suspect, not the boundary.
+- Inventories: T05 doubled (two `:xray` refusals on route maps that hold `#'var` reader forms, then native reading);
+  T07 read 16,370 chars in both runs against arm 3's median 9,868, which is arm 3's first run exactly (its second was
+  3,367), so repetition spread, not a regression; T06 improved slightly (19,330 against 20,377). The route-table
+  refusal is the tool's defect (`analyze` cannot return a var form), not the text's.
+- Caveats as before, plus one: the routing text was tuned on these tasks, so held-out tasks are needed before the
+  boundary is called general.
 
 ## Decision asked of Gene and the mayor
 
 Keep `:xray` on main. Encourage it for one class only, values that no single grep line holds, with that boundary in the
-trigger text, and do not encourage the outline for known-name lookups. The boundary wording is a hypothesis until the
-fourth arm confirms it; run that arm before any boot-file change.
+trigger text, and do not encourage the outline for known-name lookups. The fourth arm confirms that this text removes
+the control-class regression and keeps the exact-class win; it leaves T02 (one-line answers) and T05 (var forms refuse)
+unresolved, and its text was tuned on these twelve tasks. The gate before any boot-file change is now a held-out task
+set, not these twelve.
