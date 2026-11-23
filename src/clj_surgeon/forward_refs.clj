@@ -26,24 +26,29 @@
         (str dir)
         (recur (fs/parent dir))))))
 
+(defn admit-analysis-result
+  "Admit completed clj-kondo analysis: exit 0 means no findings, 2 warnings,
+  and 3 errors. Lint findings do not invalidate the analysis output."
+  [result]
+  (when-not (and (:finished? result) (contains? #{0 2 3} (:exit result)))
+    (throw (ex-info "Forward-reference analysis failed"
+                    {:error-type :forward-reference-analysis-failed
+                     :exit (:exit result)
+                     :diagnostic (str/trim (or (:err result) ""))})))
+  result)
+
 (defn analysis-from-result
   "Return clj-kondo's parsed output from one bounded-process `result`.
 
-  The exit code is deliberately not consulted. clj-kondo exits 2 for warnings
-  and 3 for errors, and `detect-forward-refs` reads only `:analysis`, so a lint
-  finding says nothing about whether the analysis is usable. An analyzer that
-  did not finish, or that produced output carrying no `:analysis`, is still a
-  failure, and both carry the exit code and stderr so the caller can tell which."
+  Require verified authority, a finished process with exit 0, 2 or 3, and
+  parseable output carrying `:analysis`. Lint warnings and errors are usable;
+  process and output failures carry the exit code and stderr for diagnosis."
   [result]
   (when-not (= :admitted (get-in result [:admission :status]))
     (throw (ex-info "Forward-reference analyzer authority is unverified"
                     {:error-type :analyzer-authority-unverified
                      :admission (:admission result)})))
-  (when-not (:finished? result)
-    (throw (ex-info "Forward-reference analysis failed"
-                    {:error-type :forward-reference-analysis-failed
-                     :exit (:exit result)
-                     :diagnostic (str/trim (or (:err result) ""))})))
+  (admit-analysis-result result)
   (let [invalid (fn [error]
                   (throw (ex-info "Forward-reference analyzer returned invalid JSON"
                                   {:error-type :forward-reference-analysis-invalid
@@ -80,27 +85,27 @@
 (defn detect-forward-refs
   "Returns forward references: vars used before they're defined in the same namespace."
   [file ns-name]
-  (let [data (run-kondo file)]
-    (let [analysis (:analysis data)
-          defs (into {}
-                     (for [d (:var-definitions analysis)
-                           :when (= (str ns-name) (str (:ns d)))]
-                       [(str (:name d)) (:row d)]))
-          usages (:var-usages analysis)
-          ns-str (str ns-name)]
-      (->> usages
-           (filter (fn [u]
-                     (and (= ns-str (str (:from u)))
-                          (= ns-str (str (:to u)))
-                          (let [def-line (get defs (str (:name u)))]
-                            (and def-line (< (:row u) def-line))))))
-           (map (fn [u]
-                  {:name (symbol (:name u))
-                   :used-at (:row u)
-                   :defined-at (get defs (str (:name u)))
-                   :gap (- (get defs (str (:name u))) (:row u))}))
-           ;; Deduplicate: one entry per forward-ref'd var (largest gap)
-           (group-by :name)
-           (map (fn [[_ vs]] (apply max-key :gap vs)))
-           (sort-by :gap >)
-           vec))))
+  (let [data (run-kondo file)
+        analysis (:analysis data)
+        defs (into {}
+                   (for [d (:var-definitions analysis)
+                         :when (= (str ns-name) (str (:ns d)))]
+                     [(str (:name d)) (:row d)]))
+        usages (:var-usages analysis)
+        ns-str (str ns-name)]
+    (->> usages
+         (filter (fn [u]
+                   (and (= ns-str (str (:from u)))
+                        (= ns-str (str (:to u)))
+                        (let [def-line (get defs (str (:name u)))]
+                          (and def-line (< (:row u) def-line))))))
+         (map (fn [u]
+                {:name (symbol (:name u))
+                 :used-at (:row u)
+                 :defined-at (get defs (str (:name u)))
+                 :gap (- (get defs (str (:name u))) (:row u))}))
+         ;; Deduplicate: one entry per forward-ref'd var (largest gap)
+         (group-by :name)
+         (map (fn [[_ vs]] (apply max-key :gap vs)))
+         (sort-by :gap >)
+         vec)))

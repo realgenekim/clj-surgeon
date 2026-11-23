@@ -728,7 +728,7 @@
                         (show-form/invocation-remedy
                           {:file (str file) :form "source->target"}))
               result @(proc/process ["zsh" "-c" command]
-                                    {:dir (str tmp-dir)
+                                    {:dir (str tmp-dir) :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}
                                      :err :string
                                      :out :string})
               receipt (edn/read-string (:out result))]
@@ -745,7 +745,7 @@
   [& args]
   @(proc/process
      (into ["bb" "-m" "clj-surgeon.core"] args)
-     {:dir project-root :err :string :out :string}))
+     {:dir project-root :err :string :out :string :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}}))
 
 (deftest cli-show-form-selectors-and-cat-contains-are-one-shot-edn-reads
   (let [tmp-dir (fs/create-temp-dir {:prefix "show form cli "})
@@ -805,7 +805,7 @@
         run-with-input
         (fn [args input]
           @(proc/process (into ["bb" "-m" "clj-surgeon.core"] args)
-                         (cond-> {:out :string :err :string}
+                         (cond-> {:out :string :err :string :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}}
                            input (assoc :in input))))]
     (try
       (spit first-file "(ns first)\n(defn first-a [] :a)\n")

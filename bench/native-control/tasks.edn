@@ -1,0 +1,645 @@
+;; Frozen read tasks for bench/native-control (authored 2026-11-22, surgeon@anvil).
+;; Expected values were computed with the Clojure reader over the pinned files (not with clj-surgeon) and
+;; cross-checked by rg; every file is at the pinned sha of the owner's own public repository.
+;; Deferred: form-lines check, header author line, edn tag whitelist, README/bb.edn wiring.
+;; T08's :file-lines measures the entire exports.clj file, not a single form.
+[{:answer-kind :exact,
+  :file "src/cfp_scheduler_killer/handlers/schedule.clj",
+  :prompt
+  "In the function `handle-rough-place` in src/cfp_scheduler_killer/handlers/schedule.clj, exceptions are caught and dispatched on the ex-data :type. When that type is :store/stale-command, what is the exact :body string of the response map?",
+  :form-lines 203,
+  :id "T01",
+  :class :exact,
+  :expected "Schedule changed; retry the move.",
+  :repo "/home/forge/src/curtaincall-cfp",
+  :repo-url "https://github.com/realgenekim/curtaincall-cfp.git",
+  :form "handle-rough-place",
+  :answer-format
+  "Reply with only the string, on one line, without surrounding quotes, nothing else.",
+  :sha "3d6be00e0a984d1a1bdb501a0d7fcd1f87eb5645"}
+ {:answer-kind :exact,
+  :file "src/marvin_voice_remote/reducer/core.clj",
+  :prompt
+  "In `step` in src/marvin_voice_remote/reducer/core.clj, the event type is dispatched with a `case`. Which handler function is bound for the event type :cmd/latest-reply?",
+  :form-lines 158,
+  :id "T02",
+  :class :exact,
+  :expected "handle-latest-reply",
+  :repo "/home/forge/src/marvin-voice-remote",
+  :repo-url "https://github.com/realgenekim/marvin-voice-remote.git",
+  :form "step",
+  :answer-format
+  "Reply with only the value, on one line, nothing else.",
+  :sha "d170f3d5edea6faa39396ea8b3418e29b2e2b4b1"}
+ {:answer-kind :exact,
+  :file "src/cfp_scheduler_killer/views/schedule.clj",
+  :prompt
+  "In `schedule-page` in src/cfp_scheduler_killer/views/schedule.clj there is a [:script ...] hiccup tag just before the day-tabs div. What is the exact value of its :src attribute?",
+  :form-lines 324,
+  :id "T03",
+  :class :exact,
+  :expected "/js/sched-tabs.js?v=1",
+  :repo "/home/forge/src/curtaincall-cfp",
+  :repo-url "https://github.com/realgenekim/curtaincall-cfp.git",
+  :form "schedule-page",
+  :answer-format
+  "Reply with only the value, on one line, nothing else.",
+  :sha "3d6be00e0a984d1a1bdb501a0d7fcd1f87eb5645"}
+ {:answer-kind :exact,
+  :file "src/cfp_scheduler_killer/server.clj",
+  :prompt
+  "In `make-routes` in src/cfp_scheduler_killer/server.clj, which handler serves GET /people/outreach? Give the symbol exactly as written after #' (alias/name).",
+  :form-lines 252,
+  :id "T04",
+  :class :exact,
+  :expected "crm-handlers/handle-outreach",
+  :repo "/home/forge/src/curtaincall-cfp",
+  :repo-url "https://github.com/realgenekim/curtaincall-cfp.git",
+  :form "make-routes",
+  :answer-format
+  "Reply with only the value, on one line, nothing else.",
+  :sha "3d6be00e0a984d1a1bdb501a0d7fcd1f87eb5645"}
+ {:answer-kind :set,
+  :file "src/cfp_scheduler_killer/server.clj",
+  :prompt
+  "List every route in the vector inside `make-routes` in src/cfp_scheduler_killer/server.clj. For each path and each HTTP method under it write one line `METHOD PATH HANDLER`: METHOD lowercase (get, post, put), PATH the route string exactly, HANDLER the symbol after #' (or the bare symbol when there is no #'). Include every route, in any order.",
+  :form-lines 252,
+  :id "T05",
+  :class :inventory,
+  :expected
+  ["get / event-handlers/handle-home"
+   "get /index.html event-handlers/handle-index-html"
+   "get /ping health-handlers/handle-ping"
+   "get /events event-handlers/handle-events-list"
+   "get /people crm-handlers/handle-people"
+   "get /people/outreach crm-handlers/handle-outreach"
+   "get /people/:person-id crm-handlers/handle-person"
+   "post /api/people/:person-id/notes crm-handlers/handle-note-add"
+   "post /api/people/:person-id/tags/add crm-handlers/handle-tag-add"
+   "post /api/people/:person-id/tags/remove crm-handlers/handle-tag-remove"
+   "post /api/people/:person-id/events/add crm-handlers/handle-push-to-event"
+   "post /api/people/import/preview crm-handlers/handle-import-preview"
+   "post /api/people/import crm-handlers/handle-import"
+   "post /api/people/segments crm-handlers/handle-segment-save"
+   "post /api/people/segments/:segment-id/remove crm-handlers/handle-segment-remove"
+   "post /api/people/outreach/preview crm-handlers/handle-outreach-preview"
+   "post /api/people/outreach/record crm-handlers/handle-outreach-record"
+   "get /events/new event-handlers/handle-new-event"
+   "get /events/:slug dashboard-handlers/handle-event-dashboard"
+   "get /events/:slug/fragment dashboard-handlers/handle-dashboard-fragment"
+   "get /events/:slug/details event-handlers/handle-event-details"
+   "get /events/:slug/committee dashboard-handlers/handle-event-committee"
+   "post /api/events/:slug/details event-handlers/handle-event-details-save"
+   "post /api/events/:slug/clone event-handlers/handle-event-clone"
+   "get /events/:slug/submissions board-handlers/handle-submissions-list"
+   "get /events/:slug/submissions/:submission-id board-handlers/handle-submission-detail"
+   "post /api/events/:slug/submissions/:submission-id/content board-handlers/handle-session-content"
+   "post /api/events/:slug/submissions/:submission-id/history/:log-index/restore board-handlers/handle-session-content-restore"
+   "get /events/:slug/board board-handlers/handle-board"
+   "get /events/:slug/review board-handlers/handle-reviewer-queue"
+   "get /events/:slug/reviewer-progress board-handlers/handle-reviewer-progress"
+   "get /events/:slug/board/review-scores.csv export-handlers/handle-export-review-scores"
+   "get /events/:slug/board/fragment board-handlers/handle-board-fragment"
+   "get /events/:slug/log/fragment dashboard-handlers/handle-log-fragment"
+   "get /events/:slug/inform communication-handlers/handle-inform-page"
+   "get /events/:slug/deliverables speaker-task-handlers/handle-deliverables"
+   "post /api/events/:slug/reminder-schedule speaker-task-handlers/handle-reminder-schedule"
+   "get /events/:slug/speakers speaker-handlers/handle-speakers"
+   "post /events/:slug/speakers/filter speaker-handlers/handle-speakers-filter"
+   "get /events/:slug/speakers/:person-id speaker-handlers/handle-speaker-detail"
+   "post /events/:slug/speakers/:person-id/withdrawal speaker-handlers/handle-presenter-withdrawal"
+   "get /events/:slug/files file-handlers/handle-files"
+   "get /events/:slug/files.zip file-handlers/handle-files-zip"
+   "get /events/:slug/files/:file-id/download file-handlers/handle-organizer-download"
+   "post /api/events/:slug/speakers speaker-handlers/handle-add-speaker"
+   "post /api/events/:slug/speaker-fields speaker-handlers/handle-define-custom-field"
+   "post /api/events/:slug/speakers/import/preview speaker-handlers/handle-import-preview"
+   "post /api/events/:slug/speakers/import speaker-handlers/handle-import-speakers"
+   "post /api/events/:slug/speakers/:person-id/status speaker-handlers/handle-speaker-status"
+   "post /api/events/:slug/speakers/:person-id/portal-invite speaker-handlers/handle-portal-invite"
+   "post /api/events/:slug/speakers/:person-id handle-update-speaker"
+   "get /events/:slug/form form-handlers/handle-form-builder"
+   "get /events/:slug/settings integration-handlers/handle-settings"
+   "get /events/:slug/comms communication-handlers/handle-comms"
+   "get /events/:slug/letters communication-handlers/handle-letters"
+   "get /events/:slug/replay replay-handlers/handle-replay-page"
+   "get /events/:slug/capture communication-handlers/handle-capture-page"
+   "get /events/:slug/schedule schedule-handlers/handle-schedule"
+   "get /events/:slug/resources resource-page-handlers/handle-organizer-pages"
+   "get /agenda/:slug public-widget-handlers/handle-agenda"
+   "get /agenda/:slug/sessions public-widget-handlers/handle-public-sessions"
+   "get /agenda/:slug/sessions/:submission-id public-widget-handlers/handle-public-session"
+   "get /agenda/:slug/speakers public-widget-handlers/handle-public-speakers"
+   "get /agenda/:slug/directory public-widget-handlers/handle-public-directory"
+   "post /agenda/:slug/speakers/filter public-widget-handlers/handle-public-speakers-filter"
+   "get /agenda/:slug/speakers/:person-id public-widget-handlers/handle-public-speaker"
+   "get /agenda/:slug/itinerary public-widget-handlers/handle-public-itinerary"
+   "get /agenda/:slug/my public-widget-handlers/handle-my-schedule"
+   "post /agenda/:slug/my.ics public-widget-handlers/handle-my-schedule-ics"
+   "get /program/:slug/resources resource-page-handlers/handle-public-index"
+   "get /program/:slug/resources/:page-slug resource-page-handlers/handle-public-page"
+   "get /events/:slug/exports export-handlers/handle-exports-page"
+   "get /events/:slug/embed export-handlers/handle-embed-builder"
+   "get /events/:slug/exports/sessions.json export-handlers/handle-export-sessions"
+   "get /events/:slug/exports/speakers.json export-handlers/handle-export-speakers"
+   "get /events/:slug/exports/review-results.csv export-handlers/handle-export-review-results-csv"
+   "get /events/:slug/exports/review-results.json export-handlers/handle-export-review-results-json"
+   "get /events/:slug/exports/calendar.ics export-handlers/handle-export-ics"
+   "get /llms.txt export-handlers/handle-site-llms-txt"
+   "get /events/:slug/llms.txt export-handlers/handle-llms-txt"
+   "post /events/:slug/mcp agent-handlers/handle-mcp"
+   "get /api/v1/ public-api-handlers/handle-api-index"
+   "get /api/v1 public-api-handlers/handle-api-index"
+   "get /api/v1/events/:slug public-api-handlers/handle-api-event"
+   "get /api/v1/events/:slug/docs public-api-handlers/handle-api-docs"
+   "get /api/v1/events/:slug/review-policy public-api-handlers/handle-api-review-policy-get"
+   "put /api/v1/events/:slug/review-policy public-api-handlers/handle-api-review-policy-put"
+   "get /api/v1/events/:slug/sessions public-api-handlers/handle-api-sessions"
+   "get /api/v1/events/:slug/speakers public-api-handlers/handle-api-speakers"
+   "get /api/v1/events/:slug/speakers/:person-id public-api-handlers/handle-api-speaker"
+   "post /api/v1/events/:slug/speakers/:person-id/publish public-api-handlers/handle-api-speaker-publish"
+   "post /api/v1/events/:slug/speakers/:person-id/unpublish public-api-handlers/handle-api-speaker-unpublish"
+   "get /api/v1/events/:slug/schedule public-api-handlers/handle-api-schedule"
+   "get /api/v1/events/:slug/rooms public-api-handlers/handle-api-rooms"
+   "get /api/v1/events/:slug/changes public-api-handlers/handle-api-changes"
+   "get /api/v1/events/:slug/submissions public-api-handlers/handle-api-submissions"
+   "get /api/v1/events/:slug/submissions/:submission-id public-api-handlers/handle-api-submission"
+   "post /api/v1/events/:slug/submissions/:submission-id/reviews public-api-handlers/handle-api-review-create"
+   "get /portal portal-handlers/handle-portal"
+   "get /portal/stream portal-handlers/handle-portal-stream"
+   "post /portal/draft portal-handlers/handle-portal-draft"
+   "get /headshots/:file-id file-handlers/handle-headshot"
+   "get /events/:slug/log dashboard-handlers/handle-event-log"
+   "get /events/:slug/people/:person-id dashboard-handlers/handle-person-detail"
+   "get /cfp/:slug public-cfp-handlers/handle-public-cfp"
+   "get /cfp/:slug/submitted/:submission-id public-cfp-handlers/handle-cfp-submitted"
+   "get /api/cfp/:slug/submit public-cfp-handlers/handle-cfp-submit-descriptor"
+   "post /api/cfp/:slug/submit public-cfp-handlers/handle-cfp-submit"
+   "post /api/cfp/:slug/import-sessionize public-cfp-handlers/handle-cfp-import"
+   "post /api/cfp/:slug/import-live public-cfp-handlers/handle-cfp-import-live"
+   "post /api/cfp/:slug/draft public-cfp-handlers/handle-cfp-draft"
+   "post /api/cfp/:slug/draft/reset public-cfp-handlers/handle-cfp-draft-reset"
+   "get /api/cfp/live public-cfp-handlers/handle-cfp-live"
+   "get /api/cfp/:slug/stream public-cfp-handlers/handle-cfp-stream"
+   "post /api/telemetry/beacon dev-handlers/handle-telemetry-beacon"
+   "post /api/events/create event-handlers/handle-create-event"
+   "post /api/events/demo event-handlers/handle-create-demo-event"
+   "post /api/events/preview event-handlers/handle-events-preview"
+   "post /api/events/:slug/archive event-handlers/handle-event-archive"
+   "post /api/events/:slug/unarchive event-handlers/handle-event-unarchive"
+   "post /api/events/:slug/default event-handlers/handle-default-event"
+   "post /api/events/draft-pref event-handlers/handle-draft-pref"
+   "post /api/events/:slug/cfp/open event-handlers/handle-cfp-open"
+   "post /api/events/:slug/cfp/close event-handlers/handle-cfp-close"
+   "post /api/events/:slug/cfp/close-date event-handlers/handle-cfp-close-date"
+   "post /api/committees/:committee-id/members/add dashboard-handlers/handle-add-member"
+   "post /api/committees/:committee-id/members/:person-id/scope dashboard-handlers/handle-member-scope"
+   "post /api/committees/:committee-id/members/:person-id/role dashboard-handlers/handle-member-role"
+   "post /api/memberships/:membership-id/remove dashboard-handlers/handle-remove-member"
+   "get /login auth-handlers/handle-login-page"
+   "post /api/login auth-handlers/handle-login"
+   "get /auth/google auth-google/handle-start"
+   "get /auth/google/callback auth-google/handle-callback"
+   "get /auth/:token auth-handlers/handle-auth-token"
+   "post /api/demo-login auth-handlers/handle-demo-login"
+   "post /logout auth-handlers/handle-logout"
+   "get /api/sse sse/handle-sse"
+   "post /api/events/:slug/board/sort board-handlers/handle-board-sort"
+   "post /api/submissions/:submission-id/rate board-handlers/handle-rate"
+   "post /api/submissions/:submission-id/comment board-handlers/handle-comment"
+   "post /api/submissions/:submission-id/reviewers/:person-id/assign board-handlers/handle-assign-reviewer"
+   "post /api/submissions/:submission-id/reviewers/:person-id/unassign board-handlers/handle-unassign-reviewer"
+   "post /api/submissions/:submission-id/recuse board-handlers/handle-recuse-reviewer"
+   "post /api/submissions/:submission-id/unrecuse board-handlers/handle-unrecuse-reviewer"
+   "post /api/events/:slug/reviewer-nudges/draft board-handlers/handle-reviewer-nudge-draft"
+   "post /api/events/:slug/reviewer-nudges/record board-handlers/handle-reviewer-nudge-record"
+   "post /api/events/:slug/reviewers/distribute/preview board-handlers/handle-reviewer-distribution-preview"
+   "post /api/events/:slug/reviewers/distribute board-handlers/handle-reviewer-distribution-confirm"
+   "post /api/events/:slug/review-plan/presenter-visibility review-plan-handlers/handle-presenter-visibility"
+   "post /api/submissions/:submission-id/status board-handlers/handle-status"
+   "post /api/submissions/:submission-id/content-status board-handlers/handle-content-status"
+   "post /api/submissions/:submission-id/priority board-handlers/handle-priority"
+   "post /api/submissions/:submission-id/inform communication-handlers/handle-inform-one"
+   "post /api/events/:slug/deliverables/:submission-id/:task-key/chase speaker-task-handlers/handle-record-chase"
+   "post /api/events/:slug/speaker-chases/draft speaker-task-handlers/handle-draft-chases"
+   "post /api/events/:slug/speaker-chases/send speaker-task-handlers/handle-send-chases"
+   "post /api/events/:slug/files/requests file-handlers/handle-request-file"
+   "post /api/events/:slug/files/:file-id/comment file-handlers/handle-organizer-comment"
+   "post /api/submissions/:submission-id/answers portal-handlers/handle-portal-answers"
+   "post /api/submissions/:submission-id/speaker-role portal-handlers/handle-portal-speaker-role"
+   "post /api/submissions/:submission-id/task portal-handlers/handle-portal-task"
+   "post /api/submissions/:submission-id/placement-acknowledgement portal-handlers/handle-placement-acknowledgement"
+   "post /api/submissions/:submission-id/files/:task-key/upload file-handlers/handle-speaker-upload"
+   "post /api/submissions/:submission-id/files/:file-id/comment file-handlers/handle-speaker-comment"
+   "get /api/submissions/:submission-id/files/:file-id/download file-handlers/handle-speaker-download"
+   "post /api/submissions/:submission-id/headshot file-handlers/handle-profile-headshot"
+   "post /api/events/:slug/inform-all communication-handlers/handle-inform-all"
+   "post /api/profile portal-handlers/handle-portal-profile"
+   "post /api/events/:slug/speaker-custom-values portal-handlers/handle-portal-custom-values"
+   "post /api/events/:slug/blackout-windows portal-handlers/handle-portal-blackout-window"
+   "post /api/events/:slug/schedule/place schedule-handlers/handle-schedule-place"
+   "post /api/events/:slug/resources resource-page-handlers/handle-page-save"
+   "post /api/events/:slug/schedule/clear schedule-handlers/handle-schedule-clear"
+   "post /api/events/:slug/schedule/room-add schedule-handlers/handle-room-add"
+   "post /api/events/:slug/schedule/room-remove schedule-handlers/handle-room-remove"
+   "post /api/events/:slug/schedule/track-add schedule-handlers/handle-track-add"
+   "post /api/events/:slug/schedule/track-rename schedule-handlers/handle-track-rename"
+   "post /api/events/:slug/schedule/track-retire schedule-handlers/handle-track-retire"
+   "post /api/events/:slug/schedule/block-add schedule-handlers/handle-block-add"
+   "post /api/events/:slug/schedule/block-remove schedule-handlers/handle-block-remove"
+   "post /api/events/:slug/schedule/block-fill schedule-handlers/handle-block-fill"
+   "post /api/events/:slug/schedule/rough-place schedule-handlers/handle-rough-place"
+   "post /api/events/:slug/schedule/organize-category schedule-handlers/handle-organize-category"
+   "post /api/events/:slug/schedule/placeholder-rename schedule-handlers/handle-placeholder-rename"
+   "post /api/events/:slug/schedule/placeholder-add schedule-handlers/handle-placeholder-add"
+   "post /api/events/:slug/schedule/lock schedule-handlers/handle-schedule-lock"
+   "post /api/events/:slug/schedule/unlock schedule-handlers/handle-schedule-unlock"
+   "post /api/events/:slug/schedule/publish schedule-handlers/handle-schedule-publish"
+   "post /api/events/:slug/schedule/suggest schedule-handlers/handle-schedule-suggest"
+   "post /api/events/:slug/form/preview form-handlers/handle-form-preview"
+   "post /api/events/:slug/form/add form-handlers/handle-form-add"
+   "post /api/events/:slug/form/update form-handlers/handle-form-update"
+   "post /api/events/:slug/form/move form-handlers/handle-form-move"
+   "post /api/events/:slug/form/retire-ask form-handlers/handle-form-retire-ask"
+   "post /api/events/:slug/form/retire form-handlers/handle-form-retire"
+   "post /api/events/:slug/form/retire-cancel form-handlers/handle-form-retire-cancel"
+   "post /api/events/:slug/form/restore form-handlers/handle-form-restore"
+   "post /api/events/:slug/form/reviewed form-handlers/handle-form-reviewed"
+   "post /api/events/:slug/capture communication-handlers/handle-capture"
+   "post /api/replay/start-demo replay-handlers/handle-replay-start-demo"
+   "post /api/events/:slug/replay/play replay-handlers/handle-replay-play"
+   "post /api/events/:slug/replay/pause replay-handlers/handle-replay-pause"
+   "post /api/events/:slug/replay/skip replay-handlers/handle-replay-skip"
+   "post /api/events/:slug/airtable/set integration-handlers/handle-airtable-set"
+   "post /api/events/:slug/airtable/remove integration-handlers/handle-airtable-remove"
+   "post /api/events/:slug/slack/set integration-handlers/handle-slack-set"
+   "post /api/events/:slug/slack/remove integration-handlers/handle-slack-remove"
+   "post /api/events/:slug/slack/test integration-handlers/handle-slack-test"
+   "post /api/events/:slug/notice/dismiss board-handlers/handle-notice-dismiss"
+   "post /api/events/:slug/api-keys/create integration-handlers/handle-api-key-create"
+   "post /api/events/:slug/api-keys/revoke integration-handlers/handle-api-key-revoke"
+   "post /api/events/:slug/webhooks/add integration-handlers/handle-webhook-add"
+   "post /api/events/:slug/webhooks/remove integration-handlers/handle-webhook-remove"
+   "get /dev/reload-check dev-handlers/handle-reload-check"
+   "get /dev/sse-state dev-handlers/handle-sse-state"],
+  :repo "/home/forge/src/curtaincall-cfp",
+  :repo-url "https://github.com/realgenekim/curtaincall-cfp.git",
+  :form "make-routes",
+  :answer-format
+  "Reply with one line per route in the format `METHOD PATH HANDLER` and nothing else: no headings, no numbering, no commentary.",
+  :sha "3d6be00e0a984d1a1bdb501a0d7fcd1f87eb5645"}
+ {:answer-kind :set,
+  :file "src/cfp_scheduler_killer/routes_additive.clj",
+  :prompt
+  "List every route in the `routes` def in src/cfp_scheduler_killer/routes_additive.clj. For each path and each HTTP method under it write one line `METHOD PATH HANDLER`: METHOD lowercase, PATH the route string exactly, HANDLER the symbol after #' (or the bare symbol when there is no #'). Include every route, in any order.",
+  :form-lines 283,
+  :id "T06",
+  :class :inventory,
+  :expected
+  ["get /events/:slug/schedule/status schedule-handlers/handle-workspace-status"
+   "get /events/:slug/schedule/day schedule-handlers/handle-workspace-day"
+   "get /events/:slug/schedule/edit schedule-handlers/handle-workspace-editor"
+   "get /events/:slug/schedule/review schedule-handlers/handle-workspace-publication-review"
+   "post /api/events/:slug/schedule/workspace schedule-handlers/handle-workspace-command"
+   "post /api/events/:slug/schedule/workspace-presenter schedule-handlers/handle-workspace-presenter"
+   "post /api/events/:slug/schedule/workspace-assignment schedule-handlers/handle-workspace-assignment"
+   "post /api/events/:slug/schedule/workspace-publish schedule-handlers/handle-workspace-publish"
+   "get /agenda/:slug/feedback/open feedback-handlers/handle-open"
+   "get /agenda/:slug/feedback/agenda feedback-handlers/handle-attendee-agenda"
+   "get /agenda/:slug/feedback/preview feedback-handlers/handle-preview"
+   "get /agenda/:slug/feedback/state feedback-handlers/handle-event-state"
+   "post /agenda/:slug/feedback/access feedback-handlers/handle-access"
+   "post /agenda/:slug/feedback/handoff feedback-handlers/handle-handoff"
+   "get /agenda/:slug/sessions/:submission-id/feedback feedback-handlers/handle-state"
+   "post /agenda/:slug/sessions/:submission-id/feedback/rating feedback-handlers/handle-rating"
+   "post /agenda/:slug/sessions/:submission-id/feedback/comment feedback-handlers/handle-comment"
+   "get /events/:slug/session-feedback feedback-handlers/handle-results"
+   "get /events/:slug/session-feedback.csv feedback-handlers/handle-csv"
+   "post /api/events/:slug/session-feedback/availability feedback-handlers/handle-availability"
+   "post /api/events/:slug/session-feedback/link integration-handlers/handle-feedback-link"
+   "get /card.png public-widget-handlers/handle-homepage-card"
+   "get /events/:slug/talks talk-content-handlers/handle-list"
+   "get /events/:slug/talks/:talk-id/edit talk-content-handlers/handle-edit"
+   "post /events/:slug/talks/:talk-id/edit talk-content-handlers/handle-edit"
+   "get /api/events/:slug/talks/:talk-id/content talk-content-handlers/handle-api"
+   "post /api/events/:slug/talks/:talk-id/content talk-content-handlers/handle-api"
+   "get /events/:slug/readiness dashboard-handlers/handle-readiness"
+   "post /api/events/:slug/schedule/rail-reorder schedule-handlers/handle-rail-reorder"
+   "get /cfp/:slug/deadline.ics public-cfp-handlers/handle-cfp-deadline-ics"
+   "get /demo handle-open-demo"
+   "get /robots.txt export-handlers/handle-robots-txt"
+   "get /program public-widget-handlers/handle-program-index"
+   "get /program/ public-widget-handlers/handle-program-index"
+   "get /program/:slug public-widget-handlers/handle-program"
+   "get /program/:slug/announce public-widget-handlers/handle-organizer-brag"
+   "get /program/:slug/card.jpg public-widget-handlers/handle-event-card"
+   "get /program/:slug/card.png public-widget-handlers/handle-event-card-png"
+   "get /events/:slug/exports/agenda-embedded.html public-widget-handlers/handle-agenda-embedded"
+   "get /cfps public-widget-handlers/handle-cfps"
+   "get /agenda/:slug/speakers/:person-id/announce public-widget-handlers/handle-announce"
+   "get /agenda/:slug/speakers/:person-id/announce/with/:co-speakers public-widget-handlers/handle-announce"
+   "get /agenda/:slug/speakers/:person-id/share/with/:co-speakers public-widget-handlers/handle-share"
+   "get /agenda/:slug/speakers/:person-id/card.png public-widget-handlers/handle-speaker-card"
+   "get /agenda/:slug/speakers/:person-id/share public-widget-handlers/handle-share"
+   "get /agenda/:slug/speakers/:person-id/card-marquee.png public-widget-handlers/handle-speaker-card-marquee"
+   "get /agenda/:slug/speakers/:person-id/card-portrait.png public-widget-handlers/handle-speaker-card-portrait"
+   "get /agenda/:slug/gallery public-widget-handlers/handle-public-gallery"
+   "get /manifesto manifesto-handlers/handle-manifesto"
+   "get /organizers/:slug event-handlers/handle-organizer-page"
+   "get /welcome event-handlers/handle-welcome"
+   "get /events/:slug/announce announce-handlers/handle-announce-page"
+   "get /events/:slug/speakers/new announce-handlers/handle-create-speaker-page"
+   "get /events/:slug/submissions/:submission-id/manage board-handlers/handle-manage-speaker"
+   "get /admin/zoo/social-sharing zoo-handlers/handle-zoo-social-sharing"
+   "get /admin/zoo/social-sharing/cards/:kind zoo-handlers/handle-zoo-preview-card"
+   "get /ping health-handlers/handle-ping"
+   "get /people crm-handlers/handle-people"
+   "get /people/outreach crm-handlers/handle-outreach"
+   "get /people/:person-id crm-handlers/handle-person"
+   "post /api/people/:person-id/notes crm-handlers/handle-note-add"
+   "post /api/people/:person-id/tags/add crm-handlers/handle-tag-add"
+   "post /api/people/:person-id/tags/remove crm-handlers/handle-tag-remove"
+   "post /api/people/:person-id/events/add crm-handlers/handle-push-to-event"
+   "post /api/people/import/preview crm-handlers/handle-import-preview"
+   "post /api/people/import crm-handlers/handle-import"
+   "post /api/people/segments crm-handlers/handle-segment-save"
+   "post /api/people/segments/:segment-id/remove crm-handlers/handle-segment-remove"
+   "post /api/people/outreach/preview crm-handlers/handle-outreach-preview"
+   "post /api/people/outreach/record crm-handlers/handle-outreach-record"
+   "get /events/:slug/review board-handlers/handle-reviewer-queue"
+   "get /events/:slug/reviewer-progress board-handlers/handle-reviewer-progress"
+   "post /api/events/:slug/submissions/:submission-id/content board-handlers/handle-session-content"
+   "post /api/events/:slug/submissions/:submission-id/history/:log-index/restore board-handlers/handle-session-content-restore"
+   "post /api/submissions/:submission-id/mention board-handlers/handle-mention"
+   "post /api/events/:slug/submissions/:submission-id/manage board-handlers/handle-manage-speaker-save"
+   "post /api/submissions/:submission-id/reviewers/:person-id/assign board-handlers/handle-assign-reviewer"
+   "post /api/submissions/:submission-id/reviewers/:person-id/unassign board-handlers/handle-unassign-reviewer"
+   "post /api/submissions/:submission-id/recuse board-handlers/handle-recuse-reviewer"
+   "post /api/submissions/:submission-id/unrecuse board-handlers/handle-unrecuse-reviewer"
+   "post /api/events/:slug/reviewer-nudges/draft board-handlers/handle-reviewer-nudge-draft"
+   "post /api/events/:slug/reviewer-nudges/record board-handlers/handle-reviewer-nudge-record"
+   "post /api/events/:slug/reviewers/distribute/preview board-handlers/handle-reviewer-distribution-preview"
+   "post /api/events/:slug/reviewers/distribute board-handlers/handle-reviewer-distribution-confirm"
+   "post /api/events/:slug/review-plan/presenter-visibility review-plan-handlers/handle-presenter-visibility"
+   "post /api/events/:slug/comms/approve-all communication-handlers/handle-email-approve-all"
+   "post /api/events/:slug/comms/:email-id/approve communication-handlers/handle-email-approve"
+   "post /api/events/:slug/comms/:email-id/discard communication-handlers/handle-email-discard"
+   "get /events/:slug/deliverables speaker-task-handlers/handle-deliverables"
+   "post /api/events/:slug/reminder-schedule speaker-task-handlers/handle-reminder-schedule"
+   "post /api/events/:slug/deliverables/:submission-id/:task-key/chase speaker-task-handlers/handle-record-chase"
+   "post /api/events/:slug/speaker-chases/draft speaker-task-handlers/handle-draft-chases"
+   "post /api/events/:slug/speaker-chases/send speaker-task-handlers/handle-send-chases"
+   "get /events/:slug/speakers speaker-handlers/handle-speakers"
+   "post /events/:slug/speakers/filter speaker-handlers/handle-speakers-filter"
+   "get /events/:slug/speakers/:person-id/removal speaker-handlers/handle-speaker-removal"
+   "post /events/:slug/speakers/:person-id/removal speaker-handlers/handle-speaker-removal"
+   "get /events/:slug/speakers/:person-id speaker-handlers/handle-speaker-detail"
+   "post /events/:slug/submissions/:submission-id/speakers speaker-handlers/handle-assign-session-speaker"
+   "post /events/:slug/submissions/:submission-id/speakers/:person-id/remove speaker-handlers/handle-unassign-session-speaker"
+   "post /events/:slug/submissions/:submission-id/speakers/:position/role speaker-handlers/handle-set-session-speaker-role"
+   "post /api/events/:slug/speakers speaker-handlers/handle-add-speaker"
+   "post /api/events/:slug/speaker-fields speaker-handlers/handle-define-custom-field"
+   "post /api/events/:slug/speakers/import/preview speaker-handlers/handle-import-preview"
+   "post /api/events/:slug/speakers/import speaker-handlers/handle-import-speakers"
+   "post /api/events/:slug/speakers/:person-id/status speaker-handlers/handle-speaker-status"
+   "post /api/events/:slug/speakers/:person-id/portal-invite speaker-handlers/handle-portal-invite"
+   "post /api/events/:slug/speakers/create announce-handlers/handle-create-speaker"
+   "post /api/events/:slug/speakers/adopt announce-handlers/handle-adopt-speaker"
+   "post /api/events/:slug/speakers/adopt-all announce-handlers/handle-adopt-all"
+   "get /events/:slug/files file-handlers/handle-files"
+   "get /events/:slug/files.zip file-handlers/handle-files-zip"
+   "get /events/:slug/files/:file-id/download file-handlers/handle-organizer-download"
+   "get /headshots/:file-id file-handlers/handle-headshot"
+   "post /api/events/:slug/files/requests file-handlers/handle-request-file"
+   "post /api/events/:slug/files/:file-id/comment file-handlers/handle-organizer-comment"
+   "post /api/submissions/:submission-id/files/:task-key/upload file-handlers/handle-speaker-upload"
+   "post /api/submissions/:submission-id/files/:file-id/comment file-handlers/handle-speaker-comment"
+   "get /api/submissions/:submission-id/files/:file-id/download file-handlers/handle-speaker-download"
+   "post /api/submissions/:submission-id/headshot file-handlers/handle-profile-headshot"
+   "get /agenda/:slug/my public-widget-handlers/handle-my-schedule"
+   "post /agenda/:slug/my.ics public-widget-handlers/handle-my-schedule-ics"
+   "get /agenda/:slug/sessions/:submission-id/invite.ics session-invites/handle-session-invite"
+   "post /events/:slug/mcp agent-handlers/handle-mcp"
+   "post /api/cfp/:slug/draft/reset public-cfp-handlers/handle-cfp-draft-reset"
+   "post /api/events/:slug/api-keys/copy integration-handlers/handle-api-key-copy"
+   "post /api/events/:slug/speaker-custom-values portal-handlers/handle-portal-custom-values"
+   "post /api/events/:slug/schedule/track-add schedule-handlers/handle-track-add"
+   "post /api/events/:slug/schedule/track-rename schedule-handlers/handle-track-rename"
+   "post /api/events/:slug/schedule/track-retire schedule-handlers/handle-track-retire"
+   "post /api/events/:slug/schedule/suggest schedule-handlers/handle-schedule-suggest"
+   "post /api/events/:slug/schedule/presenter-group-preview schedule-handlers/handle-presenter-group-preview"
+   "post /api/events/:slug/schedule/presenter-group-save schedule-handlers/handle-presenter-group-save"
+   "post /api/events/:slug/schedule/speaker-removal schedule-handlers/handle-event-speaker-removal"
+   "post /api/events/:slug/schedule/block-duration schedule-handlers/handle-block-duration"
+   "post /api/events/:slug/schedule/block-to-rail schedule-handlers/handle-block-to-rail"
+   "post /api/events/:slug/schedule/star-toggle schedule-handlers/handle-star-toggle"
+   "post /api/events/:slug/schedule/label-toggle schedule-handlers/handle-label-toggle"
+   "post /api/events/:slug/schedule/label-rename-open schedule-handlers/handle-label-rename-open"
+   "post /api/events/:slug/schedule/label-rename schedule-handlers/handle-label-rename"
+   "get /events/:slug/applicants applicant-handlers/handle-applicants-board"
+   "get /events/:slug/applicants/rate applicant-handlers/handle-applicants-rate-page"
+   "get /api/events/:slug/applicants/stream applicant-handlers/handle-applicants-stream"
+   "post /api/events/:slug/applicants/rate applicant-handlers/handle-applicants-rate"
+   "post /api/events/:slug/applicants/note applicant-handlers/handle-applicants-note"
+   "post /api/events/:slug/applicants/tag applicant-handlers/handle-applicants-tag"
+   "post /api/events/:slug/applicants/score applicant-handlers/handle-applicants-score"
+   "post /api/events/:slug/applicants/tag-filter applicant-handlers/handle-applicants-tag-filter"
+   "post /api/events/:slug/applicants/focus applicant-handlers/handle-applicants-focus"
+   "post /api/events/:slug/applicants/expand applicant-handlers/handle-applicants-expand"
+   "post /api/events/:slug/applicants/sort applicant-handlers/handle-applicants-sort"
+   "post /api/events/:slug/applicants/variant applicant-handlers/handle-applicants-variant"
+   "post /api/events/:slug/applicants/room-toggle applicant-handlers/handle-applicants-room-toggle"
+   "post /api/events/:slug/applicants/sync applicant-handlers/handle-applicants-sync"
+   "post /api/events/:slug/applicants/retry-holds applicant-handlers/handle-applicants-retry-holds"],
+  :repo "/home/forge/src/curtaincall-cfp",
+  :repo-url "https://github.com/realgenekim/curtaincall-cfp.git",
+  :form "routes",
+  :answer-format
+  "Reply with one line per route in the format `METHOD PATH HANDLER` and nothing else: no headings, no numbering, no commentary.",
+  :sha "3d6be00e0a984d1a1bdb501a0d7fcd1f87eb5645"}
+ {:answer-kind :set,
+  :file "src/marvin_voice_remote/reducer/core.clj",
+  :prompt
+  "In `step` in src/marvin_voice_remote/reducer/core.clj, the event type is dispatched with a `case`. List every event-type keyword in that case with the handler it binds, omitting the default branch.",
+  :form-lines 158,
+  :id "T07",
+  :class :inventory,
+  :expected
+  [":cmd/hf-start handle-hf-start"
+   ":cmd/hf-stop handle-hf-stop"
+   ":cmd/over handle-over"
+   ":cmd/cancel handle-cancel"
+   ":cmd/tap handle-tap"
+   ":cmd/ptt-start handle-ptt-start"
+   ":cmd/ptt-stop handle-ptt-stop"
+   ":cmd/mute handle-mute"
+   ":cmd/unmute handle-unmute"
+   ":cmd/replay-reply handle-replay-reply"
+   ":cmd/say handle-say"
+   ":cmd/skip handle-skip"
+   ":cmd/prev-reply handle-prev-reply"
+   ":cmd/next-reply handle-next-reply"
+   ":cmd/latest-reply handle-latest-reply"
+   ":cmd/pause handle-pause"
+   ":cmd/resume handle-resume"
+   ":fact/mic-opened handle-mic-opened"
+   ":fact/mic-failed handle-mic-failed"
+   ":fact/audio-energy handle-audio-energy"
+   ":fact/reply-arrived handle-reply-arrived"
+   ":fact/range-committed handle-range-committed"
+   ":fact/upload-acked handle-upload-acked"
+   ":fact/upload-failed handle-upload-failed"
+   ":fact/transcript handle-transcript"
+   ":fact/playback-started handle-playback-started"
+   ":fact/playback-finished handle-playback-finished"
+   ":fact/playback-failed handle-playback-failed"
+   ":fact/reflex-fired handle-reflex-fired"
+   ":fact/cue-delivered handle-cue-delivered"
+   ":fact/client-gone handle-client-gone"
+   ":fact/clock handle-clock"],
+  :repo "/home/forge/src/marvin-voice-remote",
+  :repo-url "https://github.com/realgenekim/marvin-voice-remote.git",
+  :form "step",
+  :answer-format
+  "Reply with one line per branch in the format `:kind/name handler-fn` and nothing else: no headings, no numbering, no commentary.",
+  :sha "d170f3d5edea6faa39396ea8b3418e29b2e2b4b1"}
+ {:answer-kind :set,
+  :file "src/cfp_scheduler_killer/exports.clj",
+  :prompt
+  "List the name of every PUBLIC top-level `defn` in src/cfp_scheduler_killer/exports.clj (exclude defn-, def, defonce and anything else).",
+  :file-lines 2072,
+  :id "T08",
+  :class :inventory,
+  :expected
+  ["record-export!"
+   "exports-for"
+   "export-receipt-sentence"
+   "latest-files-zip-verdict"
+   "sessions-card-count-verdict"
+   "published?"
+   "published-sessions"
+   "publishable-sessions"
+   "public-answers"
+   "track-of"
+   "schedule-version"
+   "date-range-string"
+   "speaker-names"
+   "speaker-ids"
+   "room-name"
+   "event-day-strings"
+   "placement-fields"
+   "session-entry"
+   "talk-has-presenters?"
+   "publishable-talks"
+   "talk-entry"
+   "program-sessions"
+   "program-session-count"
+   "sessions-json-data"
+   "speaker-entry"
+   "aggregate-speakers"
+   "announced-speaker-id"
+   "announced-roster-entries"
+   "speakers-json-data"
+   "ics-escape"
+   "fold-line"
+   "ics-uid"
+   "ics-sequence"
+   "vevent"
+   "cancellation-for"
+   "hold-the-date-uid"
+   "hold-the-date-sequence"
+   "hold-the-date-vevent"
+   "cfp-deadline-uid"
+   "cfp-deadline-sequence"
+   "cfp-deadline-ics"
+   "submission-ics"
+   "calendar-ics-for"
+   "calendar-ics"
+   "llms-txt"
+   "site-events"
+   "site-llms-txt"
+   "->json"
+   "register-webhook!"
+   "remove-webhook!"
+   "webhooks-for"
+   "api-placement"
+   "api-session"
+   "api-sessions"
+   "api-speakers"
+   "api-speaker"
+   "api-rooms"
+   "api-schedule"
+   "api-changes"
+   "api-event"
+   "api-index"
+   "api-key-scope"
+   "new-key-material"
+   "key-prefix"
+   "api-keys-for"
+   "create-api-key!"
+   "revoke-api-key!"
+   "api-key-context"
+   "api-key-actor"
+   "valid-token?"
+   "bearer-token"],
+  :repo "/home/forge/src/curtaincall-cfp",
+  :repo-url "https://github.com/realgenekim/curtaincall-cfp.git",
+  :form nil,
+  :answer-format
+  "Reply with one name per line and nothing else: no headings, no numbering, no commentary.",
+  :sha "3d6be00e0a984d1a1bdb501a0d7fcd1f87eb5645"}
+ {:answer-kind :exact,
+  :file "src/cfp_scheduler_killer/handlers/schedule.clj",
+  :prompt
+  "What is the argument vector of `handle-label-toggle` in src/cfp_scheduler_killer/handlers/schedule.clj?",
+  :form-lines 76,
+  :id "T09",
+  :class :control,
+  :expected "[req]",
+  :repo "/home/forge/src/curtaincall-cfp",
+  :repo-url "https://github.com/realgenekim/curtaincall-cfp.git",
+  :form "handle-label-toggle",
+  :answer-format
+  "Reply with only the argument vector exactly as written in the source, nothing else.",
+  :sha "3d6be00e0a984d1a1bdb501a0d7fcd1f87eb5645"}
+ {:answer-kind :exact,
+  :file "src/cfp_scheduler_killer/schedule.clj",
+  :prompt
+  "What is the argument vector of `permute-agenda-items!` in src/cfp_scheduler_killer/schedule.clj?",
+  :form-lines 86,
+  :id "T10",
+  :class :control,
+  :expected "[event seat-items ordered-ids actor]",
+  :repo "/home/forge/src/curtaincall-cfp",
+  :repo-url "https://github.com/realgenekim/curtaincall-cfp.git",
+  :form "permute-agenda-items!",
+  :answer-format
+  "Reply with only the argument vector exactly as written in the source, nothing else.",
+  :sha "3d6be00e0a984d1a1bdb501a0d7fcd1f87eb5645"}
+ {:answer-kind :exact,
+  :file "src/cfp_scheduler_killer/views/schedule.clj",
+  :prompt
+  "In the ns form of src/cfp_scheduler_killer/views/schedule.clj, what alias (:as) is given to the namespace cfp-scheduler-killer.schedule?",
+  :form-lines 40,
+  :id "T11",
+  :class :control,
+  :expected "schedule",
+  :repo "/home/forge/src/curtaincall-cfp",
+  :repo-url "https://github.com/realgenekim/curtaincall-cfp.git",
+  :form "ns",
+  :answer-format "Reply with only the alias, nothing else.",
+  :sha "3d6be00e0a984d1a1bdb501a0d7fcd1f87eb5645"}
+ {:answer-kind :exact,
+  :file "src/marvin_voice_remote/reducer/core.clj",
+  :prompt
+  "What is the argument vector of `handle-playback-failed` in src/marvin_voice_remote/reducer/core.clj?",
+  :form-lines 246,
+  :id "T12",
+  :class :control,
+  :expected "[sx cfg ev]",
+  :repo "/home/forge/src/marvin-voice-remote",
+  :repo-url "https://github.com/realgenekim/marvin-voice-remote.git",
+  :form "handle-playback-failed",
+  :answer-format
+  "Reply with only the argument vector exactly as written in the source, nothing else.",
+  :sha "d170f3d5edea6faa39396ea8b3418e29b2e2b4b1"}]

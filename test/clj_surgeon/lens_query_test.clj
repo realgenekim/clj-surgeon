@@ -497,7 +497,7 @@
 (defn- run-cli [& args]
   @(proc/process
      (into ["bb" "-m" "clj-surgeon.core"] args)
-     {:dir project-root :err :string :out :string}))
+     {:dir project-root :err :string :out :string :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}}))
 
 (deftest cli-lens-and-q-read-plan-and-apply-the-documented-expression
   (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon q "})
