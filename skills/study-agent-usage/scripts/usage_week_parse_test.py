@@ -285,5 +285,38 @@ class RoundFour(unittest.TestCase):
             record = dict(session='one', name='Bash', input=prefix + ' clj-surgeon :op :ls')
             self.assertEqual('ls', p.detect_call(record)['op'])
 
+class ConfirmedRoundThree(unittest.TestCase):
+    def test_wrapper_keeps_output_only_on_last_nested_call(self):
+        source = 'tools.exec_command({cmd:"clj-surgeon :op :ls"});'
+        for count in (1, 2):
+            for wrapped in (False, True):
+                record = dict(name='exec', input=source * count, output='exit 0')
+                if wrapped: record = dict(session='one', payload=record)
+                calls = p.fold_turn(list(p.actions(record)))
+                self.assertEqual([''] * (count - 1) + ['exit 0'], [c['output'] for c in calls])
+                self.assertEqual(['unknown'] * (count - 1) + ['success'],
+                                 [c['outcome'] for c in calls])
+
+    def test_javascript_comments_and_strings_are_not_calls(self):
+        call = 'tools.exec_command({cmd:"clj-surgeon :op :ls"})'
+        for prose in ('// ' + call + '\n', '/* ' + call + ' */',
+                      "'" + call + "';", '`' + call + '`;',
+                      '"tools.exec_command({cmd:\\"clj-surgeon :op :ls\\"})";'):
+            with self.subTest(prose=prose):
+                self.assertEqual([], p.fold_turn(list(p.actions(dict(name='exec', input=prose)))))
+                calls = p.fold_turn(list(p.actions(dict(name='exec', input=prose + '\n' + call))))
+                self.assertEqual(['ls'], [c['op'] for c in calls])
+        source = 'tools.exec_command({cmd:"clj-surgeon :op :ls", workdir:"https://host/*path*/"})'
+        self.assertEqual('ls', p.fold_turn(list(p.actions(dict(name='exec', input=source))))[0]['op'])
+
+    def test_content_text_error_and_fallback(self):
+        output = [{'type': 'text', 'text': 'exit 0'}, {'type': 'text', 'text': 'Error: broken'}]
+        for content in (output, {'content': output}, [{'type': 'text', 'text': 'Error: broken'}]):
+            self.assertEqual('error', p.classify_outcome(content))
+            call = p.fold_turn([dict(MCP, output=content), PATCH])[0]
+            self.assertEqual('error', call['outcome'])
+            self.assertTrue(call['fallback'])
+
+
 if __name__ == '__main__':
     unittest.main()

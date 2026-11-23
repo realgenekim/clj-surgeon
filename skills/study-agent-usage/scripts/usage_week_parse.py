@@ -39,8 +39,13 @@ def actions(record):
         literal = r'"(?:\\.|[^"\\])*"|\x27(?:\\.|[^\x27\\])*\x27|`[^`]*`'
         pattern = (r'tools(?:\.([\w]+)|\[["\x27]([\w-]+)["\x27]\])\(\s*'
                    r'(\{(?:' + literal + r'|[^}"\x27`])*\}|' + literal + r'|[A-Za-z_$][\w$]*)')
+        a = re.sub(literal + r'|//[^\n]*|/\*[\s\S]*?\*/',
+                   lambda m: ' ' * len(m[0]) if m[0].startswith('/') else m[0], a)
+        code = re.sub(literal, lambda m: ' ' * len(m[0]), a)
+        matches = [re.compile(pattern).match(a, m.start()) for m in re.finditer(r'\btools(?=\.|\[)', code)]
+        matches = [m for m in matches if m]
         found = False
-        for m in re.finditer(pattern, a):
+        for index, m in enumerate(matches):
             name, arg = m[1] or m[2], m[3]
             found = True
             try:
@@ -58,7 +63,8 @@ def actions(record):
             except (ValueError, SyntaxError):
                 yield dict(record, undecodable=True)
                 continue
-            nested = dict(record, name=name, payload=None, arguments=value)
+            nested = dict(record, name=name, payload=None, arguments=value,
+                          output=r.get('output', '') if index == len(matches) - 1 else '')
             yield from actions(nested)
         if not found: yield dict(record, undecodable=True)
     elif r.get('name', '').split('.')[-1] in SHELLS:
@@ -92,6 +98,11 @@ def detect_call(record):
         if re.fullmatch(r'[a-zA-Z][\w!?-]*', op):
             return dict(record, op=op, surface='cli', output=r.get('output', ''))
 def classify_outcome(output):
+    blocks = output.get('content', []) if isinstance(output, dict) else output
+    if isinstance(blocks, list):
+        joined = '\n'.join(b['text'] for b in blocks
+                           if isinstance(b, dict) and isinstance(b.get('text'), str))
+        output = text(output) + '\n' + joined
     s = (output if isinstance(output, str) else json.dumps(output, ensure_ascii=False)).replace('\\', '')
     value = r'["\s:]+(?!null\b|nil\b|false\b|true\b)'
     refusal = r'[:"](?:refusal_code|refusal-type)' + value + r'[\w-]+'
