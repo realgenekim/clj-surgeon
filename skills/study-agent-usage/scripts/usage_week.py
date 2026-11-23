@@ -1,7 +1,7 @@
 """Bounded weekly counts. Example: python3 -I usage_week.py --week 2026-09-07."""
 # Known unhandled shapes from the independent review, deferred to a later round:
 # timeout N env ...; bash -lc '<cmd>' unwrapping; python writes not at command start;
-# printf/echo redirects; perl -pi; Error: text inside MCP content lists.
+# printf/echo redirects; perl -pi; shlex comment handling; render cross-check; SKILL.md.
 import argparse
 import datetime as dt
 import importlib.util
@@ -11,6 +11,7 @@ import subprocess
 import time
 import sys
 import re
+sys.dont_write_bytecode = True
 
 def load(name):
     spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(name + '.py'))
@@ -60,7 +61,7 @@ def scan_records(lines, session, mtime, stats=None):
                     if targets: targets[-1]['partial'] = targets[-1].get('partial', '') + str(output)
                     continue  # Incomplete or unjoined continuations remain unknown.
                 if targets:
-                    output = targets[-1].get('partial', '') + str(output)
+                    if targets[-1].get('partial'): output = targets[-1]['partial'] + str(output)
                     targets[-1]['output'] = (dict(is_error=True, content=output)
                                              if b.get('is_error') else output)
             elif kind in ('function_call', 'custom_tool_call', 'tool_use'):
@@ -88,9 +89,10 @@ def scan(path, mtime, stats=None):
 def main(argv=None):
     args, since, until = arguments(argv); start = time.monotonic()
     if args.self_test:
-        return max(subprocess.call([sys.executable, '-B', '-I',
+        statuses = [subprocess.call([sys.executable, '-B', '-I',
                                    str(Path(__file__).with_name(name + '_test.py'))])
-                   for name in ('usage_week_parse', 'usage_week'))
+                   for name in ('usage_week_parse', 'usage_week')]
+        return int(any(status != 0 for status in statuses))
     calls = []; files = 0
     stats = dict(since=since, until=until, undecodable=0)
     roots = ((args.codex_root or '~/.codex/sessions', 'rollout-*.jsonl'),
@@ -98,7 +100,7 @@ def main(argv=None):
     for root, pattern in roots:
         for path in Path(root).expanduser().rglob(pattern):
             mtime = path.stat().st_mtime
-            if since - 86400 <= mtime <= until + 8 * 86400:
+            if mtime >= since - 86400:
                 files += 1; calls.extend(c for c in scan(path, mtime, stats) if since <= c['time'] < until)
     totals = p.aggregate([dict(c, op='all') for c in calls]).get('all', dict.fromkeys(p.FIELDS, 0))
     totals['undecodable'] = stats['undecodable']

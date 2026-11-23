@@ -93,6 +93,15 @@ class Command(unittest.TestCase):
             self.assertRegex(lines[2],
                 r'^total=3 calls=3 sessions=1 refusals=1 errors=1 unknown=0 fallbacks=1 undecodable=0'
                 r' files_scanned=1 seconds=\d+\.\d{3}$')
+            # Round 3: an old timestamp remains eligible after an October append.
+            stamp = w.instant('2026-10-01')
+            os.utime(inside, (stamp, stamp))
+            result = subprocess.run(command + ['--week', '2026-09-07'], capture_output=True, text=True,
+                timeout=10)
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertIn('total=2 calls=2 sessions=1 refusals=1 errors=0 unknown=0 fallbacks=1',
+                          result.stdout)
+            self.assertIn('files_scanned=1', result.stdout)
             # Neither provider's old file is opened in the empty week.
             result = subprocess.run(command + ['--week', '2026-11-16'], capture_output=True, text=True,
                 timeout=10)
@@ -158,8 +167,32 @@ class ScannerRegressions(unittest.TestCase):
         with patch.object(w.subprocess, 'call', return_value=0) as run:
             self.assertEqual(0, w.main(['--self-test']))
         self.assertEqual(2, run.call_count)
+        self.assertTrue(all('-B' in c.args[0] for c in run.call_args_list))
+        self.assertTrue(w.sys.dont_write_bytecode)
         self.assertTrue(all(c.args[0][0] == w.sys.executable for c in run.call_args_list))
 
+
+    def test_content_list_survives_output_join(self):
+        records = [event('function_call', name='clj-surgeon__ls', call_id='a', arguments={}),
+                   event('function_call_output', call_id='a',
+                         output=[{'type': 'text', 'text': 'Error: broken'}]),
+                   event('custom_tool_call', name='apply_patch', input='*** Update File: x.clj')]
+        calls = self.scan(records)
+        self.assertEqual('error', calls[0]['outcome'])
+        self.assertTrue(calls[0]['fallback'])
+
+    def test_isolated_parent_disables_bytecode_without_flag(self):
+        code = ('import runpy, sys; assert not sys.dont_write_bytecode; '
+                'runpy.run_path(sys.argv[1]); assert sys.dont_write_bytecode')
+        result = subprocess.run([w.sys.executable, '-I', '-c', code, w.__file__],
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_signal_killed_self_test_fails(self):
+        for statuses in ([-9, 0], [0, -9], [1, 0]):
+            with patch.object(w.subprocess, 'call', side_effect=statuses) as run:
+                self.assertEqual(1, w.main(['--self-test']))
+            self.assertEqual(2, run.call_count)
 
     def test_secret_session_line_is_discarded_before_json_parsing(self):
         secret = event('function_call', name='clj-surgeon__ls', call_id='secret',
