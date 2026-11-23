@@ -113,11 +113,23 @@
   (is (:correct (score {:answer-kind :set :expected ["a" "b"]} "```\na\n```\n```text\nb\n```")))
   (is (false? (:correct (score {:answer-kind :exact :expected "alpha"} "alpha.")))))
 (deftest cli-load-guard
-  (binding [*file* "required.clj"]
-    (is (nil? (load-string "(when (= *file* (System/getProperty \"babashka.file\")) :cli-ran)")))))
+  ;; load-file rebinds *file*, so model a different entry script via babashka.file.
+  (let [entry (System/getProperty "babashka.file")]
+    (try
+      (System/setProperty "babashka.file" "required.clj")
+      (is (nil? (load-file "bench/native-control/summarize.clj")))
+      (finally
+        (if entry
+          (System/setProperty "babashka.file" entry)
+          (System/clearProperty "babashka.file"))))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (let [[tasks-file] *command-line-args*]
-    (when (= tasks-file "--self-test")
+    (if (= tasks-file "--self-test")
       (let [r (run-tests 'native-control.summarize)]
-        (System/exit (if (zero? (+ (:fail r) (:error r))) 0 1))))))
+        (System/exit (if (zero? (+ (:fail r) (:error r))) 0 1)))
+      (do
+        (binding [*out* *err*]
+          (println (str "summarize: this slice carries the metrics and scoring only; "
+                        "the summary CLI lands in the next slice")))
+        (System/exit 2)))))
