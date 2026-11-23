@@ -26,6 +26,7 @@
    [clj-surgeon.rename :as rename]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
+   [clj-surgeon.usage-log :as usage-log]
    [clojure.edn :as edn]
    [clojure.pprint :as pp]
    [clojure.string :as str]))
@@ -1076,6 +1077,7 @@
             (.append sb (format "  -> %s" (name pair))))
           (.append sb "\n"))
         (.append sb "\n")))
+    (.append sb "  Usage log:\n      CLI operations record time, op, outcome, code, duration, repository basename and agent kind;\n      never arguments, paths or file text. Default: $XDG_STATE_HOME/clj-surgeon/usage.jsonl,\n      else ~/.local/state/clj-surgeon/usage.jsonl. CLJ_SURGEON_USAGE_LOG=<path> changes it; =off disables it.\n\n")
     (.append sb "  Quick start:\n")
     (.append sb "    clj-surgeon :op :ls :file src/my/ns.clj\n")
     (.append sb "    clj-surgeon :op :cat :file src/my/ns.clj :contains 'distinctive text'\n")
@@ -1385,7 +1387,7 @@
                    {:receipt-file receipt-file}))))
 
             :else
-            (let [opts (parse-args args)]
+            (let [{:keys [op] :as opts} (parse-args args)]
               (cond
                 (contains? #{:help "help"} (:op opts))
                 (println (format-global-help ops-registry))
@@ -1403,7 +1405,9 @@
                       (pp/pprint error)
                       error)))
 
-                :else (run opts))))]
+                :else (usage-log/record-call
+                        (try (or (resolve-op op) "unknown") (catch Throwable _ "unknown"))
+                        #(run opts)))))]
       (when (and (map? result) (:error result))
         (System/exit 1)))
     (catch Exception e

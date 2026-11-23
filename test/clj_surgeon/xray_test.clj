@@ -613,7 +613,7 @@
 (defn- run-cli [& args]
   @(proc/process
      (into ["bb" "-m" "clj-surgeon.core"] args)
-     {:dir project-root :err :string :out :string}))
+     {:dir project-root :err :string :out :string :extra-env {"CLJ_SURGEON_USAGE_LOG" "off"}}))
 
 (deftest cli-xray-computes-one-read-only-edn-result
   (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon xray "})

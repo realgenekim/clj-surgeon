@@ -19,6 +19,7 @@
    [clj-surgeon.file-ops-test]
    [clj-surgeon.fix-declares-test]
    [clj-surgeon.forms-test]
+   [clj-surgeon.forward-refs-test]
    [clj-surgeon.help-test]
    [clj-surgeon.insertion-gap-test]
    [clj-surgeon.install-test]
@@ -39,6 +40,7 @@
    [clj-surgeon.show-form-test]
    [clj-surgeon.structural-lens-test]
    [clj-surgeon.syntax-var-refs-test]
+   [clj-surgeon.usage-log-test]
    [clj-surgeon.workspace-onboarding-test]
    [clj-surgeon.worktree-lifecycle-cli-test]
    [clj-surgeon.worktree-lifecycle-io-test]
@@ -56,6 +58,7 @@
                    'clj-surgeon.diagnostic-delta-test
                    'clj-surgeon.rename-test
                    'clj-surgeon.fix-declares-test
+                   'clj-surgeon.forward-refs-test
                    'clj-surgeon.extract-header-test
                    'clj-surgeon.extract-test
                    'clj-surgeon.failure-report-test
@@ -63,6 +66,7 @@
                    'clj-surgeon.show-form-test
                    'clj-surgeon.structural-lens-test
                    'clj-surgeon.syntax-var-refs-test
+                   'clj-surgeon.usage-log-test
                    'clj-surgeon.lens-query-test
                    'clj-surgeon.cljc.merge-test
                    'clj-surgeon.cljc.split-test

@@ -8,6 +8,16 @@ is cut.
 
 ## [Unreleased]
 
+### Added
+
+- The CLI entry appends one line per operation dispatch to `$XDG_STATE_HOME/clj-surgeon/usage.jsonl`, else
+  `$HOME/.local/state/clj-surgeon/usage.jsonl`:
+  time, op, outcome, refusal or error code, duration, repository basename and agent kind. Never arguments,
+  paths or file text. `CLJ_SURGEON_USAGE_LOG=<path>` moves it, `CLJ_SURGEON_USAGE_LOG=off` disables it; the
+  test suite never writes the real log because only the CLI entry logs and tests that spawn it switch it off;
+  benchmark arms switch it off too; ls-tree's refusal path exits inside the op and is not counted
+  explicitly (usage-log boundary tests select temporary files). Mayor's ruling of 2026-11-23 (count use at the source).
+
 ### Fixed
 
 - Receipt and refusal wording no longer contradicts its own numbers: a
