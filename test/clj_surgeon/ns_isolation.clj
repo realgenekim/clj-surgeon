@@ -110,7 +110,15 @@
     ;; 206 s build-file loop into six independent matrix cells. This exception
     ;; remains: TEST-ISO-013 judges the SUM of shard walls, not the makespan,
     ;; and splitting the launches does not reduce their total namespace cost.
-    clj-surgeon.reader-eval-fence-test 1000000})
+    clj-surgeon.reader-eval-fence-test 1000000
+    ;; MEASURED on the GitHub runner (ubuntu-latest, slice 00's linux job, 2026-11-23), twelve identical
+    ;; runs of the refactor stack: 6 476 / 6 931 / 7 114 / 7 385 / 7 552 ms on the five that passed the
+    ;; 8 s default and 8 287 / 9 780 / 9 781 / 9 916 / 10 169 / 10 194 / 11 016 ms on the seven it
+    ;; refused, with every one of the namespace's tests passing each time. The cost is the two real
+    ;; child processes the exact-verify profile runs (see child-process-allowlist), and the runner's
+    ;; variance straddles the default. Ceiling ~2x the largest measurement, the rule of the entries
+    ;; above; recorded on issue 46 (results that depend on machine speed).
+    clj-surgeon.mcp-compact-relations-test 22000})
 
 (def mutable-global-allowlist
   "@spec TEST-ISO-005 -- vars whose deref'd value is EXPECTED to differ across
