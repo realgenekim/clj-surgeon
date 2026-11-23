@@ -38,7 +38,8 @@ Linux only. Identifiers are validated as path components before any run filesyst
 Cleanup runs in try/finally; setup or preflight failures leave `failure.json` and remove
 workspace and credential copy unless `NC_KEEP=1`.
 `run` exits with codex's exit code (2 for a refusal before anything ran, 3 for a failure after);
-`schedule` exits 0 only when every run exited 0, else 1; a refusal before any run is 2.
+`schedule` exits 0 only when at least one run happened and every run exited 0, else 1;
+a refusal before any run is 2.
 The credential is copied as 0600 inside a 0700 home. The sandbox defaults to `workspace-write`,
 with two extra writable roots only for wrapper arms, both in the INVOKER's home:
 `~/.local/state/clj-surgeon` and `~/.local/state/diagnose-skiff-cpu-memory`.
