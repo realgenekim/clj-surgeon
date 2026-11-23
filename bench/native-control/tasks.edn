@@ -1,6 +1,9 @@
 ;; Frozen read tasks for bench/native-control (authored 2026-11-22, surgeon@anvil).
 ;; Expected values were computed with the Clojure reader over the pinned files (not with clj-surgeon) and
 ;; cross-checked by rg; every file is at the pinned sha of the owner's own public repository.
+;; https://github.com/realgenekim/curtaincall-cfp.git @ 3d6be00e0a984d1a1bdb501a0d7fcd1f87eb5645
+;; https://github.com/realgenekim/marvin-voice-remote.git @ d170f3d5edea6faa39396ea8b3418e29b2e2b4b1
+;; T08's :file-lines measures the entire exports.clj file, not a single form.
 [{:answer-kind :exact,
   :file "src/cfp_scheduler_killer/handlers/schedule.clj",
   :prompt
@@ -498,7 +501,7 @@
   :file "src/cfp_scheduler_killer/exports.clj",
   :prompt
   "List the name of every PUBLIC top-level `defn` in src/cfp_scheduler_killer/exports.clj (exclude defn-, def, defonce and anything else).",
-  :form-lines 2072,
+  :file-lines 2072,
   :id "T08",
   :class :inventory,
   :expected
