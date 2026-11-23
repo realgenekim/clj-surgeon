@@ -19,6 +19,7 @@
    [clj-surgeon.file-ops-test]
    [clj-surgeon.fix-declares-test]
    [clj-surgeon.forms-test]
+   [clj-surgeon.forward-refs-test]
    [clj-surgeon.help-test]
    [clj-surgeon.insertion-gap-test]
    [clj-surgeon.install-test]
@@ -57,6 +58,7 @@
                    'clj-surgeon.diagnostic-delta-test
                    'clj-surgeon.rename-test
                    'clj-surgeon.fix-declares-test
+                   'clj-surgeon.forward-refs-test
                    'clj-surgeon.extract-header-test
                    'clj-surgeon.extract-test
                    'clj-surgeon.failure-report-test
