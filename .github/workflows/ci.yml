@@ -73,7 +73,11 @@ jobs:
       - name: Expose clj-kondo where the project's resolver looks
         run: sudo ln -sf "$(command -v clj-kondo)" /usr/local/bin/clj-kondo && /usr/local/bin/clj-kondo --version
       - name: Canonical gate (the product's tests)
-        run: make test-product
+        # This branch's test runner refuses a RAM-backed java.io.tmpdir (/tmp): give bb and the JVM a disk-backed one.
+        env:
+          TMPDIR: ${{ runner.temp }}/clj-surgeon-tmp
+          JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=${{ runner.temp }}/clj-surgeon-tmp
+        run: mkdir -p "$TMPDIR" && make test-product
 
   bench-harness:
     name: bench-harness
@@ -131,4 +135,7 @@ jobs:
       - name: Expose clj-kondo where the project's resolver looks
         run: sudo ln -sf "$(command -v clj-kondo)" /usr/local/bin/clj-kondo && /usr/local/bin/clj-kondo --version
       - name: Benchmark harness self-tests (apparatus, not product; not a required check)
-        run: make test-bench-harness
+        env:
+          TMPDIR: ${{ runner.temp }}/clj-surgeon-tmp
+          JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=${{ runner.temp }}/clj-surgeon-tmp
+        run: mkdir -p "$TMPDIR" && make test-bench-harness
