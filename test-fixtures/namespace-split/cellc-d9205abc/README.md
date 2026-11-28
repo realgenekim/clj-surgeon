@@ -1,6 +1,6 @@
 # Cell C namespace-split fixture, frozen 2026-11-28
 
-Provenance. The exact witnessed contract behind the one automatically routed class, "exact-contract
+Provenance. The exact witnessed contract behind the automatically routed exact-contract namespace-split class (the routing plate's own words, "exact-contract
 namespace split": curtaincall-cfp commit `d9205abcc9b9f31d93bd4a76537b74fccd583ca6`,
 `src/cfp_scheduler_killer/views.clj` (141 named owners into 20 absent destinations, 87 static sites in
 the caller files). Until today the request and its receipts lived only under `/var/tmp` on Anvil, where
@@ -23,7 +23,7 @@ Files.
   oracle used by the round runner.
 - `sentinel-20261025-receipt.json`, `sentinel-20261025-split-receipt.edn`: the round receipt and the
   split receipt of the last sentinel run that completed (2026-10-25, trunk 454a2863). Read them together:
-  the split receipt records committed state, complete verification, the oracles 4/4 and 87 rewritten
+  the split receipt records committed state, complete verification (six checks) and 87 rewritten
   sites across five callers (`server.clj` 62 and four test files 16, 4, 2 and 3), but also
   `:load_status :not-run` with nothing loaded, `dynamic_references "not claimed"`,
   `:clean_except_proven false` with three `:unexpected_paths` (one a test file,
