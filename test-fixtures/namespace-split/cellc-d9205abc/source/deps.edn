@@ -1,0 +1,92 @@
+{:paths ["src" "resources"]
+
+ ;; NOTE: Do NOT add :mcp alias here!
+ ;; The :mcp alias lives in ~/.clojure/deps.edn (global config)
+ ;; and is used by clojure-mcp to connect to the nREPL server
+
+ :deps {org.clojure/clojure {:mvn/version "1.12.0"}
+        hato/hato {:mvn/version "1.0.0"}
+        org.clojure/data.json {:mvn/version "2.5.1"}
+        com.taoensso/timbre {:mvn/version "6.3.1"}
+        genek/logging {:git/url "https://github.com/realgenekim/logging"
+                       :git/sha "69459ec7f9e252d41ef1e65c7ad55cfd944e34db"}
+
+        ;; Silence SLF4J 2.x "no provider" warnings (Google Cloud libs pull SLF4J 2.0.x)
+        org.slf4j/slf4j-nop {:mvn/version "2.0.16"}
+        ;; GCP Secret Manager (passwords, API keys — not needed for GCS/BigQuery/Pub/Sub)
+        genek/gcp-secrets {:git/url "https://github.com/realgenekim/gcp-secrets"
+                           :git/sha "0ed514646a57561884d5f1f26f6e44a8e90b4801"}
+
+        ;; Closed records (throw on invalid key access — no nil punning)
+        genek/closed-record {:git/url "https://github.com/realgenekim/closed-record"
+                             :git/sha "d8629338a6358d0d2bfd320145d276c83d7655a7"}
+        ;; Guardrails (runtime type checking at function boundaries)
+        com.fulcrologic/guardrails {:mvn/version "1.1.10"}
+        ;; malli — schemas for form field-defs and server-side validation
+        metosin/malli {:mvn/version "0.16.4"}
+        ;; Jsoup — HTML parsing for the Sessionize speaker-profile import
+        org.jsoup/jsoup {:mvn/version "1.17.2"}
+        ;; SMTP. Loaded LAZILY (requiring-resolve) and only when SMTP is
+        ;; configured, so the zero-setup path never touches it.
+        com.draines/postal {:mvn/version "2.0.5"}
+
+        ;; Basic auth (for dashboard protection, disabled when ENV=dev)
+        ring-basic-authentication/ring-basic-authentication {:mvn/version "1.2.0"}
+
+        genek/datastar-helpers {:git/url "https://github.com/realgenekim/datastar-helpers"                                 :git/sha "78d6a58a043febf47dda980c030f9f82c4f281d3"}
+        ;; Datastar SSE — server-push HTML fragments, reactive signals
+        dev.data-star.clojure/http-kit {:mvn/version "1.0.0-RC8"}
+
+        ;; Web server
+        http-kit/http-kit {:mvn/version "2.8.0"}
+        metosin/reitit-ring {:mvn/version "0.7.0"}
+        hiccup/hiccup {:mvn/version "2.0.0-RC4"}
+        ;; Server-side markdown for organizer copy (same renderer
+        ;; social-media-writer ships, Gene 2026-08-09).
+        markdown-clj/markdown-clj {:mvn/version "1.12.1"}
+        ring/ring-core {:mvn/version "1.12.2"}
+
+        ;; PostgreSQL — the STORE_BACKEND=postgres event-store backend (store-pg).
+        ;; Unused (never loaded) on the default JSONL path.
+        com.github.seancorfield/next.jdbc {:mvn/version "1.3.939"}
+        org.postgresql/postgresql {:mvn/version "42.7.4"}
+        com.zaxxer/HikariCP {:mvn/version "5.1.0"}
+        com.github.seancorfield/honeysql {:mvn/version "2.6.1196"}
+        ;; Cloud SQL IAM auth — no password ever exists. ADC locally, workload
+        ;; identity on Cloud Run. Version copied from joe-payne-app (known good).
+        com.google.cloud.sql/postgres-socket-factory {:mvn/version "1.15.2"}}
+
+ :aliases
+ {:dev {:extra-paths ["dev"]
+        :extra-deps {;; Browser auto-reload functionality
+                     ring/ring-devel {:mvn/version "1.12.2"}
+                     hawk/hawk {:mvn/version "0.2.11"}
+                     browser-reload/browser-reload {:git/url "https://github.com/realgenekim/browser-reload"
+                                                    :git/sha "fd534c23ac5da30a08308d284e5bec06630aba7a"}  ;; banner+ build: DEV badge, parseInt>-reload, no-cache-all, debounced watcher
+                     ;; JNA upgrade for ARM64/Apple Silicon support (hawk uses old 3.2.2)
+                     net.java.dev.jna/jna {:mvn/version "5.14.0"}}}
+  :test {:extra-paths ["test"]
+         :jvm-opts ["-Dguardrails.enabled=true"]}
+  :run-tests {:extra-paths ["test"]
+              :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}
+                           ring/ring-mock {:mvn/version "0.4.0"}
+                           ;; Browser auto-reload library (needed for web.server tests)
+                           browser-reload/browser-reload {:git/url "https://github.com/realgenekim/browser-reload"
+                                                          :git/sha "fd534c23ac5da30a08308d284e5bec06630aba7a"}}
+              :main-opts ["-m" "kaocha.runner"]
+              :jvm-opts ["-Dguardrails.enabled=true"]}
+  :nrepl {:extra-paths ["test"]
+          :extra-deps {nrepl/nrepl {:mvn/version "1.3.1"}}
+          ;; this allows nrepl to interrupt runaway repl evals
+          :jvm-opts ["-Djdk.attach.allowAttachSelf"]
+          :main-opts ["-m" "nrepl.cmdline"]}
+  :build {:deps {io.github.clojure/tools.build {:git/tag "v0.10.5" :git/sha "2a21b7a"}
+                 genek/thin-jar-build {:git/url "https://github.com/realgenekim/thin-jar-build"
+                                       :git/sha "f5bd8dd548da02250b4cda0b109611c4f9df96f3"}}
+          :ns-default build}
+  :jib-deploy {:deps {genek/thin-jar-build {:git/url "https://github.com/realgenekim/thin-jar-build"
+                                            :git/sha "f5bd8dd548da02250b4cda0b109611c4f9df96f3"}}
+               :ns-default jib}
+  :uberjar {:replace-deps {com.github.seancorfield/depstar {:mvn/version "2.0.206"}}
+            :exec-fn hf.depstar/uberjar
+            :exec-args {:aot true}}}}

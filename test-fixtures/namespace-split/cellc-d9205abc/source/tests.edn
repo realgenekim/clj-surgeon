@@ -1,0 +1,16 @@
+#kaocha/v1
+;; Two suites so the inner-loop stays fast:
+;;   make runtests-once  → :unit   (skips anything tagged ^:e2e / ^:slow / ^:pg)
+;;   make runtests-e2e   → :e2e    (only the tagged ones + the Python driver)
+;; Tag a slow/live test with metadata on the deftest, e.g.
+;;   (deftest ^:e2e drives-the-live-server ...)
+;; Nothing is tagged yet — the split infrastructure is here so tests move out
+;; of the primary path the moment one is genuinely slow or hits the network.
+ {:tests [{:id          :unit
+           :test-paths  ["test" "src" "resources"]
+           :ns-patterns [".*"]
+           :skip-meta   [:e2e :slow :pg]}
+          {:id          :e2e
+           :test-paths  ["test"]
+           :ns-patterns [".*"]
+           :focus-meta  [:e2e :slow :pg]}]}

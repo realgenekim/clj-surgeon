@@ -1,0 +1,4 @@
+{:verification-profiles
+ {"split-unit"
+  {:commands [["bin/kaocha" "unit" "--fail-fast"]
+              ["python3" "{{fixture}}/cc-oracle.py" "{{scratch}}"]]}}}

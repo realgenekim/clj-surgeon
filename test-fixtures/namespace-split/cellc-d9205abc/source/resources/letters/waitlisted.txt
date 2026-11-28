@@ -1,0 +1,16 @@
+Subject: Your talk for {{event-name}} — waitlisted
+
+Hi {{speaker-first-name}},
+
+"{{talk-title}}" is on our waitlist for {{event-name}}{{event-when}}.
+
+That is a genuinely good outcome and not a soft no: we had more talks we wanted
+than slots to put them in, and yours is one we would run if a slot opens. Every
+year some do.
+
+We'll know more as the schedule firms up, and you'll hear from us either way —
+you won't have to chase us.
+
+Thank you for submitting, and for your patience.
+
+{{support-email}}

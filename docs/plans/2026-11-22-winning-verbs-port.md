@@ -81,6 +81,31 @@ and `proof_pending=[]` at `/var/tmp/forge/round/runs/sentinel-ns-20261025T070002
 intent_transaction, receipt_artifacts, mcp_paths, mcp_process, verification_process, file_ops. Its stage table is
 written after alias migration lands, with the same method; expect about 2,400 source lines and about 45 slices.
 
+## Cell C cold replay, round 3 (2026-11-28)
+
+The fixture runner's bounded contract is to verify frozen input hashes, install the recovered cold
+profile with scratch/fixture paths, attempt commit once, and compare the eight recorded facts. Only a
+typed, explicitly unmutated/uncommitted refusal permits one plan-only diagnostic. Its tests cover
+request rebinding, profile argv/path preservation, safe fallback, and honest missing/different facts.
+This fixture work does not port the verb or admit a new split contract.
+
+Inputs and detailed receipts: [Cell C fixture README](../../test-fixtures/namespace-split/cellc-d9205abc/README.md#replay-usage-and-result).
+The missing `split-unit` configuration is now frozen and installed. The four test callers are frozen
+byte-identically from `d9205abc`, together with the three launch/config files, 19 application namespace
+dependencies, one test helper, and three letter templates needed for `bin/kaocha unit --fail-fast`.
+The requested architecture test exists only in the recovered working tree, not at the pinned commit;
+its provenance gap remains open. Port check: 35 pairs, 34 OK, 1 NO-SOURCE; all 38 SHA-256 entries pass.
+
+The first attempts refused because the sandbox could not write the analyzer admission directory
+(Errno 30). Outside the sandbox on 2026-11-28 at about 09:25Z, the frozen request on donor `7b312f85`
+committed (invocation exit 0), verified: five caller files, 87 sites, 20 destinations/created files,
+and matching unrequired qualified references; Kaocha + oracle passed in about 10 s. The runner's
+exit 1 was a created-field extraction miss plus three original workspace artefacts absent from the
+clean scratch. Round 3 compares both created-list shapes by count and labels artefacts
+`expected-different`; all other facts must match. Self-test: 8 tests / 42 assertions; lint clean.
+Saved-receipt comparison passes; the operator will rerun the corrected runner outside the sandbox.
+No commit was made.
+
 ## Deliberately left behind, and how we know
 
 - The losing operations, by name: `admit_clojure_patch`, `apply_clojure_changes`, `edit_clojure` (with
