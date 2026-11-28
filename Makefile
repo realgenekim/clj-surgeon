@@ -163,6 +163,9 @@ install-clj-kondo-admission:
 install-agent-routing:
 	bb --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.agent-routing install "$(AGENT_ROUTING_SOURCE)" "$(CODEX_GLOBAL_INSTRUCTIONS)" "$(CLAUDE_GLOBAL_INSTRUCTIONS)"
 
+.PHONY: surgeon-footprint-self-test
+surgeon-footprint-self-test:
+	bb bin/surgeon-footprint --self-test
 check-agent-routing:
 	bb --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.agent-routing check "$(AGENT_ROUTING_SOURCE)" "$(CODEX_GLOBAL_INSTRUCTIONS)" "$(CLAUDE_GLOBAL_INSTRUCTIONS)"
 

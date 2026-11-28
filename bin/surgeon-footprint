@@ -1,0 +1,146 @@
+#!/usr/bin/env bb
+(ns surgeon-footprint
+  {:clj-kondo/ignore [:namespace-name-mismatch]}
+  (:require
+   [cheshire.core :as json]
+   [clojure.java.io :as io]
+   [clojure.java.shell :as sh]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is run-tests]]))
+
+(def names-re #"clj-surgeon|cclsp|clojure-lsp")
+(defn lines [s] (remove str/blank? (str/split-lines (or s ""))))
+(defn toml [s]
+  (let [clean (str/replace (or s "") #"'[^']*'|\"(?:\\.|[^\"\\])*\"|#[^\r\n]*"
+                           #(if (str/starts-with? % "#") "" %))
+        joined (str/replace clean #"\[(?:[^\[\]\"']|\"(?:\\.|[^\"\\])*\"|'[^']*')*\]"
+                            #(str/replace % #"\r?\n" " "))]
+    (into {} (for [[_ table body] (re-seq #"(?ms)^\h*\[([^\]\r\n]+)\]\h*\n?((?:(?!^\h*\[).)*)" joined)]
+               [table (into {} (map #(subvec % 1) (re-seq #"(?m)^\h*(\w+)\h*=\h*(.*?)\h*$" body)))]))))
+
+(def server-table-re
+  (re-pattern (str "(?:mcp_servers|'mcp_servers'|\"mcp_servers\")\\h*\\.\\h*"
+                   "(?:[\\w-]+|'[^']+'|\"[^\"]+\")")))
+(defn entries [s toml?]
+  (let [data (when-not toml? (json/parse-string s))
+        configs (if toml? [[nil (toml s)]]
+                    (for [[path config] (cons [nil data] (get data "projects"))]
+                      [path (get config "mcpServers")]))]
+    (for [[path config] configs [name entry] config
+          :when (or (not toml?) (re-matches server-table-re name))
+          :let [command (str/join " " (keep entry ["command" "args" "url"]))]
+          :when (re-find names-re (str name " " command))]
+      (str (when path (str "project=" path " ")) name
+           " required=" (get entry "required" "unspecified") " command=" command))))
+
+(defn read-file [path]
+  (try (when (.isFile (io/file path)) (slurp (io/file path))) (catch Exception _ nil)))
+(defn cron-lines [s read-script]
+  (for [line (lines s)
+        :let [paths (filter #(re-find #"7906|7888|7890|surgeon-call|/mcp" (or (read-script %) ""))
+                            (distinct (map #(str/replace % #"^['\"]|['\"]$" "")
+                                           (re-seq #"\"[^\"]+\"|'[^']+'|[^\s<>;|&]+" line))))]
+        :when (or (and (not (re-find #"^\s*#" line)) (re-find names-re line)) (seq paths))]
+    (str line (when (seq paths) (str " scripts=" (str/join "," paths))))))
+
+(defn section [title source]
+  (println (str "section: " title))
+  (reduce + (for [[path raw parse] source]
+              (try (let [found (when raw (vec (parse raw)))]
+                     (doseq [v (or (seq found) [(if raw "none" "absent")])] (println (str path ": " v)))
+                     (count found))
+                   (catch Exception e (println (str path ": parse error: " (.getSimpleName (class e)))) 0)))))
+
+(defn command-text [& args]
+  (try (let [{:keys [exit out err]} (apply sh/sh args)]
+         (if (zero? exit) out (do (println (str (first args) ": unavailable: " (str/trim err))) nil)))
+       (catch Exception e (println (str (first args) ": unavailable: " (.getMessage e))) nil)))
+(defn census []
+  (let [home (System/getProperty "user.home")
+        read-local #(read-file (str/replace % #"^~" home))
+        entries-count (section "MCP entries"
+                        (for [p ["~/.codex/config.toml" "~/.claude.json" "~/.claude/settings.json"
+                                 "~/.claude/mcp.json" "./.mcp.json" "./.codex/config.toml"]]
+                          [p (read-local p) #(entries % (str/ends-with? p ".toml"))]))
+        cron-count (section "Cron" [["crontab" (command-text "crontab" "-l") #(cron-lines % read-local)]])
+        unit-count (section "User units"
+                     [["systemd" (command-text "systemctl" "--user" "list-units" "--all" "--no-pager" "--plain")
+                       #(filter (fn [line] (re-find names-re line)) (lines %))]])]
+    (println (str "footprint: entries=" entries-count " cron=" cron-count " units=" unit-count))))
+
+;; Regression fixtures from the 2026-11-28 independent probe review.
+(deftest quoted-toml-keys
+  (doseq [key ["clj-surgeon" "'clj-surgeon'" "\"clj-surgeon\""]]
+    (is (= [(str "mcp_servers." key " required=true command='bb'")]
+           (vec (entries (str "[mcp_servers." key "]\nrequired=true # needed\ncommand='bb'") true)))))
+  (is (= 1 (count (entries "['mcp_servers'.'cclsp']\ncommand='bun'" true))))
+  (is (= 1 (count (entries "[\"mcp_servers\" . \"cclsp\"]" true))))
+  (is (empty? (entries "[unrelated]\ncommand='cclsp'" true))))
+
+(deftest toml-comments-and-arrays
+  (let [s "[mcp_servers.other]\nargs = [ # formerly cclsp\n 'clj-surgeon',\n '--stdio',\n]\n"]
+    (is (= ["mcp_servers.other required=unspecified command=[   'clj-surgeon',  '--stdio', ]"]
+           (vec (entries s true)))))
+  (is (empty? (entries "[mcp_servers.other]\ncommand = 'echo' # formerly cclsp" true)))
+  (is (= "'a#b'" (get-in (toml "[x]\nvalue='a#b' # comment") ["x" "value"])))
+  (is (= "\"a\\\"#b\"" (get-in (toml "[x]\nvalue=\"a\\\"#b\" # cclsp") ["x" "value"])))
+  (is (= 1 (count (entries "[mcp_servers.cclsp]\n[mcp_servers.cclsp.env]\nX='x'" true))))
+  (is (= {} (toml nil)))
+  (is (= {"x" {}} (toml "[x]"))))
+
+(deftest json-project-paths
+  (let [s (json/generate-string {"mcpServers" {"cclsp" {"command" "bun" "required" true}}
+                                 "projects" {"/r" {"mcpServers" {"lsp" {"command" "clojure-lsp"}}}}})]
+    (is (= ["cclsp required=true command=bun" "project=/r lsp required=unspecified command=clojure-lsp"]
+           (vec (entries s false)))))
+  (is (empty? (entries "{}" false)))
+  (is (empty? (entries "{\"mcpServers\":{\"other\":{\"command\":\"echo\"}}}" false)))
+  (is (= ["x required=false command=http://localhost/clj-surgeon/mcp"]
+         (vec (entries "{\"mcpServers\":{\"x\":{\"url\":\"http://localhost/clj-surgeon/mcp\",\"required\":false}}}"
+                       false)))))
+
+(deftest cron-script-content
+  ;; A disabled weekly verb sentinel must be found through its script, without a tool name in the cron line.
+  (let [line "# 0 3 * * 0 /bin/bash /home/forge/bin/verb-sentinel"
+        path "/home/forge/bin/verb-sentinel"]
+    (doseq [marker ["7906" "7888" "7890" "surgeon-call" "/mcp"]]
+      (is (= [(str line " scripts=" path)] (vec (cron-lines line {path marker}))))))
+  (is (= ["@daily bin/check.sh scripts=bin/check.sh"]
+         (vec (cron-lines "@daily bin/check.sh" {"bin/check.sh" "surgeon-call"}))))
+  (is (= ["@daily 'a b.sh' /second scripts=a b.sh,/second"]
+         (vec (cron-lines "@daily 'a b.sh' /second" {"a b.sh" "7906" "/second" "/mcp"}))))
+  (is (= ["@daily cclsp"] (vec (cron-lines "@daily cclsp\n# cclsp disabled" {}))))
+  (is (empty? (cron-lines "@daily /missing\n@daily /unrelated" {"/unrelated" "echo ok"})))
+  (is (empty? (cron-lines nil {}))))
+
+(deftest per-file-parse-errors-continue
+  (let [output (with-out-str
+                 (is (= 1 (section "test" [["broken.json" "{" #(entries % false)]
+                                           ["next.toml" "[mcp_servers.cclsp]" #(entries % true)]]))))]
+    (is (str/includes? output "broken.json: parse error:"))
+    (is (str/includes? output "next.toml: mcp_servers.cclsp required=unspecified command="))))
+
+(deftest census-edge
+  (let [config "[mcp_servers.cclsp]\ncommand='bun'"
+        files {"./.codex/config.toml" config "/sentinel" "curl localhost:7906/mcp"}
+        output (with-redefs [read-file files
+                             command-text (fn [& args] (case (first args)
+                                                         "crontab" "# @weekly /sentinel"
+                                                         "systemctl" "cclsp.service loaded\nother.service loaded"))]
+                 (with-out-str (census)))]
+    (is (str/includes? output "~/.claude.json: absent"))
+    (is (str/includes? output "./.codex/config.toml: mcp_servers.cclsp"))
+    (is (str/includes? output "crontab: # @weekly /sentinel scripts=/sentinel"))
+    (is (str/includes? output "systemd: cclsp.service loaded"))
+    (is (str/includes? output "footprint: entries=1 cron=1 units=1"))))
+
+(deftest empty-and-unavailable-inputs
+  (is (= "section: test\nmissing: absent\nempty: none\n"
+         (with-out-str (section "test" [["missing" nil identity] ["empty" "" lines]]))))
+  (with-redefs [sh/sh (fn [& _] {:exit 1 :err "permission denied\n"})]
+    (is (= "crontab: unavailable: permission denied\n" (with-out-str (is (nil? (command-text "crontab")))))))
+  (is (= ["a" "b"] (lines "a\r\nb\n"))))
+
+(case (vec *command-line-args*) [] (census)
+  ["--self-test"] (let [r (run-tests 'surgeon-footprint)] (System/exit (+ (:fail r) (:error r))))
+  (do (println "usage: surgeon-footprint [--self-test]") (System/exit 2)))
