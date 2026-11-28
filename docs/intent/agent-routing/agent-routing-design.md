@@ -78,6 +78,11 @@ not claim that either real global instruction file contains the branch plate.
 
 ## Alias migration suspended as an automatic route, November 28, 2026
 
+> **Superseded the same day by ruling 75 (next section) for the plate change and the re-test condition.** The record of
+> Gene's words and the evidence below stands; the plate as shipped carries no schema example for alias migration and no
+> re-admission condition, and the section after this one is the one the plate follows. Both sections then yield to the
+> retirement section (ruling 71 b) for every MCP-named operation.
+
 Authority: Gene, in the mayor pane, 2026-11-28, verbatim: "64a; let's purge it from the code -- but run
 brain fleet on how valuable this would be. I think it should be awesome; especially think about how we fix
 code when we have high crapper or dryer code. Isn't this exactly the tool we need?" "64a" was the mayor's
@@ -95,8 +100,8 @@ and to the September PASS run; the oracle apparatus produced the NO and its own 
 `test-fixtures/alias-migration/mvr-5a4b4bc`. The suspensions were false alarms about the verb; the route is
 suspended on Gene's ruling, not on a proven correctness loss.
 
-Plate change: the alias-migration section keeps its executed schema example as a capability example and
-loses its trigger paragraph; a SUSPENDED line carries the date, the ruling and the evidence, worded like the
+Plate change as first ruled (withdrawn the same day, see the note above): the alias-migration section keeps its
+executed schema example as a capability example and loses its trigger paragraph; a SUSPENDED line carries the date, the ruling and the evidence, worded like the
 fan-out suspension. One class remains routed automatically, the exact-contract namespace split, unchanged.
 Re-test condition for re-admission: the frozen fixture reproduced through the CLI entrance in CI, plus the
 fleet's control. The pinned sections in `agent-routing-specs.md` change with the plate; the plate names this

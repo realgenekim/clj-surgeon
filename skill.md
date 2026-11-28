@@ -1,33 +1,28 @@
 ---
 name: clj-surgeon
 description: >-
-  Use for advanced clj-surgeon workflows: semantic preparation, computed preview, extraction or movement, CLI fallback, MCP recovery, and troubleshooting. Do not invoke for ordinary inspect_clojure or edit_clojure calls; always-loaded routing and tool schemas cover them.
+  Use for advanced clj-surgeon workflows: computed preview, extraction or movement, CLI operations, and troubleshooting. Ordinary reads and edits use native tools.
 ---
 
 # Strictly better, or native
-Route automatically ONLY when the task matches one of the two witnessed contracts
-below and the complete receipt path is available; otherwise native. "Strictly
-better" means a better EXPECTED complete verified wall on an eligible task with a
-bounded escape — not a per-invocation guarantee. The always-loaded routing plate
-carries one complete call for each; act from the plate, and open this file only for
-the unusual case. Ratios, fixtures and caveats:
+The MCP surface is retired everywhere (Gene, 2026-11-28, ruling 71 b).
+NO class is routed automatically. Native reads and patches are the default.
+Explicit user requests or separately approved experiments may use CLI capabilities.
+Measured ratios, fixtures and caveats live in
 `docs/observations/2026-09-06-strictly-better-evidence.md`.
-- FAN-OUT: SUSPENDED 2026-09-08 at the witnessed informed 3/21 sites. Schema
-  remains a capability; unknown-owner discovery is not an automatic route.
-- ALIAS migration: one `alias_migration` — known alias intent, eligible scope, no proof
-  profile. Still routed (deletes caller work); live-proven 2026-09-07, 9 files / 21 sites.
+- FAN-OUT: SUSPENDED 2026-09-08 at the witnessed informed 3/21 sites.
+  Unknown-owner discovery is not an automatic route.
+- ALIAS migration: SUSPENDED and frozen off main 2026-11-28; not routed or ported.
+  The verb and tests remain on `astra/namespace-split` and its archive tag.
 - NAMESPACE SPLIT: exact frozen Cell C source shape AND manifest only (experimental):
   curtaincall-cfp `d9205abc`, `src/cfp_scheduler_killer/views.clj`;
   141 owners / 20 absent destinations / 87 static sites / five callers.
   Supplied mapping and aliases, `promotion_policy=promote-required`,
   `source_retirement=delete`, `roots=[src,test]`, named cold `verification.profile`;
-  changed mapping/policy/source shape needs new admission. Use the plate's full contract.
-Outside those two, native is the PERFORMANCE default — that is a default, not an
-impossibility claim: an explicit user request or a separately approved experiment may
-use any other capability. `inspect_clojure` is a SUPPORTING read, never an automatic
-route: use it when structural information is actually needed and native discovery has
-not already supplied it. Every lib, Var, file, form and count in an example is a task
-input; include `workspace_root` when the target is not the server's default project.
+  changed mapping/policy/source shape needs new admission. This is the port contract;
+  split is not routed until the CLI port lands (ruling 69 a). See the routing plate.
+CLI ops on main include `:extract!`, `:rename-ns!`, `:fix-declares!`, `:ls-deps`,
+`:topo` and `:ls`; invoke them as `clj-surgeon :op <name>` when explicitly requested.
 
 ## One repair, then native
 Repair ONE clear, safely correctable argument error from the refusal text. A stale or
@@ -58,13 +53,13 @@ controls; split's complete-wall loss vs registered controls suspends its exact r
 Unknown telemetry means unknown performance — use native pending investigation.
 
 ## Syntax trip-wire
-CLI uses `:op <name>` plus key-value pairs; split uses `:op :split-ns! :request-file X`.
+CLI uses `:op <name>` plus key-value pairs; once ported, split uses `:op :split-ns! :request-file X`.
 Other nontrivial plans use `:spec-file -`; smoke: `clj-surgeon :op :ls :file src/my/ns.clj`.
 
 ## References
 
-The unusual case only; never a prerequisite for a routed call. Read
+The unusual case only; no automatic route requires these references. Read
 [CLI fallback](skills/clj-surgeon/references/cli-fallback.md) for full syntax and receipts,
 [advanced CLI operations](skills/clj-surgeon/references/advanced-operations.md) for extraction,
 moves, renames, or CLJC, and [advanced MCP routes](skills/clj-surgeon/references/mcp-advanced.md)
-only for explicit development-service work. Do not reopen a reference already consumed.
+for historical development-service contracts only. Do not reopen a reference already consumed.

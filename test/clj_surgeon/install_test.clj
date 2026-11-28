@@ -88,7 +88,7 @@
 (defn- assert-skill-contracts
   [label skill mcp-advanced cli-fallback]
   (doseq [contract ["Use for advanced clj-surgeon workflows"
-                    "Do not invoke for ordinary inspect_clojure or edit_clojure calls"
+                    "The MCP surface is retired everywhere (Gene, 2026-11-28, ruling 71 b)."
                     "Optimize complete verified task time"
                     "[advanced MCP routes](references/mcp-advanced.md)"
                     "[CLI fallback](references/cli-fallback.md)"
