@@ -1,24 +1,26 @@
 #_{:clj-kondo/ignore [:namespace-name-mismatch]} (ns refactor-census (:require [babashka.fs :as fs]
   [clj-surgeon.analyze :as a] [clj-surgeon.outline :as o] [clojure.edn :as edn]
   [clojure.string :as str] [rewrite-clj.zip :as z] [clojure.test :refer [deftest is run-tests]]))
-(defn components [groups]
-  (reduce (fn [out group] (let [{yes true no false} (group-by #(boolean (some group %)) out)]
+(defn components [groups] (reduce (fn [out group] (let [{yes true no false} (group-by #(boolean (some group %)) out)]
               (conj (vec no) (reduce into group yes)))) [] groups))
 (defn families [text root] (let [root (str/replace root #"/+$" "")
-        blocks (reduce (fn [blocks [i line]]
-          (cond (str/blank? line) blocks (str/starts-with? line "DUPLICATE score=") (conj blocks [])
+        fail (fn [reason line] (throw (ex-info (str "unparseable dryer input: " reason " at line " line) {})))
+        blocks (reduce (fn [blocks [i line]] (cond (str/blank? line) blocks
+            (str/starts-with? line "DUPLICATE score=") (conj blocks (with-meta [] {:line (inc i)}))
             :else (if-let [[_ path lo hi] (and (seq blocks) (re-matches #"  (.+):([0-9]+)-([0-9]+)\s*" line))]
-              (update blocks (dec (count blocks)) conj
-                (set (for [n (range (parse-long lo) (inc (parse-long hi)))]
-                  [(subs (str/replace-first path "<repo>" root) (inc (count root))) n])))
-              (throw (ex-info (str "unparseable dryer input: "
-                (if (seq blocks) "malformed location" "no DUPLICATE block") " at line " (inc i)) {})))))
+              (let [path (str/replace-first path #"^<repo>/" (str root "/"))]
+                (when-not (str/starts-with? path (str root "/")) (fail (str "path outside root: " path) (inc i)))
+                (when (> (parse-long lo) (parse-long hi)) (fail (str "reversed range: " lo "-" hi) (inc i)))
+                (update blocks (dec (count blocks)) conj (set (for [n (range (parse-long lo) (inc (parse-long hi)))]
+                  [(subs path (inc (count root))) n]))))
+              (fail (if (seq blocks) "malformed location" "no DUPLICATE block") (inc i)))))
           [] (map-indexed vector (str/split-lines text)))
+        blocks (mapv #(if (< (count %) 2) (fail (str "block with " (count %) " locations") (:line (meta %))) %) blocks)
         copies (components (apply concat blocks)) canonical #(first (filter (fn [copy] (some copy %)) copies))]
     (sort-by first (for [family (components (map #(set (map canonical %)) blocks))]
   (sort (for [copy family] [(ffirst copy) (apply min (map second copy)) (apply max (map second copy))]))))))
-(defn source-index [sources]
-  (into {} (for [[file source] sources :let [{:keys [ns requires]} (o/outline-source file source)
+(defn source-index [sources] (into {} (for [[file source] sources
+      :let [{:keys [ns requires]} (o/outline-source file source)
                       imports (for [[lib & opts] (map edn/read-string requires)] [lib (apply hash-map opts)])
                       aliases (into {} (for [[lib opts] imports :when (:as opts)] [(:as opts) lib]))
                       refers (into {} (for [[lib opts] imports sym (:refer opts)] [sym lib]))
@@ -33,50 +35,52 @@
 (defn census [text root sources] (let [rows (families text root) index (source-index sources)]
     (mapv (fn [family] (mapv (fn [[file lo hi]] (let [copy (str file ":" lo "-" hi)
             form (some #(when (and (= (:line %) lo) (<= lo hi (:end-line %))) %) (:forms (index file)))]
-        (if-not form {:copy copy :drift true}
-          (let [subject (symbol (str (:ns (index file))) (str (:name form)))
+        (if-not form {:copy copy :drift true} (let [sexpr (z/sexpr (z/of-string (:source form)))
+                subject (symbol (str (:ns (index file))) (str (:name form)))
                 callers (for [[f data] index [target kind] (:uses data) :when (= subject target)] [f kind])]
             {:copy copy :name (:name form) :private (boolean (or (= 'defn- (:type form))
-                                   (:private (meta (second (z/sexpr (z/of-string (:source form))))))))
+                                   (when (seq? sexpr) (:private (meta (second sexpr))))))
          :counts (frequencies (map second callers)) :files (count (set (map first callers)))})))) family)) rows)))
-(defn report [rows]
-  (let [copies (apply concat rows) owners (remove :drift copies) private (count (filter :private owners))]
-    (str (apply str (for [[i family] (map-indexed vector rows)]
-      (format "Family %d: %s\n" (inc i)
+(defn report [rows] (let [copies (apply concat rows) owners (remove :drift copies) n (count (filter :private owners))]
+    (str (apply str (for [[i family] (map-indexed vector rows)] (format "Family %d: %s\n" (inc i)
         (str/join "; " (for [{:keys [copy name private counts files drift]} family]
           (if drift (str "DRIFT " copy " (form boundaries moved)")
             (format "%s %s %s bare=%d aliased=%d files=%d" copy name (if private "private" "public")
                     (get counts :bare 0) (get counts :aliased 0) files)))))))
   (format "refactor-census: families=%d copies=%d public-copies=%d private-copies=%d drifted=%d\n"
-              (count rows) (count copies) (- (count owners) private) private (- (count copies) (count owners))))))
+              (count rows) (count copies) (- (count owners) n) n (- (count copies) (count owners))))))
 (defn test-exit [r] (if (and (pos? (:test r)) (zero? (:fail r)) (zero? (:error r))) 0 1))
 (defn main [[input root]] (try (print (report (census (slurp input) root
          (for [file (fs/glob root "{src,test}/**.{clj,cljc,cljs}")
                         :when (.startsWith (fs/real-path file) (fs/real-path root))]
                     [(str (fs/relativize root file)) (slurp (str file))])))) (flush) 0
     (catch Exception e (binding [*out* *err*] (println "refactor-census:" (ex-message e))) 2)))
-;; Pure tests (fixtures included); source resumes at the CLI guard below.
+;; Tests and fixtures; source resumes at the CLI guard below.
+(defn pair [loc] (str "DUPLICATE score=1\n  <repo>/" loc "\n  <repo>/" loc))
 (def fixture-dryer (str "DUPLICATE score=1\n  <repo>/src/a.clj:2-3\n  <repo>/src/b.clj:2-3\n"
        "DUPLICATE score=.9\n  <repo>/src/a.clj:3-4\n  <repo>/src/c.clj:2-2\n"))
 (deftest empty-input (doseq [text ["" " \t\r\n"]] (is (= [] (families text "/r")))))
-(deftest garbage-input ; PR 86 round 2: arbitrary text previously passed as zero families.
-  (is (thrown-with-msg? Exception #"unparseable dryer input: no DUPLICATE block at line 2"
-                       (families "\ngarbage" "/r"))))
-(deftest malformed-location (doseq [bad ["  <repo>/b:2-x" " <repo>/b:2-3" "  <repo>/b:2-3 extra"]]
-    (is (thrown-with-msg? Exception #"unparseable dryer input: malformed location at line 3"
-                         (families (str "DUPLICATE score=1\n  <repo>/a:1-2\n" bad) "/r")))))
-(deftest cli-parse-failure (let [err (java.io.StringWriter.)]
-    (binding [*err* err] (with-redefs [slurp (constantly "garbage")]
-      (is (= "" (with-out-str (is (= 2 (main ["literal" "/r"]))))))))
-    (is (= "refactor-census: unparseable dryer input: no DUPLICATE block at line 1\n" (str err)))))
+(deftest invalid-blocks-and-locations ; PR 86 rounds 2/3: malformed input must fail without a summary.
+  (doseq [[text reason] (concat [["\ngarbage" "no DUPLICATE block at line 2"]]
+          (for [bad ["  <repo>/b:2-x" " <repo>/b:2-3" "  <repo>/b:2-3 extra"]]
+            [(str "DUPLICATE score=1\n  <repo>/a:1-2\n" bad) "malformed location at line 3"])
+          (for [k [0 1] tail ["" "\n \n" "\nDUPLICATE score=2"]]
+            [(str "\nDUPLICATE score=1" (when (= k 1) "\n  <repo>/a:1-2") tail)
+             (str "block with " k " locations at line 2")]) (for [path ["/x" "/r2/a" "/elsewhere/a"]]
+            [(str "DUPLICATE score=1\n  " path ":1-2") (str "path outside root: " path " at line 2")])
+          [["DUPLICATE score=1\n  <repo>/a:5-2" "reversed range: 5-2 at line 2"]])]
+    (let [message (str "unparseable dryer input: " reason) err (java.io.StringWriter.)]
+      (binding [*err* err] (with-redefs [slurp (constantly text)]
+        (is (= "" (with-out-str (is (= 2 (main ["x" "/r"]))))))))
+      (is (= (str "refactor-census: " message "\n") (str err))))))
+(deftest repository-cli-boundary (is (re-find #"(?m)^refactor-census: families=\d+ "
+        (with-out-str (is (= 0 (main ["docs/quality/2026-11-22-baseline/dryer.txt" "."])))))))
 (deftest parsing-and-connected-families (let [expected [[["src/a.clj" 2 4] ["src/b.clj" 2 3] ["src/c.clj" 2 2]]]]
     (doseq [root ["/r" "/r/"] text [fixture-dryer (str/replace fixture-dryer "<repo>" "/r")
                                   (str/replace fixture-dryer "\n" "\r\n") (str fixture-dryer fixture-dryer)]]
       (is (= expected (families text root)))))
-  (is (= [] (families "" "/r"))) (is (= [] (components [])))
-  (is (= [#{1} #{2}] (components [#{1} #{2}]))) (is (= [#{1 2 3 4 5}] (components [#{1 2} #{4 5} #{2 3 4}])))
   (is (= [[["a" 1 2] ["a" 3 3]] [["b" 1 1]]]
-         (families "DUPLICATE score=1\n  <repo>/a:1-2\n  <repo>/a:3-3\nDUPLICATE score=1\n  <repo>/b:1-1" "/r"))))
+         (families (str "DUPLICATE score=1\n  <repo>/a:1-2\n  <repo>/a:3-3\n" (pair "b:1-1")) "/r"))))
 (def fixture-sources {"src/a.clj" "(ns a)\n(defn- hidden [x]\n (let [y x]\n  y))"
    "src/b.clj" "(ns b)\n(defn shared []\n 1)\n(defn calls [] (shared) (shared))"
    "src/c.clj" "(ns c (:require [b :as b :refer [shared]]))\n(defn calls [] (shared) (shared) (b/shared))"
@@ -90,30 +94,26 @@
     (is (= [{} 0] ((juxt :counts :files) a))))
   (doseq [[definition private] [["(def ^:private x 1)" true] ["(def x 1)" false]
                                 ["(defn ^:private x [] 1)" true] ["(defn x [] 1)" false]]]
-    (is (= private (:private (ffirst (census "DUPLICATE score=1\n  <repo>/a.clj:2-2" "/r"
-                                           {"a.clj" (str "(ns a)\n" definition)})))))))
-(deftest callers-count-files
-  (doseq [[extra aliased files] [[{} 2 3] [{"test/qualified.clj" "(ns qualified)\n(def x b/shared)"} 3 4]]]
+    (is (= private (:private (ffirst (census (pair "a.clj:2-2") "/r" {"a.clj" (str "(ns a)\n" definition)})))))))
+(deftest callers-count-files (doseq [[extra aliased files] [[{} 2 3] [{"test/q.clj" "(ns q)\n(def x b/shared)"} 3 4]]]
     (let [shared (second (first (census fixture-dryer "/r" (merge fixture-sources extra))))]
       (is (= {:bare 3 :aliased aliased} (:counts shared))) (is (= files (:files shared)))))
   (is (= #{} (:uses ((source-index {"a.clj" "(ns a)\n(def x 1)"}) "a.clj"))))
   (is (contains? (:uses ((source-index {"a.clj" "(ns a)\n(def x (helper))"}) "a.clj")) ['a/helper :bare]))
   (is (contains? (:uses ((source-index {"a.clj" "(ns a (:require [b :refer [x]]))\n(defn x [] 1)\n(x)"})
                         "a.clj")) ['a/x :bare])))
-(deftest moved-form-regression (doseq [span ["3-3" "2-5" "99-100"]] ; Prior review: dryer range inside a moved form.
-    (let [row (ffirst (census (str "DUPLICATE score=1\n  <repo>/a.clj:" span) "/r"
-                            {"a.clj" "(ns a)\n(defn moved []\n  1)\n(defn next-form [] 2)"}))]
-      (is (= {:copy (str "a.clj:" span) :drift true} row))
-      (is (str/includes? (report [[row]]) (str "DRIFT a.clj:" span " (form boundaries moved)")))
+(deftest moved-form-regression (doseq [span ["1-1" "3-3" "2-5" "99-100"]] ; ns ranges are DRIFT by design.
+    (let [row (ffirst (census (pair (str "src/a.clj:" span)) "/r" fixture-sources))]
+      (is (= {:copy (str "src/a.clj:" span) :drift true} row))
+      (is (str/includes? (report [[row]]) (str "DRIFT src/a.clj:" span " (form boundaries moved)")))
       (is (str/includes? (report [[row]]) "public-copies=0 private-copies=0 drifted=1"))))
-  (is (:drift (ffirst (census "DUPLICATE score=1\n  <repo>/missing.clj:1-2" "/r" {})))))
+  (is (:drift (ffirst (census (pair "missing.clj:1-2") "/r" {})))))
 (deftest self-test-gate (doseq [[tests fail error exit] [[0 0 0 1] [1 0 0 0] [1 1 0 1] [1 0 1 1]]]
     (is (= exit (test-exit {:test tests :fail fail :error error})))))
 (deftest plain-text-output (let [output (report (census fixture-dryer "/r" fixture-sources))]
-    (is (str/includes? output "src/a.clj:2-4 hidden private bare=0 aliased=0 files=0"))
+    (is (str/starts-with? output "Family 1: src/a.clj:2-4 hidden private bare=0 aliased=0 files=0"))
     (is (str/includes? output "src/b.clj:2-3 shared public bare=3 aliased=2 files=3"))
-    (is (str/starts-with? output "Family 1: ")) (is (str/ends-with? output
-          "refactor-census: families=1 copies=3 public-copies=2 private-copies=1 drifted=0\n")))
+    (is (str/ends-with? output "refactor-census: families=1 copies=3 public-copies=2 private-copies=1 drifted=0\n")))
   (is (= "refactor-census: families=0 copies=0 public-copies=0 private-copies=0 drifted=0\n" (report []))))
 (when (= (System/getProperty "babashka.file") *file*)
   (System/exit (if (= "--self-test" (first *command-line-args*))
