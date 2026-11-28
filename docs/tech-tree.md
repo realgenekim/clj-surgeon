@@ -113,9 +113,13 @@ Explicit/:all refers, renames, aliases, discards, distinct owners and classpath-
 Only .clj with let/loop/fn/defn scopes is supported; other binding constructs may over-count references.
 Verification: `bb bin/split-closure-probe --self-test`; [plan](plans/2026-11-28-split-closure-probe.md).
 
-## Live experiment backlog (prediction and cost on every item)
+Cell C cold replay (2026-11-28, PR 94 round 2): the earlier checked-in receipt reports a committed,
+verified split (87 sites / five callers, 20 destinations), but workspace inspection failed with exit 128.
+Its nil unexpected-path fact was not an empty inventory. The runner now inventories scratch independently;
+unlisted hidden files and directory symlinks are refused before copying. Fresh donor replay remains for
+the requesting reviewer. Evidence and repeatable checks: [fixture README](../test-fixtures/namespace-split/cellc-d9205abc/README.md#replay-usage-and-result).
 
-Cell C cold replay, 2026-11-28 (replaces PR 89): the frozen request replays cold on donor 7b312f85 to a committed, verified split reproducing every comparable recorded fact (87 sites / 5 callers, 20 destinations, committed, verified); receipt checked in as `replay-receipt-2026-11-28-anvil-7b312f85.edn`; an unlisted file under source/ is refused before copying. Receipt: the fixture README, "Replay usage and result".
+## Live experiment backlog (prediction and cost on every item)
 
 | id | experiment | prediction | cost | depends on |
 |---|---|---|---|---|

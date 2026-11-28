@@ -67,9 +67,19 @@ each path and exit and preserves invocation stderr. Missing split facts remain `
 `created` compares the recorded count with request destination files present on disk in scratch
 and absent from the frozen source. A match reports `created same (20 destination files present on disk)`;
 a mismatch reports `created DIFFERS <recorded> <on-disk>`. Receipt destination counts are not filesystem evidence.
-Replay `unexpected_paths` must be a subset of `.clj-surgeon.edn`, `00SERVER-LOGS.txt`, and
-`test/cfp_scheduler_killer/view_architecture_test.clj`; nil means no unexpected paths. Accepted subsets
-report `expected-different`; any other path is named in `DIFFERS`. Exit zero requires all invocations
+After invocation the runner independently inventories every regular file and symlink in scratch,
+including hidden paths, without following directory symlinks. It subtracts the frozen manifest's
+`source/` entries (without that prefix), request destination files and installed `.clj-surgeon.edn`.
+Paths under `.cpcache/` are a separate `profile-artefacts` class created by the verification profile’s
+Clojure classpath resolution, counted as `profile-artefacts: N (.cpcache/)` and excluded before the
+recorded-artefact subset check.
+The remainder must be a subset of the recorded artefacts (`00SERVER-LOGS.txt` and
+`test/cfp_scheduler_killer/view_architecture_test.clj`; the installed profile is already subtracted).
+The comparison line names total inventory and extra-path counts. An observed empty remainder reports
+`expected-different`; nil verb facts cannot establish this boundary. Other paths are named in `DIFFERS`.
+A failed verb inspection prints `workspace-inspection: failed <exit> <error>` and is never described as
+clean. Acceptance uses the independent inventory. `details_path` is printed without opening it, so a
+stale absolute detail path cannot crash comparison. Exit zero requires all invocations
 to exit zero and every other fact to match. `request.edn`, `receipt-commit.edn`, and, if fallback runs,
 `receipt-diagnostic.edn` stay in a
 unique `replay-control-*` sibling directory of scratch, outside the inspected workspace. The runner
@@ -96,35 +106,43 @@ working tree but **does not exist in `d9205abc`** (`git show` exits 128). It is 
 substituted from disk. This is consistent with its being an unexpected path in the old receipt, but does
 not establish its provenance. That gap remains open.
 
-Verification on 2026-11-28 (replacement for PR 89, closed on round 3 for the unlisted-file rule):
+Historical evidence (PR 89 replacement, retained unchanged):
 
-Real replay on donor `7b312f85` (the `archive/astra/namespace-split` checkout at
-`/home/forge/src/worktrees/clj-surgeon/sentinel-astra`), run by the surgeon seat on Anvil on 2026-11-28 outside any
-sandbox, with a decoy `SMTP_HOST` set in the calling shell: `Invocation: commit exit 0`; the frozen `split-unit`
-profile ran kaocha and the oracle green in about 9.3 s; `caller_files same`, `caller_sites same` (87), `created same
-(20 destination files present on disk)`, `destinations same`, `state same` (committed), `unrequired_qualified_refs
-same`, `verification_complete same`, `unexpected_paths expected-different recorded artefacts: 3, replay: 0`; exit 0.
-The commit-attempt receipt of that run is checked in as `replay-receipt-2026-11-28-anvil-7b312f85.edn` (evidence, not
-a frozen input; it carries the scratch paths of that run). A copy of the fixture with an added
-`source/secrets/smtp.edn` was refused with `unlisted-source-file source/secrets/smtp.edn`, exit 2, before any scratch
-existed. Inside Codex's sandbox the verb refuses because analyzer admission cannot write its shared lock directory;
-that is the only reason the automated passes could not reproduce this themselves.
+`replay-receipt-2026-11-28-anvil-7b312f85.edn` records `state=committed`,
+`verification_complete=true`, 87 caller sites, five callers and 20 destinations. It also records
+`workspace_status.exit=128`, `clean_except_proven=false`, `unexpected_paths=nil` and
+`error="Not a Git workspace"`. The old runner incorrectly treated that nil as an empty inventory.
+The receipt is evidence of the earlier invocation, **not proof of the unexpected-path boundary**.
+Its donor name and the previously reported ~9.3 s timing are historical operator claims; this review
+round does not re-attest them. The real donor rerun is left to the requesting reviewer.
 
-Self-test requires the runner namespace and loads the frozen sentinel receipt and profile:
-7 tests / 77 assertions, no failures/errors; kondo reports zero errors/warnings. All 39 SHA-256 entries
-pass. Runner plus tests total 150 lines, each under 120 columns. The checked-in subprocess tests run
-the real runner CLI against a stub donor for matching exit 0, nonzero-exit rejection and typed-refusal
-fallback. The stub returns refusal before any destination writes; the test compares the full workspace
-inventory and contents, including the installed profile, and checks that both distinct receipts survive.
-A pure literal-list regression reproduces PR 89's extra SMTP file and checks clean-list acceptance.
-The stub checks the complete environment allowlist, sibling request placement, executable
-copying and profile installation. Python subprocesses cover optimization refusal, missing/duplicate
-manifest literals, successful substitution and active assertions. The new regressions failed against
-the old code before the fixes. An additional default-scratch probe passed and verified that both
-control files stay outside scratch; the reported canonicalization failure did not reproduce here.
-These probes establish runner behavior, not a real split's behavior.
-The product gate (`make test-product`) on the merged tree is green on Anvil; the only failing target in the full `make test` is the known red bench-harness self-tests (OPEN-LOOPS item 4), unrelated to this fixture.
+PR 94 round 2 verification uses the commands below. The self-test is also collected by
+`test/run_all.clj` through `make test-fast` / `make test-product`; loading it no longer exits the process.
+It checks nil verb facts with an extra inventory path, observed-empty acceptance, exact donor exit and
+empty stderr for every stub mode, failed inspection reporting, and a missing details file. The real
+runner CLI refuses both an added hidden file and a directory symlink on fixture copies by name with
+exit 2 and no scratch/control creation. Python optimization and substitution guards remain covered.
+These tests establish runner behavior, not a fresh split's behavior.
 
-Deferred follow-ups: real demo email
-addresses remain because the sources are frozen content; changing them would require a separate
-fixture policy. Architecture-test provenance remains unresolved as documented above.
+```sh
+bb test-fixtures/namespace-split/cellc-d9205abc/replay_test.clj
+~/bin/clj-kondo --lint test-fixtures/namespace-split/cellc-d9205abc/replay.clj \
+  test-fixtures/namespace-split/cellc-d9205abc/replay_test.clj
+wc -l test-fixtures/namespace-split/cellc-d9205abc/replay{,_test}.clj
+git diff --numstat
+```
+
+Observed in this review worktree: self-test 7 tests / 96 assertions, zero failures/errors;
+`~/bin/clj-kondo` zero errors/warnings; runner 73 lines plus tests 77 = 150, maximum 119 columns;
+all 39 frozen digests match and the historical receipt remains byte-identical to HEAD.
+`make test` collected the replay tests, then stopped in `test-fast`: 771 tests / 6,412 assertions,
+2 failures and 4 errors. Diagnostics named unverified analyzer authority in forward-reference tests,
+usage-log CLI exit/outcome mismatches, and unavailable recovery receipt paths under the home state
+directory. Later product and benchmark targets did not run. This is not a green product-gate claim.
+
+Deferred follow-ups: dependencies still require network/cache state; freezing a dependency closure
+is separate work. The Python wrapper's missing arity guard and execution globals are unchanged because
+the wrapper is digest-listed frozen input. Expanding the compressed Clojure layout conflicts with the
+150-line combined cap. Demo email addresses stay byte-identical pending a separate fixture policy.
+Architecture-test provenance remains unresolved as documented above. Previous product-gate/benchmark
+claims are withdrawn here; current gate results must come from the actual command output.

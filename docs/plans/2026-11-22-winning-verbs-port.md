@@ -110,14 +110,35 @@ PR 89 review round 2 corrects the acceptance contract: every invocation must exi
 `created` requires footprint evidence, and unexpected paths must be a subset of the three recorded
 artefacts. Missing facts fail. Hashing is in-process; copying preserves executable attributes; the
 oracle manifest is an explicit fixture-relative argument. Tests load the frozen receipt and profile.
-Real donor replay, 2026-11-28, Anvil, donor 7b312f85, outside any sandbox: commit exit 0, profile green
-(~9.3 s), every comparable fact same (87 sites / 5 callers, 20 created, 20 destinations, committed, verified, same
-unrequired refs), unexpected paths expected-different, exit 0; the receipt is checked in beside the fixture as
-`replay-receipt-2026-11-28-anvil-7b312f85.edn`. The unlisted-file refusal was probed on a fixture copy (exit 2, no
-scratch). Self-test: 7 tests / 77 assertions; kondo clean; all 39 digests verified. Checked-in subprocess probes
-exercise runner acceptance and refusal with a stub donor and a poisoned caller environment, plus the Python
-optimization and manifest-substitution guards. The fixture is now a complete cold oracle for "the port must
-reproduce this receipt" (stage 13).
+The historical receipt `replay-receipt-2026-11-28-anvil-7b312f85.edn` reports committed and verified
+state with 87 sites / five callers and 20 destinations, but its workspace inspection failed with exit
+128 (not a Git workspace). The old nil-path comparison did not establish the unexpected-path boundary.
+Earlier timing and green-gate claims are not re-attested here. A fresh real replay is required before
+calling this a complete cold oracle for a port; the requesting reviewer owns that rerun.
+
+## PR 94 review round 2 contract (2026-11-28)
+
+After invocation, inventory scratch regular files and symlinks, including hidden paths, without
+following directory symlinks. Subtract manifest source entries, request destinations and the installed
+profile; count `.cpcache/` paths separately as `profile-artefacts` and exclude them before comparing
+the remainder with the recorded artefact allowance. Nil receipt facts are not an
+inventory. Print inventory counts and failed verb workspace inspections separately. Preserve frozen
+inputs and the historical receipt. Missing detail files must not crash comparison.
+
+| Witness | Expected |
+|---|---|
+| Nil verb paths, inventory contains extra file | DIFFERS naming the file |
+| Cache paths and 20 destinations | expected-different with profile-artefact count |
+| Cache paths plus stray file | DIFFERS naming the stray file |
+| Hidden unlisted file / directory symlink in fixture copy | CLI exit 2, named refusal, no scratch/control |
+| Stub success / exit 97 / typed refusal | Exact invocation exit and empty stderr, plus runner outcome |
+| Automated product suite | Collect replay tests without exiting during load |
+
+Validation: replay self-test, both files linted through `~/bin/clj-kondo`, combined length <=150,
+lines <120, frozen digests unchanged, product suite where the environment permits it. The real donor
+rerun belongs to the requesting reviewer. Suite probes require `bb` on PATH (also `env` and `python3`);
+they use only a generated stub donor, write under temporary directories cleaned in `finally`, and
+loading the test namespace does not invoke `System/exit`. Dependency hermeticity and demo-address policy remain deferred.
 
 ## Deliberately left behind, and how we know
 

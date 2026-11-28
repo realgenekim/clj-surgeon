@@ -49,7 +49,8 @@
    [clojure.test :refer [run-tests]]
    [split-closure-probe-test]))
 
-(let [r (run-tests 'split-closure-probe-test
+(load-file "test-fixtures/namespace-split/cellc-d9205abc/replay_test.clj")
+(let [r (run-tests 'replay-test 'split-closure-probe-test
                    'clj-surgeon.forms-test
                    'clj-surgeon.forward-refs-test
                    'clj-surgeon.agent-routing-test
