@@ -40,17 +40,19 @@
   (assert-sol-mutation-refused "A changed mapping/policy/source shape needs new admission." ""))
 
 ;; @spec ROUTING-ALIAS-001
+;; @spec ROUTING-PARITY-001
 (deftest alias-migration-is-frozen-off-main
   (doseq [text ["### Alias migration -- frozen off main"
                 "SUSPENDED and frozen off main 2026-11-28"
                 "64a \"let's purge it from the code\""
                 "75 \"frozen off main is good\""
-                "Not routed, not ported"
-                "archive/astra/namespace-split"
+                "Not routed, not ported to main; the verb and its tests are on `astra/namespace-split` and its archive tag `archive/astra/namespace-split`, never on main."
+                "sentinel-verdict.md` on main, pull request 77"
                 "was not a correctness loss of the verb"
                 "every surviving output matches the golden"
                 "the oracle apparatus failed and its records were reaped"]]
-    (assert-sol-mutation-refused text "")))
+    (testing text
+      (assert-sol-mutation-refused text ""))))
 
 ;; @spec ROUTING-PARITY-001
 (deftest registry-controls-every-promise

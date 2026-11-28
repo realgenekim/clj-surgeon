@@ -43,8 +43,8 @@ to route unknown-owner discovery: `docs/observations/2026-09-06-fanout-I-result.
 
 ### Alias migration -- frozen off main
 
-**SUSPENDED and frozen off main 2026-11-28 (Gene: 64a "let's purge it from the code", then 75 "frozen off main is good"). Not routed, not ported; the verb and its tests live only under the archive tag `archive/astra/namespace-split`.**
-The weekly sentinel's `verdict=SUSPEND` on 2026-10-18 and 10-25 was not a correctness loss of the verb: every surviving output matches the golden; the oracle apparatus failed and its records were reaped (`docs/observations/2026-11-28-alias-migration-sentinel-verdict.md` on main).
+**SUSPENDED and frozen off main 2026-11-28 (Gene: 64a "let's purge it from the code", then 75 "frozen off main is good"). Not routed, not ported to main; the verb and its tests are on `astra/namespace-split` and its archive tag `archive/astra/namespace-split`, never on main.**
+The weekly sentinel's `verdict=SUSPEND` on 2026-10-18 and 10-25 was not a correctness loss of the verb: every surviving output matches the golden; the oracle apparatus failed and its records were reaped (`docs/observations/2026-11-28-alias-migration-sentinel-verdict.md` on main, pull request 77).
 
 ### Namespace split -- EXACT witnessed contract only
 
