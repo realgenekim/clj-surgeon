@@ -102,3 +102,21 @@ Re-test condition for re-admission: the frozen fixture reproduced through the CL
 fleet's control. The pinned sections in `agent-routing-specs.md` change with the plate; the plate names this
 doctrine commit. Installation on any account is the mayor's act after announcing it to the seats; the
 branch check `make check-agent-routing PLATE_ONLY=1` is the only claim this change makes.
+
+## Alias migration frozen off main, November 28, 2026 (ruling 75)
+
+Authority: Gene, verbatim, on the second fleet's answer: "Hahaha. On alias migration!  Add to the letter!  I
+so much want it, but all the data says not useful, even given what crapper/dryer do!  So tough to chuck it,
+but it's the right thing to do!" Asked whether freeze meant delete: "And by freeze Alias migration, it
+really means \"delete it\", right??  Which seems right." To the mayor's option a (not ported, not routed,
+kept only under an archive tag, branch deleted with the others at cutover): "Oh, yes, frozen off main is
+good."
+
+Consequence for the plate: the alias-migration section no longer carries a schema example, because a seat
+reading the plate must not be invited to call a verb that is not on main; the section states that the
+route is suspended and the verb frozen off main, reachable only under `archive/astra/namespace-split`,
+and that the sentinel's two SUSPEND verdicts were not a correctness loss of the verb (every surviving output
+matches the golden; the oracle apparatus failed and its records were reaped). The re-test condition in the
+previous section is withdrawn: there is no re-admission to test for. The namespace-split route is
+unchanged. The pinned sections in `agent-routing-specs.md` change with the plate; the plate names this
+doctrine commit. Installation remains the mayor's act after announcing it to the seats.
