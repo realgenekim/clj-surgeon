@@ -1,0 +1,58 @@
+#!/usr/bin/env bb
+#_{:clj-kondo/ignore [:namespace-name-mismatch]}
+(ns split-closure-probe
+  (:require
+   [babashka.fs :as fs]
+   [clj-surgeon.analyze :as a]
+   [clojure.edn :as edn]
+   [clojure.string :as str]
+   [clojure.test :as t]
+   [rewrite-clj.zip :as z]))
+(def owner-types #{"def" "defn" "defn-" "defmulti" "defmethod" "defmacro"
+                   "defonce" "defrecord" "defprotocol" "deftype"})
+(defn sites [lib owners parsed]
+  (let [aliases (assoc (a/parse-ns-aliases parsed) lib lib)
+        forms (map z/sexpr (take-while some? (iterate z/right parsed)))
+        descend? #(and (coll? %) (not (and (seq? %) (#{'quote 'clojure.core/quote} (first %)))))]
+    (count (for [s (tree-seq descend? seq forms)
+                 :when (and (symbol? s) (= lib (aliases (namespace s))) (owners (name s)))] s))))
+(defn probe [{:keys [source destinations]} parsed callers existing]
+  (let [graph (filter #(owner-types (:type %)) (a/intra-ns-deps parsed))
+        names (sort (map :name graph)) counts (frequencies (mapcat :forms destinations))
+        unmapped (vec (filter #(zero? (get counts % 0)) names)) doubled (vec (filter #(< 1 (get counts % 0)) names))
+        edges (sort (for [{:keys [name depends-on]} graph dep depends-on :when ((set names) dep)] [name dep]))
+        hits (sort (for [[file forms] callers] [file (sites (:lib source) (set names) forms)]))]
+    (str/join "\n" (concat
+                     (for [owner names] (str "owner " owner " " (case (get counts owner 0)
+                                                                  0 "not-at-all" 1 "exactly-once" "more-than-once")))
+                     [(str "non-owners=" (count (remove #(owner-types (:type-str %)) (a/top-level-forms parsed))))]
+                     [(str "unmapped=" (pr-str unmapped)) (str "double-mapped=" (pr-str doubled))]
+                     [(str "unknown=" (pr-str (vec (sort (remove (set names) (keys counts))))))]
+                     (for [d destinations] (str "destination " (pr-str (select-keys d [:lib :file :forms]))
+                                             " exists=" (contains? existing (:file d))))
+                     (for [[file n] hits] (str "caller " file " sites=" n))
+                     (for [[owner dep] edges] (str owner " -> " dep))
+                     [(format (str "split-closure-probe: owners=%d mapped=%d unmapped=%d double=%d "
+                                   "destinations=%d absent=%d sites=%d callers=%d edges=%d")
+                              (count names) (count (filter #(= 1 (get counts %)) names))
+                              (count unmapped) (count doubled) (count destinations)
+                              (count (remove #(contains? existing (:file %)) destinations))
+                              (reduce + (map second hits)) (count (filter #(pos? (second %)) hits)) (count edges))]))))
+(defn run-probe [request-file root]
+  (let [request (edn/read-string (slurp request-file)) read-source #(a/string->zloc (slurp (fs/file root %)))
+        source (get-in request [:source :file])
+        paths (distinct (mapcat #(fs/glob (fs/path root %) "**.clj") (:roots request)))
+        callers (into {} (for [p paths :let [file (str (fs/relativize root p))] :when (not= file source)]
+                           [file (read-source file)]))
+        existing (set (filter #(fs/exists? (fs/path root %)) (map :file (:destinations request))))]
+    (str (apply str (for [p (:roots request) :when (not (fs/exists? (fs/path root p)))]
+                      (str "missing-root=" p "\n")))
+         (probe request (read-source source) callers existing))))
+(when (= *file* (System/getProperty "babashka.file"))
+  (if (= ["--self-test"] *command-line-args*)
+    (do (require 'split-closure-probe-test)
+        (let [{:keys [test fail error]} (t/run-tests 'split-closure-probe-test)]
+          (System/exit (if (and (pos? test) (zero? (+ fail error))) 0 1))))
+    (if (= 2 (count *command-line-args*))
+      (println (apply run-probe *command-line-args*))
+      (throw (ex-info "Usage: bb bin/split-closure-probe REQUEST.edn SOURCE-TREE | --self-test" {})))))

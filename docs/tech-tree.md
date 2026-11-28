@@ -106,6 +106,7 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | 2026-09-02 | cohort R: prohibition beats explanation; forbid -88% unmandated sub-commands, J inert; ritual is cheap per return (-3.8 returns) | big-aha log cohort R |
 | 2026-09-02 | E1: gate arm 2.2x native; 69% refusals from grammar mismatch; three red teams missed it because they fed unified diffs; the free-choice arm would have found it in one run | big-aha log E1 |
 | 2026-09-02 | gate round one: confinement/atomicity/TOCTOU solid; hazard detector evadable via declare, reader conditionals, do, metadata; verification_complete minted on process exit; quadratic identity; fixes in round two | big-aha log, gate round one |
+| 2026-11-28 | Cell C probe observes 62 sites; 25 test-caller sites need callers frozen from curtaincall-cfp d9205abc before any port. | `bb bin/split-closure-probe --self-test`; [plan](plans/2026-11-28-split-closure-probe.md) |
 
 ## Live experiment backlog (prediction and cost on every item)
 
