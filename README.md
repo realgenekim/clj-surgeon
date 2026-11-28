@@ -478,6 +478,20 @@ records the failure pattern that led to `:fix-declares`.
 `make surgeon-footprint-self-test`.
 The census covers `~/.codex/config.toml`, `~/.claude.json`, `~/.claude/settings.json`, `~/.claude/mcp.json`,
 `./.mcp.json`, `./.codex/config.toml` and the current user's crontab.
+Piece 3 also reads `.claude.json` and `settings.json` from `$CLAUDE_CONFIG_DIR` when set,
+every immediate `~/.claude-*/` directory (glob, directories only, without following directory symlinks),
+and repeatable `--config-dir <dir>` options, for example:
+`bb bin/surgeon-footprint --config-dir /profiles/kanban --config-dir /profiles/builder`.
+Extra directories are normalized and deduplicated; `~/.claude` remains the default profile.
+Each extra file is labelled with its full path; missing extra files are omitted. Default missing files
+still print `absent`. `profiles: <n> extra (<names>)` lists sorted directory paths, including empty profiles.
+Listener order is `ss -ltnp`, `ss -ltn`, `lsof -nP -iTCP -sTCP:LISTEN`, then netstat:
+`netstat -an -p tcp` on Darwin, `netstat -ltn` elsewhere. lsof owners include command and PID.
+`listeners-source: ss|lsof|netstat|none` identifies the check. `listen: none` means checked, nothing found;
+if no tool succeeds, output is `listen: unavailable: no ss, lsof or netstat`.
+The field case was the mayor's MacBook-Air-67.local run reporting `entries=0` and `listeners=0`.
+The mayor confirmed nothing on 7888 by hand with lsof; the registration count had omitted the kanban and
+builder profiles. The old `listen: none` was consistent with an empty netstat fallback, whose source was unlabelled.
 Also included: loaded/installed user launch units, listeners, server/mention processes and routing-block hashes.
 System units and other users' crontabs are out of scope; unavailable commands/listings report their reasons.
 Routing reads share the regular-file/64 KiB guard; hostname comes from Java with an `unknown-host` fallback.
