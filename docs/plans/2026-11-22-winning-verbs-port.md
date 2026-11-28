@@ -81,6 +81,44 @@ and `proof_pending=[]` at `/var/tmp/forge/round/runs/sentinel-ns-20261025T070002
 intent_transaction, receipt_artifacts, mcp_paths, mcp_process, verification_process, file_ops. Its stage table is
 written after alias migration lands, with the same method; expect about 2,400 source lines and about 45 slices.
 
+## Cell C cold replay, round 3 (2026-11-28)
+
+Replacement: replaces PR 89 (closed on round 3, the unlisted-file rule); inventory must pass before copying only manifest-listed sources.
+
+The fixture runner's bounded contract is to verify frozen input hashes, install the recovered cold
+profile with scratch/fixture paths, attempt commit once, and compare the eight recorded facts. Only a
+typed, explicitly unmutated/uncommitted refusal permits one plan-only diagnostic. Its tests cover
+request rebinding, profile argv/path preservation, safe fallback, and honest missing/different facts.
+This fixture work does not port the verb or admit a new split contract.
+
+Round 3 hardening contract: refuse optimized Python with exit 2 before opening any input; require
+exactly one frozen oracle manifest literal before substitution; clear `PYTHONOPTIMIZE` in the profile.
+The donor receives only PATH, HOME, JAVA_HOME and LANG when present. With SMTP_HOST absent and no
+fixture `secrets/smtp.edn`, frozen mail uses dev-render. Request and receipt files live in a unique
+sibling directory outside scratch. Boundary witnesses run the real runner CLI against a stub donor
+for acceptance, nonzero exit and typed refusal, and run the Python wrapper in optimized mode and
+against missing/duplicate manifest literals. Frozen sources and oracle remain byte-identical.
+
+Inputs and detailed receipts: [Cell C fixture README](../../test-fixtures/namespace-split/cellc-d9205abc/README.md#replay-usage-and-result).
+The missing `split-unit` configuration is now frozen and installed. The four test callers are frozen
+byte-identically from `d9205abc`, together with the three launch/config files, 19 application namespace
+dependencies, one test helper, and three letter templates needed for `bin/kaocha unit --fail-fast`.
+The requested architecture test exists only in the recovered working tree, not at the pinned commit;
+its provenance gap remains open. Port check: 35 pairs, 34 OK, 1 NO-SOURCE; all 39 SHA-256 entries pass.
+
+PR 89 review round 2 corrects the acceptance contract: every invocation must exit zero;
+`created` requires footprint evidence, and unexpected paths must be a subset of the three recorded
+artefacts. Missing facts fail. Hashing is in-process; copying preserves executable attributes; the
+oracle manifest is an explicit fixture-relative argument. Tests load the frozen receipt and profile.
+Real donor replay, 2026-11-28, Anvil, donor 7b312f85, outside any sandbox: commit exit 0, profile green
+(~9.3 s), every comparable fact same (87 sites / 5 callers, 20 created, 20 destinations, committed, verified, same
+unrequired refs), unexpected paths expected-different, exit 0; the receipt is checked in beside the fixture as
+`replay-receipt-2026-11-28-anvil-7b312f85.edn`. The unlisted-file refusal was probed on a fixture copy (exit 2, no
+scratch). Self-test: 7 tests / 77 assertions; kondo clean; all 39 digests verified. Checked-in subprocess probes
+exercise runner acceptance and refusal with a stub donor and a poisoned caller environment, plus the Python
+optimization and manifest-substitution guards. The fixture is now a complete cold oracle for "the port must
+reproduce this receipt" (stage 13).
+
 ## Deliberately left behind, and how we know
 
 - The losing operations, by name: `admit_clojure_patch`, `apply_clojure_changes`, `edit_clojure` (with

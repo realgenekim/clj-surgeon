@@ -1,0 +1,1830 @@
+{:state "committed",
+ :blockers [],
+ :candidate_hash
+ "d237b62b3f2cd5f729f5efbaa451ce38977e52a524076afe47222bae1c1271cb",
+ :checks
+ [{:name "captured-reference-analysis",
+   :exit 3,
+   :duration_ms 1624.72411,
+   :status "baseline",
+   :baseline {:error 108, :warning 85, :info 4},
+   :note
+   "Non-zero exit is pre-mutation baseline lint, not split damage; candidate delta is checked separately."}
+  {:name "future-source-parse",
+   :exit 0,
+   :duration_ms 33.177144,
+   :status "passed"}
+  {:baseline {:error 108, :warning 85, :info 4},
+   :exit 3,
+   :duration_ms 1694.571093,
+   :name "candidate-lint-delta",
+   :note
+   "Non-zero exit is baseline lint, not split damage; no new error findings.",
+   :status "passed",
+   :introduced_errors 0,
+   :delta {:error 0, :warning 0, :info 0},
+   :post {:error 108, :warning 85, :info 4}}
+  {:name "kaocha unit",
+   :profile "split-unit",
+   :command
+   ["/var/tmp/forge/claude-1011/-home-forge-src-worktrees-clj-surgeon-seat/cca23770-0634-4a43-90f2-9abfa918f2b7/scratchpad/cellc-replay-run7/bin/kaocha"
+    "unit"
+    "--fail-fast"],
+   :exit 0,
+   :duration_ms 9318.123393,
+   :status "passed"}
+  {:name "env",
+   :profile "split-unit",
+   :command
+   ["/usr/bin/env"
+    "-u"
+    "PYTHONOPTIMIZE"
+    "python3"
+    "/home/forge/src/worktrees/clj-surgeon/cellc-cold-replay-2/test-fixtures/namespace-split/cellc-d9205abc/cc-oracle-replay.py"
+    "/var/tmp/forge/claude-1011/-home-forge-src-worktrees-clj-surgeon-seat/cca23770-0634-4a43-90f2-9abfa918f2b7/scratchpad/cellc-replay-run7"
+    "/home/forge/src/worktrees/clj-surgeon/cellc-cold-replay-2/test-fixtures/namespace-split/cellc-d9205abc/cc-split.json"],
+   :exit 0,
+   :duration_ms 46.737079,
+   :status "passed"}
+  {:name "verified-snapshot-guard",
+   :exit 0,
+   :duration_ms 8.99064,
+   :status "passed"}],
+ :closure_receipt
+ "/var/tmp/forge/namespace-split-receipts/8a94e63f2ef8fae8306456f0a804d695ec6973b6bd6377a3380a919933f904d9/4ad19f20-619d-4dc1-ac9d-0f28aac509bd-closure.edn",
+ :committed true,
+ :counts
+ {:destinations 20,
+  :forms 141,
+  :caller_files 5,
+  :caller_sites 87,
+  :files 26},
+ :coverage
+ {:roots ["src" "test"],
+  :reference_authority
+  "clj-kondo captured snapshot plus structural quoted-Var supplement",
+  :dynamic_references "not claimed"},
+ :destination_libs
+ ["cfp-scheduler-killer.views.auth"
+  "cfp-scheduler-killer.views.avatar"
+  "cfp-scheduler-killer.views.committee"
+  "cfp-scheduler-killer.views.communications"
+  "cfp-scheduler-killer.views.dashboard"
+  "cfp-scheduler-killer.views.event-setup"
+  "cfp-scheduler-killer.views.form-builder"
+  "cfp-scheduler-killer.views.form-controls"
+  "cfp-scheduler-killer.views.format"
+  "cfp-scheduler-killer.views.integrations"
+  "cfp-scheduler-killer.views.live-drafts"
+  "cfp-scheduler-killer.views.log"
+  "cfp-scheduler-killer.views.organizer-layout"
+  "cfp-scheduler-killer.views.people"
+  "cfp-scheduler-killer.views.portal"
+  "cfp-scheduler-killer.views.public-cfp"
+  "cfp-scheduler-killer.views.replay"
+  "cfp-scheduler-killer.views.review"
+  "cfp-scheduler-killer.views.schedule"
+  "cfp-scheduler-killer.views.shell"],
+ :details_path
+ "/var/tmp/forge/namespace-split-receipts/8a94e63f2ef8fae8306456f0a804d695ec6973b6bd6377a3380a919933f904d9/4ad19f20-619d-4dc1-ac9d-0f28aac509bd-details.edn",
+ :elapsed_ms 21757.458848,
+ :facts
+ {:destinations
+  [{:lib "cfp-scheduler-killer.views.auth",
+    :file "src/cfp_scheduler_killer/views/auth.clj",
+    :owners_moved ["landing-page" "login-page"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 5}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.avatar",
+    :file "src/cfp_scheduler_killer/views/avatar.clj",
+    :owners_moved ["initials" "face-pool-size" "pool-face"],
+    :static_sites_rewritten [],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.committee",
+    :file "src/cfp_scheduler_killer/views/committee.clj",
+    :owners_moved ["member-row" "committee-card" "committee-page"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 1}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.communications",
+    :file "src/cfp_scheduler_killer/views/communications.clj",
+    :owners_moved ["letter-block" "inform-page" "comms-page"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 2}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.dashboard",
+    :file "src/cfp_scheduler_killer/views/dashboard.clj",
+    :owners_moved
+    ["alert-rows-partial"
+     "checklist-item"
+     "dash-days-left"
+     "dash-recent-line"
+     "dash-feed-talk"
+     "dash-rel-time"
+     "event-dashboard-region"
+     "event-dashboard-page"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 2}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.event-setup",
+    :file "src/cfp_scheduler_killer/views/event_setup.clj",
+    :owners_moved
+    ["events-list-page"
+     "default-start-date"
+     "default-end-date"
+     "example-name"
+     "example-location"
+     "example-website"
+     "event-marquee"
+     "slug-status"
+     "new-event-page"
+     "event-details-page"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 9}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.format",
+    :file "src/cfp_scheduler_killer/views/format.clj",
+    :owners_moved
+    ["date-fmt"
+     "datetime-fmt"
+     "->local-date"
+     "fmt-date"
+     "fmt-date-range"
+     "fmt-instant"
+     "->instant"
+     "when-fmt"
+     "relative-when"
+     "fmt-when"
+     "fmt-cfp-window"
+     "iso-date-fmt"
+     "fmt-close-date"
+     "cfp-public-url"
+     "not-blank"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 1}
+     {:file "test/cfp_scheduler_killer/polish_test.clj", :sites 15}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.form-builder",
+    :file "src/cfp_scheduler_killer/views/form_builder.clj",
+    :owners_moved
+    ["type-label"
+     "fb-tags"
+     "fb-post"
+     "field-row"
+     "form-grid-region"
+     "form-fields-region"
+     "form-preview-region"
+     "field-form-fields"
+     "form-edit-panel"
+     "finish-cfp-bar"
+     "form-builder-page"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 5}
+     {:file "test/cfp_scheduler_killer/forms_test.clj", :sites 2}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.form-controls",
+    :file "src/cfp_scheduler_killer/views/form_controls.clj",
+    :owners_moved
+    ["field-errors" "req-mark" "field-error" "answer-input"],
+    :static_sites_rewritten [],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.integrations",
+    :file "src/cfp_scheduler_killer/views/integrations.clj",
+    :owners_moved
+    ["mask-webhook-url"
+     "slack-form"
+     "exports-page"
+     "api-docs-page"
+     "settings-page"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 3}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.live-drafts",
+    :file "src/cfp_scheduler_killer/views/live_drafts.clj",
+    :owners_moved
+    ["cfp-note" "cfp-draft-status" "portal-draft-status"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 4}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.log",
+    :file "src/cfp_scheduler_killer/views/log.clj",
+    :owners_moved ["log-summary" "log-region" "log-page"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 2}
+     {:file "test/cfp_scheduler_killer/comms_test.clj", :sites 2}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.organizer-layout",
+    :file "src/cfp_scheduler_killer/views/organizer_layout.clj",
+    :owners_moved
+    ["event-resume-path"
+     "event-setup-done?"
+     "sb-link"
+     "sb-out"
+     "sb-group"
+     "sidebar"
+     "dev-strip"
+     "breadcrumb"
+     "whoami-strip"
+     "organizer-shell"
+     "header"
+     "time-travel-bar"],
+    :static_sites_rewritten
+    [{:file "test/cfp_scheduler_killer/polish_test.clj", :sites 1}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.people",
+    :file "src/cfp_scheduler_killer/views/people.clj",
+    :owners_moved ["profile-links" "person-page"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 1}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.portal",
+    :file "src/cfp_scheduler_killer/views/portal.clj",
+    :owners_moved
+    ["status-pill"
+     "task-row"
+     "portal-submission"
+     "edit-form"
+     "profile-form"
+     "portal-page"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 1}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.public-cfp",
+    :file "src/cfp_scheduler_killer/views/public_cfp.clj",
+    :owners_moved
+    ["speaker-input"
+     "speaker-inputs"
+     "cfp-closed-notice"
+     "md-token"
+     "md-inline"
+     "md-lite"
+     "render-markdown"
+     "cfp-about-you"
+     "cfp-page"
+     "cfp-success-page"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 3}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.replay",
+    :file "src/cfp_scheduler_killer/views/replay.clj",
+    :owners_moved ["replay-progress-bar" "replay-page"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 2}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.review",
+    :file "src/cfp_scheduler_killer/views/review.clj",
+    :owners_moved
+    ["submissions-page"
+     "inform-banner"
+     "fmt-mean"
+     "fmt-stars"
+     "notice-region"
+     "coverage-bar"
+     "star-form"
+     "star-histogram"
+     "opinions-block"
+     "private-note-block"
+     "chair-on-event?"
+     "row-controls"
+     "row-controls*"
+     "board-row"
+     "sort-chip"
+     "status-chip"
+     "submissions-sparkline"
+     "board-qs"
+     "sort-click"
+     "sort-th"
+     "track-chip"
+     "board-region"
+     "board-page"
+     "submission-detail-page"
+     "capture-page"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 11}
+     {:file "test/cfp_scheduler_killer/forms_test.clj", :sites 2}
+     {:file "test/cfp_scheduler_killer/views_test.clj", :sites 3}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.schedule",
+    :file "src/cfp_scheduler_killer/views/schedule.clj",
+    :owners_moved
+    ["day-tab"
+     "schedule-status-bar"
+     "conflict-chips"
+     "room-options"
+     "placed-card"
+     "block-card"
+     "schedule-grid"
+     "place-form"
+     "schedule-page"
+     "agenda-page"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 3}],
+    :retained_vars []}
+   {:lib "cfp-scheduler-killer.views.shell",
+    :file "src/cfp_scheduler_killer/views/shell.clj",
+    :owners_moved
+    ["versioned" "favicon-data-uri" "page-shell" "datastar-script"],
+    :static_sites_rewritten
+    [{:file "src/cfp_scheduler_killer/server.clj", :sites 7}],
+    :retained_vars []}],
+  :comment_policy "preserve",
+  :comment_edits
+  [{:file "src/cfp_scheduler_killer/server.clj",
+    :after_file "src/cfp_scheduler_killer/server.clj",
+    :columns [:line :after_line :before :after],
+    :lines
+    [[202
+      218
+      "                                                   ;; keep what they typed, but show the slug we derived"
+      [:indent 57]]
+     [663 679 "          ;; ONLY in dev." [:indent 11]]
+     [1202
+      1218
+      "                 ;; Same three-layer prefill as the public page, and for the same"
+      [:indent 20]]
+     [1203
+      1219
+      "                 ;; reason: half-typed text is the speaker's, not ours to drop."
+      [:indent 20]]
+     [2481
+      2497
+      "                                   ;; RETIRED fields never reach a speaker. The filter"
+      [:indent 40]]
+     [2482
+      2498
+      "                                   ;; lives at the one seam where the live form is"
+      [:indent 40]]
+     [2483
+      2499
+      "                                   ;; read, so rendering, parsing and validation can"
+      [:indent 40]]
+     [2484
+      2500
+      "                                   ;; never disagree about which questions exist."
+      [:indent 40]]
+     [2491
+      2507
+      "                                   ;; Only ANSWERS count as \\\"we saved your place\\\"."
+      [:indent 40]]
+     [2492
+      2508
+      "                                   ;; The speaker block survives a submit on"
+      [:indent 40]]
+     [2493
+      2509
+      "                                   ;; purpose, and a fresh second talk should not"
+      [:indent 40]]
+     [2494
+      2510
+      "                                   ;; be greeted as a resumed one."
+      [:indent 40]]]}
+   {:file "src/cfp_scheduler_killer/views.clj",
+    :after_file nil,
+    :columns [:line :after_line :before :after],
+    :lines
+    [[204
+      nil
+      ";; The nav is the LIFECYCLE, in order: open the call, review what arrives,"
+      nil]
+     [205
+      nil
+      ";; decide and tell people, run the show. It used to be an alphabet-soup list of"
+      nil]
+     [206
+      nil
+      ";; twelve peers, which said nothing about what to do next \\u2014 and hid the exports"
+      nil]
+     [207
+      nil
+      ";; entirely, which is how an integrator concluded we didn't have any. The three"
+      nil]
+     [208
+      nil
+      ";; housekeeping pages sit in a quiet row at the bottom, where they belong."
+      nil]
+     [3053
+      nil
+      ";; The speaker-facing LIVE LANE is defined once, in the Public CFP section"
+      nil]
+     [3054
+      nil
+      ";; below, and used by both surfaces: the portal's talk-edit form and the public"
+      nil]
+     [3055
+      nil
+      ";; submission form must show the same feedback, computed by the same server"
+      nil]
+     [3056
+      nil
+      ";; code, or a speaker gets told \\\"looks fine\\\" here and refused there. Forward"
+      nil]
+     [3057
+      nil
+      ";; declared rather than moved, so the definitions stay beside the page that"
+      nil]
+     [3058 nil ";; explains them." nil]]}
+   {:file "src/cfp_scheduler_killer/views.clj",
+    :after_file "src/cfp_scheduler_killer/views/auth.clj",
+    :columns [:line :after_line :before :after],
+    :lines
+    [[3353
+      121
+      "     ;; Google proves who you are; the committee roster still decides whether"
+      [:indent 11]]
+     [3354
+      122
+      "     ;; you get in. One link, zero JavaScript \\u2014 the whole flow is redirects."
+      [:indent 11]]
+     [3361
+      129
+      "     ;; Demo mode (bd -o42): a deployed demo has no SMTP, so a stranger \\u2014 swyx,"
+      [:indent 11]]
+     [3362
+      130
+      "     ;; a judge, the eval kit's pre-auth human \\u2014 needs a door that doesn't"
+      [:indent 11]]
+     [3363
+      131
+      "     ;; involve an inbox. One click per seeded role, and the page says plainly"
+      [:indent 11]]
+     [3364
+      132
+      "     ;; what this is. Renders ONLY when the instance is flagged as a demo."
+      [:indent 11]]]}
+   {:file "src/cfp_scheduler_killer/views.clj",
+    :after_file "src/cfp_scheduler_killer/views/committee.clj",
+    :columns [:line :after_line :before :after],
+    :lines
+    [[978
+      100
+      "              ;; The forward act, top right like every wizard page: open the"
+      [:indent 48]]
+     [979
+      101
+      "              ;; call once the committee is real, else on to the board."
+      [:indent 48]]]}
+   {:file "src/cfp_scheduler_killer/views.clj",
+    :after_file "src/cfp_scheduler_killer/views/communications.clj",
+    :columns [:line :after_line :before :after],
+    :lines
+    [[3016
+      114
+      "        ;; A real table with fixed columns \\u2014 when \\u00B7 to \\u00B7 subject \\u00B7 status. The"
+      [:indent 25]]
+     [3017
+      115
+      "        ;; previous flowing layout meant no two rows lined up, which is exactly"
+      [:indent 25]]
+     [3018
+      116
+      "        ;; the thing that makes a send log unreadable at a glance."
+      [:indent 25]]
+     [2807
+      30
+      "    ;; States the ACTUAL delivery configuration, always \\u2014 not only when there is"
+      [:indent 21]]
+     [2808
+      31
+      "    ;; a queue. Claiming \\\"sent\\\" when no mailer is configured is the single most"
+      [:indent 21]]
+     [2809
+      32
+      "    ;; damaging lie this tool could tell an organizer: they would stop chasing a"
+      [:indent 21]]
+     [2810
+      33
+      "    ;; speaker who never heard from them."
+      [:indent 21]]]}
+   {:file "src/cfp_scheduler_killer/views.clj",
+    :after_file "src/cfp_scheduler_killer/views/event_setup.clj",
+    :columns [:line :after_line :before :after],
+    :lines
+    [[4269
+      385
+      "        ;; The save toast \\u2014 THE standard save confirmation for every edit form"
+      [:indent 25]]
+     [4270
+      386
+      "        ;; (Gene, 2026-08-09): server-rendered on the post-save reload,"
+      [:indent 25]]
+     [4271
+      387
+      "        ;; CSS-only lifecycle. Reuse .toast wherever a form 303s with ?saved=1."
+      [:indent 25]]
+     [4276
+      392
+      "                       ;; Cmd-S / Ctrl-S saves (Gene, 2026-08-09) \\u2014 the ds/on-meta"
+      [:indent 40]]
+     [4277
+      393
+      "                       ;; house idiom; `el` is this form, requestSubmit is the"
+      [:indent 40]]
+     [4278
+      394
+      "                       ;; same browser-owned submit the button does."
+      [:indent 40]]
+     [694
+      208
+      "        ;; The create page streams: every keystroke is answered by a re-rendered"
+      [:indent 25]]
+     [695
+      209
+      "        ;; marquee on this connection. Same hookup as the board, on the pseudo"
+      [:indent 25]]
+     [696
+      210
+      "        ;; event that belongs to nobody (sse/new-event-channel)."
+      [:indent 25]]
+     [707
+      221
+      "        ;; input bubbles, so ONE debounced handler on the form covers every"
+      [:indent 25]]
+     [708
+      222
+      "        ;; field in it \\u2014 and Datastar posts the whole signal set, which is"
+      [:indent 25]]
+     [709
+      223
+      "        ;; exactly what the marquee needs to re-render."
+      [:indent 25]]
+     [735
+      249
+      "         ;; The call-for-speakers decision is one sentence with two radios, not a"
+      [:indent 26]]
+     [736
+      250
+      "         ;; section with two timestamps. Nobody opening a CFP wants to schedule"
+      [:indent 26]]
+     [737
+      251
+      "         ;; it; they want it live, or deliberately not yet."
+      [:indent 26]]
+     [740
+      254
+      "          ;; Both radios bind the SAME signal \\u2014 that is how Datastar reads a radio"
+      [:indent 27]]
+     [741
+      255
+      "          ;; group \\u2014 so the marquee's last caption line follows the choice."
+      [:indent 27]]
+     [759
+      273
+      "          ;; Native <details>. Zero JavaScript for the toggle itself, keyboard-"
+      [:indent 27]]
+     [760
+      274
+      "          ;; accessible for free, and it survives an SSE morph because the"
+      [:indent 27]]
+     [761
+      275
+      "          ;; browser owns the open/closed state \\u2014 a signal-driven accordion would"
+      [:indent 27]]
+     [762
+      276
+      "          ;; not. It REPORTS each toggle to the draft stash (fire-and-forget), so"
+      [:indent 27]]
+     [763
+      277
+      "          ;; a refresh re-renders the panel the way it was left."
+      [:indent 27]]
+     [791
+      305
+      "            ;; The placeholder is the DERIVED slug, and it follows the typing:"
+      [:indent 29]]
+     [792
+      306
+      "            ;; bound to a signal the preview handler patches after each"
+      [:indent 29]]
+     [793
+      307
+      "            ;; keystroke, so the ghost in the box can never disagree with the"
+      [:indent 29]]
+     [794
+      308
+      "            ;; green line under it. Tab still accepts it (ghost-fill)."
+      [:indent 29]]
+     [800
+      314
+      "                            ;; `|| fallback` because the attr binding can evaluate"
+      [:indent 45]]
+     [801
+      315
+      "                            ;; BEFORE the same element's signal registers \\u2014 without"
+      [:indent 45]]
+     [802
+      316
+      "                            ;; it, the first evaluation wipes the placeholder to"
+      [:indent 45]]
+     [803
+      317
+      "                            ;; \\\"\\\" (found live, 2026-08-09)."
+      [:indent 45]]
+     [807
+      321
+      "            ;; Second copy spot (Gene: \\\"it should be in two places\\\") \\u2014 same"
+      [:indent 29]]
+     [808
+      322
+      "            ;; clipboard gesture, sourcing the full URL from the marquee's own"
+      [:indent 29]]
+     [809
+      323
+      "            ;; text so the two can never disagree."
+      [:indent 29]]]}
+   {:file "src/cfp_scheduler_killer/views.clj",
+    :after_file "src/cfp_scheduler_killer/views/form_builder.clj",
+    :columns [:line :after_line :before :after],
+    :lines
+    [[3751
+      386
+      "            ;; The wizard's forward act sits ABOVE \\\"View public page\\\" in the"
+      [:indent 46]]
+     [3752
+      387
+      "            ;; header stack (Gene, 2026-08-09); the same button repeats at the"
+      [:indent 46]]
+     [3753
+      388
+      "            ;; bottom of the page via `finish-cfp-bar`."
+      [:indent 46]]
+     [3760
+      395
+      "    ;; The wizard banner: this page IS step 2, and it says what the act is."
+      [:indent 21]]
+     [3780
+      415
+      "    ;; The interleaved grid: each question and its live preview share a row and"
+      [:indent 21]]
+     [3781
+      416
+      "    ;; stay vertically aligned (Gene, 2026-08-09). Column headers are the grid's"
+      [:indent 21]]
+     [3782 417 "    ;; own top row, so they align too." [:indent 21]]]}
+   {:file "src/cfp_scheduler_killer/views.clj",
+    :after_file "src/cfp_scheduler_killer/views/integrations.clj",
+    :columns [:line :after_line :before :after],
+    :lines
+    [[2215
+      257
+      "      ;; The close DATE lives here, post-create. The create form only ever asks"
+      [:indent 23]]
+     [2216
+      258
+      "      ;; the one-sentence version (\\\"\\u2026open until\\\"); this is where an organizer"
+      [:indent 23]]
+     [2217
+      259
+      "      ;; extends the deadline the week everyone always asks for it, or clears it"
+      [:indent 23]]
+     [2218
+      260
+      "      ;; and leaves the call open. Opening and closing outright are the two"
+      [:indent 23]]
+     [2219
+      261
+      "      ;; buttons on the dashboard \\u2014 this is the scheduled half, they are the"
+      [:indent 23]]
+     [2220 262 "      ;; deliberate half." [:indent 23]]
+     [2282
+      324
+      "      ;; --- API keys ------------------------------------------------------"
+      [:indent 23]]
+     [2283 325 "      ;;" [:indent 23]]
+     [2284
+      326
+      "      ;; The list shows a PREFIX, never the material. One shared token meant"
+      [:indent 23]]
+     [2285
+      327
+      "      ;; revoking the leaked integration also revoked the chair's curl line, so"
+      [:indent 23]]
+     [2286
+      328
+      "      ;; nobody revoked anything; named keys make revocation small enough to"
+      [:indent 23]]
+     [2287
+      329
+      "      ;; actually do. Every control here is a plain form POST \\u2014 the whole page"
+      [:indent 23]]
+     [2288
+      330
+      "      ;; re-renders, which is why the new key can be shown once without any"
+      [:indent 23]]
+     [2289 331 "      ;; client-side state to hold it." [:indent 23]]
+     [2319
+      361
+      "               ;; Two-step confirmation, rendered by the SERVER. No confirm()"
+      [:indent 32]]
+     [2320
+      362
+      "               ;; dialog: a modal blocks the SSE stream, and \\\"am I confirming?\\\""
+      [:indent 32]]
+     [2321
+      363
+      "               ;; is state the browser has no business owning."
+      [:indent 32]]]}
+   {:file "src/cfp_scheduler_killer/views.clj",
+    :after_file "src/cfp_scheduler_killer/views/people.clj",
+    :columns [:line :after_line :before :after],
+    :lines
+    [[4218
+      85
+      "            ;; Their average against the COMMITTEE's average on the same talks."
+      [:indent 29]]
+     [4219
+      86
+      "            ;; A whole-event average would be arithmetic, not insight."
+      [:indent 29]]]}
+   {:file "src/cfp_scheduler_killer/views.clj",
+    :after_file "src/cfp_scheduler_killer/views/portal.clj",
+    :columns [:line :after_line :before :after],
+    :lines
+    [[3205
+      164
+      "     ;; The portal streams too \\u2014 same mount-inside-the-page trick as the CFP, so"
+      [:indent 11]]
+     [3206
+      165
+      "     ;; the shared page-shell (and the auth lane's login page) stays untouched."
+      [:indent 11]]
+     [3208
+      167
+      "     ;; The 15-second heartbeat patches #sse-heartbeat. A streaming page without"
+      [:indent 11]]
+     [3209
+      168
+      "     ;; this span logs PatchElementsNoTargetsFound to the console four times a"
+      [:indent 11]]
+     [3210
+      169
+      "     ;; minute \\u2014 noise that trains everyone to ignore the console."
+      [:indent 11]]]}
+   {:file "src/cfp_scheduler_killer/views.clj",
+    :after_file "src/cfp_scheduler_killer/views/public_cfp.clj",
+    :columns [:line :after_line :before :after],
+    :lines
+    [[4039
+      215
+      "      ;; `events/display-name` is the ONE place that knows how an event is"
+      [:indent 12]]
+     [4040
+      216
+      "      ;; spelled \\u2014 same string the organizer watched write itself on the create"
+      [:indent 12]]
+     [4041
+      217
+      "      ;; page, same string on the agenda, same string in the tab title."
+      [:indent 12]]
+     [4044
+      220
+      "      ;; The live lane. The stream is opened by an element inside the page rather"
+      [:indent 12]]
+     [4045
+      221
+      "      ;; than on <body>, because page-shell takes no body attrs \\u2014 data-star-init"
+      [:indent 12]]
+     [4046
+      222
+      "      ;; works anywhere, and this keeps the shared shell (and the auth lane's"
+      [:indent 12]]
+     [4047 223 "      ;; login page) untouched." [:indent 12]]
+     [4052
+      228
+      "      ;; The hero SELLS the event with every fact we hold (Gene, 2026-08-09):"
+      [:indent 12]]
+     [4053
+      229
+      "      ;; kicker, the full marquee (name \\u2014 city \\u00B7 dates), the organizer's pitch"
+      [:indent 12]]
+     [4054
+      230
+      "      ;; rendered as markdown, then the practical facts in one quiet line."
+      [:indent 12]]
+     [4057
+      233
+      "       ;; Plain title \\u2014 the highlighter mark read as \\\"a weird yellow bar\\\" out"
+      [:indent 13]]
+     [4058
+      234
+      "       ;; here (Gene, 2026-08-09); the gesture belongs on the create page only."
+      [:indent 13]]
+     [4084
+      260
+      "        ;; Every debounced keystroke posts the WHOLE form to the draft endpoint."
+      [:indent 14]]
+     [4085
+      261
+      "        ;; contentType 'form' (this Datastar build serializes the enclosing form"
+      [:indent 14]]
+     [4086
+      262
+      "        ;; as urlencoded) means the draft params are spelled exactly like a real"
+      [:indent 14]]
+     [4087
+      263
+      "        ;; submit \\u2014 one vocabulary for the stash, the prefill and the 422."
+      [:indent 14]]
+     [4088 264 "        ;;" [:indent 14]]
+     [4089
+      265
+      "        ;; :novalidate is REQUIRED, not cosmetic: Datastar's form path calls"
+      [:indent 14]]
+     [4090
+      266
+      "        ;; checkValidity() and would pop reportValidity() on every keystroke into"
+      [:indent 14]]
+     [4091
+      267
+      "        ;; a half-typed type=\\\"url\\\" field. Validation is the server's job here"
+      [:indent 14]]
+     [4092
+      268
+      "        ;; anyway \\u2014 it is the same code the 422 uses, pushed down the stream."
+      [:indent 14]]
+     [4106
+      282
+      "         ;; The import box + speaker fields live in an addressable block the"
+      [:indent 15]]
+     [4107
+      283
+      "         ;; Sessionize import morphs over SSE \\u2014 see `cfp-about-you`."
+      [:indent 15]]
+     [4110
+      286
+      "         ;; No disabled ghost buttons and no roadmap talk at the moment of"
+      [:indent 15]]
+     [4111
+      287
+      "         ;; maximum trust (Gene, 2026-08-09) \\u2014 one green act, one promise we"
+      [:indent 15]]
+     [4112
+      288
+      "         ;; keep on the very next page."
+      [:indent 15]]]}
+   {:file "src/cfp_scheduler_killer/views.clj",
+    :after_file "src/cfp_scheduler_killer/views/review.clj",
+    :columns [:line :after_line :before :after],
+    :lines
+    [[1759
+      685
+      "     ;; The scrubber rides the DEV STRIP at the viewport's foot (Gene,"
+      [:indent 22]]
+     [1760
+      686
+      "     ;; 2026-08-09), not the working surface."
+      [:indent 22]]
+     [1762
+      688
+      "     ;; The board is the one page that streams. data-star-init opens the SSE"
+      [:indent 22]]
+     [1763
+      689
+      "     ;; connection; everything after that is the server pushing HTML."
+      [:indent 22]]
+     [1876
+      722
+      "      ;; TREATMENT B, \\\"Basecamp\\\" (Gene ratified 2026-08-10): the proposal at a"
+      [:indent 23]]
+     [1877
+      723
+      "      ;; comfortable reading measure with the speaker in the rail, and the"
+      [:indent 23]]
+     [1878
+      724
+      "      ;; committee as a full-width THREAD at the page's foot \\u2014 you walk through"
+      [:indent 23]]
+     [1879
+      725
+      "      ;; the talk before you reach the room's opinions. The geometry is the"
+      [:indent 23]]
+     [1880 726 "      ;; anti-anchoring." [:indent 23]]
+     [1890
+      736
+      "        ;; Rendered from the SNAPSHOT, so this reads exactly as it did the day"
+      [:indent 25]]
+     [1891
+      737
+      "        ;; it was submitted even if the live form has moved on."
+      [:indent 25]]
+     [1903
+      749
+      "                                ;; The raw paste, verbatim and visibly so."
+      [:indent 49]]
+     [1908
+      754
+      "       ;; EVERYTHING we hold about the speaker, labeled (Gene, 2026-08-10:"
+      [:indent 24]]
+     [1909
+      755
+      "       ;; \\\"all the speaker information \\u2014 especially LinkedIn\\\")."
+      [:indent 24]]
+     [1945
+      791
+      "      ;; The conversation, at the artifact's foot."
+      [:indent 23]]]}
+   {:file "src/cfp_scheduler_killer/views.clj",
+    :after_file "src/cfp_scheduler_killer/views/schedule.clj",
+    :columns [:line :after_line :before :after],
+    :lines
+    [[2644
+      179
+      "        ;; The loud half of \\\"withhold, loudly\\\": conflicted sessions leave the"
+      [:indent 25]]
+     [2645
+      180
+      "        ;; public agenda/exports, and this line is why nothing vanishes silently."
+      [:indent 25]]]}],
+  :unexpected_paths nil,
+  :retained_vars [],
+  :stale_references
+  {:count 0,
+   :sites [],
+   :expected [],
+   :scope
+   {:roots ["src" "test"],
+    :files 47,
+    :snapshot_hash
+    "e974bc7e6ad6e4afda13e2a8188de8a08f32b495cb0c71b4bf70c9646caa7f9b",
+    :scan
+    "structural-qualified-symbols-and-requires; all captured Clojure files",
+    :excludes
+    ["strings"
+     "semicolon prose"
+     "dynamic resolution"
+     "unqualified unresolved symbols"]}},
+  :exactly_once
+  {:columns [:owner :destination_count :elsewhere_count],
+   :rows
+   [["->instant" 1 0]
+    ["->local-date" 1 0]
+    ["agenda-page" 1 0]
+    ["alert-rows-partial" 1 0]
+    ["answer-input" 1 0]
+    ["api-docs-page" 1 0]
+    ["block-card" 1 0]
+    ["board-page" 1 0]
+    ["board-qs" 1 0]
+    ["board-region" 1 0]
+    ["board-row" 1 0]
+    ["breadcrumb" 1 0]
+    ["capture-page" 1 0]
+    ["cfp-about-you" 1 0]
+    ["cfp-closed-notice" 1 0]
+    ["cfp-draft-status" 1 0]
+    ["cfp-note" 1 0]
+    ["cfp-page" 1 0]
+    ["cfp-public-url" 1 0]
+    ["cfp-success-page" 1 0]
+    ["chair-on-event?" 1 0]
+    ["checklist-item" 1 0]
+    ["committee-card" 1 0]
+    ["committee-page" 1 0]
+    ["comms-page" 1 0]
+    ["conflict-chips" 1 0]
+    ["coverage-bar" 1 0]
+    ["dash-days-left" 1 0]
+    ["dash-feed-talk" 1 0]
+    ["dash-recent-line" 1 0]
+    ["dash-rel-time" 1 0]
+    ["datastar-script" 1 0]
+    ["date-fmt" 1 0]
+    ["datetime-fmt" 1 0]
+    ["day-tab" 1 0]
+    ["default-end-date" 1 0]
+    ["default-start-date" 1 0]
+    ["dev-strip" 1 0]
+    ["edit-form" 1 0]
+    ["event-dashboard-page" 1 0]
+    ["event-dashboard-region" 1 0]
+    ["event-details-page" 1 0]
+    ["event-marquee" 1 0]
+    ["event-resume-path" 1 0]
+    ["event-setup-done?" 1 0]
+    ["events-list-page" 1 0]
+    ["example-location" 1 0]
+    ["example-name" 1 0]
+    ["example-website" 1 0]
+    ["exports-page" 1 0]
+    ["face-pool-size" 1 0]
+    ["favicon-data-uri" 1 0]
+    ["fb-post" 1 0]
+    ["fb-tags" 1 0]
+    ["field-error" 1 0]
+    ["field-errors" 1 0]
+    ["field-form-fields" 1 0]
+    ["field-row" 1 0]
+    ["finish-cfp-bar" 1 0]
+    ["fmt-cfp-window" 1 0]
+    ["fmt-close-date" 1 0]
+    ["fmt-date" 1 0]
+    ["fmt-date-range" 1 0]
+    ["fmt-instant" 1 0]
+    ["fmt-mean" 1 0]
+    ["fmt-stars" 1 0]
+    ["fmt-when" 1 0]
+    ["form-builder-page" 1 0]
+    ["form-edit-panel" 1 0]
+    ["form-fields-region" 1 0]
+    ["form-grid-region" 1 0]
+    ["form-preview-region" 1 0]
+    ["header" 1 0]
+    ["inform-banner" 1 0]
+    ["inform-page" 1 0]
+    ["initials" 1 0]
+    ["iso-date-fmt" 1 0]
+    ["landing-page" 1 0]
+    ["letter-block" 1 0]
+    ["log-page" 1 0]
+    ["log-region" 1 0]
+    ["log-summary" 1 0]
+    ["login-page" 1 0]
+    ["mask-webhook-url" 1 0]
+    ["md-inline" 1 0]
+    ["md-lite" 1 0]
+    ["md-token" 1 0]
+    ["member-row" 1 0]
+    ["new-event-page" 1 0]
+    ["not-blank" 1 0]
+    ["notice-region" 1 0]
+    ["opinions-block" 1 0]
+    ["organizer-shell" 1 0]
+    ["page-shell" 1 0]
+    ["person-page" 1 0]
+    ["place-form" 1 0]
+    ["placed-card" 1 0]
+    ["pool-face" 1 0]
+    ["portal-draft-status" 1 0]
+    ["portal-page" 1 0]
+    ["portal-submission" 1 0]
+    ["private-note-block" 1 0]
+    ["profile-form" 1 0]
+    ["profile-links" 1 0]
+    ["relative-when" 1 0]
+    ["render-markdown" 1 0]
+    ["replay-page" 1 0]
+    ["replay-progress-bar" 1 0]
+    ["req-mark" 1 0]
+    ["room-options" 1 0]
+    ["row-controls" 1 0]
+    ["row-controls*" 1 0]
+    ["sb-group" 1 0]
+    ["sb-link" 1 0]
+    ["sb-out" 1 0]
+    ["schedule-grid" 1 0]
+    ["schedule-page" 1 0]
+    ["schedule-status-bar" 1 0]
+    ["settings-page" 1 0]
+    ["sidebar" 1 0]
+    ["slack-form" 1 0]
+    ["slug-status" 1 0]
+    ["sort-chip" 1 0]
+    ["sort-click" 1 0]
+    ["sort-th" 1 0]
+    ["speaker-input" 1 0]
+    ["speaker-inputs" 1 0]
+    ["star-form" 1 0]
+    ["star-histogram" 1 0]
+    ["status-chip" 1 0]
+    ["status-pill" 1 0]
+    ["submission-detail-page" 1 0]
+    ["submissions-page" 1 0]
+    ["submissions-sparkline" 1 0]
+    ["task-row" 1 0]
+    ["time-travel-bar" 1 0]
+    ["track-chip" 1 0]
+    ["type-label" 1 0]
+    ["versioned" 1 0]
+    ["when-fmt" 1 0]
+    ["whoami-strip" 1 0]],
+   :preexisting_namesakes
+   [{:file "src/cfp_scheduler_killer/exports.clj",
+     :lib "cfp-scheduler-killer.exports",
+     :owner "date-fmt",
+     :hash
+     "e95adb6b63197b185a6ad89ad30074fcf47ac14a7d46cecd02bcb317da5098d7",
+     :after_hashes
+     ["e95adb6b63197b185a6ad89ad30074fcf47ac14a7d46cecd02bcb317da5098d7"]}
+    {:file "src/cfp_scheduler_killer/server.clj",
+     :lib "cfp-scheduler-killer.server",
+     :owner "not-blank",
+     :hash
+     "00e5e44645131356e79837f201db9d66ed976f2ec8e4a46a1488f108c1a47acb",
+     :after_hashes
+     ["00e5e44645131356e79837f201db9d66ed976f2ec8e4a46a1488f108c1a47acb"]}
+    {:file "src/cfp_scheduler_killer/server.clj",
+     :lib "cfp-scheduler-killer.server",
+     :owner "chair-on-event?",
+     :hash
+     "14d74846af33dc7190c3d5c1209338dac886439448c1bb4781add20b6658c65e",
+     :after_hashes
+     ["14d74846af33dc7190c3d5c1209338dac886439448c1bb4781add20b6658c65e"]}
+    {:file "src/cfp_scheduler_killer/sinks.clj",
+     :lib "cfp-scheduler-killer.sinks",
+     :owner "fmt-stars",
+     :hash
+     "b1852a8c79dba30e3f560c62aa5df32fac9a4358f65739f691aa667b31c4b796",
+     :after_hashes
+     ["b1852a8c79dba30e3f560c62aa5df32fac9a4358f65739f691aa667b31c4b796"]}],
+   :passed true,
+   :scope
+   {:roots ["src" "test"],
+    :files 47,
+    :definitions "top-level named owners; declarations excluded",
+    :namesake_rule
+    "pre-existing file/lib/name identity and multiplicity excluded; caller rewrites may change its body"}},
+  :bodies_preserved
+  {:algorithm "SHA-256",
+   :columns [:owner :before_hash :after_hash :raw_before_hash],
+   :basis
+   "original owner bytes after authorized reference/alignment/promotion replay",
+   :rows
+   [["->instant"
+     "d485d19ad6da8a1c85b109dce26e0dc1bbbc575163e6528fb14f63e88d2b69c2"
+     :same
+     :same]
+    ["->local-date"
+     "3be6782b199d6ac8e8aedc1fe98d0ac66c9b9b8e66574a19bd2eb9e6e20ddaa9"
+     :same
+     :same]
+    ["agenda-page"
+     "40326b1aa06fb22d9c44c4f457eb882363da0cc269cfb1284eb0561de39b9de4"
+     :same
+     "6e4100da6145aaa425b720d911d14af8e2118302e3e8a6821b2546ae223894d3"]
+    ["alert-rows-partial"
+     "8f5bcc130571021b7af468bcbda2d9f81b687bf64bc77dab55e25a970c7b2595"
+     :same
+     :same]
+    ["answer-input"
+     "721f3cdd8d3661c340b6bcbd965c6fdb5f3373420d7cf3ffc42a85245b58362f"
+     :same
+     "7b6b4d48a29bef7e8675effd6298058bed83193f6a36d926a44b912cc60f4b43"]
+    ["api-docs-page"
+     "e5d9c827e287d136bb79241fa6c3399cd7646b24c7c006b571b19ede496d77c3"
+     :same
+     "44011cf8ff655a3df6ff1fdcdeadc60c46ef68ea4501ccd558dcb9c3c21bcd63"]
+    ["block-card"
+     "29bbce6ab47e7050cd2795815d08de120fa31c380af585dc574625d931abca06"
+     :same
+     :same]
+    ["board-page"
+     "c726da7d77c34dfeda0e7a25ccb55ef050bc66e39234e03bbd9bdd63261fbf02"
+     :same
+     "35771c8d8afd97652e3b4c0b9d7869c9d2ad8f42a4428dba56d994c624b4a886"]
+    ["board-qs"
+     "c0c98868e4c06e8b8fd0f0dd7a74eccd71b9689a1ee215235b3d3bd367929ea2"
+     :same
+     "8141e39b3cf1d8b9b0648883236aaf0a6d909b9b9c6afc232b2f3937bf4a2282"]
+    ["board-region"
+     "74920ae733233c4984d30d56749dd729b02be7b026f3bf356eeb8daa8b5adadc"
+     :same
+     "c3b5503badaba0eef7a075353b4c6f8f5ff2387bb25556a5638e02d460888b4a"]
+    ["board-row"
+     "5a4b84cada281b2e1cec5120cf6eb0aa444e66cdcbb541fae13e60c568a20c6c"
+     :same
+     "8a132b19ee33941c44d3680ceff20d7918ba233c28e68e6f1d7a0b35179eb840"]
+    ["breadcrumb"
+     "07914d3610adac4228fbfa073481ec7cf0aeef88ec3fbe97d2523812f5ce9ff6"
+     :same
+     :same]
+    ["capture-page"
+     "47f284f0afbf690fc267920ef28cb50aab7ffef06749e5c4a2b9c11fc4d91396"
+     :same
+     "b27ffcea0b69518d5dc96357d64b9fa7de08add56748c0a16d85fa99bc326260"]
+    ["cfp-about-you"
+     "0b4bec12b66d3bd9f37c8f8c52013d1d35bd2469ccaaa026bc5794ef138c912f"
+     :same
+     "15c142255ec51f666d041eaaadd3eda64de61d45fe1a21e2b84d5d7a707f6300"]
+    ["cfp-closed-notice"
+     "d3cb494c7903942b2885d28e1f9f3bb41f36fee1395757ec71babf07a4e39d3f"
+     :same
+     "7dcff8df981d188c7038e31a6527ef932a65c4751c2d9dfde4875bd6ed5ec162"]
+    ["cfp-draft-status"
+     "956c208e41fee2d18e966c380f3c79aa1ca44b7f054fd1c9943ea46df95a0983"
+     :same
+     :same]
+    ["cfp-note"
+     "73c9f52ac75e03059a06c97de44c340372a4de2a0aef6c4725315b08ed0bc4b3"
+     :same
+     :same]
+    ["cfp-page"
+     "54ec8a8017885d25d5a53f91e55a6ecdb60ac2db7dd84fdacadfe9b6bb3f2ea2"
+     :same
+     "9b9b8e2c8b9e32bd6109ef1918c713477d88b4833127c8fb2c89f11a5292cff7"]
+    ["cfp-public-url"
+     "c74764218e004c497c8fb2f8bebccf235fac5c1f55e2801658918e4236e0f967"
+     :same
+     :same]
+    ["cfp-success-page"
+     "00e8aae797bacb02a6ba6ea1c7423c961f3f2cb91e3736470cc5d32722e96784"
+     :same
+     "88dab82959755451ead0a68e025f1a9c7e4c368cdfaddaccb45cf7599cee956f"]
+    ["chair-on-event?"
+     "ede5f34d6206c25212a542aa215d902b382728c28122d09080da74aa44249cc1"
+     :same
+     :same]
+    ["checklist-item"
+     "3d7f081b77b7e30f1c068ec80bc95e48114afffba5c8ba1fe29a834edc78bdac"
+     :same
+     :same]
+    ["committee-card"
+     "14c053793d654ab6dcc9235fda7575e08681108314390345d5d7ea8b5b2d5ad3"
+     :same
+     "ca76b2e997d9f53908aefffa8bff897b11535407a4628ff88e58fe2627647167"]
+    ["committee-page"
+     "a6e42dd94db3301060e738178f57f760b8526de9d6ccdb9237652c9e26232b3f"
+     :same
+     "826dc67758515b9ef480d196d12697233f4fd85cbecf0f1c4c4bb59711a093d9"]
+    ["comms-page"
+     "71a1480c33ee1ead331ce9e2a639140b034b23a2de434d2faca7c1499159f0c6"
+     :same
+     "55e78260ef1cfa83aafc846be252deee386533d0f4498626a055cf0d86d2bbbd"]
+    ["conflict-chips"
+     "398fbe42621a660c5a4790ffe16caf06b0fc0fae7275a61faf111a43d1b85344"
+     :same
+     :same]
+    ["coverage-bar"
+     "121e6f879872e8784b823aa23c9aee8160cc13a7851ae9f66b0382d8ce99b240"
+     :same
+     :same]
+    ["dash-days-left"
+     "b4f0b4075887892fd62480432cd72b8a7698b33ab85f879c669a6ed40014bb5a"
+     :same
+     :same]
+    ["dash-feed-talk"
+     "a17143fb22d471f7a0a9306920acd7461018b5de0d9dba38a62b31138b60a40d"
+     :same
+     "2871f5e00f8dbbd23be9aaab01fe8a42ba13062ec3d4a63d722761eb860136e7"]
+    ["dash-recent-line"
+     "f9dd906a251d863fa8199a3cd7e9f087f7d8c429b84249d13e07a604d2e72200"
+     :same
+     :same]
+    ["dash-rel-time"
+     "bfd8f64903d7f880e74c45b324d4c5799cd0a6a8c6ca85c24e2a17ca559f74c7"
+     :same
+     :same]
+    ["datastar-script"
+     "ee9b68e339320065cd9b6f52662b63475ec56f5fb8b90e53a088011d31597ab4"
+     :same
+     "664fbdcc809bfc06ad88469e75d5245e108beb4f271c3cace4e49072912c380b"]
+    ["date-fmt"
+     "e95adb6b63197b185a6ad89ad30074fcf47ac14a7d46cecd02bcb317da5098d7"
+     :same
+     :same]
+    ["datetime-fmt"
+     "6dd59dd14be52eca379b42651f25df5b337f3406057f02aaa4e2d3b385bae163"
+     :same
+     :same]
+    ["day-tab"
+     "21dcf37cafd8d758a4893fb311f6edc3758f840d3b895a7ffc8adf0618f7f7ac"
+     :same
+     :same]
+    ["default-end-date"
+     "1f5c3d8c07d271ef51e8b17df1f80d75e2fa2bf6b86eaf727c9b5afaad4f1569"
+     :same
+     :same]
+    ["default-start-date"
+     "401d0dbccfca2bce912c9e3199e7e01892dd0922ba658a54a8b36d721c488ffb"
+     :same
+     :same]
+    ["dev-strip"
+     "cd065d24205cd14287e24fee7eb53b26bea8ae2f59d62498f58be1d6b21d0547"
+     :same
+     :same]
+    ["edit-form"
+     "e7f208f74b013513dffc93d5dce31253bbc5be74a18b10156146d13822d9c4d0"
+     :same
+     "2b5a228c9f543d1fbac7c9ca145020ade602155b32e652d3761f9ba1bae6f431"]
+    ["event-dashboard-page"
+     "797f8d63310f12bfd747c8324be5874f16ee06fcdbecdf7adda4722558c27b23"
+     :same
+     "618a5a35568021ee9b952e62d58f39daa386db08ab24c3d6c9dfb3d34a7428ed"]
+    ["event-dashboard-region"
+     "7c4d4c79ebf0097fe6ee503df3499d8abc4f22e58590505f85b27381021a5876"
+     :same
+     "436b16122ef378bec898cf8a2bcad12791e567816dae116f223c0f0ed33bad77"]
+    ["event-details-page"
+     "5aef1f5a3dc205bd56d74b13d2dc3b346f459b95aa92d2b14b8b2cc18d213d79"
+     :same
+     "5f5b2a739418fd777aba33760c9df04275cb574a31f7d627841551e396fef3d8"]
+    ["event-marquee"
+     "81ab3a9ca626c2fcec3aae5a5126e7d8cce57c2523fbca647ae2a074c0e4321e"
+     :same
+     "b06d321b9655b532efcacf0b4b67542ea4cfad428a7348e56bd463dd9e2e044e"]
+    ["event-resume-path"
+     "377f4a2fffe5ba1539df277ff238baff9c4e872670f41d7cb20fd422c69db633"
+     :same
+     :same]
+    ["event-setup-done?"
+     "55388b6f79b83de8eb9665c029bf2e144fffa6f98d282bfa2fd46f52b0b47daf"
+     :same
+     :same]
+    ["events-list-page"
+     "1b381ae905ed00c19edc097a478ed889e6da8a5974147beda01c46b352ed427a"
+     :same
+     "e79b0715da271a1dddf247c13e79003e980048168a74c8b94dee375d07620643"]
+    ["example-location"
+     "db9221d385f88089d28aa9b243dbdd1136b4a2cc805ccbc02e851bce8f7900f6"
+     :same
+     :same]
+    ["example-name"
+     "646b964e647c6b6f47abcacfd3e02425f9346ba16f9118c8ae868b1fc266a36a"
+     :same
+     :same]
+    ["example-website"
+     "53beade7106c9e1cbd8cbdfc3719bcdf50b5461220fba32880058fe613922372"
+     :same
+     :same]
+    ["exports-page"
+     "60388c6d1a361acf8052b019ee2eda120cc540d8b2b48285ed1965dd6707df2d"
+     :same
+     "feaac3d6fe290e0d4d78ff4b1203045ae1e548cc0e45f52f71f19b9f4c62d374"]
+    ["face-pool-size"
+     "db5a3d61c7797394278dd77a2b55c2dbeee39ef372dfb85fab948387ec798a7c"
+     :same
+     :same]
+    ["favicon-data-uri"
+     "282d9ad6d47ff25816766674b36dee4deb6531916e0966d9804a171e22604d01"
+     :same
+     :same]
+    ["fb-post"
+     "1d23b1e540c4337dfbb681be5f4f436df06deaedea619d3ecf3871798b476c3f"
+     :same
+     :same]
+    ["fb-tags"
+     "925c502f175cbf74741bf4b48d3f20d8dcbc6daf4c4a16dffb5b9ebadc5299bd"
+     :same
+     :same]
+    ["field-error"
+     "32e27bacd9bb84041b356bd264c1aeee78b1426a649dde68144acc6b348ae0a8"
+     :same
+     "0329d6b64724522b2e04eccb0fc968db76b1be8bde6c64aa66519cf0bede786b"]
+    ["field-errors"
+     "05d016605bcd07090cd09a64dc821a28f5ccb2da7d2f90e710c4c2c0dd19d8d6"
+     :same
+     "b308e4fb38fed964137c899fd05ea37d08afb961be0745bd91eaaf422e602bf8"]
+    ["field-form-fields"
+     "4117ec13ad4ce8e9a4e937f7b8ad5f364ef01be12579119fc6bc7181ff39dbc2"
+     :same
+     "39133ef479ac4919ceb20442a9a6d862bd446c2b066e10a74f220114ca55bcec"]
+    ["field-row"
+     "2998e5fa7262c6777df7cd5c38e11cdcaba884c2965a7f35cfde2bc3bb6d49ac"
+     :same
+     "b8fc2ca8cb05c6f22f65117a768085e5890b2220b2708f489a3d0fdad968c121"]
+    ["finish-cfp-bar"
+     "4e7892680dc0009670623d555eb4b743c29c9907bf5636934a4404def8e3b665"
+     :same
+     :same]
+    ["fmt-cfp-window"
+     "d1e831cb5e88b4d7e30c86733122bc23809bf8fd88e275e996dc4e6906fe47cb"
+     :same
+     :same]
+    ["fmt-close-date"
+     "2c2f997af260d24964cd6fe619a51a35ebbb2dbff71f0db11b7d9d11d0a5d4c7"
+     :same
+     :same]
+    ["fmt-date"
+     "9dfeae8a237a34b9b1d76d620d9c2836078dc197682b2e8ec3aa0ef9f5c92012"
+     :same
+     :same]
+    ["fmt-date-range"
+     "5cce56227b99a1236b11c952c76b3b907159658fa6af3ab00c635ce6c710bea2"
+     :same
+     :same]
+    ["fmt-instant"
+     "514cd561a9221795effe8df5588ccbaccc686d7f276eb87728163ff1a517faec"
+     :same
+     :same]
+    ["fmt-mean"
+     "f6d0472f9682b46301af3f19546a6a8ba58fd546ec8ddefcd512e16f070c0b6c"
+     :same
+     :same]
+    ["fmt-stars"
+     "ddf50299fadae72d6b09e51f377e1a1c6d530ed2dc027ab85d8e71c82b1a90bd"
+     :same
+     :same]
+    ["fmt-when"
+     "6073810316d9e95cce94f240476a6e0a4f61d410507d7a106b2a1c1bb80c372d"
+     :same
+     :same]
+    ["form-builder-page"
+     "bb2c4e1baad08372135b8ee621ad72c9376d1a67f070b57af0ef1c6f031aacd2"
+     :same
+     "6b0d96c0c67263aafb32d73e27699ba2b39a134b8e8a575d126791257e68a26e"]
+    ["form-edit-panel"
+     "808d73e614e10a6fcec816e45547cd9e28b4a43b3714bb760a7b1a5e4641d33c"
+     :same
+     :same]
+    ["form-fields-region"
+     "16672b2672c21de4313cb1655442a561de887bda19cfc0e8564a07f5135430fc"
+     :same
+     :same]
+    ["form-grid-region"
+     "c99052c1a7a5dd4198fa5e87a947a52a70c9eb64e0404468084f402f65e43254"
+     :same
+     "ff5a234ea703fd920bbf3390a4c7177c6355cdfc2f2a5de95b51948a265c0b97"]
+    ["form-preview-region"
+     "4ac5dc7cd3ab5e9271d96749e52de661ceeae8be51ead2e92a48b4e0934bcca3"
+     :same
+     "98f03210155288518c67049ad2b915dce631dd9011e79975c945703e049085c9"]
+    ["header"
+     "4ffb6b9774447289ce2a18fb235f5d421882a2fdb086b060112ebe0b3cbf530f"
+     :same
+     "c3910aee41c92c85ddf7cb01e41dbce0ce944e293ea66d271f1a1cabb532bad0"]
+    ["inform-banner"
+     "2a58dabc37509bd28df6826920bb385835ef9c087c00a25030ef68171bf9b9d9"
+     :same
+     :same]
+    ["inform-page"
+     "8cf00d4a0cc75db43a46a8ce189d8c54f50720f802b1b12652a43ec75e6b171d"
+     :same
+     "f40291d47b0b4fd6c6863965f692139e0ec1e423d36b75a9efd01567653f7b48"]
+    ["initials"
+     "208d8217e34adab718265a47421f25a8c871c143afb70990b6c33168607d073c"
+     :same
+     "aa07a6b44a493c0df0d00cf82cf55212d26d7fe1f1a2df1329fd8a482c7dbff3"]
+    ["iso-date-fmt"
+     "f21f71125d168b0321dffb062ba6d72bf335b5f42bdb6a9a0746682920351750"
+     :same
+     :same]
+    ["landing-page"
+     "1f135bcf5f4f86ce05f49cd0af8611474d6783822d0a2f9f1558619d411cb229"
+     :same
+     "327949b3f4882e19f311a29c03b4efe1c24e3e990fab1644559b0b6079e7de41"]
+    ["letter-block"
+     "247cc761ccc10a7eff12fad4e42c0534587211e6bce15fefca8dba52d83243c5"
+     :same
+     :same]
+    ["log-page"
+     "0b5ba0177356410a1ee28ddbf41cfd26840ddd9362baa90123f3873d045b0a74"
+     :same
+     "d56ed362704eeaca78ee270dfbcb20f654b4b835134dc0299f0cd829488aba93"]
+    ["log-region"
+     "cdd68aa1e994de89193423f5ceb639c4bf11e615bfba611c9fbcb5ae1a7c0f87"
+     :same
+     "7db81611e1db6e17eab2b930d3f35342854763557ad6420d2039a41b4286b81a"]
+    ["log-summary"
+     "afcc9723ac6e1d248104d02598cc3b7806c492c1e4e2dc928f5af65898baeb50"
+     :same
+     "313049eee8785f760df2d29715599cc0758d849f56d6fca93b39a2d5941fc6b8"]
+    ["login-page"
+     "c5ccd384470238d675f1b8e47dfa76da8a95b88b94dbc6fa7a057a86287710b8"
+     :same
+     "d6d75a4560b26865d43baf54c21cb77139f57729f572ce8ab91bedb944a20aee"]
+    ["mask-webhook-url"
+     "37405428ec7cf843745dcff76c0f1929d690c3ee6b3736988a60e42408cc22e7"
+     :same
+     :same]
+    ["md-inline"
+     "72dde4c85921436f5e7f68372c14497c59b4983da5a96542c1c8e1c1e1fb3877"
+     :same
+     :same]
+    ["md-lite"
+     "d7c1419de133e177fc9185fd46e2f0f6ffcac8e884ad5babbf2c887d642dafc7"
+     :same
+     :same]
+    ["md-token"
+     "f89903fe864b8c25dd511b03a7b5c13794a1655ed23460f815a8975b84de6ce0"
+     :same
+     :same]
+    ["member-row"
+     "073802195cc08b4419cbb4b9cb5cb1d77a3bb4baa9635be93cdb72f3d4d8be22"
+     :same
+     "9a1348843ca77c956cec4a1e605e27c02e8f41843c56e09b2a26b21499fecd68"]
+    ["new-event-page"
+     "8286ccc96671afdcdb6c91762c15f001ee78236339d95f46caf12f9ec5c3a5bc"
+     :same
+     "9c6cbdd1fd41ddad7dfe23b54dc053173264ee0e5f13958d60f0d7850e2bb43d"]
+    ["not-blank"
+     "62c75d1815f34919d5543ec5fe048a7c5d02cd4f6895b53cc6f6e77e3c6c2c7a"
+     :same
+     "00e5e44645131356e79837f201db9d66ed976f2ec8e4a46a1488f108c1a47acb"]
+    ["notice-region"
+     "4e63a4779c012f1f9e710649695daeb2bbc701dbf86d5ade8b2ec22832c0d2df"
+     :same
+     :same]
+    ["opinions-block"
+     "8d6d07d594f0141ec56941f6a7071e71273ca8328a0970c12ee869e2b6771c94"
+     :same
+     :same]
+    ["organizer-shell"
+     "90f2c96b6d551593ea595135f565db63f3fc88e54e0ded03ed9a6b88b0cb9c04"
+     :same
+     "ca503cf22e8ffd913ff7158bfa3354db5c48629598712b8d0e2582110320fc78"]
+    ["page-shell"
+     "d2e6b0a0a1dad9586c73e26546700271a0f3aa21a81895c48699f5c497e9dc84"
+     :same
+     :same]
+    ["person-page"
+     "757ea15c942b67fc9152e46dfb89742ccc9f9815b1883f428f065e683b3a9cfe"
+     :same
+     "76739d120110712455d30e506b8798dcbdc09cb0af6202cff49bf6862ceb775c"]
+    ["place-form"
+     "19a811e1470c96b9a85400b0b02bcb1031aeca339d60cb70852faf41bd509ef9"
+     :same
+     :same]
+    ["placed-card"
+     "608f514c5a37220505df1229eaf18ab7a42996dc92567ecae8d2c5bd8ce3c9f7"
+     :same
+     :same]
+    ["pool-face"
+     "f89fee7f32adbd762b992336dcd1c689feaa2eef14ced5c1086c94aebd92f415"
+     :same
+     :same]
+    ["portal-draft-status"
+     "25e5c3505a26974c2edce96ac05d7e65677808be4e24ee3ee66b4070bd39db2e"
+     :same
+     :same]
+    ["portal-page"
+     "db757a3d060f96a3e677c91847438671290d45648866228d4409d534de3f00eb"
+     :same
+     "c9825e13cc1a42e1a05b7b84a2673940b02be5ec5aedbd39e67da08c78f0eb96"]
+    ["portal-submission"
+     "3e5cf714713c8caec907bb428143785b0358a42cbbabee3c34c3f5d65732da54"
+     :same
+     "f6ed81673d325086e54226fb0f6432ed74d172f56fec03d5bde1151114530150"]
+    ["private-note-block"
+     "3f120a1044a0051640702ad4e04d369fe108b38f7f28ecbcc79038acd5fd3078"
+     :same
+     :same]
+    ["profile-form"
+     "0efd02e6916e318817e17268a1a6fbf9fed4e0237d4cbb934e4c2280e7b2a66d"
+     :same
+     "541d0c47130c72d1354de5ef2e8ca9dbb2c0864baf352059c861dc240262fb7f"]
+    ["profile-links"
+     "ec32973a5a5992d54e8fba49cfde84c5296dc03839a3f9846149f051e92a2764"
+     :same
+     "ae04adab404ee4ea844df3de09689c24057037bcd33aee4b3f055dae71f4dc6a"]
+    ["relative-when"
+     "e2fb3cb8101c9528e71b335ac631d03a4d40236f93db0730d90c737f44427f99"
+     :same
+     :same]
+    ["render-markdown"
+     "1022abfe8efd03316cfd11ec3fb0d7ecdcbb4160dcc0f0bec11eef85bf5177f2"
+     :same
+     :same]
+    ["replay-page"
+     "f377a8af6cec59143da8b5171983db97bf8b424afa6f682b6e4d68fe15568517"
+     :same
+     "50a5cf53d93865416bc09f86dbc9ac7432359aeee1403e69b1988062bf1d2802"]
+    ["replay-progress-bar"
+     "04817a156e8c7275a85785001b2386cd99d4b5e149e9d9ec907b0a66273fb835"
+     :same
+     :same]
+    ["req-mark"
+     "3bc97405819d43eaf2ccbe1603e127860a44667fed4845740583222542f5912c"
+     :same
+     "d44f46a1e24d1c851dbfe8a7d0041716a94432828d0f7a26668088d6e465bb2e"]
+    ["room-options"
+     "ae1e37a3cb6bd1ca6440162ae169d4ab657e9e6e17c37879e6a45fa5ba8d23d2"
+     :same
+     :same]
+    ["row-controls"
+     "a29be56aec41b1371c169d4a54bfcf943fbe8615bb35cb138446df15eeea86e3"
+     :same
+     :same]
+    ["row-controls*"
+     "85a619d369ac2183dee8f9e0744a1a04e319e452de88e95405d2961f5383702e"
+     :same
+     :same]
+    ["sb-group"
+     "100276d345e4e6d49e82d108dd4ee8f34f52b61ee41137c67e8a7a2194f318ab"
+     :same
+     :same]
+    ["sb-link"
+     "513982bbab8aef5edff3b77ec49f1475067791cd7b098ebcffc253d6e580955a"
+     :same
+     :same]
+    ["sb-out"
+     "e6ca5878779398d9b3d03e6b12e87593b0d277087b0b98d8c5d2e30e5502fc30"
+     :same
+     :same]
+    ["schedule-grid"
+     "98ec5f93f02134d77c41c4896d6dd37f37c3296f7be99bf7325b74b44dba2d51"
+     :same
+     :same]
+    ["schedule-page"
+     "6542c88ed881131014d0c99c89fa65f4d06074ad175aca350efa4d36282f3f69"
+     :same
+     "8041ccd8483a028df32bba6b5a2a293338739dea1c22c567c96f151899fa14b4"]
+    ["schedule-status-bar"
+     "4f8b7132d000a61c82899833275adbadf83c7762ae4e43083c2a870dd2eb467a"
+     :same
+     :same]
+    ["settings-page"
+     "9b979db2f3e2f9eb6f0d20ce7e2625d242a66a9351a5e933142b511227a21575"
+     :same
+     "62baf04e7bbff4548c94041c5e917ce5978863adf780f31c6794625a0580fe95"]
+    ["sidebar"
+     "51baf9c249de0c17bbcf9e7e16600fac430d04eb4df86713f9936691731dd6fb"
+     :same
+     :same]
+    ["slack-form"
+     "502377e57a76af7909791abfb8ffe4cbdce4d210d58d9dfdf8acb7fb42ed74a0"
+     :same
+     :same]
+    ["slug-status"
+     "e235e372afa2fc3b074078d8aca347bfb0ae225143946bcabbd527609324d109"
+     :same
+     :same]
+    ["sort-chip"
+     "93d42d1935bded28c8f48b327709d512352bb61447de176e6848ccb4fed0abe1"
+     :same
+     "577d5b832d1a068b93fe8c9c95d6cc1e41871befc82ede3004398abffc3e3561"]
+    ["sort-click"
+     "f3fea95f464fedddd75cb8b7fea4de34ae05ef5f7635217c0993b5f4890dbdfc"
+     :same
+     :same]
+    ["sort-th"
+     "143dd9577f0c09a64b66faa70a5955889bfc9bbd97e6d0dacd9126a79b1bf499"
+     :same
+     :same]
+    ["speaker-input"
+     "21d83ad103ba32085027772df17107e50af1fda6e78dad772676559b1a51bb95"
+     :same
+     "18c2a46c56ff2df477c961677a4653a3723c74d7f2e8256e5d7e074597c47f76"]
+    ["speaker-inputs"
+     "6f8eb53af6617b6ffea918de41c94765a1127a493c036c1fedf6046da6e4f943"
+     :same
+     :same]
+    ["star-form"
+     "5764b06eaff1cd6a352c7b5f0e72405d8e226f6e7b61c277019c53b3fa600d1c"
+     :same
+     :same]
+    ["star-histogram"
+     "9cfb2462af9239592cda36e542b0ded5f71231ad6d08e39062db54055f8de357"
+     :same
+     :same]
+    ["status-chip"
+     "c6e74c74125f846a517d6c786341c361cccf7813845e7c07d9dc301b19651160"
+     :same
+     "01c54ad38e75cb45508d23a766c48fa619a8d8e8cb5bd3cb8dbe1ea3e87611be"]
+    ["status-pill"
+     "12cc288ca17809e54bf5eb29ed558ce1fe6cbdcdba89f28f69dc8a3a98f2ca9d"
+     :same
+     :same]
+    ["submission-detail-page"
+     "aaa512c9f966b5d3ea8efbb1b4e0ca454ed49de35f1aed4fc04f5702db266f57"
+     :same
+     "2377ef5fa65f7b661a760f4d9d3f7f73b495764ea6e20e79f97c71424ce4aebc"]
+    ["submissions-page"
+     "b55bb4fa08be987478ee0da0359b4de5cf1b385c1ee6f1be85805d8cdd5efd9e"
+     :same
+     "b052ce11965cdcba7bfee6ade79fe2a973da20825745b5ddb8ab8711bd90dfb5"]
+    ["submissions-sparkline"
+     "4071de9c6fb3bf737c77baf47826078a24079e122de11540fc83de1334a96ca4"
+     :same
+     :same]
+    ["task-row"
+     "afbdac8a145afadfbcfa882461c71482bbc0fa06e6360e8b0fe3b77d2213f823"
+     :same
+     :same]
+    ["time-travel-bar"
+     "97bf319e6422b1a762e2da921ea9e900b179087a698765b227448d5d03d90242"
+     :same
+     :same]
+    ["track-chip"
+     "d489acd3645d5ff7c151899805569583106209eef103e16600995c867c5b177c"
+     :same
+     "1dcfff99938610ad90e9b5eba0b47e1235148c079db0019ef7b47c9e021bd037"]
+    ["type-label"
+     "3e5a12c967a4cea9aba0f6bb1b3d6969859bd9c70cc6c4de558577177d0efb6d"
+     :same
+     :same]
+    ["versioned"
+     "521e31b7f5ea7d011cd0d57a654bc1feabde26a0a246e22509f112d0e14b846b"
+     :same
+     :same]
+    ["when-fmt"
+     "ffbc574bd57f2600c0ef1002eb94937a4bcf3c42afd68af20091baddcaa59c1c"
+     :same
+     :same]
+    ["whoami-strip"
+     "f8981b48e83785c09b8fda9de343b7c5509e83ebeab1d453daf1b80a0b24ff4d"
+     :same
+     :same]],
+   :raw_equal 83,
+   :raw_unequal 58,
+   :equal 141,
+   :unequal 0,
+   :hash_encoding {:same "this hash equals before_hash exactly"}},
+  :facades
+  {:forms [],
+   :expected [],
+   :unexpected [],
+   :policy
+   "no-new-forwarders; retain existing unmapped forwarding owners",
+   :scope
+   {:file "src/cfp_scheduler_killer/views.clj",
+    :expected_match [:owner :kind :arity_targets],
+    :scan
+    "def symbol/Var/partial/fn aliases and single/multi-arity direct defn/apply forwarders",
+    :excludes
+    ["macro expansion"
+     "arbitrary forwarding bodies"
+     "dynamic resolution"]}},
+  :comment_after_encoding
+  "[:indent N] reuses before text after replacing its leading whitespace with N spaces",
+  :text_encoding
+  "JSON string content; decode by wrapping in double quotes"},
+ :graph {:acyclic true, :unknown_count 0, :edge_count 311},
+ :map_hash
+ "b3ac9adc5a060e6c080db9e4b8cb1d21fde589f9dbcc06036c97b3eea588b818",
+ :mutation_attempted true,
+ :next_call nil,
+ :ok true,
+ :operation "namespace_split",
+ :promotions
+ [{:form "answer-input",
+   :lib "cfp-scheduler-killer.views.form-controls",
+   :reason "referenced across destination boundary",
+   :reference_count 6}
+  {:form "datastar-script",
+   :lib "cfp-scheduler-killer.views.shell",
+   :reason "referenced across destination boundary",
+   :reference_count 2}
+  {:form "field-error",
+   :lib "cfp-scheduler-killer.views.form-controls",
+   :reason "referenced across destination boundary",
+   :reference_count 7}
+  {:form "field-errors",
+   :lib "cfp-scheduler-killer.views.form-controls",
+   :reason "referenced across destination boundary",
+   :reference_count 15}
+  {:form "header",
+   :lib "cfp-scheduler-killer.views.organizer-layout",
+   :reason "referenced across destination boundary",
+   :reference_count 17}
+  {:form "initials",
+   :lib "cfp-scheduler-killer.views.avatar",
+   :reason "referenced across destination boundary",
+   :reference_count 1}
+  {:form "not-blank",
+   :lib "cfp-scheduler-killer.views.format",
+   :reason "referenced across destination boundary",
+   :reference_count 41}
+  {:form "req-mark",
+   :lib "cfp-scheduler-killer.views.form-controls",
+   :reason "referenced across destination boundary",
+   :reference_count 6}],
+ :proof
+ {:tier :cold,
+  :status :complete,
+  :execution :synchronous,
+  :next_call nil},
+ :proof_pending [],
+ :prose_mentions
+ [{:file "src/cfp_scheduler_killer/server.clj",
+   :line 442,
+   :text
+   "   `views/event-marquee` the page was first painted with, pushed down THIS"}
+  {:file "src/cfp_scheduler_killer/server.clj",
+   :line 1772,
+   :text
+   "  \"Everything `views/form-builder-page` needs. `extra` carries the state of a"}],
+ :receipt_hash
+ "1e0bf88013fcdd7b7153b43d02f7e0855f6ad4a5ec22c407c175db01cb55e8a9",
+ :receipt_id "4ad19f20-619d-4dc1-ac9d-0f28aac509bd",
+ :receipt_path
+ "/var/tmp/forge/namespace-split-receipts/8a94e63f2ef8fae8306456f0a804d695ec6973b6bd6377a3380a919933f904d9/4ad19f20-619d-4dc1-ac9d-0f28aac509bd-receipt.edn",
+ :snapshot_hash
+ "45f5e72fb5d0402b03f8f9f01ca95516c2c2b5c31feeb4c13b42142095462008",
+ :source_retired true,
+ :undo_command
+ ["clj-surgeon"
+  ":op"
+  ":undo-extract!"
+  ":receipt"
+  "/var/tmp/forge/namespace-split-receipts/8a94e63f2ef8fae8306456f0a804d695ec6973b6bd6377a3380a919933f904d9/4ad19f20-619d-4dc1-ac9d-0f28aac509bd-undo.edn"],
+ :undo_receipt
+ "/var/tmp/forge/namespace-split-receipts/8a94e63f2ef8fae8306456f0a804d695ec6973b6bd6377a3380a919933f904d9/4ad19f20-619d-4dc1-ac9d-0f28aac509bd-undo.edn",
+ :unrequired_qualified_refs
+ [{:file "src/cfp_scheduler_killer/views/dashboard.clj",
+   :line 44,
+   :token "cfp-scheduler-killer.store/now-inst",
+   :lib "cfp-scheduler-killer.store"}
+  {:file "src/cfp_scheduler_killer/views/public_cfp.clj",
+   :line 119,
+   :token "markdown.core/md-to-html-string",
+   :lib "markdown.core"}
+  {:file "src/cfp_scheduler_killer/views/review.clj",
+   :line 421,
+   :token "cfp-scheduler-killer.store/now-inst",
+   :lib "cfp-scheduler-killer.store"}],
+ :verification_complete true,
+ :workspace_root
+ "/var/tmp/forge/claude-1011/-home-forge-src-worktrees-clj-surgeon-seat/cca23770-0634-4a43-90f2-9abfa918f2b7/scratchpad/cellc-replay-run7",
+ :workspace_status
+ {:checked true,
+  :command
+  ["git"
+   "-C"
+   "/var/tmp/forge/claude-1011/-home-forge-src-worktrees-clj-surgeon-seat/cca23770-0634-4a43-90f2-9abfa918f2b7/scratchpad/cellc-replay-run7"
+   "status"
+   "--porcelain"
+   "--untracked-files=all"
+   "-z"],
+  :exit 128,
+  :clean_except_proven false,
+  :unexpected_paths nil,
+  :error "Not a Git workspace"}}

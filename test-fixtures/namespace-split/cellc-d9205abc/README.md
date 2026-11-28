@@ -31,16 +31,100 @@ Files.
   `cfp-scheduler-killer.store/now-inst` in `views/dashboard.clj`, which `views.clj` never required);
   and the ENCLOSING round recorded `verdict: RED`, `exit_code: 1` and a witness-runner exit of 97 with
   unknown test counts. Read the oracle result as what it is: four oracles passed on a split whose load was
-  not run and whose tree was not clean. The four test callers are not frozen here. `exports.clj` and
+  not run and whose tree was not clean. The four test callers are now frozen here. `exports.clj` and
   `sinks.clj` are frozen only because they hold pre-existing namesakes (`date-fmt`, `fmt-stars`) that the
   receipt records; neither request names them and the receipt rewrote neither.
 
-Not here: the split's output tree. The receipts carry its hashes. Reproducing the result needs more than
-this directory: a worktree of curtaincall-cfp at `d9205abc`, the verb from `archive/astra/namespace-split`
-with `:workspace_root` rebound to that worktree, and the `split-unit` configuration the request's named
-cold profile expects, which `d9205abc` itself does not carry. `cc-oracle.py` reads its inputs from the
-old `/var/tmp/forge/plan2` paths and must be pointed at the new locations before it runs. The frozen bytes
-here are the inputs and the receipts, not a push-button replay. `cc-oracle.py` is kept byte-identical because
-the receipt pins its digest; note that it checks with bare `assert` (silent under `python3 -O`) and matches
-only column-0 `def`/`defn`/`defn-`/`defmacro`, so any future runnable oracle must fail explicitly and parse
-forms, not lines.
+Not here: the split's output tree. The receipts carry its hashes. The replay below builds a scratch
+workspace from these inputs and installs the recovered `split-unit` profile, which `d9205abc` itself
+does not carry. It still needs the archived verb, its analyzer admission gate, and the application's
+Java/Clojure dependencies. The profile passes the fixture's `cc-split.json` to `cc-oracle-replay.py`.
+This wrapper refuses optimized Python with exit 2 before reading inputs, then requires exactly one
+manifest-path literal before substituting the supplied argument and executing the frozen oracle.
+Missing or duplicate literals also exit 2. The profile clears `PYTHONOPTIMIZE` explicitly. The original
+oracle bytes and digest are preserved; the wrapper and updated profile have their own manifest digests.
+The oracle retains column-0 form matching.
+
+## Replay usage and result
+
+Run `bb test-fixtures/namespace-split/cellc-d9205abc/replay.clj <astra-checkout> [scratch]`; `CLJ_SURGEON_ASTRA`
+replaces the checkout argument. Self-test: `bb test-fixtures/namespace-split/cellc-d9205abc/replay_test.clj`.
+The scratch path must not exist and must be outside the fixture and donor checkout. Before copying
+anything, the runner enumerates every regular file and symlink under `source/`, including hidden paths,
+without following directory symlinks. Any path absent from the manifest's `source/` entries refuses
+with `unlisted-source-file <path>` and exit 2; no scratch or control directory is created. It checks
+every manifest digest in-process with `java.security.MessageDigest`, then copies only the verified
+`source/` entries individually, preserving executable attributes, rebinds the request's workspace, and installs
+`workspace.clj-surgeon.edn` as `<scratch>/.clj-surgeon.edn`. In the config, `{{scratch}}` becomes the
+scratch root and `{{fixture}}` the fixture directory; the commands remain `bin/kaocha unit --fail-fast`
+and `env -u PYTHONOPTIMIZE python3 <fixture>/cc-oracle-replay.py <scratch> <fixture>/cc-split.json`.
+The donor receives an explicit environment containing only PATH, HOME, JAVA_HOME and LANG when set.
+No SMTP settings, tokens or Python optimization setting are inherited. Frozen `mail.clj` selects
+dev-render when SMTP_HOST is absent and no workspace-local `secrets/smtp.edn` exists; the fixture has
+no such file, and the inventory check refuses an added `source/secrets/smtp.edn`. It attempts commit first. Only a typed refusal with both
+`mutation_attempted=false` and `committed=false` permits one diagnostic plan-only call. The output names
+each path and exit and preserves invocation stderr. Missing split facts remain `DIFFERS`;
+`created` compares the recorded count with request destination files present on disk in scratch
+and absent from the frozen source. A match reports `created same (20 destination files present on disk)`;
+a mismatch reports `created DIFFERS <recorded> <on-disk>`. Receipt destination counts are not filesystem evidence.
+Replay `unexpected_paths` must be a subset of `.clj-surgeon.edn`, `00SERVER-LOGS.txt`, and
+`test/cfp_scheduler_killer/view_architecture_test.clj`; nil means no unexpected paths. Accepted subsets
+report `expected-different`; any other path is named in `DIFFERS`. Exit zero requires all invocations
+to exit zero and every other fact to match. `request.edn`, `receipt-commit.edn`, and, if fallback runs,
+`receipt-diagnostic.edn` stay in a
+unique `replay-control-*` sibling directory of scratch, outside the inspected workspace. The runner
+prints that directory as `Control:`. Keep it with scratch when retaining evidence; remove both afterward.
+The diagnostic receipt never overwrites the commit-attempt receipt. A rollback or committed receipt is never retried.
+
+Round 2 additions, all obtained with `git show d9205abc:<path>` from the read-only rescue checkout
+`/home/forge/src/surgeon-fixture-rescue/plan2/build/round-sentinel-ns-20261025T070002Z-fx`:
+
+| Added under `source/` | Why needed |
+|---|---|
+| `test/cfp_scheduler_killer/{polish_test,forms_test,comms_test,views_test}.clj` | The four recorded test callers supply the 25 sites missing from the original fixture. |
+| `bin/kaocha` (executable), `tests.edn`, `deps.edn` | Exact launcher, unit-suite selection, dependencies and `:run-tests` alias. |
+| `test/cfp_scheduler_killer/test_helpers.clj` | The callers require the temporary-store fixture. |
+| `src/cfp_scheduler_killer/{auth,auth_google,committees,events,forms,inform,mail,notices,people,portal,replay,reviews,schedule,secrets,seed,sessionize_import,sse,store,submissions}.clj` | Transitive local namespace dependencies of the frozen sources and callers; the launch-only probe failed first on missing `auth`. |
+| `resources/letters/{accepted,declined,waitlisted}.txt` | The comms tests render decision letters and the template list; without these, `configured-send-test` handed the transport a nil recipient. |
+
+No other application tests, resources, build scripts, or cached dependencies were added. These inputs
+exercise the requested caller subset, not the complete historical application suite. `source-manifest.txt`
+covers every frozen input and the new profile template. The request, split manifest, and all frozen source files are unchanged.
+
+The fifth requested file, `test/cfp_scheduler_killer/view_architecture_test.clj`, exists in the rescue
+working tree but **does not exist in `d9205abc`** (`git show` exits 128). It is not frozen or silently
+substituted from disk. This is consistent with its being an unexpected path in the old receipt, but does
+not establish its provenance. That gap remains open.
+
+Verification on 2026-11-28 (replacement for PR 89, closed on round 3 for the unlisted-file rule):
+
+Real replay on donor `7b312f85` (the `archive/astra/namespace-split` checkout at
+`/home/forge/src/worktrees/clj-surgeon/sentinel-astra`), run by the surgeon seat on Anvil on 2026-11-28 outside any
+sandbox, with a decoy `SMTP_HOST` set in the calling shell: `Invocation: commit exit 0`; the frozen `split-unit`
+profile ran kaocha and the oracle green in about 9.3 s; `caller_files same`, `caller_sites same` (87), `created same
+(20 destination files present on disk)`, `destinations same`, `state same` (committed), `unrequired_qualified_refs
+same`, `verification_complete same`, `unexpected_paths expected-different recorded artefacts: 3, replay: 0`; exit 0.
+The commit-attempt receipt of that run is checked in as `replay-receipt-2026-11-28-anvil-7b312f85.edn` (evidence, not
+a frozen input; it carries the scratch paths of that run). A copy of the fixture with an added
+`source/secrets/smtp.edn` was refused with `unlisted-source-file source/secrets/smtp.edn`, exit 2, before any scratch
+existed. Inside Codex's sandbox the verb refuses because analyzer admission cannot write its shared lock directory;
+that is the only reason the automated passes could not reproduce this themselves.
+
+Self-test requires the runner namespace and loads the frozen sentinel receipt and profile:
+7 tests / 77 assertions, no failures/errors; kondo reports zero errors/warnings. All 39 SHA-256 entries
+pass. Runner plus tests total 150 lines, each under 120 columns. The checked-in subprocess tests run
+the real runner CLI against a stub donor for matching exit 0, nonzero-exit rejection and typed-refusal
+fallback. The stub returns refusal before any destination writes; the test compares the full workspace
+inventory and contents, including the installed profile, and checks that both distinct receipts survive.
+A pure literal-list regression reproduces PR 89's extra SMTP file and checks clean-list acceptance.
+The stub checks the complete environment allowlist, sibling request placement, executable
+copying and profile installation. Python subprocesses cover optimization refusal, missing/duplicate
+manifest literals, successful substitution and active assertions. The new regressions failed against
+the old code before the fixes. An additional default-scratch probe passed and verified that both
+control files stay outside scratch; the reported canonicalization failure did not reproduce here.
+These probes establish runner behavior, not a real split's behavior.
+The product gate (`make test-product`) on the merged tree is green on Anvil; the only failing target in the full `make test` is the known red bench-harness self-tests (OPEN-LOOPS item 4), unrelated to this fixture.
+
+Deferred follow-ups: real demo email
+addresses remain because the sources are frozen content; changing them would require a separate
+fixture policy. Architecture-test provenance remains unresolved as documented above.

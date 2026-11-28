@@ -1,0 +1,16 @@
+Subject: Your talk for {{event-name}}
+
+Hi {{speaker-first-name}},
+
+We aren't able to program "{{talk-title}}" for {{event-name}} this year.
+
+We had far more strong submissions than slots, and a decision against a talk is
+much more often about the shape of the overall program than about the quality of
+the proposal. Several talks we admired didn't make it either.
+
+If you're willing, we'd like to see you submit again next year — and if you'd
+find it useful, reply to this note and we'll tell you what the committee said.
+
+Thank you for offering your work to us.
+
+{{support-email}}
