@@ -473,11 +473,13 @@ chains. The [first-use observation](docs/observations/2026-03-28-first-real-use.
 records the failure pattern that led to `:fix-declares`.
 
 ## Install
-`bb bin/surgeon-footprint` prints a read-only registration and launch census; verify with
+`bb bin/surgeon-footprint` prints a read-only registration and cron census (piece 1); verify with
 `make surgeon-footprint-self-test`.
 The census covers `~/.codex/config.toml`, `~/.claude.json`, `~/.claude/settings.json`, `~/.claude/mcp.json`,
-`./.mcp.json`, `./.codex/config.toml`, user systemd units and the current user's crontab; system units and
-other users' crontabs are out of scope.
+`./.mcp.json`, `./.codex/config.toml` and the current user's crontab.
+System units and other users' crontabs are out of scope. Piece 2 adds launch units (loaded AND installed
+user systemd unit files, plus launchd), listeners, processes and the routing-block hash.
+The `command=` lines may echo tokens embedded in MCP args or URLs; review census output before pasting it.
 
 ```bash
 git clone https://github.com/realgenekim/clj-surgeon.git

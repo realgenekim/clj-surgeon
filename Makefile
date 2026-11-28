@@ -165,7 +165,8 @@ install-agent-routing:
 
 .PHONY: surgeon-footprint-self-test
 surgeon-footprint-self-test:
-	bb bin/surgeon-footprint --self-test
+	bb $(CLJ_SURGEON_HOME)bin/surgeon-footprint --self-test
+
 check-agent-routing:
 	bb --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.agent-routing check "$(AGENT_ROUTING_SOURCE)" "$(CODEX_GLOBAL_INSTRUCTIONS)" "$(CLAUDE_GLOBAL_INSTRUCTIONS)"
 
