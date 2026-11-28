@@ -57,7 +57,7 @@ none is consistent with netstat succeeding without matches, not evidence that ss
 Without the original command diagnostics, the exact fallback execution cannot be established.
 
 Piece 3 keeps the census read-only with no service connections. Tool order is ss -ltnp,
-ss -ltn, lsof -nP -iTCP -sTCP:LISTEN, then netstat (-an -p tcp on Darwin, -ltn elsewhere).
+ss -ltn, lsof +c 0 -nP -iTCP -sTCP:LISTEN, then netstat (-an -p tcp on Darwin, -ltn elsewhere).
 Output identifies listeners-source: ss|lsof|netstat|none. A successful empty check prints listen: none;
 exhausting all tools prints listen: unavailable: no ss, lsof or netstat. lsof's empty exit 1 with
 no stderr is an empty selection; other failures fall through. Owners retain command and pid.
@@ -66,6 +66,7 @@ Default paths remain. Extra Claude directories come from nonblank CLAUDE_CONFIG_
 ~/.claude-* directories (no symlink following), and repeatable --config-dir <dir> options.
 Directory paths are normalized and deduplicated; ~/.claude is the default, not an extra profile.
 Explicitly selecting ~/.claude also checks its .claude.json; its settings.json is counted only once.
+Registrations print disabled=<value> when the field is present.
 Each extra directory contributes existing .claude.json and settings.json, labelled by full path;
 missing extra files are omitted. Unreadable files retain diagnostics. Empty extra directories still
 count in profiles: <n> extra (<names>), whose names are sorted directory paths.
@@ -82,15 +83,25 @@ Acceptance remains at most 150 changed script lines, test additions at least sou
 lines under 120 columns, self-test, ~/bin/clj-kondo and a live Linux census identifying ss.
 README and this plan are prose exemptions. No commit or real-home fixture writes.
 
-Verification in this worktree: 23 self-tests, 348 assertions, zero failures/errors; serialized kondo
-reports zero errors/warnings. Script diff: 128 added + 14 deleted = 142 changed lines;
-42 source additions, 86 test additions, longest line 118 columns. The lsof field regression first
-failed on all three supplied listener shapes against the old parser.
-The boundary self-test creates two profile directories under a temporary HOME-shaped root and rejects
-a matching symlink and regular file. A separate CLI run sets HOME to a temporary directory and exercises
-.claude-probe-empty, environment and repeated explicit paths, plus explicit default-profile selection;
-it reports three extra profiles and counts the default settings registration only once. Fixtures are removed.
-The live host reports profiles: 0 extra (). Both ss invocations fail with
-Cannot open netlink socket: Operation not permitted under the execution sandbox; the live source is lsof.
-The requested live listeners-source: ss receipt is therefore unavailable here. Successful ss selection
-is covered by the subprocess matrix; it is not claimed as live-host evidence.
+Verification in review round 2: the listener subprocess matrix requires lsof +c 0 and supplies
+a literal clojure-lsp listener on port 9000; the existing exact invocation failed 12 assertions before
+the fix. Linux and Darwin netstat winners now receive their respective row shapes.
+The default-profile census fixture contains a real settings registration and asserts entries=2,
+so removing its duplicate-read guard fails. The temporary HOME boundary rejects a matching symlink
+and regular file, tests environment/explicit-path deduplication through profile-dirs, then invokes
+the CLI with one explicit external directory and an empty CLAUDE_CONFIG_DIR. It reports three extra
+profiles and checks disabled=true output. It does not exercise an empty profile, repeated options
+or default-profile selection through the CLI; repeated options have a pure parsing witness.
+Fixtures are removed in finally. Removing the default settings guard in a temporary script copy
+produced two failures (duplicate path and entries=3); the working script passes 23 tests / 352 assertions.
+Serialized ~/bin/clj-kondo reports zero errors/warnings. Relative to the PR base 2535894d, the script
+has 135 added + 15 deleted = 150 changed lines, with a longest line of 118 columns.
+The live run reports listeners-source: lsof and listen: none; both ss probes report
+Cannot open netlink socket: Operation not permitted.
+
+The requested live listeners-source: ss receipt remains unavailable in this sandbox.
+The subprocess matrix verifies successful ss selection, but is not live-host evidence or an approved
+substitute for that acceptance requirement. A live macOS receipt is also outstanding.
+Deferred under the 150-line script budget: accepting lsof stdout alongside benign stderr, nonexistent
+HOME handling, and tilde expansion of quoted explicit paths. Each needs behavior and boundary tests;
+this round retains existing coverage and prioritizes the confirmed defects.

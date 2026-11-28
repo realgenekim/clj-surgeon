@@ -106,7 +106,7 @@
 (defn host-name [resolve-host] (try (.getHostName (resolve-host)) (catch Exception _ "unknown-host")))
 (defn listeners [mac?]
   (let [[tool raw] (some #(when-let [out (apply command %)] [(first %) out])
-                        [["ss" "-ltnp"] ["ss" "-ltn"] ["lsof" "-nP" "-iTCP" "-sTCP:LISTEN"]
+                        [["ss" "-ltnp"] ["ss" "-ltn"] ["lsof" "+c" "0" "-nP" "-iTCP" "-sTCP:LISTEN"]
                          (if mac? ["netstat" "-an" "-p" "tcp"] ["netstat" "-ltn"])])]
     (println (str "listeners-source: " (or tool "none")))
     (section "Listeners" [["listen" (or raw "unavailable: no ss, lsof or netstat")
@@ -303,7 +303,7 @@
                         process/shell (fn [_ & args] (swap! calls conj (vec args))
                           (case (vec args)
                             ["ss" "-ltnp"] {:err "denied"}
-                            ["lsof" "-nP" "-iTCP" "-sTCP:LISTEN"] {:exit 2 :err "missing"}
+                            ["lsof" "+c" "0" "-nP" "-iTCP" "-sTCP:LISTEN"] {:exit 2 :err "missing"}
                             ["ss" "-ltn"] (if missing? (throw (ex-info "missing" {})) {:out "LISTEN 0 1 *:7888 *:*"})
                             ["netstat" "-ltn"] {:out "tcp 0 0 *:7888 *:* LISTEN"}
                             ["netstat" "-an" "-p" "tcp"] {:out "tcp4 0 0 *.7888 *.* LISTEN"}
@@ -322,14 +322,15 @@
 (deftest listener-source-matrix
   (doseq [mac? [false true] winner [0 1 2 3 nil] empty? [false true]]
     (let [calls (atom []) result (atom nil)
-          commands [["ss" "-ltnp"] ["ss" "-ltn"] ["lsof" "-nP" "-iTCP" "-sTCP:LISTEN"]
+          commands [["ss" "-ltnp"] ["ss" "-ltn"] ["lsof" "+c" "0" "-nP" "-iTCP" "-sTCP:LISTEN"]
                     (if mac? ["netstat" "-an" "-p" "tcp"] ["netstat" "-ltn"])]
           output (with-redefs [process/shell (fn [_ & args]
                    (let [i (dec (count (swap! calls conj (vec args))))]
                      (if (= i winner)
                        {:exit (if (and (= i 2) empty?) 1 0) :out (if empty? ""
-                          (case i 2 "node 812 forge 23u IPv4 0x1 0t0 TCP 127.0.0.1:7888 (LISTEN)"
-                                  3 "tcp4 0 0 127.0.0.1.7888 *.* LISTEN" "LISTEN 0 0 *:7888 *:*"))}
+                          (case i 2 "clojure-lsp 812 forge 23u IPv4 0x1 0t0 TCP 127.0.0.1:9000 (LISTEN)"
+                                  3 (if mac? "tcp4 0 0 *.7888 *.* LISTEN" "tcp 0 0 *:7888 *:* LISTEN")
+                                  "LISTEN 0 0 *:7888 *:*"))}
                        {:exit 2 :err "missing"})))] (with-out-str (reset! result (listeners mac?))))]
       (is (= (take (if winner (inc winner) 4) commands) @calls))
       (is (= (if (and winner (not empty?)) 1 0) @result))
@@ -343,8 +344,7 @@
         rows (vec (profile-sources ["/h/.claude-builder" "/h/.claude-kanban"] files))]
     (is (= ["/h/.claude-builder/settings.json" "/h/.claude-kanban/.claude.json"] (mapv first rows)))
     (is (= [[] ["clj-surgeon required=unspecified command=bb"]] (mapv (fn [[_ s f]] (vec (f s))) rows)))
-    (is (empty? (profile-sources ["/missing"] files)))
-    (is (empty? (profile-sources [] files)))
+    (doseq [dirs [["/missing"] []]] (is (empty? (profile-sources dirs files))))
     (is (= ["/h/settings.json"] (map first (profile-sources ["/h"] {"/h/settings.json" ""})))))
   (let [error (java.io.IOException. "denied") rows (profile-sources ["/h"] {"/h/.claude.json" error})]
     (is (identical? error (second (first rows))))
@@ -358,22 +358,22 @@
 (deftest extra-profile-census-wiring
   (let [default (str (or (System/getenv "HOME") (System/getProperty "user.home")) "/.claude")
         files {"/a/.claude.json" "{\"mcpServers\":{\"clj-surgeon\":{}}}" "/b/settings.json" "{}"
-               (str default "/.claude.json") "{}"}
-        seen (atom nil) output
-        (with-redefs [profile-dirs (fn [_ _ dirs] (reset! seen dirs) [default "/a" "/b"])
+               (str default "/.claude.json") "{}"
+               (str default "/settings.json") "{\"mcpServers\":{\"cclsp\":{}}}"}
+        seen (atom nil) output (with-redefs [profile-dirs (fn [_ _ dirs] (reset! seen dirs) [default "/a" "/b"])
                       read-file (fn [p & _] (files p)) host-footprint (constantly "")
                       process/shell (fn [& _] {:out ""})]
           (with-out-str (census ["/a" "/b"])))]
     (is (= ["/a" "/b"] @seen))
     (is (str/includes? output (str default "/.claude.json: none")))
     (doseq [s ["profiles: 2 extra (/a, /b)" "~/.claude.json: absent" "/a/.claude.json: clj-surgeon"
-               "/b/settings.json: none" "entries=1 cron=0"]] (is (str/includes? output s)))
+               "/b/settings.json: none" "~/.claude/settings.json: cclsp" "entries=2 cron=0"]]
+      (is (str/includes? output s)))
     (doseq [s ["/a/settings.json:" "/b/.claude.json:" (str default "/settings.json:")]]
       (is (not (str/includes? output s))))))
 (deftest option-cli-boundary
   (doseq [[args exit] [[["--help"] 0] [["--config-dir"] 2] [["--unknown"] 2]]]
-    (let [r (apply process/shell {:out :string :err :string :continue true}
-                   "bb" *file* args)]
+    (let [r (apply process/shell {:out :string :err :string :continue true} "bb" *file* args)]
       (is (= exit (:exit r)))
       (is (str/includes? (:out r) "[--config-dir <dir>]..."))
       (is (str/blank? (:err r))))))
@@ -384,7 +384,7 @@
       (spit (str a "/.claude.json") "{\"mcpServers\":{\"clj-surgeon\":{}}}")
       (spit (str b "/.claude.json") "{\"mcpServers\":{\"clj-surgeon\":{\"disabled\":true}}}")
       (spit (str c "/settings.json") "{\"mcpServers\":{\"clj-surgeon\":{}}}")
-      (fs/create-sym-link (str home "/.claude-link") a)
+      (spit (str home "/.claude-file") "") (fs/create-sym-link (str home "/.claude-link") a)
       (is (= [b a] (profile-dirs home nil [])))
       (is (= [b a] (profile-dirs home (str a "/") [a (str b "/../.claude-builder")])))
       (let [{:keys [exit out]} (process/shell {:out :string :err :string :continue true
