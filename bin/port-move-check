@@ -1,0 +1,90 @@
+(require '[clojure.string :as str] '[clojure.java.shell :as sh] '[clojure.test :as t])
+(defn parse-manifest [text] (mapv (fn [line]
+          (let [[ref src dest :as fields] (str/split line #"\s+")]
+            (when-not (#{2 3} (count fields)) (throw (ex-info "Invalid manifest row" {:line line})))
+            [ref src (or dest src)]))
+        (remove #(or (str/blank? %) (str/starts-with? % "#")) (map str/trim (str/split-lines text)))))
+(import '[java.nio.file Files Paths LinkOption])
+(defn destination-kind [{:keys [regular? symlink? directory?]}]
+  (cond regular? nil symlink? "symlink" directory? "directory" :else "other"))
+(defn classify [src dest tracked?] {:tracked tracked?
+   :status (cond (nil? src) "NO-SOURCE" (nil? dest) "ABSENT" (= src dest) "MOVE-OK" :else "DIFFERS")})
+(defn format-line [[ref path dest] {:keys [status source sha kind]}] (str/join " " (case status
+                  "NO-SOURCE" [status (str ref ":" path)] "ABSENT" [status dest]
+                  "NOT-REGULAR" [status kind dest] "MOVE-OK" [status (subs source 0 8) dest]
+                  "DIFFERS" [status (subs source 0 8) (subs sha 0 8) dest])))
+(defn footer [results] (let [counts (frequencies (map :status results))]
+    (apply format "port-move-check: pairs=%d ok=%d differs=%d absent=%d no-source=%d not-regular=%d"
+           (count results) (map #(get counts % 0) ["MOVE-OK" "DIFFERS" "ABSENT" "NO-SOURCE" "NOT-REGULAR"]))))
+(defn git [& args] (let [env (assoc (into {} (System/getenv)) "GIT_NO_LAZY_FETCH" "1" "GIT_OPTIONAL_LOCKS" "0")
+        {:keys [exit out]} (apply sh/sh "git" (concat args [:env env]))] (when (zero? exit) (str/trim out))))
+(defn check-pair [[ref path dest]] (let [object (git "rev-parse" "--verify" "--end-of-options" (str ref ":" path))
+        source (when (and object (= "blob" (git "cat-file" "-t" object))) object)
+        p (Paths/get dest (make-array String 0)) opts (into-array LinkOption [LinkOption/NOFOLLOW_LINKS])
+        kind (when (Files/exists p opts) (destination-kind
+               {:regular? (Files/isRegularFile p opts) :symlink? (Files/isSymbolicLink p)
+                :directory? (Files/isDirectory p opts)}))
+        sha (when-not kind (git "hash-object" "--no-filters" "--" dest))
+        tracked (some? (git "--literal-pathspecs" "ls-files" "--error-unmatch" "--" dest))
+        index (git "rev-parse" "--verify" "--end-of-options" (str ":0:" dest))]
+    (assoc (if kind {:status "NOT-REGULAR" :kind kind :tracked tracked} (classify source sha tracked))
+           :source source :sha sha :index-agrees (boolean (and sha index (= sha index))))))
+(defn run-check [args] (let [[ref & paths] args
+        pairs (if (= ref "--manifest")
+                (when (= 1 (count paths)) (parse-manifest (slurp (first paths))))
+                (when (and ref (not (str/starts-with? ref "--"))) (mapv #(vector ref % %) paths)))
+        results (mapv check-pair pairs)]
+    (when-not (seq pairs) (throw (ex-info "Usage: REF PATH... | --manifest FILE | --self-test" {})))
+    (doseq [[pair result] (map vector pairs results)] (println (format-line pair result))
+      (binding [*out* *err*] (println (nth pair 2) (select-keys result [:tracked :index-agrees]))))
+    (println (footer results)) (if (every? #(= "MOVE-OK" (:status %)) results) 0 1)))
+(t/deftest symlink-false-positive-regression
+  ;; Independent read: a /proc fd symlink to identical bytes incorrectly passed.
+  (doseq [[facts expected] [[{:regular? true :symlink? false :directory? false} nil]
+                            [{:regular? false :symlink? true :directory? false} "symlink"]
+                            [{:regular? false :symlink? false :directory? true} "directory"]
+                            [{:regular? false :symlink? false :directory? false} "other"]]]
+    (t/is (= expected (destination-kind facts)))
+    (when expected
+      (t/is (= (str "NOT-REGULAR " expected " dest")
+               (format-line ["HEAD" "src" "dest"] {:status "NOT-REGULAR" :kind expected}))))))
+(t/deftest manifest-test
+  (t/is (= [] (parse-manifest "")))
+  (t/is (= [] (parse-manifest " \n # comment\n\t")))
+  (t/is (= [["HEAD" "a" "a"]] (parse-manifest "HEAD a")))
+  (t/is (= [["HEAD" "a" "b"]] (parse-manifest "HEAD a b")))
+  (t/is (= [["HEAD" "a" "a"] ["tag" "b" "c"]]
+           (parse-manifest "# comment\r\n HEAD\ta \r\ntag b c\n")))
+  (doseq [row ["HEAD" "HEAD a b c"]]
+    (t/is (thrown? clojure.lang.ExceptionInfo (parse-manifest row)))))
+(t/deftest classification-test
+  (doseq [tracked [true false]
+          [src dest expected] [[nil nil "NO-SOURCE"] [nil "a" "NO-SOURCE"]
+                               ["a" nil "ABSENT"] ["a" "a" "MOVE-OK"] ["a" "b" "DIFFERS"]]]
+    (t/is (= {:status expected :tracked tracked} (classify src dest tracked)))))
+(t/deftest formatting-test
+  (let [pair ["HEAD" "old" "new"] result {:source "1234567890" :sha "abcdef0123"}]
+    (doseq [[status expected] [["MOVE-OK" "MOVE-OK 12345678 new"]
+                               ["DIFFERS" "DIFFERS 12345678 abcdef01 new"]
+                               ["ABSENT" "ABSENT new"] ["NO-SOURCE" "NO-SOURCE HEAD:old"]]]
+      (t/is (= expected (format-line pair (assoc result :status status)))))
+  (t/is (= "ABSENT space name" (format-line ["r" "p" "space name"] {:status "ABSENT"})))))
+(t/deftest footer-test
+  (t/is (= "port-move-check: pairs=0 ok=0 differs=0 absent=0 no-source=0 not-regular=0" (footer [])))
+  (t/is (= "port-move-check: pairs=1 ok=1 differs=0 absent=0 no-source=0 not-regular=0"
+           (footer [{:status "MOVE-OK"}])))
+  (t/is (= "port-move-check: pairs=1 ok=0 differs=0 absent=0 no-source=0 not-regular=1"
+           (footer [{:status "NOT-REGULAR"}])))
+  (t/is (= "port-move-check: pairs=5 ok=2 differs=1 absent=1 no-source=1 not-regular=0"
+           (footer (map #(hash-map :status %) ["MOVE-OK" "DIFFERS" "ABSENT" "NO-SOURCE" "MOVE-OK"])))))
+(t/deftest repository-boundary-test
+  (let [missing "__port_move_check_nonexistent_8e927c__" equal (check-pair ["HEAD" "deps.edn" "deps.edn"])]
+    (t/is (= "MOVE-OK" (:status equal)))
+    (t/is (= (:source equal) (:sha equal)))
+    (t/is (true? (:tracked equal)))
+    (t/is (true? (:index-agrees equal)))
+    (t/is (= "ABSENT" (:status (check-pair ["HEAD" "deps.edn" missing]))))
+    (t/is (= "NO-SOURCE" (:status (check-pair ["HEAD" missing "deps.edn"]))))
+    (t/is (= "NO-SOURCE" (:status (check-pair [missing "deps.edn" "deps.edn"]))))))
+(defn self-test [] (let [r (t/run-tests 'user)] (if (and (pos? (:test r)) (zero? (+ (:fail r) (:error r)))) 0 1)))
+(System/exit (if (= ["--self-test"] *command-line-args*) (self-test) (run-check *command-line-args*)))
