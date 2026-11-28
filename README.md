@@ -474,12 +474,13 @@ records the failure pattern that led to `:fix-declares`.
 
 ## Machine footprint
 
-`bb bin/surgeon-footprint` prints a read-only registration and cron census (piece 1); verify with
+`bb bin/surgeon-footprint` prints a read-only machine census; verify with
 `make surgeon-footprint-self-test`.
 The census covers `~/.codex/config.toml`, `~/.claude.json`, `~/.claude/settings.json`, `~/.claude/mcp.json`,
 `./.mcp.json`, `./.codex/config.toml` and the current user's crontab.
-System units and other users' crontabs are out of scope. Piece 2 adds launch units (loaded AND installed
-user systemd unit files, plus launchd), listeners, processes and the routing-block hash.
+Also included: loaded/installed user launch units, listeners, server/mention processes and routing-block hashes.
+System units and other users' crontabs are out of scope; unavailable commands/listings report their reasons.
+Routing reads share the regular-file/64 KiB guard; hostname comes from Java with an `unknown-host` fallback.
 Cron discovery reads only regular files (including symlinks to regular files), capped at the first 64 KiB.
 Unreadable scripts are marked; content beyond that cap and shell-expanded paths are outside this census.
 Inline TOML tables produce `unsupported: inline table at line N` entries; triple-quoted strings produce

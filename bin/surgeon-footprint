@@ -1,6 +1,6 @@
 #!/usr/bin/env bb
 (ns surgeon-footprint {:clj-kondo/ignore [:namespace-name-mismatch]}
-  (:require [babashka.process :as process] [cheshire.core :as json]
+  (:require [clj-surgeon.agent-routing :as routing] [babashka.process :as process] [cheshire.core :as json]
             [clojure.java.io :as io] [clojure.string :as str]
             [clojure.test :refer [deftest is run-tests]]))
 (def names-re #"clj-surgeon|cclsp|clojure-lsp")
@@ -53,6 +53,69 @@
                      (count found))
                    (catch Exception e (println (str path (if (identical? e raw) ": unreadable: " ": parse error: ")
                                                  (.getMessage e))) 0)))))
+(defn listener [line]
+  (when-let [[_ address port tail] (re-matches
+                               #"\s*(?:LISTEN|tcp[46]?)\s+\d+\s+\d+\s+(\S+)[:.](\d+)\s+\S+\s*(.*)" line)]
+    (let [owner (str/replace tail #"^LISTEN\s*" "")]
+      (when (and (or (str/starts-with? (str/trim line) "LISTEN") (str/starts-with? tail "LISTEN"))
+                 (or (#{"7888" "7890" "7906"} port) (re-find names-re owner)))
+        {:address address :port port :owner owner}))))
+(defn process-line [line]
+  (when-let [[_ pid uptime args] (re-matches #"\s*(\d+)\s+([\d:-]+)\s+(.+)" line)]
+    (when (re-find #"clj[-_]surgeon|cclsp|clojure-lsp" args)
+      (let [[exe & argv] (drop-while #(re-matches #"(?:\w+=.*|(?:/usr/bin/)?env)" %)
+                                    (str/split args #"\s+"))
+            exe (last (str/split (or exe "") #"/"))
+            [main & main-argv] (loop [[x & xs] argv]
+                   (cond (#{"-cp" "-classpath" "--class-path" "--module-path" "-p"} x) (recur (rest xs))
+                         (#{"-jar" "-e" "--eval" "-i" "--init" "-f" "--file"} x) nil
+                         (or (= x "clojure.main") (str/starts-with? (or x "") "-")) (recur xs)
+                         :else (cons x xs)))
+            surgeon? #(and (= "clj-surgeon" (last (str/split (or %1 "") #"/"))) (some #{"mcp-serve"} %2))
+            server? (or (#{"cclsp" "clojure-lsp"} exe) (surgeon? exe argv)
+                        (and (#{"bb" "clojure" "java"} exe)
+                             (or (#{"clj_surgeon.mcp_server" "clj-surgeon.mcp-server"} main)
+                                 (and (= exe "bb") (surgeon? main main-argv)))))]
+        {:kind (if server? :server :mention) :pid pid :command (subs args 0 (min 100 (count args)))
+         :uptime (str (reduce + (map * [1 60 3600 86400] (map parse-long (reverse (str/split uptime #"[-:]"))))))}))))
+(defn units [sources]
+  (distinct (for [line (mapcat lines sources)
+                  :let [tokens (str/split (str/trim line) #"\s+")
+                        unit (if (re-matches #"\d+|-" (first tokens)) (nth tokens 2 "") (first tokens))]
+                  :when (re-find names-re unit)] (str/replace unit #"\.plist$" ""))))
+(defn routing-block [s]
+  (let [s (or s "") {:keys [ok state begin end]} (#'routing/marker-state s)]
+    (cond (not ok) ["malformed"] (= state :absent) ["absent"]
+          :else (let [block (subs s begin (if (str/starts-with? (subs s end) "\n") (inc end) end))]
+                  [(str (#'routing/sha256 block) " "
+                        (some #(when (str/includes? % "Derived from doctrine commit") %) (lines block)))]))))
+(defn command [& argv]
+  (try (let [{:keys [exit out err]} (apply process/shell {:out :string :err :string :continue true} argv)]
+         (if (and (zero? (or exit 0)) (str/blank? err)) out
+             (throw (ex-info (if (str/blank? err) (str "exit " exit) (str/trim err)) {}))))
+       (catch Exception e (println (str (str/join " " argv) ": unavailable: " (.getMessage e))) nil)))
+(defn launch-agents [home]
+  (try (str/join "\n" (filter #(str/ends-with? % ".plist")
+              (or (.list (io/file home "Library/LaunchAgents")) (throw (java.io.IOException. "listing failed")))))
+       (catch Exception e (println (str "~/Library/LaunchAgents: unavailable: " (.getMessage e))) nil)))
+(defn host-name [resolve-host] (try (.getHostName (resolve-host)) (catch Exception _ "unknown-host")))
+(defn host-footprint [home & [mac?]]
+  (let [listeners (section "Listeners" [["listen" (or (command "ss" "-ltnp") (command "ss" "-ltn")
+                                                    (if mac? (command "netstat" "-an" "-p" "tcp")
+                                                        (command "netstat" "-ltn")))
+                                         #(keep listener (lines %))]])
+        processes (keep process-line (lines (command "ps" "-eo" (if mac? "pid,etime,args" "pid,etimes,args"))))
+        sources (if mac?
+                  [(command "launchctl" "list") (launch-agents home)]
+                  [(command "systemctl" "--user" "list-units" "--all" "--no-pager" "--plain")
+                   (command "systemctl" "--user" "list-unit-files" "--no-pager" "--plain")])
+        unit-count (section "Launch units" [["units" sources units]])]
+    (section "Processes" [["ps" processes identity]])
+    (section "Routing blocks" (for [p ["/.claude/CLAUDE.md" "/.codex/AGENTS.md"]]
+                [(str home p) (or (read-file (str home p) 65536) :not-regular)
+                 #(if (= % :not-regular) ["not-regular"] (routing-block %))]))
+    (str " listeners=" listeners " servers=" (count (filter #(= :server (:kind %)) processes))
+         " units=" unit-count)))
 (defn census []
   (let [home (or (System/getenv "HOME") (System/getProperty "user.home"))
         read-cron #(let [p (str/replace % #"^~/" (str home "/"))]
@@ -62,8 +125,10 @@
                                  "~/.claude/mcp.json" "./.mcp.json" "./.codex/config.toml"]]
                           [p (read-file (str/replace p #"^~" home)) #(entries % (str/ends-with? p ".toml"))]))
         cron (try (:out (process/shell {:out :string :err :string} "crontab" "-l")) (catch Exception e e))
-        cron-count (section "Cron" [["crontab" cron #(cron-lines % read-cron)]])]
-    (println (str "footprint: entries=" entries-count " cron=" cron-count))))
+        cron-count (section "Cron" [["crontab" cron #(cron-lines % read-cron)]])
+        extra (host-footprint home (= "Mac OS X" (System/getProperty "os.name")))]
+    (println (str "footprint: " (host-name #(java.net.InetAddress/getLocalHost)) " " (java.time.Instant/now)
+                  " entries=" entries-count " cron=" cron-count extra))))
 (deftest quoted-toml-keys (doseq [key ["clj-surgeon" "'clj-surgeon'" "\"clj-surgeon\""]]
     (is (= [(str "mcp_servers." key " required=true command='bb'")]
            (vec (entries (str "[mcp_servers." key "]\nrequired=true # needed\ncommand='bb'") true)))))
@@ -119,7 +184,7 @@
     (is (str/includes? output "~/.claude.json: absent"))
     (is (str/includes? output "./.codex/config.toml: mcp_servers.cclsp"))
     (is (str/includes? output "crontab: @daily bin/check.sh scripts=bin/check.sh"))
-    (is (str/includes? output "footprint: entries=1 cron=1"))))
+    (is (str/includes? output "entries=1 cron=1"))))
 (deftest review-three-inline-tables (doseq [s ["[mcp_servers]\ncclsp = { command = 'bun' }"
             "[mcp_servers]\n'cclsp' = { command = 'bun', required = true }"]]
     (is (= ["unsupported: inline table at line 2"] (vec (entries s true)))))
@@ -142,6 +207,81 @@
          (finally (.delete f)))))
 (deftest unreadable-cron-script (is (= ["@daily /private scripts=/private (unreadable)"]
         (vec (cron-lines "@daily /private" {"/private" (java.io.IOException. "denied")})))))
+(deftest listener-literals
+  ;; Anvil's cross-account listener and the reviewer's macOS netstat fixtures.
+  (doseq [[prefix separator tail] [["LISTEN" ":" ""] ["tcp" ":" "LISTEN"] ["tcp4" "." "LISTEN"]
+                                   ["tcp6" ":" "LISTEN"]]
+          address ["127.0.0.1" "[::ffff:127.0.0.1]" "::" "*"] port ["7888" "7890" "7906"]]
+    (is (= {:address address :port port :owner ""}
+           (listener (str prefix " 0 0 " address separator port " *.* " tail)))))
+  (doseq [line ["LISTEN 0 0 *:78880 *:*" "State Recv-Q Send-Q Local Address:Port Peer Address:PortProcess"
+                "ESTAB 0 0 *:7888 *:*" "tcp 0 0 *:7888 *:* ESTABLISHED"]] (is (nil? (listener line))))
+  (doseq [tool ["clj-surgeon" "cclsp" "clojure-lsp"]]
+    (let [owner (str "users:((\"" tool "\",pid=12,fd=3))")]
+      (is (= {:address "0.0.0.0" :port "9000" :owner owner}
+             (listener (str "LISTEN 0 128 0.0.0.0:9000 *:* " owner)))))))
+(deftest process-literals
+  (doseq [args ["/bin/cclsp --stdio" "clojure-lsp listen" "clj-surgeon --port 7906 mcp-serve"
+                "X=1 /usr/bin/env Y=2 /bin/cclsp" "env X=1 clojure-lsp"
+                "java -Xmx512m -cp /lib/x.jar clj_surgeon.mcp_server" "bb /bin/clj-surgeon mcp-serve"
+                "java clojure.main -m clj-surgeon.mcp-server" "clojure -M -m clj-surgeon.mcp-server"]]
+    (is (= {:kind :server :pid "42" :uptime "123" :command args} (process-line (str "42 123 " args)))))
+  (doseq [args ["vim /src/cclsp/main.ts" "rg clojure-lsp /tmp/log" "clj-surgeon --help"
+                "java -cp /repo/clj-surgeon OtherMain" "cat /tmp/clj_surgeon.mcp_server"
+                "java --module-path /opt/clojure-lsp com.example.Main" "java clj_surgeon.mcp_server_other"
+                "bb -cp mcp-serve /bin/clj-surgeon" "clj-surgeon x-mcp-serve"
+                "bb --eval clj_surgeon.mcp_server" "java -jar clj_surgeon.mcp_server"
+                "echo clj_surgeon.mcp_server" "echo clj-surgeon mcp-serve" "bash -c clojure-lsp"]]
+    (is (= :mention (:kind (process-line (str "42 123 " args))))))
+  (doseq [line ["PID ELAPSED COMMAND" "1 5 sleep 100"]] (is (nil? (process-line line))))
+  (doseq [[elapsed seconds] [["01:02" "62"] ["01:02:03" "3723"] ["2-01:02:03" "176523"]]]
+    (is (= seconds (:uptime (process-line (str "42 " elapsed " cclsp"))))))
+  (is (= 100 (count (:command (process-line (str "1 2 cclsp " (apply str (repeat 200 "x")))))))))
+(deftest unit-literals
+  (is (= ["org.cclsp"] (units ["123 0 org.cclsp" "org.cclsp.plist"])))
+  (is (= ["clj-surgeon.service" "cclsp.service" "clojure-lsp.socket"]
+         (units ["clj-surgeon.service loaded active running MCP\ncclsp.service loaded inactive dead"
+                 "clj-surgeon.service enabled enabled\nclojure-lsp.socket disabled enabled\nother.service enabled"])))
+  (is (= ["org.cclsp" "org.clojure-lsp"]
+         (units ["PID Status Label\n- 0 org.cclsp\n42 0 org.cclsp" "org.clojure-lsp.plist"])))
+  (is (empty? (units [nil "" "other.service enabled"]))))
+(deftest routing-literals
+  (let [doctrine "*Derived from doctrine commit abc123.*"
+        block (str routing/managed-begin "\nλ\n" doctrine "\n" routing/managed-end "\n")
+        expected (str (#'routing/sha256 block) " " doctrine)]
+    (doseq [s [block (str "preface\n" block "\nsuffix")]] (is (= [expected] (routing-block s))))
+    (is (= [(str (#'routing/sha256 (str/trimr block)) " " doctrine)] (routing-block (str/trimr block))))
+    (doseq [s [nil "ordinary CLAUDE.md"]] (is (= ["absent"] (routing-block s))))
+    (doseq [s [routing/managed-begin routing/managed-end (str block block)
+              (str routing/managed-end routing/managed-begin)]] (is (= ["malformed"] (routing-block s))))))
+(deftest census-footprint-wiring
+  (doseq [mac? [false true] missing? [false true]]
+    (let [calls (atom []) file io/file read read-file reads (atom []) output
+          (with-redefs [file-probe (constantly {:regular? false})
+                        io/input-stream (fn [_] (throw (ex-info "must not open" {})))
+                        io/file (fn [p & more] (if (seq more) (throw (ex-info "denied" {})) (file p)))
+                        read-file (fn [p cap] (swap! reads conj [p cap]) (read p cap))
+                        process/shell (fn [_ & args] (swap! calls conj (vec args))
+                          (case (vec args)
+                            ["ss" "-ltnp"] {:err "denied"}
+                            ["ss" "-ltn"] (if missing? (throw (ex-info "missing" {})) {:out "LISTEN 0 1 *:7888 *:*"})
+                            ["netstat" "-ltn"] {:out "tcp 0 0 *:7888 *:* LISTEN"}
+                            ["netstat" "-an" "-p" "tcp"] {:out "tcp4 0 0 *.7888 *.* LISTEN"}
+                            ["ps" "-eo" "pid,etimes,args"] {:out "1 2 cclsp\n2 3 cat /cclsp/log"}
+                            ["ps" "-eo" "pid,etime,args"] {:out "1 00:02 cclsp\n2 00:03 cat /cclsp/log"}
+                            {:out ""}))] (with-out-str (println (host-footprint "/home/test" mac?))))]
+      (doseq [s ["unavailable: denied" " listeners=1 servers=1 units=0" ":uptime \"2\""
+                  "/.claude/CLAUDE.md: not-regular" "/.codex/AGENTS.md: not-regular"]]
+        (is (str/includes? output s)))
+      (is (= [["/home/test/.claude/CLAUDE.md" 65536] ["/home/test/.codex/AGENTS.md" 65536]] @reads))
+      (is (= missing? (boolean (some #(= "netstat" (first %)) @calls))))
+      (is (some #{["ps" "-eo" (if mac? "pid,etime,args" "pid,etimes,args")]} @calls))
+      (if mac? (is (str/includes? output "~/Library/LaunchAgents: unavailable: denied"))
+          (doseq [op ["list-units" "list-unit-files"]] (is (some #(= ["systemctl" "--user" op] (take 3 %)) @calls))))
+      (is (every? #{"ss" "netstat" "ps" "systemctl" "launchctl"} (map first @calls))))))
+(deftest hostname-boundary
+  (is (= "unknown-host" (host-name #(throw (ex-info "unresolved" {})))))
+  (is (= "localhost" (host-name #(java.net.InetAddress/getByAddress "localhost" (byte-array [127 0 0 1]))))))
 (case (vec *command-line-args*) [] (census) ["--self-test"] (let [r (run-tests 'surgeon-footprint)]
                     (System/exit (if (and (pos? (:test r)) (zero? (+ (:fail r) (:error r)))) 0 1)))
   (do (println "usage: surgeon-footprint [--self-test]") (System/exit 2)))

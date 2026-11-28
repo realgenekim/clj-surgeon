@@ -25,9 +25,21 @@ missing and unreadable inputs, multiple scripts and mocked census wiring. Round 
 duplicate tables, triple-quoted strings, unreadable scripts, pure type-probe classification and mocked special-file
 reads that must never open a stream. One temporary-file test verifies both real read paths and the 64 KiB cap.
 The cron fixture minimizes the independent review's disabled sentinel and the readable ~/bin/verb-sentinel header.
-Piece 2 adds launch units (loaded AND installed user systemd unit files, plus launchd), listeners,
-processes and the routing-block hash. Process server/mention classification, server-only counts,
-malformed-block detection and hostname/time metadata remain deferred.
+Piece 2 extends the same script: pure listener, process, merged unit-name and routing-block parsers.
+Read-only commands fall back ss -ltnp → ss -ltn → netstat -ltn; failures print unavailable reasons.
+On macOS the netstat fallback is `netstat -an -p tcp`; dotted address.port listeners include `tcp4`.
+The subprocess allowlist is exactly: `crontab -l`, `ss`, `netstat`, `ps`, `systemctl`, `launchctl`.
+macOS uses `ps -eo pid,etime,args`; pure elapsed-time parsing converts [[dd-]hh:]mm:ss to seconds.
+Other hosts use `ps -eo pid,etimes,args`. Classification starts after leading env assignments and env wrappers:
+only cclsp/clojure-lsp executables, runtime main server namespaces/classes, or clj-surgeon with its own
+mcp-serve token count as servers; argument paths remain mentions. bb may launch the clj-surgeon script.
+Launchd labels and installed filenames are deduplicated after stripping .plist; denied/failed LaunchAgents
+listings print `~/Library/LaunchAgents: unavailable: <reason>` and the census continues.
+Routing files use the cron reader's regular-file guard and 64 KiB cap; rejected paths print not-regular.
+Tests cover IPv4/IPv6, exact ports, command owners, executable/main versus argument mentions,
+loaded/installed deduplication, launchd names, absent/malformed blocks and the repository SHA function.
+The footer adds Java's local-host name (unknown-host on exception), ISO instant and listener/server/unit counts;
+mentions never count as servers. No hostname subprocess is used.
 MCP args, URLs and matching cron lines (including inline environment assignments) may expose secrets.
 Review output before pasting it; generic redaction is deferred to keep its policy and tests outside this slice.
 Acceptance: self-test with a positive test-count gate, serialized kondo, Make target and line counts.
