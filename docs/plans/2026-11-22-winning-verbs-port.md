@@ -96,15 +96,13 @@ dependencies, one test helper, and three letter templates needed for `bin/kaocha
 The requested architecture test exists only in the recovered working tree, not at the pinned commit;
 its provenance gap remains open. Port check: 35 pairs, 34 OK, 1 NO-SOURCE; all 38 SHA-256 entries pass.
 
-The first attempts refused because the sandbox could not write the analyzer admission directory
-(Errno 30). Outside the sandbox on 2026-11-28 at about 09:25Z, the frozen request on donor `7b312f85`
-committed (invocation exit 0), verified: five caller files, 87 sites, 20 destinations/created files,
-and matching unrequired qualified references; Kaocha + oracle passed in about 10 s. The runner's
-exit 1 was a created-field extraction miss plus three original workspace artefacts absent from the
-clean scratch. Round 3 compares both created-list shapes by count and labels artefacts
-`expected-different`; all other facts must match. Self-test: 8 tests / 42 assertions; lint clean.
-Saved-receipt comparison passes; the operator will rerun the corrected runner outside the sandbox.
-No commit was made.
+PR 89 review round 2 corrects the acceptance contract: every invocation must exit zero;
+`created` requires footprint evidence, and unexpected paths must be a subset of the three recorded
+artefacts. Missing facts fail. Hashing is in-process; copying preserves executable attributes; the
+oracle manifest is an explicit fixture-relative argument. Tests load the frozen receipt and profile.
+The earlier committed/verified donor replay claim is withdrawn because its receipt was an unshared
+local path. Self-test: 10 tests / 54 assertions; kondo clean, all 38 digests verified. Subprocess probes
+exercise runner acceptance and refusal with a stub donor; real donor replay remains for the operator.
 
 ## Deliberately left behind, and how we know
 

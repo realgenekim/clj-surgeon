@@ -109,14 +109,12 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 
 ## Live experiment backlog (prediction and cost on every item)
 
-Cell C cold replay, 2026-11-28: the profile and four caller inputs remain frozen with runtime
-support; architecture-test provenance remains absent at `d9205abc`. First attempts refused because
-the sandbox could not write the analyzer admission directory (Errno 30). Outside the sandbox,
-donor `7b312f85` reproduces a committed, verified split: five caller files, 87 sites, 20 destinations
-and created files, matching unrequired qualified references; Kaocha + oracle passed in about 10 s.
-Round 3 fixes created-count extraction and marks three original workspace artefacts versus zero as
-`expected-different`; saved-receipt comparison passes, fresh operator replay pending.
-[Fixture receipt](../test-fixtures/namespace-split/cellc-d9205abc/README.md#replay-usage-and-result).
+Cell C cold replay, 2026-11-28, PR 89 review round 2: the previous committed/verified replay claim
+is withdrawn because its receipt is an unshared local path. The runner now requires exit zero,
+creation evidence, and an unexpected-path subset of the three recorded artefacts. It hashes in-process,
+preserves executable attributes, and binds the oracle manifest to the fixture. Frozen-receipt self-test:
+10 tests / 54 assertions; kondo clean, 38 digests pass. Real donor replay remains for the operator.
+[Fixture contract and limitations](../test-fixtures/namespace-split/cellc-d9205abc/README.md#replay-usage-and-result).
 
 | id | experiment | prediction | cost | depends on |
 |---|---|---|---|---|

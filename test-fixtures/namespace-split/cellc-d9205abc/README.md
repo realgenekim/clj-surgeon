@@ -38,27 +38,31 @@ Files.
 Not here: the split's output tree. The receipts carry its hashes. The replay below builds a scratch
 workspace from these inputs and installs the recovered `split-unit` profile, which `d9205abc` itself
 does not carry. It still needs the archived verb, its analyzer admission gate, and the application's
-Java/Clojure dependencies. `cc-oracle.py` still reads its manifest from
-`/var/tmp/forge/plan2/cellC/cc-split.json`; rebinding its executable and workspace arguments does not
-remove that internal dependency. `cc-oracle.py` is kept byte-identical because
-the receipt pins its digest; note that it checks with bare `assert` (silent under `python3 -O`) and matches
-only column-0 `def`/`defn`/`defn-`/`defmacro`, so any future runnable oracle must fail explicitly and parse
-forms, not lines.
+Java/Clojure dependencies. The profile passes the fixture's `cc-split.json` to `cc-oracle-replay.py`.
+This tiny wrapper reads the frozen `cc-oracle.py`, replaces its literal manifest path with the supplied
+argument, and executes the source. The original oracle bytes and digest are preserved; the wrapper
+and updated profile have their own manifest digests.
+The oracle still uses bare `assert` (silent under `python3 -O`) and column-0 form matching.
 
 ## Replay usage and result
 
 Run `bb test-fixtures/namespace-split/cellc-d9205abc/replay.clj <astra-checkout> [scratch]`; `CLJ_SURGEON_ASTRA`
 replaces the checkout argument. Self-test: `bb test-fixtures/namespace-split/cellc-d9205abc/replay_test.clj`.
 The scratch path must not exist and must be outside the fixture and donor checkout. The runner checks
-the SHA-256 manifest, copies `source/`, rebinds the request's workspace, and installs
+the SHA-256 manifest in-process with `java.security.MessageDigest`, copies `source/` with file attributes, rebinds the request's workspace, and installs
 `workspace.clj-surgeon.edn` as `<scratch>/.clj-surgeon.edn`. In the config, `{{scratch}}` becomes the
 scratch root and `{{fixture}}` the fixture directory; the commands remain `bin/kaocha unit --fail-fast`
-and `python3 <fixture>/cc-oracle.py <scratch>`. It attempts commit first. Only a typed refusal with both
+and `python3 <fixture>/cc-oracle-replay.py <scratch> <fixture>/cc-split.json`. It attempts commit first. Only a typed refusal with both
 `mutation_attempted=false` and `committed=false` permits one diagnostic plan-only call. The output names
-each path and exit; missing split facts remain `DIFFERS`. Created counts accept both receipt shapes;
-workspace artefacts report `expected-different recorded artefacts: 3, replay: <n>`. Exit is zero
-when every other fact is `same`. The last receipt stays in
-`<scratch>/replay-receipt.edn`. A rollback or committed receipt is never retried.
+each path and exit and preserves invocation stderr. Missing split facts remain `DIFFERS`;
+`created` compares the recorded count with request destination files present on disk in scratch
+and absent from the frozen source. A match reports `created same (20 destination files present on disk)`;
+a mismatch reports `created DIFFERS <recorded> <on-disk>`. Receipt destination counts are not filesystem evidence.
+Replay `unexpected_paths` must be a subset of `.clj-surgeon.edn`, `00SERVER-LOGS.txt`, and
+`test/cfp_scheduler_killer/view_architecture_test.clj`; nil means no unexpected paths. Accepted subsets
+report `expected-different`; any other path is named in `DIFFERS`. Exit zero requires all invocations
+to exit zero and every other fact to match. The last receipt stays in `<scratch>/replay-receipt.edn`.
+A rollback or committed receipt is never retried.
 
 Round 2 additions, all obtained with `git show d9205abc:<path>` from the read-only rescue checkout
 `/home/forge/src/surgeon-fixture-rescue/plan2/build/round-sentinel-ns-20261025T070002Z-fx`:
@@ -73,28 +77,29 @@ Round 2 additions, all obtained with `git show d9205abc:<path>` from the read-on
 
 No other application tests, resources, build scripts, or cached dependencies were added. These inputs
 exercise the requested caller subset, not the complete historical application suite. `source-manifest.txt`
-covers every frozen input and the new profile template. The request, split manifest, oracle, and original
-four source files are unchanged.
+covers every frozen input and the new profile template. The request, split manifest, and all frozen source files are unchanged.
 
 The fifth requested file, `test/cfp_scheduler_killer/view_architecture_test.clj`, exists in the rescue
 working tree but **does not exist in `d9205abc`** (`git show` exits 128). It is not frozen or silently
 substituted from disk. This is consistent with its being an unexpected path in the old receipt, but does
 not establish its provenance. That gap remains open.
 
-Verification on 2026-11-28 (round 3):
+Verification on 2026-11-28 (PR 89 review round 2):
 
-The first attempts refused because the sandbox could not write the analyzer admission directory
-`/home/forge/.local/state/clj-surgeon/clj-kondo-priority.lock.waiters/` (Errno 30).
-Outside the sandbox at about 09:25Z, the frozen request on donor `7b312f85` committed (invocation
-exit 0) with `verification_complete=true`: five caller files, 87 sites, 20 destinations and 20 created
-files; unrequired qualified references match. The `split-unit` profile's Kaocha and oracle passed
-in about 10 s (`elapsed_ms=10188`). The original runner exited 1 solely on the created extraction
-miss and workspace artefacts; round 3 reads `facts.destinations` as well as `facts.footprint.created`
-and reports the three original workspace artefacts versus replay zero as `expected-different`.
-The saved run's `replay-receipt.edn` is under
-`/var/tmp/forge/claude-1011/-home-forge-src-worktrees-clj-surgeon-seat/cca23770-0634-4a43-90f2-9abfa918f2b7/scratchpad/cellc-replay-run2/`.
+The earlier claim of a fresh committed replay on donor `7b312f85` is withdrawn: its receipt was
+only an unshared local path, so this checkout does not substantiate that result. Real donor replay
+remains for the operator. A receipt without `facts.footprint.created` uses the filesystem comparison above.
 
-Self-test: 8 tests / 42 assertions, no failures/errors; lint clean. The saved receipt comparison
-passes; a fresh outside-sandbox replay of the corrected runner remains for the operator.
-Earlier input checks: 35 port-check pairs, 34 OK and one NO-SOURCE (architecture test); all 38
-SHA-256 entries passed. The four-caller freeze and architecture-test provenance gap above remain.
+Self-test loads the frozen sentinel receipt and profile: 10 tests / 52 assertions, no failures/errors;
+kondo reports zero errors/warnings. All 39 SHA-256 entries pass. Runner plus tests total 149 lines,
+each under 120 columns. Prior-pass subprocess probes with a stub donor checked matching exit 0,
+nonzero exit rejection (including either fallback invocation), unrelated-path rejection, the superseded missing-created
+rejection, stderr retention, executable copying, fresh-path handling, and digest-tamper refusal.
+Those probes test the runner boundary; they do not establish a real split's behavior.
+The full `make test` gate stopped in `test-fast`: 756 tests / 6,196 assertions, 2 failures / 4 errors
+in analyzer authority, usage-log CLI outcomes, and recovery receipt writes under `~/.local/state`.
+
+Deferred follow-ups: extra unlisted files under `source/` are not detected by the digest manifest;
+adding source inventory validation and its witnesses is outside this 150-line slice. Real demo email
+addresses remain because the sources are frozen content; changing them would require a separate
+fixture policy. Architecture-test provenance remains unresolved as documented above.
