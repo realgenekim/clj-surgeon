@@ -1,0 +1,248 @@
+--- src/marvin_voice_remote/app_route.clj
++++ src/marvin_voice_remote/app_route.clj
+@@ -22,7 +22,7 @@
+       lockfile hashes, test-result ids, ...) — the honest gap is itself part
+       of the conformance, not a TODO to hide."
+   (:require
+-   [clojure.data.json :as json]
++   [marvin-voice-remote.json :as mjson]
+    [clojure.edn :as edn]
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+@@ -150,7 +150,7 @@
+     {:status 200
+      :headers {"Content-Type" "application/json; charset=utf-8"
+                "Cache-Control" "no-store"}
+-     :body (json/write-str
++     :body (mjson/write
+              {:service/name "marvin-voice-remote"
+               :build/sha (or build-sha "unavailable")
+               :build/time (or build-time "unavailable")
+--- src/marvin_voice_remote/bridge3_new.clj
++++ src/marvin_voice_remote/bridge3_new.clj
+@@ -49,7 +49,6 @@
+       `/voice-lab` already uses; deleting this namespace would change no shipped
+       behavior on any other page."
+   (:require
+-   [clojure.data.json :as json]
+    [marvin-voice-remote.json :as mjson]
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+@@ -309,7 +308,7 @@
+        ;; The pin for this bug is an exact-text assertion, so the text has to be
+        ;; the obvious one.
+        reply-id
+-       (assoc :data-mv-payload (json/write-str {"reply/id" reply-id} :escape-slash false))))))
++       (assoc :data-mv-payload (mjson/write {"reply/id" reply-id} :escape-slash false))))))
+ 
+ ;; THE ELAPSED CLOCK GETS THE RECORDING'S PROMINENCE WHILE THE MIC IS THE USER'S
+ ;; (bead dws; Gene, 2026-07-29: "When recording, I'd like to see a timer").
+@@ -1235,8 +1234,8 @@
+       {:status  200
+        :headers {"Content-Type" "application/json; charset=utf-8"
+                  "Cache-Control" "no-store"}
+-       :body    (json/write-str {:ok true :utt (:utt/id res)})}
++       :body    (mjson/write {:ok true :utt (:utt/id res)})}
+       {:status  (if (= :internal (:error res)) 500 400)
+        :headers {"Content-Type" "application/json; charset=utf-8"
+                  "Cache-Control" "no-store"}
+-       :body    (json/write-str {:error (name (:error res)) :detail (:detail res)})})))
++       :body    (mjson/write {:error (name (:error res)) :detail (:detail res)})})))
+--- src/marvin_voice_remote/channel.clj
++++ src/marvin_voice_remote/channel.clj
+@@ -15,7 +15,6 @@
+    Auth: bearer token CHANNEL_TOKEN. If CHANNEL_TOKEN is unset, the endpoints are
+    open ONLY when ENV=dev (local). See channel-connector/SPEC.md."
+   (:require
+-   [clojure.data.json :as json]
+    [marvin-voice-remote.json :as mjson]
+    [clojure.java.io :as io]
+    [datastar-kit.ds :as ds]
+@@ -231,7 +230,7 @@
+ 
+ ;; --- helpers ---
+ (defn- json-response [m & [status]]
+-  {:status (or status 200) :headers {"Content-Type" "application/json"} :body (json/write-str m)})
++  {:status (or status 200) :headers {"Content-Type" "application/json"} :body (mjson/write m)})
+ 
+ (defn dictate-client-status
+   "Pure: the HTTP status a FAILED transcription answers with — 400 when the
+@@ -1962,7 +1961,7 @@
+          ;; tap-to-talk ENGINE + offline dictation queue, then calls BridgePlayerBoot()
+          ;; (contract: recordingActive() exists before boot; nothing in the player runs
+          ;; until boot, so ordering is safe).
+-         "<script>window.__MARVIN_BRIDGE__={protocol:3,surface:'bridge3',submitPath:'/api/bridge3/dictate',dedupParam:'dedup_id',nativePtt:true};var BP={seat:" (json/write-str seat) ",page:'bridge3',build:" (json/write-str git-sha) ",keyToggleId:'rec'};var SEAT=BP.seat;</script>"
++         "<script>window.__MARVIN_BRIDGE__={protocol:3,surface:'bridge3',submitPath:'/api/bridge3/dictate',dedupParam:'dedup_id',nativePtt:true};var BP={seat:" (mjson/write seat) ",page:'bridge3',build:" (mjson/write git-sha) ",keyToggleId:'rec'};var SEAT=BP.seat;</script>"
+          "<script src=\"/js/bridge-player.js?v=" (System/currentTimeMillis) "\"></script>"
+          "<script>"
+          "let mr,chunks=[],on=false,recMime='',micStream=null,micPromise=null,recStart=0;"
+@@ -3286,7 +3285,7 @@
+           ;; --- THE SHARED PLAYER (bd 6iu): js/bridge-player.js carries the whole reply-audio
+           ;; + transport machine; this inline script keeps ONLY the hands-free VAD engine,
+           ;; then calls BridgePlayerBoot(). keyToggleId:'start' = the t-key toggles hands-free.
+-          "<script>window.__MARVIN_BRIDGE__={protocol:2,surface:'bridge4',build:" (json/write-str git-sha) ",submitPath:'/api/bridge3/dictate',dedupParam:'dedup_id',capturePolicyVersion:2,nativeHf:true,nativeReplyOfferVersion:1,nativeBargeInVersion:1};var BP={seat:" (json/write-str seat) ",page:'bridge4',build:" (json/write-str git-sha) ",keyToggleId:'start',longTtsBuffer:" (if (:long-tts-buffer? friction-state) "true" "false")
++          "<script>window.__MARVIN_BRIDGE__={protocol:2,surface:'bridge4',build:" (mjson/write git-sha) ",submitPath:'/api/bridge3/dictate',dedupParam:'dedup_id',capturePolicyVersion:2,nativeHf:true,nativeReplyOfferVersion:1,nativeBargeInVersion:1};var BP={seat:" (mjson/write seat) ",page:'bridge4',build:" (mjson/write git-sha) ",keyToggleId:'start',longTtsBuffer:" (if (:long-tts-buffer? friction-state) "true" "false")
+           ;; ?micgate=1 ONLY. micGate is the INVERSE of the surface barge-in flag: with
+           ;; barge-in OFF (the production default) the mic is gated while a reply plays.
+           (when (:controls? friction-state)
+--- src/marvin_voice_remote/codex_app_server.clj
++++ src/marvin_voice_remote/codex_app_server.clj
+@@ -5,7 +5,6 @@
+   process plus its wire transcript; callers decide how conversations are
+   presented. All public lifecycle functions are safe to call from an nREPL."
+   (:require
+-   [clojure.data.json :as json]
+    [marvin-voice-remote.json :as mjson]
+    [clojure.java.io :as io]
+    [clojure.string :as str])
+@@ -27,7 +26,7 @@
+ (defn- append-jsonl! [{:keys [receipt-path receipt-lock]} record]
+   (when receipt-path
+     (locking receipt-lock
+-      (spit receipt-path (str (json/write-str record) "\n") :append true))))
++      (spit receipt-path (str (mjson/write record) "\n") :append true))))
+ 
+ (defn- receipt! [client direction payload]
+   (append-jsonl! client {:at (now) :direction direction :payload payload}))
+@@ -37,7 +36,7 @@
+     (throw (ex-info "Codex app-server is not alive" {:message message})))
+   (locking write-lock
+     (receipt! client "client->server" message)
+-    (.write stdin (json/write-str message))
++    (.write stdin (mjson/write message))
+     (.newLine stdin)
+     (.flush stdin)))
+ 
+--- src/marvin_voice_remote/director_control.clj
++++ src/marvin_voice_remote/director_control.clj
+@@ -1,7 +1,6 @@
+ (ns marvin-voice-remote.director-control
+   "Authenticated Director commands for the uniquely active Marvin capture client."
+   (:require
+-   [clojure.data.json :as json]
+    [marvin-voice-remote.json :as mjson]
+    [clojure.string :as str]
+    [marvin-voice-remote.sse-registry :as sse]
+@@ -33,7 +32,7 @@
+   {:status status
+    :headers {"Content-Type" "application/json; charset=utf-8"
+              "Cache-Control" "no-store"}
+-   :body (json/write-str body)})
++   :body (mjson/write body)})
+ 
+ (defn- parse-json-body [request]
+   (mjson/parse (slurp (:body request))))
+@@ -47,7 +46,7 @@
+ (defn- sse-frame [event-name value]
+   (str "id: " (:id value) "\n"
+        "event: " event-name "\n"
+-       "data: " (json/write-str value) "\n\n"))
++       "data: " (mjson/write value) "\n\n"))
+ 
+ (defn- client-id-of [request]
+   (some-> (or (get-in request [:query-params "client"])
+@@ -214,7 +213,7 @@
+                        false)
+            (register! client-id ch request)
+            (send! ch (str "event: hello\ndata: "
+-                          (json/write-str {:client client-id}) "\n\n"))
++                          (mjson/write {:client client-id}) "\n\n"))
+            (future
+              (loop []
+                (Thread/sleep 15000)
+--- src/marvin_voice_remote/director_outbox.clj
++++ src/marvin_voice_remote/director_outbox.clj
+@@ -8,7 +8,6 @@
+    channel-state swap returns. SSE is only the low-latency notification layer:
+    every unacknowledged event is replayed after reconnect."
+   (:require
+-   [clojure.data.json :as json]
+    [marvin-voice-remote.json :as mjson]
+    [clojure.string :as str]
+    [marvin-voice-remote.app-route :as app-route]
+@@ -96,7 +95,7 @@
+ (defn- sse-frame [event-name event]
+   (str "id: " (:id event) "\n"
+        "event: " event-name "\n"
+-       "data: " (json/write-str event) "\n\n"))
++       "data: " (mjson/write event) "\n\n"))
+ 
+ (defn- send! [ch payload]
+   (locking write-lock
+@@ -157,7 +156,7 @@
+   {:status status
+    :headers {"Content-Type" "application/json; charset=utf-8"
+              "Cache-Control" "no-store"}
+-   :body (json/write-str body)})
++   :body (mjson/write body)})
+ 
+ (defn handle-state [_request]
+   (let [state @outbox]
+@@ -245,7 +244,7 @@
+                        :close! #(http/close ch)})
+        (swap! subscribers conj ch)
+        (send! ch (str "event: hello\ndata: "
+-                      (json/write-str {:seat app-route/director-seat
++                      (mjson/write {:seat app-route/director-seat
+                                        :pending (count (pending-events @outbox))})
+                       "\n\n"))
+        (doseq [event (pending-events @outbox)]
+--- src/marvin_voice_remote/reducer_session.clj
++++ src/marvin_voice_remote/reducer_session.clj
+@@ -46,7 +46,6 @@
+    no server-side audio. The page is a MediaPort (D4) — its negative space is
+    documented at `channel/voice-lab-reducer-page-html`."
+   (:require [marvin-voice-remote.json :as mjson]
+-            [clojure.data.json :as json]
+             [clojure.string :as str]
+             [clojure.walk :as walk]
+             [marvin-voice-remote.reducer.core :as core]
+@@ -1090,7 +1089,7 @@
+    client sends back round-trips through `coerce-envelope` unchanged."
+   [x]
+   (let [full (fn [k] (if (keyword? k) (subs (str k) 1) k))]
+-    (json/write-str (walk/postwalk (fn [v] (if (keyword? v) (full v) v)) x)
++    (mjson/write (walk/postwalk (fn [v] (if (keyword? v) (full v) v)) x)
+                     :escape-slash false)))
+ 
+ (defn- json-response
+--- src/marvin_voice_remote/server.clj
++++ src/marvin_voice_remote/server.clj
+@@ -2,7 +2,7 @@
+   "Web server with http-kit, reitit routing, and Datastar SSE.
+    Route handlers are named defns with #'var references for REPL reload."
+   (:require
+-   [clojure.data.json :as json]
++   [marvin-voice-remote.json :as mjson]
+    [marvin-voice-remote.app-route :as app-route]
+    [marvin-voice-remote.auth :as auth]
+    [marvin-voice-remote.bridge3-new :as bridge3-new]
+@@ -36,7 +36,7 @@
+   {:status (or status 200)
+    :headers {"Content-Type" "application/json; charset=utf-8"
+              "Cache-Control" "no-store"}
+-   :body (json/write-str x)})
++   :body (mjson/write x)})
+ 
+ ;; --- Route handlers ---
+ 
+--- src/marvin_voice_remote/tts.clj
++++ src/marvin_voice_remote/tts.clj
+@@ -2,7 +2,7 @@
+   "ElevenLabs Text-to-Speech integration. Converts Marvin's text
+    responses to spoken audio for playback on Gene's phone."
+   (:require
+-   [clojure.data.json :as json]
++   [marvin-voice-remote.json :as mjson]
+    [clojure.java.io :as io]
+    [hato.client :as hc]
+    [taoensso.timbre :as log])
+@@ -118,7 +118,7 @@
+                         {:headers {"xi-api-key" api-key
+                                    "Content-Type" "application/json"
+                                    "Accept" "audio/mpeg"}
+-                         :body (json/write-str
++                         :body (mjson/write
+                                  {:text text
+                                   :model_id "eleven_turbo_v2_5"
+                                   :voice_settings {:stability stability

@@ -1,6 +1,6 @@
 ;; Reproduce the 5a4b4bc alias migration against all nine shipped goldens.
 ;; bb test-fixtures/alias-migration/mvr-5a4b4bc/repro.clj [fixture-dir] <astra-checkout> [scratch-dir]
-;; Requirements: bb, git, a JVM for the checkout's deps if needed, cp, diff.
+;; Requirements: bb, git, a JVM for the checkout's deps if needed, cp, tar.
 ;; Only scratch copies are mutated; seed, goldens and the checkout are unchanged.
 ;; Omit fixture-dir via CLJ_SURGEON_ASTRA (or pass "" as the first argument).
 (require '[babashka.fs :as fs]
@@ -34,7 +34,10 @@
                           "bb" "--clojure" "-Srepro" "-Sdeps" (pr-str deps) "-M"
                           (str (fs/absolutize *file*)) fixture astra scratch)))))
 (require '[clj-surgeon.mcp-alias-migration :as migration])
-(def seed (str fixture "/seed"))
+(def seed (str scratch "/seed"))
+(def manifest (slurp (str fixture "/fixture-manifest.txt")))
+(def digests (into {} (map (fn [[_ hash file]] [file hash])
+                         (re-seq #"(?m)^([0-9a-f]{64})  (.+)$" manifest))))
 (def callers (mapv #(str "src/marvin_voice_remote/" % ".clj")
                ["app_route" "bridge3_new" "channel" "codex_app_server"
                 "director_control" "director_outbox" "reducer_session" "server" "tts"]))
@@ -57,11 +60,17 @@
 (defn command! [& args]
   (let [r (apply shell/sh args)]
     (when-not (zero? (:exit r)) (throw (ex-info "Command failed" (assoc r :args args))))))
-(defn golden-diff [golden result relative]
-  (let [{:keys [exit out err]} (shell/sh "diff" "-u" "--label" (str "golden/" relative)
-                                 "--label" (str "result/" relative) golden result)]
-    (when (> exit 1) (throw (ex-info "diff failed" {:exit exit :err err})))
-    out))
+;; Verify the shipped archive before extraction, then verify its members without following links.
+(doseq [file ["seed.tar.gz" "golden.patch" "request.json"]]
+  (assert (= (get digests file) (sha (Files/readAllBytes (path (str fixture "/" file)))))))
+(assert (not (fs/exists? seed {:nofollow-links true})) "Seed scratch already exists")
+(fs/create-dirs seed)
+(command! "tar" "-xzf" (str fixture "/seed.tar.gz") "-C" seed)
+(doseq [[file [kind value]] (snapshot seed)]
+  (assert (if (= kind :file)
+            (= value (get digests (str "seed/" file)))
+            (.contains manifest (str "# symlink " (sha (.getBytes value "UTF-8"))
+                                     "  seed/" file " -> " value "\n"))) file))
 (defn run-case [label remove-link?]
   (let [root (str scratch "/" label)
         _ (when (Files/exists (path root) (into-array LinkOption [LinkOption/NOFOLLOW_LINKS]))
@@ -88,8 +97,7 @@
         after (snapshot root)
         touched (vec (sort (filter #(not= (get before %) (get after %))
                              (into (set (keys before)) (keys after)))))
-        goldens (snapshot (str fixture "/golden"))
-        matches (mapv #(and (some? (get after %)) (= (get after %) (get goldens (fs/file-name %)))) callers)]
+        matches (mapv #(= (get after %) [:file (get digests (str "golden/" (fs/file-name %)))]) callers)]
     (spit (str scratch "/" label "-plan.edn") (pr-str planned))
     (spit (str scratch "/" label "-apply.edn") (pr-str committed))
     (println "CASE" label)
@@ -105,9 +113,7 @@
       (println "planner-refusal:" (pr-str planned)))
     (println "files-touched:" (count touched) (pr-str touched))
     (doseq [[file match?] (map vector callers matches)]
-      (println "golden-byte-identical:" file match?)
-      (when-not match?
-        (println (golden-diff (str fixture "/golden/" (fs/file-name file)) (str root "/" file) file))))
+      (println "golden-byte-identical:" file match?))
     (println "all-nine-golden-byte-identical:" (every? true? matches))
     (println)
     {:plan plan :after (dissoc after "src/datastar_kit") :touched touched

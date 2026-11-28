@@ -70,8 +70,9 @@ mtimes and cannot be proven.
 ## Reproduction on today's verb
 
 `test-fixtures/alias-migration/mvr-5a4b4bc/` ships the seed's nine caller files at `5a4b4bc^` plus the
-seeded `json.clj` and the tracked symlink, the golden nine files at `5a4b4bc`, the preregistered request,
-a manifest of what ships and the manifest of the complete archive used on 2026-11-28. `repro.clj` beside
+seeded `json.clj` and the tracked symlink as a digest-verified archive, the golden nine files at
+`5a4b4bc` as a patch, the preregistered request, a manifest of what ships and the manifest of the
+complete archive used on 2026-11-28. `repro.clj` beside
 them loads an astra/namespace-split checkout and runs `validate-request -> plan! -> plan->spec ->
 commit!` against a copy of the seed, then compares every file with the golden; its header gives the
 command. The saved run of 2026-11-28 against the complete archive on 7b312f85 (Codex, this machine):

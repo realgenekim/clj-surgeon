@@ -1,4 +1,8 @@
-# SHA256 of shipped file bytes; paths are relative to this fixture directory.
+# SHA256 of shipped artifacts and reconstructed file bytes.
+# Verify in a scratch directory containing the artifacts, seed/ extracted from seed.tar.gz,
+# and golden/ holding the nine patched caller files (by basename).
+# Archive: tar --sort=name --mtime=2026-09-07T00:00:00Z --owner=0 --group=0
+# --numeric-owner --no-xattrs --format=gnu, sorted file/link paths relative to seed/; gzip -n.
 # Symlink entries below are comments: hash the link text as UTF-8 without a newline, never follow it.
 a6dcabdcc9d95d06c7e8594f53fed628fe000eb382622a59ca68b1b8115b80e8  golden/app_route.clj
 4e585ef655169677b00e000955ec016bfe5d952963c1741f4ffc60c13e8b17db  golden/bridge3_new.clj
@@ -21,3 +25,5 @@ d46330d5c010903b655f2a08c0f5b39f19fc0d6a40277cfc81bce259079463b4  seed/src/marvi
 a2d09b5637063ba80bffe11337b719faa1412a5a903fc6baba5a3a106660dbd5  seed/src/marvin_voice_remote/reducer_session.clj
 d89343c94d4d8de56df623cd0f3d61e1339bcec8575ec9299df05de058df9509  seed/src/marvin_voice_remote/server.clj
 da778f72cf06379febb8edfc35953ba51b778291f8c07bcfc95e6bf40f7be759  seed/src/marvin_voice_remote/tts.clj
+0a51e8c0e8510bab1ba981163f1f6396abf7e7032e7266ef43c447e35d30d174  golden.patch
+aa93edd33b4d2da4d3b710c03844dc4066f41926ca214270e50bf213173cc971  seed.tar.gz
