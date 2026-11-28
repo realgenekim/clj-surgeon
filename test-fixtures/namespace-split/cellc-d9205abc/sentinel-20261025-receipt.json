@@ -1,0 +1,209 @@
+{
+  "builder": {
+    "boot_id": "e5f1df7e-bdc2-44b1-8312-50751b793d6c",
+    "builder_pid": null,
+    "builder_starttime_jiffies": null,
+    "instruction_digest_sha256": null,
+    "launcher": null,
+    "model_from_log": null,
+    "model_requested": "gpt-6-astra",
+    "previous_terminal_status": "none",
+    "previous_terminal_status_basis": "n/a",
+    "resumed": false,
+    "session_id": null,
+    "status": "ok",
+    "termination": "not-launched",
+    "wrapper_exit": null,
+    "wrapper_exit_source": "not collected",
+    "wrapper_pid": null,
+    "wrapper_starttime_jiffies": null
+  },
+  "bundle": {
+    "dir": "/var/tmp/forge/round/runs/sentinel-ns-20261025T070002Z",
+    "frozen_runner": "/var/tmp/forge/round/runs/sentinel-ns-20261025T070002Z/round.frozen",
+    "frozen_runner_sha256": "212e3e43c1dc7be99d014dacab91bcfe74737b3c6804f78fc0b440888dffb6dc",
+    "reserved_atomically": true,
+    "runner_source": "/home/forge/bin/round"
+  },
+  "candidate": {
+    "arch_guard_sha256": "4cc53bb54b59dc09294bcd8fb9b62f3f274e2ee5a8e768c1a0825ee06b50255a",
+    "branch": "HEAD",
+    "candidate_deps_sha256": "d3ad2284336f7fdf39bb419b90d13232e89bc6f6d2ae17bdcf13cc3f08f37676",
+    "cc_oracle_sha256": "3f37ed778ed6658f60254706edac2db8ee8d82dc7e3fcfbb4e2c4774383a3607",
+    "commit_status": "skipped",
+    "dirty_definition": "tracked modifications anywhere + untracked under src/ test/ resources/ deps.edn .clj-surgeon.edn",
+    "fixture": "/var/tmp/forge/plan2/build/round-sentinel-ns-20261025T070002Z-fx",
+    "fixture_config_file": "/var/tmp/forge/plan2/build/round-sentinel-ns-20261025T070002Z-fx/.clj-surgeon.edn",
+    "fixture_config_sha256": "d7a70c18678715e503f39b4a526d891e5b69c4abf68ad91463dde78cc37c21a5",
+    "fixture_deps_sha256": "55bb04adbf170dd4f250d7607b3938d5d3d39d8edb6a6cfc90ed27b7be6c783c",
+    "fixture_sha": "d9205abcc9b9f31d93bd4a76537b74fccd583ca6",
+    "papercut_oracle_sha256": "501ba2ce75fb9d670c09c500cff1c1b25053cc80b9fe0a83577d78ebe777813c",
+    "request_file": "/var/tmp/forge/round/runs/sentinel-ns-20261025T070002Z/request.edn",
+    "request_sha256": "9d4d85701dd30e288412f9b84028983e1961ebc9486bce734371460fa47c2a24",
+    "round_script_sha256": "212e3e43c1dc7be99d014dacab91bcfe74737b3c6804f78fc0b440888dffb6dc",
+    "split_receipt_edn": "/var/tmp/forge/round/runs/sentinel-ns-20261025T070002Z/split-receipt.edn",
+    "split_receipt_json": "/var/tmp/forge/round/runs/sentinel-ns-20261025T070002Z/split-receipt.json",
+    "split_receipt_provenance": "produced by this round",
+    "split_receipt_supplied": null,
+    "tip_after": "454a28632c5cdaafb27b8367ee3005db53404b82",
+    "tip_before": "454a28632c5cdaafb27b8367ee3005db53404b82",
+    "worktree": "/home/forge/src/clj-surgeon-sentinel"
+  },
+  "duration_source": "/proc/uptime (CLOCK_BOOTTIME, monotonic)",
+  "durations_ms": {
+    "admission": 2520,
+    "analysis": 5451,
+    "audit": 940,
+    "build": 0,
+    "commit": 30,
+    "grade": 53430,
+    "probe": 11090,
+    "proof": 80,
+    "setup": 640,
+    "total": 58490,
+    "witness": 1450,
+    "write": 41570
+  },
+  "exit_code": 1,
+  "exits": {
+    "aggregate": "witnesses=97",
+    "arch_guard": "0",
+    "builder": {
+      "rc": null,
+      "source": "wait(2)",
+      "termination": "not-launched"
+    },
+    "cc_oracle": "0",
+    "intent_audit": "0",
+    "papercut_oracle": "0",
+    "split_call": {
+      "rc": "0",
+      "source": "exit"
+    },
+    "witness_runner": "97"
+  },
+  "intents": {
+    "audit_ok": "true",
+    "new_intent_markers": "n/a",
+    "new_spec_markers": "n/a",
+    "unlinked_change": "no",
+    "verdict": "ok",
+    "violations": "0"
+  },
+  "lease": {
+    "adopt_disabled_reason": "adopt-disabled: pending ownership transfer",
+    "adopt_enabled": false,
+    "fixture_state_dir": "/var/tmp/forge/round/state/7e8dff817dff2ba13b0b98156a7a03941d30842ad88a45df8d1433e2d9a02ef1",
+    "inside_worktree": false,
+    "state_dir": "/var/tmp/forge/round/state/081adbdbd710ee12e06870d8e7deade7ea8cc8023f64cd063acdb041ae7de27c",
+    "worktree_lease": "/var/tmp/forge/round/state/081adbdbd710ee12e06870d8e7deade7ea8cc8023f64cd063acdb041ae7de27c/lease"
+  },
+  "log": "/var/tmp/forge/round/runs/sentinel-ns-20261025T070002Z/round.log",
+  "oracles": {
+    "arch_guard_7_of_7": "pass",
+    "cc_oracle": "pass",
+    "count": 4,
+    "papercuts": "0",
+    "unit_suite_in_call": "pass",
+    "views_clj_gone": "pass"
+  },
+  "phases": [
+    {
+      "class": "admission",
+      "phase": "LOCK",
+      "result": "ok (flock held on /var/tmp/forge/round/state/081adbdbd710ee12e06870d8e7deade7ea8cc8023f64cd063acdb041ae7de27c/lease (canonical, the only lease); state=/var/tmp/forge/round/state/081adbdbd710ee12e06870d8e7deade7ea8cc8023f64cd063acdb041ae7de27c; no lock files in the worktree; no unowned codex fenced to tree)",
+      "wall_ms": 2470,
+      "wall_s": 2
+    },
+    {
+      "class": "admission",
+      "phase": "PREFLIGHT",
+      "result": "clean (tracked + relevant untracked), branch=HEAD tip=454a2863, bb+clj-kondo+oracles+launcher present",
+      "wall_ms": 50,
+      "wall_s": 0
+    },
+    {
+      "class": "build",
+      "phase": "BUILD",
+      "result": "skipped (--no-build)",
+      "wall_ms": 0,
+      "wall_s": 0
+    },
+    {
+      "class": "commit",
+      "phase": "COMMIT_CHECK",
+      "result": "skipped (--no-build); grading tip 454a2863",
+      "wall_ms": 30,
+      "wall_s": 0
+    },
+    {
+      "class": "setup",
+      "phase": "FIXTURE_SETUP",
+      "result": "fixture=/var/tmp/forge/plan2/build/round-sentinel-ns-20261025T070002Z-fx sha=d9205abc lease=/var/tmp/forge/round/state/7e8dff817dff2ba13b0b98156a7a03941d30842ad88a45df8d1433e2d9a02ef1/lease config=d7a70c18678715e5",
+      "wall_ms": 640,
+      "wall_s": 1
+    },
+    {
+      "class": "write",
+      "phase": "SPLIT_CALL",
+      "result": "rc=0 source=exit receipt=/var/tmp/forge/round/runs/sentinel-ns-20261025T070002Z/split-receipt.edn",
+      "wall_ms": 41570,
+      "wall_s": 42
+    },
+    {
+      "class": "proof",
+      "phase": "RECEIPT_SCHEMA",
+      "result": "ok (6/6; profile=/var/tmp/forge/round/runs/sentinel-ns-20261025T070002Z/verification-profile.json)",
+      "wall_ms": 80,
+      "wall_s": 0
+    },
+    {
+      "class": "probe",
+      "phase": "ORACLES",
+      "result": "PAPERCUTS=0 oracles=4/4 (papercut_rc=0 cc_oracle_rc=0 guard_rc=0)",
+      "wall_ms": 11090,
+      "wall_s": 11
+    },
+    {
+      "class": "grade",
+      "phase": "GRADE",
+      "result": "state=committed in_call=41189ms PAPERCUTS=0 oracles=4/4 receipt_checks=ok(6/6)",
+      "wall_ms": 53430,
+      "wall_s": 53
+    },
+    {
+      "class": "witness",
+      "phase": "WITNESSES",
+      "result": "rc=97 ?t/?a/?f/?e (/var/tmp/forge/round/runs/sentinel-ns-20261025T070002Z/witnesses.log)",
+      "wall_ms": 1450,
+      "wall_s": 1
+    },
+    {
+      "class": "audit",
+      "phase": "INTENT_AUDIT",
+      "result": "ok=true violations=0 rc=0 new_intent_markers=n/a new_spec_markers=n/a (/var/tmp/forge/round/runs/sentinel-ns-20261025T070002Z/intent-audit.log)",
+      "wall_ms": 940,
+      "wall_s": 1
+    }
+  ],
+  "receipt_schema": {
+    "checks_green": 6,
+    "checks_total": 6,
+    "in_call_ms": 41189,
+    "reason": "6/6 checks passed (2 analysis checks may carry evidenced baselines, compared by candidate-lint-delta), verification_complete=true, proof_pending=[], all 4 fixed checks and all 2 profile command(s) present with exact argv, every command bound to the subject fixture, :ok/:committed true, no blockers",
+    "split_state": "committed",
+    "verdict": "ok"
+  },
+  "round": "sentinel-ns-20261025T070002Z",
+  "schema": "round-receipt/2",
+  "total_wall_ms": 58490,
+  "total_wall_s": 58,
+  "verdict": "RED",
+  "witnesses": {
+    "assertions": "?",
+    "errors": "?",
+    "failures": "?",
+    "tests": "?"
+  },
+  "written_utc": "2026-10-25T07:01:01Z"
+}
