@@ -120,3 +120,27 @@ matches the golden; the oracle apparatus failed and its records were reaped). Th
 previous section is withdrawn: there is no re-admission to test for. The namespace-split route is
 unchanged. The pinned sections in `agent-routing-specs.md` change with the plate; the plate names this
 doctrine commit. Installation remains the mayor's act after announcing it to the seats.
+
+## The MCP surface retired everywhere, November 28, 2026 (ruling 71 b)
+
+Authority: Gene, verbatim: "71 no, I'm pretty sure I deleted MCP server weeks ago; I'm pretty sure we're fine.
+Worst case, we have Claude unable to start; which we'll fix later; ready to retire permanently right now; a, I
+suppose!" Asked whether he meant a (after a control run) or b (everywhere now): "71 b". The control run no
+longer gates retirement. Gene accepted the risk that a seat fails to start; the read-only census
+(`bin/surgeon-footprint`) is how that is avoided, machine by machine, before the mayor removes registrations,
+stops units and installs this plate.
+
+Consequence for the plate: no operation in it names an MCP tool. The supporting-read section that named
+`inspect_clojure`, the "other capabilities" list where it named `require_change`, the "do not use" list
+where it named `apply_clojure_changes` and the CLI-as-MCP-substitute measurement, and the terminal-response
+contract for Surgeon MCP operations all leave the plate. Alias migration stays as the previous two sections
+left it: not routed, not ported. Namespace split is no longer routed through MCP: it is being ported to the
+CLI on Gene's ruling 69 a (after the fleet confirms the assumptions) and is not routed until that port lands;
+its exact-contract text is kept as the contract the port must satisfy. What remains routable is what exists
+as a CLI op on main: `:ls`, `:ls-tree`, `:cat`, `:xray`, `:match-form`, `:declares`, `:deps`, `:topo`,
+`:extract`/`:extract!`, `:rename-ns`/`:rename-ns!`, `:fix-declares`/`:fix-declares!`, `:mv`,
+`:replace-subform`/`:replace-subform!`, `:change`/`:change!`, `:require-change!` and the CLJC ops, none of
+them routed automatically; native `rg` plus a native patch stays the default. The lint entrance
+`~/bin/clj-kondo` and the sentence that cclsp and clojure-lsp clients are retired stay. The plate states the
+retirement with the date and Gene's words. Installation is the mayor's act after announcing it to the seats
+and after the census of each machine; nothing on main is deleted by this ruling.
