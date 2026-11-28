@@ -81,6 +81,78 @@ and `proof_pending=[]` at `/var/tmp/forge/round/runs/sentinel-ns-20261025T070002
 intent_transaction, receipt_artifacts, mcp_paths, mcp_process, verification_process, file_ops. Its stage table is
 written after alias migration lands, with the same method; expect about 2,400 source lines and about 45 slices.
 
+## Cell C cold replay, round 3 (2026-11-28)
+
+Replacement: replaces PR 89 (closed on round 3, the unlisted-file rule); inventory must pass before copying only manifest-listed sources.
+
+The fixture runner's bounded contract is to verify frozen input hashes, install the recovered cold
+profile with scratch/fixture paths, attempt commit once, and compare the eight recorded facts. Only a
+typed, explicitly unmutated/uncommitted refusal permits one plan-only diagnostic. Its tests cover
+request rebinding, profile argv/path preservation, safe fallback, and honest missing/different facts.
+This fixture work does not port the verb or admit a new split contract.
+
+Round 3 hardening contract: refuse optimized Python with exit 2 before opening any input; require
+exactly one frozen oracle manifest literal before substitution; clear `PYTHONOPTIMIZE` in the profile.
+The donor receives only PATH, HOME, JAVA_HOME, LANG and TMPDIR when present. With SMTP_HOST absent and no
+fixture `secrets/smtp.edn`, frozen mail uses dev-render. Request and receipt files live in a unique
+sibling directory outside scratch. Boundary witnesses run the real runner CLI against a stub donor
+for plumbing, nonzero exit and typed refusal, and run the Python wrapper in optimized mode and
+against missing/duplicate manifest literals. Frozen sources and oracle remain byte-identical.
+
+Inputs and detailed receipts: [Cell C fixture README](../../test-fixtures/namespace-split/cellc-d9205abc/README.md#replay-usage-and-result).
+The missing `split-unit` configuration is now frozen and installed. The four test callers are frozen
+byte-identically from `d9205abc`, together with the three launch/config files, 19 application namespace
+dependencies, one test helper, and three letter templates needed for `bin/kaocha unit --fail-fast`.
+The requested architecture test exists only in the recovered working tree, not at the pinned commit;
+its provenance gap remains open. Port check: 35 pairs, 34 OK, 1 NO-SOURCE; all 41 SHA-256 entries pass.
+
+PR 89 review round 2 corrects the acceptance contract: every invocation must exit zero;
+`created` requires footprint evidence, and unexpected paths must be a subset of the three recorded
+artefacts. Missing facts fail. Hashing is in-process; copying preserves executable attributes; the
+oracle manifest is an explicit fixture-relative argument. Tests load the frozen receipt and profile.
+The historical receipt `replay-receipt-2026-11-28-anvil-7b312f85.edn` reports committed and verified
+state with 87 sites / five callers and 20 destinations, but its workspace inspection failed with exit
+128 (not a Git workspace). The old nil-path comparison did not establish the unexpected-path boundary.
+The surgeon seat ran the real donor replay on Anvil on 2026-11-28, repeatedly as the runner was hardened; the checked-in receipt and the checked-in runner output are the
+evidence, and they show: commit exit 0, profile green in nine to ten seconds, every comparable recorded fact same
+(87 sites / 5 callers, 20 created, 20 destinations, committed, verified), the scratch inventory honest (59 entries,
+0 extra, 5 classpath-cache artefacts of the profile's own run), exit 0; the receipt is checked in as
+`replay-receipt-2026-11-28-anvil-7b312f85.edn`. The product gate was green on f7cfc077, the final head of pull request 94, which carried these
+frozen sources and the probe test; the wrapper's explicit argv forwarding and the second evidence file came after. The fixture is now a complete cold oracle for "the port must reproduce this receipt" (stage 13).
+
+## PR 94 review round 3 contract (2026-11-28)
+
+After invocation, inventory scratch regular files and symlinks, including hidden paths, without
+following directory symlinks. Subtract manifest source entries, request destinations and the installed
+profile; count paths under any `.cpcache/` directory separately as `profile-artefacts` and exclude them
+before comparing the remainder with the recorded artefact allowance. Destinations count only when regular, non-symlink
+and nonempty (`Files/isRegularFile` with `NOFOLLOW_LINKS`). Invalid destinations are named in the
+failing unexpected-path comparison. Nil receipt facts are not an inventory.
+Print inventory counts and failed verb workspace inspections separately. Preserve frozen
+inputs and the historical receipt. Missing detail files must not crash comparison.
+
+| Witness | Expected |
+|---|---|
+| Nil verb paths, inventory contains extra file | DIFFERS naming the file |
+| Cache paths and 20 destinations | expected-different with profile-artefact count |
+| Cache paths plus stray file | DIFFERS naming the stray file |
+| Hidden unlisted file / directory symlink in fixture copy | CLI exit 2, named refusal, no scratch/control |
+| Stub success / exit 97 / typed refusal | Exact invocation exit and empty stderr, plus runner outcome |
+| Standalone fixture suite | Explicit opt-in; no fixture classpath or Python dependency in product suites |
+| Dangling destination link / empty destination | `destination-not-regular <path>`, excluded from created count, exit 1 |
+| Missing manifest-listed file / scratch parent | Named CLI refusal, exit 2 |
+| Python wrapper with zero, one or three arguments | One-line usage on stderr, exit 2 |
+
+Validation: replay self-test, both files linted through `~/bin/clj-kondo`, combined length <=150,
+lines <120, frozen digests unchanged, product suite where the environment permits it. Fixture probes run
+only through the standalone self-test and require `bb`, `env` and `python3` on PATH;
+they use only a generated stub donor, write under temporary directories cleaned in `finally`, and
+loading the test namespace does not invoke `System/exit`. The stub re-emits recorded facts and proves
+runner plumbing only; it does not independently witness split acceptance. The historical receipt is
+now pinned in the manifest. Empty remainders remain valid subsets, labelled `expected-different`;
+scratch/control directories remain evidence for manual cleanup. Dependency hermeticity, demo-address
+policy and redaction of frozen receipt paths remain deferred to preserve the frozen bytes.
+
 ## Deliberately left behind, and how we know
 
 - The losing operations, by name: `admit_clojure_patch`, `apply_clojure_changes`, `edit_clojure` (with

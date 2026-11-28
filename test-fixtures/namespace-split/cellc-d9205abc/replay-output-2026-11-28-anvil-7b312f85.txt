@@ -1,0 +1,14 @@
+# bb test-fixtures/namespace-split/cellc-d9205abc/replay.clj <astra checkout at 7b312f85> <fresh scratch>; run by the surgeon seat on anvil-server, 2026-11-28T11:10:29Z, SMTP_HOST=example.invalid set as a decoy in the calling shell; stdout verbatim below
+Invocation: commit exit 0
+Scratch: /var/tmp/forge/claude-1011/-home-forge-src-worktrees-clj-surgeon-seat/cca23770-0634-4a43-90f2-9abfa918f2b7/scratchpad/cellc-replay-run16 Control: /var/tmp/forge/claude-1011/-home-forge-src-worktrees-clj-surgeon-seat/cca23770-0634-4a43-90f2-9abfa918f2b7/scratchpad/replay-control-529285352241945016 Diagnostic: nil nil
+workspace-inspection: failed 128 Not a Git workspace
+Details: /var/tmp/forge/namespace-split-receipts/b1bdf41fcf987d4d567bbc87fb615a3a7950ca7911756e76acec620af6257449/5ba216ec-3c57-456f-8ddd-4aa959543e5d-details.edn
+caller_files same
+caller_sites same
+created same (20 destination files present on disk)
+destinations same
+state same
+unexpected_paths inventory: 59, extra: 0, profile-artefacts: 5 (.cpcache/) expected-different recorded artefacts: 3, replay: 0
+unrequired_qualified_refs same
+verification_complete same
+# exit=0

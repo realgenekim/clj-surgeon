@@ -107,11 +107,13 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | 2026-09-02 | E1: gate arm 2.2x native; 69% refusals from grammar mismatch; three red teams missed it because they fed unified diffs; the free-choice arm would have found it in one run | big-aha log E1 |
 | 2026-09-02 | gate round one: confinement/atomicity/TOCTOU solid; hazard detector evadable via declare, reader conditionals, do, metadata; verification_complete minted on process exit; quadratic identity; fixes in round two | big-aha log, gate round one |
 
-Cell C probe (2026-11-28): 62 sites; the inferred 25-site gap needs missing callers and counting rules reconciled.
+Cell C probe (2026-11-28): 62 sites; the inferred 25-site gap needs missing callers and counting rules reconciled. RESOLVED the same day: with the test callers frozen (the cold-replay fixture completion) the probe reproduces 87 sites across five callers; see the next Cell C row.
 Fourth read: defaults follow sequential bindings, including :as and nested patterns; sites and edges share a scanner.
 Explicit/:all refers, renames, aliases, discards, distinct owners and classpath-anchored tests remain covered.
 Only .clj with let/loop/fn/defn scopes is supported; other binding constructs may over-count references.
 Verification: `bb bin/split-closure-probe --self-test`; [plan](plans/2026-11-28-split-closure-probe.md).
+
+Cell C cold replay, 2026-11-28: the frozen request replays cold on donor 7b312f85 to a committed, verified split reproducing every comparable recorded fact (87 sites / 5 callers, 20 destinations, committed, verified), receipt and runner output checked in as `replay-receipt-2026-11-28-anvil-7b312f85.edn`; unlisted files under source/ are refused before copying; the scratch is inventoried by the runner itself. Receipt: the fixture README, "Real donor replay".
 
 ## Live experiment backlog (prediction and cost on every item)
 

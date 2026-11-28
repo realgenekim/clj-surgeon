@@ -1,0 +1,17 @@
+Subject: Your talk was accepted for {{event-name}}
+
+Hi {{speaker-first-name}},
+
+We'd love to have "{{talk-title}}" at {{event-name}}{{event-when}}.
+
+The programming committee read every submission we received, and yours was one
+we kept coming back to. Congratulations — and thank you for the work that went
+into it.
+
+A few small things need you next: confirming your bio, a headshot, and
+eventually a link to your slides. They're waiting for you in your speaker
+portal, and none of them are urgent today.
+
+If anything changes on your end, tell us early — that is never a problem.
+
+{{support-email}}
