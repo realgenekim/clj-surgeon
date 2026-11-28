@@ -28,7 +28,7 @@
 
 ;; @spec ROUTING-PARITY-001
 (deftest sol-r7-class-count
-  (assert-sol-mutation-refused "TWO classes are routed automatically" "THREE classes are routed automatically"))
+  (assert-sol-mutation-refused "ONE class is routed automatically" "TWO classes are routed automatically"))
 
 ;; @spec ROUTING-SPLIT-001
 (deftest sol-r7-frozen-witness
@@ -39,9 +39,18 @@
 (deftest sol-r7-readmission
   (assert-sol-mutation-refused "A changed mapping/policy/source shape needs new admission." ""))
 
-;; @spec ROUTING-PARITY-001
-(deftest sol-r7-alias-operation
-  (assert-sol-mutation-refused "\"op\": \"alias_migration\"" "\"op\": \"other_operation\""))
+;; @spec ROUTING-ALIAS-001
+(deftest alias-migration-is-frozen-off-main
+  (doseq [text ["### Alias migration -- frozen off main"
+                "SUSPENDED and frozen off main 2026-11-28"
+                "64a \"let's purge it from the code\""
+                "75 \"frozen off main is good\""
+                "Not routed, not ported"
+                "archive/astra/namespace-split"
+                "was not a correctness loss of the verb"
+                "every surviving output matches the golden"
+                "the oracle apparatus failed and its records were reaped"]]
+    (assert-sol-mutation-refused text "")))
 
 ;; @spec ROUTING-PARITY-001
 (deftest registry-controls-every-promise
@@ -198,7 +207,7 @@
         (let [checked (routing/check-routing! block-file [codex-file claude-file])]
           (is (:ok checked))
           (is (= (:block-hash first-result) (:block-hash checked)))
-          (is (= "3c2eb6a9" (:doctrine-commit checked)))
+          (is (= "9560bc9d" (:doctrine-commit checked)))
           (is (= [{:path codex-file :block-hash (:block-hash checked)}
                   {:path claude-file :block-hash (:block-hash checked)}]
                  (:targets checked))))
@@ -229,13 +238,13 @@
     (let [plate (slurp "resources/clj-surgeon-agent-routing.md")]
       (is (str/includes? plate "**Strictly better, or native.**"))
       (is (str/includes? plate "**Kill switch.**"))
-      (testing "retained capability, alias route and optional supporting read"
+      (testing "retained capability, frozen alias and optional supporting read"
         (is (str/includes? plate "\"within\": {\"form\": \"add\"}"))
-        (is (str/includes? plate "\"op\": \"alias_migration\", \"workspace_root\""))
+        (is (not (str/includes? plate "\"op\": \"alias_migration\"")))
         (testing "and for the optional supporting read, with expect at the ROOT"
           (is (str/includes? plate "\"expect\": {\"requests\": 3, \"files\": 3}"))))
       (testing "every published example carries workspace_root"
-        (is (= 3 (count (re-seq #"\"workspace_root\"" plate)))))
+        (is (= 2 (count (re-seq #"\"workspace_root\"" plate)))))
       (testing "the receipt scope tests a VALUE, not a field name"
         (is (str/includes? plate "verification_complete=true"))
         (is (str/includes? plate "prove the WRITE, not task")))
@@ -337,7 +346,7 @@
     (is (:ok result))
     (is (= :plate-only (:scope result)))
     (is (= 0 (:target-count result)))
-    (is (= "3c2eb6a9" (:doctrine-commit result)))
+    (is (= "9560bc9d" (:doctrine-commit result)))
     (is (re-matches #"[0-9a-f]{64}" (or (:block-hash result) "")))))
 
   ;; @spec ROUTING-PARITY-001

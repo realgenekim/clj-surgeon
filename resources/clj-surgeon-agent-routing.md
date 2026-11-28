@@ -9,7 +9,7 @@ quality win. Receipt: `docs/observations/2026-09-02-captains-log-bridge-wall-clo
 
 **Strictly better, or native.** Route automatically only when the task matches a witnessed contract and the complete receipt path is available; otherwise use native. On one clear refusal repair once, then native fallback with a receipt. Meter complete verified wall, first-attempt success, fallback and unknown telemetry; retire a route when evidence no longer clears its native control.
 
-TWO classes are routed automatically: alias migration and exact-contract namespace split. Outside them native is the
+ONE class is routed automatically: exact-contract namespace split; alias migration is frozen off main (below). Outside them native is the
 PERFORMANCE default; an explicit user request or a separately approved experiment
 may still use any other capability. The JSON examples below are SCHEMA EXAMPLES INSTANTIATED against a fixture repository
 and executed there, published byte-identical to the request that ran. Substitute the
@@ -41,23 +41,10 @@ to route unknown-owner discovery: `docs/observations/2026-09-06-fanout-I-result.
 <!-- executed 2026-09-06 20:03Z, this exact request, against a scratch copy of the
      fanout-B seed: ok, atomic commit, 3 edits / 2 files, 293.94 ms. -->
 
-### Alias migration -- one whole-repository call
+### Alias migration -- frozen off main
 
-Trigger: known old/new alias intent (`from` lib+Var, `to` lib+Var, an alias policy)
-and an eligible path scope with its expected file count. No proof profile and no
-pre-enumerated match set: the measured run used neither. Afterwards run the
-repository's own required load and tests unless the receipt explicitly proves them.
-
-```json
-{"op": "alias_migration", "workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
- "from": {"lib": "maven.db", "var": "get-ds2"},
- "to": {"lib": "maven.relaxed-search", "var": "tokenize",
-        "alias_policy": ["rsearch", "rs", "relaxed", "r-search"]},
- "scope": {"paths": ["src"]}, "expect": {"files": 2}}
-```
-
-<!-- executed 2026-09-06 20:03Z, this exact request, against a scratch copy of the
-     fanout-B seed: ok, atomic commit, 2 files / 3 sites, 628.12 ms. -->
+**SUSPENDED and frozen off main 2026-11-28 (Gene: 64a "let's purge it from the code", then 75 "frozen off main is good"). Not routed, not ported; the verb and its tests live only under the archive tag `archive/astra/namespace-split`.**
+The weekly sentinel's `verdict=SUSPEND` on 2026-10-18 and 10-25 was not a correctness loss of the verb: every surviving output matches the golden; the oracle apparatus failed and its records were reaped (`docs/observations/2026-11-28-alias-migration-sentinel-verdict.md` on main).
 
 ### Namespace split -- EXACT witnessed contract only
 
@@ -158,7 +145,7 @@ single call remains a capability example above); `apply_clojure_changes` with
 re-prints the whole owner — hundreds of untouched lines); the CLI wrapper as a
 substitute for MCP (a second layer, refuses 2.2x).
 
-*Derived from doctrine commit 3c2eb6a9 on clj-surgeon astra/namespace-split (2026-09-08).*
+*Derived from doctrine commit 9560bc9d on clj-surgeon astra/namespace-split (2026-11-28).*
 Intent and evidence: `docs/intent/agent-routing/agent-routing-design.md`.
 Branch check: `make check-agent-routing PLATE_ONLY=1` (no installed agreement claim).
 Operator: announce the suspension/admission and affected Codex/Claude seats before

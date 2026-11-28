@@ -40,6 +40,7 @@
 ;; This is a repository installer: anchor its intent authority to its source,
 ;; including when Make invokes it from outside the checkout. Missing docs fail closed.
 ;; @spec ROUTING-FANOUT-001
+;; @spec ROUTING-ALIAS-001
 ;; @spec ROUTING-SPLIT-001
 ;; @spec ROUTING-PARITY-001
 (def required-sections
