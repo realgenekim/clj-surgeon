@@ -396,3 +396,19 @@ Gene's rulings tonight (verbatim in the log): Gene reports = vs-native perf firs
 | kernel | GO 2df05b3 (merge point) | in the integration branch |
 
 Mayor: draining via the integration branch; owns curtain-call merges (Sol-reviewed per Gene). Weekly Claude limit resets 19:00Z. Usage watch 96/49/47 flat by construction (cohort servers log elsewhere).
+
+
+## State at 2026-11-28T11:20Z (night of 2026-11-28, after the mayor's night orders)
+
+Nothing is open from this seat: no pull request, no Codex run, no watcher. The running report is
+`~/handoffs/surgeon-seat-report.md` (append-only, every step of the night). Merged on main tonight: 77, 79, 80, 81,
+83, 84, 85, 87, 91, 92, 93, 95; on astra/namespace-split: 82 (the retired-state routing plate, block hash 168b1ec0...,
+doctrine 2b405234; NOT installed from here, the mayor installs after each machine's census). Closed on the three-round
+rule, each with a landed replacement: 78, 86, 88, 89, 90, 94. Not started: night-orders item 3 (7h2
+`required = false` in workspace_onboarding.clj, one line on astra plus a main port), flagged to the mayor. Waiting on
+the mayor: the laptop footprint rerun (the one receipt owed on PR 93), the word on refactor census piece 2 and on the
+split port. The weekly alias sentinel cron line is disabled with re-review 2026-12-28
+(`docs/observations/2026-11-28-alias-sentinel-disabled-re-review-2026-12-28.md`). Lesson recorded: Codex passes
+inside their sandbox cannot run the split verb (read-only analyzer admission directory) and must never write the
+records of a replay; the seat writes records from checked-in evidence only. Slot gate for this seat's Codex runs:
+`/var/tmp/.../scratchpad/myslots.sh` counts only runs tagged with this scratchpad (other seats run Codex on Anvil too).
