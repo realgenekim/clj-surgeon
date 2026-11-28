@@ -1,0 +1,1 @@
+{"op":"alias_migration","workspace_root":"$WORKTREE","from":{"lib":"clojure.data.json","var":"write-str"},"to":{"lib":"marvin-voice-remote.json","var":"write","alias_policy":["json","mjson","m-json","json-policy"]},"scope":{"paths":["src"],"exclude":["src/marvin_voice_remote/json.clj"]},"expect":{"files":9}}
