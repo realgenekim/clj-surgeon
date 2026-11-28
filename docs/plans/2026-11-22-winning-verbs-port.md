@@ -1,5 +1,12 @@
 # Plan: port the winning verbs onto main, 150 lines at a time (D.1, 2026-11-22)
 
+> **FROZEN for alias migration, 2026-11-28 (Gene, ruling 75: "frozen off main is good"; see the freeze record in
+> `docs/observations/2026-11-28-archive-tag-catalog.md`).** Stages 1 to 13 below are not executed; alias migration stays
+> under `archive/astra/namespace-split`. Stages 3, 8 and 9 (the namespace-repair code, about 320 lines) are named as
+> harvestable for a future move-a-function verb. The namespace-split half of this plan is superseded by the third
+> fleet's port plan under Gene's ruling 69 a (slice 0 a held-out run; ruling 70 a byte-identical moves) and waits for
+> Gene's decision 88. The tally below stays at 0 of ~33 by ruling, not by delay.
+
 Gene, 2026-11-22: "And I love the idea of merging in only the winning verbs for surgeon, 150 LoC at a time, leaving out
 losing ones; and validation that we don't need MCP access anymore, and we can retire all of that on its own branch."
 
