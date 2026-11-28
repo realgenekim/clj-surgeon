@@ -1,6 +1,6 @@
 # Exhaustive archive-tag catalog — Gene ruling 72 a
 
-Snapshot: 326 local `archive/*` tags, inspected on 2026-11-28. Scope: the repository was read-only for this catalog (all 326 tags were already available; no fetch, checkout, worktree, commit or ref update), and only this file and the port plan's freeze marker were written in it. Outside the repository, the same seat on the same day disabled the weekly alias sentinel's cron line on the Anvil host (see the freeze record below: the tracked re-review artefact is that record, dated 2026-12-28).
+Snapshot: 326 local `archive/*` tags, inspected on 2026-11-28. Scope: no git ref was created, moved or fetched for this catalog (all 326 tags were already present); the only files written in the repository are this one, the port plan's freeze marker and the re-review record named next. Outside the repository, the same seat on the same day disabled the weekly alias sentinel's cron line on the Anvil host; the tracked record of that change and its re-review date is `docs/observations/2026-11-28-alias-sentinel-disabled-re-review-2026-12-28.md`.
 
 Comparison baseline: `origin/main` = `90f42b72fbbe98d0b30df2da1a8e4d3af9bbbb79`. Each count is `git rev-list --count origin/main..<tag>` against that pinned baseline, **not** a count of commits authored only for that branch. These long-lived branches often contain thousands of stacked or merged commits. Tip dates below are commit dates (`%cI`, including the stored timezone), not the November archive-tag creation date; annotated tags were peeled to commits.
 
@@ -21,7 +21,7 @@ others at cutover): "Oh, yes, frozen off main is good." (ruling 75; the automati
 earlier the same day, ruling 64a).
 
 What that means for this catalog. Alias migration is never ported to main, neither as slices nor as a thin
-entrance; the 33-slice port plan `docs/plans/2026-11-22-winning-verbs-port.md` is marked frozen for it. The
+entrance; the port plan `docs/plans/2026-11-22-winning-verbs-port.md` (thirteen stages, thirty-three slices) is marked frozen for it. The
 code stays reachable only under `archive/astra/namespace-split` (entry below, with the locator table:
 planner `src/clj_surgeon/alias_migration.clj` 1,804 lines; MCP boundary `mcp_alias_migration.clj` 2,854;
 tests 1,252 + 108 + 7,301; fixture builder 627) and under `archive/bridge/q5z-alias-migration` (the
@@ -36,8 +36,9 @@ is not evidence of a wrong migration: every surviving output of those runs match
 step that said NO and its cause cannot be recovered, because the runs' records under `/var/tmp` are gone
 (the thirty-day cleaner is the inference) (`docs/observations/2026-11-28-alias-migration-sentinel-verdict.md`,
 pull request 77; fixture `test-fixtures/alias-migration/mvr-5a4b4bc`). The sentinel's cron line on Anvil was
-disabled by this seat on 2026-11-28 with re-review 2026-12-28 (the forge crontab carries the dated comment;
-backup `~/crontab.bak-2026-11-28-074707`), under the mayor's ruling-71 b note. The freeze rests on the
+disabled by this seat on 2026-11-28 with re-review 2026-12-28; the tracked record is
+`docs/observations/2026-11-28-alias-sentinel-disabled-re-review-2026-12-28.md` (the crontab line verbatim, the
+backup's name, the owner and the question to answer on that date), under the mayor's ruling-71 b note. The freeze rests on the
 fleets' demand and value findings and on Gene's ruling, not on the sentinel.
 
 ## astra/* — 27 tags
@@ -370,6 +371,8 @@ Recorded result, `docs/observations/2026-09-05-astra-fair-comparison-result.md:3
 > | native / gpt-6-astra | 6 accepted | 34.2085 s | 34.605 s | 6/6 |
 > | helper_extraction / gpt-5.6-sol | 2 attempted, 2 refused | — | — | 0 accepted; refusal retained |
 > | helper_extraction / gpt-6-astra | 0 launched | — | — | no result |
+
+Checkout: `git fetch origin tag archive/astra/production-readiness && git worktree add --detach <dir> archive/astra/production-readiness`
 
 ### archive/astra/receipt-facts-2
 
@@ -5396,7 +5399,7 @@ Recorded battery row (for the SHA in the row), `docs/observations/battery-ledger
 
 Checkout: `git fetch origin tag archive/bb-rewrite-tower-land && git worktree add --detach <dir> archive/bb-rewrite-tower-land`
 
-## records/MCP-main — 1 tags
+## records/MCP-main — 1 tag
 
 The records branch separates experiment observations, canary grades, ledgers, and synthesis from code freshness on MCP/main. It is the durable September research record, including the later zoom-out reports.
 
@@ -5579,32 +5582,27 @@ Checkout: `git fetch origin tag archive/test/eligibility-characterization-202608
 
 ## Coverage verification
 
-All tags have individual entries, including the 108 receipt-named branches: **326 own-entry tags, 326 tags covered**. The check
-below counts the tags, asserts the expected 326, and exits non-zero on any miss or extra heading; its output against the final
-bytes of this file follows it (regenerated after the last edit, not pasted from a draft).
+Every tag has its own entry, the 108 receipt-named branches included. The check below compares the local `archive/*`
+tags with this file's `### archive/` headings and exits non-zero on any missing, extra or duplicate heading; the tag
+count is reported, not asserted, so a later tag is a new snapshot rather than a failure. Its output against the final
+bytes of this file follows it; the paste is a fixed point (the output line is one line whatever number it carries, so
+re-running it after pasting prints the same line).
 
 ```bash
 catalog=docs/observations/2026-11-28-archive-tag-catalog.md
-expected=326
 tags=$(git tag -l 'archive/*' | LC_ALL=C sort)
-n=$(printf '%s
-' "$tags" | grep -c .)
 heads=$(grep -E '^### archive/' "$catalog" | sed 's/^### //' | LC_ALL=C sort)
-missing=$(LC_ALL=C comm -23 <(printf '%s
-' "$tags") <(printf '%s
-' "$heads") | grep -c . || true)
-extra=$(LC_ALL=C comm -13 <(printf '%s
-' "$tags") <(printf '%s
-' "$heads") | grep -c . || true)
-dups=$(printf '%s
-' "$heads" | uniq -d | grep -c . || true)
-printf 'tags=%s expected=%s headings=%s missing=%s extra=%s duplicate=%s lines=%s\n' \
-  "$n" "$expected" "$(printf '%s\n' "$heads" | grep -c .)" "$missing" "$extra" "$dups" "$(wc -l < "$catalog")"
-[ "$n" -eq "$expected" ] && [ "$missing" -eq 0 ] && [ "$extra" -eq 0 ] && [ "$dups" -eq 0 ] && echo COVERAGE-OK || { echo COVERAGE-FAIL; exit 1; }
+missing=$(LC_ALL=C comm -23 <(printf '%s\n' "$tags") <(printf '%s\n' "$heads") | grep -c . || true)
+extra=$(LC_ALL=C comm -13 <(printf '%s\n' "$tags") <(printf '%s\n' "$heads") | grep -c . || true)
+dups=$(printf '%s\n' "$heads" | uniq -d | grep -c . || true)
+printf 'tags=%s headings=%s missing=%s extra=%s duplicate=%s lines=%s\n' \
+  "$(printf '%s\n' "$tags" | grep -c .)" "$(printf '%s\n' "$heads" | grep -c .)" \
+  "$missing" "$extra" "$dups" "$(wc -l < "$catalog" | tr -d ' ')"
+[ "$missing" -eq 0 ] && [ "$extra" -eq 0 ] && [ "$dups" -eq 0 ] && echo COVERAGE-OK || { echo COVERAGE-FAIL; exit 1; }
 ```
 
 ```text
-tags=326 expected=326 headings=326 missing=0 extra=0 duplicate=0 lines=5607
+tags=326 headings=326 missing=0 extra=0 duplicate=0 lines=5609
 COVERAGE-OK
 ```
 
