@@ -481,9 +481,11 @@
     ;; the total without touching the map -- which is exactly why the two
     ;; assertions below must be derived separately.
     ;; TEST-ISO-014 adds the six-cell launcher coverage promise.
-    (is (= 247 (count non-mcp)))
+    ;; ROUTING-ALIAS-001 (2026-11-28, Gene's rulings 64a and 75) adds one ROUTING- id;
+    ;; ROUTING-RETIRED-001 (2026-11-28, ruling 71 b) adds another.
+    (is (= 249 (count non-mcp)))
     (is (= {"WTL-" 53 "PERF-SENT-" 50 "OP-ALG-" 39 "TEST-ISO-" 21
-            "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 3}
+            "MEASURE-" 4 "TELEMETRY-EVENTS-" 1 "ROUTING-" 5}
            (into {} (for [prefix ["WTL-" "PERF-SENT-" "OP-ALG-" "TEST-ISO-"
                                   "MEASURE-" "TELEMETRY-EVENTS-" "ROUTING-"]]
                       [prefix (count (filter #(str/starts-with? % prefix) non-mcp))]))))))

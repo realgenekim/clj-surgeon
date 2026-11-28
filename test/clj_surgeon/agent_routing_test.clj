@@ -28,7 +28,7 @@
 
 ;; @spec ROUTING-PARITY-001
 (deftest sol-r7-class-count
-  (assert-sol-mutation-refused "TWO classes are routed automatically" "THREE classes are routed automatically"))
+  (assert-sol-mutation-refused "NO class is routed automatically" "ONE class is routed automatically"))
 
 ;; @spec ROUTING-SPLIT-001
 (deftest sol-r7-frozen-witness
@@ -39,9 +39,20 @@
 (deftest sol-r7-readmission
   (assert-sol-mutation-refused "A changed mapping/policy/source shape needs new admission." ""))
 
+;; @spec ROUTING-ALIAS-001
 ;; @spec ROUTING-PARITY-001
-(deftest sol-r7-alias-operation
-  (assert-sol-mutation-refused "\"op\": \"alias_migration\"" "\"op\": \"other_operation\""))
+(deftest alias-migration-is-frozen-off-main
+  (doseq [text ["### Alias migration -- frozen off main"
+                "SUSPENDED and frozen off main 2026-11-28"
+                "64a \"let's purge it from the code\""
+                "75 \"frozen off main is good\""
+                "Not routed, not ported to main; the verb and its tests are on `astra/namespace-split` and its archive tag `archive/astra/namespace-split`, never on main."
+                "sentinel-verdict.md` on main, pull request 77"
+                "was not a correctness loss of the verb"
+                "every surviving output matches the golden"
+                "the oracle apparatus failed and its records were reaped"]]
+    (testing text
+      (assert-sol-mutation-refused text ""))))
 
 ;; @spec ROUTING-PARITY-001
 (deftest registry-controls-every-promise
@@ -81,16 +92,20 @@
 
 ;; @spec ROUTING-FANOUT-001
 ;; @spec ROUTING-SPLIT-001
+;; @spec ROUTING-RETIRED-001
 ;; @spec ROUTING-PARITY-001
 (deftest working-tree-skill-matches-plate
   (doseq [path ["skills/clj-surgeon/SKILL.md" "skill.md" ".claude/skills/clj-surgeon/SKILL.md"]]
     (let [skill (slurp path)]
       (is (<= (count (str/split-lines skill)) 70) path)
       (doseq [needle ["FAN-OUT: SUSPENDED" "ALIAS migration" "NAMESPACE SPLIT: exact frozen Cell C"
+                      "NO class is routed automatically." "2026-11-28, ruling 71 b"
                       "d9205abc" "141 owners / 20 absent destinations / 87 static sites / five callers"
                       "changed mapping/policy/source shape needs new admission"
                       "Any other nonzero exit refuses"]]
         (is (str/includes? skill needle) (str path ": " needle)))
+      (is (nil? (re-find #"inspect_clojure|apply_clojure_changes|edit_clojure|transform_clojure|require_change|terminal_response|next_call|namespace_split|relation_census|feature_thread|alias_migration"
+                  skill)) path)
       (is (not (str/includes? skill "Route only\n  when discovery is the cost"))))))
 
 ;; @spec ROUTING-PARITY-001
@@ -198,7 +213,7 @@
         (let [checked (routing/check-routing! block-file [codex-file claude-file])]
           (is (:ok checked))
           (is (= (:block-hash first-result) (:block-hash checked)))
-          (is (= "3c2eb6a9" (:doctrine-commit checked)))
+          (is (= "2b405234" (:doctrine-commit checked)))
           (is (= [{:path codex-file :block-hash (:block-hash checked)}
                   {:path claude-file :block-hash (:block-hash checked)}]
                  (:targets checked))))
@@ -208,16 +223,23 @@
       (finally
         (fs/delete-tree tmp)))))
 
-(deftest terminal-response-routing-is-conditional-on-complete-user-work
-  ;; @spec MCP-OP-RELAY-004
-  (let [source (slurp "resources/clj-surgeon-agent-routing.md")]
-    (is (str/includes? source "If `terminal_response` is present"))
-    (is (re-find #"completes all remaining\s+user-requested work" source))
-    (is (str/includes? source "return its value exactly"))
-    (is (str/includes? source "If work remains"))
-    (is (re-find
-          #"They never prove\s+that the complete user request is finished\."
-          source))))
+;; @spec ROUTING-RETIRED-001
+;; @spec MCP-OP-RELAY-004
+(deftest mcp-surface-is-retired-everywhere
+  (let [plate (slurp "resources/clj-surgeon-agent-routing.md")
+        retirement "**The MCP surface is retired everywhere (Gene, 2026-11-28, ruling 71 b: \"ready to retire permanently right now\").** No clj-surgeon MCP server is registered or started by any seat; every operation below is the CLI (`clj-surgeon :op ...`). Nothing on main is deleted by this ruling."]
+    (is (str/includes? plate retirement))
+    (assert-sol-mutation-refused retirement "")
+    (doseq [tool-name ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
+                       "transform_clojure" "require_change" "terminal_response"
+                       "next_call" "namespace_split" "relation_census" "feature_thread"
+                       "alias_migration"]]
+      (is (not (str/includes? plate tool-name)) tool-name)
+      (let [mutant (str/replace plate routing/managed-end
+                     (str "Call " tool-name " for supporting reads.\n" routing/managed-end))
+            result (routing/validate-routing-block mutant)]
+        (is (= {:ok false :error-type :routing-names-mcp-tool :tool-name tool-name}
+               result))))))
 
 (deftest doctrine-sections-are-required-in-every-block
   (testing "the shipped plate carries every required section byte-exact"
@@ -225,22 +247,19 @@
       (is (seq routing/required-sections))
       (doseq [section routing/required-sections]
         (is (str/includes? plate section) section))))
-  (testing "the plate routes only witnessed contracts and says when a route retires"
+  (testing "the plate suspends automatic routing and retains the split port contract"
     (let [plate (slurp "resources/clj-surgeon-agent-routing.md")]
       (is (str/includes? plate "**Strictly better, or native.**"))
       (is (str/includes? plate "**Kill switch.**"))
-      (testing "retained capability, alias route and optional supporting read"
-        (is (str/includes? plate "\"within\": {\"form\": \"add\"}"))
-        (is (str/includes? plate "\"op\": \"alias_migration\", \"workspace_root\""))
-        (testing "and for the optional supporting read, with expect at the ROOT"
-          (is (str/includes? plate "\"expect\": {\"requests\": 3, \"files\": 3}"))))
-      (testing "every published example carries workspace_root"
-        (is (= 3 (count (re-seq #"\"workspace_root\"" plate)))))
-      (testing "the receipt scope tests a VALUE, not a field name"
+      (testing "fan-out request removed and alias frozen"
+        (is (not (str/includes? plate "```json")))
+        (is (not (str/includes? plate "\"op\": \"alias_migration\""))))
+      (testing "no executable JSON request remains"
+        (is (not (str/includes? plate "\"workspace_root\""))))
+      (testing "the split port must prove behavior and inspect mutation status"
         (is (str/includes? plate "verification_complete=true"))
-        (is (str/includes? plate "prove the WRITE, not task")))
-      (testing "the escape rule reads commit status before falling back"
-        (is (str/includes? plate "a refusal does not imply that nothing was written")))))
+        (is (str/includes? plate "a commit alone proves no behavior"))
+        (is (str/includes? plate "Read mutation/commit status FIRST")))))
   (testing "the plate names the doctrine commit it derives from"
     (is (re-find #"Derived from doctrine commit [0-9a-f]{8}"
                  (slurp "resources/clj-surgeon-agent-routing.md"))))
@@ -297,7 +316,7 @@
     (is (str/includes? plate "Capability example only; no automatic fan-out route."))
     (is (not (str/includes? plate "## Fan-out route (experimental default")))
     (is (str/includes? plate "0.68×/0.59× are native/tool wall ratios"))
-    (is (str/includes? plate "\"within\": {\"form\": \"add\"}"))))
+    (is (not (str/includes? plate "```json")))))
 
   ;; @spec ROUTING-SPLIT-001
 (deftest split-route-is-exact-contract-only
@@ -308,12 +327,14 @@
                   "`promotion_policy=promote-required`, `source_retirement=delete`"
                   "`roots=[src,test]` and a named cold `verification.profile`"
                   "clj-surgeon :op :split-ns! :request-file X"
-                  "MCP `namespace_split`"
+                  "One call, once the port lands: `clj-surgeon :op :split-ns! :request-file X`."
+                  "NO class is routed automatically. Namespace split is being ported to the CLI"
+                  "and is not routed until that port lands; alias migration is frozen off main (below)."
                   "`state=committed`, `verification_complete=true`, `proof_pending=[]`"
                   "every required profile check present with `:exit 0`"
                   "`papercuts` must pass when the profile carries that oracle"
                   "plan-only first when the mapping is uncertain"
-                  "repair once from `next_call`, then native"
+                  "repair once from the refusal's named next step, then native"
                   "Never re-run a committed split"
                   "wall loss vs the registered controls suspends this route"
                   "dynamic references, open-ended decomposition, other source grammars"
@@ -337,7 +358,7 @@
     (is (:ok result))
     (is (= :plate-only (:scope result)))
     (is (= 0 (:target-count result)))
-    (is (= "3c2eb6a9" (:doctrine-commit result)))
+    (is (= "2b405234" (:doctrine-commit result)))
     (is (re-matches #"[0-9a-f]{64}" (or (:block-hash result) "")))))
 
   ;; @spec ROUTING-PARITY-001

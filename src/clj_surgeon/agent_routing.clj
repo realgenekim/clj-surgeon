@@ -9,7 +9,7 @@
    (java.math BigInteger)
    (java.security MessageDigest)))
 
-;; @spec MCP-OP-RELAY-004
+;; @spec ROUTING-PARITY-001
 (def managed-begin "<!-- BEGIN CLJ-SURGEON ROUTING v:1 -->")
 (def managed-end "<!-- END CLJ-SURGEON ROUTING v:1 -->")
 
@@ -40,7 +40,9 @@
 ;; This is a repository installer: anchor its intent authority to its source,
 ;; including when Make invokes it from outside the checkout. Missing docs fail closed.
 ;; @spec ROUTING-FANOUT-001
+;; @spec ROUTING-ALIAS-001
 ;; @spec ROUTING-SPLIT-001
+;; @spec ROUTING-RETIRED-001
 ;; @spec ROUTING-PARITY-001
 (def required-sections
   (registry-sections
@@ -129,15 +131,25 @@
     (format "%064x" (BigInteger. 1 digest))))
 
 ;; @spec ROUTING-PARITY-001
+;; @spec ROUTING-RETIRED-001
+;; @spec MCP-OP-RELAY-004
 (defn validate-routing-block
   "Validate canonical bytes without reading any installed target."
   [block]
-  (let [missing (missing-sections block)
+  (let [tool-name (some #(when (str/includes? block %) %)
+                    ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
+                     "transform_clojure" "require_change" "terminal_response"
+                     "next_call" "namespace_split" "relation_census"
+                     "feature_thread" "alias_migration"])
+        missing (missing-sections block)
         lines (count (str/split-lines block))
         bytes (alength (.getBytes ^String block "UTF-8"))]
     (cond
       (not (valid-canonical-block? block))
       {:ok false :error-type :invalid-canonical-routing}
+
+      tool-name
+      {:ok false :error-type :routing-names-mcp-tool :tool-name tool-name}
 
       (seq missing)
       {:ok false :error-type :missing-required-routing-section :missing missing}

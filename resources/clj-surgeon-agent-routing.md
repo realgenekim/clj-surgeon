@@ -9,13 +9,11 @@ quality win. Receipt: `docs/observations/2026-09-02-captains-log-bridge-wall-clo
 
 **Strictly better, or native.** Route automatically only when the task matches a witnessed contract and the complete receipt path is available; otherwise use native. On one clear refusal repair once, then native fallback with a receipt. Meter complete verified wall, first-attempt success, fallback and unknown telemetry; retire a route when evidence no longer clears its native control.
 
-TWO classes are routed automatically: alias migration and exact-contract namespace split. Outside them native is the
+**The MCP surface is retired everywhere (Gene, 2026-11-28, ruling 71 b: "ready to retire permanently right now").** No clj-surgeon MCP server is registered or started by any seat; every operation below is the CLI (`clj-surgeon :op ...`). Nothing on main is deleted by this ruling.
+
+NO class is routed automatically. Namespace split is being ported to the CLI (Gene, 2026-11-28, ruling 69 a, after the fleet confirms the assumptions) and is not routed until that port lands; alias migration is frozen off main (below). Outside them native is the
 PERFORMANCE default; an explicit user request or a separately approved experiment
-may still use any other capability. The JSON examples below are SCHEMA EXAMPLES INSTANTIATED against a fixture repository
-and executed there, published byte-identical to the request that ran. Substitute the
-task inputs: `workspace_root`, lib, Var, file, form, path and every count. Ratios, fixtures, caveats and how the
-meter is operated live in
-`docs/observations/2026-09-06-strictly-better-evidence.md`.
+may still use any other capability. Measured ratios, fixtures and caveats live in `docs/observations/2026-09-06-strictly-better-evidence.md`.
 
 ### Fan-out -- one call, many named owners
 
@@ -28,36 +26,10 @@ not every fan-out size. September 7 receipts:
 Cohort I's discovery-dependent 1.75× remains historical evidence, not permission
 to route unknown-owner discovery: `docs/observations/2026-09-06-fanout-I-result.md`.
 
-```json
-{"workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
- "edits": [{"file": "src/maven/inbox.clj", "within": {"form": "add"},
-            "from": "(mdb/get-ds)", "to": "(mdb/get-ds2)", "matches": 1},
-           {"file": "src/maven/inbox.clj", "within": {"form": "snooze"},
-            "from": "(mdb/get-ds)", "to": "(mdb/get-ds2)", "matches": 1},
-           {"file": "src/maven/tweets.clj", "within": {"form": "search"},
-            "from": "(mdb/get-ds)", "to": "(mdb/get-ds2)", "matches": 1}]}
-```
+### Alias migration -- frozen off main
 
-<!-- executed 2026-09-06 20:03Z, this exact request, against a scratch copy of the
-     fanout-B seed: ok, atomic commit, 3 edits / 2 files, 293.94 ms. -->
-
-### Alias migration -- one whole-repository call
-
-Trigger: known old/new alias intent (`from` lib+Var, `to` lib+Var, an alias policy)
-and an eligible path scope with its expected file count. No proof profile and no
-pre-enumerated match set: the measured run used neither. Afterwards run the
-repository's own required load and tests unless the receipt explicitly proves them.
-
-```json
-{"op": "alias_migration", "workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
- "from": {"lib": "maven.db", "var": "get-ds2"},
- "to": {"lib": "maven.relaxed-search", "var": "tokenize",
-        "alias_policy": ["rsearch", "rs", "relaxed", "r-search"]},
- "scope": {"paths": ["src"]}, "expect": {"files": 2}}
-```
-
-<!-- executed 2026-09-06 20:03Z, this exact request, against a scratch copy of the
-     fanout-B seed: ok, atomic commit, 2 files / 3 sites, 628.12 ms. -->
+**SUSPENDED and frozen off main 2026-11-28 (Gene: 64a "let's purge it from the code", then 75 "frozen off main is good"). Not routed, not ported to main; the verb and its tests are on `astra/namespace-split` and its archive tag `archive/astra/namespace-split`, never on main.**
+The weekly sentinel's `verdict=SUSPEND` on 2026-10-18 and 10-25 was not a correctness loss of the verb: every surviving output matches the golden; the oracle apparatus failed and its records were reaped (`docs/observations/2026-11-28-alias-migration-sentinel-verdict.md` on main, pull request 77).
 
 ### Namespace split -- EXACT witnessed contract only
 
@@ -68,9 +40,9 @@ named once to a destination `{lib,file,forms,alias_policy[,doc]}`; supplied
 `roots=[src,test]` and a named cold `verification.profile`.
 Witness: curtaincall-cfp `d9205abc`, `src/cfp_scheduler_killer/views.clj`:
 141 named owners / 20 absent destinations / 87 static sites / five caller files.
-One call: `clj-surgeon :op :split-ns! :request-file X` or MCP `namespace_split`.
+One call, once the port lands: `clj-surgeon :op :split-ns! :request-file X`.
 X is the complete frozen request with `workspace_root` rebound to the owned
-fixture; MCP takes that same request data. A changed mapping/policy/source shape needs new admission.
+fixture. A changed mapping/policy/source shape needs new admission.
 
 Proof over the current snapshot requires ALL of:
 `state=committed`, `verification_complete=true`, `proof_pending=[]`,
@@ -82,7 +54,7 @@ A warm `committed-probe-only` receipt is unfinished proof. Run outstanding
 user-required checks/review; a commit alone proves no behavior.
 
 Escape: plan-only first when the mapping is uncertain (`plan_only=true` in X).
-A safely correctable typed refusal: repair once from `next_call`, then native.
+A safely correctable typed refusal: repair once from the refusal's named next step, then native.
 Read mutation/commit status FIRST; stale/conflicting evidence requires refresh.
 Never re-run a committed split; finish pending proof or follow guarded recovery.
 Kill switch: a correctness failure or complete verified
@@ -100,46 +72,6 @@ Historical cross-wave ratios are not fresh matched estimates; B02 owns observer
 qualification. The p9–p12 September 8 regrades in `/var/tmp/forge/coldstart/ledger.txt`
 are workflow PASS evidence, not split controls or friction-low certification.
 
-### Optional supporting read
-
-`inspect_clojure` is a SUPPORTING read, not an automatic route: use it when
-structural information is actually needed and native discovery has not already
-supplied it. Never insert an inspect pass after sufficient native discovery. The
-root-level `expect` is required. A wildcard `_` matches ONE subtree, so it does not
-enumerate calls of arbitrary arity -- write the exact arity you mean.
-
-```json
-{"workspace_root": "/var/tmp/forge/fable-strict-fx/scratch",
- "requests": [{"id": "r1", "operation": "outline", "file": "src/maven/db.clj"},
-              {"id": "r2", "operation": "match", "file": "src/maven/inbox.clj",
-               "match": "(mdb/get-ds)"},
-              {"id": "r3", "operation": "match", "file": "src/maven/tweets.clj",
-               "match": "(mdb/get-ds)"}],
- "expect": {"requests": 3, "files": 3}}
-```
-
-<!-- executed 2026-09-06 20:03Z, this exact request, against a scratch copy of the
-     fanout-B seed: ok, read_complete=true, 3 requests / 3 files / 12 matches,
-     74.6 ms. Note the topology: three DISTINCT files, so expect.files is 3. -->
-
-### Receipts: test values, not field names
-
-Proof is `verification_complete=true` TOGETHER WITH the named successful checks over
-the current snapshot; a false or pending field is not evidence. `atomic commit
-complete` and `written bytes read back and verified` prove the WRITE, not task
-semantics -- do not re-verify a proven write, and do not treat it as behavioural
-proof. Run the outstanding required checks and repair any failure before claiming
-completion. No receipt retires user-required review, independent acceptance, or a
-check that was never performed.
-
-### Escape rule
-
-Repair ONE clear, safely correctable argument error from the refusal text. A stale
-or conflicting snapshot needs fresh evidence, not a repair. An unavailable
-capability goes native immediately. Before any fallback, read the receipt's mutation
-and commit status: a refusal does not imply that nothing was written, and a
-completed change is never reapplied blindly.
-
 **Kill switch.** A correctness failure SUSPENDS a routed class immediately. A wall
 loss is assessed against that class's controls, never banned on one noisy pair.
 Unknown telemetry means unknown PERFORMANCE -- use native pending investigation, not
@@ -148,29 +80,17 @@ fallback rate, and complete request-to-verified wall; collector coverage of thos
 itself unproven, so unknowns are retained as unknown.
 
 **Other capabilities** (`:extract!`, `:rename-ns!`, `:fix-declares!`,
-MCP `require_change`, surgical `within` + `from`/`to`, `:ls-deps`, `:topo`)
+`:ls-deps`, `:topo`)
 remain available by explicit request or separately approved experiment.
 
 **Do not use (measured losers):** per-form writes -- N separate calls -- for a
-fan-out change (one native patch does 21 owners in one cell; the batched
-single call remains a capability example above); `apply_clojure_changes` with
-`owner {:kind "namespace"}` or forms-scoped `find`+`replace` for insertion (it
-re-prints the whole owner — hundreds of untouched lines); the CLI wrapper as a
-substitute for MCP (a second layer, refuses 2.2x).
+fan-out change (one native patch does 21 owners in one cell).
 
-*Derived from doctrine commit 3c2eb6a9 on clj-surgeon astra/namespace-split (2026-09-08).*
+*Derived from doctrine commit 2b405234 on clj-surgeon astra/namespace-split (2026-11-28).*
 Intent and evidence: `docs/intent/agent-routing/agent-routing-design.md`.
 Branch check: `make check-agent-routing PLATE_ONLY=1` (no installed agreement claim).
 Operator: announce the suspension/admission and affected Codex/Claude seats before
-`make install-agent-routing`; then `make check-agent-routing` must prove installed parity.
-
-**Every Surgeon MCP operation relays the same terminal-response contract.**
-If `terminal_response` is present and this mutation completes all remaining
-user-requested work, return its value exactly. Do not add text, reread, or
-reverify. If work remains, do not return `terminal_response`. Treat it as
-terminal evidence for this operation and continue. `next_action=none` and
-`terminal_response` describe only the completed mutation. They never prove
-that the complete user request is finished.
+`make install-agent-routing`; then `make check-agent-routing` must prove installed parity. Installation follows the read-only census of that machine (`bin/surgeon-footprint`).
 
 **Lint through `~/bin/clj-kondo`**, always. This paved entrance serializes
 analyzers across agents, repositories, and JVMs; an absolute Homebrew path
