@@ -1,4 +1,5 @@
 {:verification-profiles
  {"split-unit"
   {:commands [["bin/kaocha" "unit" "--fail-fast"]
-              ["python3" "{{fixture}}/cc-oracle-replay.py" "{{scratch}}" "{{fixture}}/cc-split.json"]]}}}
+              ["env" "-u" "PYTHONOPTIMIZE" "python3"
+               "{{fixture}}/cc-oracle-replay.py" "{{scratch}}" "{{fixture}}/cc-split.json"]]}}}

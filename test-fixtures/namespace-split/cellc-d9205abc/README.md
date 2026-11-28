@@ -39,10 +39,11 @@ Not here: the split's output tree. The receipts carry its hashes. The replay bel
 workspace from these inputs and installs the recovered `split-unit` profile, which `d9205abc` itself
 does not carry. It still needs the archived verb, its analyzer admission gate, and the application's
 Java/Clojure dependencies. The profile passes the fixture's `cc-split.json` to `cc-oracle-replay.py`.
-This tiny wrapper reads the frozen `cc-oracle.py`, replaces its literal manifest path with the supplied
-argument, and executes the source. The original oracle bytes and digest are preserved; the wrapper
-and updated profile have their own manifest digests.
-The oracle still uses bare `assert` (silent under `python3 -O`) and column-0 form matching.
+This wrapper refuses optimized Python with exit 2 before reading inputs, then requires exactly one
+manifest-path literal before substituting the supplied argument and executing the frozen oracle.
+Missing or duplicate literals also exit 2. The profile clears `PYTHONOPTIMIZE` explicitly. The original
+oracle bytes and digest are preserved; the wrapper and updated profile have their own manifest digests.
+The oracle retains column-0 form matching.
 
 ## Replay usage and result
 
@@ -52,7 +53,11 @@ The scratch path must not exist and must be outside the fixture and donor checko
 the SHA-256 manifest in-process with `java.security.MessageDigest`, copies `source/` with file attributes, rebinds the request's workspace, and installs
 `workspace.clj-surgeon.edn` as `<scratch>/.clj-surgeon.edn`. In the config, `{{scratch}}` becomes the
 scratch root and `{{fixture}}` the fixture directory; the commands remain `bin/kaocha unit --fail-fast`
-and `python3 <fixture>/cc-oracle-replay.py <scratch> <fixture>/cc-split.json`. It attempts commit first. Only a typed refusal with both
+and `env -u PYTHONOPTIMIZE python3 <fixture>/cc-oracle-replay.py <scratch> <fixture>/cc-split.json`.
+The donor receives an explicit environment containing only PATH, HOME, JAVA_HOME and LANG when set.
+No SMTP settings, tokens or Python optimization setting are inherited. Frozen `mail.clj` selects
+dev-render when SMTP_HOST is absent and no workspace-local `secrets/smtp.edn` exists; the fixture has
+no such file. It attempts commit first. Only a typed refusal with both
 `mutation_attempted=false` and `committed=false` permits one diagnostic plan-only call. The output names
 each path and exit and preserves invocation stderr. Missing split facts remain `DIFFERS`;
 `created` compares the recorded count with request destination files present on disk in scratch
@@ -61,7 +66,9 @@ a mismatch reports `created DIFFERS <recorded> <on-disk>`. Receipt destination c
 Replay `unexpected_paths` must be a subset of `.clj-surgeon.edn`, `00SERVER-LOGS.txt`, and
 `test/cfp_scheduler_killer/view_architecture_test.clj`; nil means no unexpected paths. Accepted subsets
 report `expected-different`; any other path is named in `DIFFERS`. Exit zero requires all invocations
-to exit zero and every other fact to match. The last receipt stays in `<scratch>/replay-receipt.edn`.
+to exit zero and every other fact to match. `request.edn` and the last `replay-receipt.edn` stay in a
+unique `replay-control-*` sibling directory of scratch, outside the inspected workspace. The runner
+prints that directory as `Control:`. Keep it with scratch when retaining evidence; remove both afterward.
 A rollback or committed receipt is never retried.
 
 Round 2 additions, all obtained with `git show d9205abc:<path>` from the read-only rescue checkout
@@ -84,20 +91,25 @@ working tree but **does not exist in `d9205abc`** (`git show` exits 128). It is 
 substituted from disk. This is consistent with its being an unexpected path in the old receipt, but does
 not establish its provenance. That gap remains open.
 
-Verification on 2026-11-28 (PR 89 review round 2):
+Verification on 2026-11-28 (PR 89 review round 3):
 
 The earlier claim of a fresh committed replay on donor `7b312f85` is withdrawn: its receipt was
 only an unshared local path, so this checkout does not substantiate that result. Real donor replay
 remains for the operator. A receipt without `facts.footprint.created` uses the filesystem comparison above.
 
-Self-test loads the frozen sentinel receipt and profile: 10 tests / 52 assertions, no failures/errors;
-kondo reports zero errors/warnings. All 39 SHA-256 entries pass. Runner plus tests total 149 lines,
-each under 120 columns. Prior-pass subprocess probes with a stub donor checked matching exit 0,
-nonzero exit rejection (including either fallback invocation), unrelated-path rejection, the superseded missing-created
-rejection, stderr retention, executable copying, fresh-path handling, and digest-tamper refusal.
-Those probes test the runner boundary; they do not establish a real split's behavior.
-The full `make test` gate stopped in `test-fast`: 756 tests / 6,196 assertions, 2 failures / 4 errors
-in analyzer authority, usage-log CLI outcomes, and recovery receipt writes under `~/.local/state`.
+Self-test requires the runner namespace and loads the frozen sentinel receipt and profile:
+6 tests / 73 assertions, no failures/errors; kondo reports zero errors/warnings. All 39 SHA-256 entries
+pass. Runner plus tests total 150 lines, each under 120 columns. The checked-in subprocess tests run
+the real runner CLI against a stub donor for matching exit 0, nonzero-exit rejection and typed-refusal
+fallback. The stub checks the complete environment allowlist, sibling request placement, executable
+copying and profile installation. Python subprocesses cover optimization refusal, missing/duplicate
+manifest literals, successful substitution and active assertions. The new regressions failed against
+the old code before the fixes. An additional default-scratch probe passed and verified that both
+control files stay outside scratch; the reported canonicalization failure did not reproduce here.
+These probes establish runner behavior, not a real split's behavior.
+The round 3 `make test` gate stopped in `test-fast`: 756 tests / 6,196 assertions, 2 failures / 4 errors
+in analyzer authority, usage-log CLI outcomes, and recovery receipt writes under `~/.local/state`,
+matching the previously recorded gate failures. Later gate stages did not run.
 
 Deferred follow-ups: extra unlisted files under `source/` are not detected by the digest manifest;
 adding source inventory validation and its witnesses is outside this 150-line slice. Real demo email
