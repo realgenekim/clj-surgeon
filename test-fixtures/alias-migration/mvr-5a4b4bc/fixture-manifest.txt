@@ -1,0 +1,29 @@
+# SHA256 of shipped artifacts and reconstructed file bytes.
+# Verify in a scratch directory containing the artifacts, seed/ extracted from seed.tar.gz,
+# and golden/ holding the nine patched caller files (by basename).
+# Archive: tar --sort=name --mtime=2026-09-07T00:00:00Z --owner=0 --group=0
+# --numeric-owner --no-xattrs --format=gnu, sorted file/link paths relative to seed/; gzip -n.
+# Symlink entries below are comments: hash the link text as UTF-8 without a newline, never follow it.
+a6dcabdcc9d95d06c7e8594f53fed628fe000eb382622a59ca68b1b8115b80e8  golden/app_route.clj
+4e585ef655169677b00e000955ec016bfe5d952963c1741f4ffc60c13e8b17db  golden/bridge3_new.clj
+af8588ff407b2bb46821979cd03ee850cd80bd4b00ede575e155069fe5e8a1bd  golden/channel.clj
+1169f21bd1a311f6a95657a5e1311f7f5ffdd7d0d05e7e17797617d2a32b701c  golden/codex_app_server.clj
+f13ed1dfe55bbfebe80c8f68a0ce29912c3ff1d9450a2de5e4f53096dfda7c9b  golden/director_control.clj
+bd3e7132062090129aab5333c27fdfe4f5398ceae2861dd016c997f5c8b6ed5c  golden/director_outbox.clj
+756a0cbaf4ffa3d62301d17094b1f3457f28a99714480ce1c6c4a15ccf24a5f8  golden/reducer_session.clj
+da6e418406f9baf1ada5a9ccae5d72f131061900cdab96922c32e5f4321621d0  golden/server.clj
+ffb3fc94afe71a26be409cffdc99685a1bf63e6a46957ac460e6af5c300ac619  golden/tts.clj
+bcc70e6601c11cc56a65a2f5b2740de2365eea1afa9f94a3a185adb3a753b7e8  request.json
+# symlink 7cc21adc2336ada8d7f4b1b40cf633a24f090ac51d6e3d3af16dbedfb16fc9ac  seed/src/datastar_kit -> ../../datastar-helpers/src/datastar_kit
+bd5d2e7ce62584b835c4b882a32dda305a8964e620e959bec3b4b77aabb54199  seed/src/marvin_voice_remote/app_route.clj
+92932ce794d67f62ba879bac0a4700357ef774793f6e6f4f74bba85539c03e1f  seed/src/marvin_voice_remote/bridge3_new.clj
+32464216f8bc8eef49d2cb1c754e2e16b932cd87e41befaf6ed647c6b7569e17  seed/src/marvin_voice_remote/channel.clj
+d079ed5e5de07f5893471b660e3548e5068b18be7ee05dcdc6e015183ca7f206  seed/src/marvin_voice_remote/codex_app_server.clj
+70a57e5c2c741f4825ddd295eaa5cdeeed889c52770efd694a6383ba0f9ce0f2  seed/src/marvin_voice_remote/director_control.clj
+d46330d5c010903b655f2a08c0f5b39f19fc0d6a40277cfc81bce259079463b4  seed/src/marvin_voice_remote/director_outbox.clj
+5e2b4151ff2823586bdb55d0b795d4f71d744b95571ce966eb685d4b89fec410  seed/src/marvin_voice_remote/json.clj
+a2d09b5637063ba80bffe11337b719faa1412a5a903fc6baba5a3a106660dbd5  seed/src/marvin_voice_remote/reducer_session.clj
+d89343c94d4d8de56df623cd0f3d61e1339bcec8575ec9299df05de058df9509  seed/src/marvin_voice_remote/server.clj
+da778f72cf06379febb8edfc35953ba51b778291f8c07bcfc95e6bf40f7be759  seed/src/marvin_voice_remote/tts.clj
+0a51e8c0e8510bab1ba981163f1f6396abf7e7032e7266ef43c447e35d30d174  golden.patch
+aa93edd33b4d2da4d3b710c03844dc4066f41926ca214270e50bf213173cc971  seed.tar.gz
