@@ -483,11 +483,13 @@ every immediate `~/.claude-*/` directory (glob, directories only, without follow
 and repeatable `--config-dir <dir>` options, for example:
 `bb bin/surgeon-footprint --config-dir /profiles/kanban --config-dir /profiles/builder`.
 Registrations include `disabled=<value>` when configured.
-Extra directories are normalized and deduplicated; `~/.claude` remains the default profile.
-Each extra file is labelled with its full path; missing extra files are omitted. Default missing files
-still print `absent`. `profiles: <n> extra (<names>)` lists sorted directory paths, including empty profiles.
+Extra directories expand a leading `~/`, then are normalized and deduplicated; `~/.claude` remains the default.
+Each extra file is labelled with its full path; missing files print `absent`, including misspelt explicit profiles.
+`profiles: <n> extra (<names>)` lists sorted directory paths, including empty profiles.
+Failed HOME discovery prints `profiles: unavailable: <reason>`; environment/explicit profiles and host sections continue.
 Listener order is `ss -ltnp`, `ss -ltn`, `lsof +c 0 -nP -iTCP -sTCP:LISTEN`, then netstat:
 `netstat -an -p tcp` on Darwin, `netstat -ltn` elsewhere. lsof owners include command and PID.
+Valid lsof output survives stderr warnings at exit 0 or 1; empty exit 1 with stderr falls through.
 `listeners-source: ss|lsof|netstat|none` identifies the check. `listen: none` means checked, nothing found;
 if no tool succeeds, output is `listen: unavailable: no ss, lsof or netstat`.
 Also included: loaded/installed user launch units, listeners, server/mention processes and routing-block hashes.

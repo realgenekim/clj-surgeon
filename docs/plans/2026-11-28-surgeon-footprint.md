@@ -59,16 +59,19 @@ Without the original command diagnostics, the exact fallback execution cannot be
 Piece 3 keeps the census read-only with no service connections. Tool order is ss -ltnp,
 ss -ltn, lsof +c 0 -nP -iTCP -sTCP:LISTEN, then netstat (-an -p tcp on Darwin, -ltn elsewhere).
 Output identifies listeners-source: ss|lsof|netstat|none. A successful empty check prints listen: none;
-exhausting all tools prints listen: unavailable: no ss, lsof or netstat. lsof's empty exit 1 with
-no stderr is an empty selection; other failures fall through. Owners retain command and pid.
+exhausting all tools prints listen: unavailable: no ss, lsof or netstat. lsof exit 0 succeeds despite warnings;
+exit 1 succeeds with nonblank stdout or no stderr. Empty exit 1 with stderr and other failures fall through.
+Owners retain command and pid. Listener totals use the printed section's count, with unavailable counted as zero.
 
 Default paths remain. Extra Claude directories come from nonblank CLAUDE_CONFIG_DIR, immediate
 ~/.claude-* directories (no symlink following), and repeatable --config-dir <dir> options.
-Directory paths are normalized and deduplicated; ~/.claude is the default, not an extra profile.
+Directory paths expand a leading ~/ against HOME, then are normalized and deduplicated;
+~/.claude is the default, not an extra profile. Discovery failure prints profiles: unavailable: <reason>;
+CLAUDE_CONFIG_DIR and explicit directories still contribute, and all host sections and the footer run.
 Explicitly selecting ~/.claude also checks its .claude.json; its settings.json is counted only once.
 Registrations print disabled=<value> when the field is present.
-Each extra directory contributes existing .claude.json and settings.json, labelled by full path;
-missing extra files are omitted. Unreadable files retain diagnostics. Empty extra directories still
+Each extra directory contributes .claude.json and settings.json, labelled by full path;
+missing files print absent, including misspelt explicit directories. Unreadable files retain diagnostics. Empty directories
 count in profiles: <n> extra (<names>), whose names are sorted directory paths.
 
 | Contract | Witness |
@@ -77,7 +80,9 @@ count in profiles: <n> extra (<names>), whose names are sorted directory paths.
 | ss, lsof, netstat selection, empty success, all unavailable | Mocked command matrix, both host modes |
 | Default absent versus extra existing/absent, two profiles | Literal path-to-JSON map, no temp directory |
 | Repeated option and invalid/missing argument | Pure argument matrix and CLI exit probes |
-| Environment/glob/explicit paths, deduplication, symlinks | Isolated temporary HOME boundary probe |
+| Environment/glob/explicit/tilde paths, deduplication, symlinks | Isolated temporary HOME boundary probe |
+| Missing/unreadable HOME preserves selected profiles | Missing-HOME CLI boundary and injected denied listing |
+| lsof warnings, exit 0/1, empty/nonempty stdout | Eight-case command matrix |
 
 Acceptance remains at most 150 changed script lines, test additions at least source additions,
 lines under 120 columns, self-test, ~/bin/clj-kondo and a live Linux census identifying ss.
@@ -102,6 +107,29 @@ Cannot open netlink socket: Operation not permitted.
 The requested live listeners-source: ss receipt remains unavailable in this sandbox.
 The subprocess matrix verifies successful ss selection, but is not live-host evidence or an approved
 substitute for that acceptance requirement. A live macOS receipt is also outstanding.
-Deferred under the 150-line script budget: accepting lsof stdout alongside benign stderr, nonexistent
-HOME handling, and tilde expansion of quoted explicit paths. Each needs behavior and boundary tests;
-this round retains existing coverage and prioritizes the confirmed defects.
+## Final review round: fixes and remaining acceptance
+
+The confirmed code defects are repaired: discovery failures are contained, lsof warnings preserve valid output,
+and absent profile files produce diagnostics. Quoted tilde paths deduplicate after expansion. The profile-source
+binding no longer shadows name, and listener counts reuse section's result. README already documented disabled=
+and the laptop incident was already here rather than in README at the reviewed head.
+
+The new regressions first produced 28 failures on the reviewed implementation. The final suite covers missing
+HOME through a child CLI, unreadable HOME through an injected listing error, both explicit and environment
+profiles, tilde/default exclusion, every host section and the footer. Profile boundary children have an empty
+PATH and invoke bb by its absolute path, so they cannot run real crontab/ps/listener commands. The option CLI
+probes only invoke help and invalid options; they do not run a census. Existing parser and fallback coverage stays.
+
+Live Linux ss and live macOS acceptance remain OPEN, not waived or replaced by fixtures. A maintainer must
+provide those host receipts or explicitly waive them before claiming full acceptance; this sandbox cannot
+produce a Darwin run, and its netlink access denies ss. This is an evidence limitation, not a line-budget cut.
+Deferred to keep the script diff at 150 changed lines: deduplication of ~/.claude.json when --config-dir selects
+HOME (the plausible overlap finding), and explicit rendering of JSON null in disabled= (currently empty).
+Both need additional regression coverage. No confirmed code defect is deferred. No commit or push in this worktree.
+
+Verification: bb bin/surgeon-footprint --self-test and make surgeon-footprint-self-test each pass 25 tests /
+390 assertions. Serialized ~/bin/clj-kondo reports 0 errors / 0 warnings. The script diff against PR base
+2535894d is 135 additions + 15 deletions = 150 changed lines; longest line is 119 columns. git diff --check passes.
+HOME=/nonexistent bb bin/surgeon-footprint --config-dir /tmp exits 0, prints profiles: unavailable: /nonexistent,
+both /tmp config paths as absent, every host section, listeners-source: lsof and the footprint footer.
+The requested pipe through head only shows ten lines; the full run separately verifies the footer and exit status.
