@@ -1,6 +1,6 @@
 # Exhaustive archive-tag catalog — Gene ruling 72 a
 
-Snapshot: 326 local `archive/*` tags, inspected on 2026-11-28. Git remained read-only; all 326 tags were already available, so no fetch, checkout, worktree creation, commit, or ref update was performed. Only this catalog was written in the repository.
+Snapshot: 326 local `archive/*` tags, inspected on 2026-11-28. Scope: the repository was read-only for this catalog (all 326 tags were already available; no fetch, checkout, worktree, commit or ref update), and only this file and the port plan's freeze marker were written in it. Outside the repository, the same seat on the same day disabled the weekly alias sentinel's cron line on the Anvil host (see the freeze record below: the tracked re-review artefact is that record, dated 2026-12-28).
 
 Comparison baseline: `origin/main` = `90f42b72fbbe98d0b30df2da1a8e4d3af9bbbb79`. Each count is `git rev-list --count origin/main..<tag>` against that pinned baseline, **not** a count of commits authored only for that branch. These long-lived branches often contain thousands of stacked or merged commits. Tip dates below are commit dates (`%cI`, including the stored timezone), not the November archive-tag creation date; annotated tags were peeled to commits.
 
@@ -364,11 +364,12 @@ Recorded battery row (for the SHA in the row), `docs/observations/battery-ledger
 
 > {:sha "c5e8be8f0a1bc662ed68b379eb47a2869e0b0f47", :started "2026-09-05T20:03:51Z", :wall_s 699, :verdict :pass, :host "anvil-server"}
 
-Recorded result (scope and candidate as quoted), `docs/observations/2026-09-05-astra-fair-comparison-result.md:1`:
+Recorded result, `docs/observations/2026-09-05-astra-fair-comparison-result.md:3-8` (the arm table):
 
-> # Astra fair comparison result — 2026-09-05
-
-Checkout: `git fetch origin tag archive/astra/production-readiness && git worktree add --detach <dir> archive/astra/production-readiness`
+> | native / gpt-5.6-sol | 6 accepted | 36.8295 s | 39.702 s | 6/6 |
+> | native / gpt-6-astra | 6 accepted | 34.2085 s | 34.605 s | 6/6 |
+> | helper_extraction / gpt-5.6-sol | 2 attempted, 2 refused | — | — | 0 accepted; refusal retained |
+> | helper_extraction / gpt-6-astra | 0 launched | — | — | no result |
 
 ### archive/astra/receipt-facts-2
 
@@ -1246,7 +1247,7 @@ Subjects: “docs: the battery failure REPRODUCES on the unmodified trunk tip un
 
 Added observation/plan documents (merge-base comparison): `docs/observations/suite-spike-round3-review-sol.md`; `docs/observations/2026-09-05-suite-spike-round5.md`.
 
-Recorded result (scope and candidate as quoted), `docs/observations/2026-09-05-suite-spike-round5.md:42`:
+Recorded result, `docs/observations/2026-09-05-suite-spike-round5.md:42`. The GREEN below is the exclusion-membership oracle of round five (every live exclusion proves membership), not the battery: the same branch's subjects record the battery's FAILING receipt, which reproduces on the unmodified trunk tip.
 
 > VERDICT: GREEN
 > ```
@@ -2595,6 +2596,8 @@ Checkout: `git fetch origin tag archive/fable/impact-executor && git worktree ad
 
 ### archive/fable/insert-forms
 
+Shares its tip commit and its prose with `archive/fable/insert-forms-r1` (two tags, one branch state).
+
 Branch: `fable/insert-forms`. Tip: `29f81c5f` · 2026-09-10T23:10:14Z. Commits not on main: **2661**.
 
 Repairs insert_forms comment tails and inline-body indentation, retaining all six fix-round regression witnesses.
@@ -2610,6 +2613,8 @@ Shared-history battery result (the row names its measured candidate, not a verdi
 Checkout: `git fetch origin tag archive/fable/insert-forms && git worktree add --detach <dir> archive/fable/insert-forms`
 
 ### archive/fable/insert-forms-r1
+
+Shares its tip commit and its prose with `archive/fable/insert-forms` (two tags, one branch state).
 
 Branch: `fable/insert-forms-r1`. Tip: `29f81c5f` · 2026-09-10T23:10:14Z. Commits not on main: **2661**.
 
@@ -5574,27 +5579,33 @@ Checkout: `git fetch origin tag archive/test/eligibility-characterization-202608
 
 ## Coverage verification
 
-All tags have individual entries, including the 108 receipt-named branches: **326 own-entry tags + 0 combined-receipt tags = 326 tags covered**. The checks below compare exact entry headings as well as grep every complete tag name.
-
-```text
-own-entry tags: 326
-combined-receipt tags: 0
-total tags covered: 326 / 326
-duplicate entry headings: 0
-missing tags: 0
-extra entry headings: 0
-5570 docs/observations/2026-11-28-archive-tag-catalog.md
-grep coverage: 326 / 326; missing: 0
-```
-
-Reproduce the grep and line-count checks:
+All tags have individual entries, including the 108 receipt-named branches: **326 own-entry tags, 326 tags covered**. The check
+below counts the tags, asserts the expected 326, and exits non-zero on any miss or extra heading; its output against the final
+bytes of this file follows it (regenerated after the last edit, not pasted from a draft).
 
 ```bash
 catalog=docs/observations/2026-11-28-archive-tag-catalog.md
-git tag -l 'archive/*' | while IFS= read -r tag; do
-  grep -Fqx -- "### $tag" "$catalog" || printf 'MISSING %s\n' "$tag"
-done
-wc -l "$catalog"
+expected=326
+tags=$(git tag -l 'archive/*' | LC_ALL=C sort)
+n=$(printf '%s
+' "$tags" | grep -c .)
+heads=$(grep -E '^### archive/' "$catalog" | sed 's/^### //' | LC_ALL=C sort)
+missing=$(LC_ALL=C comm -23 <(printf '%s
+' "$tags") <(printf '%s
+' "$heads") | grep -c . || true)
+extra=$(LC_ALL=C comm -13 <(printf '%s
+' "$tags") <(printf '%s
+' "$heads") | grep -c . || true)
+dups=$(printf '%s
+' "$heads" | uniq -d | grep -c . || true)
+printf 'tags=%s expected=%s headings=%s missing=%s extra=%s duplicate=%s lines=%s\n' \
+  "$n" "$expected" "$(printf '%s\n' "$heads" | grep -c .)" "$missing" "$extra" "$dups" "$(wc -l < "$catalog")"
+[ "$n" -eq "$expected" ] && [ "$missing" -eq 0 ] && [ "$extra" -eq 0 ] && [ "$dups" -eq 0 ] && echo COVERAGE-OK || { echo COVERAGE-FAIL; exit 1; }
+```
+
+```text
+tags=326 expected=326 headings=326 missing=0 extra=0 duplicate=0 lines=5607
+COVERAGE-OK
 ```
 
 Index: astra/* 27; MCP/* 7; bridge/* 46; fable/* 136; experiment/* 40; audit/* 16; docs/* 22; feature/* 9; release/* 5; bench/* 3; codex/* 2; bb-rewrite-tower* 2; records/MCP-main 1; skiff* 2; singletons 8; total 326. List: `git tag -l 'archive/*'`. Fetch: `git fetch origin --tags`.
