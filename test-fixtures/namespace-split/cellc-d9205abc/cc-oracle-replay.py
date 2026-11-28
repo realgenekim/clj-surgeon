@@ -1,6 +1,10 @@
 import pathlib
 import sys
 
+if len(sys.argv) != 3:
+    print('Usage: cc-oracle-replay.py <scratch> <manifest>', file=sys.stderr)
+    sys.exit(2)
+
 if sys.flags.optimize:
     print('Optimized Python disables oracle assertions; refusing replay.', file=sys.stderr)
     sys.exit(2)

@@ -93,10 +93,10 @@ This fixture work does not port the verb or admit a new split contract.
 
 Round 3 hardening contract: refuse optimized Python with exit 2 before opening any input; require
 exactly one frozen oracle manifest literal before substitution; clear `PYTHONOPTIMIZE` in the profile.
-The donor receives only PATH, HOME, JAVA_HOME and LANG when present. With SMTP_HOST absent and no
+The donor receives only PATH, HOME, JAVA_HOME, LANG and TMPDIR when present. With SMTP_HOST absent and no
 fixture `secrets/smtp.edn`, frozen mail uses dev-render. Request and receipt files live in a unique
 sibling directory outside scratch. Boundary witnesses run the real runner CLI against a stub donor
-for acceptance, nonzero exit and typed refusal, and run the Python wrapper in optimized mode and
+for plumbing, nonzero exit and typed refusal, and run the Python wrapper in optimized mode and
 against missing/duplicate manifest literals. Frozen sources and oracle remain byte-identical.
 
 Inputs and detailed receipts: [Cell C fixture README](../../test-fixtures/namespace-split/cellc-d9205abc/README.md#replay-usage-and-result).
@@ -113,16 +113,18 @@ oracle manifest is an explicit fixture-relative argument. Tests load the frozen 
 The historical receipt `replay-receipt-2026-11-28-anvil-7b312f85.edn` reports committed and verified
 state with 87 sites / five callers and 20 destinations, but its workspace inspection failed with exit
 128 (not a Git workspace). The old nil-path comparison did not establish the unexpected-path boundary.
-Earlier timing and green-gate claims are not re-attested here. A fresh real replay is required before
-calling this a complete cold oracle for a port; the requesting reviewer owns that rerun.
+This seat ran the real donor replay on Anvil on 2026-11-28; its receipt is checked in as
+`replay-receipt-2026-11-28-anvil-7b312f85.edn`. Earlier timing and green-gate claims are not re-attested here.
 
-## PR 94 review round 2 contract (2026-11-28)
+## PR 94 review round 3 contract (2026-11-28)
 
 After invocation, inventory scratch regular files and symlinks, including hidden paths, without
 following directory symlinks. Subtract manifest source entries, request destinations and the installed
-profile; count `.cpcache/` paths separately as `profile-artefacts` and exclude them before comparing
-the remainder with the recorded artefact allowance. Nil receipt facts are not an
-inventory. Print inventory counts and failed verb workspace inspections separately. Preserve frozen
+profile; count paths under any `.cpcache/` directory separately as `profile-artefacts` and exclude them
+before comparing the remainder with the recorded artefact allowance. Destinations count only when regular, non-symlink
+and nonempty (`Files/isRegularFile` with `NOFOLLOW_LINKS`). Invalid destinations are named in the
+failing unexpected-path comparison. Nil receipt facts are not an inventory.
+Print inventory counts and failed verb workspace inspections separately. Preserve frozen
 inputs and the historical receipt. Missing detail files must not crash comparison.
 
 | Witness | Expected |
@@ -132,13 +134,20 @@ inputs and the historical receipt. Missing detail files must not crash compariso
 | Cache paths plus stray file | DIFFERS naming the stray file |
 | Hidden unlisted file / directory symlink in fixture copy | CLI exit 2, named refusal, no scratch/control |
 | Stub success / exit 97 / typed refusal | Exact invocation exit and empty stderr, plus runner outcome |
-| Automated product suite | Collect replay tests without exiting during load |
+| Standalone fixture suite | Explicit opt-in; no fixture classpath or Python dependency in product suites |
+| Dangling destination link / empty destination | `destination-not-regular <path>`, excluded from created count, exit 1 |
+| Missing manifest-listed file / scratch parent | Named CLI refusal, exit 2 |
+| Python wrapper with zero, one or three arguments | One-line usage on stderr, exit 2 |
 
 Validation: replay self-test, both files linted through `~/bin/clj-kondo`, combined length <=150,
-lines <120, frozen digests unchanged, product suite where the environment permits it. The real donor
-rerun belongs to the requesting reviewer. Suite probes require `bb` on PATH (also `env` and `python3`);
+lines <120, frozen digests unchanged, product suite where the environment permits it. Fixture probes run
+only through the standalone self-test and require `bb`, `env` and `python3` on PATH;
 they use only a generated stub donor, write under temporary directories cleaned in `finally`, and
-loading the test namespace does not invoke `System/exit`. Dependency hermeticity and demo-address policy remain deferred.
+loading the test namespace does not invoke `System/exit`. The stub re-emits recorded facts and proves
+runner plumbing only; it does not independently witness split acceptance. The historical receipt is
+now pinned in the manifest. Empty remainders remain valid subsets, labelled `expected-different`;
+scratch/control directories remain evidence for manual cleanup. Dependency hermeticity, demo-address
+policy and redaction of frozen receipt paths remain deferred to preserve the frozen bytes.
 
 ## Deliberately left behind, and how we know
 

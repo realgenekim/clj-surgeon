@@ -39,7 +39,8 @@ Not here: the split's output tree. The receipts carry its hashes. The replay bel
 workspace from these inputs and installs the recovered `split-unit` profile, which `d9205abc` itself
 does not carry. It still needs the archived verb, its analyzer admission gate, and the application's
 Java/Clojure dependencies. The profile passes the fixture's `cc-split.json` to `cc-oracle-replay.py`.
-This wrapper refuses optimized Python with exit 2 before reading inputs, then requires exactly one
+This owned wrapper requires exactly two arguments; otherwise it prints one usage line on stderr and
+exits 2. It refuses optimized Python before reading inputs, then requires exactly one
 manifest-path literal before substituting the supplied argument and executing the frozen oracle.
 Missing or duplicate literals also exit 2. The profile clears `PYTHONOPTIMIZE` explicitly. The original
 oracle bytes and digest are preserved; the wrapper and updated profile have their own manifest digests.
@@ -49,7 +50,8 @@ The oracle retains column-0 form matching.
 
 Run `bb test-fixtures/namespace-split/cellc-d9205abc/replay.clj <astra-checkout> [scratch]`; `CLJ_SURGEON_ASTRA`
 replaces the checkout argument. Self-test: `bb test-fixtures/namespace-split/cellc-d9205abc/replay_test.clj`.
-The scratch path must not exist and must be outside the fixture and donor checkout. Before copying
+The scratch path must not exist and must be outside the fixture and donor checkout. Its parent must
+exist (`scratch-parent-missing`, exit 2); missing manifest inputs report `replay-io-refused`, exit 2. Before copying
 anything, the runner enumerates every regular file and symlink under `source/`, including hidden paths,
 without following directory symlinks. Any path absent from the manifest's `source/` entries refuses
 with `unlisted-source-file <path>` and exit 2; no scratch or control directory is created. It checks
@@ -58,19 +60,21 @@ every manifest digest in-process with `java.security.MessageDigest`, then copies
 `workspace.clj-surgeon.edn` as `<scratch>/.clj-surgeon.edn`. In the config, `{{scratch}}` becomes the
 scratch root and `{{fixture}}` the fixture directory; the commands remain `bin/kaocha unit --fail-fast`
 and `env -u PYTHONOPTIMIZE python3 <fixture>/cc-oracle-replay.py <scratch> <fixture>/cc-split.json`.
-The donor receives an explicit environment containing only PATH, HOME, JAVA_HOME and LANG when set.
+The donor receives an explicit environment containing only PATH, HOME, JAVA_HOME, LANG and TMPDIR when set.
 No SMTP settings, tokens or Python optimization setting are inherited. Frozen `mail.clj` selects
 dev-render when SMTP_HOST is absent and no workspace-local `secrets/smtp.edn` exists; the fixture has
 no such file, and the inventory check refuses an added `source/secrets/smtp.edn`. It attempts commit first. Only a typed refusal with both
 `mutation_attempted=false` and `committed=false` permits one diagnostic plan-only call. The output names
 each path and exit and preserves invocation stderr. Missing split facts remain `DIFFERS`;
-`created` compares the recorded count with request destination files present on disk in scratch
-and absent from the frozen source. A match reports `created same (20 destination files present on disk)`;
+`created` counts only nonempty regular destination files, using `Files/isRegularFile` with
+`NOFOLLOW_LINKS`, absent from the frozen source. A symlink (including a dangling link) or empty file
+produces `destination-not-regular <path>` in the failing unexpected-path comparison.
+A match reports `created same (20 destination files present on disk)`;
 a mismatch reports `created DIFFERS <recorded> <on-disk>`. Receipt destination counts are not filesystem evidence.
 After invocation the runner independently inventories every regular file and symlink in scratch,
 including hidden paths, without following directory symlinks. It subtracts the frozen manifest's
 `source/` entries (without that prefix), request destination files and installed `.clj-surgeon.edn`.
-Paths under `.cpcache/` are a separate `profile-artefacts` class created by the verification profile’s
+Paths under any `.cpcache/` directory are a separate `profile-artefacts` class created by the verification profile’s
 Clojure classpath resolution, counted as `profile-artefacts: N (.cpcache/)` and excluded before the
 recorded-artefact subset check.
 The remainder must be a subset of the recorded artefacts (`00SERVER-LOGS.txt` and
@@ -114,35 +118,44 @@ Historical evidence (PR 89 replacement, retained unchanged):
 `error="Not a Git workspace"`. The old runner incorrectly treated that nil as an empty inventory.
 The receipt is evidence of the earlier invocation, **not proof of the unexpected-path boundary**.
 Its donor name and the previously reported ~9.3 s timing are historical operator claims; this review
-round does not re-attest them. The real donor rerun is left to the requesting reviewer.
+round does not re-attest them. This seat ran the real donor replay on Anvil on 2026-11-28 and checked
+in this receipt. Its bytes are now SHA-256 pinned in `source-manifest.txt`.
 
-PR 94 round 2 verification uses the commands below. The self-test is also collected by
-`test/run_all.clj` through `make test-fast` / `make test-product`; loading it no longer exits the process.
+PR 94 round 3 verification uses the commands below. The fixture self-test is explicit opt-in and
+requires `bb`, `env` and `python3`. It is no longer loaded by `test/run_all.clj`, so its subprocesses,
+full-tree copies and classpath addition stay outside `make test-fast` / `make test-product`.
 It checks nil verb facts with an extra inventory path, observed-empty acceptance, exact donor exit and
 empty stderr for every stub mode, failed inspection reporting, and a missing details file. The real
 runner CLI refuses both an added hidden file and a directory symlink on fixture copies by name with
 exit 2 and no scratch/control creation. Python optimization and substitution guards remain covered.
-These tests establish runner behavior, not a fresh split's behavior.
+The stub re-emits recorded receipt facts: its success case proves subprocess plumbing only, not
+independent split acceptance. Literal-map tests separately witness dangling/empty destination rejection;
+CLI probes cover missing inputs and scratch parents. These tests establish runner behavior.
 
 ```sh
 bb test-fixtures/namespace-split/cellc-d9205abc/replay_test.clj
+python3 test-fixtures/namespace-split/cellc-d9205abc/cc-oracle-replay.py; echo exit=$?
 ~/bin/clj-kondo --lint test-fixtures/namespace-split/cellc-d9205abc/replay.clj \
   test-fixtures/namespace-split/cellc-d9205abc/replay_test.clj
 wc -l test-fixtures/namespace-split/cellc-d9205abc/replay{,_test}.clj
 git diff --numstat
 ```
 
-Observed in this review worktree: self-test 7 tests / 96 assertions, zero failures/errors;
-`~/bin/clj-kondo` zero errors/warnings; runner 73 lines plus tests 77 = 150, maximum 119 columns;
-all 39 frozen digests match and the historical receipt remains byte-identical to HEAD.
-`make test` collected the replay tests, then stopped in `test-fast`: 771 tests / 6,412 assertions,
+Round 3 local verification: self-test 9 tests / 112 assertions, zero failures/errors;
+`~/bin/clj-kondo` zero errors/warnings; runner 67 lines plus tests 82 = 149, maximum 119 columns.
+All 40 manifest digests match. The 38 pre-existing entries other than the owned Python wrapper retain
+their original digests; the historical receipt bytes match commit `cf6eee91`, now explicitly pinned.
+
+Round 3 `make test` stopped in `test-fast`: 764 tests / 6,320 assertions (no replay fixture tests),
 2 failures and 4 errors. Diagnostics named unverified analyzer authority in forward-reference tests,
 usage-log CLI exit/outcome mismatches, and unavailable recovery receipt paths under the home state
 directory. Later product and benchmark targets did not run. This is not a green product-gate claim.
 
 Deferred follow-ups: dependencies still require network/cache state; freezing a dependency closure
-is separate work. The Python wrapper's missing arity guard and execution globals are unchanged because
-the wrapper is digest-listed frozen input. Expanding the compressed Clojure layout conflicts with the
-150-line combined cap. Demo email addresses stay byte-identical pending a separate fixture policy.
+is separate work. The Python wrapper's execution globals are unchanged; the arity guard is fixed and
+its owned digest updated. Expanding the compressed Clojure layout conflicts with the
+150-line combined cap. Demo email addresses and historical receipt paths/UUIDs stay byte-identical under the freeze rule;
+redaction requires a separate fixture policy. Empty remainders still pass the documented subset rule;
+scratch/control directories stay available as evidence and require the documented manual cleanup.
 Architecture-test provenance remains unresolved as documented above. Previous product-gate/benchmark
 claims are withdrawn here; current gate results must come from the actual command output.
