@@ -32,11 +32,13 @@ seats found that clean-up demand is "move a function" with a check that the copi
 symbols the same way, not alias migration.
 
 The record the freeze cites. The weekly sentinel's `oracle=FAIL verdict=SUSPEND` on 2026-10-18 and 10-25
-was not a correctness loss of the verb: every surviving output matched the golden and the oracle apparatus
-failed, its records reaped from `/var/tmp` (`docs/observations/2026-11-28-alias-migration-sentinel-verdict.md`,
-pull request 77; fixture `test-fixtures/alias-migration/mvr-5a4b4bc`). The sentinel's cron line is disabled
-with re-review 2026-12-28. The freeze rests on the fleets' demand and value findings and on Gene's ruling,
-not on the sentinel.
+is not evidence of a wrong migration: every surviving output of those runs matches the golden; the oracle
+step that said NO and its cause cannot be recovered, because the runs' records under `/var/tmp` are gone
+(the thirty-day cleaner is the inference) (`docs/observations/2026-11-28-alias-migration-sentinel-verdict.md`,
+pull request 77; fixture `test-fixtures/alias-migration/mvr-5a4b4bc`). The sentinel's cron line on Anvil was
+disabled by this seat on 2026-11-28 with re-review 2026-12-28 (the forge crontab carries the dated comment;
+backup `~/crontab.bak-2026-11-28-074707`), under the mayor's ruling-71 b note. The freeze rests on the
+fleets' demand and value findings and on Gene's ruling, not on the sentinel.
 
 ## astra/* — 27 tags
 
@@ -1503,7 +1505,7 @@ Recorded result (scope and candidate as quoted), `docs/observations/2026-09-08-b
 
 > # TEST-ISO-013 verdict parity: the 1-lane control against the 8-lane run
 > 
-> **Tip `bb333d33`, anvil-server, both runs under `flock /home/forge/tmp/suite.lock`.**
+> **Tip `bb333d33`, anvil-server, both runs under `flock ~/tmp/suite.lock`.**
 > 
 > The one isolation risk named at the end of the first report was that per-namespace
 > assertion counts had never been compared against a serial control -- only the
