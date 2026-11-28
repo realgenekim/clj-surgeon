@@ -18,7 +18,16 @@ Files.
 - `cc-split.json`: the same manifest in the MCP `namespace_split` shape; `cc-oracle.py`: the Cell C
   oracle used by the round runner.
 - `sentinel-20261025-receipt.json`, `sentinel-20261025-split-receipt.edn`: the round receipt and the
-  split receipt of the last sentinel run that completed (2026-10-25, oracles 4/4, trunk 454a2863).
+  split receipt of the last sentinel run that completed (2026-10-25, trunk 454a2863). Read them together:
+  the split itself verified (committed state, complete verification, oracles 4/4, 87 sites across five
+  callers: `server.clj` 62 and four test files 16, 4, 2 and 3), while the ENCLOSING round recorded
+  `verdict: RED`, `exit_code: 1` and a witness-runner exit of 97 with unknown test counts. The split
+  passed; the round around it did not. The four test callers are not frozen here; `exports.clj` and
+  `sinks.clj` are frozen because the request's scope names them, though the receipt rewrote neither.
 
-Not here: the split's output tree. The receipts carry its hashes; the result is reproduced by running the
-request through the verb on `archive/astra/namespace-split` against a worktree of the source commit.
+Not here: the split's output tree. The receipts carry its hashes. Reproducing the result needs more than
+this directory: a worktree of curtaincall-cfp at `d9205abc`, the verb from `archive/astra/namespace-split`
+with `:workspace_root` rebound to that worktree, and the `split-unit` configuration the request's named
+cold profile expects, which `d9205abc` itself does not carry. `cc-oracle.py` reads its inputs from the
+old `/var/tmp/forge/plan2` paths and must be pointed at the new locations before it runs. The frozen bytes
+here are the inputs and the receipts, not a push-button replay.
