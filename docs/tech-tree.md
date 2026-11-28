@@ -107,6 +107,12 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | 2026-09-02 | E1: gate arm 2.2x native; 69% refusals from grammar mismatch; three red teams missed it because they fed unified diffs; the free-choice arm would have found it in one run | big-aha log E1 |
 | 2026-09-02 | gate round one: confinement/atomicity/TOCTOU solid; hazard detector evadable via declare, reader conditionals, do, metadata; verification_complete minted on process exit; quadratic identity; fixes in round two | big-aha log, gate round one |
 
+Cell C probe (2026-11-28): 62 sites; the inferred 25-site gap needs missing callers and counting rules reconciled.
+Fourth read: defaults follow sequential bindings, including :as and nested patterns; sites and edges share a scanner.
+Explicit/:all refers, renames, aliases, discards, distinct owners and classpath-anchored tests remain covered.
+Only .clj with let/loop/fn/defn scopes is supported; other binding constructs may over-count references.
+Verification: `bb bin/split-closure-probe --self-test`; [plan](plans/2026-11-28-split-closure-probe.md).
+
 ## Live experiment backlog (prediction and cost on every item)
 
 Cell C cold replay, 2026-11-28, PR 89 review round 3: the previous committed/verified replay claim
