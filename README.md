@@ -472,14 +472,23 @@ required their leaf dependencies. It skipped two moves with non-leaf dependency
 chains. The [first-use observation](docs/observations/2026-03-28-first-real-use.md)
 records the failure pattern that led to `:fix-declares`.
 
-## Install
+## Machine footprint
+
 `bb bin/surgeon-footprint` prints a read-only registration and cron census (piece 1); verify with
 `make surgeon-footprint-self-test`.
 The census covers `~/.codex/config.toml`, `~/.claude.json`, `~/.claude/settings.json`, `~/.claude/mcp.json`,
 `./.mcp.json`, `./.codex/config.toml` and the current user's crontab.
 System units and other users' crontabs are out of scope. Piece 2 adds launch units (loaded AND installed
 user systemd unit files, plus launchd), listeners, processes and the routing-block hash.
-The `command=` lines may echo tokens embedded in MCP args or URLs; review census output before pasting it.
+Cron discovery reads only regular files (including symlinks to regular files), capped at the first 64 KiB.
+Unreadable scripts are marked; content beyond that cap and shell-expanded paths are outside this census.
+Inline TOML tables produce `unsupported: inline table at line N` entries; triple-quoted strings produce
+a per-file unsupported error. These conservative diagnostics may also flag unrelated TOML content.
+MCP args, URLs and matching cron lines can contain secrets, including inline environment assignments.
+Output is not redacted; review it before pasting. A failed `crontab -l`, including no installed crontab,
+currently prints `unreadable` with the command error.
+
+## Install
 
 ```bash
 git clone https://github.com/realgenekim/clj-surgeon.git

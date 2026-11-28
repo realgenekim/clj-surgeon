@@ -1,47 +1,49 @@
 #!/usr/bin/env bb
-(ns surgeon-footprint
-  {:clj-kondo/ignore [:namespace-name-mismatch]}
-  (:require [babashka.process :as process]
-            [cheshire.core :as json]
-            [clojure.java.io :as io]
-            [clojure.string :as str]
+(ns surgeon-footprint {:clj-kondo/ignore [:namespace-name-mismatch]}
+  (:require [babashka.process :as process] [cheshire.core :as json]
+            [clojure.java.io :as io] [clojure.string :as str]
             [clojure.test :refer [deftest is run-tests]]))
-
 (def names-re #"clj-surgeon|cclsp|clojure-lsp")
 (defn lines [s] (remove str/blank? (str/split-lines (or s ""))))
 (defn toml [s]
+  (when (re-find #"\"\"\"|'''" (or s "")) (throw (ex-info "unsupported: multiline TOML string" {})))
   (let [clean (str/replace (or s "") #"'[^']*'|\"(?:\\.|[^\"\\])*\"|#[^\r\n]*"
                            #(if (str/starts-with? % "#") "" %))
         joined (str/replace clean #"\[(?:[^\[\]\"']|\"(?:\\.|[^\"\\])*\"|'[^']*')*\]"
                             #(str/replace % #"\r?\n" " "))]
-    (into {} (for [[_ table body] (re-seq #"(?ms)^\h*\[([^\]\r\n]+)\]\h*\n?((?:(?!^\h*\[).)*)" joined)]
-               [table (into {} (map #(subvec % 1) (re-seq #"(?m)^\h*(\w+)\h*=\h*(.*?)\h*$" body)))]))))
-
+    (for [[_ table body] (re-seq #"(?ms)^\h*\[([^\]\r\n]+)\]\h*\n?((?:(?!^\h*\[).)*)" joined)]
+      [table (into {} (map #(subvec % 1) (re-seq #"(?m)^\h*(\w+)\h*=\h*(.*?)\h*$" body)))])))
 (defn entries [s toml?]
   (let [data (if toml? {"mcpServers" (toml s)} (json/parse-string s))]
-    (for [[path config] (cons [nil data] (get data "projects")) [name entry] (get config "mcpServers")
-          :when (or (not toml?)
-                    (re-matches
-                     #"(?:mcp_servers|'mcp_servers'|\"mcp_servers\")\h*\.\h*(?:[\w-]+|'[^']+'|\"[^\"]+\")" name))
-          :let [command (str/join " " (keep entry ["command" "args" "url"]))]
-          :when (re-find names-re (str name " " command))]
-      (str (when path (str "project=" path " ")) name
-           " required=" (get entry "required" "unspecified") " command=" command))))
-
-(defn read-file [path]
-  (try (java.nio.file.Files/readString (.toPath (io/file path)))
+    (concat (when toml? (keep-indexed #(when (re-find #"^\h*[^#=]+\h*=\h*\{" %2)
+                                         (str "unsupported: inline table at line " (inc %1)))
+                          (str/split-lines (or s ""))))
+      (for [[path config] (cons [nil data] (get data "projects")) [name entry] (get config "mcpServers")
+            :when (or (not toml?) (re-matches
+                    #"(?:mcp_servers|'mcp_servers'|\"mcp_servers\")\h*\.\h*(?:[\w-]+|'[^']+'|\"[^\"]+\")" name))
+            :let [command (str/join " " (keep entry ["command" "args" "url"]))]
+            :when (re-find names-re (str name " " command))]
+        (str (when path (str "project=" path " ")) name " required="
+             (get entry "required" "unspecified") " command=" command)))))
+(defn regular-token? [probe] (true? (:regular? probe)))
+(defn file-probe [file] {:regular? (.isFile file)})
+(defn read-file [path & [limit]]
+  (try (let [file (io/file path)] (if limit
+          (when (regular-token? (file-probe file))
+            (with-open [in (io/input-stream file)] (String. (.readNBytes in limit) "UTF-8")))
+          (java.nio.file.Files/readString (.toPath file))))
        (catch java.nio.file.NoSuchFileException _ nil)
        (catch Exception e e)))
 (defn cron-lines [s read-script]
   (for [line (lines s)
-        :let [paths (filter #(let [s (read-script %)]
-                              (and (string? s)
-                                   (re-find #"clj-surgeon|cclsp|clojure-lsp|7906|7888|7890|surgeon-call|/mcp" s)))
-                            (distinct (map #(str/replace % #"^['\"]|['\"]$" "")
-                                           (re-seq #"\"[^\"]+\"|'[^']+'|[^\s<>;|&]+" line))))]
+        :let [paths (keep #(let [content (read-script %)]
+                             (cond (instance? Exception content) (str % " (unreadable)")
+                                   (and (string? content) (re-find
+                                    #"clj-surgeon|cclsp|clojure-lsp|7906|7888|7890|surgeon-call|/mcp" content)) %))
+                      (distinct (map #(str/replace % #"^['\"]|['\"]$" "")
+                                     (re-seq #"\"[^\"]+\"|'[^']+'|[^\s<>;|&]+" line))))]
         :when (or (and (not (re-find #"^\s*#" line)) (re-find names-re line)) (seq paths))]
     (str line (when (seq paths) (str " scripts=" (str/join "," paths))))))
-
 (defn section [title source]
   (println (str "section: " title))
   (reduce + (for [[path raw parse] source]
@@ -49,59 +51,44 @@
                    (let [found (when raw (vec (parse raw)))]
                      (doseq [v (or (seq found) [(if raw "none" "absent")])] (println (str path ": " v)))
                      (count found))
-                   (catch Exception e
-                     (println (str path (if (identical? e raw) ": unreadable: " ": parse error: ")
-                                   (.getMessage e))) 0)))))
-
+                   (catch Exception e (println (str path (if (identical? e raw) ": unreadable: " ": parse error: ")
+                                                 (.getMessage e))) 0)))))
 (defn census []
   (let [home (or (System/getenv "HOME") (System/getProperty "user.home"))
-        read-local #(read-file (str/replace % #"^~" home))
         read-cron #(let [p (str/replace % #"^~/" (str home "/"))]
-                     (read-file (if (.isAbsolute (io/file p)) p (str home "/" p))))
+                     (read-file (if (.isAbsolute (io/file p)) p (str home "/" p)) 65536))
         entries-count (section "MCP entries"
                         (for [p ["~/.codex/config.toml" "~/.claude.json" "~/.claude/settings.json"
                                  "~/.claude/mcp.json" "./.mcp.json" "./.codex/config.toml"]]
-                          [p (read-local p) #(entries % (str/ends-with? p ".toml"))]))
-        cron (try (:out (process/shell {:out :string :err :string} "crontab" "-l"))
-                  (catch Exception e e))
+                          [p (read-file (str/replace p #"^~" home)) #(entries % (str/ends-with? p ".toml"))]))
+        cron (try (:out (process/shell {:out :string :err :string} "crontab" "-l")) (catch Exception e e))
         cron-count (section "Cron" [["crontab" cron #(cron-lines % read-cron)]])]
     (println (str "footprint: entries=" entries-count " cron=" cron-count))))
-
-;; Regression fixtures from the 2026-11-28 independent probe review.
-(deftest quoted-toml-keys
-  (doseq [key ["clj-surgeon" "'clj-surgeon'" "\"clj-surgeon\""]]
+(deftest quoted-toml-keys (doseq [key ["clj-surgeon" "'clj-surgeon'" "\"clj-surgeon\""]]
     (is (= [(str "mcp_servers." key " required=true command='bb'")]
            (vec (entries (str "[mcp_servers." key "]\nrequired=true # needed\ncommand='bb'") true)))))
   (is (= 1 (count (entries "['mcp_servers'.'cclsp']\ncommand='bun'" true))))
   (is (= 1 (count (entries "[\"mcp_servers\" . \"cclsp\"]" true))))
   (is (empty? (entries "[unrelated]\ncommand='cclsp'" true))))
-
 (deftest toml-comments-and-arrays
-  (let [s "[mcp_servers.other]\nargs = [ # formerly cclsp\n 'clj-surgeon',\n '--stdio',\n]\n"]
-    (is (= ["mcp_servers.other required=unspecified command=[   'clj-surgeon',  '--stdio', ]"]
-           (vec (entries s true)))))
+  (let [s "[mcp_servers.other]\nargs = [ # cclsp\n 'clj-surgeon',\n '--stdio',\n]\n"]
+    (is (= ["mcp_servers.other required=unspecified command=[   'clj-surgeon',  '--stdio', ]"] (entries s true))))
   (is (empty? (entries "[mcp_servers.other]\ncommand = 'echo' # formerly cclsp" true)))
-  (is (= "'a#b'" (get-in (toml "[x]\nvalue='a#b' # comment") ["x" "value"])))
-  (is (= "\"a\\\"#b\"" (get-in (toml "[x]\nvalue=\"a\\\"#b\" # cclsp") ["x" "value"])))
+  (is (= "'a#b'" (get-in (into {} (toml "[x]\nvalue='a#b' # comment")) ["x" "value"])))
+  (is (= "\"a\\\"#b\"" (get-in (into {} (toml "[x]\nvalue=\"a\\\"#b\" # cclsp")) ["x" "value"])))
   (is (= 1 (count (entries "[mcp_servers.cclsp]\n[mcp_servers.cclsp.env]\nX='x'" true))))
-  (is (= {} (toml nil)))
-  (is (= {"x" {}} (toml "[x]"))))
-
+  (is (empty? (toml nil))) (is (= [["x" {}]] (toml "[x]"))))
 (deftest json-project-paths
   (let [s (json/generate-string {"mcpServers" {"cclsp" {"command" "bun" "required" true}}
                                  "projects" {"/r" {"mcpServers" {"lsp" {"command" "clojure-lsp"}}}}})]
     (is (= ["cclsp required=true command=bun" "project=/r lsp required=unspecified command=clojure-lsp"]
            (vec (entries s false)))))
-  (is (empty? (entries "{}" false)))
-  (is (empty? (entries "{\"mcpServers\":{\"other\":{\"command\":\"echo\"}}}" false)))
-  (is (= ["x required=false command=http://localhost/clj-surgeon/mcp"]
-         (vec (entries "{\"mcpServers\":{\"x\":{\"url\":\"http://localhost/clj-surgeon/mcp\",\"required\":false}}}"
-                       false)))))
-
+  (doseq [s ["{}" "{\"mcpServers\":{\"x\":{\"command\":\"echo\"}}}"]] (is (empty? (entries s false))))
+  (is (= ["x required=false command=http://host/clj-surgeon"]
+         (vec (entries "{\"mcpServers\":{\"x\":{\"url\":\"http://host/clj-surgeon\",\"required\":false}}}" false)))))
 (deftest cron-script-content
   ;; A disabled weekly verb sentinel must be found through its script, without a tool name in the cron line.
-  (let [line "# 0 3 * * 0 /bin/bash /home/forge/bin/verb-sentinel"
-        path "/home/forge/bin/verb-sentinel"]
+  (let [line "# 0 3 * * 0 /bin/bash /home/forge/bin/verb-sentinel" path "/home/forge/bin/verb-sentinel"]
     (doseq [marker ["7906" "7888" "7890" "surgeon-call" "/mcp" "clj-surgeon" "cclsp" "clojure-lsp"]]
       (is (= [(str line " scripts=" path)] (vec (cron-lines line {path marker}))))))
   (is (= ["@daily bin/check.sh scripts=bin/check.sh"]
@@ -111,37 +98,50 @@
   (is (= ["@daily cclsp"] (vec (cron-lines "@daily cclsp\n# cclsp disabled" {}))))
   (is (empty? (cron-lines "@daily /missing\n@daily /unrelated" {"/unrelated" "echo ok"})))
   (is (empty? (cron-lines nil {}))))
-
-(deftest per-file-parse-errors-continue
-  (let [result (atom nil)
-        output (with-out-str
-                 (reset! result (section "test" [["broken.json" "{" #(entries % false)]
-                                                ["next.toml" "[mcp_servers.cclsp]" #(entries % true)]])))]
+(deftest per-file-parse-errors-continue (let [result (atom nil) output (with-out-str
+        (reset! result (section "test" [["broken.json" "{" #(entries % false)]
+                                       ["next.toml" "[mcp_servers.cclsp]" #(entries % true)]])))]
     (is (= 1 @result))
     (is (str/includes? output "broken.json: parse error:"))
     (is (str/includes? output "next.toml: mcp_servers.cclsp required=unspecified command="))))
-
-(deftest missing-versus-unreadable
-  (doseq [[error expected] [[(java.nio.file.NoSuchFileException. "config") "absent"]
+(deftest missing-versus-unreadable (doseq [[error expected] [[(java.nio.file.NoSuchFileException. "config") "absent"]
                           [(java.io.IOException. "Permission denied") "unreadable: Permission denied"]]]
     (with-redefs [io/file (fn [_] (throw error))]
       (is (= (str "section: test\nconfig: " expected "\n")
              (with-out-str (section "test" [["config" (read-file "config") lines]])))))))
-
-(deftest census-edge
-  (let [config "[mcp_servers.cclsp]\ncommand='bun'"
+(deftest census-edge (let [config "[mcp_servers.cclsp]\ncommand='bun'"
         home (or (System/getenv "HOME") (System/getProperty "user.home"))
         files {"./.codex/config.toml" config (str home "/bin/check.sh") "curl localhost:7906/mcp"}
-        output (with-redefs [read-file files
-                             process/shell (fn [_ & args]
-                                             (when (= ["crontab" "-l"] (vec args)) {:out "@daily bin/check.sh"}))]
+        output (with-redefs [read-file (fn [p & _] (files p))
+                     process/shell (fn [_ & args]
+                        (when (= ["crontab" "-l"] (vec args)) {:out "@daily bin/check.sh"}))]
                  (with-out-str (census)))]
     (is (str/includes? output "~/.claude.json: absent"))
     (is (str/includes? output "./.codex/config.toml: mcp_servers.cclsp"))
     (is (str/includes? output "crontab: @daily bin/check.sh scripts=bin/check.sh"))
     (is (str/includes? output "footprint: entries=1 cron=1"))))
-
-(case (vec *command-line-args*) [] (census)
-  ["--self-test"] (let [r (run-tests 'surgeon-footprint)]
+(deftest review-three-inline-tables (doseq [s ["[mcp_servers]\ncclsp = { command = 'bun' }"
+            "[mcp_servers]\n'cclsp' = { command = 'bun', required = true }"]]
+    (is (= ["unsupported: inline table at line 2"] (vec (entries s true)))))
+  (is (= 1 (count (entries "[mcp_servers.cclsp]\ncommand='bun'" true))))
+  (is (= 2 (count (entries "[mcp_servers.cclsp]\n[mcp_servers.cclsp]" true))))
+  (doseq [q ["'''" "\"\"\""]]
+    (is (thrown-with-msg? Exception #"unsupported: multiline TOML string" (entries (str "s=" q) true)))))
+(deftest review-three-file-boundary
+  (doseq [[kind regular?] [[:file true] [:fifo false] [:device false] [:directory false]
+                           [:symlink-to-fifo false] [:symlink-to-device false] [:symlink-to-file true]]]
+    (is (= regular? (regular-token? {:regular? regular?})) (name kind))
+    (when-not regular?
+      (with-redefs [file-probe (constantly {:regular? regular?})
+                    io/input-stream (fn [_] (throw (ex-info "must not open" {})))]
+        (is (empty? (cron-lines "@daily test -p /tmp/job.fifo" #(read-file % 65536))) (name kind)))))
+  (let [f (java.io.File/createTempFile "footprint-" ".txt")]
+    (try (spit f "cclsp") (doseq [limit [nil 65536]] (is (= "cclsp" (read-file f limit))))
+         (spit f (str (apply str (repeat 65536 "x")) "cclsp"))
+         (is (= 65536 (count (read-file f 65536))))
+         (finally (.delete f)))))
+(deftest unreadable-cron-script (is (= ["@daily /private scripts=/private (unreadable)"]
+        (vec (cron-lines "@daily /private" {"/private" (java.io.IOException. "denied")})))))
+(case (vec *command-line-args*) [] (census) ["--self-test"] (let [r (run-tests 'surgeon-footprint)]
                     (System/exit (if (and (pos? (:test r)) (zero? (+ (:fail r) (:error r)))) 0 1)))
   (do (println "usage: surgeon-footprint [--self-test]") (System/exit 2)))
