@@ -71,7 +71,7 @@ Directory paths expand a leading ~/ against HOME, then resolve real paths when t
 CLAUDE_CONFIG_DIR and explicit directories still contribute, and all host sections and the footer run.
 Explicitly selecting ~/.claude also checks its .claude.json. All default and selected candidate files
 are normalized and deduplicated together before reading; each file is read once, even when HOME is selected
-or a file symlink aliases another candidate. The first candidate spelling labels the observation.
+or a file symlink aliases another candidate. Observations retain candidate order and the first spelling as label.
 Registrations print disabled=<value> when the field is present, including disabled=null for JSON null.
 Each extra directory contributes .claude.json and settings.json, labelled by full path;
 missing files print absent, including misspelt explicit directories. Unreadable files retain diagnostics. Empty directories
@@ -81,11 +81,11 @@ count in profiles: <n> extra (<names>), whose names are sorted directory paths.
 |---|---|
 | lsof IPv4, wildcard IPv6, loopback IPv6, exact ports and owner | Mayor's literal rows and 78880 decoy |
 | ss, lsof, netstat selection, empty success, all unavailable | Mocked command matrix, both host modes |
-| Default absent versus extra existing/absent, two profiles | Literal path-to-JSON map, no temp directory |
+| Default absent versus extra existing/absent, three extra profiles, candidate order | Literal path-to-JSON map |
 | Repeated option and invalid/missing argument | Pure argument matrix and CLI exit probes |
 | Environment/glob/explicit/tilde paths, deduplication, symlinks | Isolated temporary HOME boundary probe |
 | Missing/unreadable HOME preserves selected profiles | Missing-HOME CLI boundary and injected denied listing |
-| lsof warnings, exit 0/1, empty/nonempty stdout | Eight-case command matrix |
+| lsof warnings, exit 0/1, nil/empty/nonempty stdout | Twelve-case matrix; nil ss stdout stays nil |
 | HOME selected by option or environment, one registration | PR 90 round-three regression: entries=1, file once |
 | File aliases and repeated candidates read once | Read-count fixture and real-path boundary |
 
@@ -118,14 +118,19 @@ is not yet verified on a host; the mocked matrix stands in until the mayor's nex
 This replacement's sandbox run used lsof: both ss probes reported
 `Cannot open netlink socket: Operation not permitted`. That run is not an additional live ss receipt.
 
-Verification: `bb bin/surgeon-footprint --self-test` passes 24 tests / 405 assertions;
+Round-two verification: `bb bin/surgeon-footprint --self-test` passes 24 tests / 415 assertions;
 `~/bin/clj-kondo --lint bin/surgeon-footprint` reports zero errors and warnings.
-Both requested real CLI invocations against `/tmp/surgeon-footprint-review-aksfjgic/home` exit 0,
-report entries=1, list the config once and render disabled=null. The live run reports
-listeners-source: lsof, profiles: 0 extra (), and entries=0 cron=0 listeners=0 servers=0 units=0.
-Full CLI outputs are in `/tmp/surgeon-footprint-review-aksfjgic/{config-dir,environment,live}.txt`.
-The script has 132 additions + 18 deletions = 150 changed lines against origin/main at 42920338
-(the branch HEAD). The local main ref affdfe3f predates the script and is not this replacement's base.
-Added lines comprise 87 test lines and 45 source/dispatch lines; the longest script line is 119 columns.
+The canonical temporary HOME fixes the macOS /var versus /private/var expectation mismatch.
+With java.io.tmpdir set to a symlink and HOME containing a decoy Claude profile, the round-one script
+at 2f52605b fails nine assertions; the revised script passes all 415. Before/after logs are retained in
+`/var/tmp/forge/pr93-round2-x7r7uuv_/{before,after}.log`. This Linux reproduction is not a laptop receipt.
+Mock census tests stub profile discovery and path resolution to literal /project paths; the read-once
+fixture pins three extra profiles and exact read order. The denied-discovery fixture also uses literal paths.
+Real CLI probes run from the temporary HOME with absolute bb/script/classpath paths and an empty PATH;
+absolute, relative and tilde selections through both entrances still produce entries=1 and disabled=null.
+The live Linux run at 2026-11-28T10:21:02Z reports listeners-source: lsof, profiles: 0 extra (),
+and entries=0 cron=0 listeners=0 servers=0 units=0. Both ss probes are denied by the sandbox's netlink policy.
+The script has 131 additions + 19 deletions = 150 changed lines against origin/main at caed7eb1.
+Added lines comprise 87 test lines and 44 source/dispatch lines; the longest script line is 119 columns.
 `make surgeon-footprint-self-test` also passes; `git diff --check` is clean.
 README and this plan remain prose exemptions. No commit or push.

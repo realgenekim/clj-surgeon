@@ -97,7 +97,7 @@
   (try (let [{:keys [exit out err]} (apply process/shell {:out :string :err :string :continue true} argv)]
          (if (if (= "lsof" (first argv))
                (or (= 0 exit) (and (= 1 exit) (or (not (str/blank? out)) (str/blank? err))))
-               (and (zero? (or exit 0)) (str/blank? err))) (or out "")
+               (and (zero? (or exit 0)) (str/blank? err))) (if (= "lsof" (first argv)) (or out "") out)
              (throw (ex-info (if (str/blank? err) (str "exit " exit) (str/trim err)) {}))))
        (catch Exception e (println (str (str/join " " argv) ": unavailable: " (.getMessage e))) nil)))
 (defn launch-agents [home]
@@ -110,8 +110,7 @@
                          (if mac? ["netstat" "-an" "-p" "tcp"] ["netstat" "-ltn"])])]
     (println (str "listeners-source: " (or tool "none")))
     (let [n (section "Listeners" [["listen" (or raw "unavailable: no ss, lsof or netstat")
-                                  #(if tool (keep listener (lines %)) [%])]])]
-      (if tool n 0))))
+                                  #(if tool (keep listener (lines %)) [%])]])] (if tool n 0))))
 (defn host-footprint [home & [mac?]]
   (let [listeners (listeners mac?)
         processes (keep process-line (lines (command "ps" "-eo" (if mac? "pid,etime,args" "pid,etimes,args"))))
@@ -133,12 +132,12 @@
                (try (filterv #(fs/directory? % {:nofollow-links true}) (fs/list-dir home ".claude-*"))
                     (catch Exception e (println (str "profiles: unavailable: " (.getMessage e))) [])))
        (map #(normalize-path home %)) distinct sort))
-(defn profile-sources [home dirs read-config]
-  (for [[p [label]] (group-by #(normalize-path home %) (concat
+(defn profile-sources [home dirs read-config] (let [candidates (vec (concat
                      ["~/.codex/config.toml" "~/.claude.json" "~/.claude/settings.json"
                       "~/.claude/mcp.json" "./.mcp.json" "./.codex/config.toml"]
                      (for [dir dirs file [".claude.json" "settings.json"]] (str dir "/" file))))]
-    [label (read-config p) #(entries % (str/ends-with? label ".toml"))]))
+    (for [[p [label]] (sort-by #(.indexOf candidates (first (val %))) (group-by #(normalize-path home %) candidates))]
+      [label (read-config p) #(entries % (str/ends-with? label ".toml"))])))
 (defn config-dirs [args] (when (and (even? (count args))
              (every? (fn [[flag dir]] (and (= flag "--config-dir") (not (str/blank? dir))
                                            (not (str/starts-with? dir "--")))) (partition 2 args)))
@@ -201,11 +200,13 @@
     (with-redefs [io/file (fn [_] (throw error))]
       (is (= (str "section: test\nconfig: " expected "\n")
              (with-out-str (section "test" [["config" (read-file "config") lines]])))))))
+(defn fixture-path [home p] (str/replace (str/replace p #"^~" home) #"^\." "/project"))
 (deftest census-edge (let [config "[mcp_servers.cclsp]\ncommand='bun'"
         home (or (System/getenv "HOME") (System/getProperty "user.home"))
-        files {(normalize-path home "./.codex/config.toml") config
+        files {"/project/.codex/config.toml" config
                (str home "/bin/check.sh") "curl localhost:7906/mcp"}
-        output (with-redefs [read-file (fn [p & _] (files p))
+        output (with-redefs [read-file (fn [p & _] (files p)) normalize-path fixture-path
+                     profile-dirs (constantly []) launch-agents (constantly "")
                      process/shell (fn [_ & args]
                         (when (= ["crontab" "-l"] (vec args)) {:out "@daily bin/check.sh"}))]
                  (with-out-str (census)))]
@@ -248,8 +249,7 @@
     (let [owner (str "users:((\"" tool "\",pid=12,fd=3))")]
       (is (= {:address "0.0.0.0" :port "9000" :owner owner}
              (listener (str "LISTEN 0 128 0.0.0.0:9000 *:* " owner)))))))
-(deftest mayor-lsof-literals ;; Mayor's macOS field case: ss absent; lsof checked 7888 by hand.
-  (doseq [[line address port owner]
+(deftest mayor-lsof-literals (doseq [[line address port owner] ;; Mayor's macOS: ss absent; lsof checked 7888.
          [["node 812 forge 23u IPv4 0x123 0t0 TCP 127.0.0.1:7888 (LISTEN)" "127.0.0.1" "7888" "node pid=812"]
            ["java 913 forge 45u IPv6 0x456 0t0 TCP *:7890 (LISTEN)" "*" "7890" "java pid=913"]
            ["java 914 forge 46u IPv6 0x789 0t0 TCP [::1]:7906 (LISTEN)" "[::1]" "7906" "java pid=914"]]]
@@ -318,65 +318,64 @@
           (doseq [op ["list-units" "list-unit-files"]] (is (some #(= ["systemctl" "--user" op] (take 3 %)) @calls))))
       (is (every? #{"ss" "lsof" "netstat" "ps" "systemctl" "launchctl"} (map first @calls))))))
 (deftest listener-source-matrix (doseq [mac? [false true] winner [0 1 2 3 nil] empty? [false true]]
-    (let [calls (atom []) result (atom nil)
+    (let [calls (atom []) got (atom nil)
           commands [["ss" "-ltnp"] ["ss" "-ltn"] ["lsof" "+c" "0" "-nP" "-iTCP" "-sTCP:LISTEN"]
                     (if mac? ["netstat" "-an" "-p" "tcp"] ["netstat" "-ltn"])]
-          output (with-redefs [process/shell (fn [_ & args]
-                   (let [i (dec (count (swap! calls conj (vec args))))] (if (= i winner)
+      out (with-redefs [process/shell (fn [_ & args] (let [i (dec (count (swap! calls conj (vec args))))]
+        (if (= i winner)
                        {:exit (if (and (= i 2) empty?) 1 0) :out (if empty? ""
                           (case i 2 "clojure-lsp 812 forge 23u IPv4 0x1 0t0 TCP 127.0.0.1:9000 (LISTEN)"
                                   3 (if mac? "tcp4 0 0 *.7888 *.* LISTEN" "tcp 0 0 *:7888 *:* LISTEN")
-                                  "LISTEN 0 0 *:7888 *:*"))}
-                       {:exit 2 :err "missing"})))] (with-out-str (reset! result (listeners mac?))))]
-      (is (= (take (if winner (inc winner) 4) commands) @calls)) (is (= (if (and winner (not empty?)) 1 0) @result))
-      (is (str/includes? output (str "listeners-source: " (if winner (first (commands winner)) "none"))))
-      (is (= (boolean (and winner empty?)) (str/includes? output "listen: none")))
-      (is (= (nil? winner) (str/includes? output "listen: unavailable: no ss, lsof or netstat"))))))
-(deftest lsof-warning-output (doseq [exit [0 1] err ["" "warning: cannot stat mount"] out ["" "listener row"]]
-    (let [result (atom nil) output (with-redefs [process/shell (constantly {:exit exit :out out :err err})]
-          (with-out-str (reset! result (command "lsof"))))
-          fails? (and (= exit 1) (str/blank? out) (not (str/blank? err)))]
-      (is (= (when-not fails? out) @result)) (is (= fails? (str/includes? output "unavailable:"))))))
-(deftest config-dir-options (doseq [[args expected] [[[] []] [["--config-dir" "/a"] ["/a"]]
-                          [["--config-dir" "/a" "--config-dir" "/b c"] ["/a" "/b c"]]]]
-    (is (= expected (config-dirs args))))
+        "LISTEN 0 0 *:7888 *:*"))} {:exit 2 :err "missing"})))] (with-out-str (reset! got (listeners mac?))))]
+      (is (= (take (if winner (inc winner) 4) commands) @calls)) (is (= (if (and winner (not empty?)) 1 0) @got))
+      (is (str/includes? out (str "listeners-source: " (if winner (first (commands winner)) "none"))))
+      (is (= (boolean (and winner empty?)) (str/includes? out "listen: none")))
+      (is (= (nil? winner) (str/includes? out "listen: unavailable: no ss, lsof or netstat"))))))
+(deftest lsof-warning-output (doseq [exit [0 1] err ["" "warning: cannot stat mount"] raw [nil "" "listener row"]]
+    (let [got (atom nil) out (with-redefs [process/shell (constantly {:exit exit :out raw :err err})]
+        (with-out-str (reset! got (command "lsof")))) fails? (and (= exit 1) (str/blank? raw) (not (str/blank? err)))]
+      (is (= (when-not fails? (or raw "")) @got)) (is (= fails? (str/includes? out "unavailable:")))))
+  (with-redefs [process/shell (constantly {:exit 0})] (is (nil? (command "ss")))))
+(deftest config-dir-options (doseq [dirs [[] ["/a"] ["/a" "/b c"]]]
+    (is (= dirs (config-dirs (interleave (repeat "--config-dir") dirs)))))
   (doseq [args [["--config-dir"] ["--config-dir" ""] ["--config-dir" "--help"] ["--unknown" "/a"]
                ["--config-dir" "/a" "stray"] ["stray"]]] (is (nil? (config-dirs args)))))
-(deftest profile-files-read-once (let [seen (atom []) result (atom nil)
+(deftest profile-files-read-once (let [seen (atom []) got (atom nil)
         files {"/a/.claude.json" "{\"mcpServers\":{\"clj-surgeon\":{}}}"
         "/h/.claude/settings.json" "{\"mcpServers\":{\"cclsp\":{}}}" "/b/settings.json" "{}"
         "/b/.claude.json" (java.io.IOException. "denied")} out
-        (with-out-str (reset! result (section "MCP entries"
-              (profile-sources "/h" ["/h/.claude" "/a" "/b" "/a"] #(do (swap! seen conj %) (files %))))))]
-    (is (= 2 @result)) (is (= 1 (apply max (vals (frequencies @seen)))))
+        (with-redefs [normalize-path fixture-path] (with-out-str (reset! got (section "MCP entries"
+          (profile-sources "/h" ["/h/.claude" "/a" "/b" "/c" "/a"] #(do (swap! seen conj %) (files %)))))))]
+    (is (= 2 @got)) (is (= 1 (apply max (vals (frequencies @seen)))))
+    (is (= ["/h/.codex/config.toml" "/h/.claude.json" "/h/.claude/settings.json" "/h/.claude/mcp.json"
+      "/project/.mcp.json" "/project/.codex/config.toml" "/h/.claude/.claude.json" "/a/.claude.json" "/a/settings.json"
+           "/b/.claude.json" "/b/settings.json" "/c/.claude.json" "/c/settings.json"] @seen))
     (doseq [s ["~/.claude.json: absent" "/a/.claude.json: clj-surgeon" "/a/settings.json: absent"
                "/b/.claude.json: unreadable: denied" "/b/settings.json: none" "~/.claude/settings.json: cclsp"]]
       (is (str/includes? out s)))))
 (deftest option-cli-boundary (doseq [[args exit] [[["--help"] 0] [["--config-dir"] 2] [["--unknown"] 2]]]
-    (let [r (apply process/shell {:out :string :err :string :continue true} "bb" *file* args)]
+    (let [r (apply process/shell {:out :string :err :string :continue true} (str (fs/which "bb")) *file* args)]
       (is (= exit (:exit r))) (is (str/includes? (:out r) "[--config-dir <dir>]...")) (is (str/blank? (:err r))))))
-(deftest pr90-home-and-profile-boundary (let [home (str (fs/create-temp-dir {:prefix "footprint-home-"}))
-        a (str home "/.claude-kanban") b (str home "/.claude-builder") c (str home "/external")]
+(deftest pr90-home-and-profile-boundary (let [home (str (fs/real-path (fs/create-temp-dir {:prefix "footprint-"})))
+        a (str home "/.claude-kanban") b (str home "/.claude-builder") c (str home "/external")
+        cli (fn [h env args] (apply process/shell {:out :string :err :string :continue true :dir home
+                      :extra-env {"HOME" h "CLAUDE_CONFIG_DIR" env "PATH" ""}}
+        (str (fs/which "bb")) "--classpath" (str (fs/absolutize "src")) (str (fs/absolutize *file*)) args))]
     (try (spit (str home "/.claude.json") "{\"mcpServers\":{\"clj-surgeon\":{\"disabled\":null}}}")
       (fs/create-sym-link (str home "/settings.json") (str home "/.claude.json"))
-      (doseq [env? [false true] selected [home "~" (str (fs/relativize (fs/cwd) home))]]
-        (let [{:keys [exit out]} (apply process/shell {:out :string :err :string :continue true
-                    :extra-env {"HOME" home "CLAUDE_CONFIG_DIR" (if env? selected "") "PATH" ""}}
-                    (str (fs/which "bb")) *file* (if env? [] ["--config-dir" selected]))]
+      (doseq [env? [false true] selected [home "~" "."]]
+        (let [{:keys [exit out]} (cli home (if env? selected "") (if env? [] ["--config-dir" selected]))]
           (is (zero? exit)) (is (str/includes? out " entries=1 ")) (is (str/includes? out " disabled=null"))
           (is (= 1 (count (filter #(str/includes? % ".claude.json:") (lines out)))))))
       (fs/delete (str home "/.claude.json")) (fs/delete (str home "/settings.json"))
-      (doseq [dir [a b c]] (fs/create-dir dir))
-      (spit (str a "/.claude.json") "{\"mcpServers\":{\"clj-surgeon\":{}}}")
+      (doseq [dir [a b c]] (fs/create-dir dir)) (spit (str a "/.claude.json") "{\"mcpServers\":{\"clj-surgeon\":{}}}")
       (spit (str b "/.claude.json") "{\"mcpServers\":{\"clj-surgeon\":{\"disabled\":true}}}")
       (spit (str c "/settings.json") "{\"mcpServers\":{\"clj-surgeon\":{}}}")
       (spit (str home "/.claude-file") "") (fs/create-sym-link (str home "/.claude-link") a)
       (is (= [b a] (profile-dirs home nil [])))
       (is (= [b a] (profile-dirs home (str a "/") ["~/.claude-link" "~/.claude-builder/../.claude-builder"])))
-      (doseq [missing? [false true]] (let [{:keys [exit out]} (process/shell {:out :string :err :string :continue true
-                      :extra-env {"HOME" (if missing? (str home "/missing") home)
-                                  "CLAUDE_CONFIG_DIR" (if missing? b "") "PATH" ""}}
-                      (str (fs/which "bb")) *file* "--config-dir" c "--config-dir" "~/.claude")]
+      (doseq [missing? [false true]] (let [{:keys [exit out]} (cli (if missing? (str home "/missing") home)
+                                         (if missing? b "") ["--config-dir" c "--config-dir" "~/.claude"])]
         (is (zero? exit)) (is (= missing? (str/includes? out "profiles: unavailable:")))
         (is (str/includes? out (str "profiles: " (if missing? 2 3) " extra (" b
                                           (when-not missing? (str ", " a)) ", " c ")")))
@@ -385,12 +384,11 @@
                    (str c "/settings.json: clj-surgeon required=unspecified command=")
                    "/.claude/.claude.json: absent" "section: Cron" "section: Listeners" "section: Processes"
                    "section: Launch units" "section: Routing blocks" "footprint:"]] (is (str/includes? out s)))
-        (is (not (str/includes? out ".claude-link")))))
-      (finally (fs/delete-tree home)))))
-(deftest profile-discovery-denied
-  (let [result (atom nil) out (with-redefs [fs/list-dir (fn [& _] (throw (java.io.IOException. "denied")))]
-                              (with-out-str (reset! result (profile-dirs "/h" "/env" ["/cli"]))))]
-    (is (= ["/cli" "/env"] @result)) (is (= "profiles: unavailable: denied\n" out))))
+        (is (not (str/includes? out ".claude-link"))))) (finally (fs/delete-tree home)))))
+(deftest profile-discovery-denied (with-redefs [normalize-path fixture-path
+      fs/list-dir (fn [& _] (throw (java.io.IOException. "denied")))]
+  (let [got (atom nil) out (with-out-str (reset! got (profile-dirs "/h" "/env" ["/cli"])))]
+    (is (= ["/cli" "/env"] @got)) (is (= "profiles: unavailable: denied\n" out)))))
 (deftest hostname-boundary
   (is (= "unknown-host" (host-name #(throw (ex-info "unresolved" {})))))
   (is (= "localhost" (host-name #(java.net.InetAddress/getByAddress "localhost" (byte-array [127 0 0 1]))))))
