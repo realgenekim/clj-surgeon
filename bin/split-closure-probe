@@ -4,13 +4,13 @@
                                 [clojure.string :as str] [clojure.test :as t] [rewrite-clj.zip :as z]))
 (def owner-types #{"def" "defn" "defn-" "defmulti" "defmethod" "defmacro"
                    "defonce" "defrecord" "defprotocol" "deftype"})
+(defn defaults [b] (mapcat #(when (map? %) (vals (:or %))) (tree-seq coll? #(if (map? %) (keys %) %) b)))
 (defn references [form env] (let [walk #(references % env) [op & args] (when (seq? form) form)]
     (cond (symbol? form) (when-not (env form) [form])
           (#{'quote 'clojure.core/quote 'ns 'comment} op) []
-          (#{'let 'loop 'let* 'loop*} op)
-          (loop [[b init & more :as bindings] (first args) scope env found []]
-            (if (seq bindings)
-              (recur more (into scope (take-nth 2 (destructure [b nil]))) (into found (references init scope)))
+          (#{'let 'loop 'let* 'loop*} op) (loop [[b init & more :as bindings] (first args) scope env found []]
+            (if (seq bindings) (recur more (into scope (take-nth 2 (destructure [b nil])))
+                     (into found (mapcat #(references % scope) (cons init (defaults b)))))
               (into found (mapcat #(references % scope) (rest args)))))
           (#{'defn 'defn- 'defmacro} op) (walk (cons 'fn (drop-while #(not (sequential? %)) (rest args))))
       (#{'fn 'fn*} op) (let [[scope tail] (if (symbol? (first args)) [(conj env (first args)) (rest args)] [env args])]
@@ -19,23 +19,24 @@
           (#{'def 'defonce} op) (mapcat walk (rest args)) (coll? form) (mapcat walk form) :else [])))
 (defn sites [lib owners parsed] (let [nodes (remove #(= :uneval (z/tag %)) (take-while some? (iterate z/right parsed)))
         forms (map z/sexpr nodes) aliases (assoc (a/parse-ns-aliases (first nodes)) lib lib)
-        refers (set (for [f forms :when (and (seq? f) (= 'ns (first f)))
+        refers (into {} (for [f forms :when (and (seq? f) (= 'ns (first f)))
                           c (drop 2 f) :when (and (seq? c) (= :require (first c)))
                           [target & opts] (filter vector? (rest c)) :when (= lib (str target))
-                          :let [r (:refer (apply hash-map opts))] n (if (= :all r) owners (map str r))] n))]
-    (count (filter #(and (owners (name %)) (if (namespace %) (= lib (aliases (namespace %))) (refers (name %))))
-                   (mapcat #(references % #{}) forms)))))
+                          :let [{:keys [refer rename]} (apply hash-map opts)]
+                          n (if (= :all refer) owners (map str refer))] [(str (get rename (symbol n) n)) n]))]
+    (count (filter #(if (namespace %) (and (owners (name %)) (= lib (aliases (namespace %))))
+                       (owners (refers (name %)))) (mapcat #(references % #{}) forms)))))
 (defn probe [{:keys [source destinations]} parsed callers existing]
-  (let [graph (filter #(owner-types (:type %)) (a/intra-ns-deps parsed)) names (sort (set (map :name graph)))
+  (let [graph (filter #(owner-types (:type %)) (a/intra-ns-deps parsed)) names (into (sorted-set) (map :name graph))
         counts (frequencies (mapcat :forms destinations)) unmapped (vec (remove counts names))
         doubled (vec (filter #(< 1 (get counts % 0)) names))
-        edges (sort (for [{:keys [name depends-on]} graph dep depends-on :when ((set names) dep)] [name dep]))
-        hits (sort (for [[file forms] callers] [file (sites (:lib source) (set names) forms)]))]
+        edges (sort (for [{:keys [name depends-on]} graph dep depends-on :when (names dep)] [name dep]))
+        hits (sort (for [[file forms] callers] [file (sites (:lib source) names forms)]))]
     (str/join "\n" (concat
       (for [n names] (str "owner " n " " (case (get counts n 0) 0 "not-at-all" 1 "exactly-once" "more-than-once")))
-      [(str "non-owners=" (count (remove #(owner-types (:type-str %)) (a/top-level-forms parsed))))
+      [(str "non-owners=" (- (count (a/top-level-forms parsed)) (count graph)))
        (str "unmapped=" (pr-str unmapped)) (str "double-mapped=" (pr-str doubled))
-       (str "unknown=" (pr-str (vec (sort (remove (set names) (keys counts))))))]
+       (str "unknown=" (pr-str (vec (sort (remove names (keys counts))))))]
       (for [d destinations] (str "destination " (pr-str (select-keys d [:lib :file :forms]))
                                 " exists=" (contains? existing (:file d))))
       (for [[file n] hits] (str "caller " file " sites=" n)) (for [[owner dep] edges] (str owner " -> " dep))
@@ -56,5 +57,4 @@
             (let [{:keys [test fail error]} (t/run-tests 'split-closure-probe-test)]
               (System/exit (if (and (pos? test) (zero? (+ fail error))) 0 1))))
         (= 2 (count *command-line-args*)) (println (apply run-probe *command-line-args*))
-     :else (throw (ex-info (str "Usage (repo root): bb bin/split-closure-probe REQUEST.edn SOURCE-TREE | --self-test; "
-                                  ".clj only, no reader conditionals") {}))))
+     :else (throw (ex-info "Usage: bb bin/split-closure-probe REQUEST.edn SOURCE-TREE | --self-test (.clj only)" {}))))

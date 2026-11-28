@@ -9,7 +9,16 @@ Print definition count as owners=N, unique names as distinct=N, and one mapping 
 Skip reader-discard forms. Discovery remains .clj only; reader conditionals and .cljc are outside this
 120-line slice. Run --self-test from the repository root (bb.edn supplies the src:test classpath).
 
-Finding to close before any port: the frozen Cell C tree holds only four src files. The 25 recorded test-caller
-sites (polish_test 16, forms_test 4, comms_test 2, views_test 3) cannot be reproduced until those test/ callers
-are frozen from curtaincall-cfp commit d9205abc. The probe prints missing-root=test for this reason; current
-fixture evidence covers 62 sites in server.clj, not the receipt's 87 sites across five callers.
+Finding to close before any port: the frozen Cell C tree holds only four src files. The probe reports
+62 sites in server.clj and missing-root=test; the receipt records 87 sites across five callers.
+The inferred 25-site gap and prior per-file breakdown (polish_test 16, forms_test 4, comms_test 2,
+views_test 3) are unverified: the missing callers and equivalent counting rules are not asserted.
+Freeze the test callers from curtaincall-cfp d9205abc before reconciling those totals.
+
+Round 3: scan :or defaults in enclosing let/loop/fn/defn scope, including nested parameter destructuring;
+resolve :rename local names to source owners, with shadowing applied before resolution. The regression
+matrix crosses explicit/:all refers, renamed/original names, nested defaults, arities and shadowing.
+Tests anchor script and fixtures to their classpath resource, independent of CWD and *file* spelling.
+The 62-site count remains a bounded syntactic observation: for/doseq/letfn/if-let/when-let/binding/catch
+and defmethod/deftype/defrecord method scopes are unsupported and may over-count shadowed references.
+Broader scope analysis and a larger layout budget are deferred beyond this final 120-line slice.
