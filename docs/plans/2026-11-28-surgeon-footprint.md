@@ -28,7 +28,7 @@ The cron fixture minimizes the independent review's disabled sentinel and the re
 Piece 2 extends the same script: pure listener, process, merged unit-name and routing-block parsers.
 Read-only commands fall back ss -ltnp → ss -ltn → netstat -ltn; failures print unavailable reasons.
 On macOS the netstat fallback is `netstat -an -p tcp`; dotted address.port listeners include `tcp4`.
-The subprocess allowlist is exactly: `crontab -l`, `ss`, `netstat`, `ps`, `systemctl`, `launchctl`.
+The subprocess allowlist is exactly: `crontab -l`, `ss`, `lsof` (piece 3), `netstat`, `ps`, `systemctl`, `launchctl`.
 macOS uses `ps -eo pid,etime,args`; pure elapsed-time parsing converts [[dd-]hh:]mm:ss to seconds.
 Other hosts use `ps -eo pid,etimes,args`. Classification starts after leading env assignments and env wrappers:
 only cclsp/clojure-lsp executables, runtime main server namespaces/classes, or clj-surgeon with its own
@@ -45,3 +45,87 @@ Review output before pasting it; generic redaction is deferred to keep its polic
 Acceptance: self-test with a positive test-count gate, serialized kondo, Make target and line counts.
 Assertions stay outside output capture; the footer reports registration and cron totals.
 README and this plan are Content exemptions as authorized; script plus Makefile changes must total <=150 lines.
+
+## Piece 3: Darwin listener evidence and Claude profiles
+
+The field case is the mayor's MacBook-Air-67.local census: entries=0, cron=0, listeners=0,
+servers=0, units=0. The mayor confirmed no listener on 7888 by hand with lsof. That confirms
+the listener observation, not the completeness of entries=0: kanban and builder profiles were omitted.
+The old code tried ss twice, then Darwin's netstat -an -p tcp. A successful command with no
+matching rows printed listen: none; all commands failing printed listen: absent. Thus the reported
+none is consistent with netstat succeeding without matches, not evidence that ss was the only check.
+Without the original command diagnostics, the exact fallback execution cannot be established.
+
+Piece 3 keeps the census read-only with no service connections. Tool order is ss -ltnp,
+ss -ltn, lsof +c 0 -nP -iTCP -sTCP:LISTEN, then netstat (-an -p tcp on Darwin, -ltn elsewhere).
+Output identifies listeners-source: ss|lsof|netstat|none. A successful empty check prints listen: none;
+exhausting all tools prints listen: unavailable: no ss, lsof or netstat. lsof exit 0 succeeds despite warnings;
+exit 1 succeeds with nonblank stdout or no stderr. Empty exit 1 with stderr and other failures fall through.
+Owners retain command and pid. Listener totals use the printed section's count, with unavailable counted as zero.
+
+Default paths remain. Extra Claude directories come from nonblank CLAUDE_CONFIG_DIR, immediate
+~/.claude-* directories (no symlink following), and repeatable --config-dir <dir> options.
+Directory paths expand a leading ~/ against HOME, then resolve real paths when they exist
+(absolute normalized paths otherwise) and are deduplicated;
+~/.claude is the default, not an extra profile. Discovery failure prints profiles: unavailable: <reason>;
+CLAUDE_CONFIG_DIR and explicit directories still contribute, and all host sections and the footer run.
+Explicitly selecting ~/.claude also checks its .claude.json. All default and selected candidate files
+are normalized and deduplicated together before reading; each file is read once, even when HOME is selected
+or a file symlink aliases another candidate. The first candidate spelling labels the observation.
+Registrations print disabled=<value> when the field is present, including disabled=null for JSON null.
+Each extra directory contributes .claude.json and settings.json, labelled by full path;
+missing files print absent, including misspelt explicit directories. Unreadable files retain diagnostics. Empty directories
+count in profiles: <n> extra (<names>), whose names are sorted directory paths.
+
+| Contract | Witness |
+|---|---|
+| lsof IPv4, wildcard IPv6, loopback IPv6, exact ports and owner | Mayor's literal rows and 78880 decoy |
+| ss, lsof, netstat selection, empty success, all unavailable | Mocked command matrix, both host modes |
+| Default absent versus extra existing/absent, two profiles | Literal path-to-JSON map, no temp directory |
+| Repeated option and invalid/missing argument | Pure argument matrix and CLI exit probes |
+| Environment/glob/explicit/tilde paths, deduplication, symlinks | Isolated temporary HOME boundary probe |
+| Missing/unreadable HOME preserves selected profiles | Missing-HOME CLI boundary and injected denied listing |
+| lsof warnings, exit 0/1, empty/nonempty stdout | Eight-case command matrix |
+| HOME selected by option or environment, one registration | PR 90 round-three regression: entries=1, file once |
+| File aliases and repeated candidates read once | Read-count fixture and real-path boundary |
+
+Acceptance remains at most 150 changed script lines, test additions at least source additions,
+lines under 120 columns, self-test, ~/bin/clj-kondo and a live Linux census identifying ss.
+README and this plan are prose exemptions. No commit or real-home fixture writes.
+
+## Replacement after PR 90
+
+PR 90 closed after its third review round. Codex confirmed that selecting HOME through either
+`--config-dir` or `CLAUDE_CONFIG_DIR` read the default `.claude.json` twice, producing entries=2 for
+one registration. The previous guard only deduplicated the default settings.json and ran after reads.
+
+The replacement collects every default and selected file candidate, normalizes file paths, and groups
+by normalized identity before any config read. Each group is read once and retains its first display label.
+Normalization uses the real path when available, otherwise the absolute normalized path; file symlinks
+therefore share one read with their targets. Discovery still excludes globbed directory symlinks, while
+explicitly selected symlinks resolve normally. JSON null now prints disabled=null.
+
+The PR 90 regression first failed six assertions: each of the two invocations counted and printed the
+registration twice and rendered disabled= without null. The final boundary fixture covers absolute,
+relative and tilde HOME selections through both entrances, plus a settings.json symlink to .claude.json.
+The profile-file fixture separately counts reads, checks default/settings overlap and repeated paths,
+and retains absent, empty and unreadable-file diagnostics. Existing profile discovery, CLI options,
+listener fallback and warning matrices remain covered. Temporary fixtures are removed in finally;
+child censuses use an empty PATH and an absolute bb path to avoid real host commands.
+
+Live ss on Linux is verified on Anvil in the seat run reported in the task handoff. Live lsof on macOS
+is not yet verified on a host; the mocked matrix stands in until the mayor's next laptop run.
+This replacement's sandbox run used lsof: both ss probes reported
+`Cannot open netlink socket: Operation not permitted`. That run is not an additional live ss receipt.
+
+Verification: `bb bin/surgeon-footprint --self-test` passes 24 tests / 405 assertions;
+`~/bin/clj-kondo --lint bin/surgeon-footprint` reports zero errors and warnings.
+Both requested real CLI invocations against `/tmp/surgeon-footprint-review-aksfjgic/home` exit 0,
+report entries=1, list the config once and render disabled=null. The live run reports
+listeners-source: lsof, profiles: 0 extra (), and entries=0 cron=0 listeners=0 servers=0 units=0.
+Full CLI outputs are in `/tmp/surgeon-footprint-review-aksfjgic/{config-dir,environment,live}.txt`.
+The script has 132 additions + 18 deletions = 150 changed lines against origin/main at 42920338
+(the branch HEAD). The local main ref affdfe3f predates the script and is not this replacement's base.
+Added lines comprise 87 test lines and 45 source/dispatch lines; the longest script line is 119 columns.
+`make surgeon-footprint-self-test` also passes; `git diff --check` is clean.
+README and this plan remain prose exemptions. No commit or push.

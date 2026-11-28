@@ -478,6 +478,22 @@ records the failure pattern that led to `:fix-declares`.
 `make surgeon-footprint-self-test`.
 The census covers `~/.codex/config.toml`, `~/.claude.json`, `~/.claude/settings.json`, `~/.claude/mcp.json`,
 `./.mcp.json`, `./.codex/config.toml` and the current user's crontab.
+Piece 3 also reads `.claude.json` and `settings.json` from `$CLAUDE_CONFIG_DIR` when set,
+every immediate `~/.claude-*/` directory (glob, directories only, without following directory symlinks),
+and repeatable `--config-dir <dir>` options, for example:
+`bb bin/surgeon-footprint --config-dir /profiles/kanban --config-dir /profiles/builder`.
+Registrations include `disabled=<value>` when configured, including `disabled=null` for JSON null.
+Paths expand a leading `~/`, resolve to real paths when present and absolute normalized paths otherwise.
+All default and extra candidate files are deduplicated together before reading; each file is read once,
+including when `--config-dir` or `CLAUDE_CONFIG_DIR` selects HOME. `~/.claude` remains the default directory.
+Each extra file is labelled with its full path; missing files print `absent`, including misspelt explicit profiles.
+`profiles: <n> extra (<names>)` lists sorted directory paths, including empty profiles.
+Failed HOME discovery prints `profiles: unavailable: <reason>`; environment/explicit profiles and host sections continue.
+Listener order is `ss -ltnp`, `ss -ltn`, `lsof +c 0 -nP -iTCP -sTCP:LISTEN`, then netstat:
+`netstat -an -p tcp` on Darwin, `netstat -ltn` elsewhere. lsof owners include command and PID.
+Valid lsof output survives stderr warnings at exit 0 or 1; empty exit 1 with stderr falls through.
+`listeners-source: ss|lsof|netstat|none` identifies the check. `listen: none` means checked, nothing found;
+if no tool succeeds, output is `listen: unavailable: no ss, lsof or netstat`.
 Also included: loaded/installed user launch units, listeners, server/mention processes and routing-block hashes.
 System units and other users' crontabs are out of scope; unavailable commands/listings report their reasons.
 Routing reads share the regular-file/64 KiB guard; hostname comes from Java with an `unknown-host` fallback.
@@ -486,8 +502,9 @@ Unreadable scripts are marked; content beyond that cap and shell-expanded paths 
 Inline TOML tables produce `unsupported: inline table at line N` entries; triple-quoted strings produce
 a per-file unsupported error. These conservative diagnostics may also flag unrelated TOML content.
 MCP args, URLs and matching cron lines can contain secrets, including inline environment assignments.
+Extra profiles widen the files whose MCP command, args and URL values are printed verbatim.
 Output is not redacted; review it before pasting. A failed `crontab -l`, including no installed crontab,
-currently prints `unreadable` with the command error.
+currently prints `unreadable` with the command error. On macOS the lsof path is verified by literal fixtures only; a live run on a macOS host is still outstanding (the plan records the laptop result once the mayor reruns the census there).
 
 ## Install
 
