@@ -46,9 +46,11 @@
    [clj-surgeon.worktree-lifecycle-io-test]
    [clj-surgeon.worktree-lifecycle-test]
    [clj-surgeon.xray-test]
-   [clojure.test :refer [run-tests]]))
+   [clojure.test :refer [run-tests]]
+   [split-closure-probe-test]))
 
-(let [r (run-tests 'clj-surgeon.forms-test
+(let [r (run-tests 'split-closure-probe-test
+                   'clj-surgeon.forms-test
                    'clj-surgeon.forward-refs-test
                    'clj-surgeon.agent-routing-test
                    'clj-surgeon.outline-test
